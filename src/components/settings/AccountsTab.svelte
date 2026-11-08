@@ -59,12 +59,12 @@
     return USAGE_HINTS[engine] ?? (showsCost({ engine }) ? 'accounts.tab.usageHintCost' : 'accounts.tab.usageHint');
   }
 
-  // The accounts, a group per harness in « Ordre des harness ». Each change goes to the backend at once (`account_*`,
-  // `engine_order_set`), not through the modal's draft: an account is made, signed in and removed on the disk, which
-  // « Annuler » could not take back.
+  // The accounts, a group per harness in « Ordre des harness ». Each change goes to the backend itself (`account_*`,
+  // `engine_order_set`), not through the fields of the window saved as they change: an account is made, signed in and
+  // removed on the disk.
 
   const accounts = $derived(app.settings.accounts ?? []);
-  /** « Quand un quota est épuisé » is in the draft, saved by « Enregistrer » with the other settings. */
+  /** « Quand un quota est épuisé » is in the window's fields, saved as they change with the other settings (ESC-380). */
   const draft = $derived(settingsForm.settings);
   /** The harnesses found: going on on the next one asks for two. */
   const found = $derived(offered());

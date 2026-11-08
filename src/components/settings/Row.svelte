@@ -4,7 +4,8 @@
 
   // A setting (`.sr` of the 2.0 design): its label (and hint), what it does, its control on the right, or under it when
   // `wide`; `shared`, the keys of the project's .escouade.yml it shows, marked when the file sets them; `extra`, more
-  // lines under what it does (« Trouvé : … », « Claude Code seulement : … »).
+  // lines under what it does (« Trouvé : … », « Claude Code seulement : … »); `error`, why what is typed is not saved
+  // (ESC-380), under it with `errorId` for the field's aria-describedby.
   let {
     label,
     hint = '',
@@ -13,6 +14,8 @@
     wide = false,
     shared,
     extra,
+    error = '',
+    errorId,
     children,
   }: {
     label: string;
@@ -22,6 +25,8 @@
     wide?: boolean;
     shared?: string | string[];
     extra?: Snippet;
+    error?: string;
+    errorId?: string;
     children?: Snippet;
   } = $props();
 </script>
@@ -33,6 +38,7 @@
     >
     {#if desc}<span class="d" id={descId}>{desc}</span>{/if}
     {#if extra}{@render extra()}{/if}
+    {#if error}<p class="bad" id={errorId}>{error}</p>{/if}
     {#if shared}<SharedMark keys={shared} />{/if}
   </div>
   {#if children}<div class="ctl">{@render children()}</div>{/if}

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { addProject, expect, send, test, openSettingsPage } from './fixture';
+import { addProject, expect, send, test, openSettingsPage, closeSettings } from './fixture';
 
 // Two Claude accounts, both simulated: Principal is the app's own Claude Code folder (the app is started with a
 // CLAUDE_CONFIG_DIR of the test's, which Principal inherits: it is never given one), the second has a folder of its own
@@ -94,8 +94,7 @@ test.describe('a private project, two accounts, the first out of quota', () => {
     await expect(dialog.getByText(/^Compte réservé à ce projet : « Principal »/)).toBeVisible();
     await expect(dialog.getByText(/^Ses agents peuvent partir sur/)).toBeHidden();
     await expect(dialog.getByRole('switch', { name: 'Comptes partagés à la limite' })).toHaveAttribute('aria-checked', 'false');
-    await dialog.getByRole('button', { name: 'Enregistrer' }).click();
-    await expect(dialog).toBeHidden();
+    await closeSettings(dialog);
 
     // Its ticket starts on Principal, out of quota: it meets the limit there and waits for its reset, with « Reprendre sur
     // un autre compte » switched on: Pro is shared with the other projects.

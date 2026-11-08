@@ -8,6 +8,7 @@ import type { AccountView } from '../../lib/types';
 import { fakeBackend, project, resetApp } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
 import IntegrationsTab from './IntegrationsTab.svelte';
+import { afterGesture } from '../../test/settings';
 
 vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }));
 const opened = vi.hoisted(() => [] as string[]);
@@ -44,7 +45,6 @@ const backend = (over: Record<string, (a: any) => unknown> = {}) =>
   });
 
 const panel = () => document.getElementById('settings-panel')!;
-const save = () => userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
 
 describe('IntegrationsTab', () => {
   beforeEach(() => {
@@ -318,9 +318,8 @@ describe('IntegrationsTab', () => {
     // Commented on arrival in « À tester » and « Terminé » by default.
     expect(p.getByRole('switch', { name: "Commenter à l'arrivée dans « À tester »" })).toHaveAttribute('aria-checked', 'true');
     await userEvent.click(p.getByRole('switch', { name: "Commenter à l'arrivée dans « En cours »" }));
-    expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Tickets importés' })).toHaveClass('changed');
-    await save();
-    const sent = b.called('update_project')[0].args.project;
+    await afterGesture();
+    const sent = b.called('update_project').at(-1)!.args.project;
     expect(sent.integrations).toEqual({
       links: [
         {
@@ -343,11 +342,10 @@ describe('IntegrationsTab', () => {
     const source = within(panel()).getByRole('combobox', { name: 'Projet Jira' });
     await waitFor(() => expect(within(source).getByRole('option', { name: 'ATL — Atlas' })).toBeInTheDocument());
     await userEvent.selectOptions(source, 'ATL');
-    // Another project shown meanwhile: the first, folded, keeps the dot of its change.
+    // Another project shown meanwhile: the source still goes to the first.
     await userEvent.click(within(screen.getByRole('navigation')).getByRole('button', { name: 'site' }));
     arrive(JIRA_STATES);
-    await waitFor(() => expect(within(screen.getByRole('navigation')).getByRole('button', { name: /^demo-api/ })).toHaveClass('changed'));
-    await save();
+    await afterGesture();
     const saved = b
       .called('update_project')
       .map((c) => [c.args.project.id, c.args.project.integrations.links.map((l: any) => l.container)]);
@@ -368,7 +366,7 @@ describe('IntegrationsTab', () => {
     expect(p.getByText('Correspondance des statuts')).toBeInTheDocument();
     await userEvent.selectOptions(p.getByRole('combobox', { name: 'Projet Jira' }), '');
     expect(p.queryByText('Correspondance des statuts')).not.toBeInTheDocument();
-    await save();
+    await afterGesture();
     expect(b.called('update_project')[0].args.project.integrations.links).toEqual([]);
   });
 
@@ -417,7 +415,7 @@ describe('IntegrationsTab', () => {
     expect(b.called('integration_states')[0].args).toEqual({ service: 'clickup', container: 'l1' });
     expect(await p.findByRole('combobox', { name: 'ClickUp — Terminé' })).toHaveValue('review');
     expect(p.getByRole('combobox', { name: 'ClickUp — En cours' })).toHaveValue('in progress');
-    await save();
+    await afterGesture();
     expect(b.called('update_project')[0].args.project.integrations.links[0]).toMatchObject({
       service: 'clickup',
       container: 'l1',
@@ -435,7 +433,7 @@ describe('IntegrationsTab', () => {
     await userEvent.type(label, 'escouade');
     await userEvent.click(p.getByRole('button', { name: '60 min' }));
     await userEvent.click(p.getByRole('switch', { name: 'Publier un résumé à chaque boucle' }));
-    await save();
+    await afterGesture();
     expect(b.called('save_settings')[0].args.settings.integrations).toEqual({
       syncStates: true,
       loopComments: true,

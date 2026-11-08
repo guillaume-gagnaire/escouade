@@ -112,7 +112,7 @@ const PAGES = [
   ['Projet', 'a-projet', FIRST],
 ] as const;
 
-/** The window, its bar, its header and its foot, and what its page shares with the preview's. */
+/** The window, its bar and its header (no foot: each setting is saved as it changes), and what its page shares with the preview's. */
 async function compareFrame(page: Page, preview: Page, route: string, small: boolean, where: string) {
   const win = page.locator('.settings[role="dialog"]');
   const pwin = preview.locator('.win.a');
@@ -129,7 +129,7 @@ async function compareFrame(page: Page, preview: Page, route: string, small: boo
     ['the page chosen', win.locator('.s-i[aria-current="page"]'), pwin.locator('.a-i.on'), []],
     [
       'another page',
-      win.locator('.s-i:not([aria-current]):not(.changed):not(.sub):not([aria-expanded])').first(),
+      win.locator('.s-i:not([aria-current]):not(.sub):not([aria-expanded])').first(),
       pwin.locator('.a-i:not(.on):not(.sub)').first(),
       [],
     ],
@@ -141,9 +141,6 @@ async function compareFrame(page: Page, preview: Page, route: string, small: boo
     ['« Fermer »', win.locator('.s-head .close'), pwin.locator('.a-main .head .close'), []],
     ['the body', win.locator('.s-body'), pwin.locator('.a-body'), ['height', ...size]],
     ['its column', win.locator('.s-body .inner'), pwin.locator('.a-body > .inner'), ['height', ...size]],
-    ['the foot', win.locator('.s-foot'), pwin.locator('.a-main .foot'), size],
-    ['« Annuler »', win.locator('.s-foot .btn').first(), pwin.locator('.a-main .foot .btn').first(), []],
-    ['« Enregistrer »', win.locator('.s-foot .btn.primary'), pwin.locator('.a-main .foot .btn.primary'), []],
   ];
   if (project)
     pairs.push(
@@ -252,12 +249,14 @@ test('the bar goes from page to page by the keyboard, and « Avancé » unfolds 
   await expect(dialog.getByRole('button', { name: 'Fermer le projet…' })).toHaveCount(0);
   await fold.click();
   await expect(dialog.getByRole('button', { name: 'Fermer le projet…' })).toBeVisible();
-  // A change marks its page with a dot, here and on the project folded.
+  // A change is saved as it is made (ESC-380): no dot of a change waiting, here or on the project folded.
   await openSettingsPage(dialog, 'Projet');
   await dialog.getByRole('textbox', { name: 'Nom du projet' }).fill('demo-api-2');
-  await expect(settingsEntry(dialog, 'Projet')).toHaveClass(/changed/);
   await openSettingsPage(dialog, 'Général');
-  await expect(nav.locator('button[aria-expanded="false"]')).toHaveClass(/changed/);
+  await expect(dialog).toHaveAttribute('data-saving', 'false');
+  await expect(nav.locator('button[aria-expanded="false"]')).toHaveText(/demo-api-2/);
+  await expect(dialog.locator('.s-nav .chg')).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Projets' }).getByRole('tab', { name: /demo-api-2/ })).toBeVisible();
 });
 
 /**
@@ -344,19 +343,7 @@ async function measure(page: Page, dialog: Locator, lang: string) {
     for (const name of pages) {
       await openSettingsPage(dialog, name);
       await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-      for (const p of await overflows(dialog, [
-        '.sr',
-        '.l1',
-        '.l2',
-        '.cmd-row',
-        '.step',
-        '.s-head',
-        '.s-foot',
-        '.s-i',
-        '.hg',
-        '.mrow',
-        '.item',
-      ]))
+      for (const p of await overflows(dialog, ['.sr', '.l1', '.l2', '.cmd-row', '.step', '.s-head', '.s-i', '.hg', '.mrow', '.item']))
         problems.push(`${lang} ${size.width}: ${name}: ${p}`);
     }
   }

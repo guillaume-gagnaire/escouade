@@ -2,14 +2,14 @@
 title: "Réglages"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md"]
-tickets: ["ESC-378","ESC-379"]
-decisions: [118]
+tickets: ["ESC-378","ESC-379","ESC-380"]
+decisions: [118,"les-reglages-s-appliquent-et-s-enregistr"]
 compared: null
 ---
 
 ## Ce que c'est
 
-Une seule fenêtre de réglages pour toute l'app : une barre des catégories à gauche, une page à la fois à droite. Les pages d'Escouade règlent l'app ; celles d'un projet ne règlent que lui. Les changements forment un brouillon, enregistré d'un coup ou jeté. Quelques réglages, qui se voient tout de suite, s'appliquent sans attendre. Chaque réglage est décrit sur la page de sa feature ; cette page dit comment la fenêtre marche et ce que chaque page contient.
+Une seule fenêtre de réglages pour toute l'app : une barre des catégories à gauche, une page à la fois à droite. Les pages d'Escouade règlent l'app ; celles d'un projet ne règlent que lui. Chaque réglage s'applique et s'enregistre au geste, comme dans les réglages de macOS et de VS Code : ni « Annuler », ni « Enregistrer ». Chaque réglage est décrit sur la page de sa feature ; cette page dit comment la fenêtre marche et ce que chaque page contient.
 
 ## Comportement
 
@@ -32,18 +32,28 @@ Une seule fenêtre de réglages pour toute l'app : une barre des catégories à 
   - « Tous les projets » (ce que reçoit un nouveau projet, les projets fermés) ;
   - en bas : « À propos » et la version d'Escouade.
 - **Le clavier** : ↑ et ↓ vont d'une entrée de la barre à la suivante et l'ouvrent, Origine et Fin à la première et à la dernière ; passer sur un projet l'ouvre et le déplie. Une seule entrée de la barre est dans l'ordre de Tab : celle où est le clavier.
-- **Un point** sur une page qui a des changements non enregistrés ; un projet replié porte celui de ses pages. Le point se lit aussi au lecteur d'écran (« Modifié, pas encore enregistré »).
-- **La teinte suit la portée** : sur une page d'Escouade (Tous les projets compris), la fenêtre prend le teal d'Escouade ; sur une page d'un projet, la couleur de ce projet, celle du brouillon dès qu'elle change. À la fermeture, l'app reprend sa propre teinte.
+- **La teinte suit la portée** : sur une page d'Escouade (Tous les projets compris), la fenêtre prend le teal d'Escouade ; sur une page d'un projet, la couleur de ce projet, dès qu'elle change. À la fermeture, l'app reprend sa propre teinte.
 - La page sous son titre et sa description ; pour une page d'un projet, sa tuile devant, et son nom pour titre sur la page Projet.
 - **« Avancé »**, en bas d'une page : un groupe replié sur une ligne qui nomme ce qu'il cache ; un clic le déplie sur place. Pour l'instant, seule la page Projet en a un : « Zone sensible », qui cache « Fermer le projet ».
-- « Enregistrer » enregistre d'un coup ce qui a changé, dans toutes les pages et tous les projets, chaque partie par-dessus ce que l'app a alors (le Kanban, lui, avance seul).
-- « Enregistrer » est refusé, avec la raison, tant qu'un projet n'a pas de nom, qu'une commande de lancement n'a pas de nom ou de ligne de commande, ou qu'un dossier des worktrees ou un préfixe de branche n'est pas valide. Ce qui n'a pas pu être enregistré reste dans la fenêtre.
-- « Annuler », Échap ou × jettent tout le brouillon.
-- Hors du brouillon, appliqués et enregistrés tout de suite : « Affichage » (voir *Fenêtre*), les comptes des harness et leur « Projection des quotas » (voir *Barre de statut*), les comptes des intégrations (voir *Intégrations*), l'interrupteur « Les agents peuvent piloter Escouade » (voir *Serveur MCP*), et les modèles de la voix, téléchargés ou effacés sur leur ligne.
+- Pas de pied : ni « Annuler » ni « Enregistrer ». Échap, × ou un clic à côté de la fenêtre la ferment, sans question.
+
+### Enregistrer au geste
+
+- **Un choix** (interrupteur, segments, menu, case, raccourci enregistré, commande ajoutée ou retirée, proposition de Claude prise, logo choisi) s'applique et s'enregistre aussitôt.
+- **Un texte** (champ, nombre) s'enregistre quand il perd le focus, ou après 0,7 s sans frappe. Fermer la fenêtre enregistre ce qui attendait encore.
+- Chaque enregistrement envoie ce qui a changé par-dessus ce que l'app a alors (le Kanban, lui, avance seul), un à la fois : ce qui change pendant qu'un enregistrement tourne part avec le suivant. Rien n'est envoyé quand rien n'a changé.
+- **Une saisie invalide** se dit sur sa rangée, et la valeur enregistrée avant reste tant qu'elle n'est pas corrigée ; le reste s'enregistre :
+  - un projet sans nom : « Un projet garde un nom : « demo-api » reste enregistré. » ;
+  - une commande de lancement sans nom ou sans ligne de commande : les commandes enregistrées restent celles d'avant tant qu'il en manque ;
+  - un dossier des worktrees ou un préfixe de branche refusé, avec la raison sous le champ (voir *Git & fichiers*) ;
+  - un nombre vidé ou sous 0, par exemple « Un nombre entier, 0 ou plus : 15 reste enregistré. » ; un nombre à virgule est arrondi à l'entier du dessous ; une taille de texte hors de ses bornes est ramenée dedans.
+- Ce qui coûte le dit sur sa rangée, comme avant : le proxy et les certificats ne valent pour un agent qu'au prochain démarrage de son process, le remote control lance aussitôt le process `claude` de chaque agent concerné.
+- Certaines rangées passent par leur propre appel au backend, comme avant : « Affichage » (voir *Fenêtre*), les comptes des harness et leur « Projection des quotas » (voir *Barre de statut*), les comptes des intégrations (voir *Intégrations*), l'interrupteur « Les agents peuvent piloter Escouade » (voir *Serveur MCP*), et les modèles de la voix, téléchargés ou effacés sur leur ligne.
+- Rien ne se perd au redémarrage : ce qui est enregistré est dans `settings.json` et les fichiers des projets, dont aucune clé ne change.
 
 ### Les pages
 
-Chaque réglage a sa page dans le registre de la fenêtre (le point d'une page se lit sur lui). Jusqu'à ce que chaque lot de la refonte les redécoupe, les pages montrent encore le contenu des onglets de la 2.0 :
+Chaque réglage a sa page dans le registre de la fenêtre. Jusqu'à ce que chaque lot de la refonte les redécoupe, les pages montrent encore le contenu des onglets de la 2.0 :
 
 - **Général** : l'ancien onglet Application.
 - **Agents** : le serveur MCP (« Les agents peuvent piloter Escouade », « Activité MCP »).
@@ -53,7 +63,7 @@ Chaque réglage a sa page dans le registre de la fenêtre (le point d'une page s
 - **Plugins** : le lien vers la vue Plugins.
 - **Avancé** : Réseau, Terminaux, puis « Recherche par le sens ».
 - **À propos** : comme avant.
-- **Projet**, **Git et worktrees**, **Lancement**, **Équipe**, **Confidentialité** : l'ancien onglet Projets du projet, chacune ouverte sur sa partie (Git, Lancement, Kanban partagé, Confidentialité) ; « Fermer le projet… » est sous « Zone sensible », repliée. Fermer ou non revient aux réglages, le brouillon intact (voir *Fermer un projet*).
+- **Projet**, **Git et worktrees**, **Lancement**, **Équipe**, **Confidentialité** : l'ancien onglet Projets du projet, chacune ouverte sur sa partie (Git, Lancement, Kanban partagé, Confidentialité) ; « Fermer le projet… » est sous « Zone sensible », repliée. Fermer ou non revient aux réglages (voir *Fermer un projet*).
 - **Kanban** : l'ancien onglet Kanban du projet.
 - **Tous les projets** : « Nouveaux projets » (« Nouveaux projets privés », éteint par défaut), puis « Projets fermés », seulement s'il y en a, avec par projet « Rouvrir » et « Effacer l'historique… », et « Historique illisible » avec « Effacer » (voir *Fermer un projet*). Effacer un historique revient sur cette page.
 
@@ -65,7 +75,7 @@ Le détail des réglages de chaque ancien onglet :
 - **Notifications** : « Me prévenir pour », les nouvelles des hébergeurs, notifications du système, son (voir *Notifications*).
 - **Voix** : « Micro utilisé », « Modèle », « Langue parlée », « Raccourci » (voir *Dictée*) ; « Conversation » (voir *Conversation vocale*).
 - **Projets** : « Identité » (nom, dossier, couleur, lettres, logo et libellé de la tuile, harness et « Compte préféré », « Assistant de configuration ») ; « Remote control pour les agents de ce projet » ; « Confidentialité » (« Projet privé », « Ses fichiers », ses comptes, voir *Serveur MCP* et *Comptes*) ; « Workflow » ; « Git » (commit, worktrees, préfixes, fichiers copiés, commandes de préparation et de démontage, voir *Git & fichiers*) ; « Worktrees restés » › « Nettoyer » ; « Lancement » ; le Kanban partagé, `.escouade.yml` et la mémoire partagée.
-- **Kanban** : branche cible, action à la validation, tests, nettoyage, message de commit, conflit (voir *Validation*) ; pilote auto et ses agents (voir *Pilote auto*) ; « Pause au-delà du quota », « pour tous les projets » : un réglage de l'app, marqué sur la page Comptes et harness (voir *Comptes*).
+- **Kanban** : branche cible, action à la validation, tests, nettoyage, message de commit, conflit (voir *Validation*) ; pilote auto et ses agents (voir *Pilote auto*) ; « Pause au-delà du quota », « pour tous les projets » : un réglage de l'app, rangé dans la page Comptes et harness (voir *Comptes*).
 - **Intégrations** : comptes des services et hébergeurs ; sources liées au projet, correspondance des statuts, synchronisation et import automatique (voir *Intégrations*).
 - **Terminaux** : PowerShell 7, Git Bash, distribution WSL (bash sous macOS), shells détectés (voir *Barre latérale*).
 - **Réseau** : proxy et certificats (ci-dessous).
@@ -88,6 +98,6 @@ Le détail des réglages de chaque ancien onglet :
 ## Limites
 
 - La recherche de la barre ne cherche rien encore.
-- Tant que les pages montrent les anciens onglets, le point d'une page suit le registre : un réglage encore affiché ailleurs (la liste de tâches sous Comptes et harness, par exemple) marque la page qui le recevra (ici Agents).
+- Rien ne revient sur un réglage enregistré : pour le défaire, on le change de nouveau.
 - Le proxy n'est pas donné aux terminaux intégrés sans l'option qui l'exporte.
 - Ignorer la vérification des certificats ne vaut pour un process `claude` qu'à son prochain démarrage.

@@ -14,6 +14,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ### Nouveautés
 
 - Les réglages ont une barre à gauche : les pages d’Escouade, puis chaque projet avec les siennes, Tous les projets et À propos, au clavier aussi. La fenêtre, plus grande, prend la couleur de ce qu’elle règle, et le rare se replie sous « Avancé », qui dit ce qu’il cache.
+- Les réglages s’appliquent dès que tu les changes, sans « Enregistrer » : un texte à la sortie du champ ou après une pause. Une saisie impossible, comme un projet sans nom, est dite sur sa ligne et l’ancienne valeur reste.
 - Les plugins d'Escouade sont dans l'installeur : à la première ouverture, même sans réseau, Escouade installe ceux que ta configuration utilise, et la vue Plugins propose les autres, installables d'un clic sans téléchargement.
 - Sur store.escouade.dev, la documentation d'un plugin peut avoir ses pages en français et en anglais : chacun lit celles de sa langue, sinon celles de l'autre, et un lien d'une page à l'autre reste sur le store.
 - Un plugin ne garde plus ce qu’Escouade lui a prêté : l’hôte d’un essai de connexion raté se referme aussitôt, et un compte retiré reprend son hôte et son jeton. Une adresse qui se fait passer pour locale, comme `http://localhost:1@exemple.dev`, est refusée dès le formulaire.

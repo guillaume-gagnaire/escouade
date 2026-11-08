@@ -5,10 +5,9 @@ import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import { BARE_ENGINE, CLAUDE_ENGINE, branchInfo, fakeBackend, gitInfo, project, resetApp } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
+import { afterGesture } from '../../test/settings';
 
 vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }));
-
-const save = () => userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
 
 describe('ProjectTab', () => {
   beforeEach(() => {
@@ -49,9 +48,9 @@ describe('ProjectTab', () => {
     expect(screen.queryByRole('heading', { name: 'Serveur MCP' })).not.toBeInTheDocument();
     // A change of the project saves nothing of the kind.
     await userEvent.click(screen.getByRole('switch', { name: 'Un worktree par agent' }));
-    await save();
+    await afterGesture();
     expect(backend.called('update_project')).toHaveLength(1);
-    expect(backend.called('update_project')[0].args.project).not.toHaveProperty('agentsUseEscouade');
+    expect(backend.called('update_project').at(-1)!.args.project).not.toHaveProperty('agentsUseEscouade');
   });
 
   it('makes a new agent’s worktree at its first message, under its name, until switched off (ESC-156)', async () => {
@@ -66,8 +65,8 @@ describe('ProjectTab', () => {
       ),
     ).toBeInTheDocument();
     await userEvent.click(toggle);
-    await save();
-    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', worktreeAtFirstMessage: false });
+    await afterGesture();
+    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({ id: 'p1', worktreeAtFirstMessage: false });
   });
 
   it('starts the new worktrees from the folder’s branch, the board’s target or a branch chosen (ESC-160)', async () => {
@@ -100,8 +99,8 @@ describe('ProjectTab', () => {
     expect(named).toHaveAttribute('aria-pressed', 'true');
     expect(named).toHaveTextContent('origin/hotfix');
     expect(screen.getByText(/^Ils partent de origin\/hotfix,/)).toBeInTheDocument();
-    await save();
-    expect(backend.called('update_project')[0].args.project).toMatchObject({
+    await afterGesture();
+    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({
       id: 'p1',
       worktreeBase: { kind: 'branch', branch: 'origin/hotfix' },
     });
@@ -115,8 +114,8 @@ describe('ProjectTab', () => {
     const group = screen.getByRole('group', { name: 'Branche de départ des nouveaux worktrees' });
     expect(within(group).getByRole('button', { name: /release/ })).toHaveAttribute('aria-pressed', 'true');
     await userEvent.click(within(group).getByRole('button', { name: 'Branche actuelle du dossier' }));
-    await save();
-    expect(backend.called('update_project')[0].args.project).toMatchObject({ worktreeBase: { kind: 'head' } });
+    await afterGesture();
+    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({ worktreeBase: { kind: 'head' } });
   });
 
   it('opens the setup assistant again on the project (ESC-94)', async () => {
@@ -199,17 +198,15 @@ describe('ProjectTab', () => {
       expect(screen.getByRole('switch', { name: LABEL })).toHaveAttribute('aria-checked', 'false');
       await userEvent.click(screen.getByRole('switch', { name: LABEL }));
       expect(screen.getByRole('switch', { name: LABEL })).toHaveAttribute('aria-checked', 'true');
-      expect(tab('Confidentialité')).toHaveClass('changed');
-      expect(backend.called('update_project')).toHaveLength(0);
-      await save();
+      await afterGesture();
       expect(backend.called('update_project')).toHaveLength(1);
-      expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p2', remoteControl: true });
+      expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({ id: 'p2', remoteControl: true });
       expect(app.projects[1].remoteControl).toBe(true);
       // The other project kept its own value.
       expect(app.projects[0].remoteControl).toBe(true);
     });
 
-    it('is switched on by a project that has it, and saves nothing when put back', async () => {
+    it('is switched on by a project that has it, and saved at each switch', async () => {
       const backend = fakeBackend();
       resetApp({ projects: [project({ remoteControl: true })] });
       app.modal = { kind: 'settings' };
@@ -217,10 +214,12 @@ describe('ProjectTab', () => {
       const remote = screen.getByRole('switch', { name: LABEL });
       expect(remote).toHaveAttribute('aria-checked', 'true');
       await userEvent.click(remote);
+      await afterGesture();
+      expect(backend.called('update_project').map((c) => c.args.project.remoteControl)).toEqual([false]);
       await userEvent.click(remote);
-      expect(tab('Confidentialité')).not.toHaveClass('changed');
-      await save();
-      expect(backend.called('update_project')).toHaveLength(0);
+      await afterGesture();
+      expect(backend.called('update_project').map((c) => c.args.project.remoteControl)).toEqual([false, true]);
+      expect(app.projects[0].remoteControl).toBe(true);
     });
 
     it('is shown on and disabled while the setting for all agents is on in the modal, with the reason in view', async () => {
@@ -234,9 +233,8 @@ describe('ProjectTab', () => {
       // A click changes nothing, and nothing of the project is saved.
       await userEvent.click(remote);
       expect(remote).toHaveAttribute('aria-checked', 'true');
-      expect(tab('Confidentialité')).not.toHaveClass('changed');
-      await save();
-      expect(backend.called('save_settings')[0].args.settings).toMatchObject({ remoteControlAll: true });
+      await afterGesture();
+      expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ remoteControlAll: true });
       expect(backend.called('update_project')).toHaveLength(0);
       expect(app.projects[0].remoteControl).toBe(false);
     });
@@ -303,8 +301,8 @@ describe('ProjectTab', () => {
     await userEvent.type(agents, 'gg/');
     expect(screen.getByText('Branche d’un nouvel agent : gg/<nom>. Vide : son nom seul.')).toBeInTheDocument();
     await userEvent.clear(tickets);
-    await save();
-    expect(backend.called('update_project')[0].args.project).toMatchObject({
+    await afterGesture();
+    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({
       id: 'p1',
       worktreeDir: '../demo-api-worktrees',
       agentBranchPrefix: 'gg/',
@@ -316,13 +314,13 @@ describe('ProjectTab', () => {
   it('refuses a worktrees folder or a branch prefix that cannot be, and saves nothing until it is fixed', async () => {
     const backend = fakeBackend();
     render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    const saveButton = screen.getByRole('button', { name: 'Enregistrer' });
     const dir = screen.getByRole('textbox', { name: 'Dossier des worktrees' });
     await userEvent.type(dir, '../demo-api');
     expect(dir).toHaveAttribute('aria-invalid', 'true');
     expect(dir).toHaveAccessibleDescription(/C’est le dossier du projet lui-même\./);
-    expect(screen.getByText('Le dossier des worktrees ou un préfixe de branche de « demo-api » n’est pas valide.')).toBeInTheDocument();
-    expect(saveButton).toBeDisabled();
+    // Left as it is: said on its row, not saved.
+    await afterGesture();
+    expect(backend.called('update_project')).toHaveLength(0);
     await userEvent.clear(dir);
     await userEvent.type(dir, '..');
     expect(dir).toHaveAccessibleDescription(/Ce dossier contient celui du projet : choisis-en un à côté/);
@@ -334,14 +332,13 @@ describe('ProjectTab', () => {
     expect(dir).toHaveAccessibleDescription(/Ce dossier est dans un dossier \.git\./);
     await userEvent.clear(dir);
     expect(dir).toHaveAttribute('aria-invalid', 'false');
-    expect(saveButton).toBeEnabled();
     const tickets = screen.getByRole('textbox', { name: 'Préfixe des branches des tickets' });
     await userEvent.type(tickets, ' x');
     expect(tickets).toHaveAttribute('aria-invalid', 'true');
     expect(tickets).toHaveAccessibleDescription(/Aucun nom de branche ne commence ainsi.*« \\ » ou « @\{ »/);
-    expect(saveButton).toBeDisabled();
-    await userEvent.click(saveButton);
+    await afterGesture();
     expect(backend.called('update_project')).toHaveLength(0);
+    expect(app.projects[0].ticketBranchPrefix).toBe('ticket/');
   });
 
   it('says in the sensitive zone that closing the project keeps its history, and offers to erase it with the question', async () => {
@@ -400,10 +397,9 @@ describe('ProjectTab: « Projet privé » (ESC-139)', () => {
       ),
     ).toBeVisible();
     await userEvent.click(own);
-    expect(tab('Confidentialité')).toHaveClass('changed');
-    await save();
+    await afterGesture();
     expect(backend.called('update_project')).toHaveLength(1);
-    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', private: true });
+    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({ id: 'p1', private: true });
     expect(app.projects[0].private).toBe(true);
     expect(backend.called('save_settings')).toHaveLength(0);
   });
@@ -442,11 +438,11 @@ describe('ProjectTab: « Projet privé » (ESC-139)', () => {
     const lock = 'Projet privé : invisible pour les agents des autres projets';
     expect(screen.getByRole('button', { name: /site/ })).toContainElement(screen.getByRole('img', { name: lock }));
     expect(screen.getAllByRole('img', { name: lock })).toHaveLength(1);
-    // Put back as it was: nothing to save.
+    // Each switch saved at once: put back, it is private again.
     await userEvent.click(screen.getByRole('switch', { name: LABEL }));
     await userEvent.click(screen.getByRole('switch', { name: LABEL }));
-    await save();
-    expect(backend.called('update_project')).toHaveLength(0);
+    await afterGesture();
+    expect(backend.called('update_project').map((c) => c.args.project.private)).toEqual([false, true]);
   });
 
   it('sets the default of the new projects, off until switched on, also with no project open', async () => {
@@ -457,9 +453,8 @@ describe('ProjectTab: « Projet privé » (ESC-139)', () => {
     expect(byDefault).toHaveAttribute('aria-checked', 'false');
     expect(screen.getByText('Chaque projet ajouté est privé dès le départ. Ceux qui existent gardent leur réglage.')).toBeVisible();
     await userEvent.click(byDefault);
-    expect(tab('Tous les projets')).toHaveClass('changed');
-    await save();
-    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ privateProjects: true });
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ privateProjects: true });
     expect(app.settings.privateProjects).toBe(true);
     // The projects that exist keep their own.
     expect(backend.called('update_project')).toHaveLength(0);
@@ -530,8 +525,8 @@ describe('ProjectTab: a private project’s accounts (ESC-141)', () => {
     expect(limit).toHaveAttribute('aria-checked', 'false');
     await userEvent.click(limit);
     expect(screen.getByText(/Ses agents peuvent partir sur « Principal », un compte partagé/)).toBeVisible();
-    await save();
-    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', private: true, sharedOnLimit: true });
+    await afterGesture();
+    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({ id: 'p1', private: true, sharedOnLimit: true });
   });
 
   it('adds an account reserved to it, back to its settings as drafted', async () => {
@@ -591,7 +586,7 @@ describe('ProjectTab: its default harness (ESC-29)', () => {
     expect(screen.getByRole('button', { name: 'Claude Code', pressed: true })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Harness nu' }));
     expect(group).toBeInTheDocument();
-    await save();
-    expect(backend.called('update_project')[0].args.project.engine).toBe('codex');
+    await afterGesture();
+    expect(backend.called('update_project').at(-1)!.args.project.engine).toBe('codex');
   });
 });

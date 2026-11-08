@@ -670,6 +670,17 @@ export async function openSettingsPage(where: Page | Locator, name: string | Reg
   return dialog;
 }
 
+/**
+ * Closes the settings window once what was changed in it is saved (ESC-380): no « Enregistrer », each setting is saved
+ * as it changes, a text when it loses the focus. The field typed in is left first (a click on the page's title).
+ */
+export async function closeSettings(dialog: Locator) {
+  await dialog.locator('.s-head h1').click();
+  await expect(dialog).toHaveAttribute('data-saving', 'false');
+  await dialog.locator('.s-head .close').click();
+  await expect(dialog).toBeHidden();
+}
+
 export async function send(page: Page, text: string) {
   const box = page.getByRole('textbox').last();
   await box.fill(text);

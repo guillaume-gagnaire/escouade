@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Locator } from '@playwright/test';
-import { addProject, expect, send, test, unfoldSections, openSettingsPage, settingsEntry } from './fixture';
+import { addProject, expect, send, test, unfoldSections, openSettingsPage, settingsEntry, closeSettings } from './fixture';
 
 test('a new project opens an agent that streams Claude’s reply', async ({ app }) => {
   const { page } = app;
@@ -336,7 +336,7 @@ test('the setting for all agents gives each one remote control, which one is set
   await expect(own).toHaveAttribute('aria-checked', 'true');
   await expect(own).toBeDisabled();
   await expect(dialog.getByText('Activé pour tous les projets dans Réglages › Harness')).toBeVisible();
-  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+  await closeSettings(dialog);
   // The agent there was gets it, and its card says where it comes from.
   await expect(card.locator('[data-tip*="Remote control : connecté"][data-tip*="activé par le réglage de tous les agents"]')).toBeVisible();
   // Set apart by hand: off in spite of the setting.
@@ -418,8 +418,7 @@ test('a new worktree is set up before its agent takes a message, and torn down b
     .getByRole('group', { name: 'Commande de démontage 1' })
     .getByLabel('Commande', { exact: true })
     .fill('Set-Content (Join-Path $env:ESCOUADE_PROJECT_DIR teardown.txt) (Test-Path prepare.txt)');
-  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
-  await expect(dialog).toBeHidden();
+  await closeSettings(dialog);
 
   await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   await expect(page.getByRole('status').filter({ hasText: 'Préparation du worktree' })).toContainText(
@@ -457,8 +456,7 @@ test('a new agent’s worktree is made at its first message, under the name the 
     .getByRole('group', { name: 'Commande de préparation 1' })
     .getByLabel('Commande', { exact: true })
     .fill("Set-Content prepare.txt ((Split-Path -Leaf (Get-Location)) + ' ' + $env:ESCOUADE_BRANCH)");
-  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
-  await expect(dialog).toBeHidden();
+  await closeSettings(dialog);
 
   await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   const card = page.locator('.card').first();
@@ -494,10 +492,8 @@ test('a project’s worktrees go to the folder and on the branch prefix its sett
   const prefix = dialog.getByRole('textbox', { name: 'Préfixe des branches des agents' });
   await prefix.fill('gg /');
   await expect(prefix).toHaveAttribute('aria-invalid', 'true');
-  await expect(dialog.getByRole('button', { name: 'Enregistrer' })).toBeDisabled();
   await prefix.fill('gg/');
-  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
-  await expect(dialog).toBeHidden();
+  await closeSettings(dialog);
 
   await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   await expect.poll(() => (fs.existsSync(beside) ? fs.readdirSync(beside) : [])).toEqual(['agent-1']);
@@ -655,9 +651,7 @@ test('launch commands run in their own terminals, with their status live', async
   const buildCfg = dialog.getByRole('group', { name: 'Commande 2' });
   await buildCfg.getByLabel('Nom').fill('Build');
   await buildCfg.getByLabel('Commande').fill('exit 2');
-  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
-
-  await expect(dialog).toBeHidden();
+  await closeSettings(dialog);
   await unfoldSections(page);
   const serveur = page.locator('.run', { hasText: 'Serveur' });
   const build = page.locator('.run', { hasText: 'Build' });
@@ -713,8 +707,7 @@ test('a launch command runs in the worktree of an agent, with its ports, and sto
   await docsCfg.getByLabel('Nom').fill('Docs');
   await docsCfg.getByLabel('Commande').fill('Start-Sleep 600');
   await docsCfg.getByLabel(/Sous-dossier/).fill('docs');
-  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
-  await expect(dialog).toBeHidden();
+  await closeSettings(dialog);
 
   // ▶ asks where (on hover).
   await unfoldSections(page);
@@ -782,7 +775,7 @@ test('the proxy configured in the settings reaches Claude', async ({ app }) => {
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
   await openSettingsPage(dialog, 'Avancé');
   await dialog.getByPlaceholder('aucun').fill('http://proxy.local:3128');
-  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+  await closeSettings(dialog);
   await addProject(page, app.repo);
   await send(page, 'Bonjour');
   await expect(page.getByText('Bonjour, tu as dit : Bonjour')).toBeVisible();
@@ -1097,7 +1090,7 @@ test('a deleted ticket’s worktree holding work stays, its archived agent says 
   await settings.getByRole('button', { name: 'Nettoyer' }).click();
   await expect(settings.getByRole('status').filter({ hasText: 'worktree' })).toHaveText('1 worktree supprimé.', { timeout: 30_000 });
   await expect.poll(() => fs.existsSync(worktree)).toBe(false);
-  await settings.getByRole('button', { name: 'Annuler' }).click();
+  await closeSettings(settings);
   await expect(archived).not.toContainText('worktree gardé');
 });
 

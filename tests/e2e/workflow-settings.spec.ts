@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium, type Locator, type Page } from '@playwright/test';
-import { addProject, expect, openSettingsPage, test } from './fixture';
+import { addProject, closeSettings, expect, openSettingsPage, test } from './fixture';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const GSD = path.join(ROOT, 'tests', 'fixtures', 'workflows', 'gsd');
@@ -28,7 +28,6 @@ const WORDS = {
     settings: 'Réglages (Ctrl+,)',
     dialog: 'Réglages',
     page: 'Projet',
-    save: 'Enregistrer',
     readAt: /^Lu par les règles à /,
     reread: 'Relire',
     gsd: 'Corriger les étapes de GSD',
@@ -45,7 +44,6 @@ const WORDS = {
     settings: 'Settings (Ctrl+,)',
     dialog: 'Settings',
     page: 'Project',
-    save: 'Save',
     readAt: /^Read by the rules at /,
     reread: 'Read again',
     gsd: 'Correct the steps of GSD',
@@ -237,8 +235,7 @@ for (const lang of ['fr', 'en'] as const) {
       const first = section.getByRole('textbox', { name: w.step(1) });
       await first.fill(w.renamed);
       await expect(gsd).toContainText(w.fixed);
-      await dialog.getByRole('button', { name: w.save }).click();
-      await expect(dialog).toBeHidden();
+      await closeSettings(dialog);
       page = await app.restart();
       await page.setViewportSize(SIZE);
       ({ dialog, section } = await open());

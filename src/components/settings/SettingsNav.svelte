@@ -12,7 +12,7 @@
   // The bar of the settings window (direction A, design/settings-2-2/index.html#a-*): the search (inert until R8),
   // Escouade's pages, the projects with the one chosen unfolded on its pages, « Tous les projets », and « À propos »
   // with the version at its foot. Up and down go from entry to entry, Home and End to the first and the last; going
-  // through a project opens it. A dot says a page has something to save.
+  // through a project opens it. Nothing waits to be saved (ESC-380): no dot of a change.
 
   /** An entry of the bar: a page of Escouade, a project (folded or not), or a page of the project unfolded. */
   interface Entry {
@@ -72,14 +72,7 @@
 
   const all = pageInfo('allProjects');
   const about = pageInfo('about');
-  const allChanged = $derived(settingsForm.changed('allProjects'));
-  const aboutChanged = $derived(settingsForm.changed('about'));
-  const projectChanged = (id: string) => PROJECT.some((x) => settingsForm.changed(x.id, id));
 </script>
-
-{#snippet dot(changed: boolean)}
-  {#if changed}<span class="chg" use:tip={t('settings.modal.changed')} aria-hidden="true"></span>{/if}
-{/snippet}
 
 <nav class="s-nav" aria-label={t('common.settings')}>
   <label class="search" use:tip={t('settings.nav.search')}>
@@ -91,46 +84,37 @@
   <div class="entries" bind:this={list} onkeydown={onKey}>
     <span class="s-h">Escouade</span>
     {#each APP as p (p.id)}
-      {@const changed = settingsForm.changed(p.id)}
       <button
         class="s-i"
         data-key={p.id}
         aria-current={current === p.id ? 'page' : undefined}
-        aria-describedby={changed ? 'settings-changed' : undefined}
-        class:changed
         tabindex={tabbable === p.id ? 0 : -1}
-        onclick={() => go({ key: p.id, page: p.id })}><Icon name={p.icon} /><span class="lbl">{p.label}</span>{@render dot(changed)}</button
+        onclick={() => go({ key: p.id, page: p.id })}><Icon name={p.icon} /><span class="lbl">{p.label}</span></button
       >
     {/each}
     {#if app.projects.length}<span class="s-h">{t('settings.nav.projects')}</span>{/if}
     {#each app.projects as p (p.id)}
       {@const d = settingsForm.projects[p.id]}
       {@const key = `project:${p.id}`}
-      {@const changed = p.id !== open && projectChanged(p.id)}
       <button
         class="s-i project"
         data-key={key}
         aria-expanded={p.id === open}
-        aria-describedby={changed ? 'settings-changed' : undefined}
-        class:changed
         tabindex={tabbable === key ? 0 : -1}
         onclick={() => go({ key, projectId: p.id })}
         ><i class="sq" style:--c={d?.color ?? p.color}></i><span class="lbl">{d?.name.trim() || p.name}</span
-        >{#if d?.private ?? p.private}<span class="end"><PrivateMark /></span>{/if}{@render dot(changed)}</button
+        >{#if d?.private ?? p.private}<span class="end"><PrivateMark /></span>{/if}</button
       >
       {#if p.id === open}
         <div class="subs" role="group" aria-label={d?.name.trim() || p.name}>
           {#each PROJECT as x (x.id)}
             {@const sub = `${p.id}:${x.id}`}
-            {@const changed = settingsForm.changed(x.id, p.id)}
             <button
               class="s-i sub"
               data-key={sub}
               aria-current={current === sub ? 'page' : undefined}
-              aria-describedby={changed ? 'settings-changed' : undefined}
-              class:changed
               tabindex={tabbable === sub ? 0 : -1}
-              onclick={() => go({ key: sub, page: x.id, projectId: p.id })}><span class="lbl">{x.label}</span>{@render dot(changed)}</button
+              onclick={() => go({ key: sub, page: x.id, projectId: p.id })}><span class="lbl">{x.label}</span></button
             >
           {/each}
         </div>
@@ -140,28 +124,22 @@
       class="s-i"
       data-key="allProjects"
       aria-current={current === 'allProjects' ? 'page' : undefined}
-      aria-describedby={allChanged ? 'settings-changed' : undefined}
-      class:changed={allChanged}
       tabindex={tabbable === 'allProjects' ? 0 : -1}
-      onclick={() => go({ key: 'allProjects', page: 'allProjects' })}
-      ><Icon name={all.icon} /><span class="lbl">{all.label}</span>{@render dot(allChanged)}</button
+      onclick={() => go({ key: 'allProjects', page: 'allProjects' })}><Icon name={all.icon} /><span class="lbl">{all.label}</span></button
     >
     <div class="bot">
       <button
         class="s-i"
         data-key="about"
         aria-current={current === 'about' ? 'page' : undefined}
-        aria-describedby={aboutChanged ? 'settings-changed' : undefined}
-        class:changed={aboutChanged}
         tabindex={tabbable === 'about' ? 0 : -1}
         onclick={() => go({ key: 'about', page: 'about' })}
-        ><Icon name={about.icon} /><span class="lbl">{about.label}</span>{@render dot(aboutChanged)}<span class="ver" aria-hidden="true"
+        ><Icon name={about.icon} /><span class="lbl">{about.label}</span><span class="ver" aria-hidden="true"
           >{shownVersion(app.version)}</span
         ></button
       >
     </div>
   </div>
-  <span id="settings-changed" hidden>{t('settings.modal.changed')}</span>
 </nav>
 
 <style>
@@ -296,17 +274,6 @@
     display: inline-flex;
     margin-left: auto;
   }
-  .chg {
-    flex: none;
-    width: 6px;
-    height: 6px;
-    margin-left: auto;
-    border-radius: 50%;
-    background: var(--p-ink);
-  }
-  .end + .chg {
-    margin-left: 8px;
-  }
   .bot {
     margin-top: auto;
     padding-top: 8px;
@@ -317,8 +284,5 @@
     color: var(--muted);
     font-size: 11.5px;
     font-variant-numeric: tabular-nums;
-  }
-  .chg + .ver {
-    margin-left: 8px;
   }
 </style>

@@ -1,6 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { addProject, expect, FAKE_CODEX, FAKE_COPILOT, FAKE_OPENCODE, send, test, type App, openSettingsPage } from './fixture';
+import {
+  addProject,
+  expect,
+  FAKE_CODEX,
+  FAKE_COPILOT,
+  FAKE_OPENCODE,
+  send,
+  test,
+  type App,
+  openSettingsPage,
+  closeSettings,
+} from './fixture';
 
 // Escouade's MCP server, declared in Claude Code by the fake `claude mcp add` (in the .claude.json of a folder of the test's),
 // and called as Claude Code calls it: JSON-RPC over HTTP, with the token it was declared with.
@@ -261,8 +272,7 @@ test.describe('a private project', () => {
     await openSettingsPage(dialog, 'Projet');
     await dialog.getByRole('button', { name: 'coffre' }).click();
     await dialog.getByRole('switch', { name: 'Projet privé' }).click();
-    await dialog.getByRole('button', { name: 'Enregistrer' }).click();
-    await expect(dialog).toBeHidden();
+    await closeSettings(dialog);
     // Its tile says so; the other's does not.
     const lock = 'Projet privé : invisible pour les agents des autres projets';
     await expect(page.getByRole('tab', { name: 'coffre, privé' })).toBeVisible();

@@ -42,34 +42,35 @@ export default {
 
   // The window itself.
   modal: {
-    changed: 'Modifié, pas encore enregistré',
-    saved: 'Réglages enregistrés',
     noProject: 'Aucun projet ouvert.',
   },
 
-  // What keeps the draft from being saved.
+  // What cannot be saved as typed, said on its row (ESC-380): what was saved before stays.
   problem: {
-    projectName: 'Le projet « {name} » doit garder un nom.',
-    command: 'Chaque commande de lancement de « {name} » demande un nom et une ligne de commande.',
-    worktrees: 'Le dossier des worktrees ou un préfixe de branche de « {name} » n’est pas valide.',
+    projectName: 'Un projet garde un nom : « {name} » reste enregistré.',
+    command:
+      'Chaque commande demande un nom et une ligne de commande : les commandes enregistrées restent celles d’avant tant qu’il en manque.',
+    /** `{value}`: the number saved, which stays. */
+    number: 'Un nombre entier, 0 ou plus : {value} reste enregistré.',
   },
 
   // « Remplir automatiquement »: what is said when Claude has read the project.
   suggest: {
     nothing: "Claude n'a trouvé aucune commande à lancer pour ce projet.",
     proposed: {
-      one: "1 commande proposée : relis-la avant d'enregistrer.",
-      other: "{count} commandes proposées : relis-les avant d'enregistrer.",
+      one: '1 commande proposée : relis-la avant de remplacer les commandes.',
+      other: '{count} commandes proposées : relis-les avant de remplacer les commandes.',
     },
     /** One command was left out, for what it would hide. */
     proposedLeftOne: {
-      one: "1 commande proposée, 1 écartée (caractères invisibles ou trop longue) : relis-la avant d'enregistrer.",
-      other: "{count} commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant d'enregistrer.",
+      one: '1 commande proposée, 1 écartée (caractères invisibles ou trop longue) : relis-la avant de remplacer les commandes.',
+      other: '{count} commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant de remplacer les commandes.',
     },
     /** Several were left out: `refused` of them. */
     proposedLeftMany: {
-      one: "1 commande proposée, {refused} écartées (caractères invisibles ou trop longues) : relis-la avant d'enregistrer.",
-      other: "{count} commandes proposées, {refused} écartées (caractères invisibles ou trop longues) : relis-les avant d'enregistrer.",
+      one: '1 commande proposée, {refused} écartées (caractères invisibles ou trop longues) : relis-la avant de remplacer les commandes.',
+      other:
+        '{count} commandes proposées, {refused} écartées (caractères invisibles ou trop longues) : relis-les avant de remplacer les commandes.',
     },
   },
 
@@ -489,12 +490,12 @@ export default {
     fillAuto: 'Remplir automatiquement',
     filling: 'Claude lit le projet…',
     fillWorktreesDesc:
-      "Claude lit le projet (manifestes, lockfiles, README…) sans rien modifier et propose les commandes. Relis-les avant d'enregistrer.",
+      'Claude lit le projet (manifestes, lockfiles, README…) sans rien modifier et propose les commandes. Relis-les avant de remplacer les tiennes.',
     fillLaunchDesc:
-      "Claude lit le projet (manifestes, scripts, docker-compose, README…) sans rien modifier et propose les commandes à lancer. Relis-les avant d'enregistrer.",
+      'Claude lit le projet (manifestes, scripts, docker-compose, README…) sans rien modifier et propose les commandes à lancer. Relis-les avant de remplacer les tiennes.',
     proposedWorktrees: 'Commandes de worktree proposées',
     proposedWorktreesNote:
-      "Proposition de Claude : relis chaque commande en entier. Elles remplacent les deux listes et, une fois enregistrées, tournent seules : la préparation à l'ouverture de chaque nouveau worktree, le démontage avant sa suppression.",
+      "Proposition de Claude : relis chaque commande en entier. Elles remplacent les deux listes et, une fois prises, tournent seules : la préparation à l'ouverture de chaque nouveau worktree, le démontage avant sa suppression.",
     proposedLaunch: 'Commandes de lancement proposées',
     proposedLaunchNote: 'Proposition de Claude : relis chaque commande en entier. Elles remplacent celles de la liste.',
     ignore: 'Ignorer',

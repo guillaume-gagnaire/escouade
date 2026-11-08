@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test, openSettingsPage } from './fixture';
+import { addProject, expect, test, openSettingsPage, closeSettings } from './fixture';
 
 const tile = (page: Page) => page.getByRole('tab', { name: /^demo-api/ });
 
@@ -59,8 +59,7 @@ for (const size of [
     await letters.pressSequentially('apiv');
     await expect(letters).toHaveValue('api');
     await expect(settings.getByRole('img', { name: 'Tuile du projet' })).toHaveText('api');
-    await settings.getByRole('button', { name: 'Enregistrer' }).click();
-    await expect(settings).toBeHidden();
+    await closeSettings(settings);
     await expect(tile(page).locator('.ini')).toHaveText('api');
 
     // The logo: an SVG whose script never runs, copied by the app; the file chosen then goes.
@@ -76,8 +75,7 @@ for (const size of [
       'src',
       /^data:image\/svg\+xml;base64,/,
     );
-    await settings.getByRole('button', { name: 'Enregistrer' }).click();
-    await expect(settings).toBeHidden();
+    await closeSettings(settings);
     fs.rmSync(svg);
     const logo = tile(page).locator('img.logo');
     await expect(logo).toHaveAttribute('src', /^data:image\/svg\+xml;base64,/);
@@ -106,8 +104,7 @@ for (const size of [
     // « Retirer »: the letters chosen again.
     settings = await projectsSettings(page);
     await settings.getByRole('button', { name: 'Retirer' }).click();
-    await settings.getByRole('button', { name: 'Enregistrer' }).click();
-    await expect(settings).toBeHidden();
+    await closeSettings(settings);
     await expect(tile(page).locator('.ini')).toHaveText('api');
     await expect(tile(page).locator('img.logo')).toHaveCount(0);
     expect(fs.readdirSync(path.join(app.data, 'projects', id))).toHaveLength(0);
@@ -126,7 +123,7 @@ test('a project closed with its history erased erases its logo', async ({ app })
   const settings = await projectsSettings(page);
   await settings.getByRole('button', { name: 'Choisir une image…' }).click();
   await expect(settings.getByRole('img', { name: 'Tuile du projet' }).locator('img')).toHaveAttribute('src', /^data:image\/png;base64,/);
-  await settings.getByRole('button', { name: 'Enregistrer' }).click();
+  await closeSettings(settings);
   await expect(tile(page).locator('img.logo')).toHaveAttribute('src', /^data:image\/png;base64,/);
   const dir = path.join(app.data, 'projects', projectId(app.data));
   expect(fs.readdirSync(dir)).toHaveLength(1);

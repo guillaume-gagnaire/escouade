@@ -3,7 +3,7 @@
 // their external ones moved and commented while the fake `claude` works them.
 
 import { execFileSync } from 'node:child_process';
-import { addProject, expect, test, openSettingsPage } from './fixture';
+import { addProject, expect, test, openSettingsPage, closeSettings } from './fixture';
 import { startFakeTrackers } from '../fixtures/fake-trackers.mjs';
 
 let trackers: { url: string; close: () => Promise<void> };
@@ -66,7 +66,7 @@ test('a Jira issue and a Trello card are imported, and their states follow their
   await expect(settings.getByRole('combobox', { name: 'Trello — En cours' })).toHaveValue('l2');
   await expect(settings.getByRole('combobox', { name: 'Trello — Terminé' })).toHaveValue('l3');
   await settings.getByRole('switch', { name: "Commenter à l'arrivée dans « En cours »" }).click();
-  await settings.getByRole('button', { name: 'Enregistrer' }).click();
+  await closeSettings(settings);
   await expect(settings).toHaveCount(0);
 
   // The import: one ticket of each source.
@@ -128,7 +128,7 @@ test('a ClickUp task is imported with its checklist, and its status follows its 
   await source.selectOption('l1');
   await expect(settings.getByRole('combobox', { name: 'ClickUp — En cours' })).toHaveValue('in progress');
   await expect(settings.getByRole('combobox', { name: 'ClickUp — Terminé' })).toHaveValue('review');
-  await settings.getByRole('button', { name: 'Enregistrer' }).click();
+  await closeSettings(settings);
   await expect(settings).toHaveCount(0);
 
   // The import: the open tasks, the finished one left out; « Mes tâches » and a custom id.
@@ -189,7 +189,7 @@ test('the automatic import brings the GitHub issues that carry its label', async
   // Kept « À faire »: the autopilot is turned off first.
   await openSettingsPage(settings, 'Kanban');
   await settings.getByRole('switch', { name: 'Attribuer les tickets automatiquement' }).click();
-  await settings.getByRole('button', { name: 'Enregistrer' }).click();
+  await closeSettings(settings);
   await expect(settings).toHaveCount(0);
   await page.getByRole('button', { name: /^Kanban/ }).click();
   // The first pass comes 30 s after the start.
@@ -268,8 +268,7 @@ test('GitLab Issues takes the GitLab code host’s account, its project offered 
   const host = new URL(trackers.url).host;
   await expect(settings.getByRole('group', { name: host })).toContainText('Sert aussi à GitLab Issues');
   await expect(settings.getByText(`Connecté · @ada · ${host}`)).toBeVisible();
-  await settings.getByRole('button', { name: 'Annuler' }).click();
-  await expect(settings).toHaveCount(0);
+  await closeSettings(settings);
 
   // The import offers the project's own GitLab project, linked in one click.
   await page.getByRole('button', { name: 'Importer' }).click();

@@ -12,11 +12,11 @@ import { agent, fakeBackend, project, resetApp } from '../test/ipc';
 import NewProjectModal from './modals/NewProjectModal.svelte';
 import SettingsModal from './modals/SettingsModal.svelte';
 import ProjectRail from './ProjectRail.svelte';
+import { afterGesture } from '../test/settings';
 
 const PNG = 'data:image/png;base64,iVBORw0KGgo=';
 const SVG = 'data:image/svg+xml;base64,PHN2Zy8+';
 const tile = (name: string) => screen.getByRole('tab', { name: new RegExp(`^${name}`) });
-const save = () => userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
 const letters = () => screen.getByRole('textbox', { name: 'Lettres de la tuile' }) as HTMLInputElement;
 const preview = () => screen.getByRole('img', { name: 'Tuile du projet' });
 
@@ -99,8 +99,8 @@ describe('Réglages › Projets', () => {
     await userEvent.type(letters(), 'apiv');
     expect(letters().value).toBe('api');
     expect(preview()).toHaveTextContent('api');
-    await save();
-    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', tileLetters: 'api' });
+    await afterGesture();
+    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({ id: 'p1', tileLetters: 'api' });
     expect(app.projects[0].tileLetters).toBe('api');
     expect(backend.called('set_project_logo')).toHaveLength(0);
 
@@ -108,7 +108,7 @@ describe('Réglages › Projets', () => {
     app.modal = { kind: 'settings' };
     render(SettingsModal, { tab: 'projects', projectId: 'p1' });
     await userEvent.clear(screen.getAllByRole('textbox', { name: 'Lettres de la tuile' }).at(-1)!);
-    await userEvent.click(screen.getAllByRole('button', { name: 'Enregistrer' }).at(-1)!);
+    await afterGesture();
     expect(backend.called('update_project')[1].args.project.tileLetters).toBe('');
   });
 
@@ -123,8 +123,7 @@ describe('Réglages › Projets', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Choisir une image…' }));
     await waitFor(() => expect(preview().querySelector('img')).toHaveAttribute('src', SVG));
     expect(backend.called('read_logo')[0].args).toEqual({ path: 'C:\\images\\logo.svg' });
-    expect(backend.called('set_project_logo')).toHaveLength(0);
-    await save();
+    await afterGesture();
     expect(backend.called('set_project_logo')[0].args).toEqual({ id: 'p1', path: 'C:\\images\\logo.svg' });
     expect(app.projects[0].logo).toBe('logo-9.svg');
     // The rail shows it without asking for it again.
@@ -139,7 +138,7 @@ describe('Réglages › Projets', () => {
     const last = within(dialogs.at(-1)!);
     await userEvent.click(last.getByRole('button', { name: 'Retirer' }));
     expect(last.getByRole('img', { name: 'Tuile du projet' }).querySelector('img')).toBeNull();
-    await userEvent.click(last.getByRole('button', { name: 'Enregistrer' }));
+    await afterGesture();
     expect(backend.called('set_project_logo')[1].args).toEqual({ id: 'p1', path: null });
     expect(app.projects[0].logo).toBe('');
   });
@@ -187,7 +186,7 @@ describe('the new project’s assistant', () => {
     await waitFor(() => expect(document.querySelector('.tile img.logo')).toHaveAttribute('src', PNG));
     await userEvent.click(screen.getByRole('button', { name: /^Créer sans l.assistant$/ }));
     await waitFor(() => expect(backend.called('set_project_logo')).toHaveLength(1));
-    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p9', tileLetters: '🚀' });
+    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({ id: 'p9', tileLetters: '🚀' });
     expect(backend.called('set_project_logo')[0].args).toEqual({ id: 'p9', path: 'C:\\images\\logo.png' });
     await waitFor(() => expect(app.projects.find((p) => p.id === 'p9')).toMatchObject({ tileLetters: '🚀', logo: 'logo-2.png' }));
   });

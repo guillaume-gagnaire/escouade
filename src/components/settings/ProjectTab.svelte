@@ -103,6 +103,8 @@
   } as const satisfies Record<WorktreesProblem, string>;
   /** What is wrong with where its worktrees go and how their branches are named, as typed. */
   const problems = $derived(worktreesProblems(project.path, draft));
+  /** What of its fields cannot be saved as typed (ESC-380), said on their row: what was saved stays. */
+  const held = $derived(settingsForm.projectProblems(project.id));
   /** Where its next worktree would go, as typed. */
   const nextWorktree = $derived(tildify(joinPath(worktreesRoot(project.path, draft.worktreeDir), t('settings.project.nextName'))));
 
@@ -250,8 +252,19 @@
 <ProposedPlugins project={live} />
 
 <Group title={t('settings.project.identity')}>
-  <Row label={t('settings.project.nameLabel')}>
-    <input class="field input" aria-label={t('settings.project.nameLabel')} spellcheck="false" bind:value={draft.name} />
+  <Row
+    label={t('settings.project.nameLabel')}
+    error={held.name ? t('settings.problem.projectName', { name: live.name }) : ''}
+    errorId="project-name-error"
+  >
+    <input
+      class="field input"
+      aria-label={t('settings.project.nameLabel')}
+      aria-invalid={held.name}
+      aria-describedby={held.name ? 'project-name-error' : undefined}
+      spellcheck="false"
+      bind:value={draft.name}
+    />
   </Row>
   <!-- From two harnesses found on: the one of its new agents and tickets (none chosen: Claude Code). -->
   {#if choosesEngine()}
@@ -592,10 +605,19 @@
     {#each draft.runCommands as c, i (c.id)}
       <fieldset class="cmd-row">
         <legend class="sr">{t('settings.project.commandN', { n: i + 1 })}</legend>
-        <input class="field" aria-label={t('common.name')} bind:value={c.name} placeholder={t('settings.project.namePlaceholder')} />
+        <input
+          class="field"
+          aria-label={t('common.name')}
+          aria-invalid={!c.name.trim()}
+          aria-describedby={held.commands ? 'commands-error' : undefined}
+          bind:value={c.name}
+          placeholder={t('settings.project.namePlaceholder')}
+        />
         <input
           class="field mono"
           aria-label={t('common.command')}
+          aria-invalid={!c.command.trim()}
+          aria-describedby={held.commands ? 'commands-error' : undefined}
           bind:value={c.command}
           placeholder={t('settings.project.commandPlaceholder')}
         />
@@ -622,6 +644,7 @@
     {:else}
       <p class="empty">{t('settings.project.noCommandsYet')}</p>
     {/each}
+    {#if held.commands}<p class="error" id="commands-error">{t('settings.problem.command')}</p>{/if}
   </div>
   <div class="launch-acts">
     <button class="add-line" onclick={() => settingsForm.addCommand()}

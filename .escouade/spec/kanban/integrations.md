@@ -2,7 +2,7 @@
 title: "Intégrations"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-213","ESC-214","ESC-215","ESC-216","ESC-344"]
+tickets: ["ESC-213","ESC-214","ESC-215","ESC-216","ESC-344","ESC-380"]
 decisions: []
 compared: null
 ---
@@ -23,7 +23,7 @@ Les intégrations relient le Kanban d'un projet à un outil de tickets : Jira Cl
 
 ### Les comptes
 
-Les comptes se connectent tout de suite, hors du brouillon « Enregistrer ».
+Les comptes se connectent tout de suite, par leur propre appel au backend, comme chaque réglage s'enregistre au geste (voir *Réglages*).
 
 | Source | Compte |
 |---|---|

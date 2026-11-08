@@ -12,6 +12,7 @@ import { settingsForm } from '../../lib/settings.svelte';
 import { app } from '../../lib/state.svelte';
 import { BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
+import { afterGesture } from '../../test/settings';
 
 const panel = () => document.getElementById('settings-panel')!;
 /** The choices of a setting, as its chips read. */
@@ -64,17 +65,18 @@ describe('the « Application » tab', () => {
     expect(choices('Interface language')[0]).toBe('System (French)');
   });
 
-  it('saves the languages chosen with the other settings', async () => {
+  it('saves each language as it is chosen, once', async () => {
     const backend = fakeBackend({ save_settings: () => [] });
     render(SettingsModal, { tab: 'app' });
-    expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Général' })).not.toHaveClass('changed');
     await userEvent.click(choice(UI, 'English'));
+    await afterGesture();
+    expect(backend.called('save_settings')).toHaveLength(1);
+    expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ language: 'en' });
     await userEvent.click(choice(CLAUDE, 'Français'));
     expect(choice(UI, 'English')).toHaveAttribute('aria-pressed', 'true');
-    expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Général' })).toHaveClass('changed');
-    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
-    expect(backend.called('save_settings')).toHaveLength(1);
-    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ language: 'en', claudeLanguage: 'fr' });
+    await afterGesture();
+    expect(backend.called('save_settings')).toHaveLength(2);
+    expect(backend.called('save_settings')[1].args.settings).toMatchObject({ language: 'en', claudeLanguage: 'fr' });
     expect(app.settings).toMatchObject({ language: 'en', claudeLanguage: 'fr' });
   });
 
@@ -129,13 +131,12 @@ describe('the « Application » tab', () => {
       expect(app.settings.uiZoom).toBe(150);
       expect(backend.called('plugin:webview|set_webview_zoom').map((c) => c.args.value)).toEqual([1.5]);
       // Nothing to save in the tab: it is saved already.
-      expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Général' })).not.toHaveClass('changed');
       vi.advanceTimersByTime(SAVE_DELAY_MS);
       expect(backend.called('save_settings')).toHaveLength(1);
-      expect(backend.called('save_settings')[0].args.settings.uiZoom).toBe(150);
+      expect(backend.called('save_settings').at(-1)!.args.settings.uiZoom).toBe(150);
       // A language saved afterwards keeps the zoom.
       await userEvent.click(choice(UI, 'English'));
-      await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+      await afterGesture();
       expect(backend.called('save_settings')[1].args.settings).toMatchObject({ language: 'en', uiZoom: 150 });
     });
 
@@ -152,15 +153,14 @@ describe('the « Application » tab', () => {
       expect(document.documentElement.dataset.theme).toBe('light');
       // The window's own theme, its title bar with it.
       expect(backend.called('plugin:window|set_theme').map((c) => c.args.value)).toEqual(['light']);
-      expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Général' })).not.toHaveClass('changed');
       vi.advanceTimersByTime(SAVE_DELAY_MS);
-      expect(backend.called('save_settings')[0].args.settings.theme).toBe('light');
+      expect(backend.called('save_settings').at(-1)!.args.settings.theme).toBe('light');
       // Back to the system's: the window's theme is the system's again.
       await userEvent.click(choice('Thème', 'Système'));
       expect(backend.called('plugin:window|set_theme').map((c) => c.args.value)).toEqual(['light', null]);
       // A language saved afterwards keeps the theme.
       await userEvent.click(choice(UI, 'English'));
-      await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+      await afterGesture();
       expect(backend.called('save_settings').at(-1)?.args.settings).toMatchObject({ language: 'en', theme: 'system' });
     });
 
@@ -223,8 +223,8 @@ describe('the « Application » tab', () => {
       expect(choices(WRITER)).toEqual(['Claude Haiku', 'Nu mini']);
       await userEvent.click(choice(WRITER, 'Nu mini'));
       expect(choice(WRITER, 'Nu mini')).toHaveAttribute('aria-pressed', 'true');
-      await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
-      expect(backend.called('save_settings')[0].args.settings).toMatchObject({ writerEngine: 'codex' });
+      await afterGesture();
+      expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ writerEngine: 'codex' });
     });
 
     it('shows the harness the texts go to when the one chosen is not installed any more', () => {
@@ -264,8 +264,8 @@ describe('the « Application » tab', () => {
       expect(menu).toHaveValue('');
       expect(panel()).toHaveTextContent('sans lui, OpenCode en choisirait un lui-même');
       await userEvent.selectOptions(menu, 'paid/coder');
-      await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
-      expect(backend.called('save_settings')[0].args.settings).toMatchObject({ writerEngine: 'opencode', writerModel: 'paid/coder' });
+      await afterGesture();
+      expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ writerEngine: 'opencode', writerModel: 'paid/coder' });
     });
 
     it('is not shown when no harness is installed', () => {
@@ -288,7 +288,6 @@ describe('the « Application » tab', () => {
   describe('« Ton nom » (ESC-243)', () => {
     const NAME = 'Ton nom';
     const field = () => within(panel()).getByRole('textbox', { name: NAME });
-    const saveButton = () => screen.getByRole('button', { name: 'Enregistrer' });
 
     it('is filled with git’s name when none was given, says so, and saves nothing until changed', async () => {
       app.settings = { ...app.settings, userName: '', nameAsked: true };
@@ -301,8 +300,8 @@ describe('the « Application » tab', () => {
       expect(settingsForm.changed('general')).toBe(false);
       await userEvent.type(field(), ' Jr');
       expect(panel()).not.toHaveTextContent('Repris de git');
-      await userEvent.click(saveButton());
-      expect(backend.called('save_settings')[0].args.settings).toMatchObject({ userName: 'Bob Durand Jr' });
+      await afterGesture();
+      expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ userName: 'Bob Durand Jr' });
     });
 
     it('stays empty once emptied on purpose, saved and opened again', async () => {
@@ -312,9 +311,9 @@ describe('the « Application » tab', () => {
       await vi.waitFor(() => expect(field()).toHaveValue('Bob Durand'));
       await userEvent.clear(field());
       expect(panel()).not.toHaveTextContent('Repris de git');
-      await userEvent.click(saveButton());
+      await afterGesture();
       await vi.waitFor(() => expect(backend.called('save_settings')).toHaveLength(1));
-      expect(backend.called('save_settings')[0].args.settings).toMatchObject({ userName: '', userNameCleared: true });
+      expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ userName: '', userNameCleared: true });
       expect(field()).toHaveValue('');
       view.unmount();
       render(SettingsModal, { tab: 'app' });

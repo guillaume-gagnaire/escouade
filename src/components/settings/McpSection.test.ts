@@ -110,7 +110,6 @@ describe('McpSection', () => {
     await waitFor(() => expect(switchEl()).toHaveAttribute('aria-checked', 'true'));
     expect(app.settings.mcpEnabled).toBe(true);
     // Saved already: the tab is not a change left for « Enregistrer ».
-    expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Agents' })).not.toHaveClass('changed');
     // Not told yet.
     expect(screen.getByRole('status')).toHaveTextContent('Déclaration dans les harness installés…');
     mcp.take({ type: 'mcpStatus', status: RUNNING });

@@ -6,7 +6,7 @@
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test, openSettingsPage } from './fixture';
+import { addProject, expect, test, openSettingsPage, closeSettings } from './fixture';
 import { startFakeTrackers } from '../fixtures/fake-trackers.mjs';
 
 let github: { url: string; close: () => Promise<void> };
@@ -60,7 +60,7 @@ async function connectGithub(page: Page) {
   await form.getByLabel(/Jeton/).fill('ghp_jeton');
   await form.getByRole('button', { name: 'Connecter' }).click();
   await expect(settings.getByText('Connecté · @ada').first()).toBeVisible();
-  await settings.getByRole('button', { name: 'Enregistrer' }).click();
+  await closeSettings(settings);
   await expect(settings).toHaveCount(0);
 }
 
@@ -78,7 +78,7 @@ test('the preview opens from the card in review, then the environments say where
   await page.getByRole('button', { name: /Après validation/ }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
   await settings.getByRole('radio', { name: /Ouvrir une pull request/ }).click();
-  await settings.getByRole('button', { name: 'Enregistrer' }).click();
+  await closeSettings(settings);
   await expect(settings).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Nouveau ticket' }).click();

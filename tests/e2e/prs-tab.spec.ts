@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test, openSettingsPage } from './fixture';
+import { addProject, expect, test, openSettingsPage, closeSettings } from './fixture';
 import { startFakeTrackers } from '../fixtures/fake-trackers.mjs';
 
 let github: { url: string; close: () => Promise<void> };
@@ -54,7 +54,7 @@ async function connectGithub(page: Page) {
   await form.getByLabel(/Jeton/).fill('ghp_jeton');
   await form.getByRole('button', { name: 'Connecter' }).click();
   await expect(settings.getByText('Connecté · @ada').first()).toBeVisible();
-  await settings.getByRole('button', { name: 'Enregistrer' }).click();
+  await closeSettings(settings);
   await expect(settings).toHaveCount(0);
 }
 

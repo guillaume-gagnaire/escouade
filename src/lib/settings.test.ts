@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync } from 'svelte';
 import { board, fakeBackend, project, resetApp, SETTINGS } from '../test/ipc';
 import { setLang } from './i18n';
-import { SETTINGS_PAGES, settingsForm } from './settings.svelte';
+import { SAVE_PAUSE_MS, SETTINGS_PAGES, settingsForm } from './settings.svelte';
 import { app } from './state.svelte';
 import type { RunCommand } from './types';
 
@@ -89,20 +89,30 @@ describe('settingsForm', () => {
     expect(backend.called('claude_found')).toHaveLength(2);
   });
 
-  it('turns an emptied number of minutes into 0 instead of sending null', async () => {
+  it('does not save an emptied or negative number, says it, and saves the rest', async () => {
     const backend = fakeBackend({ save_settings: () => [] });
     settingsForm.open();
     (settingsForm.settings as any).idleStopMinutes = null;
+    settingsForm.settings.attachWarnMb = -5;
+    settingsForm.settings.attachKeepDays = 2.7;
+    settingsForm.settings.sound = false;
+    expect([...settingsForm.badNumbers].sort()).toEqual(['attachWarnMb', 'idleStopMinutes']);
     await settingsForm.save();
-    expect(backend.called('save_settings')[0].args.settings.idleStopMinutes).toBe(0);
-  });
-
-  it('turns the numbers of the attachments into whole numbers, 0 or more, instead of sending null', async () => {
-    const backend = fakeBackend({ save_settings: () => [] });
-    settingsForm.open();
-    Object.assign(settingsForm.settings as any, { attachMaxMb: null, attachWarnMb: -5, attachKeepDays: 2.7 });
+    const sent = backend.called('save_settings')[0].args.settings;
+    // The values saved before stay; the whole number of the other is taken.
+    expect(sent).toMatchObject({
+      idleStopMinutes: SETTINGS.idleStopMinutes,
+      attachWarnMb: SETTINGS.attachWarnMb,
+      attachKeepDays: 2,
+      sound: false,
+    });
+    expect(app.settings.idleStopMinutes).toBe(SETTINGS.idleStopMinutes);
+    // Fixed: saved in its turn.
+    settingsForm.settings.attachWarnMb = 40;
+    (settingsForm.settings as any).idleStopMinutes = 15;
+    expect(settingsForm.badNumbers.size).toBe(0);
     await settingsForm.save();
-    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ attachMaxMb: 0, attachWarnMb: 0, attachKeepDays: 2 });
+    expect(backend.called('save_settings')[1].args.settings).toMatchObject({ attachWarnMb: 40, idleStopMinutes: 15 });
   });
 
   it('sees a change of the attachments on the page Avancé, and has none once it is saved', async () => {
@@ -200,7 +210,7 @@ describe('settingsForm', () => {
     answer({ setup: [ci], teardown: [], refused: 0 });
     await asked;
     expect(settingsForm.suggesting.p1).toBe(false);
-    expect(app.toasts.at(-1)?.text).toBe("1 commande proposée : relis-la avant d'enregistrer.");
+    expect(app.toasts.at(-1)?.text).toBe('1 commande proposée : relis-la avant de remplacer les commandes.');
     // Shown apart, to be read in full: the draft is left as it is until it is taken.
     expect(settingsForm.proposal.p1).toEqual({ setup: [ci], teardown: [], refused: 0 });
     expect(settingsForm.projects.p1.worktreeSetup).toEqual([]);
@@ -217,12 +227,12 @@ describe('settingsForm', () => {
     settingsForm.takeProposal('p1');
     expect(settingsForm.projects.p1.worktreeTeardown).toEqual([down]);
     expect(app.toasts.at(-1)?.text).toBe(
-      "2 commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant d'enregistrer.",
+      '2 commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant de remplacer les commandes.',
     );
     fakeBackend({ suggest_worktree_steps: () => ({ setup: [ci], teardown: [], refused: 2 }) });
     await settingsForm.suggest('p1');
     expect(app.toasts.at(-1)?.text).toBe(
-      "1 commande proposée, 2 écartées (caractères invisibles ou trop longues) : relis-la avant d'enregistrer.",
+      '1 commande proposée, 2 écartées (caractères invisibles ou trop longues) : relis-la avant de remplacer les commandes.',
     );
 
     settingsForm.takeProposal('p1');
@@ -269,7 +279,7 @@ describe('settingsForm', () => {
     answer({ commands: [web, db], refused: 0 });
     await asked;
     expect(settingsForm.suggestingLaunch.p1).toBe(false);
-    expect(app.toasts.at(-1)?.text).toBe("2 commandes proposées : relis-les avant d'enregistrer.");
+    expect(app.toasts.at(-1)?.text).toBe('2 commandes proposées : relis-les avant de remplacer les commandes.');
     // Shown apart, to be read in full: the draft keeps FRONT until it is taken.
     expect(settingsForm.launchProposal.p1).toEqual([web, db]);
     expect(settingsForm.projects.p1.runCommands).toEqual([FRONT]);
@@ -286,7 +296,7 @@ describe('settingsForm', () => {
 
     fakeBackend({ suggest_run_commands: () => ({ commands: [web], refused: 0 }) });
     await settingsForm.suggestLaunch('p1');
-    expect(app.toasts.at(-1)?.text).toBe("1 commande proposée : relis-la avant d'enregistrer.");
+    expect(app.toasts.at(-1)?.text).toBe('1 commande proposée : relis-la avant de remplacer les commandes.');
     // A proposal not taken goes with the draft too.
     settingsForm.open({ tab: 'projects', projectId: 'p1' });
     expect(settingsForm.launchProposal.p1).toBeUndefined();
@@ -297,12 +307,12 @@ describe('settingsForm', () => {
     settingsForm.takeLaunchProposal('p1');
     expect(settingsForm.projects.p1.runCommands).toEqual([web, db]);
     expect(app.toasts.at(-1)?.text).toBe(
-      "2 commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant d'enregistrer.",
+      '2 commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant de remplacer les commandes.',
     );
     fakeBackend({ suggest_run_commands: () => ({ commands: [web], refused: 3 }) });
     await settingsForm.suggestLaunch('p1');
     expect(app.toasts.at(-1)?.text).toBe(
-      "1 commande proposée, 3 écartées (caractères invisibles ou trop longues) : relis-la avant d'enregistrer.",
+      '1 commande proposée, 3 écartées (caractères invisibles ou trop longues) : relis-la avant de remplacer les commandes.',
     );
     settingsForm.takeLaunchProposal('p1');
 
@@ -360,18 +370,75 @@ describe('settingsForm', () => {
     expect(backend.called('board_set')[0].args.settings).toMatchObject({ testCommand: '', testsFirst: false });
   });
 
-  it('refuses to save a project without a name or a command without a name or a command line', async () => {
+  it('does not save a project without a name nor commands one of which lacks a name or a line, and saves the rest', async () => {
     const backend = fakeBackend();
     settingsForm.open({ projectId: 'p1' });
-    expect(settingsForm.problem).toBeNull();
+    expect(settingsForm.projectProblems('p2')).toMatchObject({ name: false, commands: false });
     settingsForm.projects.p2.name = ' ';
-    expect(settingsForm.problem).toBe('Le projet « site » doit garder un nom.');
-    expect(await settingsForm.save()).toBe(false);
-    settingsForm.projects.p2.name = 'site';
-    settingsForm.projects.p1.runCommands[0].command = '';
-    expect(settingsForm.problem).toBe('Chaque commande de lancement de « demo-api » demande un nom et une ligne de commande.');
-    expect(await settingsForm.save()).toBe(false);
+    expect(settingsForm.projectProblems('p2').name).toBe(true);
+    expect(await settingsForm.save()).toBe(true);
     expect(backend.calls).toEqual([]);
+    settingsForm.projects.p1.runCommands[0].command = '';
+    settingsForm.projects.p1.worktreePerAgent = true;
+    expect(settingsForm.projectProblems('p1').commands).toBe(true);
+    await settingsForm.save();
+    // Only what can be: the commands saved stay those of before.
+    expect(backend.called('update_project')).toHaveLength(1);
+    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', worktreePerAgent: true, runCommands: [FRONT] });
+    expect(app.projects[1].name).toBe('site');
+    // Still a change, to save once fixed.
+    expect(settingsForm.changed('launch', 'p1')).toBe(true);
+    settingsForm.projects.p1.runCommands[0].command = 'npm start';
+    await settingsForm.save();
+    expect(backend.called('update_project')[1].args.project.runCommands[0].command).toBe('npm start');
+  });
+
+  it('saves once after a pause, and at once when flushed', async () => {
+    vi.useFakeTimers();
+    try {
+      const backend = fakeBackend({ save_settings: () => [] });
+      settingsForm.open();
+      settingsForm.settings.proxyUrl = 'http://p';
+      settingsForm.schedule();
+      settingsForm.settings.proxyUrl = 'http://proxy:3128';
+      settingsForm.schedule();
+      await vi.advanceTimersByTimeAsync(SAVE_PAUSE_MS - 1);
+      expect(backend.called('save_settings')).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(1);
+      await vi.runAllTimersAsync();
+      expect(backend.called('save_settings')).toHaveLength(1);
+      expect(backend.called('save_settings')[0].args.settings.proxyUrl).toBe('http://proxy:3128');
+      // A choice: at once, the pause waiting dropped.
+      settingsForm.settings.sound = false;
+      settingsForm.schedule();
+      await settingsForm.flush();
+      expect(backend.called('save_settings')).toHaveLength(2);
+      await vi.runAllTimersAsync();
+      expect(backend.called('save_settings')).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('saves one at a time: what changes while a save runs is saved by the next', async () => {
+    let release!: () => void;
+    let n = 0;
+    const backend = fakeBackend({
+      save_settings: () => (++n === 1 ? new Promise((r) => (release = () => r([]))) : []),
+    });
+    settingsForm.open();
+    settingsForm.settings.sound = false;
+    const first = settingsForm.flush();
+    await new Promise((r) => setTimeout(r));
+    settingsForm.settings.proxyUrl = 'http://proxy:3128';
+    const second = settingsForm.flush();
+    await new Promise((r) => setTimeout(r));
+    expect(backend.called('save_settings')).toHaveLength(1);
+    release();
+    await first;
+    await second;
+    expect(backend.called('save_settings')).toHaveLength(2);
+    expect(backend.called('save_settings')[1].args.settings).toMatchObject({ sound: false, proxyUrl: 'http://proxy:3128' });
   });
 
   it('marks the pages whose settings changed', () => {
@@ -542,24 +609,20 @@ describe('settingsForm', () => {
       await settingsForm.suggestLaunch('p1');
       return app.toasts.at(-1)?.text;
     };
-    expect(await said([ci], 0)).toBe('1 command suggested: review it before saving.');
-    expect(await said([ci, db], 0)).toBe('2 commands suggested: review them before saving.');
-    expect(await said([ci], 1)).toBe('1 command suggested, 1 left out (invisible characters or too long): review it before saving.');
-    expect(await said([ci, db], 1)).toBe('2 commands suggested, 1 left out (invisible characters or too long): review them before saving.');
-    expect(await said([ci], 3)).toBe('1 command suggested, 3 left out (invisible characters or too long): review it before saving.');
-    expect(await said([ci, db], 3)).toBe('2 commands suggested, 3 left out (invisible characters or too long): review them before saving.');
+    expect(await said([ci], 0)).toBe('1 command suggested: review it before replacing the commands.');
+    expect(await said([ci, db], 0)).toBe('2 commands suggested: review them before replacing the commands.');
+    expect(await said([ci], 1)).toBe(
+      '1 command suggested, 1 left out (invisible characters or too long): review it before replacing the commands.',
+    );
+    expect(await said([ci, db], 1)).toBe(
+      '2 commands suggested, 1 left out (invisible characters or too long): review them before replacing the commands.',
+    );
+    expect(await said([ci], 3)).toBe(
+      '1 command suggested, 3 left out (invisible characters or too long): review it before replacing the commands.',
+    );
+    expect(await said([ci, db], 3)).toBe(
+      '2 commands suggested, 3 left out (invisible characters or too long): review them before replacing the commands.',
+    );
     expect(await said([], 0)).toBe('Claude found no command to run for this project.');
-  });
-
-  it('tells in English what keeps the settings from being saved, and follows a change of language', () => {
-    settingsForm.open({ projectId: 'p1' });
-    settingsForm.projects.p2.name = ' ';
-    expect(settingsForm.problem).toBe('Le projet « site » doit garder un nom.');
-    setLang('en');
-    flushSync();
-    expect(settingsForm.problem).toBe('The project “site” needs a name.');
-    settingsForm.projects.p2.name = 'site';
-    settingsForm.projects.p1.runCommands[0].command = '';
-    expect(settingsForm.problem).toBe('Every launch command in “demo-api” needs a name and a command line.');
   });
 });

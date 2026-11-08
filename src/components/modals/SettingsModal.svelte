@@ -3,7 +3,14 @@
   import { trapFocus } from '../../lib/focus';
   import { t } from '../../lib/i18n';
   import { tileText } from '../../lib/project-rail';
-  import { pageInfo, settingsForm, type SettingsPage, type SettingsSection, type SettingsTab } from '../../lib/settings.svelte';
+  import {
+    pageInfo,
+    SAVE_PAUSE_MS,
+    settingsForm,
+    type SettingsPage,
+    type SettingsSection,
+    type SettingsTab,
+  } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import { applyTheme } from '../../lib/theme';
   import AccountsTab from '../settings/AccountsTab.svelte';
@@ -22,8 +29,9 @@
   import TileFace from '../TileFace.svelte';
 
   // All the settings, the app's and each project's, in one place (direction A, design/settings-2-2/index.html#a-*):
-  // the bar of the pages on the left, a page at a time on the right, saved together. Until R3 to R7 cut them up, the
-  // pages show what the 2.0 tabs showed, opened on their part.
+  // the bar of the pages on the left, a page at a time on the right. Each setting is saved as it changes (ESC-380): a
+  // choice at once, a text when it loses the focus or after a pause in the typing; no « Enregistrer ». Until R3 to R7
+  // cut them up, the pages show what the 2.0 tabs showed, opened on their part.
   let {
     page,
     tab,
@@ -40,7 +48,7 @@
     suggest?: boolean;
   } = $props();
 
-  // A fresh draft each time the modal opens, unless it comes back from a modal it opened. Asked for it, Claude reads
+  // Read again from the app each time the modal opens, unless it comes back from a modal it opened. Asked for it, Claude reads
   // the project to fill the launch commands of the draft (only a fresh one: coming back is not asking again).
   untrack(() => {
     if (resume) return settingsForm.resume({ page, tab, projectId, section });
@@ -57,7 +65,27 @@
   // The tint follows the page: Escouade's teal on its pages, the project's colour (as in the draft) on the project's.
   // The app's own tint comes back when the window closes.
   $effect(() => applyTheme(ofProject && draft ? draft.color : null));
-  onDestroy(() => app.applyTheme());
+  // A change of the fields: typed (an `input`), saved after a pause in the typing; else (a switch, a choice, a command
+  // added, a shortcut recorded, a proposal taken) at once. A `change` (a field left, a menu chosen) or a click saves
+  // what waits at once. Closed, what waits is saved.
+  let typing = false;
+  $effect(() => {
+    JSON.stringify(settingsForm.settings);
+    JSON.stringify(settingsForm.projects);
+    untrack(() => {
+      settingsForm.schedule(typing ? SAVE_PAUSE_MS : 0);
+      typing = false;
+    });
+  });
+  const flush = () => {
+    typing = false;
+    void settingsForm.flush();
+  };
+
+  onDestroy(() => {
+    flush();
+    app.applyTheme();
+  });
 
   /** Where a page opens, until its lot gives it a content of its own: on its part of the 2.0 tab it shows. */
   const ANCHOR: Partial<Record<SettingsPage, string>> = {
@@ -84,12 +112,6 @@
   let downOnOverlay = false;
 
   const close = () => (app.modal = null);
-
-  async function save() {
-    if (!(await settingsForm.save())) return;
-    close();
-    app.toast(t('settings.modal.saved'), 'ok');
-  }
 </script>
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && close()} />
@@ -108,6 +130,10 @@
     aria-modal="true"
     aria-label={t('common.settings')}
     data-scope={info.scope}
+    data-saving={settingsForm.saving}
+    oninput={() => (typing = true)}
+    onchange={flush}
+    onclick={flush}
   >
     <SettingsNav />
     <div class="s-main">
@@ -175,19 +201,14 @@
           {/if}
         </div>
       </div>
-      <div class="s-foot">
-        {#if settingsForm.problem}<span class="problem">{settingsForm.problem}</span>{/if}
-        <button class="btn cancel" onclick={close}>{t('common.cancel')}</button>
-        <button class="btn primary" disabled={settingsForm.busy || !!settingsForm.problem} onclick={save}>{t('common.save')}</button>
-      </div>
     </div>
   </div>
 </div>
 
 <style>
   /* The window of direction A (design/settings-2-2/index.html#a-*): the bar of the pages on a darker side
-     (settings/SettingsNav), the page's title, the settings in rows under hairlines (settings/Group, settings/Row),
-     « Annuler » and « Enregistrer ». 1120 × 780, or the room there is. */
+     (settings/SettingsNav), the page's title, the settings in rows under hairlines (settings/Group, settings/Row).
+     No foot: each setting is saved as it changes. 1120 × 780, or the room there is. */
   .overlay {
     position: fixed;
     inset: 0;
@@ -294,21 +315,6 @@
     margin: 20px 0 0;
     font-size: 12.5px;
     color: var(--muted);
-  }
-  .s-foot {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 20px;
-    border-top: 1px solid var(--line);
-  }
-  .problem {
-    min-width: 0;
-    color: var(--del);
-    font-size: 12.5px;
-  }
-  .s-foot .cancel {
-    margin-left: auto;
   }
   /* The menus of the settings, as the preview's `.select`: a ring on the window, not a well. */
   /* A path, a command: the mono of the 2.0 design is a size smaller. */

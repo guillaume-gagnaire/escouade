@@ -9,7 +9,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test, openSettingsPage } from './fixture';
+import { addProject, expect, test, openSettingsPage, closeSettings } from './fixture';
 import { startFakeTrackers } from '../fixtures/fake-trackers.mjs';
 
 let fake: { url: string; close: () => Promise<void> };
@@ -52,7 +52,7 @@ async function connectAzure(page: Page) {
   await expect(row).toContainText('Azure DevOps · dev.azure.com/acme');
   await expect(row).toContainText('Connecté · ada@acme.dev');
   await expect(row).toContainText('Projet : ');
-  await settings.getByRole('button', { name: 'Enregistrer' }).click();
+  await closeSettings(settings);
   await expect(settings).toHaveCount(0);
 }
 
@@ -202,8 +202,7 @@ test('Azure Boards takes the Azure DevOps account, its project offered by the im
   await form.getByRole('button', { name: 'Connecter' }).click();
   await expect(settings.getByRole('group', { name: 'dev.azure.com' })).toContainText('Sert aussi à Azure Boards');
   await expect(row).toContainText('Connecté · ada@acme.dev · acme');
-  await settings.getByRole('button', { name: 'Annuler' }).click();
-  await expect(settings).toHaveCount(0);
+  await closeSettings(settings);
 
   // The import offers the project's own Azure DevOps project, linked in one click.
   await page.getByRole('button', { name: 'Importer' }).click();

@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium, type Locator, type Page } from '@playwright/test';
-import { addProject, expect, openNewProject, test, openSettingsPage } from './fixture';
+import { addProject, expect, openNewProject, test, openSettingsPage, closeSettings } from './fixture';
 import { startFakeTrackers } from '../fixtures/fake-trackers.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
@@ -434,7 +434,7 @@ test.describe('« Ouvrir une PR sur GitHub »', () => {
     await form.getByLabel(/Jeton/).fill('ghp_jeton');
     await form.getByRole('button', { name: 'Connecter' }).click();
     await expect(settings.getByText('Connecté · @ada').first()).toBeVisible();
-    await settings.getByRole('button', { name: 'Enregistrer' }).click();
+    await closeSettings(settings);
     await expect(settings).toHaveCount(0);
     await page.getByRole('button', { name: /^Kanban/ }).click();
     await page.getByRole('button', { name: 'Agents', exact: true }).click();

@@ -2,7 +2,7 @@
 title: "Fenêtre"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-71","ESC-109","ESC-101"]
+tickets: ["ESC-71","ESC-109","ESC-101","ESC-380"]
 decisions: []
 compared: null
 order: 5
@@ -24,7 +24,7 @@ La fenêtre principale d'Escouade. Elle est sans cadre et suit un thème clair o
 
 - « Thème » : « Système » (défaut), « Clair » ou « Sombre ». « Système » suit le thème du système, et ses changements à chaud. Une valeur inconnue vaut « Système ».
 - L'interface est teintée par la couleur du projet actif.
-- Le choix s'applique tout de suite et s'enregistre aussitôt, hors du brouillon des réglages. Barres de défilement, champs et menus natifs suivent le thème.
+- Le choix s'applique tout de suite et s'enregistre aussitôt, comme tout réglage (voir *Réglages*). Barres de défilement, champs et menus natifs suivent le thème.
 - La fenêtre native prend son thème avant d'être montrée : une app claire ne s'affiche jamais en sombre d'abord.
 
 ### Zoom et tailles du texte
@@ -32,7 +32,7 @@ La fenêtre principale d'Escouade. Elle est sans cadre et suit un thème clair o
 - « Zoom de l'interface » : le zoom de toute l'interface, comme celui d'un navigateur ou de VS Code. Le texte, les espacements et les icônes changent ensemble, terminaux et éditeur compris.
 - Paliers : 80, 90, 100 (défaut), 110, 125, 150, 175 et 200 %. Une valeur hors palier est ramenée au palier le plus proche.
 - Raccourcis : `Ctrl+=` (ou `Ctrl++`, `Ctrl+Maj+=`), `Ctrl+-` et `Ctrl+0`, avec `Cmd` sous macOS. Le pavé numérique marche aussi (`+`, `-`, `0`). `Ctrl+0` est lu aussi sur la touche physique (« à » en AZERTY). Jamais avec `Alt`. Ils marchent partout, dans un terminal (le shell n'en reçoit rien) comme dans une fenêtre ouverte.
-- Le zoom s'applique tout de suite et s'enregistre 400 ms après le dernier changement : cinq `Ctrl+=` font un seul enregistrement. Il est hors du brouillon des réglages : « Enregistrer » ne le reprend pas, « Annuler » ne le défait pas.
+- Le zoom s'applique tout de suite et s'enregistre 400 ms après le dernier changement : cinq `Ctrl+=` font un seul enregistrement.
 - Zoom affiché : le palier choisi, ou le plus grand que la fenêtre tient. Un palier tient quand la taille de la fenêtre à 100 %, divisée par le zoom, fait au moins 1000 × 600 ; le zoom ne descend jamais sous 100 % pour autant. Il est recalculé à chaque redimensionnement, et `Ctrl+=` s'arrête au dernier palier qui tient.
 - Le palier choisi reste gardé et revient quand la fenêtre grandit : « La fenêtre est trop petite pour 200 % : l'interface est à 125 % tant qu'elle ne grandit pas. »
 - La fenêtre est zoomée avant d'être montrée : elle n'est jamais dessinée à 100 % d'abord.
@@ -73,7 +73,7 @@ Réglages › Application › « Affichage » :
 - « Zoom de l'interface » : en segments de 90 à 150 % (choix 35 d'UX-NOTES), plus le palier en cours quand il est hors de cette plage ; le clavier atteint les autres. Les paliers trop grands pour la fenêtre sont grisés : « Trop grand pour la taille de la fenêtre ».
 - « Taille du texte des terminaux », « Taille du texte de l'éditeur ».
 
-Tous s'appliquent et s'enregistrent tout de suite, hors du brouillon.
+Tous s'appliquent et s'enregistrent tout de suite.
 
 ## Limites
 

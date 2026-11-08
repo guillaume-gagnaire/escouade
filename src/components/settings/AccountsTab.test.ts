@@ -71,7 +71,6 @@ describe('AccountsTab', () => {
     expect(b.called('save_settings')[0].args.settings).toMatchObject({ quotaProjection: 'always', accounts: [PRINCIPAL, PRO] });
     await userEvent.click(choice('Jamais'));
     expect(b.called('save_settings')[1].args.settings).toMatchObject({ quotaProjection: 'off' });
-    expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Comptes et harness' })).not.toHaveClass('changed');
   });
 
   it('reads « Projection des quotas » saved before 2.0.2 as a switch: off is « Jamais »', () => {
@@ -105,7 +104,6 @@ describe('AccountsTab', () => {
     expect(b.called('save_settings')).toHaveLength(1);
     expect(b.called('save_settings')[0].args.settings).toMatchObject({ switchAt: 95, accounts: [PRINCIPAL, PRO] });
     // Not part of the draft: nothing to save, nothing to cancel.
-    expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Comptes et harness' })).not.toHaveClass('changed');
   });
 
   it('says « Changer de compte à » in English', () => {
@@ -150,7 +148,6 @@ describe('AccountsTab', () => {
       ),
     ).toBeInTheDocument();
     // Saved at once: nothing left for « Enregistrer ».
-    expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Comptes et harness' })).not.toHaveClass('changed');
   });
 
   it('says what an account at rest, Principal on an API key or a sign-in out of date is', async () => {

@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
-import { addProject, expect, send, test, type App, openSettingsPage } from './fixture';
+import { addProject, expect, send, test, type App, openSettingsPage, closeSettings } from './fixture';
 
 const KB = 1024;
 const MB = 1024 * KB;
@@ -373,8 +373,7 @@ test('the settings of the attachments are saved, and apply to the next file', as
     return dialog;
   };
   const save = async (dialog: Locator) => {
-    await dialog.getByRole('button', { name: 'Enregistrer' }).click();
-    await expect(dialog).toBeHidden();
+    await closeSettings(dialog);
   };
   const max = (dialog: Locator) => dialog.getByRole('spinbutton', { name: /Taille maximale d.un fichier joint/ });
   const warn = (dialog: Locator) => dialog.getByRole('spinbutton', { name: /Avertir pour un fichier joint/ });
@@ -719,8 +718,7 @@ test.describe('in English', () => {
     await expect(dialog.getByRole('spinbutton', { name: 'Purge copies after (days)' })).toBeVisible();
     await dialog.getByRole('spinbutton', { name: 'Largest attached file (MB)' }).fill('2');
     await dialog.getByRole('spinbutton', { name: 'Warn for an attached file over (MB)' }).fill('1');
-    await dialog.getByRole('button', { name: 'Save' }).click();
-    await expect(dialog).toBeHidden();
+    await closeSettings(dialog);
     const saved = () => JSON.parse(fs.readFileSync(path.join(app.data, 'settings.json'), 'utf8'));
     await expect.poll(() => [saved().attachMaxMb, saved().attachWarnMb]).toEqual([2, 1]);
 

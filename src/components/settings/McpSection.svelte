@@ -16,9 +16,9 @@
 
   // « Serveur MCP »: one switch, « Les agents peuvent piloter Escouade » (ESC-119), gives the server to Escouade's agents
   // and declares it in every harness installed, in each of its active accounts; under it, each declaration, with its
-  // file and what to paste by hand when it failed. Then « Activité MCP »: what the server was asked. The switch is saved
-  // at once, not through the modal's draft: the declaration writes into the config of each account's harness, which
-  // « Annuler » could not take back.
+  // file and what to paste by hand when it failed. Then « Activité MCP »: what the server was asked. The switch goes to
+  // the backend itself (`mcp_set_enabled`), not through the fields of the window saved as they change: the declaration
+  // writes into the config of each account's harness.
 
   const on = $derived(app.settings.mcpEnabled);
   let busy = $state(false);

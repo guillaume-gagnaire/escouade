@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium, type Locator, type Page } from '@playwright/test';
-import { addProject, expect, test, openSettingsPage, settingsEntry } from './fixture';
+import { addProject, expect, test, openSettingsPage, settingsEntry, closeSettings } from './fixture';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const PREVIEW = path.join(ROOT, 'design', 'app-redesign', 'index.html');
@@ -92,8 +92,7 @@ test('« Thème » is the system’s by default, applies at once with the window
   expect(await colours()).toEqual([expect.stringMatching(/^oklch\(0\.9\d* /), 'rgb(21, 23, 28)', true]);
   // Saved by itself, nothing to « Enregistrer ».
   await expect.poll(() => settingsOf(app.data).theme).toBe('light');
-  await expect(settingsEntry(dialog, 'Général')).not.toHaveClass(/changed/);
-  await dialog.getByRole('button', { name: 'Annuler' }).click();
+  await closeSettings(dialog);
 
   // After a restart: light, the window too, and what the page reads before the first render says so.
   page = await app.restart();
@@ -192,8 +191,7 @@ test('the common controls of Réglages › Application look as the preview draws
           await appSeg.locator('xpath=..').screenshot({ path: path.join(SHOTS, `${name}.theme-row.app.png`) });
           await prevSeg.locator('xpath=../..').screenshot({ path: path.join(SHOTS, `${name}.theme-row.preview.png`) });
         }
-        await dialog.getByRole('button', { name: 'Annuler' }).click();
-        await expect(dialog).toBeHidden();
+        await closeSettings(dialog);
       }
   } finally {
     await browser.close();

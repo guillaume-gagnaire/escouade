@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test, openSettingsPage } from './fixture';
+import { addProject, expect, test, openSettingsPage, closeSettings } from './fixture';
 import { startFakeStore } from '../fixtures/store/fake-store.mjs';
 
 const SHOTS = process.env.ESCOUADE_E2E_SHOTS;
@@ -106,7 +106,7 @@ test('a project proposes its plugins: named with their store page, nothing insta
   // « Pas pour ce projet »: silent, and still after the window is loaded again.
   await band.getByRole('button', { name: 'Pas pour ce projet' }).click();
   await expect(band).toBeHidden();
-  await settings.getByRole('button', { name: 'Annuler' }).click();
+  await closeSettings(settings);
   await page.reload();
   settings = await projectSettings(page);
   await expect(settings.getByRole('button', { name: 'Exporter vers .escouade.yml' })).toBeVisible();

@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test, openSettingsPage } from './fixture';
+import { addProject, expect, test, openSettingsPage, closeSettings } from './fixture';
 
 const tile = (page: Page, name = 'demo-api') => page.getByRole('tab', { name: new RegExp(`^${name}`) });
 const rail = (page: Page) => page.getByRole('navigation', { name: 'Projets' });
@@ -102,8 +102,7 @@ for (const size of [
     await on.scrollIntoViewIfNeeded();
     await expect(on).toHaveAttribute('aria-checked', 'false');
     await on.click();
-    await settings.getByRole('button', { name: 'Enregistrer' }).click();
-    await expect(settings).toBeHidden();
+    await closeSettings(settings);
     const label = tile(page).locator('.lbl');
     await expect(label).toBeVisible();
     await expect(label).toHaveText('demo-api');
@@ -126,8 +125,7 @@ for (const size of [
     await expect(text).toHaveAttribute('placeholder', 'demo-api');
     await text.pressSequentially('pagination-service');
     await expect(text).toHaveValue('pagination-s');
-    await settings.getByRole('button', { name: 'Enregistrer' }).click();
-    await expect(settings).toBeHidden();
+    await closeSettings(settings);
     await expect(label).toHaveText('pagination-s');
     expect(await label.locator('.tx').evaluate((x) => x.scrollWidth > x.clientWidth)).toBe(true);
     expect(await overflows(page)).toEqual([]);
@@ -226,8 +224,7 @@ test('twelve projects in the runner’s window: the rail at its widest scrolls, 
   const on = settings.getByRole('switch', { name: 'Libellé sous la tuile' });
   await on.scrollIntoViewIfNeeded();
   await on.click();
-  await settings.getByRole('button', { name: 'Enregistrer' }).click();
-  await expect(settings).toBeHidden();
+  await closeSettings(settings);
   await edge(page).focus();
   await page.keyboard.press('End');
   await settle(page);

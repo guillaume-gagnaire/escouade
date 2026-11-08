@@ -5,7 +5,7 @@
   import { api } from '../../lib/ipc';
   import { anyCan, offered } from '../../lib/engines';
   import { IS_MAC, OS } from '../../lib/platform';
-  import { settingsForm } from '../../lib/settings.svelte';
+  import { settingsForm, type NumberSetting } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import { privacyUrl } from '../../lib/telemetry';
   import { CREDITS_URL } from '../../lib/conversation';
@@ -24,6 +24,9 @@
   let { tab }: { tab: 'claude' | 'notifications' | 'terminals' | 'network' | 'about' } = $props();
 
   const s = $derived(settingsForm.settings);
+  /** Why a number typed is not saved (ESC-380), the one saved staying. */
+  const numberError = (key: NumberSetting) =>
+    settingsForm.badNumbers.has(key) ? t('settings.problem.number', { value: app.settings[key] }) : '';
   const bigTextOptions = $derived([
     { value: 'path' as const, label: t('settings.claude.attachBigTextPath') },
     { value: 'refuse' as const, label: t('settings.claude.attachBigTextRefuse') },
@@ -193,6 +196,19 @@
   }
 </script>
 
+{#snippet numberField(key: NumberSetting, label: string, hint: string)}
+  <input
+    class="field input num"
+    type="number"
+    min="0"
+    aria-label={label}
+    aria-invalid={settingsForm.badNumbers.has(key)}
+    aria-describedby={settingsForm.badNumbers.has(key) ? `${key}-error` : undefined}
+    bind:value={s[key]}
+  />
+  <span class="hint">{hint}</span>
+{/snippet}
+
 {#snippet text(label: string, hint: string, value: string, set: (v: string) => void, placeholder = '')}
   <Row {label} {hint}>
     <input
@@ -350,22 +366,19 @@
     <Row label={t('settings.claude.autoResume')} desc={t('settings.claude.autoResumeDesc')}>
       <Switch label={t('settings.claude.autoResume')} bind:on={s.autoResume} />
     </Row>
-    <Row label={t('settings.claude.idleStop')}>
-      <input class="field input num" type="number" min="0" aria-label={t('settings.claude.idleStopLabel')} bind:value={s.idleStopMinutes} />
-      <span class="hint">{t('settings.claude.idleStopHint')}</span>
+    <Row label={t('settings.claude.idleStop')} error={numberError('idleStopMinutes')} errorId="idleStopMinutes-error">
+      {@render numberField('idleStopMinutes', t('settings.claude.idleStopLabel'), t('settings.claude.idleStopHint'))}
     </Row>
     <Row label={t('settings.claude.midTurnDelay')} desc={t('settings.claude.midTurnDelayDesc')}>
       <Chips label={t('settings.claude.midTurnDelay')} options={midTurnDelayOptions} bind:value={s.midTurnDelaySecs} />
     </Row>
   </Group>
   <Group title={t('settings.claude.attachments')} note={t('settings.claude.attachmentsNote')}>
-    <Row label={t('settings.claude.attachMax')}>
-      <input class="field input num" type="number" min="0" aria-label={t('settings.claude.attachMaxLabel')} bind:value={s.attachMaxMb} />
-      <span class="hint">{t('settings.claude.attachMaxHint')}</span>
+    <Row label={t('settings.claude.attachMax')} error={numberError('attachMaxMb')} errorId="attachMaxMb-error">
+      {@render numberField('attachMaxMb', t('settings.claude.attachMaxLabel'), t('settings.claude.attachMaxHint'))}
     </Row>
-    <Row label={t('settings.claude.attachWarn')}>
-      <input class="field input num" type="number" min="0" aria-label={t('settings.claude.attachWarnLabel')} bind:value={s.attachWarnMb} />
-      <span class="hint">{t('settings.claude.attachWarnHint')}</span>
+    <Row label={t('settings.claude.attachWarn')} error={numberError('attachWarnMb')} errorId="attachWarnMb-error">
+      {@render numberField('attachWarnMb', t('settings.claude.attachWarnLabel'), t('settings.claude.attachWarnHint'))}
     </Row>
     <Row label={t('settings.claude.attachOrigin')} desc={t('settings.claude.attachOriginDesc')}>
       <Switch label={t('settings.claude.attachOrigin')} bind:on={s.attachOrigin} />
@@ -373,15 +386,8 @@
     <Row label={t('settings.claude.attachBigText')} desc={t('settings.claude.attachBigTextDesc')}>
       <Chips label={t('settings.claude.attachBigText')} options={bigTextOptions} bind:value={s.attachBigText} />
     </Row>
-    <Row label={t('settings.claude.attachKeep')}>
-      <input
-        class="field input num"
-        type="number"
-        min="0"
-        aria-label={t('settings.claude.attachKeepLabel')}
-        bind:value={s.attachKeepDays}
-      />
-      <span class="hint">{t('settings.claude.attachKeepHint')}</span>
+    <Row label={t('settings.claude.attachKeep')} error={numberError('attachKeepDays')} errorId="attachKeepDays-error">
+      {@render numberField('attachKeepDays', t('settings.claude.attachKeepLabel'), t('settings.claude.attachKeepHint'))}
     </Row>
   </Group>
 {:else if tab === 'notifications'}

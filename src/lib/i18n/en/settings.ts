@@ -38,30 +38,29 @@ export default defineZone('settings', {
   },
 
   modal: {
-    changed: 'Modified, not saved yet',
-    saved: 'Settings saved',
     noProject: 'No project open.',
   },
 
   problem: {
-    projectName: 'The project “{name}” needs a name.',
-    command: 'Every launch command in “{name}” needs a name and a command line.',
-    worktrees: 'The worktrees folder or a branch prefix of “{name}” isn’t valid.',
+    projectName: 'A project needs a name: “{name}” stays saved.',
+    command: 'Each command needs a name and a command line: the saved commands stay as they were until none is missing one.',
+    number: 'A whole number, 0 or more: {value} stays saved.',
   },
 
   suggest: {
     nothing: 'Claude found no command to run for this project.',
     proposed: {
-      one: '1 command suggested: review it before saving.',
-      other: '{count} commands suggested: review them before saving.',
+      one: '1 command suggested: review it before replacing the commands.',
+      other: '{count} commands suggested: review them before replacing the commands.',
     },
     proposedLeftOne: {
-      one: '1 command suggested, 1 left out (invisible characters or too long): review it before saving.',
-      other: '{count} commands suggested, 1 left out (invisible characters or too long): review them before saving.',
+      one: '1 command suggested, 1 left out (invisible characters or too long): review it before replacing the commands.',
+      other: '{count} commands suggested, 1 left out (invisible characters or too long): review them before replacing the commands.',
     },
     proposedLeftMany: {
-      one: '1 command suggested, {refused} left out (invisible characters or too long): review it before saving.',
-      other: '{count} commands suggested, {refused} left out (invisible characters or too long): review them before saving.',
+      one: '1 command suggested, {refused} left out (invisible characters or too long): review it before replacing the commands.',
+      other:
+        '{count} commands suggested, {refused} left out (invisible characters or too long): review them before replacing the commands.',
     },
   },
 
@@ -427,12 +426,12 @@ export default defineZone('settings', {
     fillAuto: 'Fill in automatically',
     filling: 'Claude is reading the project…',
     fillWorktreesDesc:
-      'Claude reads the project (manifests, lockfiles, README…) without changing anything and suggests the commands. Review them before saving.',
+      'Claude reads the project (manifests, lockfiles, README…) without changing anything and suggests the commands. Review them before replacing yours.',
     fillLaunchDesc:
-      'Claude reads the project (manifests, scripts, docker-compose, README…) without changing anything and suggests the commands to run. Review them before saving.',
+      'Claude reads the project (manifests, scripts, docker-compose, README…) without changing anything and suggests the commands to run. Review them before replacing yours.',
     proposedWorktrees: 'Suggested worktree commands',
     proposedWorktreesNote:
-      'Claude’s suggestion: read each command in full. They replace both lists and, once saved, run on their own: the setup when each new worktree opens, the teardown before it is removed.',
+      'Claude’s suggestion: read each command in full. They replace both lists and, once taken, run on their own: the setup when each new worktree opens, the teardown before it is removed.',
     proposedLaunch: 'Suggested launch commands',
     proposedLaunchNote: 'Claude’s suggestion: read each command in full. They replace the ones in the list.',
     ignore: 'Ignore',

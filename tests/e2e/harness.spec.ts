@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { addProject, expect, FAKE, send, test, openSettingsPage } from './fixture';
+import { addProject, expect, FAKE, send, test, openSettingsPage, closeSettings } from './fixture';
 
 // Choosing the harness (ESC-29): Réglages › Harness lists each one with its executable and its version; its accounts sign
 // in from Réglages › Comptes (1.8.2). With none found, the first start says « Aucun harness trouvé » with the command that
@@ -125,7 +125,7 @@ test.describe('with no harness found', () => {
     await openSettingsPage(settings, 'Comptes et harness');
     // Its path given and saved: it is found, Escouade works.
     await claude.getByRole('textbox', { name: "Chemin de l'exécutable" }).fill(FAKE);
-    await settings.getByRole('button', { name: 'Enregistrer' }).click();
+    await closeSettings(settings);
     await expect(none).toHaveCount(0);
   });
 });

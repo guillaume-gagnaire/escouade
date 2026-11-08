@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test, openSettingsPage } from './fixture';
+import { addProject, expect, test, openSettingsPage, closeSettings } from './fixture';
 
 const SHOTS = process.env.ESCOUADE_E2E_SHOTS;
 
@@ -190,7 +190,7 @@ test('the docs branch is set in the project’s settings: current, or fixed', as
   await expect(group.getByRole('button', { name: 'La branche courante' })).toHaveAttribute('aria-pressed', 'true');
   await group.getByRole('button', { name: 'Une branche fixe' }).click();
   await dialog.getByRole('textbox', { name: 'Nom de la branche des docs' }).fill('docs');
-  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+  await closeSettings(dialog);
   await expect(dialog).toHaveCount(0);
   await expect(page.locator('[data-docs-share]')).toContainText('Docs sur la branche docs');
   // The fixed branch, made by Escouade in a worktree of its own: the project's folder stays on main.

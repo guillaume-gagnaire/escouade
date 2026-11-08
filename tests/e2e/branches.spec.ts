@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { addProject, expect, test, openSettingsPage } from './fixture';
+import { addProject, expect, test, openSettingsPage, closeSettings } from './fixture';
 
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 
@@ -68,7 +68,7 @@ test('the agents start from the target branch, brought up to date from the remot
     .getByRole('group', { name: 'Branche de départ des nouveaux worktrees' })
     .getByRole('button', { name: 'Branche cible du Kanban' })
     .click();
-  await settings.getByRole('button', { name: 'Enregistrer' }).click();
+  await closeSettings(settings);
   await expect(settings).toHaveCount(0);
 
   // A new agent: from origin's main, the local main moved to it, the folder left on work.
@@ -159,7 +159,7 @@ test('the new worktrees start from the branch the project names, and an agent fr
     'aria-pressed',
     'true',
   );
-  await settings.getByRole('button', { name: 'Enregistrer' }).click();
+  await closeSettings(settings);
   await expect(settings).toHaveCount(0);
 
   // A new agent: its worktree starts from release, the folder left on main.
