@@ -1,9 +1,9 @@
 ---
-number: null
+number: 126
 id: "la-recherche-et-les-points-ambre-des-reg"
 title: "La recherche et les points ambre des réglages (R8)"
 date: "2026-11-08"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-386"
 pages: ["fenetre/reglages"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/reglages","added":23,"removed":9}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-08T12:12:50+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

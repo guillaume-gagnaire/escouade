@@ -3,7 +3,7 @@ title: "Réglages"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/index.html","design/settings-2-2/captures/a-plugins.png","design/settings-2-2/captures/a-projet.png","design/settings-2-2/captures/a-comptes.png"]
 tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386"]
-decisions: [118,119,120,121,123,124,"la-recherche-et-les-points-ambre-des-reg"]
+decisions: [118,119,120,121,123,124,126]
 compared: null
 ---
 
