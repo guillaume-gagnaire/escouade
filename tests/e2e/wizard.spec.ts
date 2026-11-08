@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, test, openSettingsPage } from './fixture';
 
 // The new project's assistant (ESC-94): a project set up through it, opened again from Réglages › Projets, then a second
 // project made by copying the first one's settings, checked in its own folder, and a ticket that runs with them; in the
@@ -38,7 +38,7 @@ test('a project made by copying another one’s settings runs its ticket with th
   // Réglages › Projets › « Ouvrir l'assistant… »: the first project set up step by step.
   await page.keyboard.press('Control+,');
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(settings, 'Projet');
   await settings.getByRole('button', { name: 'Ouvrir l’assistant…' }).click();
   const setup = page.getByRole('dialog', { name: 'Configurer demo-api' });
   await expect(setup).toBeVisible();
@@ -160,7 +160,7 @@ test('a private project with its Kanban set, made by the assistant, exports its 
   // Réglages › Projets: private, its account its own; then « Exporter vers .escouade.yml ».
   await page.keyboard.press('Control+,');
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(settings, 'Projet');
   await expect(settings.getByRole('switch', { name: 'Projet privé' })).toHaveAttribute('aria-checked', 'true');
   await expect(settings.getByText(/^Compte réservé à ce projet : « Principal »/)).toBeVisible();
   await settings.getByRole('button', { name: 'Exporter vers .escouade.yml' }).click();

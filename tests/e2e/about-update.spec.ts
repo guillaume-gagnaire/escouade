@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixture';
+import { expect, test, openSettingsPage, settingsEntry } from './fixture';
 
 const SHOTS = process.env.ESCOUADE_E2E_SHOTS;
 
@@ -56,7 +56,7 @@ test('an update found from À propos shows there, downloading then ready, its re
   await fakeUpdate(page);
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'À propos' }).click();
+  await openSettingsPage(dialog, 'À propos');
   await dialog.getByRole('button', { name: 'Rechercher une mise à jour' }).click();
 
   // The row of the update, and where it stands.
@@ -79,7 +79,7 @@ test('an update found from À propos shows there, downloading then ready, its re
   const upd = page.getByRole('dialog', { name: 'Escouade 9.9.0 est prête' });
   await expect(upd).toBeVisible();
   await upd.getByRole('button', { name: 'Plus tard' }).click();
-  await expect(dialog.getByRole('tab', { name: 'À propos' })).toHaveAttribute('aria-selected', 'true');
+  await expect(settingsEntry(dialog, 'À propos')).toHaveAttribute('aria-current', 'page');
   await expect(dialog.locator('[data-update="ready"]')).toBeVisible();
   expect(await page.evaluate(() => (window as unknown as { esc250Restarts: number }).esc250Restarts)).toBe(0);
 });

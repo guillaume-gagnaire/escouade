@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
-import { addProject, expect, FAKE_CODEX, send, test, type App } from './fixture';
+import { addProject, expect, FAKE_CODEX, send, test, type App, openSettingsPage } from './fixture';
 
 /** What the fake codex was sent, launch by launch: its arguments, then the messages of the app. */
 function codexLog(
@@ -49,11 +49,11 @@ test.describe('an agent on Codex', () => {
     // Réglages › Comptes: the fiche of the Codex account offers Codex's models, efforts and modes, none of Claude Code's.
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
-    await dialog.getByRole('tab', { name: 'Comptes' }).click();
+    await openSettingsPage(dialog, 'Comptes et harness');
     // No group « Nouveaux agents » for every harness any more.
-    await dialog.getByRole('tab', { name: 'Harness' }).click();
+    await openSettingsPage(dialog, 'Comptes et harness');
     await expect(dialog.getByRole('group', { name: 'Modèle par défaut' })).toHaveCount(0);
-    await dialog.getByRole('tab', { name: 'Comptes' }).click();
+    await openSettingsPage(dialog, 'Comptes et harness');
     const codex = dialog.getByRole('list', { name: 'Comptes Codex' }).getByRole('listitem', { name: 'Principal' });
     const defaults = codex.getByRole('group', { name: 'Nouveaux agents' });
     const model = defaults.getByRole('combobox', { name: 'Modèle' });
@@ -105,7 +105,7 @@ test.describe('an agent on Codex', () => {
     // The fiche of the account offers them all.
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
-    await dialog.getByRole('tab', { name: 'Comptes' }).click();
+    await openSettingsPage(dialog, 'Comptes et harness');
     const codex = dialog.getByRole('list', { name: 'Comptes Codex' }).getByRole('listitem', { name: 'Principal' });
     const model = codex.getByRole('group', { name: 'Nouveaux agents' }).getByRole('combobox', { name: 'Modèle' });
     await expect(model.getByRole('option')).toHaveText(['Celui du harness (GPT-6-Luna)', 'GPT-6-Luna', 'GPT-5.6-Terra']);
@@ -373,7 +373,7 @@ test.describe('a voice conversation with an agent on Codex', () => {
 
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Réglages' });
-    await settings.getByRole('tab', { name: 'Comptes' }).click();
+    await openSettingsPage(settings, 'Comptes et harness');
     // Codex's group has its own button (2.0 design): the window opens on Codex.
     await settings.getByRole('button', { name: 'Ajouter un compte Codex…' }).click();
     const codex = page.getByRole('dialog', { name: 'Ajouter un compte Codex' });

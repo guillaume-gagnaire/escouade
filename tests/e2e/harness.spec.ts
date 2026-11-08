@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { addProject, expect, FAKE, send, test } from './fixture';
+import { addProject, expect, FAKE, send, test, openSettingsPage } from './fixture';
 
 // Choosing the harness (ESC-29): Réglages › Harness lists each one with its executable and its version; its accounts sign
 // in from Réglages › Comptes (1.8.2). With none found, the first start says « Aucun harness trouvé » with the command that
@@ -11,14 +11,14 @@ test('Réglages › Harness shows Claude Code’s executable and version, and se
   await addProject(page, app.repo);
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Harness' }).click();
-  const claude = settings.getByRole('region', { name: 'Claude Code' });
+  await openSettingsPage(settings, 'Comptes et harness');
+  const claude = settings.getByRole('region', { name: 'Claude Code', exact: true });
   await expect(claude.getByRole('textbox', { name: "Chemin de l'exécutable" })).toBeVisible();
   await expect(claude.locator('[data-state]')).toHaveText('2.1.301');
   // The test's Claude Code folder has no sign-in: the version's line says where to sign in, the tab itself does not.
   await expect(claude).toContainText('Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes.');
-  await expect(settings.getByRole('button', { name: 'Se connecter…' })).toHaveCount(0);
-  await settings.getByRole('tab', { name: 'Comptes' }).click();
+  await expect(claude.getByRole('button', { name: 'Se connecter…' })).toHaveCount(0);
+  await openSettingsPage(settings, 'Comptes et harness');
   await settings.getByRole('listitem', { name: 'Principal' }).getByRole('button', { name: 'Se connecter…' }).click();
   const signIn = page.getByRole('dialog', { name: 'Se connecter au compte « Principal »' });
   await expect(signIn).toBeVisible();
@@ -51,8 +51,8 @@ test('Escouade runs claude update at its start, apart from its agents, whose own
   expect(said()[0]).toMatchObject({ started: true, autoUpdater: null });
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Harness' }).click();
-  const claude = settings.getByRole('region', { name: 'Claude Code' });
+  await openSettingsPage(settings, 'Comptes et harness');
+  const claude = settings.getByRole('region', { name: 'Claude Code', exact: true });
   await expect(claude.getByRole('switch', { name: 'Mettre à jour Claude Code automatiquement' })).toHaveAttribute('aria-checked', 'true');
   await expect(claude.getByRole('status')).toHaveText('À jour (2.1.301).');
 });
@@ -72,8 +72,8 @@ test.describe('with Claude Code’s own update turned off by the user', () => {
     const { page } = app;
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Réglages' });
-    await settings.getByRole('tab', { name: 'Harness' }).click();
-    const claude = settings.getByRole('region', { name: 'Claude Code' });
+    await openSettingsPage(settings, 'Comptes et harness');
+    const claude = settings.getByRole('region', { name: 'Claude Code', exact: true });
     await expect(claude.getByRole('status')).toHaveText(
       'Coupée dans Claude Code lui-même (DISABLE_AUTOUPDATER) : Escouade ne le met pas à jour non plus.',
     );
@@ -88,7 +88,7 @@ test('« Modèle des textes rédigés » offers Claude Haiku alone with Claude C
   await addProject(page, app.repo);
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Application' }).click();
+  await openSettingsPage(settings, 'Général');
   const writer = settings.getByRole('group', { name: 'Modèle des textes rédigés' });
   await expect(writer.getByRole('button')).toHaveText(['Claude Haiku']);
   await expect(writer.getByRole('button', { name: 'Claude Haiku' })).toHaveAttribute('aria-pressed', 'true');
@@ -110,8 +110,8 @@ test.describe('with no harness found', () => {
     // Réglages › Harness: not found, with its installer.
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Réglages' });
-    await settings.getByRole('tab', { name: 'Harness' }).click();
-    const claude = settings.getByRole('region', { name: 'Claude Code' });
+    await openSettingsPage(settings, 'Comptes et harness');
+    const claude = settings.getByRole('region', { name: 'Claude Code', exact: true });
     await expect(claude.locator('[data-engine-state="absent"]')).toHaveText('Introuvable');
     await expect(claude.getByText('irm https://claude.ai/install.ps1 | iex', { exact: true })).toBeVisible();
     // Said with what puts it back (ESC-133), by the installation's row and by its update's.
@@ -119,10 +119,10 @@ test.describe('with no harness found', () => {
       'Claude Code est introuvable : réinstalle-le (`irm https://claude.ai/install.ps1 | iex`, ou `npm install -g @anthropic-ai/claude-code`), ou indique son chemin dans Réglages › Harness.';
     await expect(claude.getByText(gone, { exact: true })).toHaveCount(2);
     // No harness to write the texts: « Modèle des textes rédigés » is not offered.
-    await settings.getByRole('tab', { name: 'Application' }).click();
+    await openSettingsPage(settings, 'Général');
     await expect(settings.getByRole('heading', { name: 'Langue' })).toBeVisible();
     await expect(settings.getByRole('group', { name: 'Modèle des textes rédigés' })).toHaveCount(0);
-    await settings.getByRole('tab', { name: 'Harness' }).click();
+    await openSettingsPage(settings, 'Comptes et harness');
     // Its path given and saved: it is found, Escouade works.
     await claude.getByRole('textbox', { name: "Chemin de l'exécutable" }).fill(FAKE);
     await settings.getByRole('button', { name: 'Enregistrer' }).click();

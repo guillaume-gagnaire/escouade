@@ -2,33 +2,7 @@ import type { Tree } from '../types';
 
 // The settings window and the settings of a project.
 export default {
-  // The tabs of the window: their name and what they set (under the title, in the header).
-  tabs: {
-    app: { label: 'Application', desc: 'Thème, zoom, langue de l’interface et textes rédigés' },
-    claude: { label: 'Harness', desc: 'Exécutables et versions de chaque harness, et ce qui vaut pour tous' },
-    accounts: {
-      label: 'Comptes',
-      desc: 'Les comptes de chaque harness, les réglages de leurs nouveaux agents, et ce qui se passe à la limite',
-    },
-    plugins: { label: 'Plugins', desc: 'Ce qu’ils ajoutent à Escouade, d’où ils viennent et ce qu’ils peuvent faire' },
-    mcp: { label: 'Serveur MCP', desc: 'Ce que Claude et les agents peuvent faire dans Escouade, et ce qu’ils ont fait' },
-    notifications: { label: 'Notifications', desc: 'Alertes visuelles et sonores' },
-    projects: { label: 'Projets', desc: 'Réglages propres à chaque projet' },
-    board: { label: 'Kanban', desc: 'Pilote auto et tickets validés' },
-    integrations: {
-      label: 'Intégrations',
-      desc: 'Sources du Kanban (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards) et hébergeurs de code',
-    },
-    terminals: { label: 'Terminaux', desc: 'Shells disponibles dans les terminaux intégrés' },
-    network: {
-      label: 'Réseau',
-      desc: 'Proxy HTTP(S) et certificats TLS pour Claude Code, les intégrations et les mises à jour',
-    },
-    voice: { label: 'Voix', desc: 'Dictée et conversation vocale, sur ta machine ou en ligne' },
-    about: { label: 'À propos', desc: 'Version et données locales' },
-  },
-
-  // The pages of the window (direction A of the 2.2 redesign): their name in the bar and what they set (under the title).
+  // The pages of the window: their name and what they set (under the title, in the header).
   pages: {
     general: { label: 'Général', desc: 'Thème, zoom, langue, mises à jour et ce qui te concerne' },
     agents: { label: 'Agents', desc: 'Les nouveaux agents, les textes rédigés, le remote control et le pilotage d’Escouade' },
@@ -55,11 +29,19 @@ export default {
     allProjects: { label: 'Tous les projets', desc: 'Ce que reçoit un nouveau projet, et les projets fermés' },
   },
 
+  // The bar of the window: the search (R8), Escouade's pages, the projects with the one chosen unfolded on its pages.
+  nav: {
+    search: 'Rechercher un réglage',
+    projects: 'Projets',
+  },
+
+  // « Avancé » at the foot of a page: folded, it names what it hides.
+  fold: {
+    advanced: 'Avancé',
+  },
+
   // The window itself.
   modal: {
-    // The headings of the tabs, after the general ones.
-    groupProject: 'Par projet',
-    groupSystem: 'Système',
     changed: 'Modifié, pas encore enregistré',
     saved: 'Réglages enregistrés',
     noProject: 'Aucun projet ouvert.',
@@ -298,6 +280,8 @@ export default {
     channels: 'Canaux',
     /** `os`: « macOS » or « Windows ». */
     system: "Notifications {os} quand l'app n'est pas au premier plan",
+    /** Its name in the register (« Avancé », the search). */
+    systemName: 'Notifications du système',
     systemLabel: 'Notifications système',
     sound: 'Son',
     soundOn: 'Son activé',

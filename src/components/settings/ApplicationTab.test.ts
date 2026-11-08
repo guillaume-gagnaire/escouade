@@ -13,7 +13,7 @@ import { app } from '../../lib/state.svelte';
 import { BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
 
-const panel = () => screen.getByRole('tabpanel');
+const panel = () => document.getElementById('settings-panel')!;
 /** The choices of a setting, as its chips read. */
 const choices = (name: string) =>
   within(within(panel()).getByRole('group', { name }))
@@ -34,9 +34,9 @@ describe('the « Application » tab', () => {
   it('comes first and chooses the languages, each named in itself', () => {
     fakeBackend();
     render(SettingsModal, { tab: 'app' });
-    expect(screen.getAllByRole('tab')[0]).toHaveTextContent('Application');
-    expect(screen.getByRole('tab', { name: 'Application' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('Thème, zoom, langue de l’interface et textes rédigés')).toBeInTheDocument();
+    expect(within(screen.getByRole('navigation')).getAllByRole('button')[0]).toHaveTextContent('Général');
+    expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Général' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByText('Thème, zoom, langue, mises à jour et ce qui te concerne')).toBeInTheDocument();
     expect(within(panel()).getByRole('heading', { name: 'Langue' })).toBeInTheDocument();
     expect(choices(UI)).toEqual(['Système (Français)', 'English', 'Français']);
     expect(choices(CLAUDE)).toEqual(['Comme l’interface (par défaut)', 'English', 'Français']);
@@ -67,11 +67,11 @@ describe('the « Application » tab', () => {
   it('saves the languages chosen with the other settings', async () => {
     const backend = fakeBackend({ save_settings: () => [] });
     render(SettingsModal, { tab: 'app' });
-    expect(screen.getByRole('tab', { name: 'Application' })).not.toHaveClass('changed');
+    expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Général' })).not.toHaveClass('changed');
     await userEvent.click(choice(UI, 'English'));
     await userEvent.click(choice(CLAUDE, 'Français'));
     expect(choice(UI, 'English')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('tab', { name: 'Application' })).toHaveClass('changed');
+    expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Général' })).toHaveClass('changed');
     await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
     expect(backend.called('save_settings')).toHaveLength(1);
     expect(backend.called('save_settings')[0].args.settings).toMatchObject({ language: 'en', claudeLanguage: 'fr' });
@@ -82,8 +82,8 @@ describe('the « Application » tab', () => {
     fakeBackend();
     setLang('en');
     render(SettingsModal, { tab: 'app' });
-    expect(screen.getByRole('tab', { name: 'Application' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByText('Theme, zoom, languages and written texts')).toBeInTheDocument();
+    expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'General' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByText('Theme, zoom, language, updates and what concerns you')).toBeInTheDocument();
     expect(within(panel()).getByRole('heading', { name: 'Display' })).toBeInTheDocument();
     expect(choices('Theme')).toEqual(['System', 'Light', 'Dark']);
     expect(choices('Interface zoom')).toEqual(['90%', '100%', '110%', '125%', '150%']);
@@ -129,7 +129,7 @@ describe('the « Application » tab', () => {
       expect(app.settings.uiZoom).toBe(150);
       expect(backend.called('plugin:webview|set_webview_zoom').map((c) => c.args.value)).toEqual([1.5]);
       // Nothing to save in the tab: it is saved already.
-      expect(screen.getByRole('tab', { name: 'Application' })).not.toHaveClass('changed');
+      expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Général' })).not.toHaveClass('changed');
       vi.advanceTimersByTime(SAVE_DELAY_MS);
       expect(backend.called('save_settings')).toHaveLength(1);
       expect(backend.called('save_settings')[0].args.settings.uiZoom).toBe(150);
@@ -152,7 +152,7 @@ describe('the « Application » tab', () => {
       expect(document.documentElement.dataset.theme).toBe('light');
       // The window's own theme, its title bar with it.
       expect(backend.called('plugin:window|set_theme').map((c) => c.args.value)).toEqual(['light']);
-      expect(screen.getByRole('tab', { name: 'Application' })).not.toHaveClass('changed');
+      expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Général' })).not.toHaveClass('changed');
       vi.advanceTimersByTime(SAVE_DELAY_MS);
       expect(backend.called('save_settings')[0].args.settings.theme).toBe('light');
       // Back to the system's: the window's theme is the system's again.

@@ -50,7 +50,7 @@ const BROKEN = closed({
 describe('ClosedProjects', () => {
   beforeEach(() => {
     resetApp({ projects: [project()] });
-    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    settingsForm.open({ page: 'allProjects', projectId: 'p1' });
   });
 
   it('shows nothing when no project was closed', async () => {
@@ -112,13 +112,13 @@ describe('ClosedProjects', () => {
     expect(backend.called('erase_closed_project')).toHaveLength(0);
   });
 
-  it('erases the history once confirmed, and comes back to the projects settings of the project that was on screen', async () => {
+  it('erases the history once confirmed, and comes back to « Tous les projets », the project that was on screen kept', async () => {
     const backend = fakeBackend({ closed_projects: () => [OLD], erase_closed_project: () => undefined });
     render(ClosedProjects);
     await userEvent.click(await screen.findByRole('button', { name: "Effacer l'historique…" }));
     await (app.modal as any).onConfirm(false);
     expect(backend.called('erase_closed_project')[0].args).toEqual({ id: 'c1' });
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1', resume: true });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'allProjects', projectId: 'p1', resume: true });
   });
 
   it('comes back to the settings when the question is cancelled, and when the erasing failed', async () => {
@@ -131,22 +131,22 @@ describe('ClosedProjects', () => {
     render(ClosedProjects);
     await userEvent.click(await screen.findByRole('button', { name: "Effacer l'historique…" }));
     (app.modal as any).onCancel();
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1', resume: true });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'allProjects', projectId: 'p1', resume: true });
     await userEvent.click(screen.getByRole('button', { name: "Effacer l'historique…" }));
     await (app.modal as any).onConfirm(false);
     expect(backend.called('erase_closed_project')).toHaveLength(1);
     expect(app.toasts.at(-1)?.text).toMatch(/fichier verrouillé/);
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1', resume: true });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'allProjects', projectId: 'p1', resume: true });
   });
 
   it('comes back to the settings without a project when none is open', async () => {
     resetApp({ projects: [] });
-    settingsForm.open({ tab: 'projects' });
+    settingsForm.open({ page: 'allProjects' });
     fakeBackend({ closed_projects: () => [OLD], erase_closed_project: () => undefined });
     render(ClosedProjects);
     await userEvent.click(await screen.findByRole('button', { name: "Effacer l'historique…" }));
     await (app.modal as any).onConfirm(false);
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: undefined, resume: true });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'allProjects', projectId: undefined, resume: true });
   });
 
   it('reopens a project from its row: the window that adds a project, on its folder and on that history', async () => {
@@ -194,7 +194,7 @@ describe('ClosedProjects', () => {
       expect(backend.called('erase_closed_project')).toHaveLength(0);
       await (app.modal as any).onConfirm(false);
       expect(backend.called('erase_closed_project')[0].args).toEqual({ id: 'abc123' });
-      expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1', resume: true });
+      expect(app.modal).toEqual({ kind: 'settings', page: 'allProjects', projectId: 'p1', resume: true });
     });
 
     it('comes back to the settings when the question is cancelled', async () => {
@@ -202,7 +202,7 @@ describe('ClosedProjects', () => {
       render(ClosedProjects);
       await userEvent.click(await screen.findByRole('button', { name: 'Effacer' }));
       (app.modal as any).onCancel();
-      expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1', resume: true });
+      expect(app.modal).toEqual({ kind: 'settings', page: 'allProjects', projectId: 'p1', resume: true });
       expect(backend.called('erase_closed_project')).toHaveLength(0);
     });
 

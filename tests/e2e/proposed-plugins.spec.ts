@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, test, openSettingsPage } from './fixture';
 import { startFakeStore } from '../fixtures/store/fake-store.mjs';
 
 const SHOTS = process.env.ESCOUADE_E2E_SHOTS;
@@ -44,7 +44,7 @@ const state = async () => (await fetch(`${fake.url}/_fake/state`)).json();
 async function projectSettings(page: Page) {
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(dialog, 'Projet');
   return dialog;
 }
 

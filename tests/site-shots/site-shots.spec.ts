@@ -266,7 +266,10 @@ test('the website’s screenshots', async ({ app, language }) => {
   // « integrations »: Jira connected, its project linked, the import with three issues checked.
   await page.getByRole('button', { name: like(L.nav.rail.settingsLabel) }).click();
   const settings = page.getByRole('dialog', { name: L.common.settings });
-  await settings.getByRole('tab', { name: L.settings.tabs.integrations.label }).click();
+  await settings
+    .getByRole('navigation', { name: L.common.settings })
+    .getByRole('button', { name: L.settings.pages.services.label })
+    .click();
   await settings.getByRole('button', { name: L.integrations.accounts.connectEllipsis }).first().click();
   const jira = settings.getByRole('form', { name: like(L.integrations.accounts.formLabel) }).first();
   await jira.getByLabel(L.integrations.accounts.site).fill(trackers.url);
@@ -407,7 +410,10 @@ test.describe('the code hosts', () => {
     // The account of github.com, connected as a user would, from its token.
     await page.getByRole('button', { name: like(L.nav.rail.settingsLabel) }).click();
     const settings = page.getByRole('dialog', { name: L.common.settings });
-    await settings.getByRole('tab', { name: L.settings.tabs.integrations.label }).click();
+    await settings
+      .getByRole('navigation', { name: L.common.settings })
+      .getByRole('button', { name: L.settings.pages.services.label })
+      .click();
     await settings.getByRole('button', { name: L.integrations.accounts.connectEllipsis }).nth(2).click();
     const form = settings.getByRole('form', { name: like(L.integrations.accounts.formLabel) }).first();
     await form.getByRole('textbox').last().fill('demo');

@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium, type Locator, type Page } from '@playwright/test';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, test, openSettingsPage, settingsEntry } from './fixture';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const PREVIEW = path.join(ROOT, 'design', 'app-redesign', 'index.html');
@@ -27,7 +27,7 @@ const settingsOf = (data: string) => JSON.parse(fs.readFileSync(path.join(data, 
 async function openApplication(page: Page) {
   await page.keyboard.press('Control+,');
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Application' }).click();
+  await openSettingsPage(dialog, 'Général');
   return dialog;
 }
 
@@ -92,7 +92,7 @@ test('« Thème » is the system’s by default, applies at once with the window
   expect(await colours()).toEqual([expect.stringMatching(/^oklch\(0\.9\d* /), 'rgb(21, 23, 28)', true]);
   // Saved by itself, nothing to « Enregistrer ».
   await expect.poll(() => settingsOf(app.data).theme).toBe('light');
-  await expect(dialog.getByRole('tab', { name: 'Application' })).not.toHaveClass(/changed/);
+  await expect(settingsEntry(dialog, 'Général')).not.toHaveClass(/changed/);
   await dialog.getByRole('button', { name: 'Annuler' }).click();
 
   // After a restart: light, the window too, and what the page reads before the first render says so.
@@ -229,8 +229,8 @@ test.describe('in English', () => {
     await page.setViewportSize({ width: 1028, height: 779 });
     await page.keyboard.press('Control+,');
     const dialog = page.getByRole('dialog', { name: 'Settings' });
-    await dialog.getByRole('tab', { name: 'Application' }).click();
-    await expect(dialog.getByText('Theme, zoom, languages and written texts')).toBeVisible();
+    await openSettingsPage(dialog, 'General');
+    await expect(dialog.getByText('Theme, zoom, language, updates and what concerns you')).toBeVisible();
     const theme = dialog.getByRole('group', { name: 'Theme' });
     await expect(theme.getByRole('button')).toHaveText(['System', 'Light', 'Dark']);
     for (const pick of ['Light', 'Dark']) {

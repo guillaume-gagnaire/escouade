@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
-import { addProject, expect, send, test, type App } from './fixture';
+import { addProject, expect, send, test, type App, openSettingsPage } from './fixture';
 
 const KB = 1024;
 const MB = 1024 * KB;
@@ -368,7 +368,7 @@ test('the settings of the attachments are saved, and apply to the next file', as
   const open = async () => {
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
-    await dialog.getByRole('tab', { name: 'Harness' }).click();
+    await openSettingsPage(dialog, 'Comptes et harness');
     await expect(dialog.getByRole('heading', { name: 'Pièces jointes' })).toBeVisible();
     return dialog;
   };
@@ -709,7 +709,7 @@ test.describe('in English', () => {
     // The settings: a maximum of 1 MB, a warning over 1 MB, and the words of both in English.
     await page.getByRole('button', { name: 'Settings (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Settings' });
-    await dialog.getByRole('tab', { name: 'Harness' }).click();
+    await openSettingsPage(dialog, 'Accounts and harnesses');
     await expect(dialog.getByRole('heading', { name: 'Attachments' })).toBeVisible();
     await expect(dialog.getByRole('switch', { name: 'Attach the original file' })).toHaveAttribute('aria-checked', 'true');
     await expect(

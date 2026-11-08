@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, test, openSettingsPage } from './fixture';
 
 const tile = (page: Page) => page.getByRole('tab', { name: /^demo-api/ });
 
@@ -13,7 +13,7 @@ const tile = (page: Page) => page.getByRole('tab', { name: /^demo-api/ });
 async function projectsSettings(page: Page) {
   const settings = page.getByRole('dialog', { name: 'Réglages' });
   if (!(await settings.isVisible())) await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
-  await settings.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(settings, 'Projet');
   return settings;
 }
 

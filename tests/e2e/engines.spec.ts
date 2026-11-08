@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { addProject, expect, send, test } from './fixture';
+import { addProject, expect, send, test, openSettingsPage } from './fixture';
 
 // The registry of the harnesses (ESC-28): the version of Claude Code found, an older one than the tested ones refused, a
 // newer one taken with no warning (ESC-159). The fake `claude` prints FAKE_CLAUDE_VERSION for `--version` (2.1.301 by default, the newest tested).
@@ -7,7 +7,7 @@ import { addProject, expect, send, test } from './fixture';
 async function claudeSettings(page: Page) {
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Harness' }).click();
+  await openSettingsPage(dialog, 'Comptes et harness');
   return dialog;
 }
 

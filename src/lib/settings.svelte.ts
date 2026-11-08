@@ -5,7 +5,6 @@ import { t } from './i18n';
 import { api } from './ipc';
 import { forgetLaunches, runsOfCommand } from './launch-actions';
 import { knowLogo, logoUrl, pickLogo } from './project-logo.svelte';
-import type { IconName } from './icons';
 import { app } from './state.svelte';
 import type {
   BoardSettings,
@@ -26,8 +25,6 @@ import {
   legacyTab,
   rowsOf,
   SETTINGS_PAGES,
-  SETTINGS_ROWS,
-  tabOfPage,
   type RowInfo,
   type SettingsPage,
   type SettingsSection,
@@ -35,58 +32,6 @@ import {
 } from './settings-pages';
 
 export * from './settings-pages';
-
-/** The three groups of the 2.0 tabs: the general ones, « Par projet », « Système ». */
-export type SettingsGroup = 'general' | 'project' | 'system';
-
-interface TabInfo {
-  id: SettingsTab;
-  label: string;
-  icon: IconName;
-  desc: string;
-  group: SettingsGroup;
-  /** Set project by project: the project is chosen above it. */
-  scoped?: boolean;
-}
-
-/** A tab whose label and description are read where shown, so that they follow a change of language. */
-function tabInfo(id: SettingsTab, icon: IconName, group: SettingsGroup = 'general'): TabInfo {
-  return {
-    id,
-    icon,
-    group,
-    ...(group === 'project' ? { scoped: true } : {}),
-    get label() {
-      return t(`settings.tabs.${id}.label`);
-    },
-    get desc() {
-      return t(`settings.tabs.${id}.desc`);
-    },
-  };
-}
-
-/**
- * The tabs of the 2.0 window, shown until the shell of the pages (R2) takes their place: `SETTINGS_PAGES` is the
- * register, these only how it is shown meanwhile.
- */
-export const LEGACY_TABS: TabInfo[] = [
-  tabInfo('app', 'lang'),
-  tabInfo('claude', 'spark'),
-  // The accounts are saved at once, each change (not part of the draft); « Quand un quota est épuisé » is.
-  tabInfo('accounts', 'user'),
-  tabInfo('voice', 'mic'),
-  tabInfo('notifications', 'bell'),
-  tabInfo('projects', 'folder', 'project'),
-  tabInfo('board', 'kanban', 'project'),
-  tabInfo('integrations', 'link', 'project'),
-  // A link to the view Plugins (choice 213): nothing of it is saved here.
-  tabInfo('plugins', 'puzzle', 'system'),
-  // The one switch is saved at once (it writes into each harness's config).
-  tabInfo('mcp', 'plug', 'system'),
-  tabInfo('terminals', 'term', 'system'),
-  tabInfo('network', 'globe', 'system'),
-  tabInfo('about', 'info', 'system'),
-];
 
 /** The app's settings each page sets, read from its rows. */
 export const SETTINGS_OF = {} as Record<SettingsPage, (keyof Settings)[]>;
@@ -395,15 +340,6 @@ const rowChanged = (r: RowInfo, k: ChangedKeys) =>
 class SettingsForm {
   /** The page on screen. */
   page = $state<SettingsPage>('accounts');
-  #tab = $state<SettingsTab>('claude');
-  /** The tab of the 2.0 window on screen, until the shell of the pages (R2): choosing one goes to its page. */
-  get tab(): SettingsTab {
-    return this.#tab;
-  }
-  set tab(v: SettingsTab) {
-    this.#tab = v;
-    this.page = legacyTab(v);
-  }
   /** The project the pages of a project set. */
   projectId = $state<string | null>(null);
   settings = $state<Settings>({} as Settings);
@@ -487,9 +423,7 @@ class SettingsForm {
    */
   resume({ page, tab, projectId, section }: SettingsPlace = {}) {
     const has = (id: string | null | undefined) => !!id && app.projects.some((p) => p.id === id);
-    const shown = tab ?? (page ? tabOfPage(page) : 'claude');
-    this.#tab = shown;
-    this.page = page ?? legacyTab(shown, section);
+    this.page = page ?? (tab ? legacyTab(tab, section) : 'accounts');
     this.projectId = has(projectId) ? projectId! : has(app.project?.id) ? app.project!.id : (app.projects[0]?.id ?? null);
   }
 
@@ -497,12 +431,6 @@ class SettingsForm {
   changed(page: SettingsPage, projectId?: string): boolean {
     const keys = this.#changedKeys(projectId);
     return rowsOf(page).some((r) => rowChanged(r, keys));
-  }
-
-  /** A tab of the 2.0 window has something to save: one of the rows it shows (until R2). */
-  tabChanged(tab: SettingsTab): boolean {
-    const keys = this.#changedKeys();
-    return SETTINGS_ROWS.some((r) => r.tab === tab && rowChanged(r, keys));
   }
 
   /** What differs from the draft as opened: the app's keys, and those of the project given (else of any). */

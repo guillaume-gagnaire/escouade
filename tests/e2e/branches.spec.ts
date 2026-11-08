@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, test, openSettingsPage } from './fixture';
 
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 
@@ -57,13 +57,13 @@ test('the agents start from the target branch, brought up to date from the remot
   // « Branche cible » in the branch picker, then the setting.
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Kanban' }).click();
+  await openSettingsPage(settings, 'Kanban');
   await settings.getByRole('button', { name: 'Branche cible : work. Choisir une autre branche' }).click();
   const picker = page.getByRole('dialog', { name: 'Branche cible' });
   await picker.getByRole('option', { name: /^main/ }).click();
   await expect(picker).toBeHidden();
   // « Branche de départ des nouveaux worktrees », in the project's settings (ESC-160).
-  await settings.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(settings, 'Projet');
   await settings
     .getByRole('group', { name: 'Branche de départ des nouveaux worktrees' })
     .getByRole('button', { name: 'Branche cible du Kanban' })
@@ -147,7 +147,7 @@ test('the new worktrees start from the branch the project names, and an agent fr
   // « Branche de départ des nouveaux worktrees »: a branch, chosen in the picker.
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(settings, 'Projet');
   const choice = settings.getByRole('group', { name: 'Branche de départ des nouveaux worktrees' });
   await expect(choice.getByRole('button', { name: 'Branche actuelle du dossier' })).toHaveAttribute('aria-pressed', 'true');
   await choice.getByRole('button', { name: 'Une branche…' }).click();

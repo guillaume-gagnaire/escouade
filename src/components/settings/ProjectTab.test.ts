@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/svelte';
+import { cleanup, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../../lib/i18n';
@@ -156,10 +156,10 @@ describe('ProjectTab', () => {
   describe('remote control', () => {
     const LABEL = 'Remote control pour les agents de ce projet';
     const REASON = 'Activé pour tous les projets dans Réglages › Harness';
-    const tab = (name: string) => screen.getByRole('tab', { name });
+    const tab = (name: string) => within(screen.getByRole('navigation')).getByRole('button', { name });
     const headings = () => screen.getAllByRole('heading').map((h) => h.textContent);
     /** The modal on « Claude Code », the setting for all agents switched on or off, then on the project’s tab. */
-    const toProjects = async (global: boolean, [allLabel, projectsTab] = ['Remote control pour tous les agents', 'Projets']) => {
+    const toProjects = async (global: boolean, [allLabel, projectsTab] = ['Remote control pour tous les agents', 'demo-api']) => {
       render(SettingsModal, { tab: 'claude' });
       const all = screen.getByRole('switch', { name: allLabel });
       if (global !== (all.getAttribute('aria-checked') === 'true')) await userEvent.click(all);
@@ -199,7 +199,7 @@ describe('ProjectTab', () => {
       expect(screen.getByRole('switch', { name: LABEL })).toHaveAttribute('aria-checked', 'false');
       await userEvent.click(screen.getByRole('switch', { name: LABEL }));
       expect(screen.getByRole('switch', { name: LABEL })).toHaveAttribute('aria-checked', 'true');
-      expect(tab('Projets')).toHaveClass('changed');
+      expect(tab('Confidentialité')).toHaveClass('changed');
       expect(backend.called('update_project')).toHaveLength(0);
       await save();
       expect(backend.called('update_project')).toHaveLength(1);
@@ -218,7 +218,7 @@ describe('ProjectTab', () => {
       expect(remote).toHaveAttribute('aria-checked', 'true');
       await userEvent.click(remote);
       await userEvent.click(remote);
-      expect(tab('Projets')).not.toHaveClass('changed');
+      expect(tab('Confidentialité')).not.toHaveClass('changed');
       await save();
       expect(backend.called('update_project')).toHaveLength(0);
     });
@@ -234,7 +234,7 @@ describe('ProjectTab', () => {
       // A click changes nothing, and nothing of the project is saved.
       await userEvent.click(remote);
       expect(remote).toHaveAttribute('aria-checked', 'true');
-      expect(tab('Projets')).not.toHaveClass('changed');
+      expect(tab('Confidentialité')).not.toHaveClass('changed');
       await save();
       expect(backend.called('save_settings')[0].args.settings).toMatchObject({ remoteControlAll: true });
       expect(backend.called('update_project')).toHaveLength(0);
@@ -245,9 +245,9 @@ describe('ProjectTab', () => {
       fakeBackend();
       await toProjects(true);
       expect(screen.getByRole('switch', { name: LABEL })).toBeDisabled();
-      await userEvent.click(tab('Harness'));
+      await userEvent.click(tab('Comptes et harness'));
       await userEvent.click(screen.getByRole('switch', { name: 'Remote control pour tous les agents' }));
-      await userEvent.click(tab('Projets'));
+      await userEvent.click(tab('demo-api'));
       const remote = screen.getByRole('switch', { name: LABEL });
       expect(remote).toHaveAttribute('aria-checked', 'false');
       expect(remote).toBeEnabled();
@@ -262,9 +262,9 @@ describe('ProjectTab', () => {
       await toProjects(true);
       expect(screen.getByRole('switch', { name: LABEL })).toHaveAttribute('aria-checked', 'true');
       expect(screen.getByRole('switch', { name: LABEL })).toBeDisabled();
-      await userEvent.click(tab('Harness'));
+      await userEvent.click(tab('Comptes et harness'));
       await userEvent.click(screen.getByRole('switch', { name: 'Remote control pour tous les agents' }));
-      await userEvent.click(tab('Projets'));
+      await userEvent.click(tab('demo-api'));
       expect(screen.getByRole('switch', { name: LABEL })).toHaveAttribute('aria-checked', 'true');
       expect(screen.getByRole('switch', { name: LABEL })).toBeEnabled();
       expect(backend.called('update_project')).toHaveLength(0);
@@ -273,7 +273,7 @@ describe('ProjectTab', () => {
     it('says it in English', async () => {
       setLang('en');
       fakeBackend();
-      await toProjects(true, ['Remote control for all agents', 'Projects']);
+      await toProjects(true, ['Remote control for all agents', 'demo-api']);
       const remote = screen.getByRole('switch', { name: 'Remote control for this project’s agents' });
       expect(remote).toBeDisabled();
       expect(remote).toHaveAttribute('aria-checked', 'true');
@@ -347,6 +347,8 @@ describe('ProjectTab', () => {
   it('says in the sensitive zone that closing the project keeps its history, and offers to erase it with the question', async () => {
     fakeBackend();
     render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    // Folded at the foot of « Projet », it says what it hides.
+    await userEvent.click(screen.getByRole('button', { name: /^Zone sensible/ }));
     expect(
       screen.getByText(
         "Le projet quitte l'application : ses agents, ses terminaux et ses lancements s'arrêtent. Son historique (conversations, tickets, réglages) est gardé : rouvrir ce dossier le retrouve. Les fichiers et les worktrees sur le disque ne sont pas touchés.",
@@ -359,11 +361,12 @@ describe('ProjectTab', () => {
     });
   });
 
-  it('says it in English', () => {
+  it('says it in English', async () => {
     setLang('en');
     fakeBackend();
     render(SettingsModal, { tab: 'projects', projectId: 'p1' });
     expect(screen.getByRole('heading', { name: 'Identity' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^Danger zone/ }));
     expect(
       screen.getByText(
         'The project leaves the app: its agents, terminals and launches stop. Its history (conversations, tickets, settings) is kept: adding this folder again brings it back. The files and worktrees on disk are not touched.',
@@ -377,7 +380,7 @@ describe('ProjectTab', () => {
 describe('ProjectTab: « Projet privé » (ESC-139)', () => {
   const LABEL = 'Projet privé';
   const DEFAULT = 'Nouveaux projets privés';
-  const tab = (name: string) => screen.getByRole('tab', { name });
+  const tab = (name: string) => within(screen.getByRole('navigation')).getByRole('button', { name });
 
   beforeEach(() => {
     setLang('fr');
@@ -397,7 +400,7 @@ describe('ProjectTab: « Projet privé » (ESC-139)', () => {
       ),
     ).toBeVisible();
     await userEvent.click(own);
-    expect(tab('Projets')).toHaveClass('changed');
+    expect(tab('Confidentialité')).toHaveClass('changed');
     await save();
     expect(backend.called('update_project')).toHaveLength(1);
     expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', private: true });
@@ -448,13 +451,13 @@ describe('ProjectTab: « Projet privé » (ESC-139)', () => {
 
   it('sets the default of the new projects, off until switched on, also with no project open', async () => {
     const backend = fakeBackend({ save_settings: () => [] });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'allProjects' });
     expect(screen.getByRole('heading', { name: 'Nouveaux projets' })).toBeInTheDocument();
     const byDefault = screen.getByRole('switch', { name: DEFAULT });
     expect(byDefault).toHaveAttribute('aria-checked', 'false');
     expect(screen.getByText('Chaque projet ajouté est privé dès le départ. Ceux qui existent gardent leur réglage.')).toBeVisible();
     await userEvent.click(byDefault);
-    expect(tab('Projets')).toHaveClass('changed');
+    expect(tab('Tous les projets')).toHaveClass('changed');
     await save();
     expect(backend.called('save_settings')[0].args.settings).toMatchObject({ privateProjects: true });
     expect(app.settings.privateProjects).toBe(true);
@@ -465,7 +468,7 @@ describe('ProjectTab: « Projet privé » (ESC-139)', () => {
   it('offers the default with no project open', () => {
     fakeBackend();
     resetApp({ projects: [] });
-    render(SettingsModal, { tab: 'projects' });
+    render(SettingsModal, { page: 'allProjects' });
     expect(screen.getByRole('switch', { name: DEFAULT })).toBeInTheDocument();
   });
 
@@ -474,8 +477,10 @@ describe('ProjectTab: « Projet privé » (ESC-139)', () => {
     fakeBackend();
     render(SettingsModal, { tab: 'projects', projectId: 'p1' });
     expect(screen.getByRole('switch', { name: 'Private project' })).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'New projects are private' })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Private project: unseen by the agents of the other projects' })).toBeInTheDocument();
+    cleanup();
+    render(SettingsModal, { page: 'allProjects' });
+    expect(screen.getByRole('switch', { name: 'New projects are private' })).toBeInTheDocument();
   });
 });
 

@@ -1,7 +1,7 @@
 // Launches the real app on a throwaway data folder, with the fake `claude` CLI, and connects
 // Playwright to its WebView2 through the DevTools protocol.
 
-import { test as base, chromium, expect, type Browser, type Page } from '@playwright/test';
+import { test as base, chromium, expect, type Browser, type Locator, type Page } from '@playwright/test';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -615,6 +615,59 @@ export async function unfoldSections(page: Page) {
   // One at a time: the list shrinks as each one unfolds (`all()` would look for an nth that is gone).
   const folded = page.locator('.sec-h > .fold[aria-expanded="false"]');
   while ((await folded.count()) > 0) await folded.first().click();
+}
+
+/** The pages of a project in the bar of the settings (ESC-379), shown under the project unfolded. */
+const PROJECT_PAGES = new Set([
+  'Projet',
+  'Git et worktrees',
+  'Lancement',
+  'Kanban',
+  'Tickets importés',
+  'Équipe',
+  'Confidentialité',
+  'Project',
+  'Git and worktrees',
+  'Launch',
+  'Imported tickets',
+  'Team',
+  'Privacy',
+]);
+
+/** The bar of the settings window: its pages, its projects (direction A, ESC-379). */
+export const settingsNav = (where: Page | Locator) => where.getByRole('dialog', { name: /^(Réglages|Settings)$/ }).getByRole('navigation');
+
+/** An entry of the bar of the settings: a page by its name (« À propos », « Comptes et harness »), or a project. */
+export function settingsEntry(where: Page | Locator, name: string | RegExp) {
+  const nav = 'goto' in where ? settingsNav(where) : where.getByRole('navigation');
+  return nav.getByRole('button', typeof name === 'string' ? { name, exact: true } : { name });
+}
+
+/**
+ * Opens the settings on a page (ESC-379, in place of the 2.0 tabs): `where` is the app's page (the window is opened by
+ * « Réglages (Ctrl+,) » when it is not), or the settings dialog. A page of a project (« Kanban », « Projet »…) is the
+ * one of `project` (its name; else the one chosen, else the first), unfolded first. Answers the dialog.
+ */
+export async function openSettingsPage(where: Page | Locator, name: string | RegExp, opts: { project?: string | RegExp } = {}) {
+  let dialog: Locator;
+  if ('goto' in where) {
+    dialog = where.getByRole('dialog', { name: /^(Réglages|Settings)$/ });
+    if (!(await dialog.isVisible())) await where.getByRole('button', { name: /^(Réglages|Settings) \(/ }).click();
+  } else dialog = where;
+  const nav = dialog.getByRole('navigation');
+  if (opts.project !== undefined) {
+    const row = nav
+      .locator('button[aria-expanded]')
+      .filter({ has: dialog.page().locator('.lbl', { hasText: opts.project }) })
+      .first();
+    if ((await row.getAttribute('aria-expanded')) !== 'true') await row.click();
+  } else if (typeof name === 'string' && PROJECT_PAGES.has(name) && !(await settingsEntry(dialog, name).isVisible())) {
+    await nav.locator('button[aria-expanded]').first().click();
+  }
+  const entry = settingsEntry(dialog, name);
+  await entry.click();
+  await expect(entry).toHaveAttribute('aria-current', 'page');
+  return dialog;
 }
 
 export async function send(page: Page, text: string) {

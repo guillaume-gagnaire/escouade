@@ -1,72 +1,79 @@
 ---
 title: "Réglages"
 subject: "Fenêtre"
-sources: ["docs/SPEC.md"]
-tickets: []
-decisions: []
+sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md"]
+tickets: ["ESC-378","ESC-379"]
+decisions: ["reglages-la-barre-des-categories-la-tein"]
 compared: null
 ---
 
 ## Ce que c'est
 
-Une seule fenêtre de réglages pour toute l'app, avec ses onglets à gauche. Les changements forment un brouillon, enregistré d'un coup ou jeté. Quelques réglages, qui se voient tout de suite, s'appliquent sans attendre. Chaque réglage est décrit sur la page de sa feature ; cette page dit comment la fenêtre marche et ce que chaque onglet contient.
+Une seule fenêtre de réglages pour toute l'app : une barre des catégories à gauche, une page à la fois à droite. Les pages d'Escouade règlent l'app ; celles d'un projet ne règlent que lui. Les changements forment un brouillon, enregistré d'un coup ou jeté. Quelques réglages, qui se voient tout de suite, s'appliquent sans attendre. Chaque réglage est décrit sur la page de sa feature ; cette page dit comment la fenêtre marche et ce que chaque page contient.
 
 ## Comportement
 
 ### Ouvrir
 
-- ⚙ de la barre de statut, « Réglages » en bas de la barre des projets, ou `Ctrl+,`.
+- ⚙ de la barre de statut, « Réglages » en bas de la barre des projets, ou `Ctrl+,` : sur « Comptes et harness ».
 - Ouvertures directes :
-  - « ⚙ Après validation » du Kanban : l'onglet Kanban de son projet ;
-  - ⚙, « Configurer » et « ✦ Proposer des commandes » de la section Lancement : l'onglet Projets, sur ses commandes de lancement ; le dernier lance aussi la lecture du projet (voir *Barre latérale*) ;
-  - « Réglages du projet… » au clic droit sur un projet : l'onglet Projets de ce projet.
-- Chaque onglet, et chaque projet, s'affiche depuis son début.
+  - « ⚙ Après validation » du Kanban : la page Kanban de son projet ;
+  - ⚙, « Configurer » et « ✦ Proposer des commandes » de la section Lancement : la page Lancement du projet ; le dernier lance aussi la lecture du projet (voir *Barre latérale*) ;
+  - « Réglages du projet… » au clic droit sur un projet : la page Projet de ce projet.
+- Chaque page, et chaque projet, s'affiche depuis son début (ou depuis sa partie, tant qu'elle montre un ancien onglet : voir *Les pages*).
 
 ### La fenêtre
 
-- Les onglets à gauche, un point sur un onglet modifié, la version d'Escouade en bas. Un onglet à la fois, sous son titre et sa description.
-- « Enregistrer » enregistre d'un coup ce qui a changé, dans tous les onglets et tous les projets, chaque partie par-dessus ce que l'app a alors (le Kanban, lui, avance seul).
+- 1120 × 780, ou la place disponible avec 16 px autour (à 1028 × 779, la taille de la CI).
+- **La barre**, de haut en bas :
+  - « Rechercher un réglage » (`Ctrl+F`), inerte pour l'instant ;
+  - « Escouade » : Général, Agents, Comptes et harness, Services connectés, Voix, Notifications, Plugins, Avancé ;
+  - « Projets » : chaque projet, sa couleur devant son nom, un cadenas pour un projet privé. Le projet choisi, quand une de ses pages est à l'écran, est déplié sur ses pages : Projet, Git et worktrees, Lancement, Kanban, Tickets importés, Équipe, Confidentialité. Choisir un autre projet garde la même page, sinon ouvre « Projet » ;
+  - « Tous les projets » (ce que reçoit un nouveau projet, les projets fermés) ;
+  - en bas : « À propos » et la version d'Escouade.
+- **Le clavier** : ↑ et ↓ vont d'une entrée de la barre à la suivante et l'ouvrent, Origine et Fin à la première et à la dernière ; passer sur un projet l'ouvre et le déplie. Une seule entrée de la barre est dans l'ordre de Tab : celle où est le clavier.
+- **Un point** sur une page qui a des changements non enregistrés ; un projet replié porte celui de ses pages. Le point se lit aussi au lecteur d'écran (« Modifié, pas encore enregistré »).
+- **La teinte suit la portée** : sur une page d'Escouade (Tous les projets compris), la fenêtre prend le teal d'Escouade ; sur une page d'un projet, la couleur de ce projet, celle du brouillon dès qu'elle change. À la fermeture, l'app reprend sa propre teinte.
+- La page sous son titre et sa description ; pour une page d'un projet, sa tuile devant, et son nom pour titre sur la page Projet.
+- **« Avancé »**, en bas d'une page : un groupe replié sur une ligne qui nomme ce qu'il cache ; un clic le déplie sur place. Pour l'instant, seule la page Projet en a un : « Zone sensible », qui cache « Fermer le projet ».
+- « Enregistrer » enregistre d'un coup ce qui a changé, dans toutes les pages et tous les projets, chaque partie par-dessus ce que l'app a alors (le Kanban, lui, avance seul).
 - « Enregistrer » est refusé, avec la raison, tant qu'un projet n'a pas de nom, qu'une commande de lancement n'a pas de nom ou de ligne de commande, ou qu'un dossier des worktrees ou un préfixe de branche n'est pas valide. Ce qui n'a pas pu être enregistré reste dans la fenêtre.
 - « Annuler », Échap ou × jettent tout le brouillon.
-- Hors du brouillon, appliqués et enregistrés tout de suite : « Affichage » (voir *Fenêtre*), l'onglet Comptes et sa « Projection des quotas » (voir *Barre de statut*), les comptes des intégrations (voir *Intégrations*), l'interrupteur « Les agents peuvent piloter Escouade » (voir *Serveur MCP*), et les modèles de la voix, téléchargés ou effacés sur leur ligne.
+- Hors du brouillon, appliqués et enregistrés tout de suite : « Affichage » (voir *Fenêtre*), les comptes des harness et leur « Projection des quotas » (voir *Barre de statut*), les comptes des intégrations (voir *Intégrations*), l'interrupteur « Les agents peuvent piloter Escouade » (voir *Serveur MCP*), et les modèles de la voix, téléchargés ou effacés sur leur ligne.
 
-### Les onglets
+### Les pages
 
-- **Application**, en tête :
-  - « Affichage » : « Thème », « Zoom de l'interface », « Taille du texte des terminaux », « Taille du texte de l'éditeur » (voir *Fenêtre*) ;
-  - « Langue de l'interface » (« Système (…) » par défaut, « English », « Français ») et « Langue des textes rédigés par Claude » (« Comme l'interface » par défaut), « Modèle des textes rédigés » (voir *Langues*).
-- **Harness** :
-  - un groupe par harness : exécutable, version, état, « Se connecter… », et pour OpenCode ses « Modèles » favoris (voir *Harness*) ;
-  - pour Claude Code : le chemin de `claude`, avec dessous où est le `claude` de ce chemin (voir *Claude Code dans WSL*) ; modèle, effort et mode par défaut des nouveaux agents ; reprise automatique après la limite d'usage ; « Reprendre sur un autre compte un agent de ticket arrêté par la limite », avec plusieurs comptes (voir *Comptes*) ; « Les agents tiennent une liste de tâches », activé par défaut (voir *Avancée d'un plan*) ; arrêt des process inactifs ;
-  - « Pièces jointes » : taille maximale, avertissement au-delà d'un seuil, fichier d'origine ou copie, gros textes, purge des copies (voir *Conversation*) ;
-  - « Remote control » : « Remote control pour tous les agents » (voir *Barre latérale*) ;
-  - « Serveur MCP » : « Les agents peuvent piloter Escouade », et « Activité MCP » (voir *Serveur MCP*). C'est le seul interrupteur du serveur MCP ; il sert les agents de tous les projets.
+Chaque réglage a sa page dans le registre de la fenêtre (le point d'une page se lit sur lui). Jusqu'à ce que chaque lot de la refonte les redécoupe, les pages montrent encore le contenu des onglets de la 2.0 :
+
+- **Général** : l'ancien onglet Application.
+- **Agents** : le serveur MCP (« Les agents peuvent piloter Escouade », « Activité MCP »).
+- **Comptes et harness** : les comptes, puis l'ancien onglet Harness.
+- **Services connectés** et **Tickets importés** (sur sa partie « Sources ») : l'ancien onglet Intégrations, pour le projet choisi.
+- **Voix**, **Notifications** : comme avant.
+- **Plugins** : le lien vers la vue Plugins.
+- **Avancé** : Réseau, Terminaux, puis « Recherche par le sens ».
+- **À propos** : comme avant.
+- **Projet**, **Git et worktrees**, **Lancement**, **Équipe**, **Confidentialité** : l'ancien onglet Projets du projet, chacune ouverte sur sa partie (Git, Lancement, Kanban partagé, Confidentialité) ; « Fermer le projet… » est sous « Zone sensible », repliée. Fermer ou non revient aux réglages, le brouillon intact (voir *Fermer un projet*).
+- **Kanban** : l'ancien onglet Kanban du projet.
+- **Tous les projets** : « Nouveaux projets » (« Nouveaux projets privés », éteint par défaut), puis « Projets fermés », seulement s'il y en a, avec par projet « Rouvrir » et « Effacer l'historique… », et « Historique illisible » avec « Effacer » (voir *Fermer un projet*). Effacer un historique revient sur cette page.
+
+Le détail des réglages de chaque ancien onglet :
+
+- **Application** : « Affichage » (« Thème », « Zoom de l'interface », « Taille du texte des terminaux », « Taille du texte de l'éditeur », voir *Fenêtre*) ; « Langue de l'interface » (« Système (…) » par défaut, « English », « Français ») et « Langue des textes rédigés par Claude » (« Comme l'interface » par défaut), « Modèle des textes rédigés » (voir *Langues*).
+- **Harness** : un groupe par harness (exécutable, version, état, « Se connecter… », et pour OpenCode ses « Modèles » favoris, voir *Harness*) ; pour Claude Code, le chemin de `claude` et où il est (voir *Claude Code dans WSL*), reprise automatique après la limite d'usage, « Reprendre sur un autre compte un agent de ticket arrêté par la limite » avec plusieurs comptes (voir *Comptes*), « Les agents tiennent une liste de tâches », activé par défaut (voir *Avancée d'un plan*), arrêt des process inactifs ; « Pièces jointes » (voir *Conversation*) ; « Remote control pour tous les agents » (voir *Barre latérale*).
 - **Comptes** : la liste des comptes, « Ajouter un compte… », « Se connecter… » (voir *Comptes*) ; « Quotas » › « Projection des quotas » (voir *Barre de statut*).
-- **Notifications** : « Me prévenir pour », notifications du système, son (activé, « ▶ Tester ») (voir *Notifications*).
-- **Voix** : « Micro utilisé » (celui du système par défaut), « Modèle », « Langue parlée », « Raccourci » (voir *Dictée*) ; « Conversation » : la voix de chaque langue, « Vitesse », « Volume », « Délai avant l'envoi » (voir *Conversation vocale*).
-- **Projets**, avec un sélecteur de projet (celui affiché par défaut ; un cadenas après le nom d'un projet privé) :
-  - « Identité » : nom, dossier (« Ouvrir »), couleur, lettres, logo et libellé de la tuile (voir *Barre des projets*), « Compte préféré » avec plusieurs comptes ;
-  - « Remote control » : « Remote control pour les agents de ce projet » (voir *Barre latérale*) ;
-  - « Confidentialité » : « Projet privé » (éteint par défaut) et « Ses fichiers » (voir *Serveur MCP*) ; pour un projet privé, ses « Comptes » réservés ou partagés et « Comptes partagés à la limite » (voir *Comptes*) ;
-  - « Git » : « Commit » (« Rédigé par l'agent » par défaut, ou « Direct, avec un message proposé »), worktree par agent, dossier des worktrees, préfixes des branches des agents et des tickets, fichiers copiés dans les worktrees, commandes de préparation et de démontage des worktrees (« ✦ Remplir automatiquement », « Monter », « Descendre ») (voir *Git & fichiers*) ;
-  - « Worktrees restés » › « Nettoyer » (ci-dessous) ;
-  - « Lancement » : les commandes de lancement et leur « ✦ Remplir automatiquement » (voir *Barre latérale*) ;
-  - « Assistant de configuration » : « Ouvrir l'assistant… » (voir *Nouveau projet*) ;
-  - « Fermer le projet… » : sa confirmation, avec la case « Effacer aussi son historique (conversations, tickets, réglages) » décochée par défaut, revient aux réglages, acceptée ou non, le brouillon intact (voir *Fermer un projet*) ;
-  - sous le projet : le groupe « Nouveaux projets » (« Nouveaux projets privés », éteint par défaut : chaque projet ajouté est privé dès le départ), puis « Projets fermés », seulement s'il y en a, avec par projet « Rouvrir » et « Effacer l'historique… », et « Historique illisible » avec « Effacer » pour un fichier que l'app ne sait pas lire (voir *Fermer un projet*).
-- **Kanban**, même sélecteur :
-  - branche cible, choisie dans le sélecteur de branche en mode « Branche cible » : les branches locales du projet, recherche comprise, sans celles des agents et des tickets (leurs préfixes du projet, `escouade/` et `ticket/`), la branche du dossier comprise, la cible actuelle cochée (voir *Kanban*). D'où partent les nouveaux worktrees se règle dans l'onglet Projets (voir *Git & fichiers*) ;
-  - action à la validation (stratégie, ou PR en brouillon), commande de tests et « Relancer les tests avant », « Supprimer le worktree d'un ticket terminé ou supprimé », message de commit généré avec son aperçu, conflit (voir *Validation*) ;
-  - pilote auto, agents en parallèle et leurs modèle, effort et mode (voir *Pilote auto*) ;
-  - « Pause au-delà du quota », « pour tous les projets » : un réglage de l'app, qui marque aussi cet onglet comme modifié (voir *Comptes*).
-- **Intégrations**, même sélecteur : comptes Jira, Trello, GitHub ; sources liées au projet, correspondance des statuts, synchronisation et import automatique (voir *Intégrations*).
+- **Notifications** : « Me prévenir pour », les nouvelles des hébergeurs, notifications du système, son (voir *Notifications*).
+- **Voix** : « Micro utilisé », « Modèle », « Langue parlée », « Raccourci » (voir *Dictée*) ; « Conversation » (voir *Conversation vocale*).
+- **Projets** : « Identité » (nom, dossier, couleur, lettres, logo et libellé de la tuile, harness et « Compte préféré », « Assistant de configuration ») ; « Remote control pour les agents de ce projet » ; « Confidentialité » (« Projet privé », « Ses fichiers », ses comptes, voir *Serveur MCP* et *Comptes*) ; « Workflow » ; « Git » (commit, worktrees, préfixes, fichiers copiés, commandes de préparation et de démontage, voir *Git & fichiers*) ; « Worktrees restés » › « Nettoyer » ; « Lancement » ; le Kanban partagé, `.escouade.yml` et la mémoire partagée.
+- **Kanban** : branche cible, action à la validation, tests, nettoyage, message de commit, conflit (voir *Validation*) ; pilote auto et ses agents (voir *Pilote auto*) ; « Pause au-delà du quota », « pour tous les projets » : un réglage de l'app, marqué sur la page Comptes et harness (voir *Comptes*).
+- **Intégrations** : comptes des services et hébergeurs ; sources liées au projet, correspondance des statuts, synchronisation et import automatique (voir *Intégrations*).
 - **Terminaux** : PowerShell 7, Git Bash, distribution WSL (bash sous macOS), shells détectés (voir *Barre latérale*).
 - **Réseau** : proxy et certificats (ci-dessous).
-- **À propos** : version, « Rechercher une mise à jour », « Installer les mises à jour automatiquement » (activé par défaut : « Escouade redémarre d'elle-même quand aucun agent ne travaille et que tout est enregistré. »), données locales (voir *Livraison et mises à jour*).
+- **À propos** : version, « Rechercher une mise à jour », « Installer les mises à jour automatiquement », « Recevoir les versions bêta », statistiques d'usage, données locales (voir *Livraison et mises à jour*).
 
 ### Nettoyer les worktrees restés
 
-- « Worktrees restés » › « Nettoyer », dans l'onglet Projets : les worktrees des agents archivés du projet encore sur le disque sont supprimés, avec la même prudence que ceux des tickets finis (voir *Validation*), puis git oublie ceux dont le dossier a disparu (`git worktree prune`).
+- « Worktrees restés » › « Nettoyer », dans la page Git et worktrees : les worktrees des agents archivés du projet encore sur le disque sont supprimés, avec la même prudence que ceux des tickets finis (voir *Validation*), puis git oublie ceux dont le dossier a disparu (`git worktree prune`).
 - La rangée dit ensuite combien ont été supprimés (« Aucun worktree à supprimer. ») et ceux qui sont gardés, avec pourquoi.
 
 ### Réseau
@@ -80,5 +87,7 @@ Une seule fenêtre de réglages pour toute l'app, avec ses onglets à gauche. Le
 
 ## Limites
 
+- La recherche de la barre ne cherche rien encore.
+- Tant que les pages montrent les anciens onglets, le point d'une page suit le registre : un réglage encore affiché ailleurs (la liste de tâches sous Comptes et harness, par exemple) marque la page qui le recevra (ici Agents).
 - Le proxy n'est pas donné aux terminaux intégrés sans l'option qui l'exporte.
 - Ignorer la vérification des certificats ne vaut pour un process `claude` qu'à son prochain démarrage.

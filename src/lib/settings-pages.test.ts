@@ -309,16 +309,11 @@ describe('settingsForm by page', () => {
     expect(settingsForm.page).toBe('accounts');
     settingsForm.open({ page: 'tickets', projectId: 'p2' });
     expect(settingsForm.page).toBe('tickets');
-    expect(settingsForm.tab).toBe('integrations');
     expect(settingsForm.projectId).toBe('p2');
     settingsForm.open({ tab: 'projects', section: 'launch', projectId: 'p1' });
     expect(settingsForm.page).toBe('launch');
-    expect(settingsForm.tab).toBe('projects');
     settingsForm.resume({ tab: 'mcp' });
     expect(settingsForm.page).toBe('agents');
-    // A 2.0 tab chosen goes to its page.
-    settingsForm.tab = 'network';
-    expect(settingsForm.page).toBe('advanced');
   });
 
   it('marks as changed the page of each key changed, and no other', () => {
@@ -355,21 +350,20 @@ describe('settingsForm by page', () => {
     expect(settingsForm.changed('tickets', 'p2')).toBe(false);
   });
 
-  it('marks the 2.0 tabs as before, the attachments on Harness and the quota pause on Kanban', () => {
-    settingsForm.open();
-    settingsForm.settings.attachWarnMb = 1;
-    settingsForm.settings.quotaPause = 80;
-    expect(LEGACY.filter((tab) => settingsForm.tabChanged(tab))).toEqual(['claude', 'board']);
-    settingsForm.open();
-    settingsForm.projects.p1.name = 'api';
-    settingsForm.projects.p1.integrations.comments = ['done'];
-    expect(LEGACY.filter((tab) => settingsForm.tabChanged(tab))).toEqual(['projects', 'integrations']);
-  });
-
   it('sees no change of a page from a setting saved at once, out of the draft', () => {
     settingsForm.open();
     app.settings.theme = 'dark';
     app.settings.switchAt = 70;
     expect(SETTINGS_PAGES.filter((p) => settingsForm.changed(p.id))).toEqual([]);
+  });
+});
+
+describe('the names of the rows', () => {
+  it('are whole words, never a text with a blank to fill (« Avancé » names them, the search finds them)', () => {
+    for (const lang of ['fr', 'en'] as const) {
+      setLang(lang);
+      for (const r of SETTINGS_ROWS) expect(r.label, `${r.id} in ${lang}`).not.toMatch(/[{}]/);
+    }
+    setLang('fr');
   });
 });

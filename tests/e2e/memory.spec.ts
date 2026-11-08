@@ -7,7 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, test, openSettingsPage } from './fixture';
 
 const SHOTS = process.env.ESCOUADE_E2E_SHOTS;
 
@@ -86,7 +86,7 @@ test('Claude Code’s memory is offered once, taken memory by memory, then liste
   // Réglages › Projets: the list, a text read, one forgotten on a second click.
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(dialog, 'Projet');
   const list = dialog.getByRole('list', { name: 'Mémoire partagée' });
   await list.scrollIntoViewIfNeeded();
   await expect(list.getByRole('listitem')).toHaveCount(2);

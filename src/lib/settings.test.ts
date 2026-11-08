@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync } from 'svelte';
 import { board, fakeBackend, project, resetApp, SETTINGS } from '../test/ipc';
 import { setLang } from './i18n';
-import { LEGACY_TABS, settingsForm } from './settings.svelte';
+import { SETTINGS_PAGES, settingsForm } from './settings.svelte';
 import { app } from './state.svelte';
 import type { RunCommand } from './types';
 
@@ -16,13 +16,13 @@ describe('settingsForm', () => {
     resetApp({ projects: [project({ runCommands: [FRONT] }), P2()] });
   });
 
-  it('opens on Claude Code and the project on screen, or on the tab and project asked for', () => {
+  it('opens on Comptes et harness and the project on screen, or on the page and project asked for', () => {
     app.ui.activeProject = 'p2';
     settingsForm.open();
-    expect(settingsForm.tab).toBe('claude');
+    expect(settingsForm.page).toBe('accounts');
     expect(settingsForm.projectId).toBe('p2');
     settingsForm.open({ tab: 'board', projectId: 'p1' });
-    expect(settingsForm.tab).toBe('board');
+    expect(settingsForm.page).toBe('board');
     expect(settingsForm.projectId).toBe('p1');
     expect(settingsForm.project?.board.action).toBe('merge');
     // A project closed since the shortcut was made: the one on screen instead.
@@ -393,14 +393,12 @@ describe('settingsForm', () => {
     expect(settingsForm.changed('git')).toBe(true);
   });
 
-  it('marks the quota pause on Comptes et harness, and still on the 2.0 Kanban tab', () => {
+  it('marks the quota pause on Comptes et harness, not on Kanban', () => {
     settingsForm.open();
     expect(settingsForm.changed('accounts')).toBe(false);
     settingsForm.settings.quotaPause = 90;
     expect(settingsForm.changed('accounts')).toBe(true);
     expect(settingsForm.changed('board')).toBe(false);
-    expect(settingsForm.tabChanged('board')).toBe(true);
-    expect(settingsForm.tabChanged('accounts')).toBe(false);
   });
 
   it('keeps what could not be saved to try again, without saving twice what was', async () => {
@@ -456,7 +454,6 @@ describe('settingsForm', () => {
     settingsForm.open({ projectId: 'p1' });
     settingsForm.settings.proxyUrl = 'http://proxy:3128';
     settingsForm.resume({ tab: 'projects', projectId: 'p2' });
-    expect(settingsForm.tab).toBe('projects');
     expect(settingsForm.page).toBe('project');
     expect(settingsForm.projectId).toBe('p2');
     expect(settingsForm.settings.proxyUrl).toBe('http://proxy:3128');
@@ -509,30 +506,30 @@ describe('settingsForm', () => {
     expect(backend.called('update_project')).toHaveLength(0);
   });
 
-  it('names the 2.0 tabs, shown until R2, in the language of the interface, read when asked', () => {
-    const names = () => LEGACY_TABS.map((x) => `${x.label} / ${x.desc}`);
-    expect(names()[5]).toBe('Projets / Réglages propres à chaque projet');
+  it('names the pages in the language of the interface, read when asked', () => {
+    const names = () => SETTINGS_PAGES.map((x) => x.label);
+    expect(names()[0]).toBe('Général');
     setLang('en');
     flushSync();
     expect(names()).toEqual([
-      'Application / Theme, zoom, languages and written texts',
-      'Harness / Each harness’s executables and versions, and what holds for them all',
-      'Accounts / Each harness’s accounts, their new agents’ settings, and what happens at the limit',
-      'Voice / Dictation and voice conversation, on your machine or online',
-      'Notifications / Visual and sound alerts',
-      'Projects / Settings specific to each project',
-      'Kanban / Autopilot and approved tickets',
-      'Integrations / Kanban sources (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards) and code hosts',
-      'Plugins / What they add to Escouade, where they come from and what they can do',
-      'MCP server / What Claude and the agents can do in Escouade, and what they did',
-      'Terminals / Shells available in the built-in terminals',
-      'Network / HTTP(S) proxy and TLS certificates for Claude Code, integrations, and updates',
-      'About / Version and local data',
+      'General',
+      'Agents',
+      'Accounts and harnesses',
+      'Connected services',
+      'Voice',
+      'Notifications',
+      'Plugins',
+      'Advanced',
+      'About',
+      'Project',
+      'Git and worktrees',
+      'Launch',
+      'Kanban',
+      'Imported tickets',
+      'Team',
+      'Privacy',
+      'All projects',
     ]);
-    // Those set for one project only.
-    expect(LEGACY_TABS.filter((x) => x.scoped).map((x) => x.id)).toEqual(['projects', 'board', 'integrations']);
-    // In three groups (2.0 design): the general ones, « Par projet », « Système ».
-    expect(LEGACY_TABS.map((x) => x.group)).toEqual([...Array(5).fill('general'), ...Array(3).fill('project'), ...Array(5).fill('system')]);
   });
 
   it('tells in English what Claude suggested, in the singular and the plural of what it proposed and what was left out', async () => {

@@ -24,6 +24,7 @@ export default defineZone('handover', {
     onLimitDesc:
       'The agent moves on by itself, and the autopilot follows it for tickets. Otherwise it waits for the reset. The harness it left isn’t used again before its reset, and the agent never goes back to it by itself.',
     model: 'Handover model · {harness}',
+    modelName: 'Handover model',
     modelDesc: 'The model of an agent that moves to this harness.',
     best: 'The best one ({model})',
   },

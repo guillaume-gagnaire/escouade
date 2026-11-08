@@ -36,7 +36,7 @@ describe('the search by meaning in the projects’ settings', () => {
       vectors_model_download: () => new Promise((r) => (finish = r)),
       vectors_model_cancel: () => null,
     });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'advanced', projectId: 'p1' });
     const g = await waitFor(() => {
       const s = group();
       within(s).getByText('Recherche par le sens');
@@ -61,7 +61,7 @@ describe('the search by meaning in the projects’ settings', () => {
       vectors_model: () => ({ ...MODEL, downloaded: true, have: MODEL.size }),
       vectors_model_delete: () => MODEL,
     });
-    render(SettingsModal, { tab: 'projects' });
+    render(SettingsModal, { page: 'advanced' });
     await screen.findByText('Téléchargé');
     await userEvent.click(screen.getByRole('button', { name: 'Effacer' }));
     expect(be.called('vectors_model_delete')).toHaveLength(1);

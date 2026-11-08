@@ -3,7 +3,7 @@
 // their external ones moved and commented while the fake `claude` works them.
 
 import { execFileSync } from 'node:child_process';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, test, openSettingsPage } from './fixture';
 import { startFakeTrackers } from '../fixtures/fake-trackers.mjs';
 
 let trackers: { url: string; close: () => Promise<void> };
@@ -40,7 +40,7 @@ test('a Jira issue and a Trello card are imported, and their states follow their
   // Accounts: refused, then accepted.
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Intégrations' }).click();
+  await openSettingsPage(settings, 'Services connectés');
   await settings.getByRole('button', { name: 'Connecter…' }).first().click();
   const jira = settings.getByRole('form', { name: 'Connexion à Jira' });
   await jira.getByLabel('Site').fill(trackers.url);
@@ -112,7 +112,7 @@ test('a ClickUp task is imported with its checklist, and its status follows its 
   // The account: a key refused, then the right one; the user's name said.
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Intégrations' }).click();
+  await openSettingsPage(settings, 'Services connectés');
   await settings.getByRole('button', { name: 'Connecter…' }).nth(4).click();
   const form = settings.getByRole('form', { name: 'Connexion à ClickUp' });
   await form.getByLabel("Clé d'API").fill('bad');
@@ -173,7 +173,7 @@ test('the automatic import brings the GitHub issues that carry its label', async
   await addProject(page, app.repo, { firstAgent: false });
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Intégrations' }).click();
+  await openSettingsPage(settings, 'Services connectés');
   await settings.getByRole('button', { name: 'Connecter…' }).nth(2).click();
   const github = settings.getByRole('form', { name: 'Connexion à GitHub Issues' });
   await github.getByLabel(/Jeton/).fill('ghp_jeton');
@@ -187,7 +187,7 @@ test('the automatic import brings the GitHub issues that carry its label', async
   await settings.getByRole('switch', { name: 'Importer les tickets étiquetés' }).click();
   await settings.getByRole('button', { name: '5 min', exact: true }).click();
   // Kept « À faire »: the autopilot is turned off first.
-  await settings.getByRole('tab', { name: 'Kanban' }).click();
+  await openSettingsPage(settings, 'Kanban');
   await settings.getByRole('switch', { name: 'Attribuer les tickets automatiquement' }).click();
   await settings.getByRole('button', { name: 'Enregistrer' }).click();
   await expect(settings).toHaveCount(0);
@@ -206,7 +206,7 @@ test('the self-hosted GitLab of a project is connected from its remote, and the 
   await addProject(page, app.repo, { firstAgent: false });
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Intégrations' }).click();
+  await openSettingsPage(settings, 'Services connectés');
   await expect(settings.getByRole('heading', { name: 'Hébergeurs de code' })).toBeVisible();
   await expect(settings.getByRole('group', { name: '127.0.0.1' })).toContainText('Aucun compte, pour le projet demo-api');
 

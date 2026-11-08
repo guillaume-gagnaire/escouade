@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { expect, test } from './fixture';
+import { expect, test, openSettingsPage, settingsEntry } from './fixture';
 
 /** What the server serves and what it was asked: beta.json is absent while `beta` is null. */
 const served = { latest: '9.8.0', beta: '9.9.0-beta.1' as string | null, hits: [] as string[] };
@@ -53,7 +53,7 @@ test('the betas are off by default, and once ticked the check reads beta.json, t
   });
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'À propos' }).click();
+  await openSettingsPage(dialog, 'À propos');
   const beta = dialog.getByRole('switch', { name: 'Recevoir les versions bêta' });
   await expect(beta).toHaveAttribute('aria-checked', 'false');
   const found = dialog.locator('.sr', { has: page.locator('[data-update]') });
@@ -71,7 +71,7 @@ test('the betas are off by default, and once ticked the check reads beta.json, t
   expect(served.hits).toContain('/beta.json');
   const saved = JSON.parse(fs.readFileSync(path.join(data, 'settings.json'), 'utf8'));
   expect(saved.betaUpdates).toBe(true);
-  await expect(dialog.getByRole('tab', { name: 'À propos' })).not.toHaveClass(/changed/);
+  await expect(settingsEntry(dialog, 'À propos')).not.toHaveClass(/changed/);
 
   // No beta.json (before the first release that holds one): latest.json.
   served.beta = null;

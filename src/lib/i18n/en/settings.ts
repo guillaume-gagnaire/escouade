@@ -2,28 +2,6 @@ import { defineZone } from '../types';
 
 // The settings window and the settings of a project.
 export default defineZone('settings', {
-  tabs: {
-    app: { label: 'Application', desc: 'Theme, zoom, languages and written texts' },
-    claude: { label: 'Harness', desc: 'Each harness’s executables and versions, and what holds for them all' },
-    accounts: { label: 'Accounts', desc: 'Each harness’s accounts, their new agents’ settings, and what happens at the limit' },
-    plugins: { label: 'Plugins', desc: 'What they add to Escouade, where they come from and what they can do' },
-    mcp: { label: 'MCP server', desc: 'What Claude and the agents can do in Escouade, and what they did' },
-    notifications: { label: 'Notifications', desc: 'Visual and sound alerts' },
-    projects: { label: 'Projects', desc: 'Settings specific to each project' },
-    board: { label: 'Kanban', desc: 'Autopilot and approved tickets' },
-    integrations: {
-      label: 'Integrations',
-      desc: 'Kanban sources (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards) and code hosts',
-    },
-    terminals: { label: 'Terminals', desc: 'Shells available in the built-in terminals' },
-    network: {
-      label: 'Network',
-      desc: 'HTTP(S) proxy and TLS certificates for Claude Code, integrations, and updates',
-    },
-    voice: { label: 'Voice', desc: 'Dictation and voice conversation, on your machine or online' },
-    about: { label: 'About', desc: 'Version and local data' },
-  },
-
   pages: {
     general: { label: 'General', desc: 'Theme, zoom, language, updates and what concerns you' },
     agents: { label: 'Agents', desc: 'New agents, written texts, remote control and driving Escouade' },
@@ -50,9 +28,16 @@ export default defineZone('settings', {
     allProjects: { label: 'All projects', desc: 'What a new project starts with, and the closed projects' },
   },
 
+  nav: {
+    search: 'Search settings',
+    projects: 'Projects',
+  },
+
+  fold: {
+    advanced: 'Advanced',
+  },
+
   modal: {
-    groupProject: 'Per project',
-    groupSystem: 'System',
     changed: 'Modified, not saved yet',
     saved: 'Settings saved',
     noProject: 'No project open.',
@@ -256,6 +241,8 @@ export default defineZone('settings', {
     deployFailed: 'Deployment failed',
     channels: 'Channels',
     system: '{os} notifications when the app is not in the foreground',
+    /** Its name in the register (« Avancé », the search). */
+    systemName: 'System notifications',
     systemLabel: 'System notifications',
     sound: 'Sound',
     soundOn: 'Sound on',

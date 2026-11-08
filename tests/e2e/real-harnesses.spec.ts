@@ -34,7 +34,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
-import { addProject, expect, send, test, type App } from './fixture';
+import { addProject, expect, send, test, type App, openSettingsPage } from './fixture';
 import { keepAgy, keepClaude, keepCodex, keepCopilot, keepVibe } from './real-keep';
 
 /** Gemini CLI is tried with an account alone: its key (ESC-275). */
@@ -322,7 +322,7 @@ async function ticket(app: App, h: Harness) {
 async function copilotAccount(page: Page) {
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Comptes' }).click();
+  await openSettingsPage(settings, 'Comptes et harness');
   const list = settings.getByRole('list', { name: 'Comptes Copilot CLI' });
   await expect(list.getByRole('listitem').first()).toContainText(/Connecté/, { timeout: 60_000 });
   await snap(page, 'copilot-account');

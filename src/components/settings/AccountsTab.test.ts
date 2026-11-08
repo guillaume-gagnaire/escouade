@@ -71,7 +71,7 @@ describe('AccountsTab', () => {
     expect(b.called('save_settings')[0].args.settings).toMatchObject({ quotaProjection: 'always', accounts: [PRINCIPAL, PRO] });
     await userEvent.click(choice('Jamais'));
     expect(b.called('save_settings')[1].args.settings).toMatchObject({ quotaProjection: 'off' });
-    expect(screen.getByRole('tab', { name: 'Comptes' })).not.toHaveClass('changed');
+    expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Comptes et harness' })).not.toHaveClass('changed');
   });
 
   it('reads « Projection des quotas » saved before 2.0.2 as a switch: off is « Jamais »', () => {
@@ -105,7 +105,7 @@ describe('AccountsTab', () => {
     expect(b.called('save_settings')).toHaveLength(1);
     expect(b.called('save_settings')[0].args.settings).toMatchObject({ switchAt: 95, accounts: [PRINCIPAL, PRO] });
     // Not part of the draft: nothing to save, nothing to cancel.
-    expect(screen.getByRole('tab', { name: 'Comptes' })).not.toHaveClass('changed');
+    expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Comptes et harness' })).not.toHaveClass('changed');
   });
 
   it('says « Changer de compte à » in English', () => {
@@ -122,10 +122,10 @@ describe('AccountsTab', () => {
   it('comes after « Claude Code » and shows each account, its folder and whether it is signed in', async () => {
     const b = backend();
     render(SettingsModal, { tab: 'accounts' });
-    const tabs = screen.getAllByRole('tab');
-    const at = tabs.indexOf(screen.getByRole('tab', { name: 'Comptes' }));
-    expect(tabs[at - 1]).toBe(screen.getByRole('tab', { name: 'Harness' }));
-    expect(tabs[at]).toHaveAttribute('aria-selected', 'true');
+    expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Comptes et harness' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
     expect(names()).toEqual(['Principal', 'Pro']);
     expect(await within(row('Principal')).findByText('Connecté · ada@atlas.dev')).toBeInTheDocument();
     expect(within(row('Principal')).getByText('~/.claude')).toBeInTheDocument();
@@ -150,7 +150,7 @@ describe('AccountsTab', () => {
       ),
     ).toBeInTheDocument();
     // Saved at once: nothing left for « Enregistrer ».
-    expect(screen.getByRole('tab', { name: 'Comptes' })).not.toHaveClass('changed');
+    expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Comptes et harness' })).not.toHaveClass('changed');
   });
 
   it('says what an account at rest, Principal on an API key or a sign-in out of date is', async () => {
@@ -644,7 +644,7 @@ describe('AccountsTab', () => {
     setLang('en');
     backend();
     render(SettingsModal, { tab: 'accounts' });
-    expect(screen.getByRole('tab', { name: 'Accounts' })).toBeInTheDocument();
+    expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Accounts and harnesses' })).toBeInTheDocument();
     expect(names()).toEqual(['Main', 'Pro']);
     expect(await within(row('Main')).findByText('Signed in · ada@atlas.dev')).toBeInTheDocument();
     expect(await within(row('Pro')).findByText('Not signed in')).toBeInTheDocument();

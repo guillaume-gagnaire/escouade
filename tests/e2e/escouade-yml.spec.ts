@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, test } from './fixture';
+import { expect, test, openSettingsPage } from './fixture';
 
 // A repository with a .escouade.yml (ESC-146): added through the assistant, the project is set up by the file and says
 // so; the file's setup command runs in no worktree until the user trusts it, then runs in the next one.
@@ -98,7 +98,7 @@ test('a repository’s .escouade.yml sets the project up, its commands waiting f
   await pending.getByRole('button', { name: 'Faire confiance à ces commandes' }).click();
   await expect(pending).toBeHidden();
   await expect(settings.locator('.sr', { hasText: 'Un worktree par agent' }).getByText('Défini par .escouade.yml')).toBeVisible();
-  await settings.getByRole('tab', { name: 'Kanban' }).click();
+  await openSettingsPage(settings, 'Kanban');
   await expect(settings.locator('.sr', { hasText: 'Relancer les tests avant' }).getByText('Défini par .escouade.yml')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(settings).toBeHidden();

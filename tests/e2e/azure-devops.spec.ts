@@ -9,7 +9,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, test, openSettingsPage } from './fixture';
 import { startFakeTrackers } from '../fixtures/fake-trackers.mjs';
 
 let fake: { url: string; close: () => Promise<void> };
@@ -40,7 +40,7 @@ test.afterAll(async () => {
 async function connectAzure(page: Page) {
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Intégrations' }).click();
+  await openSettingsPage(settings, 'Services connectés');
   await settings.getByRole('button', { name: 'Connecter un hébergeur…' }).click();
   const form = settings.getByRole('form', { name: 'Connexion à un hébergeur' });
   await form.getByLabel('Hébergeur').selectOption('azure');

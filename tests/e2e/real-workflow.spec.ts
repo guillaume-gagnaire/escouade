@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, send, test, type App } from './fixture';
+import { addProject, expect, send, test, type App, openSettingsPage } from './fixture';
 import { keepClaude, keepCodex, keepCopilot } from './real-keep';
 
 const WANTED = new Set((process.env.ESCOUADE_E2E_REAL ?? '').split(',').map((s) => s.trim()));
@@ -277,7 +277,7 @@ async function rereadLeavesFiles(page: Page, repo: string) {
   );
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(settings, 'Projet');
   const reread = settings.getByRole('button', { name: /^Relire/ });
   if (await reread.isVisible()) {
     await reread.click();

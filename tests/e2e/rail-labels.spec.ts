@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, test, openSettingsPage } from './fixture';
 
 const tile = (page: Page, name = 'demo-api') => page.getByRole('tab', { name: new RegExp(`^${name}`) });
 const rail = (page: Page) => page.getByRole('navigation', { name: 'Projets' });
@@ -31,7 +31,7 @@ function repoNamed(root: string, name: string): string {
 async function projectsSettings(page: Page) {
   const settings = page.getByRole('dialog', { name: 'Réglages' });
   if (!(await settings.isVisible())) await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
-  await settings.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(settings, 'Projet');
   return settings;
 }
 
@@ -109,7 +109,10 @@ for (const size of [
     await expect(label).toHaveText('demo-api');
     await settle(page);
     expect(await width(page)).toBe(72);
-    expect(await label.evaluate((l) => getComputedStyle(l).color)).toBe(await colorOf(page, 'var(--p-ink)'));
+    // The settings were tinted with Escouade's teal (ESC-379): the project's colour glides back first (0.7 s).
+    await expect
+      .poll(async () => (await label.evaluate((l) => getComputedStyle(l).color)) === (await colorOf(page, 'var(--p-ink)')))
+      .toBe(true);
     // The tile keeps its size, under it its label.
     const t = (await tile(page).boundingBox())!;
     expect([Math.round(t.width), Math.round(t.height)]).toEqual([36, 36]);
@@ -219,7 +222,7 @@ test('twelve projects in the runner’s window: the rail at its widest scrolls, 
     await addProject(page, name === 'demo-api' ? app.repo : repoNamed(app.root, name), { firstAgent: name === 'demo-api' });
   // A label on the first, and the rail as wide as the window lets it.
   const settings = await projectsSettings(page);
-  await settings.getByRole('group', { name: 'Projet' }).getByRole('button', { name: 'demo-api', exact: true }).click();
+  await openSettingsPage(settings, 'Projet', { project: 'demo-api' });
   const on = settings.getByRole('switch', { name: 'Libellé sous la tuile' });
   await on.scrollIntoViewIfNeeded();
   await on.click();

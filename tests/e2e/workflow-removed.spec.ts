@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, test, openSettingsPage } from './fixture';
 
 const FIXTURES = path.resolve(import.meta.dirname, '..', 'fixtures', 'workflows');
 
@@ -21,7 +21,7 @@ test.use({
 async function open(page: Page) {
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(dialog, 'Projet');
   const section = dialog.locator('#sg-workflow');
   await section.scrollIntoViewIfNeeded();
   return { dialog, section };

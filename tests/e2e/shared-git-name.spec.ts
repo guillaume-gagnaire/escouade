@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, test, openSettingsPage } from './fixture';
 
 /** The machine's global git config, a file of the test's: git's name of the user, whatever the runner's. */
 const GLOBAL = path.join(os.tmpdir(), 'escouade-e2e-shared-git-name.gitconfig');
@@ -53,11 +53,11 @@ test('« Partager » without a name takes git’s, without asking, and the setti
   // Réglages › Application: « Ton nom » filled with git's, said so.
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Application' }).click();
+  await openSettingsPage(dialog, 'Général');
   await expect(dialog.getByRole('textbox', { name: 'Ton nom', exact: true })).toHaveValue('Alice Globale');
   await expect(dialog.getByText('Repris de git', { exact: true })).toBeVisible();
   // Réglages › Projets: the name in this project, empty, shows git's.
-  await dialog.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(dialog, 'Projet');
   const own = dialog.getByRole('textbox', { name: 'Ton nom dans ce projet' });
   await own.scrollIntoViewIfNeeded();
   await expect(own).toHaveValue('');

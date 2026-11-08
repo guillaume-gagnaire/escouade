@@ -33,6 +33,8 @@ export default {
     onLimitDesc:
       'L’agent y passe seul, et le pilote auto le suit pour les tickets. Sinon il attend la remise à zéro. Le harness quitté n’est pas repris avant sa remise à zéro, et l’agent n’y revient jamais seul.',
     model: 'Modèle de passation · {harness}',
+    /** The row's name in the register (« Avancé » names it, the search finds it). */
+    modelName: 'Modèle de passation',
     modelDesc: 'Le modèle d’un agent qui passe sur ce harness.',
     best: 'Le meilleur ({model})',
   },

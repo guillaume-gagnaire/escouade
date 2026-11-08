@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, FAKE_VIBE, send, test, type App } from './fixture';
+import { addProject, expect, FAKE_VIBE, send, test, type App, openSettingsPage } from './fixture';
 
 const SHOTS = process.env.ESCOUADE_E2E_SHOTS;
 
@@ -77,8 +77,8 @@ test.describe('an agent on Mistral Vibe', () => {
     // Réglages › Harness: found, with its version.
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Réglages' });
-    await settings.getByRole('tab', { name: 'Harness' }).click();
-    const vibe = settings.getByRole('region', { name: 'Mistral Vibe' });
+    await openSettingsPage(settings, 'Comptes et harness');
+    const vibe = settings.getByRole('region', { name: 'Mistral Vibe', exact: true });
     await expect(vibe.locator('[data-state]')).toHaveText('3.0.3');
     await vibe.scrollIntoViewIfNeeded();
     await shots(page, 'harness');
@@ -293,7 +293,7 @@ test.describe('a Mistral Vibe account added by its API key', () => {
     await addProject(page, app.repo);
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Réglages' });
-    await settings.getByRole('tab', { name: 'Comptes' }).click();
+    await openSettingsPage(settings, 'Comptes et harness');
     await settings.getByRole('button', { name: 'Ajouter un compte Mistral Vibe…' }).click();
     const modal = page.getByRole('dialog', { name: 'Ajouter un compte Mistral Vibe' });
     // The machine's is there already: a new one, by its key.
@@ -329,7 +329,7 @@ test.describe('a Mistral Vibe account added by its API key', () => {
     await shots(page, 'turn-cost');
     // The day's cost of the account, in Réglages › Comptes.
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
-    await settings.getByRole('tab', { name: 'Comptes' }).click();
+    await openSettingsPage(settings, 'Comptes et harness');
     await expect(team).toContainText('0,025 $');
     await team.scrollIntoViewIfNeeded();
     await shots(page, 'accounts');
@@ -342,7 +342,7 @@ test.describe('a Mistral Vibe account added by its API key', () => {
     await addProject(page, app.repo);
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Réglages' });
-    await settings.getByRole('tab', { name: 'Comptes' }).click();
+    await openSettingsPage(settings, 'Comptes et harness');
     await settings.getByRole('button', { name: 'Ajouter un compte Mistral Vibe…' }).click();
     let modal = page.getByRole('dialog', { name: 'Ajouter un compte Mistral Vibe' });
     await modal.getByRole('textbox', { name: 'Nom' }).fill('Équipe');
@@ -351,7 +351,7 @@ test.describe('a Mistral Vibe account added by its API key', () => {
     const list = settings.getByRole('list', { name: 'Comptes Mistral Vibe' });
     await expect(list.getByRole('listitem', { name: 'Équipe' })).toContainText('Connecté · clé …wxyz');
     // The voice has no key: it goes by the Vibe account's, and says so.
-    await settings.getByRole('tab', { name: 'Voix' }).click();
+    await openSettingsPage(settings, 'Voix');
     const showKey = async () => {
       await settings.getByRole('group', { name: 'Transcrite par' }).getByRole('button', { name: 'En ligne' }).click();
       await settings.getByRole('combobox', { name: 'Service' }).selectOption('mistral');
@@ -369,7 +369,7 @@ test.describe('a Mistral Vibe account added by its API key', () => {
     await row.getByLabel('Clé de Mistral').fill('cle-voix-e2e-00001234');
     await row.getByRole('button', { name: 'Enregistrer la clé' }).click();
     await expect(row).toContainText('Enregistrée dans le trousseau');
-    await settings.getByRole('tab', { name: 'Comptes' }).click();
+    await openSettingsPage(settings, 'Comptes et harness');
     await settings.getByRole('button', { name: 'Ajouter un compte Mistral Vibe…' }).click();
     modal = page.getByRole('dialog', { name: 'Ajouter un compte Mistral Vibe' });
     await modal.getByRole('textbox', { name: 'Nom' }).fill('Partagé');
@@ -388,7 +388,7 @@ test.describe('a Mistral Vibe account added by its API key', () => {
     expect(agentLaunch(app).apiKey).toBe('cle-voix-e2e-00001234');
     expect(fs.readFileSync(path.join(app.data, 'settings.json'), 'utf8')).not.toContain('cle-voix');
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
-    await settings.getByRole('tab', { name: 'Voix' }).click();
+    await openSettingsPage(settings, 'Voix');
     await showKey();
     await erase.click();
     await expect(erase).toHaveCount(0);

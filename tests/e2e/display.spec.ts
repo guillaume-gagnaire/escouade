@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, SHOW, test } from './fixture';
+import { addProject, expect, SHOW, test, openSettingsPage, settingsEntry } from './fixture';
 
 const STEPS = [80, 90, 100, 110, 125, 150, 175, 200];
 /** The steps the settings offer in segments (the keys reach the others). */
@@ -55,7 +55,7 @@ function overflowing(page: Page) {
 async function openDisplay(page: Page) {
   await page.keyboard.press('Control+,');
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Application' }).click();
+  await openSettingsPage(dialog, 'Général');
   return dialog;
 }
 
@@ -83,7 +83,7 @@ test('the zoom of Réglages › Application grows the whole interface at once, n
   await zoom.getByRole('button', { name: percent(set) }).click();
   await expect.poll(() => zoomOf(page, base)).toBe(set);
   await expect(zoom.getByRole('button', { name: percent(set) })).toHaveAttribute('aria-pressed', 'true');
-  await expect(dialog.getByRole('tab', { name: 'Application' })).not.toHaveClass(/changed/);
+  await expect(settingsEntry(dialog, 'Général')).not.toHaveClass(/changed/);
   await expect.poll(() => settingsOf(app.data).uiZoom).toBe(set);
   expect(await overflowing(page)).toEqual([]);
   await page.keyboard.press('Escape');

@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Locator } from '@playwright/test';
-import { addProject, expect, send, test, unfoldSections } from './fixture';
+import { addProject, expect, send, test, unfoldSections, openSettingsPage, settingsEntry } from './fixture';
 
 test('a new project opens an agent that streams Claude’s reply', async ({ app }) => {
   const { page } = app;
@@ -328,10 +328,10 @@ test('the setting for all agents gives each one remote control, which one is set
   const card = page.locator('.card').first();
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Harness' }).click();
+  await openSettingsPage(dialog, 'Comptes et harness');
   await dialog.getByRole('switch', { name: 'Remote control pour tous les agents' }).click();
   // The project's own switch never says otherwise: on and grayed, with the reason.
-  await dialog.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(dialog, 'Projet');
   const own = dialog.getByRole('switch', { name: 'Remote control pour les agents de ce projet' });
   await expect(own).toHaveAttribute('aria-checked', 'true');
   await expect(own).toBeDisabled();
@@ -645,7 +645,7 @@ test('launch commands run in their own terminals, with their status live', async
   // The header's « Commandes de lancement… »: in a short window (the runner's), the section folds and « Configurer » with it.
   await page.getByRole('button', { name: 'Commandes de lancement…', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await expect(dialog.getByRole('tab', { name: 'Projets' })).toHaveAttribute('aria-selected', 'true');
+  await expect(settingsEntry(dialog, 'Lancement')).toHaveAttribute('aria-current', 'page');
   await dialog.getByRole('button', { name: 'Ajouter une commande', exact: true }).click();
   const serveurCfg = dialog.getByRole('group', { name: 'Commande 1' });
   await serveurCfg.getByLabel('Nom').fill('Serveur');
@@ -780,7 +780,7 @@ test('the proxy configured in the settings reaches Claude', async ({ app }) => {
   const { page } = app;
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Réseau' }).click();
+  await openSettingsPage(dialog, 'Avancé');
   await dialog.getByPlaceholder('aucun').fill('http://proxy.local:3128');
   await dialog.getByRole('button', { name: 'Enregistrer' }).click();
   await addProject(page, app.repo);
@@ -946,11 +946,8 @@ test('a ticket is taken by an agent that loops until its criteria are met, then 
   // Its settings button opens the app's settings on the Kanban of this project, whole in the narrowest window.
   await page.locator('main.board .cfg').click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await expect(settings.getByRole('tab', { name: 'Kanban' })).toHaveAttribute('aria-selected', 'true');
-  await expect(settings.getByRole('group', { name: 'Projet' }).getByRole('button', { name: 'demonstration-d-api' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await expect(settingsEntry(settings, 'Kanban')).toHaveAttribute('aria-current', 'page');
+  await expect(settingsEntry(settings, 'demonstration-d-api')).toHaveAttribute('aria-expanded', 'true');
   expect(
     await settings.evaluate((e) => {
       const r = e.getBoundingClientRect();
@@ -1096,7 +1093,7 @@ test('a deleted ticket’s worktree holding work stays, its archived agent says 
   fs.rmSync(path.join(worktree, 'dem-1.txt'));
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(settings, 'Projet');
   await settings.getByRole('button', { name: 'Nettoyer' }).click();
   await expect(settings.getByRole('status').filter({ hasText: 'worktree' })).toHaveText('1 worktree supprimé.', { timeout: 30_000 });
   await expect.poll(() => fs.existsSync(worktree)).toBe(false);

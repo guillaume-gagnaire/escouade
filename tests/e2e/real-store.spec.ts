@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, send, test } from './fixture';
+import { addProject, expect, send, test, openSettingsPage } from './fixture';
 
 const OUT = process.env.ESCOUADE_E2E_REAL_OUT ?? path.join(os.tmpdir(), 'escouade-real-store');
 
@@ -117,7 +117,7 @@ test('the store for real: four signed plugins installed, tried, turned off, take
   await install(page, 'Contraste élevé', 'high-contrast');
   await page.keyboard.press('Control+,');
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Application' }).click();
+  await openSettingsPage(settings, 'Général');
   const colors = settings.getByRole('combobox', { name: 'Couleurs' });
   await expect(colors.locator('option', { hasText: 'Contraste élevé' }).first()).toBeAttached();
   const before = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--text'));

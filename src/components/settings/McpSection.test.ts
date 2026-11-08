@@ -78,8 +78,8 @@ describe('McpSection', () => {
     backend();
     app.modal = { kind: 'settings', tab: 'mcp' };
     render(SettingsModal, { tab: 'mcp' });
-    expect(screen.getByRole('tab', { name: 'Serveur MCP' })).toHaveAttribute('aria-selected', 'true');
-    expect(await screen.findByRole('heading', { name: 'Serveur MCP' })).toBeInTheDocument();
+    expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Agents' })).toHaveAttribute('aria-current', 'page');
+    expect(await screen.findByRole('heading', { name: 'Activité MCP' })).toBeInTheDocument();
     expect(switchEl()).toHaveAttribute('aria-checked', 'false');
     // One switch: none of a harness of its own (ESC-119).
     expect(screen.getAllByRole('switch').filter((s) => /piloter Escouade/.test(s.getAttribute('aria-label') ?? ''))).toHaveLength(1);
@@ -110,7 +110,7 @@ describe('McpSection', () => {
     await waitFor(() => expect(switchEl()).toHaveAttribute('aria-checked', 'true'));
     expect(app.settings.mcpEnabled).toBe(true);
     // Saved already: the tab is not a change left for « Enregistrer ».
-    expect(screen.getByRole('tab', { name: 'Serveur MCP' })).not.toHaveClass('changed');
+    expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Agents' })).not.toHaveClass('changed');
     // Not told yet.
     expect(screen.getByRole('status')).toHaveTextContent('Déclaration dans les harness installés…');
     mcp.take({ type: 'mcpStatus', status: RUNNING });

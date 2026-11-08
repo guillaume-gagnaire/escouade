@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium, type Locator, type Page } from '@playwright/test';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, openSettingsPage, test } from './fixture';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const GSD = path.join(ROOT, 'tests', 'fixtures', 'workflows', 'gsd');
@@ -27,7 +27,7 @@ const WORDS = {
   fr: {
     settings: 'Réglages (Ctrl+,)',
     dialog: 'Réglages',
-    tab: 'Projets',
+    page: 'Projet',
     save: 'Enregistrer',
     readAt: /^Lu par les règles à /,
     reread: 'Relire',
@@ -44,7 +44,7 @@ const WORDS = {
   en: {
     settings: 'Settings (Ctrl+,)',
     dialog: 'Settings',
-    tab: 'Projects',
+    page: 'Project',
     save: 'Save',
     readAt: /^Read by the rules at /,
     reread: 'Read again',
@@ -167,7 +167,7 @@ for (const lang of ['fr', 'en'] as const) {
       const open = async () => {
         await page.getByRole('button', { name: w.settings }).click();
         const dialog = page.getByRole('dialog', { name: w.dialog });
-        await dialog.getByRole('tab', { name: w.tab }).click();
+        await openSettingsPage(dialog, w.page);
         const section = dialog.locator('#sg-workflow');
         await section.scrollIntoViewIfNeeded();
         return { dialog, section };

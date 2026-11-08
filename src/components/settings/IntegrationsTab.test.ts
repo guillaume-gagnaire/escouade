@@ -43,7 +43,7 @@ const backend = (over: Record<string, (a: any) => unknown> = {}) =>
     ...over,
   });
 
-const panel = () => screen.getByRole('tabpanel');
+const panel = () => document.getElementById('settings-panel')!;
 const save = () => userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
 
 describe('IntegrationsTab', () => {
@@ -58,7 +58,10 @@ describe('IntegrationsTab', () => {
     backend();
     app.accounts = [off('jira'), off('trello'), off('github')];
     render(SettingsModal, { tab: 'integrations', projectId: 'p1' });
-    expect(screen.getByRole('tab', { name: 'Intégrations' })).toHaveAttribute('aria-selected', 'true');
+    expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Services connectés' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
     expect(within(panel()).getAllByText('Non connecté')).toHaveLength(7);
     expect(within(panel()).getByText('Connecte un compte ci-dessus pour lier une source à ce projet.')).toBeInTheDocument();
     expect(within(panel()).queryByText('Correspondance des statuts')).not.toBeInTheDocument();
@@ -300,7 +303,7 @@ describe('IntegrationsTab', () => {
 
   it('links a source with its default states, sets them by column, and saves them with the project', async () => {
     const b = backend();
-    render(SettingsModal, { tab: 'integrations', projectId: 'p1' });
+    render(SettingsModal, { page: 'tickets', projectId: 'p1' });
     const p = within(panel());
     const source = p.getByRole('combobox', { name: 'Projet Jira' });
     await waitFor(() => expect(within(source).getByRole('option', { name: 'ATL — Atlas' })).toBeInTheDocument());
@@ -315,7 +318,7 @@ describe('IntegrationsTab', () => {
     // Commented on arrival in « À tester » and « Terminé » by default.
     expect(p.getByRole('switch', { name: "Commenter à l'arrivée dans « À tester »" })).toHaveAttribute('aria-checked', 'true');
     await userEvent.click(p.getByRole('switch', { name: "Commenter à l'arrivée dans « En cours »" }));
-    expect(screen.getByRole('tab', { name: /Intégrations/ })).toHaveClass('changed');
+    expect(within(screen.getByRole('navigation')).getByRole('button', { name: 'Tickets importés' })).toHaveClass('changed');
     await save();
     const sent = b.called('update_project')[0].args.project;
     expect(sent.integrations).toEqual({
@@ -336,13 +339,14 @@ describe('IntegrationsTab', () => {
     app.accounts = ACCOUNTS;
     let arrive: (v: unknown) => void = () => {};
     const b = backend({ integration_states: () => new Promise((r) => (arrive = r)) });
-    render(SettingsModal, { tab: 'integrations', projectId: 'p1' });
+    render(SettingsModal, { page: 'tickets', projectId: 'p1' });
     const source = within(panel()).getByRole('combobox', { name: 'Projet Jira' });
     await waitFor(() => expect(within(source).getByRole('option', { name: 'ATL — Atlas' })).toBeInTheDocument());
     await userEvent.selectOptions(source, 'ATL');
-    await userEvent.click(screen.getByRole('group', { name: 'Projet' }).querySelector('button:nth-child(2)')!);
+    // Another project shown meanwhile: the first, folded, keeps the dot of its change.
+    await userEvent.click(within(screen.getByRole('navigation')).getByRole('button', { name: 'site' }));
     arrive(JIRA_STATES);
-    await waitFor(() => expect(screen.getByRole('tab', { name: /Intégrations/ })).toHaveClass('changed'));
+    await waitFor(() => expect(within(screen.getByRole('navigation')).getByRole('button', { name: /^demo-api/ })).toHaveClass('changed'));
     await save();
     const saved = b
       .called('update_project')

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { addProject, expect, send, test } from './fixture';
+import { addProject, expect, send, test, openSettingsPage } from './fixture';
 
 // Two Claude accounts, both simulated: Principal is the app's own Claude Code folder (the app is started with a
 // CLAUDE_CONFIG_DIR of the test's, which Principal inherits: it is never given one), the second has a folder of its own
@@ -85,7 +85,7 @@ test.describe('a private project, two accounts, the first out of quota', () => {
     await addProject(page, app.repo, { firstAgent: false });
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
-    await dialog.getByRole('tab', { name: 'Projets' }).click();
+    await openSettingsPage(dialog, 'Projet');
     await dialog.getByRole('switch', { name: 'Projet privé' }).click();
     // Made private, it says what it still shares, and how to have an account of its own.
     await expect(dialog.getByText(/^Ses agents peuvent partir sur « Principal » et « Pro », des comptes partagés/)).toBeVisible();
@@ -183,7 +183,7 @@ test.describe('two accounts, the first past « Changer de compte à »', () => {
     // The setting, in Réglages › Comptes.
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
-    await dialog.getByRole('tab', { name: 'Comptes' }).click();
+    await openSettingsPage(dialog, 'Comptes et harness');
     const at = dialog.getByRole('group', { name: 'Changer de compte à' });
     await expect(at.getByRole('button', { name: '95 %' })).toHaveAttribute('aria-pressed', 'true');
   });
@@ -223,7 +223,7 @@ test.describe('the accounts of two harnesses', () => {
 
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
-    await dialog.getByRole('tab', { name: 'Comptes' }).click();
+    await openSettingsPage(dialog, 'Comptes et harness');
     const claude = dialog.getByRole('list', { name: 'Comptes Claude Code' });
     const codex = dialog.getByRole('list', { name: 'Comptes Codex' });
     await expect(claude.getByRole('listitem')).toHaveCount(2);
@@ -321,7 +321,7 @@ test.describe('a first installation, without an account', () => {
     // Réglages › Comptes: Claude Code installed, « Aucun compte ».
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
-    await dialog.getByRole('tab', { name: 'Comptes' }).click();
+    await openSettingsPage(dialog, 'Comptes et harness');
     const empty = dialog.getByRole('group', { name: 'Comptes Claude Code' });
     await expect(empty).toContainText('Aucun compte');
     await page.keyboard.press('Escape');
@@ -443,7 +443,7 @@ test('the status bar projects a window to its reset past 80 %, every one on « T
   // « Toujours » in Réglages › Comptes › « Quotas »: the green one in the bar too, at once, and kept.
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Comptes' }).click();
+  await openSettingsPage(dialog, 'Comptes et harness');
   const projection = dialog.getByRole('group', { name: 'Projection des quotas' });
   const settings = () => JSON.parse(fs.readFileSync(path.join(app.root, 'data', 'settings.json'), 'utf8'));
   await projection.getByRole('button', { name: 'Toujours' }).click();

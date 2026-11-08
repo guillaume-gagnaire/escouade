@@ -5,7 +5,7 @@
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, test, openSettingsPage } from './fixture';
 import { startFakeTrackers } from '../fixtures/fake-trackers.mjs';
 
 let github: { url: string; close: () => Promise<void> };
@@ -38,7 +38,7 @@ test.afterAll(async () => {
 async function connectGithub(page: Page) {
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Intégrations' }).click();
+  await openSettingsPage(settings, 'Services connectés');
   await settings.getByRole('button', { name: 'Connecter…' }).nth(2).click();
   const form = settings.getByRole('form', { name: 'Connexion à GitHub Issues' });
   await form.getByLabel(/Jeton/).fill('ghp_jeton');
@@ -111,7 +111,7 @@ test('the overview says which pull requests wait for the user, and each news is 
 
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Notifications' }).click();
+  await openSettingsPage(settings, 'Notifications');
   await expect(settings.getByRole('checkbox', { name: 'Relecture demandée' })).toBeChecked();
   for (const name of [
     'CI en échec',

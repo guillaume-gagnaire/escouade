@@ -454,7 +454,7 @@
 <!-- Its workflows (ESC-195, #loops-settings): what was read, and the steps as corrected. -->
 <WorkflowSection {project} />
 
-<Group title="Git">
+<Group title="Git" anchor="git">
   <Row label={t('settings.project.worktreePerAgent')} desc={t('settings.project.worktreePerAgentDesc')} shared="worktrees.per_agent">
     <Switch label={t('settings.project.worktreePerAgent')} bind:on={draft.worktreePerAgent} />
   </Row>
@@ -685,7 +685,7 @@
   </Row>
 </Group>
 
-<Group title={t('settings.project.danger')}>
+<Group title={t('settings.project.danger')} advanced="project">
   <Row label={t('settings.project.close')} desc={t('settings.project.closeDesc')}>
     <button class="btn danger" onclick={askClose}>{t('settings.project.closeButton')}</button>
   </Row>
