@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.3
+
+- With `agy` 1.5.3, a call it refused in `-p` but told done (`DONE`, no error) is a card again: the plugin reads the refusals its `result` lists (`denied_actions`) and finds the call its transcript does not say done; its row says it was refused (ESC-388).
+- `toolPermission` is written `request-review` in the agent’s settings, whatever it held: what no rule allows is refused in `-p` and comes back to the plugin.
+- `agy` 1.5.3 writes in its temporary folder with no rule nor question: it is now the agent’s own (`TEMP`, `TMP` and `TMPDIR` at `<agent’s folder>/tmp`), and a write in your `%TEMP%` is refused and comes back to the plugin.
+- A resumption that carries a write no longer refuses `<allowed path>\..` nor `<allowed path>/..`: `agy` 1.5.3 reads it as the path’s folder, which refused the very write the user allowed; it refuses `<file>\..\.git\x` without it.
+- `real_agy_rules` was run in full on the real `agy` 1.5.3, launched as the plugin launches it: its expected results are what `agy` does (a rule is the whole command, not its start), and the plugin’s own client drives `agy` through a call refused, allowed on its card and done in the turn that goes on (`ESCOUADE_TEST_REAL_AGY_MODEL` picks a model, each has its quota).
+
 ## 2.2.2
 
 - What the plugin accepts by its rules no longer opens more than the call judged, even if `agy` reads a rule as a mere start of a text (ESC-376, the review of 2.2.1).
