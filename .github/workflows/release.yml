@@ -305,7 +305,12 @@ jobs:
       - name: Check escouade-plugin embeds escouade-js
         shell: bash
         run: |
-          bin=$(ls src-tauri/target/universal-apple-darwin/release/escouade-plugin src-tauri/target/release/escouade-plugin src-tauri/target/release/escouade-plugin.exe 2>/dev/null | head -n 1)
+          # The first that is there: under `-e -o pipefail`, an `ls` of the three would fail on the two missing.
+          bin=
+          for b in src-tauri/target/universal-apple-darwin/release/escouade-plugin src-tauri/target/release/escouade-plugin src-tauri/target/release/escouade-plugin.exe; do
+            if [ -f "$b" ]; then bin=$b; break; fi
+          done
+          test -n "$bin"
           "$bin" --version
           "$bin" --version | grep -qx "escouade-js $(cat src-tauri/escouade-js/target/escouade-js.wasm.sha256)"
 
