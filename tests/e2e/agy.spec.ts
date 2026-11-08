@@ -52,6 +52,10 @@ async function shots(page: Page, name: string) {
   await theme(page, 'dark');
 }
 
+// Antigravity CLI is not given in 2.2.0-beta.1 (ESC-388): with agy 1.5.3, `-p` lets a command or a write through with no
+// rule and no question. Its e2e come back with its plugin.
+test.skip(true, 'Antigravity CLI is not given in 2.2.0-beta.1 (ESC-388)');
+
 /** A new agent on Antigravity CLI, from the menu beside « Nouvel agent ». */
 async function newAgyAgent(page: Page) {
   await page.getByRole('button', { name: 'Autres façons de créer un agent' }).click();
