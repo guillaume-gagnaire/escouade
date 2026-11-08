@@ -226,9 +226,12 @@ pub fn manifest_text(id: &str, app_version: &str) -> Option<String> {
     let entry = REGISTRY.iter().find(|e| e.id == id)?;
     let mut v: serde_json::Value = serde_json::from_str(entry.manifest).ok()?;
     v["version"] = app_version.into();
-    // Given by this app, it runs on it, whatever a port wrote for the store (`escouade.min`).
+    // Given by this app, it runs on it, whatever a port wrote for the store (`escouade.min`). A version of Escouade
+    // there is numbers alone: a pre-release of the app (2.2.0-beta.1) writes its own (2.2.0), or no plugin it gives
+    // would be read.
+    let numbers = app_version.split(['-', '+']).next().unwrap_or(app_version);
     if let Some(range) = v.get_mut("escouade").and_then(|e| e.as_object_mut()) {
-        range.insert("min".to_string(), app_version.into());
+        range.insert("min".to_string(), numbers.into());
     }
     serde_json::to_string_pretty(&v).ok()
 }
