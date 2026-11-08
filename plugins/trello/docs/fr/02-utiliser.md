@@ -12,7 +12,7 @@ Coche les cartes, choisis « Boucles max », puis « Importer ». Chaque ticket 
 
 ## Les critères d'acceptation
 
-Avec « Extraire les critères d'acceptation » activé (Réglages › Intégrations, groupe « Synchronisation »), le plugin prend comme critères, dans cet ordre :
+Avec « Extraire les critères d'acceptation » activé (Réglages › Services connectés, groupe « Synchronisation »), le plugin prend comme critères, dans cet ordre :
 
 1. les éléments de la checklist qui porte le nom des critères (« Critères d'acceptation », « Acceptance criteria », « Definition of done », « Critères », « AC », « DoD ») ;
 2. sinon les éléments de toutes les checklists de la carte ;
@@ -22,7 +22,7 @@ Il en garde vingt au plus. Sans critère trouvé, le ticket reçoit les critère
 
 ## La carte suit son ticket
 
-Dans Réglages › Intégrations, la « Correspondance des statuts » donne, pour chaque colonne du Kanban, la liste Trello où ranger la carte. Choisir le tableau la pré-remplit : la liste qui ressemble à « en cours » pour « En cours » et « À tester », celle qui ressemble à « à tester » pour « Terminé », rien pour « À faire ».
+Dans Réglages › Projets › Tickets importés, la « Correspondance des statuts » donne, pour chaque colonne du Kanban, la liste Trello où ranger la carte. Choisir le tableau la pré-remplit : la liste qui ressemble à « en cours » pour « En cours » et « À tester », celle qui ressemble à « à tester » pour « Terminé », rien pour « À faire ».
 
 Quand un ticket importé arrive dans une colonne :
 
@@ -33,7 +33,7 @@ Avec « Publier un résumé à chaque boucle », chaque nouvelle boucle d'un age
 
 ## L'import automatique
 
-Réglages › Intégrations › « Import automatique » importe seul les cartes ouvertes qui portent l'étiquette choisie (`claude-ready` par défaut). Pour Trello, c'est une étiquette de la carte, dont le nom doit être le même, majuscules mises à part.
+Réglages › Services connectés › « Import automatique » importe seul les cartes ouvertes qui portent l'étiquette choisie (`claude-ready` par défaut). Pour Trello, c'est une étiquette de la carte, dont le nom doit être le même, majuscules mises à part.
 
 ## Les limites
 

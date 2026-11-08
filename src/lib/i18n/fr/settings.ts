@@ -2,33 +2,7 @@ import type { Tree } from '../types';
 
 // The settings window and the settings of a project.
 export default {
-  // The tabs of the window: their name and what they set (under the title, in the header).
-  tabs: {
-    app: { label: 'Application', desc: 'Thème, zoom, langue de l’interface et textes rédigés' },
-    claude: { label: 'Harness', desc: 'Exécutables et versions de chaque harness, et ce qui vaut pour tous' },
-    accounts: {
-      label: 'Comptes',
-      desc: 'Les comptes de chaque harness, les réglages de leurs nouveaux agents, et ce qui se passe à la limite',
-    },
-    plugins: { label: 'Plugins', desc: 'Ce qu’ils ajoutent à Escouade, d’où ils viennent et ce qu’ils peuvent faire' },
-    mcp: { label: 'Serveur MCP', desc: 'Ce que Claude et les agents peuvent faire dans Escouade, et ce qu’ils ont fait' },
-    notifications: { label: 'Notifications', desc: 'Alertes visuelles et sonores' },
-    projects: { label: 'Projets', desc: 'Réglages propres à chaque projet' },
-    board: { label: 'Kanban', desc: 'Pilote auto et tickets validés' },
-    integrations: {
-      label: 'Intégrations',
-      desc: 'Sources du Kanban (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards) et hébergeurs de code',
-    },
-    terminals: { label: 'Terminaux', desc: 'Shells disponibles dans les terminaux intégrés' },
-    network: {
-      label: 'Réseau',
-      desc: 'Proxy HTTP(S) et certificats TLS pour Claude Code, les intégrations et les mises à jour',
-    },
-    voice: { label: 'Voix', desc: 'Dictée et conversation vocale, sur ta machine ou en ligne' },
-    about: { label: 'À propos', desc: 'Version et données locales' },
-  },
-
-  // The pages of the window (direction A of the 2.2 redesign): their name in the bar and what they set (under the title).
+  // The pages of the window: their name and what they set (under the title, in the header).
   pages: {
     general: { label: 'Général', desc: 'Thème, zoom, langue, mises à jour et ce qui te concerne' },
     agents: { label: 'Agents', desc: 'Les nouveaux agents, les textes rédigés, le remote control et le pilotage d’Escouade' },
@@ -55,39 +29,71 @@ export default {
     allProjects: { label: 'Tous les projets', desc: 'Ce que reçoit un nouveau projet, et les projets fermés' },
   },
 
+  // The bar of the window: the search (R8), Escouade's pages, the projects with the one chosen unfolded on its pages.
+  nav: {
+    search: 'Rechercher un réglage',
+    projects: 'Projets',
+    results: 'Réglages trouvés',
+    none: 'Aucun réglage ne répond à « {query} »',
+    inAdvanced: '{page} › Avancé',
+    // The amber dot of a page that has a problem: its reason, in the tooltip.
+    alerts: {
+      noAccount: '{harness} n’a aucun compte : aucun agent ni ticket n’y démarre',
+      projectNoAccount: 'Aucun compte {harness} ne sert ce projet : ses agents et ses tickets ne démarrent pas',
+      unread: 'Jeton illisible dans le trousseau · {label}',
+      plugin: '{name} : {state}',
+    },
+  },
+
+  // « Avancé » at the foot of a page: folded, it names what it hides.
+  fold: {
+    advanced: 'Avancé',
+  },
+
+  // The groups of Escouade's pages (PROPOSITION.md §2) that no tab of the 2.0 window had.
+  groups: {
+    appearance: 'Apparence',
+    updates: 'Mises à jour',
+    you: 'Toi',
+    newAgents: 'Nouveaux agents',
+    remote: 'Remote control',
+    pilot: 'Piloter Escouade',
+    network: 'Réseau',
+    terminals: 'Terminaux',
+    localData: 'Données locales',
+  },
+
   // The window itself.
   modal: {
-    // The headings of the tabs, after the general ones.
-    groupProject: 'Par projet',
-    groupSystem: 'Système',
-    changed: 'Modifié, pas encore enregistré',
-    saved: 'Réglages enregistrés',
     noProject: 'Aucun projet ouvert.',
   },
 
-  // What keeps the draft from being saved.
+  // What cannot be saved as typed, said on its row (ESC-380): what was saved before stays.
   problem: {
-    projectName: 'Le projet « {name} » doit garder un nom.',
-    command: 'Chaque commande de lancement de « {name} » demande un nom et une ligne de commande.',
-    worktrees: 'Le dossier des worktrees ou un préfixe de branche de « {name} » n’est pas valide.',
+    projectName: 'Un projet garde un nom : « {name} » reste enregistré.',
+    command:
+      'Chaque commande demande un nom et une ligne de commande : les commandes enregistrées restent celles d’avant tant qu’il en manque.',
+    /** `{value}`: the number saved, which stays. */
+    number: 'Un nombre entier, 0 ou plus : {value} reste enregistré.',
   },
 
   // « Remplir automatiquement »: what is said when Claude has read the project.
   suggest: {
     nothing: "Claude n'a trouvé aucune commande à lancer pour ce projet.",
     proposed: {
-      one: "1 commande proposée : relis-la avant d'enregistrer.",
-      other: "{count} commandes proposées : relis-les avant d'enregistrer.",
+      one: '1 commande proposée : relis-la avant de remplacer les commandes.',
+      other: '{count} commandes proposées : relis-les avant de remplacer les commandes.',
     },
     /** One command was left out, for what it would hide. */
     proposedLeftOne: {
-      one: "1 commande proposée, 1 écartée (caractères invisibles ou trop longue) : relis-la avant d'enregistrer.",
-      other: "{count} commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant d'enregistrer.",
+      one: '1 commande proposée, 1 écartée (caractères invisibles ou trop longue) : relis-la avant de remplacer les commandes.',
+      other: '{count} commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant de remplacer les commandes.',
     },
     /** Several were left out: `refused` of them. */
     proposedLeftMany: {
-      one: "1 commande proposée, {refused} écartées (caractères invisibles ou trop longues) : relis-la avant d'enregistrer.",
-      other: "{count} commandes proposées, {refused} écartées (caractères invisibles ou trop longues) : relis-les avant d'enregistrer.",
+      one: '1 commande proposée, {refused} écartées (caractères invisibles ou trop longues) : relis-la avant de remplacer les commandes.',
+      other:
+        '{count} commandes proposées, {refused} écartées (caractères invisibles ou trop longues) : relis-les avant de remplacer les commandes.',
     },
   },
 
@@ -176,13 +182,15 @@ export default {
       /** Beside its name, before its version (2.0 design): « Prêt · 2.1.301 ». */
       ready: 'Prêt',
       notConnected: 'Aucun compte',
+      /** A harness of the seed whose plugin is not installed (ESC-373). */
+      notInstalled: 'Non installé',
       tooOld: 'Trop ancienne',
       unsupported: 'Non prise en charge',
     },
     /** The group of what holds for every harness, after each one's. */
     allHarnesses: 'Tous les harness',
     allHarnessesNote:
-      'Le modèle, l’effort et le mode des nouveaux agents se règlent compte par compte, dans Réglages › Comptes, où chaque compte se connecte.',
+      'Le modèle, l’effort et le mode des nouveaux agents se règlent compte par compte, dans Réglages › Comptes et harness, où chaque compte se connecte.',
     /** Under « Remote control pour tous les agents », in the group of the harness that has it. */
     remoteOnly: '{harness} seulement : les autres harness n’ont pas de remote control.',
     install: 'Installation',
@@ -204,7 +212,11 @@ export default {
     /** The version found of the saved path, alone: no word of the tested versions (ESC-159). */
     version: 'Version',
     versionUnknown: 'Version inconnue : claude ne l’a pas donnée.',
-    versionNotConnected: 'Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes.',
+    versionNotConnected: 'Aucun compte connecté : connecte l’un de ses comptes ci-dessous, ou ajoutes-en un.',
+    /** « Installer » of a harness not installed: its plugin from the app's seed, with no network (ESC-373). */
+    installSeed: 'Installer {harness}',
+    installing: 'Installation…',
+    notInstalledHint: 'Livré avec Escouade : il s’installe d’un clic, sans réseau, puis ses comptes s’ajoutent ici.',
     processes: 'Processus',
     autoResume: 'Reprise automatique après la limite d’usage',
     autoResumeDesc: '« continue » envoyé une fois le quota réinitialisé',
@@ -298,6 +310,8 @@ export default {
     channels: 'Canaux',
     /** `os`: « macOS » or « Windows ». */
     system: "Notifications {os} quand l'app n'est pas au premier plan",
+    /** Its name in the register (« Avancé », the search). */
+    systemName: 'Notifications du système',
     systemLabel: 'Notifications système',
     sound: 'Son',
     soundOn: 'Son activé',
@@ -412,9 +426,7 @@ export default {
     remoteDesc:
       'Chaque agent de ce projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance tout de suite le process claude de chacun, qui reste lancé. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. Pour mettre un agent à part : clic droit, « Désactiver le remote control ».',
     /** Under the switch, shown on and disabled: the setting for all agents covers the project already. */
-    remoteGlobal: 'Activé pour tous les projets dans Réglages › Harness',
-    /** The group of « Projet privé », after the remote control. */
-    privateTitle: 'Confidentialité',
+    remoteGlobal: 'Activé pour tous les projets dans Réglages › Agents',
     private: 'Projet privé',
     privateDesc:
       'Les agents des autres projets ne le voient pas par le serveur MCP d’Escouade : ni dans les listes, ni par son nom, ses tickets ou ses agents. Les siens ne voient que lui. Toi, Claude hors Escouade et les vues de l’app voyez tout.',
@@ -505,12 +517,12 @@ export default {
     fillAuto: 'Remplir automatiquement',
     filling: 'Claude lit le projet…',
     fillWorktreesDesc:
-      "Claude lit le projet (manifestes, lockfiles, README…) sans rien modifier et propose les commandes. Relis-les avant d'enregistrer.",
+      'Claude lit le projet (manifestes, lockfiles, README…) sans rien modifier et propose les commandes. Relis-les avant de remplacer les tiennes.',
     fillLaunchDesc:
-      "Claude lit le projet (manifestes, scripts, docker-compose, README…) sans rien modifier et propose les commandes à lancer. Relis-les avant d'enregistrer.",
+      'Claude lit le projet (manifestes, scripts, docker-compose, README…) sans rien modifier et propose les commandes à lancer. Relis-les avant de remplacer les tiennes.',
     proposedWorktrees: 'Commandes de worktree proposées',
     proposedWorktreesNote:
-      "Proposition de Claude : relis chaque commande en entier. Elles remplacent les deux listes et, une fois enregistrées, tournent seules : la préparation à l'ouverture de chaque nouveau worktree, le démontage avant sa suppression.",
+      "Proposition de Claude : relis chaque commande en entier. Elles remplacent les deux listes et, une fois prises, tournent seules : la préparation à l'ouverture de chaque nouveau worktree, le démontage avant sa suppression.",
     proposedLaunch: 'Commandes de lancement proposées',
     proposedLaunchNote: 'Proposition de Claude : relis chaque commande en entier. Elles remplacent celles de la liste.',
     ignore: 'Ignorer',
@@ -539,7 +551,6 @@ export default {
     subfolderHint: '(vide = dossier du projet)',
     subfolderPlaceholder: 'ex. apps/web',
     noCommandsYet: "Aucune commande pour l'instant.",
-    danger: 'Zone sensible',
     close: 'Fermer le projet',
     closeDesc:
       "Le projet quitte l'application : ses agents, ses terminaux et ses lancements s'arrêtent. Son historique (conversations, tickets, réglages) est gardé : rouvrir ce dossier le retrouve. Les fichiers et les worktrees sur le disque ne sont pas touchés.",
@@ -602,7 +613,9 @@ export default {
   },
   // The project’s .escouade.yml (ESC-146): what it sets, its commands waiting, the settings kept on this machine.
   shared: {
-    title: '.escouade.yml',
+    title: 'Réglages partagés',
+    /** Under the title: the file they are in. */
+    file: '.escouade.yml',
     /** What the group says of the file, by its state. */
     none: 'Ce dépôt n’a pas de .escouade.yml. Exporte les réglages de ce projet pour les partager avec ton équipe : le fichier se commite avec le code.',
     read: {

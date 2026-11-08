@@ -5,7 +5,7 @@ This plugin is a WASM module: it runs inside Escouade, isolated, with no program
 ## What it reaches
 
 - `api.trello.com`, over https, and no other host. Escouade's host enforces it: a call to another host, to an IP address written as such, or to an address of your machine or local network is refused before it leaves.
-- It goes through the proxy of Settings › Network when you have one.
+- It goes through the proxy of Settings › Advanced › Network when you have one.
 - Each answer from Trello is capped at 8 MiB and 15 seconds.
 
 ## What it reads and writes on Trello
@@ -24,14 +24,14 @@ It creates, renames, archives and deletes no card, list or board.
 
 ## The secrets it receives
 
-- The API key and the token of your Trello account, which you gave in Settings › Integrations. Escouade keeps them in the system keychain and lends them to the plugin when it asks, for a call; the plugin writes them nowhere.
+- The API key and the token of your Trello account, which you gave in Settings › Connected services. Escouade keeps them in the system keychain and lends them to the plugin when it asks, for a call; the plugin writes them nowhere.
 - Trello wants them in the address of each call: so they go to `api.trello.com`, and there only. The plugin's journal records a call's method and host, never its full address.
 - It can read no other secret: neither another plugin's, nor another Escouade account.
 
 ## What goes to Trello
 
 - The reads above.
-- The text of the comments Escouade has it post: the Escouade ticket key (`DEM-5`), its branch, its criteria and their state, the agent's notes, what was done, the outcome of the approval and the link of the pull request, depending on the column. They are written in the "Language of texts written by the agents" (Settings › Application).
+- The text of the comments Escouade has it post: the Escouade ticket key (`DEM-5`), its branch, its criteria and their state, the agent's notes, what was done, the outcome of the approval and the link of the pull request, depending on the column. They are written in the "Language of texts written by the agents" (Settings › General).
 
 ## What never goes there
 

@@ -8,7 +8,7 @@ Trois étapes : Copilot CLI sur ta machine, le plugin dans Escouade, puis un com
 npm install -g @github/copilot
 ```
 
-Réglages › Harness montre l’exécutable trouvé, sa version et son état. Le plugin a été essayé avec Copilot CLI 1.0.98. `npm install -g @github/copilot@latest` le met à jour.
+Réglages › Comptes et harness montre l’exécutable trouvé, sa version et son état. Le plugin a été essayé avec Copilot CLI 1.0.98. `npm install -g @github/copilot@latest` le met à jour.
 
 ## 2. Installer le plugin
 
@@ -22,7 +22,7 @@ Comme tout plugin, il se coupe par son interrupteur dans la vue Plugins et se d�
 
 Aucun compte n’existe au départ : un agent ne démarre que sur un compte que tu as ajouté.
 
-1. Ouvre Réglages › Comptes et clique sur **Ajouter un compte…** ; dès que deux harness sont installés, choisis le harness « Copilot CLI ».
+1. Ouvre Réglages › Comptes et harness, puis clique sur **Ajouter un compte…** ; dès que deux harness sont installés, choisis le harness « Copilot CLI ».
 2. Choisis :
    - **Le compte de la machine**, ton Copilot habituel (`~/.copilot`). **Ajouter ce compte** l’ajoute tel quel.
    - **Un nouveau compte**, avec son propre dossier. Donne-lui un nom, choisis ce qu’il reprend du compte de la machine (`mcp-config.json`, `copilot-instructions.md`, `agents`, `skills`), par lien ou par copie, puis **Créer et se connecter**.

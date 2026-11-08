@@ -100,7 +100,7 @@ impl NoProxy {
     }
 }
 
-/// Réglages › Réseau are the host's.
+/// Réglages › Avancé › Réseau are the host's.
 pub struct Proxy;
 
 impl Proxy {

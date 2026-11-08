@@ -112,16 +112,16 @@ export default defineZone('wizard', {
     none: 'No command: add one, or let Claude read the project.',
   },
   account: {
-    remoteAll: 'Already on for all agents (Settings › Harness).',
+    remoteAll: 'Already on for all agents (Settings › Agents).',
     noAccount: 'No {harness} account: this project’s agents and tickets won’t start until one is added.',
     reserved: 'Accounts reserved to this project',
     reservedDesc:
       'Ticked, they serve it alone: the other projects no longer go to them, and {harness} sessions, memory and history there are shared with no other project.',
     reservedAlready: 'already reserved',
-    reservedNone: 'No free {harness} account: add a reserved account in Settings › Projects once the project is created.',
+    reservedNone: 'No free {harness} account: add a reserved account in Settings › Projects › Privacy once the project is created.',
   },
   integrations: {
-    none: 'No Jira, Trello, GitHub, Linear, ClickUp, GitLab or Azure DevOps account is connected: connect one in Settings › Integrations, after creating the project.',
+    none: 'No Jira, Trello, GitHub, Linear, ClickUp, GitLab or Azure DevOps account is connected: connect one in Settings › Connected services, after creating the project.',
     source: '{service} source',
     noSource: 'None',
     loading: 'Loading…',
@@ -170,11 +170,11 @@ export default defineZone('wizard', {
     },
     noAccount: {
       title: 'No account serves this project',
-      desc: 'Nothing starts: switch an account on, or lift its reservation to other projects, in Settings › Accounts.',
+      desc: 'Nothing starts: switch an account on, or lift its reservation to other projects, in Settings › Accounts and harnesses.',
     },
     noClaude: {
       title: 'No harness found',
-      desc: 'Install a harness (Claude Code: npm install -g @anthropic-ai/claude-code), or give its path in Settings › Harness.',
+      desc: 'Install a harness (Claude Code: npm install -g @anthropic-ai/claude-code), or give its path in Settings › Accounts and harnesses.',
     },
     ok: 'Harness found · an account serves the project · repository ready',
   },

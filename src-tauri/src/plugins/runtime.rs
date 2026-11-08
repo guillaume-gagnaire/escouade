@@ -441,7 +441,7 @@ pub struct Runtime {
     tried: Mutex<Vec<Tried>>,
     /// The number of the next `Trial`.
     trials: AtomicU64,
-    /// What a plugin the app gives is told when it starts (`ESCOUADE_LANG`, the network of Réglages › Réseau).
+    /// What a plugin the app gives is told when it starts (`ESCOUADE_LANG`, the network of Réglages › Avancé › Réseau).
     builtin_env: parking_lot::RwLock<Vec<(String, String)>>,
     /// What a program of a plugin gets as an agent does (`set_agent_env`).
     agent_env: parking_lot::RwLock<Vec<(String, String)>>,
@@ -675,7 +675,7 @@ impl Runtime {
         &self.modules
     }
 
-    /// Réglages › Réseau, for the plugins in WASM: their next call follows it.
+    /// Réglages › Avancé › Réseau, for the plugins in WASM: their next call follows it.
     pub fn set_network(&self, network: super::socket::Net) {
         *self.net.read().network.write() = network;
     }

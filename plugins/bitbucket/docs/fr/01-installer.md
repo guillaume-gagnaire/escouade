@@ -10,7 +10,7 @@ Sa page, dans la même vue, a un interrupteur pour toute l'app et un onglet « P
 
 Bitbucket Cloud se connecte avec un jeton d'API Atlassian, à droits choisis, et l'e-mail du compte Atlassian auquel il appartient.
 
-1. Dans Escouade, ouvre Réglages › Intégrations › « Hébergeurs de code », puis « Connecter un hébergeur… », et choisis Bitbucket dans « Hébergeur ».
+1. Dans Escouade, ouvre Réglages › Services connectés › « Hébergeurs de code », puis « Connecter un hébergeur… », et choisis Bitbucket dans « Hébergeur ».
 2. « Créer un jeton » ouvre `https://id.atlassian.com/manage-profile/security/api-tokens`. Crée un jeton d'API **avec des droits** (scopes), pour Bitbucket, et donne-lui ceux que le formulaire rappelle : `read:user:bitbucket`, `read:repository:bitbucket`, `read:pullrequest:bitbucket`, `write:pullrequest:bitbucket`, `read:pipeline:bitbucket`.
 3. Copie le jeton.
 

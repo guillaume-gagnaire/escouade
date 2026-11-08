@@ -6,14 +6,14 @@ import { fakeBackend, resetApp } from '../test/ipc';
 
 // ESC-128: a refusal for want of an account of a harness comes marked (`commands::err`): the window says it with
 // « Ajouter un compte… » on that harness.
-const NO_CODEX = 'no-account:codex|Aucun compte Codex : ajoute-en un dans Réglages › Comptes.';
+const NO_CODEX = 'no-account:codex|Aucun compte Codex : ajoute-en un dans Réglages › Comptes et harness.';
 
 describe('the refusals of the backend', () => {
   beforeEach(() => resetApp());
 
   it('reads the harness a refusal wants an account of, and says it without its mark', () => {
     expect(missingAccountOf(NO_CODEX)).toBe('codex');
-    expect(errorText(NO_CODEX)).toBe('Aucun compte Codex : ajoute-en un dans Réglages › Comptes.');
+    expect(errorText(NO_CODEX)).toBe('Aucun compte Codex : ajoute-en un dans Réglages › Comptes et harness.');
     // Any other refusal, as it is.
     expect(missingAccountOf('ticket introuvable')).toBeNull();
     expect(errorText('ticket introuvable')).toBe('ticket introuvable');
@@ -31,7 +31,7 @@ describe('the refusals of the backend', () => {
     await app.newAgent('p1', 'codex');
     expect(app.toasts).toHaveLength(1);
     const [toast] = app.toasts;
-    expect(toast.text).toBe('Aucun compte Codex : ajoute-en un dans Réglages › Comptes.');
+    expect(toast.text).toBe('Aucun compte Codex : ajoute-en un dans Réglages › Comptes et harness.');
     expect(toast.kind).toBe('error');
     expect(toast.action?.label).toBe('Ajouter un compte…');
     toast.action?.onClick();

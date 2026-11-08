@@ -1,9 +1,9 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, test, openSettingsPage } from './fixture';
 
-// The new project's assistant (ESC-94): a project set up through it, opened again from Réglages › Projets, then a second
+// The new project's assistant (ESC-94): a project set up through it, opened again from Réglages › Projets › Projet, then a second
 // project made by copying the first one's settings, checked in its own folder, and a ticket that runs with them; in the
 // narrowest window the app is made for.
 
@@ -35,10 +35,10 @@ test('a project made by copying another one’s settings runs its ticket with th
   execFileSync('git', ['branch', 'develop'], { cwd: app.repo });
   await addProject(page, app.repo, { firstAgent: false });
 
-  // Réglages › Projets › « Ouvrir l'assistant… »: the first project set up step by step.
+  // Réglages › Projets › Projet › « Ouvrir l'assistant… »: the first project set up step by step.
   await page.keyboard.press('Control+,');
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(settings, 'Projet');
   await settings.getByRole('button', { name: 'Ouvrir l’assistant…' }).click();
   const setup = page.getByRole('dialog', { name: 'Configurer demo-api' });
   await expect(setup).toBeVisible();
@@ -157,12 +157,13 @@ test('a private project with its Kanban set, made by the assistant, exports its 
   await dialog.getByRole('button', { name: 'Créer le projet' }).click();
   await expect(dialog).toBeHidden();
 
-  // Réglages › Projets: private, its account its own; then « Exporter vers .escouade.yml ».
+  // Réglages › Projets › Confidentialité: private, its account its own; then « Exporter vers .escouade.yml ».
   await page.keyboard.press('Control+,');
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(settings, 'Confidentialité');
   await expect(settings.getByRole('switch', { name: 'Projet privé' })).toHaveAttribute('aria-checked', 'true');
   await expect(settings.getByText(/^Compte réservé à ce projet : « Principal »/)).toBeVisible();
+  await openSettingsPage(settings, 'Équipe');
   await settings.getByRole('button', { name: 'Exporter vers .escouade.yml' }).click();
   const file = path.join(vault, '.escouade.yml');
   await expect.poll(() => fs.existsSync(file)).toBe(true);
@@ -176,7 +177,8 @@ test('a private project with its Kanban set, made by the assistant, exports its 
   // its tickets.
   for (const local of ['principal', 'Principal', 'parallel', 'autopilot', 'shared_on_limit', 'remote', 'account', 'VAU'])
     expect(text, local).not.toContain(local);
-  // The settings mark them as the file's from now on.
+  // The settings mark them as the file's from now on, on their page.
+  await openSettingsPage(settings, 'Confidentialité');
   await expect(
     settings
       .locator('.sr')

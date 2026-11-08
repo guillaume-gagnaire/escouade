@@ -88,8 +88,8 @@ pub fn missing_line_with(lang: Lang, leftover: Option<&std::path::Path>) -> Stri
     };
     tr_in!(
         lang,
-        "Claude Code est introuvable : réinstalle-le (`{install}`, ou `{npm}`), ou indique son chemin dans Réglages › Harness.",
-        "Claude Code can’t be found: install it again (`{install}`, or `{npm}`), or set its path in Settings › Harness."
+        "Claude Code est introuvable : réinstalle-le (`{install}`, ou `{npm}`), ou indique son chemin dans Réglages › Comptes et harness.",
+        "Claude Code can’t be found: install it again (`{install}`, or `{npm}`), or set its path in Settings › Accounts and harnesses."
     )
 }
 
@@ -943,11 +943,11 @@ mod tests {
         };
         assert_eq!(
             missing_line_with(Fr, None),
-            format!("Claude Code est introuvable : réinstalle-le (`{install}`, ou `npm install -g @anthropic-ai/claude-code`), ou indique son chemin dans Réglages › Harness.")
+            format!("Claude Code est introuvable : réinstalle-le (`{install}`, ou `npm install -g @anthropic-ai/claude-code`), ou indique son chemin dans Réglages › Comptes et harness.")
         );
         assert_eq!(
             missing_line_with(En, None),
-            format!("Claude Code can’t be found: install it again (`{install}`, or `npm install -g @anthropic-ai/claude-code`), or set its path in Settings › Harness.")
+            format!("Claude Code can’t be found: install it again (`{install}`, or `npm install -g @anthropic-ai/claude-code`), or set its path in Settings › Accounts and harnesses.")
         );
         // Its installation by npm cut half-way, as on the client's Mac.
         let left = std::path::Path::new("/opt/homebrew/bin/.claude-Xa3k9");

@@ -2,7 +2,7 @@
 
 ## Start an agent
 
-Choose “Copilot CLI” in the “Harness” menu of “New agent”, or make it a project’s default harness (Settings › Projects, “Default harness”). Each agent has its own `copilot --server --stdio`, without the GitHub MCP server Copilot plugs in by itself, without access to the system’s temporary folder, and without the GitHub tokens in its commands’ environment.
+Choose “Copilot CLI” in the “Harness” menu of “New agent”, or make it a project’s default harness (Settings › Projects › Project, “Default harness”). Each agent has its own `copilot --server --stdio`, without the GitHub MCP server Copilot plugs in by itself, without access to the system’s temporary folder, and without the GitHub tokens in its commands’ environment.
 
 The model menu writes each model’s multiplier (`×3`), or its relative cost on a Free account; `auto` is never offered. Model and mode change at once, even during a turn.
 

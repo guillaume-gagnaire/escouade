@@ -47,7 +47,7 @@ The tooltip, to the right of the tile, gives the project’s name and its shortc
 | “Rename…” | Opens the “Rename the project” window. |
 | “Color” | A row of swatches: the project’s color, which tints the interface when it is on screen. |
 | “Turn on a worktree per agent” or “Turn off a worktree per agent” | Toggles the option for the project’s new agents. See [worktrees](worktrees). |
-| “Project settings…” | Opens the settings, Projects tab, on that project. |
+| “Project settings…” | Opens the settings on that project’s “Project” page. |
 | “Open the folder” | Opens the project’s folder in the system’s file manager. |
 | “Move up” and “Move down” | Move the tile by one place (`Alt+↑`, `Alt+↓`). |
 | “Close the project…” | Removes the project from the app after a confirmation: its agents, terminals and launches stop. Its history (conversations, tickets, settings) is kept, and `+` reopens it; a box of the confirmation erases it too. The files and the worktrees on disk are not touched. See [Settings: Projects](settings-projects#closed-projects). |
@@ -63,7 +63,7 @@ The width chosen holds for the whole app and stays after a restart. A double cli
 ### The rail’s buttons
 
 - **“Overview”** (`Ctrl+Shift+A`) shows the agents of every project on one page; the same button, or the same shortcut, closes it. See [following your agents](overview).
-- **`+`** opens the “New project” assistant. When projects were closed, it opens a short menu first: “Add a project…”, the latest closed projects with “Reopen”, and “All closed projects…” (Settings › Projects).
+- **`+`** opens the “New project” assistant. When projects were closed, it opens a short menu first: “Add a project…”, the latest closed projects with “Reopen”, and “All closed projects…” (Settings › All projects).
 - **“Stats”** shows the usage statistics; a second click goes back to the project. See [statistics](stats).
 - **“Settings”** (`Ctrl+,`) opens the settings window.
 
@@ -79,7 +79,7 @@ At the top, a two-button switch: “Agents” shows an agent’s conversation, �
 
 ### The list of agents
 
-Under the selector, “New agent” (`Ctrl+N`) creates an agent on the project’s harness. The arrow to its right, or `Ctrl+Shift+N`, opens the “Harness” menu: each harness installed with an account, numbered (`1`, `2`… pick one while the menu is open), with the account, model and mode its new agent would take; the project’s is marked “The project’s”. A harness not found or without an account is not in it: it is set up in Settings › Harness and Settings › Accounts. Under “Worktree”, “New agent without a worktree” (or “in a worktree”, depending on the project’s setting) and “New agent on a branch…”, then “Project’s default harness…”. With no agent, the list says “No agents.” with a “Create an agent” button.
+Under the selector, “New agent” (`Ctrl+N`) creates an agent on the project’s harness. The arrow to its right, or `Ctrl+Shift+N`, opens the “Harness” menu: each harness installed with an account, numbered (`1`, `2`… pick one while the menu is open), with the account, model and mode its new agent would take; the project’s is marked “The project’s”. A harness not found or without an account is not in it: it is set up in Settings › Accounts and harnesses. Under “Worktree”, “New agent without a worktree” (or “in a worktree”, depending on the project’s setting) and “New agent on a branch…”, then “Project’s default harness…”. With no agent, the list says “No agents.” with a “Create an agent” button.
 
 The agent waiting for your answer goes first in the list. Each agent is a card, without a frame; the card of the agent on screen is raised:
 
@@ -189,7 +189,7 @@ The “PR and CI” tab (“MR and CI” on GitLab) shows what the repository’
 - **The reviews and comments**, read only: who approved or requested changes, the comments with their file and line. Escouade publishes nothing there in your name.
 - **The deployments** of the branch, when the host gives them (GitHub, GitLab, Bitbucket Cloud): the environment, its state, and the preview address to open.
 
-Without a pull request on its branch, the tab offers “Open a PR…”, or says why it can’t: no branch of the agent’s own, no remote, a host without a plugin, or no account, with the link to Settings › Integrations. In a project without an agent, “Project PRs and CI” opens the list of the project’s open PRs, each with the state of its CI; a click on an agent’s opens that agent. A refused token, the host’s API limit (until what time), or an unreachable host are said in the tab, with “Try again”.
+Without a pull request on its branch, the tab offers “Open a PR…”, or says why it can’t: no branch of the agent’s own, no remote, a host without a plugin, or no account, with the link to Settings › Connected services. In a project without an agent, “Project PRs and CI” opens the list of the project’s open PRs, each with the state of its CI; a click on an agent’s opens that agent. A refused token, the host’s API limit (until what time), or an unreachable host are said in the tab, with “Try again”.
 
 ## The two layouts
 
@@ -225,7 +225,7 @@ See [quotas and cost](usage) and [branches](branches).
 
 ## The settings
 
-`Ctrl+,` or the “Settings” button, at the bottom of the projects rail, opens the settings window: the tabs on the left, the content on the right. A modified tab is marked; “Save” saves all the tabs at once, and “Cancel” (or `Esc`) closes the window without saving. The “Accounts” tab is the exception: it saves at each change. The “Projects”, “Kanban” and “Integrations” tabs set one project at a time, chosen at the top; “Project settings…” in a project’s menu opens the window on that project.
+`Ctrl+,` or the “Settings” button, at the bottom of the projects rail, opens the settings window: the bar of the pages on the left, with the search (`Ctrl+F`) at its head, Escouade’s pages then each project; one page at a time on the right. Everything saves as you set it, with no “Save”. An amber dot in the bar says a page is waiting on something (a harness without an account, an expired token, a stopped plugin). “Project settings…” in a project’s menu opens the window on its “Project” page. See [the settings window](settings-application).
 
 | Tab | Page |
 |---|---|

@@ -7,7 +7,7 @@ It is for anyone who already uses Claude Code, with a Claude subscription or an 
 ## What it needs
 
 - Claude Code installed on the machine (tried from 2.1.283 to 2.1.301).
-- A Claude Code account added in Settings › Accounts: with no account, no agent starts.
+- A Claude Code account added in Settings › Accounts and harnesses: with no account, no agent starts.
 
 ## What it can do
 

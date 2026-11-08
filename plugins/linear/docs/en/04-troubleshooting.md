@@ -13,7 +13,7 @@ The "API key" field is empty. Fill it in; nothing went to Linear.
 The key is wrong or was revoked. Make a new key with "Create a Linear API key".
 
 **"Linear can’t be reached: …"**
-The call did not arrive: no network, a proxy or a firewall blocking `api.linear.app`, or more than 15 seconds without an answer. Check your connection and Settings › Network.
+The call did not arrive: no network, a proxy or a firewall blocking `api.linear.app`, or more than 15 seconds without an answer. Check your connection and Settings › Advanced › Network.
 
 ## When importing and syncing
 
@@ -36,9 +36,9 @@ Linear refused the request as it is. Escouade sets it aside without trying again
 Linear answered with an error. A sync is tried again on its own, after 1, 5, 15 then 60 minutes, for 24 hours; "Resync" sends it again at once.
 
 **"Linear: unreadable answer"**
-Linear answered with no data, or something other than JSON, often a proxy's error page. Try again; if it lasts, look at Settings › Network.
+Linear answered with no data, or something other than JSON, often a proxy's error page. Try again; if it lasts, look at Settings › Advanced › Network.
 
-**"Linear: no token for … Connect the account again in Settings › Integrations."**
+**"Linear: no token for … Connect the account again in Settings › Connected services."**
 Escouade could not lend a key to the plugin: the account has none any more. Disconnect then connect Linear again.
 
 **"System keychain unreadable: restart Escouade or reconnect the account."**

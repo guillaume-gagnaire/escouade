@@ -10,7 +10,7 @@ One of your projects is private: each agent then has a fence, and Goose can’t 
 **“Goose not found. Install it or give its path in the settings.”**
 Escouade didn’t find `goose` in the `PATH`. Install Goose (see the Install tab) and start Escouade again if the `PATH` changed.
 
-**“No Goose account: add one in Settings › Accounts.”**
+**“No Goose account: add one in Settings › Accounts and harnesses.”**
 Add this machine’s account or a new one.
 
 **“Goose didn’t open the agent’s session: {reason}. If it asks for a sign-in, sign it in in a terminal.”**

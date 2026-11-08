@@ -34,10 +34,10 @@ La configuration recommandée : un worktree par agent, validation par merge squa
 | « Le dépôt n’a aucun commit » : aucun ticket ne démarre, un worktree part d’un commit | « Faire un premier commit » : un commit vide, aucun fichier n’est ajouté |
 | « La branche cible … est introuvable » | « Prendre la branche courante » |
 | « Les worktrees iraient dans un dossier suivi par git » | « Utiliser .claude/worktrees » |
-| « Aucun compte Claude ne sert ce projet » | Activer un compte, ou retirer sa réservation, dans Réglages › Comptes |
-| « Claude Code est introuvable » | L’installer, ou indiquer son chemin dans Réglages › Harness |
+| « Aucun compte Claude ne sert ce projet » | Activer un compte, ou retirer sa réservation, dans Réglages › Comptes et harness |
+| « Claude Code est introuvable » | L’installer, ou indiquer son chemin dans Réglages › Comptes et harness |
 
-Chaque contrôle est aussi dit dans l’étape qu’il concerne (le premier dès « Départ »). Clique sur « Créer le projet » : le projet s’ouvre dans un nouvel onglet avec ses réglages, puis son premier agent si tu l’as demandé. « Créer sans l’assistant », en bas à gauche, crée le projet tout de suite avec les valeurs par défaut d’Escouade et un premier agent, comme avant l’assistant. Plus tard, Réglages › Projets › « Ouvrir l’assistant… » le rouvre sur un projet existant (voir [Réglages : Projets](settings-projects#assistant-de-configuration)).
+Chaque contrôle est aussi dit dans l’étape qu’il concerne (le premier dès « Départ »). Clique sur « Créer le projet » : le projet s’ouvre dans un nouvel onglet avec ses réglages, puis son premier agent si tu l’as demandé. « Créer sans l’assistant », en bas à gauche, crée le projet tout de suite avec les valeurs par défaut d’Escouade et un premier agent, comme avant l’assistant. Plus tard, Réglages › Projets › Projet › « Ouvrir l’assistant… » le rouvre sur un projet existant (voir [Réglages : Projets](settings-projects#assistant-de-configuration)).
 
 Si le dossier est celui d’un projet que tu as fermé, l’historique passe avant l’assistant : la fenêtre ajoute un encart, par exemple « Historique retrouvé : 1 agent, 3 tickets, dernière activité le 14 octobre 2026 », et son bouton devient « Rouvrir le projet » : le projet revient avec son historique (agents, conversations, tickets, réglages), sans étape. L’interrupteur « Partir d’un projet vierge » en crée un neuf à la place, par l’assistant. Voir [Réglages : Projets](settings-projects#projets-fermes).
 
@@ -70,7 +70,7 @@ Les modes de permission décident quand Claude te demande l’autorisation d’a
 | « Édits auto » | Les modifications de fichiers sont acceptées sans demander. |
 | « Bypass » | Aucune demande de permission. |
 
-Un nouvel agent démarre avec le modèle, l’effort et le mode de son compte, réglés dans sa fiche de Réglages › Comptes, « Nouveaux agents » (par défaut ceux du harness : Sonnet, Moyen et Auto pour Claude Code). Voir les [réglages des comptes](settings-accounts) et [les agents](managing-agents).
+Un nouvel agent démarre avec le modèle, l’effort et le mode de son compte, réglés dans sa fiche de Réglages › Comptes et harness, « Nouveaux agents » (par défaut ceux du harness : Sonnet, Moyen et Auto pour Claude Code). Voir les [réglages des comptes](settings-accounts) et [les agents](managing-agents).
 
 > [!WARNING]
 > En mode « Bypass », Claude agit sans aucune demande de permission : Escouade te le rappelle quand tu le choisis. Réserve-le aux environnements sûrs.
@@ -118,7 +118,7 @@ Pour garder la conversation et le diff sous les yeux ensemble, passe à la dispo
 
 ## Commiter
 
-Le bouton « Commit… » du panneau commite les changements de l’agent (« Commit tout… » quand « Tout le projet » est choisi). Ce qui se passe dépend du réglage « Commit » du projet, dans Réglages › Projets :
+Le bouton « Commit… » du panneau commite les changements de l’agent (« Commit tout… » quand « Tout le projet » est choisi). Ce qui se passe dépend du réglage « Commit » du projet, dans Réglages › Projets › Git et worktrees :
 
 - **« Rédigé par l’agent »** (par défaut) : Escouade envoie à l’agent un message qui lui demande de commiter ses changements avec un message clair au format Conventional Commits. Un message éphémère confirme « Demande de commit envoyée à » suivi du nom de l’agent, puis l’agent commite comme pour n’importe quelle demande.
 - **« Direct, avec un message proposé »** : la fenêtre « Commit » liste les fichiers, Haiku rédige un message que tu relis et modifies, « Régénérer » en demande un autre, et « Commiter » commite. Rien n’est commité sans ce clic.

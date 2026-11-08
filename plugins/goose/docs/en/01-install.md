@@ -23,7 +23,7 @@ Like any plugin, it is switched off by its toggle and uninstalled from its page.
 
 ## 4. Add an account
 
-There is no account at first: an agent starts only on an account you added. Open Settings › Accounts, **Add an account…**, harness “Goose”:
+There is no account at first: an agent starts only on an account you added. Open Settings › Accounts and harnesses, **Add an account…**, harness “Goose”:
 
 - **This machine’s account**: Goose’s usual configuration, as it is.
 - **A new account**: a configuration folder of its own, under `~/.escouade/goose/`, given to Goose as `GOOSE_PATH_ROOT`. Configure its provider for that folder.

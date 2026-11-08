@@ -22,13 +22,13 @@ The token acts on your behalf: what it opens or publishes is under your account.
 
 ## 3. Connect
 
-1. In Escouade, open Settings › Integrations › "Code hosts", then "Connect a code host…". A repository whose remote is on an organization with no account also offers "Connect" followed by its host.
+1. In Escouade, open Settings › Connected services › "Code hosts", then "Connect a code host…". A repository whose remote is on an organization with no account also offers "Connect" followed by its host.
 2. "Code host": Azure DevOps.
 3. "Address": your organization's, `dev.azure.com/<organization>` (a former `<organization>.visualstudio.com` address is the same), or for Azure DevOps Server its collection's, such as `https://server/tfs/DefaultCollection`. Only https is accepted (http only to this machine).
 4. "Token (empty: the az one)": paste your token, or leave it empty for `az`'s. The form reminds the scopes: `vso.code_write`, `vso.build_execute`, `vso.work_write`.
 5. Click "Connect". The row says "Connected · " followed by your account and the organization ("ada@acme.dev · acme"), and "Also used for Azure Boards".
 
-Under "Kanban sources", Azure Boards has no account of its own: its row says "The Azure DevOps code host’s account: it is connected and disconnected in Code hosts.", reminds "Its token needs the Work Items right (read and write)." and offers "Connect Azure DevOps…".
+Under "Ticket sources", Azure Boards has no account of its own: its row says "The Azure DevOps code host’s account: it is connected and disconnected in Code hosts.", reminds "Its token needs the Work Items right (read and write)." and offers "Connect Azure DevOps…".
 
 ## 4. Link an Azure Boards project
 

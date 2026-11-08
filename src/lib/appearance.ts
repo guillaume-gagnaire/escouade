@@ -1,4 +1,4 @@
-// « Thème » (Réglages › Application › Affichage): Système, Clair or Sombre, Système by default, which follows Windows,
+// « Thème » (Réglages › Général › Apparence): Système, Clair or Sombre, Système by default, which follows Windows,
 // macOS or Linux (prefers-color-scheme) and its changes. Applied at once, the window with it:
 //   - `data-theme` on the root gives the tokens of src/app.css their values, and `color-scheme` (scroll bars, native
 //     fields and menus) follows;

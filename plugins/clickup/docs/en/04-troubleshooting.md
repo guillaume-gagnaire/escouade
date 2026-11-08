@@ -11,14 +11,14 @@ The "API key" field is empty. Fill it in; nothing went to ClickUp.
 The key is wrong, or it was generated again since. Copy your current key from "Create a ClickUp API key".
 
 **"ClickUp can’t be reached: …"**
-The call did not arrive: no network, a proxy or a firewall blocking `api.clickup.com`, or more than 15 seconds without an answer. Check your connection and Settings › Network.
+The call did not arrive: no network, a proxy or a firewall blocking `api.clickup.com`, or more than 15 seconds without an answer. Check your connection and Settings › Advanced › Network.
 
 ## When importing and syncing
 
-**"The ClickUp list 901… no longer exists or can’t be reached any more: choose another one in Settings › Integrations"**
+**"The ClickUp list 901… no longer exists or can’t be reached any more: choose another one in Settings › Projects › Imported tickets"**
 The linked list was deleted, or your key, still good, no longer reaches it. Pick another list for the project.
 
-**"The ClickUp list “Sprint 12” has no “review” status: ABC-12 stays where it is; choose another status in Settings › Integrations"**
+**"The ClickUp list “Sprint 12” has no “review” status: ABC-12 stays where it is; choose another status in Settings › Projects › Imported tickets"**
 The status chosen for the column was renamed or removed from the list. The task does not move. Pick one of the list's current statuses in the status mapping. Escouade does not try again: nothing would change.
 
 **"ClickUp limits the requests (429): try again in a moment"**
@@ -31,9 +31,9 @@ Your key does not reach this task or this space, or the task no longer exists.
 ClickUp answered with an error. A sync is tried again on its own, after 1, 5, 15 then 60 minutes, for 24 hours; "Resync" sends it again at once.
 
 **"ClickUp: unreadable answer"**
-ClickUp answered something other than JSON, often a proxy's error page. Try again; if it lasts, look at Settings › Network.
+ClickUp answered something other than JSON, often a proxy's error page. Try again; if it lasts, look at Settings › Advanced › Network.
 
-**"ClickUp: no token for … Connect the account again in Settings › Integrations."**
+**"ClickUp: no token for … Connect the account again in Settings › Connected services."**
 Escouade could not lend a key to the plugin: the account has none any more. Disconnect then connect ClickUp again.
 
 **"System keychain unreadable: restart Escouade or reconnect the account."**

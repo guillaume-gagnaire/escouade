@@ -17,13 +17,13 @@ Le jeton agit en ton nom : ce qu'il ouvre ou publie l'est sous ton compte.
 
 ## 3. Connecter
 
-1. Dans Escouade, ouvre Réglages › Intégrations › « Hébergeurs de code », puis « Connecter un hébergeur… ». Un dépôt dont le remote est sur une instance sans compte propose aussi « Connecter » suivi de son hôte.
+1. Dans Escouade, ouvre Réglages › Services connectés › « Hébergeurs de code », puis « Connecter un hébergeur… ». Un dépôt dont le remote est sur une instance sans compte propose aussi « Connecter » suivi de son hôte.
 2. « Hébergeur » : GitLab. Pour une adresse que l'app ne connaît pas, elle cherche seule le type d'hébergeur (« Recherche du type d'hébergeur… ») en demandant `/api/v4/version` à l'instance.
 3. « Adresse » : vide pour gitlab.com ; sinon celle de ton instance, chemin compris si elle en a un (`https://acme.dev/gitlab`). Seul https est accepté (http seulement vers cette machine).
 4. « Jeton (vide : celui de glab) » : colle ton jeton, ou laisse vide pour celui de `glab`. Le formulaire rappelle « Droits à donner au jeton : api ».
 5. Clique sur « Connecter ». Escouade demande à GitLab qui tu es. La ligne dit « Connecté · @ton-login ».
 
-Chaque compte GitLab sert aussi à GitLab Issues : sa ligne dit « Sert aussi à GitLab Issues ». Dans « Sources du Kanban », GitLab Issues n'a pas de compte à lui : sa ligne dit « Compte de l'hébergeur GitLab : il se connecte et se déconnecte dans Hébergeurs de code. » et propose « Connecter GitLab… ».
+Chaque compte GitLab sert aussi à GitLab Issues : sa ligne dit « Sert aussi à GitLab Issues ». Dans « Sources de tickets », GitLab Issues n'a pas de compte à lui : sa ligne dit « Compte de l'hébergeur GitLab : il se connecte et se déconnecte dans Hébergeurs de code. » et propose « Connecter GitLab… ».
 
 ## 4. Lier un projet GitLab pour ses issues
 

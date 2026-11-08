@@ -2,7 +2,7 @@
 
 ## Start an agent
 
-Claude Code is a project’s default harness until you choose another (Settings › Projects, “Default harness”). “New agent” starts it; once two harnesses are installed, the arrow beside “New agent” opens the “Harness” menu.
+Claude Code is a project’s default harness until you choose another (Settings › Projects › Project, “Default harness”). “New agent” starts it; once two harnesses are installed, the arrow beside “New agent” opens the “Harness” menu.
 
 The agent starts on the first active Claude Code account that still has quota. It keeps its conversation from one restart to the next, and “Duplicate the conversation” copies it under a new session.
 

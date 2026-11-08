@@ -47,7 +47,7 @@
   let { project, agent }: { project: Project; agent: Agent | null } = $props();
 
   const pid = $derived(project.id);
-  // The project's workflows as it has them, read again when its corrections change (Réglages › Projets › Workflow).
+  // The project's workflows as it has them, read again when its corrections change (Réglages › Projets › Kanban › Workflow).
   const fixes = $derived(JSON.stringify(project.workflowFixes ?? []));
   $effect(() => {
     const id = pid;
@@ -157,7 +157,7 @@
     if (agent) app.composerPut = { agentId: agent.id, text: command };
   }
   function openSettings() {
-    app.modal = { kind: 'settings', tab: 'projects', projectId: pid };
+    app.modal = { kind: 'settings', page: 'board', projectId: pid, at: 'workflow' };
   }
   function choose(id: string) {
     workflows.chosen[pid] = id;

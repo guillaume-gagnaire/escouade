@@ -8,7 +8,7 @@ Trois étapes : Codex sur ta machine, le plugin dans Escouade, puis un compte.
 npm install -g @openai/codex
 ```
 
-Escouade lance le binaire natif du paquet npm (sous Windows, le `codex.exe` du paquet, pas son lanceur). L’app de bureau de Codex installe souvent une version plus ancienne, que le `PATH` peut trouver d’abord : Réglages › Harness montre l’exécutable trouvé et sa version. Le plugin a été essayé avec Codex 0.163.0. `npm install -g @openai/codex@latest` le met à jour.
+Escouade lance le binaire natif du paquet npm (sous Windows, le `codex.exe` du paquet, pas son lanceur). L’app de bureau de Codex installe souvent une version plus ancienne, que le `PATH` peut trouver d’abord : Réglages › Comptes et harness montre l’exécutable trouvé et sa version. Le plugin a été essayé avec Codex 0.163.0. `npm install -g @openai/codex@latest` le met à jour.
 
 ## 2. Installer le plugin
 
@@ -22,7 +22,7 @@ Comme tout plugin, il se coupe par son interrupteur dans la vue Plugins et se d�
 
 Aucun compte n’existe au départ : un agent ne démarre que sur un compte que tu as ajouté.
 
-1. Ouvre Réglages › Comptes et clique sur **Ajouter un compte…** ; dès que deux harness sont installés, choisis le harness « Codex ».
+1. Ouvre Réglages › Comptes et harness, puis clique sur **Ajouter un compte…** ; dès que deux harness sont installés, choisis le harness « Codex ».
 2. Choisis :
    - **Le compte de la machine**, ton Codex habituel (`~/.codex`), proposé quand Codex y est connecté. **Ajouter ce compte** l’ajoute tel quel.
    - **Un nouveau compte**, avec son propre dossier. Donne-lui un nom, choisis ce qu’il reprend du compte de la machine (`config.toml`, `AGENTS.md`, `skills`, `prompts`, `rules`), par lien ou par copie, puis **Créer et se connecter**.

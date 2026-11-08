@@ -618,7 +618,7 @@
       {
         label: t('nav.sidebar.defaultHarness'),
         icon: 'sliders',
-        onClick: () => (app.modal = { kind: 'settings', tab: 'projects', projectId: project.id }),
+        onClick: () => (app.modal = { kind: 'settings', page: 'project', projectId: project.id }),
       },
     ]);
   }

@@ -8,7 +8,7 @@
   import Row from '../settings/Row.svelte';
 
   // « Intégrations », optional: a source to link for each service whose account is connected (its states by default;
-  // the rest is set in Réglages › Intégrations).
+  // the rest is set in Réglages › Services connectés and on the project's page Tickets importés).
   let { form }: { form: WizardForm } = $props();
 
   const connected = $derived(SERVICE_IDS.filter((id) => app.accounts.find((a) => a.service === id)?.connected));

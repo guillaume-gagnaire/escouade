@@ -22,7 +22,7 @@ Son interrupteur, dans la vue Plugins, l’arrête pour toute l’app ; son ongl
 
 ### Un projet peut-il installer un plugin à ma place ?
 
-Non. Son `.escouade.yml` peut en proposer (`plugins.recommended`) : Réglages › Projets les montre, et l’installation passe toujours par la fenêtre qui dit ses permissions (voir [`.escouade.yml`](escouade-yml#plugins)).
+Non. Son `.escouade.yml` peut en proposer (`plugins.recommended`) : Réglages › Projets › Projet les montre, et l’installation passe toujours par la fenêtre qui dit ses permissions (voir [`.escouade.yml`](escouade-yml#plugins)).
 
 ### Où sont ses données ?
 

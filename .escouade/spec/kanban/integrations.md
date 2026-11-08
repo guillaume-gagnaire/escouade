@@ -1,9 +1,9 @@
 ---
 title: "Intégrations"
 subject: "Kanban"
-sources: ["docs/SPEC.md"]
-tickets: ["ESC-213","ESC-214","ESC-215","ESC-216","ESC-344"]
-decisions: []
+sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md"]
+tickets: ["ESC-213","ESC-214","ESC-215","ESC-216","ESC-344","ESC-380","ESC-383"]
+decisions: [121]
 compared: null
 ---
 
@@ -13,17 +13,21 @@ Les intégrations relient le Kanban d'un projet à un outil de tickets : Jira Cl
 
 ## Comportement
 
-### Réglages › Intégrations
+### Services connectés et Tickets importés
 
-- L'onglet a deux parties nommées, chacune avec sa ligne :
+Les réglages des intégrations sont sur deux pages de la fenêtre des réglages (voir *Réglages*), une par portée :
+
+- **Services connectés**, une page d'Escouade (le teal de l'app), en deux parties nommées, chacune avec sa ligne :
   - « Hébergeurs de code » : « PR et MR des agents, CI et déploiements : un compte par instance, que chaque projet trouve par son remote. » (voir *Hébergeurs de code*) ;
-  - « Sources du Kanban » : « Import et synchro des tickets : un ticket importé suit sa colonne là-bas (état, commentaires). ». Sous elle : les comptes des sources, les sources liées, la correspondance, la synchro et l'import automatique.
+  - « Sources de tickets » : « Import et synchro des tickets : un ticket importé suit sa colonne là-bas (état, commentaires). ». Sous elle : « Comptes connectés » (les comptes des sources, « servi par » un plugin), puis « Synchronisation » et « Import automatique », qui valent pour tous les projets.
+- **Tickets importés**, une page de chaque projet (la couleur du projet) : « Sources liées à <projet> », puis « Correspondance des statuts » dès qu'une source est liée. Sans aucun compte connecté : « Connecte un compte dans Services connectés pour lier une source à ce projet. » et « Ouvrir Services connectés », qui ouvre cette page.
 - Une instance d'hébergeur dit sur sa ligne si elle sert aussi de source (« Sert aussi à GitHub Issues », « Sert aussi à GitLab Issues », « Sert aussi à Azure Boards ») ou non (« Pas de tickets : PR et CI seulement » : Bitbucket, Gitea / Forgejo, GitHub Enterprise).
-- La fenêtre d'import mène à « Sources du Kanban », pas en haut de l'onglet.
+- La fenêtre d'import (« Lier une source », « ⚙ Gérer les sources ») mène à la page Tickets importés de son projet.
+- Les clés enregistrées ne changent pas : `integrations` des réglages de l'app pour la synchro et l'import automatique, `integrations` de chaque projet pour ses sources et sa correspondance.
 
 ### Les comptes
 
-Les comptes se connectent tout de suite, hors du brouillon « Enregistrer ».
+Les comptes se connectent tout de suite, par leur propre appel au backend, comme chaque réglage s'enregistre au geste (voir *Réglages*).
 
 | Source | Compte |
 |---|---|
@@ -41,15 +45,16 @@ Les comptes se connectent tout de suite, hors du brouillon « Enregistrer ».
 - Un effacement refusé est noté dans le fichier (les noms des services, jamais un secret) et retenté au démarrage suivant, sauf si le service a de nouveau un compte avec son propre jeton. « Déconnecter » le dit dans un toast quand le jeton était dans le trousseau : « Le jeton <service> n'a pas pu être retiré du trousseau du système : Escouade réessaiera au prochain démarrage, ou retire-le à la main (son nom contient « escouade »). ». Un service que cette version ne connaît pas, noté par une plus récente, est ignoré au lieu de rendre le fichier illisible.
 - Aucune autre entrée du trousseau n'est jamais effacée, même d'un service qu'aucun compte ne cite : elle peut être la seule copie d'un jeton.
 - Au chargement, un secret trouvé dans le fichier (version d'avant 1.6, ou refusé la fois précédente) est écrit dans le trousseau, relu pour vérifier, et alors seulement retiré du fichier, réécrit d'un coup.
-- Trousseau indisponible, ou absent hors Windows et macOS : le secret reste dans le fichier (droits 0600 sous Unix), l'onglet le dit sous le compte (« Trousseau du système indisponible : le jeton reste dans ~/.escouade/integrations.json. »), et le démarrage suivant retente.
-- Trousseau qui ne rend pas les secrets d'un compte au démarrage (hors d'atteinte, refus, entrée effacée ou illisible) : rien n'est réécrit ni effacé. Le compte reste connecté, mais aucun appel ne part sans ses secrets ; GitHub ne prend pas le jeton de `gh` à la place. L'appel échoue avec « Trousseau du système illisible : relance Escouade ou reconnecte le compte <service>. », et l'onglet dit sous le compte « Trousseau du système illisible : relance Escouade ou reconnecte le compte. ».
+- Trousseau indisponible, ou absent hors Windows et macOS : le secret reste dans le fichier (droits 0600 sous Unix), la page le dit sous le compte (« Trousseau du système indisponible : le jeton reste dans ~/.escouade/integrations.json. »), et le démarrage suivant retente.
+- Trousseau qui ne rend pas les secrets d'un compte au démarrage (hors d'atteinte, refus, entrée effacée ou illisible) : rien n'est réécrit ni effacé. Le compte reste connecté, mais aucun appel ne part sans ses secrets ; GitHub ne prend pas le jeton de `gh` à la place. L'appel échoue avec « Trousseau du système illisible : relance Escouade ou reconnecte le compte <service>. », et la page dit sous le compte « Trousseau du système illisible : relance Escouade ou reconnecte le compte. ».
 - Une exécution isolée (`ESCOUADE_DATA_DIR` : tests e2e, démo) range ses secrets sous `dev.gagnaire.escouade.sandbox`, jamais à la place de ceux de l'utilisateur. Une build de développement sur le dossier de l'utilisateur les écrit dans le trousseau mais les laisse aussi dans le fichier : l'app installée, peut-être plus ancienne, les y lit.
 - Les appels passent par le proxy des réglages. `ESCOUADE_TRELLO_API`, `ESCOUADE_GITHUB_API` et `ESCOUADE_CLICKUP_API` remplacent les adresses des API (tests, démo).
 
 ### Les sources liées
 
-- Par projet, pour chaque compte connecté : un projet Jira, un tableau Trello, un dépôt GitHub (celui du remote `origin` en tête, « (dépôt du projet) »), une liste ClickUp, un projet GitLab ou un projet Azure Boards ; ou « Aucun ».
+- Par projet, sur sa page Tickets importés, pour chaque compte connecté : un projet Jira, un tableau Trello, un dépôt GitHub (celui du remote `origin` en tête, « (dépôt du projet) »), une liste ClickUp, un projet GitLab ou un projet Azure Boards ; ou « Aucun ».
 - Choisir une source pré-remplit la correspondance : « En cours » et « À tester » vers l'état qui ressemble à « en cours », « Terminé » vers celui qui ressemble à « à tester », « À faire » inchangé.
+- La source va au projet pour lequel elle a été choisie, même si un autre projet est ouvert avant que ses états arrivent.
 
 ### La correspondance des statuts
 
@@ -78,8 +83,8 @@ Les comptes se connectent tout de suite, hors du brouillon « Enregistrer ».
 ### « ⤓ Importer »
 
 - Dans l'en-tête du Kanban ; l'icône seule dans une fenêtre étroite.
-- Sans source liée : « Aucune source liée à ce projet » et les sept sources nommées. Quand l'hébergeur du remote du projet est connecté et que sa source n'est pas encore liée : « Lier <dépôt> (GitHub Issues) », « Lier <projet> (GitLab Issues) » ou « Lier <projet> (Azure Boards) », liée d'un clic avec les états par défaut, et la liste s'ouvre aussitôt. « Lier une source » (« Lier une autre source » à côté d'une proposition) ouvre Réglages › Intégrations sur « Sources du Kanban ».
-- Avec des sources : une pastille par source (avec le nombre de tickets cochés), « ⚙ Gérer les sources », une recherche (lancée 300 ms après la frappe), les filtres du service, « Tout sélectionner ».
+- Sans source liée : « Aucune source liée à ce projet » et les sept sources nommées. Quand l'hébergeur du remote du projet est connecté et que sa source n'est pas encore liée : « Lier <dépôt> (GitHub Issues) », « Lier <projet> (GitLab Issues) » ou « Lier <projet> (Azure Boards) », liée d'un clic avec les états par défaut, et la liste s'ouvre aussitôt. « Lier une source » (« Lier une autre source » à côté d'une proposition) ouvre Réglages › Projets › <projet> › Tickets importés.
+- Avec des sources : une pastille par source (avec le nombre de tickets cochés), « ⚙ Gérer les sources » (la même page), une recherche (lancée 300 ms après la frappe), les filtres du service, « Tout sélectionner ».
   - Recherche : Jira par texte ou par clé, GitHub par sa recherche, Trello en filtrant sur place.
   - Filtres : Jira « Assignés à moi », « Sprint actif », « À faire » ; Trello « Mes cartes », un par liste ; GitHub « Assignées à moi », un par étiquette.
 - Une ligne par ticket : clé externe, titre, type, priorité · assigné · statut, « ✓ n critères détectés ». Un ticket « Déjà dans le Kanban » est grisé.
@@ -97,7 +102,7 @@ Les comptes se connectent tout de suite, hors du brouillon « Enregistrer ».
 ### GitLab Issues
 
 - gitlab.com et les instances auto-hébergées.
-- Il prend tous les comptes de l'hébergeur GitLab, un par instance, sans rien redemander (voir *Hébergeurs de code*). Sa ligne dans « Comptes connectés » dit « Connecté · @ada » (« @ada · git.acme.dev » pour une instance auto-hébergée ; plusieurs, séparés par des virgules) et « Compte de l'hébergeur GitLab : il se connecte et se déconnecte dans Hébergeurs de code. ». « Connecter GitLab… » ouvre le formulaire de l'hébergeur, type GitLab choisi. Pas de « Déconnecter » à part : connecter ou déconnecter GitLab Issues seul est refusé, en le disant.
+- Il prend tous les comptes de l'hébergeur GitLab, un par instance, sans rien redemander (voir *Hébergeurs de code*). Sa ligne dans « Comptes connectés » dit « Connecté · @ada » (« @ada · git.acme.dev » pour une instance auto-hébergée ; plusieurs, séparés par des virgules) et « Compte de l'hébergeur GitLab : il se connecte et se déconnecte dans Hébergeurs de code. ». « Connecter GitLab… » ouvre le formulaire de l'hébergeur, sur la même page, type GitLab choisi. Pas de « Déconnecter » à part : connecter ou déconnecter GitLab Issues seul est refusé, en le disant.
 - La source d'un projet est un projet GitLab, `<hôte>/<groupes>/<projet>`. Le menu « Projet GitLab Issues » range par instance les projets dont le compte est membre (100, les plus actifs, archivés exclus), le projet du remote en tête « (dépôt du projet) » quand son instance a un compte. Les groupes ne sont pas des sources : les issues vivent dans les projets, et un groupe mêlerait plusieurs dépôts.
 - États : « Ouverte », « Fermée », puis les étiquettes des listes des tableaux du projet, par position (aucune si l'instance ne les donne pas), puis ses autres étiquettes. Une étiquette « ◆ … » remplace les autres étiquettes de la correspondance, en une seule écriture qui rouvre l'issue au besoin.
 - Import : les issues ouvertes, 50 par page, avec le total ; « Assignées à moi » ; l'étiquette de l'import automatique ; une puce par étiquette (12 au plus). « #12 » donne l'issue elle-même, ouverte seulement.
@@ -108,7 +113,7 @@ Les comptes se connectent tout de suite, hors du brouillon « Enregistrer ».
 ### Azure Boards
 
 - dev.azure.com et Azure DevOps Server.
-- Il prend les comptes de l'hébergeur Azure DevOps, un par organisation ou collection, sans rien redemander (voir *Hébergeurs de code*). Sa ligne dans « Comptes connectés » dit « Connecté · ada@acme.dev · acme » (le compte, puis l'organisation ; l'hôte pour un Server), « Compte de l'hébergeur Azure DevOps : il se connecte et se déconnecte dans Hébergeurs de code. » et « Son jeton doit avoir le droit Work Items (lecture et écriture). ». « Connecter Azure DevOps… » ouvre le formulaire de l'hébergeur, type Azure DevOps choisi ; connecter ou déconnecter Azure Boards seul est refusé, en le disant.
+- Il prend les comptes de l'hébergeur Azure DevOps, un par organisation ou collection, sans rien redemander (voir *Hébergeurs de code*). Sa ligne dans « Comptes connectés » dit « Connecté · ada@acme.dev · acme » (le compte, puis l'organisation ; l'hôte pour un Server), « Compte de l'hébergeur Azure DevOps : il se connecte et se déconnecte dans Hébergeurs de code. » et « Son jeton doit avoir le droit Work Items (lecture et écriture). ». « Connecter Azure DevOps… » ouvre le formulaire de l'hébergeur, sur la même page, type Azure DevOps choisi ; connecter ou déconnecter Azure Boards seul est refusé, en le disant.
 - Un 401 ou un 403 sur les éléments de travail dit qu'il faut au jeton le droit Work Items, avec l'adresse de la page des jetons de l'organisation (`<organisation>/_usersSettings/tokens`). L'erreur est retentée.
 - La source d'un projet est un projet Azure DevOps, `<org>/<projet>`. Le menu « Projet Azure Boards » range sous chaque organisation ses projets, le projet du remote en tête « (dépôt du projet) » quand son organisation a un compte.
 - États : ceux des types d'éléments de travail du projet, sans les types désactivés ni ceux qui ne sont pas d'un backlog (Test Case, Test Plan, Test Suite, Shared Steps, Shared Parameter, Code Review, Feedback). Ils sont rangés par catégorie (Proposed, InProgress, Resolved, Completed ; Removed laissé de côté), chacun une fois : Basic (To Do, Doing, Done), Agile (New, Active, Resolved, Closed), Scrum (New, Approved, Committed, Done ; To Do, In Progress pour Task), CMMI, ou un processus hérité.
@@ -134,11 +139,13 @@ Les comptes se connectent tout de suite, hors du brouillon « Enregistrer ».
 
 ## Réglages
 
-Dans Réglages › Intégrations › « Sources du Kanban » :
+Dans Réglages › Services connectés › « Sources de tickets » (pour toute l'app) :
 
-- les comptes ; par projet, les sources liées et la correspondance des statuts ;
-- pour toute l'app, la synchronisation : « Mettre à jour le statut externe » (oui par défaut), « Publier un résumé à chaque boucle » (non), « Extraire les critères d'acceptation » (oui : les éléments sous « Critères d'acceptation », « Acceptance criteria » ou « Definition of done », sinon les cases à cocher ; pour Trello, la checklist de ce nom, sinon toutes) ;
+- les comptes ;
+- la synchronisation : « Mettre à jour le statut externe » (oui par défaut), « Publier un résumé à chaque boucle » (non), « Extraire les critères d'acceptation » (oui : les éléments sous « Critères d'acceptation », « Acceptance criteria » ou « Definition of done », sinon les cases à cocher ; pour Trello, la checklist de ce nom, sinon toutes) ;
 - l'import automatique : « Importer les tickets étiquetés » (non par défaut), « Étiquette » (`claude-ready`), « Vérifier toutes les » 5, 15 ou 60 min.
+
+Dans Réglages › Projets › <projet> › Tickets importés (pour ce projet) : les sources liées et la correspondance des statuts.
 
 ## Limites
 
@@ -146,6 +153,8 @@ Dans Réglages › Intégrations › « Sources du Kanban » :
 - GitLab Issues : un groupe n'est pas une source, seulement un projet.
 - Azure Boards : ni zone ni itération ; une itération courante demanderait une équipe.
 - ClickUp : une clé personnelle seulement. L'OAuth de ClickUp (une app enregistrée, un jeton par espace de travail autorisé) n'est pas fait ; il servirait à une équipe qui ne veut pas de clés personnelles.
+- La synchronisation et l'import automatique restent des réglages de l'app, pas d'un projet (choix de la refonte des réglages) : les régler par projet changerait leur comportement.
+- Les messages des plugins de première main (Jira, ClickUp, Azure DevOps, le kit des hébergeurs) nomment encore « Réglages › Intégrations » jusqu'à leur prochaine version publiée au store ; ceux du cœur disent « Réglages › Services connectés ».
 
 ## Les comptes servis par un plugin (ESC-212)
 

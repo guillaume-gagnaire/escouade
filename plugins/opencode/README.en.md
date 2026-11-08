@@ -7,7 +7,7 @@ It is for anyone who already has OpenCode 1 and at least one connected provider.
 ## What it needs
 
 - OpenCode 1 installed on the machine (`npm install -g opencode-ai`, tried with 1.19.3). OpenCode 2 isn’t supported.
-- A provider connected to OpenCode (`opencode auth login`), and its account added in Settings › Accounts.
+- A provider connected to OpenCode (`opencode auth login`), and its account added in Settings › Accounts and harnesses.
 
 ## What it can do
 

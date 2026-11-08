@@ -25,9 +25,9 @@ Escouade détecte les shells installés sur ta machine.
 | Windows | « PowerShell » (PowerShell 7, cherché dans le `PATH` puis dans `Program Files`) ; « Windows PowerShell » à la place quand PowerShell 7 est absent ; « Git Bash », celui de Git for Windows ; « WSL » (« WSL (Ubuntu) » quand une distribution est réglée). |
 | macOS et Linux | Ton shell de connexion (`$SHELL`) en premier, puis zsh, bash et fish quand ils sont installés. `sh` sert de dernier recours quand aucun autre n’est trouvé. |
 
-Le premier de la liste est celui que `Ctrl+T` ouvre. Sous macOS et Linux, les shells démarrent en shells de connexion (`-l`), comme dans un terminal ordinaire. WSL s’ouvre dans le dossier du projet (ou celui de l’agent) et prend la distribution par défaut, ou celle de Réglages › Terminaux.
+Le premier de la liste est celui que `Ctrl+T` ouvre. Sous macOS et Linux, les shells démarrent en shells de connexion (`-l`), comme dans un terminal ordinaire. WSL s’ouvre dans le dossier du projet (ou celui de l’agent) et prend la distribution par défaut, ou celle de Réglages › Avancé › Terminaux.
 
-Les chemins de PowerShell 7 et de Git Bash, la distribution de WSL et, sous macOS, le chemin de bash se règlent dans Réglages › Terminaux, qui montre aussi les shells détectés (sous Linux, seul le champ « Git Bash » compte, pour bash) : voir [les réglages des terminaux](settings-terminals).
+Les chemins de PowerShell 7 et de Git Bash, la distribution de WSL et, sous macOS, le chemin de bash se règlent dans Réglages › Avancé › Terminaux, qui montre aussi les shells détectés (sous Linux, seul le champ « Git Bash » compte, pour bash) : voir [les réglages des terminaux](settings-terminals).
 
 ## Dans le terminal
 
@@ -61,7 +61,7 @@ Un terminal garde presque toutes les touches pour le shell. Le comportement dép
 
 ## Le proxy
 
-Dans Réglages › Réseau, l’interrupteur « Appliquer aussi le proxy aux terminaux intégrés » (désactivé par défaut) donne aux terminaux les variables `HTTPS_PROXY`, `HTTP_PROXY` (et leurs formes en minuscules) avec l’adresse du proxy, et `NO_PROXY` avec les exclusions. Il vaut pour les terminaux ouverts après le changement, et aussi pour les commandes de lancement et les commandes de préparation et de démontage des worktrees. Voir [les réglages du réseau](settings-network).
+Dans Réglages › Avancé › Réseau, l’interrupteur « Appliquer aussi le proxy aux terminaux intégrés » (désactivé par défaut) donne aux terminaux les variables `HTTPS_PROXY`, `HTTP_PROXY` (et leurs formes en minuscules) avec l’adresse du proxy, et `NO_PROXY` avec les exclusions. Il vaut pour les terminaux ouverts après le changement, et aussi pour les commandes de lancement et les commandes de préparation et de démontage des worktrees. Voir [les réglages du réseau](settings-network).
 
 ## Les autres terminaux d’Escouade
 

@@ -2,7 +2,7 @@
 title: "Vue « Pull requests » du projet"
 subject: "git-fichiers"
 sources: ["docs/TODO-1.8.md","design/esc-65/README.md","src/components/prs/PrsView.svelte","src/lib/prlist.ts","src-tauri/src/pragent.rs","src-tauri/src/prview.rs"]
-tickets: ["ESC-65","ESC-66","ESC-68"]
+tickets: ["ESC-65","ESC-66","ESC-68","ESC-383"]
 decisions: [60]
 compared: null
 ---
@@ -45,7 +45,7 @@ compared: null
 
 - Chargement : « Lecture des PR ouvertes du projet… ».
 - Vide, par filtre : « Aucune PR ouverte. », « Aucune PR ouverte par toi. », « Personne ne t'a demandé de relecture. », avec « Toutes les PR » pour en sortir.
-- Erreur : le cadre rouge et les mots de l'onglet « PR et CI » (jeton refusé, limite d'API, hébergeur injoignable, sinon ceux de l'hébergeur), avec « Réessayer » et, quand c'est là que ça se règle, « Réglages › Intégrations ». Une relecture qui échoue garde la liste affichée et dit pourquoi au-dessus.
+- Erreur : le cadre rouge et les mots de l'onglet « PR et CI » (jeton refusé, limite d'API, hébergeur injoignable, sinon ceux de l'hébergeur), avec « Réessayer » et, quand c'est là que ça se règle, « Réglages › Services connectés », qui ouvre cette page des réglages (voir *Réglages*). Une relecture qui échoue garde la liste affichée et dit pourquoi au-dessus.
 
 ## Limites
 

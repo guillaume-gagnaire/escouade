@@ -1,4 +1,4 @@
-// « Couleurs » (Réglages › Application › Affichage, PLG-7): the window takes the theme of a plugin, or Escouade's.
+// « Couleurs » (Réglages › Général › Apparence, PLG-7): the window takes the theme of a plugin, or Escouade's.
 // Applied at once and as it changes: a style sheet of its filtered values (lib/plugin-themes.ts) over src/app.css,
 // `data-plugin-theme` on the root for what draws its colours itself (the terminals, lib/terminals.ts), and its palette
 // in place of the project colours. The plugin switched off, uninstalled or gone invalid, Escouade's colours come back

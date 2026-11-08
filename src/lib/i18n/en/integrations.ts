@@ -26,7 +26,7 @@ export default defineZone('integrations', {
 
   parts: {
     sources: {
-      title: 'Kanban sources',
+      title: 'Ticket sources',
       note: 'Import and sync of tickets: an imported ticket follows its column there (status, comments).',
     },
     forges: {
@@ -104,7 +104,8 @@ export default defineZone('integrations', {
 
   sources: {
     title: 'Sources linked to {project}',
-    connectFirst: 'Connect an account above to link a source to this project.',
+    connectFirst: 'Connect an account in Connected services to link a source to this project.',
+    openServices: 'Open Connected services',
     none: 'None',
     pick: {
       jira: 'Jira project',

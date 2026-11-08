@@ -272,7 +272,7 @@ pub fn account_sign_in_ended(core: CoreState, id: String) -> Option<String> {
     core.sign_in_ended(&id)
 }
 
-/// Where Escouade's update of Claude Code stands (ESC-133), for « Réglages › Harness ».
+/// Where Escouade's update of Claude Code stands (ESC-133), for « Réglages › Comptes et harness ».
 #[tauri::command(async)]
 pub fn claude_update_status(core: CoreState) -> crate::selfupdate::Status {
     crate::selfupdate::status(&core.settings.read())

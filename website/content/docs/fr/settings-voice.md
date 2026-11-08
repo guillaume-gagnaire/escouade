@@ -1,12 +1,12 @@
 # Réglages : Voix
 
-L’onglet « Voix » des réglages règle la dictée (le micro, qui transcrit ce que tu dis, la langue parlée et le raccourci) et la conversation vocale (qui génère la voix, la voix de chaque langue, sa vitesse, son volume et le silence qui envoie ce que tu as dit).
+La page « Voix » règle la dictée (le micro, qui transcrit ce que tu dis, la langue parlée et le raccourci) et la conversation vocale (qui génère la voix, la voix de chaque langue, sa vitesse, son volume et le silence qui envoie ce que tu as dit).
 
-## Ouvrir l’onglet
+## Ouvrir la page
 
 Ouvre les réglages avec `Ctrl+,` (`⌘,` sous macOS), puis choisis « Voix » (« Dictée des messages : micro, modèle de transcription, langue et raccourci »). Ces réglages sont ceux de l’app, communs à tous les projets.
 
-Les choix de l’onglet s’appliquent à « Enregistrer », comme les autres réglages. Trois actions se font tout de suite, sans attendre « Enregistrer » : télécharger ou effacer un modèle de Whisper, télécharger ou effacer une voix, et enregistrer ou effacer la clé d’un service en ligne.
+Les choix de la page s’appliquent au geste, comme les autres réglages, et trois actions aussi : télécharger ou effacer un modèle de Whisper, télécharger ou effacer une voix, et enregistrer ou effacer la clé d’un service en ligne.
 
 L’usage de la dictée et de la conversation est décrit dans [la conversation](chat#dicter-un-message).
 
@@ -63,7 +63,7 @@ La clé se colle dans le champ (« Colle ta clé d’API »), puis « Enregis
 
 Le menu « Modèle » liste les modèles du service qui transcrivent, avec ce qui les distingue (« rapide », « plus précis »), celui par défaut en premier. Avec une clé enregistrée, la liste est celle que donne l’API du service, lue avec ta clé et gardée sur ta machine ; « Actualiser la liste » la relit, et la ligne dit quand elle a été lue. Sans clé, ou pour un service dont l’API ne liste pas ses modèles de transcription (ElevenLabs), c’est la liste de sa documentation, livrée avec l’app. Tant que tu n’en choisis pas un autre, c’est le modèle par défaut : la dictée reste celle d’avant. Le modèle choisi est gardé par service : changer de service puis revenir le retrouve. Un modèle que le service ne propose plus est remplacé par celui par défaut, et la ligne le dit (« Groq ne propose plus « … » : son modèle par défaut, « whisper-large-v3-turbo », le remplace. »).
 
-Ces cinq services sont des plugins livrés avec Escouade (`dev.escouade.openai`, `dev.escouade.groq`, `dev.escouade.mistral`, `dev.escouade.elevenlabs`, `dev.escouade.deepgram`) : la clé reste au trousseau de l’app, qui la donne au seul plugin de son service à chaque appel. **Mistral partage son compte avec Mistral Vibe** : la clé donnée ici sert aussi aux comptes Vibe qui n’ont pas de clé à eux, et sans clé ici, la voix prend celle du premier compte Vibe actif, ce que la ligne dit (« Celle du compte Vibe « Équipe » · clé …wxyz », avec « Donner une autre clé »). Coupé dans la vue Plugins, un service quitte cet onglet et la dictée repasse en local ; un plugin qui ne démarre pas laisse Escouade répondre à sa place, et son journal dit pourquoi (voir [les plugins livrés avec Escouade](plugins/installer#les-plugins-livres-avec-escouade)).
+Ces cinq services sont des plugins livrés avec Escouade (`dev.escouade.openai`, `dev.escouade.groq`, `dev.escouade.mistral`, `dev.escouade.elevenlabs`, `dev.escouade.deepgram`) : la clé reste au trousseau de l’app, qui la donne au seul plugin de son service à chaque appel. **Mistral partage son compte avec Mistral Vibe** : la clé donnée ici sert aussi aux comptes Vibe qui n’ont pas de clé à eux, et sans clé ici, la voix prend celle du premier compte Vibe actif, ce que la ligne dit (« Celle du compte Vibe « Équipe » · clé …wxyz », avec « Donner une autre clé »). Coupé dans la vue Plugins, un service quitte cette page et la dictée repasse en local ; un plugin qui ne démarre pas laisse Escouade répondre à sa place, et son journal dit pourquoi (voir [les plugins livrés avec Escouade](plugins/installer#les-plugins-livres-avec-escouade)).
 
 ### La transcription en temps réel
 

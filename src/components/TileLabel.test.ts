@@ -15,6 +15,7 @@ import '../test/pointer';
 import NewProjectModal from './modals/NewProjectModal.svelte';
 import SettingsModal from './modals/SettingsModal.svelte';
 import ProjectRail from './ProjectRail.svelte';
+import { afterGesture } from '../test/settings';
 
 const tile = (name: string) => screen.getByRole('tab', { name: new RegExp(`^${name}`) });
 const edge = () => screen.getByRole('separator', { name: 'Largeur de la barre des projets' });
@@ -195,15 +196,19 @@ describe('Réglages › Projets', () => {
 
   it('turns the label on, with a shorter text, and saves them on this machine', async () => {
     const backend = fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'project', projectId: 'p1' });
     expect(labelSwitch()).toHaveAttribute('aria-checked', 'false');
     expect(labelField().value).toBe('');
     expect(labelField().placeholder).toBe('demo-api');
     await userEvent.click(labelSwitch());
     await userEvent.type(labelField(), 'Démo API de paiement');
     expect(labelField().value).toBe('Démo API de ');
-    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
-    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', tileLabel: true, tileLabelText: 'Démo API de' });
+    await afterGesture();
+    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({
+      id: 'p1',
+      tileLabel: true,
+      tileLabelText: 'Démo API de',
+    });
     expect(app.projects[0]).toMatchObject({ tileLabel: true, tileLabelText: 'Démo API de' });
     // The rail makes room for it.
     expect(railWidth.shown).toBe(RAIL_LABELLED);
@@ -233,7 +238,7 @@ describe('the new project’s assistant', () => {
     await userEvent.type(labelField(), 'Démo');
     await userEvent.click(screen.getByRole('button', { name: /^Créer sans l.assistant$/ }));
     await waitFor(() => expect(backend.called('update_project')).toHaveLength(1));
-    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p9', tileLabel: true, tileLabelText: 'Démo' });
+    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({ id: 'p9', tileLabel: true, tileLabelText: 'Démo' });
     await waitFor(() => expect(app.projects.find((p) => p.id === 'p9')).toMatchObject({ tileLabel: true, tileLabelText: 'Démo' }));
   });
 

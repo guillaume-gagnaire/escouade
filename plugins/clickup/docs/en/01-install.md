@@ -8,7 +8,7 @@ Its page, in the same view, has a switch for the whole app and a "Projects" tab 
 
 ## 2. Make the API key on ClickUp
 
-1. In Escouade, open Settings › Integrations. Under "Kanban sources", in the "Connected accounts" group, click "Connect…" on the ClickUp row.
+1. In Escouade, open Settings › Connected services. Under "Ticket sources", in the "Connected accounts" group, click "Connect…" on the ClickUp row.
 2. Click "Create a ClickUp API key". Your browser opens `https://app.clickup.com/settings/apps`, the "Apps" page of your ClickUp settings. Generate your personal API key (it starts with `pk_`) and copy it.
 3. Paste it into the "API key" field.
 
@@ -24,7 +24,7 @@ The connection is kept at once: it does not go through "Save".
 
 ## 4. Link a list to a project
 
-Still in Settings › Integrations, the "Sources linked to `<project>`" group offers the "ClickUp list" menu. It sorts the lists of all your workspaces by space and folder ("Product › Sprints"), as ClickUp's sidebar does: lists outside a folder first, archived ones left out. The workspace's name comes first when you have several. With the menu open, typing the first letters of a name goes to it.
+In Settings › Projects › Imported tickets, the "Sources linked to `<project>`" group offers the "ClickUp list" menu. It sorts the lists of all your workspaces by space and folder ("Product › Sprints"), as ClickUp's sidebar does: lists outside a folder first, archived ones left out. The workspace's name comes first when you have several. With the menu open, typing the first letters of a name goes to it.
 
 Pick a list. Escouade loads its statuses and fills in the "Status mapping" (see **Use**). Save the settings.
 

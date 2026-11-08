@@ -9,7 +9,7 @@ Ce plugin est un module WASM : il tourne dans Escouade, isolé, sans programme �
 - Les hôtes où GitHub range le journal d'un job d'Actions : `*.actions.githubusercontent.com` et `*.blob.core.windows.net`. GitHub y renvoie par une redirection ; le plugin la suit **sans ton jeton**, qui ne quitte jamais l'API de GitHub.
 - Aucun autre hôte. C'est l'hôte d'Escouade qui l'applique : un appel vers un autre hôte, vers une adresse IP écrite telle quelle, ou vers une adresse de ta machine ou de ton réseau local est refusé avant de partir. Seule l'instance que tu as tapée échappe à ce dernier contrôle, puisque c'est toi qui l'as choisie.
 - Une redirection vers un autre hôte que l'API ne reçoit ni ton jeton ni le corps de l'appel. La page suivante d'une liste n'est suivie que sur l'API elle-même.
-- Il passe par le proxy de Réglages › Réseau quand tu en as un.
+- Il passe par le proxy de Réglages › Avancé › Réseau quand tu en as un.
 - Chaque réponse est limitée à 8 Mio et à 15 secondes.
 
 ## Ce qu'il lit et ce qu'il écrit chez GitHub

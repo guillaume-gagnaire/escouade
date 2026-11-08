@@ -2,7 +2,7 @@
 
 ## Lancer un agent
 
-Choisis « Cursor CLI » dans le menu « Harness » de « Nouvel agent », ou fais-en le harness par défaut d’un projet (Réglages › Projets, « Harness par défaut »). Chaque agent a son `agent acp` et son propre dossier de configuration.
+Choisis « Cursor CLI » dans le menu « Harness » de « Nouvel agent », ou fais-en le harness par défaut d’un projet (Réglages › Projets › Projet, « Harness par défaut »). Chaque agent a son `agent acp` et son propre dossier de configuration.
 
 Le menu « Modèle » liste les modèles de ton compte, Auto en tête, avec leurs efforts (de Bas à Très élevé). Une offre Free ne fait tourner qu’Auto : un autre modèle finit le tour en erreur, en le disant. Le modèle et le mode changent tout de suite.
 

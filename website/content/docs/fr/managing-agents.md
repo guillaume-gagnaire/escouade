@@ -36,7 +36,7 @@ Un nouvel agent s’appelle `agent-1`, `agent-2`… Dès que tu lui envoies son 
 
 ## Modèle, effort et mode de permission
 
-Sous le champ de saisie, une barre de menus règle l’agent : « Modèle », « Effort » et « Mode » (plus « Compte » quand tu as plusieurs comptes). Les valeurs des nouveaux agents sont celles de leur compte, dans sa fiche de Réglages › Comptes, « Nouveaux agents » : « Modèle », « Effort » et « Mode », parmi ceux de son harness (par défaut ceux du harness : Sonnet, Moyen et Auto pour Claude Code). Voir [les réglages des comptes](settings-accounts).
+Sous le champ de saisie, une barre de menus règle l’agent : « Modèle », « Effort » et « Mode » (plus « Compte » quand tu as plusieurs comptes). Les valeurs des nouveaux agents sont celles de leur compte, dans sa fiche de Réglages › Comptes et harness, « Nouveaux agents » : « Modèle », « Effort » et « Mode », parmi ceux de son harness (par défaut ceux du harness : Sonnet, Moyen et Auto pour Claude Code). Voir [les réglages des comptes](settings-accounts).
 
 ### Modèle
 
@@ -164,7 +164,7 @@ Au redémarrage, chaque agent retrouve sa conversation, et aucun processus Claud
 
 ### Les processus inactifs
 
-Un processus Claude occupe de la mémoire. Quand un agent n’a rien fait depuis un certain temps, Escouade arrête donc son processus, conversation et session intactes. Le délai, 30 minutes par défaut, se règle dans Réglages › Harness : « Arrêter les processus des agents inactifs après (minutes) » ; `0` désactive l’arrêt. Cela ne concerne ni un agent qui travaille ou qui attend une réponse, ni un agent dont le remote control est activé, ni un agent qui a encore en arrière-plan une commande, une surveillance, un sous-agent ou un workflow (ils vivent dans son processus, que l’arrêt tuerait). La prochaine action sur l’agent relance son processus sur sa session.
+Un processus Claude occupe de la mémoire. Quand un agent n’a rien fait depuis un certain temps, Escouade arrête donc son processus, conversation et session intactes. Le délai, 30 minutes par défaut, se règle dans Réglages › Comptes et harness : « Arrêter les processus des agents inactifs après (minutes) » ; `0` désactive l’arrêt. Cela ne concerne ni un agent qui travaille ou qui attend une réponse, ni un agent dont le remote control est activé, ni un agent qui a encore en arrière-plan une commande, une surveillance, un sous-agent ou un workflow (ils vivent dans son processus, que l’arrêt tuerait). La prochaine action sur l’agent relance son processus sur sa session.
 
 ### Si un agent s’arrête
 

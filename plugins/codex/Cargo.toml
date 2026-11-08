@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-codex"
-version = "2.2.2"
+version = "2.2.3"
 description = "Le plugin Codex d'Escouade : Codex d'OpenAI comme harness, par son app-server"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"

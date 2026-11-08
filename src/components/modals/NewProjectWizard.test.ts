@@ -377,9 +377,9 @@ describe('the new project’s assistant', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
     await userEvent.click(screen.getByRole('button', { name: /Récapitulatif/ }));
     expect(screen.getByText('Aucun compte ne sert ce projet')).toBeInTheDocument();
-    expect(screen.getByText(/Réglages › Comptes/)).toBeInTheDocument();
+    expect(screen.getByText(/retire sa réservation à d’autres projets, dans Réglages › Comptes et harness/)).toBeInTheDocument();
     expect(screen.getByText('Aucun harness trouvé')).toBeInTheDocument();
-    expect(screen.getByText(/indique son chemin dans Réglages › Harness/)).toBeInTheDocument();
+    expect(screen.getByText(/indique son chemin dans Réglages › Comptes et harness/)).toBeInTheDocument();
     app.enginesFound = ['claude'];
   });
 

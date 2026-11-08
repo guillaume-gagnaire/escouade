@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, send, test } from './fixture';
+import { addProject, expect, send, test, openSettingsPage } from './fixture';
 
 const OUT = process.env.ESCOUADE_E2E_REAL_OUT ?? path.join(os.tmpdir(), 'escouade-real-store');
 
@@ -117,7 +117,7 @@ test('the store for real: four signed plugins installed, tried, turned off, take
   await install(page, 'Contraste élevé', 'high-contrast');
   await page.keyboard.press('Control+,');
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Application' }).click();
+  await openSettingsPage(settings, 'Général');
   const colors = settings.getByRole('combobox', { name: 'Couleurs' });
   await expect(colors.locator('option', { hasText: 'Contraste élevé' }).first()).toBeAttached();
   const before = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--text'));
@@ -128,7 +128,7 @@ test('the store for real: four signed plugins installed, tried, turned off, take
     .poll(() => JSON.parse(fs.readFileSync(path.join(app.data, 'settings.json'), 'utf8')).pluginTheme)
     .toContain('dev.escouade.high-contrast');
   const after = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--text'));
-  note(`\n### Ce qu'il fait\n\nThème choisi dans Réglages › Application › Couleurs : --text ${before.trim()} → ${after.trim()}.`);
+  note(`\n### Ce qu'il fait\n\nThème choisi dans Réglages › Général › Couleurs : --text ${before.trim()} → ${after.trim()}.`);
   await colors.selectOption({ index: 0 });
   await expect(page.locator('#escouade-plugin-theme')).toHaveCount(0);
   await settings.getByRole('button', { name: 'Fermer' }).click();

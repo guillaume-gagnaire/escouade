@@ -7,6 +7,7 @@ import { onlineVoice } from '../../lib/online-voice.svelte';
 import type { ServiceCatalog, SpeechInfo, SpeechSettings, SpeechVoice, VoiceInfo } from '../../lib/types';
 import { fakeBackend, resetApp } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
+import { afterGesture } from '../../test/settings';
 
 vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }));
 
@@ -52,7 +53,7 @@ const SPEECH: SpeechInfo = {
 
 function open(over: Record<string, (a: any) => unknown> = {}) {
   const backend = fakeBackend({ voice_info: () => VOICE, speech_info: () => SPEECH, save_settings: () => [], ...over });
-  render(SettingsModal, { tab: 'voice' });
+  render(SettingsModal, { page: 'voice' });
   return backend;
 }
 
@@ -91,8 +92,8 @@ describe('Réglages › Voix, the conversation', () => {
     expect(speaker.options).toHaveLength(125);
     await userEvent.selectOptions(speaker, '3');
     expect(within(fr).getByRole('button', { name: 'Télécharger (73 Mo)' })).toBeTruthy();
-    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
-    const saved = backend.called('save_settings')[0].args.settings.voice.speech;
+    await afterGesture();
+    const saved = backend.called('save_settings').at(-1)!.args.settings.voice.speech;
     expect(saved.voices).toEqual({ fr: 'fr_FR-mls-medium' });
     expect(saved.speakers).toEqual({ 'fr_FR-mls-medium': 3 });
   });
@@ -237,7 +238,6 @@ describe('Réglages › Voix, the conversation’s voice on line (ESC-132)', () 
       voice_online_catalog: ({ service }) => CATALOGS[service] ?? OPENAI,
       ...over,
     });
-  const save = () => userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
 
   it('says on line that the conversation pauses when the service fails and no local voice is downloaded', async () => {
     online('elevenlabs');
@@ -278,8 +278,8 @@ describe('Réglages › Voix, the conversation’s voice on line (ESC-132)', () 
     expect(screen.queryByText(/^Licence/)).toBeNull();
     await userEvent.selectOptions(service, 'elevenlabs');
     expect(screen.getByText('Si ElevenLabs ne répond pas')).toBeInTheDocument();
-    await save();
-    const speech = backend.called('save_settings')[0].args.settings.voice.speech;
+    await afterGesture();
+    const speech = backend.called('save_settings').at(-1)!.args.settings.voice.speech;
     expect(speech.engine).toBe('online');
     expect(speech.onlineService).toBe('elevenlabs');
     expect(JSON.stringify(speech)).not.toMatch(/key/i);
@@ -324,8 +324,8 @@ describe('Réglages › Voix, the conversation’s voice on line (ESC-132)', () 
     await userEvent.selectOptions(select, 'eleven_v4');
     // ElevenLabs takes the speed within its bounds.
     expect(screen.getByText('ElevenLabs lit entre 0.7× et 1.2× : la vitesse est ramenée dans ces bornes.')).toBeInTheDocument();
-    await save();
-    expect(backend.called('save_settings')[0].args.settings.voice.speech.onlineModels).toEqual({ elevenlabs: 'eleven_v4' });
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings.voice.speech.onlineModels).toEqual({ elevenlabs: 'eleven_v4' });
   });
 
   it('completes the voice as one types, the account’s own among them, picked with the keyboard, and plays it', async () => {
@@ -370,8 +370,8 @@ describe('Réglages › Voix, the conversation’s voice on line (ESC-132)', () 
         lang: 'fr',
       }),
     );
-    await save();
-    expect(backend.called('save_settings')[0].args.settings.voice.speech.onlineVoices).toEqual({
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings.voice.speech.onlineVoices).toEqual({
       'elevenlabs|fr': 'XB0fDUnXU5powFXDhCwa',
     });
   });
@@ -406,8 +406,8 @@ describe('Réglages › Voix, the conversation’s voice on line (ESC-132)', () 
     await userEvent.clear(field);
     await userEvent.type(field, 'cedar');
     await userEvent.tab();
-    await save();
-    expect(backend.called('save_settings')[0].args.settings.voice.speech.onlineVoices).toEqual({ 'openai|fr': 'cedar' });
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings.voice.speech.onlineVoices).toEqual({ 'openai|fr': 'cedar' });
   });
 
   it('a service that does not read French leaves it to Piper, and takes no speed', async () => {

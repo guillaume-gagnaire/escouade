@@ -1,49 +1,59 @@
-# Réglages : Application
+# Réglages : la fenêtre et Général
 
-Cette page décrit la fenêtre des réglages (ses onglets, son ouverture, son enregistrement) et son onglet « Application », qui règle l’affichage (le thème, le zoom de l’interface, la taille du texte des terminaux et de l’éditeur) et choisit la langue de l’interface et celle des textes que Claude rédige.
+Cette page décrit la fenêtre des réglages (sa barre, sa recherche, ses points ambre, son enregistrement au geste) et sa page « Général », qui règle l’apparence (le thème, le zoom de l’interface, la taille du texte des terminaux et de l’éditeur) et choisit la langue de l’interface et celle des textes que Claude rédige.
 
 ## La fenêtre des réglages
 
-Les réglages d’Escouade tiennent dans une seule fenêtre, avec un onglet par sujet. Ouvre-la avec `Ctrl+,` (`⌘,` sous macOS) ou avec le bouton « Réglages », en bas de la [barre des projets](interface). Elle s’ouvre sur l’onglet « Harness », sauf quand un bouton l’ouvre directement sur l’onglet qui le concerne : le bouton ⚙ de l’en-tête du [Kanban](board) ouvre « Kanban », le menu d’un projet ouvre « Projets ». Le raccourci ne fait rien tant qu’une autre fenêtre est ouverte.
+Les réglages d’Escouade tiennent dans une seule fenêtre : une barre à gauche, une page à la fois à droite. Ouvre-la avec `Ctrl+,` (`⌘,` sous macOS) ou avec le bouton « Réglages », en bas de la [barre des projets](interface). Elle s’ouvre sur « Comptes et harness », sauf quand un bouton l’ouvre directement sur la page qui le concerne : le bouton ⚙ de l’en-tête du [Kanban](board) ouvre la page « Kanban » de son projet, le menu d’un projet sa page « Projet », « Configurer » de la section Lancement sa page « Lancement ». Le raccourci ne fait rien tant qu’une autre fenêtre est ouverte.
 
-### Les onglets
+### La barre
 
-La colonne de gauche liste les onglets, avec la version d’Escouade en bas. Le nom et la description de l’onglet affiché sont en haut de la partie droite. Quand le focus est sur la liste, les flèches haut et bas passent d’un onglet à l’autre, `Home` et `End` vont au premier et au dernier.
+De haut en bas : le champ « Rechercher un réglage », les pages d’Escouade, chaque projet, « Tous les projets », puis « À propos » avec la version d’Escouade. Le titre et la description de la page affichée sont en haut de la partie droite. Quand le focus est sur la barre, les flèches haut et bas passent d’une entrée à l’autre et l’ouvrent, `Home` et `End` vont à la première et à la dernière.
 
-| Onglet | Ce qu’il règle |
+| Page | Ce qu’elle règle |
 |---|---|
-| « Application » | Thème, zoom, langue de l’interface et textes rédigés |
-| [« Harness »](settings-claude-code) | Exécutable, modèle et permissions par défaut |
-| [« Comptes »](settings-accounts) | Les comptes sur lesquels partent les agents, enregistrés à chaque changement |
+| « Général » | Apparence, langues, mises à jour, ton nom et les statistiques d’usage |
+| [« Agents »](settings-claude-code) | Les nouveaux agents, les textes rédigés, le remote control, le serveur MCP |
+| [« Comptes et harness »](settings-accounts) | Chaque harness et ses comptes, et ce qui se passe quand un quota est épuisé |
+| [« Services connectés »](settings-integrations) | Les hébergeurs de code et les comptes des sources de tickets |
+| [« Voix »](settings-voice) | La dictée et la conversation vocale |
 | [« Notifications »](settings-notifications) | Alertes visuelles et sonores |
-| [« Projets »](settings-projects) | Réglages propres à chaque projet |
-| [« Kanban »](settings-board) | Pilote auto et tickets validés |
-| [« Intégrations »](settings-integrations) | Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues et Azure Boards |
-| [« Terminaux »](settings-terminals) | Shells disponibles dans les terminaux intégrés |
-| [« Réseau »](settings-network) | Proxy HTTP(S) et certificats TLS pour Claude Code, les intégrations et les mises à jour |
-| [« À propos »](settings-about) | Version et données locales |
+| « Plugins » | Les plugins installés, ceux que propose Escouade, la sécurité |
+| « Avancé » | [Réseau](settings-network), [terminaux](settings-terminals), pièces jointes, recherche par le sens, données locales |
+| [« À propos »](settings-about) | Version, crédits et liens |
 
-« Projets », « Kanban » et « Intégrations » règlent un projet à la fois. Sous l’en-tête, une rangée « Projet » propose un bouton par projet ouvert, avec sa pastille de couleur et son nom. La fenêtre démarre sur le projet affiché, ou sur celui du bouton qui l’a ouverte. Changer de projet ne perd pas ce que tu as modifié sur les autres. Sans projet ouvert, ces onglets disent « Aucun projet ouvert. ».
+Sous « Projets », chaque projet a sa couleur devant son nom, et un cadenas s’il est privé. Le projet choisi se déplie sur ses sept pages : [« Projet »](settings-projects), « Git et worktrees », « Lancement », [« Kanban »](settings-board), [« Tickets importés »](settings-integrations), « Équipe » et « Confidentialité ». Passer d’un projet à l’autre garde la même page. Sur une page d’un projet, la fenêtre prend la couleur de ce projet ; sur une page d’Escouade, le teal d’Escouade. Sans projet ouvert, une page de projet dit « Aucun projet ouvert. ».
 
-### Enregistrer ou annuler
+En bas d’une page, « Avancé » replie les réglages qu’on touche rarement sur une ligne qui les nomme ; un clic les déplie sur place.
 
-Les changements se font dans un brouillon : rien ne s’applique avant « Enregistrer ». Un point sur un onglet (info-bulle « Modifié, pas encore enregistré ») signale qu’il contient des changements non enregistrés.
+### Chercher un réglage
 
-- « Enregistrer » enregistre d’un coup tout ce qui a changé, dans tous les onglets et pour tous les projets. La fenêtre se ferme et affiche « Réglages enregistrés ». Si une partie échoue, un message d’erreur s’affiche, la fenêtre reste ouverte, et ce qui a pu être enregistré ne compte plus comme un changement.
-- « Annuler », la croix, `Échap` ou un clic sur le fond ferment la fenêtre et jettent le brouillon, sans demander confirmation. À la réouverture, tout repart de ce qui est enregistré.
-- Quand un problème empêche d’enregistrer, un message rouge s’affiche en bas à gauche, nomme le projet concerné (même s’il n’est pas celui qui est affiché) et « Enregistrer » est grisé. Trois cas : un projet n’a plus de nom ; une commande de lancement n’a pas de nom ou pas de ligne de commande ; le dossier des worktrees ou un préfixe de branche d’un projet n’est pas valide.
+Le champ « Rechercher un réglage », en tête de la barre, trouve un réglage par son nom ou sa description, et une page par son nom ; `Ctrl+F` (`⌘F` sous macOS) y mène depuis toute la fenêtre. Il cherche en français et en anglais quelle que soit la langue de l’interface, sans tenir compte des majuscules ni des accents : « beta » trouve « Recevoir les versions bêta », « proxy » trouve « Proxy HTTP(S) ».
 
-### Ce qui s’enregistre tout de suite
+Tant que le champ a du texte, ses résultats remplacent les entrées de la barre, chacun avec la page où il est : « Avancé », « Général › Avancé », « demo-api › Git et worktrees ». Un réglage de projet vient une fois par projet, le projet choisi d’abord. Les flèches haut et bas passent d’un résultat à l’autre ; `Entrée` ou un clic ouvre sa page, déplie « Avancé » s’il y est, et surligne le réglage un instant. `Échap` vide le champ ; un second `Échap` ferme la fenêtre.
 
-Trois endroits n’attendent pas le bouton. L’onglet « Comptes », où chaque changement part au moment où tu le fais, et l’interrupteur « Les agents peuvent piloter Escouade » de l’onglet « Harness », parce qu’un « Annuler » ne pourrait pas défaire ce qu’ils écrivent sur le disque. Et le groupe « Affichage » de l’onglet « Application », qui change aussi au clavier, fenêtre des réglages ouverte ou non : ce que tu y choisis se voit et s’enregistre tout de suite.
+### Les points ambre
 
-## L’onglet « Application »
+Un point ambre au bout d’une entrée de la barre dit qu’une page attend quelque chose de toi ; son info-bulle dit quoi :
 
-L’onglet a deux groupes, « Affichage » et « Langue ».
+- « Comptes et harness » : un harness installé qui n’a aucun compte (« Codex n’a aucun compte : aucun agent ni ticket n’y démarre ») ;
+- « Services connectés » : le jeton d’un hébergeur expiré ou révoqué, ou un jeton illisible dans le trousseau du système ;
+- « Plugins » : un plugin désactivé par Escouade, au manifeste invalide, ou arrêté après ses plantages ;
+- un projet : aucun compte actif de son harness ne le sert. Le point est sur le projet et sur sa page « Projet », où se choisit son compte.
 
-### Affichage
+### Tout s’enregistre au geste
 
-Ces quatre réglages s’appliquent tout de suite, sans « Enregistrer » ni redémarrage, et restent d’un lancement à l’autre.
+Il n’y a ni « Annuler » ni « Enregistrer » : comme dans les réglages de macOS ou de VS Code, un choix (un interrupteur, un menu, une commande ajoutée) s’applique et s’enregistre aussitôt, un texte quand tu quittes son champ ou après une courte pause dans la frappe. Fermer la fenêtre (la croix, `Échap` ou un clic sur le fond) enregistre ce qui attendait encore.
+
+Une saisie qui ne peut pas être enregistrée le dit sur sa ligne, et la valeur d’avant reste tant qu’elle n’est pas corrigée : un projet sans nom, une commande de lancement sans nom ou sans ligne de commande, un dossier des worktrees ou un préfixe de branche refusé, un nombre vidé.
+
+## La page « Général »
+
+La page a quatre groupes, « Apparence », « Langue », « Mises à jour » et « Toi » (voir [À propos](settings-about) pour les deux derniers), puis « Avancé » : la taille du texte de l’éditeur et ton identifiant.
+
+### Apparence
+
+Ces quatre réglages s’appliquent tout de suite, sans redémarrage, et restent d’un lancement à l’autre. La taille du texte de l’éditeur est dans « Avancé ».
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
@@ -57,11 +67,11 @@ Au clavier, partout, même dans un terminal ou avec une fenêtre ouverte : `Ctrl
 Un terminal dont la police change se redimensionne aussitôt dans sa zone, et son programme apprend sa nouvelle taille en colonnes et en lignes : rien ne dépasse ni ne se coupe.
 
 > [!NOTE]
-> L’interface est prévue pour au moins 1000 × 600 pixels, la taille minimale de la fenêtre. Un palier qui ne laisserait pas cette place est grisé, avec l’info-bulle « Trop grand pour la taille de la fenêtre », et `Ctrl+=` s’arrête avant. Si la fenêtre rétrécit sous le palier choisi, l’interface passe au plus grand palier qu’elle peut tenir, et l’onglet le dit ; le palier choisi revient dès que la fenêtre est assez grande.
+> L’interface est prévue pour au moins 1000 × 600 pixels, la taille minimale de la fenêtre. Un palier qui ne laisserait pas cette place est grisé, avec l’info-bulle « Trop grand pour la taille de la fenêtre », et `Ctrl+=` s’arrête avant. Si la fenêtre rétrécit sous le palier choisi, l’interface passe au plus grand palier qu’elle peut tenir, et la page le dit ; le palier choisi revient dès que la fenêtre est assez grande.
 
 ### Langue
 
-Les deux choix prennent effet dès l’enregistrement, sans redémarrer : la fenêtre, les menus de l’app et les textes qu’Escouade écrit passent dans la nouvelle langue.
+Les deux choix prennent effet aussitôt, sans redémarrer : la fenêtre, les menus de l’app et les textes qu’Escouade écrit passent dans la nouvelle langue.
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
@@ -93,7 +103,7 @@ Les trois choix sont « Comme l’interface (par défaut) », « English » 
 
 ## Textes rédigés
 
-« Modèle des textes rédigés » choisit le modèle qui écrit les textes courts qu’Escouade fait rédiger hors d’une conversation d’agent :
+Ce groupe est dans la page « Agents ». « Modèle des textes rédigés » choisit le modèle qui écrit les textes courts qu’Escouade fait rédiger hors d’une conversation d’agent :
 
 - le nom donné à un nouvel agent ;
 - les messages de commit et les descriptions de pull request proposés, voir [Git](git) ;

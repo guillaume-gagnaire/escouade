@@ -34,7 +34,7 @@ For each message, a `POST https://slack.com/api/chat.postMessage` request, from 
 - the channel’s name (`escouade-<project>`, or the one in `channels.json`);
 - the text: the ticket’s key and title, or the agent’s name.
 
-Escouade only lets out https requests to `slack.com` and its subdomains, without following a redirection, 10 seconds and 1 MiB at most, and never to an address of your machine or local network. The proxy of **Settings › Network** is followed.
+Escouade only lets out https requests to `slack.com` and its subdomains, without following a redirection, 10 seconds and 1 MiB at most, and never to an address of your machine or local network. The proxy of **Settings › Advanced › Network** is followed.
 
 ## What never goes there
 

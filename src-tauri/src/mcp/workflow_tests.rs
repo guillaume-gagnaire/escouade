@@ -234,7 +234,7 @@ async fn get_workflow_gives_the_workflows_as_the_user_corrected_them() {
     write_workflow(Path::new(&p.path));
     let scan = h.core.refresh_workflows(&p.id, true).await.unwrap();
     let w = &scan.workflows[0];
-    // « one » renamed in Settings › Projects › Workflow.
+    // « one » renamed in Settings › Projects › Kanban › Workflow.
     h.core
         .update_project(Project {
             workflow_fixes: vec![crate::workflowfix::Fix {

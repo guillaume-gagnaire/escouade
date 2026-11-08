@@ -1,6 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { addProject, expect, FAKE_CODEX, FAKE_COPILOT, FAKE_OPENCODE, send, test, type App } from './fixture';
+import {
+  addProject,
+  expect,
+  FAKE_CODEX,
+  FAKE_COPILOT,
+  FAKE_OPENCODE,
+  send,
+  test,
+  type App,
+  openSettingsPage,
+  closeSettings,
+} from './fixture';
 
 // Escouade's MCP server, declared in Claude Code by the fake `claude mcp add` (in the .claude.json of a folder of the test's),
 // and called as Claude Code calls it: JSON-RPC over HTTP, with the token it was declared with.
@@ -41,8 +52,8 @@ test('Claude drives Escouade: a ticket created through MCP arrives in the Kanban
   await addProject(page, app.repo, { firstAgent: false });
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Serveur MCP' }).click();
-  await expect(dialog.getByRole('heading', { name: 'Serveur MCP' })).toBeVisible();
+  await openSettingsPage(dialog, 'Agents');
+  await expect(dialog.getByRole('heading', { level: 1, name: 'Agents' })).toBeVisible();
   // Off to begin with: nothing declared anywhere.
   await expect(dialog.getByRole('switch', { name: SWITCH })).toHaveAttribute('aria-checked', 'false');
   expect(declared(app)).toBeNull();
@@ -87,8 +98,12 @@ test('Claude drives Escouade: a ticket created through MCP arrives in the Kanban
   const lost = await rpc(server!, 3, 'tools/call', { name: 'create_ticket', arguments: { project: 'nope', title: 'x' } });
   expect(lost.json.result.isError).toBe(true);
 
-  // The activity shows them, newest first, live (the dialog has been open all along): the failed call, the ticket made, and
-  // the request without a token, refused, from a client it does not know.
+  // The activity shows them, newest first, live (the dialog has been open all along), in the page's « Avancé »: the failed
+  // call, the ticket made, and the request without a token, refused, from a client it does not know.
+  await dialog
+    .locator('#settings-panel')
+    .getByRole('button', { name: /^Avancé/ })
+    .click();
   const calls = dialog.getByRole('list', { name: 'Appels au serveur MCP, les plus récents en tête' }).getByRole('listitem');
   await expect(calls).toHaveCount(3);
   await expect(calls.nth(0)).toContainText('create_ticket');
@@ -113,7 +128,7 @@ test('turning Claude’s control of Escouade off takes it out of Claude Code and
   await addProject(page, app.repo, { firstAgent: false });
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Serveur MCP' }).click();
+  await openSettingsPage(dialog, 'Agents');
   await dialog.getByRole('switch', { name: SWITCH }).click();
   await expect(row(dialog, 'Claude · compte Principal')).toContainText('Déclaré');
   const before = declared(app)!;
@@ -166,7 +181,7 @@ test('the one switch reaches agents already running: their conversation says so,
   // On: the settings count the agent already running, which gets the tools at its next start.
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Serveur MCP' }).click();
+  await openSettingsPage(dialog, 'Agents');
   await dialog.getByRole('switch', { name: SWITCH }).click();
   await expect(row(dialog, 'Claude · compte Principal')).toContainText('Déclaré');
   await expect(
@@ -219,7 +234,7 @@ test.describe('the switch saved on, the app starting', () => {
     // And the project's settings have no switch of their own any more.
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
-    await dialog.getByRole('tab', { name: 'Projets' }).click();
+    await openSettingsPage(dialog, 'Git et worktrees');
     await expect(dialog.getByRole('switch', { name: 'Un worktree par agent' })).toBeVisible();
     await expect(dialog.getByRole('switch', { name: 'Les agents peuvent utiliser Escouade' })).toHaveCount(0);
   });
@@ -258,11 +273,10 @@ test.describe('a private project', () => {
     // « Projet privé » switched on in the settings of « coffre ».
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
-    await dialog.getByRole('tab', { name: 'Projets' }).click();
+    await openSettingsPage(dialog, 'Confidentialité');
     await dialog.getByRole('button', { name: 'coffre' }).click();
     await dialog.getByRole('switch', { name: 'Projet privé' }).click();
-    await dialog.getByRole('button', { name: 'Enregistrer' }).click();
-    await expect(dialog).toBeHidden();
+    await closeSettings(dialog);
     // Its tile says so; the other's does not.
     const lock = 'Projet privé : invisible pour les agents des autres projets';
     await expect(page.getByRole('tab', { name: 'coffre, privé' })).toBeVisible();
@@ -324,7 +338,7 @@ test.describe('« Les agents peuvent piloter Escouade » in every harness instal
     await addProject(page, app.repo, { firstAgent: false });
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
-    await dialog.getByRole('tab', { name: 'Serveur MCP' }).click();
+    await openSettingsPage(dialog, 'Agents');
     // One switch, no harness of its own; the token in plain text, said beside it.
     await expect(dialog.getByRole('switch', { name: /piloter Escouade/ })).toHaveCount(1);
     await expect(

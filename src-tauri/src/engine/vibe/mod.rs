@@ -756,8 +756,8 @@ impl Engine for Vibe {
 
     fn key_missing(&self, name: &str) -> String {
         tr!(
-            "Le compte Mistral Vibe « {name} » n’a pas de clé d’API : donne-la dans Réglages › Comptes, « Changer la clé… ».",
-            "The Mistral Vibe account “{name}” has no API key: give it in Settings › Accounts, “Change the key…”."
+            "Le compte Mistral Vibe « {name} » n’a pas de clé d’API : donne-la dans Réglages › Comptes et harness, « Changer la clé… ».",
+            "The Mistral Vibe account “{name}” has no API key: give it in Settings › Accounts and harnesses, “Change the key…”."
         )
     }
 

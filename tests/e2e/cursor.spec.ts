@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, FAKE_CURSOR, send, test, type App } from './fixture';
+import { addProject, expect, FAKE_CURSOR, send, test, type App, openSettingsPage } from './fixture';
 
 type Entry = {
   launch?: { argv: string[]; configDir: string | null; msystem: string | null; apiKey?: string | null };
@@ -222,7 +222,7 @@ test.describe('a Cursor account added by its API key', () => {
     await addProject(page, app.repo);
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
-    await dialog.getByRole('tab', { name: 'Comptes' }).click();
+    await openSettingsPage(dialog, 'Comptes et harness');
     await dialog.getByRole('button', { name: 'Ajouter un compte Cursor CLI…' }).click();
     const modal = page.getByRole('dialog', { name: 'Ajouter un compte Cursor CLI' });
     // The machine's is there already: a new one, by its key.

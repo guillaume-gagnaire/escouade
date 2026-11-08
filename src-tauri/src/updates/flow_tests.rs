@@ -338,7 +338,7 @@ async fn the_check_reads_the_endpoints_of_the_configuration_and_the_network_of_t
 /// What the proxy says to the user who has to put a password in its address.
 fn password_asked(proxy: &Server) -> String {
     format!(
-        "le proxy {} demande une authentification (407 Proxy Authentication Required) : mets l'identifiant et le mot de passe dans l'adresse du proxy, dans Réglages › Réseau",
+        "le proxy {} demande une authentification (407 Proxy Authentication Required) : mets l'identifiant et le mot de passe dans l'adresse du proxy, dans Réglages › Avancé › Réseau",
         proxy.address()
     )
 }

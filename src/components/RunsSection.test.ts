@@ -111,7 +111,7 @@ describe('RunsSection', () => {
     render(RunsSection, { project: project() });
     expect(screen.queryByRole('button', { name: 'Tout lancer' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Configurer' }));
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1', section: 'launch' });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'launch', projectId: 'p1' });
   });
 
   it('offers Claude’s proposal when there is nothing to launch: the settings on the launch group, which read the project', async () => {
@@ -119,7 +119,7 @@ describe('RunsSection', () => {
     render(RunsSection, { project: project() });
     expect(screen.getByText('Aucune commande.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Proposer des commandes' }));
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1', section: 'launch', suggest: true });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'launch', projectId: 'p1', suggest: true });
   });
 
   it('does not offer it once there are commands', () => {
@@ -133,7 +133,7 @@ describe('RunsSection', () => {
     fakeBackend();
     render(RunsSection, { project: P });
     await userEvent.click(screen.getByRole('button', { name: 'Commandes de lancement…' }));
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1', section: 'launch' });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'launch', projectId: 'p1' });
   });
 
   const recipe = (over: Partial<TestRecipe> = {}): TestRecipe => ({

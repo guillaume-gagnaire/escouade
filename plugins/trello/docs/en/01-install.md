@@ -10,7 +10,7 @@ Its page, in the same view, has a switch for the whole app and a "Projects" tab 
 
 Trello asks for two things: an API key, then a token given to that key.
 
-1. In Escouade, open Settings › Integrations. Under "Kanban sources", in the "Connected accounts" group, click "Connect…" on the Trello row.
+1. In Escouade, open Settings › Connected services. Under "Ticket sources", in the "Connected accounts" group, click "Connect…" on the Trello row.
 2. Click "Get an API key". Your browser opens `https://trello.com/power-ups/admin`. Make a Power-Up if you have none (its name does not matter), then generate its API key. Paste it into the "API key" field.
 3. Click "Get a token for this key" (the link stays greyed out while the key is empty). Trello opens its authorization page in the name of "Escouade": read and write access to your account, with no expiry. Accept, then paste the token it shows into the "Token" field.
 
@@ -24,7 +24,7 @@ The connection is kept at once: it does not go through "Save".
 
 ## 4. Link a board to a project
 
-Still in Settings › Integrations, the "Sources linked to `<project>`" group offers the "Trello board" list: your open boards. Pick one. Escouade then loads its lists and fills in the "Status mapping" (see **Use**). Save the settings.
+In Settings › Projects › Imported tickets, the "Sources linked to `<project>`" group offers the "Trello board" list: your open boards. Pick one. Escouade then loads its lists and fills in the "Status mapping" (see **Use**). Save the settings.
 
 You can also start from the Kanban: "Import" with no linked source shows "No source linked to this project" and offers "Link a source", which opens that same tab.
 

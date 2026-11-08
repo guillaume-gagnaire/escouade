@@ -1,18 +1,18 @@
-# Settings: Terminals
+# Settings: the terminals (Advanced)
 
-The “Terminals” tab of the settings tells Escouade where to find the shells used by the built-in terminals, launch commands, worktree commands, and tests.
+The “Terminals” group of the “Advanced” page tells Escouade where to find the shells used by the built-in terminals, launch commands, worktree commands, and tests.
 
-## Open the tab
+## Open the page
 
-Open the settings with `Ctrl+,` (`⌘,` on macOS), then choose “Terminals” (“Shells available in the built-in terminals”). These are the app’s settings, shared by all projects; they apply on “Save”. The terminals themselves are described in [terminals](terminals).
+Open the settings with `Ctrl+,` (`⌘,` on macOS), then choose “Advanced”, “Terminals” group. These are the app’s settings, shared by all projects, and they apply as you set them. The terminals themselves are described in [terminals](terminals).
 
-The tab has a single group, “Paths”. Escouade detects shells on its own; you only fill in a field to point to a shell it can’t find, or to prefer another one.
+The group holds a few paths. Escouade detects shells on its own; you only fill in a field to point to a shell it can’t find, or to prefer another one.
 
 ## Paths
 
 Under the group’s title, the “Detected:” line lists the shells found, for example “Detected: PowerShell, Git Bash, WSL”, or “Detected: none”. It updates once the settings are saved.
 
-On Windows, the tab has three fields:
+On Windows, the group has three fields:
 
 | Setting | Effect | Default |
 |---|---|---|
@@ -20,10 +20,10 @@ On Windows, the tab has three fields:
 | “Git Bash” | The path to `bash.exe`, the bash of Git for Windows. | Empty (“blank = auto”) |
 | “WSL distribution” | The name of the WSL distribution to use, for example `Ubuntu`. | Empty (“blank = default distribution”) |
 
-On macOS, the tab has a single field, “bash” (“blank = auto”), for the path to bash.
+On macOS, the group has a single field, “bash” (“blank = auto”), for the path to bash.
 
 > [!NOTE]
-> On Linux, the tab shows the same three fields as on Windows, but only the “Git Bash” field counts: it then points to `bash`. The “PowerShell 7” and “WSL distribution” fields have no effect there.
+> On Linux, the group shows the same three fields as on Windows, but only the “Git Bash” field counts: it then points to `bash`. The “PowerShell 7” and “WSL distribution” fields have no effect there.
 
 An empty field lets Escouade search. A path that points to no file isn’t replaced by detection: the matching shell isn’t offered. For PowerShell, Escouade then falls back to Windows PowerShell if it’s installed.
 
@@ -47,12 +47,12 @@ The order of the list matters: there’s no “default shell” setting, it’s 
 
 - In the sidebar, the **+** button of the “Terminals” section (“New terminal”) opens a menu with every detected shell: you pick one.
 - “Open a terminal” (an agent’s menu) and “Open a terminal here” (the editor’s file tree menu) use the first shell.
-- A launch command or a worktree command has its own “Shell” choice, in the project’s settings (see the [“Projects”](settings-projects) tab). A new command starts with the first shell. See [launch](launch) and [worktrees](worktrees).
-- The Kanban’s “Test command” (the [“Kanban”](settings-board) tab) and test launches ([testing](testing)) also use the first shell.
+- A launch command or a worktree command has its own “Shell” choice, in the project’s settings (see [its pages](settings-projects)). A new command starts with the first shell. See [launch](launch) and [worktrees](worktrees).
+- The Kanban’s “Test command” (its [“Kanban”](settings-board) page) and test launches ([testing](testing)) also use the first shell.
 
 With no shell detected, the **+** button shows “No shell found (PowerShell 7, Git Bash, WSL). Check the settings.”
 
 ## What is set elsewhere
 
-- **The proxy in terminals**: “Also apply the proxy to the built-in terminals” is in the [“Network”](settings-network) tab. It also applies to launch and worktree commands.
-- **Claude Code in WSL**: on Windows, when the executable path (the [“Harness”](settings-claude-code) tab) is empty and no `claude` is found on Windows, Escouade looks for one installed in WSL, in the distribution from the “WSL distribution” field (the default distribution if it’s empty).
+- **The proxy in terminals**: “Also apply the proxy to the built-in terminals” is in the [“Network”](settings-network) group, just above. It also applies to launch and worktree commands.
+- **Claude Code in WSL**: on Windows, when the executable path ([“Accounts and harnesses”](settings-accounts) › Advanced) is empty and no `claude` is found on Windows, Escouade looks for one installed in WSL, in the distribution from the “WSL distribution” field (the default distribution if it’s empty).

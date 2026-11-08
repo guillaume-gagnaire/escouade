@@ -8,7 +8,7 @@ Its page, in the same view, has a switch for the whole app and a "Projects" tab 
 
 ## 2. Make the token on the instance
 
-1. In Escouade, open Settings › Integrations › "Code hosts", then "Connect a code host…". A repository whose remote is on an instance with no account also offers "Connect" followed by its host.
+1. In Escouade, open Settings › Connected services › "Code hosts", then "Connect a code host…". A repository whose remote is on an instance with no account also offers "Connect" followed by its host.
 2. "Code host": Gitea / Forgejo. For an address the app does not know, it finds the code host type on its own ("Finding out the code host type…").
 3. "Address": the instance's (`https://codeberg.org`, `https://gitea.com`, `https://git.acme.dev`). Only https is accepted (http only to this machine).
 4. "Create a token" opens `<instance>/user/settings/applications`. Make an access token with the scopes the form reminds: `write:repository`, `write:issue`, `read:user`. Copy it.

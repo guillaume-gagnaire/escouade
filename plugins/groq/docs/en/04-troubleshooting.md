@@ -13,10 +13,10 @@ Groq answered 401 or 403: the key is wrong, revoked, or lacks the right asked fo
 **“Groq refuses for now: too many requests or the quota is spent (…). Wait a little, or check the plan of your Groq account.”**
 Groq answered 429. In brackets, what it said. Wait, or look at your plan and credit at Groq.
 
-**“Groq does not answer: … Check the network and the proxy (Settings › Network), or go back to local.”**
+**“Groq does not answer: … Check the network and the proxy (Settings › Advanced › Network), or go back to local.”**
 The request did not get through. What follows the colon says why:
 
-- a network or proxy error: check [Settings › Network](https://escouade.dev/en/docs/settings-network) and that `api.groq.com` can be reached;
+- a network or proxy error: check [Settings › Advanced › Network](https://escouade.dev/en/docs/settings-network) and that `api.groq.com` can be reached;
 - “timed out”: Groq did not answer in time;
 - “this service’s plugin is gone”: the Groq plugin is off or uninstalled. Turn it back on in the Plugins view, or install it (Install tab);
 - “The plugin dev.escouade.groq is not answering: …”: the plugin is not running or stopped. Its Log tab, in the Plugins view, says why;

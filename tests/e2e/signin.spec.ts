@@ -70,7 +70,7 @@ test.describe('a sign-in emptied by Claude Code', () => {
     await card.getByRole('button', { name: 'Se reconnecter' }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
     await expect(page.getByRole('dialog')).not.toHaveAttribute('aria-label', 'Réglages');
-    // Closed, it goes back to Réglages › Comptes, closed in turn. By its button: Échap belongs to its terminal once it has
+    // Closed, it goes back to Réglages › Comptes et harness, closed in turn. By its button: Échap belongs to its terminal once it has
     // the focus (Claude Code's /login runs there), which it takes sooner or later (at once on the runner).
     await page.getByRole('dialog').getByRole('button', { name: 'Fermer' }).click();
     await expect(page.getByRole('dialog', { name: 'Réglages' })).toBeVisible();

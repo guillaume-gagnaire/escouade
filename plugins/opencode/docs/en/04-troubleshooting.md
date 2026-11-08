@@ -5,16 +5,16 @@ The messages below are those Escouade and the plugin show, word for word, in the
 ## The agent doesn’t start
 
 **“OpenCode not found. Install it or give its path in the settings.”**
-Escouade didn’t find `opencode`. Install it (`npm install -g opencode-ai`), or give its executable’s path in Settings › Harness.
+Escouade didn’t find `opencode`. Install it (`npm install -g opencode-ai`), or give its executable’s path in Settings › Accounts and harnesses.
 
-**“Not supported”, in Settings › Harness**
+**“Not supported”, in Settings › Accounts and harnesses**
 That is OpenCode 2 (`@opencode/cli`). Install OpenCode 1: `npm install -g opencode-ai`.
 
-**“No OpenCode account: add one in Settings › Accounts.”**
+**“No OpenCode account: add one in Settings › Accounts and harnesses.”**
 Add this machine’s account.
 
 **“No OpenCode model to use: connect a provider to OpenCode (opencode auth login) or declare one in its config, then pick its model.”**
-OpenCode has no connected provider, or the chosen model isn’t one of theirs. `opencode auth login` (or “Sign in…” in Settings › Harness), then pick a model in the menu.
+OpenCode has no connected provider, or the chosen model isn’t one of theirs. `opencode auth login` (or “Sign in…” in Settings › Accounts and harnesses), then pick a model in the menu.
 
 **“OpenCode’s event stream doesn’t answer”**
 OpenCode’s server didn’t open its event stream in time. Send a message to try again; if it comes back, stop the OpenCode agents so that the server starts again.

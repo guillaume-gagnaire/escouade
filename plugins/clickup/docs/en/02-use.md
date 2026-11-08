@@ -15,7 +15,7 @@ Tick the tasks, pick "Max loops", then "Import". Each imported ticket keeps the 
 
 ## Acceptance criteria
 
-With "Extract the acceptance criteria" on (Settings › Integrations, "Sync" group), the plugin takes as criteria, in this order:
+With "Extract the acceptance criteria" on (Settings › Connected services, "Sync" group), the plugin takes as criteria, in this order:
 
 1. the items of the checklist named after the criteria ("Acceptance criteria", "Critères d'acceptation", "Definition of done", "Criteria", "AC", "DoD"), in their order;
 2. otherwise the items of all the task's checklists;
@@ -25,7 +25,7 @@ It keeps twenty at most. With no criterion found, the ticket gets Escouade's def
 
 ## The task follows its ticket
 
-Each ClickUp list has its own statuses: the "Status mapping" of Settings › Integrations is therefore set on those of the linked list. Picking the list fills it in:
+Each ClickUp list has its own statuses: the "Status mapping" of Settings › Projects › Imported tickets is therefore set on those of the linked list. Picking the list fills it in:
 
 - first by names: the status that looks like "in progress" (`In Progress`, `Doing`, `WIP`…) for "In progress" and "To test", the one that looks like "to test" (`Review`, `QA`, `Testing`…) for "Done";
 - otherwise by type: the first custom status (between the open one and the closed ones) for "In progress" and "To test", the next one for "Done", failing that the first status of the done type;
@@ -40,7 +40,7 @@ With "Post a summary on every loop", each new loop of an agent also leaves a com
 
 ## Automatic import
 
-Settings › Integrations › "Automatic import" imports on its own the open tasks that carry the chosen label (`claude-ready` by default). For ClickUp, it is a tag of the task; ClickUp keeps its tags in lower case.
+Settings › Connected services › "Automatic import" imports on its own the open tasks that carry the chosen label (`claude-ready` by default). For ClickUp, it is a tag of the task; ClickUp keeps its tags in lower case.
 
 ## Limits
 

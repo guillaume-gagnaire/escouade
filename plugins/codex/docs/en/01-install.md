@@ -8,7 +8,7 @@ Three steps: Codex on your machine, the plugin in Escouade, then an account.
 npm install -g @openai/codex
 ```
 
-Escouade launches the native binary of the npm package (on Windows, the package’s `codex.exe`, not its launcher). Codex’s desktop app often installs an older version, which the `PATH` may find first: Settings › Harness shows the executable found and its version. The plugin was tried with Codex 0.163.0. `npm install -g @openai/codex@latest` updates it.
+Escouade launches the native binary of the npm package (on Windows, the package’s `codex.exe`, not its launcher). Codex’s desktop app often installs an older version, which the `PATH` may find first: Settings › Accounts and harnesses shows the executable found and its version. The plugin was tried with Codex 0.163.0. `npm install -g @openai/codex@latest` updates it.
 
 ## 2. Install the plugin
 
@@ -22,7 +22,7 @@ Like any plugin, it is switched off by its toggle in the Plugins view and uninst
 
 There is no account at first: an agent starts only on an account you added.
 
-1. Open Settings › Accounts and click **Add an account…**; once two harnesses are installed, choose the harness “Codex”.
+1. Open Settings › Accounts and harnesses, then click **Add an account…**; once two harnesses are installed, choose the harness “Codex”.
 2. Choose:
    - **This machine’s account**, your usual Codex (`~/.codex`), offered when Codex is signed in there. **Add this account** adds it as it is.
    - **A new account**, with a folder of its own. Name it, choose what it takes from this machine’s account (`config.toml`, `AGENTS.md`, `skills`, `prompts`, `rules`), linked or copied, then **Create and sign in**.

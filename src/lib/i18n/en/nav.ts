@@ -166,7 +166,7 @@ export default defineZone('nav', {
       closedOn: 'Closed on {date}',
       reopen: 'Reopen',
       all: 'All closed projects…',
-      allDetail: 'Settings › Projects',
+      allDetail: 'Settings › All projects',
     },
   },
 

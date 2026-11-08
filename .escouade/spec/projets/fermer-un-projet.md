@@ -2,7 +2,7 @@
 title: "Fermer un projet"
 subject: "Projets"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-89","ESC-300"]
+tickets: ["ESC-89","ESC-300","ESC-385"]
 decisions: []
 compared: "2026-10-30T02:50:30+01:00"
 ---
@@ -16,7 +16,7 @@ Fermer un projet le retire de l'app sans rien perdre : son historique (réglages
 ### Fermer
 
 - « Fermer » retire le projet de l'app et arrête ses process, ses terminaux, ses préparations de worktree, ses lancements de test et ses services isola. Il ne touche ni aux fichiers du dossier, ni aux worktrees, ni aux sessions de Claude Code, ni aux stats.
-- La fenêtre de confirmation dit que l'historique est gardé et propose la case « Effacer aussi son historique (conversations, tickets, réglages) », décochée par défaut. La zone sensible de Réglages › Projets montre la même confirmation.
+- La fenêtre de confirmation dit que l'historique est gardé et propose la case « Effacer aussi son historique (conversations, tickets, réglages) », décochée par défaut. « Fermer le projet… », sous « Avancé » en bas de Réglages › Projets › Projet (l'ancienne « Zone sensible »), montre la même confirmation, puis revient sur cette page.
 - Refusé tant que la validation d'un ticket du projet tourne : « La validation du ticket {key} est en cours : attends sa fin pour fermer le projet. » ; et une validation ne démarre pas sur un projet en cours de fermeture.
 - Un ticket « En cours » à ce moment est gardé bloqué avec « Projet fermé pendant le ticket » (« Project closed during the ticket », dans la langue de l'interface) ; un ticket dont la validation tournait repasse sans étape, bloqué comme après un redémarrage (« Validation interrompue »), sans conflit.
 - Deux fermetures du même projet en même temps n'en font qu'une. L'historique gardé est le projet tel qu'il sort de la liste : un ticket créé ou un réglage changé pendant la fermeture y est.
@@ -38,7 +38,7 @@ Fermer un projet le retire de l'app sans rien perdre : son historique (réglages
 - Plusieurs projets fermés au même dossier : le plus récemment fermé, sauf celui que « Rouvrir » a choisi dans la liste. Un second ajout pendant qu'une réouverture est en cours rend ce projet, pas un projet vierge de plus.
 - Le fichier n'est supprimé qu'une fois l'état enregistré : un arrêt brutal ne perd rien. S'il ne peut pas être supprimé (antivirus, fichier ouvert), les agents et les tickets que l'utilisateur supprime ensuite ne ressuscitent pas au démarrage suivant, qui retente de supprimer le fichier sans jamais le refusionner.
 - Une réouverture n'est pas comptée comme une création de projet dans les statistiques anonymes.
-- « Partir d'un projet vierge » : un projet neuf, avec un nouvel identifiant ; l'historique reste un projet fermé, listé dans Réglages › Projets › « Projets fermés ». Rien n'est effacé sans demande.
+- « Partir d'un projet vierge » : un projet neuf, avec un nouvel identifiant ; l'historique reste un projet fermé, listé dans Réglages › Tous les projets › « Projets fermés » (« L'historique reste dans Réglages › Tous les projets, où l'effacer. »). Rien n'est effacé sans demande.
 
 ### Le même dossier
 
@@ -47,7 +47,7 @@ Fermer un projet le retire de l'app sans rien perdre : son historique (réglages
 
 ### La liste des projets fermés
 
-- Réglages › Projets › « Projets fermés », seulement s'il y en a, sous la note « Leur historique est gardé : ajouter un projet dans leur dossier le retrouve. », du plus récemment fermé au plus ancien. Par projet : pastille, nom, dossier, taille (son fichier, les conversations et les journaux de préparation de ses agents, les fichiers joints à ses agents, les images et les fichiers de ses tickets), « dernière activité le … » (la date la plus récente d'un agent ou d'un ticket, à défaut la fermeture), « Rouvrir » (la fenêtre d'ajout sur son dossier et sur cet historique-là) et « Effacer l'historique… ».
+- Réglages › Tous les projets › « Projets fermés », seulement s'il y en a, sous la note « Leur historique est gardé : ajouter un projet dans leur dossier le retrouve. », du plus récemment fermé au plus ancien. « Tous les projets fermés… » du menu `+` de la barre des projets y mène. Par projet : pastille, nom, dossier, taille (son fichier, les conversations et les journaux de préparation de ses agents, les fichiers joints à ses agents, les images et les fichiers de ses tickets), « dernière activité le … » (la date la plus récente d'un agent ou d'un ticket, à défaut la fermeture), « Rouvrir » (la fenêtre d'ajout sur son dossier et sur cet historique-là) et « Effacer l'historique… ».
 - Un fichier dont l'identifiant est celui d'un projet ouvert (arrêt brutal entre l'écriture du fichier et l'enregistrement de l'état) est ignoré partout : listes et recherche par dossier.
 - Un fichier de `closed-projects/` illisible (JSON invalide, ou nom qui n'est pas `<id de son contenu>.json`) est listé quand même : « Historique illisible », avec son nom `<id>.json` et sa taille, sans « Rouvrir », avec « Effacer ». La confirmation : « Ce fichier, que l'application ne peut pas lire, est effacé pour de bon. Les autres historiques, les fichiers et les worktrees sur le disque ne sont pas touchés. » ; seul ce fichier est supprimé.
 

@@ -12,11 +12,11 @@ Coche les tickets, choisis « Boucles max », puis « Importer ». Chaque ticket
 
 ## Les critères d'acceptation
 
-Avec « Extraire les critères d'acceptation » activé (Réglages › Intégrations, groupe « Synchronisation »), le plugin cherche les critères dans la description, une fois convertie en Markdown : les éléments de liste sous un titre ou une ligne qui les nomme (« Critères d'acceptation », « Acceptance criteria », « Definition of done », « Critères », « AC », « DoD »), sinon ses cases à cocher (`- [ ]`). Il en garde vingt au plus, de 300 caractères au plus. Sans critère trouvé, le ticket reçoit les critères par défaut d'Escouade.
+Avec « Extraire les critères d'acceptation » activé (Réglages › Services connectés, groupe « Synchronisation »), le plugin cherche les critères dans la description, une fois convertie en Markdown : les éléments de liste sous un titre ou une ligne qui les nomme (« Critères d'acceptation », « Acceptance criteria », « Definition of done », « Critères », « AC », « DoD »), sinon ses cases à cocher (`- [ ]`). Il en garde vingt au plus, de 300 caractères au plus. Sans critère trouvé, le ticket reçoit les critères par défaut d'Escouade.
 
 ## Le ticket Jira suit son ticket
 
-Dans Réglages › Intégrations, la « Correspondance des statuts » donne, pour chaque colonne du Kanban, un statut du projet Jira (ceux de tous ses types de tickets, chacun une fois). Choisir le projet la pré-remplit : le statut qui ressemble à « en cours » pour « En cours » et « À tester », celui qui ressemble à « à tester » pour « Terminé », rien pour « À faire ».
+Dans Réglages › Projets › Tickets importés, la « Correspondance des statuts » donne, pour chaque colonne du Kanban, un statut du projet Jira (ceux de tous ses types de tickets, chacun une fois). Choisir le projet la pré-remplit : le statut qui ressemble à « en cours » pour « En cours » et « À tester », celui qui ressemble à « à tester » pour « Terminé », rien pour « À faire ».
 
 Quand un ticket importé arrive dans une colonne, si « Mettre à jour le statut externe » est activé :
 
@@ -29,7 +29,7 @@ Avec « Publier un résumé à chaque boucle », chaque nouvelle boucle d'un age
 
 ## L'import automatique
 
-Réglages › Intégrations › « Import automatique » importe seul les tickets ouverts qui portent l'étiquette choisie (`claude-ready` par défaut). Pour Jira, c'est un label du ticket.
+Réglages › Services connectés › « Import automatique » importe seul les tickets ouverts qui portent l'étiquette choisie (`claude-ready` par défaut). Pour Jira, c'est un label du ticket.
 
 ## Les limites
 

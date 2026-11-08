@@ -2,7 +2,7 @@
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.bitbucket",
   "name": "Bitbucket",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "description": {
     "fr": "Les PR, les statuts, les pipelines, leurs journaux, les commentaires et les déploiements de tes dépôts Bitbucket Cloud.",
     "en": "Pull requests, statuses, pipelines, their logs, comments and deployments of your Bitbucket Cloud repositories."

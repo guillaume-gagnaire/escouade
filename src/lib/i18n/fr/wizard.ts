@@ -3,7 +3,7 @@ import type { Tree } from '../types';
 // The new project's assistant: its steps, the copy of another project's settings, the checks.
 export default {
   title: 'Nouveau projet',
-  /** Opened again on an existing project, from Réglages › Projets. */
+  /** Opened again on an existing project, from Réglages › Projets › Projet. */
   titleEdit: 'Configurer {name}',
   stepOf: 'Étape {n} sur {count}',
   stepsLabel: 'Étapes',
@@ -118,7 +118,7 @@ export default {
     none: 'Aucune commande : ajoute-en une, ou laisse Claude lire le projet.',
   },
   account: {
-    remoteAll: 'Déjà allumé pour tous les agents (Réglages › Harness).',
+    remoteAll: 'Déjà allumé pour tous les agents (Réglages › Agents).',
     /** ESC-128: its harness has no account yet. */
     noAccount: 'Aucun compte {harness} : les agents et les tickets de ce projet ne démarreront qu’une fois un compte ajouté.',
     /** A private project's accounts (ESC-163): reserved to it alone once it is made. */
@@ -126,10 +126,11 @@ export default {
     reservedDesc:
       'Cochés, ils ne servent plus que lui : les autres projets ne partent plus dessus, et sessions, mémoire et historique de {harness} n’y sont partagés avec aucun autre projet.',
     reservedAlready: 'déjà réservé',
-    reservedNone: 'Aucun compte {harness} libre : ajoute un compte réservé dans Réglages › Projets, une fois le projet créé.',
+    reservedNone:
+      'Aucun compte {harness} libre : ajoute un compte réservé dans Réglages › Projets › Confidentialité, une fois le projet créé.',
   },
   integrations: {
-    none: 'Aucun compte Jira, Trello, GitHub, Linear, ClickUp, GitLab ou Azure DevOps n’est connecté : connecte-en un dans Réglages › Intégrations, après la création.',
+    none: 'Aucun compte Jira, Trello, GitHub, Linear, ClickUp, GitLab ou Azure DevOps n’est connecté : connecte-en un dans Réglages › Services connectés, après la création.',
     source: 'Source {service}',
     noSource: 'Aucune',
     loading: 'Chargement…',
@@ -180,15 +181,15 @@ export default {
     },
     noAccount: {
       title: 'Aucun compte ne sert ce projet',
-      desc: 'Rien ne démarre : active un compte, ou retire sa réservation à d’autres projets, dans Réglages › Comptes.',
+      desc: 'Rien ne démarre : active un compte, ou retire sa réservation à d’autres projets, dans Réglages › Comptes et harness.',
     },
     noClaude: {
       title: 'Aucun harness trouvé',
-      desc: 'Installe un harness (Claude Code : npm install -g @anthropic-ai/claude-code), ou indique son chemin dans Réglages › Harness.',
+      desc: 'Installe un harness (Claude Code : npm install -g @anthropic-ai/claude-code), ou indique son chemin dans Réglages › Comptes et harness.',
     },
     ok: 'Harness trouvé · un compte sert le projet · dépôt prêt',
   },
-  /** Réglages › Projets: the assistant opened again on the project. */
+  /** Réglages › Projets › Projet: the assistant opened again on the project. */
   reopen: {
     label: 'Assistant de configuration',
     desc: 'Revoir les réglages du projet étape par étape, ou y copier ceux d’un autre projet.',

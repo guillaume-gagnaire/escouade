@@ -1,10 +1,10 @@
 # Réglages : Notifications
 
-L’onglet « Notifications » règle les alertes d’Escouade : pour quels événements elle prévient, si elle affiche une notification du système quand la fenêtre n’est pas au premier plan, et si elle joue un son.
+La page « Notifications » règle les alertes d’Escouade : pour quels événements elle prévient, si elle affiche une notification du système quand la fenêtre n’est pas au premier plan, et si elle joue un son.
 
 ## Comment Escouade te prévient
 
-Trois signaux se combinent, et l’onglet commande les deux derniers. Les alertes elles-mêmes sont décrites dans [les notifications](notifications).
+Trois signaux se combinent, et la page commande les deux derniers. Les alertes elles-mêmes sont décrites dans [les notifications](notifications).
 
 - Les signaux de la fenêtre : la tuile du projet, la carte de l’agent et la barre des tâches (le Dock sous macOS) signalent toujours l’agent, quels que soient les réglages. La barre des tâches clignote quand la fenêtre n’est pas au premier plan.
 - Le carillon : joué pour un type d’événement coché, quand « Son activé » l’est aussi, que la fenêtre soit au premier plan ou non.

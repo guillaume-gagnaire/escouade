@@ -4,7 +4,7 @@ Ce que le plugin peut faire, ce qu’il envoie à ElevenLabs et quand, et ce qui
 
 ## Ce que son manifeste déclare
 
-- **Réseau** : `api.elevenlabs.io`, seul. Le plugin est un module WASM : il n’atteint le réseau que par l’hôte d’Escouade, qui refuse tout autre hôte, et passe par le proxy de [Réglages › Réseau](https://escouade.dev/docs/settings-network).
+- **Réseau** : `api.elevenlabs.io`, seul. Le plugin est un module WASM : il n’atteint le réseau que par l’hôte d’Escouade, qui refuse tout autre hôte, et passe par le proxy de [Réglages › Avancé › Réseau](https://escouade.dev/docs/settings-network).
 - **Activation** : `voice:elevenlabs`, quand une dictée, une voix ou les réglages ont besoin d’ElevenLabs.
 - **Rien d’autre** : aucun secret à lui (pas de `permissions.secrets`), aucune commande, aucun événement, aucun fichier.
 

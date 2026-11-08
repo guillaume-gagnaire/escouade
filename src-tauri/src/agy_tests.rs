@@ -174,7 +174,7 @@ async fn the_machines_antigravity_account_is_added_by_hand_and_its_defaults_hold
         env.contains(&("GEMINI_API_KEY".into(), String::new())),
         "{env:?}"
     );
-    // Its defaults, as Réglages › Comptes sets them.
+    // Its defaults, as Réglages › Comptes et harness sets them.
     let mut a = made.clone();
     a.claude_path = program;
     a.default_model = "gemini-3.8-flash".into();

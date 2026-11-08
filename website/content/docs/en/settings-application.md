@@ -1,49 +1,59 @@
-# Settings: Application
+# Settings: the window and General
 
-This page describes the settings window (its tabs, how to open it, how it saves) and its “Application” tab, which sets the display (the theme, the interface zoom, the text size of the terminals and of the editor) and the language of the interface and of the texts Claude writes.
+This page describes the settings window (its bar, its search, its amber dots, how it saves as you go) and its “General” page, which sets the appearance (the theme, the interface zoom, the text size of the terminals and of the editor) and picks the language of the interface and of the texts Claude writes.
 
 ## The settings window
 
-Escouade’s settings live in a single window, with one tab per topic. Open it with `Ctrl+,` (`⌘,` on macOS) or with the “Settings” button at the bottom of the [projects rail](interface). It opens on the “Harness” tab, unless a button opens it straight on the tab that concerns it: the ⚙ button in the header of the [Kanban](board) opens “Kanban”, and a project’s menu opens “Projects”. The shortcut does nothing while another dialog is open.
+Escouade’s settings live in a single window: a bar on the left, one page at a time on the right. Open it with `Ctrl+,` (`⌘,` on macOS) or with the “Settings” button at the bottom of the [projects rail](interface). It opens on “Accounts and harnesses”, unless a button opens it right on the page it is about: the ⚙ button in the [Kanban](board) header opens its project’s “Kanban” page, a project’s menu its “Project” page, “Configure” in the Launch section its “Launch” page. The shortcut does nothing while another window is open.
 
-### The tabs
+### The bar
 
-The left column lists the tabs, with Escouade’s version at the bottom. The name and description of the tab you are on sit at the top of the right-hand side. When the focus is on the list, the up and down arrows move from tab to tab, and `Home` and `End` jump to the first and the last.
+From top to bottom: the “Search settings” field, Escouade’s pages, each project, “All projects”, then “About” with Escouade’s version. The title and description of the page you are on sit at the top of the right-hand side. When the focus is on the bar, the up and down arrows go from one entry to the next and open it, `Home` and `End` go to the first and the last.
 
-| Tab | What it sets |
+| Page | What it sets |
 |---|---|
-| “Application” | Theme, zoom, languages and written texts |
-| [“Harness”](settings-claude-code) | Executable, model, and default permissions |
-| [“Accounts”](settings-accounts) | The accounts agents start on, saved as you change them |
+| “General” | Appearance, languages, updates, your name and usage statistics |
+| [“Agents”](settings-claude-code) | New agents, written texts, remote control, the MCP server |
+| [“Accounts and harnesses”](settings-accounts) | Each harness and its accounts, and what happens when a quota runs out |
+| [“Connected services”](settings-integrations) | Code hosts and the accounts of the ticket sources |
+| [“Voice”](settings-voice) | Dictation and voice conversation |
 | [“Notifications”](settings-notifications) | Visual and sound alerts |
-| [“Projects”](settings-projects) | Settings specific to each project |
-| [“Kanban”](settings-board) | Autopilot and approved tickets |
-| [“Integrations”](settings-integrations) | Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues, and Azure Boards |
-| [“Terminals”](settings-terminals) | Shells available in the built-in terminals |
-| [“Network”](settings-network) | HTTP(S) proxy and TLS certificates for Claude Code, integrations, and updates |
-| [“About”](settings-about) | Version and local data |
+| “Plugins” | The plugins installed, the ones Escouade proposes, security |
+| “Advanced” | [Network](settings-network), [terminals](settings-terminals), attachments, search by meaning, local data |
+| [“About”](settings-about) | Version, credits and links |
 
-“Projects”, “Kanban”, and “Integrations” set one project at a time. Under the header, a “Project” row offers one button per open project, with its color swatch and its name. The window starts on the project you are viewing, or on the one belonging to the button that opened it. Switching projects does not lose what you changed on the others. With no project open, these tabs say “No project open.”.
+Under “Projects”, each project has its color before its name, and a padlock if it is private. The project chosen unfolds on its seven pages: [“Project”](settings-projects), “Git and worktrees”, “Launch”, [“Kanban”](settings-board), [“Imported tickets”](settings-integrations), “Team” and “Privacy”. Going from one project to another keeps the same page. On a page of a project, the window takes that project’s color; on a page of Escouade, Escouade’s teal. With no project open, a project’s page says “No project open.”.
 
-### Save or cancel
+At the foot of a page, “Advanced” folds the settings you rarely touch into a line that names them; a click unfolds them in place.
 
-Changes go into a draft: nothing applies until you click “Save”. A dot on a tab (tooltip “Modified, not saved yet”) means it holds changes that are not saved.
+### Searching for a setting
 
-- “Save” saves everything that changed in one go, across all tabs and all projects. The window closes and shows “Settings saved”. If one part fails, an error message appears, the window stays open, and whatever was saved no longer counts as a change.
-- “Cancel”, the cross, `Esc`, or a click on the backdrop closes the window and throws the draft away, without asking for confirmation. When you reopen it, everything starts again from what is saved.
-- When a problem prevents saving, a red message appears at the bottom left, names the project concerned (even if it is not the one on screen), and “Save” is grayed out. There are three cases: a project has lost its name; a launch command has no name or no command line; the worktrees folder or a branch prefix of a project is not valid.
+The “Search settings” field, at the head of the bar, finds a setting by its name or its description, and a page by its name; `Ctrl+F` (`⌘F` on macOS) goes to it from anywhere in the window. It searches in English and in French whatever the language of the interface, ignoring case and accents: “bêta” finds “Receive beta versions”, “proxy” finds “HTTP(S) proxy”.
 
-### What saves right away
+While the field holds text, its results take the place of the bar’s entries, each with the page it is on: “Advanced”, “General › Advanced”, “demo-api › Git and worktrees”. A project’s setting comes once per project, the project chosen first. The up and down arrows go from one result to the next; `Enter` or a click opens its page, unfolds “Advanced” if it is there, and lights the setting for a moment. `Esc` empties the field; a second `Esc` closes the window.
 
-Three places do not wait for the button. The “Accounts” tab, where each change goes through the moment you make it, and the “Agents can drive Escouade” switch on the “Harness” tab, because a “Cancel” could not undo what they write to disk. And the “Display” group of the “Application” tab, which also changes from the keyboard, settings window open or not: what you pick there shows and saves right away.
+### The amber dots
 
-## The “Application” tab
+An amber dot at the end of an entry of the bar says a page is waiting on you; its tooltip says what for:
 
-The tab has three groups, “Display”, “Language”, and “Written texts”.
+- “Accounts and harnesses”: a harness installed with no account (“Codex has no account: no agent or ticket starts on it”);
+- “Connected services”: a code host’s token expired or revoked, or a token the system keychain can’t read;
+- “Plugins”: a plugin disabled by Escouade, with an invalid manifest, or stopped after its crashes;
+- a project: no active account of its harness serves it. The dot is on the project and on its “Project” page, where its account is chosen.
 
-### Display
+### Everything saves as you go
 
-These four settings apply right away, with no “Save” and no restart, and stay from one launch to the next.
+There is no “Cancel” and no “Save”: as in the settings of macOS or VS Code, a choice (a switch, a menu, a command added) applies and saves at once, a text when you leave its field or after a short pause in the typing. Closing the window (the cross, `Esc`, or a click on the backdrop) saves what was still waiting.
+
+An entry that can’t be saved says so on its row, and the value from before stays until it is fixed: a project without a name, a launch command without a name or a command line, a worktrees folder or a branch prefix refused, a number emptied.
+
+## The “General” page
+
+The page has four groups, “Appearance”, “Language”, “Updates” and “You” (see [About](settings-about) for the last two), then “Advanced”: the editor’s text size and your identifier.
+
+### Appearance
+
+These four settings apply right away, with no restart, and stay from one launch to the next. The editor’s text size is in “Advanced”.
 
 | Setting | Effect | Default |
 |---|---|---|
@@ -57,11 +67,11 @@ From the keyboard, anywhere, even in a terminal or with a dialog open: `Ctrl+=` 
 A terminal whose font changes resizes at once to fit its area, and its program is told its new size in columns and rows: nothing spills over or gets cut.
 
 > [!NOTE]
-> The interface is laid out for at least 1000 × 600 pixels, the window’s minimum size. A step that would not leave that much room is grayed out, with the tooltip “Too big for the size of the window”, and `Ctrl+=` stops before it. If the window shrinks below the chosen step, the interface switches to the biggest step it can hold, and the tab says so; the chosen step comes back as soon as the window is big enough.
+> The interface is laid out for at least 1000 × 600 pixels, the window’s minimum size. A step that would not leave that much room is grayed out, with the tooltip “Too big for the size of the window”, and `Ctrl+=` stops before it. If the window shrinks below the chosen step, the interface switches to the biggest step it can hold, and the page says so; the chosen step comes back as soon as the window is big enough.
 
 ### Language
 
-Both choices take effect as soon as you save, with no restart: the window, the app’s menus, and the texts Escouade writes switch to the new language.
+Both choices take effect at once, with no restart: the window, the app’s menus, and the texts Escouade writes switch to the new language.
 
 | Setting | Effect | Default |
 |---|---|---|
@@ -93,7 +103,7 @@ The three choices are “Same as the interface (default)”, “English”, and 
 
 ## Written texts
 
-“Model for written texts” chooses the model that writes the short texts Escouade has drafted outside an agent’s conversation:
+This group is on the “Agents” page. “Model for written texts” chooses the model that writes the short texts Escouade has drafted outside an agent’s conversation:
 
 - the name given to a new agent;
 - the proposed commit messages and pull request descriptions, see [Git](git);

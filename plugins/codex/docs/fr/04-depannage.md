@@ -5,9 +5,9 @@ Les messages ci-dessous sont ceux qu’Escouade et le plugin affichent, mot pour
 ## L’agent ne démarre pas
 
 **« Codex introuvable. Installe-le ou indique son chemin dans les réglages. »**
-Escouade n’a pas trouvé `codex`. Installe-le (`npm install -g @openai/codex`), ou donne le chemin de son exécutable dans Réglages › Harness.
+Escouade n’a pas trouvé `codex`. Installe-le (`npm install -g @openai/codex`), ou donne le chemin de son exécutable dans Réglages › Comptes et harness.
 
-**« Aucun compte Codex : ajoute-en un dans Réglages › Comptes. »**
+**« Aucun compte Codex : ajoute-en un dans Réglages › Comptes et harness. »**
 Ajoute le compte de la machine ou un nouveau compte.
 
 **« Le plugin Codex (dev.escouade.codex) est coupé ou n’est pas chargé : rallume-le dans la vue Plugins pour lancer un agent de Codex. »**
@@ -17,7 +17,7 @@ Le plugin est désactivé, ou n’a pas pu se charger. Rallume-le ; sa page et s
 Installe-le de nouveau depuis la vue Plugins ; les conversations des agents sont gardées.
 
 **`initialize: {raison}`** ou **`thread/start: {raison}`** (ou `thread/resume`, `thread/fork`)
-Codex a refusé d’ouvrir la conversation, avec sa raison. Le plus souvent, le compte n’est pas connecté : « Se connecter… » sur sa fiche, dans Réglages › Comptes. Sinon, mets Codex à jour.
+Codex a refusé d’ouvrir la conversation, avec sa raison. Le plus souvent, le compte n’est pas connecté : « Se connecter… » sur sa fiche, dans Réglages › Comptes et harness. Sinon, mets Codex à jour.
 
 **« Le plugin de Codex n’applique pas la clôture des projets privés : l’agent ne démarre pas. »**, **« Le plugin de Codex ne tient pas son harness en lecture seule : la discussion ne démarre pas. »**, **« Le plugin de Codex met le jeton d’Escouade dans les arguments de son harness, que tout le monde peut lire : l’agent ne démarre pas. »**
 Escouade a refusé le lancement que le plugin a décrit. Le plugin officiel ne fait pas cela : mets-le à jour, et signale-le si le message reste.

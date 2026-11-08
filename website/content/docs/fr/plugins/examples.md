@@ -44,7 +44,7 @@ Un thème sans code : des valeurs pour les jetons de la fenêtre, en sombre et e
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.high-contrast",
   "name": { "fr": "Contraste élevé", "en": "High contrast" },
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": {
     "fr": "Un thème à fort contraste, clair et sombre : texte pur, bordures nettes, couleurs d'état franches.",
     "en": "A high-contrast theme, light and dark: pure text, sharp borders, plain status colors."
@@ -108,7 +108,7 @@ Un thème sans code : des valeurs pour les jetons de la fenêtre, en sombre et e
 }
 ```
 
-Choisis-le dans Réglages › Application, rangée « Couleurs ».
+Choisis-le dans Réglages › Général, rangée « Couleurs ».
 
 ## Discord
 
@@ -121,7 +121,7 @@ Deux webhooks déclarés, sans programme : un ticket passé dans « À tester 
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.discord",
   "name": "Discord",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": {
     "fr": "Les tickets à tester et les agents qui attendent, dans un salon Discord : un webhook, sans code.",
     "en": "Tickets to test and agents waiting, in a Discord channel: a webhook, no code."
@@ -175,7 +175,7 @@ Un programme en TypeScript, écrit avec le [SDK](plugins/sdk). Il poste dans le 
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.slack",
   "name": "Slack",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": {
     "fr": "Les tickets à tester et les agents qui attendent, dans le salon Slack de chaque projet.",
     "en": "Tickets to test and agents waiting, in each project's Slack channel."
@@ -449,7 +449,7 @@ Un harness sans code : Goose, l’agent open source de Block, décrit par ACP. L
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.goose",
   "name": "Goose",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": {
     "fr": "Goose, l'agent open source de Block, comme harness : décrit par ACP, sans code.",
     "en": "Goose, Block's open source agent, as a harness: described over ACP, no code."

@@ -9,7 +9,7 @@ This plugin is a WASM module: it runs inside Escouade, isolated, with no program
 - The hosts where GitHub stores an Actions job's log: `*.actions.githubusercontent.com` and `*.blob.core.windows.net`. GitHub sends there by a redirect; the plugin follows it **without your token**, which never leaves GitHub's API.
 - No other host. Escouade's host enforces it: a call to another host, to an IP address written as such, or to an address of your machine or local network is refused before it leaves. Only the instance you typed escapes that last check, since you chose it.
 - A redirect to a host other than the API gets neither your token nor the call's body. A list's next page is only followed on the API itself.
-- It goes through the proxy of Settings › Network when you have one.
+- It goes through the proxy of Settings › Advanced › Network when you have one.
 - Each answer is capped at 8 MiB and 15 seconds.
 
 ## What it reads and writes on GitHub

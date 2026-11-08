@@ -16,12 +16,12 @@ export const ALLOWED: Allowed[] = [
 
   // L4 — settings
   {
-    file: 'src/components/settings/ProjectTab.svelte',
+    file: 'src/components/settings/GitPage.svelte',
     text: 'Git',
     why: 'nom propre : Git reste Git, titre du groupe des réglages git du projet',
   },
   {
-    file: 'src/components/settings/ProjectTab.svelte',
+    file: 'src/components/settings/GitPage.svelte',
     text: '.env*',
     why: 'un motif de fichiers donné en exemple (le champ dit « un motif par ligne »), le même dans toutes les langues',
   },
@@ -31,29 +31,29 @@ export const ALLOWED: Allowed[] = [
     why: 'le même motif d’exemple que dans Réglages › Projets, pour le même champ de l’assistant',
   },
   {
-    file: 'src/components/settings/AppTab.svelte',
+    file: 'src/components/settings/AdvancedPage.svelte',
     text: '~/.escouade',
     why: 'un chemin de dossier, pas un texte (le temps que le vrai soit lu)',
   },
 
   // L5 — integrations, boardSettings
   {
-    file: 'src/components/settings/IntegrationsTab.svelte',
+    file: 'src/components/settings/ServicesPage.svelte',
     text: 'atlas.atlassian.net',
     why: 'un exemple de site Jira, le même dans toutes les langues',
   },
   {
-    file: 'src/components/settings/IntegrationsTab.svelte',
+    file: 'src/components/settings/ServicesPage.svelte',
     text: 'ada@atlas.dev',
     why: 'un exemple d’adresse, la même dans toutes les langues',
   },
   {
-    file: 'src/components/settings/IntegrationsTab.svelte',
+    file: 'src/components/settings/ServicesPage.svelte',
     text: 'gh auth login',
     why: 'la commande de GitHub CLI, la même dans toutes les langues',
   },
   {
-    file: 'src/components/settings/IntegrationsTab.svelte',
+    file: 'src/components/settings/ServicesPage.svelte',
     text: 'claude-ready',
     why: 'un exemple d’étiquette, la même dans toutes les langues',
   },
@@ -94,7 +94,7 @@ export const ALLOWED: Allowed[] = [
 
   // G — branches
 
-  // ESC-195 — Réglages › Projets › Workflow
+  // ESC-195 — Réglages › Projets › Kanban › Workflow
   {
     file: 'src/components/settings/WorkflowSection.svelte',
     text: 'PROMPT.md',

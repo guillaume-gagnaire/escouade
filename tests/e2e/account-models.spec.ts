@@ -1,7 +1,7 @@
 // The models of an account read without an agent (ESC-186), for Copilot CLI, Cursor CLI and OpenCode as for Codex
 // (codex.spec.ts): the fiche of the account offers its harness's list before any agent ran, in the runner's window.
 
-import { addProject, expect, FAKE_COPILOT, FAKE_CURSOR, FAKE_OPENCODE, test } from './fixture';
+import { addProject, expect, FAKE_COPILOT, FAKE_CURSOR, FAKE_OPENCODE, test, openSettingsPage } from './fixture';
 
 const CASES: { harness: string; env: Record<string, string>; models: string[] }[] = [
   { harness: 'Copilot CLI', env: { ESCOUADE_COPILOT: FAKE_COPILOT }, models: ['GPT-6 Luna', 'Claude Sonnet 4.5', 'GPT-5 mini'] },
@@ -19,7 +19,7 @@ for (const c of CASES)
       await addProject(page, app.repo);
       await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
       const dialog = page.getByRole('dialog', { name: 'Réglages' });
-      await dialog.getByRole('tab', { name: 'Comptes' }).click();
+      await openSettingsPage(dialog, 'Comptes et harness');
       const fiche = dialog.getByRole('list', { name: `Comptes ${c.harness}` }).getByRole('listitem', { name: 'Principal' });
       const model = fiche.getByRole('group', { name: 'Nouveaux agents' }).getByRole('combobox', { name: 'Modèle' });
       await model.scrollIntoViewIfNeeded();

@@ -2,7 +2,7 @@
 
 ## Lancer un agent
 
-Choisis « Gemini CLI » dans le menu « Harness » de « Nouvel agent », ou fais-en le harness par défaut d’un projet (Réglages › Projets, « Harness par défaut »). Chaque agent a son `gemini --acp` et son propre dossier de configuration.
+Choisis « Gemini CLI » dans le menu « Harness » de « Nouvel agent », ou fais-en le harness par défaut d’un projet (Réglages › Projets › Projet, « Harness par défaut »). Chaque agent a son `gemini --acp` et son propre dossier de configuration.
 
 Le menu « Modèle » liste les modèles de sa session, Auto en tête (son routeur, qui choisit à chaque tour). Il n’a pas de menu « Effort ».
 

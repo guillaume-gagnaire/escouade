@@ -57,8 +57,8 @@ pub async fn ask(engine: &dyn Engine, ask: OneShot<'_>) -> Result<String> {
 /// Why a text from a third party is not asked of the harness `name`: its tools would read.
 pub fn no_tools_refused(name: &str) -> String {
     tr!(
-        "{name} ne sait pas répondre sans outil : il pourrait lire tes fichiers à la demande du texte relu. Choisis un autre harness dans Réglages › Application › Textes rédigés.",
-        "{name} can’t answer without tools: it could read your files at the request of the text reviewed. Choose another harness in Settings › Application › Written texts."
+        "{name} ne sait pas répondre sans outil : il pourrait lire tes fichiers à la demande du texte relu. Choisis un autre harness dans Réglages › Agents › Textes rédigés.",
+        "{name} can’t answer without tools: it could read your files at the request of the text reviewed. Choose another harness in Settings › Agents › Written texts."
     )
 }
 

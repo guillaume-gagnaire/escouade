@@ -8,6 +8,7 @@ import { onlineVoice } from '../../lib/online-voice.svelte';
 import type { ServiceCatalog, VoiceInfo } from '../../lib/types';
 import { fakeBackend, resetApp } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
+import { afterGesture } from '../../test/settings';
 
 vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }));
 
@@ -23,11 +24,9 @@ const INFO: VoiceInfo = {
   ],
 };
 
-const save = () => userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
-
 function open(over: Record<string, (a: any) => unknown> = {}) {
   const backend = fakeBackend({ voice_info: () => INFO, save_settings: () => [], ...over });
-  render(SettingsModal, { tab: 'voice' });
+  render(SettingsModal, { page: 'voice' });
   return backend;
 }
 
@@ -70,8 +69,8 @@ describe('Réglages › Voix', () => {
     expect([...select.options].map((o) => o.text)).toEqual(['Celui du système (Micro du casque)', 'Micro du casque', 'Micro de la webcam']);
     expect(select.value).toBe('');
     await userEvent.selectOptions(select, 'wasapi:{b}');
-    await save();
-    expect(backend.called('save_settings')[0].args.settings.voice).toEqual({
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings.voice).toEqual({
       device: 'wasapi:{b}',
       model: 'base',
       language: 'ui',
@@ -121,8 +120,8 @@ describe('Réglages › Voix', () => {
     await userEvent.selectOptions(select, 'deepgram');
     expect(screen.getByText(/vers Deepgram \(api\.deepgram\.com\)/)).toBeInTheDocument();
     expect(screen.getByText('Payé à l’usage sur ton compte Deepgram.')).toBeInTheDocument();
-    await save();
-    const voice = backend.called('save_settings')[0].args.settings.voice;
+    await afterGesture();
+    const voice = backend.called('save_settings').at(-1)!.args.settings.voice;
     expect(voice.transcription).toBe('online');
     expect(voice.onlineService).toBe('deepgram');
     // The settings never hold a key.
@@ -200,8 +199,8 @@ describe('Réglages › Voix', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Actualiser la liste' }));
     await waitFor(() => expect(backend.called('voice_online_catalog').some((c) => c.args.refresh)).toBe(true));
     expect(await screen.findByText(/^Liste lue chez Groq le /)).toBeInTheDocument();
-    await save();
-    expect(backend.called('save_settings')[0].args.settings.voice.onlineModels).toEqual({ groq: 'whisper-large-v3' });
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings.voice.onlineModels).toEqual({ groq: 'whisper-large-v3' });
   });
 
   it('« Transcription en temps réel », ticked by default, kept by service, shown only for a service that offers it (ESC-136)', async () => {
@@ -224,8 +223,8 @@ describe('Réglages › Voix', () => {
     expect(screen.getByText(/Le texte s’écrit pendant que tu parles/)).toHaveTextContent('« nova-3 »');
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Service' }), 'groq');
     await waitFor(() => expect(screen.queryByRole('switch', { name: 'Transcription en temps réel' })).toBeNull());
-    await save();
-    expect(backend.called('save_settings')[0].args.settings.voice.onlineLive).toEqual({ elevenlabs: false });
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings.voice.onlineLive).toEqual({ elevenlabs: false });
   });
 
   it('a model the service no longer offers falls back on its default, and says so', async () => {
@@ -262,8 +261,8 @@ describe('Réglages › Voix', () => {
     expect(screen.getByText(/^base/).closest('.model')).toHaveTextContent('Téléchargé');
     expect(screen.getByRole('radio', { name: /^small/ }).closest('label')).toHaveTextContent(/4\d\d Mo · Vitesse 3\/5 · qualité 3\/5/);
     await userEvent.click(screen.getByRole('radio', { name: /^small/ }));
-    await save();
-    expect(backend.called('save_settings')[0].args.settings.voice.model).toBe('small');
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings.voice.model).toBe('small');
   });
 
   it('deletes a model at once, and downloads one with its progress', async () => {
@@ -294,8 +293,8 @@ describe('Réglages › Voix', () => {
     expect(menu.selectedOptions[0].text).toBe('Celle de l’interface');
     expect(within(menu).getByRole('option', { name: 'Español' })).toHaveAttribute('lang', 'es');
     await userEvent.selectOptions(menu, 'auto');
-    await save();
-    expect(backend.called('save_settings')[0].args.settings.voice.language).toBe('auto');
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings.voice.language).toBe('auto');
   });
 
   it('records a new shortcut, keeps the old one on Escape, and goes back to the default one', async () => {
@@ -317,8 +316,8 @@ describe('Réglages › Voix', () => {
       altKey: true,
     });
     expect(screen.getByText('Ctrl+Alt+D')).toBeInTheDocument();
-    await save();
-    expect(backend.called('save_settings')[0].args.settings.voice.shortcut).toBe('Mod+Alt+KeyD');
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings.voice.shortcut).toBe('Mod+Alt+KeyD');
   });
 
   it('in English', async () => {

@@ -24,7 +24,7 @@ escouade-plugin validate . --first-party    # the manifest
 escouade-plugin test . --first-party        # Escouade's conformance bench
 ```
 
-To see it, load its folder in development (Plugins view › **In development** › **Load a folder…**), pick it in Settings › Application › Colors, and switch from Dark to Light. Escouade reads it again at each change of a file.
+To see it, load its folder in development (Plugins view › **In development** › **Load a folder…**), pick it in Settings › General › Colors, and switch from Dark to Light. Escouade reads it again at each change of a file.
 
 `node plugins/ci.mjs`, from the repository’s root (with `ESCOUADE_PLUGIN_BIN` naming the app’s `escouade-plugin`), does all of this for each plugin of the folder, with its LICENSE and CHANGELOG.
 

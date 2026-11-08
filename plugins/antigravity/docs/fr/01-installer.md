@@ -9,7 +9,7 @@ Installe-le avec son script :
 - Windows : `irm https://antigravity.google/cli/install.ps1 | iex`
 - macOS et Linux : `curl -fsSL https://antigravity.google/cli/install.sh | bash`
 
-Escouade trouve `agy` dans le `PATH`, ou là où son script le pose. Réglages › Harness montre l’exécutable trouvé et sa version. Le plugin a été essayé avec Antigravity CLI 1.4.9. `agy update` le met à jour ; Escouade coupe ses mises à jour automatiques pour ses agents.
+Escouade trouve `agy` dans le `PATH`, ou là où son script le pose. Réglages › Comptes et harness montre l’exécutable trouvé et sa version. Le plugin a été essayé avec Antigravity CLI 1.4.9. `agy update` le met à jour ; Escouade coupe ses mises à jour automatiques pour ses agents.
 
 ## 2. Installer le plugin
 
@@ -23,7 +23,7 @@ Comme tout plugin, il se coupe par son interrupteur dans la vue Plugins et se d�
 
 Aucun compte n’existe au départ : un agent ne démarre que sur un compte que tu as ajouté.
 
-1. Ouvre Réglages › Comptes et clique sur **Ajouter un compte…** ; dès que deux harness sont installés, choisis le harness « Antigravity CLI ».
+1. Ouvre Réglages › Comptes et harness, puis clique sur **Ajouter un compte…** ; dès que deux harness sont installés, choisis le harness « Antigravity CLI ».
 2. Choisis :
    - **Le compte de la machine** : ta connexion Google, proposée connectée ou non. Pas encore connecté, **Ajouter ce compte** l’ajoute puis lance `agy` dans un terminal de la fenêtre, qui ouvre ton navigateur. « Se connecter… », sur sa fiche, refait la même chose.
    - **Un nouveau compte** : une clé d’API Gemini (sur aistudio.google.com, « Get API key »). Ses agents passent par l’API Gemini de cette clé, avec ses modèles seulement. « Changer la clé… » la redonne.

@@ -263,9 +263,8 @@
 {:else if app.modal?.kind === 'settings'}
   <SettingsModal
     page={app.modal.page}
-    tab={app.modal.tab}
     projectId={app.modal.projectId}
-    section={app.modal.section}
+    at={app.modal.at}
     resume={app.modal.resume}
     suggest={app.modal.suggest}
   />

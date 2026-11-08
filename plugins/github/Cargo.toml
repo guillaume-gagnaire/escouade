@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-github"
-version = "2.2.2"
+version = "2.2.3"
 description = "Le plugin GitHub d'Escouade : les issues dans le Kanban, les PR, la CI, les relectures et les déploiements, sur un seul compte"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"

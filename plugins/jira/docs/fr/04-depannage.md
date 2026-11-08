@@ -14,7 +14,7 @@ L'adresse du site commence par `http://`. Tape-la sans schéma (`atlas.atlassian
 Le jeton est faux ou révoqué, ou l'e-mail n'est pas celui du compte Atlassian du jeton. Vérifie l'e-mail, et crée un nouveau jeton avec « Créer un jeton d'API Atlassian ».
 
 **« Jira injoignable : … »**
-L'appel n'est pas arrivé : un site mal tapé, pas de réseau, un proxy ou un pare-feu qui bloque le site, ou plus de 15 secondes sans réponse. Vérifie l'adresse du site, ta connexion et Réglages › Réseau.
+L'appel n'est pas arrivé : un site mal tapé, pas de réseau, un proxy ou un pare-feu qui bloque le site, ou plus de 15 secondes sans réponse. Vérifie l'adresse du site, ta connexion et Réglages › Avancé › Réseau.
 
 ## À l'import et à la synchronisation
 
@@ -25,7 +25,7 @@ Le workflow du ticket ne mène pas de son statut actuel au statut choisi pour la
 Ton compte n'a pas le droit de faire ce qui est demandé dans ce projet (lire, faire passer une transition, commenter). Vérifie ses permissions dans Jira.
 
 **« Jira : introuvable (404) »**
-Le projet ou le ticket n'existe plus, ou ton compte ne le voit plus. Pour un projet, choisis-en un autre dans Réglages › Intégrations.
+Le projet ou le ticket n'existe plus, ou ton compte ne le voit plus. Pour un projet, choisis-en un autre dans Réglages › Projets › Tickets importés.
 
 **« Jira limite les requêtes (429) : réessaie dans un moment »**
 Jira limite le nombre d'appels. Une synchronisation qui échoue ainsi est réessayée seule.
@@ -34,12 +34,12 @@ Jira limite le nombre d'appels. Une synchronisation qui échoue ainsi est réess
 Jira a répondu par une erreur. Une synchronisation est réessayée seule, après 1, 5, 15 puis 60 minutes, pendant 24 heures ; « Resynchroniser » la renvoie tout de suite.
 
 **« Jira : réponse illisible »**
-Jira a répondu autre chose que du JSON, souvent une page d'erreur d'un proxy ou d'une page de connexion. Vérifie l'adresse du site et Réglages › Réseau.
+Jira a répondu autre chose que du JSON, souvent une page d'erreur d'un proxy ou d'une page de connexion. Vérifie l'adresse du site et Réglages › Avancé › Réseau.
 
-**« Jira : ce compte n'a pas de site. Reconnecte-le dans Réglages › Intégrations. »**
+**« Jira : ce compte n'a pas de site. Reconnecte-le dans Réglages › Services connectés. »**
 Le compte gardé n'a pas d'adresse de site. Déconnecte puis reconnecte Jira avec son site.
 
-**« Jira : aucun jeton pour jira. Reconnecte le compte dans Réglages › Intégrations. »**
+**« Jira : aucun jeton pour jira. Reconnecte le compte dans Réglages › Services connectés. »**
 Escouade n'a pas pu prêter de jeton au plugin : le compte n'en a plus. Déconnecte puis reconnecte Jira.
 
 **« Trousseau du système illisible : relance Escouade ou reconnecte le compte. »**

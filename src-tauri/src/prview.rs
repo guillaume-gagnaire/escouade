@@ -51,7 +51,7 @@ pub struct Failure {
     /// When the host's limit starts over (seconds since 1970), for `RateLimit`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reset: Option<u64>,
-    /// Réglages › Intégrations settles it (a host unknown, no account).
+    /// Réglages › Services connectés settles it (a host unknown, no account).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub settings: bool,
 }
@@ -172,7 +172,7 @@ pub struct ProjectPrs {
     pub me: String,
 }
 
-/// Why an agent has no « Ouvrir une PR… »: the reason, and whether Réglages › Intégrations is
+/// Why an agent has no « Ouvrir une PR… »: the reason, and whether Réglages › Services connectés is
 /// where it is settled (a host unknown, no account).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -352,7 +352,7 @@ impl<R: Runtime> Core<R> {
         }))
     }
 
-    /// The project's host is unknown, or has no account: Réglages › Intégrations settles it.
+    /// The project's host is unknown, or has no account: Réglages › Services connectés settles it.
     async fn settled_in_settings(&self, project_id: &str) -> bool {
         let Some(remote) = self.project_forge(project_id).await else {
             return false;

@@ -16,7 +16,7 @@ The ACP plugin does nothing alone: it serves the harnesses other plugins describ
 
 ## 3. Add an account
 
-The ACP plugin has no account. Each described harness has its own: Settings › Accounts, **Add an account…**, its harness.
+The ACP plugin has no account. Each described harness has its own: Settings › Accounts and harnesses, **Add an account…**, its harness.
 
 - **This machine’s account**: the harness’s usual configuration, as it is.
 - **A new account**: a configuration folder of its own, under `~/.escouade/<harness>/`, given to the harness by the variable its manifest names (`accountVar`, `GOOSE_PATH_ROOT` for Goose).

@@ -6,7 +6,7 @@ This plugin is a WASM module: it runs inside Escouade, isolated, with no program
 
 - `api.bitbucket.org`, over https, and no other host. Escouade's host enforces it: a call to another host, to an IP address written as such, or to an address of your machine or local network is refused before it leaves.
 - A redirect to another host gets neither your token nor the call's body. A list's next page is only followed on the API.
-- It goes through the proxy of Settings › Network when you have one.
+- It goes through the proxy of Settings › Advanced › Network when you have one.
 - Each answer is capped at 8 MiB and 15 seconds.
 
 ## What it reads and writes on Bitbucket

@@ -43,6 +43,8 @@
 </script>
 
 <Group title={t('settings.shared.title')} anchor="shared">
+  <!-- The name of the file under the title (PROPOSITION.md §2, « Les noms »). -->
+  {#snippet state()}<span class="file mono">{t('settings.shared.file')}</span>{/snippet}
   {#snippet action()}
     <button class="btn" aria-describedby="shared-export-desc" disabled={busy} onclick={exportFile}
       ><Icon name="file" size={14} />{t('settings.shared.export')}</button
@@ -107,6 +109,10 @@
 </Group>
 
 <style>
+  .file {
+    color: var(--muted);
+    font-size: 12px;
+  }
   .state {
     max-width: 64ch;
     margin-top: 4px;

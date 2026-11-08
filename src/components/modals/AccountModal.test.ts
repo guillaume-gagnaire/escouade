@@ -224,7 +224,7 @@ describe('AccountModal', () => {
       expect(b.called('account_create')[0].args).toEqual({ name: 'Équipe', share: [], mode: 'link', engine: 'cursor' });
       expect(b.called('account_key')[0].args).toEqual({ id: 'equipe', key: 'cle-essai-0000000000abcd' });
       expect(term.opened).toEqual([]);
-      expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true });
+      expect(app.modal).toEqual({ kind: 'settings', page: 'accounts', resume: true });
     });
 
     it('gives the key again by « Changer la clé… », and says why one is refused', async () => {
@@ -243,7 +243,7 @@ describe('AccountModal', () => {
       await userEvent.clear(screen.getByLabelText('Clé d’API'));
       await userEvent.type(screen.getByLabelText('Clé d’API'), 'cle-essai-0000000000abcd{Enter}');
       await waitFor(() => expect(b.called('account_key')).toHaveLength(2));
-      expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true });
+      expect(app.modal).toEqual({ kind: 'settings', page: 'accounts', resume: true });
     });
   });
 
@@ -283,7 +283,7 @@ describe('AccountModal', () => {
       expect(b.called('account_create')[0].args).toEqual({ name: 'Équipe', share: [], mode: 'link', engine: 'vibe' });
       expect(b.called('account_key')[0].args).toEqual({ id: 'vibe-equipe', key: 'cle-mistral-000000000wxyz' });
       expect(term.opened).toEqual([]);
-      expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true });
+      expect(app.modal).toEqual({ kind: 'settings', page: 'accounts', resume: true });
     });
 
     it('may leave its key empty when the Mistral account has one (ESC-327)', async () => {
@@ -300,7 +300,7 @@ describe('AccountModal', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Ajouter le compte' }));
       await waitFor(() => expect(b.called('account_create')).toHaveLength(1));
       expect(b.called('account_key')).toHaveLength(0);
-      await waitFor(() => expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true }));
+      await waitFor(() => expect(app.modal).toEqual({ kind: 'settings', page: 'accounts', resume: true }));
     });
 
     it('asks its key while the Mistral account has none', async () => {
@@ -498,7 +498,7 @@ describe('AccountModal', () => {
       expect(app.settings.accounts).toEqual([CODEX_MAIN]);
       // No sign-in to make: back to the accounts.
       expect(term.opened).toEqual([]);
-      expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true });
+      expect(app.modal).toEqual({ kind: 'settings', page: 'accounts', resume: true });
     });
 
     it('offers a new account instead while the harness is not signed in on the machine, or its account is added already', async () => {
@@ -582,7 +582,7 @@ describe('AccountModal', () => {
     await vi.advanceTimersByTimeAsync(6000);
     expect(b.called('account_status')).toHaveLength(3);
     await userEvent.click(within(dialog).getByRole('button', { name: 'Terminé' }));
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'accounts', resume: true });
   });
 
   it('asked by a private project, makes a new account reserved to it alone and goes back to its settings (ESC-141)', async () => {
@@ -615,7 +615,7 @@ describe('AccountModal', () => {
     expect(app.settings.accounts).toEqual([PRINCIPAL, reservedPro]);
     await vi.advanceTimersByTimeAsync(2000);
     await userEvent.click(await screen.findByRole('button', { name: 'Terminé' }));
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1', resume: true });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'privacy', projectId: 'p1', resume: true });
   });
 
   it('waits a moment more for the email Claude Code writes after the sign-in', async () => {
@@ -754,7 +754,7 @@ describe('AccountModal', () => {
     await vi.advanceTimersByTimeAsync(2000);
     await userEvent.click(screen.getByRole('button', { name: 'Fermer' }));
     expect(term.disposed).toEqual(['term-1']);
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'accounts', resume: true });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'accounts', resume: true });
     expect(app.settings.accounts).toEqual([PRINCIPAL, PRO]);
     const asked = b.called('account_status').length;
     await vi.advanceTimersByTimeAsync(6000);
@@ -776,7 +776,7 @@ describe('AccountModal', () => {
 
   it('says that Claude Code is gone, or that its installation was cut, rather than that it stopped (ESC-133)', async () => {
     const gone =
-      'Claude Code est introuvable : réinstalle-le (`irm https://claude.ai/install.ps1 | iex`, ou `npm install -g @anthropic-ai/claude-code`), ou indique son chemin dans Réglages › Harness.';
+      'Claude Code est introuvable : réinstalle-le (`irm https://claude.ai/install.ps1 | iex`, ou `npm install -g @anthropic-ai/claude-code`), ou indique son chemin dans Réglages › Comptes et harness.';
     const cut =
       'L’installation de Claude Code a été interrompue (il en reste /opt/homebrew/bin/.claude-Xa3k9) : relance `npm install -g @anthropic-ai/claude-code` dans un terminal.';
     let why: string | null = gone;

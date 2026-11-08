@@ -380,11 +380,15 @@ fn fail_checkouts(repo: &Path) {
     }
 }
 
-/// What the app answers when Claude Code cannot be found (with its repair, ESC-133).
+/// What the app answers when Claude Code cannot be found (with its repair, ESC-133), cut as a block's reason is
+/// (`board::first_line`, 200 bytes: the Linux message, its install command and « Comptes et harness », is longer).
 fn no_claude() -> String {
     format!(
         "Erreur : {}",
-        crate::engine::missing_line(EngineId::CLAUDE, crate::i18n::Lang::Fr)
+        crate::text::truncate(
+            &crate::engine::missing_line(EngineId::CLAUDE, crate::i18n::Lang::Fr),
+            200
+        )
     )
 }
 
@@ -3123,7 +3127,7 @@ async fn a_project_no_account_serves_makes_no_agent_and_its_board_says_why() {
     assert_eq!(
         e.to_string(),
         format!(
-            "Aucun compte Claude Code actif ne sert le projet « {} » : coche-le sous « Réservé aux projets » d’un compte Claude Code actif, dans Réglages › Comptes.",
+            "Aucun compte Claude Code actif ne sert le projet « {} » : coche-le sous « Réservé aux projets » d’un compte Claude Code actif, dans Réglages › Comptes et harness.",
             p.name
         )
     );

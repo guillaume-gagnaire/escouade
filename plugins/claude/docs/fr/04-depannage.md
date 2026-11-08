@@ -5,9 +5,9 @@ Les messages ci-dessous sont ceux qu’Escouade et le plugin affichent, mot pour
 ## L’agent ne démarre pas
 
 **« Claude Code introuvable. Installe-le ou indique son chemin dans les réglages. »**
-Escouade n’a pas trouvé `claude`. Installe Claude Code (voir l’onglet Installer), ou donne le chemin de son exécutable dans Réglages › Harness, ou dans le champ « Exécutable » du compte.
+Escouade n’a pas trouvé `claude`. Installe Claude Code (voir l’onglet Installer), ou donne le chemin de son exécutable dans Réglages › Comptes et harness, ou dans le champ « Exécutable » du compte.
 
-**« Aucun compte Claude Code : ajoute-en un dans Réglages › Comptes. »**
+**« Aucun compte Claude Code : ajoute-en un dans Réglages › Comptes et harness. »**
 Aucun compte n’existe pour ce harness. Ajoute le compte de la machine ou un nouveau compte.
 
 **« Le plugin Claude Code (dev.escouade.claude-code) est coupé ou n’est pas chargé : rallume-le dans la vue Plugins pour lancer un agent de Claude Code. »**

@@ -51,8 +51,8 @@ export default defineZone('share', {
     title: 'Your name for the team',
     body: 'When you share a ticket of the Kanban, or move someone else’s on, your name is written in its file: it is what your teammates will read.',
     label: 'Your name',
-    help: 'Taken from git config user.name. You can change it in Settings › Application, and per project.',
-    helpEmpty: 'You can change it in Settings › Application, and per project.',
+    help: 'Taken from git config user.name. You can change it in Settings › General, and per project.',
+    helpEmpty: 'You can change it in Settings › General, and per project.',
     preview: 'For them:',
     later: 'Later',
     save: 'Save',
@@ -61,13 +61,13 @@ export default defineZone('share', {
     group: 'Team',
     name: 'Your name',
     nameDesc:
-      'Written in the tickets you share and in those you move on: your teammates see it on their Kanban. A project may have its own (Settings › Projects).',
+      'Written in the tickets you share and in those you move on: your teammates see it on their Kanban. A project may have its own (Settings › Projects › Team).',
     id: 'Your id',
     idDesc:
       'What tells your tickets from a namesake’s: made from your git e-mail, so the same on your other machines. The e-mail itself is written nowhere.',
     projectGroup: 'Shared Kanban',
     projectName: 'Your name in this project',
-    projectNameDesc: 'Empty: the one of Settings › Application ({name}). Kept on this machine, never in .escouade.yml.',
+    projectNameDesc: 'Empty: the one of Settings › General ({name}). Kept on this machine, never in .escouade.yml.',
     projectNameGit:
       'Empty: {name}, taken from git (git config user.name of this repository). Kept on this machine, never in .escouade.yml.',
     fromGit: 'Taken from git',

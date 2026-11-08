@@ -160,7 +160,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-acp"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "escouade-acp",
  "escouade-plugin-protocol",
@@ -168,7 +168,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-agy"
-version = "2.2.4"
+version = "2.2.5"
 dependencies = [
  "escouade-acp",
  "escouade-plugin-protocol",
@@ -178,7 +178,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-azure-devops"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
@@ -189,7 +189,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-bitbucket"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
@@ -200,7 +200,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-claude"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "escouade-plugin-protocol",
  "serde",
@@ -209,7 +209,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-clickup"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
@@ -218,7 +218,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-codex"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "escouade-acp",
  "escouade-plugin-protocol",
@@ -228,7 +228,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-copilot"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "chrono",
  "escouade-acp",
@@ -239,7 +239,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-cursor"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "escouade-acp",
  "escouade-plugin-protocol",
@@ -247,7 +247,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-deepgram"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "escouade-voice",
  "serde_json",
@@ -255,7 +255,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-elevenlabs"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "escouade-voice",
  "serde_json",
@@ -263,7 +263,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-gemini"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "escouade-acp",
  "escouade-plugin-protocol",
@@ -271,7 +271,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-gitea"
-version = "2.2.1"
+version = "2.2.2"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
@@ -281,7 +281,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-github"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
@@ -292,7 +292,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-gitlab"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
@@ -303,7 +303,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-groq"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "escouade-voice",
  "serde_json",
@@ -321,7 +321,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-jira"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -347,7 +347,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-linear"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
@@ -356,7 +356,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-mistral"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "escouade-acp",
  "escouade-plugin-protocol",
@@ -366,7 +366,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-openai"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "escouade-voice",
  "serde_json",
@@ -374,7 +374,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-opencode"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -396,7 +396,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-trello"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",

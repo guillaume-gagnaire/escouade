@@ -90,7 +90,7 @@ describe('ImportModal', () => {
     ).toBeInTheDocument();
     await userEvent.click(within(dialog()).getByRole('button', { name: 'Lier une source' }));
     // At the sources of the Kanban, not at the code hosts above them.
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'integrations', projectId: 'p1', section: 'sources' });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'tickets', projectId: 'p1' });
   });
 
   it('offers the project’s own GitLab project when its code host is connected, and links it in one click', async () => {
@@ -449,7 +449,7 @@ describe('ImportModal in English', () => {
       ),
     ).toBeInTheDocument();
     await userEvent.click(d.getByRole('button', { name: 'Link a source' }));
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'integrations', projectId: 'p1', section: 'sources' });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'tickets', projectId: 'p1' });
   });
 
   it('colours a type by its code, whatever its name in English or French', async () => {

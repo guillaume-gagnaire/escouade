@@ -42,7 +42,7 @@
 
 {#if info}
   {@const size = fBytes(info.size)}
-  <Row label={t('vectors.label')} desc={t('vectors.desc', { model: info.id, license: info.license, size })}>
+  <Row label={t('vectors.model')} desc={t('vectors.desc', { model: info.id, license: info.license, size })}>
     <div class="vm" data-vectors-model>
       {#if downloading}
         <span class="dl"

@@ -5,12 +5,12 @@ Les messages ci-dessous sont ceux qu’Escouade et le plugin affichent, mot pour
 ## L’agent ne démarre pas
 
 **« Copilot CLI introuvable. Installe-le ou indique son chemin dans les réglages. »**
-Escouade n’a pas trouvé `copilot`. Installe-le (`npm install -g @github/copilot`), ou donne le chemin de son exécutable dans Réglages › Harness.
+Escouade n’a pas trouvé `copilot`. Installe-le (`npm install -g @github/copilot`), ou donne le chemin de son exécutable dans Réglages › Comptes et harness.
 
-**« Aucun compte Copilot CLI : ajoute-en un dans Réglages › Comptes. »**
+**« Aucun compte Copilot CLI : ajoute-en un dans Réglages › Comptes et harness. »**
 Ajoute le compte de la machine ou un nouveau compte.
 
-**« Copilot CLI n’est connecté à aucun compte GitHub sur ce compte : connecte-le dans Réglages › Comptes (« Se connecter… », copilot login). »**
+**« Copilot CLI n’est connecté à aucun compte GitHub sur ce compte : connecte-le dans Réglages › Comptes et harness (« Se connecter… », copilot login). »**
 Le compte n’a pas de connexion à lui. Un compte autre que celui de la machine ne compte pas la connexion du GitHub CLI (`gh`) : connecte-le par « Se connecter… ».
 
 **« Copilot CLI parle le protocole {version}, Escouade le protocole {version} : mets Copilot CLI à jour (npm install -g @github/copilot@latest). »**

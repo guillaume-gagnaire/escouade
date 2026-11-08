@@ -1,10 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, test, openSettingsPage } from './fixture';
 
 // The themes of plugins (PLG-7, ESC-179): a declarative plugin that brings a theme, installed from a folder, chosen in
-// Réglages › Application › Couleurs. The window, a terminal kept open and the project colours take it at once: the
+// Réglages › Général › Couleurs. The window, a terminal kept open and the project colours take it at once: the
 // computed colour of a few surfaces is the theme's, a value that is no colour is left out (Escouade's kept), and what
 // the theme leaves out (the light panel) keeps Escouade's. « Escouade » chosen again, then the plugin uninstalled, the
 // window comes back to Escouade's colours.
@@ -89,10 +89,18 @@ async function surfaces(page: Page, box: Locator) {
 /** The first project's tile, in the projects' rail. */
 const projectTile = (page: Page) => page.locator('[role="tablist"][aria-orientation="vertical"] [role="tab"]').first();
 
+/** Closes the settings, tinted with Escouade's teal (ESC-379), once the project's colour has glided back (0.7 s). */
+async function closeSettings(page: Page, settings: Locator) {
+  await settings.getByRole('button', { name: 'Fermer' }).click();
+  await expect
+    .poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--p').trim()))
+    .toBe('oklch(0.72 0.12 48)');
+}
+
 async function openApplication(page: Page) {
   await page.keyboard.press('Control+,');
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Application' }).click();
+  await openSettingsPage(dialog, 'Général');
   return dialog;
 }
 
@@ -111,7 +119,7 @@ test('a plugin’s theme is put on the window, a terminal and the project colour
   let settings = await openApplication(page);
   await settings.getByRole('group', { name: 'Thème' }).getByRole('button', { name: 'Sombre' }).click();
   await expect(settings.getByRole('button', { name: 'Voir les thèmes' })).toBeVisible();
-  await settings.getByRole('button', { name: 'Fermer' }).click();
+  await closeSettings(page, settings);
   const escouade = await surfaces(page, box);
   expect(escouade.frame).not.toBe('16,32,48');
 
@@ -130,7 +138,7 @@ test('a plugin’s theme is put on the window, a terminal and the project colour
   // Back from the view Plugins, the project colour glides back (0.7 s).
   await expect.poll(() => surfaces(page, box)).toEqual(escouade);
 
-  // Chosen in Réglages › Application › Couleurs: applied at once, saved by itself.
+  // Chosen in Réglages › Général › Couleurs: applied at once, saved by itself.
   settings = await openApplication(page);
   const colors = settings.getByRole('combobox', { name: 'Couleurs' });
   await expect(colors.locator('option')).toHaveText(['Escouade', 'Nuit bleue · Thèmes de test']);
@@ -160,7 +168,7 @@ test('a plugin’s theme is put on the window, a terminal and the project colour
   // In the light theme: its light frame, and Escouade's light panel, which it does not give.
   settings = await openApplication(page);
   await settings.getByRole('group', { name: 'Thème' }).getByRole('button', { name: 'Clair' }).click();
-  await settings.getByRole('button', { name: 'Fermer' }).click();
+  await closeSettings(page, settings);
   const light = await surfaces(page, box);
   expect(light.frame).toBe('250,250,240');
   const escouadeLightPanel = await page.evaluate(() => {

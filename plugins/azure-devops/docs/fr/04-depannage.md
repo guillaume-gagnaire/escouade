@@ -1,6 +1,6 @@
 # Dépannage
 
-Les messages ci-dessous sont ceux du plugin et d'Escouade, tels qu'ils s'affichent : sous le formulaire de connexion, sur la ligne du compte dans Réglages › Intégrations, sur la carte d'un agent ou dans l'onglet de sa PR, ou au clic sur le ⚠ d'une carte dont la synchronisation a échoué. Quand Azure donne une raison, elle suit le message.
+Les messages ci-dessous sont ceux du plugin et d'Escouade, tels qu'ils s'affichent : sous le formulaire de connexion, sur la ligne du compte dans Réglages › Services connectés, sur la carte d'un agent ou dans l'onglet de sa PR, ou au clic sur le ⚠ d'une carte dont la synchronisation a échoué. Quand Azure donne une raison, elle suit le message.
 
 ## À la connexion
 
@@ -20,7 +20,7 @@ L'adresse commence par `http://`. Donne son adresse en `https://`.
 Le jeton est faux, expiré ou révoqué, ou il n'a pas accès à cette organisation. Azure répond aussi à un jeton refusé par une page de connexion : le plugin la lit comme ce refus. Crée un jeton avec « Créer un jeton ».
 
 **« Azure DevOps injoignable : … »**
-L'appel n'est pas arrivé : une adresse mal tapée, pas de réseau, un proxy ou un pare-feu, ou plus de 15 secondes sans réponse. Vérifie l'adresse, ta connexion et Réglages › Réseau.
+L'appel n'est pas arrivé : une adresse mal tapée, pas de réseau, un proxy ou un pare-feu, ou plus de 15 secondes sans réponse. Vérifie l'adresse, ta connexion et Réglages › Avancé › Réseau.
 
 ## Sur la ligne du compte
 
@@ -60,20 +60,20 @@ Le jeton n'a pas le droit demandé (Code en écriture pour ouvrir ou merger, Bui
 Azure a refusé un appel pour sa limite, deux fois de suite. Le plugin ralentit de lui-même ; attends un peu.
 
 **« Azure DevOps : introuvable (404) »**, **« Azure DevOps : erreur 500 »** (ou une autre erreur du service), **« Azure DevOps : réponse illisible »**, **« Azure DevOps : trop de redirections »**
-Le dépôt ou l'objet n'existe plus ou n'est pas visible, Azure a répondu par une erreur, autre chose que du JSON, ou plus de dix redirections. Réessaie ; si ça dure, regarde Réglages › Réseau.
+Le dépôt ou l'objet n'existe plus ou n'est pas visible, Azure a répondu par une erreur, autre chose que du JSON, ou plus de dix redirections. Réessaie ; si ça dure, regarde Réglages › Avancé › Réseau.
 
-**« Azure DevOps : aucun jeton pour dev.azure.com. Reconnecte le compte dans Réglages › Intégrations. »**
+**« Azure DevOps : aucun jeton pour dev.azure.com. Reconnecte le compte dans Réglages › Services connectés. »**
 Escouade n'a pas pu prêter de jeton au plugin. Reconnecte le compte.
 
 ## Pour Azure Boards
 
-**« Azure DevOps refuse ces identifiants (401). Le jeton d'Azure DevOps doit avoir le droit Work Items (lecture et écriture) : crée-en un sur https://dev.azure.com/acme/_usersSettings/tokens, puis remplace-le dans Réglages › Intégrations › Hébergeurs de code. »**
+**« Azure DevOps refuse ces identifiants (401). Le jeton d'Azure DevOps doit avoir le droit Work Items (lecture et écriture) : crée-en un sur https://dev.azure.com/acme/_usersSettings/tokens, puis remplace-le dans Réglages › Services connectés › Hébergeurs de code. »**
 Le jeton sert aux PR mais n'a pas le droit Work Items. Un refus 403 dit la même chose. Crée un jeton avec Work Items en lecture et écriture sur la page que nomme le message, puis remplace l'ancien.
 
 **« Aucun compte Azure DevOps connecté pour l'organisation acme »**, **« Aucun compte Azure DevOps connecté »**
 Le projet lié est dans une organisation dont le compte a été déconnecté. Reconnecte l'organisation dans « Hébergeurs de code ».
 
-**« Azure Boards : aucun jeton pour … Reconnecte le compte dans Réglages › Intégrations. »**
+**« Azure Boards : aucun jeton pour … Reconnecte le compte dans Réglages › Services connectés. »**
 Escouade n'a pas pu prêter de jeton au plugin. Reconnecte le compte.
 
 **« Le plugin dev.escouade.azure-devops ne répond pas : … »**

@@ -1,4 +1,4 @@
-// An update found by « Rechercher une mise à jour » shows in Réglages › À propos (ESC-250), not in the status bar alone:
+// An update found by « Rechercher une mise à jour » shows in Réglages › Général › Mises à jour (ESC-250, R3), not in the status bar alone:
 // downloading, then ready with « Redémarrer maintenant » and its notes. The backend's answers to the check and the download
 // are given in the page, on the `fetch` of Tauri's IPC (`page.route` misses the WebView2's IPC requests from time to time):
 // no release is looked for, nothing is downloaded. ESCOUADE_E2E_SHOTS names a folder for the screenshots of each state,
@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixture';
+import { expect, test, openSettingsPage, settingsEntry } from './fixture';
 
 const SHOTS = process.env.ESCOUADE_E2E_SHOTS;
 
@@ -51,12 +51,12 @@ async function shoot(page: Page, name: string) {
   await page.evaluate(() => delete document.documentElement.dataset.theme);
 }
 
-test('an update found from À propos shows there, downloading then ready, its restart through the update’s window', async ({ app }) => {
+test('an update found from Général shows there, downloading then ready, its restart through the update’s window', async ({ app }) => {
   const { page } = app;
   await fakeUpdate(page);
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'À propos' }).click();
+  await openSettingsPage(dialog, 'Général');
   await dialog.getByRole('button', { name: 'Rechercher une mise à jour' }).click();
 
   // The row of the update, and where it stands.
@@ -74,12 +74,12 @@ test('an update found from À propos shows there, downloading then ready, its re
   await expect(row.getByText('Une mise à jour trouvée se voit dans À propos')).toBeVisible();
   await shoot(page, 'ready');
 
-  // As the status bar's: the update's window, which says what a restart cuts; « Plus tard » comes back to À propos.
+  // As the status bar's: the update's window, which says what a restart cuts; « Plus tard » comes back to Général.
   await row.getByRole('button', { name: 'Redémarrer maintenant' }).click();
   const upd = page.getByRole('dialog', { name: 'Escouade 9.9.0 est prête' });
   await expect(upd).toBeVisible();
   await upd.getByRole('button', { name: 'Plus tard' }).click();
-  await expect(dialog.getByRole('tab', { name: 'À propos' })).toHaveAttribute('aria-selected', 'true');
+  await expect(settingsEntry(dialog, 'Général')).toHaveAttribute('aria-current', 'page');
   await expect(dialog.locator('[data-update="ready"]')).toBeVisible();
   expect(await page.evaluate(() => (window as unknown as { esc250Restarts: number }).esc250Restarts)).toBe(0);
 });

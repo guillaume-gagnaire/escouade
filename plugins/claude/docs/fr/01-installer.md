@@ -9,7 +9,7 @@ Installe-le avec son script, comme pour t’en servir dans un terminal :
 - Windows : `irm https://claude.ai/install.ps1 | iex`
 - macOS et Linux : `curl -fsSL https://claude.ai/install.sh | bash`
 
-Escouade trouve `claude` dans le `PATH` ou aux endroits où son script le pose, et aussi dans WSL. Réglages › Harness montre l’exécutable trouvé, sa version et son état. Le plugin a été essayé de Claude Code 2.1.283 à 2.1.301. `claude update` le met à jour.
+Escouade trouve `claude` dans le `PATH` ou aux endroits où son script le pose, et aussi dans WSL. Réglages › Comptes et harness montre l’exécutable trouvé, sa version et son état. Le plugin a été essayé de Claude Code 2.1.283 à 2.1.301. `claude update` le met à jour.
 
 ## 2. Installer le plugin
 
@@ -23,7 +23,7 @@ Comme tout plugin, il se coupe par son interrupteur dans la vue Plugins et se d�
 
 Aucun compte n’existe au départ : un agent ne démarre que sur un compte que tu as ajouté.
 
-1. Ouvre Réglages › Comptes et clique sur **Ajouter un compte…** (ou **Ajouter un compte Claude Code…** dans son groupe).
+1. Ouvre Réglages › Comptes et harness, puis clique sur **Ajouter un compte…** (ou **Ajouter un compte Claude Code…** dans son groupe).
 2. Choisis :
    - **Le compte de la machine**, proposé quand Claude Code est déjà connecté dans son dossier habituel. **Ajouter ce compte** l’ajoute tel quel.
    - **Un nouveau compte**, avec son propre dossier. Donne-lui un nom, choisis ce qu’il reprend du compte de la machine (`settings.json`, `CLAUDE.md`, `skills`, `agents`, `commands`, `plugins`, `hooks`, `output-styles`), par lien ou par copie, puis **Créer et se connecter**.

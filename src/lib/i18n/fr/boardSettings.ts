@@ -131,10 +131,6 @@ export default {
     autopilot: 'Pilote auto',
     autoAssign: 'Attribuer les tickets automatiquement',
     autoAssignDesc: 'Un agent libre prend le prochain ticket « À faire »',
-    quotaPause: 'Pause au-delà du quota',
-    quotaPauseHint: 'pour tous les projets',
-    quotaPauseDesc:
-      'Le pilote auto ne démarre aucun ticket tant que la fenêtre de 5 h ou la fenêtre hebdomadaire dépasse ce seuil. Un ticket lancé à la main part quand même.',
 
     redTargetPause: 'Pause quand la CI de la cible est rouge',
     redTargetPauseDesc:

@@ -15,7 +15,7 @@ Coche les tâches, choisis « Boucles max », puis « Importer ». Chaque ticket
 
 ## Les critères d'acceptation
 
-Avec « Extraire les critères d'acceptation » activé (Réglages › Intégrations, groupe « Synchronisation »), le plugin prend comme critères, dans cet ordre :
+Avec « Extraire les critères d'acceptation » activé (Réglages › Services connectés, groupe « Synchronisation »), le plugin prend comme critères, dans cet ordre :
 
 1. les éléments de la checklist qui porte le nom des critères (« Critères d'acceptation », « Acceptance criteria », « Definition of done », « Critères », « AC », « DoD »), dans leur ordre ;
 2. sinon les éléments de toutes les checklists de la tâche ;
@@ -25,7 +25,7 @@ Il en garde vingt au plus. Sans critère trouvé, le ticket reçoit les critère
 
 ## La tâche suit son ticket
 
-Chaque liste ClickUp a ses propres statuts : la « Correspondance des statuts » de Réglages › Intégrations se règle donc sur ceux de la liste liée. Choisir la liste la pré-remplit :
+Chaque liste ClickUp a ses propres statuts : la « Correspondance des statuts » de Réglages › Projets › Tickets importés se règle donc sur ceux de la liste liée. Choisir la liste la pré-remplit :
 
 - d'abord par les noms : le statut qui ressemble à « en cours » (`In Progress`, `Doing`, `WIP`…) pour « En cours » et « À tester », celui qui ressemble à « à tester » (`Review`, `QA`, `Testing`…) pour « Terminé » ;
 - sinon par leur type : le premier statut personnalisé (entre l'ouvert et les fermés) pour « En cours » et « À tester », le suivant pour « Terminé », à défaut le premier statut de type fini ;
@@ -40,7 +40,7 @@ Avec « Publier un résumé à chaque boucle », chaque nouvelle boucle d'un age
 
 ## L'import automatique
 
-Réglages › Intégrations › « Import automatique » importe seul les tâches ouvertes qui portent l'étiquette choisie (`claude-ready` par défaut). Pour ClickUp, c'est un tag de la tâche ; ClickUp garde ses tags en minuscules.
+Réglages › Services connectés › « Import automatique » importe seul les tâches ouvertes qui portent l'étiquette choisie (`claude-ready` par défaut). Pour ClickUp, c'est un tag de la tâche ; ClickUp garde ses tags en minuscules.
 
 ## Les limites
 

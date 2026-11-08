@@ -1752,7 +1752,7 @@ impl<R: Runtime> Core<R> {
         crate::voice::plugin_host::sync_builtin(&self.plugin_runtime, &self.plugins);
     }
 
-    /// Reads the store's catalogue and revocation list again (through Réglages › Réseau), and
+    /// Reads the store's catalogue and revocation list again (through Réglages › Avancé › Réseau), and
     /// hands them to the plugins: a version withdrawn stops, the updates of the store are offered.
     pub async fn refresh_store(&self) {
         let settings = self.settings.read().clone();
@@ -2113,7 +2113,7 @@ impl<R: Runtime> Core<R> {
             .set_routes(crate::integrations::Bases::from_env().faked());
         // The harnesses the plugins describe (PLG-6), before the window asks for the registry.
         core.sync_harnesses();
-        // The pinned Javy of the run.js plugins downloads through Réglages › Réseau (ESC-320); their modules are
+        // The pinned Javy of the run.js plugins downloads through Réglages › Avancé › Réseau (ESC-320); their modules are
         // made ready in the cache, precompiled again for this version of the app when it changed.
         {
             let weak = Arc::downgrade(&core);
@@ -2652,7 +2652,7 @@ impl<R: Runtime> Core<R> {
     }
 
     /// What a plugin the app gives is told when it starts (`escouade_plugin_kit`): the language the backend writes in,
-    /// and the network of Réglages › Réseau (its proxy, the hosts it skips, the certificates not checked).
+    /// and the network of Réglages › Avancé › Réseau (its proxy, the hosts it skips, the certificates not checked).
     pub(crate) fn builtin_env(&self) -> Vec<(String, String)> {
         let s = self.settings.read();
         vec![

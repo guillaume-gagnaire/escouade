@@ -2,7 +2,6 @@
   import { onMount } from 'svelte';
   import { accountName, principalId } from '../../lib/accounts';
   import { speakerOf } from '../../lib/engines';
-  import { fDateTime, fTime } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { maskToken, mcp } from '../../lib/mcp.svelte';
@@ -11,14 +10,13 @@
   import type { McpDeclaration } from '../../lib/types';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
-  import { tip } from '../../lib/tip';
   import Icon from '../Icon.svelte';
 
-  // « Serveur MCP »: one switch, « Les agents peuvent piloter Escouade » (ESC-119), gives the server to Escouade's agents
+  // « Piloter Escouade »: one switch, « Les agents peuvent piloter Escouade » (ESC-119), gives the server to Escouade's agents
   // and declares it in every harness installed, in each of its active accounts; under it, each declaration, with its
-  // file and what to paste by hand when it failed. Then « Activité MCP »: what the server was asked. The switch is saved
-  // at once, not through the modal's draft: the declaration writes into the config of each account's harness, which
-  // « Annuler » could not take back.
+  // file and what to paste by hand when it failed. The switch goes to
+  // the backend itself (`mcp_set_enabled`), not through the fields of the window saved as they change: the declaration
+  // writes into the config of each account's harness.
 
   const on = $derived(app.settings.mcpEnabled);
   let busy = $state(false);
@@ -48,8 +46,6 @@
 
   /** The agents already running whose next start gives them the tools (ESC-91). */
   const nextStart = $derived(Object.values(app.agents).filter((a) => a.escouadeNext).length);
-  /** The most recent first. */
-  const calls = $derived([...mcp.activity].reverse());
 
   /** The shell the command is written for (the backend writes PowerShell for Windows, `sh` for macOS). */
   const shell = $derived(IS_MAC ? 'sh' : 'PowerShell');
@@ -67,8 +63,9 @@
   }
 </script>
 
-<!-- The tab « Serveur MCP » (choice 2 of the 2.0 design): the switch, where it is declared, then what was asked. -->
-<Group aria-label={t('mcp.section.title')}>
+<!-- Agents › « Piloter Escouade » (PROPOSITION.md §2, from the 2.0 tab « Serveur MCP »): the switch, where it is declared.
+     What the server was asked is in the page's « Avancé » (McpActivity). -->
+<Group title={t('settings.groups.pilot')}>
   <Row label={t('mcp.section.enable')} desc={t('mcp.section.enableDesc')}>
     <button class="switch" class:on role="switch" aria-checked={on} aria-label={t('mcp.section.enable')} disabled={busy} onclick={toggle}
     ></button>
@@ -109,31 +106,6 @@
     </Row>
   {/if}
   <p class="note">{t('mcp.section.note')}</p>
-</Group>
-
-<Group title={t('mcp.activity.title')}>
-  {#snippet action()}
-    <button class="btn" disabled={!calls.length} onclick={() => mcp.clear()}>{t('common.clear')}</button>
-  {/snippet}
-  {#if calls.length}
-    <!-- A list that scrolls is reached with the keyboard to be read. -->
-    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-    <ul class="log" tabindex="0" aria-label={t('mcp.activity.list')}>
-      {#each calls as e}
-        <li class={e.outcome} class:bad={e.outcome !== 'ok'}>
-          <span class="tm" use:tip={fDateTime(e.at)}>{fTime(e.at)}</span>
-          <span class="who">{e.caller}</span>
-          <span class="wh"
-            ><b class="tool mono">{e.tool || '—'}</b>{#if e.summary}<span class="sum"> · {e.summary}</span>{/if}</span
-          >
-          <span class="res">{t(`mcp.activity.outcome.${e.outcome}`)}</span>
-          {#if e.message}<span class="msg">{e.message}</span>{/if}
-        </li>
-      {/each}
-    </ul>
-  {:else}
-    <p class="empty">{t('mcp.activity.empty')}</p>
-  {/if}
 </Group>
 
 <style>
@@ -213,78 +185,5 @@
   .switch:disabled {
     opacity: 0.4;
     cursor: default;
-  }
-  /* The calls, a line each under a hairline (`.log` of the 2.0 design). */
-  .log {
-    display: grid;
-    max-height: 320px;
-    margin: 8px 0 0;
-    padding: 0;
-    overflow-y: auto;
-    list-style: none;
-    border-top: 1px solid rgba(var(--fg-rgb), 0.05);
-  }
-  .log:focus-visible {
-    outline: 2px solid var(--p-ink);
-    outline-offset: 1px;
-  }
-  .log li {
-    display: grid;
-    grid-template-columns: 52px 150px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 2px 12px;
-    padding: 8px 0;
-    border-bottom: 1px solid rgba(var(--fg-rgb), 0.05);
-    font-size: 12px;
-  }
-  .tm {
-    color: var(--muted);
-    font-variant-numeric: tabular-nums;
-  }
-  .who,
-  .wh {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .who {
-    color: var(--soft);
-  }
-  .wh {
-    color: var(--muted);
-  }
-  .wh b {
-    color: var(--text);
-    font-size: 11.5px;
-    font-weight: 550;
-  }
-  .res {
-    color: var(--add);
-    font-size: 11.5px;
-  }
-  .refused .res {
-    color: var(--warn-ink);
-  }
-  .error .res,
-  .msg {
-    color: var(--del);
-  }
-  .msg {
-    grid-column: 3 / -1;
-    min-width: 0;
-    font-size: 11.5px;
-    overflow-wrap: anywhere;
-  }
-  .empty {
-    margin-top: 8px;
-    color: var(--muted);
-  }
-  @container settings (max-width: 520px) {
-    .log li {
-      grid-template-columns: 44px minmax(0, 1fr) auto;
-    }
-    .log .who {
-      display: none;
-    }
   }
 </style>

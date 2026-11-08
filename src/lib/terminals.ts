@@ -131,7 +131,7 @@ export function terminalContrast(): number {
 }
 
 /**
- * Every terminal takes the theme the window shows: at once when it changes (Réglages › Application › Thème, or the
+ * Every terminal takes the theme the window shows: at once when it changes (Réglages › Général › Apparence, or the
  * system's under Système), without opening it again; and once `--p` has glided to the next project's colour.
  */
 export function retheme() {

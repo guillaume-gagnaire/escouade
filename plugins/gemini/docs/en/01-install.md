@@ -11,7 +11,7 @@ npm install -g @google/gemini-cli
 brew install gemini-cli
 ```
 
-Escouade finds `gemini` in the `PATH`, or in npm’s global folder. Settings › Harness shows the executable found and its version. The plugin was tried with Gemini CLI 0.66.0, against a fake server: not yet with a real account. `npm install -g @google/gemini-cli` updates it.
+Escouade finds `gemini` in the `PATH`, or in npm’s global folder. Settings › Accounts and harnesses shows the executable found and its version. The plugin was tried with Gemini CLI 0.66.0, against a fake server: not yet with a real account. `npm install -g @google/gemini-cli` updates it.
 
 ## 2. Install the plugin
 
@@ -25,7 +25,7 @@ Like any plugin, it is switched off by its toggle in the Plugins view and uninst
 
 There is no account at first: an agent starts only on an account you added.
 
-1. Open Settings › Accounts and click **Add an account…**; once two harnesses are installed, choose the harness “Gemini CLI”.
+1. Open Settings › Accounts and harnesses, then click **Add an account…**; once two harnesses are installed, choose the harness “Gemini CLI”.
 2. Choose **A new account**, then one or the other:
    - **A Google account**: Escouade runs `gemini` in a terminal of the window, with the account’s folder as `GEMINI_CLI_HOME`. It opens your browser on your Google account and keeps its sign-in in that folder. “Sign in again…” does it again.
    - **A Gemini API key** (on aistudio.google.com, “Get API key”). “Change the key…” gives it again.

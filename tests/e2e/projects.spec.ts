@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
-import { addProject, expect, openNewProject, send, test, type App } from './fixture';
+import { addProject, expect, openNewProject, send, test, type App, openSettingsPage } from './fixture';
 
 // Closing a project keeps its history (ESC-89): adding its folder again gives it back, unless it was erased.
 
@@ -100,11 +100,11 @@ async function noFirstAgent(dialog: Locator) {
   if ((await first.count()) && (await first.getAttribute('aria-checked')) === 'true') await first.click();
 }
 
-/** Opens the settings on « Projets » (they may be open already: a question asked from them can bring them back). */
+/** Opens the settings on « Tous les projets », where the closed ones are (they may be open already: a question asked from them can bring them back). */
 async function projectsSettings(page: Page) {
   const settings = page.getByRole('dialog', { name: 'Réglages' });
   if (!(await settings.isVisible())) await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
-  await settings.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(settings, 'Tous les projets');
   return settings;
 }
 
@@ -246,7 +246,7 @@ test('a project closed with its history erased leaves nothing to find', async ({
   await expect.poll(() => conversationLogs(app)).toEqual([]);
   expect(closedFiles(app)).toEqual([]);
   const settings = await projectsSettings(page);
-  await expect(settings.getByRole('button', { name: 'Fermer le projet…' })).toBeVisible();
+  await expect(settings.getByRole('heading', { name: 'Nouveaux projets' })).toBeVisible();
   // The list is read when the tab opens: give it the time to be, were it there.
   await page.waitForTimeout(500);
   await expect(settings.getByRole('heading', { name: 'Projets fermés' })).toHaveCount(0);

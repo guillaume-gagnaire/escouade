@@ -18,7 +18,7 @@ Envoyé : Discord a accepté le message.
 
 **`webhook to discord.com: {code} (ticket.column #42) {réponse}`**
 Discord a refusé le message ; la fin de la ligne est le début de sa réponse (300 caractères au plus). Selon le code :
-- `404 Not Found` : le webhook n’existe plus (supprimé dans Discord) ou l’adresse est fausse. Recrée-le, puis colle sa nouvelle adresse dans **Réglages › Secrets** ;
+- `404 Not Found` : le webhook n’existe plus (supprimé dans Discord) ou l’adresse est fausse. Recrée-le, puis colle sa nouvelle adresse dans l’onglet **Réglages** de la page du plugin, section **Secrets** ;
 - `401 Unauthorized` : la fin de l’URL (le jeton du webhook) est fausse. Recopie l’URL entière ;
 - `429 Too Many Requests` : Discord limite le nombre de messages, celui-là est perdu. Coupe les projets les plus bavards dans l’onglet **Projets**.
 
@@ -26,10 +26,10 @@ Discord a refusé le message ; la fin de la ligne est le début de sa réponse (
 Discord n’a pas répondu en 10 secondes. Le message est perdu ; les suivants partiront si Discord répond.
 
 **`webhook to discord.com: no answer (…): {raison}`**
-La requête n’a pas abouti : machine hors ligne, proxy, certificat. Vérifie ta connexion et **Réglages › Réseau**.
+La requête n’a pas abouti : machine hors ligne, proxy, certificat. Vérifie ta connexion et **Réglages › Avancé › Réseau**.
 
 **`a webhook's address is not one (ticket.column)`**
-Aucune adresse n’est gardée, ou ce qui est gardé n’est pas une adresse. Colle l’URL du webhook dans **Réglages › Secrets**, puis **Garder**.
+Aucune adresse n’est gardée, ou ce qui est gardé n’est pas une adresse. Colle l’URL du webhook dans l’onglet **Réglages** de la page du plugin, section **Secrets**, puis **Garder**.
 
 **``a webhook to {hôte} is not sent: not an http(s) address of a host of `permissions.network` (ticket.column)``**
 L’adresse gardée ne pointe pas vers `discord.com`. Une adresse en `discordapp.com` (l’ancien domaine de Discord) est refusée : remplace `discordapp.com` par `discord.com` dans l’URL, ou recopie-la depuis Discord.

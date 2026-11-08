@@ -98,9 +98,9 @@
     app.modal = null;
   }
 
-  /** Réglages › Intégrations, at the sources of the Kanban (not the code hosts above them). */
+  /** Réglages › Projets › Tickets importés: the sources it links. */
   function manage() {
-    app.modal = { kind: 'settings', tab: 'integrations', projectId, section: 'sources' };
+    app.modal = { kind: 'settings', page: 'tickets', projectId };
   }
 
   /**

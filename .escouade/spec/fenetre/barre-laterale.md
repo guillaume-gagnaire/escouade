@@ -2,7 +2,7 @@
 title: "Barre latérale"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","src-tauri/src/core.rs","src-tauri/src/engine/claude/mod.rs","src-tauri/src/worktrees.rs"]
-tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19"]
+tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380"]
 decisions: []
 compared: null
 ---
@@ -98,8 +98,8 @@ Le remote control rend la session d'un agent Claude Code accessible depuis claud
 
 - Pour toute l'app : Réglages › Harness, groupe « Remote control », juste avant « Serveur MCP ». Interrupteur « Remote control pour tous les agents » (éteint par défaut), avec la description : « Chaque agent de chaque projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l'app Claude. Escouade lance tout de suite le process claude de chacun, qui reste lancé. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu'à son prochain lancement. Pour mettre un agent à part : clic droit, « Désactiver le remote control ». »
 - Pour un projet : Réglages › Projets, groupe « Remote control », après « Identité ». Interrupteur « Remote control pour les agents de ce projet » (éteint par défaut), avec la même description pour les agents du projet (« Chaque agent de ce projet, existant ou nouveau… »).
-- Les deux passent par le brouillon des réglages : ils marquent leur onglet comme modifié et s'enregistrent avec « Enregistrer ».
-- Jamais deux interrupteurs qui se contredisent : quand le réglage de l'app est allumé, celui du projet se montre allumé et grisé, avec « Activé pour tous les projets dans Réglages › Harness » (dit aussi aux lecteurs d'écran). La valeur propre du projet est gardée ; un clic sur l'interrupteur grisé ne change rien. Le réglage de l'app éteint, même dans le brouillon, le projet retrouve son état.
+- Les deux s'appliquent et s'enregistrent au geste, comme tout réglage (voir *Réglages*).
+- Jamais deux interrupteurs qui se contredisent : quand le réglage de l'app est allumé, celui du projet se montre allumé et grisé, avec « Activé pour tous les projets dans Réglages › Harness » (dit aussi aux lecteurs d'écran). La valeur propre du projet est gardée ; un clic sur l'interrupteur grisé ne change rien. Le réglage de l'app éteint, le projet retrouve son état.
 - Allumé, un réglage vaut pour les agents existants non archivés de son périmètre et pour chaque nouvel agent, agents de tickets et copies compris. Éteint, il retire le remote control aux agents qui le tenaient de lui, sans toucher à ceux allumés à la main ni à ceux qu'un autre réglage couvre encore.
 - D'où il vient : l'infobulle de l'icône d'ondes finit par « · activé à la main », « · activé par le réglage du projet » ou « · activé par le réglage de tous les agents ». Le clic droit reste possible quelle que soit la source.
 - Mettre un agent à part : « Désactiver le remote control » au clic droit retire toujours le remote control à l'agent et le met à part, même si un réglage le couvre. Aucun réglage ne le lui rend, ni en s'allumant ensuite ni au redémarrage d'Escouade, jusqu'à « Activer le remote control ». Une copie d'un agent mis à part l'est aussi. Le ticket d'un agent mis à part le reste : renvoyé en « À faire » puis relancé, il crée un agent lui aussi mis à part, sauf rallumage à la main.
@@ -154,9 +154,9 @@ La section entre Agents et Terminaux : les commandes qui lancent le projet pour 
 - « ✦ Remplir automatiquement », première rangée du groupe « Lancement », fait lire le projet par le modèle des textes rédigés, qui ne modifie ni n'exécute rien (voir *Langues*). Il lit les manifestes, les scripts, docker-compose et le README, et propose les processus qu'on lance pour développer : serveurs de dev, watchers, workers, base locale par docker compose… Chacun a un nom court, son sous-dossier et sa commande pour le shell par défaut. Jamais d'installation ni de tests.
 - 8 commandes au plus. Une commande est écartée quand son sous-dossier sort du projet ou n'existe pas, ou quand la commande ou le dossier ne tient pas sur une ligne simple : retour à la ligne, caractère de contrôle ou invisible, 24 blancs de suite ou plus, plus de 300 caractères. Cette règle est aussi donnée au modèle. Un nom est nettoyé de ses caractères invisibles ; un nom absent ou vide est tiré de la commande.
 - La proposition s'affiche d'abord en entier sous la rangée, dans la région « Commandes de lancement proposées » : « Proposition de Claude : relis chaque commande en entier. Elles remplacent celles de la liste. » Chaque commande est en police à chasse fixe, jamais coupée, ses caractères invisibles écrits en clair et dans l'ordre où le shell la lit, avec son shell et son dossier.
-- « Remplacer les commandes » les met à la place de celles du brouillon, à relire avant « Enregistrer » (« Annuler » les jette). « Ignorer » laisse les commandes telles quelles. La proposition reste en attente d'un onglet à l'autre ; une nouvelle ouverture des réglages l'oublie.
+- « Remplacer les commandes » les met à la place de celles de la liste, et elles s'enregistrent aussitôt (voir *Réglages*). « Ignorer » laisse les commandes telles quelles. La proposition reste en attente d'une page à l'autre ; une nouvelle ouverture des réglages l'oublie.
 - Pendant la lecture, le bouton affiche « Claude lit le projet… ». À la fin, le focus passe à la proposition s'il était resté sur le bouton. Chacun des deux boutons est décrit par le texte de sa rangée pour les lecteurs d'écran.
-- Toasts : « 2 commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant d'enregistrer. » ; toutes écartées : « Claude a proposé des commandes illisibles : aucune n'a été gardée. » ; réponse illisible : « Claude n'a pas proposé de commandes lisibles. » ; rien à lancer : « Claude n'a trouvé aucune commande à lancer pour ce projet. »
+- Toasts : « 2 commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant de remplacer les commandes. » ; toutes écartées : « Claude a proposé des commandes illisibles : aucune n'a été gardée. » ; réponse illisible : « Claude n'a pas proposé de commandes lisibles. » ; rien à lancer : « Claude n'a trouvé aucune commande à lancer pour ce projet. »
 
 #### Dans le worktree d'un agent
 

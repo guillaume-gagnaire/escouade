@@ -5,16 +5,16 @@ Les messages ci-dessous sont ceux qu’Escouade et le plugin affichent, mot pour
 ## L’agent ne démarre pas
 
 **« OpenCode introuvable. Installe-le ou indique son chemin dans les réglages. »**
-Escouade n’a pas trouvé `opencode`. Installe-le (`npm install -g opencode-ai`), ou donne le chemin de son exécutable dans Réglages › Harness.
+Escouade n’a pas trouvé `opencode`. Installe-le (`npm install -g opencode-ai`), ou donne le chemin de son exécutable dans Réglages › Comptes et harness.
 
-**« Non prise en charge », dans Réglages › Harness**
+**« Non prise en charge », dans Réglages › Comptes et harness**
 C’est OpenCode 2 (`@opencode/cli`). Installe OpenCode 1 : `npm install -g opencode-ai`.
 
-**« Aucun compte OpenCode : ajoute-en un dans Réglages › Comptes. »**
+**« Aucun compte OpenCode : ajoute-en un dans Réglages › Comptes et harness. »**
 Ajoute le compte de la machine.
 
 **« Aucun modèle d’OpenCode à utiliser : connecte un fournisseur à OpenCode (opencode auth login) ou déclare-en un dans sa config, puis choisis son modèle. »**
-OpenCode n’a aucun fournisseur connecté, ou le modèle choisi n’en est pas. `opencode auth login` (ou « Se connecter… » dans Réglages › Harness), puis choisis un modèle dans le menu.
+OpenCode n’a aucun fournisseur connecté, ou le modèle choisi n’en est pas. `opencode auth login` (ou « Se connecter… » dans Réglages › Comptes et harness), puis choisis un modèle dans le menu.
 
 **« Le flux d’événements d’OpenCode ne répond pas »**
 Le serveur d’OpenCode n’a pas ouvert son flux d’événements à temps. Envoie un message pour réessayer ; si cela revient, arrête les agents OpenCode pour que le serveur reparte.

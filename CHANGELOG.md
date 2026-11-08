@@ -14,6 +14,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- Les réglages sont refaits : une barre à gauche avec les pages d’Escouade (Général, Agents, Comptes et harness, Services connectés, Voix, Notifications, Plugins, Avancé), puis les pages de chaque projet, et tout s’applique dès que tu le changes, sans « Enregistrer ». Une recherche (Ctrl+F) trouve un réglage par son nom, en français comme en anglais, et ouvre sa page ; un point ambre signale la page qui attend quelque chose de toi, comme un harness sans compte ou un jeton expiré.
 - Les plugins d'Escouade sont dans l'installeur : à la première ouverture, même sans réseau, Escouade installe ceux que ta configuration utilise, et la vue Plugins propose les autres, installables d'un clic sans téléchargement.
 - Sur store.escouade.dev, la documentation d'un plugin peut avoir ses pages en français et en anglais : chacun lit celles de sa langue, sinon celles de l'autre, et un lien d'une page à l'autre reste sur le store.
 - Un plugin ne garde plus ce qu’Escouade lui a prêté : l’hôte d’un essai de connexion raté se referme aussitôt, et un compte retiré reprend son hôte et son jeton. Une adresse qui se fait passer pour locale, comme `http://localhost:1@exemple.dev`, est refusée dès le formulaire.
@@ -119,6 +120,12 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Un agent enregistré sur un harness que cette version n’a pas (celui d’une version plus récente, ou d’un plugin retiré) est lu et gardé avec sa conversation, marqué « harness absent » ; il ne démarre pas, et aucun agent n’est créé sur ce harness.
 - La fenêtre d’installation d’un plugin sans programme ne dit plus qu’Escouade ne filtre pas son réseau : ses webhooks ne partent que vers l’hôte déclaré. Elle dit aussi ce qui déclenche chaque webhook, et le store une seule fois.
 - Deux tickets validés au même moment ne reçoivent plus le même numéro de décision. Un doublon déjà présent ne fait plus planter la vue Décisions : elle montre les deux.
+
+## [2.1.5] — 2026-11-08
+
+### Corrections
+
+- **Antigravity CLI est coupé :** avec agy 1.5, ses agents pouvaient lancer une commande ou écrire un fichier sans te le demander, même en « Demander ». Escouade ne le lance plus et le dit dans Réglages › Harness ; il revient avec un correctif.
 
 ## [2.1.4] — 2026-11-07
 

@@ -7,7 +7,7 @@ Il s’adresse à qui a déjà Claude Code, avec un abonnement Claude ou une cl�
 ## Ce qu’il demande
 
 - Claude Code installé sur la machine (testé de la 2.1.283 à la 2.1.301).
-- Un compte Claude Code ajouté dans Réglages › Comptes : sans compte, aucun agent ne démarre.
+- Un compte Claude Code ajouté dans Réglages › Comptes et harness : sans compte, aucun agent ne démarre.
 
 ## Ce qu’il peut faire
 

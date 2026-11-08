@@ -8,7 +8,7 @@
   import { IS_MAC } from '../../lib/platform';
   import { app } from '../../lib/state.svelte';
   import { disposeTerminal, mountTerminal, openAccountLogin } from '../../lib/terminals';
-  import type { SettingsTab } from '../../lib/settings.svelte';
+  import type { SettingsPage } from '../../lib/settings.svelte';
   import type { Account, EngineId, MachineAccount, ShareMode } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import Modal from './Modal.svelte';
@@ -19,7 +19,7 @@
   // to the sign-in.
   // The sign-in runs the account's own program in a terminal here (`claude`, `codex login`, `copilot login`); Escouade looks for it
   // every 2 s, then closes the terminal and reads the account's quota. Closed before, the account stays, not signed in.
-  // `onclose`: opened over another modal (the assistant « Nouveau projet »), back to it rather than to Réglages › Comptes.
+  // `onclose`: opened over another modal (the assistant « Nouveau projet »), back to it rather than to Réglages › Comptes et harness.
   // Cursor CLI (ESC-43): its machine's account is the sign-in of `agent login`; a new one is its API key, kept in the system's
   // keychain and given to its processes by CURSOR_API_KEY: no terminal, « Changer la clé… » gives it again. Mistral Vibe
   // (ESC-267) the same: its machine's account is the key `vibe --setup` kept, a new one its API key, by MISTRAL_API_KEY.
@@ -35,7 +35,7 @@
     engine: asked,
     reserveFor,
     onclose,
-  }: { accountId?: string; back?: SettingsTab; engine?: EngineId; reserveFor?: string; onclose?: () => void } = $props();
+  }: { accountId?: string; back?: SettingsPage; engine?: EngineId; reserveFor?: string; onclose?: () => void } = $props();
   /** The project the account is added for, while it is open still. */
   const reservedTo = $derived(reserveFor ? app.projects.find((p) => p.id === reserveFor) : undefined);
 
@@ -437,7 +437,7 @@
   function close() {
     stop();
     if (onclose) onclose();
-    else if (reserveFor) app.modal = { kind: 'settings', tab: 'projects', projectId: reserveFor, resume: true };
+    else if (reserveFor) app.modal = { kind: 'settings', page: 'privacy', projectId: reserveFor, resume: true };
     else backToAccounts(back);
   }
 

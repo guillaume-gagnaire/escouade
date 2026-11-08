@@ -8,7 +8,7 @@ Its page, in the same view, has a switch for the whole app and a "Projects" tab 
 
 ## 2. Make the API key on Linear
 
-1. In Escouade, open Settings › Integrations. Under "Kanban sources", in the "Connected accounts" group, click "Connect…" on the Linear row.
+1. In Escouade, open Settings › Connected services. Under "Ticket sources", in the "Connected accounts" group, click "Connect…" on the Linear row.
 2. Click "Create a Linear API key". Your browser opens `https://linear.app/settings/account/security`. Make a personal API key and copy it.
 3. Paste it into the "API key" field.
 
@@ -22,7 +22,7 @@ The connection is kept at once: it does not go through "Save".
 
 ## 4. Link a team to a project
 
-Still in Settings › Integrations, the "Sources linked to `<project>`" group offers the "Linear team" menu: your teams, with their key ("Engine (ENG)"). Pick one. Escouade loads its workflow states and fills in the "Status mapping" (see **Use**). Save the settings.
+In Settings › Projects › Imported tickets, the "Sources linked to `<project>`" group offers the "Linear team" menu: your teams, with their key ("Engine (ENG)"). Pick one. Escouade loads its workflow states and fills in the "Status mapping" (see **Use**). Save the settings.
 
 You can also start from the Kanban: "Import" with no linked source shows "No source linked to this project" and offers "Link a source", which opens that same tab.
 

@@ -458,8 +458,8 @@ impl Engine for Agy {
 
     fn key_missing(&self, name: &str) -> String {
         tr!(
-            "Le compte Antigravity « {name} » n’a pas de clé d’API Gemini : donne-la dans Réglages › Comptes, « Changer la clé… ».",
-            "The Antigravity account “{name}” has no Gemini API key: give it in Settings › Accounts, “Change the key…”."
+            "Le compte Antigravity « {name} » n’a pas de clé d’API Gemini : donne-la dans Réglages › Comptes et harness, « Changer la clé… ».",
+            "The Antigravity account “{name}” has no Gemini API key: give it in Settings › Accounts and harnesses, “Change the key…”."
         )
     }
 

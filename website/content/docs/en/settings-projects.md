@@ -1,20 +1,22 @@
-# Settings: Projects
+# Settings: a project’s pages
 
-The “Projects” tab sets one project at a time: its name, color and tile, its remote control, its worktrees, how its commits are written, and its setup, teardown, and launch commands.
+Each project has its settings pages, unfolded under its name in the bar, and “All projects” sets what holds for new projects and the closed ones.
+
+A project’s pages: “Project” (its name, color, tile, harness and account), “Git and worktrees” (its worktrees, branches, commits, setup and teardown commands, repositories), “Launch” (its launch commands), [“Kanban”](settings-board), [“Imported tickets”](settings-integrations), “Team” (the shared Kanban, the shared settings of `.escouade.yml`, the shared memory) and “Privacy” (private project, remote control, plugins in this project). “All projects”, under the list, sets what a new project starts with and keeps the closed projects.
 
 ## Choosing the project
 
-The tab acts on the project chosen in the “Project” row, under the header of the [settings window](settings-application): one button per open project. What you change on a project stays in the draft when you switch to another, and everything is saved together with “Save”.
+The project chosen unfolds under its name in the [settings](settings-application) bar; another project opens on the same page. Everything saves as you set it. An amber dot on a project says no active account of its harness serves it.
 
 ## Proposed plugins
 
-When the project’s `.escouade.yml` proposes plugins (`plugins.recommended`) not installed on your machine, a band at the head of the tab names them, each with what it asks for. “See in the store” opens its page in the view Plugins, from where you install it after reading its permissions: the band installs and switches on nothing. “Not for this project” silences it on this machine. In a private project, it reminds you that an installed plugin is on in it only once switched on for it. See [.escouade.yml](escouade-yml#plugins).
+When the project’s `.escouade.yml` proposes plugins (`plugins.recommended`) not installed on your machine, a band at the head of its “Project” page names them, each with what it asks for. “See in the store” opens its page in the view Plugins, from where you install it after reading its permissions: the band installs and switches on nothing. “Not for this project” silences it on this machine. In a private project, it reminds you that an installed plugin is on in it only once switched on for it. See [.escouade.yml](escouade-yml#plugins).
 
 ## Identity
 
 | Setting | Effect | Default |
 |---|---|---|
-| “Name” | The project’s name, as the title bar, its tile’s tooltip and the project picker show it. It can’t be left empty: “Save” is blocked until it has a name. | The name given at creation, the folder’s name if you gave none |
+| “Name” | The project’s name, as the title bar, its tile’s tooltip and the project picker show it. It can’t be left empty: the name from before stays until it has one. | The name given at creation, the folder’s name if you gave none |
 | “Folder” | The project’s folder, shown but not editable. The “Open” button opens it with the system’s file manager. | — |
 | “Color” | One swatch out of 14 (13 hues and a neutral tone). The color identifies the project and tints the interface while it is shown. | The first color no project has taken, at creation |
 | “Tile letters” | What the project’s tile says in the projects’ rail: one to three letters or digits (“API”, “v2”), or a single emoji. The rest of what you type (spaces, signs, a fourth letter) isn’t written. The tile is shown beside the field, as the rail will draw it. | Empty: the initials of the name (`demo-api` → “DA”, `infra` → “In”), shown as a hint in the field |
@@ -26,7 +28,7 @@ The logo is recognized by its content, whatever its extension. An image that is 
 
 The label stays on this machine too: it doesn’t go into `.escouade.yml`. Until you drag the edge of the projects’ rail, it goes from 52 to 72 px as soon as a project has its label on; see [the projects rail](interface#its-width). The same setting is in the “New project” assistant, under the letters and the logo.
 
-Accounts are described in [accounts](accounts) and set in the [“Accounts”](settings-accounts) tab. An account switched off after it was chosen stays shown with “(inactive)” as long as it is chosen, and is ignored in the meantime.
+Accounts are described in [accounts](accounts) and set on the [“Accounts and harnesses”](settings-accounts) page. An account switched off after it was chosen stays shown with “(inactive)” as long as it is chosen, and is ignored in the meantime.
 
 ## Remote control
 
@@ -36,7 +38,7 @@ Accounts are described in [accounts](accounts) and set in the [“Accounts”](s
 
 To set an agent apart, right-click its card, then “Turn off remote control”. When off, the setting takes remote control away from the agents that had it from this setting, without touching those you turned on by hand or those the global setting still covers.
 
-When “Remote control for all agents” is on in the [“Harness”](settings-claude-code) tab, the project’s switch shows on and grayed out, with “On for all projects in Settings › Harness”. The project’s own choice is kept: once the global setting is off, the switch goes back to its state. See [remote control](remote-control).
+When “Remote control for all agents” is on on the [“Agents”](settings-claude-code) page, the project’s switch shows on and grayed out, with “On for all projects in Settings › Agents”. The project’s own choice is kept: once the global setting is off, the switch goes back to its state. See [remote control](remote-control).
 
 ## Privacy
 
@@ -51,7 +53,7 @@ See [private projects](mcp#private-projects) and [an account for a private proje
 
 ### Its files
 
-For a private project, the agents of the other projects neither read nor write its folder, its worktrees, its data in Escouade’s folder (tickets, attached files, conversations) or its harness sessions. Its own agents read none of these for the other projects, nor the rest of Escouade’s folder. Escouade gives these rules to each harness when an agent starts, and the tab says, under “Private project”, what each one guarantees:
+For a private project, the agents of the other projects neither read nor write its folder, its worktrees, its data in Escouade’s folder (tickets, attached files, conversations) or its harness sessions. Its own agents read none of these for the other projects, nor the rest of Escouade’s folder. Escouade gives these rules to each harness when an agent starts, and the “Privacy” page says, under “Private project”, what each one guarantees:
 
 | Harness | Protection | What is not guaranteed |
 |---|---|---|
@@ -99,7 +101,7 @@ You can write a path relative to the project’s folder (`../app-worktrees`, `.w
 
 Under the field, a line says where the next worktree will go (“The next one:” followed by the path, with `<name>` standing for the agent’s name). Worktrees already created stay where they are. Outside the project, the Claude Code view first asks you to trust each of them.
 
-A folder that is refused replaces that line with a red message and blocks “Save”:
+A folder that is refused replaces that line with a red message, and the folder from before stays:
 
 - the project’s own folder;
 - a folder that holds the project’s: pick one beside it (`../app-worktrees`) or in it (`.worktrees`);
@@ -110,7 +112,7 @@ A folder that is refused replaces that line with a red message and blocks “Sav
 
 The branch names of agents and tickets are the ones that go to the remote repository with a pull request: the prefixes let you follow a repository’s convention. [Branches](branches) are described separately. Under each field, a line shows the resulting form.
 
-A prefix that wouldn’t give a valid branch name is refused as you type, and blocks “Save”. These are refused: a space, `..`, `~`, `^`, `:`, `?`, `*`, `[`, `\`, and `@{`; a `-` or a `/` at the start; `//`; a part of the name that starts with `.` or ends with `.lock`.
+A prefix that wouldn’t give a valid branch name is refused as you type, and the prefix from before stays. These are refused: a space, `..`, `~`, `^`, `:`, `?`, `*`, `[`, `\`, and `@{`; a `-` or a `/` at the start; `//`; a part of the name that starts with `.` or ends with `.lock`.
 
 ### Files copied into worktrees
 
@@ -156,11 +158,11 @@ The suggestion is shown in full, with each command’s shell and folder, under �
 - “Replace the commands” puts the suggestion in place of the draft’s two lists.
 - “Ignore” throws it away.
 
-Nothing is saved before “Save”. A message says how many commands are suggested, and how many Claude left out (invisible characters or a line that is too long). When it finds none, it says “Claude found no command to run for this project.”.
+Nothing is taken before “Replace”. A message says how many commands are suggested, and how many Claude left out (invisible characters or a line that is too long). When it finds none, it says “Claude found no command to run for this project.”.
 
 ## Launch
 
-Launch commands start the project’s servers, watchers, and services. Each one runs in its own terminal, read-only, started from the Launch section of the sidebar. That section’s gear (“Launch commands…”) opens this tab on this group. When the section is empty, its “Configure” and “✦ Suggest commands” links open it too, the second one also starting the fill-in. See [launch](launch) and [terminals](terminals).
+Launch commands start the project’s servers, watchers, and services. Each one runs in its own terminal, read-only, started from the Launch section of the sidebar. That section’s gear (“Launch commands…”) opens the project’s “Launch” page. When the section is empty, its “Configure” and “✦ Suggest commands” links open it too, the second one also starting the fill-in. See [launch](launch) and [terminals](terminals).
 
 “Open the launches’ pages” says where the page of a ready test opens (see [The launch page](browser)): “In the agent” (default), “In a separate window” or “In the system browser”. This choice stays on your machine.
 
@@ -173,7 +175,7 @@ With no command, the group says “No commands yet.”. Each command has four fi
 | “Command” | The command line, such as `npm run dev`. Required. |
 | “Subfolder” (blank = project folder) | The folder, under the project’s, it runs in, such as `apps/web`. |
 
-The cross on the right deletes the command, and “+ Add a command” adds one. A command with no name or no command line blocks “Save”.
+The cross on the right deletes the command, and “+ Add a command” adds one. A command with no name or no command line says so on its row, and the commands from before stay saved.
 
 “✦ Fill in automatically” works as it does for worktrees. Claude reads the project (manifests, scripts, docker-compose, README…) and suggests the commands to run under “Suggested launch commands”, which “Replace the commands” puts in place of the list.
 
@@ -189,7 +191,7 @@ The cross on the right deletes the command, and “+ Add a command” adds one. 
 
 The confirmation window has a box “Also erase its history (conversations, tickets, settings)”, unticked by default. Ticked, nothing is kept: the project’s conversations, tickets, and settings are erased for good, and the same folder, added again, starts from scratch.
 
-Closing the project acts right away, without waiting for “Save”, and takes you back to the settings with the draft as it was.
+Closing the project acts right away and takes you back to the settings with the draft as it was.
 
 Closing is refused while an approval of one of the project’s tickets is running (“The ticket DEM-3 is being approved: wait for the end of its approval to close the project.”). Once it has finished, close the project.
 
@@ -215,7 +217,7 @@ Until a project has been closed with its history kept, this group doesn’t exis
 
 A file the app can’t read (damaged, or renamed by hand) still appears in the list, under “Unreadable history”, with its file name (`….json`) and its size. It has no “Reopen”: only “Erase” is offered. After confirmation (“This file, which the app cannot read, is erased for good. The other histories, and the files and worktrees on disk, are not touched.”), it deletes that file, and only that file.
 
-Without going through the list, simply add the project again (the `+` button to the right of the tabs), in the same folder. It doesn’t matter how you write the path: upper or lower case (on Windows), `/` or `\`, a trailing separator, a short name, a WSL share… all are recognized as the same folder. The “New project” window then says what it found, for example “History found: 12 agents, 34 tickets, last activity on Oct 14, 2026”, fills in the closed project’s name, color, and “One git worktree per agent”, and its button becomes “Reopen project”.
+Without going through the list, simply add the project again (the `+` button of the projects rail), in the same folder. It doesn’t matter how you write the path: upper or lower case (on Windows), `/` or `\`, a trailing separator, a short name, a WSL share… all are recognized as the same folder. The “New project” window then says what it found, for example “History found: 12 agents, 34 tickets, last activity on Oct 14, 2026”, fills in the closed project’s name, color, and “One git worktree per agent”, and its button becomes “Reopen project”.
 
 The project comes back as it was:
 
@@ -229,7 +231,7 @@ The accounts that were reserved to it (“Reserved to projects”) didn’t move
 
 Reopening is not creating a project: the window doesn’t offer a first agent, since the project’s own come back.
 
-The “Start from a blank project” switch (“The history stays in Settings › Projects, where you can erase it.”) creates a new project in that folder instead, without the earlier agents and tickets. The old history stays under “Closed projects”: nothing is erased unless you ask.
+The “Start from a blank project” switch (“The history stays in Settings › All projects, where you can erase it.”) creates a new project in that folder instead, without the earlier agents and tickets. The old history stays under “Closed projects”: nothing is erased unless you ask.
 
 “Erase history…” asks for confirmation (“Its conversations, tickets, and settings are erased for good. The files and worktrees on disk are not touched.”), then deletes the kept conversations, tickets, and settings of that project. The same folder, added afterwards, has no history to find.
 
@@ -242,4 +244,4 @@ The “Shared memory” group lists what the project’s agents noted in its [sh
 
 ## The project’s other settings
 
-A project’s links to Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues, and Azure Boards are set in the [“Integrations”](settings-integrations) tab. Its Kanban (autopilot, agents, approval) is set in the [“Kanban”](settings-board) tab.
+A project’s links to Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues, and Azure Boards are set on its [“Imported tickets”](settings-integrations) page. Its Kanban (autopilot, agents, approval) is set on its [“Kanban”](settings-board) page.

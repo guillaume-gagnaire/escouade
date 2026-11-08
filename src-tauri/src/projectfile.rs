@@ -1612,16 +1612,16 @@ impl<R: Runtime> Core<R> {
             if proposed > 0 {
                 toast(tr_n!(
                     proposed,
-                    "{name} propose {proposed} plugin : Réglages › Projets.",
-                    "{name} propose {proposed} plugins : Réglages › Projets.",
-                    "{name} proposes {proposed} plugin: Settings › Projects.",
-                    "{name} proposes {proposed} plugins: Settings › Projects."
+                    "{name} propose {proposed} plugin : Réglages › Projets › Projet.",
+                    "{name} propose {proposed} plugins : Réglages › Projets › Projet.",
+                    "{name} proposes {proposed} plugin: Settings › Projects › Project.",
+                    "{name} proposes {proposed} plugins: Settings › Projects › Project."
                 ));
             }
             toast(if pending.is_some() {
                 tr!(
-                    "{name} : réglages lus dans {FILE}. Ses commandes attendent ton accord (Réglages › Projets).",
-                    "{name}: settings read from {FILE}. Its commands wait for your approval (Settings › Projects)."
+                    "{name} : réglages lus dans {FILE}. Ses commandes attendent ton accord (Réglages › Projets › Équipe).",
+                    "{name}: settings read from {FILE}. Its commands wait for your approval (Settings › Projects › Team)."
                 )
             } else {
                 tr!(
@@ -1642,8 +1642,8 @@ impl<R: Runtime> Core<R> {
             }
             if pending_new && !first {
                 toast(tr!(
-                    "{name} : les commandes de {FILE} ont changé et attendent ton accord (Réglages › Projets).",
-                    "{name}: the commands of {FILE} changed and wait for your approval (Settings › Projects)."
+                    "{name} : les commandes de {FILE} ont changé et attendent ton accord (Réglages › Projets › Équipe).",
+                    "{name}: the commands of {FILE} changed and wait for your approval (Settings › Projects › Team)."
                 ));
             }
         }
@@ -1728,10 +1728,10 @@ impl<R: Runtime> Core<R> {
         self.hub.emit(UiEvent::Toast {
             text: tr_n!(
                 n,
-                "Réglage gardé sur cette machine : il passe devant {FILE}. Réglages › Projets peut l'écrire dans le fichier.",
-                "{n} réglages gardés sur cette machine : ils passent devant {FILE}. Réglages › Projets peut les écrire dans le fichier.",
-                "Setting kept on this machine: it goes before {FILE}. Settings › Projects can write it into the file.",
-                "{n} settings kept on this machine: they go before {FILE}. Settings › Projects can write them into the file."
+                "Réglage gardé sur cette machine : il passe devant {FILE}. Réglages › Projets › Équipe peut l'écrire dans le fichier.",
+                "{n} réglages gardés sur cette machine : ils passent devant {FILE}. Réglages › Projets › Équipe peut les écrire dans le fichier.",
+                "Setting kept on this machine: it goes before {FILE}. Settings › Projects › Team can write it into the file.",
+                "{n} settings kept on this machine: they go before {FILE}. Settings › Projects › Team can write them into the file."
             ),
         });
     }

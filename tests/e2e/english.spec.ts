@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { addProject, expect, send, test } from './fixture';
+import { addProject, expect, send, test, openSettingsPage, settingsEntry, closeSettings } from './fixture';
 
 // The app started in English: its words, then French at once when the setting changes, with no restart.
 test.use({ language: 'en' });
@@ -42,16 +42,16 @@ test('the interface in English, then in French without a restart', async ({ app 
   // The settings, in English, on the tab of the languages.
   await page.getByRole('button', { name: 'Settings (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Settings' });
-  await dialog.getByRole('tab', { name: 'Application' }).click();
-  await expect(dialog.getByRole('tab', { name: 'Application' })).toHaveAttribute('aria-selected', 'true');
+  await openSettingsPage(dialog, 'General');
+  await expect(settingsEntry(dialog, 'General')).toHaveAttribute('aria-current', 'page');
   const ui = dialog.getByRole('group', { name: 'Interface language' });
   await expect(ui.getByRole('button', { name: 'English', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(dialog.getByRole('group', { name: 'Language of texts written by the agents' })).toBeVisible();
 
   // « Français »: saved, and the same words are French at once.
   await ui.getByRole('button', { name: 'Français', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Save' }).click();
-  await expect(dialog).toBeHidden();
+  // Saved at once: the window is « Réglages » already.
+  await closeSettings(page.getByRole('dialog', { name: 'Réglages' }));
   await expect(sidebar.getByRole('button', { name: 'Nouvel agent' })).toBeVisible();
   await expect(sidebar).toContainText('Terminaux');
   await expect(sidebar).toContainText('Terminé');
@@ -67,7 +67,7 @@ test('the interface in English, then in French without a restart', async ({ app 
   await expect(page.getByText('Bonjour, tu as dit : Hello')).toBeVisible();
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const reglages = page.getByRole('dialog', { name: 'Réglages' });
-  await reglages.getByRole('tab', { name: 'Application' }).click();
+  await openSettingsPage(reglages, 'Général');
   await expect(
     reglages.getByRole('group', { name: 'Langue de l’interface' }).getByRole('button', { name: 'Français', exact: true }),
   ).toHaveAttribute('aria-pressed', 'true');
@@ -112,10 +112,10 @@ test('a superpowers plan run reads in English, and in French as soon as the lang
   // Switched to French while the banner is open: its words change at once, nothing is read again.
   await page.getByRole('button', { name: 'Settings (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Settings' });
-  await dialog.getByRole('tab', { name: 'Application' }).click();
+  await openSettingsPage(dialog, 'General');
   await dialog.getByRole('group', { name: 'Interface language' }).getByRole('button', { name: 'Français', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Save' }).click();
-  await expect(dialog).toBeHidden();
+  // Saved at once: the window is « Réglages » already.
+  await closeSettings(page.getByRole('dialog', { name: 'Réglages' }));
   await expect(plan).toContainText('2/3 tâches');
   await expect(plan).toContainText('1 sous-agent actif');
   await expect(third).toContainText('En attente de ta réponse');

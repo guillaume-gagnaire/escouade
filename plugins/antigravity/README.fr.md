@@ -7,7 +7,7 @@ Il s’adresse à qui a un compte Google pour Antigravity, ou une clé d’API G
 ## Ce qu’il demande
 
 - Antigravity CLI installé sur la machine (essayé avec la 1.4.9).
-- Un compte Antigravity CLI ajouté dans Réglages › Comptes : la connexion Google de la machine, ou une clé d’API Gemini.
+- Un compte Antigravity CLI ajouté dans Réglages › Comptes et harness : la connexion Google de la machine, ou une clé d’API Gemini.
 
 ## Ce qu’il peut faire
 

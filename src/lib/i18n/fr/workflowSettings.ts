@@ -1,6 +1,6 @@
 import type { Tree } from '../types';
 
-// Réglages › Projets › Workflow (ESC-195): what the reading of the project's workflows found, read again by « Relire »
+// Réglages › Projets › Kanban › Workflow (ESC-195): what the reading of the project's workflows found, read again by « Relire »
 // or by itself, and the steps as the user corrects them, in the repository (.escouade/workflows/) or on this machine.
 export default {
   title: 'Workflow',
@@ -10,8 +10,8 @@ export default {
   on: 'Lire les workflows',
   off: 'Pas de workflow pour ce projet',
   offNote:
-    'Pas de workflow pour ce projet : Escouade ne lit ni n’écrit ses workflows et n’y suit aucun agent ; {dir} reste tel quel. Pour le défaire, choisis « Lire les workflows » et enregistre.',
-  onNote: 'Enregistre pour lire à nouveau les workflows du projet.',
+    'Pas de workflow pour ce projet : Escouade ne lit ni n’écrit ses workflows et n’y suit aucun agent ; {dir} reste tel quel. Pour le défaire, choisis « Lire les workflows ».',
+  onNote: 'Escouade relit les workflows du projet.',
   readAt: 'Lu par les règles à {time}',
   readOn: 'Lu par les règles le {date}',
   reading: 'Lecture des fichiers…',

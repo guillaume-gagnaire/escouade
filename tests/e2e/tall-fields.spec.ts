@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
-import { addProject, expect, openNewProject, test } from './fixture';
+import { addProject, expect, openNewProject, test, openSettingsPage, closeSettings } from './fixture';
 
 /** Whether a click at the middle of `el` lands on it: drawn, inside the part of its window that shows, not covered. */
 const hit = (el: Locator) =>
@@ -52,13 +52,14 @@ test('the settings of a project: the files copied into the worktrees, dragged ta
   await addProject(page, app.repo, { firstAgent: false });
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(dialog, 'Git et worktrees');
   await tallField(
     page,
     dialog,
     dialog.getByRole('textbox', { name: 'Fichiers copiés dans les worktrees' }),
     dialog.getByRole('group', { name: 'Commit' }).getByRole('button').first(),
-    [dialog.getByRole('button', { name: 'Annuler', exact: true }), dialog.getByRole('button', { name: 'Enregistrer', exact: true })],
+    // No foot (ESC-380): « Fermer », in the header, stays shown.
+    [dialog.getByRole('button', { name: 'Fermer', exact: true })],
     'settings',
   );
 });
@@ -87,10 +88,9 @@ test('the commit window: its message dragged tall', async ({ app }) => {
   // A direct commit, its message proposed, for the window to open.
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(settings, 'Git et worktrees');
   await settings.getByRole('button', { name: 'Direct, avec un message proposé' }).click();
-  await settings.getByRole('button', { name: 'Enregistrer', exact: true }).click();
-  await expect(settings).toBeHidden();
+  await closeSettings(settings);
   const worktrees = path.join(app.repo, '.claude', 'worktrees');
   await expect.poll(() => (fs.existsSync(worktrees) ? fs.readdirSync(worktrees).length : 0)).toBe(1);
   fs.writeFileSync(path.join(worktrees, fs.readdirSync(worktrees)[0], 'notes.md'), 'Des notes\n');

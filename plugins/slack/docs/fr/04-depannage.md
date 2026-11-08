@@ -17,7 +17,7 @@ Aucun fait ne lui est parvenu. Vérifie :
 Envoyé : Slack a accepté le message.
 
 **`no Slack token kept: nothing sent (Plugins › Slack › Settings)`**
-Aucun jeton n’est gardé. Colle le jeton du bot dans **Réglages › Secrets**, puis **Garder**.
+Aucun jeton n’est gardé. Colle le jeton du bot dans l’onglet **Réglages** de la page du plugin, section **Secrets**, puis **Garder**.
 
 **`the token kept is not a Slack bot token (xoxb-…): nothing sent`**
 Le jeton gardé ne commence pas par `xoxb-` : c’est peut-être un jeton d’utilisateur (`xoxp-`) ou celui de l’app. Copie le **Bot User OAuth Token** depuis **OAuth & Permissions**.
@@ -31,7 +31,7 @@ Slack a répondu, mais a refusé. La fin est le code d’erreur de Slack :
 - `is_archived` : le salon est archivé.
 
 **`Slack could not be reached: {raison}`**
-La requête n’a pas abouti : machine hors ligne, proxy, certificat, Slack n’a pas répondu en 10 secondes, ou sa réponse n’était pas du JSON (une panne de Slack). Vérifie ta connexion et **Réglages › Réseau**. Ce message-là est perdu.
+La requête n’a pas abouti : machine hors ligne, proxy, certificat, Slack n’a pas répondu en 10 secondes, ou sa réponse n’était pas du JSON (une panne de Slack). Vérifie ta connexion et **Réglages › Avancé › Réseau**. Ce message-là est perdu.
 
 **`the queue of facts is full (256): the oldest, agent.status #17, is dropped`**
 Les faits sont arrivés plus vite que le plugin ne les traitait : le plus ancien n’a pas été posté.

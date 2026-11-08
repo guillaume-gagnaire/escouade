@@ -74,7 +74,7 @@ export default defineZone('conv', {
   empty: {
     title: 'Agent ready',
     hint: 'Describe the task to give to {engine}. The agent works in {cwd}.',
-    engineMissing: '{engine} couldn’t be found on this machine: install it or set its path in Settings › Harness (⚙).',
+    engineMissing: '{engine} couldn’t be found on this machine: install it or set its path in Settings › Accounts and harnesses (⚙).',
   },
   older: {
     show: { one: 'Show the previous message', other: 'Show the previous {n} messages' },

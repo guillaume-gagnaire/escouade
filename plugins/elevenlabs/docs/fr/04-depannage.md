@@ -13,10 +13,10 @@ ElevenLabs a répondu 401 ou 403 : la clé est fausse, révoquée, ou n’a pas 
 **« ElevenLabs refuse pour l’instant : trop de requêtes ou quota épuisé (…). Attends un peu, ou vérifie le forfait de ton compte ElevenLabs. »**
 ElevenLabs a répondu 429. Entre parenthèses, ce qu’il a dit. Attends, ou regarde ton forfait et ton crédit chez ElevenLabs.
 
-**« ElevenLabs ne répond pas : … Vérifie le réseau et le proxy (Réglages › Réseau), ou repasse en local. »**
+**« ElevenLabs ne répond pas : … Vérifie le réseau et le proxy (Réglages › Avancé › Réseau), ou repasse en local. »**
 La demande n’a pas abouti. Ce qui suit les deux-points dit pourquoi :
 
-- une erreur du réseau ou du proxy : vérifie [Réglages › Réseau](https://escouade.dev/docs/settings-network) et que `api.elevenlabs.io` est joignable ;
+- une erreur du réseau ou du proxy : vérifie [Réglages › Avancé › Réseau](https://escouade.dev/docs/settings-network) et que `api.elevenlabs.io` est joignable ;
 - « délai dépassé » : ElevenLabs n’a pas répondu à temps ;
 - « le plugin de ce service n’est plus là » : le plugin ElevenLabs est coupé ou désinstallé. Rallume-le dans la vue Plugins, ou installe-le (onglet Installer) ;
 - « Le plugin dev.escouade.elevenlabs ne répond pas : … » : le plugin ne tourne pas ou s’est arrêté. Son onglet Journal, dans la vue Plugins, dit pourquoi ;

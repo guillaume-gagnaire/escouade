@@ -20,7 +20,7 @@ import { readPref, writePref } from './prefs';
 import { errorText, missingAccountOf } from './refusal';
 import { parseTestId, parseWorktreeRunId, testCommand, worktreeCommand } from './recipe';
 import type { IconName } from './icons';
-import type { SettingsPage, SettingsSection, SettingsTab } from './settings-pages';
+import type { SettingsPage } from './settings-pages';
 import type { FormFile } from './ticket-files';
 import type { FormImage } from './ticket-images';
 import { setSources } from './integrations';
@@ -85,7 +85,7 @@ export type Modal =
   /**
    * The window that adds a project, on `path` when it opens on one (read at once). `historyId`: of the folder's closed
    * projects, the one « Rouvrir » was clicked on; it holds only while the path typed is `path`. `projectId`: the assistant
-   * opened again on an existing project (Réglages › Projets), to set it up anew.
+   * opened again on an existing project (Réglages › Projets › Projet), to set it up anew.
    */
   | { kind: 'newProject'; path?: string; historyId?: string; projectId?: string }
   /** The question of the first start: the usage statistics. */
@@ -95,8 +95,8 @@ export type Modal =
   /** ESC-255: what Claude Code remembers of a project, offered once to its shared memory, memory by memory. */
   | { kind: 'claudeMemory'; projectId: string; offered: OfferedMemory[] }
   /**
-   * On a tab (Claude Code by default) and, for a project's tabs, a project (the one on screen by default),
-   * scrolled to a section of it; `resume`: with the draft it had, back from a modal it opened; `suggest`: Claude
+   * On a page (« Comptes et harness » by default) and, for a project's pages, a project (the one on screen by default),
+   * scrolled to a group of it; `resume`: with the draft it had, back from a modal it opened; `suggest`: Claude
    * reads the project at once to suggest its launch commands.
    */
   | {
@@ -105,9 +105,8 @@ export type Modal =
       page?: SettingsPage;
       /** The project of a project's page. */
       projectId?: string;
-      /** An id of the 2.0 window, led to its page (`legacyTab`) until each link gives its page (R6 at the latest). */
-      tab?: SettingsTab;
-      section?: SettingsSection;
+      /** The group of the page it opens on, scrolled to (its `anchor`): « Kanban (Workflow) ». */
+      at?: string;
       resume?: boolean;
       suggest?: boolean;
     }
@@ -150,11 +149,11 @@ export type Modal =
   | { kind: 'newDiscussion'; projectId: string; preset?: DiscussionPreset }
   /** « Ajouter un compte… » (a new Claude account, then its sign-in), or « Se connecter… » for the account `accountId`. */
   /** `back`: the settings' tab it came from and goes back to (Comptes Claude by default). */
-  | { kind: 'account'; accountId?: string; back?: SettingsTab; engine?: EngineId; reserveFor?: string }
+  | { kind: 'account'; accountId?: string; back?: SettingsPage; engine?: EngineId; reserveFor?: string }
   | { kind: 'testLaunch'; agentId: string }
   | { kind: 'import'; projectId: string }
   /** The update downloaded (`app.update`), which a restart installs; `back`, the settings' tab it was opened from and goes back to. */
-  | { kind: 'update'; back?: SettingsTab }
+  | { kind: 'update'; back?: SettingsPage }
   /** The release notes of the update installed since the last start. */
   | { kind: 'notes'; version: string; notes: string }
   /** « Rechercher dans les conversations » (Ctrl+K). */
@@ -320,7 +319,7 @@ class AppState {
   engineModels = $state.raw<Partial<Record<EngineId, ToldModel[]>>>({});
   /** What the `claude` of each account told of its models: which take the mode `auto` (`modelTakes`). */
   accountModels = $state.raw<Record<string, AccountModels>>({});
-  /** The harnesses whose program is found: the only ones the interface offers (Réglages › Harness lists them all). */
+  /** The harnesses whose program is found: the only ones the interface offers (Réglages › Comptes et harness lists them all). */
   enginesFound = $state.raw<EngineId[]>([]);
   version = $state('');
   filesOpen = $state(false);

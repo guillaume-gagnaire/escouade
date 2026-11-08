@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, FAKE_GEMINI, send, test, type App } from './fixture';
+import { addProject, expect, FAKE_GEMINI, send, test, type App, openSettingsPage } from './fixture';
 
 const SHOTS = process.env.ESCOUADE_E2E_SHOTS;
 
@@ -82,11 +82,11 @@ test.describe('an agent on Gemini CLI', () => {
   test('converses over ACP, asks its permissions and questions from the window and the list, and resumes', async ({ app }) => {
     const { page } = app;
     await addProject(page, app.repo);
-    // Réglages › Harness: found, with its version.
+    // Réglages › Comptes et harness: found, with its version.
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Réglages' });
-    await settings.getByRole('tab', { name: 'Harness' }).click();
-    const gemini = settings.getByRole('region', { name: 'Gemini CLI' });
+    await openSettingsPage(settings, 'Comptes et harness');
+    const gemini = settings.getByRole('region', { name: 'Gemini CLI', exact: true });
     await expect(gemini.locator('[data-state]')).toHaveText('0.66.0');
     await gemini.scrollIntoViewIfNeeded();
     await shots(page, 'harness');
@@ -208,8 +208,8 @@ test.describe('Gemini CLI’s accounts (ESC-275)', () => {
     await addProject(page, app.repo);
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Réglages' });
-    await settings.getByRole('tab', { name: 'Comptes' }).click();
-    await expect(settings.getByRole('group', { name: 'Comptes Gemini CLI' })).toContainText('Aucun compte');
+    await openSettingsPage(settings, 'Comptes et harness');
+    await expect(settings.getByRole('region', { name: 'Gemini CLI', exact: true })).toContainText('Aucun compte');
     await settings.getByRole('button', { name: 'Ajouter un compte Gemini CLI…' }).click();
     const modal = page.getByRole('dialog', { name: 'Ajouter un compte Gemini CLI' });
     // The machine's: its sign-in is in ~/.gemini, which Escouade leaves alone.
@@ -286,7 +286,7 @@ test.describe('Gemini CLI’s accounts (ESC-275)', () => {
 
     // « Perso » off: new agents go to the key's, which runs as it, its key never on its command line.
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
-    await settings.getByRole('tab', { name: 'Comptes' }).click();
+    await openSettingsPage(settings, 'Comptes et harness');
     await perso.getByRole('switch', { name: 'Actif' }).click();
     await expect(perso.getByRole('switch', { name: 'Actif' })).toHaveAttribute('aria-checked', 'false');
     await page.keyboard.press('Escape');

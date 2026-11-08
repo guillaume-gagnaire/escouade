@@ -2,7 +2,7 @@
 title: "Livraison et mises à jour"
 subject: "Introduction"
 sources: ["docs/SPEC.md",".github/workflows/release.yml",".github/workflows/discord.yml","scripts/beta-channel.mjs","src-tauri/src/updates.rs"]
-tickets: ["ESC-374"]
+tickets: ["ESC-374","ESC-380"]
 decisions: [114]
 compared: null
 ---
@@ -34,7 +34,7 @@ L'interface est en français et en anglais (voir *Langues*).
 - « Recevoir les versions bêta » (Réglages › À propos), **décochée par défaut** : décochée, une version distante n'est proposée que plus récente et sans suffixe de préversion. Une app sur une bêta reste dessus jusqu'à la version stable qui la suit (2.2.0 après 2.2.0-beta.3), jamais une plus ancienne (2.1.5). Cochée, toute version plus récente est proposée, bêta comprise.
 - `latest.json` de la dernière release ne contient jamais une bêta : les versions sans l'option (2.1.3 et avant), qui ne lisent que lui, ne la voient jamais.
 - `beta.json`, toujours dans la dernière release stable, contient la plus récente des versions, stable ou bêta (voir *CI/CD*).
-- L'option s'enregistre aussitôt, hors du brouillon des réglages ; la cocher lance une vérification comme « Rechercher une mise à jour », la décocher une vérification silencieuse qui retire une bêta proposée.
+- L'option s'enregistre aussitôt, comme tout réglage (voir *Réglages*) ; la cocher lance une vérification comme « Rechercher une mise à jour », la décocher une vérification silencieuse qui retire une bêta proposée.
 - Une app sur une bêta le dit après sa version, dans Réglages › À propos et en bas de la colonne des onglets (« Escouade 2.2.0-beta.1 (bêta) ») ; une mise à jour bêta aussi, dans la barre de statut, l'onglet et la modale (« Escouade 2.2.0-beta.2 (bêta) est prête »).
 
 ### Échecs

@@ -5,7 +5,7 @@ Ce plugin est un module WASM : il tourne dans Escouade, isolé, sans programme �
 ## Ce qu'il joint
 
 - `api.linear.app`, en https, et aucun autre hôte. C'est l'hôte d'Escouade qui l'applique : un appel vers un autre hôte, vers une adresse IP écrite telle quelle, ou vers une adresse de ta machine ou de ton réseau local est refusé avant de partir.
-- Il passe par le proxy de Réglages › Réseau quand tu en as un.
+- Il passe par le proxy de Réglages › Avancé › Réseau quand tu en as un.
 - Chaque réponse de Linear est limitée à 8 Mio et à 15 secondes.
 
 ## Ce qu'il lit et ce qu'il écrit chez Linear
@@ -25,14 +25,14 @@ Il ne crée, ne renomme, n'archive et ne supprime aucune issue ni équipe.
 
 ## Les secrets qu'il reçoit
 
-- La clé d'API personnelle de ton compte Linear, que tu as donnée dans Réglages › Intégrations. Escouade la garde dans le trousseau du système et la prête au plugin quand il la demande, pour un appel ; le plugin ne l'écrit nulle part.
+- La clé d'API personnelle de ton compte Linear, que tu as donnée dans Réglages › Services connectés. Escouade la garde dans le trousseau du système et la prête au plugin quand il la demande, pour un appel ; le plugin ne l'écrit nulle part.
 - Elle part dans l'en-tête `Authorization` de chaque appel vers `api.linear.app`, et seulement là.
 - Il ne peut lire aucun autre secret : ni celui d'un autre plugin, ni un autre compte d'Escouade.
 
 ## Ce qui part chez Linear
 
 - Les lectures ci-dessus.
-- Le texte des commentaires qu'Escouade fait poster : la clé du ticket Escouade (`DEM-5`), sa branche, ses critères et leur état, les notes de l'agent, ce qui a été fait, l'issue de la validation et le lien de la pull request, selon la colonne. Ils sont écrits dans la « Langue des textes rédigés par les agents » (Réglages › Application).
+- Le texte des commentaires qu'Escouade fait poster : la clé du ticket Escouade (`DEM-5`), sa branche, ses critères et leur état, les notes de l'agent, ce qui a été fait, l'issue de la validation et le lien de la pull request, selon la colonne. Ils sont écrits dans la « Langue des textes rédigés par les agents » (Réglages › Général).
 
 ## Ce qui n'y part jamais
 

@@ -1,6 +1,6 @@
 # Dépannage
 
-Les messages ci-dessous sont ceux du plugin et d'Escouade, tels qu'ils s'affichent : sous le formulaire de connexion, sur la ligne du compte dans Réglages › Intégrations, sur la carte d'un agent ou dans l'onglet de sa PR, ou au clic sur le ⚠ d'une carte dont la synchronisation a échoué. Quand GitHub donne une raison, elle suit le message.
+Les messages ci-dessous sont ceux du plugin et d'Escouade, tels qu'ils s'affichent : sous le formulaire de connexion, sur la ligne du compte dans Réglages › Services connectés, sur la carte d'un agent ou dans l'onglet de sa PR, ou au clic sur le ⚠ d'une carte dont la synchronisation a échoué. Quand GitHub donne une raison, elle suit le message.
 
 ## À la connexion
 
@@ -14,7 +14,7 @@ L'adresse de l'instance commence par `http://`. Donne son adresse en `https://`.
 Le jeton est faux, expiré ou révoqué. Crée-en un autre avec « Créer un jeton ».
 
 **« GitHub injoignable : … »**
-L'appel n'est pas arrivé : une adresse mal tapée, pas de réseau, un proxy ou un pare-feu, ou plus de 15 secondes sans réponse. Vérifie l'adresse, ta connexion et Réglages › Réseau.
+L'appel n'est pas arrivé : une adresse mal tapée, pas de réseau, un proxy ou un pare-feu, ou plus de 15 secondes sans réponse. Vérifie l'adresse, ta connexion et Réglages › Avancé › Réseau.
 
 ## Sur la ligne du compte
 
@@ -63,9 +63,9 @@ Le jeton n'a pas le droit demandé sur ce dépôt (un jeton fine-grained sans ce
 La limite de l'API est atteinte. Le plugin ralentit de lui-même ; attends la fin de la fenêtre.
 
 **« GitHub : introuvable (404) »**, **« GitHub : erreur 500 »** (ou une autre erreur du service), **« GitHub : réponse illisible »**, **« GitHub : trop de redirections »**
-Le dépôt ou l'objet n'existe plus ou n'est pas visible, GitHub a répondu par une erreur, autre chose que du JSON (souvent un proxy), ou plus de dix redirections. Réessaie ; si ça dure, regarde Réglages › Réseau.
+Le dépôt ou l'objet n'existe plus ou n'est pas visible, GitHub a répondu par une erreur, autre chose que du JSON (souvent un proxy), ou plus de dix redirections. Réessaie ; si ça dure, regarde Réglages › Avancé › Réseau.
 
-**« GitHub : aucun jeton pour github.com. Reconnecte le compte dans Réglages › Intégrations. »**
+**« GitHub : aucun jeton pour github.com. Reconnecte le compte dans Réglages › Services connectés. »**
 Escouade n'a pas pu prêter de jeton au plugin. Reconnecte le compte.
 
 ## Pour GitHub Issues

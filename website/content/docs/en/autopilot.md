@@ -4,7 +4,7 @@ The autopilot takes a project’s “To do” tickets and gives each one to an a
 
 ## Turning it on or off
 
-The “Autopilot” switch is in the header of the [Kanban](board). It is per project and on by default. It is the same setting as “Assign tickets automatically” in Settings › Kanban (see [Kanban settings](settings-board)).
+The “Autopilot” switch is in the header of the [Kanban](board). It is per project and on by default. It is the same setting as “Assign tickets automatically” in Settings › Projects › Kanban (see [Kanban settings](settings-board)).
 
 When it is off, the header reads “Autopilot · off”, the “To do” cards say “Autopilot is off”, and each ticket starts when you click “Start” on its card (see below).
 
@@ -16,7 +16,7 @@ Nothing starts, whether the autopilot is on or not, in three cases:
 
 ## How many agents in parallel
 
-The “In parallel” setting (Settings › Kanban) sets how many tickets are “In progress” at the same time: from 1 to 6, 2 by default. The header counts the free slots (“1 free slot”, “All slots are taken”).
+The “In parallel” setting (Settings › Projects › Kanban) sets how many tickets are “In progress” at the same time: from 1 to 6, 2 by default. The header counts the free slots (“1 free slot”, “All slots are taken”).
 
 An “In progress” ticket holds a slot, even while its agent waits for its quota to reset. A blocked ticket no longer holds one.
 
@@ -44,19 +44,19 @@ When a ticket starts, Escouade:
 4. waits for the worktree setup: copied `.env*` files, the project’s setup commands (the card says “Setting up the worktree · …”). If a command fails, the agent is told with its first message, so that it can sort it out;
 5. sends the agent its first message: the key and title, the description, the numbered criteria, and the instruction to work until it meets them, then end with the report.
 
-This message, like the following ones, is written in “Language of texts written by the agents” (Settings › Application, see [Application settings](settings-application)).
+This message, like the following ones, is written in “Language of texts written by the agents” (Settings › General, see [Application settings](settings-application)).
 
 On every start, Escouade also adds to the agent’s system prompt a protocol that outlives compaction and resumes: work alone, check each criterion yourself (tests, runs) before declaring it met, don’t commit the files copied from the project, ask questions with the question tool when a decision is missing, and end every answer with the criteria report. Escouade also reserves a block of ports for the ticket, and the protocol asks the agent how to launch its work to test it (see [Reviewing and approving a ticket](testing)).
 
 ### Model, effort, and permissions
 
-In Settings › Kanban, the “Agents” group sets the agents of the project’s tickets: “Model”, “Effort”, and “Mode” (of permission). Left on “Default”, they follow the defaults of Settings › Harness (see [Harness settings](settings-claude-code)).
+In Settings › Projects › Kanban, the “Agents” group sets the agents of the project’s tickets: “Model”, “Effort”, and “Mode” (of permission). Left on “Default”, they follow the defaults of Settings › Accounts and harnesses (see [Harness settings](settings-claude-code)).
 
 Ticket agents stay in Escouade’s view. If one of them asks for a permission or asks a question, its card turns amber with “Question waiting for your answer”, you are notified, and you answer in its conversation (see [Chat](chat)).
 
 ### Which account it starts on
 
-A ticket starts on the project’s “Preferred account” if it is active. Otherwise, on the first active account, in the order of Settings › Accounts, that is “good” (see [Claude accounts](accounts#the-automatic-choice)) and under the “Pause above quota” threshold, has no pause due to the usage limit, and has no agent waiting for its reset. A “Reserved to projects” account only serves those projects. The agent then stays on its account, unless it resumes on another account after the usage limit (see below). See [Claude accounts](accounts).
+A ticket starts on the project’s “Preferred account” if it is active. Otherwise, on the first active account, in the order of Settings › Accounts and harnesses, that is “good” (see [Claude accounts](accounts#the-automatic-choice)) and under the “Pause above quota” threshold, has no pause due to the usage limit, and has no agent waiting for its reset. A “Reserved to projects” account only serves those projects. The agent then stays on its account, unless it resumes on another account after the usage limit (see below). See [Claude accounts](accounts).
 
 ## The loop
 
@@ -79,7 +79,7 @@ When a ticket goes back to its agent after “Send back”, failing tests, or a 
 
 ## Pausing near the quota limit
 
-The “Pause above quota” setting (Settings › Kanban, “for all projects”) takes 80%, 90%, 95%, or 100% (the default). As soon as an account’s 5-hour window or weekly window reaches this threshold, the autopilot starts no ticket on it until the window resets. This threshold holds back the autopilot alone: a ticket launched by hand (“Launch”, or an agent’s `start_ticket`) still starts, and only a usage limit reached holds it back. The queue starts again by itself 30 seconds after that reset, or as soon as the quotas read are back under the threshold.
+The “Pause above quota” setting (Settings › Projects › Kanban, “for all projects”) takes 80%, 90%, 95%, or 100% (the default). As soon as an account’s 5-hour window or weekly window reaches this threshold, the autopilot starts no ticket on it until the window resets. This threshold holds back the autopilot alone: a ticket launched by hand (“Launch”, or an agent’s `start_ticket`) still starts, and only a usage limit reached holds it back. The queue starts again by itself 30 seconds after that reset, or as soon as the quotas read are back under the threshold.
 
 The Kanban’s header says so on a line of its own, for example “Autopilot paused: 5-hour quota at 95% (resumes at 2:30 PM)” or “Autopilot paused: weekly quota at 96% (resumes on Friday, October 2 at 9:30 AM)”, with a “Resume now” button. The “To do” cards say “Waiting: autopilot paused”. Agents already at work carry on.
 
@@ -91,7 +91,7 @@ During a pause nothing starts, not even a ticket started by hand.
 
 ## Usage limit and resume
 
-When a ticket’s agent reaches its account’s usage limit, its turn stops. What follows depends on your settings (Settings › Harness):
+When a ticket’s agent reaches its account’s usage limit, its turn stops. What follows depends on your settings (Settings › Accounts and harnesses):
 
 - **“Auto-resume after the usage limit”** (on by default): Escouade waits for the quota to reset, then sends “continue” to the agent. The ticket stays “In progress” and keeps its slot; its card says “Resumes at 2:30 PM”. When every account the project can use has an agent waiting like this, the header says “Quota reached — resumes at 2:30 PM” and nothing starts before then. As long as an account has none, a ticket can start on it.
 - **“Resume a ticket’s agent stopped by the usage limit on another account”** (with several accounts, off by default): the agent goes on at once on another usable account, with its session and its conversation. An account is usable if it is signed in, under the threshold, has no pause due to the usage limit, and has no agent waiting for its reset. A session does not move between a Windows account and a WSL account. The account it leaves stays held back until it resets (30 minutes if the reset is not known). Without this setting, the agent waits for its account to reset.

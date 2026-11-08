@@ -1,12 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, openSettingsPage, test } from './fixture';
 
 // The view Plugins (PLG-4, ESC-176): the fake plugin (tests/fixtures/fake-plugin.mjs) installed from a folder through the
 // install window — its origin, its fingerprint and what it may do shown before anything is installed —, switched off then
 // on again for a project, its process started from its journal, which then tells its start; uninstalled, its copy and
-// its journal gone.
+// its journal gone. Réglages › Plugins (ESC-384) lists it, what it adds, on how many projects, and leads to its page.
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const ID = 'dev.test.fake';
@@ -100,6 +100,34 @@ test('the fake plugin is installed from a folder, switched on for a project, its
   await sw.click();
   await expect(sw).toHaveAttribute('aria-checked', 'true');
   expect(installed(app.data)[0].projects).toEqual({ [id]: true });
+
+  // Réglages › Plugins: its line says what it adds and on how many projects it is on; its switch turns it off and on in
+  // Escouade (what « Réglages › Plugins le rallume » says); « Réglages » opens its page in the view, on its settings.
+  let settings = await openSettingsPage(page, 'Plugins');
+  const row = settings.getByRole('region', { name: 'Installés' }).getByRole('group', { name: 'Faux plugin' });
+  await expect(row).toContainText('Faux pluginv1.0.0');
+  await expect(row).toContainText('Actif sur 1 projet sur 1');
+  const appSwitch = row.getByRole('switch', { name: 'Actif dans Escouade : Faux plugin' });
+  await expect(appSwitch).toHaveAttribute('aria-checked', 'true');
+  await appSwitch.click();
+  await expect(appSwitch).toHaveAttribute('aria-checked', 'false');
+  await expect.poll(() => installed(app.data)[0]).toMatchObject({ enabled: false });
+  await appSwitch.click();
+  await expect(appSwitch).toHaveAttribute('aria-checked', 'true');
+  await expect.poll(() => installed(app.data)[0]).toMatchObject({ enabled: true });
+  await row.getByRole('button', { name: 'Réglages de Faux plugin, dans la vue Plugins' }).click();
+  await expect(settings).toBeHidden();
+  await expect(page.getByRole('tab', { name: /^Réglages/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tabpanel', { name: 'Réglages' })).toContainText('Jeton');
+  // « Ouvrir la vue Plugins »: the installed ones.
+  settings = await openSettingsPage(page, 'Plugins');
+  await settings.getByRole('button', { name: 'Ouvrir la vue Plugins' }).click();
+  await expect(settings).toBeHidden();
+  await expect(side.getByRole('button', { name: /Installés/ })).toHaveAttribute('aria-current', 'page');
+  await page
+    .getByRole('table', { name: 'Ajoutés' })
+    .getByRole('button', { name: /Faux plugin/ })
+    .click();
 
   // Its journal: started from there, its start and its answer to `initialize` read.
   await page.getByRole('tab', { name: 'Journal' }).click();

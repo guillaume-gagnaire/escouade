@@ -11,7 +11,7 @@ A field is empty. Fill it in; nothing went to Trello.
 The key or the token is wrong, or the token was revoked, or it was made for another key. Make the token again with "Get a token for this key", after pasting the right key.
 
 **"Trello can’t be reached: …"**
-The call did not arrive: no network, a proxy or a firewall blocking `api.trello.com`, or more than 15 seconds without an answer. Check your connection and Settings › Network.
+The call did not arrive: no network, a proxy or a firewall blocking `api.trello.com`, or more than 15 seconds without an answer. Check your connection and Settings › Advanced › Network.
 
 ## When importing and syncing
 
@@ -19,7 +19,7 @@ The call did not arrive: no network, a proxy or a firewall blocking `api.trello.
 Your account no longer reaches the board or the card. Check on Trello that you are still a member, or link another board.
 
 **"Trello: not found (404)"**
-The board, the list or the card no longer exists (deleted, or moved out of your reach). For a board, pick another one in Settings › Integrations; for a list, change the status mapping.
+The board, the list or the card no longer exists (deleted, or moved out of your reach). For a board, pick another one in Settings › Projects › Imported tickets; for a list, change the status mapping.
 
 **"Trello limits the requests (429): try again in a moment"**
 Trello limits the number of calls per key and token. Wait a little: a sync that fails this way is tried again on its own.
@@ -28,9 +28,9 @@ Trello limits the number of calls per key and token. Wait a little: a sync that 
 Trello answered with an error. A sync is tried again on its own, after 1, 5, 15 then 60 minutes, for 24 hours; "Resync" sends it again at once.
 
 **"Trello: unreadable answer"**
-Trello answered something other than JSON, often a proxy's error page. Try again; if it lasts, look at Settings › Network.
+Trello answered something other than JSON, often a proxy's error page. Try again; if it lasts, look at Settings › Advanced › Network.
 
-**"Trello: no token for … Connect the account again in Settings › Integrations."**
+**"Trello: no token for … Connect the account again in Settings › Connected services."**
 Escouade could not lend a token to the plugin: the account has none any more. Disconnect then connect Trello again.
 
 **"System keychain unreadable: restart Escouade or reconnect the account."**

@@ -1,13 +1,13 @@
 // The shared memory (ESC-255) on a fake memory of Claude Code: what Principal's Claude Code (the test's folder, never the
 // user's) remembers of the project is offered once when the project is added, memory by memory and none ticked; only
 // what is ticked goes to `.escouade/memory/` of the project's folder, Claude Code's files untouched; the offer does not
-// come back after a restart; Réglages › Projets lists the memory and forgets one. `ESCOUADE_E2E_SHOTS`: screenshots in
+// come back after a restart; Réglages › Projets › Équipe lists the memory and forgets one. `ESCOUADE_E2E_SHOTS`: screenshots in
 // both themes.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, test, openSettingsPage } from './fixture';
 
 const SHOTS = process.env.ESCOUADE_E2E_SHOTS;
 
@@ -83,10 +83,10 @@ test('Claude Code’s memory is offered once, taken memory by memory, then liste
   await page.waitForTimeout(1500);
   await expect(page.getByRole('dialog', { name: 'Reprendre la mémoire de Claude Code ?' })).toHaveCount(0);
 
-  // Réglages › Projets: the list, a text read, one forgotten on a second click.
+  // Réglages › Projets › Équipe: the list, a text read, one forgotten on a second click.
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(dialog, 'Équipe');
   const list = dialog.getByRole('list', { name: 'Mémoire partagée' });
   await list.scrollIntoViewIfNeeded();
   await expect(list.getByRole('listitem')).toHaveCount(2);

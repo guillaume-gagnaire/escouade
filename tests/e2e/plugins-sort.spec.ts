@@ -1,13 +1,13 @@
 // The sort of the seed (ESC-373, docs/PLUGINS.md §8.7) on the real app, its files those of tests/fixtures/store/fake-store.mjs:
 // a first installation installs nothing; « Ajouter un compte… » on a harness at the start installs its plugin from the seed,
 // with no network, and says it; the view Plugins proposes the others and installs one in a click; a plugin uninstalled is
-// not put back at the next start.
+// not put back at the next start; Réglages › Plugins (ESC-384) proposes it again, and installs it in a click.
 
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, FAKE_COPILOT, test } from './fixture';
+import { addProject, expect, FAKE_COPILOT, openSettingsPage, test } from './fixture';
 import { startFakeStore } from '../fixtures/store/fake-store.mjs';
 
 const COPILOT = 'dev.escouade.copilot-cli';
@@ -110,5 +110,32 @@ test.describe('the seed sorted, the view Plugins', () => {
     await expect(page.getByRole('region', { name: 'Proposés par Escouade' })).toContainText('Tu l’as désinstallé (v2.2.0)');
     await expect(page.getByRole('table', { name: 'Ajoutés' })).toHaveCount(0);
     expect(installed(app.data)).not.toContain(TRELLO);
+
+    // Réglages › Plugins: the seed's not installed, said why; « Installer » in one click, with no window, from the seed.
+    const settings = await openSettingsPage(page, 'Plugins');
+    const seed = settings.getByRole('region', { name: 'Proposés par Escouade' });
+    await expect(seed).toContainText('Dans l’installeur, rien à télécharger');
+    await expect(seed.getByRole('group', { name: 'Copilot CLI' })).toContainText('Dans l’app, sans téléchargement');
+    await expect(seed.getByRole('group', { name: 'Trello' })).toContainText('Tu l’as désinstallé (v2.2.0)');
+    await seed.getByRole('button', { name: 'Installer Trello' }).click();
+    await expect(page.locator('.toast').filter({ hasText: 'Plugin Trello installé' }).first()).toBeVisible();
+    await expect(settings.getByRole('dialog')).toHaveCount(0);
+    await expect(settings.getByRole('region', { name: 'Installés' }).getByRole('group', { name: 'Trello' })).toContainText(
+      'Actif sur 1 projet sur 1',
+    );
+    await expect(seed.getByRole('group', { name: 'Trello' })).toHaveCount(0);
+    await expect.poll(() => installed(app.data)).toContain(TRELLO);
+
+    // The page, to set beside design/settings-2-2/captures/a-plugins*.png, when asked for.
+    const shots = process.env.ESCOUADE_E2E_SHOTS;
+    if (shots) {
+      fs.mkdirSync(shots, { recursive: true });
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.mouse.move(2, 400);
+      for (const t of ['dark', 'light'] as const) {
+        await page.evaluate((t) => (document.documentElement.dataset.theme = t), t);
+        await page.screenshot({ path: path.join(shots, `app-a-plugins${t === 'light' ? '-light' : ''}.png`) });
+      }
+    }
   });
 });

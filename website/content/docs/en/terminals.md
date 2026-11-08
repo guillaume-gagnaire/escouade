@@ -25,9 +25,9 @@ Escouade detects the shells installed on your machine.
 | Windows | “PowerShell” (PowerShell 7, looked for in the `PATH` then in `Program Files`); “Windows PowerShell” instead when PowerShell 7 is missing; “Git Bash”, the one from Git for Windows; “WSL” (“WSL (Ubuntu)” when a distribution is set). |
 | macOS and Linux | Your login shell (`$SHELL`) first, then zsh, bash and fish when they are installed. `sh` is the last resort when none of the others is found. |
 
-The first one in the list is what `Ctrl+T` opens. On macOS and Linux, shells start as login shells (`-l`), as in an ordinary terminal. WSL opens in the project folder (or the agent’s) and takes the default distribution, or the one in Settings › Terminals.
+The first one in the list is what `Ctrl+T` opens. On macOS and Linux, shells start as login shells (`-l`), as in an ordinary terminal. WSL opens in the project folder (or the agent’s) and takes the default distribution, or the one in Settings › Advanced › Terminals.
 
-The paths of PowerShell 7 and Git Bash, the WSL distribution and, on macOS, the path of bash are set in Settings › Terminals, which also shows the detected shells (on Linux, only the “Git Bash” field counts, for bash): see [the terminals settings](settings-terminals).
+The paths of PowerShell 7 and Git Bash, the WSL distribution and, on macOS, the path of bash are set in Settings › Advanced › Terminals, which also shows the detected shells (on Linux, only the “Git Bash” field counts, for bash): see [the terminals settings](settings-terminals).
 
 ## In the terminal
 
@@ -61,7 +61,7 @@ A terminal keeps almost all keys for the shell. The behavior depends on the syst
 
 ## The proxy
 
-In Settings › Network, the “Also apply the proxy to the built-in terminals” switch (off by default) gives terminals the `HTTPS_PROXY`, `HTTP_PROXY` variables (and their lowercase forms) with the proxy’s address, and `NO_PROXY` with the exclusions. It applies to terminals opened after the change, and also to launch commands and to worktrees’ setup and teardown commands. See [the network settings](settings-network).
+In Settings › Advanced › Network, the “Also apply the proxy to the built-in terminals” switch (off by default) gives terminals the `HTTPS_PROXY`, `HTTP_PROXY` variables (and their lowercase forms) with the proxy’s address, and `NO_PROXY` with the exclusions. It applies to terminals opened after the change, and also to launch commands and to worktrees’ setup and teardown commands. See [the network settings](settings-network).
 
 ## Escouade’s other terminals
 

@@ -4,7 +4,7 @@ What the plugin can do, what it sends to Deepgram and when, and what never goes 
 
 ## What its manifest declares
 
-- **Network**: `api.deepgram.com`, alone. The plugin is a WASM module: it reaches the network only through Escouade’s host, which refuses any other host, and goes through the proxy of [Settings › Network](https://escouade.dev/en/docs/settings-network).
+- **Network**: `api.deepgram.com`, alone. The plugin is a WASM module: it reaches the network only through Escouade’s host, which refuses any other host, and goes through the proxy of [Settings › Advanced › Network](https://escouade.dev/en/docs/settings-network).
 - **Activation**: `voice:deepgram`, when a dictation, a voice or the settings need Deepgram.
 - **Nothing else**: no secret of its own (no `permissions.secrets`), no commands, no events, no files.
 

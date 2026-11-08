@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
-import { addProject, expect, openNewProject, test } from './fixture';
+import { addProject, expect, openNewProject, openSettingsPage, test } from './fixture';
 
 const SHOTS = process.env.ESCOUADE_E2E_SHOTS;
 const SIZES = [
@@ -121,7 +121,7 @@ test('the labels of the assistant keep their width at every step, from 1024 × 7
   expect(problems).toEqual([]);
 });
 
-test('the labels of the settings keep their width in every tab, from 1024 × 728 to 1440 × 900', async ({ app }) => {
+test('the labels of the settings keep their width on every page, from 1024 × 728 to 1440 × 900', async ({ app }) => {
   test.setTimeout(300_000);
   const { page } = app;
   await addProject(page, app.repo);
@@ -129,11 +129,13 @@ test('the labels of the settings keep their width in every tab, from 1024 × 728
   const win = page.getByRole('dialog', { name: 'Réglages' });
   await page.mouse.move(2, 2);
   const problems: string[] = [];
-  const tabs = await win.getByRole('tab').allTextContents();
-  expect(tabs.length).toBeGreaterThan(8);
-  for (const tab of tabs.map((s) => s.trim())) {
-    await win.getByRole('tab', { name: tab, exact: true }).click();
-    await review(page, win, `settings-${tab.toLowerCase().replace(/\W+/g, '-')}`, problems);
+  // Each page of the bar, the project's unfolded first; « À propos » by its name, not its version.
+  await openSettingsPage(win, 'Projet');
+  const pages = await win.getByRole('navigation').locator('button:not([aria-expanded]) .lbl').allTextContents();
+  expect(pages.length).toBeGreaterThan(14);
+  for (const name of pages.map((s) => s.trim())) {
+    await openSettingsPage(win, name);
+    await review(page, win, `settings-${name.toLowerCase().replace(/\W+/g, '-')}`, problems);
   }
   expect(problems).toEqual([]);
 });

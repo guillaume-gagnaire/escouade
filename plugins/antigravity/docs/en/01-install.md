@@ -9,7 +9,7 @@ Install it with its script:
 - Windows: `irm https://antigravity.google/cli/install.ps1 | iex`
 - macOS and Linux: `curl -fsSL https://antigravity.google/cli/install.sh | bash`
 
-Escouade finds `agy` in the `PATH`, or where its script puts it. Settings › Harness shows the executable found and its version. The plugin was tried with Antigravity CLI 1.4.9. `agy update` updates it; Escouade turns off its automatic updates for its agents.
+Escouade finds `agy` in the `PATH`, or where its script puts it. Settings › Accounts and harnesses shows the executable found and its version. The plugin was tried with Antigravity CLI 1.4.9. `agy update` updates it; Escouade turns off its automatic updates for its agents.
 
 ## 2. Install the plugin
 
@@ -23,7 +23,7 @@ Like any plugin, it is switched off by its toggle in the Plugins view and uninst
 
 There is no account at first: an agent starts only on an account you added.
 
-1. Open Settings › Accounts and click **Add an account…**; once two harnesses are installed, choose the harness “Antigravity CLI”.
+1. Open Settings › Accounts and harnesses, then click **Add an account…**; once two harnesses are installed, choose the harness “Antigravity CLI”.
 2. Choose:
    - **This machine’s account**: your Google sign-in, offered signed in or not. Not yet signed in, **Add this account** adds it then runs `agy` in a terminal of the window, which opens your browser. “Sign in…”, on its card, does the same again.
    - **A new account**: a Gemini API key (on aistudio.google.com, “Get API key”). Its agents go through that key’s Gemini API, with its models alone. “Change the key…” gives it again.

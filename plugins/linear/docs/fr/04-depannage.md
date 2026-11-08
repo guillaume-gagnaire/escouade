@@ -13,7 +13,7 @@ Le champ « Clé d'API » est vide. Remplis-le ; rien n'est parti chez Linear.
 La clé est fausse ou a été révoquée. Crée une nouvelle clé avec « Créer une clé d'API Linear ».
 
 **« Linear injoignable : … »**
-L'appel n'est pas arrivé : pas de réseau, un proxy ou un pare-feu qui bloque `api.linear.app`, ou plus de 15 secondes sans réponse. Vérifie ta connexion et Réglages › Réseau.
+L'appel n'est pas arrivé : pas de réseau, un proxy ou un pare-feu qui bloque `api.linear.app`, ou plus de 15 secondes sans réponse. Vérifie ta connexion et Réglages › Avancé › Réseau.
 
 ## À l'import et à la synchronisation
 
@@ -36,9 +36,9 @@ Linear a refusé la requête telle quelle. Escouade la met de côté sans réess
 Linear a répondu par une erreur. Une synchronisation est réessayée seule, après 1, 5, 15 puis 60 minutes, pendant 24 heures ; « Resynchroniser » la renvoie tout de suite.
 
 **« Linear : réponse illisible »**
-Linear a répondu sans données, ou autre chose que du JSON, souvent une page d'erreur d'un proxy. Réessaie ; si ça dure, regarde Réglages › Réseau.
+Linear a répondu sans données, ou autre chose que du JSON, souvent une page d'erreur d'un proxy. Réessaie ; si ça dure, regarde Réglages › Avancé › Réseau.
 
-**« Linear : aucun jeton pour … Reconnecte le compte dans Réglages › Intégrations. »**
+**« Linear : aucun jeton pour … Reconnecte le compte dans Réglages › Services connectés. »**
 Escouade n'a pas pu prêter de clé au plugin : le compte n'en a plus. Déconnecte puis reconnecte Linear.
 
 **« Trousseau du système illisible : relance Escouade ou reconnecte le compte. »**

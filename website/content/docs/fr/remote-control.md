@@ -29,8 +29,8 @@ Deux interrupteurs, éteints au départ, activent le remote control sans passer 
 
 | Réglage | Où | Agents concernés |
 |---|---|---|
-| « Remote control pour tous les agents » | Réglages › Harness, groupe « Remote control » | Ceux de tous les projets |
-| « Remote control pour les agents de ce projet » | Réglages › Projets, groupe « Remote control » (sous « Identité ») | Ceux du projet choisi |
+| « Remote control pour tous les agents » | Réglages › Comptes et harness, groupe « Remote control » | Ceux de tous les projets |
+| « Remote control pour les agents de ce projet » | Réglages › Projets › Confidentialité, groupe « Remote control » (sous « Identité ») | Ceux du projet choisi |
 
 Comme les autres réglages, ils s’enregistrent avec « Enregistrer » (voir [les réglages des harness](settings-claude-code) et [ceux des projets](settings-projects)).
 
@@ -43,7 +43,7 @@ Escouade lance tout de suite le processus de chaque agent, au plus 3 à la fois,
 
 Éteint, un réglage retire le remote control aux agents qui le tenaient de lui, et leur session distante est fermée. Il ne touche ni aux agents dont tu as activé le remote control à la main, ni à ceux qu’un autre réglage couvre encore : si tu éteins le réglage global mais que celui d’un projet est allumé, les agents de ce projet gardent le leur, grâce au projet.
 
-Les deux réglages ne se contredisent jamais. Tant que « Remote control pour tous les agents » est allumé, l’interrupteur du projet se montre allumé et grisé, avec « Activé pour tous les projets dans Réglages › Harness ». Le choix propre du projet est gardé : une fois le réglage global éteint, l’interrupteur du projet retrouve son état.
+Les deux réglages ne se contredisent jamais. Tant que « Remote control pour tous les agents » est allumé, l’interrupteur du projet se montre allumé et grisé, avec « Activé pour tous les projets dans Réglages › Agents ». Le choix propre du projet est gardé : une fois le réglage global éteint, l’interrupteur du projet retrouve son état.
 
 ## Ce qui s’affiche dans Escouade
 

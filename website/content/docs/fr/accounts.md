@@ -8,13 +8,13 @@ Un compte Claude, c’est une connexion à claude.ai avec ses quotas (une fenêt
 
 Chaque compte est Claude Code lancé avec son propre dossier de configuration (la variable `CLAUDE_CONFIG_DIR`) : il a donc sa connexion, ses sessions et son quota. Escouade ne partage jamais la connexion d’un compte avec un autre.
 
-Cette page explique l’usage ; la liste des options de l’onglet est dans [les réglages des comptes](settings-accounts).
+Cette page explique l’usage ; la liste des options de la page est dans [les réglages des comptes](settings-accounts).
 
 ## Aucun compte au départ
 
-Une première installation n’a aucun compte, pour aucun harness, Claude Code compris : seuls les comptes que tu ajoutes existent et comptent (choix du compte d’un agent ou d’un ticket, bascule, passation à un autre harness, quotas, statistiques, serveur MCP, textes rédigés). Réglages › Comptes montre chaque harness installé, avec « Aucun compte » et le bouton « Ajouter un compte Codex… » tant qu’il n’en a pas.
+Une première installation n’a aucun compte, pour aucun harness, Claude Code compris : seuls les comptes que tu ajoutes existent et comptent (choix du compte d’un agent ou d’un ticket, bascule, passation à un autre harness, quotas, statistiques, serveur MCP, textes rédigés). Réglages › Comptes et harness montre chaque harness installé, avec « Aucun compte » et le bouton « Ajouter un compte Codex… » tant qu’il n’en a pas.
 
-Sans compte pour son harness, rien ne démarre en silence : un nouvel agent, un ticket lancé, le pilote auto, une passation ou un texte rédigé est refusé (« Aucun compte Claude Code : ajoute-en un dans Réglages › Comptes. »), avec un bouton « Ajouter un compte… » sur ce harness. L’écran d’accueil et l’étape « Compte et commit » de l’assistant « Nouveau projet » y mènent aussi ; depuis l’assistant, la fenêtre s’ouvre par-dessus et ce que tu as saisi reste.
+Sans compte pour son harness, rien ne démarre en silence : un nouvel agent, un ticket lancé, le pilote auto, une passation ou un texte rédigé est refusé (« Aucun compte Claude Code : ajoute-en un dans Réglages › Comptes et harness. »), avec un bouton « Ajouter un compte… » sur ce harness. L’écran d’accueil et l’étape « Compte et commit » de l’assistant « Nouveau projet » y mènent aussi ; depuis l’assistant, la fenêtre s’ouvre par-dessus et ce que tu as saisi reste.
 
 > [!NOTE]
 > À la mise à jour vers la 1.8.1, le compte Principal de chaque harness reste, comme un compte ajouté (mêmes agents, tickets et statistiques), s’il est connecté ou s’il a déjà servi. Un Principal jamais connecté ni utilisé disparaît. Rien d’autre ne change si tu n’avais que ton compte Claude Code.
@@ -30,7 +30,7 @@ Sans compte pour son harness, rien ne démarre en silence : un nouvel agent, un 
 
 ## Ajouter un compte
 
-1. Ouvre les réglages (`Ctrl+,`, ou ⚙ dans la barre de statut) et l’onglet « Comptes ».
+1. Ouvre les réglages (`Ctrl+,`) sur la page « Comptes et harness ».
 2. Clique sur « Ajouter un compte… » (ou sur « Ajouter un compte Codex… » dans le groupe d’un harness sans compte).
 3. Choisis le compte :
    - « Le compte de la machine » : le compte déjà connecté sur cette machine, dans le dossier habituel du harness, proposé quand le harness y est connecté (« Claude Code est connecté sur cette machine · ada@exemple.dev ») et qu’il n’est pas déjà ajouté (« Déjà ajouté »). « Ajouter ce compte » l’ajoute tel quel : il n’y a rien à connecter.
@@ -86,7 +86,7 @@ Quand Claude Code n’arrive pas à rafraîchir la connexion d’un compte, l’
 
 ## Comptes Codex
 
-Un compte Codex, c’est Codex lancé avec son propre dossier (la variable `CODEX_HOME`) : sa connexion à ChatGPT, ses sessions et son quota. Ils se gèrent dans le groupe « Comptes Codex » de l’onglet, comme ceux de Claude Code.
+Un compte Codex, c’est Codex lancé avec son propre dossier (la variable `CODEX_HOME`) : sa connexion à ChatGPT, ses sessions et son quota. Ils se gèrent dans le groupe « Comptes Codex » de la page, comme ceux de Claude Code.
 
 - Son « Principal » est ton Codex habituel, `~/.codex` : Escouade le lance sans toucher à `CODEX_HOME`. « Ajouter un compte… » le propose comme « Le compte de la machine » quand Codex y est connecté.
 - « Ajouter un compte… », harness « Codex », crée son dossier sous `~/.escouade/codex/`. Il peut reprendre de Principal `config.toml` (ses réglages, dont le bac à sable de Windows et la confiance de tes dossiers), `AGENTS.md` et ses dossiers `skills`, `prompts` et `rules`, par lien ou par copie, comme un compte Claude Code.
@@ -97,7 +97,7 @@ Le quota d’un compte Codex vient de Codex lui-même : de ses agents pendant qu
 
 ## Comptes Copilot CLI
 
-Un compte Copilot CLI, c’est Copilot lancé avec son propre dossier (la variable `COPILOT_HOME`) : sa connexion à GitHub, ses sessions et ses crédits d’IA. Ils se gèrent dans le groupe « Comptes Copilot CLI » de l’onglet.
+Un compte Copilot CLI, c’est Copilot lancé avec son propre dossier (la variable `COPILOT_HOME`) : sa connexion à GitHub, ses sessions et ses crédits d’IA. Ils se gèrent dans le groupe « Comptes Copilot CLI » de la page.
 
 - Son « Principal » est ton Copilot habituel, `~/.copilot` : Escouade le lance sans toucher à `COPILOT_HOME`.
 - « Ajouter un compte… », harness « Copilot CLI », crée son dossier sous `~/.escouade/copilot/`. Il peut reprendre de Principal `mcp-config.json` (tes serveurs MCP), `copilot-instructions.md` et ses dossiers `agents` et `skills`, par lien ou par copie.
@@ -112,11 +112,11 @@ Copilot compte en crédits d’IA, par mois : la barre « crédits » dit ce q
 
 OpenCode n’a qu’un compte dans Escouade : son « Principal », ta config habituelle d’OpenCode et les fournisseurs que tu y as connectés (« Se connecter… » lance `opencode auth login`). « Ajouter un compte… » le propose comme « Le compte de la machine » dès qu’OpenCode est installé (« OpenCode est installé sur cette machine »).
 
-OpenCode n’a pas de quota : son coût est celui que donnent tes fournisseurs, 0 avec un modèle local. La barre d’état montre, à la place des barres, le coût du jour de son compte. Pour le borner, remplis « Budget par jour ($) » sur son bloc, dans Réglages › Comptes (vide par défaut) : une fois le coût du jour atteint, le pilote auto se met en pause jusqu’à minuit, comme au quota épuisé, et la barre d’état le montre (« 0,42 $ / 5,00 $ »). « Reprendre maintenant » lève la pause jusqu’à minuit.
+OpenCode n’a pas de quota : son coût est celui que donnent tes fournisseurs, 0 avec un modèle local. La barre d’état montre, à la place des barres, le coût du jour de son compte. Pour le borner, remplis « Budget par jour ($) » sur son bloc, dans Réglages › Comptes et harness (vide par défaut) : une fois le coût du jour atteint, le pilote auto se met en pause jusqu’à minuit, comme au quota épuisé, et la barre d’état le montre (« 0,42 $ / 5,00 $ »). « Reprendre maintenant » lève la pause jusqu’à minuit.
 
 ## Gérer les comptes
 
-L’onglet « Comptes » des réglages liste les comptes. Chaque changement est enregistré tout de suite, sans passer par l’enregistrement des autres réglages (« Annuler » ne le défait pas). Une ligne par compte :
+La page « Comptes et harness » des réglages liste les comptes. Chaque changement est enregistré tout de suite, comme tout réglage. Une ligne par compte :
 
 | Élément | Rôle |
 |---|---|
@@ -125,7 +125,7 @@ L’onglet « Comptes » des réglages liste les comptes. Chaque changement es
 | Actif | Un interrupteur. Un compte inactif ne reçoit plus de nouvel agent. Le dernier compte actif ne peut pas être coupé (« Il faut au moins un compte actif. »). |
 | ↑ et ↓ | L’ordre des comptes. Les nouveaux agents les essaient dans cet ordre (« Monter Pro », « Descendre Pro »). |
 | Dossier | Le dossier de configuration du compte, en lecture seule. |
-| Exécutable | Le `claude` que ce compte lance. Vide (« Celui des réglages »), il prend l’exécutable de l’onglet « Harness ». |
+| Exécutable | Le `claude` que ce compte lance. Vide (« Celui des réglages »), il prend l’exécutable de « Comptes et harness › Avancé ». |
 | Se connecter… / Se reconnecter… | Ouvre la connexion du compte (voir plus haut). |
 | Nouveaux agents | Le « Modèle », l’« Effort » et le « Mode » avec lesquels partent les nouveaux agents de ce compte, parmi ceux de son harness (les modèles que son harness liste pour lui, les efforts de son modèle, les modes de son harness). « Celui du harness » prend le défaut du harness. |
 | Supprimer | Retire le compte (voir plus bas), le compte de la machine compris. |
@@ -148,13 +148,13 @@ L’ordre de la liste décide donc : mets en tête le compte que tu veux user en
 - une **fenêtre courte** (la 5 h) est une pause courte : au seuil, le compte est écarté jusqu’à sa remise à zéro, puis il redevient un candidat comme les autres, sans laisser de trace sur la semaine ;
 - une **fenêtre longue** (la semaine, les 30 jours de l’offre gratuite de Codex, les crédits du mois de Copilot CLI) se juge au rythme, avec la projection à la remise à zéro que montre la barre d’état : à 100 % elle est écartée jusqu’à sa remise à zéro ; projetée à 100 % ou moins, elle reste bonne, même au-dessus du seuil (une semaine à 88 % qui se remet à zéro dans 3 h ne se gaspille pas) ; projetée au-delà de 100 %, le compte passe derrière les autres, même sous le seuil ; à 95 % ou plus, il passe aussi derrière les autres, quel que soit son rythme ; sans projection (première journée de la fenêtre), le seuil décide.
 
-Le seuil se règle dans Réglages › Kanban, groupe « Pilote auto » : 80, 90, 95 ou 100 % (100 % par défaut), pour tous les projets. Il est détaillé dans [les réglages du Kanban](settings-board). Ce plafond reste le tien : le pilote auto se met en pause à ce pourcentage, sans regarder le rythme, et avec un plafond sous 100 % un compte jugé bon peut donc être retenu par le pilote auto, qui passe alors au suivant.
+Le seuil se règle dans Réglages › Projets › Kanban, groupe « Pilote auto » : 80, 90, 95 ou 100 % (100 % par défaut), pour tous les projets. Il est détaillé dans [les réglages du Kanban](settings-board). Ce plafond reste le tien : le pilote auto se met en pause à ce pourcentage, sans regarder le rythme, et avec un plafond sous 100 % un compte jugé bon peut donc être retenu par le pilote auto, qui passe alors au suivant.
 
 Quand le compte qui recevait les nouveaux agents est écarté et qu’un autre est disponible, une notification le dit : « Le compte Principal a atteint 91 % : les nouveaux agents partent sur Pro. », ou, quand seul son rythme le met derrière, « Le compte Principal finirait à 140 % de sa fenêtre hebdomadaire au rythme actuel : les nouveaux agents partent sur Pro. »
 
 ### Le compte préféré d’un projet
 
-Avec plusieurs comptes, les réglages d’un projet (onglet « Projets », groupe « Identité ») ont un choix « Compte préféré » : le compte sur lequel partent les nouveaux agents et les tickets du projet.
+Avec plusieurs comptes, les réglages d’un projet (page « Projet », groupe « Identité ») ont un choix « Compte préféré » : le compte sur lequel partent les nouveaux agents et les tickets du projet.
 
 - « Automatique » (par défaut) : le choix automatique ci-dessus.
 - Un compte précis : il est pris même si son quota est au seuil. Les tickets du projet n’attendent alors que ce compte-là.
@@ -195,13 +195,13 @@ Si aucun compte actif ne sert un projet (par exemple parce que chaque compte est
 
 - le Kanban du projet écrit « Aucun compte Claude pour ce projet — aucun ticket ne démarre » ;
 - un nouvel agent est refusé, avec un message qui dit où cocher le projet ;
-- l’onglet « Comptes » le dit sous la liste, en ambre, par exemple : Aucun compte actif ne sert « Client » : ses agents et ses tickets ne démarrent pas.
+- la page « Comptes et harness » le dit sous la liste, en ambre, par exemple : Aucun compte actif ne sert « Client » : ses agents et ses tickets ne démarrent pas.
 
 Pour y remédier, coche le projet sur un compte actif, ou décoche toutes les cases d’un compte pour qu’il serve de nouveau tous les projets.
 
 « Fermer le projet » (zone sensible des réglages du projet) garde l’historique du projet, et le projet reste dans la liste « Réservé aux projets » des comptes qui lui étaient réservés : il n’en sort que lorsque son historique est effacé (la case « Effacer aussi son historique » à la fermeture, ou « Effacer l’historique… » dans « Projets fermés »).
 
-Un compte qui n’était réservé qu’à ce projet ne sert donc aucun projet ouvert tant que le projet est fermé. Si c’était ton seul compte actif, plus rien ne démarre pour les autres projets, et l’onglet « Comptes » le dit sous la liste, comme plus haut.
+Un compte qui n’était réservé qu’à ce projet ne sert donc aucun projet ouvert tant que le projet est fermé. Si c’était ton seul compte actif, plus rien ne démarre pour les autres projets, et la page « Comptes et harness » le dit sous la liste, comme plus haut.
 
 Cet onglet montre le projet fermé dans la ligne « Réservé aux projets » du compte, coché et marqué « (fermé) », par exemple « Client (fermé) ». Décoche-le pour libérer le compte : sans case cochée, il sert de nouveau tous les projets. Quand tu rouvres le projet (voir [Projets fermés](settings-projects#projets-fermes)), ses réservations sont toujours là : il n’y a rien à refaire. Si tu effaces l’historique, à la fermeture ou plus tard dans « Projets fermés », le projet sort de la liste de chaque compte. Le « Compte préféré » du projet, lui, repasse sur « Automatique » à la réouverture si son compte n’existe plus.
 
@@ -214,7 +214,7 @@ Dès que tu allumes « Projet privé » dans les réglages du projet, la rang�
 - « Ajouter un compte réservé… » ouvre « Ajouter un compte », sur un nouveau compte, avec son propre dossier. Le compte créé est réservé au projet seul, puis tu reviens à ses réglages.
 - « Réserver Principal à ce projet » réserve tout de suite un compte existant au projet seul : les autres projets n’y partent plus.
 
-L’onglet « Comptes » le dit aussi, sous un compte où part encore un projet privé : « Le projet privé « Client » part encore sur ce compte, partagé avec d’autres projets. », avec « Réserver à « Client » ».
+La page « Comptes et harness » le dit aussi, sous un compte où part encore un projet privé : « Le projet privé « Client » part encore sur ce compte, partagé avec d’autres projets. », avec « Réserver à « Client » ».
 
 Les agents d’un projet privé qui a un compte à lui ne basculent jamais d’eux-mêmes sur un compte partagé : au-delà du seuil, ses nouveaux agents et ses tickets restent sur son compte, la reprise automatique d’un agent de ticket ne va que sur un autre compte à lui, et le passage automatique à un autre harness seulement si le compte qu’il y prendrait est à lui. Sinon, ils attendent la remise à zéro. Sans compte à lui, le projet garde ses comptes partagés, mais aucune bascule automatique ne le fait changer de compte. Pour le permettre, allume « Comptes partagés à la limite » dans les réglages du projet. « Reprendre sur… » et « Continuer sur… » restent possibles à la main.
 
@@ -222,7 +222,7 @@ Ce qu’un nouveau compte partage avec Principal à sa création (réglages, ins
 
 ## Changer de compte avant la limite
 
-Le réglage « Changer de compte à » (Réglages › Comptes, groupe « Quotas ») fait passer un agent sur un autre compte quand le sien approche de la limite : quand sa fenêtre de 5 h atteint 80 %, 90 % ou 95 %, ou quand sa fenêtre hebdomadaire atteint ce seuil sans tenir jusqu’à sa remise à zéro au rythme actuel (une semaine à 88 % qui se remet à zéro dans 3 h ne bouge pas). Par défaut, il est « À la limite » : un agent déjà lancé ne bouge pas avant 100 %. Ce réglage ne change pas le choix des nouveaux agents : ils suivent toujours la règle ci-dessus, « À la limite » compris.
+Le réglage « Changer de compte à » (Réglages › Comptes et harness, groupe « Quotas ») fait passer un agent sur un autre compte quand le sien approche de la limite : quand sa fenêtre de 5 h atteint 80 %, 90 % ou 95 %, ou quand sa fenêtre hebdomadaire atteint ce seuil sans tenir jusqu’à sa remise à zéro au rythme actuel (une semaine à 88 % qui se remet à zéro dans 3 h ne bouge pas). Par défaut, il est « À la limite » : un agent déjà lancé ne bouge pas avant 100 %. Ce réglage ne change pas le choix des nouveaux agents : ils suivent toujours la règle ci-dessus, « À la limite » compris.
 
 Au seuil, l’agent ne s’arrête jamais en plein travail :
 
@@ -244,7 +244,7 @@ Pas de va-et-vient : un agent passé sur un compte ne le quitte que quand celui-
 
 Quand Claude refuse un tour parce que le quota du compte est épuisé, l’agent s’arrête. La carte d’erreur du tour, la carte de l’agent dans la barre latérale (« Reprise à 15:00 ») et le Kanban donnent l’heure de la reprise automatique.
 
-Par défaut, Escouade envoie « continue » à l’agent une trentaine de secondes après la remise à zéro du quota, quand elle en connaît l’heure. C’est le réglage « Reprise automatique après la limite d’usage » (Réglages › Harness, groupe « Tous les harness »). Le bouton « Annuler la reprise » de la carte l’annule pour cet agent.
+Par défaut, Escouade envoie « continue » à l’agent une trentaine de secondes après la remise à zéro du quota, quand elle en connaît l’heure. C’est le réglage « Reprise automatique après la limite d’usage » (Réglages › Comptes et harness, groupe « Tous les harness »). Le bouton « Annuler la reprise » de la carte l’annule pour cet agent.
 
 ### Reprendre sur un autre compte
 
@@ -267,7 +267,7 @@ Si le tour qui suit échoue sur le nouveau compte, la carte écrit « La repris
 
 ### Tout seul, pour les agents de ticket
 
-Le réglage « Reprendre sur un autre compte un agent de ticket arrêté par la limite » (Réglages › Comptes, groupe « Quand un quota est épuisé », visible avec plusieurs comptes) fait la même chose sans toi. Il est désactivé par défaut ; sa description dit : « Sinon il attend la remise à zéro de son compte ».
+Le réglage « Reprendre sur un autre compte un agent de ticket arrêté par la limite » (Réglages › Comptes et harness, groupe « Quand un quota est épuisé », visible avec plusieurs comptes) fait la même chose sans toi. Il est désactivé par défaut ; sa description dit : « Sinon il attend la remise à zéro de son compte ».
 
 Activé, l’agent d’un ticket arrêté par la limite passe de lui-même sur un autre compte quand l’un convient : le compte préféré du projet, sinon le premier de la liste. Il faut que ce compte soit connecté, sous le seuil, qu’aucune pause après une limite d’usage ne le retienne, qu’aucun agent n’y attende sa propre remise à zéro, et qu’il soit du même côté de WSL que l’agent. S’il n’y en a pas, ou si le déplacement échoue (la conversation écrit alors « Reprise sur un autre compte impossible : … »), l’agent attend la remise à zéro de son compte, comme avant.
 
@@ -275,9 +275,9 @@ Le compte quitté ne reçoit plus de nouveau ticket jusqu’à sa remise à zér
 
 ### Continuer sur un autre harness
 
-Quand plus aucun compte du harness de l’agent qui sert son projet ne peut le prendre (limite atteinte, ou au-delà de « Pause au-delà du quota »), la carte propose « Continuer sur Codex » : le harness suivant du projet. Un projet passe d’abord par son harness par défaut, puis par les autres dans l’« Ordre des harness » (Réglages › Comptes), seulement ceux qui ont un compte actif qui le sert : un compte « Réservé aux projets » ne sert que ceux qu’il coche. Le bouton ▾ (« Continuer sur un autre harness ») ouvre le menu des suivants. Sans harness de secours, l’agent attend la remise à zéro, comme avant.
+Quand plus aucun compte du harness de l’agent qui sert son projet ne peut le prendre (limite atteinte, ou au-delà de « Pause au-delà du quota »), la carte propose « Continuer sur Codex » : le harness suivant du projet. Un projet passe d’abord par son harness par défaut, puis par les autres dans l’« Ordre des harness » (Réglages › Comptes et harness), seulement ceux qui ont un compte actif qui le sert : un compte « Réservé aux projets » ne sert que ceux qu’il coche. Le bouton ▾ (« Continuer sur un autre harness ») ouvre le menu des suivants. Sans harness de secours, l’agent attend la remise à zéro, comme avant.
 
-Une session ne passe pas d’un harness à l’autre : c’est une passation. L’agent garde sa conversation, son worktree et sa branche ; un nouveau processus du harness cible démarre sur le compte que choisit sa règle, avec le « Modèle de passation » de ce harness (son meilleur par défaut, Réglages › Comptes) et le même mode, ou le plus proche qui n’autorise jamais plus. Son premier message est un dossier de passation écrit par Escouade depuis la conversation, sans rien demander au harness quitté : la demande d’origine et les messages suivants, les derniers messages de l’agent, son avancement et les tâches de son plan, les fichiers modifiés (`git status`, `git diff --stat`, les commits de la branche), le dernier tour s’il a été coupé et où, une question ou une permission restée sans réponse. Un ticket garde son protocole par les consignes ajoutées. Le dossier est borné à la fenêtre de contexte du modèle cible ; il est replié dans la conversation sous « Dossier de passation ».
+Une session ne passe pas d’un harness à l’autre : c’est une passation. L’agent garde sa conversation, son worktree et sa branche ; un nouveau processus du harness cible démarre sur le compte que choisit sa règle, avec le « Modèle de passation » de ce harness (son meilleur par défaut, Réglages › Comptes et harness) et le même mode, ou le plus proche qui n’autorise jamais plus. Son premier message est un dossier de passation écrit par Escouade depuis la conversation, sans rien demander au harness quitté : la demande d’origine et les messages suivants, les derniers messages de l’agent, son avancement et les tâches de son plan, les fichiers modifiés (`git status`, `git diff --stat`, les commits de la branche), le dernier tour s’il a été coupé et où, une question ou une permission restée sans réponse. Un ticket garde son protocole par les consignes ajoutées. Le dossier est borné à la fenêtre de contexte du modèle cible ; il est replié dans la conversation sous « Dossier de passation ».
 
 La conversation le marque : « Suite sur Codex · quota Claude Code épuisé jusqu’à 18:00 », puis chaque tour dit le harness qui l’a fait, et ses statistiques et son coût lui restent.
 
@@ -287,7 +287,7 @@ Un agent en vue terminal (Vue Claude Code, Vue Codex…) en change aussi : le do
 
 Le harness quitté est mis de côté jusqu’à sa remise à zéro. Ensuite, la carte et le menu proposent « Revenir sur Claude Code » : une passation dans l’autre sens. L’agent n’y revient jamais seul.
 
-Le réglage « Continuer sur le harness suivant quand tous les comptes d’un harness sont épuisés » (Réglages › Comptes, groupe « Quand un quota est épuisé », visible avec deux harness) le fait sans toi. Il est désactivé par défaut. Activé, l’agent arrêté par la limite passe seul sur le premier harness de secours qui a un compte pour le prendre, jamais sur celui qu’il a quitté ; le pilote auto suit son ticket sur le nouveau harness.
+Le réglage « Continuer sur le harness suivant quand tous les comptes d’un harness sont épuisés » (Réglages › Comptes et harness, groupe « Quand un quota est épuisé », visible avec deux harness) le fait sans toi. Il est désactivé par défaut. Activé, l’agent arrêté par la limite passe seul sur le premier harness de secours qui a un compte pour le prendre, jamais sur celui qu’il a quitté ; le pilote auto suit son ticket sur le nouveau harness.
 
 ## Désactiver ou supprimer un compte
 

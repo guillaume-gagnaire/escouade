@@ -13,10 +13,10 @@ Mistral a répondu 401 ou 403 : la clé est fausse, révoquée, ou n’a pas le 
 **« Mistral refuse pour l’instant : trop de requêtes ou quota épuisé (…). Attends un peu, ou vérifie le forfait de ton compte Mistral. »**
 Mistral a répondu 429. Entre parenthèses, ce qu’il a dit. Attends, ou regarde ton forfait et ton crédit chez Mistral.
 
-**« Mistral ne répond pas : … Vérifie le réseau et le proxy (Réglages › Réseau), ou repasse en local. »**
+**« Mistral ne répond pas : … Vérifie le réseau et le proxy (Réglages › Avancé › Réseau), ou repasse en local. »**
 La demande n’a pas abouti. Ce qui suit les deux-points dit pourquoi :
 
-- une erreur du réseau ou du proxy : vérifie [Réglages › Réseau](https://escouade.dev/docs/settings-network) et que `api.mistral.ai` est joignable ;
+- une erreur du réseau ou du proxy : vérifie [Réglages › Avancé › Réseau](https://escouade.dev/docs/settings-network) et que `api.mistral.ai` est joignable ;
 - « délai dépassé » : Mistral n’a pas répondu à temps ;
 - « le plugin de ce service n’est plus là » : le plugin Mistral est coupé ou désinstallé. Rallume-le dans la vue Plugins, ou installe-le (onglet Installer) ;
 - « Le plugin dev.escouade.mistral ne répond pas : … » : le plugin ne tourne pas ou s’est arrêté. Son onglet Journal, dans la vue Plugins, dit pourquoi ;
@@ -65,9 +65,9 @@ Installe-le depuis la vue Plugins.
 Installe-le : `uv tool install mistral-vibe`.
 
 **« Mistral Vibe n’a pas ouvert la session de l’agent : … S’il n’a pas de clé d’API, lance vibe --setup dans un terminal. »**
-Pour le compte de la machine, `vibe --setup` ; pour un autre compte, sa clé dans Réglages › Comptes.
+Pour le compte de la machine, `vibe --setup` ; pour un autre compte, sa clé dans Réglages › Comptes et harness.
 
-**« Le compte Mistral Vibe « <compte> » n’a pas de clé d’API : donne-la dans Réglages › Comptes, « Changer la clé… ». »**
+**« Le compte Mistral Vibe « <compte> » n’a pas de clé d’API : donne-la dans Réglages › Comptes et harness, « Changer la clé… ». »**
 Ni le compte ni Réglages › Voix n’ont de clé. Donne-en une à l’un des deux.
 
 **« Ce n’est pas une clé d’API de Mistral : copie-la entière depuis console.mistral.ai, API Keys. »**

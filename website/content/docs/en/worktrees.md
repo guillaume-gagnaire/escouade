@@ -16,13 +16,13 @@ The option is set per project, and only affects agents created afterwards: the o
 
 - the “New project” window, with the “One git worktree per agent” switch (off by default);
 - a right-click on the project’s tile (or a click on its name in the title bar), then “Turn on a worktree per agent” or “Turn off a worktree per agent” (the entry says “new agents”);
-- Settings › Projects, “Git” group, “One worktree per agent”.
+- Settings › Projects › Git and worktrees, “Git” group, “One worktree per agent”.
 
 The project folder must be on a branch that has at least one commit: a brand-new repository with no commit can’t have a worktree yet. When a worktree can’t be created, the agent works in the project folder and the conversation shows “Worktree not created, the agent works in the project’s folder: …” with the reason.
 
 ## Where it goes and what it’s called
 
-Four project settings decide the location and the names (Settings › Projects, “Git” group). The full list of settings is in [the project settings](settings-projects).
+Four project settings decide the location and the names (Settings › Projects › Git and worktrees, “Git” group). The full list of settings is in [the project settings](settings-projects).
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -35,7 +35,7 @@ The worktree’s folder is `<worktrees folder>/<agent name>`, on a new branch `<
 
 ### At the first message
 
-The setting “Create the worktree at the first message, under the agent’s name” (Settings › Projects, “Git” group, and the “Worktrees” step of the assistant) is on by default, for existing projects too. With it, “New agent” creates the agent at once, but with no worktree or branch: its card shows “⎇ at the first message” and its conversation “The worktree will be created at the first message, under the agent’s name.” At the first message:
+The setting “Create the worktree at the first message, under the agent’s name” (Settings › Projects › Git and worktrees, “Git” group, and the “Worktrees” step of the assistant) is on by default, for existing projects too. With it, “New agent” creates the agent at once, but with no worktree or branch: its card shows “⎇ at the first message” and its conversation “The worktree will be created at the first message, under the agent’s name.” At the first message:
 
 1. The model of written texts names the agent from that message (for example `refacto-auth`). It has 15 seconds: past that, or if it fails, the agent keeps `agent-N` and nothing waits. A name that comes later renames the branch, as with the setting off.
 2. The worktree is created: the branch `<prefix><name>` and the folder `<name>`, with `-2`, `-3`… if either is taken.
@@ -50,7 +50,7 @@ These are not concerned, and get their worktree at once as before: tickets’ ag
 
 By default, the worktree starts from the commit the project folder is on at that moment. That folder’s branch becomes the agent’s **base branch**: it is the one that the merge, “Integrate” and its pull request aim at.
 
-The “Starting branch of new worktrees” setting (Settings › Projects, “Git” group, and the assistant’s “Worktrees” step) chooses another branch for all the project’s new agents:
+The “Starting branch of new worktrees” setting (Settings › Projects › Git and worktrees, “Git” group, and the assistant’s “Worktrees” step) chooses another branch for all the project’s new agents:
 
 - “Current branch of the folder”: the default, described above.
 - “Board’s target branch”: useful when your folder stays on a work branch while the agents should start from `main`.
@@ -182,7 +182,7 @@ The merge removes neither the agent’s worktree nor its branch. To tidy them up
 
 ## Opening a pull request
 
-Rather than merging yourself, you can offer an agent’s work as a pull request, on any [code host](code-hosts): GitHub, GitLab, Bitbucket Cloud, Gitea, Forgejo, or Azure DevOps. The project needs its remote at the host and an account connected in [Settings › Integrations](settings-integrations); otherwise nothing offers it.
+Rather than merging yourself, you can offer an agent’s work as a pull request, on any [code host](code-hosts): GitHub, GitLab, Bitbucket Cloud, Gitea, Forgejo, or Azure DevOps. The project needs its remote at the host and an account connected in [Settings › Connected services](settings-integrations); otherwise nothing offers it.
 
 “Open a PR” is in the conversation’s header, in the menu of a right click on the agent’s card, and in the menu of its branch in the [branch picker](branches). The window proposes a title and a description, written by the model for written texts from the branch’s commits and diff: read them, edit them, pick the target branch and a draft if you want. Nothing goes out before “Push and open”, which pushes the branch then opens the pull request. The worktree’s uncommitted files are not in it, and the window says so.
 
@@ -209,7 +209,7 @@ If the cleanup runs into a problem (a process still holding the folder, a teardo
 
 ## Leftover worktrees
 
-The worktree of a done or deleted ticket goes on its own (the “Delete the worktree of a done or deleted ticket” setting of the [“Kanban”](settings-board) tab). For other archived agents, or what is left from before, Settings › Projects › “Leftover worktrees” › “Clean up” deletes the worktrees of the project’s archived agents, after their teardown commands, and forgets those whose folder is already gone (`git worktree prune`).
+The worktree of a done or deleted ticket goes on its own (the “Delete the worktree of a done or deleted ticket” setting of the project’s [“Kanban”](settings-board) page). For other archived agents, or what is left from before, Settings › Projects › Git and worktrees › “Leftover worktrees” › “Clean up” deletes the worktrees of the project’s archived agents, after their teardown commands, and forgets those whose folder is already gone (`git worktree prune`).
 
 No work is lost there: a worktree with uncommitted changes, or commits that are neither in the target branch nor in another branch (pushed, proposed as a PR), is kept. The row says how many worktrees were deleted, then those it kept and why; the archived agent’s card says so too. The branch of a deleted worktree goes with it if its work is in the target branch; otherwise it stays, and “Restore” recreates the worktree from it.
 

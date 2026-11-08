@@ -1678,8 +1678,8 @@ pub(crate) fn no_account_of(engine: EngineId) -> anyhow::Error {
     anyhow::Error::new(NoAccount {
         engine,
         text: tr!(
-            "Aucun compte {harness} : ajoute-en un dans Réglages › Comptes.",
-            "No {harness} account: add one in Settings › Accounts."
+            "Aucun compte {harness} : ajoute-en un dans Réglages › Comptes et harness.",
+            "No {harness} account: add one in Settings › Accounts and harnesses."
         ),
     })
 }
@@ -1694,8 +1694,8 @@ pub fn has_any(settings: &Settings, engine: EngineId) -> bool {
 pub(crate) fn no_account(name: &str, engine: EngineId) -> anyhow::Error {
     let harness = engine::by_name(engine);
     anyhow::anyhow!(tr!(
-        "Aucun compte {harness} actif ne sert le projet « {name} » : coche-le sous « Réservé aux projets » d’un compte {harness} actif, dans Réglages › Comptes.",
-        "No active {harness} account serves the project “{name}”: tick it under “Reserved to projects” on an active {harness} account, in Settings › Accounts."
+        "Aucun compte {harness} actif ne sert le projet « {name} » : coche-le sous « Réservé aux projets » d’un compte {harness} actif, dans Réglages › Comptes et harness.",
+        "No active {harness} account serves the project “{name}”: tick it under “Reserved to projects” on an active {harness} account, in Settings › Accounts and harnesses."
     ))
 }
 
@@ -2540,7 +2540,7 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The harnesses whose program is found, in the registry's order: those the interface offers
-    /// (a harness that is not found shows nowhere but in Réglages › Harness).
+    /// (a harness that is not found shows nowhere but in Réglages › Comptes et harness).
     pub fn engines_found(&self) -> Vec<crate::model::EngineId> {
         engine::registry::all()
             .into_iter()

@@ -137,7 +137,7 @@ While the Docs tab is open, or while the docs have changes, the status bar says 
 
 ## The docs branch
 
-Settings › Projects › Git, “Docs branch”:
+Settings › Projects › Git and worktrees, “Docs branch”:
 
 - **The current branch** (by default): the docs live in the branch of each folder. Those of a ticket follow its branch and are merged with its code.
 - **A fixed branch** (`docs`, for instance): the docs always live on that branch, which Escouade keeps in a worktree of its own, in its system folder. Escouade makes it when needed, from the remote branch when there is one, and never merges it anywhere: that is up to the team.

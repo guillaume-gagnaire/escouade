@@ -170,8 +170,8 @@ impl Jira {
             return Err(HttpError {
                 status: 401,
                 message: tr!(
-                    "Jira : ce compte n'a pas de site. Reconnecte-le dans Réglages › Intégrations.",
-                    "Jira: this account has no site. Connect it again in Settings › Integrations."
+                    "Jira : ce compte n'a pas de site. Reconnecte-le dans Réglages › Services connectés.",
+                    "Jira: this account has no site. Connect it again in Settings › Connected services."
                 ),
             }
             .into());

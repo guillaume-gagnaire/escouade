@@ -34,10 +34,10 @@ The recommended setup: a worktree per agent, approval by a squash merge into the
 | “The repository has no commit”: no ticket starts, a worktree starts from a commit | “Make a first commit”: an empty commit, no file is added |
 | “The target branch … is not found” | “Take the current branch” |
 | “Worktrees would go in a folder git tracks” | “Use .claude/worktrees” |
-| “No Claude account serves this project” | Switch an account on, or lift its reservation, in Settings › Accounts |
-| “Claude Code is not found” | Install it, or give its path in Settings › Harness |
+| “No Claude account serves this project” | Switch an account on, or lift its reservation, in Settings › Accounts and harnesses |
+| “Claude Code is not found” | Install it, or give its path in Settings › Accounts and harnesses |
 
-Each check is also told in the step it concerns (the first one from “Start”). Click “Create project”: the project opens in a new tab with its settings, then its first agent if you asked for one. “Create without the assistant”, at the bottom left, creates the project at once with Escouade’s defaults and a first agent, as before the assistant. Later, Settings › Projects › “Open the assistant…” opens it again on an existing project (see [Settings: Projects](settings-projects#setup-assistant)).
+Each check is also told in the step it concerns (the first one from “Start”). Click “Create project”: the project opens in a new tab with its settings, then its first agent if you asked for one. “Create without the assistant”, at the bottom left, creates the project at once with Escouade’s defaults and a first agent, as before the assistant. Later, Settings › Projects › Project › “Open the assistant…” opens it again on an existing project (see [Settings: Projects](settings-projects#setup-assistant)).
 
 If the folder is the one of a project you closed, the history comes before the assistant: the window adds a notice, for example “History found: 1 agent, 3 tickets, last activity on Oct 14, 2026”, and its button becomes “Reopen project”: the project comes back with its history (agents, conversations, tickets, settings), with no step. The “Start from a blank project” switch creates a new one instead, through the assistant. See [Settings: Projects](settings-projects#closed-projects).
 
@@ -70,7 +70,7 @@ The permission modes decide when Claude asks you for permission to act:
 | “Accept edits” | File edits are accepted without asking. |
 | “Bypass” | No permission requests. |
 
-A new agent starts with the model, effort and mode of its account, set on its card in Settings › Accounts, “New agents” (by default the harness’s: Sonnet, Medium and Auto for Claude Code). See the [account settings](settings-accounts) and [agents](managing-agents).
+A new agent starts with the model, effort and mode of its account, set on its card in Settings › Accounts and harnesses, “New agents” (by default the harness’s: Sonnet, Medium and Auto for Claude Code). See the [account settings](settings-accounts) and [agents](managing-agents).
 
 > [!WARNING]
 > In “Bypass” mode, Claude acts without any permission request: Escouade reminds you of it when you choose it. Keep it for safe environments.
@@ -118,7 +118,7 @@ To keep the conversation and the diff in view together, switch to the side-by-si
 
 ## Commit
 
-The “Commit…” button of the panel commits the agent’s changes (“Commit all…” when “Whole project” is chosen). What happens depends on the project’s “Commit” setting, in Settings › Projects:
+The “Commit…” button of the panel commits the agent’s changes (“Commit all…” when “Whole project” is chosen). What happens depends on the project’s “Commit” setting, in Settings › Projects › Git and worktrees:
 
 - **“Written by the agent”** (the default): Escouade sends the agent a message asking it to commit its changes with a clear message in Conventional Commits format. A short-lived message confirms “Commit request sent to” followed by the agent’s name, then the agent commits like it does for any request.
 - **“Direct, with a suggested message”**: the “Commit” window lists the files, Haiku writes a message that you read and edit, “Regenerate” asks for another one, and “Commit” commits. Nothing is committed without that click.

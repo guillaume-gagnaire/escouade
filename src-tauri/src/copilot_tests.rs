@@ -640,7 +640,8 @@ async fn an_account_of_its_own_on_the_github_clis_sign_in_is_not_signed_in() {
     // Why, in its conversation: its process stopped on it.
     h.wait("its reason", |h| {
         h.items(&id).iter().any(|i| {
-            i.to_string().contains("copilot login") && i.to_string().contains("Réglages › Comptes")
+            i.to_string().contains("copilot login")
+                && i.to_string().contains("Réglages › Comptes et harness")
         })
     })
     .await;

@@ -70,7 +70,7 @@ isola is a plugin shipped with Escouade, `dev.escouade.isola`: the first “laun
 
 ## Approving a ticket
 
-The card’s button carries the name of what the approval does. It is set in the first group of Settings › Kanban, “When I approve a ticket in “To review””; the “After approval: …” button in the header leads there (see [Kanban settings](settings-board)).
+The card’s button carries the name of what the approval does. It is set in the first group of Settings › Projects › Kanban, “When I approve a ticket in “To review””; the “After approval: …” button in the header leads there (see [Kanban settings](settings-board)).
 
 | Setting choice | Button | What happens | The “Done” card says |
 |---|---|---|---|

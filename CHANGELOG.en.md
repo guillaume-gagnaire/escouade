@@ -14,6 +14,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### New
 
+- Settings are rebuilt: a bar on the left with Escouade’s pages (General, Agents, Accounts and harnesses, Connected services, Voice, Notifications, Plugins, Advanced), then each project’s pages, and everything applies as soon as you change it, with no “Save”. A search (Ctrl+F) finds a setting by its name, in English or French, and opens its page; an amber dot marks the page that needs you, such as a harness without an account or an expired token.
 - Escouade's plugins come in the installer: at the first start, even offline, Escouade installs those your configuration uses, and the Plugins view offers the others, installed in one click with no download.
 - On store.escouade.dev, a plugin's documentation can have its pages in French and in English: each visitor reads those of their language, else those of the other, and a link from one page to another stays on the store.
 - A plugin no longer keeps what Escouade lent it: the host of a failed connection attempt closes at once, and a removed account takes back its host and its token. An address that only looks local, such as `http://localhost:1@exemple.dev`, is refused right in the form.
@@ -119,6 +120,12 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - An agent saved on a harness this version doesn’t have (a later version’s, or a removed plugin’s) is read and kept with its conversation, marked “harness missing”; it doesn’t start, and no agent is created on that harness.
 - The install window of a plugin with no program no longer says Escouade does not filter its network: its webhooks go to the declared host only. It also says what sets off each webhook, and names the store once.
 - Two tickets approved at the same moment no longer get the same decision number. A duplicate already there no longer crashes the Decisions view: it shows both.
+
+## [2.1.5] — 2026-11-08
+
+### Fixes
+
+- **Antigravity CLI is turned off:** with agy 1.5, its agents could run a command or write a file without asking you, even in “Ask”. Escouade no longer starts it and says so in Settings › Harness; it comes back with a fix.
 
 ## [2.1.4] — 2026-11-07
 

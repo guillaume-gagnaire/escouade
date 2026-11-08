@@ -12,7 +12,7 @@ Ce n’est pas un [terminal](terminals) ordinaire : le log est en lecture seule,
 
 ## Définir les commandes
 
-Les commandes se règlent par projet, dans Réglages › Projets, groupe « Lancement ». Le plus court est le bouton d’engrenage de la section « Lancement » de la barre latérale (« Commandes de lancement… »), ou « Configurer » quand il n’y a encore aucune commande : ils ouvrent les réglages du projet sur ce groupe. Chaque commande a quatre champs :
+Les commandes se règlent par projet, dans Réglages › Projets › Lancement. Le plus court est le bouton d’engrenage de la section « Lancement » de la barre latérale (« Commandes de lancement… »), ou « Configurer » quand il n’y a encore aucune commande : ils ouvrent les réglages du projet sur ce groupe. Chaque commande a quatre champs :
 
 | Champ | Rôle |
 |---|---|
@@ -70,7 +70,7 @@ Une commande se lance aussi dans le worktree d’un agent, pour voir son travail
 - Elle reçoit `ESCOUADE_PORT_BASE` et `ESCOUADE_PORT_END`, le bloc de 10 ports de l’agent (réservé à ce moment s’il n’en a pas), le même que ses lancements de test. Pour que deux instances ne se disputent pas un port, fais lire ce port à la commande, par exemple `npm run dev -- --port $env:ESCOUADE_PORT_BASE` sous PowerShell ou `npm run dev -- --port ${ESCOUADE_PORT_BASE:-5173}` sous bash.
 - Si la même commande tourne déjà ailleurs (dans le projet ou dans un autre worktree), une fenêtre le dit avant de lancer : « Arrêter l’autre et lancer », ou « Lancer quand même ».
 - Elle s’arrête avec l’agent : à son archivage, à sa suppression, à la validation de son ticket (qui retire son worktree), et quand le projet se ferme.
-- Un worktree neuf n’a pas les dépendances du projet (`node_modules`, environnement Python…) : c’est le rôle des étapes de préparation des worktrees (Réglages › Projets, groupe « Worktrees »), qui tournent à sa création.
+- Un worktree neuf n’a pas les dépendances du projet (`node_modules`, environnement Python…) : c’est le rôle des étapes de préparation des worktrees (Réglages › Projets › Git et worktrees, groupe « Worktrees »), qui tournent à sa création.
 
 ## Remplir automatiquement
 

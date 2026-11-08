@@ -169,7 +169,7 @@ Un double-clic sur un séparateur rétablit aussi sa taille.
 | Raccourci | Action | Où |
 |---|---|---|
 | `Ctrl+,` | Ouvrir les réglages. | Partout, terminaux compris |
-| `Ctrl+=` (ou `Ctrl++`) / `Ctrl+-` | Agrandir / réduire toute l’interface d’un palier (voir [« Affichage »](settings-application#affichage)). | Partout, terminaux compris, fenêtre ouverte ou non |
+| `Ctrl+=` (ou `Ctrl++`) / `Ctrl+-` | Agrandir / réduire toute l’interface d’un palier (voir [« Apparence »](settings-application#apparence)). | Partout, terminaux compris, fenêtre ouverte ou non |
 | `Ctrl+0` | Revenir au zoom de 100 %. | Partout, terminaux compris, fenêtre ouverte ou non |
 | `Échap` | Fermer les réglages. | Réglages ouverts |
 | `Alt+↑` / `Alt+↓` | Monter / descendre une commande de préparation ou de démontage, depuis n’importe quel champ de la commande. | Réglages d’un projet, listes des commandes de worktree |

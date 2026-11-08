@@ -10,7 +10,7 @@ Sa page, dans la même vue, a un interrupteur pour toute l'app et un onglet « P
 
 Trello demande deux choses : une clé d'API, puis un jeton donné à cette clé.
 
-1. Dans Escouade, ouvre Réglages › Intégrations. Dans « Sources du Kanban », groupe « Comptes connectés », clique sur « Connecter… » à la ligne Trello.
+1. Dans Escouade, ouvre Réglages › Services connectés. Dans « Sources de tickets », groupe « Comptes connectés », clique sur « Connecter… » à la ligne Trello.
 2. Clique sur « Obtenir une clé d'API ». Ton navigateur ouvre `https://trello.com/power-ups/admin`. Crée un Power-Up si tu n'en as pas (son nom n'a pas d'importance), puis génère sa clé d'API. Copie-la dans le champ « Clé d'API ».
 3. Clique sur « Obtenir un jeton pour cette clé » (le lien reste grisé tant que la clé est vide). Trello ouvre sa page d'autorisation au nom d'« Escouade » : accès en lecture et en écriture à ton compte, sans expiration. Accepte, puis copie le jeton affiché dans le champ « Jeton ».
 
@@ -24,7 +24,7 @@ La connexion est gardée tout de suite : elle ne passe pas par « Enregistrer »
 
 ## 4. Lier un tableau à un projet
 
-Toujours dans Réglages › Intégrations, le groupe « Sources liées à `<projet>` » propose la liste « Tableau Trello » : tes tableaux ouverts. Choisis-en un. Escouade charge alors ses listes et pré-remplit la « Correspondance des statuts » (voir **Utiliser**). Enregistre les réglages.
+Dans Réglages › Projets › Tickets importés, le groupe « Sources liées à `<projet>` » propose la liste « Tableau Trello » : tes tableaux ouverts. Choisis-en un. Escouade charge alors ses listes et pré-remplit la « Correspondance des statuts » (voir **Utiliser**). Enregistre les réglages.
 
 Tu peux aussi partir du Kanban : « Importer » sans source liée affiche « Aucune source liée à ce projet » et propose « Lier une source », qui ouvre ce même onglet.
 

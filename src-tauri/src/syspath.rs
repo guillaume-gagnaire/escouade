@@ -2,7 +2,7 @@
 //! installed while the app runs (`npm install -g @openai/codex` adds `%APPDATA%\npm` to the PATH
 //! of the user, in the registry) would not be found before a restart. Each detection of the
 //! harnesses (the start, « Chercher à nouveau », the window back in front, the menu « Harness »,
-//! Réglages › Harness) reads it again first: under Windows the PATH of the registry (the user's,
+//! Réglages › Comptes et harness) reads it again first: under Windows the PATH of the registry (the user's,
 //! then the machine's, their variables expanded), elsewhere the login shell's (`shellenv`); then
 //! the folders the harnesses install into (npm's global prefix, `~/.local/bin`, Homebrew…).
 //! What is missing of them is added at the end of the process's own PATH, which the agents'

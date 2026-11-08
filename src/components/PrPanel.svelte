@@ -33,7 +33,7 @@
 
   const failedRead = (e: unknown): PrFailure => ({ kind: 'other', message: String(e) });
   function openSettings() {
-    app.modal = { kind: 'settings', tab: 'integrations' };
+    app.modal = { kind: 'settings', page: 'services' };
   }
 
   // ---------- The agent's pull request ----------

@@ -2,7 +2,7 @@
 
 ## Start an agent
 
-Choose “Antigravity CLI” in the “Harness” menu of “New agent”, or make it a project’s default harness (Settings › Projects, “Default harness”).
+Choose “Antigravity CLI” in the “Harness” menu of “New agent”, or make it a project’s default harness (Settings › Projects › Project, “Default harness”).
 
 The “Model” menu lists your account’s models (`agy models`); for Gemini, the effort (Low, Medium, High) is its “Effort” menu. A change of model, effort or mode takes effect at the next message: Escouade launches `agy` again on the same conversation.
 

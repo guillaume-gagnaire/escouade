@@ -5,7 +5,7 @@
   "properties": {
     "fixes": {
       "additionalProperties": false,
-      "description": "The user's corrections (Settings › Projects › Workflow): they go before the reading.",
+      "description": "The user's corrections (Settings › Projects › Kanban › Workflow): they go before the reading.",
       "properties": {
         "dismissed": {
           "description": "Not a workflow: kept so that no reading makes it again.",

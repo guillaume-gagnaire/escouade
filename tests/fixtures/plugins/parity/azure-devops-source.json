@@ -312,7 +312,7 @@
     ],
     "error": {
       "code": -32403,
-      "message": "Azure DevOps refuse l'accès (403) — TF: denied. Le jeton d'Azure DevOps doit avoir le droit Work Items (lecture et écriture) : crée-en un sur https://dev.azure.com/acme/_usersSettings/tokens, puis remplace-le dans Réglages › Intégrations › Hébergeurs de code."
+      "message": "Azure DevOps refuse l'accès (403) — TF: denied. Le jeton d'Azure DevOps doit avoir le droit Work Items (lecture et écriture) : crée-en un sur https://dev.azure.com/acme/_usersSettings/tokens, puis remplace-le dans Réglages › Services connectés › Hébergeurs de code."
     },
     "method": "tickets/comment",
     "result": null

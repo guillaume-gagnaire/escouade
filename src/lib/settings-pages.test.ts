@@ -4,7 +4,6 @@ import { board, project, resetApp } from '../test/ipc';
 import { setLang } from './i18n';
 import {
   BOARD_ELSEWHERE,
-  legacyTab,
   pageInfo,
   rowsOf,
   SETTINGS_ELSEWHERE,
@@ -14,8 +13,10 @@ import {
   settingsForm,
   type ProjectDraft,
   type SettingsPage,
-  type SettingsTab,
 } from './settings.svelte';
+import * as register from './settings-pages';
+import { fr } from './i18n/fr';
+import { en } from './i18n/en';
 import { app } from './state.svelte';
 import type { BoardSettings, Settings } from './types';
 
@@ -145,22 +146,6 @@ const pagesSetting = (where: 'settings' | 'project' | 'board', key: string) => [
   ...new Set(SETTINGS_ROWS.filter((r) => (r[where] as string[]).includes(key)).map((r) => r.page)),
 ];
 
-const LEGACY: SettingsTab[] = [
-  'app',
-  'claude',
-  'accounts',
-  'notifications',
-  'voice',
-  'projects',
-  'board',
-  'integrations',
-  'plugins',
-  'mcp',
-  'terminals',
-  'network',
-  'about',
-];
-
 describe('the register of the settings pages', () => {
   it('declares each page once, with its scope, its icon, its label and its description', () => {
     const ids = SETTINGS_PAGES.map((p) => p.id);
@@ -276,26 +261,124 @@ describe('the register of the settings pages', () => {
     }
   });
 
-  it('leads each id of a 2.0 tab to a page, and the sections asked for to theirs', () => {
+  it('names in the texts of the app only pages of the register, in « Réglages › … » and « Settings › … »', () => {
+    // A text that sends the user to a page names one that exists; a project's page comes after « Projets ».
+    const texts = (tree: unknown): string[] =>
+      typeof tree === 'string' ? [tree] : tree && typeof tree === 'object' ? Object.values(tree).flatMap(texts) : [];
+    const STOP = /[.,:;()«»“”"{}\n…!?]/;
+    for (const [lang, catalog, root, projects] of [
+      ['fr', fr, 'Réglages › ', 'Projets'],
+      ['en', en, 'Settings › ', 'Projects'],
+    ] as const) {
+      setLang(lang);
+      const pages = new Set(SETTINGS_PAGES.map((p) => p.label));
+      let paths = 0;
+      const wrong: string[] = [];
+      for (const text of texts(catalog)) {
+        for (let at = text.indexOf(root); at >= 0; at = text.indexOf(root, at + 1)) {
+          const rest = text.slice(at + root.length);
+          const end = rest.search(STOP);
+          const path = (end < 0 ? rest : rest.slice(0, end)).split(' › ').map((x) => x.trim());
+          const page = path[0] === projects ? path[1] : path[0];
+          // The text may go on after the name of the page (« Réglages › Plugins le rallume »).
+          // Another app's settings (cursor.com's « Settings › API Keys ») are not Escouade's.
+          const elsewhere = page === 'API Keys';
+          if (!elsewhere && ![...pages].some((p) => page === p || page?.startsWith(`${p} `))) wrong.push(text);
+          paths++;
+        }
+      }
+      expect(paths, lang).toBeGreaterThan(10);
+      expect(wrong, lang).toEqual([]);
+    }
+    setLang('fr');
+  });
+
+  // The messages of the core and of the plugin kit, and the comments, name the pages too: an agent reads « Settings ›
+  // Harness › Attachments » in a description of a tool and looks for it (R8). So do the plugins of the first party, in
+  // their messages, their README and the docs the store shows (ESC-387); their CHANGELOG tells their past, and is left.
+  it('names only pages of the register in the sources of the app, of the core, of the kit and of the plugins', () => {
+    const files = {
+      ...(import.meta.glob(['../**/*.ts', '../**/*.svelte', '!../**/*.test.ts', '!./i18n/**'], {
+        query: '?raw',
+        import: 'default',
+        eager: true,
+      }) as Record<string, string>),
+      ...(import.meta.glob(['../../src-tauri/src/**/*.rs', '../../crates/escouade-plugin-kit/src/**/*.rs'], {
+        query: '?raw',
+        import: 'default',
+        eager: true,
+      }) as Record<string, string>),
+      ...(import.meta.glob(
+        [
+          '../../plugins/*/src/**/*.{rs,ts}',
+          '../../plugins/*/docs/**/*.md',
+          '../../plugins/*/README*.md',
+          '../../plugins/*/escouade-plugin.json',
+        ],
+        { query: '?raw', import: 'default', eager: true },
+      ) as Record<string, string>),
+    };
+    expect(Object.keys(files).filter((f) => f.endsWith('.rs')).length).toBeGreaterThan(100);
+    expect(Object.keys(files).some((f) => f.includes('escouade-plugin-kit'))).toBe(true);
+    expect(Object.keys(files).filter((f) => /\/plugins\/[^/]+\/docs\//.test(f)).length).toBeGreaterThan(100);
+    const STOP = /[.,:;()«»“”"'`{}\n…!?\\|<>[\]/*]/;
+    let paths = 0;
+    const wrong: string[] = [];
+    for (const [lang, root, projects] of [
+      ['fr', 'Réglages › ', 'Projets'],
+      ['en', 'Settings › ', 'Projects'],
+    ] as const) {
+      setLang(lang);
+      const pages = SETTINGS_PAGES.map((p) => p.label);
+      for (const [file, text] of Object.entries(files)) {
+        for (let at = text.indexOf(root); at >= 0; at = text.indexOf(root, at + 1)) {
+          const rest = text.slice(at + root.length);
+          const end = rest.search(STOP);
+          const path = (end < 0 ? rest : rest.slice(0, end)).split(' › ').map((x) => x.trim());
+          const page = path[0] === projects ? path[1] : path[0];
+          paths++;
+          // Another app's settings (cursor.com's « Settings › API Keys ») are not Escouade's.
+          if (page === 'API Keys' || pages.some((p) => page === p || page?.startsWith(`${p} `))) continue;
+          const line = text.slice(0, at).split('\n').length;
+          wrong.push(`${file.replace(/^(\.\.\/)+/, '')}:${line}: ${root}${path.join(' › ')}`);
+        }
+      }
+    }
+    setLang('fr');
+    expect(paths).toBeGreaterThan(50);
+    expect(wrong).toEqual([]);
+  });
+});
+
+describe('the links of the app to the settings', () => {
+  // The ids of the 2.0 window's tabs (`legacyTab()`, from R1 to R6) are gone: each link gives its page.
+  const sources = import.meta.glob(['../**/*.ts', '../**/*.svelte', '!../**/*.test.ts'], {
+    query: '?raw',
+    import: 'default',
+    eager: true,
+  }) as Record<string, string>;
+
+  it('has no `legacyTab` any more, nor the ids of the 2.0 tabs', () => {
+    expect(register).not.toHaveProperty('legacyTab');
+    expect(Object.keys(sources).length).toBeGreaterThan(100);
+    for (const [file, text] of Object.entries(sources)) {
+      expect(text, file).not.toMatch(/\blegacyTab\(|\bSettingsTab\b|\bSettingsSection\b/);
+    }
+  });
+
+  it('opens each settings page by its id, never by a tab or a section', () => {
     const pages = new Set<string>(SETTINGS_PAGES.map((p) => p.id));
-    for (const tab of LEGACY) expect(pages.has(legacyTab(tab)), tab).toBe(true);
-    expect(Object.fromEntries(LEGACY.map((tab) => [tab, legacyTab(tab)]))).toEqual({
-      app: 'general',
-      claude: 'accounts',
-      accounts: 'accounts',
-      notifications: 'notifications',
-      voice: 'voice',
-      projects: 'project',
-      board: 'board',
-      integrations: 'services',
-      plugins: 'plugins',
-      mcp: 'agents',
-      terminals: 'advanced',
-      network: 'advanced',
-      about: 'about',
-    });
-    expect(legacyTab('projects', 'launch')).toBe('launch');
-    expect(legacyTab('integrations', 'sources')).toBe('tickets');
+    let links = 0;
+    for (const [file, text] of Object.entries(sources)) {
+      for (const m of text.matchAll(/kind: 'settings'([^}]*)\}/g)) {
+        links++;
+        expect(m[1], file).not.toMatch(/\b(tab|section):/);
+        const page = /page: '(\w+)'/.exec(m[1])?.[1];
+        if (page) expect(pages.has(page), `${file}: ${page}`).toBe(true);
+      }
+    }
+    // The links of annexe B: the rail, the side bar, Lancement, the Kanban, Workflow, an account, the imports…
+    expect(links).toBeGreaterThanOrEqual(15);
   });
 });
 
@@ -304,21 +387,16 @@ describe('settingsForm by page', () => {
     resetApp({ projects: [project(), project({ id: 'p2', name: 'site', board: board({ action: 'pr' }) })] });
   });
 
-  it('opens on a page, or on the page a 2.0 tab leads to', () => {
+  it('opens on a page, « Comptes et harness » when none is given', () => {
     settingsForm.open();
     expect(settingsForm.page).toBe('accounts');
     settingsForm.open({ page: 'tickets', projectId: 'p2' });
     expect(settingsForm.page).toBe('tickets');
-    expect(settingsForm.tab).toBe('integrations');
     expect(settingsForm.projectId).toBe('p2');
-    settingsForm.open({ tab: 'projects', section: 'launch', projectId: 'p1' });
+    settingsForm.open({ page: 'launch', projectId: 'p1' });
     expect(settingsForm.page).toBe('launch');
-    expect(settingsForm.tab).toBe('projects');
-    settingsForm.resume({ tab: 'mcp' });
+    settingsForm.resume({ page: 'agents' });
     expect(settingsForm.page).toBe('agents');
-    // A 2.0 tab chosen goes to its page.
-    settingsForm.tab = 'network';
-    expect(settingsForm.page).toBe('advanced');
   });
 
   it('marks as changed the page of each key changed, and no other', () => {
@@ -355,21 +433,20 @@ describe('settingsForm by page', () => {
     expect(settingsForm.changed('tickets', 'p2')).toBe(false);
   });
 
-  it('marks the 2.0 tabs as before, the attachments on Harness and the quota pause on Kanban', () => {
-    settingsForm.open();
-    settingsForm.settings.attachWarnMb = 1;
-    settingsForm.settings.quotaPause = 80;
-    expect(LEGACY.filter((tab) => settingsForm.tabChanged(tab))).toEqual(['claude', 'board']);
-    settingsForm.open();
-    settingsForm.projects.p1.name = 'api';
-    settingsForm.projects.p1.integrations.comments = ['done'];
-    expect(LEGACY.filter((tab) => settingsForm.tabChanged(tab))).toEqual(['projects', 'integrations']);
-  });
-
   it('sees no change of a page from a setting saved at once, out of the draft', () => {
     settingsForm.open();
     app.settings.theme = 'dark';
     app.settings.switchAt = 70;
     expect(SETTINGS_PAGES.filter((p) => settingsForm.changed(p.id))).toEqual([]);
+  });
+});
+
+describe('the names of the rows', () => {
+  it('are whole words, never a text with a blank to fill (« Avancé » names them, the search finds them)', () => {
+    for (const lang of ['fr', 'en'] as const) {
+      setLang(lang);
+      for (const r of SETTINGS_ROWS) expect(r.label, `${r.id} in ${lang}`).not.toMatch(/[{}]/);
+    }
+    setLang('fr');
   });
 });

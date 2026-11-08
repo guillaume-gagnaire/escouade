@@ -16,7 +16,7 @@ Le plugin ACP ne fait rien seul : il sert les harness que d’autres plugins dé
 
 ## 3. Brancher un compte
 
-Le plugin ACP n’a pas de compte. Chaque harness décrit a les siens : Réglages › Comptes, **Ajouter un compte…**, son harness.
+Le plugin ACP n’a pas de compte. Chaque harness décrit a les siens : Réglages › Comptes et harness, **Ajouter un compte…**, son harness.
 
 - **Le compte de la machine** : la configuration habituelle du harness, telle quelle.
 - **Un nouveau compte** : un dossier de configuration à lui, sous `~/.escouade/<harness>/`, donné au harness par la variable que son manifeste nomme (`accountVar`, `GOOSE_PATH_ROOT` pour Goose).

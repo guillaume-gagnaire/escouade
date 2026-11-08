@@ -1,6 +1,6 @@
 # Troubleshooting
 
-The messages below are the plugin's and Escouade's, as they show: under the connection form, on the account's row in Settings › Integrations, on an agent's card or in its pull request's tab. When Bitbucket gives a reason, it follows the message.
+The messages below are the plugin's and Escouade's, as they show: under the connection form, on the account's row in Settings › Connected services, on an agent's card or in its pull request's tab. When Bitbucket gives a reason, it follows the message.
 
 ## When connecting
 
@@ -14,7 +14,7 @@ The "Token" field is empty. Bitbucket has no CLI whose token Escouade would take
 The token is wrong, expired or revoked, or the email is not that of its Atlassian account, or it is a token without scopes. Make an API token with the Bitbucket scopes the form reminds.
 
 **"Bitbucket can’t be reached: …"**
-The call did not arrive: no network, a proxy or a firewall blocking `api.bitbucket.org`, or more than 15 seconds without an answer. Check your connection and Settings › Network.
+The call did not arrive: no network, a proxy or a firewall blocking `api.bitbucket.org`, or more than 15 seconds without an answer. Check your connection and Settings › Advanced › Network.
 
 ## On the account's row
 
@@ -57,9 +57,9 @@ Your token lacks the scope asked (one missing among the form's), or your account
 The hour's budget is spent: the plugin already waited and asked once more. Wait a little.
 
 **"Bitbucket: not found (404)"**, **"Bitbucket: error 500"** (or another error of the service), **"Bitbucket: unreadable answer"**, **"Bitbucket: too many redirects"**
-The repository or the object no longer exists or is not visible, Bitbucket answered with an error, something other than JSON (often a proxy), or more than ten redirects. Try again; if it lasts, look at Settings › Network.
+The repository or the object no longer exists or is not visible, Bitbucket answered with an error, something other than JSON (often a proxy), or more than ten redirects. Try again; if it lasts, look at Settings › Advanced › Network.
 
-**"Bitbucket: no token for bitbucket.org. Connect the account again in Settings › Integrations."**
+**"Bitbucket: no token for bitbucket.org. Connect the account again in Settings › Connected services."**
 Escouade could not lend a token to the plugin. Connect the account again.
 
 **"The plugin dev.escouade.bitbucket is not answering: …"**

@@ -14,7 +14,7 @@ The site's address starts with `http://`. Type it without a scheme (`atlas.atlas
 The token is wrong or revoked, or the email is not that of the token's Atlassian account. Check the email, and make a new token with "Create an Atlassian API token".
 
 **"Jira can’t be reached: …"**
-The call did not arrive: a mistyped site, no network, a proxy or a firewall blocking the site, or more than 15 seconds without an answer. Check the site's address, your connection and Settings › Network.
+The call did not arrive: a mistyped site, no network, a proxy or a firewall blocking the site, or more than 15 seconds without an answer. Check the site's address, your connection and Settings › Advanced › Network.
 
 ## When importing and syncing
 
@@ -25,7 +25,7 @@ The issue's workflow does not lead from its current status to the status chosen 
 Your account may not do what is asked in this project (read, take a transition, comment). Check its permissions in Jira.
 
 **"Jira: not found (404)"**
-The project or the issue no longer exists, or your account no longer sees it. For a project, pick another one in Settings › Integrations.
+The project or the issue no longer exists, or your account no longer sees it. For a project, pick another one in Settings › Projects › Imported tickets.
 
 **"Jira limits the requests (429): try again in a moment"**
 Jira limits the number of calls. A sync that fails this way is tried again on its own.
@@ -34,12 +34,12 @@ Jira limits the number of calls. A sync that fails this way is tried again on it
 Jira answered with an error. A sync is tried again on its own, after 1, 5, 15 then 60 minutes, for 24 hours; "Resync" sends it again at once.
 
 **"Jira: unreadable answer"**
-Jira answered something other than JSON, often a proxy's error page or a login page. Check the site's address and Settings › Network.
+Jira answered something other than JSON, often a proxy's error page or a login page. Check the site's address and Settings › Advanced › Network.
 
-**"Jira: this account has no site. Connect it again in Settings › Integrations."**
+**"Jira: this account has no site. Connect it again in Settings › Connected services."**
 The kept account has no site address. Disconnect then connect Jira again with its site.
 
-**"Jira: no token for jira. Connect the account again in Settings › Integrations."**
+**"Jira: no token for jira. Connect the account again in Settings › Connected services."**
 Escouade could not lend a token to the plugin: the account has none any more. Disconnect then connect Jira again.
 
 **"System keychain unreadable: restart Escouade or reconnect the account."**

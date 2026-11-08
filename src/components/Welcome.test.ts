@@ -28,7 +28,7 @@ describe('Welcome', () => {
     render(Welcome);
     const none = screen.getByRole('region', { name: 'Aucun harness trouvé' });
     expect(none).toHaveTextContent(
-      'Escouade fait travailler des agents de code. Installe l’un d’eux, puis indique son chemin dans Réglages › Harness s’il n’est pas dans le PATH.',
+      'Escouade fait travailler des agents de code. Installe l’un d’eux, puis indique son chemin dans Réglages › Comptes et harness s’il n’est pas dans le PATH.',
     );
     const items = within(none).getAllByRole('listitem');
     const claude = OS === 'windows' ? 'irm https://claude.ai/install.ps1 | iex' : 'curl -fsSL https://claude.ai/install.sh | bash';
@@ -44,7 +44,7 @@ describe('Welcome', () => {
     expect(screen.queryByRole('button', { name: /Ajouter un projet/ })).not.toBeInTheDocument();
   });
 
-  it('looks for the harnesses again, and opens Réglages › Harness', async () => {
+  it('looks for the harnesses again, and opens Réglages › Comptes et harness', async () => {
     const backend = fakeBackend({ claude_found: () => ({ claudeFound: true, claudePathFound: true, enginesFound: ['claude'] }) });
     app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
     app.enginesFound = [];
@@ -55,9 +55,9 @@ describe('Welcome', () => {
     expect(app.enginesFound).toEqual(['claude']);
     expect(screen.queryByRole('region', { name: 'Aucun harness trouvé' })).not.toBeInTheDocument();
     app.enginesFound = [];
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Réglages › Harness…' })).toBeInTheDocument());
-    await userEvent.click(screen.getByRole('button', { name: 'Réglages › Harness…' }));
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'claude' });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Réglages › Comptes et harness…' })).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: 'Réglages › Comptes et harness…' }));
+    expect(app.modal).toEqual({ kind: 'settings', page: 'accounts' });
   });
 
   it('says WSL was searched too when a distribution is set', () => {
@@ -115,10 +115,10 @@ describe('Welcome in English', () => {
     app.enginesFound = [];
     render(Welcome);
     expect(screen.getByRole('region', { name: 'No harness found' })).toHaveTextContent(
-      'Escouade runs coding agents. Install one of them, then set its path in Settings › Harness if it isn’t on the PATH.',
+      'Escouade runs coding agents. Install one of them, then set its path in Settings › Accounts and harnesses if it isn’t on the PATH.',
     );
     expect(screen.getByRole('button', { name: 'Search again' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Settings › Harness…' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Settings › Accounts and harnesses…' })).toBeInTheDocument();
   });
 
   it('writes the invitation in English', () => {

@@ -22,7 +22,7 @@ Its switch, in the Plugins view, stops it for the whole app; its Projects tab, f
 
 ### Can a project install a plugin for me?
 
-No. Its `.escouade.yml` can propose some (`plugins.recommended`): Settings › Projects shows them, and the install always goes through the window that says their permissions (see [`.escouade.yml`](escouade-yml#plugins)).
+No. Its `.escouade.yml` can propose some (`plugins.recommended`): Settings › Projects › Project shows them, and the install always goes through the window that says their permissions (see [`.escouade.yml`](escouade-yml#plugins)).
 
 ### Where is its data?
 
