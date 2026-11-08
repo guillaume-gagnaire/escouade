@@ -10,6 +10,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - OpenCode : un projet privé tient mieux. Ses règles sont posées avant l'ouverture d'une session, et « Toujours » n'est plus proposé sous clôture.
 - Claude Code : une discussion refuse aussi les commandes PowerShell, au lieu de les présenter sur une carte.
 - Antigravity CLI : sa vue terminal suit les règles de son plugin. Elle n’autorise plus d’office les écritures du dossier de l’agent ni git add et git commit, demande les commandes d’un projet privé, et oublie les « Toujours » gardés par la 2.2.0.
+- Antigravity CLI : sa vue terminal a son propre dossier temporaire, comme son plugin, au lieu du tien, où il écrivait sans rien demander.
 
 ### Nouveautés
 

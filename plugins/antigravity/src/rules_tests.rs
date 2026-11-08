@@ -315,7 +315,7 @@ fn accept_all_with_a_fence_writes_no_joker_and_judges_each_call() {
     assert!(cards(&out).is_empty(), "{out:?}");
     assert!(out.iter().any(|i| matches!(i, Item::Relaunch { .. })));
     assert!(out.iter().any(
-        |i| matches!(i, Item::Notice { text, .. } if text.contains("d’office") && text.contains("début de texte"))
+        |i| matches!(i, Item::Notice { text, .. } if text.contains("d’office") && text.contains("pour le tour suivant"))
     ));
     assert_eq!(allowed(&out), [format!("write_file({path})")]);
     // Without a fence, « Tout accepter » is its rules'.
@@ -357,7 +357,7 @@ fn a_rule_is_never_a_joker_nor_wider_than_its_card_says() {
     // A card says what « Autoriser » gives `agy`.
     let out = turn_refusing(&mut c, "run_command", command("echo ok"));
     assert!(out.iter().any(
-        |i| matches!(i, Item::Permission { description: Some(d), .. } if d.contains("tour suivant, comme début de texte"))
+        |i| matches!(i, Item::Permission { description: Some(d), .. } if d.contains("tour suivant ; une écriture couvre aussi ce qui est sous son chemin"))
     ));
 }
 
@@ -444,7 +444,7 @@ fn the_fence_and_the_agents_folder_are_told_by_the_path_resolved() {
         }
         let d = denied("read_file", json!({ "Path": path }));
         assert_eq!(
-            words::judge(&rules, "default", &[], &d, "r"),
+            judge_here(&rules, "default", &[], &d, "r"),
             Verdict::Refused,
             "{path}"
         );
@@ -462,7 +462,7 @@ fn the_fence_and_the_agents_folder_are_told_by_the_path_resolved() {
         let d = denied("write_file", write_of(&path));
         assert!(
             matches!(
-                words::judge(&rules, "default", &[], &d, "r"),
+                judge_here(&rules, "default", &[], &d, "r"),
                 Verdict::Asked { .. }
             ),
             "{path}"
@@ -471,12 +471,12 @@ fn the_fence_and_the_agents_folder_are_told_by_the_path_resolved() {
     // A relative one is placed in it, but its rule would not be the path judged (ESC-376, N4): a card.
     let d = denied("write_file", write_of("src/a.rs"));
     assert_eq!(
-        words::judge(&rules, "default", &[], &d, "r"),
+        judge_here(&rules, "default", &[], &d, "r"),
         Verdict::Asked { always: false }
     );
     let d = denied("write_file", write_of(&at("src/a.rs")));
     assert_eq!(
-        words::judge(&rules, "default", &[], &d, "r"),
+        judge_here(&rules, "default", &[], &d, "r"),
         Verdict::Allowed
     );
 }
@@ -605,6 +605,11 @@ fn rules_here() -> AgyRules {
     }
 }
 
+/// `words::judge`, each write in the agent's folder reaching a file alone.
+fn judge_here(rules: &AgyRules, mode: &str, always: &[String], d: &Denied, rule: &str) -> Verdict {
+    words::judge(rules, mode, always, d, rule, &|_| true)
+}
+
 fn denied(tool: &str, args: Value) -> Denied {
     Denied {
         step: 1,
@@ -633,7 +638,7 @@ fn n1_a_write_of_the_agents_folder_itself_is_a_card_without_always() {
         for path in &itself {
             let d = denied("write_file", write_of(path));
             assert_eq!(
-                words::judge(&rules_here(), mode, &[], &d, "r"),
+                judge_here(&rules_here(), mode, &[], &d, "r"),
                 Verdict::Asked { always: false },
                 "{mode} {path:?}"
             );
@@ -659,7 +664,7 @@ fn n1_a_write_of_the_agents_folder_itself_is_a_card_without_always() {
     // A file strictly under it is allowed.
     let d = denied("write_file", write_of(&at("src/a.rs")));
     assert_eq!(
-        words::judge(&rules_here(), "default", &[], &d, "r"),
+        judge_here(&rules_here(), "default", &[], &d, "r"),
         Verdict::Allowed
     );
 }
@@ -689,7 +694,7 @@ fn n4_an_allowance_by_the_rules_is_made_only_of_the_absolute_normal_path_judged(
             let d = denied("write_file", write_of(path));
             assert!(
                 matches!(
-                    words::judge(&rules, mode, &[], &d, "r"),
+                    judge_here(&rules, mode, &[], &d, "r"),
                     Verdict::Asked { always: false }
                 ),
                 "{mode} {path:?}"
@@ -708,7 +713,7 @@ fn n4_an_allowance_by_the_rules_is_made_only_of_the_absolute_normal_path_judged(
         json!({ "AbsolutePath": format!("{joined}{sep}x{sep}..{sep}a.png") }),
     );
     assert!(matches!(
-        words::judge(&rules, "default", &[], &d, "r"),
+        judge_here(&rules, "default", &[], &d, "r"),
         Verdict::Asked { .. }
     ));
     let d = denied(
@@ -716,14 +721,14 @@ fn n4_an_allowance_by_the_rules_is_made_only_of_the_absolute_normal_path_judged(
         json!({ "AbsolutePath": format!("{joined}{sep}a.png") }),
     );
     assert_eq!(
-        words::judge(&rules, "default", &[], &d, "r"),
+        judge_here(&rules, "default", &[], &d, "r"),
         Verdict::Allowed
     );
     // « Toujours » is replayed only for a path normal, and offered only for one.
     let rel = denied("write_file", write_of("../ailleurs/a.rs"));
     let rule = "write_file(../ailleurs/a.rs)".to_string();
     assert_eq!(
-        words::judge(
+        judge_here(
             &rules_here(),
             "default",
             std::slice::from_ref(&rule),
@@ -753,7 +758,7 @@ fn n3_a_word_of_a_command_that_resolves_into_the_fence_is_refused() {
         for mode in ["default", "acceptEdits", "bypassPermissions"] {
             let d = denied("run_command", command(&cmd));
             assert_eq!(
-                words::judge(&rules, mode, &[], &d, "r"),
+                judge_here(&rules, mode, &[], &d, "r"),
                 Verdict::Refused,
                 "{mode} {cmd}"
             );
@@ -767,7 +772,7 @@ fn n3_a_word_of_a_command_that_resolves_into_the_fence_is_refused() {
         "cargo test".to_string(),
     ] {
         let d = denied("run_command", command(&cmd));
-        let verdict = words::judge(&rules, "bypassPermissions", &[], &d, "r");
+        let verdict = judge_here(&rules, "bypassPermissions", &[], &d, "r");
         assert!(
             matches!(verdict, Verdict::Refused | Verdict::Asked { always: false }),
             "{cmd}: {verdict:?}"
@@ -786,7 +791,7 @@ fn n2_no_command_is_allowed_by_a_rule_but_exactly_what_the_user_allowed_for_good
             let d = denied("run_command", command(cmd));
             assert!(
                 matches!(
-                    words::judge(&rules, mode, &[], &d, "r"),
+                    judge_here(&rules, mode, &[], &d, "r"),
                     Verdict::Asked { .. }
                 ),
                 "{mode} {cmd}"
@@ -797,7 +802,7 @@ fn n2_no_command_is_allowed_by_a_rule_but_exactly_what_the_user_allowed_for_good
     let rule = "command(cargo test)".to_string();
     let d = denied("run_command", command("cargo test"));
     assert_eq!(
-        words::judge(
+        judge_here(
             &rules_here(),
             "default",
             std::slice::from_ref(&rule),
@@ -1143,6 +1148,201 @@ fn esc388_its_settings_ask_for_a_review_of_what_no_rule_allows() {
     assert!(doc.get("agentMode").is_none());
 }
 
+// ---- ESC-389: the review of 2.2.3 ---------------------------------------------------------------------------------
+
+/// A repository in `dir` whose index has a submodule `sub` (a gitlink), never initialized: no `sub` folder.
+fn with_submodule(dir: &Path) {
+    let git = |args: &[&str]| {
+        let ok = std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .status()
+            .is_ok_and(|s| s.success());
+        assert!(ok, "git {args:?}");
+    };
+    git(&["init", "-q"]);
+    git(&[
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        "160000,1111111111111111111111111111111111111111,sub",
+    ]);
+}
+
+#[test]
+fn esc389_a_write_naming_a_sub_folder_is_a_card_without_always_even_a_submodule() {
+    let sep = std::path::MAIN_SEPARATOR;
+    let repo = home("389-sub");
+    with_submodule(&repo);
+    let cwd = repo.to_string_lossy().into_owned();
+    let rules = AgyRules {
+        cwd: cwd.clone(),
+        ..AgyRules::default()
+    };
+    // A folder with a dot in its name, a submodule deeper in it (its `.git` a file), a file without an extension.
+    let at_repo = |rel: &str| format!("{cwd}{sep}{}", rel.replace('/', &sep.to_string()));
+    std::fs::create_dir_all(repo.join("vendor.d").join("lib")).unwrap();
+    std::fs::write(repo.join("vendor.d/lib/.git"), "gitdir: x\n").unwrap();
+    std::fs::create_dir_all(repo.join("src")).unwrap();
+    std::fs::write(repo.join("Makefile"), "all:\n").unwrap();
+    // What the core's `fs/fileOnly` says, read on the disk.
+    let file_only = |p: &str| crate::host::file_only("agy-a1", &cwd, p);
+    // `write_file(<path>)` covers what is under `<path>` at any depth (`real_agy_rules`): the submodule (never initialized,
+    // not there), what holds it, a folder, one whose submodule is two levels down: a card, never « Toujours ».
+    let wide = [
+        at_repo("sub"),
+        at_repo("sub") + &sep.to_string(),
+        at_repo("vendor.d"),
+        at_repo("vendor.d/lib"),
+        at_repo("src"),
+    ];
+    for mode in ["default", "acceptEdits"] {
+        for path in &wide {
+            for always in [&[][..], &[format!("write_file({path})")][..]] {
+                let d = denied("write_file", write_of(path));
+                let rule = format!("write_file({path})");
+                assert_eq!(
+                    words::judge(&rules, mode, always, &d, &rule, &file_only),
+                    Verdict::Asked { always: false },
+                    "{mode} {path:?}"
+                );
+            }
+        }
+        // A file there, or nothing there and no submodule under it: accepted, whatever its name.
+        for path in [
+            at_repo("Makefile"),
+            at_repo("src/a.rs"),
+            at_repo("neuf"),
+            at_repo("vendor.d/lib.txt"),
+        ] {
+            let d = denied("write_file", write_of(&path));
+            assert_eq!(
+                words::judge(&rules, mode, &[], &d, "r", &file_only),
+                Verdict::Allowed,
+                "{mode} {path:?}"
+            );
+        }
+    }
+    // The host asked of a write that could be accepted alone: not of a command, a read, a write in `.git`.
+    let asked = std::cell::Cell::new(0);
+    let counting = |_: &str| {
+        asked.set(asked.get() + 1);
+        false
+    };
+    for (tool, args) in [
+        ("run_command", command("echo hi")),
+        ("view_file", write_of(&at_repo("a.txt"))),
+        ("write_file", write_of(&at_repo(".git/config"))),
+    ] {
+        words::judge(&rules, "default", &[], &denied(tool, args), "r", &counting);
+    }
+    assert_eq!(asked.get(), 0);
+}
+
+#[test]
+fn esc389_a_turn_going_on_with_a_write_refuses_kept_right_under_each_path_allowed() {
+    let sep = if WIN { "\\" } else { "/" };
+    let dir = home("389-guard");
+    // The agent's folder a repository whose submodule `sub` was never initialized.
+    let repo = home("389-guard-wt");
+    with_submodule(&repo);
+    let wt = repo.to_string_lossy().into_owned();
+    let mut p = params(&dir, "default");
+    p.cwd = wt.clone();
+    let mut c = started(&p);
+    // Accepted by the rules: `<path>\.git` and the others refused all the same.
+    let file = format!("{wt}{sep}lib.d{sep}a.rs");
+    let out = turn_refusing(&mut c, "write_file", write_of(&file));
+    assert_eq!(allowed(&out), [format!("write_file({file})")]);
+    let deny = denied_rules(&out);
+    for k in words::KEPT {
+        for base in [wt.clone(), file.clone()] {
+            assert!(
+                deny.contains(&format!("write_file({base}{sep}{k})")),
+                "{base} {k}: {deny:?}"
+            );
+        }
+    }
+    assert!(!deny.contains(&format!("write_file({file})")), "{deny:?}");
+    c.frames(&[init(), result()]);
+    // The submodule: a card without « Toujours »; allowed by the user on it, its `.git` refused all the same.
+    let sub = format!("{wt}{sep}sub");
+    let out = turn_refusing(&mut c, "write_file", write_of(&sub));
+    let found = cards(&out);
+    assert_eq!(found.len(), 1, "{out:?}");
+    assert!(!found[0].1, "no « Toujours » for a submodule: {out:?}");
+    assert!(went_on(&out).is_none());
+    let out = c
+        .answer_permission(&answer(&found[0].0, true, false))
+        .unwrap();
+    assert_eq!(allowed(&out), [format!("write_file({sub})")]);
+    let deny = denied_rules(&out);
+    for k in words::KEPT {
+        assert!(
+            deny.contains(&format!("write_file({sub}{sep}{k})")),
+            "{k}: {deny:?}"
+        );
+    }
+    // Each refusal once, none of the write allowed itself.
+    let mut unique = deny.clone();
+    unique.dedup();
+    assert_eq!(unique.len(), deny.len(), "{deny:?}");
+    assert_eq!(
+        words::guard_rules(
+            &cwd(),
+            &[format!("write_file({sub})"), format!("write_file({sub})")]
+        ),
+        words::guard_rules(&cwd(), &[format!("write_file({sub})")]),
+    );
+    // A write the user allowed in a sub-folder's `.git`: that folder is not refused, the others under it are.
+    let git = at("sub/.git");
+    let deny = words::guard_rules(
+        &cwd(),
+        &[
+            format!("write_file({sub})"),
+            format!("write_file({git}{sep}config)"),
+        ],
+    );
+    assert!(!deny.contains(&format!("write_file({git})")), "{deny:?}");
+    assert!(
+        deny.contains(&format!("write_file({sub}{sep}.husky)")),
+        "{deny:?}"
+    );
+}
+
+#[test]
+fn esc389_a_refusal_no_call_matches_is_told_in_the_conversation() {
+    let dir = home("389-unmatched");
+    let mut c = started(&params(&dir, "default"));
+    c.send("fais-le");
+    // `agy` lists a refused write, and no call of the turn is one.
+    let out = read_all(
+        &mut c,
+        &[
+            init(),
+            told(2, "run_command", "DONE", command("echo hi")),
+            result_denying(&["write_file"]),
+        ],
+    );
+    assert!(cards(&out).is_empty(), "{out:?}");
+    let told: Vec<&String> = out
+        .iter()
+        .filter_map(|i| match i {
+            Item::Notice { text, level } if level == "warn" => Some(text),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(told.len(), 1, "{out:?}");
+    assert!(
+        told[0].contains("Antigravity a refusé un appel (write_file)"),
+        "{told:?}"
+    );
+    assert_eq!(
+        words::unmatched_refusal("en", "command"),
+        "Antigravity refused a call (command) without saying which: no card could be put. Ask for it again if needed."
+    );
+}
+
 // ---- The real `agy` ----------------------------------------------------------------------------------------------
 
 /// A case of `real_agy_rules`: what it tries, its rules `allow` and `deny`, what the model is told to call, whether `agy`
@@ -1155,8 +1355,8 @@ type Case = (&'static str, Vec<String>, Vec<String>, String, bool);
 /// case by case. Each case writes `settings.json`, starts `agy -p` on one message that has the model call one tool, and
 /// reads its stream: `refused` when its step ended refused or the turn's `result` lists it (`denied_actions`), `allowed`
 /// when the call ran; a case where the model called another tool is tried again. Its expected results are what `agy` 1.5.3
-/// did on 2026-11-08 (ESC-388); one that differs is printed with what `agy` said, and the run fails at its end with all of
-/// them. Then a call refused, allowed by the user and done again in the turn that goes on, as the plugin has it.
+/// did on 2026-11-08 (ESC-388, ESC-389); one that differs is printed with what `agy` said, and the run fails at its end
+/// with all of them. Then a call refused, allowed by the user and done again in the turn that goes on, as the plugin has it.
 #[test]
 #[ignore = "real Antigravity CLI: ESCOUADE_TEST_REAL_AGY=<agy>"]
 fn real_agy_rules() {
@@ -1170,6 +1370,8 @@ fn real_agy_rules() {
         .status()
         .is_ok_and(|s| s.success());
     assert!(ok, "git init");
+    // A sub-folder with its own `.git` (ESC-389): the model writes in it more willingly than over a submodule's file.
+    std::fs::create_dir_all(wt.join("sub").join(".git")).unwrap();
     let prive = root.join("prive");
     std::fs::create_dir_all(&prive).unwrap();
     std::fs::write(prive.join("secret.txt"), "MOT-DE-PASSE-7731\n").unwrap();
@@ -1460,6 +1662,44 @@ fn real_agy_rules() {
             vec![],
             vec![],
             format!("write_file {}", w(&words::temp_dir(&agy_home).join("t.txt"))),
+            true,
+        ),
+        // ESC-389: a write that names a sub-folder, accepted by the rules in 2.2.3, opened the `.git` under it.
+        (
+            "write_file of a sub-folder covers <sub-folder> backslash .git backslash x",
+            vec![format!("write_file({wt_s}{sep}sub)")],
+            vec![],
+            format!("write_file {wt_s}{sep}sub{sep}.git{sep}x"),
+            true,
+        ),
+        (
+            "write_file of a sub-folder not there covers <sub-folder> backslash .git backslash config",
+            vec![format!("write_file({wt_s}{sep}neuf)")],
+            vec![],
+            format!("write_file {wt_s}{sep}neuf{sep}.git{sep}config"),
+            true,
+        ),
+        (
+            "deny of <sub-folder> backslash .git wins over allow of <sub-folder>",
+            vec![format!("write_file({wt_s}{sep}sub)")],
+            vec![format!("write_file({wt_s}{sep}sub{sep}.git)")],
+            format!("write_file {wt_s}{sep}sub{sep}.git{sep}x"),
+            false,
+        ),
+        // 1.5.3 judges the text, not the folder Windows reaches: a refusal holds only against the name it says. Why the
+        // plugin accepts by its rules a write that reaches a file alone (`fs/fileOnly`): nothing is under it.
+        (
+            "deny of <sub-folder> backslash .git does not hold against its short name GIT~1",
+            vec![format!("write_file({wt_s}{sep}sub)")],
+            vec![format!("write_file({wt_s}{sep}sub{sep}.git)")],
+            format!("write_file {wt_s}{sep}sub{sep}GIT~1{sep}y"),
+            true,
+        ),
+        (
+            "deny of <sub-folder> backslash .git does not hold against .git with a final dot",
+            vec![format!("write_file({wt_s}{sep}sub)")],
+            vec![format!("write_file({wt_s}{sep}sub{sep}.git)")],
+            format!("write_file {wt_s}{sep}sub{sep}.git.{sep}z"),
             true,
         ),
     ];

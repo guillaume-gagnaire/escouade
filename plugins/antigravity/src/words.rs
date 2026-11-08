@@ -243,9 +243,13 @@ fn separator(path: &str) -> char {
 }
 
 /// The refusals that guard a turn going on with a write allowed (`allowed`, rules `write_file(<path>)`, ESC-376): each
-/// folder of `KEPT` at the root of the agent's folder `cwd`, but one a write allowed is in (`deny` wins over `allow`,
-/// `real_agy_rules`). No refusal of `<path>\..`: `agy` 1.5.3 reads it as the folder of `<path>`, which would refuse the
-/// write allowed itself, and refuses `<path>\..\.git\x` with no such refusal (ESC-388).
+/// folder of `KEPT` at the root of the agent's folder `cwd`, and right under each path allowed: `agy` 1.5.3's
+/// `write_file(<path>)` covers what is under it, `<path>\.git` too, and a path allowed may be a folder, a submodule's
+/// (ESC-389). But one a write allowed is in (`deny` wins over `allow`, `real_agy_rules`). They hold against the name they
+/// say alone, not a short name (`GIT~1`) nor a final dot (`.git.`): what is accepted by the rules reaches a file alone
+/// (`fs/fileOnly`), nothing under it; for a folder the user allows on its card, they keep the plain names. No refusal of `<path>\..`:
+/// `agy` 1.5.3 reads it as the folder of `<path>`, which would refuse the write allowed itself, and refuses
+/// `<path>\..\.git\x` with no such refusal (ESC-388).
 pub fn guard_rules(cwd: &str, allowed: &[String]) -> Vec<String> {
     let writes: Vec<&str> = allowed
         .iter()
@@ -255,14 +259,17 @@ pub fn guard_rules(cwd: &str, allowed: &[String]) -> Vec<String> {
     if writes.is_empty() {
         return Vec::new();
     }
-    let mut deny = Vec::new();
-    let root = cwd.trim_end_matches(['/', '\\']);
-    if !root.is_empty() {
-        let sep = separator(cwd);
+    let bases = std::iter::once(cwd)
+        .chain(writes.iter().copied())
+        .map(|b| (b.trim_end_matches(['/', '\\']), separator(b)))
+        .filter(|(b, _)| !b.is_empty());
+    let mut deny: Vec<String> = Vec::new();
+    for (base, sep) in bases {
         for k in KEPT {
-            let folder = format!("{root}{sep}{k}");
-            if !writes.iter().any(|w| escouade_acp::inside(w, &folder)) {
-                deny.push(format!("write_file({folder})"));
+            let folder = format!("{base}{sep}{k}");
+            let rule = format!("write_file({folder})");
+            if !writes.iter().any(|w| escouade_acp::inside(w, &folder)) && !deny.contains(&rule) {
+                deny.push(rule);
             }
         }
     }
@@ -623,10 +630,20 @@ pub enum Verdict {
 /// - « Tout accepter »: allowed (it only comes back with a fence, or what `agy` refuses whatever its rules);
 /// - a read in a folder of the files joined to the messages: allowed;
 /// - in « Demander » and « Édits auto », a write strictly under the agent's folder, neither in `KEPT` nor covering it
-///   (`covers_kept`: the folder itself, `.g`): allowed;
+///   (`covers_kept`: the folder itself, `.g`), that reaches a file alone (`file_only`, the host's `fs/fileOnly`: a file
+///   there, or nothing and no submodule under it; `write_file(<path>)` covers what is under `<path>`, a folder's `.git`
+///   at any depth, ESC-389): allowed, the turn going on with each name of `KEPT` right under it refused (`guard_rules`);
 /// - anything else a card, without « Toujours » for a fenced agent (what it covers would never be judged again), a write
-///   in `KEPT` or covering it, or a path not normal (its rule would not be what was judged).
-pub fn judge(rules: &AgyRules, mode: &str, always: &[String], d: &Denied, rule: &str) -> Verdict {
+///   in `KEPT` or covering it, a write in the agent's folder that may reach more than a file (a folder, a submodule), or
+///   a path not normal (its rule would not be what was judged).
+pub fn judge(
+    rules: &AgyRules,
+    mode: &str,
+    always: &[String],
+    d: &Denied,
+    rule: &str,
+    file_only: &dyn Fn(&str) -> bool,
+) -> Verdict {
     if rules.read_only || fenced(&d.args, &rules.fence, &rules.cwd) {
         return Verdict::Refused;
     }
@@ -640,10 +657,18 @@ pub fn judge(rules: &AgyRules, mode: &str, always: &[String], d: &Denied, rule: 
         && path
             .as_deref()
             .is_none_or(|p| kept(p, cwd) || covers_kept(p, cwd));
+    // A write in the agent's folder that may reach more than a file (a folder, a submodule): what is under it would be
+    // allowed, a `.git` at any depth (ESC-389). Asked of the host only for a write that could be accepted.
+    let wide = write
+        && exact
+        && !in_kept
+        && path
+            .as_deref()
+            .is_some_and(|p| under(p, cwd) && !file_only(p));
     let asked = Verdict::Asked {
-        always: !fenced_agent && !in_kept && exact,
+        always: !fenced_agent && !in_kept && !wide && exact,
     };
-    if exact && !in_kept && !fenced_agent && always.iter().any(|r| r == rule) {
+    if exact && !in_kept && !wide && !fenced_agent && always.iter().any(|r| r == rule) {
         return Verdict::Allowed;
     }
     if d.tool == "run_command" || !exact {
@@ -659,7 +684,7 @@ pub fn judge(rules: &AgyRules, mode: &str, always: &[String], d: &Denied, rule: 
                 .iter()
                 .any(|dir| escouade_acp::inside(p, dir))
         });
-    let write_here = write && !in_kept && path.as_deref().is_some_and(|p| under(p, cwd));
+    let write_here = write && !in_kept && !wide && path.as_deref().is_some_and(|p| under(p, cwd));
     if read_joined || (matches!(mode, "default" | "acceptEdits") && write_here) {
         return Verdict::Allowed;
     }
@@ -765,18 +790,18 @@ pub fn permission_params(session: &str, d: &Denied, always: bool) -> Value {
 /// the conversation still offers its choices (it takes a note of 240 characters at most, `LIST_NOTE_MAX`).
 pub fn once_note(lang: &str) -> String {
     if lang == "fr" {
-        "« Autoriser » vaut pour le tour suivant, comme début de texte : ce qui commence pareil passe aussi. « Toujours » : de même, à chaque retour de cet appel.".into()
+        "« Autoriser » vaut pour le tour suivant ; une écriture couvre aussi ce qui est sous son chemin. « Toujours » : de même, à chaque retour de cet appel.".into()
     } else {
-        "“Allow” holds for the next turn, as the start of a text: what starts the same goes through too. “Always”: the same, each time this call comes back.".into()
+        "“Allow” holds for the next turn; a write also covers what is under its path. “Always”: the same, each time this call comes back.".into()
     }
 }
 
 /// Said when Escouade's rules allowed a call without a card: as « Autoriser », for the turn that goes on.
 pub fn allowed_notice(lang: &str, said: &str) -> String {
     if lang == "fr" {
-        format!("Escouade a autorisé d’office {said} : pour le tour suivant, comme début de texte, ce qui commence pareil passe aussi.")
+        format!("Escouade a autorisé d’office {said} : pour le tour suivant.")
     } else {
-        format!("Escouade allowed {said} by its rules: for the next turn, as the start of a text, what starts the same goes through too.")
+        format!("Escouade allowed {said} by its rules: for the next turn.")
     }
 }
 
@@ -807,6 +832,16 @@ pub fn refused_by_agy(lang: &str) -> &'static str {
         "Refusé par Antigravity : aucune règle ne l’autorisait."
     } else {
         "Refused by Antigravity: no rule allowed it."
+    }
+}
+
+/// Said when `agy`'s `result` lists a refusal of `action` (`denied_actions`) that no call of the turn matches: no card can
+/// be put on it, the user is told a call was refused (ESC-389).
+pub fn unmatched_refusal(lang: &str, action: &str) -> String {
+    if lang == "fr" {
+        format!("Antigravity a refusé un appel ({action}) sans dire lequel : aucune carte n’a pu être posée. Redemandez-le si besoin.")
+    } else {
+        format!("Antigravity refused a call ({action}) without saying which: no card could be put. Ask for it again if needed.")
     }
 }
 

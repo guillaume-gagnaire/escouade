@@ -59,6 +59,7 @@ Le protocole de base (`schemas/plugin-protocol-1.json`, version 1, délai par d�
 | `net/fetch` | vers Escouade | 10 s | Une requête https vers `permissions.network` (WASM seulement) |
 | `fs/read`, `fs/write`, `fs/stat`, `fs/list`, `fs/canon` | vers Escouade | 5 s | Les fichiers de `permissions.files` (WASM seulement, §8.4.6) |
 | `fs/gitProtected` | vers Escouade | 1 s pour git | Si git ne peut rien lancer de l'agent dans son dossier, pour un harness en WASM (`run.wasm`, §8.26) |
+| `fs/fileOnly` | vers Escouade | 1 s pour git | Si l'écriture d'un chemin du dossier d'un agent n'atteint qu'un fichier : un fichier qui est là, ou rien et aucun sous-module de l'index de git dessous ; un booléen, sans racine (Antigravity, ESC-389) |
 | `proc/spawn`, `proc/write`, `proc/kill` | vers Escouade | 5 s | Les programmes de `permissions.commands` (WASM seulement, §8.4.7) |
 | `proc/out`, `proc/exit` | vers le plugin, notification | — | Ce qu'un programme écrit, et sa fin |
 | `log` | vers Escouade, notification | — | Une ligne de son journal |

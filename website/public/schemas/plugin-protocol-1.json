@@ -323,6 +323,34 @@
       },
       "errors": ["invalidParams", "refused"]
     },
+    "fs/fileOnly": {
+      "description": "Whether a write of a path strictly in an agent's folder reaches a file alone: a file there (not a link), or nothing there and no submodule of git's index at it or under it, its links leading nowhere out of the folder. For a harness in WASM whose rule of a write covers what is under its path, which reads no worktree, by escouade.call. Needs no root of permissions.files: it gives one boolean of the agent's own folder. A folder, a link, and a git that does not answer within a second give false. Refused for a path that is not absolute, strictly in the folder of an agent of this plugin, and out of its fence.",
+      "direction": "toEscouade",
+      "params": {
+        "type": "object",
+        "required": ["agent", "path"],
+        "properties": {
+          "agent": {
+            "type": "string",
+            "description": "The agent, as agent/attach named it."
+          },
+          "path": {
+            "type": "string",
+            "description": "The absolute path the write names."
+          }
+        }
+      },
+      "result": {
+        "type": "object",
+        "required": ["fileOnly"],
+        "properties": {
+          "fileOnly": {
+            "type": "boolean"
+          }
+        }
+      },
+      "errors": ["invalidParams", "refused"]
+    },
     "proc/spawn": {
       "description": "Runs a program of permissions.commands, for a plugin in WASM: the command and its arguments must be an entry word for word, more following only an entry that ends in *. The program is found on the PATH, never a path; no shell; 4 at once; it ends with the plugin. Its environment is an agent's, without Escouade's variables, plus env. Its output comes by proc/out, its end by proc/exit; proc/out may come before this answer. Each start goes to the journal.",
       "direction": "toEscouade",

@@ -84,8 +84,8 @@ fn meaning(lang: Lang, mode: &str) -> String {
         ),
         "acceptEdits" => tr_in!(
             lang,
-            "Ses écritures dans le dossier de l’agent (hors .git, .husky, .githooks, .agents et .gemini) sont acceptées par Escouade à la fin du tour, puis il les refait ; ses commandes, git add et git commit compris, ses écritures ailleurs et les outils MCP demandent. Ce qu’Escouade accepte vaut pour le tour suivant, comme début de texte. Pas de bac à sable.",
-            "Its writes in the agent’s folder (but .git, .husky, .githooks, .agents and .gemini) are accepted by Escouade at the end of the turn, then it does them again; its commands, git add and git commit included, its writes elsewhere and MCP tools ask. What Escouade accepts holds for the next turn, as the start of a text. No sandbox."
+            "Ses écritures d’un fichier à extension dans le dossier de l’agent (hors .git, .husky, .githooks, .agents et .gemini) sont acceptées par Escouade à la fin du tour, puis il les refait ; ses commandes, git add et git commit compris, ses autres écritures et les outils MCP demandent. Ce qu’Escouade accepte vaut pour le tour suivant. Pas de bac à sable.",
+            "Its writes of a file with an extension in the agent’s folder (but .git, .husky, .githooks, .agents and .gemini) are accepted by Escouade at the end of the turn, then it does them again; its commands, git add and git commit included, its other writes and MCP tools ask. What Escouade accepts holds for the next turn. No sandbox."
         ),
         "bypassPermissions" => tr_in!(
             lang,
@@ -94,8 +94,8 @@ fn meaning(lang: Lang, mode: &str) -> String {
         ),
         _ => tr_in!(
             lang,
-            "Ses écritures dans le dossier de l’agent (hors .git, .husky, .githooks, .agents et .gemini) sont acceptées par Escouade ; ses commandes, ses écritures ailleurs et les outils MCP demandent. Tout cela une fois son tour fini (Antigravity ne demande rien en cours de tour), puis il les refait ; ce qu’Escouade accepte vaut pour le tour suivant, comme début de texte. Il lit sans demander. Pas de bac à sable.",
-            "Its writes in the agent’s folder (but .git, .husky, .githooks, .agents and .gemini) are accepted by Escouade; its commands, its writes elsewhere and MCP tools ask. All of it once its turn is over (Antigravity asks nothing during a turn), then it does them again; what Escouade accepts holds for the next turn, as the start of a text. It reads without asking. No sandbox."
+            "Ses écritures d’un fichier à extension dans le dossier de l’agent (hors .git, .husky, .githooks, .agents et .gemini) sont acceptées par Escouade ; ses commandes, ses autres écritures et les outils MCP demandent. Tout cela une fois son tour fini (Antigravity ne demande rien en cours de tour), puis il les refait ; ce qu’Escouade accepte vaut pour le tour suivant. Il lit sans demander. Pas de bac à sable.",
+            "Its writes of a file with an extension in the agent’s folder (but .git, .husky, .githooks, .agents and .gemini) are accepted by Escouade; its commands, its other writes and MCP tools ask. All of it once its turn is over (Antigravity asks nothing during a turn), then it does them again; what Escouade accepts holds for the next turn. It reads without asking. No sandbox."
         ),
     }
 }

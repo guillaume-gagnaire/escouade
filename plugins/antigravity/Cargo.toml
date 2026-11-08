@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-agy"
-version = "2.2.3"
+version = "2.2.4"
 description = "Le plugin Antigravity CLI d'Escouade : l'agent de Google comme harness, par stream-json"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"
