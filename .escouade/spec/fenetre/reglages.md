@@ -3,7 +3,7 @@ title: "Réglages"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md"]
 tickets: ["ESC-378","ESC-379"]
-decisions: ["reglages-la-barre-des-categories-la-tein"]
+decisions: [118]
 compared: null
 ---
 

@@ -1,9 +1,9 @@
 ---
-number: null
+number: 118
 id: "reglages-la-barre-des-categories-la-tein"
 title: "Réglages : la barre des catégories, la teinte par portée et « Avancé »"
 date: "2026-11-08"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-379"
 pages: ["fenetre/reglages"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/reglages","added":45,"removed":39}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-08T02:07:46+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
