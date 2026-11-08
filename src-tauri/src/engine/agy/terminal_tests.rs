@@ -269,3 +269,28 @@ fn its_rules_are_its_plugins_and_what_the_2_2_0_kept_of_always_is_erased_unread(
         assert!(pair(&t.args, "--mode").is_none_or(|m| m == "plan"));
     }
 }
+
+#[test]
+fn its_temporary_folder_is_the_agents_own_as_its_plugin_has_it() {
+    // `agy` 1.5.3 writes in its temporary folder with no rule nor question (ESC-388): not the user's `%TEMP%` (ESC-389).
+    let home = crate::paths::test_dir("esc389-agy-temp");
+    let meta = AgentMeta {
+        mode: "default".into(),
+        cwd: CWD.into(),
+        ..Default::default()
+    };
+    let t = launch_of(
+        &meta,
+        Some(&home),
+        &crate::fence::Fence::default(),
+        &granted(),
+    );
+    let tmp = home.join("tmp").to_string_lossy().into_owned();
+    for var in crate::engine::agy::TEMP_VARS {
+        assert_eq!(env_of(&t, var), Some(tmp.as_str()), "{var}");
+        assert_eq!(t.env.iter().filter(|(k, _)| k == var).count(), 1, "{var}");
+    }
+    // The folder is made with the launch's files.
+    assert!(t.files.iter().any(|(p, _)| *p == temp_mark(&home)));
+    assert_eq!(temp_mark(&home).parent(), Some(home.join("tmp").as_path()));
+}

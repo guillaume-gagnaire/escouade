@@ -515,6 +515,29 @@ pub fn home_env(env: &[(String, String)], home: &Path) -> Vec<(String, String)> 
     env
 }
 
+/// The variables that name the temporary folder (Windows, then Unix).
+pub const TEMP_VARS: [&str; 3] = ["TEMP", "TMP", "TMPDIR"];
+
+/// The temporary folder of `agy` in the agent's home, as its plugin gives it (`<home>/tmp`): `agy` 1.5.3 writes in its
+/// temporary folder with no rule nor question (ESC-388), so its interface is not given the user's (ESC-389).
+pub fn temp_dir(home: &Path) -> PathBuf {
+    home.join("tmp")
+}
+
+/// The file that makes `temp_dir` (the launch's files are written, their folder made), as its plugin writes it.
+pub fn temp_mark(home: &Path) -> PathBuf {
+    temp_dir(home).join(".escouade")
+}
+
+/// `env` with `TEMP_VARS` set to the agent's own temporary folder (`temp_dir`).
+pub fn temp_env(env: &mut Vec<(String, String)>, home: &Path) {
+    let tmp = temp_dir(home).to_string_lossy().into_owned();
+    env.retain(|(k, _)| !TEMP_VARS.contains(&k.as_str()));
+    for var in TEMP_VARS {
+        env.push((var.into(), tmp.clone()));
+    }
+}
+
 #[cfg(test)]
 /// What the card of a turn stopped by its limit says (`said`: `agy`'s own words).
 pub fn limited_error(lang: &str, said: &str) -> String {

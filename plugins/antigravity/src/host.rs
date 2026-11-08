@@ -1,5 +1,5 @@
-//! What it asks of the host, in a module: the agent's home by `fs/read` (the root `agentHome`, docs/PLUGINS.md §8.4.6), a
-//! timer, items said unasked. Natively (the tests) it reads the disk, and
+//! What it asks of the host, in a module: the agent's home by `fs/read` (the root `agentHome`, docs/PLUGINS.md §8.4.6),
+//! whether a write reaches a file alone (`fs/fileOnly`, ESC-389), a timer, items said unasked. Natively (the tests) it reads the disk, and
 //! nothing rings: the tests call `Client::tick` themselves.
 
 use std::path::Path;
@@ -49,6 +49,13 @@ mod module {
         })
     }
 
+    /// Whether a write of `path`, in the folder of the agent `agent`, reaches a file alone (`fs/fileOnly`): a file there,
+    /// or nothing and no submodule under it. A host that does not answer (an older core) says no: the user is asked.
+    pub fn file_only(agent: &str, _cwd: &str, path: &str) -> bool {
+        turn::host_call("fs/fileOnly", json!({ "agent": agent, "path": path }))
+            .is_ok_and(|r| r["fileOnly"] == true)
+    }
+
     fn line(method: &str, params: Value) {
         let line = json!({ "jsonrpc": "2.0", "method": method, "params": params });
         turn::write(&line.to_string());
@@ -70,7 +77,7 @@ mod module {
 }
 
 #[cfg(target_family = "wasm")]
-pub use module::{push, read, read_end, read_home, timer};
+pub use module::{file_only, push, read, read_end, read_home, timer};
 
 /// See the module's `read`.
 #[cfg(not(target_family = "wasm"))]
@@ -88,6 +95,39 @@ pub fn read_home(agent: &str, home: &Path, rel: &Path) -> Option<String> {
 #[cfg(not(target_family = "wasm"))]
 pub fn read_end(agent: &str, path: &Path) -> Option<String> {
     read(agent, path)
+}
+
+/// See the module's `file_only`: what the core's `fs/fileOnly` says, on the disk (the tests). A file (not a link), or
+/// nothing and no submodule in git's index at it or under it.
+#[cfg(not(target_family = "wasm"))]
+pub fn file_only(_agent: &str, cwd: &str, path: &str) -> bool {
+    let at = Path::new(path);
+    match std::fs::symlink_metadata(at) {
+        Ok(meta) => meta.file_type().is_file(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            let cwd = Path::new(cwd);
+            if !cwd.ancestors().any(|d| d.join(".git").exists()) {
+                return true;
+            }
+            let Ok(rel) = at.strip_prefix(cwd) else {
+                return false;
+            };
+            let rel = rel.to_string_lossy().replace('\\', "/");
+            std::process::Command::new("git")
+                .args(["--literal-pathspecs", "-c", "core.fsmonitor=false"])
+                .args(["ls-files", "--stage", "-z", "--", &rel])
+                .current_dir(cwd)
+                .output()
+                .is_ok_and(|out| {
+                    out.status.success()
+                        && !out
+                            .stdout
+                            .split(|b| *b == 0)
+                            .any(|e| e.starts_with(b"160000 "))
+                })
+        }
+        Err(_) => false,
+    }
 }
 
 /// See the module's `timer`.

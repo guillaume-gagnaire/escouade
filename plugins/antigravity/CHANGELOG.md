@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.2.4
+
+- In Ask and Accept edits, a write is accepted by the rules only when the core says it reaches a file alone (`fs/fileOnly`: a file there, or nothing and no submodule under it): with `agy` 1.5.3 the rule of a folder covers its `.git` at any depth, so a folder, a submodule (even never initialized) or what holds one is a card, without “Always” (ESC-389, the review of 2.2.3).
+- A resumption that carries a write also refuses `.git`, `.husky`, `.githooks`, `.agents` and `.gemini` right under each path allowed. `real_agy_rules` measures that such a refusal holds for its plain name, not against `GIT~1` nor `.git.`, and passes in full on the real `agy` 1.5.3.
+- A refusal `agy` lists that no call matches is told in the conversation, no longer only in the log.
+- The card and the conversation say what `agy` 1.5.3 was measured to do (a write covers what is under its path), and the permissions page says what 2.2.3 measured.
+
 ## 2.2.3
 
 - With `agy` 1.5.3, a call it refused in `-p` but told done (`DONE`, no error) is a card again: the plugin reads the refusals its `result` lists (`denied_actions`) and finds the call its transcript does not say done; its row says it was refused (ESC-388).

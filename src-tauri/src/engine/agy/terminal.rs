@@ -25,8 +25,8 @@
 use super::super::terminal::{bracketed, TerminalArgs, TerminalLaunch, TerminalView};
 use super::super::{mcp, Engine, Escouade};
 use super::{
-    agy_mode, always_file, gemini_dir, grant_doc, home_env, settings_doc, settings_file,
-    transcript, AgyRules, AGY, EFFORTS, KEY_VARS,
+    agy_mode, always_file, gemini_dir, grant_doc, home_env, settings_doc, settings_file, temp_env,
+    temp_mark, transcript, AgyRules, AGY, EFFORTS, KEY_VARS,
 };
 use crate::agent::{AgentRt, Effects, HookOutcome};
 use crate::tui::Registered;
@@ -162,6 +162,13 @@ impl TerminalView for AgyTerminal {
         ];
         if let Some(home) = l.home {
             env.extend(home_env(&[], home));
+            // Its own temporary folder, as its plugin has it: `agy` writes there with no rule nor question (ESC-389).
+            temp_env(&mut env, home);
+            files.push((
+                temp_mark(home),
+                b"Antigravity's temporary folder for this agent (TEMP, TMP), made by Escouade.\n"
+                    .to_vec(),
+            ));
             let rules = AgyRules {
                 fence: crate::fence::spelled(l.fence, l.program),
                 read_only: l.meta.discussion.is_some(),

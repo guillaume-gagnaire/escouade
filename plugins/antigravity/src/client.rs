@@ -545,11 +545,18 @@ impl Client {
 
     /// The calls `agy` refused but told `DONE` (1.5.3, ESC-388): what its `result` lists refused (`denied_actions`) beyond
     /// the steps told refused, each the last call told `DONE` of its action that its transcript does not say `DONE` (one
-    /// refused is never written there; one that ran is, before its event).
-    fn told_done(&self, r: &Value, denied: &[Denied], mut done: Vec<Denied>) -> Vec<Denied> {
+    /// refused is never written there; one that ran is, before its event). And the actions of the refusals no call
+    /// matches, to be told in the conversation (ESC-389).
+    fn told_done(
+        &self,
+        r: &Value,
+        denied: &[Denied],
+        mut done: Vec<Denied>,
+    ) -> (Vec<Denied>, Vec<String>) {
         let action = |d: &Denied| words::action_of(&d.tool, &d.args);
         let mut caught: Vec<Option<String>> = denied.iter().map(action).collect();
         let mut found = Vec::new();
+        let mut unmatched = Vec::new();
         for a in r["denied_actions"].as_array().into_iter().flatten() {
             let a = a["action"].as_str().map(str::to_string);
             if let Some(i) = caught.iter().position(|c| c.is_some() && *c == a) {
@@ -565,11 +572,11 @@ impl Client {
                 .rposition(|d| a.is_some() && action(d) == a && !ran(d))
             {
                 Some(i) => found.push(done.remove(i)),
-                None => eprintln!("agy: a refusal of {a:?} no call told matches"),
+                None => unmatched.push(a.unwrap_or_else(|| "?".into())),
             }
         }
         found.sort_by_key(|d| d.step);
-        found
+        (found, unmatched)
     }
 
     /// The end of a turn of `agy` (`result`): over for Escouade, or what it was refused and asked asked of the user first,
@@ -579,7 +586,16 @@ impl Client {
         let done = std::mem::take(&mut self.done);
         // Told `DONE`, it did not run: its row says it was refused.
         let session = self.session.clone().unwrap_or_default();
-        for d in self.told_done(r, &denied, done) {
+        let (found, unmatched) = self.told_done(r, &denied, done);
+        // A refusal no call matches: no card, but the user is told (ESC-389).
+        for a in unmatched {
+            let a: String = a.chars().filter(|c| !c.is_control()).take(60).collect();
+            out.push(Item::Notice {
+                text: words::unmatched_refusal(&self.lang, &a),
+                level: "warn".into(),
+            });
+        }
+        for d in found {
             out.push(Item::ToolResult {
                 id: words::call_id(&session, d.step),
                 output: words::refused_by_agy(&self.lang).into(),
@@ -629,7 +645,15 @@ impl Client {
                 });
                 continue;
             }
-            match words::judge(&self.rules, &self.settings.mode, &self.always, d, &rule) {
+            let file_only = |p: &str| host::file_only(&self.agent, &self.rules.cwd, p);
+            match words::judge(
+                &self.rules,
+                &self.settings.mode,
+                &self.always,
+                d,
+                &rule,
+                &file_only,
+            ) {
                 // « Projet privé », a discussion: refused at once, never a card the user could accept.
                 words::Verdict::Refused => {
                     eprintln!(
