@@ -15,6 +15,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### New
 
+- Split screen: drag an agent, a terminal, a launch or the editor from the sidebar onto the work area to open it beside, above or below, up to four panes. The ringed pane takes your typing, your voice and your answers; Ctrl+ splits or goes back to one pane, and the layout comes back at the next start.
 - Settings are rebuilt: a bar on the left with Escouade’s pages (General, Agents, Accounts and harnesses, Connected services, Voice, Notifications, Plugins, Advanced), then each project’s pages, and everything applies as soon as you change it, with no “Save”. A search (Ctrl+F) finds a setting by its name, in English or French, and opens its page; an amber dot marks the page that needs you, such as a harness without an account or an expired token.
 - Escouade's plugins come in the installer: at the first start, even offline, Escouade installs those your configuration uses, and the Plugins view offers the others, installed in one click with no download.
 - On store.escouade.dev, a plugin's documentation can have its pages in French and in English: each visitor reads those of their language, else those of the other, and a link from one page to another stays on the store.

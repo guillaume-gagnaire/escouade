@@ -2273,6 +2273,9 @@ pub struct UiState {
     pub selected_agent: HashMap<String, String>,
     /// "split" (conversation | files) or "" (classic).
     pub layout: String,
+    /// The split screen of each project (ESC-392), by project id: its tree of panes as the interface wrote it
+    /// (`lib/panes.ts`), kept whole and read back at the start. Absent: one content fills the work area.
+    pub panes: HashMap<String, Value>,
 }
 
 /// A choice of Claude Code's model picker (`initialize`): an alias or a full id, and the model

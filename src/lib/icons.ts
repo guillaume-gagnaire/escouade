@@ -42,6 +42,17 @@ export const ICONS = {
   'lay-1': '<rect x="2.25" y="3" width="11.5" height="10" rx="1.75" />',
   'lay-2': '<rect x="2.25" y="3" width="11.5" height="10" rx="1.75" /><path d="M9.25 3v10" />',
   import: '<path d="M8 2.75v7.5M5 7.5l3 3 3-3M3 12.75h10" />',
+  // The cells of the split screen's compass (ESC-392): where a content dropped goes, the part of the pane it takes.
+  'pane-l':
+    '<rect x="2.25" y="3" width="11.5" height="10" rx="1.75" /><rect x="4" y="4.75" width="3.5" height="6.5" rx=".75" fill="currentColor" stroke="none" />',
+  'pane-r':
+    '<rect x="2.25" y="3" width="11.5" height="10" rx="1.75" /><rect x="8.5" y="4.75" width="3.5" height="6.5" rx=".75" fill="currentColor" stroke="none" />',
+  'pane-t':
+    '<rect x="2.25" y="3" width="11.5" height="10" rx="1.75" /><rect x="4" y="4.75" width="8" height="2.75" rx=".75" fill="currentColor" stroke="none" />',
+  'pane-b':
+    '<rect x="2.25" y="3" width="11.5" height="10" rx="1.75" /><rect x="4" y="8.5" width="8" height="2.75" rx=".75" fill="currentColor" stroke="none" />',
+  'pane-c':
+    '<rect x="2.25" y="3" width="11.5" height="10" rx="1.75" /><rect x="5.25" y="5.75" width="5.5" height="4.5" rx=".75" fill="currentColor" stroke="none" />',
   merge:
     '<circle cx="4.75" cy="3.75" r="1.5" /><circle cx="4.75" cy="12.25" r="1.5" /><circle cx="11.25" cy="9.25" r="1.5" /><path d="M4.75 5.25v5.5M4.75 5.5c0 2.4 2.4 3.75 5 3.75" />',
   pr: '<circle cx="4.75" cy="3.75" r="1.5" /><circle cx="4.75" cy="12.25" r="1.5" /><circle cx="11.25" cy="12.25" r="1.5" /><path d="M4.75 5.25v5.5M11.25 10.75V6.5c0-1-.75-1.75-1.75-1.75H7.5M9 3.25l-1.5 1.5L9 6.25" />',

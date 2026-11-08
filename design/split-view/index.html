@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Escouade — écran partagé : choisir une direction (ESC-392)</title>
+    <link rel="stylesheet" href="../../node_modules/@fontsource-variable/inter/opsz.css" />
+    <style>
+      :root { --bg: #0b0c0e; --line: rgba(255,255,255,.09); --text: #f7f8f8; --soft: #d0d3d8; --muted: #989da6; --brand: #35c1bd; --p-ink: oklch(0.83 0.08 48); }
+      * { box-sizing: border-box; margin: 0; }
+      body { background: var(--bg); color: var(--text); font-family: 'Inter Variable', Inter, system-ui, sans-serif; font-size: 15px; line-height: 1.55; padding: 48px 56px 80px; max-width: 1560px; margin: 0 auto; }
+      h1 { font-size: 26px; font-weight: 650; letter-spacing: -.01em; }
+      .lead { color: var(--soft); max-width: 900px; margin-top: 10px; }
+      .lead a { color: var(--brand); }
+      section { margin-top: 56px; padding-top: 28px; border-top: 1px solid var(--line); }
+      h2 { font-size: 20px; font-weight: 650; display: flex; gap: 12px; align-items: baseline; }
+      h2 .l { color: var(--p-ink); font-weight: 700; }
+      .what { color: var(--soft); max-width: 1000px; margin-top: 8px; }
+      .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 20px; }
+      figure img { width: 100%; border-radius: 10px; border: 1px solid var(--line); display: block; }
+      figcaption { color: var(--muted); font-size: 13px; margin-top: 8px; }
+      ul { color: var(--soft); margin-top: 12px; padding-left: 20px; max-width: 1000px; }
+      li + li { margin-top: 4px; }
+      b { color: var(--text); font-weight: 600; }
+      .q { margin-top: 56px; padding: 20px 24px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.02); max-width: 1000px; }
+      .q h2 { font-size: 17px; }
+    </style>
+  </head>
+  <body>
+    <h1>L’écran partagé : trois directions</h1>
+    <p class="lead">
+      Deux volets dans la zone de travail, côte à côte ou l’un sur l’autre, remplis en glissant un agent ou un terminal depuis la barre
+      latérale (ou par « Ouvrir à côté » au clavier). Chaque direction est montrée dans trois états : un agent et un terminal côte à côte,
+      deux agents l’un sur l’autre, et le geste en cours. Rien n’est construit ; l’étude est dans
+      <a href="../../docs/SPLIT.md">docs/SPLIT.md</a>, les rendus viennent de <code>apercu.html</code> (<code>node design/split-view/render.mjs</code>).
+    </p>
+
+    <section>
+      <h2><span class="l">A</span> Un panneau, un filet</h2>
+      <p class="what">
+        La zone de travail reste un seul panneau ; les volets y sont séparés par un filet d’un pixel et sa poignée. Le volet actif porte un
+        trait de la couleur du projet sur son en-tête et son champ de saisie s’allume. Pendant le geste, la moitié visée se remplit, avec
+        « Ouvrir à droite » écrit dedans ; les bords se marquent.
+      </p>
+      <div class="grid">
+        <figure><img src="a-cote.png" alt="A : un agent et un terminal côte à côte" /><figcaption>Agent et terminal côte à côte</figcaption></figure>
+        <figure><img src="a-pile.png" alt="A : deux agents l’un sur l’autre" /><figcaption>Deux agents l’un sur l’autre</figcaption></figure>
+        <figure><img src="a-glisser.png" alt="A : le glisser en cours" /><figcaption>refacto-auth glissé vers la droite</figcaption></figure>
+      </div>
+      <ul>
+        <li><b>Pour</b> : le plus proche de l’app d’aujourd’hui, le moins de bruit ; le panneau ne change pas.</li>
+        <li><b>Contre</b> : le volet actif ne se lit qu’au trait et au champ de saisie ; deux conversations se ressemblent.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="l">B</span> Des panneaux posés sur le cadre</h2>
+      <p class="what">
+        Chaque volet devient son propre panneau, coins arrondis et ombre, avec le cadre teinté entre eux (8 px, la poignée au milieu). Le
+        volet actif est entouré d’un anneau de la couleur du projet ; l’autre s’assombrit à peine. Pendant le geste, une boussole de cinq
+        cases (haut, gauche, remplacer, droite, bas) s’ouvre sur le volet survolé et l’emplacement se dessine.
+      </p>
+      <div class="grid">
+        <figure><img src="b-cote.png" alt="B : un agent et un terminal côte à côte" /><figcaption>Agent et terminal côte à côte</figcaption></figure>
+        <figure><img src="b-pile.png" alt="B : deux agents l’un sur l’autre" /><figcaption>Deux agents l’un sur l’autre</figcaption></figure>
+        <figure><img src="b-glisser.png" alt="B : le glisser en cours" /><figcaption>Git Bash lâché sur la case « droite »</figcaption></figure>
+      </div>
+      <ul>
+        <li><b>Pour</b> : le volet actif saute aux yeux ; les cases du geste sont précises et se visent aussi au clavier.</li>
+        <li><b>Contre</b> : 8 px de moins par séparation ; une boussole de plus à apprendre.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="l">C</span> Des groupes d’onglets</h2>
+      <p class="what">
+        Chaque volet a sa barre d’onglets, comme l’éditeur : on y garde plusieurs agents et terminaux, on passe de l’un à l’autre sans
+        toucher à la barre latérale. Lâcher sur une barre d’onglets ajoute un onglet (un trait marque la place) ; lâcher sur le bord d’un
+        volet en ouvre un nouveau.
+      </p>
+      <div class="grid">
+        <figure><img src="c-cote.png" alt="C : un agent et un terminal côte à côte" /><figcaption>Agent et terminal, chacun avec ses onglets</figcaption></figure>
+        <figure><img src="c-pile.png" alt="C : deux agents l’un sur l’autre" /><figcaption>Deux agents l’un sur l’autre</figcaption></figure>
+        <figure><img src="c-glisser.png" alt="C : le glisser en cours" /><figcaption>refacto-auth glissé dans les onglets du volet gauche</figcaption></figure>
+      </div>
+      <ul>
+        <li><b>Pour</b> : le plus puissant, familier à qui vient d’un IDE.</li>
+        <li><b>Contre</b> : une deuxième navigation qui double la barre latérale ; le plus long à construire ; l’état à retenir grossit.</li>
+      </ul>
+    </section>
+
+    <div class="q">
+      <h2>Ce qui reste à choisir</h2>
+      <ul>
+        <li>La direction : <b>B</b>, choisie le 2026-11-08.</li>
+        <li>Le nombre de volets : deux, ou plus.</li>
+        <li>Ce qui peut aller dans un volet : agents et terminaux, ou aussi le Kanban, une PR, un fichier de l’éditeur.</li>
+        <li>Ce qui est retenu : la disposition par projet au redémarrage, ou rien.</li>
+      </ul>
+    </div>
+  </body>
+</html>

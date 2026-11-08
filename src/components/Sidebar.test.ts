@@ -1894,6 +1894,9 @@ describe('Sidebar in English', () => {
       'Open in editor',
       'Open a terminal',
       'Claude Code view',
+      // The split screen (ESC-392).
+      'Open beside',
+      'Open below',
       '',
       'Turn off remote control',
       'Open on claude.ai',

@@ -5,6 +5,8 @@
 
 <script lang="ts">
   import { tick, untrack } from 'svelte';
+  import { paneDrag } from '../lib/pane-drag.svelte';
+  import { itemKey, leaves, type PaneItem } from '../lib/panes';
   import { keyLabel } from '../lib/platform';
   import { SIDE_MIN, sideWidth } from '../lib/side-width.svelte';
   import Splitter from './Splitter.svelte';
@@ -145,6 +147,27 @@
   const termSelected = $derived(app.selectedTerm[project.id] ?? null);
   /** Another view (terminal, launch log, board) fills the main area: no agent is highlighted. */
   const otherView = $derived(!!termSelected || !!app.runCommand || app.boardOn || app.docsOn || app.prsOn);
+  /** The contents of the split screen's panes (ESC-392), when it is on screen: each is highlighted, the active one more. */
+  const paneKeys = $derived(app.panesOn && app.panes ? new Set(leaves(app.panes.root).map(itemKey)) : null);
+  const inPane = (key: string) => !!paneKeys?.has(key) && app.panes?.active !== key;
+
+  /** « Ouvrir à côté », « Ouvrir en dessous » (ESC-392): what a card's or a row's menu offers. */
+  function besideItems(item: PaneItem): MenuItem[] {
+    return [
+      {
+        label: t('shell.panes.openBeside'),
+        hint: `${keyLabel('Ctrl')}+${t('shell.panes.click')}`,
+        onClick: () => app.openBeside(item, 'right'),
+      },
+      { label: t('shell.panes.openBelow'), onClick: () => app.openBeside(item, 'bottom') },
+    ];
+  }
+
+  /** A click on a card or a row: with Ctrl (Cmd), beside the content on screen. */
+  function open(e: MouseEvent, item: PaneItem, select: () => void) {
+    if (e.ctrlKey || e.metaKey) app.openBeside(item, 'right');
+    else select();
+  }
   const review = $derived(app.reviewCount(project.id));
   /** The word of the project's code host (« PR », « MR » on GitLab): read by its view, else by one of its agents (ESC-65). */
   const prsWord = $derived(app.prWords[project.id] ?? app.projectAgents.find((a) => a.prWord)?.prWord ?? 'PR');
@@ -384,6 +407,7 @@
             },
           ]
         : []),
+      ...(a.archived ? [] : besideItems({ kind: 'agent', id: a.id })),
       ...foldedItems(folded),
       ...handoverItems(e, a),
       ...remoteItems(a),
@@ -815,7 +839,7 @@
 
     <div class="agents">
       {#each agents as a (a.id)}
-        {@const sel = a.id === selectedAgentId && !otherView}
+        {@const sel = paneKeys ? app.panes?.active === `agent:${a.id}` : a.id === selectedAgentId && !otherView}
         {@const s = spent(a)}
         {@const ticket = app.ticketOf(a.id)}
         {@const plan = planView(a)?.mini}
@@ -835,6 +859,7 @@
           class:error={a.status === 'error'}
           class:awaits={!!pending}
           class:sel
+          class:inpane={inPane(`agent:${a.id}`)}
           class:alert={app.attention[a.id]}
           class:flash={flashing[a.id]}
           style:--alert={a.status === 'error' ? 'var(--del)' : a.status === 'waiting' ? 'var(--wait)' : 'var(--run)'}
@@ -842,7 +867,8 @@
           tabindex="0"
           aria-current={sel ? 'true' : undefined}
           data-agent={a.id}
-          onclick={() => app.selectAgent(a.id)}
+          onclick={(e) => open(e, { kind: 'agent', id: a.id }, () => app.selectAgent(a.id))}
+          onpointerdown={(e) => paneDrag.press(e, { kind: 'agent', id: a.id }, a.name, engineName(a.engine))}
           onkeydown={(e) => cardKey(e, a)}
           oncontextmenu={(e) => agentMenu(e, a)}
         >
@@ -1271,12 +1297,15 @@
         {#each terms as term (term.id)}
           <div
             class="row-item term"
-            class:sel={termSelected === term.id}
+            class:sel={paneKeys ? app.panes?.active === `term:${term.id}` : termSelected === term.id}
+            class:inpane={inPane(`term:${term.id}`)}
             role="button"
             tabindex="0"
             aria-current={termSelected === term.id ? 'true' : undefined}
             data-shell={term.shell}
-            onclick={() => app.selectTerm(term.id)}
+            onclick={(e) => open(e, { kind: 'term', id: term.id }, () => app.selectTerm(term.id))}
+            onpointerdown={(e) => paneDrag.press(e, { kind: 'term', id: term.id }, term.name)}
+            oncontextmenu={(e) => menu.show(e, besideItems({ kind: 'term', id: term.id }))}
             onkeydown={(e) => e.key === 'Enter' && e.target === e.currentTarget && app.selectTerm(term.id)}
           >
             <span class="ti"><Icon name="term" size={14} /></span>
@@ -1604,6 +1633,11 @@
   }
   .agent.sel {
     background: rgba(var(--fg-rgb), 0.06);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+  }
+  /* Shown in a pane of the split screen that is not the active one (ESC-392). */
+  .agent.inpane,
+  .row-item.inpane {
     box-shadow: inset 0 0 0 1px var(--line-2);
   }
   .agent.waiting {

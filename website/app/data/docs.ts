@@ -21,7 +21,7 @@ export const DOC_GROUPS = [
       'remote-control',
     ],
   },
-  { id: 'code', pages: ['git', 'worktrees', 'branches', 'code-hosts', 'editor', 'terminals', 'launch'] },
+  { id: 'code', pages: ['git', 'worktrees', 'branches', 'code-hosts', 'editor', 'terminals', 'split-screen', 'launch'] },
   { id: 'board', pages: ['board', 'autopilot', 'testing', 'browser', 'integrations', 'shared-board', 'docs-space', 'mcp'] },
   { id: 'usage', pages: ['accounts', 'usage', 'stats'] },
   {

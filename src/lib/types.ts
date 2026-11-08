@@ -2,6 +2,7 @@
 
 import type { ThemeChoice } from './appearance';
 import type { Lang } from './i18n/locale.svelte';
+import type { PaneLayout } from './panes';
 
 export type AgentStatus = 'idle' | 'running' | 'waiting' | 'done' | 'error';
 
@@ -1980,6 +1981,8 @@ export interface UiState {
   selectedAgent: Record<string, string>;
   /** 'split': conversation on the left half, uncommitted files and their diff on the right. */
   layout?: '' | 'split';
+  /** The split screen of each project (ESC-392), by project id (`lib/panes.ts`); absent: one content fills the work area. */
+  panes?: Record<string, PaneLayout>;
 }
 
 /** The checkout of an agent's own folder (`GitInfo.agentGit`): the branch HEAD is really on, whatever its worktree was made on. */

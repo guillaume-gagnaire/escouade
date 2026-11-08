@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { paneDrag } from '../lib/pane-drag.svelte';
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { dictation } from '../lib/dictation.svelte';
   import { t } from '../lib/i18n';
@@ -95,6 +96,7 @@
         aria-label={t('nav.titleBar.openEditor')}
         use:tip={t('nav.titleBar.openEditorTitle')}
         onclick={() => app.openEditor({ projectId: activeProject.id, source: 'project' })}
+        onpointerdown={(e) => paneDrag.press(e, { kind: 'editor' }, t('common.editor'))}
       >
         <Icon name="code" />
         <span class="lbl">{t('common.editor')}</span>

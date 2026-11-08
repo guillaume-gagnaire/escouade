@@ -26,7 +26,8 @@
   /** The question the Alt+digit keys are for: the one being answered. */
   let cursor = $state(0);
 
-  const keys = $derived(pending && current);
+  // In the split screen (ESC-392), only the active pane's request takes the keys.
+  const keys = $derived(pending && current && app.keysFor(agentId));
   // « Claude attend ta réponse », its agent named as its harness names it.
   const waiting = $derived(t('composer.question.waiting', { engine: speakerOf(app.agents[agentId]?.engine) }));
   // « Codex t’a posé une question », once answered.

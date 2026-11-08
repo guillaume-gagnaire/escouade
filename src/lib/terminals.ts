@@ -637,10 +637,15 @@ export function getXTerm(id: string): XTerm | undefined {
   return xterms.get(id);
 }
 
-/** Moves the terminal's DOM into `container` (or back to the parking lot). */
-export function mountTerminal(id: string, container: HTMLElement | null) {
+/**
+ * Moves the terminal's DOM into `container` (or back to the parking lot). Back to the lot from `from` only: a view
+ * left after another took the terminal (a pane of the split screen drawn again, ESC-392) does not take it back.
+ * `focus`: false for a terminal shown in a pane that is not the active one.
+ */
+export function mountTerminal(id: string, container: HTMLElement | null, opts: { from?: HTMLElement; focus?: boolean } = {}) {
   const x = xterms.get(id);
   if (!x) return;
+  if (!container && opts.from && x.host.parentElement !== opts.from) return;
   (container ?? parkingLot()).appendChild(x.host);
   if (container) {
     x.term.options.theme = terminalTheme(x.readOnly);
@@ -650,7 +655,7 @@ export function mountTerminal(id: string, container: HTMLElement | null) {
       } catch {
         /* not measurable yet */
       }
-      x.term.focus();
+      if (opts.focus !== false) x.term.focus();
     });
   }
 }
