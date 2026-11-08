@@ -130,7 +130,6 @@ const REDRAWN = {
     'src/components/settings/AboutPage.svelte',
     'src/components/settings/AdvancedPage.svelte',
     'src/components/settings/AgentsPage.svelte',
-    'src/components/settings/HarnessesSection.svelte',
     'src/components/settings/McpActivity.svelte',
     'src/components/settings/NotificationsPage.svelte',
     'src/components/settings/BoardTab.svelte',

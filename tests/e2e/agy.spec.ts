@@ -68,7 +68,7 @@ test.describe('an agent on Antigravity CLI', () => {
   }) => {
     const { page } = app;
     await addProject(page, app.repo);
-    // Réglages › Harness: found, with its version.
+    // Réglages › Comptes et harness: found, with its version.
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Réglages' });
     await openSettingsPage(settings, 'Comptes et harness');
@@ -214,7 +214,7 @@ test.describe('Antigravity CLI’s accounts', () => {
     const settings = page.getByRole('dialog', { name: 'Réglages' });
     await openSettingsPage(settings, 'Comptes et harness');
     // None of its own (ESC-128): Antigravity CLI installed, « Aucun compte ».
-    await expect(settings.getByRole('group', { name: 'Comptes Antigravity CLI' })).toContainText('Aucun compte');
+    await expect(settings.getByRole('region', { name: 'Antigravity CLI', exact: true })).toContainText('Aucun compte');
     await settings.getByRole('button', { name: 'Ajouter un compte Antigravity CLI…' }).click();
     const modal = page.getByRole('dialog', { name: 'Ajouter un compte Antigravity CLI' });
     await expect(modal.getByText('Antigravity CLI n’est pas encore connecté sur cette machine', { exact: false })).toBeVisible();

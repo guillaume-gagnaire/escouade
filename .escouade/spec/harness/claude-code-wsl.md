@@ -2,7 +2,7 @@
 title: "Claude Code dans WSL"
 subject: "Harness"
 sources: ["docs/SPEC.md"]
-tickets: []
+tickets: ["ESC-382"]
 decisions: []
 compared: null
 ---
@@ -15,7 +15,7 @@ Sous Windows, les agents peuvent tourner avec un Claude Code installé seulement
 
 ### Chemin
 
-- Le chemin (Réglages › Harness, ou l'exécutable d'un compte) peut être :
+- Le chemin (Réglages › Comptes et harness › Avancé, ou l'exécutable d'un compte) peut être :
   - `\\wsl.localhost\<distribution>\…` ou `\\wsl$\<distribution>\…` : la distribution du chemin, jamais lancé comme un programme de Windows ;
   - un chemin Linux `/home/<utilisateur>/…` ;
   - `~/…`.
@@ -69,14 +69,14 @@ Le serveur MCP et les hooks de la vue Claude Code écoutent sur 127.0.0.1 de Win
 
 ## Réglages
 
-- Réglages › Harness, chemin de Claude Code : une ligne dessous dit où est son `claude`, redemandée 250 ms après chaque frappe (une réponse à un chemin d'avant est écartée) :
+- Réglages › Comptes et harness › Avancé, chemin de Claude Code : une ligne dessous dit où est son `claude`, redemandée 250 ms après chaque frappe (une réponse à un chemin d'avant est écartée) :
   - « Trouvé : <chemin> » ;
   - « Trouvé dans WSL (<distribution>) : <chemin> » ;
   - « Introuvable. Indique le chemin de claude.exe, ou de Claude Code installé dans WSL : ~/.local/bin/claude, /home/<utilisateur>/…, ou \\wsl.localhost\<distribution>\…. » (sous macOS et Linux : « Introuvable. Indique le chemin de claude. »).
-- Pour un `claude` de WSL en NAT, une note sous le groupe : « Le réseau de WSL est en NAT : le serveur MCP d'Escouade et le suivi de la vue Claude Code ne joignent pas l'app. Passe-le en mode miroir (networkingMode=mirrored sous [wsl2] dans %UserProfile%\.wslconfig), puis lance wsl --shutdown. »
+- Pour un `claude` de WSL en NAT, une note sous le groupe de Claude Code : « Le réseau de WSL est en NAT : le serveur MCP d'Escouade et le suivi de la vue Claude Code ne joignent pas l'app. Passe-le en mode miroir (networkingMode=mirrored sous [wsl2] dans %UserProfile%\.wslconfig), puis lance wsl --shutdown. »
 - Enregistrer un autre chemin ou une autre distribution met à jour le bandeau « Claude Code introuvable » du Kanban et l'indice du champ, sans redémarrer.
 - Réglages › Terminaux › « Distribution WSL » : la distribution d'un chemin Linux.
-- L'exécutable d'un compte, dans sa fiche de Réglages › Comptes.
+- L'exécutable d'un compte, dans sa fiche de Réglages › Comptes et harness.
 
 ## Limites
 

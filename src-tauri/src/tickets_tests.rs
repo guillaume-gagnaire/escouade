@@ -3123,7 +3123,7 @@ async fn a_project_no_account_serves_makes_no_agent_and_its_board_says_why() {
     assert_eq!(
         e.to_string(),
         format!(
-            "Aucun compte Claude Code actif ne sert le projet « {} » : coche-le sous « Réservé aux projets » d’un compte Claude Code actif, dans Réglages › Comptes.",
+            "Aucun compte Claude Code actif ne sert le projet « {} » : coche-le sous « Réservé aux projets » d’un compte Claude Code actif, dans Réglages › Comptes et harness.",
             p.name
         )
     );

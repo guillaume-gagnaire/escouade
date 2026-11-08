@@ -170,11 +170,11 @@ export default defineZone('wizard', {
     },
     noAccount: {
       title: 'No account serves this project',
-      desc: 'Nothing starts: switch an account on, or lift its reservation to other projects, in Settings › Accounts.',
+      desc: 'Nothing starts: switch an account on, or lift its reservation to other projects, in Settings › Accounts and harnesses.',
     },
     noClaude: {
       title: 'No harness found',
-      desc: 'Install a harness (Claude Code: npm install -g @anthropic-ai/claude-code), or give its path in Settings › Harness.',
+      desc: 'Install a harness (Claude Code: npm install -g @anthropic-ai/claude-code), or give its path in Settings › Accounts and harnesses.',
     },
     ok: 'Harness found · an account serves the project · repository ready',
   },

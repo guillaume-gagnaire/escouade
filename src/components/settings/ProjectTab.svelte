@@ -88,7 +88,7 @@
   const sharedAccounts = $derived(sharedBy(asDrafted, privateEngine));
   const quotedNames = (list: Account[]) => fList(list.map((a) => t('accounts.tab.quoted', { name: accountName(a) })));
 
-  /** « Réserver <compte> à ce projet »: saved at once, as Réglages › Comptes saves its accounts. */
+  /** « Réserver <compte> à ce projet »: saved at once, as Réglages › Comptes et harness saves its accounts. */
   async function reserveHere(a: Account) {
     const list = await app.run(api.accountUpdate({ ...$state.snapshot(a), projects: [project.id] }));
     if (list) app.settings.accounts = list;

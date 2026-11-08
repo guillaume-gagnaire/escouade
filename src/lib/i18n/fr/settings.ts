@@ -172,13 +172,15 @@ export default {
       /** Beside its name, before its version (2.0 design): « Prêt · 2.1.301 ». */
       ready: 'Prêt',
       notConnected: 'Aucun compte',
+      /** A harness of the seed whose plugin is not installed (ESC-373). */
+      notInstalled: 'Non installé',
       tooOld: 'Trop ancienne',
       unsupported: 'Non prise en charge',
     },
     /** The group of what holds for every harness, after each one's. */
     allHarnesses: 'Tous les harness',
     allHarnessesNote:
-      'Le modèle, l’effort et le mode des nouveaux agents se règlent compte par compte, dans Réglages › Comptes, où chaque compte se connecte.',
+      'Le modèle, l’effort et le mode des nouveaux agents se règlent compte par compte, dans Réglages › Comptes et harness, où chaque compte se connecte.',
     /** Under « Remote control pour tous les agents », in the group of the harness that has it. */
     remoteOnly: '{harness} seulement : les autres harness n’ont pas de remote control.',
     install: 'Installation',
@@ -200,7 +202,11 @@ export default {
     /** The version found of the saved path, alone: no word of the tested versions (ESC-159). */
     version: 'Version',
     versionUnknown: 'Version inconnue : claude ne l’a pas donnée.',
-    versionNotConnected: 'Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes.',
+    versionNotConnected: 'Aucun compte connecté : connecte l’un de ses comptes ci-dessous, ou ajoutes-en un.',
+    /** « Installer » of a harness not installed: its plugin from the app's seed, with no network (ESC-373). */
+    installSeed: 'Installer {harness}',
+    installing: 'Installation…',
+    notInstalledHint: 'Livré avec Escouade : il s’installe d’un clic, sans réseau, puis ses comptes s’ajoutent ici.',
     processes: 'Processus',
     autoResume: 'Reprise automatique après la limite d’usage',
     autoResumeDesc: '« continue » envoyé une fois le quota réinitialisé',

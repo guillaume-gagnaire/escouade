@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, FAKE_CODEX, send, test, openSettingsPage } from './fixture';
+import { addProject, expect, FAKE_CODEX, send, test, openAdvanced, openSettingsPage } from './fixture';
 
 const SHOTS = process.env.ESCOUADE_E2E_SHOTS;
 const SMALL = { width: 1028, height: 779 };
@@ -146,6 +146,7 @@ test.describe('57 and 58', () => {
       await shot(page, 'choice-57-row', t);
       // 58: « Ordre des harness », each chip with its number and its arrows.
       await openSettingsPage(dialog, 'Comptes et harness');
+      await openAdvanced(dialog);
       const order = dialog.getByRole('list', { name: 'Ordre des harness' });
       await order.scrollIntoViewIfNeeded();
       await expect(order.getByRole('button', { name: /Codex/ }).first()).toBeVisible();

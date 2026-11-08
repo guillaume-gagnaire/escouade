@@ -19,7 +19,7 @@
   // to the sign-in.
   // The sign-in runs the account's own program in a terminal here (`claude`, `codex login`, `copilot login`); Escouade looks for it
   // every 2 s, then closes the terminal and reads the account's quota. Closed before, the account stays, not signed in.
-  // `onclose`: opened over another modal (the assistant « Nouveau projet »), back to it rather than to Réglages › Comptes.
+  // `onclose`: opened over another modal (the assistant « Nouveau projet »), back to it rather than to Réglages › Comptes et harness.
   // Cursor CLI (ESC-43): its machine's account is the sign-in of `agent login`; a new one is its API key, kept in the system's
   // keychain and given to its processes by CURSOR_API_KEY: no terminal, « Changer la clé… » gives it again. Mistral Vibe
   // (ESC-267) the same: its machine's account is the key `vibe --setup` kept, a new one its API key, by MISTRAL_API_KEY.

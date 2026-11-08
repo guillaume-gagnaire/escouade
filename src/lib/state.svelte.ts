@@ -320,7 +320,7 @@ class AppState {
   engineModels = $state.raw<Partial<Record<EngineId, ToldModel[]>>>({});
   /** What the `claude` of each account told of its models: which take the mode `auto` (`modelTakes`). */
   accountModels = $state.raw<Record<string, AccountModels>>({});
-  /** The harnesses whose program is found: the only ones the interface offers (Réglages › Harness lists them all). */
+  /** The harnesses whose program is found: the only ones the interface offers (Réglages › Comptes et harness lists them all). */
   enginesFound = $state.raw<EngineId[]>([]);
   version = $state('');
   filesOpen = $state(false);

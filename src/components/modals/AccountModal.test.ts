@@ -776,7 +776,7 @@ describe('AccountModal', () => {
 
   it('says that Claude Code is gone, or that its installation was cut, rather than that it stopped (ESC-133)', async () => {
     const gone =
-      'Claude Code est introuvable : réinstalle-le (`irm https://claude.ai/install.ps1 | iex`, ou `npm install -g @anthropic-ai/claude-code`), ou indique son chemin dans Réglages › Harness.';
+      'Claude Code est introuvable : réinstalle-le (`irm https://claude.ai/install.ps1 | iex`, ou `npm install -g @anthropic-ai/claude-code`), ou indique son chemin dans Réglages › Comptes et harness.';
     const cut =
       'L’installation de Claude Code a été interrompue (il en reste /opt/homebrew/bin/.claude-Xa3k9) : relance `npm install -g @anthropic-ai/claude-code` dans un terminal.';
     let why: string | null = gone;

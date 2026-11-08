@@ -318,7 +318,7 @@ async function ticket(app: App, h: Harness) {
   await snap(page, `${h}-ticket-conversation`);
 }
 
-/** Réglages › Comptes: the Principal of Copilot CLI signed in as the user's account, with its credits of the month. */
+/** Réglages › Comptes et harness: the Principal of Copilot CLI signed in as the user's account, with its credits of the month. */
 async function copilotAccount(page: Page) {
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });

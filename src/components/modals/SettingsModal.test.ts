@@ -123,13 +123,14 @@ describe('SettingsModal', () => {
     expect(tab('Comptes et harness')).toHaveAttribute('aria-current', 'page');
     expect(within(dialog).getByRole('heading', { level: 1, name: 'Comptes et harness' })).toBeInTheDocument();
     expect(within(dialog).getByText('Les harness de ce poste, leurs comptes, et ce qui se passe à la limite')).toBeInTheDocument();
-    expect(within(panel()).getByRole('textbox', { name: /Chemin de l'exécutable/ })).toBeInTheDocument();
+    expect(within(panel()).getByRole('region', { name: 'Claude Code' })).toBeInTheDocument();
+    expect(within(panel()).getByRole('heading', { name: 'Quand un quota est épuisé' })).toBeInTheDocument();
 
     await userEvent.click(tab('Avancé'));
     expect(tab('Avancé')).toHaveAttribute('aria-current', 'page');
     expect(tab('Comptes et harness')).not.toHaveAttribute('aria-current');
     expect(within(panel()).getByRole('heading', { name: 'Réseau' })).toBeInTheDocument();
-    expect(screen.queryByRole('textbox', { name: /Chemin de l'exécutable/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Claude Code' })).not.toBeInTheDocument();
     // Each page starts at its top, whatever the one before was scrolled to.
     panel().scrollTop = 300;
     await userEvent.click(tab('Général'));
@@ -359,13 +360,13 @@ describe('SettingsModal', () => {
   it('has no defaults of new agents for every harness any more: each account has its own (ESC-128)', async () => {
     const backend = backendSaving();
     render(SettingsModal);
+    const resume = group('Quand un quota est épuisé').getByRole('switch', { name: 'Reprise automatique après la limite d’usage' });
+    expect(resume).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(resume);
     expect(screen.queryByRole('group', { name: 'Modèle par défaut' })).not.toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'Effort par défaut' })).not.toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'Mode de permission par défaut' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Nouveaux agents' })).not.toBeInTheDocument();
-    const resume = screen.getByRole('switch', { name: 'Reprise automatique après la limite d’usage' });
-    expect(resume).toHaveAttribute('aria-checked', 'true');
-    await userEvent.click(resume);
     await userEvent.click(tab('Agents'));
     await userEvent.click(within(panel()).getByRole('button', { name: /^Avancé/ }));
     const idle = screen.getByRole('spinbutton', { name: /Arrêter les processus des agents inactifs/ });
@@ -575,7 +576,8 @@ describe('SettingsModal', () => {
     const next = screen.getByRole('switch', { name: 'Continuer sur le harness suivant quand tous les comptes d’un harness sont épuisés' });
     expect(next).toHaveAttribute('aria-checked', 'false');
     await userEvent.click(next);
-    // Codex's best model by default; another one chosen.
+    // Codex's best model by default, in « Avancé »; another one chosen.
+    await userEvent.click(within(panel()).getByRole('button', { name: /^Avancé/ }));
     const codex = screen.getByRole('combobox', { name: 'Modèle de passation · Codex' }) as HTMLSelectElement;
     expect(codex.selectedOptions[0].text).toBe('Le meilleur (GPT-5.5)');
     await userEvent.selectOptions(codex, 'gpt-5.5-mini');
@@ -613,6 +615,9 @@ describe('SettingsModal', () => {
             'vectors_model',
             'account_status',
             'closed_projects',
+            // What the seed holds, for a harness not installed (R4).
+            'plugins_list',
+            'plugin_seed_offers',
             'data_dir',
           ].includes(c.cmd),
       ),
@@ -733,10 +738,19 @@ describe('SettingsModal', () => {
     });
   });
 
-  it('pauses the autopilot past a quota, for every project', async () => {
+  it('pauses the autopilot past a quota, for every project, beside « Changer de compte à » and no more in Kanban (R4)', async () => {
     const backend = backendSaving();
     render(SettingsModal, { tab: 'board', projectId: 'p1' });
-    const pause = screen.getByRole('group', { name: 'Pause au-delà du quota' });
+    expect(screen.queryByRole('group', { name: /au-delà du quota/ })).toBeNull();
+    await userEvent.click(tab('Comptes et harness'));
+    const limit = group('Quand un quota est épuisé');
+    // The two thresholds one after the other, then the resumes.
+    expect(limit.getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual([
+      'Changer de compte à',
+      'Pause du pilote auto au-delà du quota',
+    ]);
+    expect(limit.getAllByRole('switch').map((g) => g.getAttribute('aria-label'))).toEqual(['Reprise automatique après la limite d’usage']);
+    const pause = limit.getByRole('group', { name: 'Pause du pilote auto au-delà du quota' });
     expect(
       within(pause)
         .getAllByRole('button')
@@ -1536,6 +1550,9 @@ describe('SettingsModal in English', () => {
     expect(within(nav()).getByRole('searchbox', { name: 'Search settings' })).toBeInTheDocument();
     expect(within(dialog).getByText('This machine’s harnesses, their accounts, and what happens at the limit')).toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: 'Save' })).toBeNull();
+    expect(group('When a quota runs out').getByRole('group', { name: 'Pause the autopilot above quota' })).toBeInTheDocument();
+    expect(screen.getByText('for all projects')).toBeInTheDocument();
+    await userEvent.click(within(panel()).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     const path = screen.getByRole('textbox', { name: 'Executable path' });
     expect(path).toHaveAttribute('placeholder', 'claude (found in PATH)');
     app.claudePathFound = false;
@@ -1581,6 +1598,7 @@ describe('SettingsModal in English', () => {
     app.claudeFound = true;
     app.claudePathFound = false;
     render(SettingsModal, { tab: 'claude' });
+    await userEvent.click(within(panel()).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     const path = screen.getByRole('textbox', { name: 'Executable path' });
     expect(path).toHaveAttribute('placeholder', 'not found — enter the path to claude.exe');
     app.claudePathFound = true;
@@ -1599,6 +1617,7 @@ describe('SettingsModal in English', () => {
             : { path: null, wsl: null, nat: false, canWsl: true },
     });
     render(SettingsModal, { tab: 'claude' });
+    await userEvent.click(within(panel()).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     const field = screen.getByRole('textbox', { name: 'Executable path' });
     // Blank: the one found by itself.
     expect(await screen.findByText('Found: C:\\Users\\me\\.local\\bin\\claude.exe')).toBeInTheDocument();
@@ -1819,7 +1838,7 @@ describe('SettingsModal, the version of Claude Code', () => {
     fakeBackend({ claude_locate: () => located, engines: () => [answer] });
     render(SettingsModal, { tab: 'claude' });
     expect(
-      await screen.findByText('Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes.'),
+      await screen.findByText('Aucun compte connecté : connecte l’un de ses comptes ci-dessous, ou ajoutes-en un.'),
     ).toBeInTheDocument();
   });
 
@@ -1838,6 +1857,7 @@ describe('SettingsModal, the version of Claude Code', () => {
     const backend = fakeBackend({ claude_locate: () => located, engines: () => [info({})] });
     render(SettingsModal, { tab: 'claude' });
     expect(await screen.findByText('2.1.301')).toBeInTheDocument();
+    await userEvent.click(within(panel()).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     await userEvent.type(screen.getByRole('textbox', { name: "Chemin de l'exécutable" }), 'C:\autre\claude.exe');
     await waitFor(() => expect(screen.queryByText('2.1.301')).toBeNull());
     expect(backend.called('engines').length).toBeGreaterThan(0);
@@ -1847,9 +1867,7 @@ describe('SettingsModal, the version of Claude Code', () => {
     setLang('en');
     fakeBackend({ claude_locate: () => located, engines: () => [info({ state: 'notConnected' })] });
     render(SettingsModal, { tab: 'claude' });
-    expect(
-      await screen.findByText('No account signed in: add or sign in an account of this harness in the Accounts tab.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('No account signed in: sign in one of its accounts below, or add one.')).toBeInTheDocument();
     cleanup();
     fakeBackend({ claude_locate: () => located, engines: () => [info({ version: null })] });
     render(SettingsModal, { tab: 'claude' });
@@ -1897,22 +1915,26 @@ describe('SettingsModal, Claude Code updated by Escouade (ESC-133)', () => {
     let answer = status({ state: 'updated', version: '2.1.302', from: '2.1.301', at: 1 });
     fakeBackend({ claude_locate: () => located, engines: () => [info()], claude_update_status: () => answer });
     render(SettingsModal, { tab: 'claude' });
+    await userEvent.click(within(panel()).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     expect(screen.getByRole('switch', { name: SWITCH })).toHaveAttribute('aria-checked', 'true');
     expect(await screen.findByText('Mis à jour en 2.1.302 (depuis la 2.1.301).')).toBeInTheDocument();
     cleanup();
     answer = status({ state: 'upToDate', version: '2.1.302', at: 1 });
     fakeBackend({ claude_locate: () => located, engines: () => [info()], claude_update_status: () => answer });
     render(SettingsModal, { tab: 'claude' });
+    await userEvent.click(within(panel()).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     expect(await screen.findByText('À jour (2.1.302).')).toBeInTheDocument();
     cleanup();
     answer = status({ state: 'failed', line: 'Error: EACCES: permission denied', at: 1 });
     fakeBackend({ claude_locate: () => located, engines: () => [info()], claude_update_status: () => answer });
     render(SettingsModal, { tab: 'claude' });
+    await userEvent.click(within(panel()).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     expect(await screen.findByText('Échec de la mise à jour : Error: EACCES: permission denied')).toHaveClass('bad');
     cleanup();
     answer = status({ state: 'userOff', line: 'DISABLE_AUTOUPDATER' });
     fakeBackend({ claude_locate: () => located, engines: () => [info()], claude_update_status: () => answer });
     render(SettingsModal, { tab: 'claude' });
+    await userEvent.click(within(panel()).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     expect(
       await screen.findByText('Coupée dans Claude Code lui-même (DISABLE_AUTOUPDATER) : Escouade ne le met pas à jour non plus.'),
     ).toBeInTheDocument();
@@ -1926,6 +1948,7 @@ describe('SettingsModal, Claude Code updated by Escouade (ESC-133)', () => {
       save_settings: () => [],
     });
     render(SettingsModal, { tab: 'claude' });
+    await userEvent.click(within(panel()).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     expect(await screen.findByText('À jour (2.1.302).')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('switch', { name: SWITCH }));
     expect(
@@ -1973,21 +1996,23 @@ describe('SettingsModal, the « Harness » tab (ESC-29)', () => {
     ...over,
   });
 
-  it('lists each harness with its executable and its version, and leaves signing in to the Accounts tab', async () => {
+  it('lists each harness with its state and its version beside its name, its accounts under it, its path in « Avancé »', async () => {
     fakeBackend({ claude_locate: () => located, engines: () => [claude(), bare()] });
     render(SettingsModal, { tab: 'claude' });
     const own = await screen.findByRole('region', { name: 'Claude Code' });
-    expect(within(own).getByRole('textbox', { name: "Chemin de l'exécutable" })).toBeInTheDocument();
+    expect(within(own).getByRole('heading', { name: 'Claude Code' })).toBeInTheDocument();
+    expect(within(own).getByRole('button', { name: 'Ajouter un compte Claude Code…' })).toBeInTheDocument();
+    expect(within(own).getByRole('listitem', { name: 'Principal' })).toBeInTheDocument();
+    expect(within(own).queryByRole('textbox', { name: "Chemin de l'exécutable" })).toBeNull();
     expect(await within(own).findByText('2.1.301')).toHaveAttribute('data-state', 'notConnected');
     expect(
-      within(own).getByText(/Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes\.$/),
+      within(own).getByText(/Aucun compte connecté : connecte l’un de ses comptes ci-dessous, ou ajoutes-en un\.$/),
     ).toBeInTheDocument();
     const other = screen.getByRole('region', { name: 'Harness nu' });
-    expect(within(other).getByText('Trouvé : C:\bin\codex.exe')).toBeInTheDocument();
     expect(within(other).getByText('0.163.0')).toHaveAttribute('data-state', 'ready');
-    // An account signs in from Réglages › Comptes (ESC-128): the tab has no state line nor « Se connecter… » any more.
-    expect(screen.queryByRole('button', { name: 'Se connecter…' })).toBeNull();
-    expect(screen.queryByText('État')).toBeNull();
+    expect(within(other).getByText(/^Prêt/)).toBeInTheDocument();
+    await userEvent.click(within(panel()).getByRole('button', { name: /^(Avancé|Advanced)/ }));
+    expect(screen.getByRole('textbox', { name: "Chemin de l'exécutable" })).toBeInTheDocument();
   });
 
   it('says that the cost of a harness that does not tell it is estimated, and what it cannot do', async () => {
@@ -2021,7 +2046,6 @@ describe('SettingsModal, the « Harness » tab (ESC-29)', () => {
     expect(await within(screen.getByRole('region', { name: 'Claude Code' })).findByText('2.1.301')).toHaveAttribute('data-state', 'ready');
     // Its path is not set here (Claude Code's alone is): no « Indique le chemin de claude » under it (ESC-84).
     expect(within(other).queryByText(/chemin de claude/)).toBeNull();
-    expect(within(other).getByText('Introuvable.')).toBeInTheDocument();
   });
 
   it('says it in English too', async () => {
@@ -2029,11 +2053,8 @@ describe('SettingsModal, the « Harness » tab (ESC-29)', () => {
     fakeBackend({ claude_locate: () => located, engines: () => [claude(), bare()] });
     render(SettingsModal, { tab: 'claude' });
     const own = await screen.findByRole('region', { name: 'Claude Code' });
-    expect(
-      await within(own).findByText(/No account signed in: add or sign in an account of this harness in the Accounts tab\.$/),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Sign in…' })).toBeNull();
-    expect(within(screen.getByRole('region', { name: 'Harness nu' })).getByText('Found: C:\bin\codex.exe')).toBeInTheDocument();
+    expect(await within(own).findByText(/No account signed in: sign in one of its accounts below, or add one\.$/)).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Harness nu' })).getByText(/^Ready/)).toBeInTheDocument();
   });
 });
 

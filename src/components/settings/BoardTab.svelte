@@ -2,7 +2,6 @@
   import Icon from '../Icon.svelte';
   import { newAgentDefaults } from '../../lib/accounts';
   import { commitPreview } from '../../lib/board';
-  import { fPct } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { EFFORTS, MODES, modelLabel, modelOptions } from '../../lib/models';
   import { settingsForm } from '../../lib/settings.svelte';
@@ -47,7 +46,6 @@
   const conflicts = $derived(CONFLICT_IDS.map((value) => ({ value, label: t(`boardSettings.tab.conflicts.${value}`) })));
   const PARALLEL = [1, 2, 3, 4, 5, 6].map((n) => ({ value: n, label: String(n) }));
   /** As the backend offers them (`board::QUOTA_PAUSES`). */
-  const quotaPauses = $derived([80, 90, 95, 100].map((n) => ({ value: n, label: fPct(n) })));
 </script>
 
 <Group title={t('boardSettings.tab.actionsTitle')} plain>
@@ -185,10 +183,6 @@
   <!-- ESC-63: off by default; the target's CI is read from its code host, like the pull requests of the tickets. -->
   <Row label={t('boardSettings.tab.redTargetPause')} desc={t('boardSettings.tab.redTargetPauseDesc')}>
     <Switch label={t('boardSettings.tab.redTargetPause')} bind:on={() => !!b.pauseOnRedTarget, (v) => (b.pauseOnRedTarget = v)} />
-  </Row>
-  <!-- The quotas are the account's: an app setting, shown with each project's autopilot. -->
-  <Row label={t('boardSettings.tab.quotaPause')} hint={t('boardSettings.tab.quotaPauseHint')} desc={t('boardSettings.tab.quotaPauseDesc')}>
-    <Chips label={t('boardSettings.tab.quotaPause')} options={quotaPauses} mono bind:value={settingsForm.settings.quotaPause} />
   </Row>
 </Group>
 

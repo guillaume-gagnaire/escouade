@@ -670,6 +670,14 @@ export async function openSettingsPage(where: Page | Locator, name: string | Reg
   return dialog;
 }
 
+/** Unfolds « Avancé » at the foot of the page shown (direction A): the rare settings it folds. Answers the dialog. */
+export async function openAdvanced(dialog: Locator) {
+  const fold = dialog.locator('#settings-panel').getByRole('button', { name: /^(Avancé|Advanced)/ });
+  if ((await fold.getAttribute('aria-expanded')) !== 'true') await fold.click();
+  await expect(fold).toHaveAttribute('aria-expanded', 'true');
+  return dialog;
+}
+
 /**
  * Closes the settings window once what was changed in it is saved (ESC-380): no « Enregistrer », each setting is saved
  * as it changes, a text when it loses the focus. The field typed in is left first (a click on the page's title).

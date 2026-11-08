@@ -27,7 +27,7 @@ export default {
   },
   /** The mark of the harness on a turn, once the conversation went from one to another. */
   turnOn: 'sur {harness}',
-  /** The settings of Réglages › Harness. */
+  /** The settings of Réglages › Comptes et harness. */
   settings: {
     onLimit: 'Continuer sur le harness suivant quand tous les comptes d’un harness sont épuisés',
     onLimitDesc:

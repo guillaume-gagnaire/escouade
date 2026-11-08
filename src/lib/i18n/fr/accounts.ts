@@ -12,8 +12,6 @@ export default {
     list: 'Comptes',
     /** The accounts of one harness; `{harness}`: « Claude Code ». */
     group: 'Comptes {harness}',
-    order:
-      'Les nouveaux agents partent sur le premier compte actif de leur harness dont la 5 h est sous les seuils « Pause au-delà du quota » et « Changer de compte à » et dont la semaine tient son rythme, dans cet ordre.',
     name: 'Nom',
     folder: 'Dossier',
     executable: 'Exécutable',
@@ -237,7 +235,7 @@ export default {
     inactive: '{name} (inactif)',
   },
 
-  /** A private project's accounts (ESC-141), in its settings and in Réglages › Comptes. `{names}`: quoted, as in a sentence. */
+  /** A private project's accounts (ESC-141), in its settings and in Réglages › Comptes et harness. `{names}`: quoted, as in a sentence. */
   private: {
     own: {
       one: 'Compte réservé à ce projet : {names}. Sessions, mémoire et historique de {harness} n’y sont partagés avec aucun autre projet.',
@@ -257,7 +255,7 @@ export default {
     sharedOnLimit: 'Comptes partagés à la limite',
     sharedOnLimitDesc:
       'À la limite d’usage de ses comptes réservés, ses agents peuvent continuer sur un compte partagé (changement de compte, passage à un autre harness). Éteint, ils attendent la remise à zéro.',
-    /** Réglages › Comptes, under an account a private project shares. */
+    /** Réglages › Comptes et harness, under an account a private project shares. */
     sharing: {
       one: 'Le projet privé {names} part encore sur ce compte, partagé avec d’autres projets.',
       other: 'Les projets privés {names} partent encore sur ce compte, partagé avec d’autres projets.',
@@ -352,18 +350,19 @@ export default {
     back: 'Revenir sur {account}',
   },
 
-  // The « Quotas » group, at the end of the « Comptes » tab: how the status bar shows them, for every account.
+  // « Quand un quota est épuisé » of « Comptes et harness », and its « Projection des quotas » in « Avancé ».
   quotas: {
-    title: 'Quotas',
-    /** Where an agent goes at the limit, gathered in « Comptes » (choice 2 of the 2.0 design). */
+    /** Where an agent goes at a limit, in one place (cause 1 of design/settings-2-2/PROPOSITION.md). */
     limitTitle: 'Quand un quota est épuisé',
-    limitNote:
-      'Les nouveaux agents partent sur le premier compte actif de leur harness dont la 5 h est sous les seuils « Pause au-delà du quota » et « Changer de compte à » et dont la semaine tient son rythme. Ce qui suit dit où va un agent qui les atteint.',
     /** « Changer de compte à » (ESC-148): its choices are percentages, and « À la limite ». */
     switchAt: 'Changer de compte à',
     switchAtLimit: 'À la limite',
-    switchAtDesc:
-      'Un agent passe sur un autre compte de son harness à la fin de son tour quand une fenêtre courte (5 h) de son compte atteint ce seuil, ou qu’une fenêtre longue (semaine, 30 jours, crédits du mois) l’atteint sans tenir jusqu’à sa remise à zéro au rythme actuel. Les nouveaux agents et les tickets partent sur le premier compte de l’ordre dont la 5 h n’est pas pleine et dont la semaine tient son rythme, même sur « À la limite » (un agent lancé ne bouge alors pas avant 100 %, puis « Reprendre sur un autre compte… », ci-dessous, décide). « Pause au-delà du quota » (Kanban) retient en plus les tickets quand tous les comptes l’ont passée.',
+    switchAtDesc: 'Un agent passe sur un autre compte de son harness à la fin de son tour quand sa fenêtre de 5 h atteint ce seuil.',
+    /** Beside « Changer de compte à » (once in Kanban): an app setting, for all the projects. */
+    pauseAt: 'Pause du pilote auto au-delà du quota',
+    pauseAtHint: 'pour tous les projets',
+    pauseAtDesc:
+      'Le pilote auto ne démarre aucun ticket tant que la fenêtre de 5 h ou la fenêtre hebdomadaire dépasse ce seuil. Un ticket lancé à la main part quand même.',
     projection: 'Projection des quotas',
     projectionDesc:
       'Après chaque quota, où il en sera à sa remise à zéro au rythme actuel (« → 64 % ») : vert, orange au-delà de 80 %, rouge au-delà de 100 % ; pour un harness sans quota, le coût du jour projeté à minuit, rapporté au budget. Le panneau des quotas et les infobulles les montrent toutes ; la barre d’état, celles qui passent 80 % ou toutes, sauf sous 1240 px de large, où elles restent dans les infobulles.',
@@ -381,7 +380,7 @@ export default {
     down: 'Descendre {name}',
   },
 
-  // The setting of the Harness tab.
+  // A setting of « Quand un quota est épuisé » (Réglages › Comptes et harness).
   switchOnLimit: {
     label: 'Reprendre sur un autre compte un agent de ticket arrêté par la limite',
     desc: 'Sinon il attend la remise à zéro de son compte',

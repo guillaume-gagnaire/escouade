@@ -200,6 +200,8 @@ test('the settings look as the previews of direction A draw them, tinted by what
           // The tint follows what the page sets.
           expect.soft(await tint(page), `the tint, ${where}`).toBe(color);
           await expect(dialog).toHaveAttribute('data-scope', color === TEAL ? 'app' : 'project');
+          // Each harness's state, read a moment after the page opens: shot once Claude Code's is drawn.
+          if (route === 'a-comptes') await expect(dialog.locator('[data-engine="claude"] .hstate')).toBeVisible();
           await previewAt(preview, PREVIEW, route, t, await tint(page));
           await shoot(page, preview, `${route}${size.name}-${t}`);
           await compareFrame(page, preview, route, small, where);
@@ -464,7 +466,7 @@ test('the private project, the cleaned worktrees and the quotas look as the 2.0 
               ['width'],
             ],
             ['its title', '[data-anchor="limit"] h2', '#sg-quotas h2', ['width']],
-            ['its note', '[data-anchor="limit"] .note', '#sg-quotas .note', ['width', 'height']],
+            // No note under it any more (R4, design/settings-2-2/index.html#a-comptes): each row says what it does.
           ],
           `#accounts-quotas, ${where}`,
         );

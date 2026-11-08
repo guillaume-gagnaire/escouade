@@ -82,7 +82,7 @@ test.describe('an agent on Gemini CLI', () => {
   test('converses over ACP, asks its permissions and questions from the window and the list, and resumes', async ({ app }) => {
     const { page } = app;
     await addProject(page, app.repo);
-    // Réglages › Harness: found, with its version.
+    // Réglages › Comptes et harness: found, with its version.
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Réglages' });
     await openSettingsPage(settings, 'Comptes et harness');
@@ -209,7 +209,7 @@ test.describe('Gemini CLI’s accounts (ESC-275)', () => {
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Réglages' });
     await openSettingsPage(settings, 'Comptes et harness');
-    await expect(settings.getByRole('group', { name: 'Comptes Gemini CLI' })).toContainText('Aucun compte');
+    await expect(settings.getByRole('region', { name: 'Gemini CLI', exact: true })).toContainText('Aucun compte');
     await settings.getByRole('button', { name: 'Ajouter un compte Gemini CLI…' }).click();
     const modal = page.getByRole('dialog', { name: 'Ajouter un compte Gemini CLI' });
     // The machine's: its sign-in is in ~/.gemini, which Escouade leaves alone.

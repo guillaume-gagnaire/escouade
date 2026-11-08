@@ -19,7 +19,7 @@ test('the settings tell the version of Claude Code found, alone', async ({ app }
   await expect(version).toHaveText('2.1.301');
   // The test's Claude Code folder has no sign-in: that is what keeps it from being ready.
   await expect(version).toHaveAttribute('data-state', 'notConnected');
-  await expect(dialog.getByText('Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes.')).toBeVisible();
+  await expect(dialog.getByText('Aucun compte connecté : connecte l’un de ses comptes ci-dessous, ou ajoutes-en un.')).toBeVisible();
   await expect(dialog.getByText(/Testée avec Escouade/)).toHaveCount(0);
 });
 
@@ -54,9 +54,7 @@ test.describe('a Claude Code newer than the tested ones', () => {
     await expect(dialog.locator('[data-state]')).toHaveText('2.1.999');
     // No sign-in in the test's Claude Code folder: that alone is told, nothing of the tested versions.
     await expect(dialog.locator('[data-state]')).toHaveAttribute('data-state', 'notConnected');
-    await expect(
-      dialog.getByText('Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes.'),
-    ).toBeVisible();
+    await expect(dialog.getByText('Aucun compte connecté : connecte l’un de ses comptes ci-dessous, ou ajoutes-en un.')).toBeVisible();
     await expect(dialog.getByText(/testé/)).toHaveCount(0);
   });
 });

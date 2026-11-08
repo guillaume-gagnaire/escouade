@@ -180,11 +180,11 @@ export default {
     },
     noAccount: {
       title: 'Aucun compte ne sert ce projet',
-      desc: 'Rien ne démarre : active un compte, ou retire sa réservation à d’autres projets, dans Réglages › Comptes.',
+      desc: 'Rien ne démarre : active un compte, ou retire sa réservation à d’autres projets, dans Réglages › Comptes et harness.',
     },
     noClaude: {
       title: 'Aucun harness trouvé',
-      desc: 'Installe un harness (Claude Code : npm install -g @anthropic-ai/claude-code), ou indique son chemin dans Réglages › Harness.',
+      desc: 'Installe un harness (Claude Code : npm install -g @anthropic-ai/claude-code), ou indique son chemin dans Réglages › Comptes et harness.',
     },
     ok: 'Harness trouvé · un compte sert le projet · dépôt prêt',
   },

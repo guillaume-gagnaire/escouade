@@ -74,7 +74,7 @@ test.describe('an agent on Mistral Vibe', () => {
   test('converses, asks its permissions with a write’s diff, from the window and the list, and ends its turns', async ({ app }) => {
     const { page } = app;
     await addProject(page, app.repo);
-    // Réglages › Harness: found, with its version.
+    // Réglages › Comptes et harness: found, with its version.
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Réglages' });
     await openSettingsPage(settings, 'Comptes et harness');
@@ -327,7 +327,7 @@ test.describe('a Mistral Vibe account added by its API key', () => {
     await expect(page.getByText('Vibe a reçu : encore')).toBeVisible();
     await expect(page.locator('main.conv').getByText('0,012 $')).toHaveCount(2);
     await shots(page, 'turn-cost');
-    // The day's cost of the account, in Réglages › Comptes.
+    // The day's cost of the account, in Réglages › Comptes et harness.
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     await openSettingsPage(settings, 'Comptes et harness');
     await expect(team).toContainText('0,025 $');

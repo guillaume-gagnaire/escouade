@@ -26,6 +26,7 @@ import {
   usageOf,
 } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
+import { afterGesture } from '../../test/settings';
 
 const PRINCIPAL: Account = { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true };
 const PRO: Account = { id: 'pro', name: 'Pro', configDir: 'C:\\Users\\ada\\.escouade\\claude\\pro', claudePath: '', active: true };
@@ -55,7 +56,7 @@ describe('AccountsTab', () => {
   it('sets « Projection des quotas » at once, past 80 % by default, with the app’s other settings as they are, the draft left as it is', async () => {
     const b = backend();
     render(SettingsModal, { tab: 'accounts' });
-    expect(screen.getByRole('heading', { name: 'Quotas' })).toBeInTheDocument();
+    await userEvent.click(within(document.getElementById('settings-panel')!).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     const projection = screen.getByRole('group', { name: 'Projection des quotas' });
     const choice = (name: string) => within(projection).getByRole('button', { name });
     expect(
@@ -73,10 +74,11 @@ describe('AccountsTab', () => {
     expect(b.called('save_settings')[1].args.settings).toMatchObject({ quotaProjection: 'off' });
   });
 
-  it('reads « Projection des quotas » saved before 2.0.2 as a switch: off is « Jamais »', () => {
+  it('reads « Projection des quotas » saved before 2.0.2 as a switch: off is « Jamais »', async () => {
     backend();
     (app.settings as { quotaProjection: unknown }).quotaProjection = false;
     render(SettingsModal, { tab: 'accounts' });
+    await userEvent.click(within(document.getElementById('settings-panel')!).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     const projection = screen.getByRole('group', { name: 'Projection des quotas' });
     expect(within(projection).getByRole('button', { name: 'Jamais' })).toHaveAttribute('aria-pressed', 'true');
   });
@@ -93,10 +95,7 @@ describe('AccountsTab', () => {
     // Settings saved before it had none: the limit, as before.
     expect(within(at).getByRole('button', { name: 'À la limite' })).toHaveAttribute('aria-pressed', 'true');
     expect(
-      screen.getByText(/^Un agent passe sur un autre compte de son harness à la fin de son tour quand une fenêtre courte \(5 h\)/),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/« Reprendre sur un autre compte… », ci-dessous, décide\)\. « Pause au-delà du quota » \(Kanban\)/),
+      screen.getByText('Un agent passe sur un autre compte de son harness à la fin de son tour quand sa fenêtre de 5 h atteint ce seuil.'),
     ).toBeInTheDocument();
     await userEvent.click(within(at).getByRole('button', { name: '95 %' }));
     expect(within(at).getByRole('button', { name: '95 %' })).toHaveAttribute('aria-pressed', 'true');
@@ -142,11 +141,6 @@ describe('AccountsTab', () => {
     expect(within(row('Pro')).queryByText('Compte de la machine')).not.toBeInTheDocument();
     expect(within(row('Principal')).getByRole('button', { name: 'Supprimer' })).toBeInTheDocument();
     expect(within(row('Pro')).getByRole('button', { name: 'Supprimer' })).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'Les nouveaux agents partent sur le premier compte actif de leur harness dont la 5 h est sous les seuils « Pause au-delà du quota » et « Changer de compte à » et dont la semaine tient son rythme, dans cet ordre.',
-      ),
-    ).toBeInTheDocument();
     // Saved at once: nothing left for « Enregistrer ».
   });
 
@@ -647,11 +641,6 @@ describe('AccountsTab', () => {
     expect(await within(row('Pro')).findByText('Not signed in')).toBeInTheDocument();
     expect(within(row('Pro')).getByRole('textbox', { name: 'Executable' })).toHaveAttribute('placeholder', 'The one in the settings');
     expect(screen.getByRole('button', { name: 'Add a Claude Code account…' })).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'New agents start on the first active account of their harness whose 5 hours is under the “Pause above quota” and “Switch accounts at” thresholds and whose week keeps its pace, in this order.',
-      ),
-    ).toBeInTheDocument();
     expect(within(row('Main')).getByText('This machine’s account')).toBeInTheDocument();
     // What its new agents go with: the choices are read at each render, in the language of the interface.
     const defaults = within(within(row('Pro')).getByRole('group', { name: 'New agents' }));
@@ -664,6 +653,66 @@ describe('AccountsTab', () => {
     expect(options('Model')[0]).toBe('The harness’s (Sonnet)');
     app.settings.accounts = [{ ...PRINCIPAL, name: 'Perso' }, PRO];
     await waitFor(() => expect(names()).toEqual(['Perso', 'Pro']));
+  });
+});
+
+describe('AccountsTab, « Quand un quota est épuisé » (R4)', () => {
+  beforeEach(() => {
+    resetApp();
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    app.enginesFound = ['claude', 'codex'];
+    app.settings = { ...SETTINGS, accounts: [PRINCIPAL, PRO] };
+    app.modal = { kind: 'settings', page: 'accounts' };
+  });
+
+  it('gathers the five settings, the two thresholds side by side, and saves each with its key as it was', async () => {
+    const b = backend();
+    render(SettingsModal, { page: 'accounts' });
+    const limit = screen.getByRole('heading', { name: 'Quand un quota est épuisé' }).closest('section')!;
+    expect(
+      within(limit)
+        .getAllByRole('group')
+        .map((g) => g.getAttribute('aria-label')),
+    ).toEqual(['Changer de compte à', 'Pause du pilote auto au-delà du quota']);
+    expect(
+      within(limit)
+        .getAllByRole('switch')
+        .map((g) => g.getAttribute('aria-label')),
+    ).toEqual([
+      'Reprendre sur un autre compte un agent de ticket arrêté par la limite',
+      'Reprise automatique après la limite d’usage',
+      'Continuer sur le harness suivant quand tous les comptes d’un harness sont épuisés',
+    ]);
+    expect(within(limit).getByText('pour tous les projets')).toBeInTheDocument();
+    const pause = within(limit).getByRole('group', { name: 'Pause du pilote auto au-delà du quota' });
+    expect(
+      within(pause)
+        .getAllByRole('button')
+        .map((x) => x.textContent),
+    ).toEqual(['80 %', '90 %', '95 %', '100 %']);
+    await userEvent.click(within(pause).getByRole('button', { name: '95 %' }));
+    await userEvent.click(within(limit).getByRole('switch', { name: 'Reprise automatique après la limite d’usage' }));
+    await afterGesture();
+    expect(b.called('save_settings').at(-1)!.args.settings).toMatchObject({ quotaPause: 95, autoResume: false });
+    // Nothing of them in a project's Kanban any more.
+    await userEvent.click(within(screen.getByRole('navigation')).getByRole('button', { name: 'Tous les projets' }));
+    expect(screen.queryByRole('group', { name: /au-delà du quota/ })).toBeNull();
+  });
+
+  it('folds the rare ones into « Avancé », which names them', async () => {
+    backend();
+    render(SettingsModal, { page: 'accounts' });
+    const fold = within(document.getElementById('settings-panel')!).getByRole('button', { name: /^Avancé/ });
+    expect(fold).toHaveAttribute('aria-expanded', 'false');
+    expect(fold).toHaveTextContent(
+      "Ordre des harness · Modèle de passation · Chemin de l'exécutable · Mettre à jour Claude Code automatiquement · Projection des quotas",
+    );
+    expect(screen.queryByRole('group', { name: 'Projection des quotas' })).toBeNull();
+    await userEvent.click(fold);
+    expect(screen.getByRole('list', { name: 'Ordre des harness' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: "Chemin de l'exécutable" })).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Mettre à jour Claude Code automatiquement' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Projection des quotas' })).toBeInTheDocument();
   });
 });
 
@@ -713,24 +762,80 @@ describe('AccountsTab with two harnesses (ESC-30)', () => {
     fakeBackend({ account_status: statuses, save_settings: () => [] });
     render(SettingsModal, { tab: 'accounts' });
     expect(items('Comptes Claude Code')).toEqual(['Pro']);
-    const empty = screen.getByRole('group', { name: 'Comptes Harness nu' });
-    expect(within(empty).getByText('Aucun compte')).toBeInTheDocument();
+    const empty = screen.getByRole('region', { name: 'Harness nu' });
+    expect(within(empty).getByText('Aucun compte')).toHaveAttribute('data-engine-state', 'noAccount');
     expect(within(empty).getByText('Aucun agent ni ticket ne démarre sur Harness nu avant qu’un compte soit ajouté.')).toBeInTheDocument();
-    await userEvent.click(
-      within(screen.getByRole('region', { name: 'Comptes Harness nu' })).getByRole('button', { name: 'Ajouter un compte Harness nu…' }),
-    );
+    expect(within(empty).queryByRole('list')).toBeNull();
+    await userEvent.click(within(empty).getByRole('button', { name: 'Ajouter un compte Harness nu…' }));
     expect(app.modal).toEqual({ kind: 'account', engine: 'codex' });
   });
 
-  it('shows « Aucun compte » for every harness installed on a first installation, and nothing of one not installed', () => {
+  it('shows « Aucun compte » for every harness found on a first installation, and no account to add to one not found', () => {
     app.enginesFound = ['claude'];
     app.settings.accounts = [];
     app.settings.engineOrder = [];
     fakeBackend({ account_status: statuses, save_settings: () => [] });
     render(SettingsModal, { tab: 'accounts' });
-    expect(within(screen.getByRole('group', { name: 'Comptes Claude Code' })).getByText('Aucun compte')).toBeInTheDocument();
-    expect(screen.queryByRole('group', { name: 'Comptes Harness nu' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Claude Code' })).getByText('Aucun compte')).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Comptes Claude Code' })).not.toBeInTheDocument();
+    // Declared, not found on this machine: its group, nothing to add to it.
+    const bare = screen.getByRole('region', { name: 'Harness nu' });
+    expect(within(bare).queryByText('Aucun compte')).toBeNull();
+    expect(within(bare).queryByRole('button', { name: /Ajouter un compte/ })).toBeNull();
+  });
+
+  it('installs a harness the seed holds and that is not installed, on a click, with no network (ESC-373)', async () => {
+    app.engines = [CLAUDE_ENGINE];
+    app.settings.accounts = [PRINCIPAL];
+    app.settings.engineOrder = [];
+    let installed = false;
+    const b = fakeBackend({
+      account_status: statuses,
+      save_settings: () => [],
+      plugin_seed_offers: () =>
+        installed
+          ? []
+          : [
+              { id: 'dev.escouade.codex', name: 'Codex', version: '2.2.0', removed: null, refused: null },
+              { id: 'dev.escouade.trello', name: 'Trello', version: '2.2.0', removed: null, refused: null },
+            ],
+      plugin_need_engine: () => {
+        installed = true;
+      },
+      engines_declared: () => (installed ? [CLAUDE_ENGINE, { ...BARE_ENGINE, id: 'codex', name: 'Codex' }] : [CLAUDE_ENGINE]),
+      engines_found_now: () => ['claude', 'codex'],
+    });
+    render(SettingsModal, { tab: 'accounts' });
+    // The harness, not a plugin of another kind.
+    const codex = await screen.findByRole('region', { name: 'Codex' });
+    expect(screen.queryByRole('region', { name: 'Trello' })).toBeNull();
+    expect(within(codex).getByText('Non installé')).toHaveAttribute('data-engine-state', 'notInstalled');
+    expect(
+      within(codex).getByText('Livré avec Escouade : il s’installe d’un clic, sans réseau, puis ses comptes s’ajoutent ici.'),
+    ).toBeInTheDocument();
+    expect(within(codex).queryByRole('button', { name: /Ajouter un compte/ })).toBeNull();
+    await userEvent.click(within(codex).getByRole('button', { name: 'Installer Codex' }));
+    await waitFor(() => expect(b.called('plugin_need_engine')).toEqual([expect.objectContaining({ args: { engine: 'codex' } })]));
+    // Installed: its group as any harness's, its first account to add.
+    await waitFor(() => expect(within(screen.getByRole('region', { name: 'Codex' })).queryByText('Non installé')).toBeNull());
+    expect(
+      within(screen.getByRole('region', { name: 'Codex' })).getByRole('button', { name: 'Ajouter un compte Codex…' }),
+    ).toBeInTheDocument();
+    expect(app.engines.map((e) => e.id)).toEqual(['claude', 'codex']);
+  });
+
+  it('says why the seed refused a harness, as it said it', async () => {
+    app.engines = [CLAUDE_ENGINE];
+    fakeBackend({
+      account_status: statuses,
+      save_settings: () => [],
+      plugin_seed_offers: () => [
+        { id: 'dev.escouade.cursor-cli', name: 'Cursor CLI', version: '2.2.0', removed: null, refused: 'Signature invalide.' },
+      ],
+    });
+    render(SettingsModal, { tab: 'accounts' });
+    const cursor = await screen.findByRole('region', { name: 'Cursor CLI' });
+    expect(within(cursor).getByText('Signature invalide.')).toHaveClass('bad');
   });
 
   it('sets what the new agents of an account go with, among what its own harness has (ESC-128)', async () => {
@@ -788,6 +893,7 @@ describe('AccountsTab with two harnesses (ESC-30)', () => {
   it('sets the order of the harnesses, which gives a project its fallback harnesses', async () => {
     const b = fakeBackend({ account_status: statuses, save_settings: () => [], engine_order_set: (a: { order: string[] }) => a.order });
     render(SettingsModal, { tab: 'accounts' });
+    await userEvent.click(within(document.getElementById('settings-panel')!).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     expect(screen.getByText(/Après son harness par défaut, un projet passe aux suivants dans cet ordre/)).toBeInTheDocument();
     const order = list('Ordre des harness');
     expect(
@@ -820,11 +926,12 @@ describe('AccountsTab with two harnesses (ESC-30)', () => {
     expect(screen.getByRole('list', { name: 'Comptes Claude Code' })).toBeInTheDocument();
   });
 
-  it('is written in English', () => {
+  it('is written in English', async () => {
     setLang('en');
     fakeBackend({ account_status: statuses, save_settings: () => [] });
     render(SettingsModal, { tab: 'accounts' });
     expect(screen.getByRole('list', { name: 'Claude Code accounts' })).toBeInTheDocument();
+    await userEvent.click(within(document.getElementById('settings-panel')!).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     expect(screen.getByRole('list', { name: 'Harness order' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Move Harness nu up' })).toBeInTheDocument();
   });

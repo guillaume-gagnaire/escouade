@@ -46,7 +46,7 @@ test.describe('an agent on Codex', () => {
     await newCodexAgent(page);
     await send(page, 'bonjour Codex');
     await expect(page.getByText('Bonjour, tu as dit : bonjour Codex')).toBeVisible();
-    // Réglages › Comptes: the fiche of the Codex account offers Codex's models, efforts and modes, none of Claude Code's.
+    // Réglages › Comptes et harness: the fiche of the Codex account offers Codex's models, efforts and modes, none of Claude Code's.
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
     await openSettingsPage(dialog, 'Comptes et harness');

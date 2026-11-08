@@ -177,7 +177,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('accountsList', 'accounts', 'accounts.tab.list', s('accounts')),
   row('favoriteModels', 'accounts', 'settings.claude.models.label', s('favoriteModels')),
   row('switchAt', 'accounts', 'accounts.quotas.switchAt', s('switchAt')),
-  row('quotaPause', 'accounts', 'boardSettings.tab.quotaPause', s('quotaPause')),
+  row('quotaPause', 'accounts', 'accounts.quotas.pauseAt', s('quotaPause')),
   row('switchOnLimit', 'accounts', 'accounts.switchOnLimit.label', s('switchOnLimit')),
   row('autoResume', 'accounts', 'settings.claude.autoResume', s('autoResume')),
   row('handoverOnLimit', 'accounts', 'handover.settings.onLimit', s('handoverOnLimit')),
@@ -335,7 +335,7 @@ export function legacyTab(tab: SettingsTab, section?: SettingsSection): Settings
 
 const LEGACY: Record<Exclude<SettingsTab, 'projects' | 'integrations'>, SettingsPage> = {
   app: 'general',
-  // « Accueil : aucun harness » and « Réglages › Harness » lead to the harnesses (annexe B).
+  // « Accueil : aucun harness » and « Réglages › Comptes et harness » lead to the harnesses (annexe B).
   claude: 'accounts',
   accounts: 'accounts',
   notifications: 'notifications',

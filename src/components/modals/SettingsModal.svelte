@@ -20,7 +20,6 @@
   import BoardTab from '../settings/BoardTab.svelte';
   import ClosedProjects from '../settings/ClosedProjects.svelte';
   import GeneralPage from '../settings/GeneralPage.svelte';
-  import HarnessesSection from '../settings/HarnessesSection.svelte';
   import NewProjects from '../settings/NewProjects.svelte';
   import NotificationsPage from '../settings/NotificationsPage.svelte';
   import PluginsPage from '../settings/PluginsPage.svelte';
@@ -175,7 +174,6 @@
             <AgentsPage />
           {:else if info.id === 'accounts'}
             <AccountsTab />
-            <HarnessesSection />
           {:else if info.id === 'services'}
             <ServicesPage />
           {:else if info.id === 'voice'}

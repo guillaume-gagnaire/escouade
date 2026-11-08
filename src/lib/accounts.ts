@@ -104,7 +104,7 @@ export function newAgentDefaults(project: ProjectLike | undefined, engine?: Engi
 }
 
 /**
- * « Ajouter un compte… » on `engine` (Réglages › Comptes, back there when it closes). Choosing the harness installs its plugin
+ * « Ajouter un compte… » on `engine` (Réglages › Comptes et harness, back there when it closes). Choosing the harness installs its plugin
  * from the app's seed when it is not installed, with no network (ESC-373): the core says it in a line.
  */
 export function addAccount(engine: EngineId) {

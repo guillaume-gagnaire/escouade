@@ -2,8 +2,8 @@
 title: "Réglages"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/index.html","design/settings-2-2/captures/a-plugins.png"]
-tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-383","ESC-384"]
-decisions: [118,119,120,121]
+tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384"]
+decisions: [118,119,120,121,"reglages-r4-comptes-et-harness-reunit-le"]
 compared: null
 ---
 
@@ -38,7 +38,7 @@ Une seule fenêtre de réglages pour toute l'app : une barre des catégories à 
 - **Le clavier** : ↑ et ↓ vont d'une entrée de la barre à la suivante et l'ouvrent, Origine et Fin à la première et à la dernière ; passer sur un projet l'ouvre et le déplie. Une seule entrée de la barre est dans l'ordre de Tab : celle où est le clavier.
 - **La teinte suit la portée** : sur une page d'Escouade (Tous les projets compris), la fenêtre prend le teal d'Escouade ; sur une page d'un projet, la couleur de ce projet, dès qu'elle change. À la fermeture, l'app reprend sa propre teinte.
 - La page sous son titre et sa description ; pour une page d'un projet, sa tuile devant, et son nom pour titre sur la page Projet.
-- **« Avancé »**, en bas d'une page : un groupe replié sur une ligne qui nomme ce qu'il cache ; un clic le déplie sur place. Général, Agents et Projet en ont un (celui de Projet s'appelle « Zone sensible » et cache « Fermer le projet »).
+- **« Avancé »**, en bas d'une page : un groupe replié sur une ligne qui nomme ce qu'il cache ; un clic le déplie sur place. Général, Agents, Comptes et harness et Projet en ont un (celui de Projet s'appelle « Zone sensible » et cache « Fermer le projet » ; celui de Comptes et harness se déplie seul quand Claude Code est introuvable, son chemin s'y réglant).
 - Pas de pied : ni « Annuler » ni « Enregistrer ». Échap, × ou un clic à côté de la fenêtre la ferment, sans question.
 
 ### Enregistrer au geste
@@ -71,7 +71,7 @@ Chaque réglage a sa page dans le registre de la fenêtre. Les pages d'Escouade 
   - « Remote control » : « Remote control pour tous les agents », qui dit quels harness l'ont (voir *Barre latérale*) ; absent sans harness qui l'a ;
   - « Piloter Escouade » : « Les agents peuvent piloter Escouade » et ses déclarations (voir *Serveur MCP*) ;
   - Avancé : arrêt des process inactifs, « Activité MCP ».
-- **Comptes et harness** : les comptes (« Ajouter un compte… », « Se connecter… », voir *Comptes* ; « Quotas » › « Projection des quotas », voir *Barre de statut*) ; puis un groupe par harness (exécutable, version, état, installation, coût estimé, et pour OpenCode ses « Modèles » favoris, voir *Harness*) ; pour Claude Code, le chemin de `claude` et où il est (voir *Claude Code dans WSL*) et sa mise à jour par Escouade ; puis « Tous les harness » › reprise automatique après la limite d'usage.
+- **Comptes et harness** (voir *Comptes*, « Réglages › Comptes et harness ») : un groupe par harness, son état et sa version en pastille (« Prêt · 2.1.301 », « Aucun compte », « Introuvable »), « Ajouter un compte <harness>… » et ses comptes ; un harness introuvable donne sa commande d'installation à la place, un harness non installé « Installer <harness> » depuis l'amorce ; pour OpenCode, ses « Modèles » favoris ; le coût estimé d'un harness qui ne le donne pas. Puis « Quand un quota est épuisé » : « Changer de compte à », « Pause du pilote auto au-delà du quota » (« pour tous les projets »), « Reprendre sur un autre compte un agent de ticket arrêté par la limite », « Reprise automatique après la limite d’usage », « Continuer sur le harness suivant… ». Avancé : « Ordre des harness », « Modèle de passation », le chemin de `claude` et où il est (voir *Claude Code dans WSL*), « Mettre à jour Claude Code automatiquement », « Projection des quotas » (voir *Barre de statut*).
 - **Services connectés** : « Hébergeurs de code » (les instances et leurs jetons), puis « Sources de tickets » : leurs comptes (« servi par » un plugin), « Synchronisation » et « Import automatique », pour tous les projets (voir *Intégrations*, *Hébergeurs de code*). Elle ne demande aucun projet.
 - **Voix** : « Micro utilisé », « Modèle », « Langue parlée », « Raccourci » (voir *Dictée*) ; « Conversation » (voir *Conversation vocale*).
 - **Notifications** : « Me prévenir pour », « Pull requests et déploiements », notifications du système, son (voir *Notifications*).
@@ -85,7 +85,7 @@ Chaque réglage a sa page dans le registre de la fenêtre. Les pages d'Escouade 
 - **À propos** : le logo, « Escouade » et sa version, les harness détectés ; « Crédits et licences », « Site web », Discord, « Soutenir Escouade ».
 - **Projet**, **Git et worktrees**, **Lancement**, **Équipe**, **Confidentialité** : l'ancien onglet Projets du projet, chacune ouverte sur sa partie (Git, Lancement, Kanban partagé, Confidentialité) ; « Fermer le projet… » est sous « Zone sensible », repliée. Fermer ou non revient aux réglages (voir *Fermer un projet*). Leur contenu : « Identité » (nom, dossier, couleur, lettres, logo et libellé de la tuile, harness et « Compte préféré », « Assistant de configuration ») ; « Remote control pour les agents de ce projet » ; « Confidentialité » (« Projet privé », « Ses fichiers », ses comptes, voir *Serveur MCP* et *Comptes*) ; « Workflow » ; « Git » (commit, worktrees, préfixes, fichiers copiés, commandes de préparation et de démontage, voir *Git & fichiers*) ; « Worktrees restés » › « Nettoyer » ; « Lancement » ; le Kanban partagé, `.escouade.yml` et la mémoire partagée.
 - **Tickets importés** : les sources liées au projet et la correspondance de leurs statuts ; sans compte connecté, un renvoi à Services connectés (voir *Intégrations*).
-- **Kanban** : branche cible, action à la validation, tests, nettoyage, message de commit, conflit (voir *Validation*) ; pilote auto et ses agents (voir *Pilote auto*) ; « Pause au-delà du quota », « pour tous les projets » : un réglage de l'app, rangé dans la page Comptes et harness (voir *Comptes*).
+- **Kanban** : branche cible, action à la validation, tests, nettoyage, message de commit, conflit (voir *Validation*) ; pilote auto et ses agents (voir *Pilote auto*) ; la pause au-delà du quota est dans Comptes et harness.
 - **Tous les projets** : « Nouveaux projets » (« Nouveaux projets privés », éteint par défaut), puis « Projets fermés », seulement s'il y en a, avec par projet « Rouvrir » et « Effacer l'historique… », et « Historique illisible » avec « Effacer » (voir *Fermer un projet*). Effacer un historique revient sur cette page.
 
 ### La page Plugins

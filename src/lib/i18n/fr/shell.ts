@@ -17,11 +17,11 @@ export default {
     /** ESC-128: harnesses found, no account added yet. */
     noAccount: 'Aucun compte',
     noAccountDesc: 'Ajoute un compte : celui déjà connecté sur cette machine, ou un nouveau. Seuls les comptes ajoutés lancent des agents.',
-    /** `{where}`: « Réglages › Harness », in bold. */
+    /** `{where}`: « Réglages › Comptes et harness », in bold. */
     noEngineDesc:
       'Escouade fait travailler des agents de code. Installe l’un d’eux, puis indique son chemin dans {where} s’il n’est pas dans le PATH.',
-    harnessSettings: 'Réglages › Harness',
-    harnessSettingsButton: 'Réglages › Harness…',
+    harnessSettings: 'Réglages › Comptes et harness',
+    harnessSettingsButton: 'Réglages › Comptes et harness…',
     /** `{harness}`: its name. */
     copy: 'Copier la commande de {harness}',
     copied: 'Commande copiée',
