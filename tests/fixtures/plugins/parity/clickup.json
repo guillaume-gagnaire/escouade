@@ -243,7 +243,7 @@
     ],
     "error": {
       "code": -32404,
-      "message": "La liste ClickUp nowhere n'existe plus ou n'est plus accessible : choisis-en une autre dans Réglages › Intégrations"
+      "message": "La liste ClickUp nowhere n'existe plus ou n'est plus accessible : choisis-en une autre dans Réglages › Projets › Tickets importés"
     },
     "method": "tickets/issues",
     "result": null
@@ -262,7 +262,7 @@
     ],
     "error": {
       "code": -32404,
-      "message": "La liste ClickUp  n'existe plus ou n'est plus accessible : choisis-en une autre dans Réglages › Intégrations"
+      "message": "La liste ClickUp  n'existe plus ou n'est plus accessible : choisis-en une autre dans Réglages › Projets › Tickets importés"
     },
     "method": "tickets/setState",
     "result": null
