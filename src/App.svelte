@@ -14,6 +14,7 @@
   import { watchForUpdates } from './lib/updater';
   import { watchPresence } from './lib/presence';
   import { createWarmer } from './lib/warm';
+  import { heatClock } from './lib/heat.svelte';
   import { offerClaudeMemory } from './lib/memory';
   import { hasTab } from './lib/code-host';
   import { WATCH_TICK_MS } from './lib/prnew';
@@ -88,6 +89,12 @@
     void app.ui.view;
     void app.project?.color;
     app.applyTheme();
+  });
+
+  // The one clock of the caches' degrees (ESC-398): it ticks while one of them is warm, and stops with the last.
+  $effect(() => {
+    const agents = Object.values(app.agents).map((a) => ({ heat: a.heat }));
+    untrack(() => heatClock.watch(agents));
   });
 
   // « Thème » as saved, once the settings are read (until then, the one the page kept: main.ts).

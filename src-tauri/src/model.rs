@@ -2071,6 +2071,10 @@ pub struct AgentMeta {
     /// spec. None for any other agent.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub discussion: Option<crate::discussion::Discussion>,
+    /// The temperature of its cache (ESC-398): when it last served, how long it lives, what its last turn did with it.
+    /// Saved: the cache lives at its vendor, a restart of the app does not cool it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub heat: Option<crate::heat::CacheHeat>,
 }
 
 /// The sign-in an agent waits for (`AgentMeta::sign_in`): its account's, another than `stamp`.

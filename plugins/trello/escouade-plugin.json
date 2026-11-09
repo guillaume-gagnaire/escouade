@@ -15,7 +15,7 @@
   "activation": ["account:trello"],
   "permissions": {
     "network": ["api.trello.com"],
-    "secrets": ["account:trello", "account:trello-*"]
+    "secrets": ["account:trello", "account:*"]
   },
   "limits": { "fetchSeconds": 15, "fetchBytes": 8388608 },
   "contributes": {

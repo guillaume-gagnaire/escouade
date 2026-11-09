@@ -1604,6 +1604,8 @@ export interface Agent {
   pending: string[];
   /** The same requests summed up, in the same order: what « Vue d’ensemble » shows without the conversation. */
   requests: PendingRequest[];
+  /** The temperature of its cache (ESC-398): absent until a turn told something cached. */
+  heat?: CacheHeat | null;
   contextTokens: number;
   /** Size of the context window of the conversation's model (0 until a turn told it). */
   contextWindow: number;
@@ -3434,3 +3436,31 @@ export type DocsShared =
   | { kind: 'nothing' }
   | { kind: 'done'; committed: number; message: string; pulled: boolean }
   | { kind: 'conflict'; conflict: DocsConflict };
+
+/** Why a cache went cold before its time (ESC-398). */
+export type HeatBroken = 'model' | 'compaction' | 'prompt' | 'account' | 'conversation';
+
+/** The state of an agent's cache as the backend keeps it (`heat.rs`): the window counts its degrees down. */
+export interface CacheHeat {
+  /** When it last served (ms). */
+  at: number;
+  /** How long it lives without a request (s); null: its harness does not tell. */
+  ttl: number | null;
+  broken?: HeatBroken | string | null;
+  /** Tokens of its last turn read from the cache, and written to it; null when told only together (`cached`). */
+  read: number | null;
+  written: number | null;
+  cached: number;
+  /** Its input at full price. */
+  fresh: number;
+  /** What a next message reads again. */
+  context: number;
+  /** USD; null when the price or the tokens read are not known. */
+  saved: number | null;
+  warm: number | null;
+  cold: number | null;
+  model: string;
+  /** The local day (YYYY-MM-DD) of `savedToday`. */
+  day: string;
+  savedToday: number;
+}

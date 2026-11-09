@@ -6,11 +6,13 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Plugins: “Look now” reads the store again before looking, so a version published since the start is offered. The page says when the store was read; when it does not answer, it says so and looks in the offers already read.
 - Split screen: archiving or deleting an agent no longer undoes the layout. Another agent takes its place, and the terminal you put beside or below stays where it was.
 - A button that opens a pull request in the browser now says why it did not open, with the reason, instead of doing nothing: the PR list, the review, the ticket card, the status bar, the agent’s header and menu, and the PR and CI tab.
 - Claude Code’s interactive commands work from an agent’s field: `/login` signs in the agent’s account, which picks up its conversation, and screen commands like `/permissions` or `/hooks` open in its terminal view. The “/” menu says where each one opens.
 - Several Jira, Trello, Linear or ClickUp accounts connect side by side, and each project chooses the one that serves its source: a different Jira per client. An account disconnects alone; the projects that used it say so and keep their settings. Existing accounts stay as they are, but going back to 2.1 only sees the first account of each service.
 - The PR tab shows a badge as soon as a new PR arrives on the project on screen, with how many; opening the tab clears it and marks the new ones “New” in the list. Those Escouade opened don’t count.
+- Each agent shows the temperature of its cache, from 100 °C when it just served to 0 °C when it expires: a message sent warm costs far less. Hovering the header details the last turn and what a cold start would cost, and the status bar says what the cache saved today.
 - The plugins Escouade installs by itself from the installer now count in the store’s number of installs, if you accepted the statistics, even when installed offline or before you answered; those of the 2.2 betas count once.
 - Launch commands and the steps of “▶ Test” are interactive while they run: you answer their prompts, use a dev server's keys and stop them with Ctrl+C in their view, as in a terminal. Once ended, their log is read-only again.
 - The “Harness” menus now offer only the harnesses you can use: program installed, plugin on and at least one account. The one already chosen stays listed with the reason, and Settings › Accounts and harnesses still shows those without an account yet.

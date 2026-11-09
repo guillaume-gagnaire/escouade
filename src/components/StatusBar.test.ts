@@ -1001,3 +1001,25 @@ describe('StatusBar at the first start', () => {
     expect(document.querySelector('footer')).toBeEmptyDOMElement();
   });
 });
+
+describe('StatusBar and the cache', () => {
+  it('says what the agents’ cache saved today, and nothing when it saved nothing', async () => {
+    const { localDay } = await import('../lib/heat.svelte');
+    const { heat } = await import('../test/heat');
+    resetApp({ agents: [agent({ id: 'a1' })] });
+    fakeBackend();
+    const { unmount } = render(StatusBar);
+    expect(document.querySelector('[data-heat-today]')).toBeNull();
+    unmount();
+    const today = localDay(Date.now());
+    resetApp({
+      agents: [
+        { ...agent({ id: 'a1' }), heat: heat({ day: today, savedToday: 1.2 }) },
+        { ...agent({ id: 'a2' }), heat: heat({ day: today, savedToday: 1.9 }) },
+        { ...agent({ id: 'a3' }), heat: heat({ day: '2020-01-01', savedToday: 50 }) },
+      ],
+    });
+    render(StatusBar);
+    expect(document.querySelector('[data-heat-today] .ht-long')).toHaveTextContent('Cache aujourd’hui : ≈ 3,10 $ économisés');
+  });
+});

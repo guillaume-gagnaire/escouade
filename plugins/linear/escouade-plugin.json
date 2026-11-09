@@ -15,7 +15,7 @@
   "activation": ["account:linear"],
   "permissions": {
     "network": ["api.linear.app"],
-    "secrets": ["account:linear", "account:linear-*"]
+    "secrets": ["account:linear", "account:*"]
   },
   "limits": { "fetchSeconds": 15, "fetchBytes": 8388608 },
   "contributes": {

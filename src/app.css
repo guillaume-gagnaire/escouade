@@ -63,6 +63,10 @@
   --teal-ink: oklch(0.86 0.08 190);
   --teal-ink-2: oklch(0.82 0.09 190);
   --info: oklch(0.8 0.1 235);
+  /* The temperature of a cache (ESC-398): red-orange when hot, amber half way, blue cooling. */
+  --heat-hot: oklch(0.72 0.17 38);
+  --heat-mid: oklch(0.82 0.13 75);
+  --heat-cool: oklch(0.78 0.11 235);
   --shade: 1;
   --glow: 14%;
   --sel: 40%;
@@ -162,6 +166,9 @@
   --teal-ink: oklch(0.47 0.08 190);
   --teal-ink-2: oklch(0.47 0.08 190);
   --info: oklch(0.5 0.12 245);
+  --heat-hot: oklch(0.52 0.18 35);
+  --heat-mid: oklch(0.5 0.11 65);
+  --heat-cool: oklch(0.5 0.12 245);
   --shade: 0.3;
   --glow: 10%;
   --sel: 26%;

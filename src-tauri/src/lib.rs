@@ -110,6 +110,7 @@ mod fsedit;
 mod gemini_tui_tests;
 mod git;
 mod handover;
+mod heat;
 mod hub;
 mod integrations;
 #[cfg(test)]

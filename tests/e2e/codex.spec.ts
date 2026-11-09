@@ -255,13 +255,20 @@ test.describe('an agent on Codex', () => {
     const filled = async () => parseFloat(((await gauge.getAttribute('style')) ?? '').replace(/[^\d.]/g, '')) || 0;
     await expect.poll(filled).toBeGreaterThan(0);
     const before = await filled();
-    // « / » offers Codex's one command there, `/compact`, and none of Claude Code's.
+    // « / » offers Codex's own command, `/compact`, beside those Escouade answers for every harness (ESC-401: /login,
+    // /logout, /model, /effort), and none of Claude Code's.
     const box = page.getByRole('textbox').last();
     await box.pressSequentially('/');
     const menu = page.getByRole('listbox');
-    await expect(menu.getByRole('option')).toHaveCount(1);
-    await expect(menu.getByRole('option')).toContainText('/compact');
-    await expect(menu.getByRole('option')).toContainText('Compacter le contexte de la conversation');
+    await expect(menu.getByRole('option', { name: /\/compact/ })).toHaveCount(1);
+    for (const claudeOnly of ['/hooks', '/doctor', '/agents', '/config']) {
+      await expect(menu.getByRole('option', { name: new RegExp(claudeOnly) })).toHaveCount(0);
+    }
+    // Its own command first, and the one Entrée takes.
+    const first = menu.getByRole('option').first();
+    await expect(first).toContainText('/compact');
+    await expect(first).toContainText('Compacter le contexte de la conversation');
+    await expect(first).toHaveAttribute('aria-selected', 'true');
     await expect(menu).toBeInViewport();
     await box.press('Enter');
     await expect(box).toHaveValue('/compact ');
@@ -277,7 +284,7 @@ test.describe('an agent on Codex', () => {
     await box.pressSequentially('Relis src/');
     await expect(menu).toHaveCount(0);
     await box.pressSequentially(' puis /');
-    await expect(menu.getByRole('option')).toContainText('/compact');
+    await expect(menu.getByRole('option', { name: /\/compact/ })).toHaveCount(1);
     await box.press('Escape');
     await box.fill('');
     // With an instruction, which Codex does not take: refused, the text kept.

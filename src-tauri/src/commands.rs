@@ -708,13 +708,22 @@ pub fn plugin_start(core: CoreState, id: String) -> Result<PluginRun, String> {
     Ok(plugin_run(core, id))
 }
 
-/// Looks for newer versions of the installed plugins (offered, never installed).
+/// What « Rechercher des mises à jour » found: the plugins as they are now, and the store as it was read (`readAt`,
+/// `error` when it did not answer: the offers of `readAt` were looked at).
+#[derive(serde::Serialize)]
+pub struct UpdatesLooked {
+    plugins: Vec<crate::plugins::PluginView>,
+    store: crate::plugins::store::StoreView,
+}
+
+/// Looks for newer versions of the installed plugins (offered, never installed), the store read again first (ESC-405).
 #[tauri::command(async)]
-pub async fn plugins_check_updates(
-    core: CoreState<'_>,
-) -> Result<Vec<crate::plugins::PluginView>, ()> {
-    core.plugins.check_updates().await;
-    Ok(core.plugins.list(crate::i18n::ui()))
+pub async fn plugins_check_updates(core: CoreState<'_>) -> Result<UpdatesLooked, ()> {
+    core.look_for_updates().await;
+    Ok(UpdatesLooked {
+        plugins: core.plugins.list(crate::i18n::ui()),
+        store: core.store.view(),
+    })
 }
 
 /// The user agrees to the commands a plugin runs on facts, as they are now, or takes the

@@ -15,7 +15,7 @@
   "activation": ["account:clickup"],
   "permissions": {
     "network": ["api.clickup.com"],
-    "secrets": ["account:clickup", "account:clickup-*"]
+    "secrets": ["account:clickup", "account:*"]
   },
   "limits": { "fetchSeconds": 15, "fetchBytes": 8388608 },
   "contributes": {

@@ -35,9 +35,20 @@ const MARK = 3;
 const PAIRS: [string, string[], number][] = [
   ...['--text', '--soft', '--muted', '--dim'].map((t): [string, string[], number] => [t, ALL, TEXT]),
   ['--text-ai', ['panneau', 'puits'], TEXT],
-  ...['--p-ink', '--run', '--del', '--add', '--git-m', '--warn-ink', '--teal-ink', '--teal-ink-2', '--done'].map(
-    (t): [string, string[], number] => [t, PLAIN, TEXT],
-  ),
+  ...[
+    '--p-ink',
+    '--run',
+    '--del',
+    '--add',
+    '--git-m',
+    '--warn-ink',
+    '--teal-ink',
+    '--teal-ink-2',
+    '--done',
+    '--heat-hot',
+    '--heat-mid',
+    '--heat-cool',
+  ].map((t): [string, string[], number] => [t, PLAIN, TEXT]),
   ['--wait', [...PLAIN, 'carte qui attend'], TEXT],
   ...['--code-fg', '--code-dim', '--syn-k', '--syn-f', '--syn-s', '--syn-t', '--syn-n', '--ansi-y', '--ansi-cy', '--ansi-cy-2'].map(
     (t): [string, string[], number] => [t, CODE, TEXT],

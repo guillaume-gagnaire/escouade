@@ -14,6 +14,7 @@ The bar sits at the bottom of the window. From left to right:
 | “4 Claude · 1.2 GB · 6% CPU” | The running Claude processes, with the memory and processor they take. Missing when none runs. The tooltip lists each agent, the one using the most memory first. |
 | Quotas | The two quota windows of the current account: see the next section. |
 | “Today $4.12” | What the agents have cost since midnight: see the “Cost” section. |
+| “Cache today: ≈ $3.10 saved” | What the agents’ cache saved since midnight: see the “Cache temperature” section. Missing while it saved nothing. |
 | “⎇ main ↑1 ↓3” | The branch of the project on screen, when it is a git repository. A click opens the branch picker ([branches](branches)). |
 | On the right | The state of an [update](updates), “♪ On” or “♪ Off” for the sound of [notifications](notifications), and ⚙ for the settings (`Ctrl+,`). |
 
@@ -97,12 +98,40 @@ When the turn ends, Claude Code’s exact figure replaces the estimate. For a mo
 | Where | What is shown |
 |---|---|
 | The agent’s card, in the sidebar | Its tokens (“tok”), its cost and the number of modified files. |
-| The conversation header | “Tokens” and “Cost”, with “Context” and “Duration”. |
+| The conversation header | “Tokens” and “Cost”, with “Context”, “Cache” and “Duration”. |
 | End of a turn | The “Task done” card (duration, tokens, cost, edited files), or a duration · tokens · cost line between two turns. |
 | A Kanban ticket’s card | Its agent’s cost. |
 | [Overview](overview) | Each agent’s cost. |
 
 The [statistics](stats) add all this up by day, week or month.
+
+## Cache temperature
+
+Each agent shows a figure in degrees: on its card, at the end of its model’s line, and in its conversation’s header, under “Cache”. It says how long the agent’s cache still holds.
+
+**How it works.** The model reads the whole conversation again at each turn. The start it already read is kept in a cache for a few minutes at the vendor, and read again for about 5 to 10% of the price. Each read resets the clock. After a pause longer than the cache’s life, everything is read again at full price. On Opus 5.5, with 100k tokens of context, the next message costs about $0.02 warm, and $0.40 to $0.50 cold.
+
+| Figure | What it means |
+|---|---|
+| **100 °C**, red-orange | The cache just served. |
+| **64 °C**, amber | It still holds half its life. |
+| **27 °C**, blue | It is cooling: it expires soon. |
+| **0 °C** | Expired, or broken (model or account changed, context compacted, system prompt changed, new conversation): the next turn reads everything again. |
+| **— °C** | The harness says nothing of its cache, or not how long it lives. |
+
+The figure goes down in a straight line, from 100 °C at the last turn that used the cache to 0 °C when it expires. The cache lives at the vendor: restarting Escouade doesn’t cool it. Escouade only shows it: it never sends a message to keep a cache warm, which would cost a turn.
+
+**On hover** over the header’s figure, the detail of the last turn: the time left, the tokens read from the cache, written to it and read at full price, what the cache saved, and what the next message would cost if it started cold. A screen reader reads the same in words (“Cache: 72 °C, expires in 3 min 40”).
+
+**Harness by harness**, the life comes from what each one says:
+
+| Harness | What Escouade reads |
+|---|---|
+| Claude Code | The tokens read from and written to the cache by each request, and their life: 1 hour when it writes for an hour (its usual way), 5 minutes otherwise. |
+| Codex | The tokens read from the cache at each turn. 5 minutes, the shortest life OpenAI states (5 to 10 minutes without activity). |
+| Copilot CLI, OpenCode, and the ACP harnesses that tell them | The cache tokens of each turn, read and written together. 5 minutes on an Anthropic or OpenAI model, “— °C” on another. |
+| Gemini CLI, Antigravity CLI, Mistral Vibe | Their vendors don’t say how long their cache lives: “— °C”. |
+| Cursor CLI | It says nothing of its cache: “— °C”. |
 
 ## When a quota nears its limit
 

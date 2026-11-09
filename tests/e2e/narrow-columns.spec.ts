@@ -56,7 +56,9 @@ function overflows(root: Locator, rows: string[] = []) {
         range.selectNodeContents(node);
         const tops = new Set([...range.getClientRects()].filter((q) => q.width > 0).map((q) => Math.round(q.top)));
         if (tops.size > 1 && s.whiteSpace === 'nowrap') out.push(`${name(el)} on ${tops.size} lines`);
-        if (tops.size > 1 && el.closest('header, .utabs, .side-top, .actions')) out.push(`${name(el)} on ${tops.size} lines`);
+        // A tooltip's text goes on several lines by design (the cache's detail, ESC-398).
+        if (tops.size > 1 && el.closest('header, .utabs, .side-top, .actions') && !el.closest('[role="tooltip"]'))
+          out.push(`${name(el)} on ${tops.size} lines`);
       }
     }
     for (const sel of rows)

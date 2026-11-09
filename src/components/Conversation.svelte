@@ -34,6 +34,7 @@
   import { stepDividers } from '../lib/workflow-view';
   import { workflows } from '../lib/workflows.svelte';
   import { contextUse, estimateHint, fSpentUsd, spent } from '../lib/spend';
+  import HeatFigure from './HeatFigure.svelte';
   import { capsOf, engineName, showsCost, speakerOf } from '../lib/engines';
   import { injectedSource, parseAgentMessage, subagentLabels } from '../lib/events';
   import { localCommandViews } from '../lib/localcmd';
@@ -685,6 +686,8 @@
           </dd>
         </div>
       {/if}
+      <!-- The temperature of its cache (ESC-398): the detail of its last turn on hover or focus. -->
+      <HeatFigure {agent} detail />
       {#if docked}
         <div class="fig fig-files">
           <dt>{t('common.files')}</dt>
@@ -1288,7 +1291,8 @@
     color: var(--text);
   }
   /* The header folds by the width of the conversation, not the window's (the side panel open, the split layout, a small
-     window), for its name and its state to keep their room (ESC-166): the figures go one by one (Durée, Fichiers, Tokens),
+     window), for its name and its state to keep their room (ESC-166): the figures go one by one (Durée, Fichiers, Tokens; 56 px
+     sooner since the cache's degrees, ESC-398),
      then the words of its buttons (their icon and tooltip stay), then the layout and the views, which « … » takes over. The
      path gives up its project's name before its branch. */
   @container conv (max-width: 1100px) {
@@ -1303,17 +1307,28 @@
       display: none;
     }
   }
-  @container conv (max-width: 960px) {
+  @container conv (max-width: 1016px) {
     .figures .fig-files {
       display: none;
     }
   }
-  @container conv (max-width: 880px) {
+  @container conv (max-width: 936px) {
     .figures .fig-tok {
       display: none;
     }
   }
-  @container conv (max-width: 800px) {
+  /* The context's window and the word « estimé » go before the cache's degrees (ESC-398), which go under 640 px. */
+  @container conv (max-width: 760px) {
+    .fig dd small {
+      display: none;
+    }
+  }
+  @container conv (max-width: 640px) {
+    .figures :global(.fig-heat) {
+      display: none;
+    }
+  }
+  @container conv (max-width: 856px) {
     .head .btn .lbl {
       display: none;
     }

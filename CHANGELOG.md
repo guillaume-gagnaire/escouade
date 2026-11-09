@@ -6,11 +6,13 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Plugins : « Chercher maintenant » relit le store avant de chercher, et propose donc une version publiée depuis le démarrage. La page dit quand le store a été lu ; s’il ne répond pas, elle le dit et cherche dans les offres déjà lues.
 - Écran partagé : archiver ou supprimer un agent ne défait plus la disposition. Un autre agent prend sa place, et le terminal mis à côté ou en dessous reste où il était.
 - Un bouton qui ouvre une PR dans le navigateur dit désormais pourquoi elle ne s’ouvre pas, avec la raison, au lieu de ne rien faire : liste des PR, relecture, carte du ticket, barre d’état, en-tête et menu de l’agent, onglet PR et CI.
 - Les commandes interactives de Claude Code marchent depuis le champ d’un agent : `/login` connecte le compte de l’agent, qui reprend sa conversation, et les commandes à écran comme `/permissions` ou `/hooks` s’ouvrent dans sa vue terminal. Le menu « / » dit où chacune s’ouvre.
 - Plusieurs comptes Jira, Trello, Linear ou ClickUp se connectent côte à côte, et chaque projet choisit celui qui sert sa source : un Jira différent par client. Un compte se déconnecte seul ; les projets qui l’utilisaient le disent et gardent leurs réglages. Les comptes d’avant restent tels quels, mais un retour à la 2.1 ne voit que le premier compte de chaque service.
 - L’onglet PR porte une pastille dès qu’une nouvelle PR arrive sur le projet affiché, avec leur nombre ; l’ouvrir la remet à zéro et marque les nouvelles d’un « Nouvelle » dans la liste. Celles qu’Escouade a ouvertes ne comptent pas.
+- Chaque agent montre la température de son cache, de 100 °C quand il vient de servir à 0 °C quand il expire : un message parti au chaud coûte bien moins cher. Le survol de l’en-tête détaille le dernier tour et ce que coûterait un départ à froid, et la barre d’état dit ce que le cache a fait économiser aujourd’hui.
 - Les plugins qu’Escouade installe d’elle-même depuis l’installeur comptent désormais dans le nombre d’installations du store, si tu as accepté les statistiques, même installés hors ligne ou avant ta réponse ; ceux des bêtas de la 2.2 se comptent une fois.
 - Les commandes de lancement et les étapes de « ▶ Tester » sont interactives tant qu'elles tournent : tu réponds à leurs questions, utilises les touches d'un serveur de dev et les arrêtes par Ctrl+C dans leur vue, comme dans un terminal. Terminées, leur journal redevient en lecture seule.
 - Les menus « Harness » ne proposent plus que les harness utilisables : programme installé, plugin actif et au moins un compte. Celui déjà choisi reste affiché avec la raison, et Réglages › Comptes et harness montre toujours ceux qui n’ont pas encore de compte.

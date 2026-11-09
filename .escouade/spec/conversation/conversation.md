@@ -2,7 +2,7 @@
 title: "Conversation"
 subject: "Conversation"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-76","ESC-127","ESC-95","ESC-108","ESC-89","ESC-400"]
+tickets: ["ESC-76","ESC-127","ESC-95","ESC-108","ESC-89","ESC-398","ESC-400"]
 decisions: [136]
 compared: "2026-10-30T05:32:58+01:00"
 gaps: [{"text":"La spec dit que l'en-tête se replie sous 1000 px (Tokens et Fichiers s'effacent, la vue cachée perd son mot) et sous 760 px (Durée aussi, boutons réduits à l'icône), puis sous 580 px pour les chiffres. Le code utilise d'autres seuils échelonnés. À 1100 px, Durée et le mot de la vue cachée disparaissent. À 960 px, c'est Fichiers. À 880 px, c'est Tokens. À 800 px, les boutons passent à l'icône. À 680 px, le sélecteur de disposition disparaît. À 440 px, les vues en segments disparaissent. Seul le seuil de 580 px pour les chiffres correspond.","code":["src/components/Conversation.svelte"]}]
@@ -138,3 +138,9 @@ La conversation est la vue d'un agent dans Escouade : son en-tête, ses messages
 - Le chemin d'origine d'un fichier déposé n'est lu que sous Windows : ailleurs, toujours une copie.
 - L'interface ne montre pas la liste des fichiers accordés en lecture et ne permet pas d'en retirer un ; supprimer l'agent l'efface.
 - Pas d'aperçu d'un fichier qui n'est pas une image ; pas d'envoi de fichier par `send_message` du serveur MCP ; la copie d'un agent garde les chemins des fichiers joints de l'original.
+
+### Cache dans l'en-tête (ESC-398)
+
+- Parmi les chiffres de l'en-tête, après Coût : « Cache » et la température du cache de l'agent (« 72 °C », « — °C »), dans la couleur de sa chaleur. Au survol ou au focus, le détail du dernier tour. Voir *Température du cache*.
+
+- Pour lui faire place, les chiffres se replient plus tôt : Durée et le mot de la vue cachée sous 1100 px de conversation (inchangé), Fichiers sous 1016 px, Tokens sous 936 px, les mots des boutons sous 856 px ; sous 760 px, la fenêtre du contexte (« / 200 k ») et le mot « estimé » ; sous 640 px, « Cache » (la carte de l'agent le garde) ; sous 580 px, tous les chiffres.
