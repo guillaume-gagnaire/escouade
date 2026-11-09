@@ -38,7 +38,8 @@ test('an agent shows the temperature of its cache, its detail on hover, and keep
   await expect(pop).toContainText('Si le prochain message part à froid');
   // Whole in the window.
   const box = (await pop.boundingBox())!;
-  const view = page.viewportSize()!;
+  // The window's size read in the page: connected to WebView2 over CDP, Playwright has no viewport (`viewportSize()` is null).
+  const view = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(view.width);
   await page.mouse.move(5, view.height / 2);
