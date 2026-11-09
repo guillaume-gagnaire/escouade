@@ -75,9 +75,13 @@ test('a folder made by hand takes an agent dragged in and out, and a click moves
 
   // The same gesture released on the work area opens a card beside what is shown (the split screen), and moves nothing.
   const work = page.locator('.work').first();
+  // `c` is the one shown (an agent dropped on its own pane would only show it alone): the loose `a` is dragged.
+  await side().locator(`.agent[data-agent="${c}"]`).click();
+  await expect(side().locator(`.agent[data-agent="${c}"]`)).toHaveAttribute('aria-current', 'true');
   const before2 = await order(page);
-  await drag(page, side().locator(`.agent[data-agent="${c}"]`), work, { x: (await work.boundingBox())!.width * 0.9, y: 200 });
+  await drag(page, side().locator(`.agent[data-agent="${a}"]`), work, { x: (await work.boundingBox())!.width * 0.9, y: 200 });
   await expect(page.getByTestId('pane')).toHaveCount(2);
+  await expect(page.locator(`[data-pane-key="agent:${a}"]`)).toBeVisible();
   await expect(page.locator(`[data-pane-key="agent:${c}"]`)).toBeVisible();
   expect(await order(page)).toEqual(before2);
 });
