@@ -354,10 +354,7 @@ fn trello_is_a_plugin_of_the_app_that_the_registry_of_sources_names() {
     let m = v.manifest.unwrap();
     assert_eq!(m.run.unwrap().wasm.as_deref(), Some("Cargo.toml"));
     assert_eq!(m.permissions.network, ["api.trello.com"]);
-    assert_eq!(
-        m.permissions.secrets,
-        ["account:trello", "account:*"]
-    );
+    assert_eq!(m.permissions.secrets, ["account:trello", "account:*"]);
 }
 
 /// The texts of the form's missing fields are the plugin's (its manifest), the token first.

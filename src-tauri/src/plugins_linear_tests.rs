@@ -392,10 +392,7 @@ fn linear_is_a_plugin_of_the_app_that_the_registry_of_sources_names() {
     let m = v.manifest.unwrap();
     assert_eq!(m.run.unwrap().wasm.as_deref(), Some("Cargo.toml"));
     assert_eq!(m.permissions.network, ["api.linear.app"]);
-    assert_eq!(
-        m.permissions.secrets,
-        ["account:linear", "account:*"]
-    );
+    assert_eq!(m.permissions.secrets, ["account:linear", "account:*"]);
 }
 
 /// The text of the form's missing key is the plugin's (its manifest).
