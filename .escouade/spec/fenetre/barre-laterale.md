@@ -2,7 +2,7 @@
 title: "Barre latérale"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","src-tauri/src/core.rs","src-tauri/src/engine/claude/mod.rs","src-tauri/src/worktrees.rs"]
-tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390","ESC-396","ESC-403"]
+tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390","ESC-396","ESC-398","ESC-403"]
 decisions: [129,133]
 compared: null
 ---
@@ -207,3 +207,7 @@ La section entre Agents et Terminaux : les commandes qui lancent le projet pour 
 - De 220 à 480 px de large, les mots restent entiers.
 
 - « PR » porte la pastille ambre de ses PR nouvelles, arrivées depuis la dernière ouverture de l'onglet et pas ouvertes par Escouade ; l'ouvrir la remet à zéro. Un lecteur d'écran lit « PR, 2 nouvelles ». Voir *Vue « Pull requests » du projet* (ESC-403).
+
+### Température du cache sur la carte (ESC-398)
+
+- Au bout de la ligne du modèle, à droite : la température du cache de l'agent (« 100 °C » → « 0 °C », « — °C » quand son harness ne dit rien), dans la couleur de sa chaleur, son sens en mots pour les lecteurs d'écran et en infobulle. Voir *Température du cache*.
