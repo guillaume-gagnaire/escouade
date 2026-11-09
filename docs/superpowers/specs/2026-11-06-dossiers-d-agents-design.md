@@ -83,7 +83,7 @@ ou non, sans qu'un agent qui attend une réponse ne passe inaperçu, et sans qu'
 - **Menu d'un dossier** (clic droit sur son en-tête) : Renommer, Monter, Descendre, Supprimer.
 - **Supprimer un dossier** : ne supprime ni n'archive aucun agent ; ils reviennent hors dossier, à la place du
   dossier, dans leur ordre. Pas de confirmation (rien ne se perd).
-- **Agent principal** : au clic droit d'un agent d'un dossier, « Faire l'agent principal » / « Retirer l'étoile ».
+- **Agent principal** : au clic droit d'un agent d'un dossier, « Faire de cet agent l'agent principal » / « Retirer le rôle d'agent principal » (libellés revus le 2026-11-09).
   Au plus un par dossier : en désigner un retire l'étoile au précédent, qui reste dans le dossier.
 - **Menu d'un agent**, en plus : « Déplacer vers » ▸ chaque dossier du projet, « Nouveau dossier… », « Hors dossier »
   (le chemin sans souris de décision 5), et Monter / Descendre, comme les tuiles de projet.

@@ -523,7 +523,7 @@
       ...(mine
         ? [
             {
-              label: t(mine.principal?.id === a.id ? 'nav.sidebar.folders.removeStar' : 'nav.sidebar.folders.makePrincipal'),
+              label: t(mine.principal?.id === a.id ? 'nav.sidebar.folders.removePrincipal' : 'nav.sidebar.folders.makePrincipal'),
               onClick: () => app.run(api.agentFolderPrincipal(project.id, mine.folder.id, mine.principal?.id === a.id ? null : a.id)),
             },
           ]

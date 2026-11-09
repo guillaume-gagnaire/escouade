@@ -77,7 +77,7 @@ Au clic droit sur sa carte :
 
 - Renommer.
 - « Déplacer vers… » : un menu avec chaque autre dossier du projet, « Nouveau dossier » et, pour un agent d'un dossier, « Hors dossier ». Pas pour un agent archivé.
-- « Nouveau dossier avec cet agent » pour un agent hors dossier ; « Faire l'agent principal » ou « Retirer l'étoile » pour un agent d'un dossier.
+- « Nouveau dossier avec cet agent » pour un agent hors dossier ; « Faire de cet agent l'agent principal » ou « Retirer le rôle d'agent principal » pour un agent d'un dossier.
 - Monter, Descendre : d'un cran, comme `Alt+↑` / `Alt+↓`.
 - « Dupliquer la conversation » (ci-dessous).
 - Archiver : l'agent passe dans l'historique du projet, d'où il se rouvre.

@@ -134,7 +134,7 @@ Une barre latérale chargée se range en dossiers : un cadre avec un nom, un che
 
 - **Créer** : « Nouveau dossier » dans le menu à côté de « Nouvel agent », ou « Nouveau dossier avec cet agent » au clic droit d’une carte. Le nom se tape tout de suite ; un double-clic sur le nom le change plus tard.
 - **Ranger** : glisse une carte sur l’en-tête d’un dossier pour l’y mettre, hors du cadre pour l’en sortir ; au clavier, `Alt+↑` et `Alt+↓` déplacent d’un pas la carte ou le dossier qui a le focus. « Déplacer vers… » et « Hors dossier » du menu de la carte font la même chose. Un dossier ne se glisse pas dans un autre.
-- **L’agent principal** : « Faire l’agent principal » met une étoile (« Agent principal ») sur un agent du dossier, qui passe en tête ; « Retirer l’étoile » la reprend.
+- **L’agent principal** : « Faire de cet agent l’agent principal » met une étoile (« Agent principal ») sur un agent du dossier, qui passe en tête ; « Retirer le rôle d’agent principal » la reprend.
 - **Replier** : un dossier replié montre encore la carte de ses agents qui attendent une réponse et celle de l’agent ouvert. Le choix est gardé d’un lancement à l’autre.
 - **Supprimer** : « Supprimer le dossier » (clic droit sur son en-tête) en sort les agents sans en arrêter aucun.
 

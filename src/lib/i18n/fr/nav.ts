@@ -110,8 +110,8 @@ export default {
       createWith: 'Nouveau dossier avec cet agent',
       moveTo: 'Déplacer vers…',
       outOf: 'Hors dossier',
-      makePrincipal: 'Faire l’agent principal',
-      removeStar: 'Retirer l’étoile',
+      makePrincipal: 'Faire de cet agent l’agent principal',
+      removePrincipal: 'Retirer le rôle d’agent principal',
       delete: 'Supprimer le dossier',
     },
     // The menu of an agent's card.
