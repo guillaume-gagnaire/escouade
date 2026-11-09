@@ -394,7 +394,7 @@ fn linear_is_a_plugin_of_the_app_that_the_registry_of_sources_names() {
     assert_eq!(m.permissions.network, ["api.linear.app"]);
     assert_eq!(
         m.permissions.secrets,
-        ["account:linear", "account:linear-*"]
+        ["account:linear", "account:*"]
     );
 }
 

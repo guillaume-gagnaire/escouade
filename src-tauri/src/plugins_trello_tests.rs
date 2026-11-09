@@ -356,7 +356,7 @@ fn trello_is_a_plugin_of_the_app_that_the_registry_of_sources_names() {
     assert_eq!(m.permissions.network, ["api.trello.com"]);
     assert_eq!(
         m.permissions.secrets,
-        ["account:trello", "account:trello-*"]
+        ["account:trello", "account:*"]
     );
 }
 

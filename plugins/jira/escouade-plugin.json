@@ -15,7 +15,7 @@
   "activation": ["account:jira"],
   "permissions": {
     "network": ["*.atlassian.net", "{account}"],
-    "secrets": ["account:jira", "account:jira-*"]
+    "secrets": ["account:jira", "account:*"]
   },
   "limits": { "fetchSeconds": 15, "fetchBytes": 8388608 },
   "contributes": {
