@@ -53,8 +53,8 @@
     },
     {
       "id": "dev.escouade.discord",
-      "version": "1.1.1",
-      "sha256": "756a04c28224820f3b9a904805d4b99c53f2f42adcd040da18bf53bd65c3a3e9"
+      "version": "1.1.2",
+      "sha256": "c1f1d90af7779119be2579411713d3228f6b8fa0c07a439c251d363f25f9e08f"
     },
     {
       "id": "dev.escouade.elevenlabs",
@@ -83,8 +83,8 @@
     },
     {
       "id": "dev.escouade.goose",
-      "version": "1.0.1",
-      "sha256": "b481bf37893ab767ddab8925b026a7f4df5f532bb07e2e99542d5f2da83d84b0"
+      "version": "1.0.2",
+      "sha256": "284e88ad6084ecb208c64491584008360b84537d196eeb0ce36d7343407e19a7"
     },
     {
       "id": "dev.escouade.groq",
@@ -93,8 +93,13 @@
     },
     {
       "id": "dev.escouade.high-contrast",
-      "version": "1.1.1",
-      "sha256": "b1266a46c237bf49eb051b6b8369053f2b226336216dcde5ac721e619bf89678"
+      "version": "1.1.2",
+      "sha256": "2b5058105220fa347b42e712b7037f0d59c6dbeae69e7e00803fef9a5b465001"
+    },
+    {
+      "id": "dev.escouade.isola",
+      "version": "2.2.0",
+      "sha256": "168e72261c8de61710e3dc9532a62ac6d3a39d7cacb1ff5f22e8ed22307118d7"
     },
     {
       "id": "dev.escouade.jira",

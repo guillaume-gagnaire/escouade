@@ -104,7 +104,6 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Retiré
 
-- isola n’est pas dans cette bêta : son essai réel n’a pas encore pu tourner (isola n’existe pas pour Windows). Il revient avec lui.
 - L’index du code est retiré : mesuré avec de vrais agents sur des changements à plusieurs endroits, il ne faisait pas économiser de tokens ni éviter d’oubli, et chaque harness trouve le code par ses propres outils. Ses bases sont effacées de ta machine à la mise à jour, et la recherche par le sens de la mémoire et des docs se règle maintenant dans Réglages › Projets › Tous les projets.
 
 ### Corrections
