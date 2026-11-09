@@ -500,3 +500,58 @@ describe('the commands a plugin runs on facts (PLG-5)', () => {
     expect(screen.queryByRole('region', { name: 'Lance ces commandes' })).toBeNull();
   });
 });
+
+describe('« Rechercher des mises à jour » (ESC-405)', () => {
+  // Local times: the line says the hour of this machine.
+  const READ = '2026-11-09T10:42:00';
+  const storeView = (error: string | null) => ({ url: '', catalog: null, readAt: READ, error, best: {} });
+
+  it('shows that it looks while the store is read, then when the store was read and the version found', async () => {
+    let answer: (v: unknown) => void = () => {};
+    const backend = fakeBackend({
+      plugins_list: () => [view()],
+      plugins_check_updates: () => new Promise((done) => (answer = done)),
+    });
+    plugins.page = { kind: 'updates' };
+    render(PluginsView);
+    await userEvent.click(await screen.findByRole('button', { name: 'Chercher maintenant' }));
+    const busy = await screen.findByRole('button', { name: 'Recherche…' });
+    expect(busy.hasAttribute('disabled')).toBe(true);
+    expect(busy.getAttribute('aria-busy')).toBe('true');
+    expect(busy.querySelector('.spin')).toBeTruthy();
+    // Clicked again while it looks: nothing more is asked.
+    await userEvent.click(busy);
+    expect(backend.called('plugins_check_updates')).toHaveLength(1);
+
+    answer({ plugins: [view({ update: { version: '1.3.0', verified: true, seed: false } })], store: storeView(null) });
+    const status = await screen.findByRole('status');
+    expect(status.textContent).toBe('Store lu le 09/11 10:42');
+    expect(status.className).not.toContain('warn');
+    expect(screen.getByRole('button', { name: 'Chercher maintenant' }).getAttribute('aria-busy')).toBe('false');
+    expect(document.body.textContent).toContain('v1.2.0 → v1.3.0');
+  });
+
+  it('says a store that does not answer, and of when the offers looked at are', async () => {
+    fakeBackend({
+      plugins_list: () => [view()],
+      plugins_check_updates: () => ({
+        plugins: [view()],
+        store: storeView('Le store ne répond pas (HTTP 503) : le catalogue gardé sur ce poste est montré.'),
+      }),
+    });
+    plugins.page = { kind: 'updates' };
+    render(PluginsView);
+    await userEvent.click(await screen.findByRole('button', { name: 'Chercher maintenant' }));
+    const status = await screen.findByRole('status');
+    expect(status.textContent).toBe('Store injoignable : offres du 09/11 10:42');
+    expect(status.className).toContain('warn');
+  });
+
+  it('says it on the tab Versions of a plugin too', async () => {
+    fakeBackend({ plugins_check_updates: () => ({ plugins: [view()], store: storeView(null) }) });
+    plugins.store = null;
+    render(PluginPage, { plugin: view(), tab: 'versions' });
+    await userEvent.click(screen.getByRole('button', { name: 'Chercher une mise à jour' }));
+    expect((await screen.findByRole('status')).textContent).toBe('Store lu le 09/11 10:42');
+  });
+});

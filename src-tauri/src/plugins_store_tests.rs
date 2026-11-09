@@ -696,3 +696,129 @@ async fn an_install_is_counted_by_its_id_and_version_alone() {
         ])
     );
 }
+
+/// How many times the fake store served its catalogue.
+async fn catalogue_reads(fake: &Fake) -> usize {
+    fake.state().await["requests"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|r| r.as_str() == Some("GET /api/v1/catalog.json"))
+        .count()
+}
+
+#[tokio::test]
+async fn looking_for_updates_reads_the_store_first_and_offers_a_version_published_since() {
+    let fake = Fake::start().trusted();
+    let (_, store, plugins) = ready(&fake, "published").await;
+    install(&store, &plugins, "dev.exemple.team-rules", None, false)
+        .await
+        .unwrap();
+    plugins.check_updates().await;
+    assert!(plugins
+        .get("dev.exemple.team-rules", Lang::Fr)
+        .unwrap()
+        .update
+        .is_none());
+
+    // Published after the start: the offers kept in memory do not know it.
+    fake.post(
+        "/_fake/bump",
+        json!({ "id": "dev.exemple.team-rules", "version": "1.1.0" }),
+    )
+    .await;
+    plugins.check_updates().await;
+    assert!(plugins
+        .get("dev.exemple.team-rules", Lang::Fr)
+        .unwrap()
+        .update
+        .is_none());
+
+    // « Rechercher des mises à jour » reads the store again before looking.
+    let read = plugins
+        .look_for_updates(&store, Ok(http()), Lang::Fr, std::time::Duration::ZERO)
+        .await;
+    assert!(read.error.is_none() && read.read_at.is_some());
+    let update = plugins
+        .get("dev.exemple.team-rules", Lang::Fr)
+        .unwrap()
+        .update
+        .expect("1.1.0 is offered");
+    assert_eq!(update.version, "1.1.0");
+}
+
+#[tokio::test]
+async fn an_unreachable_store_is_said_and_the_offers_in_memory_are_looked_at() {
+    let fake = Fake::start().trusted();
+    let (_, store, plugins) = ready(&fake, "unreachable").await;
+    install(
+        &store,
+        &plugins,
+        "dev.exemple.high-contrast",
+        Some("1.0.0"),
+        false,
+    )
+    .await
+    .unwrap();
+    let before = store.view().read_at.clone().unwrap();
+    fake.post("/_fake/down", json!({ "down": true })).await;
+    let read = plugins
+        .look_for_updates(&store, Ok(http()), Lang::Fr, std::time::Duration::ZERO)
+        .await;
+    assert!(read.error.unwrap().contains("Le store ne répond pas"));
+    assert_eq!(
+        read.read_at.as_deref(),
+        Some(before.as_str()),
+        "the offers' date"
+    );
+    // The search went on, on what was kept.
+    assert_eq!(
+        plugins
+            .get("dev.exemple.high-contrast", Lang::Fr)
+            .unwrap()
+            .update
+            .unwrap()
+            .version,
+        "1.1.0"
+    );
+    // No client (a proxy refused by Réglages › Avancé › Réseau): said the same way.
+    let read = plugins
+        .look_for_updates(
+            &store,
+            Err("proxy".to_string()),
+            Lang::Fr,
+            std::time::Duration::ZERO,
+        )
+        .await;
+    assert!(read.error.unwrap().contains("Le store ne répond pas"));
+}
+
+#[tokio::test]
+async fn clicks_close_together_read_the_store_once() {
+    let fake = Fake::start().trusted();
+    let data = DataDir::new(temp_dir("clicks").join("data"));
+    let store = fake.store(&data);
+    let fresh = store::FRESH;
+    assert_eq!(fresh, std::time::Duration::from_secs(30));
+    // Two clicks at once: the second takes the reading under way.
+    let (h1, h2) = (http(), http());
+    let (a, b) = tokio::join!(
+        store.refresh_within(&h1, Lang::Fr, fresh),
+        store.refresh_within(&h2, Lang::Fr, fresh)
+    );
+    assert!(a != b, "one read, the other took it");
+    assert_eq!(catalogue_reads(&fake).await, 1);
+    // A click right after: the reading of less than 30 s is taken as it is.
+    assert!(!store.refresh_within(&http(), Lang::Fr, fresh).await);
+    assert_eq!(catalogue_reads(&fake).await, 1);
+    // Older than the window: read again.
+    assert!(
+        store
+            .refresh_within(&http(), Lang::Fr, std::time::Duration::ZERO)
+            .await
+    );
+    assert_eq!(catalogue_reads(&fake).await, 2);
+    // The reading of every 6 hours always reads.
+    store.refresh(&http(), Lang::Fr).await;
+    assert_eq!(catalogue_reads(&fake).await, 3);
+}

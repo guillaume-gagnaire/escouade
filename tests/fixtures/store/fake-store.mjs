@@ -29,7 +29,8 @@
 // - dev.escouade.claude-code, codex, copilot-cli, github, linear, deepgram, isola, acp: 2.2.0 verified, in the seed only
 //   (not in the catalogue), for the sort of the seed (ESC-373).
 // Its controls: POST /_fake/revocations { entries, serial? } signs and serves the next list (the mirror too);
-// POST /_fake/down { down } makes /api/v1 answer 503; GET /_fake/state says the installs counted and the requests;
+// POST /_fake/down { down } makes /api/v1 answer 503; POST /_fake/bump { id, version } publishes `version` of `id` (its last
+// line again, ESC-405); GET /_fake/state says the installs counted and the requests;
 // POST /_fake/seed { dir, plugins: [{ id, version }] } writes in `dir` the seed of those versions as the release makes it
 // (the bytes and the signatures of the store, the list of the day), with its seed.json.
 //
@@ -602,6 +603,22 @@ export function startFakeStore(port = 0) {
         writeFileSync(join(b.dir, 'revocations.json.minisig'), state.list.minisig);
       }
       return send(200, JSON.stringify({ plugins }));
+    }
+    if (path === '/_fake/bump' && req.method === 'POST') {
+      // A version published after the app started (ESC-405): the last line of `id` again under `version`, its files too.
+      const b = json();
+      const plugin = catalog.plugins.find((x) => x.id === b.id);
+      if (!plugin?.versions.length) return send(404, '{}');
+      const last = plugin.versions[0];
+      const from = `/api/v1/plugins/${b.id}/${last.version}`;
+      const to = `/api/v1/plugins/${b.id}/${b.version}`;
+      for (const [k, v] of [...files]) if (k.startsWith(`${from}/`)) files.set(to + k.slice(from.length), v);
+      const rename = (o) =>
+        o ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === 'string' ? v.replace(from, to) : v])) : o;
+      plugin.versions.unshift({ ...last, version: b.version, published_at: new Date().toISOString(), files: rename(last.files) });
+      plugin.latest = b.version;
+      listed();
+      return send(200, '{}');
     }
     if (path === '/_fake/publishing' && req.method === 'POST') {
       Object.assign(state.publishing, json());

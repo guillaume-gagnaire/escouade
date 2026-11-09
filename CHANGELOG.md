@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Plugins : « Chercher maintenant » relit le store avant de chercher, et propose donc une version publiée depuis le démarrage. La page dit quand le store a été lu ; s’il ne répond pas, elle le dit et cherche dans les offres déjà lues.
 - Écran partagé : archiver ou supprimer un agent ne défait plus la disposition. Un autre agent prend sa place, et le terminal mis à côté ou en dessous reste où il était.
 - Un bouton qui ouvre une PR dans le navigateur dit désormais pourquoi elle ne s’ouvre pas, avec la raison, au lieu de ne rien faire : liste des PR, relecture, carte du ticket, barre d’état, en-tête et menu de l’agent, onglet PR et CI.
 - Les commandes interactives de Claude Code marchent depuis le champ d’un agent : `/login` connecte le compte de l’agent, qui reprend sa conversation, et les commandes à écran comme `/permissions` ou `/hooks` s’ouvrent dans sa vue terminal. Le menu « / » dit où chacune s’ouvre.

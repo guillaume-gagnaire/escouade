@@ -1,8 +1,8 @@
 ---
 title: "Le store dans l'app"
 subject: "store"
-sources: ["docs/STORE.md","docs/PLUGINS.md","design/plugins/maquettes-b.html","design/app-redesign/UX-NOTES.md","website/content/docs/fr/plugins/installer.md","src-tauri/src/plugins_seed_tests.rs"]
-tickets: ["ESC-236","ESC-287","ESC-313","ESC-314","ESC-184","ESC-394"]
+sources: ["docs/STORE.md","docs/PLUGINS.md","design/plugins/maquettes-b.html","design/app-redesign/UX-NOTES.md","website/content/docs/fr/plugins/installer.md","src-tauri/src/plugins_seed_tests.rs","src-tauri/src/plugins_store_tests.rs"]
+tickets: ["ESC-236","ESC-287","ESC-313","ESC-314","ESC-184","ESC-394","ESC-405"]
 decisions: [21,25,67,132]
 compared: "2026-10-31T19:50:53+01:00"
 gaps: [{"text":"La spec dit que le schéma `escouade` est enregistré par les installeurs NSIS et MSI sous Windows. Le code ne produit que l'installeur NSIS (`bundle.targets` vaut [\"nsis\"] et rien ne construit de MSI), donc aucun MSI n'enregistre le schéma.","code":["src-tauri/tauri.conf.json"]},{"text":"La spec dit que le `.deb` et le `.rpm` déclarent `x-scheme-handler/escouade`. Sous Linux, la config ne construit que `appimage` et `deb` (`targets: [\"appimage\", \"deb\"]`). Le gabarit de bureau est prévu pour le rpm, mais aucun `.rpm` n'est produit, donc aucun rpm ne déclare le schéma.","code":["src-tauri/tauri.linux.conf.json"]}]
@@ -41,10 +41,13 @@ Référence : `docs/STORE.md` §5 et §7 (il fait foi) ; aperçu `#b1` à `#b4` 
 
 ## Les mises à jour et le passage au store
 - Un plugin du store est mis à jour depuis le catalogue (la dernière version compatible) : proposé, jamais installé seul, « v1.3.0 · non vérifiée » quand elle n'a pas de sceau ; l'accord redemandé si elle demande plus.
+- **« Chercher maintenant »** (page Mises à jour) et « Chercher une mise à jour » (onglet Versions d'un plugin) relisent d'abord le store, le catalogue puis la liste de révocation, par Réglages › Réseau ; ensuite seulement ils cherchent les mises à jour : les étiquettes Git, les dossiers, le store et l'amorce. Une version publiée depuis la dernière lecture est donc proposée au clic (ESC-405).
+- Une lecture en cours sert aux clics qui arrivent pendant elle, et une lecture finie depuis moins de 30 secondes est reprise telle quelle : des clics proches ne font qu'une lecture. La relecture du démarrage et des 6 heures lit toujours.
+- Pendant la recherche, le bouton dit « Recherche… », tourne et ne se reclique pas. Ensuite, à côté de lui : « Store lu le jj/mm hh:mm ». **Le store ne répond pas** : la recherche se fait quand même sur les offres gardées, et la ligne le dit en ambre, « Store injoignable : offres du jj/mm hh:mm » (« aucune offre lue encore » sans lecture réussie).
 - Un plugin installé depuis un dossier ou un dépôt git dont l'id est au store le dit sur sa page, avec « Passer à la v… du store » ; ses choix (projets, permissions retirées, réglages) restent.
 
 ## La liste de révocation
-- Lue au démarrage puis toutes les 6 heures, et par « Relire maintenant » en bas des installés ; vérifiée (signée par une clé de l'app, commentaire `escouade-revocations-v1 <serial>`, pas par une clé qu'elle révoque) ; un `serial` plus petit que le dernier lu est refusé et dit. Le store ne répond pas : sa copie sur escouade.dev. La dernière liste gardée s'applique hors ligne, revérifiée au démarrage.
+- Lue au démarrage puis toutes les 6 heures, par « Relire maintenant » en bas des installés, et par « Chercher maintenant » des mises à jour ; vérifiée (signée par une clé de l'app, commentaire `escouade-revocations-v1 <serial>`, pas par une clé qu'elle révoque) ; un `serial` plus petit que le dernier lu est refusé et dit. Le store ne répond pas : sa copie sur escouade.dev. La dernière liste gardée s'applique hors ligne, revérifiée au démarrage.
 - `disable` : la version est arrêtée et désactivée (« Retiré par Escouade le … »), une bande rouge en tête des installés dit laquelle, quand et pourquoi, que ses réglages et secrets restent ; elle ne se réinstalle pas. `unverify` : le sceau part, le plugin continue, sa page dit pourquoi.
 - En bas des installés : « Liste de révocation lue à HH:MM · nº N, signée, relue toutes les 6 heures ».
 

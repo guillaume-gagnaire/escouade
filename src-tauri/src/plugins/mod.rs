@@ -318,6 +318,15 @@ pub fn secret_keys(m: &Manifest) -> Vec<String> {
 }
 
 /// A newer version found for an installed plugin: offered, never installed by itself (§3.2).
+/// How the store was read for « Rechercher des mises à jour » (ESC-405): when its offers were last read, and why it did
+/// not answer this time (the offers of `read_at` were looked at).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoreRead {
+    pub read_at: Option<String>,
+    pub error: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Update {
@@ -1479,6 +1488,31 @@ impl Plugins {
         }
         self.save()?;
         Ok(true)
+    }
+
+    /// « Rechercher des mises à jour » (ESC-405): the store's catalogue and revocation list read again first (`http`, the
+    /// client of Réglages › Avancé › Réseau; a reading under way or of less than `fresh` taken as it is), then
+    /// `check_updates`. A store that does not answer stops nothing: the offers kept are looked at, and said with their date.
+    pub async fn look_for_updates(
+        &self,
+        store: &store::Store,
+        http: Result<reqwest::Client, String>,
+        lang: Lang,
+        fresh: std::time::Duration,
+    ) -> StoreRead {
+        match http {
+            Ok(http) => {
+                store.refresh_within(&http, lang, fresh).await;
+            }
+            Err(e) => store.unreachable(&e, lang),
+        }
+        self.apply_store(store.revocations(), store.offers());
+        self.check_updates().await;
+        let v = store.view();
+        StoreRead {
+            read_at: v.read_at,
+            error: v.error,
+        }
     }
 
     /// Looks for a newer version of each installed plugin: a later tag of its repository, a later

@@ -1765,6 +1765,21 @@ impl<R: Runtime> Core<R> {
         self.send_seed_counts().await;
     }
 
+    /// « Rechercher des mises à jour » (ESC-405): the store read again (a reading under way or of less than 30 s taken as it
+    /// is), then the updates looked for, the Git tags, the folders, the store and the seed.
+    pub async fn look_for_updates(&self) -> crate::plugins::StoreRead {
+        let settings = self.settings.read().clone();
+        let http = crate::plugins::store::client(&settings).map_err(|e| e.to_string());
+        self.plugins
+            .look_for_updates(
+                &self.store,
+                http,
+                crate::i18n::ui(),
+                crate::plugins::store::FRESH,
+            )
+            .await
+    }
+
     /// The installs of the seed not counted yet sent to the store with the user's consent to the statistics, forgotten on
     /// a refusal, kept until they answer (ESC-394, docs/STORE.md §5.4).
     pub async fn send_seed_counts(&self) {
