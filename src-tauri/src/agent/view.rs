@@ -324,7 +324,8 @@ impl AgentRt {
             }
             Item::ViewUsage { id, model, usage } => {
                 self.main_model = model.clone();
-                self.tui_usage.insert(id, (model, Usage::from_api(&usage)));
+                self.tui_usage
+                    .insert(id, (model.clone(), Usage::from_api(&usage)));
                 self.context_tokens = [
                     &usage["input_tokens"],
                     &usage["cache_read_input_tokens"],
@@ -333,6 +334,7 @@ impl AgentRt {
                 .iter()
                 .filter_map(|v| v.as_u64())
                 .sum();
+                self.heat_message(&model, &usage, fx);
             }
             Item::ViewError { error } => self.tui_error = Some(error),
             Item::Row {

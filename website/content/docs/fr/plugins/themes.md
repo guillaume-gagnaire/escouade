@@ -102,7 +102,7 @@ Ce sont ceux de `src/app.css`, listés dans `DESIGN.md` (« Les jetons ») :
 | Surfaces | `--frame`, `--panel`, `--raise`, `--raise-2`, `--well`, `--scrim`, `--shade`, `--drop-base`, `--vo-base`, `--orb-base` |
 | Filets et survol | `--fg-rgb`, `--line`, `--line-2`, `--line-3`, `--hover`, `--sep`, `--ring` |
 | Textes | `--text`, `--soft`, `--muted`, `--dim`, `--text-ai`, `--idle` |
-| États | `--run`, `--wait`, `--wait-bg`, `--wait-line`, `--done`, `--add`, `--del`, `--git-m`, `--warn-ink`, `--info`, `--teal-ink`, `--teal-ink-2`, `--disc`, `--brain` |
+| États | `--run`, `--wait`, `--wait-bg`, `--wait-line`, `--done`, `--add`, `--del`, `--git-m`, `--warn-ink`, `--info`, `--teal-ink`, `--teal-ink-2`, `--disc`, `--brain`, `--heat-hot`, `--heat-mid`, `--heat-cool` |
 | Bouton plein et encres | `--primary`, `--primary-hover`, `--on-primary`, `--on-primary-line`, `--on-primary-kbd`, `--on-primary-dim`, `--on-wait`, `--on-hit`, `--on-tick`, `--on-tile`, `--win-close`, `--on-win-close` |
 | Historique de git | `--lane-main`, `--lane-1` à `--lane-8` |
 | Code et terminal | `--code-fg`, `--code-ln`, `--code-nb`, `--code-dim`, `--syn-k`, `--syn-f`, `--syn-s`, `--syn-t`, `--syn-n`, `--ansi-k`, `--ansi-w`, `--ansi-w-2`, `--ansi-y`, `--ansi-cy`, `--ansi-cy-2`, `--term-sel-bg`, `--term-sel-fg` |

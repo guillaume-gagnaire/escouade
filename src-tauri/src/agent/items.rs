@@ -528,7 +528,13 @@ impl AgentRt {
                 }
             }
             Item::LimitRest => self.limit_rest = true,
-            Item::Entry { entry } => self.set_last_entry(entry, fx),
+            Item::Entry { entry } => {
+                // None: its session's chain starts again (Claude Code's compaction): what its cache held is not read again.
+                if entry.is_none() {
+                    self.heat_break(crate::heat::broken::COMPACTION, fx);
+                }
+                self.set_last_entry(entry, fx)
+            }
             Item::Activity { tool, input, block } => {
                 let activity = match (tool, block) {
                     (Some(tool), _) => tool_activity(&tool, &input, &self.meta.cwd),
@@ -581,16 +587,22 @@ impl AgentRt {
                 self.close_open_items(fx);
                 self.plan_apply(fx, |plan| plan.end_turn(now_ms()));
                 let tokens = usage.input + usage.cache + usage.output;
+                // An agent on its harness's default model: that one's row (Gemini's router).
+                let model = if self.meta.model.is_empty() {
+                    crate::engine::of(&self.meta)
+                        .models()
+                        .first()
+                        .map_or_else(String::new, |m| m.id.to_string())
+                } else {
+                    self.meta.model.clone()
+                };
+                let heat_model = if self.main_model.is_empty() {
+                    model.clone()
+                } else {
+                    self.main_model.clone()
+                };
+                self.heat_turn(&heat_model, usage.input, usage.cache, fx);
                 if tokens > 0 || usage.cost > 0.0 {
-                    // An agent on its harness's default model: that one's row (Gemini's router).
-                    let model = if self.meta.model.is_empty() {
-                        crate::engine::of(&self.meta)
-                            .models()
-                            .first()
-                            .map_or_else(String::new, |m| m.id.to_string())
-                    } else {
-                        self.meta.model.clone()
-                    };
                     fx.turns.push(TurnRow {
                         engine: self.meta.engine,
                         model,

@@ -14,6 +14,7 @@ import errors from './errors';
 import format from './format';
 import git from './git';
 import handover from './handover';
+import heat from './heat';
 import integrations from './integrations';
 import mcp from './mcp';
 import memory from './memory';
@@ -56,6 +57,7 @@ export const fr = {
   errors,
   accounts,
   handover,
+  heat,
   mcp,
   memory,
   vectors,

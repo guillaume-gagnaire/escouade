@@ -5374,6 +5374,7 @@ impl<R: Runtime> Core<R> {
                 None,
                 &mut fx,
             );
+            rt.heat_compacts(&mut fx);
             (rt.meta.project_id.clone(), rt.meta.name.clone(), rt.view())
         };
         self.apply(id, &pid, &agent_name, fx, Some(view));
