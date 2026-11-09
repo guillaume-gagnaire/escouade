@@ -1,9 +1,9 @@
 ---
-number: null
+number: 141
 id: "rechercher-des-mises-a-jour-relit-le-sto"
 title: "« Rechercher des mises à jour » relit le store avant de chercher"
 date: "2026-11-09"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-405"
 pages: ["store/store-dans-l-app"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"store/store-dans-l-app","added":4,"removed":1}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-09T17:52:40+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
