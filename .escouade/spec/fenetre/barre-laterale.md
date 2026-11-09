@@ -2,7 +2,7 @@
 title: "Barre latérale"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","src-tauri/src/core.rs","src-tauri/src/engine/claude/mod.rs","src-tauri/src/worktrees.rs"]
-tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390","ESC-396"]
+tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390","ESC-396","ESC-403"]
 decisions: [129,133]
 compared: null
 ---
@@ -205,3 +205,5 @@ La section entre Agents et Terminaux : les commandes qui lancent le projet pour 
 - « Agents » porte le nombre d'agents en gris ; « Kanban », la pastille ambre des tickets « À tester ». « PR » est le mot de l'hébergeur (« MR » sur GitLab).
 - « PR » n'est là que si le projet a un hébergeur de code dont le plugin est actif et qui lit des pull requests (voir *Vue « Pull requests » du projet*). Sans lui, trois onglets remplissent la barre de la même façon. Un hébergeur qui part pendant que la vue des PR est ouverte ramène aux agents.
 - De 220 à 480 px de large, les mots restent entiers.
+
+- « PR » porte la pastille ambre de ses PR nouvelles, arrivées depuis la dernière ouverture de l'onglet et pas ouvertes par Escouade ; l'ouvrir la remet à zéro. Un lecteur d'écran lit « PR, 2 nouvelles ». Voir *Vue « Pull requests » du projet* (ESC-403).
