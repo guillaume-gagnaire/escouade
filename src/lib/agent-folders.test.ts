@@ -34,6 +34,12 @@ describe('dropPlace', () => {
     expect(dropPlace(p, items, 'c', null, null)).toBeNull();
     expect(dropPlace(p, items, 'a', null, null)).toEqual({ folderId: null, index: null });
   });
+  it('a principal dropped in its own folder does nothing, elsewhere it goes', () => {
+    const { p, items } = setup([ag('a'), ag('b'), ag('c')], [folder('f', ['a', 'b'], 'a')], ['f', 'c']);
+    expect(dropPlace(p, items, 'a', 'f', 'b')).toBeNull();
+    expect(dropPlace(p, items, 'a', 'f', null)).toBeNull();
+    expect(dropPlace(p, items, 'a', null, 'c')).toEqual({ folderId: null, index: 1 });
+  });
   it('drops into a folder before a member', () => {
     const { p, items } = setup([ag('a'), ag('b'), ag('c')], [folder('f', ['b', 'c'], 'b')], ['a', 'f']);
     expect(dropPlace(p, items, 'a', 'f', 'c')).toEqual({ folderId: 'f', index: 1 });
@@ -66,7 +72,19 @@ describe('stepPlace', () => {
     const { p, items } = setup([ag('a'), ag('b'), ag('c')], [folder('f', ['c', 'a', 'b'], 'c')], ['f']);
     expect(stepPlace(p, items, 'a', -1)).toEqual({ folderId: null, index: 0 });
     expect(stepPlace(p, items, 'a', 1)).toEqual({ folderId: 'f', index: null });
-    expect(stepPlace(p, items, 'c', 1)).toEqual({ folderId: 'f', index: 1 });
+    // The principal itself does not move in its own folder.
+    expect(stepPlace(p, items, 'c', 1)).toBeNull();
+    expect(stepPlace(p, items, 'c', -1)).toBeNull();
+  });
+  it('an archived principal is no floor: the agent steps above its neighbour inside the folder', () => {
+    // x is the principal but archived (not shown): [a, b] are all the folder shows.
+    const { p, items } = setup([ag('a'), ag('b')], [folder('f', ['x', 'a', 'b'], 'x')], ['f']);
+    expect(stepPlace(p, items, 'b', -1)).toEqual({ folderId: 'f', index: 1 });
+  });
+  it('a principal that is the only member has no step either', () => {
+    const { p, items } = setup([ag('a')], [folder('f', ['a'], 'a')], ['f']);
+    expect(stepPlace(p, items, 'a', 1)).toBeNull();
+    expect(stepPlace(p, items, 'a', -1)).toBeNull();
   });
   it('steps inside a folder', () => {
     const { p, items } = setup([ag('a'), ag('b'), ag('c')], [folder('f', ['a', 'b', 'c'])], ['f']);

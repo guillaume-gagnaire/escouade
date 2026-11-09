@@ -34,9 +34,24 @@ function shown(items: SidebarItem[], level: string | null): { id: string; lifted
   ];
 }
 
+/** Whether `id` is the principal of the folder `folder` (an archived principal is not shown, so it does not count). */
+const isPrincipal = (project: Project, folder: string | null, id: string) =>
+  (project.agentFolders ?? []).find((f) => f.id === folder)?.principal === id;
+
 /** The level `id` is in now (a folder's id, null = project level). */
 function levelOf(project: Project, id: string): string | null {
   return (project.agentFolders ?? []).find((f) => f.agents.includes(id))?.id ?? null;
+}
+
+/**
+ * The shown item of `level` a drop before `beforeShown` lands in front of, null for the end of the level: the first one at
+ * or after it that is not lifted (a loose agent that waits, a waiting member under its folder's principal: they sit on top
+ * whatever their stored rank) and is not `dragged`. The drop line is drawn there.
+ */
+export function landing(items: SidebarItem[], dragged: string, level: string | null, beforeShown: string | null): string | null {
+  const row = shown(items, level);
+  const from = beforeShown === null ? -1 : row.findIndex((r) => r.id === beforeShown);
+  return (from < 0 ? undefined : row.slice(from).find((r) => !r.lifted && r.id !== dragged))?.id ?? null;
 }
 
 /**
@@ -54,11 +69,11 @@ export function dropPlace(
   beforeShown: string | null,
 ): Place | null {
   if (level && items.some((it) => it.kind === 'folder' && it.folder.id === dragged)) return null;
+  // A principal is on top of its own folder whatever the drop: it leaves it, or stays.
+  if (level && level === levelOf(project, dragged) && isPrincipal(project, level, dragged)) return null;
   const list = stored(project, items)(level).filter((i) => i !== dragged);
-  const row = shown(items, level);
-  const from = beforeShown === null ? -1 : row.findIndex((r) => r.id === beforeShown);
-  const next = from < 0 ? undefined : row.slice(from).find((r) => !r.lifted && r.id !== dragged);
-  const rank = next ? list.indexOf(next.id) : -1;
+  const next = landing(items, dragged, level, beforeShown);
+  const rank = next ? list.indexOf(next) : -1;
   const index = rank < 0 ? null : rank;
   const here = stored(project, items)(levelOf(project, dragged)).indexOf(dragged);
   if (levelOf(project, dragged) === level && (index ?? list.length) === here) return null;
@@ -69,7 +84,7 @@ export function dropPlace(
  * Where `item` lands moved one step (`by`) on the stored order; null at the ends. An agent at the edge of a folder leaves
  * it, above or below the folder; a loose agent arriving on a folder enters it (at the top going down, at the bottom going
  * up); a folder steps over the whole neighbour. Inside a folder the principal is stored first (the core settles it so),
- * and an agent never steps above it (it leaves the folder instead).
+ * and an agent never steps above it (it leaves the folder instead). The principal itself has no step in its folder.
  */
 export function stepPlace(project: Project, items: SidebarItem[], item: string, by: -1 | 1): Place | null {
   const of = stored(project, items);
@@ -83,6 +98,8 @@ export function stepPlace(project: Project, items: SidebarItem[], item: string, 
   const row = of(level).filter((i) => seen.has(i));
   const at = row.indexOf(item);
   if (at < 0) return null;
+  // The principal stays on top of its folder: it leaves it by « Hors dossier », « Déplacer vers… » or a drag.
+  if (isPrincipal(project, level, item)) return null;
   const k = at + by;
   const rest = row.filter((i) => i !== item);
   const rank = (level: string | null, id: string | undefined) => {
@@ -94,7 +111,8 @@ export function stepPlace(project: Project, items: SidebarItem[], item: string, 
             .indexOf(id);
     return r < 0 ? null : r;
   };
-  const floor = folder?.principal && item !== folder.principal ? 1 : 0;
+  // Only a principal that is shown is on top of the others.
+  const floor = folder?.principal && row.includes(folder.principal) ? 1 : 0;
   if (level && (k < floor || k >= row.length)) {
     // Out of the folder: next to it at the project level.
     const top = of(null).filter((i) => seen.has(i));
