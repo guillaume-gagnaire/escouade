@@ -351,6 +351,8 @@ class AppState {
   accountModels = $state.raw<Record<string, AccountModels>>({});
   /** The harnesses whose program is found: the only ones the interface offers (Réglages › Comptes et harness lists them all). */
   enginesFound = $state.raw<EngineId[]>([]);
+  /** The harnesses whose plugin is off or not installed (ESC-391): found perhaps, but not offered. */
+  enginesOff = $state.raw<EngineId[]>([]);
   version = $state('');
   filesOpen = $state(false);
   filesScope = $state<'agent' | 'project'>('agent');
@@ -756,6 +758,7 @@ class AppState {
     this.engineModels = s.engineModels ?? {};
     this.accountModels = s.accountModels ?? {};
     this.enginesFound = s.enginesFound ?? (s.claudeFound ? ['claude'] : []);
+    this.enginesOff = s.enginesOff ?? [];
     if (s.sources) setSources(s.sources);
     this.restartAt = s.restartAt ?? null;
     this.failedUpdate = s.failedUpdate ?? null;
@@ -1056,6 +1059,9 @@ class AppState {
     if (declared && declared.map((e) => e.id).join() !== this.engines.map((e) => e.id).join()) this.engines = declared;
     const found = await api.enginesFoundNow().catch(() => null);
     if (found && found.join() !== this.enginesFound.join()) this.enginesFound = found;
+    // Their plugins (ESC-391): one turned off, removed or installed since.
+    const off = await api.enginesOffNow().catch(() => null);
+    if (off && off.join() !== this.enginesOff.join()) this.enginesOff = off;
   }
 
   markSeen() {

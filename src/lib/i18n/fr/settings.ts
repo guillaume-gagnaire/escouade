@@ -156,7 +156,7 @@ export default {
     writing: 'Textes rédigés',
     writer: 'Modèle des textes rédigés',
     writerHelp:
-      'Nom donné à un nouvel agent, messages de commit et descriptions de pull request proposés, commandes du worktree remplies automatiquement. Seuls les harness installés sont proposés.',
+      'Nom donné à un nouvel agent, messages de commit et descriptions de pull request proposés, commandes du worktree remplies automatiquement. Seuls les harness utilisables sont proposés : programme installé, plugin actif et au moins un compte.',
     /** For a harness whose models are those of the providers connected to it (OpenCode). */
     writerModel: 'Modèle',
     writerModelHelp:
@@ -166,6 +166,12 @@ export default {
   },
 
   // The « Harness » tab (Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode: « Harness » in French too).
+  /** The harness already chosen in a menu « Harness » that cannot be used any more, and why (ESC-391). */
+  engineWhy: {
+    notFound: '{name} (programme introuvable)',
+    pluginOff: '{name} (plugin coupé)',
+    noAccount: '{name} (aucun compte)',
+  },
   claude: {
     /** The models of a harness that lists those of its providers (OpenCode). */
     models: {

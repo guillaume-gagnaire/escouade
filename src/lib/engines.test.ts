@@ -12,6 +12,7 @@ import {
   engineOf,
   engineOptions,
   favoritesOf,
+  found,
   modelCost,
   modelMenu,
   modelsOf,
@@ -24,6 +25,7 @@ import {
   showsCost,
   showsMark,
   speakerOf,
+  unusable,
   writerOf,
   writerOptions,
 } from './engines';
@@ -85,10 +87,22 @@ describe('the capabilities of a harness', () => {
   });
 });
 
+/** An account of Codex beside Claude Code's Principal: both harnesses can be used (ESC-391). */
+function withCodexAccount() {
+  app.settings = {
+    ...app.settings,
+    accounts: [
+      ...app.settings.accounts,
+      { id: 'principal-codex', name: 'Codex', engine: 'codex', configDir: '', claudePath: '', active: true },
+    ],
+  };
+}
+
 describe('the harnesses offered (ESC-29)', () => {
   beforeEach(() => {
     resetApp();
     app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    withCodexAccount();
   });
 
   it('are the harnesses found: a harness that is not found is offered nowhere', () => {
@@ -104,6 +118,58 @@ describe('the harnesses offered (ESC-29)', () => {
     // The one a ticket or a project has stays listed, though it is not found any more.
     app.enginesFound = ['claude'];
     expect(engineOptions('codex').map((o) => o.value)).toEqual(['claude', 'codex']);
+  });
+
+  it('are those that can be used: found, their plugin on and an account of their own (ESC-391)', () => {
+    setLang('fr');
+    app.enginesFound = ['claude', 'codex'];
+    expect(offered().map((e) => e.id)).toEqual(['claude', 'codex']);
+    expect(unusable('codex')).toBeNull();
+    // Its plugin off or not installed: found, not offered; the one chosen stays listed, saying why.
+    app.enginesOff = ['codex'];
+    expect(unusable('codex')).toBe('pluginOff');
+    expect(offered().map((e) => e.id)).toEqual(['claude']);
+    expect(choosesEngine()).toBe(false);
+    expect(engineOptions()).toEqual([{ value: 'claude', label: 'Claude Code' }]);
+    expect(engineOptions('codex')).toEqual([
+      { value: 'claude', label: 'Claude Code' },
+      { value: 'codex', label: 'Harness nu (plugin coupé)' },
+    ]);
+    // No account of its own: the same.
+    app.enginesOff = [];
+    app.settings = { ...app.settings, accounts: app.settings.accounts.filter((a) => a.engine !== 'codex') };
+    expect(unusable('codex')).toBe('noAccount');
+    expect(offered().map((e) => e.id)).toEqual(['claude']);
+    expect(engineOptions('codex').at(-1)).toEqual({ value: 'codex', label: 'Harness nu (aucun compte)' });
+    // Its program not found.
+    withCodexAccount();
+    app.enginesFound = ['claude'];
+    expect(unusable('codex')).toBe('notFound');
+    expect(engineOptions('codex').at(-1)).toEqual({ value: 'codex', label: 'Harness nu (programme introuvable)' });
+    setLang('en');
+    expect(engineOptions('codex').at(-1)!.label).toBe('Harness nu (program not found)');
+    setLang('fr');
+    // Where they are set up, every harness found is listed, with an account or not, its plugin on or not.
+    app.enginesFound = ['claude', 'codex'];
+    app.enginesOff = ['codex'];
+    app.settings = { ...app.settings, accounts: app.settings.accounts.filter((a) => a.engine !== 'codex') };
+    expect(found().map((e) => e.id)).toEqual(['claude', 'codex']);
+  });
+
+  it('follow the plugins: one turned off, then on again, as the backend says after a plugin changed (ESC-391)', async () => {
+    app.enginesFound = ['claude', 'codex'];
+    let off: string[] = ['codex'];
+    fakeBackend({
+      engines_declared: () => [CLAUDE_ENGINE, BARE_ENGINE],
+      engines_found_now: () => ['claude', 'codex'],
+      engines_off_now: () => off,
+    });
+    await app.refreshEngines();
+    expect(app.enginesOff).toEqual(['codex']);
+    expect(offered().map((e) => e.id)).toEqual(['claude']);
+    off = [];
+    await app.refreshEngines();
+    expect(offered().map((e) => e.id)).toEqual(['claude', 'codex']);
   });
 
   it('show their brand only once agents run on two of them, archived ones aside', () => {
@@ -389,6 +455,14 @@ describe('« Modèle des textes rédigés »', () => {
   beforeEach(() => {
     resetApp();
     app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    withCodexAccount();
+  });
+
+  it('offers only the harnesses that can be used, and goes to another than one whose plugin is off (ESC-391)', () => {
+    app.enginesFound = ['claude', 'codex'];
+    app.enginesOff = ['codex'];
+    expect(writerOptions().map((o) => o.value)).toEqual(['claude']);
+    expect(writerOf('codex')).toBe('claude');
   });
 
   it('offers the model of each harness found, and only those', () => {

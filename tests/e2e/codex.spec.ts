@@ -91,6 +91,35 @@ test.describe('an agent on Codex', () => {
     expect(start.collaborationMode.mode).toBe('plan');
   });
 
+  test('is not offered by the menu « Harness » while its plugin is off, and is again once it is on (ESC-391)', async ({ app }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    const more = page.getByRole('button', { name: 'Autres façons de créer un agent' });
+    await more.click();
+    await expect(page.getByRole('menuitemradio', { name: /^Codex/ })).toBeVisible();
+    await page.keyboard.press('Escape');
+    // Its plugin turned off: its program found, its account there, not offered any more.
+    const toggle = (on: boolean) =>
+      page.evaluate(
+        ([on]) =>
+          (window as unknown as { __TAURI_INTERNALS__: { invoke(c: string, a: unknown): Promise<unknown> } }).__TAURI_INTERNALS__.invoke(
+            'plugin_set_enabled',
+            { id: 'dev.escouade.codex', on },
+          ),
+        [on] as const,
+      );
+    await toggle(false);
+    await more.click();
+    await expect(page.getByRole('menuitemradio', { name: /^Claude Code/ })).toBeVisible();
+    await expect(page.getByRole('menuitemradio', { name: /^Codex/ })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    // Back on: offered, and its agent runs.
+    await toggle(true);
+    await newCodexAgent(page);
+    await send(page, 'bonjour Codex');
+    await expect(page.getByText('Bonjour, tu as dit : bonjour Codex')).toBeVisible();
+  });
+
   test('offers every model of its account before any agent, read without a turn on every page, in the runner’s window (ESC-186)', async ({
     app,
   }) => {

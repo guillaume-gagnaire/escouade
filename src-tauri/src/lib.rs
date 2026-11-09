@@ -704,6 +704,7 @@ pub fn run() {
                 commands::account_status,
                 commands::account_models_refresh,
                 commands::engines_found_now,
+                commands::engines_off_now,
                 commands::engines_declared,
                 commands::account_key,
                 commands::account_login,

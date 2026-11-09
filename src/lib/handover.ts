@@ -29,11 +29,13 @@ function setAside(agent: Who, engine: EngineId, now: number): boolean {
 
 /**
  * The harnesses the agent may be handed over to now (`Core::handover_targets`): its project's fallback harnesses but its own,
- * found here, the one it left not before its quota resets.
+ * found here and their plugin on (ESC-391), the one it left not before its quota resets.
  */
 export function handoverTargets(agent: Who, now: number = app.now): EngineId[] {
   const own = agent.engine ?? 'claude';
-  return fallbackEngines(agent.projectId).filter((e) => e !== own && app.enginesFound.includes(e) && !setAside(agent, e, now));
+  return fallbackEngines(agent.projectId).filter(
+    (e) => e !== own && app.enginesFound.includes(e) && !app.enginesOff.includes(e) && !setAside(agent, e, now),
+  );
 }
 
 /** The harness the agent left, once it may go back to it (« Revenir sur <harness> »): never by itself. */

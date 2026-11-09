@@ -7406,7 +7406,7 @@ impl<R: Runtime> Core<R> {
     /// account a new agent of the project would go to (a private project's reserved one).
     pub(crate) async fn one_shot_who(&self, project: &str) -> Result<OneShotWho> {
         let settings = self.settings.read().clone();
-        let id = engine::oneshot::writer(settings.writer_engine, &self.engines_found())
+        let id = engine::oneshot::writer(settings.writer_engine, &self.engines_usable())
             .unwrap_or(EngineId::CLAUDE);
         let engine = engine::by_id(id);
         let account = self.account_for(id, None, Some(project))?;
@@ -7487,7 +7487,7 @@ impl<R: Runtime> Core<R> {
         } = ask;
         let settings = self.settings.read().clone();
         // None found: Claude Code's, which says what is missing, as before there was a choice.
-        let id = engine::oneshot::writer(settings.writer_engine, &self.engines_found())
+        let id = engine::oneshot::writer(settings.writer_engine, &self.engines_usable())
             .unwrap_or(EngineId::CLAUDE);
         let engine = engine::by_id(id);
         let account = self.account_for(id, agent, project)?;

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import type { FolderInfo, Project, SetupInfo } from '../../lib/types';
-import { agent, board, fakeBackend, project, resetApp } from '../../test/ipc';
+import { agent, BARE_ENGINE, board, CLAUDE_ENGINE, fakeBackend, project, resetApp, usableEngines } from '../../test/ipc';
 import NewProjectModal from './NewProjectModal.svelte';
 
 // The assistant of « Nouveau projet »: its steps, the copy of another project, the checks, and what « Créer » saves.
@@ -381,6 +381,26 @@ describe('the new project’s assistant', () => {
     expect(screen.getByText('Aucun harness trouvé')).toBeInTheDocument();
     expect(screen.getByText(/indique son chemin dans Réglages › Comptes et harness/)).toBeInTheDocument();
     app.enginesFound = ['claude'];
+  });
+
+  it('offers as its harness only those that can be used: found, their plugin on, with an account (ESC-391)', async () => {
+    backend();
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    usableEngines('claude', 'codex');
+    app.enginesOff = ['codex'];
+    render(NewProjectModal);
+    await typePath();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
+    await userEvent.click(screen.getByRole('button', { name: /Compte et commit/ }));
+    // Codex found with an account, its plugin off: Claude Code alone, no choice.
+    expect(screen.queryByRole('group', { name: 'Harness par défaut' })).toBeNull();
+    app.enginesOff = [];
+    const group = await screen.findByRole('group', { name: 'Harness par défaut' });
+    expect(
+      within(group)
+        .getAllByRole('button')
+        .map((b) => b.textContent?.trim()),
+    ).toEqual(['Claude Code', 'Harness nu']);
   });
 
   it('leads to « Ajouter un compte… » over the assistant when its harness has no account, and keeps what was typed (ESC-128)', async () => {

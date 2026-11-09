@@ -221,6 +221,7 @@ export const api = {
   engines: () => invoke<EngineInfo[]>('engines'),
   /** The harnesses found now, the PATH of today read first (ESC-186). */
   enginesFoundNow: () => invoke<EngineId[]>('engines_found_now'),
+  enginesOffNow: () => invoke<EngineId[]>('engines_off_now'),
   /** The registry of now: the harnesses the plugins describe come and go with them (PLG-6). */
   enginesDeclared: () => invoke<EngineDecl[]>('engines_declared'),
   /** The items of Principal's folder a new account may share (those it has), files first. */

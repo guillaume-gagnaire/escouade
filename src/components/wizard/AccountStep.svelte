@@ -61,12 +61,12 @@
 {/if}
 {#if adding}<AccountModal {engine} onclose={() => (adding = false)} />{/if}
 <div class="box">
-  <!-- From two harnesses found on: the one of its new agents and tickets (none chosen: Claude Code). -->
-  {#if choosesEngine()}
+  <!-- From two harnesses that can be used on (ESC-391): the one of its new agents and tickets (none chosen: Claude Code). -->
+  {#if choosesEngine(form.config.engine ?? 'claude')}
     <Row label={t('settings.project.engine')} desc={t('settings.project.engineDesc')}>
       <Chips
         label={t('settings.project.engine')}
-        options={engineOptions(form.config.engine)}
+        options={engineOptions(form.config.engine ?? 'claude')}
         bind:value={() => form.config.engine ?? 'claude', setEngine}
       />
     </Row>

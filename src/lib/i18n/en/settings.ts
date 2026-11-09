@@ -131,7 +131,7 @@ export default defineZone('settings', {
     writing: 'Written texts',
     writer: 'Model for written texts',
     writerHelp:
-      'Name given to a new agent, proposed commit messages and pull request descriptions, worktree commands filled in automatically. Only the installed harnesses are offered.',
+      'Name given to a new agent, proposed commit messages and pull request descriptions, worktree commands filled in automatically. Only the harnesses that can be used are offered: program installed, plugin on and at least one account.',
     writerModel: 'Model',
     writerModelHelp:
       'A model of the providers connected to OpenCode, always given: without one, OpenCode would pick one itself. With no model at all, no written text.',
@@ -139,6 +139,12 @@ export default defineZone('settings', {
     writerModelNone: 'Default (read at the first text)',
   },
 
+  /** The harness already chosen in a menu « Harness » that cannot be used any more, and why (ESC-391). */
+  engineWhy: {
+    notFound: '{name} (program not found)',
+    pluginOff: '{name} (plugin off)',
+    noAccount: '{name} (no account)',
+  },
   claude: {
     models: {
       label: 'Models',

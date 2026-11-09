@@ -2717,6 +2717,27 @@ describe('Sidebar: choosing the harness and its brand (ESC-29)', () => {
     expect(menu.open!.items[0]).toMatchObject({ label: 'Worktree', heading: true });
   });
 
+  it('leaves out a harness whose plugin is off, though found with an account, as its plugin says now (ESC-391)', async () => {
+    resetApp();
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    app.enginesFound = ['claude', 'codex'];
+    app.settings.accounts = [
+      ...app.settings.accounts!,
+      { id: 'cx', name: 'Pro', configDir: '', claudePath: '', active: true, engine: 'codex' },
+    ];
+    let off = ['codex'];
+    fakeBackend({ engines_found_now: () => ['claude', 'codex'], engines_off_now: () => off });
+    render(Sidebar, { project: project() });
+    await userEvent.click(more());
+    const labels = () => menu.open!.items.map((i) => i.label);
+    expect(labels()).not.toContain('Harness nu');
+    menu.close();
+    // Turned back on: offered at the next opening.
+    off = [];
+    await userEvent.click(more());
+    expect(labels().slice(0, 3)).toEqual(['Harness', 'Claude Code', 'Harness nu']);
+  });
+
   it('opens the menu « Harness » on Ctrl+Shift+N, and takes a harness by its number', async () => {
     resetApp();
     app.engines = [CLAUDE_ENGINE, BARE_ENGINE];

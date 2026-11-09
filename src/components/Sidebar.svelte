@@ -15,7 +15,7 @@
   import { branchSummary, deltaDetail, repoLabel } from '../lib/repos';
   import { api } from '../lib/ipc';
   import { fDur, fUsd, fWhen, tildify } from '../lib/format';
-  import { accountName, defaultEngine, hasAccount, newAgentAccount, newAgentDefaults } from '../lib/accounts';
+  import { accountName, defaultEngine, newAgentAccount, newAgentDefaults } from '../lib/accounts';
   import {
     cardActivity,
     cardSpend,
@@ -585,7 +585,8 @@
     await app.refreshEngines();
     if (!moreBtn) return;
     const own = project.engine ?? defaultEngine();
-    const setUp = offered().filter((e) => hasAccount(e.id));
+    // Those that can be used (ESC-391): found, their plugin on, with an account.
+    const setUp = offered();
     const harnesses: MenuItem[] = setUp.map((e, i) => {
       const account = newAgentAccount(project, e.id);
       const d = newAgentDefaults(project, e.id);

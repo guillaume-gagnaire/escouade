@@ -2751,6 +2751,8 @@ export interface InitialState {
   engines: EngineDecl[];
   /** The harnesses whose program is found: the only ones offered (absent before 1.8: Claude Code, when found). */
   enginesFound?: EngineId[];
+  /** The harnesses whose plugin is off or not installed (absent before ESC-391: none). */
+  enginesOff?: EngineId[];
   /** The kinds of ticket sources the core knows (absent before INT-1: the seven of the window). */
   sources?: SourceDecl[];
   /** Why no ticket of a project's board starts, by project (none: they may). */

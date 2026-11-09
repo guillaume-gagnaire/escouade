@@ -378,3 +378,58 @@ async fn the_harnesses_offered_are_those_whose_program_is_found() {
     h.core.save_settings(s).unwrap();
     assert_eq!(h.core.engines_found(), [EngineId::CLAUDE]);
 }
+
+/// A harness is offered only when it can be used (ESC-391): its program found, its plugin on, and an account of its
+/// own; Claude Code's program found but without an account, or Codex's plugin turned off, is not offered. The plugin is
+/// read from the core's own plugins, not from the harnesses plugged for all the tests (`sync_harnesses` is not called).
+#[tokio::test]
+async fn a_harness_is_offered_only_with_its_plugin_on_and_an_account() {
+    let h = harness("esc391-usable");
+    h.set_settings(|s| {
+        s.accounts.retain(|a| a.engine != EngineId::CLAUDE);
+        s.accounts.push(Account {
+            id: "principal-codex".into(),
+            name: "Codex".into(),
+            engine: EngineId::CODEX,
+            claude_path: crate::engine::fake_codex(),
+            active: true,
+            ..Default::default()
+        });
+    });
+    let found = h.core.engines_found();
+    assert!(
+        found.contains(&EngineId::CLAUDE) && found.contains(&EngineId::CODEX),
+        "{found:?}"
+    );
+    // Claude Code found, but no account of its own.
+    assert_eq!(h.core.engines_usable(), [EngineId::CODEX]);
+    assert!(
+        h.core.engines_unplugged().is_empty(),
+        "{:?}",
+        h.core.engines_unplugged()
+    );
+    h.set_settings(|s| {
+        s.accounts.push(Account {
+            id: "principal".into(),
+            name: "Claude".into(),
+            engine: EngineId::CLAUDE,
+            active: true,
+            ..Default::default()
+        })
+    });
+    assert_eq!(h.core.engines_usable(), [EngineId::CLAUDE, EngineId::CODEX]);
+    // Codex's plugin turned off: still found, no longer offered, and the texts go to Claude Code.
+    let codex = crate::plugins::builtin::CODEX;
+    h.core.plugins.choose(codex, |c| c.enabled = false).unwrap();
+    assert!(h.core.engines_found().contains(&EngineId::CODEX));
+    assert_eq!(h.core.engines_unplugged(), [EngineId::CODEX]);
+    assert_eq!(h.core.engines_usable(), [EngineId::CLAUDE]);
+    assert_eq!(
+        crate::engine::oneshot::writer(Some(EngineId::CODEX), &h.core.engines_usable()),
+        Some(EngineId::CLAUDE)
+    );
+    // Turned back on: offered again.
+    h.core.plugins.choose(codex, |c| c.enabled = true).unwrap();
+    assert!(h.core.engines_unplugged().is_empty());
+    assert_eq!(h.core.engines_usable(), [EngineId::CLAUDE, EngineId::CODEX]);
+}
