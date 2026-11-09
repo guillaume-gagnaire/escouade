@@ -6,7 +6,7 @@ Each worktree gets services of its own, on ports and `*.localhost` addresses of 
 
 **What it needs**:
 
-- the `isola` program on your PATH (on Windows, an `isola.exe`);
+- the `isola` program on your PATH. isola does not exist for Windows: there, the plugin finds no program, and the project goes on without isola, its tickets tested with a recipe on the reserved ports;
 - an `.isola.toml` file committed at the root of the project.
 
 No account, no secret, no network.

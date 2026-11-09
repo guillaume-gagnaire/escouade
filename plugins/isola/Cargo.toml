@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-isola"
-version = "2.2.0"
+version = "2.2.1"
 description = "Le plugin isola d'Escouade : les services de chaque worktree sur ses ports et ses adresses *.localhost"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"

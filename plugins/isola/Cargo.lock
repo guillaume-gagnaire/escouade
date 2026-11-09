@@ -143,7 +143,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-isola"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "escouade-plugin-kit",
  "serde",
@@ -170,9 +170,9 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-protocol"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f13740d119142f6f9a8ff54c8932bc96b40e8b67cb907ef191c4e8c35b1fdd7"
+checksum = "69c9dd3888506df8296cf8081d5d63eef2eac2cc29b666a3c7c0ae1d1bd1e3cd"
 dependencies = [
  "serde",
  "serde_json",

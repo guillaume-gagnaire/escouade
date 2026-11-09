@@ -19,7 +19,7 @@ Exactly three commands, those of its manifest’s `permissions.commands`, shown 
 Escouade holds these rules, not the plugin:
 
 - the command and its arguments must be one of these three lines, word for word: `isola ls`, `isola down now` or `isola logs` are refused;
-- `isola` is looked for on the PATH, never a path; no shell; on Windows, no `.cmd` nor `.bat`;
+- `isola` is looked for on the PATH, never a path; no shell; on Windows (where isola does not exist yet), no `.cmd` nor `.bat`;
 - the program runs in the worktree Escouade lends the plugin for the time of the call, and nowhere else: the plugin gets no path, only a name given for that call;
 - its environment is an agent’s, without Escouade’s own variables, plus `NO_COLOR=1`;
 - its input is closed at once; it has 60 seconds, and is killed past them; it dies with the plugin;
