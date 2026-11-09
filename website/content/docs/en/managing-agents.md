@@ -74,6 +74,17 @@ The mode decides what Claude does without asking you.
 
 The model, effort, and mode menus stay usable for the agent’s whole life, even while it works. The choice applies to the agent right away, the conversation goes on, and it only holds for this agent. If the agent’s process is stopped (see [below](managing-agents#closing-the-window-quitting-and-restarting)), the choice is picked up the next time it starts.
 
+## Interactive commands
+
+Some Claude Code commands open a screen of their own in its terminal: `/login`, `/permissions`, `/hooks`… Typed in an agent’s field, they are never sent as a message. In the “/” menu, each says where it opens before you pick it.
+
+- `/login` opens the sign-in of the agent’s account, like “Sign in” in Settings › Accounts and harnesses. Once signed in, the agent goes on on that account with its conversation. `/logout` asks you first, then signs that account out for all its agents; it stays in Escouade.
+- `/model` and `/effort` alone open the field’s menus, `/plan` switches to Plan mode, `/usage` opens the accounts’ quotas, `/remote-control` turns on the agent’s remote control.
+- The others, like `/permissions`, `/hooks`, `/mcp` or `/config`, switch the agent to the [terminal view](claude-code-view), where the command is typed for you. “Escouade view” brings you back to the conversation, which goes on.
+- `/resume`, `/branch`, `/fork`, `/teleport` and `/exit` aren’t offered: the agent keeps its session.
+
+For Codex, Copilot CLI and the other harnesses, only `/login`, `/logout`, `/model` and `/effort` are handled. `/logout` works with Claude Code and Codex.
+
 ## An agent’s account
 
 When you’ve added several Claude accounts, an “Account” menu joins the others. Its first choice, “Automatic”, lets Escouade take the project’s account (its “Preferred account”), otherwise the first “good” active account (5 hours under the pause and switch thresholds, week on pace); the name of the chosen account is written in parentheses. An agent’s account can no longer change after its first message, since its conversation is filed in that account: the menu is then read-only.

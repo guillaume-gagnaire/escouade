@@ -1,9 +1,9 @@
 ---
 title: "Le store dans l'app"
 subject: "store"
-sources: ["docs/STORE.md","docs/PLUGINS.md","design/plugins/maquettes-b.html","design/app-redesign/UX-NOTES.md","website/content/docs/fr/plugins/installer.md"]
-tickets: ["ESC-236","ESC-287","ESC-313","ESC-314","ESC-184"]
-decisions: [21,25,67]
+sources: ["docs/STORE.md","docs/PLUGINS.md","design/plugins/maquettes-b.html","design/app-redesign/UX-NOTES.md","website/content/docs/fr/plugins/installer.md","src-tauri/src/plugins_seed_tests.rs"]
+tickets: ["ESC-236","ESC-287","ESC-313","ESC-314","ESC-184","ESC-394"]
+decisions: [21,25,67,132]
 compared: "2026-10-31T19:50:53+01:00"
 gaps: [{"text":"La spec dit que le schéma `escouade` est enregistré par les installeurs NSIS et MSI sous Windows. Le code ne produit que l'installeur NSIS (`bundle.targets` vaut [\"nsis\"] et rien ne construit de MSI), donc aucun MSI n'enregistre le schéma.","code":["src-tauri/tauri.conf.json"]},{"text":"La spec dit que le `.deb` et le `.rpm` déclarent `x-scheme-handler/escouade`. Sous Linux, la config ne construit que `appimage` et `deb` (`targets: [\"appimage\", \"deb\"]`). Le gabarit de bureau est prévu pour le rpm, mais aucun `.rpm` n'est produit, donc aucun rpm ne déclare le schéma.","code":["src-tauri/tauri.linux.conf.json"]}]
 ---
@@ -64,3 +64,10 @@ Référence : `docs/STORE.md` §5 et §7 (il fait foi) ; aperçu `#b1` à `#b4` 
 
 ## Ce que la fenêtre d'installation dit du réseau (ESC-184)
 - Chaque hôte de `permissions.network` porte ce qu'Escouade en fait : appliqué pour un `run.js` (« il ne joint aucun autre hôte, ni une adresse de ta machine ou de ton réseau local ») ; appliqué pour un plugin déclaratif (« ses webhooks ne partent que vers cet hôte ») ; seulement déclaré pour un `run.command` (« Escouade ne filtre pas encore son réseau »).
+
+## Les installations depuis l'amorce comptent (ESC-394)
+- Une installation depuis l'amorce compte au store comme une installation (`POST /api/v1/installs { id, version, event: "install" }`), sous la même règle que « Installer » : avec l'accord aux statistiques seulement, rien que les trois clés. C'est vrai au démarrage (le tri), pour un geste qui demande un plugin, et au clic sur un plugin de l'amorce.
+- L'amorce installe hors ligne, souvent avant que l'utilisateur ait répondu sur les statistiques : le compte attend dans ce que l'app garde de l'amorce, par id et version. Il part dès que l'accord vaut oui et que le store répond, et il est oublié sur un non. Une version comptée ne compte plus jamais.
+- Un envoi qui échoue (hors ligne, erreur du store, 408, 429) reste en attente. Il repart au démarrage suivant, à chaque relecture du store (toutes les 6 heures, ou « Relire maintenant ») et au prochain geste, un essai à la fois. Un autre refus du store (une version qu'il ne publie pas) le règle.
+- Un plugin installé par l'amorce d'une 2.2.0-beta et jamais compté se compte une fois, avec sa version installée, au premier démarrage qui sait compter.
+- Rien ne compte d'un plugin `builtin` (non passé par le store), d'un dossier en développement, d'une mise à jour du store (déjà comptée en `update`), ni de l'amorce d'un build de développement (`scripts/seed-dev.sh`, les e2e).

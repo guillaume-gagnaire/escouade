@@ -27,6 +27,7 @@ import type { FormImage } from './ticket-images';
 import { setSources } from './integrations';
 import { applyTheme } from './theme';
 import { hasTab } from './code-host';
+import { newCount, opened, readSeen, seenOf, type PrSeen } from './prnew';
 import { workflows } from './workflows.svelte';
 import {
   activeItem,
@@ -40,6 +41,7 @@ import {
   place as placePane,
   prune as prunePanes,
   setRatio as setPaneRatio,
+  settle as settlePanes,
   type PaneItem,
   type PaneLayout,
   type PaneZone,
@@ -168,7 +170,8 @@ export type Modal =
   | { kind: 'newDiscussion'; projectId: string; preset?: DiscussionPreset }
   /** « Ajouter un compte… » (a new Claude account, then its sign-in), or « Se connecter… » for the account `accountId`. */
   /** `back`: the settings' tab it came from and goes back to (Comptes Claude by default). */
-  | { kind: 'account'; accountId?: string; back?: SettingsPage; engine?: EngineId; reserveFor?: string }
+  /** `forAgent`: opened by `/login` typed to that agent (ESC-401), which goes on once signed in; closed, back to it. */
+  | { kind: 'account'; accountId?: string; back?: SettingsPage; engine?: EngineId; reserveFor?: string; forAgent?: string }
   | { kind: 'testLaunch'; agentId: string }
   | { kind: 'import'; projectId: string }
   /** The update downloaded (`app.update`), which a restart installs; `back`, the settings' tab it was opened from and goes back to. */
@@ -267,6 +270,9 @@ export const atWork = (a: Pick<Agent, 'status'>) => a.status === 'running' || a.
 
 /** How many of the last lines of the step running a worktree's setup the window keeps (as the backend does). */
 const SETUP_LINES = 500;
+
+/** How long after a Ctrl+C typed in a launch command's view its exit is taken for the user's stop (ESC-396). */
+const INTERRUPT_WINDOW_MS = 10_000;
 
 /** The title of the question asked on quitting, in the language of the interface (the open dialog is told by it). */
 const quitTitle = () => t('shell.quit.title');
@@ -751,7 +757,13 @@ class AppState {
     this.projectPauses = s.projectPauses ?? {};
     this.accounts = s.accounts ?? [];
     this.attention = {};
-    this.ui = { ...s.ui, view: s.ui.view || 'project', selectedAgent: s.ui.selectedAgent ?? {}, panes: readPanes(s.ui.panes) };
+    this.ui = {
+      ...s.ui,
+      view: s.ui.view || 'project',
+      selectedAgent: s.ui.selectedAgent ?? {},
+      panes: readPanes(s.ui.panes),
+      prSeen: readSeens(s.ui.prSeen),
+    };
     this.overviewFrom = 'project';
     if (!this.ui.activeProject || !this.projects.some((p) => p.id === this.ui.activeProject)) {
       // Never the one the page crashed on (ESC-290): it is offered again, not opened.
@@ -827,6 +839,8 @@ class AppState {
         if (prev && atWork(prev) && !atWork(e.agent)) this.runHooks(this.turnEndHooks, e.agent.id);
         // Its setup is over: what it wrote is in its log (and its failure in the conversation).
         if (!e.agent.setup) this.dropSetupOutput(e.agent.id);
+        // Archived: its pane, if it has one, goes to another agent (ESC-399).
+        if (e.agent.archived && !prev?.archived) this.settlePanes();
         break;
       }
       case 'agentRemoved':
@@ -837,6 +851,7 @@ class AppState {
         this.dropSetupOutput(e.id);
         dropConversation(e.id);
         this.forgetEditorSource(e.projectId, e.id);
+        this.settlePanes();
         break;
       case 'ticket': {
         const prev = this.tickets[e.ticket.id];
@@ -852,6 +867,8 @@ class AppState {
         break;
       case 'project':
         this.replaceProject(e.project);
+        // A launch removed leaves its pane.
+        this.settlePanes();
         break;
       case 'devPage':
         for (const f of this.devPageHooks) f(e.page);
@@ -867,6 +884,9 @@ class AppState {
       case 'focusPrs':
         // The click of a review asked of the user.
         this.openPrs(e.projectId);
+        break;
+      case 'prsRead':
+        this.prsRead(e.projectId, e.numbers);
         break;
       case 'pluginSeeded':
         this.toast(e.text, 'ok');
@@ -1299,6 +1319,43 @@ class AppState {
     this.persistUi();
   }
 
+  /**
+   * Every project's split screen once the contents gone have left it (ESC-399): an agent archived or deleted (from its
+   * menu, the board, the MCP server, another screen), a terminal closed, a launch removed. The pane of an agent gone
+   * takes the agent the app shows in its place, the one it would show alone (the first of the project's not shown);
+   * without one it closes. The other panes keep their place and share; the last one left is the one shown alone. The
+   * selection follows the active pane.
+   */
+  settlePanes() {
+    for (const [projectId, raw] of Object.entries(this.ui.panes ?? {})) {
+      const p = this.projects.find((x) => x.id === projectId);
+      if (!p) continue;
+      const standIn = (_: PaneItem, shown: Set<string>): PaneItem | null => {
+        const a = Object.values(this.agents)
+          .filter((x) => x.projectId === projectId && !x.archived && !shown.has(`agent:${x.id}`))
+          .sort((x, y) => x.createdAt - y.createdAt)[0];
+        return a ? { kind: 'agent', id: a.id } : null;
+      };
+      const { layout, alone } = settlePanes(raw, (x) => this.paneExists(p, x), standIn);
+      if (layout === raw) continue;
+      this.setPanes(projectId, layout);
+      if (alone) this.selectIn(projectId, alone);
+      else if (layout && layout.active !== raw.active) this.selectIn(projectId, activeItem(layout));
+    }
+  }
+
+  /** `item` selected the classic way in the project `projectId`, on screen or not: alone, or the active pane's. */
+  private selectIn(projectId: string, item: PaneItem) {
+    this.selectedTerm[projectId] = item.kind === 'term' ? item.id : null;
+    this.selectedLaunch[projectId] = item.kind === 'launch' ? item.id : null;
+    if (item.kind === 'agent') this.ui.selectedAgent[projectId] = item.id;
+    if (item.kind === 'editor') {
+      this.editorReady(projectId);
+      if (!this.ui.panes?.[projectId]) this.editor[projectId].on = true;
+    } else this.closeEditor(projectId);
+    this.persistUi();
+  }
+
   /** Shows `item` in the active pane of the project's split screen, if it has one: a content already in a pane makes it active. */
   private paneShow(projectId: string, item: PaneItem) {
     const p = this.projects.find((x) => x.id === projectId);
@@ -1522,6 +1579,32 @@ class AppState {
     this.selectedTerm[projectId] = null;
     this.selectedLaunch[projectId] = null;
     this.closeEditor(projectId);
+    this.persistUi();
+  }
+
+  /** The new pull requests of a project (ESC-403): the PR tab's badge. */
+  prsNew(projectId: string) {
+    return newCount(this.ui.prSeen?.[projectId]);
+  }
+
+  /** A reading of a project's list of pull requests, whoever made it (ESC-403): those Escouade opened, its tickets' and
+   * its agents', are never new. */
+  prsRead(projectId: string, numbers: number[]) {
+    const escouade = new Set<number>();
+    for (const tk of Object.values(this.tickets)) if (tk.projectId === projectId && tk.pr) escouade.add(tk.pr.number);
+    for (const a of Object.values(this.agents)) if (a.projectId === projectId) for (const p of a.prs ?? []) escouade.add(p.number);
+    const shown = this.prsOn && this.project?.id === projectId;
+    this.setPrSeen(projectId, readSeen(this.ui.prSeen?.[projectId], numbers, escouade, shown));
+  }
+
+  /** The project's PR view came on screen (ESC-403): its badge back to zero, its new ones marked in the list. */
+  prsOpened(projectId: string) {
+    const next = opened(this.ui.prSeen?.[projectId]);
+    if (next) this.setPrSeen(projectId, next);
+  }
+
+  private setPrSeen(projectId: string, seen: PrSeen) {
+    this.ui.prSeen = { ...this.ui.prSeen, [projectId]: seen };
     this.persistUi();
   }
 
@@ -1822,8 +1905,10 @@ class AppState {
     if (!found) return;
     const [id, l] = found;
     delete this.exitedTerms[ptyId];
-    const status = l.stopping ? 'stopped' : code === 0 ? 'done' : 'crashed';
-    Object.assign(l, { status, code, ptyId: null, stopping: false });
+    // Ended soon after a Ctrl+C typed in its view (ESC-396): the user stopped it, as with « Stopper ».
+    const interrupted = l.interruptedAt !== undefined && Date.now() - l.interruptedAt <= INTERRUPT_WINDOW_MS;
+    const status = l.stopping || (code !== 0 && interrupted) ? 'stopped' : code === 0 ? 'done' : 'crashed';
+    Object.assign(l, { status, code, ptyId: null, stopping: false, interruptedAt: undefined });
     if (status !== 'crashed') return;
     // « Voir le log »: its log in the main area, in its project.
     const projectId = this.launchProject(id);
@@ -1933,3 +2018,14 @@ class AppState {
 }
 
 export const app = new AppState();
+
+/** What was seen of each project's pull requests, as the interface's state gave it back (ESC-403). */
+function readSeens(v: unknown): Record<string, PrSeen> {
+  const out: Record<string, PrSeen> = {};
+  if (v && typeof v === 'object')
+    for (const [id, raw] of Object.entries(v)) {
+      const seen = seenOf(raw);
+      if (seen) out[id] = seen;
+    }
+  return out;
+}

@@ -649,7 +649,7 @@
             aria-label={t('prs.chipLabel', { word, number: p.number, state: stateWord(p) })}
             use:tip={{ text: prTip(word, p), aria: false }}
             data-pr={p.number}
-            onclick={() => openPr(p)}><Icon name={prIcon(p)} size={12} />{p.repo ? `${repoLabel(p.repo)} ` : ''}#{p.number}</button
+            onclick={() => openPr(p, word)}><Icon name={prIcon(p)} size={12} />{p.repo ? `${repoLabel(p.repo)} ` : ''}#{p.number}</button
           >
         {/each}
         <!-- Codex's sandbox, which its modes set (but Bypass, which has none): said where it matters. -->

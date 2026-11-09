@@ -1109,6 +1109,11 @@ pub struct SourceLink {
     /// The state an imported ticket's external one is given when it comes into each column
     /// (none: left as it is).
     pub states: BTreeMap<Column, ExternalState>,
+    /// The account of its service that serves it (`AccountView::id`, ESC-397); empty: the
+    /// service's first one (a link from before). GitLab Issues and Azure Boards have none: their
+    /// container names its instance.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub account: String,
 }
 
 /// What a project's tickets have to do with external ticket systems.
@@ -1155,6 +1160,10 @@ pub struct ExternalRef {
     pub url: String,
     /// Why its last sync failed, until one succeeds.
     pub error: Option<String>,
+    /// The account it was imported with (`SourceLink::account`), which it keeps; empty: the
+    /// service's first one.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub account: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -2303,6 +2312,9 @@ pub struct UiState {
     /// The split screen of each project (ESC-392), by project id: its tree of panes as the interface wrote it
     /// (`lib/panes.ts`), kept whole and read back at the start. Absent: one content fills the work area.
     pub panes: HashMap<String, Value>,
+    /// What was seen of each project's pull requests (ESC-403), by project id, as the interface wrote
+    /// it (`lib/prnew.ts`), kept whole: the PR tab's badge counts the new ones from it.
+    pub pr_seen: HashMap<String, Value>,
 }
 
 /// A choice of Claude Code's model picker (`initialize`): an alias or a full id, and the model
@@ -3089,6 +3101,14 @@ pub enum UiEvent {
     #[serde(rename_all = "camelCase")]
     FocusPrs {
         project_id: String,
+    },
+    /// The project's list of pull requests was read, whoever read it (the view, the « PR et CI »
+    /// tab, the overview, the tools): the numbers of its open ones, for the PR tab's badge of the new
+    /// ones (ESC-403). Told by a reading already made, never by one of its own.
+    #[serde(rename_all = "camelCase")]
+    PrsRead {
+        project_id: String,
+        numbers: Vec<u64>,
     },
     /// Why no ticket of the project's board starts (its target branch has no commit yet, or is
     /// gone), or None once they may start again.
@@ -4410,6 +4430,7 @@ mod tests {
             },
         );
         let link = SourceLink {
+            account: "jira-1".into(),
             service: Service::JIRA,
             container: "ATL".into(),
             name: "Atlas".into(),
@@ -4427,6 +4448,7 @@ mod tests {
             container: "acme/api".into(),
             url: "https://github.com/acme/api/issues/42".into(),
             error: None,
+            account: String::new(),
         };
         let t = serde_json::to_value(Ticket {
             external: Some(r),

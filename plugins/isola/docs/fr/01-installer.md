@@ -5,7 +5,7 @@ Le plugin vient avec Escouade, tu n’as pas à l’installer depuis le store. D
 - sous **Livrés avec Escouade** tant que l’app le donne elle-même : signé avec elle, mis à jour avec elle, sa version est celle d’Escouade. Tu peux le couper, pas le désinstaller ;
 - sous **Proposés par Escouade** quand l’installeur porte sa version du store : Escouade l’installe sans réseau au premier lancement, puis c’est un plugin comme un autre, que tu peux couper, désinstaller et mettre à jour.
 
-Son module WASM n’est pas encore dans les installeurs d’Escouade : il y arrive avec sa version du store. Si sa page dit qu’il est arrêté faute de module, voir le Dépannage.
+Son module WASM est dans les installeurs d’Escouade, comme les autres plugins de la première main : Escouade l’installe de là, sans réseau, à son premier lancement. Si sa page dit qu’il est arrêté faute de module, voir le Dépannage.
 
 Pour qu’il serve, il lui faut deux choses : le programme `isola` sur la machine, et un `.isola.toml` dans le projet.
 
@@ -14,7 +14,8 @@ Pour qu’il serve, il lui faut deux choses : le programme `isola` sur la machin
 Installe [isola](https://github.com/cyucelen/isola) en suivant sa documentation, et vérifie qu’il est sur ton PATH : `isola --help` doit répondre dans un terminal.
 
 - Escouade cherche `isola` dans les dossiers absolus du PATH, au plus toutes les 30 secondes : installé pendant qu’Escouade tourne, il est trouvé peu après, sans relancer l’app.
-- Sous Windows, Escouade ne lance qu’un `isola.exe` ou un `isola.com`, jamais un `isola.cmd` ni un `isola.bat` (ils ne tournent qu’à travers un shell).
+- isola n’existe pas pour Windows : il ne publie pas de version Windows, et `go install` y échoue (isola repose sur des groupes de processus et des verrous de fichiers que seul Unix a). Sous Windows, le plugin ne trouve pas de programme `isola` : aucun worktree n’est le sien, et les tickets partent comme sans isola, avec une recette sur les ports réservés. Rien à couper, rien ne casse.
+- Si isola a un jour une version Windows, Escouade ne lancera qu’un `isola.exe` ou un `isola.com`, jamais un `isola.cmd` ni un `isola.bat` (ils ne tournent qu’à travers un shell).
 
 ## 2. Ajouter un `.isola.toml` au projet
 

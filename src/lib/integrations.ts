@@ -2,7 +2,17 @@
 
 import { fList } from './format';
 import { t } from './i18n';
-import type { Column, Container, ExternalIssue, ExternalState, ProjectIntegrations, Service, SourceDecl } from './types';
+import type {
+  AccountView,
+  Column,
+  Container,
+  ExternalIssue,
+  ExternalState,
+  ProjectIntegrations,
+  Service,
+  SourceDecl,
+  SourceLink,
+} from './types';
 
 /**
  * The sources, in the registry's order: read from the registry of the core at the window's start (`setSources`).
@@ -140,15 +150,42 @@ export function importedLabel(issues: { service: Service }[]): string {
 /** An external ticket's key in a selection. */
 export const issueKey = (i: ExternalIssue) => `${i.service}|${i.id}`;
 
-/** The project's source for `service` becomes `container` (with its default states), or none. */
+/** `id` names the first account of `service` (empty: a link or a ticket from before ESC-397). */
+export const isFirstAccount = (service: Service, id: string | undefined) => !id || id === service;
+
+/** `a` and `b` name the same account of `service`. */
+export const sameAccount = (service: Service, a: string | undefined, b: string | undefined) =>
+  (isFirstAccount(service, a) && isFirstAccount(service, b)) || a === b;
+
+/**
+ * The connected accounts of a source with several (`AccountView.id`): Jira, Trello, Linear, ClickUp. GitHub Issues,
+ * GitLab Issues and Azure Boards follow their code host's accounts, and have none to choose.
+ */
+export function accountsOf(accounts: AccountView[], service: Service): AccountView[] {
+  if (HOSTED.includes(service)) return [];
+  return accounts.filter((a) => a.service === service && a.connected && a.id);
+}
+
+/** The link's account is connected: else its source is paused, its settings kept (ESC-397). */
+export function linkServed(accounts: AccountView[], link: SourceLink): boolean {
+  if (HOSTED.includes(link.service) || !accounts.some((a) => a.service === link.service && a.id)) {
+    return accounts.some((a) => a.service === link.service && a.connected);
+  }
+  return accountsOf(accounts, link.service).some((a) => sameAccount(link.service, a.id, link.account));
+}
+
+/** The project's source for `service` becomes `container` (with its default states), or none; `account`: the account
+ *  of the service that serves it (none, or the first one's: left out, as a link from before). */
 export function linkSource(
   p: ProjectIntegrations,
   service: Service,
   container: Container | null,
   states: Partial<Record<Column, ExternalState>>,
+  account?: string,
 ): ProjectIntegrations {
   if (!container) return { ...p, links: p.links.filter((l) => l.service !== service) };
-  const link = { service, container: container.id, name: container.name, states: { ...states } };
+  const link: SourceLink = { service, container: container.id, name: container.name, states: { ...states } };
+  if (!isFirstAccount(service, account)) link.account = account;
   const at = p.links.findIndex((l) => l.service === service);
   const links = at < 0 ? [...p.links, link] : p.links.map((l, i) => (i === at ? link : l));
   return { ...p, links };

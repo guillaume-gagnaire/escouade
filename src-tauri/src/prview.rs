@@ -24,6 +24,18 @@ pub const LOG_VIEW: usize = 20_000;
 
 /// How long a project's list is taken again rather than read (the view reads it every minute).
 const LIST_FRESH: Duration = Duration::from_secs(55);
+/// How often the list of the project on screen is read in the background, for the PR tab's badge
+/// of the new ones (ESC-403): never sooner after any other reading of it.
+pub const WATCH_EVERY: Duration = Duration::from_secs(120);
+/// `WATCH_EVERY`, unless `ESCOUADE_PR_WATCH_EVERY_MS` says otherwise (the end-to-end tests).
+fn watch_every() -> Duration {
+    std::env::var("ESCOUADE_PR_WATCH_EVERY_MS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .map_or(WATCH_EVERY, Duration::from_millis)
+}
+/// The longest wait of the background reading after failures in a row.
+const WATCH_LONGEST: Duration = Duration::from_secs(30 * 60);
 /// How long a pull request read whole by the tools is given again.
 const WHOLE_FRESH: Duration = Duration::from_secs(20);
 
@@ -411,6 +423,36 @@ impl<R: Runtime> Core<R> {
                 Read::failed(&e, limit)
             }
         }
+    }
+
+    /// The background reading of the list of the project on screen, for the PR tab's badge
+    /// (ESC-403), which the window asks for while it is visible: made only when the list was not
+    /// read in `WATCH_EVERY` (by the view, the tab « PR et CI », the overview, the tools or
+    /// itself), the host's limit is not near, and after a failure only once the wait is over, the
+    /// wait doubling at each one up to `WATCH_LONGEST`. A failure is told to no one: the view says
+    /// it when it is opened. Whether it read.
+    pub async fn project_prs_watch(self: &Arc<Self>, project_id: &str) -> bool {
+        if let Some(list) = self.pr_lists.lock().get(project_id) {
+            let recent = list
+                .read
+                .as_ref()
+                .is_some_and(|(at, _, _)| at.elapsed() < watch_every());
+            let waiting = list.watch_after.is_some_and(|t| Instant::now() < t);
+            if recent || waiting || limit_near(list.limit, (now_ms() / 1000) as u64) {
+                return false;
+            }
+        }
+        let failed = self.project_prs(project_id).await.failure.is_some();
+        if failed {
+            let mut lists = self.pr_lists.lock();
+            let list = lists.entry(project_id.to_string()).or_default();
+            list.watch_failures = list.watch_failures.saturating_add(1);
+            let wait = watch_every()
+                .saturating_mul(1 << list.watch_failures.min(4))
+                .min(WATCH_LONGEST);
+            list.watch_after = Some(Instant::now() + wait);
+        }
+        true
     }
 
     /// `project_prs` for what can wait (the overview, the tools): the last list when it is under

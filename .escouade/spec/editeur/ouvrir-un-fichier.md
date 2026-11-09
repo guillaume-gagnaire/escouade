@@ -2,8 +2,8 @@
 title: "Ouvrir un fichier"
 subject: "Éditeur"
 sources: ["docs/SPEC.md"]
-tickets: []
-decisions: []
+tickets: ["ESC-396"]
+decisions: [133]
 compared: null
 order: 28
 ---
@@ -28,7 +28,7 @@ La palette « Ouvrir un fichier » trouve un fichier par son nom et l'ouvre dans
 
 - `Ctrl+P` et `Ctrl+Maj+P` n'impriment jamais la page. Ils sont retenus avant tout champ, même derrière une boîte de dialogue, où `Ctrl+P` n'ouvre rien.
 - La touche P est reconnue à sa place sur un clavier d'un autre alphabet (cyrillique, grec).
-- Dans un terminal interactif sous Windows, `Ctrl+P` reste au shell (commande précédente ; voir *Raccourcis*). Dans le journal en lecture seule d'une commande de lancement, il ouvre la palette.
+- Dans un terminal interactif sous Windows, `Ctrl+P` reste au shell (commande précédente ; voir *Raccourcis*). Il en va de même dans la vue d'une commande de lancement tant qu'elle tourne (elle prend le clavier, voir *Barre latérale › Lancement*) ; une fois la commande terminée, son journal est en lecture seule et `Ctrl+P` y ouvre la palette.
 
 ## Limites
 

@@ -215,12 +215,22 @@ pub(crate) fn store_for(data: &DataDir) -> Arc<dyn SecretStore> {
 /// former account of the service left goes; false when it stays (to forget at the next start,
 /// `Accounts::to_forget`).
 pub(crate) fn place(store: &dyn SecretStore, service: Service, a: &mut Account) -> bool {
+    place_of(store, service, "", a)
+}
+
+/// `place`, for the account `id` of `service` (`Accounts::account`).
+pub(crate) fn place_of(
+    store: &dyn SecretStore,
+    service: Service,
+    id: &str,
+    a: &mut Account,
+) -> bool {
     let secrets = Secrets::of(a);
     a.in_file = false;
     if secrets.is_empty() {
-        return forget(store, service);
+        return forget_account(store, service, id, "");
     }
-    if let Err(e) = keep(store, service, a, &secrets) {
+    if let Err(e) = keep(store, service, id, a, &secrets) {
         log::warn!(
             "{}: secrets left in integrations.json, the system keychain refused them: {e:#}",
             service.label()
@@ -233,10 +243,21 @@ pub(crate) fn place(store: &dyn SecretStore, service: Service, a: &mut Account) 
 /// Puts `secrets` under the account's plugin's name (`plugins::accounts`), and under the
 /// service's former entry when Escouade's own hand serves it (a version from before reads it),
 /// then reads them back: Ok once the store gives them as they were given.
-fn keep(store: &dyn SecretStore, service: Service, a: &Account, secrets: &Secrets) -> Result<()> {
+fn keep(
+    store: &dyn SecretStore,
+    service: Service,
+    id: &str,
+    a: &Account,
+    secrets: &Secrets,
+) -> Result<()> {
     let text = serde_json::to_string(secrets)?;
-    keep_secret(store, &accounts::source_vault_name(service, a), &text)?;
-    if accounts::is_first_hand(&a.plugin) {
+    keep_secret(
+        store,
+        &accounts::source_vault_name_of(service, id, a),
+        &text,
+    )?;
+    // The former entry is the first account's only: a version from before knows no other.
+    if super::is_first(service, id) && accounts::is_first_hand(&a.plugin) {
         keep_secret(store, &entry(service), &text)?;
     }
     Ok(())
@@ -273,6 +294,44 @@ pub(crate) fn forget_of(store: &dyn SecretStore, service: Service, plugin: &str)
             "{}: the system keychain did not forget its secrets: {e:#}",
             service.label()
         );
+        return false;
+    }
+    true
+}
+
+/// The keychain's names of the secrets of the account `id` of `service` after its first
+/// (Escouade's own hand's, and `plugin`'s).
+pub(crate) fn names_of_more(service: Service, id: &str, plugin: &str) -> Vec<String> {
+    let other = Account {
+        plugin: plugin.to_string(),
+        ..Account::default()
+    };
+    let mut names = vec![
+        accounts::source_vault_name_of(service, id, &Account::default()),
+        accounts::source_vault_name_of(service, id, &other),
+    ];
+    names.dedup();
+    names
+}
+
+/// `forget_of`, for the account `id` of `service`: the first one's under all its names, another
+/// one's under its own.
+pub(crate) fn forget_account(
+    store: &dyn SecretStore,
+    service: Service,
+    id: &str,
+    plugin: &str,
+) -> bool {
+    if super::is_first(service, id) {
+        return forget_of(store, service, plugin);
+    }
+    forget_names(store, &names_of_more(service, id, plugin))
+}
+
+/// The entries `names` leave the store; false when they could not (logged).
+pub(crate) fn forget_names(store: &dyn SecretStore, names: &[String]) -> bool {
+    if let Err(e) = names.iter().try_for_each(|n| store.delete(n)) {
+        log::warn!("the system keychain did not forget an account's secrets: {e:#}");
         return false;
     }
     true
@@ -317,9 +376,10 @@ pub(crate) fn through_gh(service: Service, a: &Account) -> bool {
 /// The account's secrets, from the store. Missing (out of reach, refused, the entry gone or
 /// unreadable), the account says so (`Account::unread`): a call without them would be refused,
 /// or for GitHub go out with the CLI's token, as whoever it is logged in as.
-fn fill(store: &dyn SecretStore, service: Service, a: &mut Account) {
-    let former = accounts::is_first_hand(&a.plugin).then(|| entry(service));
-    let name = accounts::source_vault_name(service, a);
+fn fill(store: &dyn SecretStore, service: Service, id: &str, a: &mut Account) {
+    let former = (super::is_first(service, id) && accounts::is_first_hand(&a.plugin))
+        .then(|| entry(service));
+    let name = accounts::source_vault_name_of(service, id, a);
     match read_entry(store, former.as_deref(), &name, service.label()) {
         Ok(Some(text)) => match serde_json::from_str::<Secrets>(&text) {
             Ok(s) => {
@@ -349,22 +409,32 @@ fn fill(store: &dyn SecretStore, service: Service, a: &mut Account) {
 /// written again after a broken one, or by another version, would cost the others their tokens.
 pub(crate) fn load_accounts(data: &DataDir, store: &dyn SecretStore, file_copy: bool) -> Accounts {
     let path = data.integrations_file();
-    let none = || Accounts {
-        file_copy,
-        ..Default::default()
+    let more = load_more(data, store);
+    let none = |more: super::MoreAccounts| {
+        let mut a = Accounts {
+            file_copy,
+            more,
+            ..Default::default()
+        };
+        // The accounts after the first are apart: they keep their secrets (ESC-397).
+        for m in &mut a.more.accounts {
+            fill(store, m.service, &m.id, &mut m.account);
+        }
+        a
     };
     let Ok(text) = std::fs::read_to_string(&path) else {
-        return none();
+        return none(more);
     };
     let mut accounts: Accounts = match serde_json::from_str(&text) {
         Ok(a) => a,
         Err(e) => {
             log::error!("invalid {}: {e}", path.display());
             let _ = std::fs::copy(&path, path.with_extension("broken.json"));
-            return none();
+            return none(more);
         }
     };
     accounts.file_copy = file_copy;
+    accounts.more = more;
     let pending = std::mem::take(&mut accounts.to_forget);
     for &service in &pending {
         let done = match accounts.get(service) {
@@ -387,7 +457,15 @@ pub(crate) fn load_accounts(data: &DataDir, store: &dyn SecretStore, file_copy: 
             }
             // The CLI's token: an entry a former account left is never read.
             Some(a) if through_gh(service, a) => {}
-            Some(a) => fill(store, service, a),
+            Some(a) => fill(store, service, "", a),
+        }
+    }
+    for m in &mut accounts.more.accounts {
+        if !Secrets::of(&m.account).is_empty() {
+            place_of(store, m.service, &m.id, &mut m.account);
+            moved |= !m.account.in_file;
+        } else {
+            fill(store, m.service, &m.id, &mut m.account);
         }
     }
     let forges = crate::forge::accounts::load(store, &mut accounts);
@@ -422,7 +500,53 @@ pub(crate) fn save_accounts(data: &DataDir, accounts: &Accounts) -> Result<()> {
     let bytes = serde_json::to_vec_pretty(&saved)?;
     paths::write_private(&data.integrations_file(), &bytes)
         .with_context(|| saving_accounts(crate::i18n::ui()))?;
-    Ok(())
+    save_more(data, &accounts.more, accounts.file_copy)
+}
+
+/// Writes the accounts after the first of each service to `ticket-accounts.json`, without the
+/// secrets the store holds; nothing while there are none and the file is not there.
+fn save_more(data: &DataDir, more: &super::MoreAccounts, file_copy: bool) -> Result<()> {
+    let path = data.ticket_accounts_file();
+    if more == &super::MoreAccounts::default() && !path.exists() {
+        return Ok(());
+    }
+    let mut saved = more.clone();
+    for m in &mut saved.accounts {
+        if !m.account.in_file && !file_copy {
+            m.account.key.clear();
+            m.account.token.clear();
+        }
+    }
+    let bytes = serde_json::to_vec_pretty(&saved)?;
+    paths::write_private(&path, &bytes).with_context(|| saving_accounts(crate::i18n::ui()))
+}
+
+/// The accounts after the first of each service (`ticket-accounts.json`; none when it is missing
+/// or unreadable: logged, set aside), a service this version does not know left out. The entries
+/// a « Déconnecter » could not delete go, unless an account has them again.
+fn load_more(data: &DataDir, store: &dyn SecretStore) -> super::MoreAccounts {
+    let path = data.ticket_accounts_file();
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return Default::default();
+    };
+    let mut more: super::MoreAccounts = match serde_json::from_str(&text) {
+        Ok(m) => m,
+        Err(e) => {
+            log::error!("invalid {}: {e}", path.display());
+            let _ = std::fs::copy(&path, path.with_extension("broken.json"));
+            return Default::default();
+        }
+    };
+    more.accounts
+        .retain(|m| source::registry().get(m.service).is_some() && !m.id.is_empty());
+    let mine: Vec<String> = more
+        .accounts
+        .iter()
+        .flat_map(|m| names_of_more(m.service, &m.id, &m.account.plugin))
+        .collect();
+    more.to_forget
+        .retain(|n| !mine.contains(n) && !forget_names(store, std::slice::from_ref(n)));
+    more
 }
 
 /// The keychain's entry of the MCP server's token for Claude outside Escouade (« Claude et les

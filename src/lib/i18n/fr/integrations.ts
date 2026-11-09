@@ -51,6 +51,9 @@ export default {
     servedByPlugin: 'Servi par le plugin {plugin}',
     disconnect: 'Déconnecter',
     connectEllipsis: 'Connecter…',
+    // ESC-397: several accounts per source, each disconnected alone.
+    connectAnother: 'Connecter un compte…',
+    disconnectOne: 'Déconnecter {label}',
     connect: 'Connecter',
     checking: 'Vérification…',
     formLabel: 'Connexion à {service}',
@@ -116,6 +119,12 @@ export default {
     title: 'Sources liées à {project}',
     connectFirst: 'Connecte un compte dans Services connectés pour lier une source à ce projet.',
     openServices: 'Ouvrir Services connectés',
+    // The account of its service that serves a source (ESC-397).
+    account: 'Compte',
+    accountOf: 'Compte {service}',
+    paused:
+      'Le compte de cette source est déconnecté : elle est en pause (ni import ni synchro), ses réglages sont gardés. Choisis un autre compte, ou reconnecte-le dans Services connectés.',
+    gone: 'Compte déconnecté',
     none: 'Aucun',
     // The choice of the source, by service: its container, then the service.
     pick: {

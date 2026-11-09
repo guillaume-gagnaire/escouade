@@ -15,6 +15,8 @@
   import { watchPresence } from './lib/presence';
   import { createWarmer } from './lib/warm';
   import { offerClaudeMemory } from './lib/memory';
+  import { hasTab } from './lib/code-host';
+  import { WATCH_TICK_MS } from './lib/prnew';
   import Board from './components/board/Board.svelte';
   import PrsView from './components/prs/PrsView.svelte';
   import DocsView from './components/docs/DocsView.svelte';
@@ -128,6 +130,19 @@
   $effect(() => {
     const id = app.ui.view === 'project' ? app.ui.activeProject : null;
     if (app.ready && !app.modal && id) untrack(() => void offerClaudeMemory(id));
+  });
+
+  // The PR tab's badge (ESC-403): the list of the project on screen read in the background, window visible, the
+  // backend choosing when (two minutes after any reading, longer after a failure). Nothing is said of a failure.
+  $effect(() => {
+    const id = app.ready && app.ui.view === 'project' ? app.ui.activeProject : null;
+    if (!id || !hasTab(app.codeHosts[id], 'pullRequests')) return;
+    const watch = () => {
+      if (document.visibilityState === 'visible') api.projectPrsWatch(id).catch(() => {});
+    };
+    watch();
+    const timer = setInterval(watch, WATCH_TICK_MS);
+    return () => clearInterval(timer);
   });
 
   const warmSelected = createWarmer((id) => api.warmAgent(id).catch(() => {}));
@@ -299,7 +314,13 @@
 {:else if app.modal?.kind === 'rename'}
   <RenameModal title={app.modal.title} value={app.modal.value} onSubmit={app.modal.onSubmit} />
 {:else if app.modal?.kind === 'account'}
-  <AccountModal accountId={app.modal.accountId} back={app.modal.back} engine={app.modal.engine} reserveFor={app.modal.reserveFor} />
+  <AccountModal
+    accountId={app.modal.accountId}
+    back={app.modal.back}
+    engine={app.modal.engine}
+    reserveFor={app.modal.reserveFor}
+    forAgent={app.modal.forAgent}
+  />
 {:else if app.modal?.kind === 'testLaunch'}
   <TestLaunchModal agentId={app.modal.agentId} />
 {:else if app.modal?.kind === 'import'}

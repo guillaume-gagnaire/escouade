@@ -2,8 +2,8 @@
 title: "Écran partagé"
 subject: "fenetre"
 sources: ["docs/SPLIT.md","design/split-view/index.html"]
-tickets: ["ESC-392"]
-decisions: [128]
+tickets: ["ESC-392","ESC-399"]
+decisions: [128,134]
 compared: null
 ---
 
@@ -50,7 +50,16 @@ Tout agent montré dans un volet, fenêtre au premier plan, est **vu** : il ne c
 
 ## Ce qui est retenu
 
-La disposition (l'arbre des volets, sens, parts, contenus, volet actif) est retenue **par projet** avec l'état de l'interface et revient au redémarrage. Un contenu qui n'existe plus (agent archivé ou supprimé, terminal fermé ou arrêté par la fermeture de l'app, lancement retiré) quitte son volet ; les autres prennent la place, et le dernier restant occupe seul la zone de travail.
+La disposition (l'arbre des volets, sens, parts, contenus, volet actif) est retenue **par projet** avec l'état de l'interface et revient au redémarrage.
+
+## Quand un contenu s'en va
+
+Un contenu qui s'en va ne défait pas la disposition (ESC-399) :
+
+- **Un agent archivé ou supprimé** — depuis son menu, le Kanban (ticket validé), le serveur MCP ou un autre écran, que son projet soit affiché ou non — : son volet prend l'agent que l'app montrerait seul à sa place, le premier agent non archivé du projet (par date de création) qui n'est pas déjà dans un volet, à la même place et avec la même part. Il devient actif si l'agent parti l'était.
+- **Sans autre agent à montrer**, ou pour **un terminal fermé** ou **un lancement retiré**, le volet se ferme : son voisin prend sa place (et le volet actif, s'il l'était). Les autres volets gardent leur place et leurs parts.
+- Le **dernier volet restant** occupe seul la zone de travail, et c'est lui qu'on voit (le terminal, par exemple), pas un écran vide ni l'agent archivé.
+- Seuls les contenus partis s'en vont : un terminal du projet reste quand un agent est archivé.
 
 ## Ailleurs
 

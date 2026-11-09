@@ -713,7 +713,7 @@ impl<R: Runtime> Core<R> {
         self.forge_health.lock().remove(&host);
         self.forge_cli_tokens.lock().remove(&host);
         if host == GITHUB_COM {
-            self.integration_disconnect(Service::GITHUB)?;
+            self.integration_disconnect(Service::GITHUB, "")?;
             return Ok(self.forges_view().await);
         }
         let (had, kind, plugin) = self

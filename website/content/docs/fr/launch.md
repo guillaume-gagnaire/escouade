@@ -1,6 +1,6 @@
 # Lancer le projet
 
-Les commandes de lancement démarrent les processus dont tu as besoin pour développer un projet (serveur, API, base de données, worker…), chacun dans son propre terminal en lecture seule. Cette page explique comment les définir, les lancer, suivre leur état et laisser Claude les proposer.
+Les commandes de lancement démarrent les processus dont tu as besoin pour développer un projet (serveur, API, base de données, worker…), chacun dans son propre terminal. Cette page explique comment les définir, les lancer, suivre leur état et laisser Claude les proposer.
 
 ![La section Lancement de la barre latérale, avec trois commandes dont une plantée, et le log du serveur de développement](/images/launch.jpg)
 
@@ -8,7 +8,7 @@ Les commandes de lancement démarrent les processus dont tu as besoin pour déve
 
 Une commande de lancement est une ligne de commande que tu relances souvent en développant : le serveur du front, l’API, une base locale, un worker. Elle est rangée avec le projet. Elle tourne dans son propre terminal, dont le log reste d’un lancement à l’autre, et tu la lances, la stoppes ou la relances d’un clic, seule ou avec les autres.
 
-Ce n’est pas un [terminal](terminals) ordinaire : le log est en lecture seule, et Escouade suit le processus pour dire s’il tourne, s’il s’est arrêté ou s’il a planté.
+Ce n’est pas un [terminal](terminals) ordinaire : son log reste d’un lancement à l’autre, il ne prend le clavier que tant que le processus tourne, et Escouade suit le processus pour dire s’il tourne, s’il s’est arrêté ou s’il a planté.
 
 ## Définir les commandes
 
@@ -53,7 +53,7 @@ Quand une commande ne démarre pas, un message le dit (« « Front » n’a p
 Le log d’une commande occupe la zone principale quand tu cliques sa ligne. L’en-tête donne son nom, son shell, son état (« en cours », « depuis 14:02 »), la ligne de commande et le dossier où elle tourne. À droite : la loupe, « Effacer » et les boutons d’action, qui suivent l’état : « Relancer » et « Stopper » pendant qu’elle tourne, « Relancer » une fois finie, « Lancer » quand elle n’a jamais tourné (le log dit « Pas encore lancée. »).
 
 - Le log commence par la ligne de commande (`$ npm run dev`). Le programme écrit ensuite ce qu’il veut, couleurs comprises. Il garde 10 000 lignes.
-- Le log est en lecture seule : on le fait défiler (molette, `Maj+PageUp`) et on y cherche, mais les touches ne vont pas au processus. Le processus suit la taille de la fenêtre. Comme dans un terminal, une adresse `http://` ou `https://` du log s’ouvre dans le navigateur d’un simple clic.
+- Tant que la commande tourne, sa vue est un terminal : ce que tu tapes ou colles va au processus (une réponse à « Ok to proceed? », les touches `h`, `r` ou `q` d’un serveur de dev), et `Ctrl+C` l’interrompt quand rien n’est sélectionné (avec une sélection, il la copie) : elle passe alors à « arrêté », comme avec « Stopper ». Les raccourcis d’Escouade y marchent comme dans un terminal de la barre latérale, et dans l’écran partagé seul le volet entouré reçoit le clavier. Une fois la commande terminée, le log redevient en lecture seule : on le fait défiler (molette, `Maj+PageUp`) et on y cherche ; la relancer lui rend le clavier. Le processus suit la taille de la fenêtre. Comme dans un terminal, une adresse `http://` ou `https://` du log s’ouvre dans le navigateur d’un simple clic.
 - Il reste d’un lancement à l’autre : une relance ajoute « — relancé à 14:32 — » à la suite. Il disparaît quand la commande est retirée des réglages ou quand le projet est fermé.
 - La loupe, ou `Ctrl+Maj+F` (`⇧⌘F` sous macOS) dans le log, ouvre un champ de recherche : `Entrée` va à l’occurrence suivante, `Maj+Entrée` à la précédente, `Échap` ferme le champ. « Effacer » vide l’écran du log.
 

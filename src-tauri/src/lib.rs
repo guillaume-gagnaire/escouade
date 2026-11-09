@@ -252,6 +252,8 @@ mod terminal_tests;
 mod test_tmp;
 mod testlaunch;
 mod text;
+#[cfg(test)]
+mod ticket_accounts_tests;
 mod ticketfiles;
 mod ticketimages;
 mod ticketprs;
@@ -812,6 +814,8 @@ pub fn run() {
                 commands::set_agent_options,
                 commands::set_agent_account,
                 commands::resume_on_account,
+                commands::agent_signed_in,
+                commands::agent_logout,
                 commands::continue_on_engine,
                 commands::back_to_previous_account,
                 commands::rename_agent,
@@ -851,6 +855,7 @@ pub fn run() {
                 commands::project_prs,
                 commands::project_code_host,
                 commands::overview_prs,
+                commands::project_prs_watch,
                 commands::pr_reviews,
                 commands::pr_review_start,
                 commands::pr_review_note,

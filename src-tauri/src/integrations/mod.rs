@@ -43,6 +43,11 @@ pub struct Accounts {
     /// token of its own again. Their names only, never a secret.
     #[serde(deserialize_with = "known_services")]
     pub to_forget: Vec<Service>,
+    /// The sources' accounts after the first of each service (ESC-397), kept in
+    /// `ticket-accounts.json` (`secrets::save_accounts`): a version from before, which writes
+    /// `integrations.json` again without what it does not know, leaves them as they are.
+    #[serde(skip)]
+    pub more: MoreAccounts,
     /// `plugins::accounts::VAULT` once the secrets are also under the plugins' names
     /// (`plugin:<id>:account:<account>`, INT-6); 0 (left out) while they are under the former
     /// ones only. A version from before ignores it, and finds its entries as they were.
@@ -90,6 +95,66 @@ impl Accounts {
         }
     }
 
+    /// The account `id` of `s` (`is_first`: its first one, in its own field).
+    pub fn account(&self, s: Service, id: &str) -> Option<&Account> {
+        if is_first(s, id) {
+            return self.get(s);
+        }
+        self.more
+            .accounts
+            .iter()
+            .find(|a| a.service == s && a.id == id)
+            .map(|a| &a.account)
+    }
+
+    /// The accounts of `s` with their ids, its first one first.
+    pub fn list(&self, s: Service) -> Vec<(String, &Account)> {
+        let first = self.get(s).map(|a| (s.as_str().to_string(), a));
+        first
+            .into_iter()
+            .chain(
+                self.more
+                    .accounts
+                    .iter()
+                    .filter(|a| a.service == s)
+                    .map(|a| (a.id.clone(), &a.account)),
+            )
+            .collect()
+    }
+
+    /// The account `id` of `s` is `a` now (none: it goes).
+    pub fn put(&mut self, s: Service, id: &str, a: Option<Account>) {
+        if is_first(s, id) {
+            return self.set(s, a);
+        }
+        match (
+            self.more
+                .accounts
+                .iter()
+                .position(|m| m.service == s && m.id == id),
+            a,
+        ) {
+            (Some(i), Some(a)) => self.more.accounts[i].account = a,
+            (Some(i), None) => {
+                self.more.accounts.remove(i);
+            }
+            (None, Some(a)) => self.more.accounts.push(SourceAccount {
+                id: id.to_string(),
+                service: s,
+                account: a,
+            }),
+            (None, None) => {}
+        }
+    }
+
+    /// The account of `s` that is the same as `a` (`same_account`): its id.
+    pub fn same_as(&self, s: Service, a: &Account) -> Option<String> {
+        self.list(s)
+            .into_iter()
+            .find(|(_, b)| same_account(s, a, b))
+            .map(|(id, _)| id)
+    }
+
     /// The GitLab code host's accounts, one per instance: GitLab Issues' too.
     pub fn gitlab_accounts(&self) -> Vec<&crate::forge::accounts::ForgeAccount> {
         self.hosted_accounts(Service::GITLAB)
@@ -108,34 +173,46 @@ impl Accounts {
     pub fn connected(&self, s: Service) -> bool {
         match hosted_kind(s) {
             Some(_) => !self.hosted_accounts(s).is_empty(),
-            None => self.get(s).is_some(),
+            None => !self.list(s).is_empty(),
         }
     }
 
-    /// What the window knows of them.
+    /// What the window knows of them: each account of a source (several per service, ESC-397),
+    /// or one line not connected for a source without any.
     pub fn views(&self) -> Vec<AccountView> {
-        source::registry()
-            .services()
-            .iter()
-            .map(|&service| match hosted_kind(service) {
-                Some(_) => self.hosted_view(service),
-                None => AccountView {
+        let mut views = Vec::new();
+        for service in source::registry().services() {
+            if hosted_kind(service).is_some() {
+                views.push(self.hosted_view(service));
+                continue;
+            }
+            let list = self.list(service);
+            if list.is_empty() {
+                views.push(AccountView {
                     service,
-                    connected: self.get(service).is_some(),
-                    label: self
-                        .get(service)
-                        .map(|a| a.label.clone())
-                        .unwrap_or_default(),
-                    in_file: self.get(service).is_some_and(|a| a.in_file),
-                    unread: self.get(service).is_some_and(|a| a.unread),
-                    plugin: self
-                        .get(service)
-                        .map(|a| a.plugin.clone())
-                        .unwrap_or_default(),
+                    id: String::new(),
+                    connected: false,
+                    label: String::new(),
+                    in_file: false,
+                    unread: false,
+                    plugin: String::new(),
                     servers: Vec::new(),
-                },
-            })
-            .collect()
+                });
+            }
+            for (id, a) in list {
+                views.push(AccountView {
+                    service,
+                    id,
+                    connected: true,
+                    label: a.label.clone(),
+                    in_file: a.in_file,
+                    unread: a.unread,
+                    plugin: a.plugin.clone(),
+                    servers: Vec::new(),
+                });
+            }
+        }
+        views
     }
 
     /// GitLab Issues' and Azure Boards' view: their code host's accounts, their instance named
@@ -157,6 +234,7 @@ impl Accounts {
             .join(", ");
         AccountView {
             service,
+            id: String::new(),
             connected: !list.is_empty(),
             label,
             in_file: list.iter().any(|a| a.in_file),
@@ -169,6 +247,62 @@ impl Accounts {
 
 fn is_zero(n: &u32) -> bool {
     *n == 0
+}
+
+/// `id` names the first account of `s`, the one in its own field of `integrations.json`: empty
+/// (a link or a ticket from before ESC-397), or the service's own name.
+pub fn is_first(s: Service, id: &str) -> bool {
+    id.is_empty() || id == s.as_str()
+}
+
+/// `a` and `b` name the same account of `s` (empty and the service's name are its first).
+pub fn same_id(s: Service, a: &str, b: &str) -> bool {
+    (is_first(s, a) && is_first(s, b)) || a == b
+}
+
+/// The sources' accounts after the first of each service (`ticket-accounts.json`).
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MoreAccounts {
+    pub accounts: Vec<SourceAccount>,
+    /// The keychain's names of their secrets that a « Déconnecter » could not delete: deleted at
+    /// the next start (`Accounts::to_forget` for these accounts).
+    pub to_forget: Vec<String>,
+}
+
+/// A source's account after its first: its id (`<service>-<8 hex>`, never given again) and its
+/// account.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SourceAccount {
+    pub id: String,
+    pub service: Service,
+    #[serde(flatten)]
+    pub account: Account,
+}
+
+/// The id of a new account of `s` after its first: never one an account had, so that a link to a
+/// disconnected account never goes to another one.
+pub fn new_account_id(s: Service) -> String {
+    let n = uuid::Uuid::new_v4().simple().to_string();
+    format!("{}-{}", s.as_str(), &n[..8])
+}
+
+/// `a` and `b` are the same account of `s`: on the same Jira site with the same e-mail; for the
+/// others, the same user for the service (else the same label).
+pub fn same_account(s: Service, a: &Account, b: &Account) -> bool {
+    let eq = |x: &str, y: &str| !x.is_empty() && x.trim().eq_ignore_ascii_case(y.trim());
+    if s == Service::JIRA {
+        return eq(a.site.trim_end_matches('/'), b.site.trim_end_matches('/'))
+            && eq(&a.email, &b.email);
+    }
+    if a.plugin != b.plugin {
+        return false;
+    }
+    if !a.user.is_empty() || !b.user.is_empty() {
+        return eq(&a.user, &b.user);
+    }
+    eq(&a.label, &b.label)
 }
 
 /// The code host whose accounts are a source's own: GitLab Issues', Azure Boards'.
@@ -230,6 +364,9 @@ pub(crate) const VIA_GH: &str = " · via gh";
 #[serde(rename_all = "camelCase")]
 pub struct AccountView {
     pub service: Service,
+    /// The account's id among its service's (`SourceLink::account`); empty for a source without
+    /// any, and for GitLab Issues and Azure Boards (their code host's accounts).
+    pub id: String,
     pub connected: bool,
     pub label: String,
     /// Its token stays in `integrations.json`: the system's keychain refused it.

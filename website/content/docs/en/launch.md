@@ -1,6 +1,6 @@
 # Running the project
 
-Launch commands start the processes you need to develop a project (server, API, database, worker…), each in its own read-only terminal. This page explains how to define them, run them, follow their state and let Claude suggest them.
+Launch commands start the processes you need to develop a project (server, API, database, worker…), each in its own terminal. This page explains how to define them, run them, follow their state and let Claude suggest them.
 
 ![The sidebar’s Launch section, with three commands, one of them crashed, and the log of the development server](/images/en/launch.jpg)
 
@@ -8,7 +8,7 @@ Launch commands start the processes you need to develop a project (server, API, 
 
 A launch command is a command line you often rerun while developing: the front-end server, the API, a local database, a worker. It is stored with the project. It runs in its own terminal, whose log stays from one run to the next, and you run, stop or restart it in a click, alone or with the others.
 
-It isn’t an ordinary [terminal](terminals): the log is read-only, and Escouade follows the process to say whether it is running, has stopped or has crashed.
+It isn’t an ordinary [terminal](terminals): its log stays from one run to the next, it takes the keyboard only while the process runs, and Escouade follows the process to say whether it is running, has stopped or has crashed.
 
 ## Defining the commands
 
@@ -53,7 +53,7 @@ When a command doesn’t start, a message says so (““Front” couldn’t sta
 A command’s log fills the main area when you click its row. The header gives its name, its shell, its state (“running”, “since 14:02”), the command line and the folder it runs in. On the right: the magnifier, “Clear” and the action buttons, which follow the state: “Restart” and “Stop” while it runs, “Restart” once it has finished, “Run” when it has never run (the log then says “Not run yet.”).
 
 - The log starts with the command line (`$ npm run dev`). The program then writes whatever it wants, colors included. It keeps 10,000 lines.
-- The log is read-only: you scroll it (mouse wheel, `Shift+PageUp`) and search in it, but keys don’t go to the process. The process follows the window’s size. As in a terminal, an `http://` or `https://` address in the log opens in the browser with a plain click.
+- While the command runs, its view is a terminal: what you type or paste goes to the process (an answer to “Ok to proceed?”, a dev server’s `h`, `r` or `q` keys), and `Ctrl+C` interrupts it when nothing is selected (with a selection, it copies it): it then shows “stopped”, as with “Stop”. Escouade’s shortcuts work there as in a terminal of the sidebar, and in the split screen only the ringed pane takes the keyboard. Once the command has ended, the log is read-only again: you scroll it (mouse wheel, `Shift+PageUp`) and search in it; running it again gives it the keyboard back. The process follows the window’s size. As in a terminal, an `http://` or `https://` address in the log opens in the browser with a plain click.
 - It stays from one run to the next: a restart adds “— restarted at 14:32 —” after it. It disappears when the command is removed from the settings or when the project is closed.
 - The magnifier, or `Ctrl+Shift+F` (`⇧⌘F` on macOS) in the log, opens a search field: `Enter` goes to the next match, `Shift+Enter` to the previous one, `Esc` closes the field. “Clear” empties the log’s screen.
 

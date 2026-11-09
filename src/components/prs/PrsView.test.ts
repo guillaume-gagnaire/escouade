@@ -63,8 +63,18 @@ describe('the « Pull requests » view (ESC-65)', () => {
     });
     render(PrsView, { project: project() });
     const rows = await screen.findAllByRole('listitem');
-    await userEvent.click(within(rows[2]).getByRole('button', { name: 'Ouvrir dans le navigateur' }));
+    const browser = within(rows[2]).getByRole('button', { name: 'Ouvrir dans le navigateur' });
+    await userEvent.click(browser);
     expect(openUrl).toHaveBeenCalledWith('https://github.com/acme/demo/pull/10');
+    // By Entrée too, and a refusal said with its reason (ESC-402).
+    browser.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(openUrl).toHaveBeenCalledTimes(2);
+    openUrl.mockImplementationOnce(() => Promise.reject('aucun navigateur'));
+    await userEvent.click(browser);
+    await waitFor(() =>
+      expect(app.toasts.at(-1)).toMatchObject({ text: 'La PR #10 ne s’ouvre pas dans le navigateur : aucun navigateur', kind: 'error' }),
+    );
 
     await userEvent.click(within(rows[2]).getByRole('button', { name: 'Lancer un agent' }));
     await waitFor(() => expect(backend.called('create_agent_on_pr').map((c) => c.args)).toEqual([{ projectId: 'p1', number: 10 }]));
@@ -77,6 +87,23 @@ describe('the « Pull requests » view (ESC-65)', () => {
     main.focus();
     await userEvent.keyboard('{ArrowDown}{Enter}');
     await waitFor(() => expect(backend.called('create_agent_on_pr').at(-1)?.args).toEqual({ projectId: 'p1', number: 11 }));
+  });
+
+  it('once on screen, sets the tab’s badge back to zero and marks the new ones until the next opening (ESC-403)', async () => {
+    fakeBackend({ project_prs: () => ({ data: { word: 'PR', prs: PRS, me: 'ada' } }) });
+    app.ui.prSeen = { p1: { mark: 10, open: [10, 11, 12], own: [], fresh: [] } };
+    expect(app.prsNew('p1')).toBe(2);
+    const view = render(PrsView, { project: project() });
+    const rows = await screen.findAllByRole('listitem');
+    expect(app.prsNew('p1')).toBe(0);
+    expect(within(rows[0]).getByText('Nouvelle')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('Nouvelle')).toBeInTheDocument();
+    expect(within(rows[2]).queryByText('Nouvelle')).toBeNull();
+    view.unmount();
+
+    render(PrsView, { project: project() });
+    await screen.findAllByRole('listitem');
+    expect(screen.queryByText('Nouvelle')).toBeNull();
   });
 
   it('opens the agent already on a pull request instead of starting another', async () => {

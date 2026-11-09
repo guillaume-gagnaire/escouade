@@ -3,7 +3,7 @@
   import { trapFocus } from '../../lib/focus';
   import { fInt } from '../../lib/format';
   import { t } from '../../lib/i18n';
-  import { HOSTED, importedLabel, issueKey, linkSource, SERVICE_IDS, SERVICES } from '../../lib/integrations';
+  import { HOSTED, importedLabel, issueKey, linkServed, linkSource, SERVICE_IDS, SERVICES } from '../../lib/integrations';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
   import type { Container, ExternalIssue, IssuePage, Service } from '../../lib/types';
@@ -15,11 +15,13 @@
   let { projectId }: { projectId: string } = $props();
 
   const project = $derived(app.projects.find((p) => p.id === projectId));
-  /** The linked sources whose account is connected, in the services' order. */
+  /** The linked sources whose account is connected, in the services' order: one whose account was disconnected is
+   *  paused (ESC-397). */
   const sources = $derived(
-    SERVICE_IDS.filter(
-      (id) => project?.integrations.links.some((l) => l.service === id) && app.accounts.find((a) => a.service === id)?.connected,
-    ),
+    SERVICE_IDS.filter((id) => {
+      const l = project?.integrations.links.find((x) => x.service === id);
+      return !!l && linkServed(app.accounts, l);
+    }),
   );
   let chosen = $state<Service | null>(null);
   const current = $derived(chosen && sources.includes(chosen) ? chosen : (sources[0] ?? null));

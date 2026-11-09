@@ -280,6 +280,10 @@ impl Engine for Codex {
         }
     }
 
+    fn logout_args(&self) -> &'static [&'static str] {
+        &["logout"]
+    }
+
     /// The sign-in of its folder (`auth.json`), and the email it names.
     fn account_status<'a>(
         &'a self,

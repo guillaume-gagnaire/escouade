@@ -353,6 +353,7 @@ fn external_of(i: &ExternalIssue) -> ExternalRef {
         container: i.container.clone(),
         url: i.url.clone(),
         error: None,
+        account: String::new(),
     }
 }
 
@@ -400,9 +401,28 @@ fn sources(lang: Lang, tickets: &[Ticket]) -> String {
 }
 
 /// Under what the secret of `service`'s account is lent to its plugin.
-fn lent_key(service: Service) -> String {
-    let account = crate::plugins::accounts::source_account(service);
+fn lent_key(service: Service, id: &str) -> String {
+    let account = crate::plugins::accounts::source_account_of(service, id);
     format!("account:{account}")
+}
+
+/// The version of a plugin of the first hand from which it serves an account after the first
+/// (it reads the secret the call names, `account.name`, ESC-397).
+const SEVERAL_ACCOUNTS_SINCE: &str = "2.2.4";
+
+/// "No account": the account a source of a project is linked to was disconnected.
+fn no_account(service: Service, id: &str) -> anyhow::Error {
+    let name = service.label();
+    if is_first(service, id) {
+        return anyhow!(tr!(
+            "Aucun compte {name} connecté",
+            "No {name} account connected"
+        ));
+    }
+    anyhow!(tr!(
+        "Le compte {name} de cette source est déconnecté : choisis-en un autre dans les Tickets importés du projet, ou reconnecte-le.",
+        "The {name} account of this source was disconnected: choose another one in the project’s Imported tickets, or connect it again."
+    ))
 }
 
 /// GitLab Issues and Azure Boards have no account of their own: their code host's serves.
@@ -467,9 +487,12 @@ impl<R: Runtime> Core<R> {
     async fn client_for(
         &self,
         service: Service,
+        id: &str,
         account: &Account,
         trial: Option<&Trial>,
     ) -> Result<Box<dyn TicketSource>> {
+        // An account after the first is named in each call: its plugin reads its secret by it.
+        let name = (!is_first(service, id)).then(|| id.to_string());
         if !account.plugin.is_empty() {
             // Another plugin than Escouade's own hand serves it.
             return Ok(Box::new(
@@ -478,7 +501,8 @@ impl<R: Runtime> Core<R> {
                     &account.plugin,
                     service.as_str(),
                     account,
-                ),
+                )
+                .named(name.as_deref()),
             ));
         }
         let mut account = account.clone();
@@ -490,6 +514,9 @@ impl<R: Runtime> Core<R> {
             // Out of the core (GitHub Issues, Trello, Linear, Jira): its plugin serves it, its secret lent as the core
             // holds it (Trello's is the key and the token), on github.com's account for GitHub.
             let host = crate::plugins::accounts::source_account(service);
+            if name.is_some() {
+                self.serves_several_accounts(own, service)?;
+            }
             let (secret, api) = match service {
                 Service::TRELLO => (
                     serde_json::json!({ "key": account.key, "token": account.token }).to_string(),
@@ -501,13 +528,13 @@ impl<R: Runtime> Core<R> {
                 Service::CLICKUP => (account.token.clone(), Some(&bases.clickup)),
                 _ => (account.token.clone(), Some(&bases.github)),
             };
-            let key = format!("account:{host}");
+            let key = lent_key(service, id);
             match trial {
                 Some(t) => t.lend(own, &key, &secret, &crate::forge::host_of(&account.site)),
                 // Under the lock its removal takes: no loan comes after `take_back`.
                 None => {
                     let accounts = self.accounts.read();
-                    if accounts.get(service).is_some() {
+                    if accounts.account(service, id).is_some() {
                         self.plugin_runtime.lend(own, &key, &secret);
                     }
                 }
@@ -522,7 +549,8 @@ impl<R: Runtime> Core<R> {
                 own,
                 service.as_str(),
                 &account,
-            );
+            )
+            .named(name.as_deref());
             return Ok(Box::new(match api {
                 Some(api) => source.with_api(api),
                 None => source,
@@ -532,7 +560,34 @@ impl<R: Runtime> Core<R> {
         source::registry().client(service, &account, http, &bases)
     }
 
-    async fn client(&self, service: Service) -> Result<Box<dyn TicketSource>> {
+    /// Refused when `own`, installed in a version from before ESC-397, would serve an account
+    /// after the first with the first one's secret.
+    fn serves_several_accounts(&self, own: &str, service: Service) -> Result<()> {
+        // Given with the app, it is built from the same kit: only one from the store may be older.
+        let Some(version) = self
+            .plugins
+            .get(own, i18n::ui())
+            .filter(|p| !matches!(p.origin, crate::plugins::Origin::Builtin))
+            .map(|p| p.version)
+        else {
+            return Ok(());
+        };
+        let since = semver::Version::parse(SEVERAL_ACCOUNTS_SINCE).expect("a version");
+        match semver::Version::parse(&version) {
+            Ok(v) if v < since => {
+                let name = service.label();
+                bail!(tr!(
+                    "Le plugin {own} {version} ne sert qu'un compte {name} : mets-le à jour ({SEVERAL_ACCOUNTS_SINCE} au moins) dans la vue Plugins pour en servir plusieurs.",
+                    "The plugin {own} {version} serves one {name} account only: update it ({SEVERAL_ACCOUNTS_SINCE} at least) in the Plugins view to serve several."
+                ))
+            }
+            _ => Ok(()),
+        }
+    }
+
+    /// The client of the source `service` for its account `id` (empty: its first one; GitHub
+    /// Issues, GitLab Issues and Azure Boards: their code host's accounts, whatever `id`).
+    async fn client(&self, service: Service, id: &str) -> Result<Box<dyn TicketSource>> {
         if let Some(a) = self.served_by_a_plugin(service) {
             // One connection, every use: the plugin that serves the code host's account serves
             // its source too.
@@ -544,7 +599,7 @@ impl<R: Runtime> Core<R> {
                 plugin: a.plugin.clone(),
                 ..Account::default()
             };
-            return self.client_for(service, &account, None).await;
+            return self.client_for(service, "", &account, None).await;
         }
         if service == Service::GITLAB {
             return self.gitlab_client().await;
@@ -552,13 +607,14 @@ impl<R: Runtime> Core<R> {
         if service == Service::AZURE {
             return self.azure_client().await;
         }
-        let account = self.accounts.read().get(service).cloned().ok_or_else(|| {
-            let name = service.label();
-            anyhow!(tr!(
-                "Aucun compte {name} connecté",
-                "No {name} account connected"
-            ))
-        })?;
+        // GitHub Issues has github.com's account, one.
+        let id = if service == Service::GITHUB { "" } else { id };
+        let account = self
+            .accounts
+            .read()
+            .account(service, id)
+            .cloned()
+            .ok_or_else(|| no_account(service, id))?;
         // Without its secrets, a call would be refused, or for GitHub go out with the CLI's
         // token, as whoever it is logged in as.
         if account.unread {
@@ -568,7 +624,7 @@ impl<R: Runtime> Core<R> {
                 "The system keychain can’t be read: restart Escouade or connect the {name} account again."
             ));
         }
-        self.client_for(service, &account, None).await
+        self.client_for(service, id, &account, None).await
     }
 
     /// The code host's account of a source hosted by it (GitLab Issues, Azure Boards) when
@@ -796,11 +852,17 @@ impl<R: Runtime> Core<R> {
         }
         // A plugin takes the secrets from the keychain itself (`secrets/get`): they are there
         // first, and go if it refuses them.
+        // The account it is (ESC-397): the same one again (Jira: its site and e-mail) is put
+        // right, another one is added.
+        let tried = self.account_id_for(service, &account);
         if !account.plugin.is_empty() {
-            secrets::place(&*self.secrets, service, &mut account);
+            secrets::place_of(&*self.secrets, service, &tried, &mut account);
         }
         let trial = self.plugin_runtime.trial();
-        let asked = match self.client_for(service, &account, Some(&trial)).await {
+        let asked = match self
+            .client_for(service, &tried, &account, Some(&trial))
+            .await
+        {
             Ok(client) => client.me().await,
             Err(e) => Err(e),
         };
@@ -808,7 +870,7 @@ impl<R: Runtime> Core<R> {
             Ok(who) => who,
             Err(e) => {
                 if !account.plugin.is_empty() {
-                    secrets::forget_of(&*self.secrets, service, &account.plugin);
+                    secrets::forget_account(&*self.secrets, service, &tried, &account.plugin);
                 }
                 return Err(e);
             }
@@ -818,47 +880,77 @@ impl<R: Runtime> Core<R> {
         }
         account.label = label;
         account.user = user;
-        let left = !secrets::place(&*self.secrets, service, &mut account);
+        // Now that the service said who it is: the same as an account already there?
+        let id = self
+            .accounts
+            .read()
+            .same_as(service, &account)
+            .unwrap_or_else(|| tried.clone());
+        if id != tried && !account.plugin.is_empty() {
+            secrets::forget_account(&*self.secrets, service, &tried, &account.plugin);
+        }
+        let left = !secrets::place_of(&*self.secrets, service, &id, &mut account);
         {
             let mut accounts = self.accounts.write();
-            // The entry is this account's now: an earlier « Déconnecter » must not take it.
-            accounts.to_forget.retain(|&s| s != service);
-            // Through the CLI, the token of a former account goes at the next start.
-            if left {
-                accounts.to_forget.push(service);
+            if is_first(service, &id) {
+                // The entry is this account's now: an earlier « Déconnecter » must not take it.
+                accounts.to_forget.retain(|&s| s != service);
+                // Through the CLI, the token of a former account goes at the next start.
+                if left {
+                    accounts.to_forget.push(service);
+                }
+            } else {
+                let names = secrets::names_of_more(service, &id, &account.plugin);
+                accounts.more.to_forget.retain(|n| !names.contains(n));
             }
-            accounts.set(service, Some(account));
-            self.plugin_runtime.take_back(&lent_key(service));
-            trial.keep();
+            accounts.put(service, &id, Some(account));
+            self.plugin_runtime.take_back(&lent_key(service, &id));
+            if id == tried {
+                trial.keep();
+            }
         }
         self.save_accounts()?;
         Ok(self
             .integration_accounts()
             .into_iter()
-            .find(|a| a.service == service)
-            .expect("every service has a view"))
+            .find(|a| a.service == service && (a.id == id || service == Service::GITHUB))
+            .expect("every account has a view"))
+    }
+
+    /// The id the account `a` of `service` is tried under: the same one already there (Jira: its
+    /// site and e-mail), else the first one while the service has none, else a new one. GitHub
+    /// Issues has one account, github.com's.
+    fn account_id_for(&self, service: Service, a: &Account) -> String {
+        let accounts = self.accounts.read();
+        if service == Service::GITHUB || accounts.list(service).is_empty() {
+            return service.as_str().to_string();
+        }
+        accounts
+            .same_as(service, a)
+            .unwrap_or_else(|| new_account_id(service))
     }
 
     /// "Déconnecter": the account is forgotten, its secrets with it (the projects keep their links,
     /// unused until one is connected again). An entry the keychain keeps goes at the next start
     /// (`Accounts::to_forget`); the window is told when it held the account's token.
-    pub fn integration_disconnect(&self, service: Service) -> Result<Vec<AccountView>> {
+    pub fn integration_disconnect(&self, service: Service, id: &str) -> Result<Vec<AccountView>> {
         if hosted_kind(service).is_some() {
             bail!(by_its_host(service));
         }
+        let id = if service == Service::GITHUB { "" } else { id };
         // Not for GitHub through the CLI (no token of its own), nor a token the keychain refused
         // (in the file, which is written again without it).
         let (in_keychain, plugin) =
             self.accounts
                 .read()
-                .get(service)
+                .account(service, id)
                 .map_or((false, String::new()), |a| {
                     (
                         !secrets::through_gh(service, a) && !a.in_file,
                         a.plugin.clone(),
                     )
                 });
-        let forgotten = secrets::forget_of(&*self.secrets, service, &plugin);
+        let forgotten = secrets::forget_account(&*self.secrets, service, id, &plugin);
         if !forgotten && in_keychain {
             let name = service.label();
             self.hub.emit(UiEvent::Toast {
@@ -870,11 +962,21 @@ impl<R: Runtime> Core<R> {
         }
         {
             let mut accounts = self.accounts.write();
-            if !forgotten && !accounts.to_forget.contains(&service) {
-                accounts.to_forget.push(service);
+            if !forgotten {
+                if is_first(service, id) {
+                    if !accounts.to_forget.contains(&service) {
+                        accounts.to_forget.push(service);
+                    }
+                } else {
+                    for n in secrets::names_of_more(service, id, &plugin) {
+                        if !accounts.more.to_forget.contains(&n) {
+                            accounts.more.to_forget.push(n);
+                        }
+                    }
+                }
             }
-            accounts.set(service, None);
-            self.plugin_runtime.take_back(&lent_key(service));
+            accounts.put(service, id, None);
+            self.plugin_runtime.take_back(&lent_key(service, id));
         }
         if service == Service::GITHUB {
             *self.gh_token.lock() = None;
@@ -887,9 +989,10 @@ impl<R: Runtime> Core<R> {
     pub async fn integration_containers(
         &self,
         service: Service,
+        account: &str,
         project_id: Option<&str>,
     ) -> Result<Vec<Container>> {
-        let mut list = self.client(service).await?.containers().await?;
+        let mut list = self.client(service, account).await?.containers().await?;
         let own = match (service, project_id) {
             (Service::GITHUB, Some(id)) => self.project_repo(id).await,
             (Service::GITLAB, Some(id)) => self.project_gitlab(id).await,
@@ -953,9 +1056,13 @@ impl<R: Runtime> Core<R> {
     pub async fn integration_states(
         &self,
         service: Service,
+        account: &str,
         container: &str,
     ) -> Result<StatesView> {
-        self.client(service).await?.states_view(container).await
+        self.client(service, account)
+            .await?
+            .states_view(container)
+            .await
     }
 
     /// The tickets of the project's source for `service`, those already imported marked.
@@ -974,7 +1081,7 @@ impl<R: Runtime> Core<R> {
             ))
         })?;
         let mut page = self
-            .client(service)
+            .client(service, &link.account)
             .await?
             .issues(&link.container, &q)
             .await?;
@@ -983,6 +1090,16 @@ impl<R: Runtime> Core<R> {
             i.imported = have.contains(&i.id);
         }
         Ok(page)
+    }
+
+    /// The link's account is connected: else its source is paused (ESC-397), its settings kept.
+    pub(crate) fn source_served(&self, link: &SourceLink) -> bool {
+        let accounts = self.accounts.read();
+        match hosted_kind(link.service) {
+            Some(_) => accounts.connected(link.service),
+            None if link.service == Service::GITHUB => accounts.connected(link.service),
+            None => accounts.account(link.service, &link.account).is_some(),
+        }
     }
 
     /// The external ids of `service` the project's tickets come from.
@@ -1019,7 +1136,8 @@ impl<R: Runtime> Core<R> {
     ) -> Result<Vec<Ticket>> {
         let _one = self.import_lock.lock().await;
         let extract = self.settings.read().integrations.extract_criteria;
-        let seen = self.project(project_id)?.integrations.imported;
+        let linked = self.project(project_id)?.integrations;
+        let seen = &linked.imported;
         let mut made = Vec::new();
         for i in issues {
             let key = imported_key(&i);
@@ -1030,8 +1148,14 @@ impl<R: Runtime> Core<R> {
                 continue;
             }
             let draft = draft_of(&i, max_loops, extract);
+            let mut ext = external_of(&i);
+            // It keeps the account of the source it came from (ESC-397).
+            ext.account = linked
+                .link(i.service)
+                .map(|l| l.account.clone())
+                .unwrap_or_default();
             made.push(
-                self.ticket_create_with(project_id, draft, Some(external_of(&i)))
+                self.ticket_create_with(project_id, draft, Some(ext))
                     .await?,
             );
             let project = {
@@ -1063,14 +1187,14 @@ impl<R: Runtime> Core<R> {
         for p in projects {
             let mut found = Vec::new();
             for link in &p.integrations.links {
-                if !self.accounts.read().connected(link.service) {
+                if !self.source_served(link) {
                     continue;
                 }
                 let q = Query {
                     label: Some(label.clone()),
                     ..Default::default()
                 };
-                let page = match self.client(link.service).await {
+                let page = match self.client(link.service, &link.account).await {
                     Ok(c) => c.issues(&link.container, &q).await,
                     Err(e) => Err(e),
                 };
@@ -1260,10 +1384,9 @@ impl<R: Runtime> Core<R> {
         if !self.settings.read().integrations.sync_states {
             return None;
         }
-        let link = project
-            .integrations
-            .link(ext.service)
-            .filter(|l| l.container == ext.container)?;
+        let link = project.integrations.link(ext.service).filter(|l| {
+            l.container == ext.container && same_id(ext.service, &l.account, &ext.account)
+        })?;
         let state = link.states.get(&column).filter(|st| !st.id.is_empty())?;
         Some(SyncOp::State {
             state: state.clone(),
@@ -1347,7 +1470,7 @@ impl<R: Runtime> Core<R> {
         client: &mut Option<Box<dyn TicketSource>>,
     ) -> Result<()> {
         if client.is_none() {
-            *client = Some(self.client(p.external.service).await?);
+            *client = Some(self.client(p.external.service, &p.external.account).await?);
         }
         let c = client.as_ref().expect("made above");
         match &p.op {

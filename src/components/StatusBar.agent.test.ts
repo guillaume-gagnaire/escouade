@@ -103,6 +103,15 @@ describe('StatusBar while an agent is open', () => {
     expect(chip.dataset.tip).toContain('PR #12 · Connexion par jeton');
     await userEvent.click(chip);
     expect(openUrl).toHaveBeenCalledWith('https://github.com/acme/demo/pull/7');
+    // By Entrée too, and a refusal said with its reason (ESC-402).
+    chip.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(openUrl).toHaveBeenCalledTimes(2);
+    openUrl.mockImplementationOnce(() => Promise.reject('aucun navigateur'));
+    await userEvent.click(chip);
+    await waitFor(() =>
+      expect(app.toasts.at(-1)).toMatchObject({ text: 'La PR #12 ne s’ouvre pas dans le navigateur : aucun navigateur', kind: 'error' }),
+    );
     // Another branch: none of the old one's.
     app.git = { p1: gitInfo({ agentGit: { a1: own({ branch: 'feat/review' }) } }) };
     await tick();

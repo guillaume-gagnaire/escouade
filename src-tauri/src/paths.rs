@@ -306,6 +306,12 @@ impl DataDir {
         self.0.join("integrations.json")
     }
 
+    /// The ticket sources' accounts after the first of each service (ESC-397), apart from
+    /// `integrations.json`: a version from before writes that one again without them.
+    pub fn ticket_accounts_file(&self) -> PathBuf {
+        self.0.join("ticket-accounts.json")
+    }
+
     /// The MCP server's token for Claude outside Escouade, while the system's keychain refuses it
     /// (`integrations::secrets::mcp_token`).
     pub fn mcp_token_file(&self) -> PathBuf {

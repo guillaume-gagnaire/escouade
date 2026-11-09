@@ -8,9 +8,11 @@ import type { InitialState, RunCommand, TermInfo, UiEvent } from './types';
 const logs = vi.hoisted(() => ({}) as Record<string, string>);
 // How each log tells its process about its new size.
 const resizers = vi.hoisted(() => ({}) as Record<string, (cols: number, rows: number) => void>);
+// Where each log's run takes what is typed in it, and how it is told of what was sent (ESC-396).
+const inputs = vi.hoisted(() => ({}) as Record<string, { to: () => string | null; sent: (d: string) => void }>);
 vi.mock('./terminals', () => ({
-  launchLog: (id: string, onResize: (cols: number, rows: number) => void) => ({
-    _: [(logs[id] ??= ''), (resizers[id] = onResize)],
+  launchLog: (id: string, onResize: (cols: number, rows: number) => void, to: () => string | null, sent: (d: string) => void) => ({
+    _: [(logs[id] ??= ''), (resizers[id] = onResize), (inputs[id] = { to, sent })],
     term: {
       cols: 100,
       rows: 30,
@@ -108,6 +110,23 @@ describe('launch commands', () => {
     emit({ type: 'terminalExit', id: 't1', code: 1 });
     expect(app.launches.c1.status).toBe('stopped');
     expect(app.toasts).toHaveLength(0);
+  });
+
+  it('types into its running process only, and takes an exit after a Ctrl+C typed in its view for a stop (ESC-396)', async () => {
+    const { emit } = await boot();
+    await startLaunch(P, FRONT);
+    expect(inputs.c1.to()).toBe('t1');
+    inputs.c1.sent('\x03');
+    emit({ type: 'terminalExit', id: 't1', code: 1 });
+    expect(app.launches.c1).toMatchObject({ status: 'stopped', code: 1 });
+    expect(app.toasts).toHaveLength(0);
+    // Ended: nothing to type into.
+    expect(inputs.c1.to()).toBeNull();
+    // A crash with no Ctrl+C typed is still one, an answer typed included.
+    await startLaunch(P, FRONT);
+    inputs.c1.sent('y\r');
+    emit({ type: 'terminalExit', id: 't2', code: 1 });
+    expect(app.launches.c1.status).toBe('crashed');
   });
 
   it('keeps the end of a command that exited before its start returned', async () => {

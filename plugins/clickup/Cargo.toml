@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-clickup"
-version = "2.2.3"
+version = "2.2.4"
 description = "Le plugin ClickUp d'Escouade : les tâches d'une liste ClickUp dans le Kanban, ses statuts comme colonnes"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"

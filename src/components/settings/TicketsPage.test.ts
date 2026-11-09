@@ -262,6 +262,82 @@ describe('TicketsPage', () => {
       name: 'Sprint 12',
     });
   });
+
+  // ESC-397: several Jira accounts; each project chooses the one that serves its source.
+  describe('with several accounts', () => {
+    const TWO: AccountView[] = [
+      { service: 'jira', id: 'jira', connected: true, label: 'ada@atlas.dev · atlas.atlassian.net' },
+      { service: 'jira', id: 'jira-2b', connected: true, label: 'bob@mobile.dev · mobile.atlassian.net' },
+      { service: 'trello', id: '', connected: false, label: '' },
+    ];
+
+    it('asks for the account first, lists the containers of the one chosen, and saves the link with it', async () => {
+      app.accounts = TWO;
+      const b = backend();
+      render(SettingsModal, { page: 'tickets', projectId: 'p1' });
+      const p = within(panel());
+      const account = p.getByRole('combobox', { name: 'Compte Jira' });
+      expect(
+        within(account)
+          .getAllByRole('option')
+          .map((o) => o.textContent),
+      ).toEqual(['ada@atlas.dev · atlas.atlassian.net', 'bob@mobile.dev · mobile.atlassian.net']);
+      // The first account by default, as before.
+      expect(account).toHaveValue('jira');
+      await waitFor(() => expect(b.called('integration_containers')[0].args).toEqual({ service: 'jira', projectId: 'p1' }));
+      await userEvent.selectOptions(account, 'jira-2b');
+      await waitFor(() =>
+        expect(b.called('integration_containers').at(-1)!.args).toEqual({ service: 'jira', projectId: 'p1', account: 'jira-2b' }),
+      );
+      const source = p.getByRole('combobox', { name: 'Projet Jira' });
+      await waitFor(() => expect(within(source).getByRole('option', { name: 'MOB — Mobile' })).toBeInTheDocument());
+      await userEvent.selectOptions(source, 'MOB');
+      expect(b.called('integration_states').at(-1)!.args).toEqual({ service: 'jira', container: 'MOB', account: 'jira-2b' });
+      await p.findByRole('combobox', { name: 'Jira — Terminé' });
+      await afterGesture();
+      expect(b.called('update_project').at(-1)!.args.project.integrations.links).toEqual([
+        { service: 'jira', container: 'MOB', name: 'MOB — Mobile', states: JIRA_STATES.defaults, account: 'jira-2b' },
+      ]);
+    });
+
+    it('says a source whose account was disconnected is paused, keeps its settings, and offers another account', async () => {
+      resetApp({
+        projects: [
+          project({
+            integrations: {
+              links: [
+                {
+                  service: 'jira',
+                  container: 'MOB',
+                  name: 'MOB — Mobile',
+                  states: { doing: { id: '3', name: 'In Progress' } },
+                  account: 'jira-gone',
+                },
+              ],
+              comments: ['review', 'done'],
+            },
+          }),
+        ],
+      });
+      app.accounts = [TWO[0], TWO[2]];
+      const b = backend();
+      render(SettingsModal, { page: 'tickets', projectId: 'p1' });
+      const p = within(panel());
+      expect(p.getByText(/^Le compte de cette source est déconnecté : elle est en pause/)).toBeInTheDocument();
+      // Its container stays chosen; no call goes out for the account that is gone.
+      expect(p.getByRole('combobox', { name: 'Projet Jira' })).toHaveValue('MOB');
+      expect(b.called('integration_containers')).toHaveLength(0);
+      // The mapping of a paused source is not offered (its states cannot be read): it is kept.
+      expect(p.queryByRole('combobox', { name: 'Jira — En cours' })).toBeNull();
+      const account = p.getByRole('combobox', { name: 'Compte Jira' });
+      expect(account).toHaveValue('');
+      await userEvent.selectOptions(account, 'jira');
+      await afterGesture();
+      expect(b.called('update_project').at(-1)!.args.project.integrations.links).toEqual([
+        { service: 'jira', container: 'MOB', name: 'MOB — Mobile', states: { doing: { id: '3', name: 'In Progress' } } },
+      ]);
+    });
+  });
 });
 
 // The page alone, in English (the window around it is tested above, in French).

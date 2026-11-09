@@ -74,6 +74,17 @@ Le mode décide de ce que Claude fait sans te demander.
 
 Les menus de modèle, d’effort et de mode restent utilisables pendant toute la vie de l’agent, même pendant qu’il travaille. Le choix s’applique à l’agent tout de suite, la conversation continue, et il vaut pour cet agent seulement. Si le processus de l’agent est arrêté (voir [plus bas](managing-agents#fermer-la-fenetre-quitter-et-redemarrer)), le choix est pris en compte à son prochain démarrage.
 
+## Les commandes interactives
+
+Certaines commandes de Claude Code ouvrent un écran à elles dans son terminal : `/login`, `/permissions`, `/hooks`… Tapées dans le champ d’un agent, elles ne partent jamais comme un message. Dans le menu « / », chacune dit où elle s’ouvre avant que tu la choisisses.
+
+- `/login` ouvre la connexion du compte de l’agent, comme « Se connecter » dans Réglages › Comptes et harness. Une fois connecté, l’agent reprend sur ce compte avec sa conversation. `/logout` te demande confirmation, puis déconnecte ce compte pour tous ses agents ; il reste dans Escouade.
+- `/model` et `/effort` seuls ouvrent les menus du champ, `/plan` passe en mode Plan, `/usage` ouvre les quotas des comptes, `/remote-control` active le remote control de l’agent.
+- Les autres, comme `/permissions`, `/hooks`, `/mcp` ou `/config`, basculent l’agent dans la [vue terminal](claude-code-view), où la commande est tapée pour toi. « Vue Escouade » te ramène à la conversation, qui continue.
+- `/resume`, `/branch`, `/fork`, `/teleport` et `/exit` ne sont pas proposés : l’agent garde sa session.
+
+Pour Codex, Copilot CLI et les autres harness, seuls `/login`, `/logout`, `/model` et `/effort` sont pris en charge. `/logout` marche avec Claude Code et Codex.
+
 ## Le compte d’un agent
 
 Quand tu as ajouté plusieurs comptes Claude, un menu « Compte » s’ajoute aux autres. Son premier choix, « Automatique », laisse Escouade prendre le compte du projet (son « Compte préféré »), sinon le premier compte actif « bon » (5 h sous les seuils de pause et de changement de compte, semaine au rythme) ; le nom du compte choisi est écrit entre parenthèses. Le compte d’un agent ne change plus après son premier message, puisque sa conversation est rangée dans ce compte : le menu est alors en lecture seule.

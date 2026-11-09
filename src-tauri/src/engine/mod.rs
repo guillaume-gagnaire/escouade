@@ -717,6 +717,12 @@ pub trait Engine: Send + Sync {
     /// What « Se connecter… » sets before its terminal starts, in the folder of `account` and in
     /// `env` (Gemini CLI: its interface straight to the Google sign-in, the home folder trusted).
     fn before_login(&self, _account: &crate::model::Account, _env: &mut Vec<(String, String)>) {}
+    /// The arguments of its own command that signs an account out, run with the account's folder
+    /// (`/logout` typed to an agent, ESC-401): none when it has none Escouade can run without asking
+    /// anything (Copilot CLI has no such command, OpenCode's asks for a provider).
+    fn logout_args(&self) -> &'static [&'static str] {
+        &[]
+    }
 
     /// Its models go by aliases it resolves itself (Claude Code: `opus`, `sonnet[1m]`): any name
     /// is taken as it is, the versions they run told per account by its start (`Ready::models`),

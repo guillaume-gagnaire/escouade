@@ -1766,6 +1766,31 @@ impl<R: Runtime> Core<R> {
         }
         self.plugins
             .apply_store(self.store.revocations(), self.store.offers());
+        self.send_seed_counts().await;
+    }
+
+    /// The installs of the seed not counted yet sent to the store with the user's consent to the statistics, forgotten on
+    /// a refusal, kept until they answer (ESC-394, docs/STORE.md §5.4).
+    pub async fn send_seed_counts(&self) {
+        let settings = self.settings.read().clone();
+        match crate::plugins::store::client(&settings) {
+            Ok(http) => {
+                self.plugins
+                    .send_seed_counts(&self.store, &http, settings.telemetry)
+                    .await
+            }
+            Err(e) => log::warn!("the store's client: {e}"),
+        }
+    }
+
+    /// `send_seed_counts` on a task of its own.
+    pub(crate) fn spawn_seed_counts(&self) {
+        if cfg!(test) {
+            return;
+        }
+        if let Some(c) = self.me.upgrade() {
+            tauri::async_runtime::spawn(async move { c.send_seed_counts().await });
+        }
     }
 
     pub fn load(app: AppHandle<R>, data: DataDir) -> (Arc<Self>, mpsc::UnboundedReceiver<String>) {
@@ -2225,6 +2250,8 @@ impl<R: Runtime> Core<R> {
             id: view.id.clone(),
             text: tr!("Plugin {} installé", "Plugin {} installed", view.name),
         });
+        // Counted on the store as an install, with the consent to the statistics (ESC-394).
+        self.spawn_seed_counts();
         Ok(Some(view))
     }
 
@@ -2615,6 +2642,10 @@ impl<R: Runtime> Core<R> {
         if self.telemetry.set_consent(telemetry) {
             // Said yes during the session: it counts as started.
             self.telemetry.track(self.started_event());
+        }
+        if telemetry.is_some() && before_settings.telemetry != telemetry {
+            // The installs of the seed waiting for the answer: sent on a yes, forgotten on a no (ESC-394).
+            self.spawn_seed_counts();
         }
         if mcp_was_enabled && !mcp_enabled {
             // « Claude et les agents peuvent piloter Escouade » turned off: the token changes at once, and its entry

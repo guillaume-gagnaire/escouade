@@ -139,6 +139,10 @@ pub(crate) struct PrList {
     /// The pull requests whose review was asked of the user at its last reading; none before the
     /// first one, which tells nothing.
     asked: Option<HashSet<u64>>,
+    /// The background readings for the PR tab's badge (ESC-403) that failed in a row, and when the
+    /// next one may be made: later after each failure. A good reading, whoever made it, ends it.
+    pub(crate) watch_failures: u32,
+    pub(crate) watch_after: Option<Instant>,
 }
 
 impl PrList {
@@ -158,6 +162,8 @@ impl PrList {
         };
         self.asked = Some(asked.into_iter().collect());
         self.read = Some((Instant::now(), now, read.clone()));
+        self.watch_failures = 0;
+        self.watch_after = None;
         new
     }
 }
@@ -250,6 +256,10 @@ impl<R: Runtime> Core<R> {
             list.limit = limit;
             list.read_well(now, read)
         };
+        self.hub.emit(UiEvent::PrsRead {
+            project_id: project_id.to_string(),
+            numbers: read.prs.iter().map(|p| p.number).collect(),
+        });
         let project = self.project(project_id).map(|p| p.name).unwrap_or_default();
         for n in new {
             self.alert(

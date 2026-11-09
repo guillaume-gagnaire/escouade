@@ -513,7 +513,7 @@ fn jira_is_a_plugin_of_the_app_that_the_registry_of_sources_names() {
     let m = v.manifest.unwrap();
     assert_eq!(m.run.unwrap().wasm.as_deref(), Some("Cargo.toml"));
     assert_eq!(m.permissions.network, ["*.atlassian.net", "{account}"]);
-    assert_eq!(m.permissions.secrets, ["account:jira"]);
+    assert_eq!(m.permissions.secrets, ["account:jira", "account:jira-*"]);
 }
 
 /// The texts of the form's missing fields are the plugin's (its manifest), in the order of the form: the site, the

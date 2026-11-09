@@ -130,6 +130,43 @@ export default {
   },
 
   /** What a model costs beside the others, beside its name in the menu (Copilot). */
+  /** The interactive commands of a harness (ESC-401, `lib/interactive.ts`): where each opens, never sent as a message. */
+  interactive: {
+    /** The discreet mark of the « / » menu, before pressing it. */
+    where: {
+      account: 's’ouvre dans Comptes',
+      menu: 's’ouvre dans le menu',
+      mode: 'passe en mode Plan',
+      settings: 's’ouvre dans Réglages',
+      remote: 'Remote Control d’Escouade',
+      view: 's’ouvre dans la vue {harness}',
+      kept: 'pas depuis Escouade',
+    },
+    /** What the command does, for those its harness does not describe to Escouade. */
+    desc: {
+      login: 'Connecter le compte de l’agent',
+      logout: 'Déconnecter le compte de l’agent',
+      plan: 'Passer en mode Plan',
+      usage: 'Quotas des comptes',
+      remoteControl: 'Joindre l’agent depuis claude.ai et l’app Claude',
+    },
+    toView: '{command} s’ouvre dans la vue {harness}. « Vue Escouade » ramène à la conversation, qui continue.',
+    noView: '{command} ne marche que dans la vue {harness}, qu’un agent de ticket n’a pas.',
+    noViewHarness: '{command} ne s’ouvre pas depuis Escouade pour {harness}.',
+    kept: {
+      session: '{command} n’est pas proposé ici : l’agent garde sa session. Un nouvel agent en ouvre une autre.',
+      exit: '{command} n’est pas proposé ici : rien à quitter, l’agent reste dans Escouade.',
+    },
+    noEffort: 'Ce modèle ne prend pas d’effort.',
+    noPlan: '{harness} n’a pas de mode Plan.',
+    noRemote: '{harness} n’a pas de Remote Control.',
+    remoteAlready: 'Le Remote Control de cet agent est déjà actif.',
+    logout: {
+      title: 'Déconnecter le compte {account} ?',
+      body: '{harness} se déconnecte de ce compte, pour tous les agents qui l’utilisent. Le compte reste dans Escouade : /login ou « Se connecter » le reconnecte.',
+      confirm: 'Déconnecter',
+    },
+  },
   model: {
     multiplier: '×{n}',
     multiplierTitle: 'Coûte {n} fois le tarif de base',

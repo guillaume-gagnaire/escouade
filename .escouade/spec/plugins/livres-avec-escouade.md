@@ -2,7 +2,7 @@
 title: "Les plugins livrés avec Escouade"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/github/README.fr.md","plugins/gitlab/README.fr.md","plugins/gitea/README.fr.md","plugins/azure-devops/README.fr.md","docs/PLUGINS.md §8.7, §8.13, §8.14","src-tauri/src/plugins/seed.rs","src-tauri/src/plugins/sort.rs","src-tauri/src/plugins_builtin_tests.rs","src-tauri/src/plugins_sort_tests.rs","docs/PLUGINS.md §8.32","plugins/seed.json","tests/e2e/real-seed.spec.ts","https://store.escouade.dev/api/v1/catalog.json"]
-tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339","ESC-344","ESC-351","ESC-349","ESC-348","ESC-345","ESC-350","ESC-367","ESC-370","ESC-373","ESC-354"]
+tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339","ESC-344","ESC-351","ESC-349","ESC-348","ESC-345","ESC-350","ESC-367","ESC-370","ESC-373","ESC-354","ESC-394"]
 decisions: [80,92,110,113,117]
 compared: null
 ---
@@ -135,3 +135,7 @@ Le README d'un dossier de `plugins/` peut être un par langue : `README.fr.md` e
 - **Essayé hors ligne** sur une build release : un dossier vierge n'installe rien, et « Ajouter un compte… » sur Claude Code installe son plugin depuis l'amorce en 250 à 270 ms ; une configuration de 2.1 (Claude Code, Codex, Trello) installe ces trois-là au lancement, 130 à 300 ms chacun, et rien d'autre ; le module de Claude Code se précompile à sa première activation en 100 à 120 ms ; un plugin désinstallé n'est pas remis au lancement suivant.
 - **Le poids** : l'amorce fait 17,4 Mo en clair et ajoute 2,5 Mo à l'installeur, contre les 34,5 Mo qu'aurait pesés `escouade-plugins`.
 - Le journal de l'app dit le temps de chaque installation depuis l'amorce et de chaque mise en route d'un module.
+
+## Le compte des installations de l'amorce (ESC-394)
+
+Les plugins que l'amorce installe comptent au store comme une installation, avec l'accord aux statistiques. Hors ligne ou avant la réponse sur les statistiques, le compte attend. Il est oublié sur un refus, et une version ne compte qu'une fois. Ceux d'une 2.2.0-beta, jamais comptés, se comptent une fois. Une amorce de build de développement ne compte rien. Le détail est dans *Le store dans l'app*.

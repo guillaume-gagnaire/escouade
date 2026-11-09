@@ -50,4 +50,6 @@ export function closeTerminal(id: string) {
   app.terminals = app.terminals.filter((x) => x.id !== id);
   delete app.exitedTerms[id];
   if (t && app.selectedTerm[t.projectId] === id) app.selectedTerm[t.projectId] = null;
+  // Its pane, if it has one, closes; the others stay (ESC-399).
+  app.settlePanes();
 }

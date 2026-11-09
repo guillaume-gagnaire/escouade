@@ -1,6 +1,18 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { setLang } from './i18n';
-import { editsByTurn, escouadeArgs, hasDiff, isEscouadeTool, isQuietTool, toolArg, toolIcon, toolLabel, toolResultSummary } from './tools';
+import {
+  artifactLink,
+  editsByTurn,
+  escouadeArgs,
+  hasDiff,
+  isEscouadeTool,
+  isQuietTool,
+  toolArg,
+  toolIcon,
+  toolLabel,
+  toolResultSummary,
+} from './tools';
 import type { ConvItem, ToolItem, TurnItem } from './types';
 
 const CWD = 'C:\\code\\app';
@@ -347,5 +359,55 @@ describe('the summaries of the tools in English', () => {
     expect(toolResultSummary(tool('Task', {}, { result: { text: 'x', isError: false } }))).toBe('done');
     expect(toolLabel('Read')).toBe('Read');
     expect(toolLabel('mcp__github__create_issue')).toBe('github·create_issue');
+  });
+});
+
+describe('the artifacts of Claude Code (ESC-400)', () => {
+  // The frames of a real turn of Claude Code 2.1.319 (anonymized): the call that published a page, and its result.
+  const frames = readFileSync('tests/fixtures/claude-artifacts/with-artifact-env.jsonl', 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => JSON.parse(l));
+  const call = frames
+    .flatMap((f) => (f.type === 'assistant' ? f.message.content : []))
+    .find((c: { type: string; name?: string }) => c.type === 'tool_use' && c.name === 'Artifact');
+  const said = frames
+    .flatMap((f) => (f.type === 'user' && Array.isArray(f.message?.content) ? f.message.content : []))
+    .find((c: { tool_use_id?: string }) => c.tool_use_id === call.id).content as string;
+  const URL = 'https://claude.ai/artifact/AbCdEfGhIjKlMnOpQrStUv';
+  const published = tool('Artifact', call.input, { result: { text: said, isError: false } });
+
+  it('are named in words, with the icon of a page', () => {
+    expect(toolLabel('Artifact')).toBe('Artefact');
+    expect(toolLabel('ArtifactComments')).toBe('Commentaires d’artefact');
+    expect(toolLabel('ArtifactData')).toBe('Données d’artefact');
+    expect(toolLabel('ArtifactCheck')).toBe('Vérification d’artefact');
+    expect(['Artifact', 'ArtifactComments', 'ArtifactData', 'ArtifactCheck'].map(toolIcon)).toEqual(['page', 'page', 'page', 'page']);
+    setLang('en');
+    expect(toolLabel('Artifact')).toBe('Artifact');
+    expect(toolLabel('ArtifactComments')).toBe('Artifact comments');
+    setLang('fr');
+  });
+
+  it('say the file published, or what is deleted', () => {
+    expect(toolArg(published, CWD)).toBe('esc400-trial.html');
+    expect(toolArg(tool('Artifact', { file_path: 'C:\code\app\out\page.html', title: 'Le rapport' }), CWD)).toBe('Le rapport');
+    expect(toolArg(tool('Artifact', { action: 'delete', url: URL }), CWD)).toBe(`Supprimer ${URL}`);
+  });
+
+  it('give the link of the page published, and nothing else', () => {
+    expect(artifactLink(published)).toBe(URL);
+    // The row shows the link: no summary beside it.
+    expect(toolResultSummary(published)).toBe('');
+    expect(artifactLink(tool('Artifact', call.input, { status: 'running' }))).toBeNull();
+    expect(artifactLink(tool('Artifact', call.input, { status: 'error', result: { text: said, isError: true } }))).toBeNull();
+    // Deleted: its link leads nowhere.
+    const gone = `Artifact deleted: ${URL}. Its link no longer works for anyone.`;
+    expect(artifactLink(tool('Artifact', { action: 'delete', url: URL }, { result: { text: gone, isError: false } }))).toBeNull();
+    // A link of another site is not taken for one.
+    expect(
+      artifactLink(tool('Artifact', {}, { result: { text: 'Published at https://evil.example/claude.ai/artifact/x', isError: false } })),
+    ).toBeNull();
+    expect(artifactLink(tool('Bash', {}, { result: { text: URL, isError: false } }))).toBeNull();
   });
 });

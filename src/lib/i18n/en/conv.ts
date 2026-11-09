@@ -168,6 +168,9 @@ export default defineZone('conv', {
 
   tool: {
     openFile: 'Open {path} in the editor',
+    /** The link of the page an `Artifact` call published (ESC-400), opened in the browser. */
+    openArtifact: 'Open the artifact',
+    openArtifactTip: 'Open {url} in the browser',
     running: 'running',
     subTools: { one: '{count} tool', other: '{count} tools' },
     more: { one: 'Show the rest ({count} character)', other: 'Show the rest ({count} characters)' },
@@ -183,6 +186,14 @@ export default defineZone('conv', {
     taskCreate: 'Task: {subject}',
     taskUpdate: 'Task #{id}: {status}',
     taskStatus: { pending: 'to do', inProgress: 'in progress', completed: 'done', deleted: 'deleted', changed: 'updated' },
+    /** The tools of Claude Code's artifacts (ESC-400): their names, and the line of a deletion. */
+    artifact: {
+      publish: 'Artifact',
+      comments: 'Artifact comments',
+      data: 'Artifact data',
+      check: 'Artifact check',
+      delete: 'Delete {target}',
+    },
   },
   patch: { more: { one: '… {n} more line', other: '… {n} more lines' } },
 

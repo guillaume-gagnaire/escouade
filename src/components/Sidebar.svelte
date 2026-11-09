@@ -176,6 +176,8 @@
   const prsWord = $derived(app.prWords[project.id] ?? app.projectAgents.find((a) => a.prWord)?.prWord ?? 'PR');
   /** The « PR » tab only for a project whose remote is on a code host whose plugin is on (ESC-390). */
   const prsTab = $derived(hasTab(app.codeHosts[project.id], 'pullRequests'));
+  /** The project's pull requests come since its PR tab was last opened (ESC-403). */
+  const prsNew = $derived(app.prsNew(project.id));
   // Its code host read when the project shows, and again when the window comes back (its remote may have changed).
   $effect(() => {
     const id = project.id;
@@ -1021,7 +1023,10 @@
         class:on={app.prsOn}
         aria-pressed={app.prsOn}
         onclick={() => app.openPrs(project.id)}
-        use:tip={t('prs.list.tabHint', { word: prsWord })}>{t('prs.list.tab', { word: prsWord })}</button
+        aria-label={prsNew ? t('prs.list.tabNew', { word: prsWord, count: prsNew }) : undefined}
+        use:tip={t('prs.list.tabHint', { word: prsWord })}
+        >{t('prs.list.tab', { word: prsWord })}{#if prsNew}<span class="badge" data-testid="prs-new" aria-hidden="true">{prsNew}</span
+          >{/if}</button
       >
     {/if}
     <button class:on={app.docsOn} aria-pressed={app.docsOn} onclick={() => app.openDocs(project.id)}>{t('docs.tab')}</button>
@@ -1304,7 +1309,8 @@
                   class="prnum {prTone(p)}"
                   aria-label={t('prs.chipLabel', { word, number: p.number, state: stateWord(p) })}
                   use:tip={{ text: prTip(word, p), aria: false }}
-                  onclick={() => openPr(p)}><Icon name={prIcon(p)} size={12} />{p.repo ? `${repoLabel(p.repo)} ` : ''}#{p.number}</button
+                  onclick={() => openPr(p, word)}
+                  ><Icon name={prIcon(p)} size={12} />{p.repo ? `${repoLabel(p.repo)} ` : ''}#{p.number}</button
                 >
                 <!-- Where it goes and its CI in words (ESC-305): « #41 → main · CI en échec ». -->
                 <span class="prto">{t('prs.to', { base: p.base })}</span>

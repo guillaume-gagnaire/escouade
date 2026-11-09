@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.4
+
+- It serves several accounts of its service: each call names its account, whose own token it reads (`account:<id>`), with Escouade 2.2 (ESC-397).
+
 ## 2.2.3
 
 - Its messages, README and documentation send to the settings pages of Escouade 2.2: Connected services, a project’s Imported tickets, Advanced › Network and General (ESC-387).

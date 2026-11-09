@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-linear"
-version = "2.2.3"
+version = "2.2.4"
 description = "Le plugin Linear d'Escouade : les issues d'une équipe dans le Kanban, ses statuts comme colonnes"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { agent, CLAUDE_ENGINE, board, fakeBackend, gitInfo, project, resetApp, SETTINGS, ticket } from '../test/ipc';
+import { agent, CLAUDE_ENGINE, board, fakeBackend, gitInfo, project, pullRequest, resetApp, SETTINGS, ticket } from '../test/ipc';
 import { conversationOf } from './conversations.svelte';
 import { buffers } from './editor/buffers.svelte';
 import { navHistory } from './editor/history';
@@ -8,7 +8,7 @@ import { fileSearches } from './editor/search.svelte';
 import { trees } from './editor/trees.svelte';
 import { locale, setLang } from './i18n';
 import { app } from './state.svelte';
-import type { CodeHost, InitialState, LaunchState, UiEvent } from './types';
+import type { CodeHost, InitialState, LaunchState, Ticket, UiEvent } from './types';
 
 /** Starts the app against a fake backend and returns a function pushing backend events. */
 async function start(over: Partial<InitialState> = {}, handlers: Record<string, (args: any) => unknown> = {}) {
@@ -1159,7 +1159,7 @@ describe('board', () => {
   });
 
   it('knows the external accounts from the start, and says what the automatic import brought', async () => {
-    const accounts = [{ service: 'jira' as const, connected: true, label: '@ada' }];
+    const accounts = [{ service: 'jira' as const, id: 'jira', connected: true, label: '@ada' }];
     const { emit } = await start({ accounts });
     expect(app.accounts).toEqual(accounts);
     emit({ type: 'toast', text: '2 tickets importés depuis GitHub dans demo' });
@@ -1448,6 +1448,39 @@ describe('board', () => {
     emit({ type: 'focusPrs', projectId: 'p2' });
     expect(app.ui.activeProject).toBe('p2');
     expect(app.prsOn).toBe(true);
+  });
+
+  it('counts the pull requests come since the PR tab was opened, from the readings made, not Escouade’s (ESC-403)', async () => {
+    const { emit, backend } = await start({
+      agents: [agent({ prs: [pullRequest({ number: 7 })] })],
+      tickets: [ticket({ id: 't1', projectId: 'p1', pr: { number: 8 } as Ticket['pr'] })],
+    });
+    emit({ type: 'prsRead', projectId: 'p1', numbers: [1, 2] });
+    expect(app.prsNew('p1')).toBe(0);
+    emit({ type: 'prsRead', projectId: 'p1', numbers: [1, 2, 3, 7, 8] });
+    expect(app.prsNew('p1')).toBe(1);
+    expect(app.prsNew('p2')).toBe(0);
+    await new Promise((r) => setTimeout(r, 300));
+    const saved = backend.called('set_ui').at(-1)?.args.ui.prSeen;
+    expect(saved.p1).toMatchObject({ mark: 2, open: [1, 2, 3, 7, 8] });
+
+    // A restart: what was seen comes back with the interface's state.
+    app.prsOpened('p1');
+    expect(app.prsNew('p1')).toBe(0);
+    await new Promise((r) => setTimeout(r, 300));
+    const again = await start({ ui: backend.called('set_ui').at(-1)?.args.ui });
+    expect(app.ui.prSeen?.p1).toMatchObject({ mark: 8, fresh: [3] });
+    again.emit({ type: 'prsRead', projectId: 'p1', numbers: [1, 2, 3, 7, 8, 9] });
+    expect(app.prsNew('p1')).toBe(1);
+  });
+
+  it('a reading made while the PR tab is on screen counts nothing (ESC-403)', async () => {
+    const { emit } = await start();
+    emit({ type: 'prsRead', projectId: 'p1', numbers: [1] });
+    app.openPrs('p1');
+    emit({ type: 'prsRead', projectId: 'p1', numbers: [1, 2] });
+    expect(app.prsNew('p1')).toBe(0);
+    expect(app.ui.prSeen?.p1.fresh).toEqual([2]);
   });
 
   it('shows the board of the project of a notification even when another view is up', async () => {
@@ -1799,5 +1832,129 @@ describe('the view of a background task (ESC-14)', () => {
       app.closeTask('a1');
       expect(app.subFocus).toEqual({ from: null, back: null });
     });
+  });
+});
+
+describe('the split screen when a content goes (ESC-399)', () => {
+  const t1 = { id: 't1', projectId: 'p1', name: 'pwsh-1', shell: 'pwsh' };
+  const t2 = { id: 't2', projectId: 'p2', name: 'pwsh-1', shell: 'pwsh' };
+  const runs = [{ id: 'c1', name: 'Front', command: 'npm run dev', shell: 'pwsh', cwd: '' }];
+  const three = [agent(), agent({ id: 'a2', name: 'tests-e2e', createdAt: 2 }), agent({ id: 'a3', name: 'docs', createdAt: 3 })];
+
+  /** The agent a1 on top, the terminal t1 below at 70 / 30. */
+  async function agentOverTerminal(over: Partial<InitialState> = {}) {
+    const started = await start(over);
+    app.terminals = [t1];
+    app.selectAgent('a1');
+    app.openBeside({ kind: 'term', id: 't1' }, 'bottom');
+    app.setPaneRatio('', 0.7);
+    app.activatePane('agent:a1');
+    return started;
+  }
+
+  it('archiving the agent on top keeps the terminal below: the agent the app selects takes its pane, same share', async () => {
+    const { emit } = await agentOverTerminal();
+    emit({ type: 'agent', agent: agent({ archived: true }) });
+    expect(app.panesOn).toBe(true);
+    expect(app.panes?.root).toEqual({
+      dir: 'col',
+      ratio: 0.7,
+      a: { leaf: { kind: 'agent', id: 'a2' } },
+      b: { leaf: { kind: 'term', id: 't1' } },
+    });
+    expect(app.panes?.active).toBe('agent:a2');
+    expect(app.agent?.id).toBe('a2');
+    // Written: the layout comes back so at the next start.
+    expect(app.ui.panes?.p1.root).toEqual(app.panes?.root);
+  });
+
+  it('deleting it does the same', async () => {
+    const { emit } = await agentOverTerminal();
+    emit({ type: 'agentRemoved', id: 'a1', projectId: 'p1' });
+    expect(app.panes?.root).toEqual({
+      dir: 'col',
+      ratio: 0.7,
+      a: { leaf: { kind: 'agent', id: 'a2' } },
+      b: { leaf: { kind: 'term', id: 't1' } },
+    });
+  });
+
+  it('the terminal keeps the active pane when it had it', async () => {
+    const { emit } = await agentOverTerminal();
+    app.activatePane('term:t1');
+    emit({ type: 'agent', agent: agent({ archived: true }) });
+    expect(app.panes?.active).toBe('term:t1');
+    expect(app.term?.id).toBe('t1');
+  });
+
+  it('with no other agent to show, its pane closes and the terminal alone fills the work area', async () => {
+    const { emit } = await agentOverTerminal({ agents: [agent(), agent({ id: 'b1', projectId: 'p2', name: 'landing' })] });
+    emit({ type: 'agent', agent: agent({ archived: true }) });
+    expect(app.panes).toBeNull();
+    expect(app.singleItem).toEqual({ kind: 'term', id: 't1' });
+    expect(app.term?.id).toBe('t1');
+  });
+
+  it('takes an agent not already shown, else closes its pane and keeps the others', async () => {
+    const { emit } = await agentOverTerminal({ agents: three });
+    app.openBeside({ kind: 'agent', id: 'a2' }, 'right');
+    app.activatePane('agent:a1');
+    // a1 | a2 over t1: a3 takes a1's pane.
+    emit({ type: 'agent', agent: agent({ archived: true }) });
+    expect(app.panes?.root).toMatchObject({
+      dir: 'col',
+      ratio: 0.7,
+      a: { dir: 'row', a: { leaf: { id: 'a3' } }, b: { leaf: { id: 'a2' } } },
+    });
+    // a3 archived in turn: no agent left that is not shown, its pane closes, a2 over t1 stay.
+    emit({ type: 'agent', agent: { ...three[2], archived: true } });
+    expect(app.panes?.root).toEqual({
+      dir: 'col',
+      ratio: 0.7,
+      a: { leaf: { kind: 'agent', id: 'a2' } },
+      b: { leaf: { kind: 'term', id: 't1' } },
+    });
+    expect(app.panes?.active).toBe('agent:a2');
+    expect(app.agent?.id).toBe('a2');
+  });
+
+  it('holds for an agent archived in a project not on screen (the board, the MCP server)', async () => {
+    const { emit } = await start();
+    app.terminals = [t1, t2];
+    app.selectProject('p2');
+    app.selectAgent('b1');
+    app.openBeside({ kind: 'term', id: 't2' }, 'bottom');
+    app.selectProject('p1');
+    emit({ type: 'agent', agent: agent({ id: 'b1', projectId: 'p2', name: 'landing', archived: true }) });
+    expect(app.ui.panes?.p2).toBeUndefined();
+    expect(app.selectedTerm.p2).toBe('t2');
+    app.selectProject('p2');
+    expect(app.term?.id).toBe('t2');
+  });
+
+  it('a terminal closed in a pane leaves it, the others keep their place and share', async () => {
+    await agentOverTerminal({ agents: three });
+    app.openBeside({ kind: 'agent', id: 'a2' }, 'right');
+    app.setPaneRatio('a', 0.4);
+    app.activatePane('term:t1');
+    const { closeTerminal } = await import('./term-actions');
+    closeTerminal('t1');
+    expect(app.panes?.root).toEqual({
+      dir: 'row',
+      ratio: 0.4,
+      a: { leaf: { kind: 'agent', id: 'a1' } },
+      b: { leaf: { kind: 'agent', id: 'a2' } },
+    });
+    expect(app.panes?.active).toBe(`agent:${app.agent?.id}`);
+    expect(app.ui.panes?.p1.root).toEqual(app.panes?.root);
+  });
+
+  it('a launch gone from its pane leaves it, the last pane left is the one shown', async () => {
+    const { emit } = await start({ projects: [project({ runCommands: runs }), project({ id: 'p2', name: 'studio-web' })] });
+    app.selectAgent('a2');
+    app.openBeside({ kind: 'launch', id: 'c1' }, 'bottom');
+    emit({ type: 'project', project: project() });
+    expect(app.panes).toBeNull();
+    expect(app.singleItem).toEqual({ kind: 'agent', id: 'a2' });
   });
 });

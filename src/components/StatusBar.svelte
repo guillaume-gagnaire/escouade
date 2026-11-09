@@ -454,7 +454,7 @@
               text: [prTip(shownPr.word, p), ...(shownPr.more ? [t('shell.status.morePrs', { count: shownPr.more })] : [])].join('\n'),
               aria: false,
             }}
-            onclick={() => openPr(p)}
+            onclick={() => openPr(p, shownPr.word)}
             ><Icon name={prIcon(p)} size={13} /><span class="mono">#{p.number}</span>{#if shownPr.more}<span class="d"
                 >{t('shell.status.morePrs', { count: shownPr.more })}</span
               >{/if}</button

@@ -4,7 +4,7 @@
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { VERDICTS, edited, isOwn, notesByFile, publishBlock, tally } from '../../lib/prreview';
-  import { openUrl } from '../../lib/opener';
+  import { openPrPage } from '../../lib/prs';
   import { errorText } from '../../lib/refusal';
   import { app } from '../../lib/state.svelte';
   import { tip } from '../../lib/tip';
@@ -203,7 +203,7 @@
       class="icon-btn"
       aria-label={t('prs.view.openInBrowser')}
       use:tip={t('prs.view.openInBrowser')}
-      onclick={() => void openUrl(review.url)}><Icon name="ext" size={15} /></button
+      onclick={() => void openPrPage({ url: review.url, number, word })}><Icon name="ext" size={15} /></button
     >
     <button class="btn ghost" disabled={busy} onclick={discard}
       >{review.phase === 'reading' ? t('prs.review.cancel') : t('prs.review.discard')}</button

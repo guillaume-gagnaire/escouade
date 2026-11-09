@@ -40,6 +40,17 @@ pub const BASE_ARGS: &[&str] = &[
     "--allow-dangerously-skip-permissions",
 ];
 
+/// Its artifacts, on as in a terminal (ESC-400): stream-json makes Claude Code an Agent SDK session
+/// (`CLAUDE_CODE_ENTRYPOINT=sdk-cli`), whose artifacts are off unless this variable says on — no `Artifact` tool, and
+/// « Unknown skill: artifact-design ». What turns them off for the user (`CLAUDE_CODE_DISABLE_ARTIFACT`, its settings,
+/// its organization) still does.
+fn artifacts_on() -> EnvVar {
+    EnvVar {
+        name: "CLAUDE_CODE_ARTIFACT".into(),
+        value: "1".into(),
+    }
+}
+
 /// Whether a model takes an effort, before its account's `claude` has told.
 pub fn supports_effort(model: &str) -> bool {
     !model.to_lowercase().contains("haiku")
@@ -217,7 +228,7 @@ impl Agent {
         self.waiting.insert(id.clone(), Waiting::Initialize);
         Launch {
             args: launch_args(p),
-            env: Vec::<EnvVar>::new(),
+            env: vec![artifacts_on()],
             fence_applied: !p.fence.is_empty() && p.settings.is_some(),
             read_only: p.read_only,
             writes: vec![initialize_line(&id)],

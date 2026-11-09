@@ -239,6 +239,13 @@ async fn a_branchs_pull_requests_are_found_by_its_name_newest_first_and_the_open
     }
     let open = client(&server).open_pull_requests(&repo()).await.unwrap();
     assert_eq!(open.len(), 3);
+    // Their web pages, never their API's address: the buttons open them in the browser (ESC-402).
+    assert!(
+        open.iter()
+            .all(|p| p.url.starts_with("https://codeberg.org/ada/notes/pulls/")),
+        "{:?}",
+        open.iter().map(|p| &p.url).collect::<Vec<_>>()
+    );
     assert_eq!(open[0].approvals, 1, "reviews and statuses come with each");
     assert_eq!(open[0].checks, Some(CheckState::Failure));
     assert_eq!(open[1].checks, None);

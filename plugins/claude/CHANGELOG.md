@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.4
+
+- Its agents create artifacts as in a terminal: each launch sets `CLAUDE_CODE_ARTIFACT=1`, without which Claude Code in stream-json (an Agent SDK session) has no `Artifact` tool and says « Unknown skill: artifact-design » (ESC-400).
+
 ## 2.2.3
 
 - Its messages, README and documentation send to the settings pages of Escouade 2.2: Accounts and harnesses and a project’s Project page (ESC-387).

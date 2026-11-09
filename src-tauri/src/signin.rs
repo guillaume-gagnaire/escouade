@@ -93,6 +93,24 @@ pub(crate) fn signed_in_line(lang: Lang, account: &str) -> String {
     )
 }
 
+/// What the conversation says once the account of the agent signed in by `/login` (ESC-401).
+pub(crate) fn login_line(lang: Lang, account: &str) -> String {
+    tr_in!(
+        lang,
+        "Compte {account} connecté : l’agent reprend sur ce compte, avec sa session.",
+        "{account} account signed in: the agent goes on on this account, with its session."
+    )
+}
+
+/// What the conversation says once the account of the agent signed out by `/logout` (ESC-401).
+pub(crate) fn logout_line(lang: Lang, account: &str) -> String {
+    tr_in!(
+        lang,
+        "Compte {account} déconnecté. /login le reconnecte.",
+        "{account} account signed out. /login signs it in again."
+    )
+}
+
 /// What the notification says of an agent waiting for its account to sign in again.
 pub(crate) fn wait_body(lang: Lang, account: &str) -> String {
     tr_in!(
@@ -291,6 +309,48 @@ impl<R: Runtime> Core<R> {
             body: wait_body(lang, &name),
         };
         self.notify_agent(alert, &project, id, &agent);
+    }
+
+    /// `/login` typed to the agent (ESC-401): its account was just signed in, in the terminal of
+    /// « Se connecter… » (the gesture of Réglages › Comptes et harness). The agent goes on on it,
+    /// its session kept: its process, which holds the sign-in it started with in its memory, stops
+    /// when idle (the next message starts one on its session); the turn that waited for a sign-in,
+    /// if one did, goes on at once ("continue").
+    pub async fn agent_signed_in(self: &Arc<Self>, id: &str) -> anyhow::Result<()> {
+        let h = self.agent(id)?;
+        let account = self.agent_account(&h)?;
+        let lang = i18n::ui();
+        let name = accounts::name_in(lang, &account);
+        let waited = self.with_agent(id, |rt, fx| {
+            let waited = rt.meta.sign_in.take().is_some();
+            if waited {
+                rt.sign_in_retries = 0;
+                fx.save = true;
+            }
+            rt.notice("info", login_line(lang, &name), fx);
+            Ok(waited)
+        })?;
+        if self.stop_for_sign_in(&h).await && waited {
+            self.send_continue(id).await?;
+        }
+        Ok(())
+    }
+
+    /// `/logout` typed to the agent (ESC-401), once the user said yes: its account signs out by its
+    /// harness's own command (`claude auth logout`, `codex logout`), run with its folder; its
+    /// process, idle, stops (it would hold the sign-in in its memory). The account stays in
+    /// Escouade, not signed in: `/login` or « Se connecter… » signs it in again.
+    pub async fn agent_logout(self: &Arc<Self>, id: &str) -> anyhow::Result<()> {
+        let h = self.agent(id)?;
+        let account = self.agent_account(&h)?;
+        self.sign_out(&account).await?;
+        let lang = i18n::ui();
+        let name = accounts::name_in(lang, &account);
+        self.stop_for_sign_in(&h).await;
+        self.with_agent(id, |rt, fx| {
+            rt.notice("info", logout_line(lang, &name), fx);
+            Ok(())
+        })
     }
 
     /// The agents waiting for their account to sign in again (`sign_in_lost`) whose sign-in

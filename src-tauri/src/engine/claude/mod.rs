@@ -468,6 +468,10 @@ impl Engine for Claude {
         }
     }
 
+    fn logout_args(&self) -> &'static [&'static str] {
+        &["auth", "logout"]
+    }
+
     fn config_dir(
         &self,
         account: &crate::model::Account,

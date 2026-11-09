@@ -3,6 +3,7 @@
 import type { ThemeChoice } from './appearance';
 import type { Lang } from './i18n/locale.svelte';
 import type { PaneLayout } from './panes';
+import type { PrSeen } from './prnew';
 
 export type AgentStatus = 'idle' | 'running' | 'waiting' | 'done' | 'error';
 
@@ -457,6 +458,8 @@ export interface SourceLink {
   name: string;
   /** The state an imported ticket's external one gets when it comes into each column (none: left as it is). */
   states: Partial<Record<Column, ExternalState>>;
+  /** The account of its service that serves it (AccountView.id, ESC-397); none: the service's first. */
+  account?: string;
 }
 
 export interface ProjectIntegrations {
@@ -478,10 +481,14 @@ export interface ExternalRef {
   url: string;
   /** Why its last sync failed, until one succeeds. */
   error: string | null;
+  /** The account it was imported with, which it keeps; none: the service's first. */
+  account?: string;
 }
 
 export interface AccountView {
   service: Service;
+  /** Its id among its service's accounts (SourceLink.account); empty for a service without any, and for GitLab Issues and Azure Boards. */
+  id?: string;
   connected: boolean;
   /** « ada@atlas.dev · atlas.atlassian.net », « @ada ». */
   label: string;
@@ -1466,6 +1473,8 @@ export interface LaunchState {
   stopping: boolean;
   code: number | null;
   startedAt: number;
+  /** When the user last typed Ctrl+C in its view (ESC-396): an exit soon after is a stop, not a crash. */
+  interruptedAt?: number;
 }
 
 export interface Worktree {
@@ -1998,6 +2007,8 @@ export interface UiState {
   layout?: '' | 'split';
   /** The split screen of each project (ESC-392), by project id (`lib/panes.ts`); absent: one content fills the work area. */
   panes?: Record<string, PaneLayout>;
+  /** What was seen of each project's pull requests (ESC-403), by project id (`lib/prnew.ts`): the PR tab's badge. */
+  prSeen?: Record<string, PrSeen>;
 }
 
 /** The checkout of an agent's own folder (`GitInfo.agentGit`): the branch HEAD is really on, whatever its worktree was made on. */
@@ -2660,6 +2671,8 @@ export type UiEvent =
   | { type: 'openUrl'; url: string }
   | { type: 'focusBoard'; projectId: string }
   | { type: 'focusPrs'; projectId: string }
+  /** A reading of the project's list of pull requests, whoever made it: its open ones (ESC-403). */
+  | { type: 'prsRead'; projectId: string; numbers: number[] }
   /** Why no ticket of the project's board starts (its target branch), or null once they may. */
   | { type: 'boardIssue'; projectId: string; issue: string | null }
   | { type: 'environments'; environments: ProjectEnvironments }

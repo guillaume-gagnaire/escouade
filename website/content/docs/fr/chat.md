@@ -179,6 +179,12 @@ Un clic sur la ligne (ou `Entrée` quand elle a le focus) la déplie :
 
 Les outils qui ne font que relire la liste des tâches (`TaskList`, `TaskGet`) sont affichés en teintes plus douces. Les outils du serveur MCP d’Escouade portent un badge « Escouade · … » (voir [le serveur MCP](mcp)).
 
+### Les artefacts de Claude Code
+
+Un agent Claude Code crée des artefacts comme dans un terminal : des pages publiées sur claude.ai, privées tant que tu ne les partages pas. Ses outils ont leur nom en clair : « Artefact » pour publier (la ligne dit le fichier publié), « Commentaires d’artefact », « Données d’artefact ». Une fois la page publiée, la ligne de l’outil porte « Ouvrir l’artefact » : un clic ouvre son lien dans ton navigateur, jamais avant. Le lien que l’agent écrit dans sa réponse s’ouvre de la même façon.
+
+Supprimer un artefact demande ton accord : la carte d’autorisation dit « Artefact · Supprimer » suivi de son lien. Pour qu’un agent n’en crée pas, coupe les artefacts dans Claude Code lui-même (la variable `CLAUDE_CODE_DISABLE_ARTIFACT=1` ou son réglage) : Escouade ne fait que les rendre disponibles, comme dans un terminal.
+
 ### Les fichiers envoyés par l’agent
 
 Claude Code peut envoyer des fichiers à l’utilisateur (son outil `SendUserFile`) : une capture d’écran, un rendu, un rapport. Escouade les montre dans la conversation, dans une carte « Envoyé par Claude » qui dit combien d’images et de fichiers il y a :

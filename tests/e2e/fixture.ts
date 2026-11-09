@@ -67,6 +67,8 @@ export interface App {
     todoTools: string | null;
     /** `DISABLE_AUTOUPDATER`: its own update off (ESC-133). */
     autoUpdater: string | null;
+    /** `CLAUDE_CODE_ARTIFACT`: its artifacts on in stream-json (ESC-400). */
+    artifact: string | null;
   }[];
 }
 
