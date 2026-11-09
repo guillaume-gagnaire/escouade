@@ -398,6 +398,9 @@ mod signature {
             .args(["-NoProfile", "-NonInteractive", "-Command"])
             .arg("(Get-AuthenticodeSignature -LiteralPath $env:ESCOUADE_SIGNED_PATH).Status")
             .env("ESCOUADE_SIGNED_PATH", path)
+            // Windows PowerShell 5.1 builds its own module path: the one a PowerShell 7 (or a terminal that
+            // launched the app) passes down points it at modules it cannot load (the Security module).
+            .env_remove("PSModulePath")
             .creation_flags(crate::proc::CREATE_NO_WINDOW)
             .output()
             .map_err(|e| format!("the signature cannot be read: {e}"))?;
