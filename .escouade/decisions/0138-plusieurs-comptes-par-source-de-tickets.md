@@ -1,9 +1,9 @@
 ---
-number: null
+number: 138
 id: "plusieurs-comptes-par-source-de-tickets"
 title: "Plusieurs comptes par source de tickets, choisis par projet"
 date: "2026-11-09"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-397"
 pages: ["kanban/integrations"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"kanban/integrations","added":19,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-09T16:03:04+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
