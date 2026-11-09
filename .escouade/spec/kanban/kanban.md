@@ -2,7 +2,7 @@
 title: "Kanban"
 subject: "Kanban"
 sources: ["docs/SPEC.md","design/kanban-envs-2-2/README.md"]
-tickets: ["ESC-95","ESC-123","ESC-141","ESC-143","ESC-153","ESC-190","ESC-243","ESC-59","ESC-63","ESC-390"]
+tickets: ["ESC-95","ESC-123","ESC-141","ESC-143","ESC-153","ESC-190","ESC-243","ESC-59","ESC-63","ESC-390","ESC-393"]
 decisions: [129]
 compared: null
 order: 30
@@ -34,7 +34,7 @@ Deux rangées (direction A, choisie sur aperçu le 2026-11-08, ESC-390), où rie
   - « <cible> n'a encore aucun commit — aucun ticket ne démarre » : dans un dépôt neuf, son premier commit lance la file ;
   - « Branche cible <cible> introuvable — aucun ticket ne démarre ».
   Dans les deux derniers cas, les cartes « À faire » disent « En attente de la branche cible ».
-- Dans une zone de travail de 1000 px ou moins, « Après validation : » ne laisse que son résumé (entier dans l'infobulle) ; de 860 px ou moins, « Importer » garde son icône seule et les onglets perdent leurs comptes. Un texte trop long se coupe, entier dans son infobulle.
+- Dans une zone de travail de 1000 px ou moins (une fenêtre de 1024 px, par exemple), « Après validation : » ne laisse que son résumé (entier dans l'infobulle) ; le bouton garde pour nom « Après validation : <résumé> » à toutes les largeurs, pour un lecteur d'écran (ESC-393). De 860 px ou moins, « Importer » garde son icône seule et les onglets perdent leurs comptes. Un texte trop long se coupe, entier dans son infobulle.
 - Pilote auto en pause : une ligne sous l'en-tête le dit, avec « Reprendre maintenant », et les places libres ne s'affichent pas (voir *Pilote auto*). En pause sur une cible rouge : « Pilote auto en pause : la CI de main est rouge depuis 2 h », avec « Voir les jobs ».
 
 ### La branche cible

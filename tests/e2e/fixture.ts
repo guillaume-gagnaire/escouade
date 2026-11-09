@@ -284,6 +284,12 @@ const NO_STORE = 'http://127.0.0.1:9';
 export const SHOW = !!process.env.ESCOUADE_E2E_SHOW && process.env.ESCOUADE_E2E_SHOW !== '0';
 
 /**
+ * `ESCOUADE_E2E_VIEWPORT=1024x728`: the size of the window at each start, as the CI's runner bounds it (its screen); else
+ * the window keeps its own (1440 × 900: off every screen, nothing bounds it). A test that sets its own size still does.
+ */
+const VIEWPORT = /^(\d+)x(\d+)$/.exec(process.env.ESCOUADE_E2E_VIEWPORT ?? '');
+
+/**
  * WebView2 draws and runs its timers in full even though its window is not seen: Chromium slows down a window it takes for
  * hidden or covered. Off the screens, the window was drawn without them in short tests (ESC-126): they keep it so in the long
  * ones. The same in ci.yml, where they reach WebView2 by the machine policy.
@@ -470,6 +476,7 @@ export const test = base.extend<{
     const attach = async (launch: Instance): Promise<Page> => {
       try {
         const { browser, page } = await connect(port, () => launch.stopped);
+        if (VIEWPORT) await page.setViewportSize({ width: Number(VIEWPORT[1]), height: Number(VIEWPORT[2]) });
         launch.browser = browser;
         return page;
       } catch (e) {
@@ -538,7 +545,10 @@ export const test = base.extend<{
         return `--- page ---\n${shown}\n--- app (${instance.stopped ?? 'running'}) ---\n${tail(path.join(data, 'app.log'), 25)}`;
       };
       try {
-        await expect(page.getByRole('button', { name: LABELS[language].addProject }).first()).toBeVisible();
+        // A runner's window thread stops for 7 to 10 s at times while the app starts (« window thread: paused 9725 ms » in
+        // its log), its page still blank: longer than the 15 s of an expect, which failed a test there before it began
+        // (shell.spec.ts, tall-fields.spec.ts on the CI of 2026-11-08, ESC-393).
+        await expect(page.getByRole('button', { name: LABELS[language].addProject }).first()).toBeVisible({ timeout: 45_000 });
       } catch (e) {
         throw new Error(`${(e as Error).message.split('\n')[0]}\n${await state()}`);
       }

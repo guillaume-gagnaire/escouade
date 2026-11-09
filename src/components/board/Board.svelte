@@ -160,9 +160,11 @@
           <span class="places" use:tip={{ text: places, cut: true }}>{places}</span>
         {/if}
         <i class="sep" aria-hidden="true"></i>
-        <!-- Its tooltip holds the summary in full: the summary is cut in a narrow window. -->
+        <!-- Its tooltip holds the summary in full: the summary is cut in a narrow window. Its name stays « Après
+             validation : <résumé> » at every width, when « Après validation : » is no longer shown (ESC-393). -->
         <button
           class="cfg"
+          aria-label="{t('board.header.afterApproval')} {summary}"
           use:tip={t('board.header.settingsTitle', { summary })}
           onclick={() => (app.modal = { kind: 'settings', page: 'board', projectId: project.id })}
         >

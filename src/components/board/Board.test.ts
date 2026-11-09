@@ -254,6 +254,9 @@ describe('Board', () => {
     render(Board, { project: app.projects[0] });
     const button = screen.getByRole('button', { name: /Après validation/ });
     expect(button).toHaveAttribute('data-tip', 'Réglages du Kanban — merge squash → main');
+    // Its name is given whole, not read from what it shows: « Après validation : » goes in a board of 1000 px or less
+    // (a CSS container query, which jsdom does not run), and the button kept its name there (ESC-393).
+    expect(button).toHaveAttribute('aria-label', 'Après validation : merge squash → main');
     // The summary has no tooltip of its own, which would hide the button's.
     expect(within(button).getByText('merge squash → main')).not.toHaveAttribute('data-tip');
   });
