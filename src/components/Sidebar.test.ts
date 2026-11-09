@@ -3475,16 +3475,79 @@ describe('Sidebar agent folders', () => {
   });
 
   /** A hand's drag: press `from`, move past the threshold over `over` (what is under the pointer, the list's elements), release. */
-  async function gesture(from: Element, over: Element[], release = true) {
+  async function gesture(from: Element, over: Element[], release = true, y = 40) {
     document.elementsFromPoint = () => over;
     onTestFinished(() => void window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
     const pt = (type: string, x: number, y: number) =>
       new PointerEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true, cancelable: true });
     await fireEvent(from, pt('pointerdown', 10, 10));
-    await fireEvent(window, pt('pointermove', 10, 40));
+    await fireEvent(window, pt('pointermove', 10, y));
     await tick();
-    if (release) await fireEvent(window, pt('pointerup', 10, 40));
+    if (release) await fireEvent(window, pt('pointerup', 10, y));
   }
+
+  /** The rows of the list drawn one under the other, 38 px each with 2 px between (jsdom has no layout). */
+  function stack() {
+    const rows = [...document.querySelectorAll<HTMLElement>('.agents > [data-row], .agents > section.folder')];
+    const spy = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      const at = rows.findIndex((r) => r === this || r.contains(this));
+      const top = at < 0 ? 0 : at * 40;
+      return { top, bottom: top + 38, left: 0, right: 200, width: 200, height: 38, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
+    });
+    onTestFinished(() => spy.mockRestore());
+  }
+  const loose = (over: Record<string, Partial<Parameters<typeof agent>[0]>> = {}) =>
+    resetApp({
+      projects: [project({ agentOrder: ['a1', 'a2', 'a3'] })],
+      agents: ['a1', 'a2', 'a3'].map((id, i) => agent({ id, name: id, createdAt: i + 1, ...over[id] })),
+    });
+
+  it('released on the pull request row of a card, an agent lands next to that card, not at the end', async () => {
+    loose({ a2: { worktree: { path: 'C:\\w', branch: 'escouade/x', baseBranch: 'main' }, prWord: 'PR', prDown: 'arrêté' } });
+    const backend = fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    stack();
+    const down = document.querySelector<HTMLElement>('[data-pr-down="a2"]')!;
+    // The lower half of the row of a2 (its card and what is under it): after a2, so before a3.
+    await gesture(card('a1'), [down, document.querySelector('.agents')!], true, 70);
+    await waitFor(() => expect(backend.called('agent_folder_move')).toHaveLength(1));
+    expect(backend.called('agent_folder_move')[0].args).toMatchObject({ itemId: 'a1', index: 1 });
+  });
+
+  it('released in the gap between two cards, it lands by the height, not at the end', async () => {
+    loose();
+    const backend = fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    stack();
+    // The pointer is on the list itself, between a2 (ends at 78) and a3 (starts at 80).
+    await gesture(card('a1'), [document.querySelector('.agents')!], true, 79);
+    await waitFor(() => expect(backend.called('agent_folder_move')).toHaveLength(1));
+    expect(backend.called('agent_folder_move')[0].args).toMatchObject({ itemId: 'a1', index: 1 });
+  });
+
+  it('the drop line is drawn where the agent lands: before the first card that did not move up', async () => {
+    loose({ a1: { status: 'waiting' } });
+    // a1 waits: it is on top whatever its place. Dropping a3 above it lands before a2.
+    app.projects[0].agentOrder = ['a1', 'a2', 'a3'];
+    fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    stack();
+    await gesture(card('a3'), [card('a1'), document.querySelector('.agents')!], false, 5);
+    const line = document.querySelector('.drop')!;
+    expect(line).not.toBeNull();
+    expect(line.nextElementSibling).toBe(document.querySelector('[data-row="a2"]'));
+  });
+
+  it('with no agent left but a folder, the empty message and « Créer un agent » stay', () => {
+    resetApp({
+      projects: [project({ agentFolders: [{ id: 'f1', name: 'Auth', named: true, principal: null, agents: [] }], agentOrder: ['f1'] })],
+      agents: [],
+    });
+    fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    expect(folderOf('f1')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Créer un agent' })).toBeInTheDocument();
+  });
 
   it('dragging a card onto a folder asks for the move', async () => {
     withFolders();

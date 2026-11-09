@@ -14,7 +14,7 @@
   import { t } from '../lib/i18n';
   import { branchSummary, deltaDetail, repoLabel } from '../lib/repos';
   import { api } from '../lib/ipc';
-  import { dropPlace, stepPlace, type Place } from '../lib/agent-folders';
+  import { dropPlace, landing, stepPlace, type Place } from '../lib/agent-folders';
   import { fDur, fUsd, fWhen, tildify } from '../lib/format';
   import { accountName, defaultEngine, newAgentAccount, newAgentDefaults } from '../lib/accounts';
   import {
@@ -26,6 +26,7 @@
     listStep,
     listTarget,
     foldedCards,
+    shownAgents,
     type SidebarItem,
     type ListDecision,
     type ListRequest,
@@ -350,6 +351,12 @@
   const dragging = $derived(paneDrag.on ? paneDrag.sidebarId : null);
   /** Where the dragged item would land, null when it would not move or may not go there: no line then. */
   const place = $derived(dragging && drop ? dropPlace(project, items, dragging, drop.level, drop.before) : null);
+  /** The drawn row the line sits before: where the item lands (`landing`), not the row hovered when it is one that moved up. */
+  const lineBefore = $derived.by(() => {
+    if (!dragging || !drop) return null;
+    const next = landing(items, dragging, drop.level, drop.before);
+    return next && rowIds(drop.level).includes(next) ? next : null;
+  });
 
   /** Over a drawn row (an agent's card or a folder's header at the project level): the line goes above it or under it. */
   function aimRow(id: string, r: DOMRect, y: number) {
@@ -359,29 +366,44 @@
     drop = { level, before: y < r.top + r.height / 2 ? id : (row[row.indexOf(id) + 1] ?? null) };
   }
 
+  /**
+   * Between the rows (the gap, or the free space of a list): the line goes before the first drawn row of `level` whose
+   * middle is under the pointer, at the end of the level when none is.
+   */
+  function aimGap(level: string | null, y: number) {
+    const rows = level
+      ? document.querySelectorAll<HTMLElement>(`[data-folder="${CSS.escape(level)}"] .folder-b > [data-row]`)
+      : document.querySelectorAll<HTMLElement>('.agents > [data-row], .agents > section.folder');
+    const below = [...rows].find((r) => {
+      const b = r.getBoundingClientRect();
+      return y < b.top + b.height / 2;
+    });
+    drop = { level, before: below ? (below.dataset.row ?? below.dataset.folder!) : null };
+  }
+
   /** What the pointer at (x, y) would put where, from the element under it: the rules of the list, kept as they were. */
   function aim(id: string, x: number, y: number) {
     const dragsFolder = isFolder(id);
     drop = overFolder = null;
     for (const n of document.elementsFromPoint(x, y)) {
-      const el = n.closest<HTMLElement>('[data-agent], .folder-h, .folder-b');
+      const el = n.closest<HTMLElement>('[data-row], .folder-h, .folder-b');
       if (!el) continue;
       const folder = el.closest<HTMLElement>('[data-folder]')?.dataset.folder;
       if (el.matches('.folder-b')) {
-        // A folder has no place inside another one; the free space of a body is the end of that folder.
-        if (!dragsFolder && folder) drop = { level: folder, before: null };
+        // A folder has no place inside another one.
+        if (!dragsFolder && folder) aimGap(folder, y);
       } else if (el.matches('.folder-h')) {
         if (dragsFolder) aimRow(folder!, el.getBoundingClientRect(), y);
         else overFolder = folder ?? null;
       } else {
-        const agentId = el.dataset.agent!;
+        const agentId = el.dataset.row!;
         // A folder goes among the project's rows only: inside another folder it has no place.
         if (!(dragsFolder && folderOf(agentId))) aimRow(agentId, el.getBoundingClientRect(), y);
       }
       return;
     }
-    // The free space of the list: the end of the project's rows.
-    drop = { level: null, before: null };
+    // The free space of the list, or a gap between its rows.
+    aimGap(null, y);
   }
 
   $effect(() => {
@@ -912,7 +934,7 @@
 
 <!-- The line where a dragged agent or folder lands: before the row `before` of its level, null at the end of it. -->
 {#snippet line(level: string | null, before: string | null)}
-  {#if place && drop && drop.level === level && drop.before === before}<div class="drop" aria-hidden="true"></div>{/if}
+  {#if place && drop && drop.level === level && lineBefore === before}<div class="drop" aria-hidden="true"></div>{/if}
 {/snippet}
 
 <!-- The button of a list that shows only its first rows: it unrolls the others, then folds them back (the focus stays). -->
@@ -1043,399 +1065,404 @@
       {@const pending = pendingFor(a, app.agents, app.tickets, app.now, can(a, 'backgroundTasks'))}
       {@const ask = listRequest(a)}
       {@const act = cardActivity(a, git?.agents[a.id] ?? 0, pending)}
-      <div
-        class="agent card"
-        class:waiting={a.status === 'waiting'}
-        class:done={a.status === 'done' && !pending}
-        class:idle={a.status === 'idle' && !pending}
-        class:error={a.status === 'error'}
-        class:awaits={!!pending}
-        class:sel
-        class:inpane={inPane(`agent:${a.id}`)}
-        class:alert={app.attention[a.id]}
-        class:flash={flashing[a.id]}
-        class:dragging={dragging === a.id}
-        style:--alert={a.status === 'error' ? 'var(--del)' : a.status === 'waiting' ? 'var(--wait)' : 'var(--run)'}
-        role="button"
-        tabindex="0"
-        aria-current={sel ? 'true' : undefined}
-        data-agent={a.id}
-        onclick={(e) => open(e, { kind: 'agent', id: a.id }, () => app.selectAgent(a.id))}
-        onpointerdown={(e) => {
-          if (renaming !== a.id)
-            paneDrag.press(e, { kind: 'agent', id: a.id }, a.name, engineName(a.engine), { id: a.id, drop: () => dropHere(a.id) });
-        }}
-        onkeydown={(e) => cardKey(e, a)}
-        oncontextmenu={(e) => agentMenu(e, a)}
-      >
-        <div class="a-top">
-          <StatusDot status={a.status} awaits={!!pending} />
-          {#if principal}
-            <span
-              class="star"
-              role="img"
-              aria-label={t('nav.sidebar.folders.principal')}
-              use:tip={{ text: t('nav.sidebar.folders.principal'), aria: false }}><Icon name="star" size={12} /></span
-            >
-          {/if}
-          {#if renaming === a.id}
-            <!-- svelte-ignore a11y_autofocus -->
-            <input
-              class="rename"
-              bind:value={renameValue}
-              autofocus
-              onclick={(e) => e.stopPropagation()}
-              onkeydown={(e) => {
-                e.stopPropagation();
-                if (e.key === 'Enter') commitRename(a);
-                if (e.key === 'Escape') renaming = null;
-              }}
-              onblur={() => commitRename(a)}
-            />
-          {:else}
-            <span class="name" ondblclick={() => startRename(a)} role="presentation">{a.name}</span>
-          {/if}
-          {#if subsRunning + inBg > 0}
-            <!-- Its subagents and its background tasks at work (choice 10): their lists unfold under the card of the agent open. -->
-            <span class="bg-chip">
-              {#if subsRunning}
-                {@const label = t('subagents.chipLabel', { count: subsRunning })}
-                <span
-                  class="part"
-                  role="img"
-                  aria-label={label}
-                  use:tip={{ text: label, aria: false }}
-                  data-sub-chip
-                  data-count={subsRunning}><Icon name="sub" size={12} />{subsRunning}</span
-                >
-              {/if}
-              {#if inBg}
-                {@const label = t('bgtasks.chipLabel', { count: inBg })}
-                <span class="part" role="img" aria-label={label} use:tip={{ text: label, aria: false }} data-bg-chip data-count={inBg}
-                  ><Icon name="clock" size={12} />{inBg}</span
-                >
-              {/if}
-            </span>
-          {/if}
-          {#if remote}
-            <span class="rc" class:on={remote === 'connected'} class:warn={remote === 'stillOn'} use:tip={remoteTitle(a, remote)}>
-              <Icon name="remote" size={13} />{#if remote === 'stillOn'}<span class="bar" aria-hidden="true"></span>{/if}
-            </span>
-          {/if}
-          {#if a.status === 'waiting'}
-            <span class="a-state status">{statusLabel('waiting')}</span>
-          {:else if a.resumeAt}
-            <span class="a-state status wk" use:tip={t('nav.sidebar.resumeTitle', { when: fWhen(a.resumeAt, app.now) })}
-              ><Icon name="clock" size={12} />{t('nav.sidebar.resumes', { when: fWhen(a.resumeAt, app.now) })}</span
-            >
-          {:else if a.setup}
-            <span class="a-state status wk" use:tip={t('nav.sidebar.settingUpTitle', { step: a.setup })}>{t('nav.sidebar.settingUp')}</span>
-          {:else if pending}
-            <!-- Its turn is over, but what it left goes on (ESC-138): not « Terminé » yet. -->
-            <span class="a-state status wk" use:tip={pendingText(pending, app.now)} data-pending
-              >{#if pending.wake}<Icon name="clock" size={12} />{/if}{pendingLabel(pending, app.now)}</span
-            >
-          {:else}
-            <span class="a-state status">{statusLabel(a.status)}</span>
-          {/if}
-        </div>
-        {#if a.progressLine}
-          <!-- What the agent reported through Escouade's MCP server, until its next report. -->
-          <div class="said" use:tip={{ text: a.progressLine, cut: true }}>
-            <span class="sr">{t('mcp.progress.label')}{' '}</span>{a.progressLine}
-          </div>
-        {/if}
-        <div class="a-meta">
-          <EngineMark engine={a.engine} />
-          {#if ticket?.column === 'doing' || ticket?.column === 'review'}
-            <span class="ticket-chip">{ticket.key}</span>
-            {#if ticket.column === 'doing'}
-              <!-- The ticket's loop keeps its place; the step of its workflow, if it follows one, is in the tooltip (choice 145). -->
-              <span
-                class="loop"
-                use:tip={wfStep
-                  ? [t('workflow.cardStep', { step: wfStep }), wfNext].filter(Boolean).join('\n')
-                  : t('workflow.next', { what: t('board.columns.review') })}
-                ><span>{t('nav.sidebar.loop', { iteration: ticket.iteration, max: ticket.maxLoops })}</span>
-                <span class="loops" aria-hidden="true"
-                  >{#each { length: Math.min(ticket.maxLoops, 10) } as _, i (i)}<i class:on={i < ticket.iteration}></i>{/each}</span
-                ></span
-              >
-            {:else}
-              <span>{t('nav.sidebar.toTest')}</span>
-            {/if}
-          {:else}
-            <span class="model">{modelLabel(a.model, app.models)}</span>
-            {#if a.prompts || a.activeMs || a.activeSince}
-              <span class="sep">·</span><span class="num">{duration(a)}</span>
-            {:else}
-              <span class="sep">·</span><span>{t('nav.sidebar.noMessage')}</span>
-            {/if}
-            {#if wfStep}
-              <!-- Where it is in its workflow takes the place of its plan, which stays in its banner (choice 145). -->
-              <span class="sep">·</span><span class="wf-mini" use:tip={wfNext}><Icon name="flow" size={14} /><span>{wfStep}</span></span>
-            {:else if plan}
-              <!-- How far the agent is through its plan: the bar says it at a glance, the words are read. -->
-              <span class="sep">·</span><span class="plan-mini"
-                ><span class="plan-text"
-                  >{plan.subs
-                    ? t('plan.miniSubs', { done: plan.done, total: plan.total, count: plan.subs })
-                    : t('plan.mini', { done: plan.done, total: plan.total })}</span
-                ><span class="plan-bar" aria-hidden="true"><i style:--pct={plan.percent}></i></span></span
-              >
-            {:else if a.worktree}
-              <!-- Its own branch, when the line has room for it (no plan): whole in the tooltip. -->
-              <span class="sep">·</span><span class="branch" use:tip={a.worktree.branch}
-                ><Icon name="branch" size={12} /><span class="bn"
-                  >{shortBranch(a.worktree.branch, a.worktree.existing ? '' : project.agentBranchPrefix)}</span
-                ></span
-              >
-            {/if}
-          {/if}
-          {#if a.worktreePending}<span class="sep">·</span><span class="wt" use:tip={t('nav.sidebar.worktreeLaterTitle')}
-              >{t('nav.sidebar.worktreeLater')}</span
-            >{/if}
-        </div>
-        {#if a.status === 'waiting'}
-          <!-- What it waits on, answered from here (2.0, new): its choices clicked, or its keys 1, 2… (listKey). Questions one
-               after the other; a permission allowed, for good or for the session, or refused. What does not hold on the card
-               is answered in its conversation. -->
-          {@const req = a.requests?.[0]}
-          <div class="a-ask">
-            {#if ask?.kind === 'question'}
-              {@const step = shownStep(ask)}
-              {#if ask.note}<p class="note">{revealHidden(ask.note)}</p>{/if}
-              {#if ask.questions.length > 1}
-                <span class="step">{t('nav.sidebar.step', { n: step + 1, count: ask.questions.length })}</span>
-              {/if}
-              <p>{ask.questions[step].question}</p>
-              {@render choices(a, ask)}
-            {:else if ask}
-              <p class="perm"><span class="tool">{toolLabel(ask.tool)}</span> <span class="arg mono">{revealHidden(ask.arg)}</span></p>
-              {#if ask.note}<p class="note">{revealHidden(ask.note)}</p>{/if}
-              {@render choices(a, ask)}
-            {:else if req}
-              <p class="clip">
-                {req.kind === 'question'
-                  ? req.questions.map((x) => x.question).join(' · ')
-                  : req.tool === 'ExitPlanMode'
-                    ? t('stats.overview.proposesPlanThen', { engine: speakerOf(a.engine), mode: modeLabel(planResume(a)) })
-                    : `${req.tool}${req.arg ? ` ${req.arg.split('\n')[0]}` : ''}`}
-              </p>
-              <button
-                class="in-conv"
-                onclick={(e) => {
-                  e.stopPropagation();
-                  app.selectAgent(a.id);
-                }}>{t('nav.sidebar.inConversation')}<Icon name="right" size={12} /></button
-              >
-            {/if}
-          </div>
-        {:else if act || s.tokens > 0 || s.cost > 0}
-          <div class="a-act" use:tip={s.estimated ? estimateHint(s) : undefined}>
-            {#if act?.kind === 'doing'}
-              <b>{act.verb}</b>{#if act.what}<span class="tgt mono">{act.what}</span>{/if}
-            {:else if act?.kind === 'thinking'}
-              <span class="tgt">{t('stats.overview.thinking')}</span>
-            {:else if act?.kind === 'over'}
-              <span class="ok"><Icon name="check" size={14} /></span><span class="tgt">{t('nav.sidebar.over')} · {act.goes}</span>
-            {:else if act?.kind === 'result'}
-              <span class="ok"><Icon name="check" size={14} /></span><span class="tgt"
-                >{t('nav.sidebar.changed', { count: act.files })}</span
-              >
-            {/if}
-            <span class="spend">{cardSpend(a)}</span>
-          </div>
-        {/if}
-      </div>
       {@const prs = cardPrs(a)}
-      {#if a.prDown && !a.ticketId}
-        <!-- Its code host's plugin does not answer (INT-8.1): said under the card, the pull requests read last kept. -->
-        <div class="prdown" role="status" data-pr-down={a.id} use:tip={t('prs.downHint', { why: a.prDown, word: prWord(a) })}>
-          <Icon name="plug" size={12} />{t('prs.down', { word: prWord(a) })}
-        </div>
-      {/if}
-      {#if !prs.length && !a.ticketId && ciShown(a.branchCi)}
-        <!-- Its branch pushed without a pull request (ESC-63): its CI, its jobs on a click. -->
-        <div class="prs" role="group" aria-label={t('prs.group', { name: a.name })} data-branch-ci={a.id}>
-          <CiPill ci={a.branchCi} of={{ kind: 'agent', id: a.id }} projectId={a.projectId} />
-        </div>
-      {/if}
-      {#if prs.length}
-        <!-- Under the card, not in it (the card is a button): its pull requests (ESC-64), the ones to merge first; a number
-             opens it, the corrections go to the agent on a click only. -->
-        {@const word = prWord(a)}
-        <div class="prs" role="group" aria-label={t('prs.group', { name: a.name })} data-prs={a.id}>
-          {#each prs as p (prKey(p))}
-            <div class="pr" data-pr={p.number}>
-              <button
-                class="prnum {prTone(p)}"
-                aria-label={t('prs.chipLabel', { word, number: p.number, state: stateWord(p) })}
-                use:tip={{ text: prTip(word, p), aria: false }}
-                onclick={() => openPr(p)}><Icon name={prIcon(p)} size={12} />{p.repo ? `${repoLabel(p.repo)} ` : ''}#{p.number}</button
-              >
-              <!-- Where it goes and its CI in words (ESC-305): « #41 → main · CI en échec ». -->
-              <span class="prto">{t('prs.to', { base: p.base })}</span>
-              {#if p.checks && p.state === 'open'}
-                <!-- Its CI opens the side panel's « PR et CI » on it, even where the panel is too narrow for that tab (choice 189). -->
-                <button class="prci {p.checks}" use:tip={t('prs.seeCi', { word, number: p.number })} onclick={() => showCi(a.id)}
-                  >{t(`prs.checks.${p.checks}`)}</button
-                >
-              {/if}
-              {#if !a.archived && canFixChecks(p)}
-                <button
-                  class="prfix"
-                  use:tip={t('prs.fixChecksHint', { agent: a.name, word, number: p.number })}
-                  onclick={() => fixPr(a, p, 'checks')}>{t('prs.fixChecks')}</button
-                >
-              {/if}
-              {#if !a.archived && canFixReviews(p)}
-                <button
-                  class="prfix"
-                  use:tip={t('prs.fixReviewsHint', { agent: a.name, word, number: p.number })}
-                  onclick={() => fixPr(a, p, 'reviews')}>{t('prs.fixReviews')}</button
-                >
-              {/if}
-            </div>
-          {/each}
-        </div>
-      {/if}
       {@const subs = a.id === selectedAgentId ? sidebarSubs(a) : null}
-      {#if subs}
-        <!-- Under the card of the agent open only (choice 10 of the 2.0 design): its subagents, unfolded while one runs. -->
-        {@const open = app.subsOpen[a.id] ?? subs.running.length > 0}
-        {@const doneOpen = finishedOpen[a.id] ?? false}
-        <div class="subl" class:sel role="group" aria-label={t('subagents.toggle', { name: a.name })}>
-          <button class="sh subs-toggle" aria-expanded={open} onclick={() => (app.subsOpen[a.id] = !open)}>
-            {@render chev(open)}
-            <span class="lbl">{t('subagents.title')}</span>
-            {#if subs.running.length}<span class="cnt run">{t('subagents.runningCount', { count: subs.running.length })}</span>{/if}
-            {#if subs.finished.length}<span class="cnt">{t('subagents.finishedCount', { count: subs.finished.length })}</span>{/if}
-          </button>
-          {#if open}
-            <!-- The role is said again: a list with no bullets is a list no more for the web views of macOS. -->
-            <!-- svelte-ignore a11y_no_redundant_roles -->
-            <ul class="sub-list" role="list">
-              {#each runningAll[a.id] ? subs.running : subs.running.slice(0, RUNNING_SHOWN) as s (s.id)}
-                {@render subRow(a, s)}
-              {/each}
-              {#if subs.running.length > RUNNING_SHOWN}
-                {@render moreRows(
-                  runningAll[a.id] ?? false,
-                  t('subagents.moreRunning', { count: subs.running.length - RUNNING_SHOWN }),
-                  () => (runningAll[a.id] = !runningAll[a.id]),
-                )}
-              {/if}
-              {#if subs.finished.length}
-                <li class="finished">
-                  <button class="done-toggle" aria-expanded={doneOpen} onclick={() => (finishedOpen[a.id] = !doneOpen)}>
-                    {@render chev(doneOpen)}{t('subagents.finishedToggle', { count: subs.finished.length })}
-                  </button>
-                  {#if doneOpen}
-                    <!-- svelte-ignore a11y_no_redundant_roles -->
-                    <ul class="sub-list done" role="list">
-                      {#each finishedAll[a.id] ? subs.finished : subs.finished.slice(0, FINISHED_SHOWN) as s (s.id)}
-                        {@render subRow(a, s)}
-                      {/each}
-                      {#if subs.finished.length > FINISHED_SHOWN}
-                        {@render moreRows(
-                          finishedAll[a.id] ?? false,
-                          t('subagents.moreFinished', { count: subs.finished.length - FINISHED_SHOWN }),
-                          () => (finishedAll[a.id] = !finishedAll[a.id]),
-                        )}
-                      {/if}
-                    </ul>
-                  {/if}
-                </li>
-              {/if}
-            </ul>
-          {/if}
-        </div>
-      {/if}
       {@const bg =
         a.id === selectedAgentId && can(a, 'backgroundTasks')
           ? sidebarBg(a.plan, { running: bgRunningAll[a.id], finished: bgFinishedAll[a.id] })
           : null}
-      {#if bg}
-        <!-- Under the card of the agent open too, after the subagents: what its harness runs in the background. -->
-        {@const open = app.bgOpen[a.id] ?? bg.runningTotal > 0}
-        {@const doneOpen = bgFinishedOpen[a.id] ?? false}
-        <div class="subl bgs" class:sel role="group" aria-label={t('bgtasks.toggle', { name: a.name })} data-bg-group={a.id}>
-          <button class="sh subs-toggle" aria-expanded={open} onclick={() => (app.bgOpen[a.id] = !open)}>
-            {@render chev(open)}
-            <span class="lbl">{t('bgtasks.title')}</span>
-            {#if bg.runningTotal}<span class="cnt run">{t('bgtasks.runningCount', { count: bg.runningTotal })}</span>{/if}
-            {#if bg.finishedTotal}<span class="cnt">{t('bgtasks.finishedCount', { count: bg.finishedTotal })}</span>{/if}
-          </button>
-          {#if open}
-            <!-- svelte-ignore a11y_no_redundant_roles -->
-            <ul class="sub-list" role="list">
-              {#each bg.running as r (r.id)}
-                {@render bgItem(a, r)}
-              {/each}
-              {#if bg.runningTotal > BG_RUNNING_SHOWN}
-                {@render moreRows(
-                  bgRunningAll[a.id] ?? false,
-                  t('bgtasks.moreRunning', { count: bg.runningTotal - BG_RUNNING_SHOWN }),
-                  () => (bgRunningAll[a.id] = !bgRunningAll[a.id]),
-                  t('bgtasks.lessList'),
-                )}
-              {/if}
-              {#if bg.finishedTotal}
-                <li class="finished">
-                  <button class="done-toggle" aria-expanded={doneOpen} onclick={() => (bgFinishedOpen[a.id] = !doneOpen)}>
-                    {@render chev(doneOpen)}{t('bgtasks.finishedToggle', { count: bg.finishedTotal })}
-                  </button>
-                  {#if doneOpen}
-                    <!-- svelte-ignore a11y_no_redundant_roles -->
-                    <ul class="sub-list done" role="list">
-                      {#each bg.finished as r (r.id)}
-                        {@render bgItem(a, r)}
-                      {/each}
-                      {#if bg.finishedTotal > BG_FINISHED_SHOWN}
-                        {@render moreRows(
-                          bgFinishedAll[a.id] ?? false,
-                          t('bgtasks.moreFinished', { count: bg.finishedTotal - BG_FINISHED_SHOWN }),
-                          () => (bgFinishedAll[a.id] = !bgFinishedAll[a.id]),
-                          t('bgtasks.lessList'),
-                        )}
-                      {/if}
-                    </ul>
-                  {/if}
-                </li>
-              {/if}
-            </ul>
-          {/if}
-        </div>
-      {/if}
       {@const driven = drivenAgents(a.plan, app.agents, app.tickets, a.id)}
-      {#if driven.length}
-        <!-- Under the card too (ESC-138): the agents of Escouade it set to work through the MCP server, while they work. -->
-        {@const open = drivenOpen[a.id] ?? true}
-        <div class="subl" class:sel role="group" aria-label={t('bgtasks.later.drivenToggle', { name: a.name })} data-driven-group={a.id}>
-          <button class="sh subs-toggle" aria-expanded={open} onclick={() => (drivenOpen[a.id] = !open)}>
-            {@render chev(open)}
-            <span class="lbl">{t('bgtasks.later.drivenTitle')}</span>
-            <span class="cnt run">{t('bgtasks.later.drivenCount', { count: driven.length })}</span>
-          </button>
-          {#if open}
-            <!-- svelte-ignore a11y_no_redundant_roles -->
-            <ul class="sub-list" role="list">
-              {#each driven as d (d.id)}
-                <li>
-                  <button class="sub" aria-label={t('bgtasks.later.drivenOpen', { name: d.name })} onclick={() => app.selectAgent(d.id)}>
-                    <span class="sdot running" aria-hidden="true"></span>
-                    <span class="stext"
-                      ><span class="sline"><span class="stitle">{d.name}</span><span class="sstate">{statusLabel(d.status)}</span></span
-                      ></span
-                    >
-                  </button>
-                </li>
-              {/each}
-            </ul>
+      <!-- The card and the rows under it (pull requests, sub-agents…) are one row: a drop on any of them is a drop on the card. -->
+      <div class="row" data-row={a.id}>
+        <div
+          class="agent card"
+          class:waiting={a.status === 'waiting'}
+          class:done={a.status === 'done' && !pending}
+          class:idle={a.status === 'idle' && !pending}
+          class:error={a.status === 'error'}
+          class:awaits={!!pending}
+          class:sel
+          class:inpane={inPane(`agent:${a.id}`)}
+          class:alert={app.attention[a.id]}
+          class:flash={flashing[a.id]}
+          class:dragging={dragging === a.id}
+          style:--alert={a.status === 'error' ? 'var(--del)' : a.status === 'waiting' ? 'var(--wait)' : 'var(--run)'}
+          role="button"
+          tabindex="0"
+          aria-current={sel ? 'true' : undefined}
+          data-agent={a.id}
+          onclick={(e) => open(e, { kind: 'agent', id: a.id }, () => app.selectAgent(a.id))}
+          onpointerdown={(e) => {
+            if (renaming !== a.id)
+              paneDrag.press(e, { kind: 'agent', id: a.id }, a.name, engineName(a.engine), { id: a.id, drop: () => dropHere(a.id) });
+          }}
+          onkeydown={(e) => cardKey(e, a)}
+          oncontextmenu={(e) => agentMenu(e, a)}
+        >
+          <div class="a-top">
+            <StatusDot status={a.status} awaits={!!pending} />
+            {#if principal}
+              <span
+                class="star"
+                role="img"
+                aria-label={t('nav.sidebar.folders.principal')}
+                use:tip={{ text: t('nav.sidebar.folders.principal'), aria: false }}><Icon name="star" size={12} /></span
+              >
+            {/if}
+            {#if renaming === a.id}
+              <!-- svelte-ignore a11y_autofocus -->
+              <input
+                class="rename"
+                bind:value={renameValue}
+                autofocus
+                onclick={(e) => e.stopPropagation()}
+                onkeydown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === 'Enter') commitRename(a);
+                  if (e.key === 'Escape') renaming = null;
+                }}
+                onblur={() => commitRename(a)}
+              />
+            {:else}
+              <span class="name" ondblclick={() => startRename(a)} role="presentation">{a.name}</span>
+            {/if}
+            {#if subsRunning + inBg > 0}
+              <!-- Its subagents and its background tasks at work (choice 10): their lists unfold under the card of the agent open. -->
+              <span class="bg-chip">
+                {#if subsRunning}
+                  {@const label = t('subagents.chipLabel', { count: subsRunning })}
+                  <span
+                    class="part"
+                    role="img"
+                    aria-label={label}
+                    use:tip={{ text: label, aria: false }}
+                    data-sub-chip
+                    data-count={subsRunning}><Icon name="sub" size={12} />{subsRunning}</span
+                  >
+                {/if}
+                {#if inBg}
+                  {@const label = t('bgtasks.chipLabel', { count: inBg })}
+                  <span class="part" role="img" aria-label={label} use:tip={{ text: label, aria: false }} data-bg-chip data-count={inBg}
+                    ><Icon name="clock" size={12} />{inBg}</span
+                  >
+                {/if}
+              </span>
+            {/if}
+            {#if remote}
+              <span class="rc" class:on={remote === 'connected'} class:warn={remote === 'stillOn'} use:tip={remoteTitle(a, remote)}>
+                <Icon name="remote" size={13} />{#if remote === 'stillOn'}<span class="bar" aria-hidden="true"></span>{/if}
+              </span>
+            {/if}
+            {#if a.status === 'waiting'}
+              <span class="a-state status">{statusLabel('waiting')}</span>
+            {:else if a.resumeAt}
+              <span class="a-state status wk" use:tip={t('nav.sidebar.resumeTitle', { when: fWhen(a.resumeAt, app.now) })}
+                ><Icon name="clock" size={12} />{t('nav.sidebar.resumes', { when: fWhen(a.resumeAt, app.now) })}</span
+              >
+            {:else if a.setup}
+              <span class="a-state status wk" use:tip={t('nav.sidebar.settingUpTitle', { step: a.setup })}
+                >{t('nav.sidebar.settingUp')}</span
+              >
+            {:else if pending}
+              <!-- Its turn is over, but what it left goes on (ESC-138): not « Terminé » yet. -->
+              <span class="a-state status wk" use:tip={pendingText(pending, app.now)} data-pending
+                >{#if pending.wake}<Icon name="clock" size={12} />{/if}{pendingLabel(pending, app.now)}</span
+              >
+            {:else}
+              <span class="a-state status">{statusLabel(a.status)}</span>
+            {/if}
+          </div>
+          {#if a.progressLine}
+            <!-- What the agent reported through Escouade's MCP server, until its next report. -->
+            <div class="said" use:tip={{ text: a.progressLine, cut: true }}>
+              <span class="sr">{t('mcp.progress.label')}{' '}</span>{a.progressLine}
+            </div>
+          {/if}
+          <div class="a-meta">
+            <EngineMark engine={a.engine} />
+            {#if ticket?.column === 'doing' || ticket?.column === 'review'}
+              <span class="ticket-chip">{ticket.key}</span>
+              {#if ticket.column === 'doing'}
+                <!-- The ticket's loop keeps its place; the step of its workflow, if it follows one, is in the tooltip (choice 145). -->
+                <span
+                  class="loop"
+                  use:tip={wfStep
+                    ? [t('workflow.cardStep', { step: wfStep }), wfNext].filter(Boolean).join('\n')
+                    : t('workflow.next', { what: t('board.columns.review') })}
+                  ><span>{t('nav.sidebar.loop', { iteration: ticket.iteration, max: ticket.maxLoops })}</span>
+                  <span class="loops" aria-hidden="true"
+                    >{#each { length: Math.min(ticket.maxLoops, 10) } as _, i (i)}<i class:on={i < ticket.iteration}></i>{/each}</span
+                  ></span
+                >
+              {:else}
+                <span>{t('nav.sidebar.toTest')}</span>
+              {/if}
+            {:else}
+              <span class="model">{modelLabel(a.model, app.models)}</span>
+              {#if a.prompts || a.activeMs || a.activeSince}
+                <span class="sep">·</span><span class="num">{duration(a)}</span>
+              {:else}
+                <span class="sep">·</span><span>{t('nav.sidebar.noMessage')}</span>
+              {/if}
+              {#if wfStep}
+                <!-- Where it is in its workflow takes the place of its plan, which stays in its banner (choice 145). -->
+                <span class="sep">·</span><span class="wf-mini" use:tip={wfNext}><Icon name="flow" size={14} /><span>{wfStep}</span></span>
+              {:else if plan}
+                <!-- How far the agent is through its plan: the bar says it at a glance, the words are read. -->
+                <span class="sep">·</span><span class="plan-mini"
+                  ><span class="plan-text"
+                    >{plan.subs
+                      ? t('plan.miniSubs', { done: plan.done, total: plan.total, count: plan.subs })
+                      : t('plan.mini', { done: plan.done, total: plan.total })}</span
+                  ><span class="plan-bar" aria-hidden="true"><i style:--pct={plan.percent}></i></span></span
+                >
+              {:else if a.worktree}
+                <!-- Its own branch, when the line has room for it (no plan): whole in the tooltip. -->
+                <span class="sep">·</span><span class="branch" use:tip={a.worktree.branch}
+                  ><Icon name="branch" size={12} /><span class="bn"
+                    >{shortBranch(a.worktree.branch, a.worktree.existing ? '' : project.agentBranchPrefix)}</span
+                  ></span
+                >
+              {/if}
+            {/if}
+            {#if a.worktreePending}<span class="sep">·</span><span class="wt" use:tip={t('nav.sidebar.worktreeLaterTitle')}
+                >{t('nav.sidebar.worktreeLater')}</span
+              >{/if}
+          </div>
+          {#if a.status === 'waiting'}
+            <!-- What it waits on, answered from here (2.0, new): its choices clicked, or its keys 1, 2… (listKey). Questions one
+               after the other; a permission allowed, for good or for the session, or refused. What does not hold on the card
+               is answered in its conversation. -->
+            {@const req = a.requests?.[0]}
+            <div class="a-ask">
+              {#if ask?.kind === 'question'}
+                {@const step = shownStep(ask)}
+                {#if ask.note}<p class="note">{revealHidden(ask.note)}</p>{/if}
+                {#if ask.questions.length > 1}
+                  <span class="step">{t('nav.sidebar.step', { n: step + 1, count: ask.questions.length })}</span>
+                {/if}
+                <p>{ask.questions[step].question}</p>
+                {@render choices(a, ask)}
+              {:else if ask}
+                <p class="perm"><span class="tool">{toolLabel(ask.tool)}</span> <span class="arg mono">{revealHidden(ask.arg)}</span></p>
+                {#if ask.note}<p class="note">{revealHidden(ask.note)}</p>{/if}
+                {@render choices(a, ask)}
+              {:else if req}
+                <p class="clip">
+                  {req.kind === 'question'
+                    ? req.questions.map((x) => x.question).join(' · ')
+                    : req.tool === 'ExitPlanMode'
+                      ? t('stats.overview.proposesPlanThen', { engine: speakerOf(a.engine), mode: modeLabel(planResume(a)) })
+                      : `${req.tool}${req.arg ? ` ${req.arg.split('\n')[0]}` : ''}`}
+                </p>
+                <button
+                  class="in-conv"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    app.selectAgent(a.id);
+                  }}>{t('nav.sidebar.inConversation')}<Icon name="right" size={12} /></button
+                >
+              {/if}
+            </div>
+          {:else if act || s.tokens > 0 || s.cost > 0}
+            <div class="a-act" use:tip={s.estimated ? estimateHint(s) : undefined}>
+              {#if act?.kind === 'doing'}
+                <b>{act.verb}</b>{#if act.what}<span class="tgt mono">{act.what}</span>{/if}
+              {:else if act?.kind === 'thinking'}
+                <span class="tgt">{t('stats.overview.thinking')}</span>
+              {:else if act?.kind === 'over'}
+                <span class="ok"><Icon name="check" size={14} /></span><span class="tgt">{t('nav.sidebar.over')} · {act.goes}</span>
+              {:else if act?.kind === 'result'}
+                <span class="ok"><Icon name="check" size={14} /></span><span class="tgt"
+                  >{t('nav.sidebar.changed', { count: act.files })}</span
+                >
+              {/if}
+              <span class="spend">{cardSpend(a)}</span>
+            </div>
           {/if}
         </div>
-      {/if}
+        {#if a.prDown && !a.ticketId}
+          <!-- Its code host's plugin does not answer (INT-8.1): said under the card, the pull requests read last kept. -->
+          <div class="prdown" role="status" data-pr-down={a.id} use:tip={t('prs.downHint', { why: a.prDown, word: prWord(a) })}>
+            <Icon name="plug" size={12} />{t('prs.down', { word: prWord(a) })}
+          </div>
+        {/if}
+        {#if !prs.length && !a.ticketId && ciShown(a.branchCi)}
+          <!-- Its branch pushed without a pull request (ESC-63): its CI, its jobs on a click. -->
+          <div class="prs" role="group" aria-label={t('prs.group', { name: a.name })} data-branch-ci={a.id}>
+            <CiPill ci={a.branchCi} of={{ kind: 'agent', id: a.id }} projectId={a.projectId} />
+          </div>
+        {/if}
+        {#if prs.length}
+          <!-- Under the card, not in it (the card is a button): its pull requests (ESC-64), the ones to merge first; a number
+             opens it, the corrections go to the agent on a click only. -->
+          {@const word = prWord(a)}
+          <div class="prs" role="group" aria-label={t('prs.group', { name: a.name })} data-prs={a.id}>
+            {#each prs as p (prKey(p))}
+              <div class="pr" data-pr={p.number}>
+                <button
+                  class="prnum {prTone(p)}"
+                  aria-label={t('prs.chipLabel', { word, number: p.number, state: stateWord(p) })}
+                  use:tip={{ text: prTip(word, p), aria: false }}
+                  onclick={() => openPr(p)}><Icon name={prIcon(p)} size={12} />{p.repo ? `${repoLabel(p.repo)} ` : ''}#{p.number}</button
+                >
+                <!-- Where it goes and its CI in words (ESC-305): « #41 → main · CI en échec ». -->
+                <span class="prto">{t('prs.to', { base: p.base })}</span>
+                {#if p.checks && p.state === 'open'}
+                  <!-- Its CI opens the side panel's « PR et CI » on it, even where the panel is too narrow for that tab (choice 189). -->
+                  <button class="prci {p.checks}" use:tip={t('prs.seeCi', { word, number: p.number })} onclick={() => showCi(a.id)}
+                    >{t(`prs.checks.${p.checks}`)}</button
+                  >
+                {/if}
+                {#if !a.archived && canFixChecks(p)}
+                  <button
+                    class="prfix"
+                    use:tip={t('prs.fixChecksHint', { agent: a.name, word, number: p.number })}
+                    onclick={() => fixPr(a, p, 'checks')}>{t('prs.fixChecks')}</button
+                  >
+                {/if}
+                {#if !a.archived && canFixReviews(p)}
+                  <button
+                    class="prfix"
+                    use:tip={t('prs.fixReviewsHint', { agent: a.name, word, number: p.number })}
+                    onclick={() => fixPr(a, p, 'reviews')}>{t('prs.fixReviews')}</button
+                  >
+                {/if}
+              </div>
+            {/each}
+          </div>
+        {/if}
+        {#if subs}
+          <!-- Under the card of the agent open only (choice 10 of the 2.0 design): its subagents, unfolded while one runs. -->
+          {@const open = app.subsOpen[a.id] ?? subs.running.length > 0}
+          {@const doneOpen = finishedOpen[a.id] ?? false}
+          <div class="subl" class:sel role="group" aria-label={t('subagents.toggle', { name: a.name })}>
+            <button class="sh subs-toggle" aria-expanded={open} onclick={() => (app.subsOpen[a.id] = !open)}>
+              {@render chev(open)}
+              <span class="lbl">{t('subagents.title')}</span>
+              {#if subs.running.length}<span class="cnt run">{t('subagents.runningCount', { count: subs.running.length })}</span>{/if}
+              {#if subs.finished.length}<span class="cnt">{t('subagents.finishedCount', { count: subs.finished.length })}</span>{/if}
+            </button>
+            {#if open}
+              <!-- The role is said again: a list with no bullets is a list no more for the web views of macOS. -->
+              <!-- svelte-ignore a11y_no_redundant_roles -->
+              <ul class="sub-list" role="list">
+                {#each runningAll[a.id] ? subs.running : subs.running.slice(0, RUNNING_SHOWN) as s (s.id)}
+                  {@render subRow(a, s)}
+                {/each}
+                {#if subs.running.length > RUNNING_SHOWN}
+                  {@render moreRows(
+                    runningAll[a.id] ?? false,
+                    t('subagents.moreRunning', { count: subs.running.length - RUNNING_SHOWN }),
+                    () => (runningAll[a.id] = !runningAll[a.id]),
+                  )}
+                {/if}
+                {#if subs.finished.length}
+                  <li class="finished">
+                    <button class="done-toggle" aria-expanded={doneOpen} onclick={() => (finishedOpen[a.id] = !doneOpen)}>
+                      {@render chev(doneOpen)}{t('subagents.finishedToggle', { count: subs.finished.length })}
+                    </button>
+                    {#if doneOpen}
+                      <!-- svelte-ignore a11y_no_redundant_roles -->
+                      <ul class="sub-list done" role="list">
+                        {#each finishedAll[a.id] ? subs.finished : subs.finished.slice(0, FINISHED_SHOWN) as s (s.id)}
+                          {@render subRow(a, s)}
+                        {/each}
+                        {#if subs.finished.length > FINISHED_SHOWN}
+                          {@render moreRows(
+                            finishedAll[a.id] ?? false,
+                            t('subagents.moreFinished', { count: subs.finished.length - FINISHED_SHOWN }),
+                            () => (finishedAll[a.id] = !finishedAll[a.id]),
+                          )}
+                        {/if}
+                      </ul>
+                    {/if}
+                  </li>
+                {/if}
+              </ul>
+            {/if}
+          </div>
+        {/if}
+        {#if bg}
+          <!-- Under the card of the agent open too, after the subagents: what its harness runs in the background. -->
+          {@const open = app.bgOpen[a.id] ?? bg.runningTotal > 0}
+          {@const doneOpen = bgFinishedOpen[a.id] ?? false}
+          <div class="subl bgs" class:sel role="group" aria-label={t('bgtasks.toggle', { name: a.name })} data-bg-group={a.id}>
+            <button class="sh subs-toggle" aria-expanded={open} onclick={() => (app.bgOpen[a.id] = !open)}>
+              {@render chev(open)}
+              <span class="lbl">{t('bgtasks.title')}</span>
+              {#if bg.runningTotal}<span class="cnt run">{t('bgtasks.runningCount', { count: bg.runningTotal })}</span>{/if}
+              {#if bg.finishedTotal}<span class="cnt">{t('bgtasks.finishedCount', { count: bg.finishedTotal })}</span>{/if}
+            </button>
+            {#if open}
+              <!-- svelte-ignore a11y_no_redundant_roles -->
+              <ul class="sub-list" role="list">
+                {#each bg.running as r (r.id)}
+                  {@render bgItem(a, r)}
+                {/each}
+                {#if bg.runningTotal > BG_RUNNING_SHOWN}
+                  {@render moreRows(
+                    bgRunningAll[a.id] ?? false,
+                    t('bgtasks.moreRunning', { count: bg.runningTotal - BG_RUNNING_SHOWN }),
+                    () => (bgRunningAll[a.id] = !bgRunningAll[a.id]),
+                    t('bgtasks.lessList'),
+                  )}
+                {/if}
+                {#if bg.finishedTotal}
+                  <li class="finished">
+                    <button class="done-toggle" aria-expanded={doneOpen} onclick={() => (bgFinishedOpen[a.id] = !doneOpen)}>
+                      {@render chev(doneOpen)}{t('bgtasks.finishedToggle', { count: bg.finishedTotal })}
+                    </button>
+                    {#if doneOpen}
+                      <!-- svelte-ignore a11y_no_redundant_roles -->
+                      <ul class="sub-list done" role="list">
+                        {#each bg.finished as r (r.id)}
+                          {@render bgItem(a, r)}
+                        {/each}
+                        {#if bg.finishedTotal > BG_FINISHED_SHOWN}
+                          {@render moreRows(
+                            bgFinishedAll[a.id] ?? false,
+                            t('bgtasks.moreFinished', { count: bg.finishedTotal - BG_FINISHED_SHOWN }),
+                            () => (bgFinishedAll[a.id] = !bgFinishedAll[a.id]),
+                            t('bgtasks.lessList'),
+                          )}
+                        {/if}
+                      </ul>
+                    {/if}
+                  </li>
+                {/if}
+              </ul>
+            {/if}
+          </div>
+        {/if}
+        {#if driven.length}
+          <!-- Under the card too (ESC-138): the agents of Escouade it set to work through the MCP server, while they work. -->
+          {@const open = drivenOpen[a.id] ?? true}
+          <div class="subl" class:sel role="group" aria-label={t('bgtasks.later.drivenToggle', { name: a.name })} data-driven-group={a.id}>
+            <button class="sh subs-toggle" aria-expanded={open} onclick={() => (drivenOpen[a.id] = !open)}>
+              {@render chev(open)}
+              <span class="lbl">{t('bgtasks.later.drivenTitle')}</span>
+              <span class="cnt run">{t('bgtasks.later.drivenCount', { count: driven.length })}</span>
+            </button>
+            {#if open}
+              <!-- svelte-ignore a11y_no_redundant_roles -->
+              <ul class="sub-list" role="list">
+                {#each driven as d (d.id)}
+                  <li>
+                    <button class="sub" aria-label={t('bgtasks.later.drivenOpen', { name: d.name })} onclick={() => app.selectAgent(d.id)}>
+                      <span class="sdot running" aria-hidden="true"></span>
+                      <span class="stext"
+                        ><span class="sline"><span class="stitle">{d.name}</span><span class="sstate">{statusLabel(d.status)}</span></span
+                        ></span
+                      >
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          </div>
+        {/if}
+      </div>
     {/snippet}
 
     <div class="agents" data-sidebar-drop role="presentation">
@@ -1504,13 +1531,15 @@
             </div>
           </section>
         {/if}
-      {:else}
+      {/each}
+      {@render line(null, null)}
+      {#if !shownAgents(items).length}
+        <!-- No agent at all (empty folders may remain): the invitation stays. -->
         <div class="empty">
           <p>{t('nav.sidebar.empty')}</p>
           <button class="btn" onclick={() => app.newAgent(project.id)}><Icon name="plus" size={14} />{t('nav.sidebar.createAgent')}</button>
         </div>
-      {/each}
-      {@render line(null, null)}
+      {/if}
 
       {#if app.archivedAgents.length}
         <button class="archived-h" aria-expanded={app.showArchived} onclick={() => (app.showArchived = !app.showArchived)}>
@@ -1882,6 +1911,11 @@
     margin: 0 -4px;
     padding: 0 4px 12px;
     mask-image: linear-gradient(to bottom, black calc(100% - 28px), transparent);
+  }
+  .row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
   .agent {
     --tone: var(--run);
@@ -2611,6 +2645,7 @@
   }
   /* Where a dragged agent or folder lands. */
   .drop {
+    pointer-events: none;
     flex: none;
     height: 3px;
     margin: -2px 0;
