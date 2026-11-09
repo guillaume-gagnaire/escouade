@@ -299,6 +299,12 @@ jobs:
           codesign --verify --deep --strict "$app"
           # Only a warning: the build already requires the notarization, and Gatekeeper's reading must not keep a release a draft.
           if [ -n "$APPLE_ID" ]; then spctl --assess --type execute --verbose=2 "$app" || echo "::warning::spctl does not accept $app (the notarization is required by the build itself)"; fi
+          # The plugins' WASM modules run from memory wasmtime makes executable: without these entitlements the hardened
+          # runtime kills the app as soon as a plugin starts (2.2.0-beta.3 on every Mac). Their absence keeps the release a draft.
+          ent=$(codesign -d --entitlements - --xml "$app" 2>/dev/null || codesign -d --entitlements :- "$app" 2>/dev/null)
+          for k in com.apple.security.cs.allow-jit com.apple.security.cs.allow-unsigned-executable-memory com.apple.security.device.audio-input; do
+            echo "$ent" | grep -q "$k" || { echo "::error::$app is signed without the entitlement $k"; exit 1; }
+          done
 
       # escouade-plugin, the authors' command, compiles and plays the run.js plugins without Node (ESC-322): it embeds the
       # escouade-js of the `escouade-js` job, the same as the app's. A build without it keeps the release a draft.
