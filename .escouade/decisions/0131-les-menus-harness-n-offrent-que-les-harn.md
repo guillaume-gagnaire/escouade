@@ -1,9 +1,9 @@
 ---
-number: null
+number: 131
 id: "les-menus-harness-n-offrent-que-les-harn"
 title: "Les menus « Harness » n'offrent que les harness utilisables"
 date: "2026-11-08"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-391"
 pages: ["harness/harness"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"harness/harness","added":17,"removed":8}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-09T07:18:24+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

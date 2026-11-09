@@ -3,7 +3,7 @@ title: "Harness"
 subject: "Harness"
 sources: ["docs/SPEC.md","docs/PLUGINS.md","docs/TODO-2.1.md"]
 tickets: ["ESC-42","ESC-49","ESC-133","ESC-159","ESC-266","ESC-268","ESC-269","ESC-270","ESC-271","ESC-272","ESC-273","ESC-274","ESC-275","ESC-209","ESC-391"]
-decisions: ["les-menus-harness-n-offrent-que-les-harn"]
+decisions: [131]
 compared: "2026-10-31T10:07:12+01:00"
 order: 3
 ---
