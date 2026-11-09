@@ -122,6 +122,45 @@ export function prune(layout: PaneLayout, keep: (item: PaneItem) => boolean): Pa
   return normal(root, layout.active);
 }
 
+/**
+ * The layout once the contents gone (`keep` false: an agent archived or deleted, a terminal closed, a launch removed)
+ * have left (ESC-399). The pane of an agent gone takes `standIn`'s agent (the one the app shows in its place, never
+ * one already shown), in the same place with the same share; the pane of a content without one closes, its sibling
+ * taking its place (and the active pane, when it was). The other panes stay as they are. Down to one pane, no layout:
+ * `alone` is the content left, to show alone.
+ */
+export function settle(
+  layout: PaneLayout,
+  keep: (item: PaneItem) => boolean,
+  standIn: (gone: PaneItem, shown: Set<string>) => PaneItem | null,
+): { layout: PaneLayout | null; alone: PaneItem | null } {
+  const all = leaves(layout.root);
+  if (all.every(keep)) return { layout, alone: null };
+  const shown = new Set(all.filter(keep).map(itemKey));
+  let root: PaneNode | null = layout.root;
+  let active = layout.active;
+  for (const x of all) {
+    if (keep(x) || !root) continue;
+    const k = itemKey(x);
+    const by = x.kind === 'agent' ? standIn(x, shown) : null;
+    if (by && !shown.has(itemKey(by))) {
+      const bk = itemKey(by);
+      shown.add(bk);
+      root = mapLeaves(root, (y) => ({ leaf: itemKey(y) === k ? by : y }));
+      if (active === k) active = bk;
+      continue;
+    }
+    if (active === k) {
+      const sib = siblingOf(root, k);
+      active = sib ? itemKey(leaves(sib)[0]) : '';
+    }
+    root = without(root, k);
+  }
+  if (!root) return { layout: null, alone: null };
+  if (isLeaf(root)) return { layout: null, alone: root.leaf };
+  return { layout: normal(root, active), alone: null };
+}
+
 /** The split at `path` (`a`/`b` from the root, `''` the root) set to `ratio`, held between the bounds. */
 export function setRatio(layout: PaneLayout, path: string, ratio: number): PaneLayout {
   const r = Math.min(1 - MIN_RATIO, Math.max(MIN_RATIO, ratio));

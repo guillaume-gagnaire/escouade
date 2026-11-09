@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Split screen: archiving or deleting an agent no longer undoes the layout. Another agent takes its place, and the terminal you put beside or below stays where it was.
 - The plugins Escouade installs by itself from the installer now count in the store’s number of installs, if you accepted the statistics, even when installed offline or before you answered; those of the 2.2 betas count once.
 - Launch commands and the steps of “▶ Test” are interactive while they run: you answer their prompts, use a dev server's keys and stop them with Ctrl+C in their view, as in a terminal. Once ended, their log is read-only again.
 - The “Harness” menus now offer only the harnesses you can use: program installed, plugin on and at least one account. The one already chosen stays listed with the reason, and Settings › Accounts and harnesses still shows those without an account yet.

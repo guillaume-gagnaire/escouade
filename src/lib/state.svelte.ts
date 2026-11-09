@@ -39,6 +39,7 @@ import {
   place as placePane,
   prune as prunePanes,
   setRatio as setPaneRatio,
+  settle as settlePanes,
   type PaneItem,
   type PaneLayout,
   type PaneZone,
@@ -819,6 +820,8 @@ class AppState {
         if (prev && atWork(prev) && !atWork(e.agent)) this.runHooks(this.turnEndHooks, e.agent.id);
         // Its setup is over: what it wrote is in its log (and its failure in the conversation).
         if (!e.agent.setup) this.dropSetupOutput(e.agent.id);
+        // Archived: its pane, if it has one, goes to another agent (ESC-399).
+        if (e.agent.archived && !prev?.archived) this.settlePanes();
         break;
       }
       case 'agentRemoved':
@@ -829,6 +832,7 @@ class AppState {
         this.dropSetupOutput(e.id);
         dropConversation(e.id);
         this.forgetEditorSource(e.projectId, e.id);
+        this.settlePanes();
         break;
       case 'ticket': {
         const prev = this.tickets[e.ticket.id];
@@ -844,6 +848,8 @@ class AppState {
         break;
       case 'project':
         this.replaceProject(e.project);
+        // A launch removed leaves its pane.
+        this.settlePanes();
         break;
       case 'devPage':
         for (const f of this.devPageHooks) f(e.page);
@@ -1288,6 +1294,43 @@ class AppState {
     if (layout) all[projectId] = layout;
     else delete all[projectId];
     this.ui.panes = all;
+    this.persistUi();
+  }
+
+  /**
+   * Every project's split screen once the contents gone have left it (ESC-399): an agent archived or deleted (from its
+   * menu, the board, the MCP server, another screen), a terminal closed, a launch removed. The pane of an agent gone
+   * takes the agent the app shows in its place, the one it would show alone (the first of the project's not shown);
+   * without one it closes. The other panes keep their place and share; the last one left is the one shown alone. The
+   * selection follows the active pane.
+   */
+  settlePanes() {
+    for (const [projectId, raw] of Object.entries(this.ui.panes ?? {})) {
+      const p = this.projects.find((x) => x.id === projectId);
+      if (!p) continue;
+      const standIn = (_: PaneItem, shown: Set<string>): PaneItem | null => {
+        const a = Object.values(this.agents)
+          .filter((x) => x.projectId === projectId && !x.archived && !shown.has(`agent:${x.id}`))
+          .sort((x, y) => x.createdAt - y.createdAt)[0];
+        return a ? { kind: 'agent', id: a.id } : null;
+      };
+      const { layout, alone } = settlePanes(raw, (x) => this.paneExists(p, x), standIn);
+      if (layout === raw) continue;
+      this.setPanes(projectId, layout);
+      if (alone) this.selectIn(projectId, alone);
+      else if (layout && layout.active !== raw.active) this.selectIn(projectId, activeItem(layout));
+    }
+  }
+
+  /** `item` selected the classic way in the project `projectId`, on screen or not: alone, or the active pane's. */
+  private selectIn(projectId: string, item: PaneItem) {
+    this.selectedTerm[projectId] = item.kind === 'term' ? item.id : null;
+    this.selectedLaunch[projectId] = item.kind === 'launch' ? item.id : null;
+    if (item.kind === 'agent') this.ui.selectedAgent[projectId] = item.id;
+    if (item.kind === 'editor') {
+      this.editorReady(projectId);
+      if (!this.ui.panes?.[projectId]) this.editor[projectId].on = true;
+    } else this.closeEditor(projectId);
     this.persistUi();
   }
 

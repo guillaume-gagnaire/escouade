@@ -1786,3 +1786,127 @@ describe('the view of a background task (ESC-14)', () => {
     });
   });
 });
+
+describe('the split screen when a content goes (ESC-399)', () => {
+  const t1 = { id: 't1', projectId: 'p1', name: 'pwsh-1', shell: 'pwsh' };
+  const t2 = { id: 't2', projectId: 'p2', name: 'pwsh-1', shell: 'pwsh' };
+  const runs = [{ id: 'c1', name: 'Front', command: 'npm run dev', shell: 'pwsh', cwd: '' }];
+  const three = [agent(), agent({ id: 'a2', name: 'tests-e2e', createdAt: 2 }), agent({ id: 'a3', name: 'docs', createdAt: 3 })];
+
+  /** The agent a1 on top, the terminal t1 below at 70 / 30. */
+  async function agentOverTerminal(over: Partial<InitialState> = {}) {
+    const started = await start(over);
+    app.terminals = [t1];
+    app.selectAgent('a1');
+    app.openBeside({ kind: 'term', id: 't1' }, 'bottom');
+    app.setPaneRatio('', 0.7);
+    app.activatePane('agent:a1');
+    return started;
+  }
+
+  it('archiving the agent on top keeps the terminal below: the agent the app selects takes its pane, same share', async () => {
+    const { emit } = await agentOverTerminal();
+    emit({ type: 'agent', agent: agent({ archived: true }) });
+    expect(app.panesOn).toBe(true);
+    expect(app.panes?.root).toEqual({
+      dir: 'col',
+      ratio: 0.7,
+      a: { leaf: { kind: 'agent', id: 'a2' } },
+      b: { leaf: { kind: 'term', id: 't1' } },
+    });
+    expect(app.panes?.active).toBe('agent:a2');
+    expect(app.agent?.id).toBe('a2');
+    // Written: the layout comes back so at the next start.
+    expect(app.ui.panes?.p1.root).toEqual(app.panes?.root);
+  });
+
+  it('deleting it does the same', async () => {
+    const { emit } = await agentOverTerminal();
+    emit({ type: 'agentRemoved', id: 'a1', projectId: 'p1' });
+    expect(app.panes?.root).toEqual({
+      dir: 'col',
+      ratio: 0.7,
+      a: { leaf: { kind: 'agent', id: 'a2' } },
+      b: { leaf: { kind: 'term', id: 't1' } },
+    });
+  });
+
+  it('the terminal keeps the active pane when it had it', async () => {
+    const { emit } = await agentOverTerminal();
+    app.activatePane('term:t1');
+    emit({ type: 'agent', agent: agent({ archived: true }) });
+    expect(app.panes?.active).toBe('term:t1');
+    expect(app.term?.id).toBe('t1');
+  });
+
+  it('with no other agent to show, its pane closes and the terminal alone fills the work area', async () => {
+    const { emit } = await agentOverTerminal({ agents: [agent(), agent({ id: 'b1', projectId: 'p2', name: 'landing' })] });
+    emit({ type: 'agent', agent: agent({ archived: true }) });
+    expect(app.panes).toBeNull();
+    expect(app.singleItem).toEqual({ kind: 'term', id: 't1' });
+    expect(app.term?.id).toBe('t1');
+  });
+
+  it('takes an agent not already shown, else closes its pane and keeps the others', async () => {
+    const { emit } = await agentOverTerminal({ agents: three });
+    app.openBeside({ kind: 'agent', id: 'a2' }, 'right');
+    app.activatePane('agent:a1');
+    // a1 | a2 over t1: a3 takes a1's pane.
+    emit({ type: 'agent', agent: agent({ archived: true }) });
+    expect(app.panes?.root).toMatchObject({
+      dir: 'col',
+      ratio: 0.7,
+      a: { dir: 'row', a: { leaf: { id: 'a3' } }, b: { leaf: { id: 'a2' } } },
+    });
+    // a3 archived in turn: no agent left that is not shown, its pane closes, a2 over t1 stay.
+    emit({ type: 'agent', agent: { ...three[2], archived: true } });
+    expect(app.panes?.root).toEqual({
+      dir: 'col',
+      ratio: 0.7,
+      a: { leaf: { kind: 'agent', id: 'a2' } },
+      b: { leaf: { kind: 'term', id: 't1' } },
+    });
+    expect(app.panes?.active).toBe('agent:a2');
+    expect(app.agent?.id).toBe('a2');
+  });
+
+  it('holds for an agent archived in a project not on screen (the board, the MCP server)', async () => {
+    const { emit } = await start();
+    app.terminals = [t1, t2];
+    app.selectProject('p2');
+    app.selectAgent('b1');
+    app.openBeside({ kind: 'term', id: 't2' }, 'bottom');
+    app.selectProject('p1');
+    emit({ type: 'agent', agent: agent({ id: 'b1', projectId: 'p2', name: 'landing', archived: true }) });
+    expect(app.ui.panes?.p2).toBeUndefined();
+    expect(app.selectedTerm.p2).toBe('t2');
+    app.selectProject('p2');
+    expect(app.term?.id).toBe('t2');
+  });
+
+  it('a terminal closed in a pane leaves it, the others keep their place and share', async () => {
+    await agentOverTerminal({ agents: three });
+    app.openBeside({ kind: 'agent', id: 'a2' }, 'right');
+    app.setPaneRatio('a', 0.4);
+    app.activatePane('term:t1');
+    const { closeTerminal } = await import('./term-actions');
+    closeTerminal('t1');
+    expect(app.panes?.root).toEqual({
+      dir: 'row',
+      ratio: 0.4,
+      a: { leaf: { kind: 'agent', id: 'a1' } },
+      b: { leaf: { kind: 'agent', id: 'a2' } },
+    });
+    expect(app.panes?.active).toBe(`agent:${app.agent?.id}`);
+    expect(app.ui.panes?.p1.root).toEqual(app.panes?.root);
+  });
+
+  it('a launch gone from its pane leaves it, the last pane left is the one shown', async () => {
+    const { emit } = await start({ projects: [project({ runCommands: runs }), project({ id: 'p2', name: 'studio-web' })] });
+    app.selectAgent('a2');
+    app.openBeside({ kind: 'launch', id: 'c1' }, 'bottom');
+    emit({ type: 'project', project: project() });
+    expect(app.panes).toBeNull();
+    expect(app.singleItem).toEqual({ kind: 'agent', id: 'a2' });
+  });
+});
