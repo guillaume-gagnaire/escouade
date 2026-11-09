@@ -5,5 +5,13 @@
   <!-- Dictation (ESC-96): the hardened runtime of a notarized app keeps the microphone from it without this. -->
   <key>com.apple.security.device.audio-input</key>
   <true/>
+  <!-- The plugins' WASM modules (WASM-ALL): wasmtime compiles them, or loads them precompiled from the cache, into memory
+       it then makes executable (mmap, then mprotect to r-x, without MAP_JIT). The hardened runtime kills the app at the
+       first instruction run from such a page (EXC_BAD_ACCESS, Code Signature Invalid) unless both are allowed:
+       2.2.0-beta.3 died 4 s after its start on every Mac whose Claude Code plugin started. -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
 </dict>
 </plist>
