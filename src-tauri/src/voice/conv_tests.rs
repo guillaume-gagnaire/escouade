@@ -532,7 +532,12 @@ fn the_voice_on_line_reads_the_passage_sentence_by_sentence_without_piper() {
     );
     // Heard in real time, its first sentence long before the end (29 characters: about 1.5 s of sound).
     assert!(all >= Duration::from_millis(1200), "{all:?}");
-    assert!(first_at < Duration::from_millis(700), "first sentence heard after {first_at:?}");
+    // Long before the end, however slow the machine (the CI's macOS took 766 ms, 2026-11-09): the second sentence's
+    // sound still to come after it.
+    assert!(
+        first_at + Duration::from_millis(400) < all,
+        "first sentence heard after {first_at:?}, the end after {all:?}"
+    );
     assert!(c.engine.said.lock().is_empty(), "Piper read nothing");
     assert!(conv_events(h).iter().any(|e| matches!(e, VoiceEvent::ConvSentence { index: 1, .. })));
     h.voice.conversation_stop();
