@@ -766,6 +766,26 @@ impl CursorQuery {
     }
 }
 
+/// Ctrl+C typed in a terminal reaches its program (ESC-396): ConPTY makes it a console Ctrl+C
+/// event, which a process ignores when it was started with Ctrl+C ignored, a flag every process
+/// inherits from the one that started it. Escouade started in a new process group (by a launcher,
+/// a test runner, a Node script with `detached`) has it, and would pass it to the shells and launch
+/// commands of its terminals, which Ctrl+C would then never stop. Escouade has no console of its
+/// own, so taking Ctrl+C back costs it nothing; done once, before the first terminal starts.
+#[cfg(windows)]
+fn let_ctrl_c_through() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        // SAFETY: no handler routine; FALSE only clears the process's "Ctrl+C ignored" flag.
+        if unsafe { windows_sys::Win32::System::Console::SetConsoleCtrlHandler(None, 0) } == 0 {
+            log::warn!(
+                "Ctrl+C ignored by the terminals' programs: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+    });
+}
+
 /// Starts the thread writing to a terminal's input what `write` queues; returns the queue, and
 /// the count of the bytes in it.
 fn spawn_input(
@@ -1136,6 +1156,8 @@ impl PtyManager {
         on_data: impl Fn(Vec<u8>) + Send + 'static,
         on_exit: impl FnOnce(Option<u32>) + Send + 'static,
     ) -> Result<()> {
+        #[cfg(windows)]
+        let_ctrl_c_through();
         let pty = native_pty_system();
         let pair = pty
             .openpty(PtySize {
@@ -2728,6 +2750,92 @@ mod windows_powershell_tests {
             screen_writes(&repaint).iter().all(|&row| row >= 5),
             "{repaint:?}"
         );
+    }
+
+    /// Starts `command` as a launch command; returns its id, its output so far and its exit code.
+    #[allow(clippy::type_complexity)]
+    fn start_launch(
+        pty: &PtyManager,
+        shell: &ShellInfo,
+        command: &str,
+    ) -> (String, Arc<Mutex<String>>, Arc<Mutex<Option<Option<u32>>>>) {
+        let out = Arc::new(Mutex::new(String::new()));
+        let exit = Arc::new(Mutex::new(None));
+        let (sink, done) = (out.clone(), exit.clone());
+        let info = TermInfo {
+            id: new_test_id(),
+            project_id: "p".into(),
+            name: "run".into(),
+            shell: shell.id.clone(),
+        };
+        let id = info.id.clone();
+        let cwd = std::env::temp_dir().to_string_lossy().to_string();
+        pty.spawn_command(
+            info,
+            shell,
+            "",
+            &cwd,
+            (120, 30),
+            vec![],
+            1,
+            command,
+            move |b| sink.lock().push_str(&String::from_utf8_lossy(&b)),
+            move |code| *done.lock() = Some(code),
+        )
+        .unwrap();
+        (id, out, exit)
+    }
+
+    fn wait_for(what: &str, until: impl Fn() -> bool, out: &Mutex<String>) {
+        let start = Instant::now();
+        while !until() {
+            assert!(
+                start.elapsed() < Duration::from_secs(90),
+                "{what}: {}",
+                out.lock()
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    /// ESC-396: what the window types in a launch command's view reaches its program (an answer to
+    /// its prompt).
+    #[test]
+    fn a_launch_command_reads_what_the_window_types() {
+        let _one = one_shell_at_a_time();
+        let Some(shell) = windows_powershell() else {
+            return;
+        };
+        let pty = PtyManager::default();
+        let (id, out, exit) = start_launch(
+            &pty,
+            &shell,
+            "$r = Read-Host 'Ton nom'; Write-Output ('bonjour-' + $r)",
+        );
+        wait_for("no prompt", || out.lock().contains("Ton nom"), &out);
+        pty.write_from_window(&id, b"escouade\r").unwrap();
+        wait_for("did not end", || exit.lock().is_some(), &out);
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(out.lock().contains("bonjour-escouade"), "{}", out.lock());
+        assert_eq!(*exit.lock(), Some(Some(0)));
+    }
+
+    /// ESC-396: Ctrl+C typed in a launch command's view stops the program running there.
+    #[test]
+    fn ctrl_c_typed_in_a_launch_command_stops_it() {
+        let _one = one_shell_at_a_time();
+        let Some(shell) = windows_powershell() else {
+            return;
+        };
+        let pty = PtyManager::default();
+        let (id, out, exit) = start_launch(
+            &pty,
+            &shell,
+            "Write-Output tourne; while ($true) { Start-Sleep -Milliseconds 100 }",
+        );
+        wait_for("no output", || out.lock().contains("tourne"), &out);
+        pty.write_from_window(&id, b"\x03").unwrap();
+        wait_for("Ctrl+C did not stop it", || exit.lock().is_some(), &out);
     }
 
     /// Rows `out` moves the cursor to, or erases from (1 for an erase of the screen).

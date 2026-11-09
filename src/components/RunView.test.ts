@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../lib/i18n';
@@ -8,6 +8,8 @@ import { agent, fakeBackend, project, resetApp } from '../test/ipc';
 import RunView from './RunView.svelte';
 
 const mounted = vi.hoisted(() => [] as (string | null)[]);
+// Whether each log took the keyboard (ESC-396), as the view said, in order.
+const live = vi.hoisted(() => [] as [string, boolean][]);
 vi.mock('../lib/terminals', () => ({
   launchLog: () => ({
     term: {
@@ -25,6 +27,7 @@ vi.mock('../lib/terminals', () => ({
   getXTerm: () => undefined,
   logKey: (id: string) => `run:${id}`,
   mountTerminal: (key: string, el: HTMLElement | null) => mounted.push(el ? key : null),
+  setLogLive: (id: string, on: boolean) => live.push([id, on]),
 }));
 
 const FRONT: RunCommand = { id: 'c1', name: 'Front', command: 'npm run dev', shell: 'pwsh', cwd: 'web' };
@@ -35,6 +38,19 @@ describe('RunView', () => {
     resetApp({ projects: [P] });
     app.shells = [{ id: 'pwsh', label: 'PowerShell 7', path: 'pwsh.exe' }];
     mounted.length = 0;
+    live.length = 0;
+  });
+
+  it('lets its log take the keyboard while its run lasts, and makes it read-only once it ended (ESC-396)', async () => {
+    fakeBackend({ run_start: () => ({ id: 't1', projectId: 'p1', name: 'Front', shell: 'pwsh' }) });
+    render(RunView, { cmd: FRONT, project: P });
+    expect(live.at(-1)).toEqual(['c1', false]);
+    await userEvent.click(screen.getAllByRole('button', { name: /Lancer/ })[0]);
+    await waitFor(() => expect(live.at(-1)).toEqual(['c1', true]));
+    // Its process ended (as the state does on the backend's terminalExit).
+    Object.assign(app.launches.c1, { status: 'done', ptyId: null, code: 0 });
+    await waitFor(() => expect(live.at(-1)).toEqual(['c1', false]));
+    expect(screen.getByText('terminé')).toBeInTheDocument();
   });
 
   it('shows the command, where it runs, and its log', () => {

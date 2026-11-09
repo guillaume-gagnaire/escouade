@@ -1451,6 +1451,8 @@ export interface LaunchState {
   stopping: boolean;
   code: number | null;
   startedAt: number;
+  /** When the user last typed Ctrl+C in its view (ESC-396): an exit soon after is a stop, not a crash. */
+  interruptedAt?: number;
 }
 
 export interface Worktree {

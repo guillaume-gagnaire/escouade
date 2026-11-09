@@ -267,6 +267,9 @@ export const atWork = (a: Pick<Agent, 'status'>) => a.status === 'running' || a.
 /** How many of the last lines of the step running a worktree's setup the window keeps (as the backend does). */
 const SETUP_LINES = 500;
 
+/** How long after a Ctrl+C typed in a launch command's view its exit is taken for the user's stop (ESC-396). */
+const INTERRUPT_WINDOW_MS = 10_000;
+
 /** The title of the question asked on quitting, in the language of the interface (the open dialog is told by it). */
 const quitTitle = () => t('shell.quit.title');
 
@@ -1811,8 +1814,10 @@ class AppState {
     if (!found) return;
     const [id, l] = found;
     delete this.exitedTerms[ptyId];
-    const status = l.stopping ? 'stopped' : code === 0 ? 'done' : 'crashed';
-    Object.assign(l, { status, code, ptyId: null, stopping: false });
+    // Ended soon after a Ctrl+C typed in its view (ESC-396): the user stopped it, as with « Stopper ».
+    const interrupted = l.interruptedAt !== undefined && Date.now() - l.interruptedAt <= INTERRUPT_WINDOW_MS;
+    const status = l.stopping || (code !== 0 && interrupted) ? 'stopped' : code === 0 ? 'done' : 'crashed';
+    Object.assign(l, { status, code, ptyId: null, stopping: false, interruptedAt: undefined });
     if (status !== 'crashed') return;
     // « Voir le log »: its log in the main area, in its project.
     const projectId = this.launchProject(id);

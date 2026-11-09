@@ -1,4 +1,4 @@
-// Launch commands: each runs in its own read-only terminal, whose log outlives its runs.
+// Launch commands: each runs in its own terminal, whose log outlives its runs; it takes the keyboard while a run lasts.
 
 import { fTime } from './format';
 import { t } from './i18n';
@@ -8,12 +8,31 @@ import { app } from './state.svelte';
 import { disposeLog, launchLog } from './terminals';
 import type { LaunchState, Project, RunCommand } from './types';
 
-/** The command's log; the running process follows its size. */
+/** The terminal a command's run types into while it runs: none before its process is up, nor once it ended. */
+export function livePty(commandId: string): string | null {
+  const l = app.launches[commandId];
+  return l?.status === 'running' ? l.ptyId : null;
+}
+
+const CTRL_C = '\x03';
+
+/**
+ * The command's log; the running process follows its size, and gets what is typed in it (ESC-396). A Ctrl+C typed in it
+ * is noted: the exit it brings is the user's stop, not a crash (`app.onLaunchExit`).
+ */
 export function log(commandId: string) {
-  return launchLog(commandId, (cols, rows) => {
-    const pty = app.launches[commandId]?.ptyId;
-    if (pty) api.termResize(pty, cols, rows).catch(() => {});
-  });
+  return launchLog(
+    commandId,
+    (cols, rows) => {
+      const pty = app.launches[commandId]?.ptyId;
+      if (pty) api.termResize(pty, cols, rows).catch(() => {});
+    },
+    () => livePty(commandId),
+    (data) => {
+      const l = app.launches[commandId];
+      if (l?.status === 'running' && data.includes(CTRL_C)) l.interruptedAt = Date.now();
+    },
+  );
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

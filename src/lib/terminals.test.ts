@@ -133,6 +133,7 @@ import {
   openTerminal,
   pastedContent,
   roomOf,
+  setLogLive,
   setTerminalFontSize,
   ANSI_TOKENS,
 } from './terminals';
@@ -1833,6 +1834,71 @@ describe('what a terminal tells the log', () => {
       await new Promise((r) => setTimeout(r, 20));
       expect(b.called('term_report')).toEqual([]);
     });
+  });
+});
+
+describe('a launch command’s log and the keyboard (ESC-396)', () => {
+  let now = 1_000;
+  beforeEach(() => {
+    resetApp();
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    disposeLog('kb');
+  });
+
+  const press = (init: KeyboardEventInit) => keyHandlers.at(-1)!(new KeyboardEvent('keydown', init));
+
+  it('sends what the user types and pastes to its run while it lasts, and nothing once it ended', () => {
+    const b = fakeBackend({ term_write: () => 1 });
+    let pty: string | null = 'pty-1';
+    const x = launchLog(
+      'kb',
+      () => {},
+      () => pty,
+    );
+    const term = terms.at(-1)!;
+    // Made read-only: a key goes to the app, not to the log.
+    expect(press({ key: 'a' })).toBe(false);
+    setLogLive('kb', true);
+    expect(x.term.options).toMatchObject({ disableStdin: false, cursorBlink: true });
+    // An answer to a prompt, then Ctrl+C with nothing selected: both go to the program, as in a terminal.
+    expect(press({ key: 'y' })).toBe(true);
+    term.dataHandlers[0]('y');
+    expect(press({ key: 'Enter' })).toBe(true);
+    term.dataHandlers[0]('\r');
+    expect(press({ key: 'c', ctrlKey: true })).toBe(true);
+    term.dataHandlers[0]('\x03');
+    // A paste of several lines goes whole.
+    x.host.dispatchEvent(new Event('paste'));
+    term.dataHandlers[0]('un\rdeux');
+    // What xterm.js answers by itself (a cursor report), no key nor paste just before: the backend answers those.
+    now += 1_000;
+    term.dataHandlers[0]('\x1b[5;1R');
+    // An app shortcut still goes to the app.
+    expect(press({ key: ',', ctrlKey: true })).toBe(false);
+    expect(b.called('term_write').map((c) => c.args)).toEqual([
+      { id: 'pty-1', data: 'y' },
+      { id: 'pty-1', data: '\r' },
+      { id: 'pty-1', data: '\x03' },
+      { id: 'pty-1', data: 'un\rdeux' },
+    ]);
+    // Its run ended: a log again, which takes nothing.
+    pty = null;
+    setLogLive('kb', false);
+    expect(x.term.options).toMatchObject({ disableStdin: true, cursorBlink: false });
+    expect(press({ key: 'a' })).toBe(false);
+    x.host.dispatchEvent(new Event('paste'));
+    term.dataHandlers[0]('encore');
+    expect(b.called('term_write')).toHaveLength(4);
+    // Started again: it takes the keyboard again, for its new run.
+    pty = 'pty-2';
+    setLogLive('kb', true);
+    now += 1_000;
+    expect(press({ key: 'q' })).toBe(true);
+    term.dataHandlers[0]('q');
+    expect(b.called('term_write').at(-1)!.args).toEqual({ id: 'pty-2', data: 'q' });
   });
 });
 

@@ -3,10 +3,10 @@
   import { paneCtx } from '../lib/pane-context';
   import { t } from '../lib/i18n';
   import { keyLabel, primaryKey } from '../lib/platform';
-  import { launchStatus, log, restartLaunch, runHere, stopLaunch } from '../lib/launch-actions';
+  import { launchStatus, livePty, log, restartLaunch, runHere, stopLaunch } from '../lib/launch-actions';
   import { parseTestId, parseWorktreeRunId } from '../lib/recipe';
   import { app } from '../lib/state.svelte';
-  import { getXTerm, logKey, mountTerminal } from '../lib/terminals';
+  import { getXTerm, logKey, mountTerminal, setLogLive } from '../lib/terminals';
   import type { Project, RunCommand } from '../lib/types';
   import { fTime, joinPath, tildify } from '../lib/format';
   import { tip } from '../lib/tip';
@@ -65,6 +65,12 @@
     };
   });
 
+  // While its run lasts, the log takes the keyboard (ESC-396); once it ended, it is read-only again.
+  $effect(() => {
+    if (!box) return;
+    setLogLive(cmd.id, !!livePty(cmd.id));
+  });
+
   function find(next = true) {
     const x = getXTerm(logKey(cmd.id));
     if (!x || !query) return;
@@ -97,7 +103,10 @@
           autofocus
           onkeydown={(e) => {
             if (e.key === 'Enter') find(!e.shiftKey);
-            if (e.key === 'Escape') searchOpen = false;
+            if (e.key === 'Escape') {
+              searchOpen = false;
+              getXTerm(logKey(cmd.id))?.term.focus();
+            }
           }}
         />
       {/if}
