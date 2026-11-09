@@ -118,7 +118,7 @@
         <button class="btn" class:primary={none} disabled={searching} onclick={searchAgain}
           ><Icon name="restart" size={14} />{t('shell.welcome.searchAgain')}</button
         >
-        <button class="btn" onclick={() => (app.modal = { kind: 'settings', tab: 'claude' })}
+        <button class="btn" onclick={() => (app.modal = { kind: 'settings', page: 'accounts' })}
           >{t('shell.welcome.harnessSettingsButton')}</button
         >
         <span class="where"

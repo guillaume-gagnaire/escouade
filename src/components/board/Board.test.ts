@@ -42,7 +42,7 @@ describe('Board', () => {
     render(Board, { project: app.projects[0] });
     expect(screen.getByText('Les commandes de .escouade.yml attendent ton accord : elles ne tournent pas encore.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Les lire' }));
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p1' });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'team', projectId: 'p1', at: 'shared' });
   });
 
   it('says nothing of a .escouade.yml whose commands are trusted', () => {
@@ -254,6 +254,9 @@ describe('Board', () => {
     render(Board, { project: app.projects[0] });
     const button = screen.getByRole('button', { name: /Après validation/ });
     expect(button).toHaveAttribute('data-tip', 'Réglages du Kanban — merge squash → main');
+    // Its name is given whole, not read from what it shows: « Après validation : » goes in a board of 1000 px or less
+    // (a CSS container query, which jsdom does not run), and the button kept its name there (ESC-393).
+    expect(button).toHaveAttribute('aria-label', 'Après validation : merge squash → main');
     // The summary has no tooltip of its own, which would hide the button's.
     expect(within(button).getByText('merge squash → main')).not.toHaveAttribute('data-tip');
   });
@@ -263,7 +266,7 @@ describe('Board', () => {
     render(Board, { project: app.projects[0] });
     expect(screen.getByRole('heading', { name: 'Kanban' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /Après validation/ }));
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'board', projectId: 'p1' });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'board', projectId: 'p1' });
   });
 
   it('turns the autopilot off and lets a ticket be launched by hand', async () => {

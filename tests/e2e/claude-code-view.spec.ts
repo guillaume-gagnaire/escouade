@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test, type App } from './fixture';
+import { addProject, expect, test, type App, openSettingsPage, closeSettings } from './fixture';
 
 // « Vue Claude Code » (ESC-106): Claude Code's own interface, played by the fake `claude`, which refuses `--resume` of a session
 // it does not know (« No conversation found with session ID: … ») and keeps its transcript in Principal's folder (`claude/`).
@@ -161,12 +161,11 @@ test('« Vue des nouveaux agents » set to the harness’s terminal opens a new 
   const { page } = app;
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Harness' }).click();
+  await openSettingsPage(dialog, 'Agents');
   const choice = dialog.getByRole('group', { name: 'Vue des nouveaux agents' });
   await expect(choice.getByRole('button', { name: 'Escouade' })).toHaveAttribute('aria-pressed', 'true');
   await choice.getByRole('button', { name: 'Terminal du harness' }).click();
-  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
-  await expect(dialog).toBeHidden();
+  await closeSettings(dialog);
 
   // The project's first agent starts in it: its interface, and the way back to Escouade's view in its header.
   await addProject(page, app.repo);

@@ -2,8 +2,8 @@
 title: "Harness"
 subject: "Harness"
 sources: ["docs/SPEC.md","docs/PLUGINS.md","docs/TODO-2.1.md"]
-tickets: ["ESC-42","ESC-49","ESC-133","ESC-159","ESC-266","ESC-268","ESC-269","ESC-270","ESC-271","ESC-272","ESC-273","ESC-274","ESC-275","ESC-209"]
-decisions: []
+tickets: ["ESC-42","ESC-49","ESC-133","ESC-159","ESC-266","ESC-268","ESC-269","ESC-270","ESC-271","ESC-272","ESC-273","ESC-274","ESC-275","ESC-209","ESC-391"]
+decisions: [131]
 compared: "2026-10-31T10:07:12+01:00"
 order: 3
 ---
@@ -17,12 +17,21 @@ Un **harness** est le CLI qui fait tourner un agent : Claude Code, Codex, OpenCo
 ### Choisir un harness
 
 - Réglages › Harness liste chaque harness avec son exécutable, sa version, son état (introuvable, trop ancien, non connecté, prêt, non pris en charge) et « Se connecter… ». Rien n'y parle des versions testées. Un harness introuvable y donne sa commande d'installation, comme l'écran « Aucun harness trouvé » du premier lancement.
-- Dès que deux harness sont trouvés :
+- Un harness est **utilisable** quand trois choses sont vraies à la fois : son programme est trouvé, son plugin est installé et actif, et il a au moins un compte dans Escouade. Les menus « Harness » ne proposent que les harness utilisables, pas tous ceux trouvés sur le poste :
+  - le « Harness par défaut » du projet, dans ses réglages et dans l'assistant de nouveau projet ;
+  - « Nouvel agent ▾ » ;
+  - le champ « Harness » d'un ticket ;
+  - le harness d'une nouvelle discussion (parmi ceux qui savent ne pas écrire) ;
+  - « Modèle des textes rédigés », qui sert aussi aux relectures de PR.
+- Le harness déjà choisi (celui du projet, d'un ticket) qui n'est plus utilisable reste listé, avec la raison entre parenthèses : « Codex (plugin coupé) », « (aucun compte) », « (programme introuvable) ». Le menu se montre alors même s'il n'y a qu'un autre harness utilisable.
+- Réglages › Comptes et harness montre au contraire chaque harness trouvé, avec « Aucun compte » tant qu'il n'en a pas, même si son plugin est coupé : c'est là qu'on le configure. « Ajouter un compte » propose tous les harness trouvés.
+- Dès que deux harness sont utilisables :
   - le projet a un « Harness par défaut » (Claude Code sans réglage) ;
-  - « Nouvel agent ▾ » propose « Nouvel agent sur <harness> » ;
-  - un ticket a un champ « Harness » (celui du projet par défaut), que le pilote auto suit ;
-  - la carte de chaque agent porte la marque de son harness dès que des agents tournent sur deux harness.
-- Un agent garde son harness. Il n'en change que par une passation (voir *Comptes*, « Continuer sur un autre harness »).
+  - « Nouvel agent ▾ » propose « Nouvel agent sur <harness> » pour chaque harness utilisable ; les autres n’y sont pas (ils se règlent dans Réglages › Comptes et harness et dans la vue Plugins) ;
+  - un ticket a un champ « Harness » (celui du projet par défaut), que le pilote auto suit.
+- La carte de chaque agent porte la marque de son harness dès que des agents tournent sur deux harness.
+- Un plugin coupé, rallumé, installé ou retiré change les menus sans redémarrer : ils sont relus à leur ouverture.
+- Un agent garde son harness. Il n'en change que par une passation (voir *Comptes*, « Continuer sur un autre harness »), qui ne va que vers un harness dont le plugin est actif.
 
 ### La même conversation pour tous
 
@@ -62,13 +71,13 @@ Chaque harness a sa plage de versions testées.
 | **Textes rédigés** | « Claude Haiku » (`claude -p`) | « Codex (GPT-6-Luna) » (`codex exec`) | le modèle choisi (`opencode run`) | « Copilot (GPT-5 mini) » (`copilot -p`) | « Cursor (Auto) » (`agent acp`, mode Ask) | « Mistral Vibe » (`vibe -p`, l’interface à côté de `vibe-acp` : question sur son entrée, `--enabled-tools none`, `--max-turns 1`, `--max-price 0.05`, `VIBE_HOME` jetable, la clé du compte) | « Gemini 3.8 Flash » (`agy -p`, Flash Low, question sur son entrée en stream-json, dossier jetable dont le `settings.json` refuse tous ses outils, la clé du compte s’il en a une, 90 s au plus) | « Gemini CLI » (`gemini -p … -o json`, question sur son entrée, `flash-lite` ou `flash`, `-e none`, `GEMINI_CLI_HOME` jetable, tous ses outils refusés par une règle `toolName = "*"` de `--policy`, le compte de l’agent) |
 | **Pas pris en charge** | — | PDF, Reprendre sur <compte>, commandes `/` sauf `/compact`, Remote Control, tâches de fond | OpenCode 2, Auto, plusieurs comptes, PDF, Reprendre sur <compte>, commandes `/` sauf `/compact`, Remote Control, tâches de fond | mode `assisted`, « Toujours autoriser », PDF, Reprendre sur <compte>, commandes `/` sauf `/compact`, Remote Control, tâches de fond | Auto, quota lu, Dupliquer, PDF, Reprendre sur <compte>, commandes `/` (`/compact` refusé : `/summarize` de sa vue terminal), Remote Control, tâches de fond | Auto, quota, PDF, commandes `/` (sauf `/compact`, envoyé en message), Remote Control, tâches de fond | Auto, quota lu, coût, images et PDF joints, Dupliquer, un second compte Google (une clé d’API à la place), commandes `/`, Remote Control, tâches de fond | Auto, effort, quota, coût, PDF, Dupliquer, questions par un outil (il n’en a pas en ACP : la consigne de son premier message lui fait finir son tour sur un bloc `<escouade_question>`, montré en carte), liste de tâches, commandes `/` (`/compact` refusé : `/compress` de son interface), Remote Control, tâches de fond, vue terminal ; rien n’est encore essayé avec un vrai compte |
 
-Le modèle qui rédige les textes sans session (nom d'un agent, message de commit…) se choisit dans Réglages › Application (voir *Langues*).
+Le modèle qui rédige les textes sans session (nom d'un agent, message de commit…) se choisit dans Réglages › Agents (voir *Langues*), parmi les harness utilisables. Celui choisi qui ne l'est plus cède la place à Claude Code, sinon au premier utilisable ; les relectures de PR suivent le même choix.
 
 ## Réglages
 
 - Réglages › Harness : chaque harness, son exécutable, son état, « Se connecter… ».
-- Le « Harness par défaut » d'un projet (Claude Code sans réglage), dès deux harness trouvés.
-- Le champ « Harness » d'un ticket (celui du projet par défaut).
+- Le « Harness par défaut » d'un projet (Claude Code sans réglage), dès deux harness utilisables.
+- Le champ « Harness » d'un ticket (celui du projet par défaut), dès deux harness utilisables.
 
 ## Limites
 

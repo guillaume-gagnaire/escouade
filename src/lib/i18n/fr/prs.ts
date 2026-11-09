@@ -249,7 +249,7 @@ export default {
     },
     noPr: {
       title: 'Pas de {word} sur cette branche',
-      settings: 'Réglages › Intégrations',
+      settings: 'Réglages › Services connectés',
     },
     project: {
       title: '{word} ouvertes du projet',

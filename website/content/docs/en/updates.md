@@ -7,7 +7,18 @@ Escouade updates itself from GitHub releases: it downloads in the background, th
 - Escouade looks for a new version shortly after it starts, then five minutes after each check ends. It reads the `latest.json` file of the latest release published on [GitHub](https://github.com/guillaume-gagnaire/escouade/releases). A release is only published once the files for all three systems are uploaded and checked, so Escouade never meets a half-built one.
 - When a newer version exists, it downloads it right away, without asking, and checks its signature. During the download, the status bar shows “Update 1.8.0…” (with the version number).
 - Once downloaded, the update waits: the status bar shows “Update 1.8.0 ready · Restart”. It installs when you restart the app, when the app restarts by itself, or when you quit it.
-- Installation happens without an installer window. The proxy and certificate verification set in Settings › Network apply to the checks and downloads too. When something fails, see [“When it fails”](#when-it-fails).
+- Installation happens without an installer window. The proxy and certificate verification set in Settings › Advanced › Network apply to the checks and downloads too. When something fails, see [“When it fails”](#when-it-fails).
+
+## Beta versions
+
+A beta is an early version, published so that volunteers can try it before everyone else: it carries the number of the version it prepares followed by `-beta` and a number, for example “2.2.0-beta.1”. It may have flaws the stable version won’t have.
+
+The “Receive beta versions” option (Settings › General, unticked by default) decides whether you get them:
+
+- **Unticked**, Escouade ignores every beta and reads only `latest.json`, which never holds one. If you are already on a beta, you stay on it until the stable version that follows it (2.2.0 after 2.2.0-beta.3); an older version, such as a 2.1.5, doesn’t replace it.
+- **Ticked**, Escouade first reads `beta.json`, in the latest stable release, which gives the most recent version, beta or stable; if it’s missing, it reads `latest.json`. Ticking it starts a check at once, and the setting is saved right away, without “Save”.
+
+A beta shows wherever Escouade says a version: “Escouade 2.2.0-beta.1 (beta)” in Settings › General and at the bottom of the settings bar, “Update 2.2.0-beta.1 (beta)…” in the status bar. Its notes are in the update window as for any version; it isn’t announced on Discord.
 
 ## Installing an update
 
@@ -24,7 +35,7 @@ Escouade stops cleanly before installing: the agents’ processes and the termin
 
 ### Restart automatically
 
-The “Install updates automatically” setting (Settings › About, on by default) lets Escouade restart by itself: “Escouade restarts itself when no agent is working and everything is saved.”
+The “Install updates automatically” setting (Settings › General, on by default) lets Escouade restart by itself: “Escouade restarts itself when no agent is working and everything is saved.”
 
 The app is at rest when none of this is true:
 
@@ -50,7 +61,7 @@ The app stays on the old version and says so: “The update to 1.8.0 couldn’t 
 
 ## Checking by hand
 
-Settings › About shows the installed version (“Escouade 1.7.5”, for example) and a “Check for updates” button. The answer is “No update available.” (only when the check really got an answer), or the update appears in the tab, “Escouade 1.8.0 available” then “Escouade 1.8.0 ready” with “Restart now”, as in the status bar. When you check yourself, a failure is always shown, with its reason: “Couldn’t check for updates” or “Couldn’t download the update”, followed by the cause. An automatic check is more patient: see [“When it fails”](#when-it-fails). Behind a proxy or a corporate certificate, see [“Behind a company proxy”](#behind-a-company-proxy) and [troubleshooting](troubleshooting).
+Settings › General shows the installed version (“Escouade 1.7.5”, for example) and a “Check for updates” button. The answer is “No update available.” (only when the check really got an answer), or the update appears in the tab, “Escouade 1.8.0 available” then “Escouade 1.8.0 ready” with “Restart now”, as in the status bar. When you check yourself, a failure is always shown, with its reason: “Couldn’t check for updates” or “Couldn’t download the update”, followed by the cause. An automatic check is more patient: see [“When it fails”](#when-it-fails). Behind a proxy or a corporate certificate, see [“Behind a company proxy”](#behind-a-company-proxy) and [troubleshooting](troubleshooting).
 
 ## When it fails
 
@@ -67,7 +78,7 @@ The error says what the request ran into:
 - the proxy the request went through, if there is one, for example `127.0.0.1:9000`;
 - what the answer says about itself: the `Proxy-Agent` header, or a `Server` header or a block page that names a known proxy (Zscaler, Netskope, Squid, Blue Coat, Forcepoint, Fortinet, Palo Alto, Umbrella, Sophos, Skyhigh…), the start of which it quotes. A bare `Via` header isn’t enough to name a proxy: some add it to all their answers, even to a site’s refusal.
 
-For a 403, it adds “blocked by the network or a proxy?”. For example: “403 Forbidden from release-assets.githubusercontent.com, through the proxy 127.0.0.1:9000 (Zscaler/6.2): blocked by the network or a proxy?”. For a 407, it says the proxy asks for authentication, and that you need to put the username and password in the proxy’s address, in Settings › Network.
+For a 403, it adds “blocked by the network or a proxy?”. For example: “403 Forbidden from release-assets.githubusercontent.com, through the proxy 127.0.0.1:9000 (Zscaler/6.2): blocked by the network or a proxy?”. For a 407, it says the proxy asks for authentication, and that you need to put the username and password in the proxy’s address, in Settings › Advanced › Network.
 
 Escouade announces itself with an honest User-Agent, `Escouade/<version> (<system>; <architecture>)`, for the check and for the download. It never passes itself off as a browser.
 
@@ -79,7 +90,7 @@ A company proxy (Zscaler, Netskope, Squid…) often lets the check through, a sm
 
 When a company proxy that identifies itself refuses the installer, the message names it: “your company’s proxy (Zscaler/6.2) refused the installer (403 Forbidden from release-assets.githubusercontent.com, through the proxy 127.0.0.1:9000). Download it in the browser: you may have to confirm the proxy’s warning.”
 
-When the proxy refuses the request (403, 407, refused tunnel), Escouade doesn’t make it again without the proxy: it gets around no rule of your company, and the message explains the refusal. For a 407, it says the proxy asks for authentication: put the username and password in the proxy’s address, in Settings › Network (for example `http://user:password@proxy:3128`).
+When the proxy refuses the request (403, 407, refused tunnel), Escouade doesn’t make it again without the proxy: it gets around no rule of your company, and the message explains the refusal. For a 407, it says the proxy asks for authentication: put the username and password in the proxy’s address, in Settings › Advanced › Network (for example `http://user:password@proxy:3128`).
 
 Only a proxy that can’t be reached (set but switched off, or a computer outside the company network) leads to a second try, without the proxy. [The app’s log](troubleshooting#where-the-app-s-log-is) then says whether direct access worked, and if both tries fail, the failure message gives both.
 
@@ -96,7 +107,7 @@ Ask them to allow:
 
 ### The proxy setting
 
-If your company gives you the address of its proxy, enter it in Settings › Network: the check and the download then go through it. If the proxy decrypts traffic with a company certificate, install that certificate on the system. See [the network settings](settings-network).
+If your company gives you the address of its proxy, enter it in Settings › Advanced › Network: the check and the download then go through it. If the proxy decrypts traffic with a company certificate, install that certificate on the system. See [the network settings](settings-network).
 
 ## By system
 

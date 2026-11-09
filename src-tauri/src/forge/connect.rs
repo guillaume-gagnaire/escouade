@@ -15,6 +15,18 @@ use std::process::Stdio;
 use std::time::Duration;
 use tauri::Runtime;
 
+/// A project's code host, as the sidebar and the board need it (ESC-390).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodeHost {
+    pub kind: String,
+    pub name: String,
+    /// Its word for a pull request (« PR », « MR » on GitLab).
+    pub word: String,
+    pub pull_requests: bool,
+    pub deployments: bool,
+}
+
 /// How an account stands, as its last check found it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -210,7 +222,7 @@ pub struct UnknownHost {
     pub projects: Vec<String>,
 }
 
-/// Réglages › Intégrations › Hébergeurs de code.
+/// Réglages › Services connectés › Hébergeurs de code.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ForgesView {
@@ -411,6 +423,30 @@ impl<R: Runtime> Core<R> {
         }
     }
 
+    /// The code host of a project (ESC-390): its remote recognised by a code host whose plugin is
+    /// on. None without a remote, on a host Escouade does not know, or whose plugin is off: the
+    /// sidebar has no « PR » tab then, and the board no « Environnements ».
+    pub async fn project_code_host(&self, project_id: &str) -> Option<CodeHost> {
+        let remote = self.project_forge(project_id).await?;
+        let provider = remote
+            .kind
+            .as_deref()
+            .and_then(|k| self.forges.read().get(k))?;
+        if let Some(id) = provider.plugin() {
+            if !self.served_by(id).on {
+                return None;
+            }
+        }
+        let can = provider.capabilities();
+        Some(CodeHost {
+            kind: provider.kind(),
+            name: provider.name().to_string(),
+            word: provider.request_word().to_string(),
+            pull_requests: can.pull_requests,
+            deployments: can.deployments,
+        })
+    }
+
     /// What a project's remote names (the remote of its target branch, else origin, else the
     /// only one): its code host and repository.
     pub async fn project_forge(&self, project_id: &str) -> Option<Remote> {
@@ -425,7 +461,7 @@ impl<R: Runtime> Core<R> {
         registry.analyze(&url, |host| accounts::kind_for(&list, host))
     }
 
-    /// Réglages › Intégrations › Hébergeurs de code, with the state each account was last found in.
+    /// Réglages › Services connectés › Hébergeurs de code, with the state each account was last found in.
     pub async fn forges_view(&self) -> ForgesView {
         let registry = self.forges.read().clone();
         let kinds = crate::plugins::accounts::kinds_of(&self.plugins);
@@ -562,6 +598,12 @@ impl<R: Runtime> Core<R> {
     /// account is saved, its token in the keychain. github.com's is Issues' account.
     pub async fn forge_connect(&self, form: ForgeForm) -> Result<ForgesView> {
         let provider = self.provider(form.kind.trim())?;
+        // Its plugin of the first hand, from the seed if it is not installed (ESC-373): the gesture asks for it.
+        if form.plugin.trim().is_empty() {
+            if let Some(p) = crate::plugins::sort::of_forge(&provider.kind()) {
+                self.need_plugin(p);
+            }
+        }
         let typed = if form.url.trim().is_empty() {
             provider.default_host().unwrap_or("")
         } else {

@@ -201,6 +201,8 @@ export const pluginsApi = {
   /** Reads the seed's version of a plugin and checks it, with no network (ESC-338). */
   inspectSeed: (id: string) => invoke<PluginPreview>('plugin_inspect_seed', { id }),
   seedOffers: () => invoke<SeedOffer[]>('plugin_seed_offers'),
+  /** « Installer » of a plugin the seed proposes: installed at once from it, with no network (ESC-373). */
+  installSeed: (id: string) => invoke<PluginView | null>('plugin_install_seed', { id }),
   install: (token: string) => invoke<PluginView>('plugin_install', { token }),
   discard: (token: string) => invoke<void>('plugin_discard', { token }),
   remove: (id: string, keep: boolean) => invoke<boolean>('plugin_remove', { id, keep }),
@@ -385,7 +387,9 @@ export function contributionsOf(m: Manifest | null, lang: string): string[] {
   ];
   for (const [key, label] of points) {
     const n = list(key).length;
-    if (n) out.push(t(`plugins.adds.${label}`, { count: n, names: names(key) }));
+    // An account of a Kanban source or a code host is added in Services connectés; a harness's, in Comptes et harness.
+    const where = label === 'accounts' && (list('ticketSources').length || list('forges').length) ? 'accountsServices' : label;
+    if (n) out.push(t(`plugins.adds.${where}`, { count: n, names: names(key) }));
   }
   return out;
 }

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.2
+
+- Its messages, README and documentation send to the settings pages of Escouade 2.2: Advanced › Network and the plugin’s own Settings tab (ESC-387).
+
+## 1.1.1
+
+- Its page has its documentation in French and in English: README.fr.md, README.en.md and the pages of docs/fr and docs/en (`store.docs`).
+
 ## 1.1.0 (2026-10-31)
 
 - A plugin of Escouade's own hand: its id is `dev.escouade.discord` (it was `dev.exemple.discord`), and it lives in `plugins/discord/` of

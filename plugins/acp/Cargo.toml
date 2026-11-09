@@ -1,7 +1,7 @@
 [package]
 name = "escouade-plugin-acp"
-version = "2.2.0"
-description = "Le plugin ACP livré avec Escouade : les harness qui parlent ACP, décrits par un plugin sans code"
+version = "2.2.3"
+description = "Le plugin ACP d'Escouade : les harness qui parlent ACP, décrits par un plugin sans code"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"
 edition = "2021"
@@ -12,5 +12,5 @@ rust-version = "1.88"
 crate-type = ["cdylib"]
 
 [dependencies]
-escouade-acp = "0.1.1"
+escouade-acp = "0.1.3"
 escouade-plugin-protocol = "0.1.0"

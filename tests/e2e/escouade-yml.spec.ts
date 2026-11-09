@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, test } from './fixture';
+import { expect, test, openSettingsPage, settingsEntry } from './fixture';
 
 // A repository with a .escouade.yml (ESC-146): added through the assistant, the project is set up by the file and says
 // so; the file's setup command runs in no worktree until the user trusts it, then runs in the next one.
@@ -64,7 +64,7 @@ test('a repository’s .escouade.yml sets the project up, its commands waiting f
   await dialog.getByRole('button', { name: 'Créer le projet' }).click();
   await expect(dialog).toBeHidden();
   await expect(
-    page.getByText('shared-app : réglages lus dans .escouade.yml. Ses commandes attendent ton accord (Réglages › Projets).'),
+    page.getByText('shared-app : réglages lus dans .escouade.yml. Ses commandes attendent ton accord (Réglages › Projets › Équipe).'),
   ).toBeVisible();
 
   // An agent before the trust: the file's branch prefix, and nothing of its setup ran.
@@ -83,22 +83,29 @@ test('a repository’s .escouade.yml sets the project up, its commands waiting f
   await expect(page.getByText('Les commandes de .escouade.yml attendent ton accord : elles ne tournent pas encore.')).toBeVisible();
   await page.getByRole('button', { name: 'Les lire' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
+  // On « Projets › shared-app › Équipe » (annexe B), scrolled to « Réglages partagés ».
+  await expect(settingsEntry(settings, 'Équipe')).toHaveAttribute('aria-current', 'page');
+  await expect(settings.getByRole('heading', { name: 'Réglages partagés' })).toBeInViewport();
   await expect(settings.getByText(/Réglages lus dans \.escouade\.yml \(version 1\)/)).toBeVisible();
   // What was left out is said with its line.
   await expect(settings.getByText(/Ligne 13 : clé inconnue : board\.unknown_thing/)).toBeVisible();
-  // The settings it set are marked, those of the Kanban too.
+  // The commands waiting, read in full and trusted here.
+  const pending = settings.getByRole('region', { name: 'Commandes en attente de ton accord' });
+  await expect(pending.getByText(`node -e "require('fs').writeFileSync('setup-ran.txt', 'yes')"`)).toBeVisible();
+  // The settings it set are marked where they are, on « Git et worktrees », those of the Kanban too.
+  await openSettingsPage(settings, 'Git et worktrees');
   const perAgent = settings.locator('.sr', { hasText: 'Un worktree par agent' });
   await expect(perAgent.getByText('Défini par .escouade.yml')).toBeVisible();
   // Its worktrees at once (ESC-156), as the file says.
   const atFirst = settings.locator('.sr', { hasText: 'Créer le worktree au premier message' });
   await expect(atFirst.getByText('Défini par .escouade.yml')).toBeVisible();
   await expect(atFirst.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
-  const pending = settings.getByRole('region', { name: 'Commandes en attente de ton accord' });
-  await expect(pending.getByText(`node -e "require('fs').writeFileSync('setup-ran.txt', 'yes')"`)).toBeVisible();
+  await openSettingsPage(settings, 'Équipe');
   await pending.getByRole('button', { name: 'Faire confiance à ces commandes' }).click();
   await expect(pending).toBeHidden();
+  await openSettingsPage(settings, 'Git et worktrees');
   await expect(settings.locator('.sr', { hasText: 'Un worktree par agent' }).getByText('Défini par .escouade.yml')).toBeVisible();
-  await settings.getByRole('tab', { name: 'Kanban' }).click();
+  await openSettingsPage(settings, 'Kanban');
   await expect(settings.locator('.sr', { hasText: 'Relancer les tests avant' }).getByText('Défini par .escouade.yml')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(settings).toBeHidden();

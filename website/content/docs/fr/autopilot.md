@@ -4,7 +4,7 @@ Le pilote auto prend les tickets « À faire » d’un projet et confie chacun
 
 ## L’activer ou l’éteindre
 
-L’interrupteur « Pilote auto » est dans l’en-tête du [Kanban](board). Il est propre à chaque projet et allumé par défaut. C’est le même réglage que « Attribuer les tickets automatiquement » dans Réglages › Kanban (voir [Réglages du Kanban](settings-board)).
+L’interrupteur « Pilote auto » est dans l’en-tête du [Kanban](board). Il est propre à chaque projet et allumé par défaut. C’est le même réglage que « Attribuer les tickets automatiquement » dans Réglages › Projets › Kanban (voir [Réglages du Kanban](settings-board)).
 
 Éteint, l’en-tête affiche « Pilote auto · off », les cartes « À faire » disent « Pilote auto désactivé » et chaque ticket part quand tu cliques sur « Lancer » sur sa carte (voir plus bas).
 
@@ -16,7 +16,7 @@ Rien ne démarre, pilote auto allumé ou non, dans trois cas :
 
 ## Combien d’agents en parallèle
 
-Le réglage « En parallèle » (Réglages › Kanban) fixe le nombre de tickets « En cours » en même temps : de 1 à 6, 2 par défaut. L’en-tête compte les places libres (« 1 place libre », « Toutes les places sont prises »).
+Le réglage « En parallèle » (Réglages › Projets › Kanban) fixe le nombre de tickets « En cours » en même temps : de 1 à 6, 2 par défaut. L’en-tête compte les places libres (« 1 place libre », « Toutes les places sont prises »).
 
 Un ticket « En cours » occupe une place, y compris quand son agent attend sa remise à zéro de quota. Un ticket bloqué n’en occupe plus.
 
@@ -44,19 +44,19 @@ Quand un ticket démarre, Escouade :
 4. attend la préparation du worktree : fichiers `.env*` copiés, commandes de préparation du projet (la carte dit « Prépare le worktree · … »). Si une commande échoue, l’agent en est informé avec son premier message, pour y remédier ;
 5. envoie à l’agent son premier message : la clé et le titre, la description, les critères numérotés, et la consigne de travailler jusqu’à les atteindre puis de terminer par le bilan.
 
-Ce message, comme les suivants, est écrit dans « Langue des textes rédigés par les agents » (Réglages › Application, voir [Réglages de l’application](settings-application)).
+Ce message, comme les suivants, est écrit dans « Langue des textes rédigés par les agents » (Réglages › Général, voir [Réglages de l’application](settings-application)).
 
 À chaque démarrage, Escouade ajoute aussi à la consigne système de l’agent un protocole qui survit au compactage et aux reprises : travailler seul, vérifier soi-même chaque critère (tests, exécution) avant de le déclarer atteint, ne pas commiter les fichiers copiés du projet, poser ses questions par l’outil de question quand une décision manque, et terminer chaque réponse par le bilan des critères. Escouade réserve en plus au ticket un bloc de ports, et le protocole demande à l’agent comment lancer son travail pour le tester (voir [Tester et valider un ticket](testing)).
 
 ### Modèle, effort et permissions
 
-Dans Réglages › Kanban, le groupe « Agents » règle les agents des tickets du projet : « Modèle », « Effort » et « Mode » (de permission). Laissés à « Par défaut », ils suivent les valeurs par défaut de Réglages › Harness (voir [Réglages des harness](settings-claude-code)).
+Dans Réglages › Projets › Kanban, le groupe « Agents » règle les agents des tickets du projet : « Modèle », « Effort » et « Mode » (de permission). Laissés à « Par défaut », ils suivent les valeurs par défaut de Réglages › Comptes et harness (voir [Réglages des harness](settings-claude-code)).
 
 Les agents des tickets restent dans la vue d’Escouade. Si l’un d’eux demande une autorisation ou pose une question, sa carte passe en ambre avec « Question en attente de ta réponse », tu es prévenu, et tu réponds dans sa conversation (voir [Le chat](chat)).
 
 ### Sur quel compte il part
 
-Un ticket part sur le « Compte préféré » du projet s’il est actif. Sinon, sur le premier compte actif, dans l’ordre de Réglages › Comptes, qui est « bon » (voir [Les comptes Claude](accounts#le-choix-automatique)) et sous le seuil de « Pause au-delà du quota », sans pause due à la limite d’usage et sans agent qui attende sa remise à zéro. Un compte « Réservé aux projets » ne sert que ces projets. L’agent reste ensuite sur son compte, sauf reprise sur un autre compte après la limite d’usage (voir plus bas). Voir [Les comptes Claude](accounts).
+Un ticket part sur le « Compte préféré » du projet s’il est actif. Sinon, sur le premier compte actif, dans l’ordre de Réglages › Comptes et harness, qui est « bon » (voir [Les comptes Claude](accounts#le-choix-automatique)) et sous le seuil de « Pause au-delà du quota », sans pause due à la limite d’usage et sans agent qui attende sa remise à zéro. Un compte « Réservé aux projets » ne sert que ces projets. L’agent reste ensuite sur son compte, sauf reprise sur un autre compte après la limite d’usage (voir plus bas). Voir [Les comptes Claude](accounts).
 
 ## La boucle
 
@@ -79,7 +79,7 @@ Quand un ticket revient chez son agent après un « Renvoyer », des tests en 
 
 ## La pause près de la limite du quota
 
-Le réglage « Pause au-delà du quota » (Réglages › Kanban, « pour tous les projets ») prend 80 %, 90 %, 95 % ou 100 % (par défaut). Dès que la fenêtre de 5 h ou la fenêtre hebdomadaire d’un compte atteint ce seuil, le pilote auto ne démarre aucun ticket sur lui avant la remise à zéro de la fenêtre. Ce seuil ne retient que le pilote auto : un ticket lancé à la main (« Lancer », ou `start_ticket` d’un agent) part quand même, et seule une limite d’usage atteinte le retient. La file repart d’elle-même 30 secondes après cette remise à zéro, ou dès que les quotas lus repassent sous le seuil.
+Le réglage « Pause au-delà du quota » (Réglages › Projets › Kanban, « pour tous les projets ») prend 80 %, 90 %, 95 % ou 100 % (par défaut). Dès que la fenêtre de 5 h ou la fenêtre hebdomadaire d’un compte atteint ce seuil, le pilote auto ne démarre aucun ticket sur lui avant la remise à zéro de la fenêtre. Ce seuil ne retient que le pilote auto : un ticket lancé à la main (« Lancer », ou `start_ticket` d’un agent) part quand même, et seule une limite d’usage atteinte le retient. La file repart d’elle-même 30 secondes après cette remise à zéro, ou dès que les quotas lus repassent sous le seuil.
 
 L’en-tête du Kanban le dit sur une ligne à part, par exemple « Pilote auto en pause : quota de 5 h à 95 % (reprise à 14:30) » ou « Pilote auto en pause : quota hebdo à 96 % (reprise le vendredi 2 octobre à 09:30) », avec un bouton « Reprendre maintenant ». Les cartes « À faire » disent « En attente : pilote auto en pause ». Les agents déjà au travail continuent.
 
@@ -91,7 +91,7 @@ Pendant une pause, rien ne démarre, même un ticket lancé à la main.
 
 ## Limite d’usage et reprise
 
-Quand un agent de ticket atteint la limite d’usage de son compte, son tour s’arrête. Ce qui suit dépend de tes réglages (Réglages › Harness) :
+Quand un agent de ticket atteint la limite d’usage de son compte, son tour s’arrête. Ce qui suit dépend de tes réglages (Réglages › Comptes et harness) :
 
 - **« Reprise automatique après la limite d’usage »** (activée par défaut) : Escouade attend la remise à zéro du quota, puis envoie « continue » à l’agent. Le ticket reste « En cours » et garde sa place ; sa carte dit « Reprise à 14:30 ». Quand tous les comptes que le projet peut utiliser ont ainsi un agent en attente, l’en-tête dit « Quota atteint — reprise à 14:30 » et rien ne démarre avant. Tant qu’un compte n’en a pas, un ticket peut partir dessus.
 - **« Reprendre sur un autre compte un agent de ticket arrêté par la limite »** (avec plusieurs comptes, désactivé par défaut) : l’agent repart tout de suite sur un autre compte utilisable, avec sa session et sa conversation. Un compte est utilisable s’il est connecté, sous le seuil, sans pause due à la limite d’usage et sans agent en attente de sa remise à zéro. Une session ne passe pas d’un compte Windows à un compte WSL. Le compte quitté reste retenu jusqu’à sa remise à zéro (30 minutes si elle n’est pas connue). Sans ce réglage, l’agent attend la remise à zéro de son compte.

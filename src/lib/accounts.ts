@@ -6,8 +6,9 @@ import { capsOf, engineName } from './engines';
 import { fDayMonth, fList, fPct, fTime } from './format';
 import { estimatedBy } from './spend';
 import { t, tIn } from './i18n';
+import { api } from './ipc';
 import { app } from './state.svelte';
-import type { SettingsTab } from './settings.svelte';
+import type { SettingsPage } from './settings.svelte';
 import type { Account, AccountUsage, Agent, AutopilotPause, EngineId, Project, QuotaMeter, QuotaProjection, RateWindow } from './types';
 
 /** The id of the user's own Claude Code account. */
@@ -102,9 +103,15 @@ export function newAgentDefaults(project: ProjectLike | undefined, engine?: Engi
   return accountDefaults(newAgentAccount(project, e), e);
 }
 
-/** « Ajouter un compte… » on `engine` (Réglages › Comptes, back there when it closes). */
+/**
+ * « Ajouter un compte… » on `engine` (Réglages › Comptes et harness, back there when it closes). Choosing the harness installs its plugin
+ * from the app's seed when it is not installed, with no network (ESC-373): the core says it in a line.
+ */
 export function addAccount(engine: EngineId) {
   app.modal = { kind: 'account', engine };
+  void Promise.resolve()
+    .then(() => api.pluginNeedEngine(engine))
+    .catch(() => {});
 }
 
 /** The harness whose accounts the status bar shows: the one of the agent shown, else the project's default one. */
@@ -189,7 +196,7 @@ export function usableFor(project: string | undefined, engine: EngineId = defaul
 }
 
 /** The harness a project's new agents and tickets run on unless they say theirs. */
-function engineOfProject(project: { engine?: EngineId | null } | undefined): EngineId {
+export function engineOfProject(project: { engine?: EngineId | null } | undefined): EngineId {
   return project?.engine ?? defaultEngine();
 }
 
@@ -602,7 +609,7 @@ export function quotaRows(now: number): QuotaRow[] {
   return [...rows.filter((r) => r.current), ...rows.filter((r) => !r.current)];
 }
 
-/** Back to the settings' tab `tab` (« Comptes » by default), their draft as it was. */
-export function backToAccounts(tab: SettingsTab = 'accounts') {
-  app.modal = { kind: 'settings', tab, resume: true };
+/** Back to the settings' page `page` (« Comptes et harness » by default), their draft as it was. */
+export function backToAccounts(page: SettingsPage = 'accounts') {
+  app.modal = { kind: 'settings', page, resume: true };
 }

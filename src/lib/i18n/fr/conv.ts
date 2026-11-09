@@ -99,7 +99,7 @@ export default {
     /** `{cwd}`: the folder the agent works in, in code style. */
     hint: "Décris la tâche à confier à {engine}. L'agent travaille dans {cwd}.",
     /** `{engine}`: the agent's harness. */
-    engineMissing: '{engine} est introuvable sur ce poste : installe-le ou indique son chemin dans Réglages › Harness (⚙).',
+    engineMissing: '{engine} est introuvable sur ce poste : installe-le ou indique son chemin dans Réglages › Comptes et harness (⚙).',
   },
   /** The button above the messages drawn, and what a screen reader hears once more are drawn. */
   older: {

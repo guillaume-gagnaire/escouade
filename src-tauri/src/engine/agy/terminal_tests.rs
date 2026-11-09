@@ -95,7 +95,8 @@ fn a_written_conversation_is_resumed_in_its_home_with_its_model_mode_trust_hooks
         Some("gemini-3.8-flash")
     );
     assert_eq!(pair(&t.args, "--effort").as_deref(), Some("low"));
-    assert_eq!(pair(&t.args, "--mode").as_deref(), Some("accept-edits"));
+    // « Édits auto » is no mode of `agy`'s: its interface asks what no rule allows (ESC-376).
+    assert!(pair(&t.args, "--mode").is_none(), "{:?}", t.args);
     // Its interface, not its stream.
     assert!(!t
         .args
@@ -126,7 +127,7 @@ fn a_written_conversation_is_resumed_in_its_home_with_its_model_mode_trust_hooks
     let settings = file_of(&t, &settings_file(&home)).expect("its settings");
     assert_eq!(settings["trustedWorkspaces"], json!([CWD]));
     let allow = settings["permissions"]["allow"].as_array().unwrap();
-    assert!(allow.contains(&json!("command(git commit)")), "{allow:?}");
+    assert!(allow.is_empty(), "{allow:?}");
     // Its first screens passed.
     let onboarding = file_of(&t, &onboarding_file(&home)).expect("its onboarding");
     assert_eq!(onboarding["onboardingComplete"], true);
@@ -188,10 +189,8 @@ fn a_conversation_without_transcript_is_not_given_its_settings_are_kept_and_a_fe
     let doc = file_of(&t, &settings).unwrap();
     assert_eq!(doc["theme"], "dark");
     assert_eq!(doc["trustedWorkspaces"], json!([CWD]));
-    assert!(doc["permissions"]["allow"]
-        .as_array()
-        .unwrap()
-        .contains(&json!("command(*)")));
+    // With a fence, no rule `allow`: its interface asks (ESC-376).
+    assert_eq!(doc["permissions"]["allow"], json!([]));
     let deny = doc["permissions"]["deny"].as_array().unwrap();
     assert!(
         deny.iter().any(|r| r.as_str().unwrap().contains("secret")),
@@ -225,4 +224,73 @@ fn its_keys_its_lost_conversation_and_its_hooks_taken_away() {
     std::fs::write(&hooks, "{}").unwrap();
     forget_hooks(&home);
     assert!(!hooks.exists());
+}
+
+#[test]
+fn its_rules_are_its_plugins_and_what_the_2_2_0_kept_of_always_is_erased_unread() {
+    let home = crate::paths::test_dir("esc376-agy-view-rules");
+    let always = always_file(&home);
+    std::fs::write(&always, r#"["command(planted)","command(*)"]"#).unwrap();
+    let settings = settings_file(&home);
+    std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+    std::fs::write(
+        &settings,
+        r#"{"toolPermission":"auto","agentMode":"accept-edits","permissions":{"allow":["command(*)"]}}"#,
+    )
+    .unwrap();
+    for (mode, fenced, allowed) in [
+        ("default", false, false),
+        ("acceptEdits", false, false),
+        ("plan", false, false),
+        ("bypassPermissions", true, false),
+        ("bypassPermissions", false, true),
+    ] {
+        let meta = AgentMeta {
+            mode: mode.into(),
+            cwd: CWD.into(),
+            ..Default::default()
+        };
+        let fence = if fenced {
+            crate::fence::Fence::new(vec![PathBuf::from(if cfg!(windows) {
+                r"C:\secret"
+            } else {
+                "/secret"
+            })])
+        } else {
+            crate::fence::Fence::default()
+        };
+        let t = launch_of(&meta, Some(&home), &fence, &granted());
+        assert!(!always.exists(), "{mode}: escouade-always.json erased");
+        let doc = file_of(&t, &settings).unwrap();
+        let allow = doc["permissions"]["allow"].as_array().unwrap();
+        assert_eq!(!allow.is_empty(), allowed, "{mode} {fenced}: {allow:?}");
+        assert!(!allow.contains(&json!("command(planted)")), "{allow:?}");
+        assert!(doc.get("toolPermission").is_none() && doc.get("agentMode").is_none());
+        assert!(pair(&t.args, "--mode").is_none_or(|m| m == "plan"));
+    }
+}
+
+#[test]
+fn its_temporary_folder_is_the_agents_own_as_its_plugin_has_it() {
+    // `agy` 1.5.3 writes in its temporary folder with no rule nor question (ESC-388): not the user's `%TEMP%` (ESC-389).
+    let home = crate::paths::test_dir("esc389-agy-temp");
+    let meta = AgentMeta {
+        mode: "default".into(),
+        cwd: CWD.into(),
+        ..Default::default()
+    };
+    let t = launch_of(
+        &meta,
+        Some(&home),
+        &crate::fence::Fence::default(),
+        &granted(),
+    );
+    let tmp = home.join("tmp").to_string_lossy().into_owned();
+    for var in crate::engine::agy::TEMP_VARS {
+        assert_eq!(env_of(&t, var), Some(tmp.as_str()), "{var}");
+        assert_eq!(t.env.iter().filter(|(k, _)| k == var).count(), 1, "{var}");
+    }
+    // The folder is made with the launch's files.
+    assert!(t.files.iter().any(|(p, _)| *p == temp_mark(&home)));
+    assert_eq!(temp_mark(&home).parent(), Some(home.join("tmp").as_path()));
 }

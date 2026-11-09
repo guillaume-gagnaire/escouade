@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-openai"
-version = "2.2.1"
+version = "2.2.3"
 description = "Le plugin OpenAI d'Escouade : le service de voix (dictée, direct, voix de l'agent)"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"

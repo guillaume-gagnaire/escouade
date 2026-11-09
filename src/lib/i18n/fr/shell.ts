@@ -17,11 +17,11 @@ export default {
     /** ESC-128: harnesses found, no account added yet. */
     noAccount: 'Aucun compte',
     noAccountDesc: 'Ajoute un compte : celui déjà connecté sur cette machine, ou un nouveau. Seuls les comptes ajoutés lancent des agents.',
-    /** `{where}`: « Réglages › Harness », in bold. */
+    /** `{where}`: « Réglages › Comptes et harness », in bold. */
     noEngineDesc:
       'Escouade fait travailler des agents de code. Installe l’un d’eux, puis indique son chemin dans {where} s’il n’est pas dans le PATH.',
-    harnessSettings: 'Réglages › Harness',
-    harnessSettingsButton: 'Réglages › Harness…',
+    harnessSettings: 'Réglages › Comptes et harness',
+    harnessSettingsButton: 'Réglages › Comptes et harness…',
     /** `{harness}`: its name. */
     copy: 'Copier la commande de {harness}',
     copied: 'Commande copiée',
@@ -56,7 +56,7 @@ export default {
       /** `{agents}`, `{tickets}`: the counts, each with its noun; `{date}`: its last activity. */
       found: 'Historique retrouvé : {agents}, {tickets}, dernière activité le {date}',
       fresh: "Partir d'un projet vierge",
-      freshDesc: "L'historique reste dans Réglages › Projets, où l'effacer.",
+      freshDesc: "L'historique reste dans Réglages › Tous les projets, où l'effacer.",
       reopen: 'Rouvrir le projet',
       reopening: 'Réouverture…',
     },
@@ -80,6 +80,8 @@ export default {
   },
   /** The update downloaded, its notes once installed, and the toasts about it. */
   update: {
+    /** A beta's version, wherever the app says it (ESC-374). */
+    betaVersion: '{version} (bêta)',
     ready: 'Escouade {version} est prête',
     notes: 'Nouveautés d’Escouade {version}',
     saveFirst: {
@@ -108,7 +110,7 @@ export default {
     title: 'Aider à améliorer Escouade ?',
     body: 'Escouade peut envoyer des statistiques d’usage, sans rien qui t’identifie : quelles fonctionnalités servent, avec quelle version d’Escouade et quel système. Jamais tes projets, ton code, tes conversations ni ton nom.',
     detail:
-      'Elles partent vers un serveur d’Escouade hébergé en France (Aptabase, open source), sous un identifiant tiré au hasard, et sont gardées 25 mois. Tu peux changer d’avis à tout moment dans Réglages › À propos.',
+      'Elles partent vers un serveur d’Escouade hébergé en France (Aptabase, open source), sous un identifiant tiré au hasard, et sont gardées 25 mois. Tu peux changer d’avis à tout moment dans Réglages › Général.',
     more: 'Ce qui est envoyé, en détail',
     yes: 'Partager les statistiques',
     no: 'Non merci',
@@ -184,5 +186,29 @@ export default {
     soundTip: 'Son des notifications : {state}',
     soundOn: 'On',
     soundOff: 'Off',
+  },
+  /** The split screen (ESC-392): panes of the work area, filled by dragging from the sidebar. */
+  panes: {
+    region: 'Volet : {name}',
+    close: 'Fermer le volet',
+    closeTip: 'Fermer le volet ({shortcut})',
+    handle: 'Taille des volets',
+    handleTip: 'Tirer pour régler · double clic : moitié-moitié',
+    editor: 'Éditeur',
+    openBeside: 'Ouvrir à côté',
+    openBelow: 'Ouvrir en dessous',
+    /** After the key of Ctrl+clic, in a menu's hint. */
+    click: 'clic',
+    zone: {
+      left: 'À gauche',
+      right: 'À droite',
+      top: 'En haut',
+      bottom: 'En bas',
+      center: 'Remplacer',
+    },
+    full: 'Plus de place pour un volet de plus',
+    hintSides: 'Bord : à côté',
+    hintMiddle: 'Milieu : remplacer',
+    hintCancel: 'Échap : annuler',
   },
 } as const satisfies Tree;

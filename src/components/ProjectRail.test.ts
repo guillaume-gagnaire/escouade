@@ -238,7 +238,7 @@ describe('ProjectRail', () => {
     render(ProjectRail);
     await fireEvent.contextMenu(tile('studio-web'));
     menu.open!.items.find((i) => i.label === 'Réglages du projet…')!.onClick!();
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects', projectId: 'p2' });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'project', projectId: 'p2' });
   });
 
   it('closes a project once the backend removed it, its history kept', async () => {
@@ -315,7 +315,7 @@ describe('ProjectRail', () => {
     items[1].onClick!();
     expect(app.modal).toEqual({ kind: 'newProject', path: 'C:\\code\\legacy', historyId: 'old' });
     items[2].onClick!();
-    expect(app.modal).toEqual({ kind: 'settings', tab: 'projects' });
+    expect(app.modal).toEqual({ kind: 'settings', page: 'allProjects' });
     items[0].onClick!();
     expect(app.modal).toEqual({ kind: 'newProject' });
   });

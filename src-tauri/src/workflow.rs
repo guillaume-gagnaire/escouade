@@ -2214,8 +2214,8 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             .emit(crate::model::UiEvent::Project { project: updated });
     }
 
-    /// The project's corrections written into the files of its workflows (Réglages › Projets ›
-    /// Workflow saved).
+    /// The project's corrections written into the files of its workflows (saved in
+    /// Réglages › Projets › Kanban › Workflow).
     pub(crate) fn write_workflow_fixes(&self, project: &crate::model::Project) {
         if !project.workflows_enabled {
             return;

@@ -1678,8 +1678,8 @@ pub(crate) fn no_account_of(engine: EngineId) -> anyhow::Error {
     anyhow::Error::new(NoAccount {
         engine,
         text: tr!(
-            "Aucun compte {harness} : ajoute-en un dans Réglages › Comptes.",
-            "No {harness} account: add one in Settings › Accounts."
+            "Aucun compte {harness} : ajoute-en un dans Réglages › Comptes et harness.",
+            "No {harness} account: add one in Settings › Accounts and harnesses."
         ),
     })
 }
@@ -1694,8 +1694,8 @@ pub fn has_any(settings: &Settings, engine: EngineId) -> bool {
 pub(crate) fn no_account(name: &str, engine: EngineId) -> anyhow::Error {
     let harness = engine::by_name(engine);
     anyhow::anyhow!(tr!(
-        "Aucun compte {harness} actif ne sert le projet « {name} » : coche-le sous « Réservé aux projets » d’un compte {harness} actif, dans Réglages › Comptes.",
-        "No active {harness} account serves the project “{name}”: tick it under “Reserved to projects” on an active {harness} account, in Settings › Accounts."
+        "Aucun compte {harness} actif ne sert le projet « {name} » : coche-le sous « Réservé aux projets » d’un compte {harness} actif, dans Réglages › Comptes et harness.",
+        "No active {harness} account serves the project “{name}”: tick it under “Reserved to projects” on an active {harness} account, in Settings › Accounts and harnesses."
     ))
 }
 
@@ -1877,6 +1877,8 @@ impl<R: Runtime> Core<R> {
         share: &[String],
         mode: ShareMode,
     ) -> Result<Account> {
+        // Its harness's plugin, from the seed if it is not installed (ESC-373): the gesture asks for it.
+        self.need_engine_plugin(engine);
         let root = self.data.accounts_of(engine);
         let (made, _) = self.change_claude_accounts(|s| {
             let from = config_dir(&get(s, &principal_id(engine)), s);
@@ -1892,6 +1894,7 @@ impl<R: Runtime> Core<R> {
     /// `engine` (its Principal: its usual folder, `~/.claude`, `~/.codex`…), added last in the
     /// order and active, as it is. Refused when it is there already.
     pub fn add_machine_account(self: &Arc<Self>, engine: EngineId) -> Result<Account> {
+        self.need_engine_plugin(engine);
         let (made, _) = self.change_claude_accounts(|s| {
             let id = principal_id(engine);
             if s.accounts.iter().any(|a| a.id == id) {
@@ -2537,12 +2540,44 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The harnesses whose program is found, in the registry's order: those the interface offers
-    /// (a harness that is not found shows nowhere but in Réglages › Harness).
+    /// (a harness that is not found shows nowhere but in Réglages › Comptes et harness).
     pub fn engines_found(&self) -> Vec<crate::model::EngineId> {
         engine::registry::all()
             .into_iter()
             .filter(|h| self.engine_found(h.id()))
             .map(|h| h.id())
+            .collect()
+    }
+
+    /// Whether the plugin `engine` goes through is installed and on (ESC-391): a harness of the app's own plugins
+    /// (INT-10) whose plugin is off or gone starts no agent. One a plugin describes is in the registry only while its
+    /// plugin is on.
+    pub fn engine_plugged(&self, engine: EngineId) -> bool {
+        let Some(plugin) = crate::plugins::harness::plugin_of_engine(engine) else {
+            return true;
+        };
+        self.plugins
+            .get(plugin, crate::i18n::Lang::En)
+            .is_some_and(|v| v.state == crate::plugins::State::Ready && v.choices.enabled)
+    }
+
+    /// The harnesses of the registry whose plugin is off or not installed (ESC-391): the menus « Harness » do not offer
+    /// them, and say so of the one already chosen.
+    pub fn engines_unplugged(&self) -> Vec<EngineId> {
+        engine::registry::all()
+            .into_iter()
+            .map(|h| h.id())
+            .filter(|&e| !self.engine_plugged(e))
+            .collect()
+    }
+
+    /// The harnesses that can be used (ESC-391), in the registry's order: their program found, their plugin on, and at
+    /// least one account of theirs in Escouade. Those the menus « Harness » offer, and among which the texts' writer is.
+    pub fn engines_usable(&self) -> Vec<EngineId> {
+        let accounts = self.settings.read().accounts.clone();
+        self.engines_found()
+            .into_iter()
+            .filter(|&e| self.engine_plugged(e) && accounts.iter().any(|a| a.engine == e))
             .collect()
     }
 

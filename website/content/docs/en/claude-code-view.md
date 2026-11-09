@@ -71,7 +71,7 @@ A message sent to the agent from elsewhere, for example through the [MCP server]
 
 ## Opening new agents in this view
 
-In Settings › Harness, group “Processes”, the “New agents’ view” choice, “Escouade” (the default) or “Harness terminal”, makes each new agent start in Escouade’s conversation or in this view. Each agent can then switch views from its header. Ticket agents always stay in Escouade’s view, and so do the agents of a harness that has no terminal view. See [the harness settings](settings-claude-code).
+In Settings › Agents, group “New agents”, the “New agents’ view” choice, “Escouade” (the default) or “Harness terminal”, makes each new agent start in Escouade’s conversation or in this view. Each agent can then switch views from its header. Ticket agents always stay in Escouade’s view, and so do the agents of a harness that has no terminal view. See [the harness settings](settings-claude-code).
 
 ## Folder trust
 

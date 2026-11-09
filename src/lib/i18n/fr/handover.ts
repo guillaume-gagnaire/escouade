@@ -27,12 +27,14 @@ export default {
   },
   /** The mark of the harness on a turn, once the conversation went from one to another. */
   turnOn: 'sur {harness}',
-  /** The settings of Réglages › Harness. */
+  /** The settings of Réglages › Comptes et harness. */
   settings: {
     onLimit: 'Continuer sur le harness suivant quand tous les comptes d’un harness sont épuisés',
     onLimitDesc:
       'L’agent y passe seul, et le pilote auto le suit pour les tickets. Sinon il attend la remise à zéro. Le harness quitté n’est pas repris avant sa remise à zéro, et l’agent n’y revient jamais seul.',
     model: 'Modèle de passation · {harness}',
+    /** The row's name in the register (« Avancé » names it, the search finds it). */
+    modelName: 'Modèle de passation',
     modelDesc: 'Le modèle d’un agent qui passe sur ce harness.',
     best: 'Le meilleur ({model})',
   },

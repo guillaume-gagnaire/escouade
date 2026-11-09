@@ -2,8 +2,8 @@
 title: "Pilote auto"
 subject: "Kanban"
 sources: ["docs/SPEC.md","src-tauri/src/mcp/act_tests.rs","website/content/docs/fr/autopilot.md"]
-tickets: ["ESC-312","ESC-63"]
-decisions: [20,24]
+tickets: ["ESC-312","ESC-63","ESC-382"]
+decisions: [20,24,123]
 compared: "2026-10-31T17:27:51+01:00"
 gaps: [{"text":"La page dit que les cartes « À faire » en attente d'un autre ticket affichent « ⏸ après … » et que ce texte passe avant « En attente : pilote auto en pause ». Le code affiche « Après {keys} » (en anglais « After {keys} »), sans le symbole ⏸.","code":["src/lib/i18n/fr/boardSettings.ts","src/lib/board.ts"]}]
 ---
@@ -32,7 +32,8 @@ Le pilote auto lance seul les tickets « À faire », dans l'ordre, tant qu'il r
 
 ### La pause au quota
 
-- Une fenêtre de quota (5 h ou hebdomadaire) au seuil « Pause au-delà du quota » ou au-delà, dont la fin est connue et pas encore passée, met le pilote auto en pause. Elle le retient jusqu'à sa fin plus 30 s, ou jusqu'à ce qu'une lecture des quotas la redonne sous le seuil.
+- Une fenêtre de quota (5 h ou hebdomadaire) au seuil « Pause du pilote auto au-delà du quota » ou au-delà, dont la fin est connue et pas encore passée, met le pilote auto en pause. Elle le retient jusqu'à sa fin plus 30 s, ou jusqu'à ce qu'une lecture des quotas la redonne sous le seuil.
+- Un seuil changé vaut tout de suite : relevé au-dessus de la fenêtre, le pilote auto repart sans attendre ; abaissé sous elle, il se met en pause avant le ticket suivant.
 - Elle ne retient que le pilote auto : un ticket lancé à la main part quand même, tant que la fenêtre n'est pas épuisée.
 - Les agents déjà au travail continuent.
 - Avec plusieurs comptes, la pause se calcule compte par compte (voir *Comptes*).
@@ -61,8 +62,8 @@ L'agent d'un ticket arrêté par la limite sans reprise prévue (reprise automat
 
 - « Pilote auto », dans l'en-tête du Kanban.
 - Le nombre de places, dans les réglages du Kanban : de 1 à 6, 2 par défaut.
-- « Pause au-delà du quota » (Réglages › Kanban, pour tous les projets) : 80, 90, 95 ou 100 %, 100 % par défaut. Une autre valeur écrite à la main vaut 100 %.
-- « Pause quand la CI de la cible est rouge » (Réglages › Kanban, par projet) : éteint par défaut.
+- « Pause du pilote auto au-delà du quota », « pour tous les projets » : 80, 90, 95 ou 100 %, 100 % par défaut. Une autre valeur écrite à la main vaut 100 %. C'est un réglage de l'app, dans Réglages › Comptes et harness › « Quand un quota est épuisé », à côté de « Changer de compte à » (avant la 2.2, dans la page Kanban d'un projet ; sa clé, `quotaPause`, n'a pas changé).
+- « Pause quand la CI de la cible est rouge » (Réglages › *projet* › Kanban, par projet) : éteint par défaut.
 
 ## Limites
 

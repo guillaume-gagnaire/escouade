@@ -409,13 +409,13 @@ fn lent_key(service: Service) -> String {
 fn by_its_host(service: Service) -> String {
     if service == Service::AZURE {
         return tr!(
-            "Azure Boards se connecte avec Azure DevOps dans Réglages › Intégrations › Hébergeurs de code : un seul compte pour les PR et les éléments de travail.",
-            "Azure Boards is connected with Azure DevOps in Settings › Integrations › Code hosts: one account for the PRs and the work items."
+            "Azure Boards se connecte avec Azure DevOps dans Réglages › Services connectés › Hébergeurs de code : un seul compte pour les PR et les éléments de travail.",
+            "Azure Boards is connected with Azure DevOps in Settings › Connected services › Code hosts: one account for the PRs and the work items."
         );
     }
     tr!(
-        "GitLab se connecte dans Réglages › Intégrations › Hébergeurs de code : un seul compte pour les MR et les tickets.",
-        "GitLab is connected in Settings › Integrations › Code hosts: one account for the MRs and the tickets."
+        "GitLab se connecte dans Réglages › Services connectés › Hébergeurs de code : un seul compte pour les MR et les tickets.",
+        "GitLab is connected in Settings › Connected services › Code hosts: one account for the MRs and the tickets."
     )
 }
 
@@ -599,8 +599,8 @@ impl<R: Runtime> Core<R> {
             .collect();
         if list.is_empty() {
             bail!(tr!(
-                "Aucun compte GitLab connecté : connecte-le dans Réglages › Intégrations › Hébergeurs de code.",
-                "No GitLab account connected: connect it in Settings › Integrations › Code hosts."
+                "Aucun compte GitLab connecté : connecte-le dans Réglages › Services connectés › Hébergeurs de code.",
+                "No GitLab account connected: connect it in Settings › Connected services › Code hosts."
             ));
         }
         let mut instances = Vec::new();
@@ -662,8 +662,8 @@ impl<R: Runtime> Core<R> {
             .collect();
         if list.is_empty() {
             bail!(tr!(
-                "Aucun compte Azure DevOps connecté : connecte-le dans Réglages › Intégrations › Hébergeurs de code.",
-                "No Azure DevOps account connected: connect it in Settings › Integrations › Code hosts."
+                "Aucun compte Azure DevOps connecté : connecte-le dans Réglages › Services connectés › Hébergeurs de code.",
+                "No Azure DevOps account connected: connect it in Settings › Connected services › Code hosts."
             ));
         }
         let plugin = crate::plugins::builtin::AZURE_DEVOPS;
@@ -756,6 +756,12 @@ impl<R: Runtime> Core<R> {
         if hosted_kind(service).is_some() {
             // One account for both uses: the code host's form.
             bail!(by_its_host(service));
+        }
+        // Its plugin of the first hand, from the seed if it is not installed (ESC-373): the gesture asks for it.
+        if form.plugin.trim().is_empty() {
+            if let Some(p) = crate::plugins::sort::of_service(service.as_str()) {
+                self.need_plugin(p);
+            }
         }
         let mut account = Account {
             site: if service == Service::JIRA {

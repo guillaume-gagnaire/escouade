@@ -17,6 +17,7 @@ const { lang, text } = useLang();
           <li v-for="i in text.roadmap.items" :key="i.title">
             <h3>{{ i.title }}</h3>
             <p>{{ i.text }}</p>
+            <a v-if="i.link" class="arrow more" :href="i.link.href">{{ i.link.label }}</a>
           </li>
         </ul>
         <p class="links">
@@ -80,6 +81,10 @@ h3 {
   color: var(--muted);
   font-size: 15px;
   line-height: 1.55;
+}
+.more {
+  margin-top: 12px;
+  font-size: 15px;
 }
 .links {
   display: flex;

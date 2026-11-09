@@ -1,5 +1,6 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type {
+  CodeHost,
   MergeHow,
   EngineDecl,
   PageBounds,
@@ -221,6 +222,7 @@ export const api = {
   engines: () => invoke<EngineInfo[]>('engines'),
   /** The harnesses found now, the PATH of today read first (ESC-186). */
   enginesFoundNow: () => invoke<EngineId[]>('engines_found_now'),
+  enginesOffNow: () => invoke<EngineId[]>('engines_off_now'),
   /** The registry of now: the harnesses the plugins describe come and go with them (PLG-6). */
   enginesDeclared: () => invoke<EngineDecl[]>('engines_declared'),
   /** The items of Principal's folder a new account may share (those it has), files first. */
@@ -232,6 +234,8 @@ export const api = {
   accountAddMachine: (engine: EngineId) => invoke<Account>('account_add_machine', { engine }),
   /** Whether the machine's account of `engine` is signed in, with whom, and whether it is added already. */
   accountMachine: (engine: EngineId) => invoke<MachineAccount>('account_machine', { engine }),
+  /** The plugin of the harness `engine`, from the app's seed when it is not installed (ESC-373): said in a line once installed. */
+  pluginNeedEngine: (engine: EngineId) => invoke<void>('plugin_need_engine', { engine }),
   /** The account's name, `claude`, « Actif » and the defaults of its new agents (its folder stays its own); the accounts as they then are. */
   accountUpdate: (account: Account) => invoke<Account[]>('account_update', { account }),
   /** The accounts in the order of `ids`, as they then are. */
@@ -474,6 +478,7 @@ export const api = {
   agentNoPr: (id: string) => invoke<NoPr | null>('agent_no_pr', { id }),
   /** The open pull requests of the project, on the remote of its target. */
   projectPrs: (projectId: string) => invoke<PrRead<ProjectPrs>>('project_prs', { projectId }),
+  projectCodeHost: (projectId: string) => invoke<CodeHost | null>('project_code_host', { projectId }),
   overviewPrs: () => invoke<OverviewPrs[]>('overview_prs'),
   /** « Lancer un agent sur cette PR » (ESC-65): an agent in a worktree on the branch of the open pull request `number`. */
   createAgentOnPr: (projectId: string, number: number) => invoke<Agent>('create_agent_on_pr', { projectId, number }),

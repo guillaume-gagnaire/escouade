@@ -50,4 +50,4 @@ Escouade reads Claude Code’s project memory in the folder of each of your Clau
 
 ## In the settings
 
-Settings › Projects, “Shared memory” group: the list of the project’s memories, their kind and their description. A click on a memory shows its text. “Forget”, then “Confirm forgetting”, deletes its file. The agents write the memory themselves: the settings are there to read it and clean it up. See [the projects’ settings](settings-projects).
+Settings › Projects › Team, “Shared memory” group: the list of the project’s memories, their kind and their description. A click on a memory shows its text. “Forget”, then “Confirm forgetting”, deletes its file. The agents write the memory themselves: the settings are there to read it and clean it up. See [the projects’ settings](settings-projects).

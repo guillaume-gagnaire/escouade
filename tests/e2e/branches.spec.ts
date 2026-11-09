@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, test, openSettingsPage, closeSettings } from './fixture';
 
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 
@@ -57,18 +57,18 @@ test('the agents start from the target branch, brought up to date from the remot
   // « Branche cible » in the branch picker, then the setting.
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Kanban' }).click();
+  await openSettingsPage(settings, 'Kanban');
   await settings.getByRole('button', { name: 'Branche cible : work. Choisir une autre branche' }).click();
   const picker = page.getByRole('dialog', { name: 'Branche cible' });
   await picker.getByRole('option', { name: /^main/ }).click();
   await expect(picker).toBeHidden();
   // « Branche de départ des nouveaux worktrees », in the project's settings (ESC-160).
-  await settings.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(settings, 'Git et worktrees');
   await settings
     .getByRole('group', { name: 'Branche de départ des nouveaux worktrees' })
     .getByRole('button', { name: 'Branche cible du Kanban' })
     .click();
-  await settings.getByRole('button', { name: 'Enregistrer' }).click();
+  await closeSettings(settings);
   await expect(settings).toHaveCount(0);
 
   // A new agent: from origin's main, the local main moved to it, the folder left on work.
@@ -147,7 +147,7 @@ test('the new worktrees start from the branch the project names, and an agent fr
   // « Branche de départ des nouveaux worktrees »: a branch, chosen in the picker.
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(settings, 'Git et worktrees');
   const choice = settings.getByRole('group', { name: 'Branche de départ des nouveaux worktrees' });
   await expect(choice.getByRole('button', { name: 'Branche actuelle du dossier' })).toHaveAttribute('aria-pressed', 'true');
   await choice.getByRole('button', { name: 'Une branche…' }).click();
@@ -159,7 +159,7 @@ test('the new worktrees start from the branch the project names, and an agent fr
     'aria-pressed',
     'true',
   );
-  await settings.getByRole('button', { name: 'Enregistrer' }).click();
+  await closeSettings(settings);
   await expect(settings).toHaveCount(0);
 
   // A new agent: its worktree starts from release, the folder left on main.

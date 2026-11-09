@@ -69,6 +69,8 @@ const overviewKey = (e: KeyboardEvent) => e.shiftKey && e.key.toLowerCase() === 
  * (previous command) on Windows: « Ouvrir un fichier » is Cmd+P there.
  */
 export function isAppShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
+  // The split screen's keys (ESC-392) leave a terminal for the app while it is split, Ctrl+\ always (it would be SIGQUIT).
+  if (paneKey(e, mac)) return true;
   if (e.altKey) return false;
   if (agentCycle(e)) return true;
   // The zoom of the whole window, as in VS Code's terminal (Ctrl+- would only be readline's undo there).
@@ -114,12 +116,14 @@ export function holdPrint(e: KeyboardEvent, mac = IS_MAC): boolean {
 function openQuickOpen() {
   const project = app.project;
   if (!project || app.modal) return;
-  const source = app.editorOn ? app.editor[project.id].source : app.agent?.worktree ? app.agent.id : 'project';
+  const source = app.editorActive ? app.editor[project.id].source : app.agent?.worktree ? app.agent.id : 'project';
   app.modal = { kind: 'quickOpen', projectId: project.id, source };
 }
 
 /** Runs the shortcut matching `e`. Returns true when the event was handled. */
 export function handleShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
+  // Ctrl+Alt+arrows go from pane to pane (ESC-392): an arrow types nothing, even with AltGr.
+  if (e.altKey && !app.modal && handlePaneKey(e, mac)) return true;
   // Ctrl+Alt is AltGr on French keyboards (e.g. AltGr+2 = ~): never a shortcut.
   if (e.altKey) return false;
   // Taken whatever the window shows (a dialog open, no project): a Ctrl+P left to the WebView prints the page.
@@ -139,12 +143,12 @@ export function handleShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
   }
   if (!primaryKey(e, mac)) return false;
   const k = e.key.toLowerCase();
-  if (k === 's' && !e.shiftKey && app.editorOn) {
+  if (k === 's' && !e.shiftKey && app.editorActive) {
     import('./editor/actions').then((m) => m.saveActive());
     return true;
   }
   // The editor's search through the files of its source; Ctrl+F stays the search in the file.
-  if (k === 'f' && e.shiftKey && app.editorOn && findInFiles()) return true;
+  if (k === 'f' && e.shiftKey && app.editorActive && findInFiles()) return true;
   const n = digit(e);
   if (n !== null && !e.shiftKey) {
     const p = app.projects[n - 1];
@@ -191,11 +195,47 @@ export function handleShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
     app.toggleLayout();
     return true;
   }
+  if (handlePaneKey(e, mac)) return true;
   if (overviewKey(e)) {
     app.toggleOverview();
     return true;
   }
   return false;
+}
+
+/** The arrows of Ctrl+Alt+arrow: the pane on that side. */
+const PANE_SIDES: Record<string, 'left' | 'right' | 'top' | 'bottom'> = {
+  ArrowLeft: 'left',
+  ArrowRight: 'right',
+  ArrowUp: 'top',
+  ArrowDown: 'bottom',
+};
+
+/** Ctrl+\ (by its place: Ctrl+* on a French AZERTY keyboard), with or without Shift. */
+const splitKey = (e: KeyboardEvent, mac: boolean) =>
+  primaryKey(e, mac) && !e.altKey && (e.code === 'Backslash' || e.key === '\\' || e.key === '|');
+
+/**
+ * The split screen's keys (ESC-392): Ctrl+\ splits or comes back to one pane, Ctrl+Shift+\ turns the active pane's
+ * split, and, while split, Ctrl+Shift+W closes the active pane and Ctrl+Alt+arrows go to the pane on that side.
+ */
+export function paneKey(e: KeyboardEvent, mac = IS_MAC): 'split' | 'flip' | 'close' | 'left' | 'right' | 'top' | 'bottom' | null {
+  if (e.repeat && !(e.key in PANE_SIDES)) return null;
+  if (splitKey(e, mac)) return e.shiftKey ? (app.panesOn ? 'flip' : null) : 'split';
+  if (!app.panesOn) return null;
+  if (primaryKey(e, mac) && e.shiftKey && !e.altKey && (e.key.toLowerCase() === 'w' || e.code === 'KeyW')) return 'close';
+  if (primaryKey(e, mac) && e.altKey && !e.shiftKey && e.key in PANE_SIDES) return PANE_SIDES[e.key];
+  return null;
+}
+
+function handlePaneKey(e: KeyboardEvent, mac: boolean): boolean {
+  const k = paneKey(e, mac);
+  if (!k || !app.project) return false;
+  if (k === 'split') app.toggleSplit();
+  else if (k === 'flip') app.flipPanes();
+  else if (k === 'close') app.closePaneOf(app.panes!.active);
+  else app.focusPane(k);
+  return true;
 }
 
 /**

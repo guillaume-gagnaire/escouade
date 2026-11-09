@@ -1,25 +1,29 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { addProject, expect, FAKE, send, test } from './fixture';
+import { addProject, expect, FAKE, send, test, openAdvanced, openSettingsPage, closeSettings } from './fixture';
 
-// Choosing the harness (ESC-29): Réglages › Harness lists each one with its executable and its version; its accounts sign
-// in from Réglages › Comptes (1.8.2). With none found, the first start says « Aucun harness trouvé » with the command that
+// Choosing the harness (ESC-29): Réglages › Comptes et harness lists each one with its state, its version and its accounts
+// (R4), its path in « Avancé ». With none found, the first start says « Aucun harness trouvé » with the command that
 // installs each.
 
-test('Réglages › Harness shows Claude Code’s executable and version, and sends to Comptes, where its account signs in', async ({ app }) => {
+test('Réglages › Comptes et harness shows Claude Code’s state, version and accounts, one of which signs in, its path in « Avancé »', async ({
+  app,
+}) => {
   const { page } = app;
   await addProject(page, app.repo);
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Harness' }).click();
-  const claude = settings.getByRole('region', { name: 'Claude Code' });
-  await expect(claude.getByRole('textbox', { name: "Chemin de l'exécutable" })).toBeVisible();
+  await openSettingsPage(settings, 'Comptes et harness');
+  const claude = settings.getByRole('region', { name: 'Claude Code', exact: true });
+  // Its state and version beside its name, its accounts under it (R4), its path in « Avancé ».
   await expect(claude.locator('[data-state]')).toHaveText('2.1.301');
-  // The test's Claude Code folder has no sign-in: the version's line says where to sign in, the tab itself does not.
-  await expect(claude).toContainText('Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes.');
-  await expect(settings.getByRole('button', { name: 'Se connecter…' })).toHaveCount(0);
-  await settings.getByRole('tab', { name: 'Comptes' }).click();
-  await settings.getByRole('listitem', { name: 'Principal' }).getByRole('button', { name: 'Se connecter…' }).click();
+  await expect(claude.getByRole('button', { name: 'Ajouter un compte Claude Code…' })).toBeVisible();
+  // The test's Claude Code folder has no sign-in: the line under its name says so, its account signs in just below.
+  await expect(claude).toContainText('Aucun compte connecté : connecte l’un de ses comptes ci-dessous, ou ajoutes-en un.');
+  await expect(claude.getByRole('textbox', { name: "Chemin de l'exécutable" })).toHaveCount(0);
+  await openAdvanced(settings);
+  await expect(settings.getByRole('region', { name: 'Avancé' }).getByRole('textbox', { name: "Chemin de l'exécutable" })).toBeVisible();
+  await claude.getByRole('listitem', { name: 'Principal' }).getByRole('button', { name: 'Se connecter…' }).click();
   const signIn = page.getByRole('dialog', { name: 'Se connecter au compte « Principal »' });
   await expect(signIn).toBeVisible();
   // Its × (Escape may go to the sign-in's terminal once it has the focus).
@@ -27,7 +31,7 @@ test('Réglages › Harness shows Claude Code’s executable and version, and se
   await expect(signIn).toHaveCount(0);
 });
 
-test('Escouade runs claude update at its start, apart from its agents, whose own update is off; Réglages › Harness says what it said (ESC-133)', async ({
+test('Escouade runs claude update at its start, apart from its agents, whose own update is off; Réglages › Comptes et harness says what it said (ESC-133)', async ({
   app,
 }) => {
   const { page } = app;
@@ -51,10 +55,11 @@ test('Escouade runs claude update at its start, apart from its agents, whose own
   expect(said()[0]).toMatchObject({ started: true, autoUpdater: null });
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Harness' }).click();
-  const claude = settings.getByRole('region', { name: 'Claude Code' });
-  await expect(claude.getByRole('switch', { name: 'Mettre à jour Claude Code automatiquement' })).toHaveAttribute('aria-checked', 'true');
-  await expect(claude.getByRole('status')).toHaveText('À jour (2.1.301).');
+  await openSettingsPage(settings, 'Comptes et harness');
+  const advanced = settings.getByRole('region', { name: 'Avancé' });
+  await openAdvanced(settings);
+  await expect(advanced.getByRole('switch', { name: 'Mettre à jour Claude Code automatiquement' })).toHaveAttribute('aria-checked', 'true');
+  await expect(advanced.locator('[data-update-state]')).toHaveText('À jour (2.1.301).');
 });
 
 test.describe('with Claude Code’s own update turned off by the user', () => {
@@ -72,9 +77,9 @@ test.describe('with Claude Code’s own update turned off by the user', () => {
     const { page } = app;
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Réglages' });
-    await settings.getByRole('tab', { name: 'Harness' }).click();
-    const claude = settings.getByRole('region', { name: 'Claude Code' });
-    await expect(claude.getByRole('status')).toHaveText(
+    await openSettingsPage(settings, 'Comptes et harness');
+    await openAdvanced(settings);
+    await expect(settings.getByRole('region', { name: 'Avancé' }).locator('[data-update-state]')).toHaveText(
       'Coupée dans Claude Code lui-même (DISABLE_AUTOUPDATER) : Escouade ne le met pas à jour non plus.',
     );
     // Past the start's few seconds: never run.
@@ -88,7 +93,7 @@ test('« Modèle des textes rédigés » offers Claude Haiku alone with Claude C
   await addProject(page, app.repo);
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Application' }).click();
+  await openSettingsPage(settings, 'Agents');
   const writer = settings.getByRole('group', { name: 'Modèle des textes rédigés' });
   await expect(writer.getByRole('button')).toHaveText(['Claude Haiku']);
   await expect(writer.getByRole('button', { name: 'Claude Haiku' })).toHaveAttribute('aria-pressed', 'true');
@@ -107,25 +112,29 @@ test.describe('with no harness found', () => {
     const none = page.getByRole('region', { name: 'Aucun harness trouvé' });
     await expect(none).toBeVisible();
     await expect(none.getByRole('listitem').filter({ hasText: 'Claude Code' })).toContainText('irm https://claude.ai/install.ps1 | iex');
-    // Réglages › Harness: not found, with its installer.
+    // Réglages › Comptes et harness: not found, with its installer.
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Réglages' });
-    await settings.getByRole('tab', { name: 'Harness' }).click();
-    const claude = settings.getByRole('region', { name: 'Claude Code' });
+    await openSettingsPage(settings, 'Comptes et harness');
+    const claude = settings.getByRole('region', { name: 'Claude Code', exact: true });
     await expect(claude.locator('[data-engine-state="absent"]')).toHaveText('Introuvable');
     await expect(claude.getByText('irm https://claude.ai/install.ps1 | iex', { exact: true })).toBeVisible();
-    // Said with what puts it back (ESC-133), by the installation's row and by its update's.
+    // Said with what puts it back (ESC-133), by the installation's row and by its update's, in « Avancé », unfolded by
+    // itself: its path is set there.
     const gone =
-      'Claude Code est introuvable : réinstalle-le (`irm https://claude.ai/install.ps1 | iex`, ou `npm install -g @anthropic-ai/claude-code`), ou indique son chemin dans Réglages › Harness.';
-    await expect(claude.getByText(gone, { exact: true })).toHaveCount(2);
+      'Claude Code est introuvable : réinstalle-le (`irm https://claude.ai/install.ps1 | iex`, ou `npm install -g @anthropic-ai/claude-code`), ou indique son chemin dans Réglages › Comptes et harness.';
+    await expect(claude.getByText(gone, { exact: true })).toHaveCount(1);
+    const advanced = settings.getByRole('region', { name: 'Avancé' });
+    await expect(advanced.getByText(gone, { exact: true })).toHaveCount(1);
     // No harness to write the texts: « Modèle des textes rédigés » is not offered.
-    await settings.getByRole('tab', { name: 'Application' }).click();
-    await expect(settings.getByRole('heading', { name: 'Langue' })).toBeVisible();
+    await openSettingsPage(settings, 'Agents');
+    await expect(settings.getByRole('heading', { name: 'Nouveaux agents' })).toBeVisible();
     await expect(settings.getByRole('group', { name: 'Modèle des textes rédigés' })).toHaveCount(0);
-    await settings.getByRole('tab', { name: 'Harness' }).click();
+    await openSettingsPage(settings, 'Comptes et harness');
     // Its path given and saved: it is found, Escouade works.
-    await claude.getByRole('textbox', { name: "Chemin de l'exécutable" }).fill(FAKE);
-    await settings.getByRole('button', { name: 'Enregistrer' }).click();
+    await openAdvanced(settings);
+    await advanced.getByRole('textbox', { name: "Chemin de l'exécutable" }).fill(FAKE);
+    await closeSettings(settings);
     await expect(none).toHaveCount(0);
   });
 });

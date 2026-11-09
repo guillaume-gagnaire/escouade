@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { settingsAlerts } from '../../lib/settings-alerts.svelte';
   import Icon from '../Icon.svelte';
   import { tick } from 'svelte';
   import { openUrl } from '../../lib/opener';
@@ -26,6 +27,7 @@
   function take(v: ForgesView | null | undefined) {
     if (!v) return;
     view = v;
+    settingsAlerts.takeForges(v);
     if (v.issues?.length) app.accounts = v.issues;
   }
 

@@ -24,7 +24,7 @@ const LOOK: Duration = Duration::from_secs(10 * 60);
 /// How long after Escouade's start: the window and the agents first.
 const AFTER_START: Duration = Duration::from_secs(5);
 
-/// Where the last update stands, as « Réglages › Harness » shows it.
+/// Where the last update stands, as « Réglages › Comptes et harness » shows it.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum State {

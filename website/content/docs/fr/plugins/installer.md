@@ -34,7 +34,7 @@ Rien n’est installé tout de suite : le plugin est lu, mis de côté, et la fe
 
 Escouade propose **la dernière version qu’il peut faire tourner** : une version écrite pour une Escouade plus récente est sautée, une version retirée par son auteur aussi.
 
-**Installer** télécharge la version, puis vérifie tout avant d’ouvrir la fenêtre d’installation : `version.json` contre l’empreinte du catalogue, la signature contre les clés publiques qu’Escouade embarque (le store ne peut pas fabriquer un sceau : il n’a pas la clé), l’archive et son module contre `version.json`, le manifeste contre son empreinte. Un écart arrête tout et le dit (« L’archive reçue ne correspond pas à celle que le store a publiée ») : rien n’est installé. Le catalogue, les archives et la liste de révocation passent par **Réglages › Réseau** (proxy, certificats du système).
+**Installer** télécharge la version, puis vérifie tout avant d’ouvrir la fenêtre d’installation : `version.json` contre l’empreinte du catalogue, la signature contre les clés publiques qu’Escouade embarque (le store ne peut pas fabriquer un sceau : il n’a pas la clé), l’archive et son module contre `version.json`, le manifeste contre son empreinte. Un écart arrête tout et le dit (« L’archive reçue ne correspond pas à celle que le store a publiée ») : rien n’est installé. Le catalogue, les archives et la liste de révocation passent par **Réglages › Avancé › Réseau** (proxy, certificats du système).
 
 La fenêtre d’installation dit alors « Vérifié par Escouade » et « Signature : vérifiée ici, par l’app » ; pour une version non vérifiée, une bande : « Personne n’a relu cette version. Elle vient du store, son archive est bien celle que l’auteur a publiée, mais rien ne dit ce que fait son programme », et le bouton « Installer quand même ».
 
@@ -84,8 +84,26 @@ Certaines intégrations d’Escouade sont des plugins, livrés avec l’app, sig
 | OpenAI, Groq, Mistral, ElevenLabs, Deepgram | Les services de voix en ligne (voir [Réglages › Voix](settings-voice)). |
 
 - **Les couper** : leur interrupteur, pour toute l’app, ou leur onglet Projets, pour un projet. Rien de ce qu’ils ont fait n’est perdu, et tes choix sont gardés pour quand tu les rallumes.
-- **Ce qui se voit** : un hébergeur coupé ou arrêté ne suit plus les PR, et la carte de l’agent comme Réglages › Intégrations le disent ; une source coupée arrête sa synchro, qui dit pourquoi ; un service de voix coupé quitte Réglages › Voix, et la dictée repasse en local ; les agents d’un harness ACP restent, marqués « Harness absent ».
+- **Ce qui se voit** : un hébergeur coupé ou arrêté ne suit plus les PR, et la carte de l’agent comme Réglages › Services connectés le disent ; une source coupée arrête sa synchro, qui dit pourquoi ; un service de voix coupé quitte Réglages › Voix, et la dictée repasse en local ; les agents d’un harness ACP restent, marqués « Harness absent ».
 - **Pas de désinstallation**, ni de mise à jour à part : ils changent avec l’app. Un plugin d’un autre auteur ne peut pas prendre leur identifiant (`dev.escouade.*` est réservé) ; il peut servir le même service à côté d’eux, et c’est le compte qui dit lequel le sert.
+
+## Les plugins d’Escouade dans l’installeur
+
+Depuis la 2.2, les plugins d’Escouade arrivent avec l’installeur, signés comme sur le store, et s’installent **sans réseau**. Escouade n’installe que ceux dont ta configuration se sert :
+
+- **un harness** : un compte de ce harness dans Réglages › Comptes et harness, ou un agent sur lui ;
+- **une source de tickets ou un hébergeur** : un projet qui l’utilise (sa source, ou le remote de son dépôt), ou un compte de ce service déjà connecté ;
+- **un service de voix** : choisi « En ligne » pour la dictée ou la voix, ou dont la clé est gardée ;
+- **isola** : un projet avec un `.isola.toml` ;
+- **Discord, Slack, Contraste élevé, Règles de l’équipe** : seulement si tu les as déjà.
+
+Ce qu’Escouade ne peut pas lire sûrement (un fichier de réglages abîmé, un projet sur un disque débranché) installe ce qui pourrait servir : une mise à jour ne te fait jamais perdre ce qui marchait.
+
+- **Une mise à jour depuis la 2.1** installe ce que ta configuration utilise, sans un clic. Les autres plugins quittent la liste, leurs réglages gardés.
+- **Une première installation** n’installe rien d’office : « Ajouter un compte… » sur un harness installe son plugin, puis ajoute le compte.
+- **Plus tard**, le geste qui demande un plugin absent l’installe et le dit (« Plugin Codex installé ») : ajouter un compte, choisir une source ou un harness pour un projet, ajouter un projet, connecter un hébergeur, choisir un service de voix, tester un worktree isola. Pas de fenêtre de plus : le geste vaut accord.
+- **La vue Plugins** range les autres sous « Proposés par Escouade » (« Dans l’app, sans téléchargement ») : « Installer » les installe d’un clic. Les listes de choix (harness, sources, hébergeurs, voix) les proposent tous, installés ou non.
+- **Un plugin que tu as désinstallé** n’est pas remis au lancement : seulement par un geste qui le demande, ou par « Installer ».
 
 ## Activer pour l’app ou par projet
 

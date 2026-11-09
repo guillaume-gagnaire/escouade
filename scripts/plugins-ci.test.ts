@@ -106,7 +106,7 @@ describe('touchedBy', () => {
   const names = (files: string[]) => touchedBy(files, plugins).map((p: { name: string }) => p.name);
 
   it('runs only the folders touched, not a folder whose name starts the same', () => {
-    expect(names(['plugins/github/src/lib.rs', 'plugins/slack/README.md'])).toEqual(['github', 'slack']);
+    expect(names(['plugins/github/src/lib.rs', 'plugins/slack/README.en.md'])).toEqual(['github', 'slack']);
     expect(names(['plugins/github-old/x', 'plugins/README.md', 'src/App.svelte'])).toEqual([]);
   });
 

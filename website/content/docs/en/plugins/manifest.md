@@ -13,7 +13,7 @@ The Discord plugin, one of the [example plugins](plugins/examples), whole: a plu
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.discord",
   "name": "Discord",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "description": {
     "fr": "Les tickets à tester et les agents qui attendent, dans un salon Discord : un webhook, sans code.",
     "en": "Tickets to test and agents waiting, in a Discord channel: a webhook, no code."
@@ -49,7 +49,8 @@ The Discord plugin, one of the [example plugins](plugins/examples), whole: a plu
         }
       }
     ]
-  }
+  },
+  "store": { "docs": "docs" }
 }
 ```
 
@@ -73,7 +74,7 @@ The `$schema` line gives completion and checks in VS Code and the editors that r
 | `permissions` | no | What it asks for: `events`, `network`, `secrets`, `files`, `commands` (lists) and `decide` (`true` or `false`). See [the host’s capabilities](plugins/capabilities). |
 | `limits` | no | What more it asks of the host: `fetchSeconds`, `fetchBytes`, `fileBytes` ([the limits](plugins/capabilities#the-limits-limits)). |
 | `contributes` | no | Its extension points: what it adds to Escouade. |
-| `store` | no | What the marketplace shows of it: `categories`, `keywords`, `screenshots`, `docs`. |
+| `store` | no | What the marketplace shows of it: `categories`, `keywords`, `screenshots`, `docs` (the folder of its documentation, a page per language under `docs/fr/` and `docs/en/`: [the documentation, by language](plugins/publishing#the-documentation-by-language)). |
 
 ### Texts in two languages
 

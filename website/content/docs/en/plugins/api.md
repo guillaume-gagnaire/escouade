@@ -130,7 +130,7 @@ A plugin in WASM opens no connection: everything goes through Escouade, by `net/
 - **following no redirect**: the plugin gets the 3xx answer, which the kit’s client follows in Rust;
 - **within 10 s, for an answer of 1 MiB at most**, unless `limits` asks for more;
 - **never to an address of the machine or of the local network**, even for a declared host: loopback, private, link-local, unspecified, multicast or broadcast, in IPv4 as in IPv6. Escouade judges the addresses the connection itself uses, once the name is resolved, not a separate lookup the DNS could contradict;
-- **through the proxy of Settings › Network**, if there is one: only the name is judged then, and the journal says so.
+- **through the proxy of Settings › Advanced › Network**, if there is one: only the name is judged then, and the journal says so.
 
 `{account}`, the host of an account the user typed, and `local:shared`, a harness’s local server, open http and the local network for these hosts alone: see [the host’s capabilities](plugins/capabilities#the-network).
 

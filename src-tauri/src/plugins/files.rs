@@ -97,7 +97,7 @@ fn parts_of(path: &str) -> Option<Vec<&str>> {
 
 // ---- fs/* ------------------------------------------------------------------------------------------------------
 
-/// How long `fs/gitProtected` waits for git: well within the 2 s of a turn.
+/// How long `fs/gitProtected` and `fs/fileOnly` wait for git: well within the 2 s of a turn.
 const GIT_WITHIN: std::time::Duration =
     std::time::Duration::from_secs(if cfg!(test) { 30 } else { 1 });
 
@@ -219,6 +219,7 @@ impl Access {
             "fs/list" => self.list(params),
             "fs/canon" => self.canon(params),
             "fs/gitProtected" => self.git_protected(params),
+            "fs/fileOnly" => self.file_only(params),
             _ => {
                 return Err((
                     super::runtime::METHOD_NOT_FOUND,
@@ -343,6 +344,48 @@ impl Access {
         });
         let protected = rx.recv_timeout(GIT_WITHIN).unwrap_or(false);
         Ok(json!({ "protected": protected }))
+    }
+
+    /// `{ agent, path }` → `{ fileOnly }`: whether a write of `path`, an absolute path strictly in the folder of the agent
+    /// `agent`, reaches a file alone: a file there (not a link), or nothing there and no submodule of git's index at it or
+    /// under it, its links leading nowhere out of that folder. What a harness whose rule of a write covers what is under
+    /// its path (`agy` 1.5.3, ESC-389) asks before it accepts a write without a card: a module reads no worktree. It names
+    /// no root and says one boolean of that agent's own folder; out of it, or in its fence, it is refused. A folder, a
+    /// link, anything else, and a git that does not answer within `GIT_WITHIN`, say no: the user is asked.
+    fn file_only(&self, params: &Value) -> Result<Value, (i64, String)> {
+        let asked = self.asked(params)?;
+        let refused = |why: &str| (REFUSED, format!("{:?} {why}", asked.path));
+        let key = asked.agent.ok_or_else(|| refused("names no agent"))?;
+        let place = self
+            .agents
+            .lock()
+            .get(key)
+            .cloned()
+            .ok_or_else(|| refused("names no agent given to this plugin"))?;
+        let named = named_path(asked.path)
+            .filter(|p| p.is_absolute())
+            .ok_or_else(|| refused("is no absolute path"))?;
+        let (text, cwd) = (named.to_string_lossy(), place.cwd.to_string_lossy());
+        if !escouade_acp::inside(&text, &cwd) || escouade_acp::inside(&cwd, &text) {
+            return Err(refused("is not strictly in the agent's folder"));
+        }
+        if place.fence.covers(&text) {
+            return Err(refused("is refused to this agent (« Projet privé »)"));
+        }
+        // Its links followed, it is still in the agent's folder.
+        let inside = match (resolved(&named), std::fs::canonicalize(&place.cwd)) {
+            (Some(real), Ok(root)) => real.starts_with(&root) && real != root,
+            _ => false,
+        };
+        let only = inside
+            && match std::fs::symlink_metadata(&named) {
+                Ok(meta) => meta.file_type().is_file(),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    no_submodule(&place.cwd, &named)
+                }
+                Err(_) => false,
+            };
+        Ok(json!({ "fileOnly": only }))
     }
 
     /// The real path of what `params` names, links followed as far as it exists: under a root of that agent, out of its
@@ -567,6 +610,45 @@ fn resolved(path: &Path) -> Option<PathBuf> {
         }
         rest.push(at.file_name()?);
         at = at.parent()?;
+    }
+}
+
+/// Whether git's index of the worktree `cwd` has no submodule (a gitlink, mode 160000) at `path` or under it: no `.git`
+/// a write of `path` could make that git would then enter (ESC-389). A folder in no repository has none; a git that
+/// fails or does not answer within `GIT_WITHIN` says there may be one.
+fn no_submodule(cwd: &Path, path: &Path) -> bool {
+    if !cwd.ancestors().any(|d| d.join(".git").exists()) {
+        return true;
+    }
+    let (Some(real), Ok(root)) = (resolved(path), std::fs::canonicalize(cwd)) else {
+        return false;
+    };
+    let Ok(rel) = real.strip_prefix(&root) else {
+        return false;
+    };
+    let rel = rel.to_string_lossy().replace('\\', "/");
+    let mut cmd = std::process::Command::new("git");
+    cmd.args(["--literal-pathspecs", "-c", "core.fsmonitor=false"])
+        .args(["ls-files", "--stage", "-z", "--", &rel])
+        .current_dir(&root)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
+    }
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(cmd.output());
+    });
+    match rx.recv_timeout(GIT_WITHIN) {
+        Ok(Ok(out)) if out.status.success() => !out
+            .stdout
+            .split(|b| *b == 0)
+            .any(|entry| entry.starts_with(b"160000 ")),
+        _ => false,
     }
 }
 
@@ -856,6 +938,51 @@ mod tests {
         let b = Bed::new(json!([{ "root": "agent", "access": "read" }]));
         let params = json!({ "path": b.path("wt") });
         assert_eq!(b.call("fs/gitProtected", params).unwrap_err().0, REFUSED);
+    }
+
+    #[test]
+    fn a_harness_asks_whether_a_write_reaches_a_file_alone_without_reading_the_worktree() {
+        // A plugin that declares its agent's home alone, as Antigravity does (ESC-389).
+        let b = Bed::new(json!([{ "root": "agentHome", "access": "read" }]));
+        let only = |p: &str| {
+            let params = json!({ "agent": "a", "path": b.path(p) });
+            b.call("fs/fileOnly", params).unwrap()["fileOnly"].clone()
+        };
+        // No repository: a file there, or nothing, yes; a folder no.
+        assert_eq!(only("wt/src/a.txt"), true);
+        assert_eq!(only("wt/src/neuf.txt"), true);
+        assert_eq!(only("wt/neuf/b.txt"), true);
+        assert_eq!(only("wt/src"), false);
+        // A repository with a submodule never initialized (no folder): neither it nor what holds it.
+        let git = |args: &[&str]| {
+            let done = std::process::Command::new("git")
+                .args(args)
+                .current_dir(b.base.join("wt"))
+                .output()
+                .unwrap();
+            assert!(done.status.success(), "{done:?}");
+        };
+        git(&["init", "-q"]);
+        let gitlink = "160000,1111111111111111111111111111111111111111,libs/sub";
+        git(&["update-index", "--add", "--cacheinfo", gitlink]);
+        assert_eq!(only("wt/libs/sub"), false);
+        assert_eq!(only("wt/libs"), false);
+        assert_eq!(only("wt/libs/autre.txt"), true);
+        assert_eq!(only("wt/src/neuf.txt"), true);
+        // A name git would read as a pattern is a name.
+        assert_eq!(only("wt/libs/[s]ub"), true);
+        // Its `.git`, a folder, is no file.
+        assert_eq!(only("wt/.git"), false);
+        // Strictly in the agent's folder, of an agent of this plugin, or refused.
+        for path in [b.path("wt"), b.path("other/b.txt"), b.path("repo/HEAD.txt")] {
+            b.refused("fs/fileOnly", json!({ "agent": "a", "path": path }));
+        }
+        b.refused("fs/fileOnly", json!({ "agent": "a", "path": "src/a.txt" }));
+        b.refused(
+            "fs/fileOnly",
+            json!({ "agent": "z", "path": b.path("wt/src/a.txt") }),
+        );
+        b.refused("fs/fileOnly", json!({ "path": b.path("wt/src/a.txt") }));
     }
 
     #[test]

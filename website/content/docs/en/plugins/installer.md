@@ -34,7 +34,7 @@ Nothing is installed at once: the plugin is read, set aside, and the install win
 
 Escouade offers **the last version it can run**: a version written for a newer Escouade is skipped, and so is one its author took back.
 
-**Install** downloads the version, then checks everything before the install window opens: `version.json` against the catalog’s fingerprint, the signature against the public keys Escouade embeds (the store cannot make a seal: it does not have the key), the archive and its module against `version.json`, the manifest against its fingerprint. A gap stops everything and says so (“The archive received is not the one the store published”): nothing is installed. The catalog, the archives and the revocation list go through **Settings › Network** (proxy, the system’s certificates).
+**Install** downloads the version, then checks everything before the install window opens: `version.json` against the catalog’s fingerprint, the signature against the public keys Escouade embeds (the store cannot make a seal: it does not have the key), the archive and its module against `version.json`, the manifest against its fingerprint. A gap stops everything and says so (“The archive received is not the one the store published”): nothing is installed. The catalog, the archives and the revocation list go through **Settings › Advanced › Network** (proxy, the system’s certificates).
 
 The install window then says “Verified by Escouade” and “Signature: checked here, by the app”; for an unverified version, a band: “Nobody has reviewed this version. It comes from the store, its archive is the one its author published, but nothing says what its program does”, and the button “Install anyway”.
 
@@ -84,8 +84,26 @@ Some of Escouade’s integrations are plugins, shipped with the app, signed and 
 | OpenAI, Groq, Mistral, ElevenLabs, Deepgram | The online voice services (see [Settings › Voice](settings-voice)). |
 
 - **Switching them off**: their switch, for the whole app, or their Projects tab, for one project. Nothing they did is lost, and your choices are kept for when you switch them back on.
-- **What shows**: a code host switched off or stopped no longer follows the PRs, and the agent’s card and Settings › Integrations say so; a source switched off stops its sync, which says why; a voice service switched off leaves Settings › Voice, and dictation goes back to local; the agents of an ACP harness stay, marked “Harness missing”.
+- **What shows**: a code host switched off or stopped no longer follows the PRs, and the agent’s card and Settings › Connected services say so; a source switched off stops its sync, which says why; a voice service switched off leaves Settings › Voice, and dictation goes back to local; the agents of an ACP harness stay, marked “Harness missing”.
 - **No uninstall**, and no update of their own: they change with the app. A plugin by another author cannot take their id (`dev.escouade.*` is reserved); it can serve the same service beside them, and the account says which one serves it.
+
+## Escouade’s plugins in the installer
+
+Since 2.2, Escouade’s plugins come with the installer, signed as on the store, and install **with no network**. Escouade installs only those your configuration uses:
+
+- **a harness**: an account of that harness in Settings › Accounts and harnesses, or an agent on it;
+- **a ticket source or a code host**: a project that uses it (its source, or the remote of its repository), or an account of that service already connected;
+- **a voice service**: chosen “Online” for dictation or the voice, or whose key is kept;
+- **isola**: a project with an `.isola.toml`;
+- **Discord, Slack, High contrast, Team rules**: only if you have them already.
+
+What Escouade cannot read surely (a damaged settings file, a project on an unplugged disk) installs what could be needed: an update never makes you lose what worked.
+
+- **An update from 2.1** installs what your configuration uses, without a click. The other plugins leave the list, their settings kept.
+- **A first installation** installs nothing by itself: “Add an account…” on a harness installs its plugin, then adds the account.
+- **Later**, the gesture that needs a missing plugin installs it and says so (“Plugin Codex installed”): adding an account, choosing a source or a harness for a project, adding a project, connecting a code host, choosing a voice service, testing an isola worktree. No extra window: the gesture is your consent.
+- **The Plugins view** lists the others under “Offered by Escouade” (“In the app, nothing to download”): “Install” installs them in one click. The lists of choices (harnesses, sources, code hosts, voices) offer them all, installed or not.
+- **A plugin you uninstalled** is not put back at the start: only by a gesture that needs it, or by “Install”.
 
 ## Switching on for the app or by project
 

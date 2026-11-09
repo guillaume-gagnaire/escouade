@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Locator } from '@playwright/test';
-import { addProject, expect, send, test, unfoldSections } from './fixture';
+import { addProject, expect, send, test, unfoldSections, openSettingsPage, settingsEntry, closeSettings } from './fixture';
 
 test('a new project opens an agent that streams Claude’s reply', async ({ app }) => {
   const { page } = app;
@@ -328,15 +328,15 @@ test('the setting for all agents gives each one remote control, which one is set
   const card = page.locator('.card').first();
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Harness' }).click();
+  await openSettingsPage(dialog, 'Agents');
   await dialog.getByRole('switch', { name: 'Remote control pour tous les agents' }).click();
   // The project's own switch never says otherwise: on and grayed, with the reason.
-  await dialog.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(dialog, 'Confidentialité');
   const own = dialog.getByRole('switch', { name: 'Remote control pour les agents de ce projet' });
   await expect(own).toHaveAttribute('aria-checked', 'true');
   await expect(own).toBeDisabled();
-  await expect(dialog.getByText('Activé pour tous les projets dans Réglages › Harness')).toBeVisible();
-  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(dialog.getByText('Activé pour tous les projets dans Réglages › Agents')).toBeVisible();
+  await closeSettings(dialog);
   // The agent there was gets it, and its card says where it comes from.
   await expect(card.locator('[data-tip*="Remote control : connecté"][data-tip*="activé par le réglage de tous les agents"]')).toBeVisible();
   // Set apart by hand: off in spite of the setting.
@@ -408,6 +408,8 @@ test('a new worktree is set up before its agent takes a message, and torn down b
   // The header's « Commandes de lancement… »: in a short window (the runner's), the section folds and « Configurer » with it.
   await page.getByRole('button', { name: 'Commandes de lancement…', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
+  // It opens on « Lancement » (annexe B); the worktrees are on « Git et worktrees ».
+  await openSettingsPage(dialog, 'Git et worktrees');
   await dialog.getByRole('button', { name: 'Ajouter une commande de préparation' }).click();
   await dialog
     .getByRole('group', { name: 'Commande de préparation 1' })
@@ -418,8 +420,7 @@ test('a new worktree is set up before its agent takes a message, and torn down b
     .getByRole('group', { name: 'Commande de démontage 1' })
     .getByLabel('Commande', { exact: true })
     .fill('Set-Content (Join-Path $env:ESCOUADE_PROJECT_DIR teardown.txt) (Test-Path prepare.txt)');
-  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
-  await expect(dialog).toBeHidden();
+  await closeSettings(dialog);
 
   await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   await expect(page.getByRole('status').filter({ hasText: 'Préparation du worktree' })).toContainText(
@@ -451,14 +452,15 @@ test('a new agent’s worktree is made at its first message, under the name the 
   // The header's « Commandes de lancement… »: in a short window (the runner's), the section folds and « Configurer » with it.
   await page.getByRole('button', { name: 'Commandes de lancement…', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
+  // It opens on « Lancement » (annexe B); the worktrees are on « Git et worktrees ».
+  await openSettingsPage(dialog, 'Git et worktrees');
   await expect(dialog.getByRole('switch', { name: 'Créer le worktree au premier message, au nom de l’agent' })).toBeChecked();
   await dialog.getByRole('button', { name: 'Ajouter une commande de préparation' }).click();
   await dialog
     .getByRole('group', { name: 'Commande de préparation 1' })
     .getByLabel('Commande', { exact: true })
     .fill("Set-Content prepare.txt ((Split-Path -Leaf (Get-Location)) + ' ' + $env:ESCOUADE_BRANCH)");
-  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
-  await expect(dialog).toBeHidden();
+  await closeSettings(dialog);
 
   await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   const card = page.locator('.card').first();
@@ -486,6 +488,8 @@ test('a project’s worktrees go to the folder and on the branch prefix its sett
   // The header's « Commandes de lancement… »: in a short window (the runner's), the section folds and « Configurer » with it.
   await page.getByRole('button', { name: 'Commandes de lancement…', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
+  // It opens on « Lancement » (annexe B); the worktrees are on « Git et worktrees ».
+  await openSettingsPage(dialog, 'Git et worktrees');
   // Beside the repository, as the repositories that want no worktree in them have it.
   await dialog.getByRole('textbox', { name: 'Dossier des worktrees' }).fill('../demo-api-worktrees');
   const beside = path.join(path.dirname(app.repo), 'demo-api-worktrees');
@@ -494,10 +498,8 @@ test('a project’s worktrees go to the folder and on the branch prefix its sett
   const prefix = dialog.getByRole('textbox', { name: 'Préfixe des branches des agents' });
   await prefix.fill('gg /');
   await expect(prefix).toHaveAttribute('aria-invalid', 'true');
-  await expect(dialog.getByRole('button', { name: 'Enregistrer' })).toBeDisabled();
   await prefix.fill('gg/');
-  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
-  await expect(dialog).toBeHidden();
+  await closeSettings(dialog);
 
   await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
   await expect.poll(() => (fs.existsSync(beside) ? fs.readdirSync(beside) : [])).toEqual(['agent-1']);
@@ -645,7 +647,7 @@ test('launch commands run in their own terminals, with their status live', async
   // The header's « Commandes de lancement… »: in a short window (the runner's), the section folds and « Configurer » with it.
   await page.getByRole('button', { name: 'Commandes de lancement…', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await expect(dialog.getByRole('tab', { name: 'Projets' })).toHaveAttribute('aria-selected', 'true');
+  await expect(settingsEntry(dialog, 'Lancement')).toHaveAttribute('aria-current', 'page');
   await dialog.getByRole('button', { name: 'Ajouter une commande', exact: true }).click();
   const serveurCfg = dialog.getByRole('group', { name: 'Commande 1' });
   await serveurCfg.getByLabel('Nom').fill('Serveur');
@@ -655,9 +657,7 @@ test('launch commands run in their own terminals, with their status live', async
   const buildCfg = dialog.getByRole('group', { name: 'Commande 2' });
   await buildCfg.getByLabel('Nom').fill('Build');
   await buildCfg.getByLabel('Commande').fill('exit 2');
-  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
-
-  await expect(dialog).toBeHidden();
+  await closeSettings(dialog);
   await unfoldSections(page);
   const serveur = page.locator('.run', { hasText: 'Serveur' });
   const build = page.locator('.run', { hasText: 'Build' });
@@ -713,8 +713,7 @@ test('a launch command runs in the worktree of an agent, with its ports, and sto
   await docsCfg.getByLabel('Nom').fill('Docs');
   await docsCfg.getByLabel('Commande').fill('Start-Sleep 600');
   await docsCfg.getByLabel(/Sous-dossier/).fill('docs');
-  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
-  await expect(dialog).toBeHidden();
+  await closeSettings(dialog);
 
   // ▶ asks where (on hover).
   await unfoldSections(page);
@@ -780,9 +779,9 @@ test('the proxy configured in the settings reaches Claude', async ({ app }) => {
   const { page } = app;
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Réseau' }).click();
+  await openSettingsPage(dialog, 'Avancé');
   await dialog.getByPlaceholder('aucun').fill('http://proxy.local:3128');
-  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+  await closeSettings(dialog);
   await addProject(page, app.repo);
   await send(page, 'Bonjour');
   await expect(page.getByText('Bonjour, tu as dit : Bonjour')).toBeVisible();
@@ -902,7 +901,9 @@ test('a ticket is taken by an agent that loops until its criteria are met, then 
       const [places, cfg, label, auto] = [r('.places'), r('.cfg'), r('.cfg .k'), r('.auto')];
       const problems: string[] = [];
       if (label.right > cfg.right + 0.5) problems.push(`label ends at ${label.right}, its button at ${cfg.right}`);
-      if (cfg.right > auto.left + 0.5) problems.push(`button ends at ${cfg.right}, the switch starts at ${auto.left}`);
+      // Two rows since ESC-390: the settings end inside the header, the switch above them.
+      if (cfg.right > auto.right + 0.5) problems.push(`button ends at ${cfg.right}, past the switch at ${auto.right}`);
+      if (cfg.top < auto.bottom) problems.push(`button at ${cfg.top}, over the switch's row ending at ${auto.bottom}`);
       if (places.right > cfg.left + 0.5) problems.push(`places end at ${places.right}, the button starts at ${cfg.left}`);
       return problems;
     });
@@ -946,11 +947,8 @@ test('a ticket is taken by an agent that loops until its criteria are met, then 
   // Its settings button opens the app's settings on the Kanban of this project, whole in the narrowest window.
   await page.locator('main.board .cfg').click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await expect(settings.getByRole('tab', { name: 'Kanban' })).toHaveAttribute('aria-selected', 'true');
-  await expect(settings.getByRole('group', { name: 'Projet' }).getByRole('button', { name: 'demonstration-d-api' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await expect(settingsEntry(settings, 'Kanban')).toHaveAttribute('aria-current', 'page');
+  await expect(settingsEntry(settings, 'demonstration-d-api')).toHaveAttribute('aria-expanded', 'true');
   expect(
     await settings.evaluate((e) => {
       const r = e.getBoundingClientRect();
@@ -1096,11 +1094,11 @@ test('a deleted ticket’s worktree holding work stays, its archived agent says 
   fs.rmSync(path.join(worktree, 'dem-1.txt'));
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(settings, 'Git et worktrees');
   await settings.getByRole('button', { name: 'Nettoyer' }).click();
   await expect(settings.getByRole('status').filter({ hasText: 'worktree' })).toHaveText('1 worktree supprimé.', { timeout: 30_000 });
   await expect.poll(() => fs.existsSync(worktree)).toBe(false);
-  await settings.getByRole('button', { name: 'Annuler' }).click();
+  await closeSettings(settings);
   await expect(archived).not.toContainText('worktree gardé');
 });
 

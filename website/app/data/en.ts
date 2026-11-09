@@ -1,6 +1,6 @@
 // Everything the English page says. fr.ts says the same, key for key.
 import type { Catalog } from './catalog';
-import { DOWNLOAD, SUPPORT } from './site';
+import { DOWNLOAD, STORE, SUPPORT } from './site';
 import { docPath } from './docs';
 
 export const en: Catalog = {
@@ -21,6 +21,7 @@ export const en: Catalog = {
     github: 'GitHub',
     discord: 'Discord',
     docs: 'Docs',
+    plugins: 'Plugins',
     download: 'Download',
     language: 'Language',
   },
@@ -244,20 +245,21 @@ export const en: Catalog = {
 
   roadmap: {
     title: 'What comes next.',
-    lead: 'Your code host in the loop, plugins and their marketplace, and dictation through Wispr Flow. No date promised: the work is planned in detail on GitHub.',
+    lead: 'Your code host in the loop, reviews by an agent, plugins and their marketplace. No date promised: the work is planned in detail on GitHub.',
     next: 'Version {version} · in the works',
     items: [
-      {
-        title: 'Wispr Flow',
-        text: 'Wispr Flow’s dictation in the message field and the voice conversation, as an online service and as a desktop app.',
-      },
       {
         title: 'GitHub, GitLab, Bitbucket and Gitea',
         text: 'Tickets’ pull requests followed through to the merge, with their CI and their deployments, without leaving Escouade.',
       },
       {
+        title: 'Get a PR reviewed',
+        text: 'An agent reads a pull request’s diff and writes its comments by file and by line. You keep, edit or drop each one, then publish: nothing leaves without you.',
+      },
+      {
         title: 'Plugins and their marketplace',
-        text: 'Escouade grows through plugins, and every external integration becomes one: code hosts, ticket sources, harnesses. A marketplace gathers them, reviewed before they get in.',
+        text: 'Plugins extend Escouade: ticket sources, code hosts, harnesses, voice, notifications, themes and permission rules. They install from the app and are listed on the store, where every version passes eleven checks.',
+        link: { label: 'Browse the store', href: STORE.en },
       },
     ],
     plan: 'The detailed plan (in French)',
@@ -412,6 +414,7 @@ export const en: Catalog = {
       'code-hosts': 'Code hosts',
       editor: 'The editor',
       terminals: 'Terminals',
+      'split-screen': 'Split screen',
       launch: 'Running the project',
       board: 'The Kanban',
       autopilot: 'Autopilot',
@@ -426,15 +429,15 @@ export const en: Catalog = {
       accounts: 'Several accounts',
       usage: 'Quotas and cost',
       stats: 'Statistics',
-      'settings-application': 'Application',
-      'settings-claude-code': 'Harness',
-      'settings-accounts': 'Accounts',
+      'settings-application': 'The window and General',
+      'settings-claude-code': 'Agents',
+      'settings-accounts': 'Accounts and harnesses',
       'settings-notifications': 'Notifications',
-      'settings-projects': 'Projects',
-      'settings-board': 'Kanban',
-      'settings-integrations': 'Integrations',
-      'settings-terminals': 'Terminals',
-      'settings-network': 'Network',
+      'settings-projects': 'A project’s pages',
+      'settings-board': 'A project’s Kanban',
+      'settings-integrations': 'Services and imported tickets',
+      'settings-terminals': 'Advanced: terminals',
+      'settings-network': 'Advanced: network',
       'settings-voice': 'Voice',
       'settings-about': 'About',
       'plugins/installer': 'Installing a plugin',

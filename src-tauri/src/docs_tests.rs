@@ -253,6 +253,49 @@ fn a_decision_is_cited_by_its_number_or_its_id() {
     assert_eq!(decision_id("2 tickets"), "2-tickets");
 }
 
+/// Two files of the same number, as two validations at once left them before ESC-377: the register
+/// reads both, renumbers neither, and the next number comes after them.
+#[test]
+fn a_number_twice_in_the_register_reads_as_two_decisions_left_as_they_are() {
+    let (s, root) = space("docs-same-number-twice");
+    for title in ["L'amorce", "Un canal bêta"] {
+        let d = s.decision_propose(None, proposal(title)).unwrap();
+        s.decision_accept(&d.reference(), "Léa", &Register::default(), None)
+            .unwrap();
+    }
+    let dir = root.join(".escouade/decisions");
+    std::fs::rename(
+        dir.join("0002-un-canal-beta.md"),
+        dir.join("0001-un-canal-beta.md"),
+    )
+    .unwrap();
+    let text = std::fs::read_to_string(dir.join("0001-un-canal-beta.md")).unwrap();
+    std::fs::write(
+        dir.join("0001-un-canal-beta.md"),
+        text.replace("number: 2", "number: 1"),
+    )
+    .unwrap();
+    let all: Vec<(Option<u32>, String)> = s
+        .decisions()
+        .into_iter()
+        .map(|d| (d.number, d.id))
+        .collect();
+    assert_eq!(
+        all,
+        vec![
+            (Some(1), "l-amorce".to_string()),
+            (Some(1), "un-canal-beta".to_string()),
+        ]
+    );
+    assert_eq!(s.next_number(), 2);
+    // Each read by its id; nothing renamed.
+    assert_eq!(
+        s.decision(&Ref::Id("un-canal-beta".into())).unwrap().title,
+        "Un canal bêta"
+    );
+    assert!(dir.join("0001-l-amorce.md").is_file() && dir.join("0001-un-canal-beta.md").is_file());
+}
+
 #[test]
 fn decisions_are_proposed_without_a_number_and_numbered_when_a_human_accepts_them() {
     let (s, root) = space("docs-decisions");
@@ -1149,6 +1192,51 @@ async fn two_tickets_in_parallel_get_two_numbers_for_their_decisions_when_valida
         git(&repo, &["status", "--porcelain", "--untracked-files=no"]),
         ""
     );
+}
+
+/// What happened to ESC-373 and ESC-374 (ESC-377): validated a few seconds apart, each read main's
+/// register before the other was merged, and both took 0113. Two validations run at once now get
+/// two numbers that follow each other.
+#[tokio::test]
+async fn two_validations_at_the_same_time_get_two_numbers_that_follow() {
+    let h = harness("docs-two-at-once");
+    let (p, repo) = h.project(false).await;
+    let (a, _) = crate::tickets_tests::reviewed(&h, &p.id, "Un [ok]").await;
+    let (b, _) = crate::tickets_tests::reviewed(&h, &p.id, "Deux [ok]").await;
+    for (t, title) in [(&a, "Quatre échéances"), (&b, "Tarif famille")] {
+        let s = h
+            .core
+            .docs_space(&p.id, t.agent_id.as_deref())
+            .await
+            .unwrap();
+        let mut d = proposal(title);
+        d.origin = "ticket".into();
+        d.origin_ref = t.key.clone();
+        s.decision_propose(None, d).unwrap();
+    }
+    let (ra, rb) = tokio::join!(h.core.ticket_approve(&a.id), h.core.ticket_approve(&b.id));
+    ra.unwrap();
+    rb.unwrap();
+    for t in [&a, &b] {
+        let t = h.ticket(&t.id);
+        assert_eq!(t.column, crate::model::Column::Done, "{:?}", t.blocked);
+    }
+    let mut files: Vec<String> = git(
+        &repo,
+        &[
+            "ls-tree",
+            "--name-only",
+            "main",
+            "--",
+            ".escouade/decisions/",
+        ],
+    )
+    .lines()
+    .map(|l| l.rsplit('/').next().unwrap().to_string())
+    .collect();
+    files.sort();
+    let numbers: Vec<&str> = files.iter().map(|f| &f[..4]).collect();
+    assert_eq!(numbers, vec!["0001", "0002"], "{files:?}");
 }
 
 /// What happened to ESC-302 (32c0a0f1): two tickets had each proposed a decision 4, as Escouade

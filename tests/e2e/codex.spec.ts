@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
-import { addProject, expect, FAKE_CODEX, send, test, type App } from './fixture';
+import { addProject, expect, FAKE_CODEX, send, test, type App, openSettingsPage } from './fixture';
 
 /** What the fake codex was sent, launch by launch: its arguments, then the messages of the app. */
 function codexLog(
@@ -46,14 +46,14 @@ test.describe('an agent on Codex', () => {
     await newCodexAgent(page);
     await send(page, 'bonjour Codex');
     await expect(page.getByText('Bonjour, tu as dit : bonjour Codex')).toBeVisible();
-    // Réglages › Comptes: the fiche of the Codex account offers Codex's models, efforts and modes, none of Claude Code's.
+    // Réglages › Comptes et harness: the fiche of the Codex account offers Codex's models, efforts and modes, none of Claude Code's.
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
-    await dialog.getByRole('tab', { name: 'Comptes' }).click();
+    await openSettingsPage(dialog, 'Comptes et harness');
     // No group « Nouveaux agents » for every harness any more.
-    await dialog.getByRole('tab', { name: 'Harness' }).click();
+    await openSettingsPage(dialog, 'Comptes et harness');
     await expect(dialog.getByRole('group', { name: 'Modèle par défaut' })).toHaveCount(0);
-    await dialog.getByRole('tab', { name: 'Comptes' }).click();
+    await openSettingsPage(dialog, 'Comptes et harness');
     const codex = dialog.getByRole('list', { name: 'Comptes Codex' }).getByRole('listitem', { name: 'Principal' });
     const defaults = codex.getByRole('group', { name: 'Nouveaux agents' });
     const model = defaults.getByRole('combobox', { name: 'Modèle' });
@@ -91,6 +91,35 @@ test.describe('an agent on Codex', () => {
     expect(start.collaborationMode.mode).toBe('plan');
   });
 
+  test('is not offered by the menu « Harness » while its plugin is off, and is again once it is on (ESC-391)', async ({ app }) => {
+    const { page } = app;
+    await addProject(page, app.repo);
+    const more = page.getByRole('button', { name: 'Autres façons de créer un agent' });
+    await more.click();
+    await expect(page.getByRole('menuitemradio', { name: /^Codex/ })).toBeVisible();
+    await page.keyboard.press('Escape');
+    // Its plugin turned off: its program found, its account there, not offered any more.
+    const toggle = (on: boolean) =>
+      page.evaluate(
+        ([on]) =>
+          (window as unknown as { __TAURI_INTERNALS__: { invoke(c: string, a: unknown): Promise<unknown> } }).__TAURI_INTERNALS__.invoke(
+            'plugin_set_enabled',
+            { id: 'dev.escouade.codex', on },
+          ),
+        [on] as const,
+      );
+    await toggle(false);
+    await more.click();
+    await expect(page.getByRole('menuitemradio', { name: /^Claude Code/ })).toBeVisible();
+    await expect(page.getByRole('menuitemradio', { name: /^Codex/ })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    // Back on: offered, and its agent runs.
+    await toggle(true);
+    await newCodexAgent(page);
+    await send(page, 'bonjour Codex');
+    await expect(page.getByText('Bonjour, tu as dit : bonjour Codex')).toBeVisible();
+  });
+
   test('offers every model of its account before any agent, read without a turn on every page, in the runner’s window (ESC-186)', async ({
     app,
   }) => {
@@ -105,7 +134,7 @@ test.describe('an agent on Codex', () => {
     // The fiche of the account offers them all.
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
-    await dialog.getByRole('tab', { name: 'Comptes' }).click();
+    await openSettingsPage(dialog, 'Comptes et harness');
     const codex = dialog.getByRole('list', { name: 'Comptes Codex' }).getByRole('listitem', { name: 'Principal' });
     const model = codex.getByRole('group', { name: 'Nouveaux agents' }).getByRole('combobox', { name: 'Modèle' });
     await expect(model.getByRole('option')).toHaveText(['Celui du harness (GPT-6-Luna)', 'GPT-6-Luna', 'GPT-5.6-Terra']);
@@ -373,7 +402,7 @@ test.describe('a voice conversation with an agent on Codex', () => {
 
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Réglages' });
-    await settings.getByRole('tab', { name: 'Comptes' }).click();
+    await openSettingsPage(settings, 'Comptes et harness');
     // Codex's group has its own button (2.0 design): the window opens on Codex.
     await settings.getByRole('button', { name: 'Ajouter un compte Codex…' }).click();
     const codex = page.getByRole('dialog', { name: 'Ajouter un compte Codex' });
@@ -417,7 +446,9 @@ test.describe('a harness installed while the app runs (ESC-186)', () => {
     await addProject(page, app.repo);
     const more = page.getByRole('button', { name: 'Autres façons de créer un agent' });
     await more.click();
-    await expect(page.getByRole('menuitem', { name: /^Codex/ })).toBeDisabled();
+    // Not found: not in the menu, only the harnesses set up are.
+    await expect(page.getByRole('menuitemradio', { name: /^Claude Code/ })).toBeVisible();
+    await expect(page.getByRole('menuitemradio', { name: /^Codex/ })).toHaveCount(0);
     await page.keyboard.press('Escape');
     // `npm install -g @openai/codex` meanwhile: its program, and its folder in the PATH of the user.
     fs.writeFileSync(path.join(installed, 'codex.cmd'), `@echo off\r\nnode "${FAKE_CODEX_MJS}" %*\r\n`);

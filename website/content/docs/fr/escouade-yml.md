@@ -73,7 +73,7 @@ Les clés sont en anglais, en `snake_case` (mots en minuscules séparés par `_`
 
 ### La clé version
 
-`version` est le numéro du format du fichier, un entier : `1` aujourd’hui. Escouade l’écrit en tête de chaque fichier qu’il crée. Elle n’est pas obligatoire : sans elle, le fichier est lu comme la version 1, et le groupe « .escouade.yml » de Réglages › Projets le signale (« pas de clé « version » : lu comme la version 1 »). Une valeur qui n’est pas un entier d’au moins 1 (`one`, `'1'`, `0`) est signalée de la même façon, et le fichier est lu comme la version 1.
+`version` est le numéro du format du fichier, un entier : `1` aujourd’hui. Escouade l’écrit en tête de chaque fichier qu’il crée. Elle n’est pas obligatoire : sans elle, le fichier est lu comme la version 1, et le groupe « Réglages partagés » de Réglages › Projets › Équipe le signale (« pas de clé « version » : lu comme la version 1 »). Une valeur qui n’est pas un entier d’au moins 1 (`one`, `'1'`, `0`) est signalée de la même façon, et le fichier est lu comme la version 1.
 
 ### Une version plus ancienne ou plus récente
 
@@ -126,7 +126,7 @@ Le harness des nouveaux agents et des tickets du projet qui n’en choisissent p
 |---|---|---|---|---|
 | `private` | Booléen | `true`, `false` | le réglage de chaque machine | `private: true` |
 
-« Projet privé » : les agents des autres projets ne le voient pas par le serveur MCP d’Escouade et ne lisent pas ses fichiers (voir [Réglages › Projets](settings-projects)). Le dépôt est sensible pour toute l’équipe, d’où sa place dans le fichier ; les comptes réservés au projet, eux, restent ceux de chaque machine.
+« Projet privé » : les agents des autres projets ne le voient pas par le serveur MCP d’Escouade et ne lisent pas ses fichiers (voir [Réglages › Projets › Confidentialité](settings-projects)). Le dépôt est sensible pour toute l’équipe, d’où sa place dans le fichier ; les comptes réservés au projet, eux, restent ceux de chaque machine.
 
 Le fichier peut rendre un projet privé, jamais le rendre public : sur une machine où le projet est privé, `private: false` n’est pas appliqué, le réglage devient un réglage local de cette machine et un avertissement le dit (« private: false ignoré : ce projet est privé sur cette machine, décoche « Projet privé » pour le rendre public »). Pour le rendre public, décoche « Projet privé » toi-même.
 
@@ -197,7 +197,7 @@ Les commandes de « Lancement » du projet (serveurs de développement, watche
 - `tests_before_approve` : « Relancer les tests avant » la validation d’un ticket ; sans commande de tests, rien ne se relance.
 - `on_conflict` : « En cas de conflit » au merge : te demander (`ask`), laisser l’agent le résoudre (`agent`), ou abandonner (`abort`).
 - `remove_worktree` : « Supprimer le worktree d’un ticket terminé ou supprimé ».
-- `model`, `effort`, `mode` : le modèle, l’effort et le mode des agents des tickets (Réglages › Kanban, groupe « Agents »). Une valeur vide (`model: ''`) laisse ceux du compte. `bypassPermissions` n’est jamais dans le fichier : un dépôt ne lève pas les autorisations de qui l’ouvre. Lu, il est refusé (« bypassPermissions ne se partage pas : il se règle sur chaque machine ») ; réglé dans la fenêtre, il reste un réglage local, que l’export n’écrit pas.
+- `model`, `effort`, `mode` : le modèle, l’effort et le mode des agents des tickets (Réglages › Projets › Kanban, groupe « Agents »). Une valeur vide (`model: ''`) laisse ceux du compte. `bypassPermissions` n’est jamais dans le fichier : un dépôt ne lève pas les autorisations de qui l’ouvre. Lu, il est refusé (« bypassPermissions ne se partage pas : il se règle sur chaque machine ») ; réglé dans la fenêtre, il reste un réglage local, que l’export n’écrit pas.
 
 ### workflows
 
@@ -205,7 +205,7 @@ Les commandes de « Lancement » du projet (serveurs de développement, watche
 |---|---|---|---|---|
 | `workflows.enabled` | Booléen | `true`, `false` | `true` | `enabled: false` |
 
-- `enabled` : `false` vaut « Pas de workflow pour ce projet » (Réglages › Projets › Workflow) : Escouade ne lit ni n’écrit les [workflows](workflows) du projet et n’y suit aucun agent, sur chaque machine qui lit le fichier ; `.escouade/workflows/` reste tel quel.
+- `enabled` : `false` vaut « Pas de workflow pour ce projet » (Réglages › Projets › Kanban › Workflow) : Escouade ne lit ni n’écrit les [workflows](workflows) du projet et n’y suit aucun agent, sur chaque machine qui lit le fichier ; `.escouade/workflows/` reste tel quel.
 
 ### plugins
 
@@ -223,7 +223,7 @@ plugins:
     channel: '#equipe-api'
 ```
 
-Les plugins que le projet **propose**, comme les extensions recommandées de VS Code. À l’ouverture du projet, Escouade dit combien il en manque sur ta machine ; en tête de Réglages › Projets, une bande les nomme, chacun avec ce qu’il demande et « Voir dans le store », qui ouvre sa page dans la vue Plugins. Rien n’est installé ni activé seul : un dépôt cloné ne doit pas pouvoir lancer un programme. L’installation reste ton geste, plugin par plugin, après la fenêtre qui montre ses permissions. Un plugin installé quitte la bande ; « Pas pour ce projet » la fait taire sur cette machine, et elle ne revient que pour un plugin que le fichier proposerait plus tard. Un identifiant qui n’en est pas un (`Slack`) est signalé et ignoré.
+Les plugins que le projet **propose**, comme les extensions recommandées de VS Code. À l’ouverture du projet, Escouade dit combien il en manque sur ta machine ; en tête de Réglages › Projets › Projet, une bande les nomme, chacun avec ce qu’il demande et « Voir dans le store », qui ouvre sa page dans la vue Plugins. Rien n’est installé ni activé seul : un dépôt cloné ne doit pas pouvoir lancer un programme. L’installation reste ton geste, plugin par plugin, après la fenêtre qui montre ses permissions. Un plugin installé quitte la bande ; « Pas pour ce projet » la fait taire sur cette machine, et elle ne revient que pour un plugin que le fichier proposerait plus tard. Un identifiant qui n’en est pas un (`Slack`) est signalé et ignoré.
 
 Sous `plugins.<id>`, les réglages que le projet donne au plugin : ceux qu’il déclare (`contributes.settings`), avec une valeur de leur type, passent devant ceux de sa page quand il les demande pour ce projet (`settings/get` avec le projet, voir [l’API des plugins](plugins/api)). Une clé qu’il ne déclare pas, ou l’un de ses secrets, ne lui est jamais donnée : **jamais de secret dans ce fichier**, ils vont au trousseau du système, par sa page. Un projet privé ne donne rien à un plugin qui n’y est pas activé.
 
@@ -321,15 +321,15 @@ Le fichier est relu dès qu’il change : après un `git pull`, un changement de
 
 Un dépôt cloné peut venir de n’importe qui. Les commandes du fichier (`worktrees.setup`, `worktrees.teardown`, `launch` et `board.test_command`) ne tournent jamais avant ton accord, et la lecture du fichier n’en lance aucune. Tant que tu ne les as pas approuvées, le projet garde les siennes, et le Kanban affiche « Les commandes de .escouade.yml attendent ton accord : elles ne tournent pas encore. ».
 
-« Les lire » ouvre Réglages › Projets, groupe « .escouade.yml », qui montre chaque commande en entier, avec son shell et son dossier. « Faire confiance à ces commandes » les applique. Si le fichier les change ensuite (une commande, son shell ou son dossier, une commande ajoutée ou retirée), Escouade te redemande ton accord ; d’ici là, celles que tu avais approuvées restent en place. Des commandes identiques à celles que le projet a déjà n’ont rien à approuver.
+« Les lire » ouvre Réglages › Projets › Équipe, groupe « Réglages partagés », qui montre chaque commande en entier, avec son shell et son dossier. « Faire confiance à ces commandes » les applique. Si le fichier les change ensuite (une commande, son shell ou son dossier, une commande ajoutée ou retirée), Escouade te redemande ton accord ; d’ici là, celles que tu avais approuvées restent en place. Des commandes identiques à celles que le projet a déjà n’ont rien à approuver.
 
 > [!WARNING]
 > Lis chaque commande avant de lui faire confiance : la préparation tourne dans chaque nouveau worktree, avant le premier message de son agent.
 
 ## Les réglages marqués
 
-Dans Réglages › Projets et Réglages › Kanban, un réglage défini par le fichier le dit sous son libellé : « Défini par .escouade.yml ». Le modifier et enregistrer en fait un réglage local de cette machine, qui passe devant le fichier, même quand il est relu : « Réglage local de cette machine : il passe devant .escouade.yml. ». Sous le réglage, « Écrire dans .escouade.yml » met ta valeur dans le fichier (à commiter), et « Reprendre la valeur du fichier » rend la main au fichier.
+Dans les pages d’un projet de Réglages › Projets, un réglage défini par le fichier le dit sous son libellé : « Défini par .escouade.yml ». Le modifier en fait un réglage local de cette machine, qui passe devant le fichier, même quand il est relu : « Réglage local de cette machine : il passe devant .escouade.yml. ». Sous le réglage, « Écrire dans .escouade.yml » met ta valeur dans le fichier (à commiter), et « Reprendre la valeur du fichier » rend la main au fichier.
 
 ## Exporter les réglages d’un projet
 
-Pour partager un projet déjà réglé, Réglages › Projets › « Exporter vers .escouade.yml » écrit le fichier à la racine du dépôt depuis les réglages enregistrés du projet : toutes les clés, dans l’ordre de l’exemple complet (une branche cible encore vide est omise, le mode `bypassPermissions` aussi). Un fichier existant garde ses commentaires, l’ordre de ses clés et les clés qu’Escouade ne connaît pas ; un nouveau fichier commence par la ligne du schéma et `version: 1`. Les commandes exportées sont celles du projet : elles n’ont pas besoin de ton accord. Il reste à commiter le fichier.
+Pour partager un projet déjà réglé, Réglages › Projets › Équipe › « Exporter vers .escouade.yml » écrit le fichier à la racine du dépôt depuis les réglages enregistrés du projet : toutes les clés, dans l’ordre de l’exemple complet (une branche cible encore vide est omise, le mode `bypassPermissions` aussi). Un fichier existant garde ses commentaires, l’ordre de ses clés et les clés qu’Escouade ne connaît pas ; un nouveau fichier commence par la ligne du schéma et `version: 1`. Les commandes exportées sont celles du projet : elles n’ont pas besoin de ton accord. Il reste à commiter le fichier.

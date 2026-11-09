@@ -1,0 +1,6 @@
+target/
+build.log
+# Ce que chaque lancement écrit en passant ; le résumé est dans spike.jsonl, startup-node.jsonl et tauri*.jsonl.
+results/*-[0-9].jsonl
+results/run*.*
+results/ten.jsonl

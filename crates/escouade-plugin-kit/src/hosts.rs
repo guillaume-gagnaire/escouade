@@ -174,8 +174,8 @@ impl Hosts {
             return Err(Refusal {
                 code: code::http(401),
                 message: tr!(
-                    "{kind} : aucun jeton pour {name}. Reconnecte le compte dans Réglages › Intégrations.",
-                    "{kind}: no token for {name}. Connect the account again in Settings › Integrations."
+                    "{kind} : aucun jeton pour {name}. Reconnecte le compte dans Réglages › Services connectés.",
+                    "{kind}: no token for {name}. Connect the account again in Settings › Connected services."
                 ),
             });
         }

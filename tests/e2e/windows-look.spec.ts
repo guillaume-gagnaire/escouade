@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium, type Locator, type Page } from '@playwright/test';
-import { addProject, expect, openNewProject, test } from './fixture';
+import { addProject, expect, openNewProject, test, openSettingsPage, closeSettings } from './fixture';
 import { startFakeTrackers } from '../fixtures/fake-trackers.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
@@ -331,7 +331,7 @@ test('« Ajouter un compte » reads as the preview, then its sign-in in a well',
   await addProject(page, app.repo, { firstAgent: false });
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Comptes' }).click();
+  await openSettingsPage(settings, 'Comptes et harness');
   await settings.getByRole('button', { name: 'Ajouter un compte Claude Code…' }).click();
   const dialog = page.getByRole('dialog', { name: /^Ajouter un compte/ });
   await expect(dialog.getByRole('radio', { name: /Un nouveau compte/ })).toBeChecked();
@@ -428,13 +428,13 @@ test.describe('« Ouvrir une PR sur GitHub »', () => {
     await expect(page.locator('.side .card')).toHaveCount(1, { timeout: 60_000 });
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Réglages' });
-    await settings.getByRole('tab', { name: 'Intégrations' }).click();
+    await openSettingsPage(settings, 'Services connectés');
     await settings.getByRole('button', { name: 'Connecter…' }).nth(2).click();
     const form = settings.getByRole('form', { name: 'Connexion à GitHub Issues' });
     await form.getByLabel(/Jeton/).fill('ghp_jeton');
     await form.getByRole('button', { name: 'Connecter' }).click();
     await expect(settings.getByText('Connecté · @ada').first()).toBeVisible();
-    await settings.getByRole('button', { name: 'Enregistrer' }).click();
+    await closeSettings(settings);
     await expect(settings).toHaveCount(0);
     await page.getByRole('button', { name: /^Kanban/ }).click();
     await page.getByRole('button', { name: 'Agents', exact: true }).click();
@@ -590,7 +590,7 @@ test.describe('in English', () => {
 
     await page.getByRole('button', { name: 'Settings (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Settings' });
-    await settings.getByRole('tab', { name: 'Accounts' }).click();
+    await openSettingsPage(settings, 'Accounts and harnesses');
     await settings.getByRole('button', { name: 'Add a Claude Code account…' }).click();
     const account = page.getByRole('dialog', { name: /^Add a/ });
     // Captured once risen (a window half-way up shows what is under it).

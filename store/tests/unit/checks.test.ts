@@ -354,6 +354,33 @@ describe('the names too close', () => {
   });
 });
 
+describe('store.docs that names no page (ESC-366)', () => {
+  const withDocs = (docs: unknown, files: Record<string, string | null> = {}) =>
+    runChecks(snapshot(plugin({ manifest: { store: { docs } }, files })));
+
+  it('passes the README with a warning, never a refusal', () => {
+    const readme = by(withDocs('docs'), 'readme');
+    expect(readme.status).toBe('pass');
+    expect(readme.problems).toHaveLength(1);
+    expect(readme.problems[0]!.path).toBe('store.docs');
+    expect(readme.problems[0]!.why.fr).toContain('ne nomme aucune page lisible');
+    expect(readme.problems[0]!.fix.en).toContain('under fr/ and en/');
+    expect(by(withDocs('docs', { 'docs/image.png': 'x' }), 'readme').problems).toHaveLength(1);
+  });
+
+  it('says nothing of a folder with pages, with or without languages, nor of a manifest without store.docs', () => {
+    expect(by(withDocs('docs', { 'docs/setup.md': '# Setup\n' }), 'readme').problems).toEqual([]);
+    expect(by(withDocs('docs', { 'docs/en/01-install.md': '# Install\n' }), 'readme').problems).toEqual([]);
+    expect(by(runChecks(snapshot(plugin())), 'readme').problems).toEqual([]);
+  });
+
+  it('adds to a README that fails without doubling it', () => {
+    const readme = by(withDocs('docs', { 'README.md': null }), 'readme');
+    expect(readme.status).toBe('fail');
+    expect(readme.problems.map((p) => p.path)).toEqual(['README.md', 'store.docs']);
+  });
+});
+
 describe('the ids of Escouade’s own hand (ESC-314)', () => {
   const own = () => plugin({ manifest: { id: 'dev.escouade.ntfy' } });
 

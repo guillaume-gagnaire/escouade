@@ -5021,7 +5021,7 @@ async fn a_new_project_no_account_would_serve_is_made_without_its_first_agent_an
         .collect();
     assert_eq!(
         toasts,
-        ["Aucun compte Claude Code actif ne sert le projet « client » : coche-le sous « Réservé aux projets » d’un compte Claude Code actif, dans Réglages › Comptes."]
+        ["Aucun compte Claude Code actif ne sert le projet « client » : coche-le sous « Réservé aux projets » d’un compte Claude Code actif, dans Réglages › Comptes et harness."]
     );
 }
 
@@ -9160,7 +9160,7 @@ async fn without_an_account_of_its_harness_nothing_starts_and_the_window_is_told
     assert_eq!(no.engine, EngineId::CLAUDE);
     assert_eq!(
         refused.to_string(),
-        "Aucun compte Claude Code : ajoute-en un dans Réglages › Comptes."
+        "Aucun compte Claude Code : ajoute-en un dans Réglages › Comptes et harness."
     );
     // Nor on another harness, never on Claude Code's in its place.
     let codex = h

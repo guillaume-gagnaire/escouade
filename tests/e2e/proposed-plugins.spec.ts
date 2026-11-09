@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, test, openSettingsPage, closeSettings } from './fixture';
 import { startFakeStore } from '../fixtures/store/fake-store.mjs';
 
 const SHOTS = process.env.ESCOUADE_E2E_SHOTS;
@@ -44,7 +44,7 @@ const state = async () => (await fetch(`${fake.url}/_fake/state`)).json();
 async function projectSettings(page: Page) {
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(dialog, 'Projet');
   return dialog;
 }
 
@@ -64,7 +64,7 @@ test('a project proposes its plugins: named with their store page, nothing insta
   execFileSync('git', ['add', '.escouade.yml'], { cwd: app.repo, stdio: 'pipe' });
   execFileSync('git', ['commit', '-qm', 'escouade.yml'], { cwd: app.repo, stdio: 'pipe' });
   await addProject(page, app.repo);
-  await expect(page.getByText(/propose 3 plugins : Réglages › Projets\./)).toBeVisible();
+  await expect(page.getByText(/propose 3 plugins : Réglages › Projets › Projet\./)).toBeVisible();
 
   // The band: the three, what each asks for, nothing installed.
   let settings = await projectSettings(page);
@@ -106,9 +106,9 @@ test('a project proposes its plugins: named with their store page, nothing insta
   // « Pas pour ce projet »: silent, and still after the window is loaded again.
   await band.getByRole('button', { name: 'Pas pour ce projet' }).click();
   await expect(band).toBeHidden();
-  await settings.getByRole('button', { name: 'Annuler' }).click();
+  await closeSettings(settings);
   await page.reload();
   settings = await projectSettings(page);
-  await expect(settings.getByRole('button', { name: 'Exporter vers .escouade.yml' })).toBeVisible();
+  await expect(settings.getByRole('textbox', { name: 'Nom du projet' })).toBeVisible();
   await expect(settings.getByRole('region', { name: 'Plugins proposés par ce projet' })).toHaveCount(0);
 });

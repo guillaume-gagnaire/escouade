@@ -1,6 +1,6 @@
 # Les thèmes
 
-Un plugin **déclaratif** peut donner à Escouade d’autres couleurs : des valeurs pour les jetons de l’interface, en sombre et en clair, et une palette de couleurs de projet. Il se choisit dans **Réglages › Application › Couleurs** et s’applique tout de suite, terminaux et éditeur compris.
+Un plugin **déclaratif** peut donner à Escouade d’autres couleurs : des valeurs pour les jetons de l’interface, en sombre et en clair, et une palette de couleurs de projet. Il se choisit dans **Réglages › Général › Couleurs** et s’applique tout de suite, terminaux et éditeur compris.
 
 ## Un thème dans le manifeste
 
@@ -13,7 +13,7 @@ Le plugin « Contraste élevé », en entier : un thème, sombre et clair, et 
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.high-contrast",
   "name": { "fr": "Contraste élevé", "en": "High contrast" },
-  "version": "1.1.0",
+  "version": "1.1.2",
   "description": {
     "fr": "Un thème à fort contraste, clair et sombre : texte pur, bordures nettes, couleurs d'état franches.",
     "en": "A high-contrast theme, light and dark: pure text, sharp borders, plain status colors."
@@ -72,7 +72,8 @@ Le plugin « Contraste élevé », en entier : un thème, sombre et clair, et 
         "projectColors": ["#ffd400", "#00e0ff", "#ff5cf0", "#7cff4f", "#ff8a00", "#b48cff"]
       }
     ]
-  }
+  },
+  "store": { "docs": "docs" }
 }
 ```
 
@@ -112,7 +113,7 @@ Les terminaux tirent leurs couleurs de `--well`, `--code-fg`, `--text`, des coul
 
 ## Les valeurs permises
 
-Escouade filtre chaque valeur avant de la poser sur la fenêtre. Ce qui ne passe pas est écarté, et le jeton garde la valeur d’Escouade ; Réglages › Application dit combien de valeurs du thème choisi ont été écartées.
+Escouade filtre chaque valeur avant de la poser sur la fenêtre. Ce qui ne passe pas est écarté, et le jeton garde la valeur d’Escouade ; Réglages › Général dit combien de valeurs du thème choisi ont été écartées.
 
 - **Les couleurs** (presque tous les jetons) : `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, les fonctions `rgb()`, `rgba()`, `hsl()`, `hsla()`, `hwb()`, `lab()`, `lch()`, `oklab()`, `oklch()`, `color()` et `color-mix()`, les couleurs relatives (`oklch(from var(--wait) l c h / 0.1)`), `transparent`, `white`, `black`, et `var()` d’un autre jeton de la liste (ou de `--p`). Une seule couleur par jeton, 160 caractères au plus.
 - **Les proportions** `--sel` et `--glow` : un pourcentage de 0 à 100 % (`26%`).
@@ -125,10 +126,10 @@ Jamais de `url()`, d’autre fonction (`image-set()`, `attr()`, `env()`…), de 
 ## Ce que voit l’utilisateur
 
 - **Le choix.** La rangée « Couleurs », sous « Thème » : « Escouade », puis les thèmes des plugins installés et activés pour l’app. Sans thème installé, un bouton « Voir les thèmes » ouvre la vue Plugins sur sa catégorie « Thèmes ».
-- **Tout de suite.** La fenêtre, les terminaux ouverts (sans les rouvrir) et l’éditeur prennent le thème dès qu’il est choisi ; la palette remplace celle d’Escouade dans l’assistant « Nouveau projet », dans Réglages › Projet et dans le menu d’une tuile. Un projet garde sa couleur : si elle n’est pas dans la palette, elle y est ajoutée à la fin.
+- **Tout de suite.** La fenêtre, les terminaux ouverts (sans les rouvrir) et l’éditeur prennent le thème dès qu’il est choisi ; la palette remplace celle d’Escouade dans l’assistant « Nouveau projet », dans Réglages › Projets › Projet et dans le menu d’une tuile. Un projet garde sa couleur : si elle n’est pas dans la palette, elle y est ajoutée à la fin.
 - **Au démarrage.** Le thème choisi est gardé avec les réglages, et posé avant le premier affichage.
-- **Le plugin retiré.** Désactivé, désinstallé ou devenu invalide, son thème quitte la fenêtre et Escouade reprend ses couleurs ; Réglages › Application le dit. Le choix reste : le plugin réactivé, son thème revient.
+- **Le plugin retiré.** Désactivé, désinstallé ou devenu invalide, son thème quitte la fenêtre et Escouade reprend ses couleurs ; Réglages › Général le dit. Le choix reste : le plugin réactivé, son thème revient.
 
 ## Tester un thème
 
-`escouade-plugin validate` vérifie le manifeste. Pour voir le thème, installe le dossier du plugin en développement (vue Plugins › « En développement »), choisis-le dans Réglages › Application et passe de Sombre à Clair. Le plugin d’exemple « Contraste élevé », celui du manifeste plus haut (`plugins/high-contrast` dans le dépôt d’Escouade), est un point de départ : voir [Les plugins d’exemple](plugins/examples#contraste-eleve).
+`escouade-plugin validate` vérifie le manifeste. Pour voir le thème, installe le dossier du plugin en développement (vue Plugins › « En développement »), choisis-le dans Réglages › Général et passe de Sombre à Clair. Le plugin d’exemple « Contraste élevé », celui du manifeste plus haut (`plugins/high-contrast` dans le dépôt d’Escouade), est un point de départ : voir [Les plugins d’exemple](plugins/examples#contraste-eleve).

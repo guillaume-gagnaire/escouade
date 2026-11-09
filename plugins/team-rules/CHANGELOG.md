@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.1
+
+- Its page has its documentation in French and in English: README.fr.md, README.en.md and the pages of docs/fr and docs/en (`store.docs`).
+
 ## 2.0.0 (2026-11-02)
 
 - The program runs in WASM inside Escouade (`"run": { "js": "dist/plugin.mjs" }`): no Node needed on the user's machine, and

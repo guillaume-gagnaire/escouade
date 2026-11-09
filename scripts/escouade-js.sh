@@ -27,7 +27,8 @@ else
   javy="$out/javy/$exe"
   if [ ! -x "$javy" ]; then
     mkdir -p "$out/javy"
-    curl -fsSL -o "$out/javy/$asset" "https://github.com/bytecodealliance/javy/releases/download/v9.1.0/$asset"
+    # GitHub's releases answer 502 to 504 now and then: tried again, further apart.
+    curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "$out/javy/$asset" "https://github.com/bytecodealliance/javy/releases/download/v9.1.0/$asset"
     got=$( (sha256sum "$out/javy/$asset" 2>/dev/null || shasum -a 256 "$out/javy/$asset") | cut -d' ' -f1)
     if [ "$got" != "$sum" ]; then
       echo "$asset: SHA-256 $got, not $sum" >&2
@@ -66,7 +67,23 @@ if ! cargo build --release --target wasm32-wasip1 2>/dev/null; then
   [ -n "$inc" ] && export BINDGEN_EXTRA_CLANG_ARGS="-I$(cd "$inc" && (pwd -W 2>/dev/null || pwd))"
 fi
 # The `target_features` section kept (strip = false in Cargo.toml), which `javy init-plugin` (binaryen) reads.
-cargo build --release --target wasm32-wasip1
+# rquickjs-sys downloads its WASI SDK from GitHub's releases, which answer 502 to 504 now and then (2026-11-08): its
+# curl keeps the error page as the archive, which it would read again. A build that failed drops an archive that is not
+# gzip and tries again, further apart; the SDK stays where rquickjs-sys puts it, so the module's bytes do not change.
+tries=1
+wait=10
+until cargo build --release --target wasm32-wasip1; do
+  [ "$tries" -ge 4 ] && exit 1
+  for a in target/wasm32-wasip1/release/build/rquickjs-sys-*/out/wasi-sdk/wasi-sdk-*.tar.gz; do
+    if [ -f "$a" ] && ! gzip -t "$a" 2>/dev/null; then
+      rm -f "$a"
+      echo "$a: not gzip, downloaded again" >&2
+    fi
+  done
+  sleep "$wait"
+  wait=$((wait * 3))
+  tries=$((tries + 1))
+done
 # --deterministic: fixed clocks and a zero-filled RNG during the pre-initialization, without which each run differs.
 "$javy" init-plugin --deterministic target/wasm32-wasip1/release/escouade_js.wasm -o "$out/escouade-js.wasm"
 sum=$( (sha256sum "$out/escouade-js.wasm" 2>/dev/null || shasum -a 256 "$out/escouade-js.wasm") | cut -d' ' -f1)

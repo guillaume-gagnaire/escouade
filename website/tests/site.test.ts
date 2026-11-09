@@ -6,7 +6,7 @@ import { fmt } from '../app/data/catalog';
 import { DOC_GROUPS, DOC_SLUGS, docPath, docSource, type DocSlug } from '../app/data/docs';
 import { LANG_KEY, type Lang } from '../app/data/language';
 import { renderDoc } from '../app/data/render';
-import { FEATURE_SHOTS, HERO_SHOT, NEXT, REPO, SITE, STAGES, SUPPORT, VIDEO, imageOf } from '../app/data/site';
+import { FEATURE_SHOTS, HERO_SHOT, NEXT, REPO, SITE, STAGES, STORE, SUPPORT, VIDEO, imageOf } from '../app/data/site';
 import { SNAPSHOT, squadAt } from '../app/data/squad';
 import { escapeText, headOf, leaves, tags } from './helpers';
 
@@ -286,7 +286,8 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
     const mine = new Set(leaves(text).values());
     let checked = 0;
     for (const [path, s] of leaves(CATALOGS[other])) {
-      if (s.length < 15 || mine.has(s)) continue;
+      // An address is not said: the French store’s is the start of the English one’s.
+      if (s.length < 15 || mine.has(s) || /^https?:\/\//.test(s)) continue;
       expect(html, `${lang}: ${path}`).not.toContain(escapeText(s));
       checked++;
     }
@@ -501,6 +502,20 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
       expect(link, part.slice(0, 80)).toBeDefined();
     }
     expect(header).toContain(`>${escapeText(text.header.docs)}</a>`);
+  });
+
+  it('leads to the plugin store in its language, from the header, the footer and the roadmap', () => {
+    const header = html.match(/<header[\s\S]*?<\/header>/)?.[0] ?? '';
+    const footer = html.match(/<footer class="foot[\s\S]*?<\/footer>/)?.[0] ?? '';
+    const start = html.indexOf(`id="${text.anchors.roadmap}"`);
+    const roadmap = start < 0 ? '' : html.slice(start, html.indexOf('</section>', start));
+    for (const part of [header, footer, roadmap]) {
+      expect(
+        tags(part, 'a').some((a) => a.href === STORE[lang]),
+        part.slice(0, 80),
+      ).toBe(true);
+    }
+    for (const part of [header, footer]) expect(part).toContain(`>${escapeText(text.header.plugins)}</a>`);
   });
 
   it('points the header’s links at sections that exist', () => {

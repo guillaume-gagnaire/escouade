@@ -33,10 +33,31 @@ export default defineZone('envs', {
     underWay: 'Deployment under way · {sha}',
     more: { one: '+ {count} more', other: '+ {count} more' },
     merged: 'merged {since}',
-    empty: 'No ticket',
+    empty: 'No ticket has reached it.',
+    waitingEmpty: 'Nothing waits for a deployment.',
+    production: 'production',
+    /** The environments left out because nothing ever ran there (ESC-390). */
+    neverRan: {
+      one: '{names} isn’t shown: no successful deployment.',
+      other: '{names} aren’t shown: no successful deployment.',
+    },
+    noneShown: 'No environment is shown: pick them in the environments menu.',
     loading: 'Reading the deployments…',
     none: 'No deployment on {host} for this repository. Those of your CI (GitHub Actions, GitLab CI, Bitbucket Pipelines) show here by themselves.',
     unsupported: '{host} has no deployments API: Escouade only follows the CI of the target branch.',
     error: 'Deployments unreadable: {error}',
+  },
+
+  /** The menu of the environments shown (ESC-390), in the board's header. */
+  menu: {
+    button: { one: '{count} environment of {total}', other: '{count} environments of {total}' },
+    short: '{count} of {total}',
+    title: 'Environments shown',
+    tip: 'Choose the environments shown and their order',
+    tickets: { one: '{count} ticket', other: '{count} tickets' },
+    byYou: 'hidden by you',
+    neverRan: 'no successful deployment',
+    move: 'Drag to change the order',
+    foot: 'Drag to change the order, or Alt+↑ and Alt+↓. Kept for this project, on this machine.',
   },
 });

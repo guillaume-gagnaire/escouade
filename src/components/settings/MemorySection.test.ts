@@ -28,7 +28,7 @@ describe('the shared memory in the project’s settings (ESC-255)', () => {
   it('lists the memories with their kind, and shows a text on a click', async () => {
     resetApp({ projects: [project()] });
     fakeBackend({ memory_list: () => MEMORIES });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'team', projectId: 'p1' });
     const list = await screen.findByRole('list', { name: 'Mémoire partagée' });
     expect(within(list).getByText('e2e-build')).toBeInTheDocument();
     expect(within(list).getByText('Façon de faire')).toBeInTheDocument();
@@ -44,14 +44,14 @@ describe('the shared memory in the project’s settings (ESC-255)', () => {
   it('says when there is none yet', async () => {
     resetApp({ projects: [project()] });
     fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'team', projectId: 'p1' });
     expect(await screen.findByText(/Aucun souvenir pour l’instant/)).toBeInTheDocument();
   });
 
   it('forgets a memory on a second click only', async () => {
     resetApp({ projects: [project()] });
     const backend = fakeBackend({ memory_list: () => MEMORIES });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'team', projectId: 'p1' });
     const forget = await screen.findByRole('button', { name: 'Oublier le souvenir ports' });
     await userEvent.click(forget);
     expect(backend.called('memory_forget')).toHaveLength(0);
@@ -65,7 +65,7 @@ describe('the shared memory in the project’s settings (ESC-255)', () => {
     resetApp({ projects: [project()] });
     let memories: Memory[] = [];
     const backend = fakeBackend({ memory_list: () => memories });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'team', projectId: 'p1' });
     await screen.findByText(/Aucun souvenir pour l’instant/);
     memories = MEMORIES;
     // What the 'memory' event does.

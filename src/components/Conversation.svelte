@@ -2,6 +2,7 @@
   import { keyLabel } from '../lib/platform';
   import { onMount, tick, untrack } from 'svelte';
   import { t } from '../lib/i18n';
+  import { paneCtx } from '../lib/pane-context';
   import { isMulti, repoLabel, touchedRepos } from '../lib/repos';
   import Rich from '../lib/i18n/Rich.svelte';
   import { api } from '../lib/ipc';
@@ -66,6 +67,9 @@
   import { tip } from '../lib/tip';
 
   let { agent, project }: { agent: Agent; project: Project } = $props();
+  /** Its pane of the split screen (ESC-392), if it is in one: the files open over it there, never docked beside. */
+  const pane = paneCtx();
+  const docked = $derived(app.split && !pane);
 
   /** The words that tell what an agent is doing, read when shown (the language of the interface can change). */
   function statusLabel(status: string): string {
@@ -118,7 +122,7 @@
   function openWorkflow(workflow: string) {
     workflows.chosen[project.id] = workflow;
     app.panelTab = 'workflow';
-    if (!app.split) app.filesOpen = true;
+    if (!docked) app.filesOpen = true;
   }
   // The next slice: what « Afficher les N précédents » adds.
   const older = $derived(Math.min(SLICE, start));
@@ -555,7 +559,7 @@
       const el = head?.querySelector(sel);
       return !el || (typeof el.checkVisibility === 'function' && !el.checkVisibility());
     };
-    return { files: !app.split && hidden('.fig.files'), layout: hidden('.layout-seg') };
+    return { files: !docked && hidden('.fig.files'), layout: !pane && hidden('.layout-seg') };
   }
 
   function rename() {
@@ -681,7 +685,7 @@
           </dd>
         </div>
       {/if}
-      {#if app.split}
+      {#if docked}
         <div class="fig fig-files">
           <dt>{t('common.files')}</dt>
           <dd>{files}</dd>
@@ -778,20 +782,21 @@
         use:tip={t('conv.header.more')}
         onclick={(e) => app.askAgentMenu(agent.id, e.currentTarget, folded(e.currentTarget))}><Icon name="more" size={14} /></button
       >
-      <div class="layout-seg" role="group" aria-label={t('conv.header.layout', { key: keyLabel('Ctrl+Shift+L') })}>
-        <button
-          aria-pressed={!app.split}
-          aria-label={t('conv.header.layoutClassic')}
-          use:tip={t('conv.header.layoutClassic')}
-          onclick={() => app.split && app.toggleLayout()}><Icon name="lay-1" size={14} /></button
-        >
-        <button
-          aria-pressed={app.split}
-          aria-label={t('conv.header.layoutSplit')}
-          use:tip={t('conv.header.layoutSplit')}
-          onclick={() => !app.split && app.toggleLayout()}><Icon name="lay-2" size={14} /></button
-        >
-      </div>
+      <!-- In a pane of the split screen (ESC-392) the files open over the conversation: no layout to choose. -->
+      {#if !pane}<div class="layout-seg" role="group" aria-label={t('conv.header.layout', { key: keyLabel('Ctrl+Shift+L') })}>
+          <button
+            aria-pressed={!app.split}
+            aria-label={t('conv.header.layoutClassic')}
+            use:tip={t('conv.header.layoutClassic')}
+            onclick={() => app.split && app.toggleLayout()}><Icon name="lay-1" size={14} /></button
+          >
+          <button
+            aria-pressed={app.split}
+            aria-label={t('conv.header.layoutSplit')}
+            use:tip={t('conv.header.layoutSplit')}
+            onclick={() => !app.split && app.toggleLayout()}><Icon name="lay-2" size={14} /></button
+          >
+        </div>{/if}
     </div>
   </header>
 

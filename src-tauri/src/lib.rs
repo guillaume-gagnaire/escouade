@@ -188,6 +188,8 @@ mod plugins_rust_build_tests;
 #[cfg(test)]
 mod plugins_seed_tests;
 #[cfg(test)]
+mod plugins_sort_tests;
+#[cfg(test)]
 mod plugins_store_tests;
 #[cfg(test)]
 mod plugins_tests;
@@ -671,6 +673,8 @@ pub fn run() {
                 commands::plugin_inspect_store,
                 commands::plugin_inspect_seed,
                 commands::plugin_seed_offers,
+                commands::plugin_install_seed,
+                commands::plugin_need_engine,
                 commands::store_view,
                 commands::deep_links_take,
                 commands::store_refresh,
@@ -703,6 +707,7 @@ pub fn run() {
                 commands::account_status,
                 commands::account_models_refresh,
                 commands::engines_found_now,
+                commands::engines_off_now,
                 commands::engines_declared,
                 commands::account_key,
                 commands::account_login,
@@ -844,6 +849,7 @@ pub fn run() {
                 commands::agent_pr_rerun,
                 commands::agent_no_pr,
                 commands::project_prs,
+                commands::project_code_host,
                 commands::overview_prs,
                 commands::pr_reviews,
                 commands::pr_review_start,

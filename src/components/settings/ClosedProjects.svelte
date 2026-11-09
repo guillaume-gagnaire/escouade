@@ -33,7 +33,7 @@
     // Taken now: the settings are gone while the confirmation is open.
     const projectId = settingsForm.projectId ?? undefined;
     const back = () => {
-      app.modal = { kind: 'settings', tab: 'projects', projectId, resume: true };
+      app.modal = { kind: 'settings', page: 'allProjects', projectId, resume: true };
     };
     const file = c.unreadable;
     app.modal = {

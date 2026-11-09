@@ -2,13 +2,13 @@
   import { onDestroy, untrack } from 'svelte';
   import { accountName, backToAccounts, engineOfAccount, isPrincipal, principalId, SHARED_FILES } from '../../lib/accounts';
   import { tildify } from '../../lib/format';
-  import { byKey as goesByKey, engineName, offered } from '../../lib/engines';
+  import { byKey as goesByKey, engineName, found } from '../../lib/engines';
   import { t, type Key } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { IS_MAC } from '../../lib/platform';
   import { app } from '../../lib/state.svelte';
   import { disposeTerminal, mountTerminal, openAccountLogin } from '../../lib/terminals';
-  import type { SettingsTab } from '../../lib/settings.svelte';
+  import type { SettingsPage } from '../../lib/settings.svelte';
   import type { Account, EngineId, MachineAccount, ShareMode } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import Modal from './Modal.svelte';
@@ -19,7 +19,7 @@
   // to the sign-in.
   // The sign-in runs the account's own program in a terminal here (`claude`, `codex login`, `copilot login`); Escouade looks for it
   // every 2 s, then closes the terminal and reads the account's quota. Closed before, the account stays, not signed in.
-  // `onclose`: opened over another modal (the assistant « Nouveau projet »), back to it rather than to Réglages › Comptes.
+  // `onclose`: opened over another modal (the assistant « Nouveau projet »), back to it rather than to Réglages › Comptes et harness.
   // Cursor CLI (ESC-43): its machine's account is the sign-in of `agent login`; a new one is its API key, kept in the system's
   // keychain and given to its processes by CURSOR_API_KEY: no terminal, « Changer la clé… » gives it again. Mistral Vibe
   // (ESC-267) the same: its machine's account is the key `vibe --setup` kept, a new one its API key, by MISTRAL_API_KEY.
@@ -35,7 +35,7 @@
     engine: asked,
     reserveFor,
     onclose,
-  }: { accountId?: string; back?: SettingsTab; engine?: EngineId; reserveFor?: string; onclose?: () => void } = $props();
+  }: { accountId?: string; back?: SettingsPage; engine?: EngineId; reserveFor?: string; onclose?: () => void } = $props();
   /** The project the account is added for, while it is open still. */
   const reservedTo = $derived(reserveFor ? app.projects.find((p) => p.id === reserveFor) : undefined);
 
@@ -110,10 +110,10 @@
 
   /** The account signing in; none while it is still to make. */
   let account = $state<Account | null>(untrack(() => app.settings.accounts.find((a) => a.id === accountId) ?? null));
-  /** The harness of the account: the one asked for, else the first offered (Claude Code's when it is found). */
-  let engine = $state<EngineId>(untrack(() => (account ? engineOfAccount(account) : (asked ?? offered()[0]?.id ?? 'claude'))));
+  /** The harness of the account: the one asked for, else the first found (Claude Code's when it is found). */
+  let engine = $state<EngineId>(untrack(() => (account ? engineOfAccount(account) : (asked ?? found()[0]?.id ?? 'claude'))));
   /** The harnesses an account may be added to: those found, a menu from two on. */
-  const engines = $derived(offered());
+  const engines = $derived(found());
   const says = $derived(SAYS[engine] ?? CLAUDE_SAYS);
   const keySays = $derived(KEY_SAYS[engine] ?? CURSOR_KEY_SAYS);
   let name = $state('');
@@ -437,7 +437,7 @@
   function close() {
     stop();
     if (onclose) onclose();
-    else if (reserveFor) app.modal = { kind: 'settings', tab: 'projects', projectId: reserveFor, resume: true };
+    else if (reserveFor) app.modal = { kind: 'settings', page: 'privacy', projectId: reserveFor, resume: true };
     else backToAccounts(back);
   }
 

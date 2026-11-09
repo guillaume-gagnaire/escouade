@@ -2,7 +2,8 @@ import type { Tree } from '../types';
 
 // « Recherche par le sens » (ESC-254) : le modèle des vecteurs, un pour tous les projets de cette machine, qui sert à la mémoire partagée et aux docs.
 export default {
-  allTitle: 'Tous les projets',
+  /** The row of the model, in Avancé › Recherche par le sens. */
+  model: 'Modèle local',
   label: 'Recherche par le sens',
   desc: 'En plus des mots, la mémoire partagée et les docs se cherchent par le sens, avec un petit modèle multilingue ({model}, licence {license}) qui tourne sur cette machine. Un seul téléchargement de {size}, pour tous les projets ; ensuite, rien ne sort de la machine.',
   download: 'Télécharger ({size})',

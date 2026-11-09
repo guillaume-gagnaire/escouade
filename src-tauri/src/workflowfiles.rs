@@ -1029,7 +1029,7 @@ pub fn schema() -> Value {
             },
             "fixes": {
                 "type": "object",
-                "description": "The user's corrections (Settings › Projects › Workflow): they go before the reading.",
+                "description": "The user's corrections (Settings › Projects › Kanban › Workflow): they go before the reading.",
                 "properties": {
                     "dismissed": { "type": "boolean", "description": "Not a workflow: kept so that no reading makes it again." },
                     "steps": { "type": "array", "description": "The steps in their order; absent: those read.", "items": {

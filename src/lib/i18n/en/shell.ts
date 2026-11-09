@@ -17,8 +17,8 @@ export default defineZone('shell', {
     noAccount: 'No account',
     noAccountDesc: 'Add an account: the one already signed in on this machine, or a new one. Only the accounts added start agents.',
     noEngineDesc: 'Escouade runs coding agents. Install one of them, then set its path in {where} if it isn’t on the PATH.',
-    harnessSettings: 'Settings › Harness',
-    harnessSettingsButton: 'Settings › Harness…',
+    harnessSettings: 'Settings › Accounts and harnesses',
+    harnessSettingsButton: 'Settings › Accounts and harnesses…',
     copy: 'Copy the command of {harness}',
     copied: 'Command copied',
     machine: 'Signed in on this machine',
@@ -48,7 +48,7 @@ export default defineZone('shell', {
     history: {
       found: 'History found: {agents}, {tickets}, last activity on {date}',
       fresh: 'Start from a blank project',
-      freshDesc: 'The history stays in Settings › Projects, where you can erase it.',
+      freshDesc: 'The history stays in Settings › All projects, where you can erase it.',
       reopen: 'Reopen project',
       reopening: 'Reopening…',
     },
@@ -72,6 +72,7 @@ export default defineZone('shell', {
   },
   /** The update downloaded, its notes once installed, and the toasts about it. */
   update: {
+    betaVersion: '{version} (beta)',
     ready: 'Escouade {version} is ready',
     notes: 'What’s new in Escouade {version}',
     saveFirst: {
@@ -100,7 +101,7 @@ export default defineZone('shell', {
     title: 'Help improve Escouade?',
     body: 'Escouade can send usage statistics, with nothing that identifies you: which features are used, with which version of Escouade and which system. Never your projects, your code, your conversations or your name.',
     detail:
-      'They go to a server of Escouade’s hosted in France (Aptabase, open source), under an id drawn at random, and are kept 25 months. You can change your mind at any time in Settings › About.',
+      'They go to a server of Escouade’s hosted in France (Aptabase, open source), under an id drawn at random, and are kept 25 months. You can change your mind at any time in Settings › General.',
     more: 'What is sent, in detail',
     yes: 'Share statistics',
     no: 'No thanks',
@@ -167,5 +168,27 @@ export default defineZone('shell', {
     soundTip: 'Notification sound: {state}',
     soundOn: 'On',
     soundOff: 'Off',
+  },
+  panes: {
+    region: 'Pane: {name}',
+    close: 'Close the pane',
+    closeTip: 'Close the pane ({shortcut})',
+    handle: 'Size of the panes',
+    handleTip: 'Drag to resize · double click: half and half',
+    editor: 'Editor',
+    openBeside: 'Open beside',
+    openBelow: 'Open below',
+    click: 'click',
+    zone: {
+      left: 'On the left',
+      right: 'On the right',
+      top: 'On top',
+      bottom: 'Below',
+      center: 'Replace',
+    },
+    full: 'No room for another pane',
+    hintSides: 'Edge: beside',
+    hintMiddle: 'Middle: replace',
+    hintCancel: 'Esc: cancel',
   },
 });

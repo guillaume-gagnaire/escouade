@@ -13,7 +13,7 @@ Le plugin Discord, l’un des [plugins d’exemple](plugins/examples), en entier
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.discord",
   "name": "Discord",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "description": {
     "fr": "Les tickets à tester et les agents qui attendent, dans un salon Discord : un webhook, sans code.",
     "en": "Tickets to test and agents waiting, in a Discord channel: a webhook, no code."
@@ -49,7 +49,8 @@ Le plugin Discord, l’un des [plugins d’exemple](plugins/examples), en entier
         }
       }
     ]
-  }
+  },
+  "store": { "docs": "docs" }
 }
 ```
 
@@ -73,7 +74,7 @@ La ligne `$schema` donne l’autocomplétion et la vérification dans VS Code et
 | `permissions` | non | Ce qu’il demande : `events`, `network`, `secrets`, `files`, `commands` (des listes) et `decide` (`true` ou `false`). Voir [les capacités de l’hôte](plugins/capabilities). |
 | `limits` | non | Ce qu’il demande de plus à l’hôte : `fetchSeconds`, `fetchBytes`, `fileBytes` ([les limites](plugins/capabilities#les-limites-limits)). |
 | `contributes` | non | Ses points d’extension : ce qu’il ajoute à Escouade. |
-| `store` | non | Ce que la place de marché montre de lui : `categories`, `keywords`, `screenshots`, `docs`. |
+| `store` | non | Ce que la place de marché montre de lui : `categories`, `keywords`, `screenshots`, `docs` (le dossier de sa documentation, une page par langue sous `docs/fr/` et `docs/en/` : [la documentation, par langue](plugins/publishing#la-documentation-par-langue)). |
 
 ### Les textes dans deux langues
 

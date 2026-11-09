@@ -380,27 +380,34 @@ describe('the view', () => {
     expect(shipped.textContent).not.toContain('Slack');
   });
 
-  it('proposes what the seed holds and is not installed, and installs it on a click only (ESC-338)', async () => {
+  it('proposes what the seed holds and is not installed, and installs it in one click only (ESC-338, ESC-373)', async () => {
     const calls: string[] = [];
+    let offers = [
+      { id: 'dev.escouade.trello', name: 'Trello', version: '2.2.0', removed: '2.2.0', refused: null },
+      { id: 'dev.escouade.jira', name: 'Jira', version: '2.2.0', removed: null, refused: 'La signature ne tient pas.' },
+      { id: 'dev.escouade.linear', name: 'Linear', version: '2.2.0', removed: null, refused: null },
+    ];
     fakeBackend({
       plugins_list: () => [],
-      plugin_seed_offers: () => [
-        { id: 'dev.escouade.trello', name: 'Trello', version: '2.2.0', removed: '2.2.0', refused: null },
-        { id: 'dev.escouade.jira', name: 'dev.escouade.jira', version: '2.2.0', removed: null, refused: 'La signature ne tient pas.' },
-      ],
-      plugin_inspect_seed: ({ id }: { id: string }) => {
+      plugin_seed_offers: () => offers,
+      plugin_install_seed: ({ id }: { id: string }) => {
         calls.push(id);
-        return preview({ id });
+        offers = offers.filter((o) => o.id !== id);
+        return view({ id, name: 'Trello' });
       },
     });
     render(PluginsView);
     const proposed = await screen.findByRole('region', { name: 'Proposés par Escouade' });
     expect(proposed.textContent).toContain('Tu l’as désinstallé (v2.2.0)');
     expect(proposed.textContent).toContain('Non installé : La signature ne tient pas.');
+    expect(proposed.textContent).toContain('Dans l’app, sans téléchargement');
     expect(calls).toEqual([]);
     await userEvent.click(within(proposed).getAllByRole('button', { name: 'Installer' })[0]!);
     expect(calls).toEqual(['dev.escouade.trello']);
-    expect(plugins.install?.kind).toBe('preview');
+    // No window: installed at once, and no longer proposed.
+    expect(plugins.install).toBeNull();
+    await waitFor(() => expect(plugins.byId('dev.escouade.trello')).toBeTruthy());
+    expect(plugins.offers.map((o) => o.id)).toEqual(['dev.escouade.jira', 'dev.escouade.linear']);
   });
 
   it('takes a proposed plugin from the store when the store has a newer version (ESC-338)', async () => {
@@ -420,9 +427,9 @@ describe('the view', () => {
         calls.push(`store:${id}`);
         return preview({ id });
       },
-      plugin_inspect_seed: ({ id }: { id: string }) => {
+      plugin_install_seed: ({ id }: { id: string }) => {
         calls.push(`seed:${id}`);
-        return preview({ id });
+        return null;
       },
     });
     render(PluginsView);

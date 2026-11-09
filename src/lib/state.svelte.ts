@@ -21,14 +21,32 @@ import { readPref, writePref } from './prefs';
 import { errorText, missingAccountOf } from './refusal';
 import { parseTestId, parseWorktreeRunId, testCommand, worktreeCommand } from './recipe';
 import type { IconName } from './icons';
-import type { SettingsTab } from './settings.svelte';
+import type { SettingsPage } from './settings-pages';
 import type { FormFile } from './ticket-files';
 import type { FormImage } from './ticket-images';
 import { setSources } from './integrations';
 import { applyTheme } from './theme';
+import { hasTab } from './code-host';
 import { workflows } from './workflows.svelte';
+import {
+  activeItem,
+  close as closePane,
+  flip as flipPane,
+  has as paneHas,
+  itemKey,
+  leaves,
+  neighbor,
+  parseLayout,
+  place as placePane,
+  prune as prunePanes,
+  setRatio as setPaneRatio,
+  type PaneItem,
+  type PaneLayout,
+  type PaneZone,
+} from './panes';
 import type {
   AccountView,
+  CodeHost,
   Agent,
   AgentStatus,
   AutopilotPause,
@@ -86,7 +104,7 @@ export type Modal =
   /**
    * The window that adds a project, on `path` when it opens on one (read at once). `historyId`: of the folder's closed
    * projects, the one « Rouvrir » was clicked on; it holds only while the path typed is `path`. `projectId`: the assistant
-   * opened again on an existing project (Réglages › Projets), to set it up anew.
+   * opened again on an existing project (Réglages › Projets › Projet), to set it up anew.
    */
   | { kind: 'newProject'; path?: string; historyId?: string; projectId?: string }
   /** The question of the first start: the usage statistics. */
@@ -96,11 +114,21 @@ export type Modal =
   /** ESC-255: what Claude Code remembers of a project, offered once to its shared memory, memory by memory. */
   | { kind: 'claudeMemory'; projectId: string; offered: OfferedMemory[] }
   /**
-   * On a tab (Claude Code by default) and, for a project's tabs, a project (the one on screen by default),
-   * scrolled to a section of it; `resume`: with the draft it had, back from a modal it opened; `suggest`: Claude
+   * On a page (« Comptes et harness » by default) and, for a project's pages, a project (the one on screen by default),
+   * scrolled to a group of it; `resume`: with the draft it had, back from a modal it opened; `suggest`: Claude
    * reads the project at once to suggest its launch commands.
    */
-  | { kind: 'settings'; tab?: SettingsTab; projectId?: string; section?: 'launch' | 'sources'; resume?: boolean; suggest?: boolean }
+  | {
+      kind: 'settings';
+      /** The page it opens on (the last one when left out). */
+      page?: SettingsPage;
+      /** The project of a project's page. */
+      projectId?: string;
+      /** The group of the page it opens on, scrolled to (its `anchor`): « Kanban (Workflow) ». */
+      at?: string;
+      resume?: boolean;
+      suggest?: boolean;
+    }
   /**
    * `commit`: what it changed; `refs`: what changes from `from` to `to` (branches, or commits); `wholeProject`: every
    * uncommitted file the project's list shows, worktrees of the agents included.
@@ -140,11 +168,11 @@ export type Modal =
   | { kind: 'newDiscussion'; projectId: string; preset?: DiscussionPreset }
   /** « Ajouter un compte… » (a new Claude account, then its sign-in), or « Se connecter… » for the account `accountId`. */
   /** `back`: the settings' tab it came from and goes back to (Comptes Claude by default). */
-  | { kind: 'account'; accountId?: string; back?: SettingsTab; engine?: EngineId; reserveFor?: string }
+  | { kind: 'account'; accountId?: string; back?: SettingsPage; engine?: EngineId; reserveFor?: string }
   | { kind: 'testLaunch'; agentId: string }
   | { kind: 'import'; projectId: string }
   /** The update downloaded (`app.update`), which a restart installs; `back`, the settings' tab it was opened from and goes back to. */
-  | { kind: 'update'; back?: SettingsTab }
+  | { kind: 'update'; back?: SettingsPage }
   /** The release notes of the update installed since the last start. */
   | { kind: 'notes'; version: string; notes: string }
   /** « Rechercher dans les conversations » (Ctrl+K). */
@@ -268,10 +296,24 @@ export interface EditorState {
   reveal: { path: string; line: number; col?: number; seq: number } | null;
 }
 
+/** The split screens read back from the settings, each checked (`parseLayout`): what is malformed is dropped. */
+function readPanes(raw: unknown): Record<string, PaneLayout> {
+  const out: Record<string, PaneLayout> = {};
+  if (raw && typeof raw === 'object') {
+    for (const [id, v] of Object.entries(raw)) {
+      const l = parseLayout(v);
+      if (l) out[id] = l;
+    }
+  }
+  return out;
+}
+
 class AppState {
   ready = $state(false);
   /** Counts the `escouade://` links told (STORE-11): the view Plugins takes them (App.svelte). */
   deepLinks = $state(0);
+  /** How many plugins of the seed a gesture installed (ESC-373): the view Plugins reads them again. */
+  pluginsSeeded = $state(0);
   projects = $state<Project[]>([]);
   agents = $state<Record<string, Agent>>({});
   ui = $state<UiState>({ activeProject: null, view: 'project', selectedAgent: {} });
@@ -308,8 +350,10 @@ class AppState {
   engineModels = $state.raw<Partial<Record<EngineId, ToldModel[]>>>({});
   /** What the `claude` of each account told of its models: which take the mode `auto` (`modelTakes`). */
   accountModels = $state.raw<Record<string, AccountModels>>({});
-  /** The harnesses whose program is found: the only ones the interface offers (Réglages › Harness lists them all). */
+  /** The harnesses whose program is found: the only ones the interface offers (Réglages › Comptes et harness lists them all). */
   enginesFound = $state.raw<EngineId[]>([]);
+  /** The harnesses whose plugin is off or not installed (ESC-391): found perhaps, but not offered. */
+  enginesOff = $state.raw<EngineId[]>([]);
   version = $state('');
   filesOpen = $state(false);
   filesScope = $state<'agent' | 'project'>('agent');
@@ -366,6 +410,8 @@ class AppState {
   /** The last download of an update that failed, until one goes through: Réglages › À propos says it (choice 13). */
   updateTrouble = $state<{ version: string; message: string; page: string | null } | null>(null);
   focusComposer = $state(0);
+  /** Counts the asks to give the focus to the active pane when it is no agent (a terminal, a launch log, the editor). */
+  paneFocus = $state(0);
   /** The card of the agents' list to give the focus to (Ctrl+J), `n` counting the asks: the sidebar focuses it. */
   cardFocus = $state<{ id: string; n: number }>({ id: '', n: 0 });
   /** Ctrl+Shift+N: the menu « Harness » of « Nouvel agent » opens (the sidebar watches it). */
@@ -393,6 +439,11 @@ class AppState {
   prReviewOpen = $state<Record<string, number | null>>({});
   /** The word of each project's code host for a pull request (« PR », « MR » on GitLab), once read (ESC-65). */
   prWords = $state<Record<string, string>>({});
+  /**
+   * Each project's code host as last read (ESC-390): null for none, and then no « PR » tab in the sidebar nor
+   * « Environnements » on the board; absent while it is not read yet.
+   */
+  codeHosts = $state<Record<string, CodeHost | null>>({});
   /** The space of the Docs tab each project shows: the spec, the decisions or the documents. */
   docsSpace = $state<Record<string, DocsSpaceId>>({});
   /** The page of the spec each project shows; none: the map of the subjects. */
@@ -490,16 +541,60 @@ class AppState {
     if (!p) return null;
     const id = this.selectedLaunch[p.id];
     if (!id) return null;
+    return this.launchOf(p, id);
+  });
+
+  /** The launch command `id` of the project `p`: one of its own, or a step of an agent's recipe. */
+  launchOf(p: Project, id: string) {
     return (
       p.runCommands.find((c) => c.id === id) ??
       worktreeCommand(id, p, this.agents) ??
       testCommand(id, this.agents, this.shells[0]?.id ?? '')
     );
+  }
+
+  /**
+   * The split screen of the project on screen (ESC-392), without the contents gone since (an agent archived, a terminal
+   * closed); null: one content fills the work area.
+   */
+  panes = $derived.by(() => {
+    const p = this.project;
+    const raw = p ? this.ui.panes?.[p.id] : undefined;
+    return p && raw ? prunePanes(raw, (x) => this.paneExists(p, x)) : null;
+  });
+  /** The panes are on screen: the Kanban, the pull requests and the Docs cover them (they come back when those close). */
+  panesOn = $derived(this.ui.view === 'project' && !!this.panes && !this.boardOn && !this.docsOn && !this.prsOn);
+  /** The content shown alone in the work area, which a content dropped beside it splits (null: none, or a wide view). */
+  singleItem = $derived.by((): PaneItem | null => {
+    const p = this.project;
+    if (!p || this.ui.view !== 'project' || this.panesOn || this.boardOn || this.docsOn || this.prsOn) return null;
+    if (this.editorOn) return { kind: 'editor' };
+    if (this.runCommand) return { kind: 'launch', id: this.selectedLaunch[p.id]! };
+    if (this.term) return { kind: 'term', id: this.term.id };
+    if (this.agent) return { kind: 'agent', id: this.agent.id };
+    return null;
+  });
+  /** The editor is the content that has the keyboard: alone on screen, or in the active pane. */
+  editorActive = $derived(this.panesOn ? this.panes?.active === 'editor' : this.editorOn);
+  /** The keys that answer a request go to `agentId`'s: shown alone, or in the active pane. */
+  keysFor(agentId: string): boolean {
+    return !this.panesOn || this.panes?.active === `agent:${agentId}`;
+  }
+  /** The agents on screen: the one shown alone, or those of the panes. */
+  shownAgents = $derived.by((): string[] => {
+    if (this.panesOn && this.panes) return leaves(this.panes.root).flatMap((x) => (x.kind === 'agent' ? [x.id] : []));
+    return this.agentShown ? [this.agentShown.id] : [];
   });
 
   /** The agent whose conversation is on screen: its project's view, without the board, the editor, a run or a terminal over it. */
   agentShown = $derived(
-    this.ui.view === 'project' && !this.term && !this.runCommand && !this.editorOn && !this.boardOn && !this.prsOn ? this.agent : null,
+    this.panesOn && this.panes
+      ? this.panes.active.startsWith('agent:')
+        ? (this.agents[this.panes.active.slice(6)] ?? null)
+        : null
+      : this.ui.view === 'project' && !this.term && !this.runCommand && !this.editorOn && !this.boardOn && !this.prsOn
+        ? this.agent
+        : null,
   );
 
   /** What else goes when the backend removes an agent: what other modules (the launches' logs) hold of it. */
@@ -656,7 +751,7 @@ class AppState {
     this.projectPauses = s.projectPauses ?? {};
     this.accounts = s.accounts ?? [];
     this.attention = {};
-    this.ui = { ...s.ui, view: s.ui.view || 'project', selectedAgent: s.ui.selectedAgent ?? {} };
+    this.ui = { ...s.ui, view: s.ui.view || 'project', selectedAgent: s.ui.selectedAgent ?? {}, panes: readPanes(s.ui.panes) };
     this.overviewFrom = 'project';
     if (!this.ui.activeProject || !this.projects.some((p) => p.id === this.ui.activeProject)) {
       // Never the one the page crashed on (ESC-290): it is offered again, not opened.
@@ -674,6 +769,7 @@ class AppState {
     this.engineModels = s.engineModels ?? {};
     this.accountModels = s.accountModels ?? {};
     this.enginesFound = s.enginesFound ?? (s.claudeFound ? ['claude'] : []);
+    this.enginesOff = s.enginesOff ?? [];
     if (s.sources) setSources(s.sources);
     this.restartAt = s.restartAt ?? null;
     this.failedUpdate = s.failedUpdate ?? null;
@@ -772,6 +868,10 @@ class AppState {
         // The click of a review asked of the user.
         this.openPrs(e.projectId);
         break;
+      case 'pluginSeeded':
+        this.toast(e.text, 'ok');
+        this.pluginsSeeded++;
+        break;
       case 'toast':
         // For want of an account (ESC-128): with « Ajouter un compte… ».
         if (missingAccountOf(e.text)) this.refused(e.text);
@@ -807,6 +907,9 @@ class AppState {
       case 'environments':
         this.environments[e.environments.projectId] = e.environments;
         break;
+      case 'codeHosts':
+        this.readCodeHosts();
+        break;
       case 'boardIssue':
         if (e.issue) this.boardIssues[e.projectId] = e.issue;
         else delete this.boardIssues[e.projectId];
@@ -831,10 +934,14 @@ class AppState {
       case 'vectorsDownload':
         this.vectorsProgress = { done: e.done, total: e.total };
         break;
-      case 'git':
+      case 'git': {
+        const had = this.git[e.projectId]?.hasRemote;
         this.git[e.projectId] = e.git;
+        // A remote added or removed (`git remote add` in a terminal): its code host read again (ESC-390).
+        if (had !== undefined && had !== e.git.hasRemote && e.projectId in this.codeHosts) void this.readCodeHost(e.projectId);
         if (e.projectId === this.ui.activeProject) this.gitTick++;
         break;
+      }
       case 'usage':
         this.usage = e.usage;
         break;
@@ -846,6 +953,7 @@ class AppState {
         break;
       case 'accounts':
         this.settings = { ...this.settings, accounts: e.accounts, engineOrder: e.engineOrder };
+        this.readCodeHosts();
         break;
       case 'engineModels':
         this.engineModels = { ...this.engineModels, [e.engine]: e.models };
@@ -934,7 +1042,7 @@ class AppState {
 
   /** True when the user can see `id`'s conversation: selected, shown, window in front. */
   private onScreen(id: string): boolean {
-    return this.agentShown?.id === id && (typeof document === 'undefined' || document.hasFocus());
+    return this.shownAgents.includes(id) && (typeof document === 'undefined' || document.hasFocus());
   }
 
   /** An agent that comes to ask, finish or fail out of sight needs a look. */
@@ -962,11 +1070,13 @@ class AppState {
     if (declared && declared.map((e) => e.id).join() !== this.engines.map((e) => e.id).join()) this.engines = declared;
     const found = await api.enginesFoundNow().catch(() => null);
     if (found && found.join() !== this.enginesFound.join()) this.enginesFound = found;
+    // Their plugins (ESC-391): one turned off, removed or installed since.
+    const off = await api.enginesOffNow().catch(() => null);
+    if (off && off.join() !== this.enginesOff.join()) this.enginesOff = off;
   }
 
   markSeen() {
-    const id = this.agent?.id;
-    if (id && this.attention[id] && this.onScreen(id)) delete this.attention[id];
+    for (const id of this.shownAgents) if (this.attention[id] && this.onScreen(id)) delete this.attention[id];
   }
 
   /** Agents of `projectId` that need a look. */
@@ -1136,6 +1246,7 @@ class AppState {
       ed.source = a.worktree ? a.id : 'project';
       ed.places[ed.source] ??= { open: [], active: null, expanded: {} };
     }
+    this.paneShow(a.projectId, { kind: 'agent', id });
     this.persistUi();
     this.focusComposer++;
     this.chosen++;
@@ -1151,6 +1262,7 @@ class AppState {
       this.docs[p.id] = false;
       this.prs[p.id] = false;
       this.closeEditor(p.id);
+      this.paneShow(p.id, { kind: 'term', id });
     }
   }
 
@@ -1164,7 +1276,179 @@ class AppState {
       this.docs[p.id] = false;
       this.prs[p.id] = false;
       this.closeEditor(p.id);
+      this.paneShow(p.id, { kind: 'launch', id: commandId });
     }
+  }
+
+  // The split screen (ESC-392). The active pane's content is also the one selected the classic way (`selectAgent`,
+  // `selectTerm`, `selectLaunch`, the editor): what reads `app.agent`, `app.term`… follows the active pane.
+
+  /** A content of the project `p` still there to show. */
+  paneExists(p: Project, x: PaneItem): boolean {
+    if (x.kind === 'editor') return true;
+    if (x.kind === 'agent') return this.agents[x.id]?.projectId === p.id && !this.agents[x.id].archived;
+    if (x.kind === 'term') return this.terminals.some((t) => t.id === x.id && t.projectId === p.id);
+    return !!this.launchOf(p, x.id);
+  }
+
+  private setPanes(projectId: string, layout: PaneLayout | null) {
+    const all = { ...(this.ui.panes ?? {}) };
+    if (layout) all[projectId] = layout;
+    else delete all[projectId];
+    this.ui.panes = all;
+    this.persistUi();
+  }
+
+  /** Shows `item` in the active pane of the project's split screen, if it has one: a content already in a pane makes it active. */
+  private paneShow(projectId: string, item: PaneItem) {
+    const p = this.projects.find((x) => x.id === projectId);
+    const raw = this.ui.panes?.[projectId];
+    if (!p || !raw) return;
+    const l = prunePanes(raw, (x) => this.paneExists(p, x));
+    if (!l) return this.setPanes(projectId, null);
+    const k = itemKey(item);
+    if (paneHas(l, item)) {
+      if (l.active !== k || l !== raw) this.setPanes(projectId, { ...l, active: k });
+      return;
+    }
+    this.setPanes(projectId, placePane(l, activeItem(l), 'center', item));
+  }
+
+  /** The editor of a project ready to draw (its state made, on its project's source), without showing it alone. */
+  private editorReady(projectId: string) {
+    this.editor[projectId] ??= { on: false, source: 'project', places: {}, reveal: null };
+    const st = this.editor[projectId];
+    st.places[st.source] ??= { open: [], active: null, expanded: {} };
+  }
+
+  /** Shows `item` alone in the work area of the project on screen, the classic way. */
+  private showAlone(item: PaneItem) {
+    const p = this.project;
+    if (!p) return;
+    if (item.kind === 'editor') {
+      this.editorReady(p.id);
+      this.selectedTerm[p.id] = null;
+      this.selectedLaunch[p.id] = null;
+      this.editor[p.id].on = true;
+      return;
+    }
+    this.closeEditor(p.id);
+    if (item.kind === 'agent') this.selectAgent(item.id);
+    else if (item.kind === 'term') this.selectTerm(item.id);
+    else this.selectLaunch(item.id);
+  }
+
+  /** The pane of `key` becomes active: its content is the one selected. */
+  activatePane(key: string) {
+    const p = this.project;
+    const l = this.panes;
+    if (!p || !l) return;
+    const item = leaves(l.root).find((x) => itemKey(x) === key);
+    if (!item) return;
+    if (item.kind === 'agent') {
+      // Not `selectAgent`: a click in a conversation must not take the focus to its composer.
+      this.ui.selectedAgent[p.id] = item.id;
+      this.selectedTerm[p.id] = null;
+      this.selectedLaunch[p.id] = null;
+      this.setPanes(p.id, { ...l, active: key });
+    } else if (item.kind === 'term') this.selectTerm(item.id);
+    else if (item.kind === 'launch') this.selectLaunch(item.id);
+    else {
+      this.editorReady(p.id);
+      this.selectedTerm[p.id] = null;
+      this.selectedLaunch[p.id] = null;
+      this.setPanes(p.id, { ...l, active: key });
+    }
+  }
+
+  /**
+   * Opens `item` beside the pane `target` (on `zone`) or in its place (`center`): dropped from the sidebar, or
+   * « Ouvrir à côté ». Without a split screen, `target` is the content shown alone.
+   */
+  dropInPane(target: PaneItem, zone: PaneZone, item: PaneItem) {
+    const p = this.project;
+    if (!p || !this.paneExists(p, item)) return;
+    const next = placePane(this.panes, target, zone, item);
+    this.setPanes(p.id, next);
+    if (!next) return this.showAlone(item);
+    if (item.kind === 'editor') this.editorReady(p.id);
+    this.activatePane(itemKey(item));
+    if (item.kind === 'agent') this.focusComposer++;
+    else this.paneFocus++;
+  }
+
+  /** « Ouvrir à côté » (`right`) or « Ouvrir en dessous » (`bottom`) of the active pane, or of the content shown alone. */
+  openBeside(item: PaneItem, zone: 'right' | 'bottom' = 'right') {
+    const target = this.panes && this.panesOn ? activeItem(this.panes) : this.singleItem;
+    if (!target) {
+      if (item.kind !== 'editor') this.showAlone(item);
+      return;
+    }
+    this.dropInPane(target, zone, item);
+  }
+
+  /** Closes the pane `key`; the last one left fills the work area alone. */
+  closePaneOf(key: string) {
+    const p = this.project;
+    const l = this.panes;
+    if (!p || !l) return;
+    const next = closePane(l, key);
+    if (!next) {
+      const rest = leaves(l.root).find((x) => itemKey(x) !== key);
+      this.setPanes(p.id, null);
+      if (rest) this.showAlone(rest);
+      return;
+    }
+    this.setPanes(p.id, next);
+    this.activatePane(next.active);
+  }
+
+  /** Back to one content: the active pane's fills the work area. */
+  unsplit() {
+    const p = this.project;
+    const l = this.panes;
+    if (!p || !l) return;
+    const item = activeItem(l);
+    this.setPanes(p.id, null);
+    this.showAlone(item);
+  }
+
+  /** The handle of the split at `path` dragged to `ratio`. */
+  setPaneRatio(path: string, ratio: number) {
+    const p = this.project;
+    if (p && this.panes) this.setPanes(p.id, setPaneRatio(this.panes, path, ratio));
+  }
+
+  /** The split of the active pane turned the other way. */
+  flipPanes() {
+    const p = this.project;
+    if (p && this.panes) this.setPanes(p.id, flipPane(this.panes, this.panes.active));
+  }
+
+  /** The focus to the pane on `side` of the active one; false without a split screen. */
+  focusPane(side: Exclude<PaneZone, 'center'>): boolean {
+    const l = this.panes;
+    if (!l || !this.panesOn) return false;
+    const k = neighbor(l, l.active, side);
+    if (!k) return true;
+    this.activatePane(k);
+    if (k.startsWith('agent:')) this.focusComposer++;
+    else this.paneFocus++;
+    return true;
+  }
+
+  /** Ctrl+\ : without a split screen, the content shown alone and the next one not shown side by side; with one, back to one. */
+  toggleSplit() {
+    if (this.panesOn) return this.unsplit();
+    const p = this.project;
+    const single = this.singleItem;
+    if (!p || !single) return;
+    const shown = itemKey(single);
+    const next: PaneItem | undefined = [
+      ...this.projectAgents.map((a) => ({ kind: 'agent' as const, id: a.id })),
+      ...this.terminals.filter((t) => t.projectId === p.id).map((t) => ({ kind: 'term' as const, id: t.id })),
+    ].find((x) => itemKey(x) !== shown);
+    if (next) this.dropInPane(single, 'right', next);
   }
 
   /** Shows the board of a project in the main area, in place of the agents, a terminal, a launch log and the editor. */
@@ -1228,6 +1512,8 @@ class AppState {
    */
   openPrs(projectId = this.ui.activeProject) {
     if (!projectId) return;
+    // A project known to have no code host has no pull requests to show (ESC-390).
+    if (projectId in this.codeHosts && !hasTab(this.codeHosts[projectId], 'pullRequests')) return;
     this.ui.activeProject = projectId;
     this.ui.view = 'project';
     this.board[projectId] = false;
@@ -1241,6 +1527,28 @@ class AppState {
 
   closePrs(projectId = this.ui.activeProject) {
     if (projectId) this.prs[projectId] = false;
+  }
+
+  /**
+   * Reads a project's code host again (ESC-390). One gone while its views are open takes them away: the agents in
+   * place of the pull requests, the tickets in place of the environments.
+   */
+  async readCodeHost(projectId: string) {
+    let host: CodeHost | null;
+    try {
+      host = await api.projectCodeHost(projectId);
+    } catch {
+      return;
+    }
+    this.codeHosts[projectId] = host;
+    if (host) this.prWords[projectId] = host.word;
+    if (!hasTab(host, 'pullRequests') && this.prs[projectId]) this.closePrs(projectId);
+    if (!hasTab(host, 'deployments') && this.envView[projectId]) this.envView[projectId] = false;
+  }
+
+  /** The code hosts of the projects already read, read again (a host's plugin switched, an account connected). */
+  readCodeHosts() {
+    for (const id of Object.keys(this.codeHosts)) void this.readCodeHost(id);
   }
 
   /** A review as the backend has it; one that ends out of sight says so. */
@@ -1360,6 +1668,7 @@ class AppState {
         st.reveal = req.col ? { path, line: req.line, col: req.col, seq } : { path, line: req.line, seq };
       }
     }
+    this.paneShow(projectId, { kind: 'editor' });
     this.persistUi();
   }
 

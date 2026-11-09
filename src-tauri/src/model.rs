@@ -57,6 +57,10 @@ pub struct Settings {
     /// itself once it is at rest (`updates::busy`). Off, the user restarts it, or the update
     /// installs when the app is closed.
     pub auto_update: bool,
+    /// « Recevoir les versions bêta » (ESC-374): off, a version with a pre-release suffix
+    /// (`2.2.0-beta.1`) is never offered, and the check reads latest.json alone; on, it reads the
+    /// beta channel (beta.json) first (`updates::endpoints_for`, `updates::accepts`).
+    pub beta_updates: bool,
     /// What the external ticket systems' links do (their accounts are kept apart, with their
     /// secrets: `integrations::Accounts`).
     pub integrations: IntegrationSettings,
@@ -139,12 +143,12 @@ pub struct Settings {
     /// « Remote control pour tous les agents »: every agent, those of tickets too, is reachable
     /// from claude.ai (`AgentMeta::remote_control`, `RemoteSource::Global`).
     pub remote_control_all: bool,
-    /// « Nouveaux projets privés » (Réglages › Projets): a project added is private
+    /// « Nouveaux projets privés » (Réglages › Tous les projets): a project added is private
     /// (`Project::private`) from the start. Off by default.
     pub private_projects: bool,
-    /// « Thème » (Réglages › Application › Affichage): the window's look, the system's by default.
+    /// « Thème » (Réglages › Général › Apparence): the window's look, the system's by default.
     pub theme: ThemeChoice,
-    /// « Couleurs » (Réglages › Application › Affichage, PLG-7): the theme of a plugin the window takes,
+    /// « Couleurs » (Réglages › Général › Apparence, PLG-7): the theme of a plugin the window takes,
     /// `<plugin id>/<theme id>`; empty, Escouade's. Its values are filtered by the window
     /// (src/lib/plugin-themes.ts); a plugin switched off or gone leaves Escouade's colours, the choice kept.
     pub plugin_theme: String,
@@ -172,7 +176,7 @@ pub struct Settings {
     pub quota_projection: QuotaProjection,
     /// « Voix »: the dictation (`voice`).
     pub voice: VoiceSettings,
-    /// « Ton nom » (Réglages › Application › Équipe, ESC-190): written in the tickets shared with
+    /// « Ton nom » (Réglages › Général › Toi, ESC-190): written in the tickets shared with
     /// the team and in those this machine moves on; a project may have its own
     /// (`Project::user_name`). Empty until given: the name git knows stands in (ESC-243).
     pub user_name: String,
@@ -660,6 +664,7 @@ impl Default for Settings {
             quota_pause: 100,
             switch_at: 100,
             auto_update: true,
+            beta_updates: false,
             integrations: IntegrationSettings::default(),
             language: "system".into(),
             claude_language: "ui".into(),
@@ -2295,6 +2300,9 @@ pub struct UiState {
     pub selected_agent: HashMap<String, String>,
     /// "split" (conversation | files) or "" (classic).
     pub layout: String,
+    /// The split screen of each project (ESC-392), by project id: its tree of panes as the interface wrote it
+    /// (`lib/panes.ts`), kept whole and read back at the start. Absent: one content fills the work area.
+    pub panes: HashMap<String, Value>,
 }
 
 /// A choice of Claude Code's model picker (`initialize`): an alias or a full id, and the model
@@ -3094,6 +3102,9 @@ pub enum UiEvent {
         project_id: String,
         number: u64,
     },
+    /// The code hosts may have changed (a host's plugin switched on or off, installed, removed; an
+    /// account connected or gone): the window reads its projects' code host again (ESC-390).
+    CodeHosts,
     /// The environments of a project's host, as last read (ESC-67).
     Environments {
         environments: crate::deploys::ProjectEnvironments,
@@ -3125,6 +3136,12 @@ pub enum UiEvent {
     /// An address to open in the default browser (a pull request to finish on GitHub).
     OpenUrl {
         url: String,
+    },
+    /// A plugin of the seed installed for a gesture that needs it (ESC-373): the window says it in a line, and reads
+    /// the plugins again.
+    PluginSeeded {
+        id: String,
+        text: String,
     },
     /// Something done in the background the window says in passing (tickets imported by
     /// themselves).
@@ -3824,6 +3841,19 @@ mod tests {
         assert_eq!(serde_json::to_value(&s).unwrap()["autoUpdate"], json!(true));
         let off: Settings = serde_json::from_str(r#"{"autoUpdate":false}"#).unwrap();
         assert!(!off.auto_update);
+    }
+
+    #[test]
+    fn the_betas_are_off_until_the_user_asks_for_them() {
+        let s: Settings = serde_json::from_str(r#"{"autoUpdate":true}"#).unwrap();
+        assert!(!s.beta_updates);
+        assert!(!Settings::default().beta_updates);
+        assert_eq!(
+            serde_json::to_value(&s).unwrap()["betaUpdates"],
+            json!(false)
+        );
+        let on: Settings = serde_json::from_str(r#"{"betaUpdates":true}"#).unwrap();
+        assert!(on.beta_updates);
     }
 
     #[test]

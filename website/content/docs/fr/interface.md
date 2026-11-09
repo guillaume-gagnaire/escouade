@@ -47,7 +47,7 @@ L’infobulle, à droite de la tuile, donne le nom du projet et son raccourci (`
 | « Renommer… » | Ouvre la fenêtre « Renommer le projet ». |
 | « Couleur » | Une rangée de pastilles : la couleur du projet, qui teinte l’interface quand il est affiché. |
 | « Activer le worktree par agent » ou « Désactiver le worktree par agent » | Bascule l’option pour les nouveaux agents du projet. Voir les [worktrees](worktrees). |
-| « Réglages du projet… » | Ouvre les réglages, onglet Projets, sur ce projet. |
+| « Réglages du projet… » | Ouvre les réglages sur la page « Projet » de ce projet. |
 | « Ouvrir le dossier » | Ouvre le dossier du projet dans le gestionnaire de fichiers du système. |
 | « Monter » et « Descendre » | Déplacent la tuile d’une place (`Alt+↑`, `Alt+↓`). |
 | « Fermer le projet… » | Retire le projet de l’application après confirmation : ses agents, ses terminaux et ses lancements s’arrêtent. Son historique (conversations, tickets, réglages) est gardé, et `+` le rouvre ; une case de la confirmation permet de l’effacer aussi. Les fichiers et les worktrees sur le disque ne sont pas touchés. Voir [Réglages : Projets](settings-projects#projets-fermes). |
@@ -63,7 +63,7 @@ La largeur choisie vaut pour toute l’application et reste après un redémarra
 ### Les boutons de la barre
 
 - **« Vue d’ensemble »** (`Ctrl+Maj+A`) affiche les agents de tous les projets sur une page ; le même bouton, ou le même raccourci, la referme. Voir [suivre ses agents](overview).
-- **`+`** ouvre l’assistant « Nouveau projet ». Quand des projets ont été fermés, il ouvre d’abord un menu court : « Ajouter un projet… », les derniers projets fermés avec « Rouvrir », et « Tous les projets fermés… » (Réglages › Projets).
+- **`+`** ouvre l’assistant « Nouveau projet ». Quand des projets ont été fermés, il ouvre d’abord un menu court : « Ajouter un projet… », les derniers projets fermés avec « Rouvrir », et « Tous les projets fermés… » (Réglages › Tous les projets).
 - **« Stats »** affiche les statistiques de consommation ; un second clic revient au projet. Voir les [statistiques](stats).
 - **« Réglages »** (`Ctrl+,`) ouvre la fenêtre des réglages.
 
@@ -79,7 +79,7 @@ En haut, un sélecteur à deux boutons : « Agents » affiche la conversation 
 
 ### La liste des agents
 
-Sous le sélecteur, « Nouvel agent » (`Ctrl+N`) crée un agent sur le harness du projet. La flèche à sa droite, ou `Ctrl+Maj+N`, ouvre le menu « Harness » : chaque harness qu’Escouade connaît, numéroté (`1` à `4` le choisissent tant que le menu est ouvert), avec le compte, le modèle et le mode que prendrait son nouvel agent ; celui du projet est marqué « Celui du projet ». Un harness sans compte reste à sa place avec « Aucun compte » et « Ajouter un compte… » ; un harness introuvable est grisé avec l’endroit où régler son exécutable. Sous « Worktree », « Nouvel agent sans worktree » (ou « dans un worktree », selon le réglage du projet) et « Nouvel agent sur une branche… », puis « Harness par défaut du projet… ». Sans agent, la liste dit « Aucun agent. » avec un bouton « Créer un agent ».
+Sous le sélecteur, « Nouvel agent » (`Ctrl+N`) crée un agent sur le harness du projet. La flèche à sa droite, ou `Ctrl+Maj+N`, ouvre le menu « Harness » : chaque harness installé qui a un compte, numéroté (`1`, `2`… le choisissent tant que le menu est ouvert), avec le compte, le modèle et le mode que prendrait son nouvel agent ; celui du projet est marqué « Celui du projet ». Un harness introuvable ou sans compte n’y est pas : il se règle dans Réglages › Comptes et harness. Sous « Worktree », « Nouvel agent sans worktree » (ou « dans un worktree », selon le réglage du projet) et « Nouvel agent sur une branche… », puis « Harness par défaut du projet… ». Sans agent, la liste dit « Aucun agent. » avec un bouton « Créer un agent ».
 
 L’agent qui attend ta réponse passe en tête de la liste. Chaque agent est une carte, sans cadre ; celle de l’agent affiché est en relief :
 
@@ -189,7 +189,7 @@ L’onglet « PR et CI » (« MR et CI » sur GitLab) montre ce que l’[hé
 - **Les revues et commentaires**, en lecture : qui a approuvé ou demandé des changements, les commentaires avec leur fichier et leur ligne. Escouade n’y publie rien en ton nom.
 - **Les déploiements** de la branche, quand l’hébergeur les donne (GitHub, GitLab, Bitbucket Cloud) : l’environnement, son état et l’adresse de prévisualisation à ouvrir.
 
-Sans PR sur sa branche, l’onglet propose « Ouvrir une PR… », ou dit pourquoi il ne peut pas : pas de branche à l’agent, pas de dépôt distant, un hébergeur sans plugin, ou pas de compte, avec le lien vers Réglages › Intégrations. Dans un projet sans agent, « PR et CI du projet » ouvre la liste des PR ouvertes du projet, chacune avec l’état de sa CI ; un clic sur celle d’un agent ouvre cet agent. Un jeton refusé, la limite d’API de l’hébergeur (jusqu’à quelle heure) ou un hébergeur injoignable sont dits dans l’onglet, avec « Réessayer ».
+Sans PR sur sa branche, l’onglet propose « Ouvrir une PR… », ou dit pourquoi il ne peut pas : pas de branche à l’agent, pas de dépôt distant, un hébergeur sans plugin, ou pas de compte, avec le lien vers Réglages › Services connectés. Dans un projet sans agent, « PR et CI du projet » ouvre la liste des PR ouvertes du projet, chacune avec l’état de sa CI ; un clic sur celle d’un agent ouvre cet agent. Un jeton refusé, la limite d’API de l’hébergeur (jusqu’à quelle heure) ou un hébergeur injoignable sont dits dans l’onglet, avec « Réessayer ».
 
 ## Les deux dispositions
 
@@ -225,7 +225,7 @@ Voir [les quotas et le coût](usage) et [les branches](branches).
 
 ## Les réglages
 
-`Ctrl+,` ou le bouton « Réglages », en bas de la barre des projets, ouvre la fenêtre des réglages : les onglets à gauche, le contenu à droite. Un onglet modifié est marqué ; « Enregistrer » enregistre tous les onglets d’un coup et « Annuler » (ou `Échap`) ferme la fenêtre sans enregistrer. L’onglet « Comptes » fait exception : il enregistre à chaque changement. Les onglets « Projets », « Kanban » et « Intégrations » règlent un projet à la fois, choisi en haut ; « Réglages du projet… » dans le menu d’un projet ouvre la fenêtre sur ce projet.
+`Ctrl+,` ou le bouton « Réglages », en bas de la barre des projets, ouvre la fenêtre des réglages : la barre des pages à gauche, avec la recherche (`Ctrl+F`) en tête, les pages d’Escouade puis chaque projet ; une page à la fois à droite. Tout s’enregistre au geste, sans « Enregistrer ». Un point ambre dans la barre dit une page qui attend quelque chose (un harness sans compte, un jeton expiré, un plugin arrêté). « Réglages du projet… » dans le menu d’un projet ouvre la fenêtre sur sa page « Projet ». Voir [la fenêtre des réglages](settings-application).
 
 | Onglet | Page |
 |---|---|

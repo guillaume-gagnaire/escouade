@@ -2,16 +2,17 @@
   import { flushDrafts } from '../../lib/drafts';
   import { buffers } from '../../lib/editor/buffers.svelte';
   import { t } from '../../lib/i18n';
+  import { shownVersion } from '../../lib/updater';
   import { api } from '../../lib/ipc';
-  import type { SettingsTab } from '../../lib/settings.svelte';
+  import type { SettingsPage } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import Markdown from '../conv/Markdown.svelte';
   import Icon from '../Icon.svelte';
   import Modal from './Modal.svelte';
 
   // The update downloaded, which a restart installs; or, `installed`, the one installed since the last start: its notes.
-  // `back`: the settings' tab it was opened from (Réglages › À propos), which « Plus tard » goes back to.
-  let { version, notes, installed = false, back }: { version: string; notes: string; installed?: boolean; back?: SettingsTab } = $props();
+  // `back`: the settings' page it was opened from (Réglages › Général), which « Plus tard » goes back to.
+  let { version, notes, installed = false, back }: { version: string; notes: string; installed?: boolean; back?: SettingsPage } = $props();
 
   // The files « Quitter » asks about, which a restart would lose: saved first.
   const unsaved = $derived(buffers.unsaved);
@@ -30,7 +31,7 @@
     restarting = false;
   }
 
-  const close = () => (app.modal = back ? { kind: 'settings', tab: back, resume: true } : null);
+  const close = () => (app.modal = back ? { kind: 'settings', page: back, resume: true } : null);
 
   /** A notice's sentence, its subject in bold as the preview has it: what comes before its first colon. */
   function subject(text: string): [string, string] {
@@ -41,7 +42,13 @@
   }
 </script>
 
-<Modal title={installed ? t('shell.update.notes', { version }) : t('shell.update.ready', { version })} width={560} onclose={close}>
+<Modal
+  title={installed
+    ? t('shell.update.notes', { version: shownVersion(version) })
+    : t('shell.update.ready', { version: shownVersion(version) })}
+  width={560}
+  onclose={close}
+>
   {#snippet lead()}<span class="lead"><Icon name="download" /></span>{/snippet}
   {#if !installed && unsaved}
     {@const [b, rest] = subject(t('shell.update.saveFirst', { count: unsaved }))}

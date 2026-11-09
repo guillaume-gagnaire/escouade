@@ -1,8 +1,8 @@
 ---
 title: "Claude Code en plugin"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4 (INT-10.5)","docs/PLUGINS.md §8.27 (ESC-347)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-226","plugins/claude/README.md"]
-tickets: ["ESC-226","ESC-347","ESC-352","ESC-364"]
+sources: ["docs/PLUGINS.md §4 (INT-10.5)","docs/PLUGINS.md §8.27 (ESC-347)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-226","plugins/claude/README.en.md"]
+tickets: ["ESC-226","ESC-347","ESC-352","ESC-364","ESC-369"]
 decisions: []
 compared: null
 ---

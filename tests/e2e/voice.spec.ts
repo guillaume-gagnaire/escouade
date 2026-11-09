@@ -8,7 +8,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test, type App } from './fixture';
+import { addProject, expect, test, type App, openSettingsPage } from './fixture';
 
 /** The size of « base » in the catalog of the app (`voice::models::CATALOG`). */
 const BASE_SIZE = 147_951_465;
@@ -194,7 +194,7 @@ test.describe('dictation, the first time', () => {
     expect(fs.existsSync(dir) ? fs.readdirSync(dir) : []).toEqual([]);
     // Réglages › Voix: base is still to download.
     await page.keyboard.press('Control+,');
-    await page.getByRole('tab', { name: 'Voix' }).click();
+    await openSettingsPage(page, 'Voix');
     await expect(page.getByRole('radio', { name: /^base/ })).toBeChecked();
     await expect(page.getByRole('combobox', { name: 'Micro utilisé' })).toBeVisible();
   });

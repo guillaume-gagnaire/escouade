@@ -2,55 +2,86 @@ import { defineZone } from '../types';
 
 // The settings window and the settings of a project.
 export default defineZone('settings', {
-  tabs: {
-    app: { label: 'Application', desc: 'Theme, zoom, languages and written texts' },
-    claude: { label: 'Harness', desc: 'Each harness’s executables and versions, and what holds for them all' },
-    accounts: { label: 'Accounts', desc: 'Each harness’s accounts, their new agents’ settings, and what happens at the limit' },
-    plugins: { label: 'Plugins', desc: 'What they add to Escouade, where they come from and what they can do' },
-    mcp: { label: 'MCP server', desc: 'What Claude and the agents can do in Escouade, and what they did' },
-    notifications: { label: 'Notifications', desc: 'Visual and sound alerts' },
-    projects: { label: 'Projects', desc: 'Settings specific to each project' },
-    board: { label: 'Kanban', desc: 'Autopilot and approved tickets' },
-    integrations: {
-      label: 'Integrations',
-      desc: 'Kanban sources (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards) and code hosts',
+  pages: {
+    general: { label: 'General', desc: 'Theme, zoom, language, updates and what concerns you' },
+    agents: { label: 'Agents', desc: 'New agents, written texts, remote control and driving Escouade' },
+    accounts: {
+      label: 'Accounts and harnesses',
+      desc: 'This machine’s harnesses, their accounts, and what happens at the limit',
     },
-    terminals: { label: 'Terminals', desc: 'Shells available in the built-in terminals' },
-    network: {
-      label: 'Network',
-      desc: 'HTTP(S) proxy and TLS certificates for Claude Code, integrations, and updates',
+    services: {
+      label: 'Connected services',
+      desc: 'Code hosts and ticket sources (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards)',
     },
     voice: { label: 'Voice', desc: 'Dictation and voice conversation, on your machine or online' },
-    about: { label: 'About', desc: 'Version and local data' },
+    notifications: { label: 'Notifications', desc: 'What alerts you, and how' },
+    plugins: { label: 'Plugins', desc: 'What they add to Escouade, where they come from and what they can do' },
+    advanced: { label: 'Advanced', desc: 'Network, terminals, attachments, search by meaning and local data' },
+    about: { label: 'About', desc: 'Version, credits and links' },
+    project: { label: 'Project', desc: 'This project only: its name, its tile, its harness and its account' },
+    git: { label: 'Git and worktrees', desc: 'Its agents’ worktrees, their branches, their commits and its repositories' },
+    launch: { label: 'Launch', desc: 'The commands that launch this project, and where its pages open' },
+    board: { label: 'Kanban', desc: 'Approved tickets, the autopilot, the tickets’ agents and the workflow' },
+    tickets: { label: 'Imported tickets', desc: 'The sources linked to this project and how their statuses map' },
+    team: { label: 'Team', desc: 'The shared Kanban, the shared settings (.escouade.yml) and the shared memory' },
+    privacy: { label: 'Privacy', desc: 'What this project keeps to itself: its files, its accounts, its plugins' },
+    allProjects: { label: 'All projects', desc: 'What a new project starts with, and the closed projects' },
+  },
+
+  nav: {
+    search: 'Search settings',
+    projects: 'Projects',
+    results: 'Settings found',
+    none: 'No setting matches “{query}”',
+    inAdvanced: '{page} › Advanced',
+    alerts: {
+      noAccount: '{harness} has no account: no agent or ticket starts on it',
+      projectNoAccount: 'No {harness} account serves this project: its agents and tickets don’t start',
+      unread: 'Token unreadable in the keychain · {label}',
+      plugin: '{name}: {state}',
+    },
+  },
+
+  fold: {
+    advanced: 'Advanced',
+  },
+
+  groups: {
+    appearance: 'Appearance',
+    updates: 'Updates',
+    you: 'You',
+    newAgents: 'New agents',
+    remote: 'Remote control',
+    pilot: 'Drive Escouade',
+    network: 'Network',
+    terminals: 'Terminals',
+    localData: 'Local data',
   },
 
   modal: {
-    groupProject: 'Per project',
-    groupSystem: 'System',
-    changed: 'Modified, not saved yet',
-    saved: 'Settings saved',
     noProject: 'No project open.',
   },
 
   problem: {
-    projectName: 'The project “{name}” needs a name.',
-    command: 'Every launch command in “{name}” needs a name and a command line.',
-    worktrees: 'The worktrees folder or a branch prefix of “{name}” isn’t valid.',
+    projectName: 'A project needs a name: “{name}” stays saved.',
+    command: 'Each command needs a name and a command line: the saved commands stay as they were until none is missing one.',
+    number: 'A whole number, 0 or more: {value} stays saved.',
   },
 
   suggest: {
     nothing: 'Claude found no command to run for this project.',
     proposed: {
-      one: '1 command suggested: review it before saving.',
-      other: '{count} commands suggested: review them before saving.',
+      one: '1 command suggested: review it before replacing the commands.',
+      other: '{count} commands suggested: review them before replacing the commands.',
     },
     proposedLeftOne: {
-      one: '1 command suggested, 1 left out (invisible characters or too long): review it before saving.',
-      other: '{count} commands suggested, 1 left out (invisible characters or too long): review them before saving.',
+      one: '1 command suggested, 1 left out (invisible characters or too long): review it before replacing the commands.',
+      other: '{count} commands suggested, 1 left out (invisible characters or too long): review them before replacing the commands.',
     },
     proposedLeftMany: {
-      one: '1 command suggested, {refused} left out (invisible characters or too long): review it before saving.',
-      other: '{count} commands suggested, {refused} left out (invisible characters or too long): review them before saving.',
+      one: '1 command suggested, {refused} left out (invisible characters or too long): review it before replacing the commands.',
+      other:
+        '{count} commands suggested, {refused} left out (invisible characters or too long): review them before replacing the commands.',
     },
   },
 
@@ -100,7 +131,7 @@ export default defineZone('settings', {
     writing: 'Written texts',
     writer: 'Model for written texts',
     writerHelp:
-      'Name given to a new agent, proposed commit messages and pull request descriptions, worktree commands filled in automatically. Only the installed harnesses are offered.',
+      'Name given to a new agent, proposed commit messages and pull request descriptions, worktree commands filled in automatically. Only the harnesses that can be used are offered: program installed, plugin on and at least one account.',
     writerModel: 'Model',
     writerModelHelp:
       'A model of the providers connected to OpenCode, always given: without one, OpenCode would pick one itself. With no model at all, no written text.',
@@ -108,6 +139,12 @@ export default defineZone('settings', {
     writerModelNone: 'Default (read at the first text)',
   },
 
+  /** The harness already chosen in a menu « Harness » that cannot be used any more, and why (ESC-391). */
+  engineWhy: {
+    notFound: '{name} (program not found)',
+    pluginOff: '{name} (plugin off)',
+    noAccount: '{name} (no account)',
+  },
   claude: {
     models: {
       label: 'Models',
@@ -120,11 +157,13 @@ export default defineZone('settings', {
       missing: '{id} (harness missing)',
       ready: 'Ready',
       notConnected: 'No account',
+      notInstalled: 'Not installed',
       tooOld: 'Too old',
       unsupported: 'Not supported',
     },
     allHarnesses: 'All harnesses',
-    allHarnessesNote: 'New agents’ model, effort and mode are set account by account, in Settings › Accounts, where each account signs in.',
+    allHarnessesNote:
+      'New agents’ model, effort and mode are set account by account, in Settings › Accounts and harnesses, where each account signs in.',
     remoteOnly: '{harness} only: the other harnesses have no remote control.',
     install: 'Installation',
     installDesc: 'Not found on this machine: install it with this command, then set its path here if it isn’t on the PATH.',
@@ -144,7 +183,10 @@ export default defineZone('settings', {
     /** The version found of the saved path, alone: no word of the tested versions (ESC-159). */
     version: 'Version',
     versionUnknown: 'Unknown version: claude didn’t tell it.',
-    versionNotConnected: 'No account signed in: add or sign in an account of this harness in the Accounts tab.',
+    versionNotConnected: 'No account signed in: sign in one of its accounts below, or add one.',
+    installSeed: 'Install {harness}',
+    installing: 'Installing…',
+    notInstalledHint: 'Shipped with Escouade: it installs in one click, with no network, then its accounts are added here.',
     processes: 'Processes',
     autoResume: 'Auto-resume after the usage limit',
     autoResumeDesc: '“continue” is sent once the quota has reset',
@@ -230,6 +272,8 @@ export default defineZone('settings', {
     deployFailed: 'Deployment failed',
     channels: 'Channels',
     system: '{os} notifications when the app is not in the foreground',
+    /** Its name in the register (« Avancé », the search). */
+    systemName: 'System notifications',
     systemLabel: 'System notifications',
     sound: 'Sound',
     soundOn: 'Sound on',
@@ -286,6 +330,9 @@ export default defineZone('settings', {
     noUpdate: 'No update available.',
     autoUpdate: 'Install updates automatically',
     autoUpdateDesc: 'Escouade restarts itself when no agent is working and everything is saved.',
+    betaUpdates: 'Receive beta versions',
+    betaUpdatesDesc:
+      'Betas come before everyone else’s update and may have flaws. Unticked, Escouade stays on its beta until the stable version that follows it.',
     localData: 'Local data',
     telemetry: 'Usage statistics',
     telemetryDesc:
@@ -328,8 +375,7 @@ export default defineZone('settings', {
     remote: 'Remote control for this project’s agents',
     remoteDesc:
       'Every agent of this project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts each one’s claude process right away, and it stays running. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. To set an agent apart: right-click, “Turn off remote control”.',
-    remoteGlobal: 'On for all projects in Settings › Harness',
-    privateTitle: 'Privacy',
+    remoteGlobal: 'On for all projects in Settings › Agents',
     private: 'Private project',
     privateDesc:
       'The agents of the other projects do not see it through Escouade’s MCP server: not in the lists, nor by its name, its tickets or its agents. Its own agents see it alone. You, Claude outside Escouade and the app’s views see everything.',
@@ -411,12 +457,12 @@ export default defineZone('settings', {
     fillAuto: 'Fill in automatically',
     filling: 'Claude is reading the project…',
     fillWorktreesDesc:
-      'Claude reads the project (manifests, lockfiles, README…) without changing anything and suggests the commands. Review them before saving.',
+      'Claude reads the project (manifests, lockfiles, README…) without changing anything and suggests the commands. Review them before replacing yours.',
     fillLaunchDesc:
-      'Claude reads the project (manifests, scripts, docker-compose, README…) without changing anything and suggests the commands to run. Review them before saving.',
+      'Claude reads the project (manifests, scripts, docker-compose, README…) without changing anything and suggests the commands to run. Review them before replacing yours.',
     proposedWorktrees: 'Suggested worktree commands',
     proposedWorktreesNote:
-      'Claude’s suggestion: read each command in full. They replace both lists and, once saved, run on their own: the setup when each new worktree opens, the teardown before it is removed.',
+      'Claude’s suggestion: read each command in full. They replace both lists and, once taken, run on their own: the setup when each new worktree opens, the teardown before it is removed.',
     proposedLaunch: 'Suggested launch commands',
     proposedLaunchNote: 'Claude’s suggestion: read each command in full. They replace the ones in the list.',
     ignore: 'Ignore',
@@ -444,7 +490,6 @@ export default defineZone('settings', {
     subfolderHint: '(blank = project folder)',
     subfolderPlaceholder: 'e.g. apps/web',
     noCommandsYet: 'No commands yet.',
-    danger: 'Danger zone',
     close: 'Close the project',
     closeDesc:
       'The project leaves the app: its agents, terminals and launches stop. Its history (conversations, tickets, settings) is kept: adding this folder again brings it back. The files and worktrees on disk are not touched.',
@@ -496,7 +541,9 @@ export default defineZone('settings', {
     deleteN: 'Delete command {n}',
   },
   shared: {
-    title: '.escouade.yml',
+    title: 'Shared settings',
+    /** Under the title: the file they are in. */
+    file: '.escouade.yml',
     none: 'This repository has no .escouade.yml. Export this project’s settings to share them with your team: the file is committed with the code.',
     read: {
       one: 'Settings read from .escouade.yml (version {version}): {count} setting defined by the file.',

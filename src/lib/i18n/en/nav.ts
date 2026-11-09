@@ -42,9 +42,6 @@ export default defineZone('nav', {
     answered: '{name}: “{choice}”',
     harness: 'Harness',
     projectHarness: 'The project’s',
-    noAccount: 'No account',
-    addAccount: 'Add an account…',
-    harnessMissing: 'Not found: see Settings › Harness',
     worktree: 'Worktree',
     newAgentNoWorktreeDetail: 'In the project’s folder, on its current branch',
     newAgentInWorktreeDetail: 'On a branch of its own, in a folder apart',
@@ -186,7 +183,7 @@ export default defineZone('nav', {
       closedOn: 'Closed on {date}',
       reopen: 'Reopen',
       all: 'All closed projects…',
-      allDetail: 'Settings › Projects',
+      allDetail: 'Settings › All projects',
     },
   },
 

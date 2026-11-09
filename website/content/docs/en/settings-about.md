@@ -1,19 +1,20 @@
 # Settings: About
 
-The “About” tab of the settings shows Escouade’s version, looks for updates, says whether they install by themselves, sets the usage statistics, and shows where your local data lives.
+The “About” page shows Escouade’s version, the harnesses detected, the credits and the links. Since 2.2, checking for updates, installing them automatically and the usage statistics are on the “General” page, and the local data in “Advanced”: this page describes them in their new place.
 
-## Open the tab
+## Open the page
 
-Open the settings with `Ctrl+,` (`⌘,` on macOS), then choose “About” (“Version and local data”). These are the app’s settings, shared by all projects; they apply on “Save”. The version is also written at the bottom of the column of tabs, after the word “Escouade”, whichever tab is open.
+Open the settings with `Ctrl+,` (`⌘,` on macOS), then choose “About”, at the bottom of the bar. The version is written there after the word “Escouade”, whichever page is open. These are the app’s settings, shared by all projects, and they apply as you set them.
 
 ## Escouade
 
-The tab has a single group, “Escouade”, with eight lines, plus that of an update found, under “Install updates automatically”, until it is installed (see [“Check for updates”](#check-for-updates)).
+On the “General” page, the “Updates” group, with nine lines, plus that of an update found, under “Install updates automatically”, until it is installed (see [“Check for updates”](#check-for-updates)).
 
 | Line | What it shows or does | Default |
 |---|---|---|
-| “Escouade” followed by the version | The installed version. Below it, the harnesses Escouade finds on your machine (“Harnesses detected: Claude Code, Codex”), or “No harness found”. On the right, the “Check for updates” button. | — |
+| “Escouade” followed by the version | The installed version, followed by “(beta)” for a beta. Below it, the harnesses Escouade finds on your machine (“Harnesses detected: Claude Code, Codex”), or “No harness found”. On the right, the “Check for updates” button. | — |
 | “Install updates automatically” | “Escouade restarts itself when no agent is working and everything is saved.” | On |
+| “Receive beta versions” | “Betas come before everyone else’s update and may have flaws. Unticked, Escouade stays on its beta until the stable version that follows it.” Saved at once; ticked, it starts a check (see [“Beta versions”](updates#beta-versions)). | Off |
 | “Usage statistics” | “The features used, the version of Escouade and the system, under an id drawn at random: nothing that identifies you, nor your projects or your code.” On the right, the “In detail” button (it opens the [Privacy](/en/privacy/) page) and a switch. | Off until you accept the first-start question |
 | “Local data” | The folder where Escouade keeps its data: `~/.escouade/`. | — |
 | “Credits and licenses” | The components and voices Escouade ships, with their licenses. The “Open” button shows the list in your browser. | — |
@@ -21,17 +22,17 @@ The tab has a single group, “Escouade”, with eight lines, plus that of an up
 | “Discord” | “Ask a question, report a problem, follow what’s coming”. The “Join” button opens the invitation to Escouade’s Discord server. | — |
 | “Support Escouade” | “Escouade is free and open source: a coffee helps it move forward”. The “Buy a coffee” button opens the [payment page](support:) in your browser, for the amount you choose (see [“Support Escouade”](introduction#support-escouade)). | — |
 
-If an installed harness isn’t found, give its path in the [“Harness”](settings-claude-code) tab.
+If an installed harness isn’t found, give its path on the [“Accounts and harnesses”](settings-accounts) page.
 
 ## Check for updates
 
 Escouade looks on its own: once a few seconds after it starts, then five minutes after each check ends. The “Check for updates” button (it reads “Checking…” during the call) starts a check right away. With no newer version, a message says “No update available.”; if the check fails, an error message gives the reason. Only a check started with this button shows it right away: an automatic check waits for several failures in a row (see [“When it fails”](updates#when-it-fails)).
 
-A version found, by the button or by the automatic check, is downloaded right away and its signature is checked, then it waits. The tab shows it under “Install updates automatically”: “Escouade 1.8.0 available” with “Downloading…”, then “Escouade 1.8.0 ready” with the “Restart now” button and the “See what’s new” link, which unfolds its notes. During the countdown of an automatic restart, the line shows it too (“Restarting in 20 s”) with a “Later” button. If the download fails, the “Update 1.8.0” line takes its place and gives the reason (“Download failed: …”), with “Download in the browser” when it can; a newer version found later takes the place back.
+A version found, by the button or by the automatic check, is downloaded right away and its signature is checked, then it waits. The “General” page shows it under “Install updates automatically”: “Escouade 1.8.0 available” with “Downloading…”, then “Escouade 1.8.0 ready” with the “Restart now” button and the “See what’s new” link, which unfolds its notes. During the countdown of an automatic restart, the line shows it too (“Restarting in 20 s”) with a “Later” button. If the download fails, the “Update 1.8.0” line takes its place and gives the reason (“Download failed: …”), with “Download in the browser” when it can; a newer version found later takes the place back.
 
-When it’s ready, the status bar also shows a button, for example “Update 1.8.0 ready · Restart”. It, like the tab’s “Restart now”, opens a window, for example “Escouade 1.8.0 is ready”, which shows the version’s notes. “Restart now” installs the update. It’s grayed out while a file in the editor isn’t saved (the window tells you), and the window warns you when agents are working, since the restart interrupts their turn. “Later” closes the window without installing anything (opened from the tab, it takes you back to “About”).
+When it’s ready, the status bar also shows a button, for example “Update 1.8.0 ready · Restart”. It, like the tab’s “Restart now”, opens a window, for example “Escouade 1.8.0 is ready”, which shows the version’s notes. “Restart now” installs the update. It’s grayed out while a file in the editor isn’t saved (the window tells you), and the window warns you when agents are working, since the restart interrupts their turn. “Later” closes the window without installing anything (opened from “General”, it takes you back there).
 
-Checking and downloading go through the proxy of the [“Network”](settings-network) tab. The whole flow is in [updates](updates).
+Checking and downloading go through the proxy of [“Advanced › Network”](settings-network). The whole flow is in [updates](updates).
 
 ## Install updates automatically
 
@@ -48,7 +49,7 @@ Escouade is at rest when none of this is true:
 - a window is open over the app;
 - you’ve used the keyboard or the mouse in the window in the last 5 minutes (a hidden or minimized window doesn’t count).
 
-Once it’s at rest, Escouade warns you 30 seconds ahead: a system notification (not on Linux), even if system notifications are off in the [“Notifications”](settings-notifications) tab, says “Escouade is restarting to update” with a “Later” button, and the status bar counts down (“Restarting in 20 s”). “Later” postpones the restart by 30 minutes. It is in the status bar, next to the countdown, and in the notification on Windows only (the macOS notification has no button). If, during those 30 seconds, you pick the app back up or an agent starts working again, the restart is canceled.
+Once it’s at rest, Escouade warns you 30 seconds ahead: a system notification (not on Linux), even if system notifications are off on the [“Notifications”](settings-notifications) page, says “Escouade is restarting to update” with a “Later” button, and the status bar counts down (“Restarting in 20 s”). “Later” postpones the restart by 30 minutes. It is in the status bar, next to the countdown, and in the notification on Windows only (the macOS notification has no button). If, during those 30 seconds, you pick the app back up or an agent starts working again, the restart is canceled.
 
 If a version couldn’t install, Escouade no longer restarts by itself for it: you can try again by hand.
 
@@ -67,4 +68,4 @@ When you turn the switch off, the install id is forgotten, its `telemetry-id` fi
 
 ## Local data
 
-The “Local data” line shows `~/.escouade/`, in your home folder (`C:\Users\<you>\.escouade` on Windows). The tab only shows where the folder is: it has no button to open it, so open it with your file manager. What it holds is described in [local data](data).
+The “Local data” line shows `~/.escouade/`, in your home folder (`C:\Users\<you>\.escouade` on Windows). The page only shows where the folder is: it has no button to open it, so open it with your file manager. What it holds is described in [local data](data).

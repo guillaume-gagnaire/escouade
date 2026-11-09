@@ -45,7 +45,7 @@ fn started(data: &DataDir, seed: Seed) -> std::sync::Arc<Plugins> {
     let list = seed.revocations();
     let plugins = Plugins::load_seeded(data.clone(), "2.2.0", seed);
     plugins.apply_store(list, Default::default());
-    plugins.sync_seed(Lang::Fr);
+    plugins.sync_seed(Lang::Fr, &|_| true);
     plugins
 }
 
@@ -554,4 +554,47 @@ fn a_seed_with_nothing_changes_nothing() {
     assert!(seed.revocations().is_none());
     let plugins = started(&data_of("nothing"), Seed::default());
     assert!(plugins.seed_offers(Lang::Fr).is_empty());
+}
+
+#[test]
+fn the_committed_list_holds_the_first_hand_the_store_signed() {
+    let list =
+        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../plugins/seed.json"))
+            .unwrap();
+    let ids: Vec<String> = seed::parse(&list)
+        .unwrap()
+        .into_iter()
+        .map(|e| e.id)
+        .collect();
+    // Z2 (ESC-354): the harnesses, the sources and code hosts, the voices; Goose and those on request beside the registry.
+    for id in [
+        builtin::CLAUDE,
+        builtin::CODEX,
+        builtin::TRELLO,
+        builtin::GITHUB,
+        builtin::ACP,
+        crate::plugins::sort::GOOSE,
+        "dev.escouade.discord",
+        "dev.escouade.team-rules",
+    ] {
+        assert!(ids.iter().any(|i| i == id), "{id} is in the seed");
+        assert!(builtin::seeds(id), "{id} may be in the seed");
+    }
+    assert!(!builtin::seeds("dev.escouade.une-autre"));
+}
+
+#[test]
+fn a_build_of_development_without_the_seeds_files_runs_the_registrys_plugins() {
+    // The list names Trello; a folder without its files leaves it to the registry, as before the seed (ESC-354).
+    let empty = temp_dir("dev-no-files");
+    let seed = Seed::of_app(Some(empty.clone()));
+    assert!(!seed.has(TRELLO));
+    let plugins = started(&data_of("dev-no-files-data"), seed);
+    assert_eq!(
+        plugins.get(TRELLO, Lang::Fr).unwrap().origin,
+        Origin::Builtin
+    );
+    // Its files there: the seed takes it.
+    std::fs::create_dir_all(empty.join(TRELLO)).unwrap();
+    assert!(Seed::of_app(Some(empty)).has(TRELLO));
 }

@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-gitea"
-version = "2.2.0"
+version = "2.2.2"
 description = "Le plugin Gitea et Forgejo livré avec Escouade : les PR, la CI (statuts et Actions), les relectures et le merge de Gitea, de Forgejo et de Codeberg"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"

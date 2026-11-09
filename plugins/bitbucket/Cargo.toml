@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-bitbucket"
-version = "2.2.1"
+version = "2.2.3"
 description = "Le plugin Bitbucket Cloud d'Escouade : les PR, les statuts, les pipelines et leurs journaux, les commentaires et les déploiements"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"

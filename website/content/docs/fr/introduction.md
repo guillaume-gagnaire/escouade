@@ -69,7 +69,7 @@ Un worktree est une copie de travail séparée de ton dépôt, sur sa propre bra
 
 ### Compte Claude
 
-Un compte Claude est un dossier de configuration de Claude Code, avec sa connexion. Il n’y en a aucun au départ : dans Réglages › Comptes, ajoute ton compte habituel (« Le compte de la machine », nommé « Principal », lancé comme avant), ou un nouveau (un perso, un pro). Chaque agent reste sur son compte. Voir [les comptes Claude](accounts).
+Un compte Claude est un dossier de configuration de Claude Code, avec sa connexion. Il n’y en a aucun au départ : dans Réglages › Comptes et harness, ajoute ton compte habituel (« Le compte de la machine », nommé « Principal », lancé comme avant), ou un nouveau (un perso, un pro). Chaque agent reste sur son compte. Voir [les comptes Claude](accounts).
 
 ### Vue d’ensemble
 
@@ -85,7 +85,7 @@ La « Vue d’ensemble » est une page qui liste les agents de tous les projet
 
 Le détail des prérequis est dans l’[installation](installation).
 
-L’interface existe en français et en anglais. Par défaut, elle suit la langue du système : français si le système est en français, anglais sinon. Réglages › Application permet de choisir l’une ou l’autre sans redémarrer, et de choisir à part la langue des textes que Claude rédige (messages de commit, descriptions de pull request, commentaires publiés dans Jira, Trello, GitHub, Linear, ClickUp, GitLab et Azure Boards, consignes données aux agents), car beaucoup d’équipes commitent en anglais avec une interface en français. Voir les [réglages de l’application](settings-application).
+L’interface existe en français et en anglais. Par défaut, elle suit la langue du système : français si le système est en français, anglais sinon. Réglages › Général permet de choisir l’une ou l’autre sans redémarrer, et de choisir à part la langue des textes que Claude rédige (messages de commit, descriptions de pull request, commentaires publiés dans Jira, Trello, GitHub, Linear, ClickUp, GitLab et Azure Boards, consignes données aux agents), car beaucoup d’équipes commitent en anglais avec une interface en français. Voir les [réglages de l’application](settings-application).
 
 ## Plan de la documentation
 
@@ -94,7 +94,7 @@ L’interface existe en français et en anglais. Par défaut, elle suit la langu
 - **Code et Git** : [Git et commits](git), puis les worktrees, les branches, les [hébergeurs de code](code-hosts), l’éditeur, les terminaux et le lancement du projet.
 - **Kanban et automatisation** : [le Kanban](board), puis le pilote auto, les tests et la validation des tickets, les intégrations et le serveur MCP.
 - **Comptes et consommation** : les [comptes Claude](accounts), puis les quotas, le coût et les statistiques.
-- **Réglages** : chaque onglet de la fenêtre des réglages, option par option, à partir de [Application](settings-application).
+- **Réglages** : chaque page de la fenêtre des réglages, option par option, à partir de [la fenêtre et Général](settings-application).
 - **Référence** : les [raccourcis clavier](shortcuts), les données locales, les mises à jour et le [dépannage](troubleshooting).
 
 ## Soutenir Escouade

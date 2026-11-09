@@ -8,7 +8,7 @@ import { fileSearches } from './editor/search.svelte';
 import { trees } from './editor/trees.svelte';
 import { locale, setLang } from './i18n';
 import { app } from './state.svelte';
-import type { InitialState, LaunchState, UiEvent } from './types';
+import type { CodeHost, InitialState, LaunchState, UiEvent } from './types';
 
 /** Starts the app against a fake backend and returns a function pushing backend events. */
 async function start(over: Partial<InitialState> = {}, handlers: Record<string, (args: any) => unknown> = {}) {
@@ -311,6 +311,33 @@ describe('AppState', () => {
     expect(app.git.p2.behind).toBe(2);
     emit({ type: 'git', projectId: 'p1', git });
     expect(app.gitTick).toBe(before + 1);
+  });
+
+  it('reads the code host again when a remote comes or goes, the plugins or the accounts change (ESC-390)', async () => {
+    let host: CodeHost | null = null;
+    const { emit, backend } = await start({}, { project_code_host: () => host });
+    const reads = () => backend.called('project_code_host').length;
+    await app.readCodeHost('p1');
+    expect(app.codeHosts.p1).toBeNull();
+    // `git remote add` in a terminal: the project has a remote now, its host is read again.
+    emit({ type: 'git', projectId: 'p1', git: gitInfo({ hasRemote: false }) });
+    expect(reads()).toBe(1);
+    host = { kind: 'github', name: 'GitHub', word: 'PR', pullRequests: true, deployments: true };
+    emit({ type: 'git', projectId: 'p1', git: gitInfo({ hasRemote: true }) });
+    await vi.waitFor(() => expect(app.codeHosts.p1).toEqual(host));
+    // The same git again: no read.
+    emit({ type: 'git', projectId: 'p1', git: gitInfo({ hasRemote: true }) });
+    expect(reads()).toBe(2);
+    // A plugin switched off: read again, its views closed.
+    app.openPrs('p1');
+    app.envView.p1 = true;
+    expect(app.prsOn).toBe(true);
+    host = null;
+    emit({ type: 'codeHosts' });
+    await vi.waitFor(() => expect(app.prsOn).toBe(false));
+    expect(app.envView.p1).toBe(false);
+    // A project never read is not read for it.
+    expect(backend.called('project_code_host').every((c) => c.args.projectId === 'p1')).toBe(true);
   });
 
   it('focuses the agent a notification was clicked for', async () => {
@@ -1140,6 +1167,14 @@ describe('board', () => {
     // An older backend sends none.
     await start();
     expect(app.accounts).toEqual([]);
+  });
+
+  it('says a plugin of the seed a gesture installed, and has the plugins read again (ESC-373)', async () => {
+    const { emit } = await start();
+    const before = app.pluginsSeeded;
+    emit({ type: 'pluginSeeded', id: 'dev.escouade.codex', text: 'Plugin Codex installé' });
+    expect(app.toasts.at(-1)).toMatchObject({ text: 'Plugin Codex installé', kind: 'ok' });
+    expect(app.pluginsSeeded).toBe(before + 1);
   });
 
   it('knows why a board starts nothing, from the start and as the backend tells it', async () => {

@@ -3024,9 +3024,10 @@ fn no_claude() -> String {
     crate::engine::missing_line(crate::model::EngineId::CLAUDE, crate::i18n::Lang::Fr)
 }
 
-/// The block of a ticket whose agent got no message: Claude Code is nowhere to be found.
+/// The block of a ticket whose agent got no message: Claude Code is nowhere to be found, cut as a block's reason is
+/// (`board::first_line`, 200 bytes: the Linux message, its install command and « Comptes et harness », is longer).
 fn no_claude_block() -> String {
-    format!("Erreur : {}", no_claude())
+    format!("Erreur : {}", crate::text::truncate(&no_claude(), 200))
 }
 
 /// What a tool says when its message failed after the ticket moved.
@@ -3057,7 +3058,12 @@ async fn a_message_that_fails_after_the_ticket_moved_says_so_and_the_ticket_is_b
             logged.outcome,
             logged.message.as_deref()
         ),
-        ("reject_ticket", "error", Some(said.as_str()))
+        // The activity keeps an error of 300 characters at most.
+        (
+            "reject_ticket",
+            "error",
+            Some(super::activity::clip(&said).as_str())
+        )
     );
     let moved = stored(&h, &review.id);
     assert_eq!(

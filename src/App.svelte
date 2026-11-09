@@ -65,6 +65,9 @@
   import TitleBar from './components/TitleBar.svelte';
   import Toasts from './components/Toasts.svelte';
   import Welcome from './components/Welcome.svelte';
+  import PaneDrop from './components/panes/PaneDrop.svelte';
+  import PaneGrid from './components/panes/PaneGrid.svelte';
+  import { itemKey } from './lib/panes';
 
   let initError = $state<string | null>(null);
 
@@ -92,7 +95,9 @@
 
   // « Couleurs » (PLG-7): the plugins read once the settings are, then the theme chosen among those of the plugins on,
   // at once and as either changes; none (or its plugin off or gone), Escouade's colours.
+  // Read again when a gesture installed a plugin of the seed (ESC-373).
   $effect(() => {
+    void app.pluginsSeeded;
     if (app.ready) untrack(() => void plugins.load());
   });
   $effect(() => {
@@ -137,6 +142,7 @@
     void app.boardOn;
     void app.docsOn;
     void app.ui.view;
+    void app.panes;
     app.markSeen();
   });
 
@@ -190,65 +196,71 @@
     {:else if app.project}
       {@const project = app.project}
       <Sidebar {project} />
-      <div class="work">
-        {#if app.boardOn}
-          {#key project.id}
-            <Board {project} />
-          {/key}
-        {:else if app.prsOn}
-          {#key project.id}
-            <PrsView {project} />
-          {/key}
-        {:else if app.docsOn}
-          {#key project.id}
-            <DocsView {project} />
-          {/key}
-        {:else if app.editorOn}
-          {#key project.id}
-            <EditorView {project} />
-          {/key}
-        {:else if app.runCommand}
-          <RunView cmd={app.runCommand} {project} />
-        {:else if app.term}
-          <TerminalView term={app.term} {project} />
-        {:else if app.agent}
-          {#key app.agent.id}
-            <!-- One of its subagents' conversation (ESC-13), or the view of one of its background tasks (ESC-14), in place of its own. -->
-            {#if app.subView[app.agent.id]}
-              {#key app.subView[app.agent.id]}
-                <SubagentView agent={app.agent} {project} call={app.subView[app.agent.id] ?? ''} />
-              {/key}
-            {:else if app.taskView[app.agent.id]}
-              {#key app.taskView[app.agent.id]}
-                <TaskView agent={app.agent} task={app.taskView[app.agent.id] ?? ''} />
-              {/key}
-            {:else}
-              <Conversation agent={app.agent} {project} />
+      {#if app.panesOn && app.panes}
+        <!-- The split screen (ESC-392): each pane its own panel on the frame. -->
+        <div class="work panes" data-testid="panes"><PaneGrid node={app.panes.root} {project} /></div>
+      {:else}
+        <!-- What is shown alone carries its key: a content dragged from the sidebar is dropped beside it (ESC-392). -->
+        <div class="work" data-pane-key={app.singleItem ? itemKey(app.singleItem) : undefined}>
+          {#if app.boardOn}
+            {#key project.id}
+              <Board {project} />
+            {/key}
+          {:else if app.prsOn}
+            {#key project.id}
+              <PrsView {project} />
+            {/key}
+          {:else if app.docsOn}
+            {#key project.id}
+              <DocsView {project} />
+            {/key}
+          {:else if app.editorOn}
+            {#key project.id}
+              <EditorView {project} />
+            {/key}
+          {:else if app.runCommand}
+            <RunView cmd={app.runCommand} {project} />
+          {:else if app.term}
+            <TerminalView term={app.term} {project} />
+          {:else if app.agent}
+            {#key app.agent.id}
+              <!-- One of its subagents' conversation (ESC-13), or the view of one of its background tasks (ESC-14), in place of its own. -->
+              {#if app.subView[app.agent.id]}
+                {#key app.subView[app.agent.id]}
+                  <SubagentView agent={app.agent} {project} call={app.subView[app.agent.id] ?? ''} />
+                {/key}
+              {:else if app.taskView[app.agent.id]}
+                {#key app.taskView[app.agent.id]}
+                  <TaskView agent={app.agent} task={app.taskView[app.agent.id] ?? ''} />
+                {/key}
+              {:else}
+                <Conversation agent={app.agent} {project} />
+              {/if}
+            {/key}
+            {#if app.split}
+              <SidePanel {project} agent={app.agent} docked />
+            {:else if app.filesOpen}
+              <SidePanel {project} agent={app.agent} />
             {/if}
-          {/key}
-          {#if app.split}
-            <SidePanel {project} agent={app.agent} docked />
-          {:else if app.filesOpen}
-            <SidePanel {project} agent={app.agent} />
+          {:else}
+            <div class="noagent">
+              <span>{t('shell.app.noAgent')}</span>
+              <button class="btn primary" onclick={() => app.newAgent()}><Icon name="plus" size={14} />{t('shell.app.newAgent')}</button>
+              <!-- The project's open pull requests (ESC-305), in the side panel's « PR et CI » tab without an agent. -->
+              <button
+                class="btn ghost"
+                onclick={() => {
+                  app.panelTab = 'hosts';
+                  app.filesOpen = true;
+                }}><Icon name="pr" size={14} />{t('shell.app.projectPrs')}</button
+              >
+            </div>
+            {#if app.split || app.filesOpen}
+              <SidePanel {project} agent={null} />
+            {/if}
           {/if}
-        {:else}
-          <div class="noagent">
-            <span>{t('shell.app.noAgent')}</span>
-            <button class="btn primary" onclick={() => app.newAgent()}><Icon name="plus" size={14} />{t('shell.app.newAgent')}</button>
-            <!-- The project's open pull requests (ESC-305), in the side panel's « PR et CI » tab without an agent. -->
-            <button
-              class="btn ghost"
-              onclick={() => {
-                app.panelTab = 'hosts';
-                app.filesOpen = true;
-              }}><Icon name="pr" size={14} />{t('shell.app.projectPrs')}</button
-            >
-          </div>
-          {#if app.split || app.filesOpen}
-            <SidePanel {project} agent={null} />
-          {/if}
-        {/if}
-      </div>
+        </div>
+      {/if}
     {:else}
       <div class="work"><Welcome /></div>
     {/if}
@@ -260,9 +272,9 @@
   <NewProjectModal />
 {:else if app.modal?.kind === 'settings'}
   <SettingsModal
-    tab={app.modal.tab}
+    page={app.modal.page}
     projectId={app.modal.projectId}
-    section={app.modal.section}
+    at={app.modal.at}
     resume={app.modal.resume}
     suggest={app.modal.suggest}
   />
@@ -328,6 +340,7 @@
   <ConversationOverlay />
 {/if}
 <ContextMenu />
+<PaneDrop />
 <Toasts />
 <IconSprite />
 
@@ -374,6 +387,13 @@
       0 0 0 1px var(--line),
       0 8px 24px -6px rgba(0, 0, 0, calc(0.5 * var(--shade)));
     overflow: hidden;
+  }
+  /* The split screen: no panel of its own, the panes are (and their ring shows past their edge). */
+  .work.panes {
+    background: none;
+    box-shadow: none;
+    border-radius: 0;
+    overflow: visible;
   }
   .fatal {
     flex: 1;

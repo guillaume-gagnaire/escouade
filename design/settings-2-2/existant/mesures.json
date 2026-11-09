@@ -1,0 +1,171 @@
+{
+  "app": {
+    "visible": 565,
+    "total": 1090,
+    "screens": 1.9,
+    "groups": [
+      "Affichage",
+      "Textes rédigés",
+      "Langue",
+      "Équipe"
+    ],
+    "rows": 9,
+    "controls": 19
+  },
+  "claude": {
+    "visible": 565,
+    "total": 2350,
+    "screens": 4.2,
+    "groups": [
+      "Claude Code",
+      "Codex",
+      "Copilot CLI",
+      "OpenCode",
+      "Cursor CLI",
+      "Mistral Vibe",
+      "Antigravity CLI",
+      "Gemini CLI",
+      "Tous les harness",
+      "Pièces jointes"
+    ],
+    "rows": 21,
+    "controls": 19
+  },
+  "accounts": {
+    "visible": 565,
+    "total": 1111,
+    "screens": 2,
+    "groups": [
+      "Comptes Claude Code",
+      "Quand un quota est épuisé",
+      "Quotas"
+    ],
+    "rows": 3,
+    "controls": 35
+  },
+  "voice": {
+    "visible": 565,
+    "total": 1538,
+    "screens": 2.7,
+    "groups": [
+      "Transcription",
+      "Conversation"
+    ],
+    "rows": 11,
+    "controls": 26
+  },
+  "notifications": {
+    "visible": 565,
+    "total": 929,
+    "screens": 1.6,
+    "groups": [
+      "Me prévenir pour",
+      "Pull requests et déploiements",
+      "Canaux",
+      "Son"
+    ],
+    "rows": 3,
+    "controls": 15
+  },
+  "projects": {
+    "visible": 522,
+    "total": 4705,
+    "screens": 9,
+    "groups": [
+      "Identité",
+      "Remote control",
+      "Confidentialité",
+      "Workflow",
+      "Git",
+      "Worktrees",
+      "Lancement",
+      ".escouade.yml",
+      "Mémoire partagée",
+      "Kanban partagé",
+      "Zone sensible",
+      "Tous les projets",
+      "Nouveaux projets"
+    ],
+    "rows": 32,
+    "controls": 58
+  },
+  "board": {
+    "visible": 522,
+    "total": 1374,
+    "screens": 2.6,
+    "groups": [
+      "Quand je valide un ticket « À tester »",
+      "Avant et après",
+      "Pilote auto",
+      "Agents"
+    ],
+    "rows": 12,
+    "controls": 30
+  },
+  "integrations": {
+    "visible": 522,
+    "total": 1534,
+    "screens": 2.9,
+    "groups": [
+      "Instances connectées",
+      "Comptes connectés",
+      "Sources liées à demo-api",
+      "Synchronisation",
+      "Import automatique"
+    ],
+    "rows": 6,
+    "controls": 16
+  },
+  "plugins": {
+    "visible": 565,
+    "total": 565,
+    "screens": 1,
+    "groups": [
+      "(sans titre)"
+    ],
+    "rows": 0,
+    "controls": 1
+  },
+  "mcp": {
+    "visible": 565,
+    "total": 565,
+    "screens": 1,
+    "groups": [
+      "Serveur MCP",
+      "Activité MCP"
+    ],
+    "rows": 1,
+    "controls": 2
+  },
+  "terminals": {
+    "visible": 565,
+    "total": 565,
+    "screens": 1,
+    "groups": [
+      "Chemins"
+    ],
+    "rows": 3,
+    "controls": 3
+  },
+  "network": {
+    "visible": 565,
+    "total": 565,
+    "screens": 1,
+    "groups": [
+      "Proxy",
+      "Certificats"
+    ],
+    "rows": 4,
+    "controls": 4
+  },
+  "about": {
+    "visible": 565,
+    "total": 677,
+    "screens": 1.2,
+    "groups": [
+      "Escouade"
+    ],
+    "rows": 7,
+    "controls": 9
+  }
+}

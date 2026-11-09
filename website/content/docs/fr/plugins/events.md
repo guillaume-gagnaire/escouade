@@ -130,7 +130,7 @@ Le plugin Discord, en entier : un webhook pour un ticket passé « À tester �
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.discord",
   "name": "Discord",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "description": {
     "fr": "Les tickets à tester et les agents qui attendent, dans un salon Discord : un webhook, sans code.",
     "en": "Tickets to test and agents waiting, in a Discord channel: a webhook, no code."
@@ -166,7 +166,8 @@ Le plugin Discord, en entier : un webhook pour un ticket passé « À tester �
         }
       }
     ]
-  }
+  },
+  "store": { "docs": "docs" }
 }
 ```
 

@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, test, openSettingsPage, closeSettings } from './fixture';
 
 const SHOTS = process.env.ESCOUADE_E2E_SHOTS;
 
@@ -78,9 +78,9 @@ test('the Docs tab imports the spec found, shows its subjects, a page and its ga
 
   await addProject(page, app.repo, { firstAgent: false });
 
-  // Agents · Kanban · PR (ESC-65) · Docs; the three spaces under Docs.
+  // Agents · Kanban · Docs: no « PR », the remote is a folder on no code host (ESC-390); the three spaces under Docs.
   const tabs = page.getByRole('group', { name: 'Vue du projet' });
-  await expect(tabs.getByRole('button')).toHaveCount(4);
+  await expect(tabs.getByRole('button')).toHaveText([/^Agents/, /^Kanban/, 'Docs']);
   await tabs.getByRole('button', { name: 'Docs' }).click();
   const spaces = page.getByRole('region', { name: 'Espaces des docs' });
   for (const s of ['Spécification', 'Décisions', 'Documents'])
@@ -184,13 +184,13 @@ test('the docs branch is set in the project’s settings: current, or fixed', as
   await expect(page.locator('[data-docs-share]')).toContainText('Docs sur la branche main');
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(dialog, 'Git et worktrees');
   const group = dialog.getByRole('group', { name: 'Branche des docs' });
   await group.scrollIntoViewIfNeeded();
   await expect(group.getByRole('button', { name: 'La branche courante' })).toHaveAttribute('aria-pressed', 'true');
   await group.getByRole('button', { name: 'Une branche fixe' }).click();
   await dialog.getByRole('textbox', { name: 'Nom de la branche des docs' }).fill('docs');
-  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
+  await closeSettings(dialog);
   await expect(dialog).toHaveCount(0);
   await expect(page.locator('[data-docs-share]')).toContainText('Docs sur la branche docs');
   // The fixed branch, made by Escouade in a worktree of its own: the project's folder stays on main.

@@ -60,7 +60,7 @@ Everything that goes out goes through `net/fetch`, `net/stream` or `ws/open`: se
 
 A refused call answers `-32003`. A call that fails on the way answers `-32004`.
 
-**Settings › Network.** The proxy, its exclusions and unverified certificates are followed, and a change reaches the next call, without restarting the plugin. Through a proxy, only the name is judged, and the journal says so.
+**Settings › Advanced › Network.** The proxy, its exclusions and unverified certificates are followed, and a change reaches the next call, without restarting the plugin. Through a proxy, only the name is judged, and the journal says so.
 
 **The window** says “Connects to”, then each host, with “enforced by Escouade”.
 

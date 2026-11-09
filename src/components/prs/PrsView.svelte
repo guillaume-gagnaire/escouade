@@ -138,7 +138,7 @@
       {#if f.kind === 'refused' || f.kind === 'rateLimit' || f.kind === 'unreachable'}<span class="why">{f.message}</span>{/if}
     </div>
     {#if f.kind === 'refused' || f.settings}
-      <button class="btn" onclick={() => (app.modal = { kind: 'settings', tab: 'integrations' })}>{t('prs.view.noPr.settings')}</button>
+      <button class="btn" onclick={() => (app.modal = { kind: 'settings', page: 'services' })}>{t('prs.view.noPr.settings')}</button>
     {/if}
     {#if f.kind !== 'unavailable'}
       <button class="btn" onclick={() => void load()}><Icon name="restart" size={14} />{t('prs.view.retry')}</button>

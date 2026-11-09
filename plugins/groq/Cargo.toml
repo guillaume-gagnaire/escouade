@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-groq"
-version = "2.2.1"
+version = "2.2.3"
 description = "Le plugin Groq d'Escouade : le service de voix (dictée, voix de l'agent)"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"

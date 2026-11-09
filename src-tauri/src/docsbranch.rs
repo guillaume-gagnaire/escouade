@@ -14,6 +14,7 @@
 //! The text extracted from the documents is kept in the data folder too (`Space::text_dir`).
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use anyhow::{bail, Result};
 use tauri::Runtime;
@@ -174,7 +175,11 @@ impl<R: Runtime> Core<R> {
         let by = self.me_in(&project).name;
         let space = self.docs_space(project_id, None).await?;
         let was = space.decision(reference)?;
-        let d = space.decision_accept(reference, &by, &Register::default(), None)?;
+        // Never a number a validation under way gave, not merged yet (ESC-377).
+        let numbers = self.decision_numbers(project_id);
+        let given = numbers.lock().await;
+        let d = space.decision_accept(reference, &by, &reserved(&given), None)?;
+        drop(given);
         self.docs_numbered(project_id, &was, &d);
         Ok(d)
     }
@@ -206,12 +211,17 @@ impl<R: Runtime> Core<R> {
         if mine.is_empty() {
             return Ok(Vec::new());
         }
+        // One validation of the project at a time from here (ESC-377), and after the numbers the
+        // others under way gave, not merged yet: two at once never read the same register.
+        let numbers = self.decision_numbers(project_id);
+        let mut given = numbers.lock().await;
         // Where it goes: the docs of the project as they are (the fixed branch, or the project's
         // folder), and the branch it is merged into as git has it.
         let mut on = self.docs_space(project_id, None).await?.register();
         if project.docs_branch.trim().is_empty() && !target.is_empty() {
             on = on.and(register_on_branch(&space.root, target).await);
         }
+        on = on.and(reserved(&given));
         let by = self.me_in(&project).name;
         let mut done = Vec::new();
         for was in mine {
@@ -220,6 +230,7 @@ impl<R: Runtime> Core<R> {
             let d = space.decision_accept(&own, &by, &on, Some(key))?;
             if let Some(n) = d.number {
                 on.next = on.next.max(n + 1);
+                given.push((key.to_string(), n));
             }
             self.docs_numbered(project_id, &was, &d);
             if let Some(n) = d.number {
@@ -227,6 +238,22 @@ impl<R: Runtime> Core<R> {
             }
         }
         Ok(done)
+    }
+
+    /// The numbers the validations of the project under way gave (`decision_numbers`).
+    fn decision_numbers(&self, project_id: &str) -> Given {
+        self.decision_numbers
+            .lock()
+            .entry(project_id.to_string())
+            .or_default()
+            .clone()
+    }
+
+    /// The validation of ticket `key` is over (merged, or stopped): the numbers it gave are
+    /// the target's own then, or free again.
+    pub(crate) async fn docs_numbers_release(&self, project_id: &str, key: &str) {
+        let numbers = self.decision_numbers(project_id);
+        numbers.lock().await.retain(|(k, _)| k != key);
     }
 
     /// The proposal `was` accepted as `now`: the tickets of the board and what is to plan that
@@ -290,4 +317,16 @@ async fn register_on_branch(dir: &Path, branch: &str) -> Register {
     };
     let out = String::from_utf8_lossy(&out);
     Register::of_names(out.lines().filter_map(|l| l.rsplit('/').next()))
+}
+
+/// The decision numbers the validations of a project under way gave, each with its ticket's key.
+pub(crate) type Given = Arc<tokio::sync::Mutex<Vec<(String, u32)>>>;
+
+/// The numbers the validations under way gave, as a register: taken, the next after them. Each is
+/// held by no id, so that a proposal numbered before ESC-303 never keeps one of them.
+fn reserved(given: &[(String, u32)]) -> Register {
+    Register {
+        next: given.iter().map(|(_, n)| n + 1).max().unwrap_or(1),
+        taken: given.iter().map(|(_, n)| (*n, String::new())).collect(),
+    }
 }

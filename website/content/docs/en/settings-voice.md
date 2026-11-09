@@ -1,12 +1,12 @@
 # Settings: Voice
 
-The “Voice” tab of the settings sets up dictation (the microphone, who transcribes what you say, the spoken language and the shortcut) and the voice conversation (what makes the voice, the voice of each language, its speed, its volume and the silence that sends what you said).
+The “Voice” page sets up dictation (the microphone, who transcribes what you say, the spoken language and the shortcut) and the voice conversation (what makes the voice, the voice of each language, its speed, its volume and the silence that sends what you said).
 
-## Opening the tab
+## Opening the page
 
 Open the settings with `Ctrl+,` (`⌘,` on macOS), then choose “Voice” (“Dictating messages: microphone, transcription model, language and shortcut”). These settings are the app’s own, shared by all projects.
 
-The tab’s choices apply on “Save”, like the other settings. Three actions take effect at once, without waiting for “Save”: downloading or deleting a Whisper model, downloading or deleting a voice, and saving or deleting the key of an online service.
+The page’s choices apply as you set them, like the other settings, and three actions too: downloading or deleting a Whisper model, downloading or deleting a voice, and saving or deleting the key of an online service.
 
 Using dictation and the conversation is described in [the conversation](chat#dictating-a-message).
 
@@ -63,7 +63,7 @@ Paste the key in the field (“Paste your API key”), then “Save the key” o
 
 The “Model” menu lists the service’s models that transcribe, with what sets them apart (“fast”, “more accurate”), the default one first. With a key saved, the list is the one the service’s API gives, read with your key and kept on your machine; “Refresh the list” reads it again, and the row says when it was read. Without a key, or for a service whose API does not list its transcription models (ElevenLabs), it is the list of its documentation, shipped with the app. Until you choose another one, it is the default model: dictation stays as it was. The model chosen is kept per service: switching service and back finds it again. A model the service no longer offers is replaced by the default one, and the row says so (“Groq no longer offers “…”: its default model, “whisper-large-v3-turbo”, stands in.”).
 
-These five services are plugins shipped with Escouade (`dev.escouade.openai`, `dev.escouade.groq`, `dev.escouade.mistral`, `dev.escouade.elevenlabs`, `dev.escouade.deepgram`): the key stays in the app’s keychain, which gives it to its service’s plugin alone at each call. **Mistral shares its account with Mistral Vibe**: the key given here also serves the Vibe accounts without a key of their own, and with no key here, the voice takes the first active Vibe account’s, which the row says (“The one of the Vibe account “Team” · key …wxyz”, with “Give another key”). Switched off in the Plugins view, a service leaves this tab and dictation goes back to local; a plugin that does not start lets Escouade answer in its place, and its journal says why (see [the plugins shipped with Escouade](plugins/installer#the-plugins-shipped-with-escouade)).
+These five services are plugins shipped with Escouade (`dev.escouade.openai`, `dev.escouade.groq`, `dev.escouade.mistral`, `dev.escouade.elevenlabs`, `dev.escouade.deepgram`): the key stays in the app’s keychain, which gives it to its service’s plugin alone at each call. **Mistral shares its account with Mistral Vibe**: the key given here also serves the Vibe accounts without a key of their own, and with no key here, the voice takes the first active Vibe account’s, which the row says (“The one of the Vibe account “Team” · key …wxyz”, with “Give another key”). Switched off in the Plugins view, a service leaves this page and dictation goes back to local; a plugin that does not start lets Escouade answer in its place, and its journal says why (see [the plugins shipped with Escouade](plugins/installer#the-plugins-shipped-with-escouade)).
 
 ### Real-time transcription
 

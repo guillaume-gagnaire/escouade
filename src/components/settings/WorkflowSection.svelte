@@ -28,7 +28,7 @@
   import Row from './Row.svelte';
   import Switch from './Switch.svelte';
 
-  // Réglages › Projets › Workflow (ESC-195, `#loops-settings` and `#loops-settings-steps` of the 2.0 design): what the
+  // Réglages › Projets › Kanban › Workflow (ESC-195, `#loops-settings` and `#loops-settings-steps` of the 2.0 design): what the
   // reading found and from what, « Relire », the reading again by itself, the workflows found, and the steps of the one
   // chosen as the user corrects them (the draft's `workflowFixes`), kept in the files of the workflows (in the repository, or on this machine).
   let { project }: { project: Project } = $props();

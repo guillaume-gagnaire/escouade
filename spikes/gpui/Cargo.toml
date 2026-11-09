@@ -1,0 +1,17 @@
+[package]
+name = "gpui-spike"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Hors de l'espace de travail de l'app : jetable, jamais livré (ESC-365).
+[workspace]
+
+[dependencies]
+gpui = { package = "gpui-pre", version = "=0.3.11" }
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.11" }
+alacritty_terminal = "0.26"
+portable-pty = "0.9"
+
+[profile.release]
+debug = false

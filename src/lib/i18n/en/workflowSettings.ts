@@ -1,6 +1,6 @@
 import { defineZone } from '../types';
 
-// Settings › Projects › Workflow (ESC-195): see the French catalog.
+// Settings › Projects › Kanban › Workflow (ESC-195): see the French catalog.
 export default defineZone('workflowSettings', {
   title: 'Workflow',
   enabled: 'Project workflows',
@@ -9,8 +9,8 @@ export default defineZone('workflowSettings', {
   on: 'Read the workflows',
   off: 'No workflow for this project',
   offNote:
-    'No workflow for this project: Escouade neither reads nor writes its workflows and follows no agent in them; {dir} is left as it is. To undo it, choose “Read the workflows” and save.',
-  onNote: 'Save to read the project’s workflows again.',
+    'No workflow for this project: Escouade neither reads nor writes its workflows and follows no agent in them; {dir} is left as it is. To undo it, choose “Read the workflows”.',
+  onNote: 'Escouade is reading the project’s workflows again.',
   readAt: 'Read by the rules at {time}',
   readOn: 'Read by the rules on {date}',
   reading: 'Reading the files…',

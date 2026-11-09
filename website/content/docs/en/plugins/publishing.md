@@ -66,16 +66,37 @@ A plugin written in Rust ships as `run.wasm`: its manifest names its `Cargo.toml
 
 A failure of the store, a network down for example, does not refuse the version: it waits, to run again.
 
-
 ## The plugin’s page
 
 Once published, the version has its page on the store: its name, its author, “Not verified” or “In review” until it is signed, what it will be able to do in words (the strongest permission first), its repository, commit and fingerprint, its versions, and “Open in Escouade”, which opens its page in the app.
 
 Once the review has read the version, you get its answer by e-mail and in your account. Verified, it bears the seal “Verified by Escouade” and the review’s summary (the permissions read, the hosts reached, what was checked), on its page and in the app, which checks the signature with its own keys. If the review asks for changes or refuses, the version stays published, unverified, and the message says why: a new version that takes it into account goes through the review again.
 
-The README is rendered there once, at submission, in the visitor’s language (`README.en.md` or `README.fr.md`, else `README.md`); the markdown pages of the `store.docs` folder make the “Documentation” tab. The store keeps the markdown and a short list of HTML tags (headings, lists, links, code, tables, `details`); it removes scripts, styles, `style` and `class` attributes, frames and forms. The repository’s images (PNG, JPEG or WebP, 5 MB at most, by a relative path or by their address on GitHub) are copied to the store and re-encoded; images from elsewhere, such as badges, are removed: a visitor loads nothing from a third party. A link to a file of the repository leads to GitHub, at the published commit.
+The README is rendered there once, at submission, in the visitor’s language (`README.en.md` or `README.fr.md`, else `README.md`); the markdown pages of the `store.docs` folder make the “Documentation” tab. The store keeps the markdown and a short list of HTML tags (headings, lists, links, code, tables, `details`); it removes scripts, styles, `style` and `class` attributes, frames and forms. The repository’s images (PNG, JPEG or WebP, 5 MB at most, by a relative path or by their address on GitHub) are copied to the store and re-encoded; images from elsewhere, such as badges, are removed: a visitor loads nothing from a third party. A link to a file of the repository leads to GitHub, at the published commit; a link to a page of the documentation or to the README stays on the store, in its tab.
 
 Anyone can report a plugin from its page, without an account, with an e-mail address: a person reads every report. You see that a report is open, never who sent it.
+
+### The documentation, by language
+
+The folder `store.docs` names gives its pages in two languages in the subfolders `fr/` and `en/`: the visitor sees those of their language, else those of the other. A folder without `fr/` or `en/` shows all its pages in both languages. The pages come in the order of their names (prefix them: `01-install.md`, `02-set-up.md`), 20 at most per language; a tab’s title is the page’s first heading (`#`), else its name without the prefix. Images go beside them, in a folder both languages share.
+
+```text
+my-plugin/
+├── escouade-plugin.json      "store": { "docs": "docs/" }
+├── README.fr.md
+├── README.en.md
+└── docs/
+    ├── fr/
+    │   ├── 01-installer.md   # Installer   …   [la suite](02-regler.md)
+    │   └── 02-regler.md      # Régler le sujet
+    ├── en/
+    │   ├── 01-install.md     # Install     …   ![The topic](../images/topic.png)
+    │   └── 02-set-up.md      # Set it up
+    └── images/
+        └── topic.png
+```
+
+Links between pages are written as relative paths (`02-set-up.md`, `../fr/01-installer.md`), and images too (`../images/topic.png`). If `store.docs` leads to no markdown page, the README check says so as a warning: the version passes, and its page shows the README alone.
 
 ## The signature and the seal
 
@@ -84,7 +105,6 @@ A verified version gets the “Verified by Escouade” seal: the review signs it
 ## Updates
 
 Publishing a version changes nothing for those who have the plugin: Escouade **offers it, and never installs it alone**, with the same window as the install. If it asks for more, the window says so, marks “new” each extra permission and asks for agreement again. See [installing a plugin](plugins/installer#updates) and [the versions](plugins/versioning).
-
 
 ## Preparing for the review
 

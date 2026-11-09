@@ -1293,7 +1293,7 @@ describe('Conversation', () => {
 });
 
 describe('Conversation of an agent whose harness has no account (choice 19)', () => {
-  const NO_CODEX = 'no-account:codex|Aucun compte Codex : ajoute-en un dans Réglages › Comptes.';
+  const NO_CODEX = 'no-account:codex|Aucun compte Codex : ajoute-en un dans Réglages › Comptes et harness.';
   const CODEX = { ...BARE_ENGINE, id: 'codex' as const, name: 'Codex', speaker: 'Codex' };
 
   it('says in its header that a Codex agent runs in a sandbox, and what it means in its mode (choice 8)', async () => {
@@ -1325,7 +1325,7 @@ describe('Conversation of an agent whose harness has no account (choice 19)', ()
     });
     render(Conversation, { agent: a, project: project() });
     await userEvent.type(screen.getByRole('textbox'), 'Ajoute un bouton{Enter}');
-    const card = await screen.findByRole('group', { name: 'Aucun compte Codex : ajoute-en un dans Réglages › Comptes.' });
+    const card = await screen.findByRole('group', { name: 'Aucun compte Codex : ajoute-en un dans Réglages › Comptes et harness.' });
     expect(card).toHaveClass('limit');
     expect(screen.getByRole('textbox')).toHaveValue('Ajoute un bouton');
     // Said once, in the card: no toast besides.

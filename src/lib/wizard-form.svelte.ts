@@ -58,7 +58,7 @@ export class WizardForm {
   /** A start chosen by the user: the folder's file no longer picks it. */
   #chosen = false;
 
-  /** `project`: an existing project set up anew (Réglages › Projets), else a new one. */
+  /** `project`: an existing project set up anew (Réglages › Projets › Projet), else a new one. */
   constructor(readonly project: Project | null = null) {
     this.model = newAgentDefaults(undefined).model || CLAUDE_DEFAULT_MODEL;
     if (project) {

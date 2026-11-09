@@ -7,10 +7,11 @@ import type { Project, WorkflowFix } from '../../lib/types';
 import { fakeBackend, project, resetApp } from '../../test/ipc';
 import { gsdScan, gsdWorkflow } from '../../test/workflows';
 import SettingsModal from '../modals/SettingsModal.svelte';
+import { afterGesture } from '../../test/settings';
 
 vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }));
 
-const save = () => userEvent.click(screen.getByRole('button', { name: /^(Enregistrer|Save)$/ }));
+const save = afterGesture;
 const section = () => document.querySelector<HTMLElement>('#sg-workflow')!;
 const sentFixes = (backend: ReturnType<typeof fakeBackend>) =>
   backend.called('update_project').at(-1)!.args.project.workflowFixes as WorkflowFix[];
@@ -23,11 +24,11 @@ function open(over: Partial<Project> = {}, scan = gsdScan(), handlers: Record<st
     refresh_workflows: () => ({ ...scan, readAt: scan.readAt + 60_000 }),
     ...handlers,
   });
-  render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+  render(SettingsModal, { page: 'board', projectId: 'p1' });
   return backend;
 }
 
-describe('Réglages › Projets › Workflow (ESC-195)', () => {
+describe('Réglages › Projets › Kanban › Workflow (ESC-195)', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date(2026, 9, 26, 11, 0));
@@ -125,7 +126,7 @@ describe('Réglages › Projets › Workflow (ESC-195)', () => {
     const backend = open();
     await userEvent.click(within(section()).getByRole('switch', { name: 'Relire quand les fichiers changent' }));
     await save();
-    expect(backend.called('update_project')[0].args.project).toMatchObject({ workflowsAutoRead: false });
+    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({ workflowsAutoRead: false });
   });
 
   it('renames, merges, removes, reorders and adds steps, the corrections saved with the project', async () => {
@@ -227,7 +228,7 @@ describe('Réglages › Projets › Workflow (ESC-195)', () => {
     await userEvent.click(s.getByRole('radio', { name: 'Sur cette machine' }));
     expect(s.getByRole('radio', { name: 'Sur cette machine' })).toBeChecked();
     await save();
-    expect(backend.called('update_project')[0].args.project).toMatchObject({ workflowsInRepo: false });
+    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({ workflowsInRepo: false });
   });
 
   it('says a file that cannot be read, one updated by the reading, and one of the team’s alone that it can remove', async () => {
@@ -281,7 +282,7 @@ describe('Réglages › Projets › Workflow (ESC-195)', () => {
   });
 });
 
-describe('Réglages › Projets › Workflow, supprimer et « Pas de workflow » (ESC-309)', () => {
+describe('Réglages › Projets › Kanban › Workflow, supprimer et « Pas de workflow » (ESC-309)', () => {
   it('deletes a workflow at once and says the reading will not make it again', async () => {
     const backend = open({}, gsdScan(), {
       set_workflow_removed: () => gsdScan({ workflows: [], removed: [{ id: '|claude|gsd', name: 'GSD', changed: false }] }),
@@ -323,12 +324,12 @@ describe('Réglages › Projets › Workflow, supprimer et « Pas de workflow »
     const note = s.getByTestId('workflows-off');
     expect(note).toHaveTextContent('Escouade ne lit ni n’écrit ses workflows');
     expect(note).toHaveTextContent('.escouade/workflows/ reste tel quel');
-    expect(note).toHaveTextContent('Pour le défaire, choisis « Lire les workflows » et enregistre.');
+    expect(note).toHaveTextContent('Pour le défaire, choisis « Lire les workflows ».');
     // Nothing of the workflows is offered while it is chosen.
     expect(s.queryByRole('button', { name: 'Relire' })).toBeNull();
     expect(s.queryByRole('button', { name: 'Corriger les étapes de GSD' })).toBeNull();
     await save();
-    expect(backend.called('update_project')[0].args.project).toMatchObject({ workflowsEnabled: false });
+    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({ workflowsEnabled: false });
   });
 
   it('says a project without workflows as such, and reads them again once undone', async () => {
@@ -337,9 +338,9 @@ describe('Réglages › Projets › Workflow, supprimer et « Pas de workflow »
     expect(await s.findByRole('radio', { name: 'Pas de workflow pour ce projet' })).toBeChecked();
     expect(s.getByTestId('workflows-off')).toBeInTheDocument();
     await userEvent.click(s.getByRole('radio', { name: 'Lire les workflows' }));
-    expect(s.getByTestId('workflows-off')).toHaveTextContent('Enregistre pour lire à nouveau les workflows du projet.');
+    expect(s.getByTestId('workflows-off')).toHaveTextContent('Escouade relit les workflows du projet.');
     await save();
-    expect(backend.called('update_project')[0].args.project).toMatchObject({ workflowsEnabled: true });
+    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({ workflowsEnabled: true });
   });
 
   it('says it in English', async () => {
@@ -348,7 +349,7 @@ describe('Réglages › Projets › Workflow, supprimer et « Pas de workflow »
     const s = within(section());
     expect(await s.findByRole('radio', { name: 'No workflow for this project' })).toBeChecked();
     expect(s.getByTestId('workflows-off')).toHaveTextContent(
-      'No workflow for this project: Escouade neither reads nor writes its workflows and follows no agent in them; .escouade/workflows/ is left as it is. To undo it, choose “Read the workflows” and save.',
+      'No workflow for this project: Escouade neither reads nor writes its workflows and follows no agent in them; .escouade/workflows/ is left as it is. To undo it, choose “Read the workflows”.',
     );
     setLang('fr');
   });

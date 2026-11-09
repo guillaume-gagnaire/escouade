@@ -441,7 +441,7 @@ pub struct Runtime {
     tried: Mutex<Vec<Tried>>,
     /// The number of the next `Trial`.
     trials: AtomicU64,
-    /// What a plugin the app gives is told when it starts (`ESCOUADE_LANG`, the network of Réglages › Réseau).
+    /// What a plugin the app gives is told when it starts (`ESCOUADE_LANG`, the network of Réglages › Avancé › Réseau).
     builtin_env: parking_lot::RwLock<Vec<(String, String)>>,
     /// What a program of a plugin gets as an agent does (`set_agent_env`).
     agent_env: parking_lot::RwLock<Vec<(String, String)>>,
@@ -675,7 +675,7 @@ impl Runtime {
         &self.modules
     }
 
-    /// Réglages › Réseau, for the plugins in WASM: their next call follows it.
+    /// Réglages › Avancé › Réseau, for the plugins in WASM: their next call follows it.
     pub fn set_network(&self, network: super::socket::Net) {
         *self.net.read().network.write() = network;
     }
@@ -1414,9 +1414,12 @@ impl Host {
             // In WASM (ESC-320, ESC-331): its module from the cache, or made now, off the runtime's threads.
             let js = run.js.as_deref().unwrap_or(super::wasm::MODULE_FILE);
             let (modules, folder, program) = (rt.modules.clone(), self.folder.clone(), run.clone());
+            let asked = Instant::now();
             let prepared = tokio::task::spawn_blocking(move || modules.of(&folder, &program))
                 .await
                 .unwrap_or_else(|e| Err(e.to_string()));
+            // How long its module took at this activation (ESC-354): the first one of a plugin of the seed precompiles it.
+            let took = asked.elapsed().as_millis();
             let (module, made) = match prepared {
                 Ok(m) => m,
                 Err(e) => {
@@ -1439,11 +1442,12 @@ impl Host {
             self.journal.push(
                 Kind::Start,
                 format!(
-                    "started {} in WASM, isolated: {}",
+                    "started {} in WASM, isolated: {} ({took} ms)",
                     self.folder.join(js).display(),
                     made.describe()
                 ),
             );
+            log::info!("plugin {}: {} in {took} ms", self.id, made.describe());
             conn
         } else {
             let program = rt.program_of(&self.folder, run);

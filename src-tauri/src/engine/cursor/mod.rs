@@ -630,8 +630,8 @@ impl Engine for Cursor {
 
     fn key_missing(&self, name: &str) -> String {
         tr!(
-            "Le compte Cursor « {name} » n’a pas de clé d’API : donne-la dans Réglages › Comptes, « Changer la clé… ».",
-            "The Cursor account “{name}” has no API key: give it in Settings › Accounts, “Change the key…”."
+            "Le compte Cursor « {name} » n’a pas de clé d’API : donne-la dans Réglages › Comptes et harness, « Changer la clé… ».",
+            "The Cursor account “{name}” has no API key: give it in Settings › Accounts and harnesses, “Change the key…”."
         )
     }
 

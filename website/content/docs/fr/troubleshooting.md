@@ -10,15 +10,15 @@ Les problèmes que rencontre le plus souvent Escouade, chacun avec son symptôme
 
 **Cause.** Escouade cherche `claude` dans cet ordre :
 
-1. Le chemin de Réglages › Harness, champ « Chemin de l’exécutable », quand il est rempli. S’il est rempli, il décide seul : un chemin faux donne « introuvable », même si `claude` est dans le `PATH`.
+1. Le chemin de Réglages › Comptes et harness, champ « Chemin de l’exécutable », quand il est rempli. S’il est rempli, il décide seul : un chemin faux donne « introuvable », même si `claude` est dans le `PATH`.
 2. Sinon, le `PATH`, puis les emplacements habituels des installeurs. Sous Windows : `%USERPROFILE%\.local\bin\claude.exe`, `%USERPROFILE%\.claude\local\claude.exe` et `%USERPROFILE%\AppData\Roaming\npm\claude.cmd`. Sous macOS et Linux : `~/.local/bin/claude`, `~/.claude/local/claude`, `/opt/homebrew/bin/claude` et `/usr/local/bin/claude`.
 3. Sous Windows, à défaut, un Claude Code installé dans WSL (voir plus bas).
 
-Le message le dit avec la commande qui le réinstalle : « Claude Code est introuvable : réinstalle-le (…), ou indique son chemin dans Réglages › Harness. », à la connexion d’un compte, au lancement d’un agent et dans Réglages › Harness.
+Le message le dit avec la commande qui le réinstalle : « Claude Code est introuvable : réinstalle-le (…), ou indique son chemin dans Réglages › Comptes et harness. », à la connexion d’un compte, au lancement d’un agent et dans Réglages › Comptes et harness.
 
-**Solution.** Installe Claude Code et connecte-le, ou indique son chemin dans Réglages › Harness (voir les [réglages des harness](settings-claude-code)). Le champ accepte `~` pour ton dossier personnel, et sous Windows on peut y omettre `.exe` ou `.cmd`. La ligne sous le champ répond tout de suite : « Trouvé : … » avec le chemin retenu, ou « Introuvable. Indique le chemin de claude.exe, … ». Vide le champ pour revenir à la détection automatique (« vide = détection automatique »).
+**Solution.** Installe Claude Code et connecte-le, ou indique son chemin dans Réglages › Comptes et harness (voir les [réglages des harness](settings-claude-code)). Le champ accepte `~` pour ton dossier personnel, et sous Windows on peut y omettre `.exe` ou `.cmd`. La ligne sous le champ répond tout de suite : « Trouvé : … » avec le chemin retenu, ou « Introuvable. Indique le chemin de claude.exe, … ». Vide le champ pour revenir à la détection automatique (« vide = détection automatique »).
 
-Un compte Claude peut avoir son propre exécutable (Réglages › Comptes, champ « Exécutable », « Celui des réglages » par défaut). Un chemin qui existe mais ne se lance pas donne « impossible de lancer » suivi de ce chemin.
+Un compte Claude peut avoir son propre exécutable (Réglages › Comptes et harness, champ « Exécutable », « Celui des réglages » par défaut). Un chemin qui existe mais ne se lance pas donne « impossible de lancer » suivi de ce chemin.
 
 ### Claude Code a disparu après une mise à jour interrompue
 
@@ -40,15 +40,15 @@ Si npm refuse (`ENOTEMPTY`), supprime d’abord ce qui reste (le chemin que donn
 
 **Cause.** macOS donne aux apps lancées depuis le Finder ou le Dock un `PATH` minimal, pas celui de ton terminal. Au démarrage, Escouade le complète avec celui de ton shell de connexion (elle l’interroge par `$SHELL -ilc`), puis ajoute `/opt/homebrew/bin`, `/usr/local/bin` et `~/.local/bin`. Elle n’attend le shell que cinq secondes : un profil qui demande une saisie, ou qui met plus longtemps, annule cette étape. La même chose vaut pour un lanceur de bureau sous Linux.
 
-**Solution.** Indique le chemin complet de `claude` dans Réglages › Harness (`which claude` dans un terminal le donne), ou allège le profil de ton shell pour qu’il réponde vite.
+**Solution.** Indique le chemin complet de `claude` dans Réglages › Comptes et harness (`which claude` dans un terminal le donne), ou allège le profil de ton shell pour qu’il réponde vite.
 
 ### Claude Code est installé dans WSL
 
 **Symptôme.** Claude Code n’est installé que dans WSL, et Escouade ne le trouve pas, ou un agent ne peut pas travailler dans un dossier.
 
-**Cause.** Sous Windows, Escouade ne regarde dans WSL que si Windows n’a pas de `claude`. Elle cherche dans la distribution de Réglages › Terminaux (champ « Distribution WSL », « vide = distribution par défaut »), à `~/.local/bin/claude`, `~/.claude/local/claude`, `/usr/local/bin/claude` et `/usr/bin/claude`. Cette recherche peut démarrer la distribution et prendre quelques secondes.
+**Cause.** Sous Windows, Escouade ne regarde dans WSL que si Windows n’a pas de `claude`. Elle cherche dans la distribution de Réglages › Avancé › Terminaux (champ « Distribution WSL », « vide = distribution par défaut »), à `~/.local/bin/claude`, `~/.claude/local/claude`, `/usr/local/bin/claude` et `/usr/bin/claude`. Cette recherche peut démarrer la distribution et prendre quelques secondes.
 
-**Solution.** Indique le chemin dans Réglages › Harness, sous l’une de ces formes :
+**Solution.** Indique le chemin dans Réglages › Comptes et harness, sous l’une de ces formes :
 
 - `~/.local/bin/claude`
 - `/home/<utilisateur>/.local/bin/claude`
@@ -58,7 +58,7 @@ La ligne sous le champ confirme : « Trouvé dans WSL (Ubuntu) : /home/ada/.loc
 
 ### Les outils MCP et le suivi de la vue Claude Code ne marchent pas depuis WSL
 
-**Symptôme.** Sous le champ du chemin, Réglages › Harness affiche : « Le réseau de WSL est en NAT : le serveur MCP d’Escouade et le suivi de la vue Claude Code ne joignent pas l’app. »
+**Symptôme.** Sous le champ du chemin, Réglages › Comptes et harness affiche : « Le réseau de WSL est en NAT : le serveur MCP d’Escouade et le suivi de la vue Claude Code ne joignent pas l’app. »
 
 **Cause.** En mode NAT, WSL n’est pas sur le réseau de Windows : le serveur MCP d’Escouade et les hooks de la vue Claude Code, qui écoutent sur le `127.0.0.1` de Windows, lui sont hors de portée.
 
@@ -77,7 +77,7 @@ Puis, dans un terminal Windows, lance `wsl --shutdown` et relance Escouade.
 
 **Cause.** Escouade le lance sans le profil du shell : ces fichiers ne sont pas lus.
 
-**Solution.** Le proxy de Réglages › Réseau, lui, est transmis à Claude Code dans WSL. Pour une autre variable, définis-la côté Windows (dans les variables d’environnement de ton compte), ajoute son nom à la variable Windows `WSLENV` (les noms s’y séparent par `:`) et relance Escouade. Escouade garde ta valeur de `WSLENV` et y ajoute les variables qu’elle transmet elle-même.
+**Solution.** Le proxy de Réglages › Avancé › Réseau, lui, est transmis à Claude Code dans WSL. Pour une autre variable, définis-la côté Windows (dans les variables d’environnement de ton compte), ajoute son nom à la variable Windows `WSLENV` (les noms s’y séparent par `:`) et relance Escouade. Escouade garde ta valeur de `WSLENV` et y ajoute les variables qu’elle transmet elle-même.
 
 ## Réseau
 
@@ -85,7 +85,7 @@ Puis, dans un terminal Windows, lance `wsl --shutdown` et relance Escouade.
 
 **Symptôme.** Les quotas, les intégrations, les mises à jour ou Claude Code n’arrivent pas à se connecter depuis un réseau d’entreprise.
 
-**Solution.** Dans Réglages › Réseau, renseigne « Proxy HTTP(S) » (par exemple `http://utilisateur:motdepasse@proxy:3128`) et, si besoin, « Exclusions » (la liste `NO_PROXY`, séparée par des virgules). Le proxy est transmis aux processus Claude Code, à la lecture des quotas, aux intégrations et aux mises à jour. Pour un agent, il s’applique au prochain (re)démarrage de son processus. Pour que les terminaux intégrés, les commandes de lancement et les commandes de préparation et de démontage des worktrees l’utilisent aussi, active « Appliquer aussi le proxy aux terminaux intégrés » (désactivé par défaut). Voir les [réglages Réseau](settings-network).
+**Solution.** Dans Réglages › Avancé › Réseau, renseigne « Proxy HTTP(S) » (par exemple `http://utilisateur:motdepasse@proxy:3128`) et, si besoin, « Exclusions » (la liste `NO_PROXY`, séparée par des virgules). Le proxy est transmis aux processus Claude Code, à la lecture des quotas, aux intégrations et aux mises à jour. Pour un agent, il s’applique au prochain (re)démarrage de son processus. Pour que les terminaux intégrés, les commandes de lancement et les commandes de préparation et de démontage des worktrees l’utilisent aussi, active « Appliquer aussi le proxy aux terminaux intégrés » (désactivé par défaut). Voir les [réglages Réseau](settings-network).
 
 ### La mise à jour est refusée par un proxy d’entreprise
 
@@ -93,7 +93,7 @@ Puis, dans un terminal Windows, lance `wsl --shutdown` et relance Escouade.
 
 **Cause.** Un proxy d’entreprise (Zscaler, Netskope, Squid…) laisse souvent passer la recherche mais refuse l’installateur à un client qui n’est pas un navigateur. Escouade s’annonce honnêtement (`Escouade/<version>`) et ne se fait pas passer pour un navigateur ; quand le proxy refuse la requête, elle ne la refait pas sans lui. Une recherche automatique ne montre son erreur qu’après plusieurs échecs de suite, sur plus d’une heure.
 
-**Solution.** Si le message dit que le proxy demande une authentification, mets l’identifiant et le mot de passe dans l’adresse du proxy, dans Réglages › Réseau (par exemple `http://utilisateur:motdepasse@proxy:3128`). Sinon, clique sur « Télécharger dans le navigateur » dans le message : la page de la release s’ouvre, et le proxy peut demander de confirmer un avertissement. Pour que la mise à jour intégrée passe, demande au service informatique d’autoriser `github.com` et `release-assets.githubusercontent.com`, et le téléchargement des fichiers de la release pour le client dont le User-Agent commence par `Escouade/`. Le détail est dans [« Derrière un proxy d’entreprise »](updates#derriere-un-proxy-d-entreprise).
+**Solution.** Si le message dit que le proxy demande une authentification, mets l’identifiant et le mot de passe dans l’adresse du proxy, dans Réglages › Avancé › Réseau (par exemple `http://utilisateur:motdepasse@proxy:3128`). Sinon, clique sur « Télécharger dans le navigateur » dans le message : la page de la release s’ouvre, et le proxy peut demander de confirmer un avertissement. Pour que la mise à jour intégrée passe, demande au service informatique d’autoriser `github.com` et `release-assets.githubusercontent.com`, et le téléchargement des fichiers de la release pour le client dont le User-Agent commence par `Escouade/`. Le détail est dans [« Derrière un proxy d’entreprise »](updates#derriere-un-proxy-d-entreprise).
 
 ### Un certificat d’entreprise fait échouer les connexions
 
@@ -101,7 +101,7 @@ Puis, dans un terminal Windows, lance `wsl --shutdown` et relance Escouade.
 
 **Cause.** Un proxy d’entreprise déchiffre le trafic avec un certificat que personne ne reconnaît. Les requêtes d’Escouade (intégrations, quotas, mises à jour) font confiance aux certificats reconnus et à ceux installés sur le système, celui d’un proxy d’entreprise le plus souvent. Claude Code, lui, a sa propre liste.
 
-**Solution.** Installe le certificat de l’entreprise dans le système : Escouade lui fait alors confiance pour ses propres requêtes. Claude Code a sa propre liste : pour lui, ou si tu ne peux pas installer le certificat, active « Ignorer la vérification des certificats TLS » (Réglages › Réseau, groupe « Certificats »). Le réglage s’applique aux intégrations, aux quotas, aux mises à jour, aux processus Claude Code (au prochain démarrage de leur processus) et aux commandes que lancent les agents (npm, node…).
+**Solution.** Installe le certificat de l’entreprise dans le système : Escouade lui fait alors confiance pour ses propres requêtes. Claude Code a sa propre liste : pour lui, ou si tu ne peux pas installer le certificat, active « Ignorer la vérification des certificats TLS » (Réglages › Avancé › Réseau, groupe « Certificats »). Le réglage s’applique aux intégrations, aux quotas, aux mises à jour, aux processus Claude Code (au prochain démarrage de leur processus) et aux commandes que lancent les agents (npm, node…).
 
 > [!WARNING]
 > Avec ce réglage, une connexion interceptée, jetons compris, ne serait plus détectée. Réserve-le à un réseau de confiance.
@@ -110,7 +110,7 @@ Puis, dans un terminal Windows, lance `wsl --shutdown` et relance Escouade.
 
 ### Les quotas ne s’affichent pas
 
-**Symptôme.** Dans la barre d’état, `5h` et `7j` ont une barre vide et un « — » à la place du décompte, et l’infobulle dit « Quota indisponible ». Dans Réglages › Comptes, le compte dit « Pas connecté », « Pas connecté par un compte claude.ai (clé d’API ?) » ou « Connexion expirée : relance Claude Code pour ce compte. »
+**Symptôme.** Dans la barre d’état, `5h` et `7j` ont une barre vide et un « — » à la place du décompte, et l’infobulle dit « Quota indisponible ». Dans Réglages › Comptes et harness, le compte dit « Pas connecté », « Pas connecté par un compte claude.ai (clé d’API ?) » ou « Connexion expirée : relance Claude Code pour ce compte. »
 
 **Causes possibles.**
 
@@ -119,7 +119,7 @@ Puis, dans un terminal Windows, lance `wsl --shutdown` et relance Escouade.
 - Anthropic n’est pas joignable (réseau, proxy, certificat : voir plus haut). Les dernières valeurs restent affichées, et Escouade réessaie à la lecture suivante, environ toutes les cinq minutes.
 - Sous macOS, Claude Code garde sa connexion dans le trousseau. Si tu refuses l’accès quand macOS le demande, Escouade ne le redemande pas avant dix minutes.
 
-**Solution.** Dans Réglages › Comptes, « Se connecter… » (ou « Se reconnecter… ») ouvre un terminal où Claude Code te connecte (commande `/login` s’il ne le propose pas). Pour Principal, c’est la connexion de ton propre Claude Code. Voir [les comptes Claude](accounts).
+**Solution.** Dans Réglages › Comptes et harness, « Se connecter… » (ou « Se reconnecter… ») ouvre un terminal où Claude Code te connecte (commande `/login` s’il ne le propose pas). Pour Principal, c’est la connexion de ton propre Claude Code. Voir [les comptes Claude](accounts).
 
 ### Un agent s’est arrêté sur la limite d’usage
 
@@ -129,9 +129,9 @@ Puis, dans un terminal Windows, lance `wsl --shutdown` et relance Escouade.
 
 **Solution.** Ce que fait l’app dépend de tes réglages :
 
-- **Reprise automatique.** Le réglage « Reprise automatique après la limite d’usage » (Réglages › Harness, activé par défaut) envoie « continue » une fois le quota réinitialisé. Quand Claude Code indique l’heure de remise à zéro, la carte dit « Reprise automatique » suivi du moment, avec un bouton « Annuler la reprise ».
+- **Reprise automatique.** Le réglage « Reprise automatique après la limite d’usage » (Réglages › Comptes et harness, activé par défaut) envoie « continue » une fois le quota réinitialisé. Quand Claude Code indique l’heure de remise à zéro, la carte dit « Reprise automatique » suivi du moment, avec un bouton « Annuler la reprise ».
 - **Un autre compte.** Avec plusieurs comptes, le bouton « Reprendre sur Pro » (avec le nom d’un autre compte), et son menu « Reprendre sur un autre compte », font repartir l’agent avec sa session sur un autre compte. Les comptes inactifs, pas connectés ou au-delà de « Pause au-delà du quota » n’y figurent pas.
-- **Les agents de ticket** attendent la remise à zéro de leur compte, sauf si tu actives « Reprendre sur un autre compte un agent de ticket arrêté par la limite » (Réglages › Harness, avec plusieurs comptes).
+- **Les agents de ticket** attendent la remise à zéro de leur compte, sauf si tu actives « Reprendre sur un autre compte un agent de ticket arrêté par la limite » (Réglages › Comptes et harness, avec plusieurs comptes).
 
 Pour ne pas arriver à la limite, le [pilote auto](autopilot) se met en pause avant, au seuil « Pause au-delà du quota ».
 
@@ -156,7 +156,7 @@ Un agent de ticket reprend de la même façon : son ticket n’est pas bloqué. 
 
 **Cause.** Le processus Claude Code de l’agent s’est terminé de lui-même. Le message qu’il a laissé dit le plus souvent pourquoi (connexion, proxy, version…).
 
-**Solution.** Envoie un message : Escouade relance Claude sur la même session. Un processus arrêté exprès n’est pas une erreur : Escouade arrête les processus inactifs après un délai (Réglages › Harness, « Arrêter les processus des agents inactifs après », 30 minutes par défaut, 0 pour jamais) et les relance à la prochaine action.
+**Solution.** Envoie un message : Escouade relance Claude sur la même session. Un processus arrêté exprès n’est pas une erreur : Escouade arrête les processus inactifs après un délai (Réglages › Comptes et harness, « Arrêter les processus des agents inactifs après », 30 minutes par défaut, 0 pour jamais) et les relance à la prochaine action.
 
 ### Session Claude introuvable
 
@@ -172,7 +172,7 @@ Un agent de ticket reprend de la même façon : son ticket n’est pas bloqué. 
 
 **Symptôme.** La conversation de l’agent affiche « La préparation du worktree a échoué sur `npm ci` (code 1). », suivie des dernières lignes de la sortie et de « Sortie complète » avec un chemin.
 
-**Cause.** Une commande de préparation du projet a échoué (Réglages › Projets, groupe « Worktrees », section « À l’ouverture d’un worktree »). Escouade les lance dans l’ordre et s’arrête à la première qui échoue. La raison est entre parenthèses : « code 1 », « arrêtée », « pas finie en 20 min » (une commande dispose de 20 minutes), « ne démarre pas » suivi de la cause, ou « le dossier … n’existe pas dans le worktree ».
+**Cause.** Une commande de préparation du projet a échoué (Réglages › Projets › Git et worktrees, groupe « Worktrees », section « À l’ouverture d’un worktree »). Escouade les lance dans l’ordre et s’arrête à la première qui échoue. La raison est entre parenthèses : « code 1 », « arrêtée », « pas finie en 20 min » (une commande dispose de 20 minutes), « ne démarre pas » suivi de la cause, ou « le dossier … n’existe pas dans le worktree ».
 
 **Solution.** Lis la sortie complète dans `~/.escouade/logs/<agent>-setup.log` : chaque étape y a son nom et sa fin. Corrige la commande dans les réglages du projet (voir [les réglages des projets](settings-projects)), ou lance-la à la main dans un terminal ouvert dans le worktree. Les commandes reçoivent `ESCOUADE_PROJECT_DIR`, `ESCOUADE_WORKTREE_DIR` et `ESCOUADE_BRANCH`. L’agent reste utilisable ; pour un agent de ticket, l’échec est ajouté à son premier message, et Claude doit faire le nécessaire pour pouvoir travailler et tester. Le log est remplacé à chaque nouvelle préparation, et disparaît avec l’agent.
 
@@ -216,7 +216,7 @@ Voir les [notifications](notifications).
 
 ### Le trousseau du système est illisible
 
-**Symptôme.** Réglages › Intégrations dit « Trousseau du système illisible : relance Escouade ou reconnecte le compte. » ou « Trousseau du système indisponible : le jeton reste dans ~/.escouade/integrations.json. »
+**Symptôme.** Réglages › Services connectés dit « Trousseau du système illisible : relance Escouade ou reconnecte le compte. » ou « Trousseau du système indisponible : le jeton reste dans ~/.escouade/integrations.json. »
 
 **Solution.** Relance Escouade ; si le message revient, reconnecte le compte (le jeton est alors enregistré de nouveau). Dans le second cas, le jeton reste dans `integrations.json`, lisible par toi seul sous macOS et Linux.
 
@@ -282,14 +282,14 @@ Si tu vois le retard et que le journal ne note rien, le temps n’est pas passé
 
 - « Aucune clé OpenAI n’est enregistrée. » : colle ta clé dans [Réglages › Voix](settings-voice#la-dictee-en-ligne), ou repasse en « Local (Whisper) ». Sous Linux, la clé ne peut pas être enregistrée : reste en local.
 - « OpenAI refuse la clé. » : vérifie-la chez le service, puis « Remplacer ».
-- « OpenAI ne répond pas » : vérifie le réseau et le proxy ([Réglages › Réseau](settings-network)), ou repasse en local.
+- « OpenAI ne répond pas » : vérifie le réseau et le proxy ([Réglages › Avancé › Réseau](settings-network)), ou repasse en local.
 - « OpenAI n’a pas transcrit la dictée », avec le code et la raison que donne le service : règle ce qu’elle dit sur ton compte chez lui, ou repasse en local.
 
 ### La conversation vocale ne démarre pas
 
 **Symptôme.** Un clic sur « Conversation » affiche « La conversation vocale n’est pas disponible : le moteur de la voix (ONNX Runtime) est introuvable dans l’app. Réinstalle Escouade. », ou le téléchargement d’un modèle ou d’une voix échoue.
 
-**Solution.** ONNX Runtime est livré avec l’app : s’il manque, réinstalle Escouade depuis [la page de téléchargement](installation). Un téléchargement qui échoue passe par le proxy des réglages réseau : derrière un proxy d’entreprise, vérifie [Réglages › Réseau](settings-network) et que `huggingface.co` est joignable. Ce qui se télécharge, et où, est dans [Réglages › Voix](settings-voice#ce-qui-se-telecharge-et-ou).
+**Solution.** ONNX Runtime est livré avec l’app : s’il manque, réinstalle Escouade depuis [la page de téléchargement](installation). Un téléchargement qui échoue passe par le proxy des réglages réseau : derrière un proxy d’entreprise, vérifie [Réglages › Avancé › Réseau](settings-network) et que `huggingface.co` est joignable. Ce qui se télécharge, et où, est dans [Réglages › Voix](settings-voice#ce-qui-se-telecharge-et-ou).
 
 ## Journal et signalement
 

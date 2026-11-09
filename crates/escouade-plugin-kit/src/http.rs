@@ -20,7 +20,7 @@ use anyhow::{anyhow, Result};
 use serde_json::Value;
 use std::time::Duration;
 
-/// The network as Escouade's settings say it (Réglages › Réseau), given to a plugin of the first hand when it starts:
+/// The network as Escouade's settings say it (Réglages › Avancé › Réseau), given to a plugin of the first hand when it starts:
 /// `ESCOUADE_PROXY` (empty: none), `ESCOUADE_NO_PROXY`, `ESCOUADE_INSECURE_TLS` (`1`: the certificates are not
 /// checked, for a proxy that inspects them without its root in the system's store). A module has no environment and needs
 /// none of it: the host keeps its network.

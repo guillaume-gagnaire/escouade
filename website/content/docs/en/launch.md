@@ -12,7 +12,7 @@ It isn’t an ordinary [terminal](terminals): the log is read-only, and Escouade
 
 ## Defining the commands
 
-Commands are set per project, in Settings › Projects, “Launch” group. The quickest way is the gear button of the sidebar’s “Launch” section (“Launch commands…”), or “Configure” when there is no command yet: they open the project’s settings on that group. Each command has four fields:
+Commands are set per project, in Settings › Projects › Launch. The quickest way is the gear button of the sidebar’s “Launch” section (“Launch commands…”), or “Configure” when there is no command yet: they open the project’s settings on that group. Each command has four fields:
 
 | Field | Role |
 |---|---|
@@ -70,7 +70,7 @@ A command also runs in an agent’s worktree, to see its work running without me
 - It receives `ESCOUADE_PORT_BASE` and `ESCOUADE_PORT_END`, the agent’s block of 10 ports (reserved then if it has none), the same as its test launches. For two instances not to fight over a port, make the command read it, for example `npm run dev -- --port $env:ESCOUADE_PORT_BASE` in PowerShell or `npm run dev -- --port ${ESCOUADE_PORT_BASE:-5173}` in bash.
 - When the same command already runs elsewhere (in the project or in another worktree), a dialog says so before running: “Stop the other and run”, or “Run anyway”.
 - It stops with the agent: when it’s archived, deleted, when its ticket is approved (which removes its worktree), and when the project closes.
-- A new worktree doesn’t have the project’s dependencies (`node_modules`, Python environment…): that’s the job of the worktree setup steps (Settings › Projects, “Worktrees” group), which run when it’s made.
+- A new worktree doesn’t have the project’s dependencies (`node_modules`, Python environment…): that’s the job of the worktree setup steps (Settings › Projects › Git and worktrees, “Worktrees” group), which run when it’s made.
 
 ## Fill in automatically
 

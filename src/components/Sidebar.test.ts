@@ -24,6 +24,9 @@ import {
 import ContextMenu from './ContextMenu.svelte';
 import Sidebar from './Sidebar.svelte';
 import { getByTip } from '../test/tip';
+import type { CodeHost } from '../lib/types';
+
+const GITHUB_HOST: CodeHost = { kind: 'github', name: 'GitHub', word: 'PR', pullRequests: true, deployments: true };
 import { gsd, scanOf, track } from '../test/workflows';
 import { workflows } from '../lib/workflows.svelte';
 
@@ -592,7 +595,7 @@ describe('Sidebar agent card plan line', () => {
   });
 
   it('says where the agent is in its workflow in the place of its plan, a ticket’s card in the tooltip of its loop (ESC-197)', async () => {
-    // GSD, its verifying step named by the user (Réglages › Projets › Workflow).
+    // GSD, its verifying step named by the user (Réglages › Projets › Kanban › Workflow).
     const named = {
       ...gsd(),
       steps: gsd().steps.map((st) => (st.name === 'gsd:verify-work' ? { ...st, name: 'Vérifier', named: true } : st)),
@@ -1556,9 +1559,9 @@ describe('Sidebar editor entries', () => {
 
   it('opens the project’s « Pull requests » beside the Kanban, in the host’s word (ESC-65)', async () => {
     resetApp({ projects: [project()], agents: [agent()] });
-    fakeBackend();
+    fakeBackend({ project_code_host: () => GITHUB_HOST });
     render(Sidebar, { project: project() });
-    const tab = screen.getByRole('button', { name: 'PR' });
+    const tab = await screen.findByRole('button', { name: 'PR' });
     await userEvent.click(tab);
     expect(app.prsOn).toBe(true);
     expect(tab).toHaveAttribute('aria-pressed', 'true');
@@ -1571,6 +1574,50 @@ describe('Sidebar editor entries', () => {
     // GitLab's word, once read.
     app.prWords.p1 = 'MR';
     expect(await screen.findByRole('button', { name: 'MR' })).toBeInTheDocument();
+  });
+});
+
+describe('Sidebar tabs and the code host (ESC-390)', () => {
+  const tabs = () =>
+    within(screen.getByRole('group', { name: 'Vue du projet' }))
+      .getAllByRole('button')
+      .map((b) => b.textContent?.trim());
+
+  it('shows « PR » only with a code host, comes and goes with it, and leaves its view when it goes', async () => {
+    resetApp({ projects: [project()], agents: [agent()] });
+    let host: CodeHost | null = null;
+    const backend = fakeBackend({ project_code_host: () => host });
+    render(Sidebar, { project: project() });
+    // No code host: three tabs, words alone; the pull requests do not open.
+    await waitFor(() => expect(app.codeHosts.p1).toBeNull());
+    expect(backend.called('project_code_host')).toEqual([{ cmd: 'project_code_host', args: { projectId: 'p1' } }]);
+    expect(tabs()).toEqual(['Agents1', 'Kanban', 'Docs']);
+    expect(document.querySelector('.seg [data-icon]')).toBeNull();
+    app.openPrs('p1');
+    expect(app.prsOn).toBe(false);
+    // Its plugin switched on (GitLab): the tab in its word.
+    host = { ...GITHUB_HOST, kind: 'gitlab', name: 'GitLab', word: 'MR' };
+    app.readCodeHosts();
+    await userEvent.click(await screen.findByRole('button', { name: 'MR' }));
+    expect(tabs()).toEqual(['Agents1', 'Kanban', 'MR', 'Docs']);
+    expect(app.prsOn).toBe(true);
+    // Its plugin switched off while the view is open: back to the agents, the tab gone.
+    host = null;
+    app.readCodeHosts();
+    await waitFor(() => expect(app.prsOn).toBe(false));
+    expect(screen.queryByRole('button', { name: 'MR' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Agents/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('reads the code host again when the window comes back (its remote may have changed)', async () => {
+    resetApp({ projects: [project()], agents: [agent()] });
+    let host: CodeHost | null = null;
+    fakeBackend({ project_code_host: () => host });
+    render(Sidebar, { project: project() });
+    await waitFor(() => expect(app.codeHosts.p1).toBeNull());
+    host = GITHUB_HOST;
+    await fireEvent.focus(window);
+    expect(await screen.findByRole('button', { name: 'PR' })).toBeInTheDocument();
   });
 });
 
@@ -1855,6 +1902,9 @@ describe('Sidebar in English', () => {
       'Open in editor',
       'Open a terminal',
       'Claude Code view',
+      // The split screen (ESC-392).
+      'Open beside',
+      'Open below',
       '',
       'Turn off remote control',
       'Open on claude.ai',
@@ -2631,7 +2681,7 @@ describe('Sidebar of agents on harnesses that do not all do the same', () => {
 describe('Sidebar: choosing the harness and its brand (ESC-29)', () => {
   const more = () => screen.getByRole('button', { name: 'Autres façons de créer un agent' });
 
-  it('lists every harness in the menu « Harness », numbered, the project’s marked, one not found greyed with where to set it', async () => {
+  it('lists the harnesses set up in the menu « Harness », numbered, the project’s marked, not one not found', async () => {
     resetApp();
     app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
     app.settings.accounts = [
@@ -2642,8 +2692,8 @@ describe('Sidebar: choosing the harness and its brand (ESC-29)', () => {
     render(Sidebar, { project: project({ engine: 'codex' }) });
     await userEvent.click(more());
     const harness = (label: string) => menu.open!.items.find((i) => i.label === label)!;
-    // Codex not found: in its place, greyed, with where to set it (choice 1).
-    expect(harness('Harness nu')).toMatchObject({ engine: 'codex', disabled: true, reason: expect.stringContaining('Réglages › Harness') });
+    // Codex not found: left out, even with an account.
+    expect(harness('Harness nu')).toBeUndefined();
     menu.close();
     app.enginesFound = ['claude', 'codex'];
     await userEvent.click(more());
@@ -2657,18 +2707,43 @@ describe('Sidebar: choosing the harness and its brand (ESC-29)', () => {
     expect(backend.called('create_agent')[0].args).toEqual({ projectId: 'p1', model: null, engine: 'claude', isolated: null, base: null });
   });
 
-  it('keeps a harness without an account in its place, with « Ajouter un compte… » (choice 15)', async () => {
+  it('leaves out a harness found without an account, the others numbered from 1, and the heading without any', async () => {
     resetApp();
-    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    app.engines = [BARE_ENGINE, CLAUDE_ENGINE];
     app.enginesFound = ['claude', 'codex'];
     fakeBackend();
     render(Sidebar, { project: project() });
     await userEvent.click(more());
-    const codex = menu.open!.items.find((i) => i.label === 'Harness nu')!;
-    expect(codex).toMatchObject({ detail: 'Aucun compte', fix: 'Ajouter un compte…' });
-    expect(codex.key).toBeUndefined();
-    codex.onClick!();
-    expect(app.modal).toEqual({ kind: 'account', engine: 'codex' });
+    const labels = () => menu.open!.items.map((i) => i.label);
+    expect(labels()).not.toContain('Harness nu');
+    expect(menu.open!.items.find((i) => i.label === 'Claude Code')).toMatchObject({ key: '1' });
+    menu.close();
+    app.settings.accounts = [];
+    await userEvent.click(more());
+    expect(labels()).not.toContain('Harness');
+    expect(labels()).not.toContain('Claude Code');
+    expect(menu.open!.items[0]).toMatchObject({ label: 'Worktree', heading: true });
+  });
+
+  it('leaves out a harness whose plugin is off, though found with an account, as its plugin says now (ESC-391)', async () => {
+    resetApp();
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    app.enginesFound = ['claude', 'codex'];
+    app.settings.accounts = [
+      ...app.settings.accounts!,
+      { id: 'cx', name: 'Pro', configDir: '', claudePath: '', active: true, engine: 'codex' },
+    ];
+    let off = ['codex'];
+    fakeBackend({ engines_found_now: () => ['claude', 'codex'], engines_off_now: () => off });
+    render(Sidebar, { project: project() });
+    await userEvent.click(more());
+    const labels = () => menu.open!.items.map((i) => i.label);
+    expect(labels()).not.toContain('Harness nu');
+    menu.close();
+    // Turned back on: offered at the next opening.
+    off = [];
+    await userEvent.click(more());
+    expect(labels().slice(0, 3)).toEqual(['Harness', 'Claude Code', 'Harness nu']);
   });
 
   it('opens the menu « Harness » on Ctrl+Shift+N, and takes a harness by its number', async () => {
@@ -3281,7 +3356,7 @@ describe('Sidebar of the 2.0 design (ESC-73)', () => {
     app.git.p1 = gitInfo();
     fakeBackend();
     render(Sidebar, { project: project() });
-    for (const name of ['plus', 'down', 'agents', 'kanban', 'folder', 'branch', 'sliders']) {
+    for (const name of ['plus', 'down', 'folder', 'branch', 'sliders']) {
       expect(document.querySelector(`[data-icon="${name}"]`), name).not.toBeNull();
     }
     expect(document.body.textContent).not.toMatch(/[▾▸⎇✦⟳■▶×]/);

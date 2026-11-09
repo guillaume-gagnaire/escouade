@@ -69,7 +69,7 @@ A worktree is a separate working copy of your repository, on its own branch. Wit
 
 ### Claude account
 
-A Claude account is a Claude Code configuration folder, with its sign-in. There is none to begin with: in Settings › Accounts, add your usual account (“This machine’s account”, named “Main”, started as before), or a new one (a personal one, a work one). Each agent stays on its account. See [Claude accounts](accounts).
+A Claude account is a Claude Code configuration folder, with its sign-in. There is none to begin with: in Settings › Accounts and harnesses, add your usual account (“This machine’s account”, named “Main”, started as before), or a new one (a personal one, a work one). Each agent stays on its account. See [Claude accounts](accounts).
 
 ### Overview
 
@@ -85,7 +85,7 @@ The “Overview” is a page that lists the agents of all projects, the ones wai
 
 The full requirements are in [installation](installation).
 
-The interface comes in French and English. By default it follows the system language: French if the system is in French, English otherwise. Settings › Application lets you pick either one without restarting, and pick separately the language of the texts Claude writes (commit messages, pull request descriptions, comments posted to Jira, Trello, GitHub, Linear, ClickUp, GitLab and Azure Boards, instructions given to agents), because many teams commit in English with an interface in French. See the [application settings](settings-application).
+The interface comes in French and English. By default it follows the system language: French if the system is in French, English otherwise. Settings › General lets you pick either one without restarting, and pick separately the language of the texts Claude writes (commit messages, pull request descriptions, comments posted to Jira, Trello, GitHub, Linear, ClickUp, GitLab and Azure Boards, instructions given to agents), because many teams commit in English with an interface in French. See the [application settings](settings-application).
 
 ## Map of the documentation
 
@@ -94,7 +94,7 @@ The interface comes in French and English. By default it follows the system lang
 - **Code and Git**: [Git and commits](git), then worktrees, branches, the [code hosts](code-hosts), the editor, terminals and running the project.
 - **Kanban and automation**: [the Kanban](board), then autopilot, testing and approving tickets, integrations and the MCP server.
 - **Accounts and usage**: [Claude accounts](accounts), then quotas, cost and statistics.
-- **Settings**: every tab of the settings window, option by option, starting with [Application](settings-application).
+- **Settings**: every page of the settings window, option by option, starting with [the window and General](settings-application).
 - **Reference**: the [keyboard shortcuts](shortcuts), local data, updates and [troubleshooting](troubleshooting).
 
 ## Support Escouade

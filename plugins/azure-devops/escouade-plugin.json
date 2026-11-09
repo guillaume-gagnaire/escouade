@@ -2,7 +2,7 @@
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.azure-devops",
   "name": "Azure DevOps",
-  "version": "2.2.1",
+  "version": "2.2.3",
   "description": {
     "fr": "Azure Boards dans le Kanban, et les PR d'Azure Repos, leurs stratégies, leurs pipelines, leurs relectures et leur merge, sur le compte de ton organisation.",
     "en": "Azure Boards in the Kanban, and Azure Repos pull requests, their policies, pipelines, reviews and merging, on your organization's account."
@@ -35,5 +35,5 @@
     "ticketSources": [{ "id": "azure", "name": "Azure Boards", "account": "azure" }],
     "forges": [{ "id": "azure", "name": "Azure DevOps", "account": "azure" }]
   },
-  "store": { "categories": ["ticket-sources", "forges"] }
+  "store": { "categories": ["ticket-sources", "forges"], "docs": "docs" }
 }

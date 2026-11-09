@@ -27,10 +27,10 @@ export default {
   // The toast after an import: « 3 tickets importés depuis Jira et Trello ».
   imported: { one: '{count} ticket importé depuis {from}', other: '{count} tickets importés depuis {from}' },
 
-  // The two parts of the tab: where the tickets come from, and where the code is.
+  // The two parts of « Services connectés »: where the code is, and where the tickets come from.
   parts: {
     sources: {
-      title: 'Sources du Kanban',
+      title: 'Sources de tickets',
       note: 'Import et synchro des tickets : un ticket importé suit sa colonne là-bas (état, commentaires).',
     },
     forges: {
@@ -114,7 +114,8 @@ export default {
   // The project's sources.
   sources: {
     title: 'Sources liées à {project}',
-    connectFirst: 'Connecte un compte ci-dessus pour lier une source à ce projet.',
+    connectFirst: 'Connecte un compte dans Services connectés pour lier une source à ce projet.',
+    openServices: 'Ouvrir Services connectés',
     none: 'Aucun',
     // The choice of the source, by service: its container, then the service.
     pick: {

@@ -187,10 +187,8 @@ test('a plugin’s page shows its README cut down, its copied image, its permiss
   expect(await page.evaluate(() => (window as unknown as { __pwned?: unknown }).__pwned)).toBeUndefined();
   await expect(page.locator('body')).toBeVisible();
   expect(await md.locator('a[href^="javascript"]').count()).toBe(0);
-  await expect(md.locator('a', { hasText: 'la doc' })).toHaveAttribute(
-    'href',
-    /^https:\/\/github\.com\/.+\/blob\/[0-9a-f]{40}\/docs\/setup\.md$/,
-  );
+  // A link to a page of its documentation opens its tab on the store (ESC-366).
+  await expect(md.locator('a', { hasText: 'la doc' })).toHaveAttribute('href', '?tab=docs&page=docs%2Fsetup.md');
   // The image of the repository, copied on the store; the tracker's dropped.
   const img = md.locator('img');
   await expect(img).toHaveCount(1);
@@ -243,6 +241,46 @@ test('a README in the visitor’s language, the other one otherwise', async ({ p
   await expect(page.locator('.aside')).toContainText('Connects to ntfy.sh');
   await page.goto(`/en/plugins/${seeded.ids.nord}`);
   await expect(page.locator('.aside')).toContainText('Asks for nothing');
+});
+
+test('the documentation pages of docs/fr and docs/en in the visitor’s language, the other one otherwise (ESC-366)', async ({
+  page,
+  request,
+}) => {
+  const md = page.locator('.readme .md');
+  const pages = page.locator('.doc-pages a');
+  // In French: its two pages, in the order of their names, the second titled by its file's name.
+  await page.goto(`/plugins/${seeded.ids.ntfy}?tab=docs`);
+  await expect(page.locator('.tabs a.on')).toContainText('2');
+  await expect(pages).toHaveText(['Installer', 'regler']);
+  await expect(md).toContainText('Abonne-toi au sujet.');
+  await expect(md).toHaveAttribute('lang', 'fr');
+  const src = (await md.locator('img').getAttribute('src'))!;
+  expect(src).toMatch(/^\/files\/[0-9a-f]{64}\.png$/);
+  expect((await request.get(src)).status()).toBe(200);
+  // A link to the other page stays on the store, in its tab.
+  await md.getByRole('link', { name: 'règle-le' }).click();
+  // The router writes the path's slashes as they are, a link encodes them: both name the same page.
+  await expect(page).toHaveURL(/[?&]page=docs(?:%2F|\/)fr(?:%2F|\/)02-regler\.md/);
+  await expect(md).toContainText('Le sujet par projet.');
+  await expect(pages.nth(1)).toHaveClass(/on/);
+  // In English: its one page, and the same image.
+  await page.goto(`/en/plugins/${seeded.ids.ntfy}?tab=docs`);
+  await expect(page.locator('.doc-pages')).toHaveCount(0);
+  await expect(md).toContainText('Subscribe to the topic.');
+  await expect(md).toHaveAttribute('lang', 'en');
+  await expect(md.locator('img')).toHaveAttribute('src', src);
+  // A page asked by its address shows with those of its language.
+  await page.goto(`/en/plugins/${seeded.ids.ntfy}?tab=docs&page=${encodeURIComponent('docs/fr/02-regler.md')}`);
+  await expect(md).toContainText('Le sujet par projet.');
+  await expect(pages).toHaveText(['Installer', 'regler']);
+  // A documentation without the visitor's language: the other one's, as a README.
+  await page.goto(`/en/plugins/${seeded.ids.nord}?tab=docs`);
+  await expect(md).toContainText('Seize couleurs.');
+  await expect(md).toHaveAttribute('lang', 'fr');
+  // A folder without languages, as before: its page, in both.
+  await page.goto(`/en/plugins/${seeded.ids.slack}?tab=docs`);
+  await expect(md).toContainText('Le salon par projet.');
 });
 
 test('« Signaler » takes a report without an account, and acknowledges it by e-mail', async ({ page, request }) => {

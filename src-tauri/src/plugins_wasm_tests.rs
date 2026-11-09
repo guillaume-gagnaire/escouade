@@ -352,7 +352,12 @@ async fn the_two_plugins_of_the_app_run_in_wasm_without_node_in_the_path() {
             &std::fs::read_to_string(folder.join("escouade-plugin.json")).unwrap(),
         )
         .unwrap();
-        assert_eq!(m["version"], "2.0.0", "{dir}");
+        // In run.js since 2.0.0 (ESC-326); a later version keeps it.
+        assert!(
+            m["version"].as_str().is_some_and(|v| v.starts_with("2.")),
+            "{dir}: {}",
+            m["version"]
+        );
         assert_eq!(
             m["run"],
             json!({ "js": "dist/plugin.mjs" }),

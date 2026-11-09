@@ -29,8 +29,8 @@ Two switches, off to begin with, turn remote control on without going through ea
 
 | Setting | Where | Agents covered |
 |---|---|---|
-| “Remote control for all agents” | Settings › Harness, “Remote control” group | Those of every project |
-| “Remote control for this project’s agents” | Settings › Projects, “Remote control” group (under “Identity”) | Those of the project chosen |
+| “Remote control for all agents” | Settings › Agents, “Remote control” group | Those of every project |
+| “Remote control for this project’s agents” | Settings › Projects › Privacy, “Remote control” group (under “Identity”) | Those of the project chosen |
 
 Like the other settings, they are saved with “Save” (see [Harness settings](settings-claude-code) and [project settings](settings-projects)).
 
@@ -43,7 +43,7 @@ Escouade starts each agent’s process right away, at most 3 at a time, and it s
 
 Once off, a setting takes remote control away from the agents that had it from that setting, and their remote session is closed. It touches neither the agents whose remote control you turned on by hand, nor those another setting still covers: if you turn off the global setting but a project’s is on, that project’s agents keep theirs, through the project.
 
-The two settings never contradict each other. While “Remote control for all agents” is on, the project’s switch shows on and grayed out, with “On for all projects in Settings › Harness”. The project’s own choice is kept: once the global setting is off, the project’s switch goes back to its state.
+The two settings never contradict each other. While “Remote control for all agents” is on, the project’s switch shows on and grayed out, with “On for all projects in Settings › Agents”. The project’s own choice is kept: once the global setting is off, the project’s switch goes back to its state.
 
 ## What shows in Escouade
 

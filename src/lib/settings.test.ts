@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync } from 'svelte';
 import { board, fakeBackend, project, resetApp, SETTINGS } from '../test/ipc';
 import { setLang } from './i18n';
-import { SETTINGS_TABS, settingsForm } from './settings.svelte';
+import { SAVE_PAUSE_MS, SETTINGS_PAGES, settingsForm } from './settings.svelte';
 import { app } from './state.svelte';
 import type { RunCommand } from './types';
 
@@ -16,23 +16,23 @@ describe('settingsForm', () => {
     resetApp({ projects: [project({ runCommands: [FRONT] }), P2()] });
   });
 
-  it('opens on Claude Code and the project on screen, or on the tab and project asked for', () => {
+  it('opens on Comptes et harness and the project on screen, or on the page and project asked for', () => {
     app.ui.activeProject = 'p2';
     settingsForm.open();
-    expect(settingsForm.tab).toBe('claude');
+    expect(settingsForm.page).toBe('accounts');
     expect(settingsForm.projectId).toBe('p2');
-    settingsForm.open({ tab: 'board', projectId: 'p1' });
-    expect(settingsForm.tab).toBe('board');
+    settingsForm.open({ page: 'board', projectId: 'p1' });
+    expect(settingsForm.page).toBe('board');
     expect(settingsForm.projectId).toBe('p1');
     expect(settingsForm.project?.board.action).toBe('merge');
     // A project closed since the shortcut was made: the one on screen instead.
-    settingsForm.open({ tab: 'projects', projectId: 'gone' });
+    settingsForm.open({ page: 'project', projectId: 'gone' });
     expect(settingsForm.projectId).toBe('p2');
   });
 
   it('has no project to set when there is none', () => {
     resetApp({ projects: [] });
-    settingsForm.open({ tab: 'projects' });
+    settingsForm.open({ page: 'project' });
     expect(settingsForm.projectId).toBeNull();
     expect(settingsForm.project).toBeUndefined();
   });
@@ -89,33 +89,43 @@ describe('settingsForm', () => {
     expect(backend.called('claude_found')).toHaveLength(2);
   });
 
-  it('turns an emptied number of minutes into 0 instead of sending null', async () => {
+  it('does not save an emptied or negative number, says it, and saves the rest', async () => {
     const backend = fakeBackend({ save_settings: () => [] });
     settingsForm.open();
     (settingsForm.settings as any).idleStopMinutes = null;
+    settingsForm.settings.attachWarnMb = -5;
+    settingsForm.settings.attachKeepDays = 2.7;
+    settingsForm.settings.sound = false;
+    expect([...settingsForm.badNumbers].sort()).toEqual(['attachWarnMb', 'idleStopMinutes']);
     await settingsForm.save();
-    expect(backend.called('save_settings')[0].args.settings.idleStopMinutes).toBe(0);
+    const sent = backend.called('save_settings')[0].args.settings;
+    // The values saved before stay; the whole number of the other is taken.
+    expect(sent).toMatchObject({
+      idleStopMinutes: SETTINGS.idleStopMinutes,
+      attachWarnMb: SETTINGS.attachWarnMb,
+      attachKeepDays: 2,
+      sound: false,
+    });
+    expect(app.settings.idleStopMinutes).toBe(SETTINGS.idleStopMinutes);
+    // Fixed: saved in its turn.
+    settingsForm.settings.attachWarnMb = 40;
+    (settingsForm.settings as any).idleStopMinutes = 15;
+    expect(settingsForm.badNumbers.size).toBe(0);
+    await settingsForm.save();
+    expect(backend.called('save_settings')[1].args.settings).toMatchObject({ attachWarnMb: 40, idleStopMinutes: 15 });
   });
 
-  it('turns the numbers of the attachments into whole numbers, 0 or more, instead of sending null', async () => {
-    const backend = fakeBackend({ save_settings: () => [] });
-    settingsForm.open();
-    Object.assign(settingsForm.settings as any, { attachMaxMb: null, attachWarnMb: -5, attachKeepDays: 2.7 });
-    await settingsForm.save();
-    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ attachMaxMb: 0, attachWarnMb: 0, attachKeepDays: 2 });
-  });
-
-  it('sees a change of the attachments in the Claude Code tab, and has none once it is saved', async () => {
+  it('sees a change of the attachments on the page Avancé, and has none once it is saved', async () => {
     fakeBackend({ save_settings: () => [] });
     settingsForm.open();
-    expect(settingsForm.changed('claude')).toBe(false);
+    expect(settingsForm.changed('advanced')).toBe(false);
     settingsForm.settings.attachWarnMb = 50;
-    expect(settingsForm.changed('claude')).toBe(true);
+    expect(settingsForm.changed('advanced')).toBe(true);
     settingsForm.settings.attachWarnMb = 200;
     settingsForm.settings.attachBigText = 'refuse';
-    expect(settingsForm.changed('claude')).toBe(true);
+    expect(settingsForm.changed('advanced')).toBe(true);
     await settingsForm.save();
-    expect(settingsForm.changed('claude')).toBe(false);
+    expect(settingsForm.changed('advanced')).toBe(false);
     expect(app.settings.attachBigText).toBe('refuse');
   });
 
@@ -148,7 +158,7 @@ describe('settingsForm', () => {
   it('saves the launch commands trimmed and the copied files one per line, and stops a removed one that ran', async () => {
     const backend = fakeBackend();
     app.launches.c1 = { status: 'running', ptyId: 't1', name: 'Front', stopping: false, code: null, startedAt: 1 };
-    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    settingsForm.open({ page: 'project', projectId: 'p1' });
     settingsForm.addCommand();
     const added = settingsForm.projects.p1.runCommands[1];
     Object.assign(added, { name: ' API ', command: ' cargo run ', cwd: ' back ' });
@@ -167,7 +177,7 @@ describe('settingsForm', () => {
   it('saves the worktree steps trimmed, without those that have no command', async () => {
     const backend = fakeBackend();
     app.shells = [{ id: 'bash', label: 'Git Bash', path: 'bash.exe' }];
-    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    settingsForm.open({ page: 'project', projectId: 'p1' });
     settingsForm.addStep('setup');
     settingsForm.addStep('setup');
     settingsForm.addStep('teardown');
@@ -176,14 +186,14 @@ describe('settingsForm', () => {
     Object.assign(first, { command: ' npm ci ', cwd: ' web ' });
     empty.command = '   ';
     settingsForm.projects.p1.worktreeTeardown[0].command = 'docker compose down';
-    expect(settingsForm.changed('projects')).toBe(true);
+    expect(settingsForm.changed('git')).toBe(true);
     expect(await settingsForm.save()).toBe(true);
 
     const saved = backend.called('update_project')[0].args.project;
     expect(saved.worktreeSetup).toEqual([{ id: first.id, command: 'npm ci', shell: 'bash', cwd: 'web' }]);
     expect(saved.worktreeTeardown).toMatchObject([{ command: 'docker compose down', shell: 'bash', cwd: '' }]);
     expect(app.projects[0].worktreeSetup).toEqual(saved.worktreeSetup);
-    expect(settingsForm.changed('projects')).toBe(false);
+    expect(settingsForm.changed('git')).toBe(false);
   });
 
   it("fills the worktree steps with Claude's suggestion, and says when it has none", async () => {
@@ -191,7 +201,7 @@ describe('settingsForm', () => {
     const backend = fakeBackend({
       suggest_worktree_steps: () => new Promise((r) => (answer = r)),
     });
-    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    settingsForm.open({ page: 'project', projectId: 'p1' });
     settingsForm.addStep('teardown');
     const asked = settingsForm.suggest('p1');
     expect(settingsForm.suggesting.p1).toBe(true);
@@ -200,7 +210,7 @@ describe('settingsForm', () => {
     answer({ setup: [ci], teardown: [], refused: 0 });
     await asked;
     expect(settingsForm.suggesting.p1).toBe(false);
-    expect(app.toasts.at(-1)?.text).toBe("1 commande proposée : relis-la avant d'enregistrer.");
+    expect(app.toasts.at(-1)?.text).toBe('1 commande proposée : relis-la avant de remplacer les commandes.');
     // Shown apart, to be read in full: the draft is left as it is until it is taken.
     expect(settingsForm.proposal.p1).toEqual({ setup: [ci], teardown: [], refused: 0 });
     expect(settingsForm.projects.p1.worktreeSetup).toEqual([]);
@@ -217,12 +227,12 @@ describe('settingsForm', () => {
     settingsForm.takeProposal('p1');
     expect(settingsForm.projects.p1.worktreeTeardown).toEqual([down]);
     expect(app.toasts.at(-1)?.text).toBe(
-      "2 commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant d'enregistrer.",
+      '2 commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant de remplacer les commandes.',
     );
     fakeBackend({ suggest_worktree_steps: () => ({ setup: [ci], teardown: [], refused: 2 }) });
     await settingsForm.suggest('p1');
     expect(app.toasts.at(-1)?.text).toBe(
-      "1 commande proposée, 2 écartées (caractères invisibles ou trop longues) : relis-la avant d'enregistrer.",
+      '1 commande proposée, 2 écartées (caractères invisibles ou trop longues) : relis-la avant de remplacer les commandes.',
     );
 
     settingsForm.takeProposal('p1');
@@ -254,8 +264,8 @@ describe('settingsForm', () => {
   it("fills the launch commands with Claude's suggestion in place of the draft's, and says when it has none", async () => {
     let answer!: (v: unknown) => void;
     const backend = fakeBackend({ suggest_run_commands: () => new Promise((r) => (answer = r)) });
-    settingsForm.open({ tab: 'projects', projectId: 'p1' });
-    expect(settingsForm.changed('projects')).toBe(false);
+    settingsForm.open({ page: 'project', projectId: 'p1' });
+    expect(settingsForm.changed('launch')).toBe(false);
     const asked = settingsForm.suggestLaunch('p1');
     expect(settingsForm.suggestingLaunch.p1).toBe(true);
     // The worktree steps' reading is another one.
@@ -269,26 +279,26 @@ describe('settingsForm', () => {
     answer({ commands: [web, db], refused: 0 });
     await asked;
     expect(settingsForm.suggestingLaunch.p1).toBe(false);
-    expect(app.toasts.at(-1)?.text).toBe("2 commandes proposées : relis-les avant d'enregistrer.");
+    expect(app.toasts.at(-1)?.text).toBe('2 commandes proposées : relis-les avant de remplacer les commandes.');
     // Shown apart, to be read in full: the draft keeps FRONT until it is taken.
     expect(settingsForm.launchProposal.p1).toEqual([web, db]);
     expect(settingsForm.projects.p1.runCommands).toEqual([FRONT]);
-    expect(settingsForm.changed('projects')).toBe(false);
+    expect(settingsForm.changed('launch')).toBe(false);
     // Taken, it replaces the draft's command.
     settingsForm.takeLaunchProposal('p1');
     expect(settingsForm.launchProposal.p1).toBeUndefined();
     expect(settingsForm.projects.p1.runCommands).toEqual([web, db]);
     // A draft like another: it shows as a change, and cancelling drops it.
-    expect(settingsForm.changed('projects')).toBe(true);
+    expect(settingsForm.changed('launch')).toBe(true);
     expect(app.projects[0].runCommands).toEqual([FRONT]);
-    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    settingsForm.open({ page: 'project', projectId: 'p1' });
     expect(settingsForm.projects.p1.runCommands).toEqual([FRONT]);
 
     fakeBackend({ suggest_run_commands: () => ({ commands: [web], refused: 0 }) });
     await settingsForm.suggestLaunch('p1');
-    expect(app.toasts.at(-1)?.text).toBe("1 commande proposée : relis-la avant d'enregistrer.");
+    expect(app.toasts.at(-1)?.text).toBe('1 commande proposée : relis-la avant de remplacer les commandes.');
     // A proposal not taken goes with the draft too.
-    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    settingsForm.open({ page: 'project', projectId: 'p1' });
     expect(settingsForm.launchProposal.p1).toBeUndefined();
 
     // Some were refused (a line break, invisible characters, a long run of blanks, too long): said, in the singular and the plural.
@@ -297,12 +307,12 @@ describe('settingsForm', () => {
     settingsForm.takeLaunchProposal('p1');
     expect(settingsForm.projects.p1.runCommands).toEqual([web, db]);
     expect(app.toasts.at(-1)?.text).toBe(
-      "2 commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant d'enregistrer.",
+      '2 commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant de remplacer les commandes.',
     );
     fakeBackend({ suggest_run_commands: () => ({ commands: [web], refused: 3 }) });
     await settingsForm.suggestLaunch('p1');
     expect(app.toasts.at(-1)?.text).toBe(
-      "1 commande proposée, 3 écartées (caractères invisibles ou trop longues) : relis-la avant d'enregistrer.",
+      '1 commande proposée, 3 écartées (caractères invisibles ou trop longues) : relis-la avant de remplacer les commandes.',
     );
     settingsForm.takeLaunchProposal('p1');
 
@@ -332,7 +342,7 @@ describe('settingsForm', () => {
         refused: 0,
       }),
     });
-    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    settingsForm.open({ page: 'project', projectId: 'p1' });
     await settingsForm.suggestLaunch('p1');
     settingsForm.takeLaunchProposal('p1');
     expect(await settingsForm.save()).toBe(true);
@@ -360,45 +370,102 @@ describe('settingsForm', () => {
     expect(backend.called('board_set')[0].args.settings).toMatchObject({ testCommand: '', testsFirst: false });
   });
 
-  it('refuses to save a project without a name or a command without a name or a command line', async () => {
+  it('does not save a project without a name nor commands one of which lacks a name or a line, and saves the rest', async () => {
     const backend = fakeBackend();
     settingsForm.open({ projectId: 'p1' });
-    expect(settingsForm.problem).toBeNull();
+    expect(settingsForm.projectProblems('p2')).toMatchObject({ name: false, commands: false });
     settingsForm.projects.p2.name = ' ';
-    expect(settingsForm.problem).toBe('Le projet « site » doit garder un nom.');
-    expect(await settingsForm.save()).toBe(false);
-    settingsForm.projects.p2.name = 'site';
-    settingsForm.projects.p1.runCommands[0].command = '';
-    expect(settingsForm.problem).toBe('Chaque commande de lancement de « demo-api » demande un nom et une ligne de commande.');
-    expect(await settingsForm.save()).toBe(false);
+    expect(settingsForm.projectProblems('p2').name).toBe(true);
+    expect(await settingsForm.save()).toBe(true);
     expect(backend.calls).toEqual([]);
+    settingsForm.projects.p1.runCommands[0].command = '';
+    settingsForm.projects.p1.worktreePerAgent = true;
+    expect(settingsForm.projectProblems('p1').commands).toBe(true);
+    await settingsForm.save();
+    // Only what can be: the commands saved stay those of before.
+    expect(backend.called('update_project')).toHaveLength(1);
+    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', worktreePerAgent: true, runCommands: [FRONT] });
+    expect(app.projects[1].name).toBe('site');
+    // Still a change, to save once fixed.
+    expect(settingsForm.changed('launch', 'p1')).toBe(true);
+    settingsForm.projects.p1.runCommands[0].command = 'npm start';
+    await settingsForm.save();
+    expect(backend.called('update_project')[1].args.project.runCommands[0].command).toBe('npm start');
   });
 
-  it('marks the tabs whose settings changed', () => {
+  it('saves once after a pause, and at once when flushed', async () => {
+    vi.useFakeTimers();
+    try {
+      const backend = fakeBackend({ save_settings: () => [] });
+      settingsForm.open();
+      settingsForm.settings.proxyUrl = 'http://p';
+      settingsForm.schedule();
+      settingsForm.settings.proxyUrl = 'http://proxy:3128';
+      settingsForm.schedule();
+      await vi.advanceTimersByTimeAsync(SAVE_PAUSE_MS - 1);
+      expect(backend.called('save_settings')).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(1);
+      await vi.runAllTimersAsync();
+      expect(backend.called('save_settings')).toHaveLength(1);
+      expect(backend.called('save_settings')[0].args.settings.proxyUrl).toBe('http://proxy:3128');
+      // A choice: at once, the pause waiting dropped.
+      settingsForm.settings.sound = false;
+      settingsForm.schedule();
+      await settingsForm.flush();
+      expect(backend.called('save_settings')).toHaveLength(2);
+      await vi.runAllTimersAsync();
+      expect(backend.called('save_settings')).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('saves one at a time: what changes while a save runs is saved by the next', async () => {
+    let release!: () => void;
+    let n = 0;
+    const backend = fakeBackend({
+      save_settings: () => (++n === 1 ? new Promise((r) => (release = () => r([]))) : []),
+    });
     settingsForm.open();
-    expect(settingsForm.changed('claude')).toBe(false);
+    settingsForm.settings.sound = false;
+    const first = settingsForm.flush();
+    await new Promise((r) => setTimeout(r));
+    settingsForm.settings.proxyUrl = 'http://proxy:3128';
+    const second = settingsForm.flush();
+    await new Promise((r) => setTimeout(r));
+    expect(backend.called('save_settings')).toHaveLength(1);
+    release();
+    await first;
+    await second;
+    expect(backend.called('save_settings')).toHaveLength(2);
+    expect(backend.called('save_settings')[1].args.settings).toMatchObject({ sound: false, proxyUrl: 'http://proxy:3128' });
+  });
+
+  it('marks the pages whose settings changed', () => {
+    settingsForm.open();
+    expect(settingsForm.changed('agents')).toBe(false);
     settingsForm.settings.idleStopMinutes = 5;
     settingsForm.settings.proxyTerminals = true;
     settingsForm.projects.p2.board.maxParallel = 5;
-    expect(settingsForm.changed('claude')).toBe(true);
-    expect(settingsForm.changed('network')).toBe(true);
+    expect(settingsForm.changed('agents')).toBe(true);
+    expect(settingsForm.changed('advanced')).toBe(true);
     expect(settingsForm.changed('board')).toBe(true);
     expect(settingsForm.changed('notifications')).toBe(false);
-    expect(settingsForm.changed('terminals')).toBe(false);
-    expect(settingsForm.changed('projects')).toBe(false);
+    expect(settingsForm.changed('voice')).toBe(false);
+    expect(settingsForm.changed('git')).toBe(false);
     settingsForm.projects.p1.copy = '.env*\n';
     // The same patterns: nothing to save.
-    expect(settingsForm.changed('projects')).toBe(false);
+    expect(settingsForm.changed('git')).toBe(false);
     settingsForm.projects.p1.copy = '.env.local';
-    expect(settingsForm.changed('projects')).toBe(true);
+    expect(settingsForm.changed('git')).toBe(true);
   });
 
-  it('marks the Kanban tab for its app setting, the quota pause, as for its boards', () => {
+  it('marks the quota pause on Comptes et harness, not on Kanban', () => {
     settingsForm.open();
-    expect(settingsForm.changed('board')).toBe(false);
+    expect(settingsForm.changed('accounts')).toBe(false);
     settingsForm.settings.quotaPause = 90;
-    expect(settingsForm.changed('board')).toBe(true);
-    expect(settingsForm.changed('claude')).toBe(false);
+    expect(settingsForm.changed('accounts')).toBe(true);
+    expect(settingsForm.changed('board')).toBe(false);
   });
 
   it('keeps what could not be saved to try again, without saving twice what was', async () => {
@@ -418,7 +485,7 @@ describe('settingsForm', () => {
     expect(app.toasts.at(-1)?.text).toContain('disque plein');
     expect(app.projects[0].board.strategy).toBe('squash');
     expect(settingsForm.changed('notifications')).toBe(false);
-    expect(settingsForm.changed('projects')).toBe(false);
+    expect(settingsForm.changed('project')).toBe(false);
     expect(settingsForm.changed('board')).toBe(true);
 
     fail = false;
@@ -447,33 +514,33 @@ describe('settingsForm', () => {
     settingsForm.projects.p1.board.strategy = 'rebase';
     expect(await settingsForm.save()).toBe(false);
     expect(app.projects[0].name).toBe('api');
-    expect(settingsForm.changed('projects')).toBe(true);
+    expect(settingsForm.changed('project')).toBe(true);
   });
 
-  it('resumes the draft it had, on the tab and project asked for', () => {
+  it('resumes the draft it had, on the page and project asked for, or the page of a 2.0 tab', () => {
     settingsForm.open({ projectId: 'p1' });
     settingsForm.settings.proxyUrl = 'http://proxy:3128';
-    settingsForm.resume({ tab: 'projects', projectId: 'p2' });
-    expect(settingsForm.tab).toBe('projects');
+    settingsForm.resume({ page: 'project', projectId: 'p2' });
+    expect(settingsForm.page).toBe('project');
     expect(settingsForm.projectId).toBe('p2');
     expect(settingsForm.settings.proxyUrl).toBe('http://proxy:3128');
     // Its project closed meanwhile: the one on screen.
     app.projects = app.projects.filter((p) => p.id !== 'p2');
-    settingsForm.resume({ tab: 'projects', projectId: 'p2' });
+    settingsForm.resume({ page: 'project', projectId: 'p2' });
     expect(settingsForm.projectId).toBe('p1');
   });
 
-  it('saves a project’s links on the « Intégrations » tab alone, without its empty ones', async () => {
+  it('saves a project’s links on its page Tickets importés alone, without its empty ones', async () => {
     const backend = fakeBackend();
-    settingsForm.open({ tab: 'integrations', projectId: 'p1' });
-    expect(settingsForm.changed('integrations')).toBe(false);
+    settingsForm.open({ page: 'tickets', projectId: 'p1' });
+    expect(settingsForm.changed('tickets')).toBe(false);
     settingsForm.projects.p1.integrations.links.push(
       { service: 'jira', container: 'ATL', name: 'ATL — Atlas', states: { doing: { id: '3', name: 'In Progress' } } },
       { service: 'trello', container: '', name: '', states: {} },
     );
     settingsForm.projects.p1.integrations.comments = ['done'];
-    expect(settingsForm.changed('integrations')).toBe(true);
-    expect(settingsForm.changed('projects')).toBe(false);
+    expect(settingsForm.changed('tickets')).toBe(true);
+    expect(settingsForm.changed('project')).toBe(false);
     expect(await settingsForm.save()).toBe(true);
     const sent = backend.called('update_project')[0].args.project;
     expect(sent.integrations).toEqual({
@@ -482,16 +549,16 @@ describe('settingsForm', () => {
     });
     expect(sent.name).toBe('demo-api');
     expect(app.projects[0].integrations.links.map((l) => l.container)).toEqual(['ATL']);
-    expect(settingsForm.changed('integrations')).toBe(false);
+    expect(settingsForm.changed('tickets')).toBe(false);
   });
 
-  it('counts the sync settings as the « Intégrations » tab’s', async () => {
+  it('counts the sync settings as the page Services connectés’s', async () => {
     const backend = fakeBackend({ save_settings: () => [] });
-    settingsForm.open({ tab: 'integrations' });
+    settingsForm.open({ page: 'services' });
     settingsForm.settings.integrations.autoImport = true;
     settingsForm.settings.integrations.importLabel = 'escouade';
-    expect(settingsForm.changed('integrations')).toBe(true);
-    expect(settingsForm.changed('claude')).toBe(false);
+    expect(settingsForm.changed('services')).toBe(true);
+    expect(settingsForm.changed('tickets')).toBe(false);
     await settingsForm.save();
     expect(backend.called('save_settings')[0].args.settings.integrations).toMatchObject({ autoImport: true, importLabel: 'escouade' });
     expect(backend.called('update_project')).toHaveLength(0);
@@ -506,33 +573,29 @@ describe('settingsForm', () => {
     expect(backend.called('update_project')).toHaveLength(0);
   });
 
-  it('names its tabs in the language of the interface, read when asked', () => {
-    const names = () => SETTINGS_TABS.map((x) => `${x.label} / ${x.desc}`);
-    expect(names()[5]).toBe('Projets / Réglages propres à chaque projet');
+  it('names the pages in the language of the interface, read when asked', () => {
+    const names = () => SETTINGS_PAGES.map((x) => x.label);
+    expect(names()[0]).toBe('Général');
     setLang('en');
     flushSync();
     expect(names()).toEqual([
-      'Application / Theme, zoom, languages and written texts',
-      'Harness / Each harness’s executables and versions, and what holds for them all',
-      'Accounts / Each harness’s accounts, their new agents’ settings, and what happens at the limit',
-      'Voice / Dictation and voice conversation, on your machine or online',
-      'Notifications / Visual and sound alerts',
-      'Projects / Settings specific to each project',
-      'Kanban / Autopilot and approved tickets',
-      'Integrations / Kanban sources (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards) and code hosts',
-      'Plugins / What they add to Escouade, where they come from and what they can do',
-      'MCP server / What Claude and the agents can do in Escouade, and what they did',
-      'Terminals / Shells available in the built-in terminals',
-      'Network / HTTP(S) proxy and TLS certificates for Claude Code, integrations, and updates',
-      'About / Version and local data',
-    ]);
-    // Those set for one project only.
-    expect(SETTINGS_TABS.filter((x) => x.scoped).map((x) => x.id)).toEqual(['projects', 'board', 'integrations']);
-    // In three groups (2.0 design): the general ones, « Par projet », « Système ».
-    expect(SETTINGS_TABS.map((x) => x.group)).toEqual([
-      ...Array(5).fill('general'),
-      ...Array(3).fill('project'),
-      ...Array(5).fill('system'),
+      'General',
+      'Agents',
+      'Accounts and harnesses',
+      'Connected services',
+      'Voice',
+      'Notifications',
+      'Plugins',
+      'Advanced',
+      'About',
+      'Project',
+      'Git and worktrees',
+      'Launch',
+      'Kanban',
+      'Imported tickets',
+      'Team',
+      'Privacy',
+      'All projects',
     ]);
   });
 
@@ -540,30 +603,26 @@ describe('settingsForm', () => {
     setLang('en');
     const ci = { id: 's1', name: 'Front', command: 'npm run dev', shell: 'bash', cwd: '' };
     const db = { ...ci, id: 's2', name: 'Base' };
-    settingsForm.open({ tab: 'projects', projectId: 'p1' });
+    settingsForm.open({ page: 'project', projectId: 'p1' });
     const said = async (commands: unknown[], refused: number) => {
       fakeBackend({ suggest_run_commands: () => ({ commands, refused }) });
       await settingsForm.suggestLaunch('p1');
       return app.toasts.at(-1)?.text;
     };
-    expect(await said([ci], 0)).toBe('1 command suggested: review it before saving.');
-    expect(await said([ci, db], 0)).toBe('2 commands suggested: review them before saving.');
-    expect(await said([ci], 1)).toBe('1 command suggested, 1 left out (invisible characters or too long): review it before saving.');
-    expect(await said([ci, db], 1)).toBe('2 commands suggested, 1 left out (invisible characters or too long): review them before saving.');
-    expect(await said([ci], 3)).toBe('1 command suggested, 3 left out (invisible characters or too long): review it before saving.');
-    expect(await said([ci, db], 3)).toBe('2 commands suggested, 3 left out (invisible characters or too long): review them before saving.');
+    expect(await said([ci], 0)).toBe('1 command suggested: review it before replacing the commands.');
+    expect(await said([ci, db], 0)).toBe('2 commands suggested: review them before replacing the commands.');
+    expect(await said([ci], 1)).toBe(
+      '1 command suggested, 1 left out (invisible characters or too long): review it before replacing the commands.',
+    );
+    expect(await said([ci, db], 1)).toBe(
+      '2 commands suggested, 1 left out (invisible characters or too long): review them before replacing the commands.',
+    );
+    expect(await said([ci], 3)).toBe(
+      '1 command suggested, 3 left out (invisible characters or too long): review it before replacing the commands.',
+    );
+    expect(await said([ci, db], 3)).toBe(
+      '2 commands suggested, 3 left out (invisible characters or too long): review them before replacing the commands.',
+    );
     expect(await said([], 0)).toBe('Claude found no command to run for this project.');
-  });
-
-  it('tells in English what keeps the settings from being saved, and follows a change of language', () => {
-    settingsForm.open({ projectId: 'p1' });
-    settingsForm.projects.p2.name = ' ';
-    expect(settingsForm.problem).toBe('Le projet « site » doit garder un nom.');
-    setLang('en');
-    flushSync();
-    expect(settingsForm.problem).toBe('The project “site” needs a name.');
-    settingsForm.projects.p2.name = 'site';
-    settingsForm.projects.p1.runCommands[0].command = '';
-    expect(settingsForm.problem).toBe('Every launch command in “demo-api” needs a name and a command line.');
   });
 });

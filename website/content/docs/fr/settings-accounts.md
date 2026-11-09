@@ -1,16 +1,18 @@
-# Réglages : Comptes
+# Réglages : Comptes et harness
 
-L’onglet « Comptes » liste les comptes sur lesquels partent les agents, un groupe par harness, dans l’ordre où Escouade les essaie. Chaque changement y est enregistré tout de suite, sans passer par « Enregistrer ».
+La page « Comptes et harness » montre chaque harness, son état et sa version, avec ses comptes sous lui, dans l’ordre où Escouade les essaie ; puis « Quand un quota est épuisé », et « Avancé ». Chaque changement s’enregistre tout de suite.
+
+Un point ambre sur la page, dans la barre des réglages, dit un harness installé qui n’a aucun compte.
 
 ## Comment Escouade choisit un compte
 
-Un compte est un harness lancé avec son propre dossier de configuration (pour Claude Code, son `CLAUDE_CONFIG_DIR`), donc avec sa connexion, ses sessions et son quota. Chaque compte appartient à un seul harness, et l’onglet les groupe par harness : « Comptes Claude Code », puis ceux des autres harness quand ils en ont. Aucun compte n’existe au départ : seuls ceux que tu ajoutes comptent. Un harness installé sans compte a son groupe, avec « Aucun compte » et « Ajouter un compte Codex… ». Le compte de la machine d’un harness, son « Principal », est ton installation habituelle : une fois ajouté, il est lancé comme toujours, sans dossier à part, et il se retire comme les autres, sans déconnecter la machine. Le fonctionnement des comptes et de leurs quotas est expliqué dans [les comptes](accounts) et dans [l’usage](usage).
+Un compte est un harness lancé avec son propre dossier de configuration (pour Claude Code, son `CLAUDE_CONFIG_DIR`), donc avec sa connexion, ses sessions et son quota. Chaque compte appartient à un seul harness, et la page les groupe par harness : « Comptes Claude Code », puis ceux des autres harness quand ils en ont. Aucun compte n’existe au départ : seuls ceux que tu ajoutes comptent. Un harness installé sans compte a son groupe, avec « Aucun compte » et « Ajouter un compte Codex… ». Le compte de la machine d’un harness, son « Principal », est ton installation habituelle : une fois ajouté, il est lancé comme toujours, sans dossier à part, et il se retire comme les autres, sans déconnecter la machine. Le fonctionnement des comptes et de leurs quotas est expliqué dans [les comptes](accounts) et dans [l’usage](usage).
 
 La note sous le titre du premier groupe le résume : « Les nouveaux agents partent sur le premier compte actif de leur harness dont la 5 h est sous les seuils « Pause au-delà du quota » et « Changer de compte à » et dont la semaine tient son rythme, dans cet ordre. » En détail :
 
 - Un nouvel agent part sur un compte de son harness, jamais sur celui d’un autre harness : le premier compte actif du groupe qui est « bon » : aucune fenêtre courte (la 5 h) n’a atteint le seuil de pause ni celui de « Changer de compte à » (le plus bas des deux compte), et aucune fenêtre longue (la semaine, les 30 jours, les crédits du mois) n’est à sa limite ni ne finirait au-delà de 100 % à son rythme actuel. Une semaine au-dessus du seuil mais qui tient son rythme reste bonne.
 - Si tous les comptes actifs ont atteint le seuil, il part sur le premier compte actif, et le [pilote auto](autopilot) se met en pause.
-- Le « Compte préféré » d’un projet, dans l’onglet [« Projets »](settings-projects), passe devant tant qu’il est actif.
+- Le « Compte préféré » d’un projet, dans sa page [« Projet »](settings-projects), passe devant tant qu’il est actif.
 - Un compte « Réservé aux projets » ne reçoit que les agents et les tickets de ces projets.
 
 ## La liste
@@ -23,9 +25,9 @@ Chaque compte a son bloc dans le groupe de son harness.
 | « Actif » | Interrupteur. Un compte inactif ne reçoit aucun nouvel agent. Il en faut au moins un d’actif par harness : l’interrupteur du dernier compte actif d’un groupe est grisé (« Il faut au moins un compte actif par harness. »). | Activé |
 | Flèches ↑ et ↓ | Montent ou descendent le compte dans son groupe : l’ordre du groupe est l’ordre de priorité de son harness. | — |
 | « Dossier » | Le dossier de configuration du compte, affiché sans pouvoir être modifié. | — |
-| « Exécutable » | Le `claude` de ce compte. Vide, c’est celui de l’onglet « Harness » (le champ dit « Celui des réglages »). Enregistré quand tu quittes le champ. | Vide |
+| « Exécutable » | Le `claude` de ce compte. Vide, c’est celui de « Avancé » › « Chemin de l’exécutable » (le champ dit « Celui des réglages »). Enregistré quand tu quittes le champ. | Vide |
 | « Se connecter… » ou « Se reconnecter… » | Ouvre la connexion du compte. | — |
-| « Nouveaux agents » | « Modèle », « Effort » et « Mode » des nouveaux agents de ce compte, parmi ceux de son harness : les modèles que son harness liste pour lui, les efforts de son modèle (absent pour un harness sans effort), les modes de son harness. « Celui du harness » prend le défaut de son harness. Un nouvel agent les prend, sauf choix dans son champ de message ; un ticket, après ceux du ticket et du Kanban. Enregistré tout de suite. | « Celui du harness » (à la mise à jour, un compte Claude Code gardé prend les anciens réglages « Nouveaux agents » de l’onglet « Harness ») |
+| « Nouveaux agents » | « Modèle », « Effort » et « Mode » des nouveaux agents de ce compte, parmi ceux de son harness : les modèles que son harness liste pour lui, les efforts de son modèle (absent pour un harness sans effort), les modes de son harness. « Celui du harness » prend le défaut de son harness. Un nouvel agent les prend, sauf choix dans son champ de message ; un ticket, après ceux du ticket et du Kanban. Enregistré tout de suite. | « Celui du harness » (à la mise à jour, un compte Claude Code gardé prend les anciens réglages « Nouveaux agents » de l’ancien onglet « Harness ») |
 | « Supprimer » | Retire le compte de la liste, le compte de la machine compris (la confirmation dit qu’il reste connecté sur la machine). | — |
 | « Réservé aux projets » | Une case par projet ouvert, plus une case cochée, marquée « (fermé) », pour chaque projet fermé auquel le compte reste réservé : le compte ne sert que les projets cochés. | Aucune case cochée : « Tous les projets » |
 
@@ -63,7 +65,7 @@ Si aucun compte actif de son harness par défaut ne sert un projet (tous sont r�
 
 ## Ordre des harness
 
-Dès que deux harness ont des comptes, la liste « Ordre des harness » apparaît sous les groupes, un harness par ligne avec ses flèches ↑ et ↓. Elle range les groupes de l’onglet et du panneau des quotas, et donne à chaque projet ses harness de secours : après son harness par défaut, les suivants dans cet ordre, seulement ceux qui ont un compte actif qui le sert. Changer l’ordre est enregistré tout de suite.
+Dès que deux harness ont des comptes, la liste « Ordre des harness » apparaît sous les groupes, un harness par ligne avec ses flèches ↑ et ↓. Elle range les groupes de la page et du panneau des quotas, et donne à chaque projet ses harness de secours : après son harness par défaut, les suivants dans cet ordre, seulement ceux qui ont un compte actif qui le sert. Changer l’ordre est enregistré tout de suite.
 
 ## Ajouter un compte
 
@@ -81,17 +83,17 @@ La connexion (`.credentials.json`) et `.claude.json` ne sont jamais partagés : 
 
 ## Changer de compte à
 
-Dans le groupe « Quotas », en bas de l’onglet, « Changer de compte à » fait passer un agent sur un autre compte avant que le sien ne soit à court.
+Dans le groupe « Quand un quota est épuisé », « Changer de compte à » fait passer un agent sur un autre compte avant que le sien ne soit à court.
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
 | « Changer de compte à » | Un agent passe sur un autre compte de son harness à la fin de son tour quand une fenêtre courte (5 h) de son compte atteint ce seuil, ou qu’une fenêtre longue (semaine, 30 jours, crédits du mois) l’atteint sans tenir jusqu’à sa remise à zéro au rythme actuel. Les nouveaux agents et les tickets partent sur le premier compte de l’ordre dont la 5 h n’est pas pleine et dont la semaine tient son rythme, même sur « À la limite ». Choix : 80 %, 90 %, 95 % ou « À la limite ». | À la limite |
 
-Sur « À la limite », un agent déjà lancé ne bouge pas avant la limite (les nouveaux agents suivent la règle du choix), puis « Reprendre sur un autre compte un agent de ticket arrêté par la limite » (onglet [« Harness »](settings-claude-code)) décide. Les deux réglages se complètent : le seuil agit à la fin d’un tour, la reprise à la limite sur un tour que la limite a arrêté en route. Le détail est dans [les comptes](accounts#changer-de-compte-avant-la-limite).
+Sur « À la limite », un agent déjà lancé ne bouge pas avant la limite (les nouveaux agents suivent la règle du choix), puis « Reprendre sur un autre compte un agent de ticket arrêté par la limite » (groupe « Quand un quota est épuisé », plus haut) décide. Les deux réglages se complètent : le seuil agit à la fin d’un tour, la reprise à la limite sur un tour que la limite a arrêté en route. Le détail est dans [les comptes](accounts#changer-de-compte-avant-la-limite).
 
 ## Le seuil de pause
 
-Le seuil se règle dans l’onglet [« Kanban »](settings-board), pas ici, mais il décide quels comptes Escouade écarte.
+Le seuil, « Pause du pilote auto au-delà du quota », est dans ce même groupe ; il décide quels comptes Escouade écarte.
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
@@ -103,4 +105,4 @@ Un compte dont une fenêtre courte a passé le seuil (ou dont une fenêtre longu
 
 Quand un tour s’arrête sur la limite d’usage, la carte de l’agent propose « Reprendre sur » suivi d’un compte, ou « Reprendre sur un autre compte » avec un menu quand il y en a plusieurs : l’agent repart avec sa session sur l’autre compte. Sont proposés les comptes actifs de son harness, autres que celui de l’agent, qui servent son projet, sont connectés et restent sous le seuil de pause : la bascule automatique entre comptes reste dans le même harness.
 
-Pour un agent de ticket, le réglage « Reprendre sur un autre compte un agent de ticket arrêté par la limite » de l’onglet [« Harness »](settings-claude-code) le fait tout seul. Une session ne passe pas d’un compte qui fait tourner Claude Code sous Windows à un compte qui le fait tourner dans WSL, ni l’inverse.
+Pour un agent de ticket, le réglage « Reprendre sur un autre compte un agent de ticket arrêté par la limite » du groupe « Quand un quota est épuisé » le fait tout seul. Une session ne passe pas d’un compte qui fait tourner Claude Code sous Windows à un compte qui le fait tourner dans WSL, ni l’inverse.

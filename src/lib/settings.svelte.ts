@@ -1,11 +1,12 @@
-// The settings modal: one draft of all it sets (the app's settings, each project's own and its
-// board's), saved at once by « Enregistrer » and dropped by « Annuler ».
+// The settings window (ESC-380): what its fields show of the app's settings, each project's own and its board's, saved
+// as soon as they change — a choice at once, a text when it loses the focus or after a pause in the typing. What cannot
+// be saved as typed (a project without a name, a launch command without one, a number below 0) is said on its row and
+// left as it was saved.
 
 import { t } from './i18n';
 import { api } from './ipc';
 import { forgetLaunches, runsOfCommand } from './launch-actions';
 import { knowLogo, logoUrl, pickLogo } from './project-logo.svelte';
-import type { IconName } from './icons';
 import { app } from './state.svelte';
 import type {
   BoardSettings,
@@ -22,100 +23,19 @@ import type {
   WorktreeSuggestion,
 } from './types';
 import { branchPrefixProblem, worktreesRootProblem } from './worktrees';
+import { rowsOf, SETTINGS_PAGES, type RowInfo, type SettingsPage } from './settings-pages';
 
-export type SettingsTab =
-  | 'app'
-  | 'claude'
-  | 'accounts'
-  | 'notifications'
-  | 'voice'
-  | 'projects'
-  | 'board'
-  | 'integrations'
-  | 'plugins'
-  | 'mcp'
-  | 'terminals'
-  | 'network'
-  | 'about';
+export * from './settings-pages';
 
-/** The three groups of the tabs (2.0 design): the general ones, « Par projet », « Système ». */
-export type SettingsGroup = 'general' | 'project' | 'system';
+/** The app's settings each page sets, read from its rows. */
+export const SETTINGS_OF = {} as Record<SettingsPage, (keyof Settings)[]>;
+for (const p of SETTINGS_PAGES) SETTINGS_OF[p.id] = [...new Set(rowsOf(p.id).flatMap((r) => r.settings))];
 
-interface TabInfo {
-  id: SettingsTab;
-  label: string;
-  icon: IconName;
-  desc: string;
-  group: SettingsGroup;
-  /** Set project by project: the project is chosen above it. */
-  scoped?: boolean;
+/** Where the window opens or comes back to: a page, and the project of a project's page. */
+export interface SettingsPlace {
+  page?: SettingsPage;
+  projectId?: string;
 }
-
-/** A tab whose label and description are read where shown, so that they follow a change of language. */
-function tabInfo(id: SettingsTab, icon: IconName, group: SettingsGroup = 'general'): TabInfo {
-  return {
-    id,
-    icon,
-    group,
-    ...(group === 'project' ? { scoped: true } : {}),
-    get label() {
-      return t(`settings.tabs.${id}.label`);
-    },
-    get desc() {
-      return t(`settings.tabs.${id}.desc`);
-    },
-  };
-}
-
-export const SETTINGS_TABS: TabInfo[] = [
-  tabInfo('app', 'lang'),
-  tabInfo('claude', 'spark'),
-  // The accounts are saved at once, each change (not part of the draft); « Quand un quota est épuisé » is.
-  tabInfo('accounts', 'user'),
-  tabInfo('voice', 'mic'),
-  tabInfo('notifications', 'bell'),
-  tabInfo('projects', 'folder', 'project'),
-  tabInfo('board', 'kanban', 'project'),
-  tabInfo('integrations', 'link', 'project'),
-  // The one switch is saved at once (it writes into each harness's config).
-  // A link to the view Plugins (choice 213): nothing of it is saved here.
-  tabInfo('plugins', 'puzzle', 'system'),
-  tabInfo('mcp', 'plug', 'system'),
-  tabInfo('terminals', 'term', 'system'),
-  tabInfo('network', 'globe', 'system'),
-  tabInfo('about', 'info', 'system'),
-];
-
-/** The app's settings each tab sets. */
-const SETTINGS_OF: Partial<Record<SettingsTab, (keyof Settings)[]>> = {
-  app: ['language', 'claudeLanguage', 'writerEngine', 'writerModel', 'userName', 'userNameCleared'],
-  claude: [
-    'claudePath',
-    'autoResume',
-    'todoTools',
-    'claudeSelfUpdate',
-    'idleStopMinutes',
-    'midTurnDelaySecs',
-    'attachMaxMb',
-    'attachWarnMb',
-    'attachOrigin',
-    'attachBigText',
-    'attachKeepDays',
-    'remoteControlAll',
-  ],
-  // « Quand un quota est épuisé » (choice 2 of the 2.0 design): the rest of the tab is saved at once.
-  accounts: ['switchOnLimit', 'handoverOnLimit', 'handoverModels'],
-  // What a project added starts with: shown under the project's own settings.
-  projects: ['privateProjects'],
-  notifications: ['sound', 'osNotifications', 'notifyFor'],
-  voice: ['voice'],
-  terminals: ['pwshPath', 'bashPath', 'wslDistro'],
-  network: ['proxyUrl', 'noProxy', 'proxyTerminals', 'insecureTls'],
-  // The quotas are the account's: one pause for every project's board.
-  board: ['quotaPause'],
-  integrations: ['integrations'],
-  about: ['autoUpdate', 'telemetry'],
-};
 
 /** What the modal sets of a project, as the backend's `update_project` takes it, its board apart. */
 type ProjectFields = Pick<
@@ -307,10 +227,15 @@ export function worktreesProblems(path: string, d: Pick<ProjectDraft, 'worktreeD
   };
 }
 
-const worktreesProblem = (path: string, d: ProjectDraft) => {
-  const p = worktreesProblems(path, d);
-  return !!p.dir || p.agentPrefix || p.ticketPrefix;
-};
+/** How long a text waits after its last key before it is saved. */
+export const SAVE_PAUSE_MS = 700;
+
+/** The numbers of the app's settings typed in a field: a whole number of 0 or more each. */
+const NUMBERS = ['idleStopMinutes', 'attachMaxMb', 'attachWarnMb', 'attachKeepDays'] as const;
+export type NumberSetting = (typeof NUMBERS)[number];
+
+/** A number typed that cannot be saved: emptied (null), not a number, or below 0. */
+const badNumber = (n: unknown) => n === null || n === undefined || n === '' || !Number.isFinite(Number(n)) || Number(n) < 0;
 
 /** The steps as saved: trimmed, without those that run nothing. */
 const stepsOf = (steps: WorktreeStep[]) =>
@@ -366,7 +291,7 @@ function boardOf(d: ProjectDraft): BoardSettings {
   return { ...d.board, testCommand, testsFirst: d.board.testsFirst && !!testCommand };
 }
 
-/** A whole number of 0 or more: an emptied number field is null, and the backend expects a number. */
+/** A whole number of 0 or more (the field's own refusals apart, `badNumber`). */
 const count = (n: number) => Math.max(0, Math.floor(Number(n) || 0));
 
 function settingsOf(s: Settings): Settings {
@@ -398,10 +323,26 @@ const proposed = (n: number, refused = 0) => {
     : t('settings.suggest.proposedLeftMany', { count: n, refused });
 };
 
+/** The keys that differ from the draft as opened, by where they are kept. */
+interface ChangedKeys {
+  settings: Set<string>;
+  project: Set<string>;
+  board: Set<string>;
+}
+
+const rowChanged = (r: RowInfo, k: ChangedKeys) =>
+  r.settings.some((x) => k.settings.has(x)) || r.project.some((x) => k.project.has(x)) || r.board.some((x) => k.board.has(x));
+
 class SettingsForm {
-  tab = $state<SettingsTab>('claude');
-  /** The project the "Projets" and "Kanban" tabs set. */
+  /** The page on screen. */
+  page = $state<SettingsPage>('accounts');
+  /** The project the pages of a project set. */
   projectId = $state<string | null>(null);
+  /**
+   * The row a search opened (R8): its page unfolds « Avancé » when it is there, and the window lights it. `n` tells
+   * one opening from the next of the same row.
+   */
+  found = $state<{ row: RowInfo; n: number } | null>(null);
   settings = $state<Settings>({} as Settings);
   /** By project. */
   projects = $state<Record<string, ProjectDraft>>({});
@@ -433,23 +374,86 @@ class SettingsForm {
 
   project = $derived(this.projectId ? this.projects[this.projectId] : undefined);
 
-  /** What keeps the draft from being saved. */
-  problem = $derived.by(() => {
-    for (const p of app.projects) {
-      const d = this.projects[p.id];
-      if (!d) continue;
-      if (!d.name.trim()) return t('settings.problem.projectName', { name: p.name });
-      if (d.runCommands.some((c) => !c.name.trim() || !c.command.trim())) {
-        return t('settings.problem.command', { name: d.name.trim() });
-      }
-      if (worktreesProblem(p.path, d)) return t('settings.problem.worktrees', { name: d.name.trim() });
-    }
-    return null;
-  });
+  /** The numbers typed that cannot be saved: said on their row, the value saved before stays. */
+  badNumbers = $derived(new Set<NumberSetting>(NUMBERS.filter((k) => badNumber(this.settings[k]))));
 
-  /** A fresh draft of everything, on `tab` and the project given (else the one on screen). */
-  open({ tab = 'claude', projectId }: { tab?: SettingsTab; projectId?: string } = {}) {
-    this.resume({ tab, projectId });
+  /**
+   * What of a project's fields cannot be saved as typed, said on its row: its name emptied, a launch command without a
+   * name or a line, its worktrees folder or a branch prefix refused. The value saved before stays until it is fixed.
+   */
+  projectProblems(id: string) {
+    const d = this.projects[id];
+    const p = app.projects.find((x) => x.id === id);
+    if (!d || !p) return { name: false, commands: false, dir: null, agentPrefix: false, ticketPrefix: false };
+    return {
+      name: !d.name.trim(),
+      commands: d.runCommands.some((c) => !c.name.trim() || !c.command.trim()),
+      ...worktreesProblems(p.path, d),
+    };
+  }
+
+  /** The fields of a project left out of a save, for what `projectProblems` says of them. */
+  #heldBack(id: string): (keyof ProjectFields)[] {
+    const p = this.projectProblems(id);
+    const out: (keyof ProjectFields)[] = [];
+    if (p.name) out.push('name');
+    if (p.commands) out.push('runCommands');
+    if (p.dir) out.push('worktreeDir');
+    if (p.agentPrefix) out.push('agentBranchPrefix');
+    if (p.ticketPrefix) out.push('ticketBranchPrefix');
+    return out;
+  }
+
+  #timer: ReturnType<typeof setTimeout> | undefined;
+  /** The saves one after the other: a change made while one runs is saved by the next. */
+  #chain: Promise<boolean> = Promise.resolve(true);
+  /** The saves asked for and not finished: a pause waited, or a save running (the window's `data-saving`). */
+  saving = $state(false);
+  #asked = 0;
+
+  /** A change made: saved after a pause (a key typed waits for the next), or at once by `flush`. */
+  schedule(delay = SAVE_PAUSE_MS) {
+    clearTimeout(this.#timer);
+    this.saving = true;
+    this.#timer = setTimeout(() => void this.flush(), delay);
+  }
+
+  /** The saves started, finished (none started by it). */
+  settled(): Promise<boolean> {
+    return this.#chain;
+  }
+
+  /** Saves now what changed and can be saved (a choice made, a field left, the window closed). */
+  flush(): Promise<boolean> {
+    clearTimeout(this.#timer);
+    this.#timer = undefined;
+    const asked = ++this.#asked;
+    this.saving = true;
+    this.#chain = this.#chain
+      .then(
+        () => this.save(),
+        () => this.save(),
+      )
+      .finally(() => {
+        if (asked === this.#asked && !this.#timer) this.saving = false;
+      });
+    return this.#chain;
+  }
+
+  /**
+   * What the window shows, read again from the app, on the page and the project given (else the one on
+   * screen). A save still running is let finish first, so that what it sends is not shown as a change to undo.
+   */
+  open(place: SettingsPlace = {}) {
+    this.resume(place);
+    if (this.busy) {
+      void this.#chain.then(() => this.#read());
+      return;
+    }
+    this.#read();
+  }
+
+  #read() {
     const settings = $state.snapshot(app.settings);
     const projects = Object.fromEntries(app.projects.map((p) => [p.id, draftOf(p)]));
     this.#base = { settings, projects };
@@ -477,22 +481,34 @@ class SettingsForm {
     else if (this.settings.userNameCleared) this.settings.userNameCleared = false;
   }
 
-  /** The draft as it is, on `tab` and the project given (else the one on screen). */
-  resume({ tab = 'claude', projectId }: { tab?: SettingsTab; projectId?: string } = {}) {
+  /**
+   * The draft as it is, on the page given (else « Comptes et harness »)
+   * and the project given (else the one on screen).
+   */
+  resume({ page, projectId }: SettingsPlace = {}) {
     const has = (id: string | null | undefined) => !!id && app.projects.some((p) => p.id === id);
-    this.tab = tab;
+    this.page = page ?? 'accounts';
+    this.found = null;
     this.projectId = has(projectId) ? projectId! : has(app.project?.id) ? app.project!.id : (app.projects[0]?.id ?? null);
   }
 
-  /** A tab has something to save. */
-  changed(tab: SettingsTab): boolean {
-    const keys = SETTINGS_OF[tab];
-    const own = !!keys && keys.some((k) => k in changes(settingsOf(this.#base.settings), settingsOf(this.settings)));
-    if (tab === 'integrations') return own || Object.keys(this.projects).some((id) => this.#linksChanged(id));
-    if (tab === 'board') return own || Object.keys(this.projects).some((id) => !empty(this.#boardChanges(id)));
-    if (tab === 'projects') return own || Object.keys(this.projects).some((id) => !empty(this.#projectChanges(id)));
-    if (keys) return own;
-    return false;
+  /** A page has something to save: for the project given, else for any (a page of a project). */
+  changed(page: SettingsPage, projectId?: string): boolean {
+    const keys = this.#changedKeys(projectId);
+    return rowsOf(page).some((r) => rowChanged(r, keys));
+  }
+
+  /** What differs from the draft as opened: the app's keys, and those of the project given (else of any). */
+  #changedKeys(projectId?: string): ChangedKeys {
+    const settings = new Set(Object.keys(changes(settingsOf(this.#base.settings), settingsOf(this.settings))));
+    const project = new Set<string>();
+    const board = new Set<string>();
+    for (const id of projectId ? [projectId] : Object.keys(this.projects)) {
+      for (const k of Object.keys(this.#projectChanges(id))) project.add(k === 'worktreeCopy' ? 'copy' : k);
+      if (this.#linksChanged(id)) project.add('integrations');
+      for (const k of Object.keys(this.#boardChanges(id))) board.add(k);
+    }
+    return { settings, project, board };
   }
 
   /**
@@ -599,15 +615,17 @@ class SettingsForm {
   }
 
   /**
-   * Saves what changed, each part over what the app has now (the backend moves a board on by
-   * itself). Returns whether all of it was saved; what was is no longer a change.
+   * Saves what changed, each part over what the app has now (the backend moves a board on by itself), what cannot be
+   * saved as typed left out (`badNumbers`, `projectProblems`). Returns whether all that was sent was saved; what was
+   * is no longer a change. `flush` calls it, one save at a time.
    */
   async save(): Promise<boolean> {
-    if (this.problem || this.busy) return false;
+    if (this.busy) return false;
     this.busy = true;
     let ok = true;
     try {
       const diff = changes(settingsOf(this.#base.settings), settingsOf(this.settings));
+      for (const k of this.badNumbers) delete diff[k];
       if (!empty(diff)) {
         const next = { ...$state.snapshot(app.settings), ...diff };
         const shells = await app.run(api.saveSettings(next));
@@ -639,6 +657,7 @@ class SettingsForm {
     let ok = true;
     // The logo goes its own way (ESC-167): the image chosen is copied by the backend.
     const { logo, ...fields } = this.#projectChanges(id);
+    for (const k of this.#heldBack(id)) delete fields[k as keyof typeof fields];
     if (logo !== undefined && !(await this.#saveLogo(id, logo))) ok = false;
     const links = this.#linksChanged(id) ? linksOf($state.snapshot(this.projects[id])) : null;
     const current = () => app.projects.find((p) => p.id === id);

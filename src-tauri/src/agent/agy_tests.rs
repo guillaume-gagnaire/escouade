@@ -273,9 +273,10 @@ async fn a_turn_on_the_fake_has_its_model_effort_mode_home_and_server_without_it
     let mut live = Live::start(&dir, meta(&dir, "acceptEdits"), Default::default()).await;
     live.send("modèle");
     live.turns_done(1).await;
+    // « Édits auto » is `agy`'s default mode: its plugin judges what it refuses (ESC-371).
     assert_eq!(
         live.texts(),
-        ["Modèle : gemini-3.8-flash, effort : high, mode : accept-edits"]
+        ["Modèle : gemini-3.8-flash, effort : high, mode : default"]
     );
     let log = live.launched();
     // Escouade's server in its own MCP config, its token there; never on the command line.
@@ -306,7 +307,7 @@ async fn a_turn_on_the_fake_has_its_model_effort_mode_home_and_server_without_it
     live.turns_done(2).await;
     assert_eq!(
         live.texts()[1],
-        "Modèle : claude-sonnet-4-6, effort : aucun, mode : accept-edits"
+        "Modèle : claude-sonnet-4-6, effort : aucun, mode : default"
     );
     let launches = live.launches();
     assert_eq!(launches.len(), 2);
@@ -341,9 +342,10 @@ async fn a_command_refused_asks_once_the_turn_is_over_then_runs_and_always_holds
     assert_eq!(live.texts().last().unwrap(), "Fait.");
     // One turn of Escouade for both of `agy`'s.
     assert_eq!(items.iter().filter(|i| i["kind"] == "turn").count(), 1);
+    // « Toujours » is kept by the plugin, never a rule of `agy` once the turn is over (ESC-371).
     let rules =
         std::fs::read_to_string(live.home.join(".gemini/antigravity-cli/settings.json")).unwrap();
-    assert!(rules.contains("command(npm test)"), "{rules}");
+    assert!(!rules.contains("command(npm test)"), "{rules}");
     // « Toujours »: no card the next time.
     live.send("commande");
     live.turns_done(2).await;
@@ -352,7 +354,8 @@ async fn a_command_refused_asks_once_the_turn_is_over_then_runs_and_always_holds
         items.iter().filter(|i| i["kind"] == "permission").count(),
         1
     );
-    assert_eq!(live.texts().last().unwrap(), "Tests passés.");
+    // Refused by `agy` (no rule), allowed again by its plugin, done in the turn that goes on.
+    assert_eq!(live.texts().last().unwrap(), "Fait.");
     live.stop().await;
 }
 
@@ -394,9 +397,16 @@ async fn a_write_in_the_folder_goes_through_with_its_diff_and_one_outside_asks()
     live.send("fichier");
     live.turns_done(1).await;
     let items = live.rt.conv.items();
-    let w = items.iter().find(|i| i["kind"] == "tool").unwrap();
+    // Refused by `agy`, accepted by its plugin's rules, done again (ESC-371).
+    let w = items
+        .iter()
+        .find(|i| i["kind"] == "tool" && i["status"] == "ok")
+        .unwrap();
     assert_eq!(w["name"], "Write", "{w}");
-    assert_eq!(w["status"], "ok");
+    assert!(
+        !items.iter().any(|i| i["kind"] == "permission"),
+        "{items:#?}"
+    );
     assert!(w["result"]["patch"].to_string().contains("+bonjour"), "{w}");
     assert!(!live.rt.meta.touched_files.is_empty());
     live.send("fichier dehors");
@@ -586,10 +596,16 @@ async fn a_fenced_path_is_refused_by_its_rules_even_in_bypass_without_a_card() {
         rules.contains("\"deny\"") && rules.contains("dehors.txt"),
         "{rules}"
     );
-    // Its commands are allowed in Bypass by its rules.
+    // Its commands, without `command(*)` with a fence, ask in Bypass (ESC-376): a rule `command(npm test)` might let
+    // `npm test & type <fence>` through. Allowed, the turn goes on.
     live.send("commande");
+    live.until("its permission", |items| {
+        items.iter().any(|i| i["kind"] == "permission")
+    })
+    .await;
+    live.answer("permission", "allow");
     live.turns_done(2).await;
-    assert_eq!(live.texts().last().unwrap(), "Tests passés.");
+    assert_eq!(live.texts().last().unwrap(), "Fait.");
     live.stop().await;
 }
 

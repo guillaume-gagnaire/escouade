@@ -2,6 +2,7 @@
 
 import type { ThemeChoice } from './appearance';
 import type { Lang } from './i18n/locale.svelte';
+import type { PaneLayout } from './panes';
 
 export type AgentStatus = 'idle' | 'running' | 'waiting' | 'done' | 'error';
 
@@ -48,6 +49,8 @@ export interface Settings {
   switchAt: number;
   /** « Installer les mises à jour automatiquement »: the app restarts by itself for an update once at rest. */
   autoUpdate: boolean;
+  /** « Recevoir les versions bêta » (ESC-374): off by default; off, a version with a suffix (`2.2.0-beta.1`) is never offered. */
+  betaUpdates: boolean;
   /** « Statistiques d’usage »: null until the user answered the question of the first start. */
   telemetry: boolean | null;
   /** What the external ticket systems' links do (their accounts are kept apart, with their secrets). */
@@ -1250,6 +1253,16 @@ export interface Deployment {
   log?: string | null;
 }
 
+/** A project's code host (`forge::connect::CodeHost`, ESC-390): its remote recognised by a host whose plugin is on. */
+export interface CodeHost {
+  kind: string;
+  name: string;
+  /** Its word for a pull request: « PR », « MR » on GitLab. */
+  word: string;
+  pullRequests: boolean;
+  deployments: boolean;
+}
+
 /** An environment as the view « Environnements » shows it (`deploys::Environment`). */
 export interface Environment {
   name: string;
@@ -1983,6 +1996,8 @@ export interface UiState {
   selectedAgent: Record<string, string>;
   /** 'split': conversation on the left half, uncommitted files and their diff on the right. */
   layout?: '' | 'split';
+  /** The split screen of each project (ESC-392), by project id (`lib/panes.ts`); absent: one content fills the work area. */
+  panes?: Record<string, PaneLayout>;
 }
 
 /** The checkout of an agent's own folder (`GitInfo.agentGit`): the branch HEAD is really on, whatever its worktree was made on. */
@@ -2476,7 +2491,7 @@ export interface WorkflowStep {
   agents: { name: string; path: string | null; description: string }[];
   reads: string[];
   writes: string[];
-  /** « deviné »: dotted until « Garder » or « Retirer » (Réglages › Projets › Workflow). */
+  /** « deviné »: dotted until « Garder » or « Retirer » (Réglages › Projets › Kanban › Workflow). */
   guessed?: boolean;
   /** What else signals it once corrected (ESC-195): the steps merged in, its name as read when renamed. */
   also?: string[];
@@ -2648,12 +2663,16 @@ export type UiEvent =
   /** Why no ticket of the project's board starts (its target branch), or null once they may. */
   | { type: 'boardIssue'; projectId: string; issue: string | null }
   | { type: 'environments'; environments: ProjectEnvironments }
+  /** The code hosts may have changed (a host's plugin on or off, an account connected or gone): read again (ESC-390). */
+  | { type: 'codeHosts' }
   | { type: 'prReview'; review: AgentReview }
   | { type: 'prReviewGone'; projectId: string; number: number }
   /** Why no ticket of a project that goes to any account starts for now, or null once they may; `projects`: the same for the paused projects that prefer an account. */
   | { type: 'autopilotPause'; pause: AutopilotPause | null; projects?: Record<string, AutopilotPause> }
   /** The CI of a project's target branch as last read (ESC-63), or null when there is none to show. */
   | { type: 'targetCi'; projectId: string; ci: BranchCi | null }
+  /** A plugin of the seed installed for a gesture that needs it (ESC-373): said in a line, the plugins read again. */
+  | { type: 'pluginSeeded'; id: string; text: string }
   | { type: 'toast'; text: string }
   /** The settings changed a language: the window switches to it at once. */
   | { type: 'language'; lang: LangInfo }
@@ -2747,6 +2766,8 @@ export interface InitialState {
   engines: EngineDecl[];
   /** The harnesses whose program is found: the only ones offered (absent before 1.8: Claude Code, when found). */
   enginesFound?: EngineId[];
+  /** The harnesses whose plugin is off or not installed (absent before ESC-391: none). */
+  enginesOff?: EngineId[];
   /** The kinds of ticket sources the core knows (absent before INT-1: the seven of the window). */
   sources?: SourceDecl[];
   /** Why no ticket of a project's board starts, by project (none: they may). */
@@ -3090,7 +3111,7 @@ export interface PrFailure {
   message: string;
   /** When the host's limit starts over (Unix seconds). */
   reset?: number;
-  /** Réglages › Intégrations settles it. */
+  /** Réglages › Services connectés settles it. */
   settings?: boolean;
 }
 

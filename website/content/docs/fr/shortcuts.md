@@ -12,7 +12,7 @@ Les raccourcis s’écrivent comme l’app les écrit en français : `Ctrl+Maj+A
 
 `Échap` ferme la fenêtre ouverte. Deux précisions sur le clavier :
 
-- Les raccourcis globaux ignorent toute combinaison avec `Alt`, parce que `Ctrl+Alt` est `AltGr` sur un clavier français. Les raccourcis avec `Alt` sont propres à une zone : `Alt+1` … `Alt+9` (questions), `Alt+←` et `Alt+→` (éditeur), `Alt+↑` et `Alt+↓` (réglages des worktrees), `Alt+clic` (éditeur).
+- Les raccourcis globaux ignorent toute combinaison avec `Alt`, parce que `Ctrl+Alt` est `AltGr` sur un clavier français, sauf `Ctrl+Alt` et une flèche, qui ne tape rien, pour passer d’un volet à l’autre de l’[écran partagé](split-screen). Les raccourcis avec `Alt` sont propres à une zone : `Alt+1` … `Alt+9` (questions), `Alt+←` et `Alt+→` (éditeur), `Alt+↑` et `Alt+↓` (réglages des worktrees), `Alt+clic` (éditeur).
 - Les chiffres de `Ctrl+1` … `Ctrl+9` et de `Alt+1` … `Alt+9` se lisent sur la touche physique : sur un clavier AZERTY, pas besoin de `Maj`.
 
 ## Sous macOS
@@ -148,6 +148,11 @@ Sous macOS, les raccourcis de l’app utilisent `⌘`, que le shell ne reçoit j
 |---|---|---|
 | `Ctrl+Maj+L` | Passer de la disposition classique à « Conversation et fichiers côte à côte », et inversement. | Partout, terminaux compris |
 | `Ctrl+Maj+B` | Afficher ou masquer le panneau des fichiers non commités. | Partout, terminaux compris, en disposition classique (côte à côte, le panneau est toujours affiché) |
+| `Ctrl+\` | [Écran partagé](split-screen) : partager ce qui est affiché avec l’agent suivant, ou revenir à un seul volet. Sur un clavier AZERTY : `Ctrl+*`. | Partout, terminaux compris |
+| `Ctrl+Maj+\` | Tourner la séparation du volet actif. | Écran partagé, terminaux compris |
+| `Ctrl+Alt+←` `→` `↑` `↓` | Passer au volet de ce côté. | Écran partagé, terminaux compris |
+| `Ctrl+Maj+W` | Fermer le volet actif. | Écran partagé, terminaux compris |
+| `Ctrl+clic` | Sur une carte d’agent, la ligne d’un terminal ou d’un lancement : l’ouvrir à côté. | Barre latérale |
 
 Un séparateur qui a le focus (avec `Tab`) se règle au clavier :
 
@@ -169,7 +174,7 @@ Un double-clic sur un séparateur rétablit aussi sa taille.
 | Raccourci | Action | Où |
 |---|---|---|
 | `Ctrl+,` | Ouvrir les réglages. | Partout, terminaux compris |
-| `Ctrl+=` (ou `Ctrl++`) / `Ctrl+-` | Agrandir / réduire toute l’interface d’un palier (voir [« Affichage »](settings-application#affichage)). | Partout, terminaux compris, fenêtre ouverte ou non |
+| `Ctrl+=` (ou `Ctrl++`) / `Ctrl+-` | Agrandir / réduire toute l’interface d’un palier (voir [« Apparence »](settings-application#apparence)). | Partout, terminaux compris, fenêtre ouverte ou non |
 | `Ctrl+0` | Revenir au zoom de 100 %. | Partout, terminaux compris, fenêtre ouverte ou non |
 | `Échap` | Fermer les réglages. | Réglages ouverts |
 | `Alt+↑` / `Alt+↓` | Monter / descendre une commande de préparation ou de démontage, depuis n’importe quel champ de la commande. | Réglages d’un projet, listes des commandes de worktree |

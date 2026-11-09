@@ -1,4 +1,4 @@
-// A project's label under its tile (ESC-168), set in Réglages › Projets, then the rail's width chosen by its right edge:
+// A project's label under its tile (ESC-168), set in Réglages › Projets › Projet, then the rail's width chosen by its right edge:
 // the labels under the tiles on a narrow rail, beside them from 160 px, the width kept after a restart and given back by
 // a double click, held to the window's room. At 1440 × 900 and in the runner's window (its screen is 1024 × 768).
 
@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, test, openSettingsPage, closeSettings } from './fixture';
 
 const tile = (page: Page, name = 'demo-api') => page.getByRole('tab', { name: new RegExp(`^${name}`) });
 const rail = (page: Page) => page.getByRole('navigation', { name: 'Projets' });
@@ -31,7 +31,7 @@ function repoNamed(root: string, name: string): string {
 async function projectsSettings(page: Page) {
   const settings = page.getByRole('dialog', { name: 'Réglages' });
   if (!(await settings.isVisible())) await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
-  await settings.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(settings, 'Projet');
   return settings;
 }
 
@@ -102,14 +102,16 @@ for (const size of [
     await on.scrollIntoViewIfNeeded();
     await expect(on).toHaveAttribute('aria-checked', 'false');
     await on.click();
-    await settings.getByRole('button', { name: 'Enregistrer' }).click();
-    await expect(settings).toBeHidden();
+    await closeSettings(settings);
     const label = tile(page).locator('.lbl');
     await expect(label).toBeVisible();
     await expect(label).toHaveText('demo-api');
     await settle(page);
     expect(await width(page)).toBe(72);
-    expect(await label.evaluate((l) => getComputedStyle(l).color)).toBe(await colorOf(page, 'var(--p-ink)'));
+    // The settings were tinted with Escouade's teal (ESC-379): the project's colour glides back first (0.7 s).
+    await expect
+      .poll(async () => (await label.evaluate((l) => getComputedStyle(l).color)) === (await colorOf(page, 'var(--p-ink)')))
+      .toBe(true);
     // The tile keeps its size, under it its label.
     const t = (await tile(page).boundingBox())!;
     expect([Math.round(t.width), Math.round(t.height)]).toEqual([36, 36]);
@@ -123,8 +125,7 @@ for (const size of [
     await expect(text).toHaveAttribute('placeholder', 'demo-api');
     await text.pressSequentially('pagination-service');
     await expect(text).toHaveValue('pagination-s');
-    await settings.getByRole('button', { name: 'Enregistrer' }).click();
-    await expect(settings).toBeHidden();
+    await closeSettings(settings);
     await expect(label).toHaveText('pagination-s');
     expect(await label.locator('.tx').evaluate((x) => x.scrollWidth > x.clientWidth)).toBe(true);
     expect(await overflows(page)).toEqual([]);
@@ -219,12 +220,11 @@ test('twelve projects in the runner’s window: the rail at its widest scrolls, 
     await addProject(page, name === 'demo-api' ? app.repo : repoNamed(app.root, name), { firstAgent: name === 'demo-api' });
   // A label on the first, and the rail as wide as the window lets it.
   const settings = await projectsSettings(page);
-  await settings.getByRole('group', { name: 'Projet' }).getByRole('button', { name: 'demo-api', exact: true }).click();
+  await openSettingsPage(settings, 'Projet', { project: 'demo-api' });
   const on = settings.getByRole('switch', { name: 'Libellé sous la tuile' });
   await on.scrollIntoViewIfNeeded();
   await on.click();
-  await settings.getByRole('button', { name: 'Enregistrer' }).click();
-  await expect(settings).toBeHidden();
+  await closeSettings(settings);
   await edge(page).focus();
   await page.keyboard.press('End');
   await settle(page);

@@ -1,7 +1,7 @@
 // Everything the French page says. en.ts says the same, key for key.
 // The French guillemets hold non-breaking spaces ( ), so that « Importer » never splits over two lines.
 import type { Catalog } from './catalog';
-import { DOWNLOAD, SUPPORT } from './site';
+import { DOWNLOAD, STORE, SUPPORT } from './site';
 import { docPath } from './docs';
 
 export const fr: Catalog = {
@@ -22,6 +22,7 @@ export const fr: Catalog = {
     github: 'GitHub',
     discord: 'Discord',
     docs: 'Documentation',
+    plugins: 'Plugins',
     download: 'Télécharger',
     language: 'Langue',
   },
@@ -248,20 +249,21 @@ export const fr: Catalog = {
 
   roadmap: {
     title: 'Ce qui arrive ensuite.',
-    lead: 'Ton hébergeur de code dans la boucle, les plugins et leur place de marché, et la dictée par Wispr Flow. Pas de date promise : le chantier est décrit en détail sur GitHub.',
+    lead: 'Ton hébergeur de code dans la boucle, des relectures par un agent, les plugins et leur place de marché. Pas de date promise : le chantier est décrit en détail sur GitHub.',
     next: 'Version {version} · en préparation',
     items: [
-      {
-        title: 'Wispr Flow',
-        text: 'La dictée de Wispr Flow dans la zone de saisie et la conversation vocale, comme service en ligne et comme app de bureau.',
-      },
       {
         title: 'GitHub, GitLab, Bitbucket et Gitea',
         text: 'Les pull requests des tickets suivies jusqu’au merge, avec leur CI et leurs déploiements, sans quitter Escouade.',
       },
       {
+        title: 'Faire relire une PR',
+        text: 'Un agent lit le diff d’une pull request et rédige ses commentaires par fichier et par ligne. Tu gardes, corriges ou écartes chacun, puis tu publies : rien ne part sans toi.',
+      },
+      {
         title: 'Les plugins et leur place de marché',
-        text: 'Escouade s’étend par des plugins, et chaque intégration externe en devient un : hébergeurs, sources de tickets, harness. Une place de marché les rassemble, relus avant d’y entrer.',
+        text: 'Des plugins étendent Escouade : sources de tickets, hébergeurs, harness, voix, notifications, thèmes et règles d’autorisation. Ils s’installent depuis l’app et sont listés sur le store, où chaque version passe onze contrôles.',
+        link: { label: 'Voir le store', href: STORE.fr },
       },
     ],
     plan: 'Le plan détaillé',
@@ -416,6 +418,7 @@ export const fr: Catalog = {
       'code-hosts': 'Hébergeurs de code',
       editor: 'L’éditeur',
       terminals: 'Les terminaux',
+      'split-screen': 'L’écran partagé',
       launch: 'Lancer le projet',
       board: 'Le Kanban',
       autopilot: 'Le pilote auto',
@@ -430,15 +433,15 @@ export const fr: Catalog = {
       accounts: 'Plusieurs comptes',
       usage: 'Quotas et coût',
       stats: 'Statistiques',
-      'settings-application': 'Application',
-      'settings-claude-code': 'Harness',
-      'settings-accounts': 'Comptes',
+      'settings-application': 'La fenêtre et Général',
+      'settings-claude-code': 'Agents',
+      'settings-accounts': 'Comptes et harness',
       'settings-notifications': 'Notifications',
-      'settings-projects': 'Projets',
-      'settings-board': 'Kanban',
-      'settings-integrations': 'Intégrations',
-      'settings-terminals': 'Terminaux',
-      'settings-network': 'Réseau',
+      'settings-projects': 'Les pages d’un projet',
+      'settings-board': 'Kanban d’un projet',
+      'settings-integrations': 'Services et tickets importés',
+      'settings-terminals': 'Avancé : terminaux',
+      'settings-network': 'Avancé : réseau',
       'settings-voice': 'Voix',
       'settings-about': 'À propos',
       'plugins/installer': 'Installer un plugin',

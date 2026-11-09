@@ -78,7 +78,7 @@ export default {
   // « Pas de workflow pour ce projet » (ESC-309).
   offTitle: 'Pas de workflow pour ce projet',
   offBody:
-    'Escouade ne lit ni n’écrit les workflows de {project} et n’y suit aucun agent. Pour le défaire : Réglages › Projets › Workflow, « Lire les workflows ».',
+    'Escouade ne lit ni n’écrit les workflows de {project} et n’y suit aucun agent. Pour le défaire : Réglages › Projets › Kanban, « Lire les workflows ».',
   offUndo: 'Ouvrir les réglages du workflow',
   // Where the card, the conversation and the Kanban meet it (ESC-197, choices 145 and 159).
   ticketsName: 'Tickets',

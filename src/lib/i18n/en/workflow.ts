@@ -72,7 +72,7 @@ export default defineZone('workflow', {
   // “No workflow for this project” (ESC-309).
   offTitle: 'No workflow for this project',
   offBody:
-    'Escouade neither reads nor writes the workflows of {project} and follows no agent in them. To undo it: Settings › Projects › Workflow, “Read the workflows”.',
+    'Escouade neither reads nor writes the workflows of {project} and follows no agent in them. To undo it: Settings › Projects › Kanban, “Read the workflows”.',
   offUndo: 'Open the workflow settings',
   // Where the card, the conversation and the Kanban meet it (ESC-197, choices 145 and 159).
   ticketsName: 'Tickets',

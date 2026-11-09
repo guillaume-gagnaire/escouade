@@ -62,7 +62,7 @@ An unfolded diff appears in slices of 500 lines: the “Show 500 more lines” b
 
 ## Committing
 
-The “Commit…” and “Commit all…” buttons of the panel follow the project’s “Commit” setting (Settings › Projects, “Git” group). It has two values: “Written by the agent”, the default, and “Direct, with a suggested message”. The full list of project settings is in [the project settings](settings-projects).
+The “Commit…” and “Commit all…” buttons of the panel follow the project’s “Commit” setting (Settings › Projects › Git and worktrees, “Git” group). It has two values: “Written by the agent”, the default, and “Direct, with a suggested message”. The full list of project settings is in [the project settings](settings-projects).
 
 ### Asking the agent to commit
 
@@ -130,7 +130,7 @@ Since the panel is always there, `Ctrl+Shift+B` no longer has any effect and “
 A project can be a folder that is no git repository itself and holds several, one per subfolder (`front`, `api`, `infra`, `docs`), or a repository that holds others than its submodules. Escouade finds them by itself: when the project is added, at startup, when the window comes back to the front, and with “Look again”. It looks at the subfolders and one level down (`services/billing`), never into `node_modules`, `target`, `dist`, `build`, hidden folders or the worktrees folder; a submodule stays with its repository. A project of one repository doesn’t change at all.
 
 - **The “New project” assistant** says “4 git repositories: api, docs, front, infra”, and points out a repository without any commit yet (the agents get no worktree of it until it has one). The folder is never made a repository.
-- **Settings › Projects, “Repositories” group** lists the repositories and their branch. A repository that appears is announced, and the next agents get a worktree of it; one that is gone stays marked “removed” until “Forget”. The project’s `.escouade.yml` is at the root of the folder: it is versioned nowhere until you put it in a repository yourself.
+- **Settings › Projects › Git and worktrees, “Repositories” group** lists the repositories and their branch. A repository that appears is announced, and the next agents get a worktree of it; one that is gone stays marked “removed” until “Forget”. The project’s `.escouade.yml` is at the root of the folder: it is versioned nowhere until you put it in a repository yourself.
 - **The status bar** says “main · 4 repositories” when they are all on one branch, otherwise “3 branches · 4 repositories”. Its click opens the list of the repositories, with each one’s branch and how far it is from its remote; picking one opens its [branch picker](branches), the same as a project of one repository’s. The “Δ” of the title bar and of the sidebar’s foot is the sum of the repositories, each one’s detail in its tooltip.
 - **The “Uncommitted” panel** groups the files by repository, each group with its branch and its counts, foldable; the repositories without a change fit on one line. A direct “Commit…” opens a window with one message per repository changed, each proposed in that repository’s style. “History” shows one repository at a time, picked in the menu at its top.
 - **Agents**: without a worktree, an agent works at the project’s root and sees every repository. With one, it gets a folder of its own with a worktree of each repository, all on one branch, and the files at the project’s root are copied into it; the project’s starting branch applies to each repository. Launch and setup commands keep their subfolder, which is then a repository.

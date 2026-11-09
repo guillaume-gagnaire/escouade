@@ -78,6 +78,16 @@ describe('the display', () => {
   });
 });
 
+/** The first project's row in the bar of the settings. */
+const projectRow = () =>
+  bar()
+    .getAllByRole('button')
+    .find((b) => b.hasAttribute('aria-expanded'))!;
+/** The bar of the settings window. */
+const bar = () => within(within(screen.getByRole('dialog', { name: 'Réglages' })).getByRole('navigation'));
+/** The same, once the window is there. */
+const barSoon = async () => within(within(await screen.findByRole('dialog', { name: 'Réglages' })).getByRole('navigation'));
+
 describe('App layout', () => {
   it('shows the uncommitted files and the diff next to the conversation in the split layout', async () => {
     start('split');
@@ -492,7 +502,7 @@ describe('App layout', () => {
     app.openBoard('p1');
     await userEvent.click(await screen.findByRole('button', { name: /Après validation/ }));
     expect(await screen.findByRole('dialog', { name: 'Réglages' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Kanban' })).toHaveAttribute('aria-selected', 'true');
+    expect(bar().getByRole('button', { name: 'Kanban' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('radio', { name: /Merger dans une branche/ })).toBeInTheDocument();
   });
 
@@ -502,7 +512,10 @@ describe('App layout', () => {
     start('', { handlers: { suggest_run_commands: () => reading } });
     await userEvent.click(await screen.findByRole('button', { name: 'Proposer des commandes' }));
     const dialog = await screen.findByRole('dialog', { name: 'Réglages' });
-    expect(within(dialog).getByRole('tab', { name: 'Projets' })).toHaveAttribute('aria-selected', 'true');
+    expect(within(within(dialog).getByRole('navigation')).getByRole('button', { name: 'Lancement' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
     expect(await within(dialog).findByRole('button', { name: 'Claude lit le projet…' })).toBeDisabled();
     answer({ commands: [{ id: 's1', name: 'Front', command: 'npm run dev', shell: 'pwsh', cwd: '' }], refused: 0 });
     // Read in full, then taken.
@@ -517,21 +530,23 @@ describe('App layout', () => {
     start('');
     expect(await screen.findByRole('main')).toBeInTheDocument();
     app.modal = { kind: 'settings' };
-    await userEvent.click(await screen.findByRole('tab', { name: 'Réseau' }));
+    await userEvent.click(await (await barSoon()).findByRole('button', { name: 'Avancé' }));
     await userEvent.type(screen.getByPlaceholderText('aucun'), 'http://proxy:3128');
-    await userEvent.click(screen.getByRole('tab', { name: 'Projets' }));
+    await userEvent.click(projectRow());
+    await userEvent.click(within(document.getElementById('settings-panel')!).getByRole('button', { name: /^Avancé/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Fermer le projet…' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Annuler' }));
-    expect(await screen.findByRole('tab', { name: 'Projets' })).toHaveAttribute('aria-selected', 'true');
-    await userEvent.click(screen.getByRole('tab', { name: 'Réseau' }));
+    expect(await bar().findByRole('button', { name: 'Projet' })).toHaveAttribute('aria-current', 'page');
+    await userEvent.click(bar().getByRole('button', { name: 'Avancé' }));
     expect(screen.getByPlaceholderText('aucun')).toHaveValue('http://proxy:3128');
     // Closed for good: still the settings, still the draft.
-    await userEvent.click(screen.getByRole('tab', { name: 'Projets' }));
+    await userEvent.click(projectRow());
+    await userEvent.click(within(document.getElementById('settings-panel')!).getByRole('button', { name: /^Avancé/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Fermer le projet…' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Fermer le projet' }));
     expect(await screen.findByText('Aucun projet ouvert.')).toBeInTheDocument();
     expect(app.projects).toEqual([]);
-    await userEvent.click(screen.getByRole('tab', { name: 'Réseau' }));
+    await userEvent.click(bar().getByRole('button', { name: 'Avancé' }));
     expect(screen.getByPlaceholderText('aucun')).toHaveValue('http://proxy:3128');
   });
 
@@ -557,18 +572,18 @@ describe('App layout', () => {
     });
     expect(await screen.findByRole('main')).toBeInTheDocument();
     app.modal = { kind: 'settings' };
-    await userEvent.click(await screen.findByRole('tab', { name: 'Réseau' }));
+    await userEvent.click(await (await barSoon()).findByRole('button', { name: 'Avancé' }));
     await userEvent.type(screen.getByPlaceholderText('aucun'), 'http://proxy:3128');
-    await userEvent.click(screen.getByRole('tab', { name: 'Projets' }));
+    await userEvent.click(bar().getByRole('button', { name: 'Tous les projets' }));
     expect(await screen.findByText('ancien')).toBeInTheDocument();
     expect(screen.getByText('vieux')).toBeInTheDocument();
     await userEvent.click(screen.getAllByRole('button', { name: "Effacer l'historique…" })[0]);
     await userEvent.click(await screen.findByRole('button', { name: "Effacer l'historique" }));
     expect(backend.called('erase_closed_project')[0].args).toEqual({ id: 'c1' });
     expect(await screen.findByText('vieux')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Projets' })).toHaveAttribute('aria-selected', 'true');
+    expect(bar().getByRole('button', { name: 'Tous les projets' })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByText('ancien')).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('tab', { name: 'Réseau' }));
+    await userEvent.click(bar().getByRole('button', { name: 'Avancé' }));
     expect(screen.getByPlaceholderText('aucun')).toHaveValue('http://proxy:3128');
   });
 
@@ -576,7 +591,9 @@ describe('App layout', () => {
     const { backend } = start('');
     expect(await screen.findByRole('main')).toBeInTheDocument();
     app.modal = { kind: 'settings' };
-    await userEvent.click(await screen.findByRole('tab', { name: 'Projets' }));
+    await screen.findByRole('dialog', { name: 'Réglages' });
+    await userEvent.click(projectRow());
+    await userEvent.click(within(document.getElementById('settings-panel')!).getByRole('button', { name: /^Avancé/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Fermer le projet…' }));
     expect(
       await screen.findByRole('checkbox', { name: 'Effacer aussi son historique (conversations, tickets, réglages)' }),

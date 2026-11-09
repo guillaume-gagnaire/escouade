@@ -10,7 +10,7 @@ The “Plan” banner appears between the conversation header and the messages a
 
 Escouade never creates a task and never changes a plan file: it reads what the agent does. The list comes from one of these two sources.
 
-- **Claude Code’s task list.** The agent keeps it with Claude Code’s task tools (`TodoWrite`, or `TaskCreate` and `TaskUpdate`). The “Agents keep a task list” setting (Settings › Harness, on by default) gives this tool to the agents started afterwards; the model doesn’t have to use it. See [the harness settings](settings-claude-code).
+- **Claude Code’s task list.** The agent keeps it with Claude Code’s task tools (`TodoWrite`, or `TaskCreate` and `TaskUpdate`). The “Agents keep a task list” setting (Settings › Agents, on by default) gives this tool to the agents started afterwards; the model doesn’t have to use it. See [the harness settings](settings-claude-code).
 - **A superpowers plan.** For an agent that has no task list, Escouade reads the plan the agent wrote in `docs/superpowers/plans/` (the `writing-plans`, `executing-plans`, and `subagent-driven-development` skills) and the progress ledger those skills keep in `.superpowers/sdd/`, to know which tasks are done. This reading only happens in the agent’s folder (its worktree, or the project) and changes nothing. If the agent also keeps its own list, that list is the list; the plan file then only gives its title and name.
 
 The banner keeps at most 100 tasks.

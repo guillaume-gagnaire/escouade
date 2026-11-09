@@ -10,7 +10,9 @@ const TABBABLE = FOCUSABLE.split(',')
 export function trapFocus(node: HTMLElement) {
   const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const focusables = () => [...node.querySelectorAll<HTMLElement>(TABBABLE)].filter((el) => !el.hidden && !el.closest('[hidden]'));
-  (node.querySelector<HTMLElement>('[autofocus]') ?? focusables()[0] ?? node).focus();
+  // `data-autofocus`: where it starts without the browser's own `autofocus` (the settings: the page on screen in the bar,
+  // not the search above it).
+  (node.querySelector<HTMLElement>('[autofocus],[data-autofocus]') ?? focusables()[0] ?? node).focus();
 
   function onKeydown(e: KeyboardEvent) {
     if (e.key !== 'Tab') return;

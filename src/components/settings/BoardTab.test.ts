@@ -16,7 +16,7 @@ describe('BoardTab in English', () => {
     resetApp({ projects: [project()] });
     app.git.p1 = gitInfo();
     fakeBackend({ git_branches: () => ['main', 'release'] });
-    settingsForm.open({ tab: 'board', projectId: 'p1' });
+    settingsForm.open({ page: 'board', projectId: 'p1' });
     setLang('en');
   });
 
@@ -85,15 +85,10 @@ describe('BoardTab in English', () => {
     ).toEqual(['Ask me', 'Let the agent resolve', 'Cancel']);
   });
 
-  it('writes the autopilot and the agents, the percentages as English does', () => {
+  it('writes the autopilot and the agents; the pause above quota is in Accounts and harnesses (R4)', () => {
     render(BoardTab, { project: app.projects[0] });
     expect(screen.getByRole('switch', { name: 'Assign tickets automatically' })).toBeInTheDocument();
-    const quota = screen.getByRole('group', { name: 'Pause above quota' });
-    expect(
-      within(quota)
-        .getAllByRole('button')
-        .map((b) => b.textContent),
-    ).toEqual(['80%', '90%', '95%', '100%']);
+    expect(screen.queryByRole('group', { name: /above quota/ })).toBeNull();
     expect(screen.getByRole('heading', { name: 'Agents' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'In parallel' })).toBeInTheDocument();
     expect(within(screen.getByRole('combobox', { name: 'Model' })).getByRole('option', { name: 'Default (Sonnet)' })).toBeInTheDocument();
@@ -108,9 +103,15 @@ describe('BoardTab in English', () => {
     setLang('fr');
     flushSync();
     expect(screen.getByRole('radio', { name: /Merger dans une branche/ })).toBeInTheDocument();
-    expect(
-      within(screen.getByRole('group', { name: 'Pause au-delà du quota' })).getByRole('button', { name: /^80\s%$/ }),
-    ).toBeInTheDocument();
+    expect(within(screen.getByRole('group', { name: 'En parallèle' })).getAllByRole('button').length).toBeGreaterThan(0);
     expect(screen.getByText('feat: limiter les tentatives de connexion [DEM-42]')).toBeInTheDocument();
+  });
+
+  it('ends with the project’s workflow (R6: Workflow left the project’s settings for its Kanban)', () => {
+    render(BoardTab, { project: app.projects[0] });
+    const titles = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    expect(titles.at(-1)).toBe('Workflow');
+    expect(titles.slice(0, -1)).toEqual(['When I approve a ticket in “To review”', 'Before and after', 'Autopilot', 'Agents']);
+    expect(document.querySelector('#sg-workflow')).toHaveAttribute('data-anchor', 'workflow');
   });
 });

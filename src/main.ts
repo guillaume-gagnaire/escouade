@@ -23,7 +23,7 @@ guardLinks(document);
 
 // The theme the page kept, before the first render: the settings say it again a moment later.
 earlyAppearance();
-// And the colours of the plugin's theme it showed (Réglages › Application › Couleurs), until the plugins are read.
+// And the colours of the plugin's theme it showed (Réglages › Général › Apparence), until the plugins are read.
 earlyPluginTheme();
 
 // Under WebKit (Linux, macOS), what crashes its web process is turned off (app.css, `:root.webkit`).

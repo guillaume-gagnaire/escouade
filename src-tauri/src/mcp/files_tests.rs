@@ -1070,7 +1070,7 @@ async fn the_schemas_say_what_a_file_is_and_how_one_is_named_and_read() {
     for (name, said) in [
         (
             "create_ticket",
-            ["files", "any format", "Settings › Harness › Attachments"].as_slice(),
+            ["files", "any format", "Settings › Advanced › Attachments"].as_slice(),
         ),
         ("update_ticket", &["addFiles", "removeFiles"]),
         ("get_ticket", &["files", "get_ticket_file"]),

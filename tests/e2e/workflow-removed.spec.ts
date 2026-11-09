@@ -1,5 +1,5 @@
 // A workflow deleted, or « Pas de workflow pour ce projet » (ESC-309): the project's own /dev skill (its workflow in
-// .escouade/workflows/ of the repository) deleted in Réglages › Projets › Workflow, GSD of Principal's folder (its file on
+// .escouade/workflows/ of the repository) deleted in Réglages › Projets › Kanban › Workflow, GSD of Principal's folder (its file on
 // this machine) deleted by hand; neither comes back after « Relire » nor after a restart, both said under « Supprimés »;
 // one restored; then no workflow for the project: nothing read nor written again, its file deleted by hand stays gone.
 
@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, test, openSettingsPage, closeSettings } from './fixture';
 
 const FIXTURES = path.resolve(import.meta.dirname, '..', 'fixtures', 'workflows');
 
@@ -21,7 +21,7 @@ test.use({
 async function open(page: Page) {
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(dialog, 'Kanban');
   const section = dialog.locator('#sg-workflow');
   await section.scrollIntoViewIfNeeded();
   return { dialog, section };
@@ -84,9 +84,8 @@ test('a workflow deleted, here or by hand, never comes back; no workflow for the
 
   // « Pas de workflow pour ce projet »: said, with how to undo it; saved.
   await section.getByRole('radio', { name: 'Pas de workflow pour ce projet' }).click();
-  await expect(section.getByTestId('workflows-off')).toContainText('Pour le défaire, choisis « Lire les workflows » et enregistre.');
-  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
-  await expect(dialog).toBeHidden();
+  await expect(section.getByTestId('workflows-off')).toContainText('Pour le défaire, choisis « Lire les workflows ».');
+  await closeSettings(dialog);
   // Its last file deleted by hand, the app started again: nothing read, nothing written.
   fs.rmSync(gsd);
   const reading = path.join(path.dirname(path.dirname(gsd)), 'workflows.json');
@@ -105,5 +104,5 @@ test('a workflow deleted, here or by hand, never comes back; no workflow for the
   const side = page.locator('aside.git-side');
   await side.getByRole('tab', { name: /^Workflow/ }).click();
   await expect(side.getByTestId('workflow-off')).toContainText('Pas de workflow pour ce projet');
-  await expect(side.getByTestId('workflow-off')).toContainText('Réglages › Projets › Workflow, « Lire les workflows »');
+  await expect(side.getByTestId('workflow-off')).toContainText('Réglages › Projets › Kanban, « Lire les workflows »');
 });

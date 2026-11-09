@@ -2,7 +2,6 @@
   import Icon from '../Icon.svelte';
   import { newAgentDefaults } from '../../lib/accounts';
   import { commitPreview } from '../../lib/board';
-  import { fPct } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { EFFORTS, MODES, modelLabel, modelOptions } from '../../lib/models';
   import { settingsForm } from '../../lib/settings.svelte';
@@ -14,9 +13,10 @@
   import Row from './Row.svelte';
   import SharedMark from './SharedMark.svelte';
   import Switch from './Switch.svelte';
+  import WorkflowSection from './WorkflowSection.svelte';
   import { joinNames, splitNames } from '../../lib/ticket-prs';
 
-  // A project's Kanban: what validating a ticket does, and the agents that take its tickets (its draft:
+  // A project's Kanban: what validating a ticket does, the agents that take its tickets, and its workflow (its draft:
   // the modal's project).
   let { project }: { project: Project } = $props();
 
@@ -46,8 +46,6 @@
   const prUpdates = $derived(PR_UPDATE_IDS.map((value) => ({ value, label: t(`boardSettings.tab.prUpdates.${value}`) })));
   const conflicts = $derived(CONFLICT_IDS.map((value) => ({ value, label: t(`boardSettings.tab.conflicts.${value}`) })));
   const PARALLEL = [1, 2, 3, 4, 5, 6].map((n) => ({ value: n, label: String(n) }));
-  /** As the backend offers them (`board::QUOTA_PAUSES`). */
-  const quotaPauses = $derived([80, 90, 95, 100].map((n) => ({ value: n, label: fPct(n) })));
 </script>
 
 <Group title={t('boardSettings.tab.actionsTitle')} plain>
@@ -186,10 +184,6 @@
   <Row label={t('boardSettings.tab.redTargetPause')} desc={t('boardSettings.tab.redTargetPauseDesc')}>
     <Switch label={t('boardSettings.tab.redTargetPause')} bind:on={() => !!b.pauseOnRedTarget, (v) => (b.pauseOnRedTarget = v)} />
   </Row>
-  <!-- The quotas are the account's: an app setting, shown with each project's autopilot. -->
-  <Row label={t('boardSettings.tab.quotaPause')} hint={t('boardSettings.tab.quotaPauseHint')} desc={t('boardSettings.tab.quotaPauseDesc')}>
-    <Chips label={t('boardSettings.tab.quotaPause')} options={quotaPauses} mono bind:value={settingsForm.settings.quotaPause} />
-  </Row>
 </Group>
 
 <Group title={t('common.agents')}>
@@ -215,6 +209,9 @@
     </select>
   </Row>
 </Group>
+
+<!-- Its workflows (ESC-195, #loops-settings): what was read, and the steps as corrected. The panel Workflow opens here. -->
+<WorkflowSection {project} />
 
 <style>
   /* What validating a ticket does: the radios of the windows (`.w-radio`, src/app.css, lot 11a). */

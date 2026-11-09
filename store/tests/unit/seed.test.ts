@@ -112,7 +112,13 @@ describe.skipIf(!whole)('the seed of a release', () => {
   });
 
   it('reads the list and the keys the repository holds', async () => {
-    expect(parseList(fs.readFileSync(path.join(ROOT, 'plugins', 'seed.json'), 'utf8'))).toEqual([]);
+    // The seed of the release (ESC-354): plugins of the first hand, each once, each with its version and the SHA-256 of
+    // its version.json.
+    const list = parseList(fs.readFileSync(path.join(ROOT, 'plugins', 'seed.json'), 'utf8'));
+    expect(list.length).toBeGreaterThan(0);
+    for (const e of list)
+      expect(e).toMatchObject({ id: expect.stringMatching(/^dev\.escouade\./), version: expect.stringMatching(/^\d+\.\d+\.\d+$/) });
+    expect(new Set(list.map((e) => e.id)).size).toBe(list.length);
     expect(() => parseList('{"format":2,"plugins":[]}')).toThrow(/format 1/);
     expect(() => parseList('{"format":1,"plugins":[{"id":"x"}]}')).toThrow(/SHA-256/);
     expect((await keysOf(path.join(ROOT, 'store', 'keys'))).map((k) => k.id).sort()).toEqual(['177096D57E2EC0C8', 'E0516468FFDCBDD5']);

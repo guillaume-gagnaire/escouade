@@ -2,8 +2,8 @@
 title: "Raccourcis"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md"]
-tickets: []
-decisions: []
+tickets: ["ESC-392"]
+decisions: [128]
 compared: null
 ---
 
@@ -16,7 +16,7 @@ Les raccourcis clavier d'Escouade, par défaut. Ils couvrent l'app entière, la 
 ### Partout
 
 - Sous macOS, `Ctrl` devient `Cmd`, sauf dans `Ctrl+Tab`.
-- `Ctrl+Alt` (AltGr) n'est jamais un raccourci.
+- `Ctrl+Alt` (AltGr) n'est jamais un raccourci, sauf `Ctrl+Alt+flèche` de l'écran partagé : une flèche ne tape rien.
 
 ### App
 
@@ -30,6 +30,8 @@ Les raccourcis clavier d'Escouade, par défaut. Ils couvrent l'app entière, la 
 - `Ctrl+Maj+A` : vue d'ensemble.
 - `Ctrl+Maj+B` : panneau des fichiers.
 - `Ctrl+Maj+L` : disposition.
+- `Ctrl+\` (la touche de code `Backslash`, `*` en AZERTY) : partager l'écran ou revenir à un volet ; `Ctrl+Maj+\` : tourner la séparation du volet actif (voir *Écran partagé*).
+- Écran partagé : `Ctrl+Alt+←→↑↓` passe au volet de ce côté, `Ctrl+Maj+W` ferme le volet actif.
 - `Ctrl+,` : réglages.
 - `Ctrl+=` / `Ctrl+-` / `Ctrl+0` : zoom de l'interface, une fenêtre ouverte aussi (voir *Fenêtre*).
 
@@ -70,5 +72,5 @@ Les raccourcis clavier d'Escouade, par défaut. Ils couvrent l'app entière, la 
 ### Dans un terminal
 
 - Les touches du shell lui restent (`Ctrl+C`, `Ctrl+R`, `Ctrl+N`, `Ctrl+K`, `Ctrl+P`…).
-- L'app y prend `Ctrl+1..9`, `Ctrl+Tab`, `Ctrl+J`, `Ctrl+,`, `Ctrl+Maj+A` et le zoom (`Ctrl+=`, `Ctrl+-`, `Ctrl+0`).
+- L'app y prend `Ctrl+1..9`, `Ctrl+Tab`, `Ctrl+J`, `Ctrl+,`, `Ctrl+Maj+A`, le zoom (`Ctrl+=`, `Ctrl+-`, `Ctrl+0`), `Ctrl+\` (qui y serait SIGQUIT) et, l'écran partagé ouvert, `Ctrl+Maj+\`, `Ctrl+Maj+W` et `Ctrl+Alt+flèche`.
 - Sous macOS, le shell ne reçoit jamais `Cmd` : les raccourcis de l'app y marchent, et `Cmd+C`, `Cmd+V`, `Cmd+A` restent au terminal (copier, coller, tout sélectionner).

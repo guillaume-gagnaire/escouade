@@ -109,8 +109,8 @@ export default defineZone('plugins', {
     builtinNote: 'signed with the app, updated with it',
     seedTitle: 'Offered by Escouade',
     seedNote: 'in the installer, nothing to download',
-    seedRemoved: 'You uninstalled it (v{version}). Escouade does not put it back without you.',
-    seedMissing: 'Not installed yet.',
+    seedRemoved: 'You uninstalled it (v{version}). Escouade puts it back only on a gesture that needs it.',
+    seedMissing: 'In the app, nothing to download. It installs when you need it.',
     seedRefused: 'Not installed: {reason}',
     seedInstall: 'Install',
     empty: 'No plugin installed.',
@@ -262,6 +262,11 @@ export default defineZone('plugins', {
     privateOn: 'private project, switched on by you: Escouade cannot keep a program from reading the disk',
     appOff: 'Switched off for the whole app: no project gets it.',
     none: 'No project open.',
+    /** Settings › <project> › Privacy: the plugins on in this project. */
+    title: 'Plugins in this project',
+    pluginLabel: '{name} in this project',
+    appOffShort: 'switched off for the whole app',
+    noneInstalled: 'No plugin installed that is switched on project by project.',
   },
 
   settings: {
@@ -374,19 +379,29 @@ export default defineZone('plugins', {
 
   adds: {
     themes: {
-      one: 'A theme, in Settings › Application › Colors: {names}',
-      other: '{count} themes, in Settings › Application › Colors: {names}',
+      one: 'A theme, in Settings › General › Colors: {names}',
+      other: '{count} themes, in Settings › General › Colors: {names}',
     },
     harnesses: { one: 'A harness, in « New agent »: {names}', other: '{count} harnesses, in « New agent »: {names}' },
-    ticketSources: { one: 'A Kanban source: {names}', other: '{count} Kanban sources: {names}' },
+    ticketSources: {
+      one: 'A Kanban source, in Settings › Connected services: {names}',
+      other: '{count} Kanban sources, in Settings › Connected services: {names}',
+    },
     launchEnvironments: {
       one: 'A launch environment, for the test launches: {names}',
       other: '{count} launch environments, for the test launches: {names}',
     },
-    forges: { one: 'A code host: {names}', other: '{count} code hosts: {names}' },
+    forges: {
+      one: 'A code host, in Settings › Connected services: {names}',
+      other: '{count} code hosts, in Settings › Connected services: {names}',
+    },
     accounts: {
-      one: 'A kind of account, in Settings › Accounts: {names}',
-      other: '{count} kinds of accounts, in Settings › Accounts: {names}',
+      one: 'A kind of account, in Settings › Accounts and harnesses: {names}',
+      other: '{count} kinds of accounts, in Settings › Accounts and harnesses: {names}',
+    },
+    accountsServices: {
+      one: 'A kind of account, in Settings › Connected services: {names}',
+      other: '{count} kinds of accounts, in Settings › Connected services: {names}',
     },
     webhooks: { one: 'A webhook: {names}', other: '{count} webhooks: {names}' },
     commands: { one: 'A command: {names}', other: '{count} commands: {names}' },
@@ -403,10 +418,22 @@ export default defineZone('plugins', {
     bad: 'Escouade can’t read this link, nothing was done: {url}',
   },
 
-  link: {
-    title: 'Plugins have their own view',
-    body: 'Install, switch on project by project, take a permission back, read a journal: it all happens in the view Plugins, opened by the icon of the projects’ rail.',
+  // Settings › Plugins (direction A, ESC-384): the installed ones, what each adds and where it is set, the seed's.
+  settingsPage: {
     open: 'Open the view Plugins',
+    none: 'No plugin installed. A plugin adds a harness, a Kanban source, a code host, a theme or a voice service.',
+    settings: 'Settings',
+    settingsOf: 'Settings of {name}, in the view Plugins',
+    verified: 'Verified',
+    verifiedTip: 'Verified by Escouade: v{version}, signed, reviewed by Escouade',
+    voice: 'A voice service, in Settings › Voice',
+    active: { one: 'On in {count} project of {total}', other: 'On in {count} projects of {total}' },
+    wholeApp: 'For the whole app',
+    seedNote:
+      'In the installer, nothing to download: each also installs by itself on the gesture that needs it (adding an account, choosing a source, a code host or a voice service).',
+    install: 'Install',
+    installOf: 'Install {name}',
+    security: 'Security',
   },
 
   proposed: {

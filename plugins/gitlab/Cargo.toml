@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-gitlab"
-version = "2.2.1"
+version = "2.2.3"
 description = "Le plugin GitLab d'Escouade : les MR, les pipelines, les discussions et les déploiements, sur gitlab.com et les instances auto-hébergées"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"

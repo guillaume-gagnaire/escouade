@@ -450,7 +450,9 @@ async fn the_team_rules_example_refuses_rm_rf_with_its_reason() {
     let manifest = dir.join("escouade-plugin.json");
     let mut m: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&manifest).unwrap()).unwrap();
-    m["escouade"]["min"] = serde_json::json!(env!("CARGO_PKG_VERSION"));
+    // Numbers alone there, a pre-release of the app (2.2.0-beta.1) all the same.
+    let app = env!("CARGO_PKG_VERSION").split(['-', '+']).next().unwrap();
+    m["escouade"]["min"] = serde_json::json!(app);
     std::fs::write(&manifest, serde_json::to_string_pretty(&m).unwrap()).unwrap();
     h.core.plugins.load_dev(&dir, Lang::En).unwrap();
     // Its module made now, before the waits' 60 s: Javy and wasmtime's compilation of a debug build take long on a

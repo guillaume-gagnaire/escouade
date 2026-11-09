@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
-import { addProject, expect, openNewProject, test } from './fixture';
+import { addProject, expect, openNewProject, test, openSettingsPage, closeSettings } from './fixture';
 
 /** Whether a click at the middle of `el` lands on it: drawn, inside the part of its window that shows, not covered. */
 const hit = (el: Locator) =>
@@ -36,6 +36,12 @@ async function tallField(page: Page, dialog: Locator, field: Locator, next: Loca
   expect(await clear(next, field), `under the field, clear of it, ${label}`).toBe(true);
   for (const b of buttons) expect(await hit(b), `${await b.textContent()} beside it, ${label}`).toBe(true);
   await page.mouse.wheel(0, -20_000);
+  // The wheel scrolls on the compositor, and `mouse.wheel` returns before the page has it. On a slow runner the scroll
+  // landed after the focus and the Tab below, its delta added to where the focus had scrolled: back at the top, the
+  // focused button out of sight (ESC-393). Up again first, the field's top in the window.
+  await expect
+    .poll(async () => (await field.boundingBox())!.y >= (await dialog.boundingBox())!.y, { message: `back up, ${label}` })
+    .toBe(true);
   await field.focus();
   for (let i = 0; i < 10 && !(await next.evaluate((n) => n === document.activeElement)); i++) await page.keyboard.press('Tab');
   await expect(next, label).toBeFocused();
@@ -52,13 +58,14 @@ test('the settings of a project: the files copied into the worktrees, dragged ta
   await addProject(page, app.repo, { firstAgent: false });
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(dialog, 'Git et worktrees');
   await tallField(
     page,
     dialog,
     dialog.getByRole('textbox', { name: 'Fichiers copiés dans les worktrees' }),
     dialog.getByRole('group', { name: 'Commit' }).getByRole('button').first(),
-    [dialog.getByRole('button', { name: 'Annuler', exact: true }), dialog.getByRole('button', { name: 'Enregistrer', exact: true })],
+    // No foot (ESC-380): « Fermer », in the header, stays shown.
+    [dialog.getByRole('button', { name: 'Fermer', exact: true })],
     'settings',
   );
 });
@@ -87,10 +94,9 @@ test('the commit window: its message dragged tall', async ({ app }) => {
   // A direct commit, its message proposed, for the window to open.
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(settings, 'Git et worktrees');
   await settings.getByRole('button', { name: 'Direct, avec un message proposé' }).click();
-  await settings.getByRole('button', { name: 'Enregistrer', exact: true }).click();
-  await expect(settings).toBeHidden();
+  await closeSettings(settings);
   const worktrees = path.join(app.repo, '.claude', 'worktrees');
   await expect.poll(() => (fs.existsSync(worktrees) ? fs.readdirSync(worktrees).length : 0)).toBe(1);
   fs.writeFileSync(path.join(worktrees, fs.readdirSync(worktrees)[0], 'notes.md'), 'Des notes\n');

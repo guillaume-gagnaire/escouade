@@ -187,9 +187,11 @@ pub const GEMINI: &str = "dev.escouade.gemini-cli";
 /// The plugin « OpenCode »: OpenCode as a harness, on its `opencode serve` (INT-10.2).
 pub const OPENCODE: &str = "dev.escouade.opencode";
 
-/// Whether the seed may hold `id`: a plugin of the registry, less the demonstration, which is no product.
+/// Whether the seed may hold `id`: a plugin of the registry, less the demonstration, which is no product; and the plugins
+/// of the first hand the app never gave, published on the store (ESC-354): Goose, a harness its manifest describes, and
+/// those on request (Discord, Slack, High contrast, Team rules), which the seed proposes and never installs unasked.
 pub fn seeds(id: &str) -> bool {
-    id != "dev.escouade.minimal" && is_builtin(id)
+    (id != "dev.escouade.minimal" && is_builtin(id)) || super::sort::seeds_beyond_the_registry(id)
 }
 
 /// Whether `id` is the id of a plugin the app gives.
@@ -203,14 +205,33 @@ pub fn first_hand(id: &str) -> bool {
     id.starts_with(super::manifest::RESERVED_PREFIX)
 }
 
+/// The name of the plugin of the registry `id` in `lang`, as its manifest says it: what the view and the line of a
+/// gesture name a plugin of the seed that is not installed (ESC-373).
+pub fn name(id: &str, lang: crate::i18n::Lang) -> Option<String> {
+    let entry = REGISTRY.iter().find(|e| e.id == id)?;
+    let v: serde_json::Value = serde_json::from_str(entry.manifest).ok()?;
+    let name = v.get("name")?;
+    let key = match lang {
+        crate::i18n::Lang::Fr => "fr",
+        crate::i18n::Lang::En => "en",
+    };
+    name.as_str()
+        .or_else(|| name.get(key).and_then(|n| n.as_str()))
+        .or_else(|| name.get("en").and_then(|n| n.as_str()))
+        .map(str::to_string)
+}
+
 /// The manifest of the builtin plugin `id`, at Escouade's version `app_version`.
 pub fn manifest_text(id: &str, app_version: &str) -> Option<String> {
     let entry = REGISTRY.iter().find(|e| e.id == id)?;
     let mut v: serde_json::Value = serde_json::from_str(entry.manifest).ok()?;
     v["version"] = app_version.into();
-    // Given by this app, it runs on it, whatever a port wrote for the store (`escouade.min`).
+    // Given by this app, it runs on it, whatever a port wrote for the store (`escouade.min`). A version of Escouade
+    // there is numbers alone: a pre-release of the app (2.2.0-beta.1) writes its own (2.2.0), or no plugin it gives
+    // would be read.
+    let numbers = app_version.split(['-', '+']).next().unwrap_or(app_version);
     if let Some(range) = v.get_mut("escouade").and_then(|e| e.as_object_mut()) {
-        range.insert("min".to_string(), app_version.into());
+        range.insert("min".to_string(), numbers.into());
     }
     serde_json::to_string_pretty(&v).ok()
 }

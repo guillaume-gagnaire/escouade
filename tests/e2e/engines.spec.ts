@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { addProject, expect, send, test } from './fixture';
+import { addProject, expect, send, test, openSettingsPage } from './fixture';
 
 // The registry of the harnesses (ESC-28): the version of Claude Code found, an older one than the tested ones refused, a
 // newer one taken with no warning (ESC-159). The fake `claude` prints FAKE_CLAUDE_VERSION for `--version` (2.1.301 by default, the newest tested).
@@ -7,7 +7,7 @@ import { addProject, expect, send, test } from './fixture';
 async function claudeSettings(page: Page) {
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
-  await dialog.getByRole('tab', { name: 'Harness' }).click();
+  await openSettingsPage(dialog, 'Comptes et harness');
   return dialog;
 }
 
@@ -19,7 +19,7 @@ test('the settings tell the version of Claude Code found, alone', async ({ app }
   await expect(version).toHaveText('2.1.301');
   // The test's Claude Code folder has no sign-in: that is what keeps it from being ready.
   await expect(version).toHaveAttribute('data-state', 'notConnected');
-  await expect(dialog.getByText('Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes.')).toBeVisible();
+  await expect(dialog.getByText('Aucun compte connecté : connecte l’un de ses comptes ci-dessous, ou ajoutes-en un.')).toBeVisible();
   await expect(dialog.getByText(/Testée avec Escouade/)).toHaveCount(0);
 });
 
@@ -54,9 +54,7 @@ test.describe('a Claude Code newer than the tested ones', () => {
     await expect(dialog.locator('[data-state]')).toHaveText('2.1.999');
     // No sign-in in the test's Claude Code folder: that alone is told, nothing of the tested versions.
     await expect(dialog.locator('[data-state]')).toHaveAttribute('data-state', 'notConnected');
-    await expect(
-      dialog.getByText('Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes.'),
-    ).toBeVisible();
+    await expect(dialog.getByText('Aucun compte connecté : connecte l’un de ses comptes ci-dessous, ou ajoutes-en un.')).toBeVisible();
     await expect(dialog.getByText(/testé/)).toHaveCount(0);
   });
 });

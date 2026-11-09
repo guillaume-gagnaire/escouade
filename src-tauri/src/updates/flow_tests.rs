@@ -124,6 +124,7 @@ impl Rig {
                 proxy: proxy.map(|p| format!("http://{}", p.address()).parse().unwrap()),
                 ..Network::default()
             },
+            beta: false,
             endpoints: vec![self.endpoint.parse().unwrap()],
             pause: Duration::from_millis(5),
         })
@@ -337,7 +338,7 @@ async fn the_check_reads_the_endpoints_of_the_configuration_and_the_network_of_t
 /// What the proxy says to the user who has to put a password in its address.
 fn password_asked(proxy: &Server) -> String {
     format!(
-        "le proxy {} demande une authentification (407 Proxy Authentication Required) : mets l'identifiant et le mot de passe dans l'adresse du proxy, dans Réglages › Réseau",
+        "le proxy {} demande une authentification (407 Proxy Authentication Required) : mets l'identifiant et le mot de passe dans l'adresse du proxy, dans Réglages › Avancé › Réseau",
         proxy.address()
     )
 }
@@ -845,6 +846,7 @@ async fn tls_verification_off_lets_the_check_and_the_probe_trust_a_self_signed_c
                 insecure_tls,
                 ..Network::default()
             },
+            beta: false,
             endpoints: vec![url.parse().unwrap()],
             pause: Duration::from_millis(5),
         })
@@ -860,4 +862,74 @@ async fn tls_verification_off_lets_the_check_and_the_probe_trust_a_self_signed_c
     // Not verified: found.
     let checked = within(checker(true).run(&updates, true)).await;
     assert!(matches!(checked, Checked::Found { .. }), "{checked:?}");
+}
+
+// ---------- the beta channel (ESC-374) ----------
+
+const BETA: &str = "/beta.json";
+
+impl Rig {
+    /// A check with « Recevoir les versions bêta » on or off, as `Checker::new` makes it.
+    fn checker_with_betas(&self, beta: bool) -> Arc<Checker<MockRuntime>> {
+        Arc::new(Checker {
+            beta,
+            endpoints: endpoints_for(&[self.endpoint.parse().unwrap()], beta),
+            ..Arc::into_inner(self.checker(None)).unwrap()
+        })
+    }
+}
+
+/// beta.json beside latest.json, holding `version`.
+fn serve_beta(rig: &Rig, version: &str) {
+    let manifest = manifest(version, &rig.origin.url(SETUP));
+    rig.origin
+        .script(BETA, vec![Reply::json(200, &manifest.to_string())]);
+}
+
+#[tokio::test]
+async fn without_the_betas_the_check_reads_latest_json_alone() {
+    let rig = Rig::new().await;
+    serve_beta(&rig, "99.1.0-beta.1");
+    let found = rig.found(&rig.checker_with_betas(false)).await;
+    assert_eq!(found.version, NEW);
+    assert_eq!(rig.origin.hits(LATEST).len(), 1);
+    assert!(rig.origin.hits(BETA).is_empty());
+}
+
+#[tokio::test]
+async fn with_the_betas_the_check_reads_beta_json_first() {
+    let rig = Rig::new().await;
+    serve_beta(&rig, "99.1.0-beta.1");
+    let found = rig.found(&rig.checker_with_betas(true)).await;
+    assert_eq!(found.version, "99.1.0-beta.1");
+    assert_eq!(rig.origin.hits(BETA).len(), 1);
+    assert!(rig.origin.hits(LATEST).is_empty());
+}
+
+#[tokio::test]
+async fn with_the_betas_and_no_beta_json_yet_the_check_reads_latest_json() {
+    let rig = Rig::new().await;
+    // No script for beta.json: the server answers 404, as GitHub before the first release that
+    // holds one.
+    let found = rig.found(&rig.checker_with_betas(true)).await;
+    assert_eq!(found.version, NEW);
+    assert_eq!(rig.origin.hits(BETA).len(), 1);
+    assert_eq!(rig.origin.hits(LATEST).len(), 1);
+}
+
+#[tokio::test]
+async fn without_the_betas_a_beta_found_in_latest_json_is_not_offered() {
+    let rig = Rig::new().await;
+    rig.origin.script(
+        LATEST,
+        vec![Reply::json(
+            200,
+            &manifest("99.0.0-beta.1", &rig.origin.url(SETUP)).to_string(),
+        )],
+    );
+    let checked = rig.check(&rig.checker_with_betas(false), true).await;
+    assert!(matches!(checked, Checked::None), "{checked:?}");
+    // With them, it is.
+    let found = rig.found(&rig.checker_with_betas(true)).await;
+    assert_eq!(found.version, "99.0.0-beta.1");
 }

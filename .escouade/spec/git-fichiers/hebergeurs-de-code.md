@@ -1,8 +1,8 @@
 ---
 title: "Hébergeurs de code"
 subject: "Git & fichiers"
-sources: ["docs/SPEC.md","plugins/gitlab/README.md","tests/fixtures/forges/gitlab/README.md","docs/TODO-2.2.md (Hébergeurs de code)","plugins/gitea/README.md","tests/fixtures/forges/gitea/README.md","docs/TODO-1.8.md","src-tauri/src/telemetry.rs"]
-tickets: ["ESC-54","ESC-55","ESC-56","ESC-58","ESC-70","ESC-241","ESC-212","ESC-57","ESC-67","ESC-345","ESC-69"]
+sources: ["docs/SPEC.md","plugins/gitlab/README.fr.md","plugins/gitlab/docs/fr/","tests/fixtures/forges/gitlab/README.md","docs/TODO-2.2.md (Hébergeurs de code)","plugins/gitea/README.fr.md","plugins/gitea/docs/fr/","tests/fixtures/forges/gitea/README.md","docs/TODO-1.8.md","src-tauri/src/telemetry.rs"]
+tickets: ["ESC-54","ESC-55","ESC-56","ESC-58","ESC-70","ESC-241","ESC-212","ESC-57","ESC-67","ESC-345","ESC-69","ESC-367","ESC-383"]
 decisions: [104]
 compared: null
 ---
@@ -71,11 +71,12 @@ Le client est le plugin livré `dev.escouade.gitea`. Gitea et Forgejo partagent 
 
 ## Réglages
 
-Réglages › Intégrations › « Hébergeurs de code » :
+Réglages › Services connectés › « Hébergeurs de code », une page d'Escouade (voir *Réglages*) :
 
-- Chaque compte : hébergeur, hôte, état de sa dernière vérification (« Connecté » ; « Jeton expiré ou révoqué » sur un 401 ; « Droits manquants : … » quand l'hébergeur dit les droits du jeton ; « Injoignable »), « Jeton de gh », « Sert aussi à GitHub Issues » (ou à GitLab Issues ; sinon « Pas de tickets : PR et CI seulement »), les projets dont le dépôt est sur l'instance, « Déconnecter ». Les comptes sont vérifiés à l'ouverture de l'onglet et par « Vérifier ».
+- Chaque compte : hébergeur, hôte, état de sa dernière vérification (« Connecté » ; « Jeton expiré ou révoqué » sur un 401 ; « Droits manquants : … » quand l'hébergeur dit les droits du jeton ; « Injoignable »), « Jeton de gh », « Sert aussi à GitHub Issues » (ou à GitLab Issues ; sinon « Pas de tickets : PR et CI seulement »), les projets dont le dépôt est sur l'instance, « Déconnecter ». Les comptes sont vérifiés à l'ouverture de la page et par « Vérifier ».
 - Les hôtes des dépôts des projets sans compte : « Aucun compte, pour le projet … » et « Connecter <hôte> », qui pré-remplit l'adresse (celle du dépôt en https, port compris ; celle de l'organisation sur Azure DevOps) et devine le type d'instance (GitLab, Gitea, Forgejo) en interrogeant sa version.
 - « Connecter un hébergeur… » : hébergeur, adresse (son instance publique si vide), e-mail (Bitbucket), jeton (vide : celui de la CLI), les droits à lui donner, « Créer un jeton ».
+- Les messages du cœur qui renvoient à un compte manquant (« Hébergeur inconnu pour <hôte> : connecte-le dans Réglages › Services connectés. ») nomment cette page ; ceux des plugins livrés disent encore « Réglages › Intégrations » jusqu'à leur prochaine version au store.
 
 ## Limites
 

@@ -125,6 +125,14 @@ describe('the « Pull requests » view (ESC-65)', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(3);
   });
 
+  it('leads a refused token to the page « Services connectés » of the settings', async () => {
+    fakeBackend({ project_prs: () => ({ failure: { kind: 'refused', message: '401 Bad credentials' } }) });
+    render(PrsView, { project: project() });
+    const alert = await screen.findByRole('alert');
+    await userEvent.click(within(alert).getByRole('button', { name: 'Réglages › Services connectés' }));
+    expect(app.modal).toEqual({ kind: 'settings', page: 'services' });
+  });
+
   it('speaks English', async () => {
     setLang('en');
     fakeBackend({ project_prs: () => ({ data: { word: 'PR', prs: PRS, me: 'ada' } }) });

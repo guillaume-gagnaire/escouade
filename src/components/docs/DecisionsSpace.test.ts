@@ -121,6 +121,23 @@ describe('the register of the decisions', () => {
     expect(within(rowOf(13)).queryByRole('button', { name: /Accepter/ })).toBeNull();
   });
 
+  it('shows both of two decisions that have the same number, each of them chosen on its own (ESC-377)', async () => {
+    // Two validations at once gave 0113 twice before ESC-377: the app does not renumber them, the register shows both.
+    backend([
+      decision(113, { id: 'l-amorce-n-installe-que-les-plugins-de-c', title: 'L’amorce n’installe que les plugins utilisés' }),
+      decision(113, { id: 'un-canal-beta-opt-in-beta-json-a-cote-de', title: 'Un canal bêta opt-in' }),
+    ]);
+    await docsStore.load('p1');
+    render(DecisionsSpace, { project: app.projects[0] });
+    const rows = document.querySelectorAll('tbody tr');
+    expect(rows).toHaveLength(2);
+    expect([...rows].map((r) => r.querySelector('.c-num')?.textContent)).toEqual(['113', '113']);
+    await userEvent.click(screen.getByRole('button', { name: 'Un canal bêta opt-in' }));
+    expect(screen.getByRole('complementary', { name: 'Un canal bêta opt-in' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'L’amorce n’installe que les plugins utilisés' }));
+    expect(screen.getByRole('complementary', { name: 'L’amorce n’installe que les plugins utilisés' })).toBeInTheDocument();
+  });
+
   it('filters them by state', async () => {
     backend(register());
     await docsStore.load('p1');

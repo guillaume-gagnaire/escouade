@@ -32,7 +32,7 @@
   /** The files opened last, but the one the editor shows: Enter with nothing typed goes back to the one before. */
   const recent = $derived.by(() => {
     const ed = app.editor[projectId];
-    const shown = app.editorOn && app.project?.id === projectId && ed?.source === source ? ed.places[source]?.active : null;
+    const shown = app.editorActive && app.project?.id === projectId && ed?.source === source ? ed.places[source]?.active : null;
     return recentFiles.list(projectId, source).filter((p) => p !== shown);
   });
   const shown = $derived(rankFiles(files, query.name, recent, QUICK_OPEN_MAX));
@@ -120,7 +120,7 @@
     close();
     await tick();
     const target = col ? { path, line, col } : { path, line };
-    const inEditor = app.editorOn && app.project?.id === pid && app.editor[pid]?.source === src;
+    const inEditor = app.editorActive && app.project?.id === pid && app.editor[pid]?.source === src;
     if (inEditor && editorJump(target)) return;
     app.openEditor({ projectId: pid, source: src, ...target });
   }

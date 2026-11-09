@@ -3,12 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { flushSync } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../../lib/i18n';
-import { settingsForm } from '../../lib/settings.svelte';
+import { SAVE_PAUSE_MS, settingsForm } from '../../lib/settings.svelte';
 import { app } from '../../lib/state.svelte';
-import { PROJECT_COLORS } from '../../lib/theme';
+import { BRAND, PROJECT_COLORS } from '../../lib/theme';
 import type { ClaudeUpdateStatus, EngineInfo, RunCommand } from '../../lib/types';
 import { BARE_ENGINE, board, branchInfo, CLAUDE_ENGINE, fakeBackend, gitInfo, project, resetApp } from '../../test/ipc';
 import SettingsModal from './SettingsModal.svelte';
+import { afterGesture } from '../../test/settings';
 
 vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }));
 
@@ -18,11 +19,13 @@ const SHELLS = [
   { id: 'bash', label: 'Git Bash', path: 'bash.exe' },
 ];
 
-const tab = (name: string) => screen.getByRole('tab', { name });
-const panel = () => screen.getByRole('tabpanel');
+/** The bar of the pages. */
+const nav = () => screen.getByRole('navigation');
+/** An entry of the bar: a page, or a project. */
+const tab = (name: string | RegExp) => within(nav()).getByRole('button', { name });
+const panel = () => document.getElementById('settings-panel')!;
 /** What is in a group of the settings, under its heading. */
 const group = (name: string) => within(within(panel()).getByRole('heading', { name }).closest('section')!);
-const save = () => userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
 /** The backend as it answers: a board saved comes back in its project. */
 const backendSaving = (over: Record<string, (a: any) => unknown> = {}) =>
   fakeBackend({
@@ -48,6 +51,26 @@ describe('SettingsModal', () => {
     app.modal = { kind: 'settings' };
   });
 
+  it('opens on the page asked for, or on the page a 2.0 tab leads to, the project unfolded on its pages', () => {
+    fakeBackend({ save_settings: () => [] });
+    render(SettingsModal, { page: 'tickets', projectId: 'p2' });
+    expect(tab('Tickets importés')).toHaveAttribute('aria-current', 'page');
+    expect(tab('site')).toHaveAttribute('aria-expanded', 'true');
+    expect(tab('demo-api')).toHaveAttribute('aria-expanded', 'false');
+    expect(settingsForm.page).toBe('tickets');
+    expect(settingsForm.projectId).toBe('p2');
+    cleanup();
+    render(SettingsModal, { page: 'launch', projectId: 'p1' });
+    expect(tab('Lancement')).toHaveAttribute('aria-current', 'page');
+    expect(settingsForm.page).toBe('launch');
+    cleanup();
+    render(SettingsModal, { page: 'advanced' });
+    expect(tab('Avancé')).toHaveAttribute('aria-current', 'page');
+    expect(settingsForm.page).toBe('advanced');
+    // On a page of Escouade, no project is unfolded.
+    expect(within(nav()).queryByRole('button', { name: 'Projet' })).toBeNull();
+  });
+
   it('dit sous le chemin de l’exécutable où est son claude, dans WSL aussi', async () => {
     fakeBackend({
       claude_locate: ({ path }: { path: string }) =>
@@ -55,7 +78,7 @@ describe('SettingsModal', () => {
           ? { path: null, wsl: null, nat: false, canWsl: true }
           : { path: '/home/moi/.local/bin/claude', wsl: 'Ubuntu', nat: true, canWsl: true },
     });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'accounts' });
     expect(
       await screen.findByText(
         'Introuvable. Indique le chemin de claude.exe, ou de Claude Code installé dans WSL : ~/.local/bin/claude, /home/<utilisateur>/…, ou \\\\wsl.localhost\\<distribution>\\….',
@@ -66,88 +89,211 @@ describe('SettingsModal', () => {
     expect(screen.getByText(/^Le réseau de WSL est en NAT : le serveur MCP d’Escouade/)).toBeInTheDocument();
   });
 
-  it('shows one tab at a time, Application first, opens on Claude Code, with the app’s version under them', async () => {
+  it('shows a page at a time, from the bar: Escouade, the projects, Tous les projets, À propos and the version', async () => {
     fakeBackend();
     render(SettingsModal);
     const dialog = screen.getByRole('dialog', { name: 'Réglages' });
-    expect(
-      within(dialog)
-        .getAllByRole('tab')
-        .map((t) => t.textContent?.trim()),
-    ).toEqual([
-      'Application',
-      'Harness',
-      'Comptes',
+    const entries = () =>
+      within(nav())
+        .getAllByRole('button')
+        .map((t) => t.textContent?.trim());
+    expect(entries()).toEqual([
+      'Général',
+      'Agents',
+      'Comptes et harness',
+      'Services connectés',
       'Voix',
       'Notifications',
-      'Projets',
-      'Kanban',
-      'Intégrations',
       'Plugins',
-      'Serveur MCP',
-      'Terminaux',
-      'Réseau',
-      'À propos',
+      'Avancé',
+      'demo-api',
+      'site',
+      'Tous les projets',
+      'À propos1.3.1',
     ]);
-    // An icon each, drawn (2.0 design), and the three groups: the general tabs, « Par projet », « Système ».
+    // An icon each for Escouade's pages, drawn; a square of its colour for each project.
     expect(
-      within(dialog)
-        .getAllByRole('tab')
-        .map((t) => t.querySelector('svg')?.dataset.icon),
-    ).toEqual(['lang', 'spark', 'user', 'mic', 'bell', 'folder', 'kanban', 'link', 'puzzle', 'plug', 'term', 'globe', 'info']);
-    expect([...dialog.querySelectorAll('.s-group')].map((g) => g.textContent)).toEqual(['Par projet', 'Système']);
-    expect(tab('Harness')).toHaveAttribute('aria-selected', 'true');
-    expect(within(dialog).getByText('Exécutables et versions de chaque harness, et ce qui vaut pour tous')).toBeInTheDocument();
-    expect(within(panel()).getByRole('textbox', { name: /Chemin de l'exécutable/ })).toBeInTheDocument();
-    expect(within(dialog).getByText('Escouade 1.3.1')).toBeInTheDocument();
+      within(nav())
+        .getAllByRole('button')
+        .map((t) => t.querySelector('svg')?.dataset.icon ?? (t.querySelector('.sq') ? 'sq' : null)),
+    ).toEqual(['sliders', 'agents', 'user', 'link', 'mic', 'bell', 'puzzle', 'term', 'sq', 'sq', 'folder', 'info']);
+    expect([...nav().querySelectorAll('.s-h')].map((g) => g.textContent)).toEqual(['Escouade', 'Projets']);
+    // The search (R8).
+    expect(within(nav()).getByRole('searchbox', { name: 'Rechercher un réglage' })).toBeEnabled();
+    expect(tab('Comptes et harness')).toHaveAttribute('aria-current', 'page');
+    expect(within(dialog).getByRole('heading', { level: 1, name: 'Comptes et harness' })).toBeInTheDocument();
+    expect(within(dialog).getByText('Les harness de ce poste, leurs comptes, et ce qui se passe à la limite')).toBeInTheDocument();
+    expect(within(panel()).getByRole('region', { name: 'Claude Code' })).toBeInTheDocument();
+    expect(within(panel()).getByRole('heading', { name: 'Quand un quota est épuisé' })).toBeInTheDocument();
 
-    await userEvent.click(tab('Réseau'));
-    expect(tab('Réseau')).toHaveAttribute('aria-selected', 'true');
-    expect(within(panel()).getByRole('heading', { name: 'Proxy' })).toBeInTheDocument();
-    expect(screen.queryByRole('textbox', { name: /Chemin de l'exécutable/ })).not.toBeInTheDocument();
-    // Each tab starts at its top, whatever the one before was scrolled to.
+    await userEvent.click(tab('Avancé'));
+    expect(tab('Avancé')).toHaveAttribute('aria-current', 'page');
+    expect(tab('Comptes et harness')).not.toHaveAttribute('aria-current');
+    expect(within(panel()).getByRole('heading', { name: 'Réseau' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Claude Code' })).not.toBeInTheDocument();
+    // Each page starts at its top, whatever the one before was scrolled to.
     panel().scrollTop = 300;
-    await userEvent.click(tab('Terminaux'));
+    await userEvent.click(tab('Général'));
     expect(panel().scrollTop).toBe(0);
-    await userEvent.click(tab('Réseau'));
-    // Arrows move from tab to tab.
-    await userEvent.keyboard('{ArrowDown}');
-    expect(tab('À propos')).toHaveAttribute('aria-selected', 'true');
-    expect(tab('À propos')).toHaveFocus();
+    // A project opens on « Projet », unfolded on its pages; another page of it keeps the project.
+    await userEvent.click(tab('site'));
+    expect(settingsForm.page).toBe('project');
+    expect(settingsForm.projectId).toBe('p2');
+    expect(entries().slice(8, 19)).toEqual([
+      'demo-api',
+      'site',
+      'Projet',
+      'Git et worktrees',
+      'Lancement',
+      'Kanban',
+      'Tickets importés',
+      'Équipe',
+      'Confidentialité',
+      'Tous les projets',
+      'À propos1.3.1',
+    ]);
+    expect(within(dialog).getByRole('heading', { level: 1, name: 'site' })).toBeInTheDocument();
+    await userEvent.click(tab('Kanban'));
+    expect(within(dialog).getByRole('heading', { level: 1, name: 'Kanban' })).toBeInTheDocument();
+    // Another project, on the same page.
+    await userEvent.click(tab('demo-api'));
+    expect(settingsForm.page).toBe('board');
+    expect(settingsForm.projectId).toBe('p1');
+    expect(tab('site')).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('saves the settings of every tab at once', async () => {
+  it('goes through the bar with the arrows, Home and End, unfolding a project gone through', async () => {
+    fakeBackend();
+    render(SettingsModal, { page: 'plugins' });
+    tab('Plugins').focus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(tab('Avancé')).toHaveAttribute('aria-current', 'page');
+    expect(tab('Avancé')).toHaveFocus();
+    // On a project: it opens, on « Projet », the focus on its name.
+    await userEvent.keyboard('{ArrowDown}');
+    expect(settingsForm.projectId).toBe('p1');
+    expect(tab('Projet')).toHaveAttribute('aria-current', 'page');
+    await expect.poll(() => document.activeElement).toBe(tab('demo-api'));
+    await userEvent.keyboard('{ArrowDown}');
+    await userEvent.keyboard('{ArrowDown}');
+    expect(tab('Git et worktrees')).toHaveAttribute('aria-current', 'page');
+    await expect.poll(() => document.activeElement).toBe(tab('Git et worktrees'));
+    await userEvent.keyboard('{End}');
+    expect(tab(/^À propos/)).toHaveAttribute('aria-current', 'page');
+    await expect.poll(() => document.activeElement).toBe(tab(/^À propos/));
+    // Up through « Tous les projets » to the last project, opened on « Projet ».
+    await userEvent.keyboard('{ArrowUp}');
+    await userEvent.keyboard('{ArrowUp}');
+    await expect.poll(() => document.activeElement).toBe(tab('site'));
+    expect(settingsForm.projectId).toBe('p2');
+    expect(settingsForm.page).toBe('project');
+    await userEvent.keyboard('{Home}');
+    expect(tab('Général')).toHaveAttribute('aria-current', 'page');
+    await expect.poll(() => document.activeElement).toBe(tab('Général'));
+    // The first stays where it is.
+    await userEvent.keyboard('{ArrowUp}');
+    expect(tab('Général')).toHaveFocus();
+    // One entry in the Tab order: the one the keyboard is on.
+    expect(
+      within(nav())
+        .getAllByRole('button')
+        .filter((b) => b.tabIndex === 0),
+    ).toEqual([tab('Général')]);
+  });
+
+  it('tints the window by what the page sets: Escouade’s teal, or the project’s colour as in the draft', async () => {
+    fakeBackend();
+    app.projects[1].color = PROJECT_COLORS[3];
+    const tint = () => document.documentElement.style.getPropertyValue('--p');
+    const { unmount } = render(SettingsModal, { page: 'general' });
+    const dialog = screen.getByRole('dialog', { name: 'Réglages' });
+    expect(tint()).toBe(BRAND);
+    expect(dialog).toHaveAttribute('data-scope', 'app');
+    await userEvent.click(tab('site'));
+    expect(tint()).toBe(PROJECT_COLORS[3]);
+    expect(dialog).toHaveAttribute('data-scope', 'project');
+    // Its tile beside its name.
+    expect(dialog.querySelector('.s-head .tile')).toHaveTextContent('Si');
+    // A colour chosen in the draft tints it at once.
+    settingsForm.projects.p2.color = PROJECT_COLORS[5];
+    flushSync();
+    expect(tint()).toBe(PROJECT_COLORS[5]);
+    await userEvent.click(tab('Tous les projets'));
+    expect(tint()).toBe(BRAND);
+    expect(dialog.querySelector('.s-head .tile')).toBeNull();
+    // Closed, the app's own tint comes back: the colour of the project on screen.
+    await userEvent.click(tab('site'));
+    app.ui.view = 'project';
+    app.ui.activeProject = 'p1';
+    unmount();
+    expect(tint()).toBe(app.projects[0].color);
+  });
+
+  it('saves a text when it loses the focus and a switch at once, each once, with no « Enregistrer » (ESC-380)', async () => {
     const backend = fakeBackend({ save_settings: () => [{ id: 'pwsh', label: 'PowerShell', path: 'pwsh.exe' }] });
     render(SettingsModal);
-    await userEvent.click(tab('Réseau'));
+    const dialog = screen.getByRole('dialog', { name: 'Réglages' });
+    expect(within(dialog).queryByRole('button', { name: 'Enregistrer' })).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: 'Annuler' })).toBeNull();
+    await userEvent.click(tab('Avancé'));
     await userEvent.type(screen.getByPlaceholderText('aucun'), 'http://proxy:3128');
+    // Typing: not yet.
+    expect(backend.called('save_settings')).toHaveLength(0);
+    // Left for another page: saved.
     await userEvent.click(tab('Notifications'));
+    await settingsForm.settled();
+    expect(backend.called('save_settings')).toHaveLength(1);
+    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ proxyUrl: 'http://proxy:3128', sound: true });
     const sound = screen.getByRole('switch', { name: 'Son activé' });
     expect(sound).toHaveAttribute('aria-checked', 'true');
     await userEvent.click(sound);
-    // Each tab with a change is marked until it is saved.
-    expect(tab('Réseau')).toHaveClass('changed');
-    expect(tab('Notifications')).toHaveClass('changed');
-    expect(tab('Harness')).not.toHaveClass('changed');
-    expect(backend.called('save_settings')).toHaveLength(0);
-    await save();
-    expect(backend.called('save_settings')).toHaveLength(1);
-    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ proxyUrl: 'http://proxy:3128', sound: false });
-    expect(app.modal).toBeNull();
+    await settingsForm.settled();
+    expect(backend.called('save_settings')).toHaveLength(2);
+    expect(backend.called('save_settings')[1].args.settings).toMatchObject({ proxyUrl: 'http://proxy:3128', sound: false });
+    await afterGesture();
+    expect(backend.called('save_settings')).toHaveLength(2);
+    // The window stays open, nothing to confirm.
+    expect(app.modal).not.toBeNull();
     expect(app.shells.map((s) => s.id)).toEqual(['pwsh']);
-    expect(app.toasts.at(-1)?.text).toBe('Réglages enregistrés');
+  });
+
+  it('saves a text after a pause in the typing, without leaving the field (ESC-380)', async () => {
+    const backend = fakeBackend({ save_settings: () => [] });
+    render(SettingsModal);
+    await userEvent.click(tab('Avancé'));
+    const proxy = screen.getByPlaceholderText('aucun');
+    await userEvent.type(proxy, 'http://proxy:3128');
+    expect(proxy).toHaveFocus();
+    expect(backend.called('save_settings')).toHaveLength(0);
+    await waitFor(() => expect(backend.called('save_settings')).toHaveLength(1), { timeout: SAVE_PAUSE_MS + 1000 });
+    expect(backend.called('save_settings')[0].args.settings.proxyUrl).toBe('http://proxy:3128');
+    expect(proxy).toHaveFocus();
+  });
+
+  it('saves what waits when the window closes, and asks nothing (ESC-380)', async () => {
+    const backend = fakeBackend({ save_settings: () => [] });
+    app.modal = { kind: 'settings' };
+    const view = render(SettingsModal);
+    await userEvent.click(tab('Avancé'));
+    await userEvent.type(screen.getByPlaceholderText('aucun'), 'http://proxy:3128');
+    await userEvent.keyboard('{Escape}');
+    expect(app.modal).toBeNull();
+    expect(backend.called('save_settings')).toHaveLength(0);
+    // What App does once the modal is gone.
+    view.unmount();
+    await waitFor(() => expect(backend.called('save_settings')).toHaveLength(1));
+    expect(app.settings.proxyUrl).toBe('http://proxy:3128');
   });
 
   it('turns TLS verification off for a proxy with a certificate of its own', async () => {
     const backend = fakeBackend({ save_settings: () => [] });
     render(SettingsModal);
-    await userEvent.click(tab('Réseau'));
+    await userEvent.click(tab('Avancé'));
     const insecure = screen.getByRole('switch', { name: 'Ignorer la vérification des certificats TLS' });
     expect(insecure).toHaveAttribute('aria-checked', 'false');
     await userEvent.click(insecure);
-    expect(tab('Réseau')).toHaveClass('changed');
-    await save();
-    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ insecureTls: true });
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ insecureTls: true });
     expect(app.settings.insecureTls).toBe(true);
   });
 
@@ -164,7 +310,6 @@ describe('SettingsModal', () => {
         .map((s) => s.closest('label')!.textContent!.trim()),
     ).toEqual(labels);
     for (const label of labels) expect(within(group).getByRole('checkbox', { name: label })).toBeChecked();
-    expect(tab('Notifications')).not.toHaveClass('changed');
     // Off, a type is silent outside the window; what blinks or flashes still does.
     expect(group).toHaveTextContent(
       /Désactivé : ni notification système ni carillon pour ce type ; l’onglet, la carte et (la barre des tâches|le Dock) signalent toujours l’agent\./,
@@ -173,9 +318,8 @@ describe('SettingsModal', () => {
     await userEvent.click(within(group).getByRole('checkbox', { name: 'Tâches terminées' }));
     expect(within(group).getByRole('checkbox', { name: 'Tâches terminées' })).not.toBeChecked();
     expect(within(group).getByRole('checkbox', { name: 'Erreurs' })).toBeChecked();
-    expect(tab('Notifications')).toHaveClass('changed');
-    await save();
-    expect(backend.called('save_settings')[0].args.settings.notifyFor).toEqual({
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings.notifyFor).toEqual({
       ...app.settings.notifyFor,
       questions: true,
       done: false,
@@ -205,8 +349,8 @@ describe('SettingsModal', () => {
     ]);
     await userEvent.click(within(hosts).getByRole('checkbox', { name: 'PR approuvée' }));
     await userEvent.click(within(hosts).getByRole('checkbox', { name: 'Déploiement en production réussi' }));
-    await save();
-    const saved = backend.called('save_settings')[0].args.settings.notifyFor;
+    await afterGesture();
+    const saved = backend.called('save_settings').at(-1)!.args.settings.notifyFor;
     expect(saved.prApproved).toBe(false);
     expect(saved.deployOk).toBe(false);
     expect(saved.prCiFailed).toBe(true);
@@ -216,23 +360,36 @@ describe('SettingsModal', () => {
   it('has no defaults of new agents for every harness any more: each account has its own (ESC-128)', async () => {
     const backend = backendSaving();
     render(SettingsModal);
+    const resume = group('Quand un quota est épuisé').getByRole('switch', { name: 'Reprise automatique après la limite d’usage' });
+    expect(resume).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(resume);
     expect(screen.queryByRole('group', { name: 'Modèle par défaut' })).not.toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'Effort par défaut' })).not.toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'Mode de permission par défaut' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Nouveaux agents' })).not.toBeInTheDocument();
-    const resume = screen.getByRole('switch', { name: 'Reprise automatique après la limite d’usage' });
-    expect(resume).toHaveAttribute('aria-checked', 'true');
-    await userEvent.click(resume);
-    await userEvent.clear(screen.getByRole('spinbutton', { name: /Arrêter les processus des agents inactifs/ }));
-    await save();
-    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ autoResume: false, idleStopMinutes: 0 });
-    expect(backend.called('save_settings')[0].args.settings).not.toHaveProperty('defaultModel');
+    await userEvent.click(tab('Agents'));
+    await userEvent.click(within(panel()).getByRole('button', { name: /^Avancé/ }));
+    const idle = screen.getByRole('spinbutton', { name: /Arrêter les processus des agents inactifs/ });
+    await userEvent.clear(idle);
+    await afterGesture();
+    // Emptied: said on its row, the number saved before stays (ESC-380).
+    expect(idle).toHaveAttribute('aria-invalid', 'true');
+    expect(idle).toHaveAccessibleDescription(`Un nombre entier, 0 ou plus : ${app.settings.idleStopMinutes} reste enregistré.`);
+    expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({
+      autoResume: false,
+      idleStopMinutes: app.settings.idleStopMinutes,
+    });
+    await userEvent.type(idle, '0');
+    await afterGesture();
+    expect(idle).toHaveAttribute('aria-invalid', 'false');
+    expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ idleStopMinutes: 0 });
+    expect(backend.called('save_settings').at(-1)!.args.settings).not.toHaveProperty('defaultModel');
   });
 
   it('opens new agents in Escouade or in their harness’s terminal (ESC-34)', async () => {
     const backend = backendSaving();
-    render(SettingsModal);
-    const view = group('Tous les harness').getByRole('group', { name: 'Vue des nouveaux agents' });
+    render(SettingsModal, { page: 'agents' });
+    const view = group('Nouveaux agents').getByRole('group', { name: 'Vue des nouveaux agents' });
     const escouade = within(view).getByRole('button', { name: 'Escouade' });
     const harness = within(view).getByRole('button', { name: 'Terminal du harness' });
     expect(escouade).toHaveAttribute('aria-pressed', 'true');
@@ -242,15 +399,15 @@ describe('SettingsModal', () => {
     await userEvent.click(harness);
     expect(harness).toHaveAttribute('aria-pressed', 'true');
     expect(escouade).toHaveAttribute('aria-pressed', 'false');
-    await save();
-    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ terminalView: true });
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ terminalView: true });
     expect(app.settings.terminalView).toBe(true);
   });
 
   it('saves the delay before a message sent during a turn', async () => {
     const backend = backendSaving();
-    render(SettingsModal);
-    const delay = group('Tous les harness').getByRole('group', { name: 'Délai avant l’envoi pendant un tour' });
+    render(SettingsModal, { page: 'agents' });
+    const delay = group('Nouveaux agents').getByRole('group', { name: 'Délai avant l’envoi pendant un tour' });
     expect(screen.getByText(/tu peux le modifier ou l’annuler d’ici là/)).toHaveTextContent(/Cursor et OpenCode/);
     expect(
       within(delay)
@@ -259,41 +416,39 @@ describe('SettingsModal', () => {
     ).toEqual(['Désactivé', '5 s', '10 s', '20 s', '30 s']);
     await userEvent.click(within(delay).getByRole('button', { name: '20 s' }));
     expect(within(delay).getByRole('button', { name: '20 s' })).toHaveAttribute('aria-pressed', 'true');
-    await save();
-    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ midTurnDelaySecs: 20 });
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ midTurnDelaySecs: 20 });
     expect(app.settings.midTurnDelaySecs).toBe(20);
   });
 
-  it('lets the agents keep a task list, from the group of the processes, on by default', async () => {
+  it('lets the agents keep a task list, from « Nouveaux agents », on by default', async () => {
     const backend = backendSaving();
-    render(SettingsModal);
-    const processes = group('Tous les harness');
+    render(SettingsModal, { page: 'agents' });
+    const processes = group('Nouveaux agents');
     const todo = processes.getByRole('switch', { name: 'Les agents tiennent une liste de tâches' });
     expect(todo).toHaveAttribute('aria-checked', 'true');
     // Next to the other settings of the processes, with its help.
-    expect(processes.getByRole('switch', { name: 'Reprise automatique après la limite d’usage' })).toBeInTheDocument();
+    expect(processes.getByRole('group', { name: 'Vue des nouveaux agents' })).toBeInTheDocument();
     // The help says what the setting does, and that the model is the one to use the tool: the banner is not promised.
     const help = processes.getByText(/Donne aux agents l’outil de liste de tâches de Claude Code/);
     expect(help).toHaveTextContent(/s’ils la tiennent, Escouade montre leur avancée dans le bandeau « Plan »/);
     expect(help).toHaveTextContent(/le modèle n’est pas obligé de s’en servir/);
     expect(help).not.toHaveTextContent(/Escouade peut alors montrer/);
-    expect(tab('Harness')).not.toHaveClass('changed');
     await userEvent.click(todo);
     expect(todo).toHaveAttribute('aria-checked', 'false');
-    expect(tab('Harness')).toHaveClass('changed');
-    await save();
-    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ todoTools: false });
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ todoTools: false });
     expect(app.settings.todoTools).toBe(false);
   });
 
-  describe('the attachments of the Claude Code tab', () => {
+  describe('the attachments, in « Avancé »', () => {
     const maxField = () => screen.getByRole('spinbutton', { name: 'Taille maximale d’un fichier joint (Mo)' });
     const warnField = () => screen.getByRole('spinbutton', { name: 'Avertir pour un fichier joint de plus de (Mo)' });
     const keepField = () => screen.getByRole('spinbutton', { name: 'Purger les copies après (jours)' });
 
     it('shows the five settings with their defaults: no maximum, a warning at 200 Mo, the original file, a big text by its path', () => {
       fakeBackend();
-      render(SettingsModal);
+      render(SettingsModal, { page: 'advanced' });
       const attachments = group('Pièces jointes');
       expect(maxField()).toHaveValue(0);
       expect(warnField()).toHaveValue(200);
@@ -310,18 +465,17 @@ describe('SettingsModal', () => {
 
     it('saves what is set', async () => {
       const backend = backendSaving();
-      render(SettingsModal);
+      render(SettingsModal, { page: 'advanced' });
       const attachments = group('Pièces jointes');
-      expect(tab('Harness')).not.toHaveClass('changed');
       await userEvent.clear(maxField());
       await userEvent.type(maxField(), '500');
       await userEvent.clear(warnField());
+      await userEvent.type(warnField(), '0');
       await userEvent.type(keepField(), '30');
       await userEvent.click(attachments.getByRole('switch', { name: 'Joindre le fichier d’origine' }));
       await userEvent.click(attachments.getByRole('button', { name: 'Refusé' }));
-      expect(tab('Harness')).toHaveClass('changed');
-      await save();
-      expect(backend.called('save_settings')[0].args.settings).toMatchObject({
+      await afterGesture();
+      expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({
         attachMaxMb: 500,
         attachWarnMb: 0,
         attachOrigin: false,
@@ -334,7 +488,7 @@ describe('SettingsModal', () => {
     it('is written in English too', () => {
       setLang('en');
       fakeBackend();
-      render(SettingsModal);
+      render(SettingsModal, { page: 'advanced' });
       const attachments = group('Attachments');
       expect(attachments.getByRole('spinbutton', { name: 'Largest attached file (MB)' })).toBeInTheDocument();
       expect(attachments.getByRole('spinbutton', { name: 'Warn for an attached file over (MB)' })).toBeInTheDocument();
@@ -345,50 +499,46 @@ describe('SettingsModal', () => {
     });
   });
 
-  it('puts the task list back, and saves nothing when it is switched on again', async () => {
+  it('saves the task list at each switch, back on when switched on again', async () => {
     const backend = backendSaving();
-    render(SettingsModal);
+    render(SettingsModal, { page: 'agents' });
     const todo = screen.getByRole('switch', { name: 'Les agents tiennent une liste de tâches' });
     await userEvent.click(todo);
     await userEvent.click(todo);
     expect(todo).toHaveAttribute('aria-checked', 'true');
-    expect(tab('Harness')).not.toHaveClass('changed');
-    await save();
-    expect(backend.called('save_settings')).toHaveLength(0);
+    await afterGesture();
+    expect(backend.called('save_settings').map((c) => c.args.settings.todoTools)).toEqual([false, true]);
+    expect(app.settings.todoTools).toBe(true);
   });
 
-  it('makes every agent reachable by remote control from its own group, beside the MCP switch, off until the user switches it on', async () => {
+  it('makes every agent reachable by remote control from Agents, before « Piloter Escouade », off until the user switches it on', async () => {
     const backend = backendSaving();
-    render(SettingsModal);
-    const remote = group('Claude Code');
+    render(SettingsModal, { page: 'agents' });
+    const remote = group('Remote control');
     const all = remote.getByRole('switch', { name: 'Remote control pour tous les agents' });
     expect(remote.getByText('Claude Code seulement : les autres harness n’ont pas de remote control.')).toBeInTheDocument();
     expect(all).toHaveAttribute('aria-checked', 'false');
     expect(remote.getByText(/^Chaque agent de chaque projet, existant ou nouveau \(agents des tickets compris\)/)).toHaveTextContent(
       'Chaque agent de chaque projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance tout de suite le process claude de chacun, qui reste lancé. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. Pour mettre un agent à part : clic droit, « Désactiver le remote control ».',
     );
-    // The MCP server has a tab of its own (choice 2 of the 2.0 design).
-    expect(within(panel()).queryByRole('heading', { name: 'Activité MCP' })).toBeNull();
-    expect(tab('Harness')).not.toHaveClass('changed');
+    // On the page of « Piloter Escouade », its group after.
+    expect(within(panel()).getByRole('heading', { name: 'Piloter Escouade' })).toBeInTheDocument();
     await userEvent.click(all);
     expect(all).toHaveAttribute('aria-checked', 'true');
-    // A setting of the draft like the others: marked, saved by « Enregistrer ».
-    expect(tab('Harness')).toHaveClass('changed');
-    expect(backend.called('save_settings')).toHaveLength(0);
-    await save();
-    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ remoteControlAll: true });
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ remoteControlAll: true });
     expect(app.settings.remoteControlAll).toBe(true);
   });
 
-  it('puts the remote control of all agents back, and saves nothing when it is switched on again', async () => {
+  it('saves the remote control of all agents at each switch, off again when switched off', async () => {
     const backend = backendSaving();
-    render(SettingsModal);
+    render(SettingsModal, { page: 'agents' });
     const all = screen.getByRole('switch', { name: 'Remote control pour tous les agents' });
     await userEvent.click(all);
     await userEvent.click(all);
-    expect(tab('Harness')).not.toHaveClass('changed');
-    await save();
-    expect(backend.called('save_settings')).toHaveLength(0);
+    await afterGesture();
+    expect(backend.called('save_settings').map((c) => c.args.settings.remoteControlAll)).toEqual([true, false]);
+    expect(app.settings.remoteControlAll).toBe(false);
   });
 
   it('lets a ticket’s agent stopped by the limit go on on another account, off until the user switches it on', async () => {
@@ -397,7 +547,7 @@ describe('SettingsModal', () => {
       { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true },
       { id: 'pro', name: 'Pro', configDir: 'C:\\claude\\pro', claudePath: '', active: true },
     ];
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     const move = group('Quand un quota est épuisé').getByRole('switch', {
       name: 'Reprendre sur un autre compte un agent de ticket arrêté par la limite',
     });
@@ -405,9 +555,8 @@ describe('SettingsModal', () => {
     expect(move).toHaveAttribute('aria-checked', 'false');
     expect(screen.getByText('Sinon il attend la remise à zéro de son compte')).toBeInTheDocument();
     await userEvent.click(move);
-    expect(tab('Comptes')).toHaveClass('changed');
-    await save();
-    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ switchOnLimit: true });
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ switchOnLimit: true });
   });
 
   it('has no such switch with a single account, nothing to go on on', () => {
@@ -415,7 +564,7 @@ describe('SettingsModal', () => {
     render(SettingsModal);
     expect(screen.getByRole('switch', { name: 'Reprise automatique après la limite d’usage' })).toBeInTheDocument();
     cleanup();
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     expect(screen.queryByRole('switch', { name: /Reprendre sur un autre compte/ })).not.toBeInTheDocument();
   });
 
@@ -423,16 +572,17 @@ describe('SettingsModal', () => {
     const backend = backendSaving();
     app.engines = [CLAUDE_ENGINE, { ...BARE_ENGINE, name: 'Codex' }];
     app.enginesFound = ['claude', 'codex'];
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     const next = screen.getByRole('switch', { name: 'Continuer sur le harness suivant quand tous les comptes d’un harness sont épuisés' });
     expect(next).toHaveAttribute('aria-checked', 'false');
     await userEvent.click(next);
-    // Codex's best model by default; another one chosen.
+    // Codex's best model by default, in « Avancé »; another one chosen.
+    await userEvent.click(within(panel()).getByRole('button', { name: /^Avancé/ }));
     const codex = screen.getByRole('combobox', { name: 'Modèle de passation · Codex' }) as HTMLSelectElement;
     expect(codex.selectedOptions[0].text).toBe('Le meilleur (GPT-5.5)');
     await userEvent.selectOptions(codex, 'gpt-5.5-mini');
-    await save();
-    expect(backend.called('save_settings')[0].args.settings).toMatchObject({
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({
       handoverOnLimit: true,
       handoverModels: { codex: 'gpt-5.5-mini' },
     });
@@ -440,42 +590,62 @@ describe('SettingsModal', () => {
 
   it('has no such switch with a single harness', () => {
     backendSaving();
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     expect(screen.queryByRole('switch', { name: /Continuer sur le harness suivant/ })).not.toBeInTheDocument();
   });
 
-  it('changes nothing when cancelled, nor when closed', async () => {
+  it('saves nothing when nothing is changed, opened, gone through and closed', async () => {
     const backend = fakeBackend();
-    render(SettingsModal);
-    await userEvent.click(tab('Terminaux'));
-    await userEvent.type(screen.getByRole('textbox', { name: /Git Bash/ }), 'C:\\Git\\bin\\bash.exe');
-    await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
-    expect(app.modal).toBeNull();
-    // Nothing saved; the « Harness » tab it opened on only read the harnesses and what the MCP server is doing.
+    const view = render(SettingsModal);
+    await userEvent.click(tab('Avancé'));
+    await userEvent.click(tab('Notifications'));
+    await userEvent.click(screen.getByRole('button', { name: 'Fermer' }));
+    view.unmount();
+    await settingsForm.settled();
+    // The pages it showed only read the harnesses, what the MCP server is doing and the vectors' model.
     expect(
-      backend.calls.filter((c) => !['engines', 'mcp_status', 'mcp_declare_status', 'mcp_activity', 'claude_update_status'].includes(c.cmd)),
+      backend.calls.filter(
+        (c) =>
+          ![
+            'engines',
+            'mcp_status',
+            'mcp_declare_status',
+            'mcp_activity',
+            'claude_update_status',
+            'vectors_model',
+            'account_status',
+            'closed_projects',
+            // What the seed holds, for a harness not installed (R4).
+            'plugins_list',
+            'plugin_seed_offers',
+            'data_dir',
+            // The amber dots of the bar (R8): the code hosts' accounts as last checked, each plugin's process.
+            'forges',
+            'plugin_run',
+          ].includes(c.cmd),
+      ),
     ).toEqual([]);
-    expect(app.settings.bashPath).toBe('');
   });
 
-  it('opens on the tab and the project asked for, and switches project', async () => {
+  it('opens on the page and the project asked for, and switches project', async () => {
     backendSaving();
-    render(SettingsModal, { tab: 'board', projectId: 'p2' });
-    expect(tab('Kanban')).toHaveAttribute('aria-selected', 'true');
+    render(SettingsModal, { page: 'board', projectId: 'p2' });
+    expect(tab('Kanban')).toHaveAttribute('aria-current', 'page');
     await expect.poll(() => document.activeElement).toBe(tab('Kanban'));
-    const projects = screen.getByRole('group', { name: 'Projet' });
-    expect(within(projects).getByRole('button', { name: 'site' })).toHaveAttribute('aria-pressed', 'true');
+    expect(tab('site')).toHaveAttribute('aria-expanded', 'true');
+    expect(within(nav()).getByRole('group', { name: 'site' })).toContainElement(tab('Kanban'));
     expect(screen.getByRole('radio', { name: /Ouvrir une pull request/ })).toHaveAttribute('aria-checked', 'true');
-    await userEvent.click(within(projects).getByRole('button', { name: 'demo-api' }));
+    await userEvent.click(tab('demo-api'));
+    expect(tab('Kanban')).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('radio', { name: /Merger dans une branche/ })).toHaveAttribute('aria-checked', 'true');
-    // No project chooser where the settings are the app's.
-    await userEvent.click(tab('Réseau'));
-    expect(screen.queryByRole('group', { name: 'Projet' })).not.toBeInTheDocument();
+    // No project unfolded where the settings are the app's.
+    await userEvent.click(tab('Avancé'));
+    expect(within(nav()).queryByRole('group')).not.toBeInTheDocument();
   });
 
   it('sets what validating a ticket does, saved with the rest', async () => {
     const backend = backendSaving();
-    render(SettingsModal, { tab: 'board', projectId: 'p1' });
+    render(SettingsModal, { page: 'board', projectId: 'p1' });
     expect(screen.getByRole('radio', { name: /Merger dans une branche/ })).toHaveAttribute('aria-checked', 'true');
     await userEvent.click(screen.getByRole('button', { name: 'Branche cible : main. Choisir une autre branche' }));
     await userEvent.click(await within(await screen.findByRole('dialog', { name: 'Branche cible' })).findByText('release'));
@@ -490,19 +660,17 @@ describe('SettingsModal', () => {
       'true',
     );
     await userEvent.click(screen.getByRole('switch', { name: 'PR en brouillon' }));
-    expect(backend.called('board_set')).toHaveLength(0);
-    await save();
-    expect(backend.called('board_set')[0].args).toMatchObject({
+    await afterGesture();
+    expect(backend.called('board_set').at(-1)!.args).toMatchObject({
       projectId: 'p1',
       settings: { action: 'pr', draft: true, target: 'release', strategy: 'rebase' },
     });
     expect(app.projects[0].board).toMatchObject({ action: 'pr', target: 'release' });
-    expect(app.modal).toBeNull();
   });
 
   it('chooses the target branch in the branch picker, without the agents’ and the tickets’ branches (ESC-144)', async () => {
     backendSaving();
-    render(SettingsModal, { tab: 'board', projectId: 'p1' });
+    render(SettingsModal, { page: 'board', projectId: 'p1' });
     await userEvent.click(screen.getByRole('button', { name: 'Branche cible : main. Choisir une autre branche' }));
     const picker = await screen.findByRole('dialog', { name: 'Branche cible' });
     await within(picker).findByText('release');
@@ -522,21 +690,21 @@ describe('SettingsModal', () => {
 
   it('no longer says where the agents start: the project’s settings do (ESC-160)', async () => {
     backendSaving();
-    render(SettingsModal, { tab: 'board', projectId: 'p1' });
+    render(SettingsModal, { page: 'board', projectId: 'p1' });
     expect(screen.queryByRole('switch', { name: 'Les agents partent de la branche cible' })).toBeNull();
     expect(screen.queryByText(/^Chaque nouvel agent à worktree part de/)).toBeNull();
   });
 
   it('hides the target branch when the work is only pushed or kept', async () => {
     backendSaving();
-    render(SettingsModal, { tab: 'board', projectId: 'p1' });
+    render(SettingsModal, { page: 'board', projectId: 'p1' });
     await userEvent.click(screen.getByRole('radio', { name: /Laisser en l'état/ }));
     expect(screen.queryByText('Branche cible')).not.toBeInTheDocument();
   });
 
   it('keeps the tests switch off until a command is given, and previews the commit message', async () => {
     const backend = backendSaving();
-    render(SettingsModal, { tab: 'board', projectId: 'p1' });
+    render(SettingsModal, { page: 'board', projectId: 'p1' });
     const tests = screen.getByRole('switch', { name: 'Relancer les tests avant' });
     expect(tests).toBeDisabled();
     await userEvent.type(screen.getByRole('textbox', { name: 'Commande de tests' }), 'npm test');
@@ -546,8 +714,8 @@ describe('SettingsModal', () => {
     await userEvent.click(screen.getByRole('switch', { name: 'Message de commit généré' }));
     expect(screen.getByText('DEM-42 Limiter les tentatives de connexion')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('switch', { name: "Supprimer le worktree d'un ticket terminé ou supprimé" }));
-    await save();
-    expect(backend.called('board_set')[0].args.settings).toMatchObject({
+    await afterGesture();
+    expect(backend.called('board_set').at(-1)!.args.settings).toMatchObject({
       testCommand: 'npm test',
       testsFirst: true,
       conventional: false,
@@ -557,14 +725,14 @@ describe('SettingsModal', () => {
 
   it('sets the conflict policy, the autopilot, the agents in parallel and their model', async () => {
     const backend = backendSaving();
-    render(SettingsModal, { tab: 'board', projectId: 'p1' });
+    render(SettingsModal, { page: 'board', projectId: 'p1' });
     await userEvent.click(within(screen.getByRole('group', { name: 'En cas de conflit' })).getByRole('button', { name: "L'agent résout" }));
     await userEvent.click(screen.getByRole('switch', { name: 'Attribuer les tickets automatiquement' }));
     await userEvent.click(within(screen.getByRole('group', { name: 'En parallèle' })).getByRole('button', { name: '4' }));
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Modèle' }), 'opus');
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Mode' }), 'plan');
-    await save();
-    expect(backend.called('board_set')[0].args.settings).toMatchObject({
+    await afterGesture();
+    expect(backend.called('board_set').at(-1)!.args.settings).toMatchObject({
       conflict: 'agent',
       autopilot: false,
       maxParallel: 4,
@@ -573,10 +741,19 @@ describe('SettingsModal', () => {
     });
   });
 
-  it('pauses the autopilot past a quota, for every project', async () => {
+  it('pauses the autopilot past a quota, for every project, beside « Changer de compte à » and no more in Kanban (R4)', async () => {
     const backend = backendSaving();
-    render(SettingsModal, { tab: 'board', projectId: 'p1' });
-    const pause = screen.getByRole('group', { name: 'Pause au-delà du quota' });
+    render(SettingsModal, { page: 'board', projectId: 'p1' });
+    expect(screen.queryByRole('group', { name: /au-delà du quota/ })).toBeNull();
+    await userEvent.click(tab('Comptes et harness'));
+    const limit = group('Quand un quota est épuisé');
+    // The two thresholds one after the other, then the resumes.
+    expect(limit.getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual([
+      'Changer de compte à',
+      'Pause du pilote auto au-delà du quota',
+    ]);
+    expect(limit.getAllByRole('switch').map((g) => g.getAttribute('aria-label'))).toEqual(['Reprise automatique après la limite d’usage']);
+    const pause = limit.getByRole('group', { name: 'Pause du pilote auto au-delà du quota' });
     expect(
       within(pause)
         .getAllByRole('button')
@@ -590,9 +767,8 @@ describe('SettingsModal', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('pour tous les projets')).toBeInTheDocument();
     await userEvent.click(within(pause).getByRole('button', { name: '90 %' }));
-    expect(tab('Kanban')).toHaveClass('changed');
-    await save();
-    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ quotaPause: 90 });
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ quotaPause: 90 });
     // An app setting: no board changes.
     expect(backend.called('board_set')).toHaveLength(0);
     expect(app.settings.quotaPause).toBe(90);
@@ -604,9 +780,9 @@ describe('SettingsModal', () => {
         throw 'disque plein';
       },
     });
-    render(SettingsModal, { tab: 'board', projectId: 'p1' });
+    render(SettingsModal, { page: 'board', projectId: 'p1' });
     await userEvent.click(screen.getByRole('button', { name: 'Rebase' }));
-    await save();
+    await afterGesture();
     expect(app.toasts.at(-1)?.text).toContain('disque plein');
     expect(app.modal).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Rebase' })).toHaveAttribute('aria-pressed', 'true');
@@ -615,7 +791,7 @@ describe('SettingsModal', () => {
 
   it('sets a project’s name, color and worktrees', async () => {
     const backend = backendSaving();
-    render(SettingsModal, { tab: 'projects', projectId: 'p2' });
+    render(SettingsModal, { page: 'project', projectId: 'p2' });
     expect(screen.getByText('C:\\code\\demo-api')).toBeInTheDocument();
     const name = screen.getByRole('textbox', { name: 'Nom du projet' });
     await userEvent.clear(name);
@@ -624,9 +800,11 @@ describe('SettingsModal', () => {
     expect(within(colors).getAllByRole('button')).toHaveLength(PROJECT_COLORS.length);
     await userEvent.click(within(colors).getByRole('button', { name: 'Couleur 4' }));
     expect(within(colors).getByRole('button', { name: 'Couleur 4' })).toHaveAttribute('aria-pressed', 'true');
+    // The worktrees are on « Git et worktrees », the same draft.
+    await userEvent.click(tab('Git et worktrees'));
     await userEvent.click(screen.getByRole('switch', { name: 'Un worktree par agent' }));
-    await save();
-    expect(backend.called('update_project')[0].args.project).toMatchObject({
+    await afterGesture();
+    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({
       id: 'p2',
       name: 'vitrine',
       color: PROJECT_COLORS[3],
@@ -637,7 +815,7 @@ describe('SettingsModal', () => {
 
   it('edits, adds and saves the project’s launch commands', async () => {
     const backend = backendSaving();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'launch', projectId: 'p1' });
     const front = screen.getByRole('group', { name: 'Commande 1' });
     expect(within(front).getByLabelText('Nom')).toHaveValue('Front');
     expect(within(front).getByLabelText('Shell')).toHaveValue('pwsh');
@@ -650,66 +828,79 @@ describe('SettingsModal', () => {
     await userEvent.type(within(api).getByLabelText('Nom'), 'API');
     await userEvent.type(within(api).getByLabelText('Commande'), 'cargo run');
     await userEvent.selectOptions(within(api).getByLabelText('Shell'), 'bash');
-    await save();
+    await afterGesture();
 
-    const saved = backend.called('update_project')[0].args.project.runCommands;
+    const saved = backend.called('update_project').at(-1)!.args.project.runCommands;
     expect(saved).toEqual([FRONT, { id: expect.any(String), name: 'API', command: 'cargo run', shell: 'bash', cwd: '' }]);
     expect(app.projects[0].runCommands).toEqual(saved);
-    expect(app.modal).toBeNull();
   });
 
-  it('needs a name and a command line for each command, and a name for each project', async () => {
+  it('says on its row a command without a name or a line, and a project without a name, and saves neither (ESC-380)', async () => {
     const backend = backendSaving();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    await userEvent.clear(within(screen.getByRole('group', { name: 'Commande 1' })).getByLabelText('Commande'));
-    expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeDisabled();
-    expect(screen.getByText('Chaque commande de lancement de « demo-api » demande un nom et une ligne de commande.')).toBeInTheDocument();
-    await userEvent.type(within(screen.getByRole('group', { name: 'Commande 1' })).getByLabelText('Commande'), 'npm start');
-    await userEvent.clear(screen.getByRole('textbox', { name: 'Nom du projet' }));
-    expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeDisabled();
+    render(SettingsModal, { page: 'launch', projectId: 'p1' });
+    const command = within(screen.getByRole('group', { name: 'Commande 1' })).getByLabelText('Commande');
+    await userEvent.clear(command);
+    await afterGesture();
+    expect(command).toHaveAttribute('aria-invalid', 'true');
+    expect(command).toHaveAccessibleDescription(
+      'Chaque commande demande un nom et une ligne de commande : les commandes enregistrées restent celles d’avant tant qu’il en manque.',
+    );
     expect(backend.called('update_project')).toHaveLength(0);
+    expect(app.projects[0].runCommands).toEqual([FRONT]);
+    await userEvent.type(command, 'npm start');
+    await afterGesture();
+    expect(command).toHaveAttribute('aria-invalid', 'false');
+    expect(backend.called('update_project')).toHaveLength(1);
+    expect(app.projects[0].runCommands[0].command).toBe('npm start');
+    await userEvent.click(tab('Projet'));
+    const name = screen.getByRole('textbox', { name: 'Nom du projet' });
+    await userEvent.clear(name);
+    await afterGesture();
+    expect(name).toHaveAccessibleDescription('Un projet garde un nom : « demo-api » reste enregistré.');
+    expect(backend.called('update_project')).toHaveLength(1);
+    expect(app.projects[0].name).toBe('demo-api');
   });
 
   it('removes a command, stopping it if it ran', async () => {
     const backend = backendSaving();
     app.launches.c1 = { status: 'running', ptyId: 't1', name: 'Front', stopping: false, code: null, startedAt: 1 };
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'launch', projectId: 'p1' });
     await userEvent.click(within(screen.getByRole('group', { name: 'Commande 1' })).getByRole('button', { name: 'Supprimer' }));
     expect(screen.getByText("Aucune commande pour l'instant.")).toBeInTheDocument();
-    await save();
-    expect(backend.called('update_project')[0].args.project.runCommands).toEqual([]);
+    await afterGesture();
+    expect(backend.called('update_project').at(-1)!.args.project.runCommands).toEqual([]);
     expect(backend.called('term_kill')[0].args).toEqual({ id: 't1' });
     expect(app.launches.c1).toBeUndefined();
   });
 
   it('chooses who writes the commits, the agent by default', async () => {
     const backend = backendSaving();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'git', projectId: 'p1' });
     const choice = screen.getByRole('group', { name: 'Commit' });
     expect(within(choice).getByRole('button', { name: "Rédigé par l'agent" })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('Direct : Escouade propose un message, tu le relis et tu commites toi-même.')).toBeInTheDocument();
     await userEvent.click(within(choice).getByRole('button', { name: 'Direct, avec un message proposé' }));
     expect(within(choice).getByRole('button', { name: 'Direct, avec un message proposé' })).toHaveAttribute('aria-pressed', 'true');
-    await save();
-    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', commitMode: 'direct' });
+    await afterGesture();
+    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({ id: 'p1', commitMode: 'direct' });
     expect(app.projects[0].commitMode).toBe('direct');
   });
 
   it('chooses where the launches’ pages open, in the agent by default (ESC-311)', async () => {
     const backend = backendSaving();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'launch', projectId: 'p1' });
     const choice = screen.getByRole('group', { name: 'Ouvrir les pages des lancements' });
     expect(within(choice).getByRole('button', { name: 'Dans l’agent' })).toHaveAttribute('aria-pressed', 'true');
     expect(within(choice).getByRole('button', { name: 'Dans une fenêtre à part' })).toHaveAttribute('aria-pressed', 'false');
     await userEvent.click(within(choice).getByRole('button', { name: 'Dans le navigateur du système' }));
-    await save();
-    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', pagesOpen: 'system' });
+    await afterGesture();
+    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({ id: 'p1', pagesOpen: 'system' });
     expect(app.projects[0].pagesOpen).toBe('system');
   });
 
   it('offers no preferred account with a single account', () => {
     backendSaving();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'project', projectId: 'p1' });
     expect(screen.queryByRole('group', { name: 'Compte préféré' })).not.toBeInTheDocument();
   });
 
@@ -720,7 +911,7 @@ describe('SettingsModal', () => {
       { id: 'pro', name: 'Pro', configDir: 'C:\\claude\\pro', claudePath: '', active: true },
       { id: 'team', name: 'Équipe', configDir: 'C:\\claude\\team', claudePath: '', active: false },
     ];
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'project', projectId: 'p1' });
     const choice = screen.getByRole('group', { name: 'Compte préféré' });
     // The account switched off is not offered.
     expect(
@@ -732,8 +923,8 @@ describe('SettingsModal', () => {
     expect(choice.closest('.sr')).toHaveTextContent('Le compte sur lequel partent les nouveaux agents et les tickets de ce projet.');
     await userEvent.click(within(choice).getByRole('button', { name: 'Pro' }));
     expect(within(choice).getByRole('button', { name: 'Pro' })).toHaveAttribute('aria-pressed', 'true');
-    await save();
-    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', account: 'pro' });
+    await afterGesture();
+    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({ id: 'p1', account: 'pro' });
     expect(app.projects[0].account).toBe('pro');
   });
 
@@ -744,12 +935,12 @@ describe('SettingsModal', () => {
       ...app.settings.accounts,
       { id: 'team', name: 'Équipe', configDir: 'C:\\claude\\team', claudePath: '', active: false },
     ];
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'project', projectId: 'p1' });
     const choice = screen.getByRole('group', { name: 'Compte préféré' });
     expect(within(choice).getByRole('button', { name: 'Équipe (inactif)' })).toHaveAttribute('aria-pressed', 'true');
     await userEvent.click(within(choice).getByRole('button', { name: 'Automatique' }));
-    await save();
-    expect(backend.called('update_project')[0].args.project).toMatchObject({ id: 'p1', account: '' });
+    await afterGesture();
+    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({ id: 'p1', account: '' });
   });
 
   it('names the preferred account in English', async () => {
@@ -759,7 +950,7 @@ describe('SettingsModal', () => {
       ...app.settings.accounts,
       { id: 'pro', name: 'Pro', configDir: 'C:\\claude\\pro', claudePath: '', active: true },
     ];
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'project', projectId: 'p1' });
     const choice = screen.getByRole('group', { name: 'Preferred account' });
     expect(
       within(choice)
@@ -771,20 +962,20 @@ describe('SettingsModal', () => {
 
   it('saves the files copied into new worktrees', async () => {
     const backend = backendSaving();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'git', projectId: 'p1' });
     const field = screen.getByRole('textbox', { name: /Fichiers copiés dans les worktrees/ });
     expect(field).toHaveValue('.env*');
     // Only what git ignores is copied: a copy never shows as a change to commit.
     expect(field).toHaveAccessibleDescription(/^Seuls ceux que git ignore/);
     await userEvent.type(field, '{Enter}**/.env.local');
-    await save();
-    expect(backend.called('update_project')[0].args.project.worktreeCopy).toEqual(['.env*', '**/.env.local']);
+    await afterGesture();
+    expect(backend.called('update_project').at(-1)!.args.project.worktreeCopy).toEqual(['.env*', '**/.env.local']);
   });
 
   it('sets the commands run in new worktrees, by hand or as Claude suggests them', async () => {
     let answer!: (v: unknown) => void;
     const backend = backendSaving({ suggest_worktree_steps: () => new Promise((r) => (answer = r)) });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'git', projectId: 'p1' });
     await userEvent.click(screen.getByRole('button', { name: 'Ajouter une commande de démontage' }));
     const down = screen.getByRole('group', { name: 'Commande de démontage 1' });
     expect(within(down).getByLabelText('Shell')).toHaveValue('pwsh');
@@ -792,8 +983,6 @@ describe('SettingsModal', () => {
     const worktrees = group('Worktrees');
     await userEvent.click(worktrees.getByRole('button', { name: 'Remplir automatiquement' }));
     expect(worktrees.getByRole('button', { name: 'Claude lit le projet…' })).toBeDisabled();
-    // The launch commands have their own button, which keeps its label.
-    expect(group('Lancement').getByRole('button', { name: 'Remplir automatiquement' })).toBeEnabled();
     expect(backend.called('suggest_worktree_steps')[0].args).toEqual({ projectId: 'p1' });
     expect(backend.called('suggest_run_commands')).toHaveLength(0);
     // Longer than its field: its end would only be seen by scrolling it, and it runs by itself in each new worktree.
@@ -816,7 +1005,7 @@ describe('SettingsModal', () => {
     // When each list runs by itself, once saved.
     expect(
       proposal.getByText(
-        "Proposition de Claude : relis chaque commande en entier. Elles remplacent les deux listes et, une fois enregistrées, tournent seules : la préparation à l'ouverture de chaque nouveau worktree, le démontage avant sa suppression.",
+        "Proposition de Claude : relis chaque commande en entier. Elles remplacent les deux listes et, une fois prises, tournent seules : la préparation à l'ouverture de chaque nouveau worktree, le démontage avant sa suppression.",
       ),
     ).toBeInTheDocument();
     // The steps of the draft it would remove are said too.
@@ -832,9 +1021,8 @@ describe('SettingsModal', () => {
     // The suggestion replaces both lists, and the launch commands stay.
     expect(screen.queryByRole('group', { name: 'Commande de démontage 1' })).toBeNull();
     expect(worktrees.getByRole('button', { name: 'Remplir automatiquement' })).toBeEnabled();
-    expect(screen.getByDisplayValue('Front')).toBeInTheDocument();
-    await save();
-    expect(backend.called('update_project')[0].args.project).toMatchObject({
+    await afterGesture();
+    expect(backend.called('update_project').at(-1)!.args.project).toMatchObject({
       worktreeSetup: [
         { id: 's1', command: 'npm ci', shell: 'bash', cwd: 'web' },
         { id: 's2', command: long, shell: 'pwsh', cwd: '' },
@@ -848,15 +1036,16 @@ describe('SettingsModal', () => {
     const backend = backendSaving({
       suggest_worktree_steps: () => ({ setup: [{ id: 's1', command: 'npm ci', shell: 'bash', cwd: '' }], teardown: [], refused: 0 }),
     });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'git', projectId: 'p1' });
     await userEvent.click(group('Worktrees').getByRole('button', { name: 'Remplir automatiquement' }));
     const proposal = await group('Worktrees').findByRole('region', { name: 'Commandes de worktree proposées' });
     // The reading's button was given up: the proposal takes the focus, to be read from the keyboard.
     expect(proposal).toHaveFocus();
-    // Still there when coming back to the tab, which keeps the focus.
-    await userEvent.click(tab('Réseau'));
-    await userEvent.click(tab('Projets'));
-    expect(tab('Projets')).toHaveFocus();
+    // Still there when coming back to the project, which keeps the focus.
+    await userEvent.click(tab('Avancé'));
+    await userEvent.click(tab('demo-api'));
+    await userEvent.click(tab('Git et worktrees'));
+    expect(tab('Git et worktrees')).toHaveFocus();
     const worktrees = group('Worktrees');
     const back = within(worktrees.getByRole('region', { name: 'Commandes de worktree proposées' }));
     expect(back.getByText('npm ci')).toBeInTheDocument();
@@ -864,8 +1053,7 @@ describe('SettingsModal', () => {
     expect(worktrees.getByRole('button', { name: 'Remplir automatiquement' })).toHaveFocus();
     expect(worktrees.queryByRole('region', { name: 'Commandes de worktree proposées' })).toBeNull();
     expect(screen.queryByRole('group', { name: 'Commande de préparation 1' })).toBeNull();
-    expect(tab('Projets')).not.toHaveClass('changed');
-    await save();
+    await afterGesture();
     expect(backend.called('update_project')).toHaveLength(0);
   });
 
@@ -873,7 +1061,7 @@ describe('SettingsModal', () => {
     const steps = ['npm ci', 'npm run gen', 'npm run db'].map((command, i) => ({ id: `s${i}`, command, shell: 'pwsh', cwd: '' }));
     app.projects = [project({ worktreeSetup: steps })];
     const backend = backendSaving();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'git', projectId: 'p1' });
     const step = (n: number) => within(screen.getByRole('group', { name: `Commande de préparation ${n}` }));
     const commands = () => [1, 2, 3].map((n) => (step(n).getByLabelText('Commande') as HTMLInputElement).value);
     const button = (name: string) => screen.getByRole('button', { name });
@@ -905,26 +1093,29 @@ describe('SettingsModal', () => {
     // Ctrl+Alt is AltGr on French keyboards: nothing moves.
     await userEvent.keyboard('{Control>}{Alt>}{ArrowDown}{/Alt}{/Control}');
     expect(commands()).toEqual(['npm run db', 'npm ci', 'npm run gen']);
-    await save();
-    expect(backend.called('update_project')[0].args.project.worktreeSetup.map((s: { id: string }) => s.id)).toEqual(['s2', 's0', 's1']);
+    await afterGesture();
+    expect(
+      backend
+        .called('update_project')
+        .at(-1)!
+        .args.project.worktreeSetup.map((s: { id: string }) => s.id),
+    ).toEqual(['s2', 's0', 's1']);
   });
 
   it('sets the launch commands as Claude suggests them, in place of those of the draft', async () => {
     let answer!: (v: unknown) => void;
     const backend = backendSaving({ suggest_run_commands: () => new Promise((r) => (answer = r)) });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'launch', projectId: 'p1' });
     const launch = group('Lancement');
     expect(
       launch.getByText(
-        "Claude lit le projet (manifestes, scripts, docker-compose, README…) sans rien modifier et propose les commandes à lancer. Relis-les avant d'enregistrer.",
+        'Claude lit le projet (manifestes, scripts, docker-compose, README…) sans rien modifier et propose les commandes à lancer. Relis-les avant de remplacer les tiennes.',
       ),
     ).toBeInTheDocument();
     // Not before it is asked for.
     expect(backend.called('suggest_run_commands')).toHaveLength(0);
     await userEvent.click(launch.getByRole('button', { name: 'Remplir automatiquement' }));
     expect(launch.getByRole('button', { name: 'Claude lit le projet…' })).toBeDisabled();
-    // The worktrees' button is another reading: it stays available.
-    expect(group('Worktrees').getByRole('button', { name: 'Remplir automatiquement' })).toBeEnabled();
     expect(backend.called('suggest_run_commands')[0].args).toEqual({ projectId: 'p1' });
     expect(backend.called('suggest_worktree_steps')).toHaveLength(0);
     answer({
@@ -937,7 +1128,7 @@ describe('SettingsModal', () => {
     // What was left out is said, not lost in silence.
     await expect
       .poll(() => app.toasts.at(-1)?.text)
-      .toBe("2 commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant d'enregistrer.");
+      .toBe('2 commandes proposées, 1 écartée (caractères invisibles ou trop longue) : relis-les avant de remplacer les commandes.');
     // Read in full first, in place of nothing yet.
     const proposal = within(await launch.findByRole('region', { name: 'Commandes de lancement proposées' }));
     expect(proposal.getByText('API')).toBeInTheDocument();
@@ -945,7 +1136,6 @@ describe('SettingsModal', () => {
     expect(proposal.getByText('le dossier du projet')).toBeInTheDocument();
     expect(proposal.getByText('npm run dev')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Front')).toBeInTheDocument();
-    expect(tab('Projets')).not.toHaveClass('changed');
     // In place of the draft's, FRONT.
     await userEvent.click(proposal.getByRole('button', { name: 'Remplacer les commandes' }));
     expect(launch.queryByRole('region', { name: 'Commandes de lancement proposées' })).toBeNull();
@@ -960,9 +1150,8 @@ describe('SettingsModal', () => {
     expect(within(second).getByLabelText('Sous-dossier', { exact: false })).toHaveValue('web');
     expect(screen.queryByRole('group', { name: 'Commande 3' })).toBeNull();
     expect(launch.getByRole('button', { name: 'Remplir automatiquement' })).toBeEnabled();
-    expect(tab('Projets')).toHaveClass('changed');
-    await save();
-    expect(backend.called('update_project')[0].args.project.runCommands).toEqual([
+    await afterGesture();
+    expect(backend.called('update_project').at(-1)!.args.project.runCommands).toEqual([
       { id: 's1', name: 'API', command: 'cargo watch -x run', shell: 'bash', cwd: '' },
       { id: 's2', name: 'Web', command: 'npm run dev', shell: 'bash', cwd: 'web' },
     ]);
@@ -978,7 +1167,7 @@ describe('SettingsModal', () => {
         refused: 0,
       }),
     });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'launch', projectId: 'p1' });
     await userEvent.click(group('Lancement').getByRole('button', { name: 'Remplir automatiquement' }));
     const proposal = within(await screen.findByRole('region', { name: 'Commandes de lancement proposées' }));
     expect(proposal.getByText('We⟨U+200B⟩b')).toBeInTheDocument();
@@ -994,41 +1183,37 @@ describe('SettingsModal', () => {
       suggest_worktree_steps: () => ({ setup: [{ id: 's1', command: 'npm ci', shell: 'pwsh', cwd: 'web' }], teardown: [], refused: 0 }),
       suggest_run_commands: () => ({ commands: [{ id: 's2', name: 'API', command: 'cargo run', shell: 'pwsh', cwd: '' }], refused: 0 }),
     });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    await userEvent.click(group('Worktrees').getByRole('button', { name: 'Remplir automatiquement' }));
-    await userEvent.click(group('Lancement').getByRole('button', { name: 'Remplir automatiquement' }));
-    const proposals = [
-      await screen.findByRole('region', { name: 'Commandes de worktree proposées' }),
-      await screen.findByRole('region', { name: 'Commandes de lancement proposées' }),
-    ];
-    // A rule of the tab applies to whatever has its scope's class and the rule's: a class of the proposal that the rest
-    // of the tab uses too restyles both (a launch command's box, the proposal's commands). The app's own classes
-    // (app.css), which the tab does not style, aside.
-    const global = new Set(['btn', 'ghost', 'primary', 'mono', 'section-label']);
-    const scope = [...proposals[0].classList].find((c) => c.startsWith('svelte-'))!;
-    const classes = (inside: boolean) =>
-      new Set(
-        [...panel().querySelectorAll(`.${scope}`)]
-          .filter((e) => proposals.some((p) => p.contains(e)) === inside)
-          .flatMap((e) => [...e.classList])
-          .filter((c) => c !== scope && !global.has(c)),
-      );
-    const others = classes(false);
-    expect(others.size).toBeGreaterThan(0);
-    expect([...classes(true)].filter((c) => others.has(c))).toEqual([]);
+    render(SettingsModal, { page: 'git', projectId: 'p1' });
+    // The proposal is styled by its own component (settings/Proposal): no rule of the page around it (a launch
+    // command's box, a step of a worktree) reaches what it lists, and none of its rules reaches the page.
+    const apart = async (groupName: string, name: string, ofPage: string) => {
+      await userEvent.click(group(groupName).getByRole('button', { name: 'Remplir automatiquement' }));
+      const proposal = await screen.findByRole('region', { name });
+      const scopeOf = (e: Element) => [...e.classList].find((c) => c.startsWith('svelte-'));
+      const page = scopeOf(panel().querySelector(ofPage)!)!;
+      const own = scopeOf(proposal)!;
+      expect(page).not.toBe(own);
+      expect(proposal.querySelectorAll(`.${page}`)).toHaveLength(0);
+      expect([...panel().querySelectorAll(`.${own}`)].every((e) => proposal.contains(e))).toBe(true);
+    };
+    await apart('Worktrees', 'Commandes de worktree proposées', '.sub-h');
+    await userEvent.click(tab('Lancement'));
+    await apart('Lancement', 'Commandes de lancement proposées', '.cmds');
   });
 
-  it('tells the two « ✦ Remplir automatiquement » buttons apart by the text of their own row', () => {
+  it('tells the two « ✦ Remplir automatiquement » buttons apart by the text of their own row', async () => {
     backendSaving();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'git', projectId: 'p1' });
     const button = { name: 'Remplir automatiquement' };
     expect(group('Worktrees').getByRole('button', button)).toHaveAccessibleDescription(/lockfiles.*propose les commandes\. Relis-les/);
+    cleanup();
+    render(SettingsModal, { page: 'launch', projectId: 'p1' });
     expect(group('Lancement').getByRole('button', button)).toHaveAccessibleDescription(/docker-compose.*commandes à lancer\. Relis-les/);
   });
 
   it('keeps the launch commands when Claude proposes none readable, and says so', async () => {
     backendSaving({ suggest_run_commands: () => Promise.reject("Claude n'a pas proposé de commandes lisibles.") });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'launch', projectId: 'p1' });
     await userEvent.click(group('Lancement').getByRole('button', { name: 'Remplir automatiquement' }));
     await expect.poll(() => app.toasts.at(-1)).toMatchObject({ text: "Claude n'a pas proposé de commandes lisibles.", kind: 'error' });
     expect(screen.getByDisplayValue('Front')).toBeInTheDocument();
@@ -1038,7 +1223,7 @@ describe('SettingsModal', () => {
   it('reads the project at once when it is opened to propose the launch commands, but not when it comes back', async () => {
     let answer!: (v: unknown) => void;
     const backend = backendSaving({ suggest_run_commands: () => new Promise((r) => (answer = r)) });
-    const { unmount } = render(SettingsModal, { tab: 'projects', projectId: 'p1', section: 'launch', suggest: true });
+    const { unmount } = render(SettingsModal, { page: 'launch', projectId: 'p1', suggest: true });
     expect(backend.called('suggest_run_commands')[0].args).toEqual({ projectId: 'p1' });
     expect(group('Lancement').getByRole('button', { name: 'Claude lit le projet…' })).toBeDisabled();
     answer({ commands: [{ id: 's1', name: 'Web', command: 'npm start', shell: 'bash', cwd: '' }], refused: 0 });
@@ -1047,14 +1232,21 @@ describe('SettingsModal', () => {
     expect(await screen.findByDisplayValue('Web')).toBeInTheDocument();
     unmount();
     // Back from a modal it opened (the project's closing): the draft as it was, nothing asked again.
-    render(SettingsModal, { tab: 'projects', projectId: 'p1', section: 'launch', suggest: true, resume: true });
+    render(SettingsModal, { page: 'launch', projectId: 'p1', suggest: true, resume: true });
     expect(backend.called('suggest_run_commands')).toHaveLength(1);
     expect(screen.getByDisplayValue('Web')).toBeInTheDocument();
   });
 
   it('asks before closing the project', async () => {
     fakeBackend();
-    render(SettingsModal, { tab: 'projects', projectId: 'p2' });
+    render(SettingsModal, { page: 'project', projectId: 'p2' });
+    // In « Avancé », folded at the foot of « Projet », which says what it hides (no « Zone sensible » any more).
+    expect(screen.queryByRole('button', { name: 'Fermer le projet…' })).toBeNull();
+    const fold = within(panel()).getByRole('button', { name: /^Avancé/ });
+    expect(fold).toHaveAttribute('aria-expanded', 'false');
+    expect(fold).toHaveTextContent('AvancéFermer le projet');
+    await userEvent.click(fold);
+    expect(fold).toHaveAttribute('aria-expanded', 'true');
     await userEvent.click(screen.getByRole('button', { name: 'Fermer le projet…' }));
     expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Fermer « site » ?', confirm: 'Fermer le projet' });
   });
@@ -1062,10 +1254,15 @@ describe('SettingsModal', () => {
   it('says there is no project to set when none is open', async () => {
     resetApp({ projects: [] });
     fakeBackend();
-    render(SettingsModal, { tab: 'projects' });
+    render(SettingsModal, { page: 'project' });
     expect(screen.getByText('Aucun projet ouvert.')).toBeInTheDocument();
-    await userEvent.click(tab('Kanban'));
-    expect(screen.getByText('Aucun projet ouvert.')).toBeInTheDocument();
+    // No project in the bar, and still an entry to reach it from the keyboard.
+    expect(nav().querySelectorAll('.s-h')).toHaveLength(1);
+    await expect.poll(() => document.activeElement).toBe(tab('Général'));
+    // « Services connectés » is Escouade's: it needs no project.
+    await userEvent.click(tab('Services connectés'));
+    expect(screen.queryByText('Aucun projet ouvert.')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Comptes connectés' })).toBeInTheDocument();
   });
 
   describe('the projects closed with their history', () => {
@@ -1082,38 +1279,35 @@ describe('SettingsModal', () => {
       size: 5 * 1024,
     };
 
-    it('lists them under the settings of the project, in the Projets tab', async () => {
+    it('lists them in « Tous les projets », after what a new project starts with', async () => {
       const backend = fakeBackend({ closed_projects: () => [OLD] });
-      render(SettingsModal, { tab: 'projects', projectId: 'p2' });
+      render(SettingsModal, { page: 'allProjects', projectId: 'p2' });
       await screen.findByRole('heading', { name: 'Projets fermés' });
       expect(group('Projets fermés').getByText('ancien')).toBeInTheDocument();
       expect(backend.called('closed_projects')).toHaveLength(1);
       const headings = within(panel())
         .getAllByRole('heading')
         .map((h) => h.textContent);
-      expect(headings.slice(-4)).toEqual(['Zone sensible', 'Tous les projets', 'Nouveaux projets', 'Projets fermés']);
-      // Another tab of the project does not carry them.
-      await userEvent.click(tab('Kanban'));
+      expect(headings.slice(-2)).toEqual(['Nouveaux projets', 'Projets fermés']);
+      // A page of a project does not carry them.
+      await userEvent.click(tab('site'));
       expect(screen.queryByRole('heading', { name: 'Projets fermés' })).not.toBeInTheDocument();
     });
 
-    it('lists them when no project is open, under what says so', async () => {
+    it('lists them when no project is open', async () => {
       resetApp({ projects: [] });
       fakeBackend({ closed_projects: () => [OLD] });
-      render(SettingsModal, { tab: 'projects' });
+      render(SettingsModal, { page: 'project' });
       expect(screen.getByText('Aucun projet ouvert.')).toBeInTheDocument();
+      await userEvent.click(tab('Tous les projets'));
       await screen.findByRole('heading', { name: 'Projets fermés' });
       expect(group('Projets fermés').getByText('ancien')).toBeInTheDocument();
       expect(group('Projets fermés').getByRole('button', { name: "Effacer l'historique…" })).toBeInTheDocument();
-      // The other tabs of a project still have nothing to show.
-      await userEvent.click(tab('Kanban'));
-      expect(screen.getByText('Aucun projet ouvert.')).toBeInTheDocument();
-      expect(screen.queryByRole('heading', { name: 'Projets fermés' })).not.toBeInTheDocument();
     });
 
     it('shows no group when none was closed', async () => {
       const backend = fakeBackend({ closed_projects: () => [] });
-      render(SettingsModal, { tab: 'projects', projectId: 'p2' });
+      render(SettingsModal, { page: 'allProjects' });
       await waitFor(() => expect(backend.called('closed_projects')).toHaveLength(1));
       await new Promise((r) => setTimeout(r));
       expect(screen.queryByRole('heading', { name: 'Projets fermés' })).not.toBeInTheDocument();
@@ -1122,8 +1316,8 @@ describe('SettingsModal', () => {
 
   it('checks for an update on demand', async () => {
     const backend = fakeBackend({ update_check: () => ({ kind: 'none' }) });
-    render(SettingsModal, { tab: 'about' });
-    expect(screen.getByText('Escouade 1.3.1', { selector: '[role="tabpanel"] *' })).toBeInTheDocument();
+    render(SettingsModal, { page: 'general' });
+    expect(screen.getByText('Escouade 1.3.1', { selector: '#settings-panel *' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Rechercher une mise à jour' }));
     await expect.poll(() => app.toasts.at(-1)?.text).toBe('Aucune mise à jour disponible.');
     // Asked by the user: the backend is told, so that a failure is never kept quiet.
@@ -1134,7 +1328,7 @@ describe('SettingsModal', () => {
     fakeBackend({
       update_check: () => ({ kind: 'failed', trouble: { message: '403 Forbidden de github.com', show: true, page: null } }),
     });
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     const button = screen.getByRole('button', { name: 'Rechercher une mise à jour' });
     await userEvent.click(button);
     await expect.poll(() => app.toasts.at(-1)?.text).toBe('Vérification des mises à jour impossible : 403 Forbidden de github.com');
@@ -1145,53 +1339,84 @@ describe('SettingsModal', () => {
 
   it('installs updates by itself unless told not to', async () => {
     const backend = fakeBackend({ save_settings: () => [] });
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     const auto = screen.getByRole('switch', { name: 'Installer les mises à jour automatiquement' });
     expect(auto).toHaveAttribute('aria-checked', 'true');
     expect(
       screen.getByText('Escouade redémarre d’elle-même quand aucun agent ne travaille et que tout est enregistré.'),
     ).toBeInTheDocument();
     await userEvent.click(auto);
-    expect(tab('À propos')).toHaveClass('changed');
-    await save();
-    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ autoUpdate: false });
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ autoUpdate: false });
     expect(app.settings.autoUpdate).toBe(false);
+  });
+
+  it('receives the betas only once ticked, saved at once, a check following (ESC-374)', async () => {
+    const backend = fakeBackend({ save_settings: () => [], update_check: () => ({ kind: 'none' }) });
+    render(SettingsModal, { page: 'general' });
+    const beta = screen.getByRole('switch', { name: 'Recevoir les versions bêta' });
+    expect(beta).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByText(/Les bêtas arrivent avant tout le monde et peuvent avoir des défauts/)).toBeInTheDocument();
+    await userEvent.click(beta);
+    // Saved without « Enregistrer »: the check that follows reads the saved settings.
+    await waitFor(() => expect(backend.called('update_check')).toHaveLength(1));
+    expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ betaUpdates: true });
+    expect(backend.called('update_check')[0].args).toEqual({ manual: true });
+    expect(app.settings.betaUpdates).toBe(true);
+    await expect.poll(() => app.toasts.at(-1)?.text).toBe('Aucune mise à jour disponible.');
+    // Unticked: saved, and a quiet check takes back a beta on offer.
+    await userEvent.click(beta);
+    await waitFor(() => expect(backend.called('update_check')).toHaveLength(2));
+    expect(backend.called('save_settings')[1].args.settings).toMatchObject({ betaUpdates: false });
+    expect(backend.called('update_check')[1].args).toEqual({ manual: false });
+    expect(beta).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('says « bêta » beside the version of an app on a beta, and of a beta found', async () => {
+    app.version = '2.2.0-beta.1';
+    fakeBackend({
+      update_check: () => ({ kind: 'found', update: { id: 3, version: '2.2.0-beta.2', notes: '' } }),
+      update_download: () => new Promise(() => {}),
+    });
+    render(SettingsModal, { page: 'general' });
+    expect(screen.getByText('Escouade 2.2.0-beta.1 (bêta)', { selector: '#settings-panel *' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Rechercher une mise à jour' }));
+    await expect.poll(() => screen.queryByText('Escouade 2.2.0-beta.2 (bêta) disponible')).not.toBeNull();
   });
 
   it('shares the usage statistics only once switched on', async () => {
     const backend = fakeBackend({ save_settings: () => [] });
     app.settings = { ...app.settings, telemetry: null };
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     const share = screen.getByRole('switch', { name: 'Statistiques d’usage' });
     expect(share).toHaveAttribute('aria-checked', 'false');
     await userEvent.click(share);
-    expect(tab('À propos')).toHaveClass('changed');
-    await save();
-    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ telemetry: true });
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ telemetry: true });
     expect(app.settings.telemetry).toBe(true);
   });
 
   it('stops the usage statistics when switched off', async () => {
     const backend = fakeBackend({ save_settings: () => [] });
     app.settings = { ...app.settings, telemetry: true };
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     const share = screen.getByRole('switch', { name: 'Statistiques d’usage' });
     expect(share).toHaveAttribute('aria-checked', 'true');
     await userEvent.click(share);
-    await save();
-    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ telemetry: false });
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ telemetry: false });
   });
 
   it('opens the website, in the language of the interface, and the Discord server', async () => {
     const backend = fakeBackend({ open_url: () => null });
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'about' });
     expect(screen.getByText('Site web')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Ouvrir le site' }));
     await userEvent.click(screen.getByRole('button', { name: 'Rejoindre le Discord' }));
     expect(backend.called('open_url').map((c) => c.args.url)).toEqual(['https://escouade.dev/', 'https://discord.gg/m3KYtN8gxP']);
     cleanup();
     setLang('en');
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'about' });
     await userEvent.click(screen.getByRole('button', { name: 'Open the website' }));
     expect(backend.called('open_url').at(-1)?.args.url).toBe('https://escouade.dev/en/');
     setLang('fr');
@@ -1199,7 +1424,7 @@ describe('SettingsModal', () => {
 
   it('offers a coffee, on the Stripe page of the language of the interface, in the browser', async () => {
     const backend = fakeBackend({ open_url: () => null });
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'about' });
     expect(screen.getByText('Soutenir Escouade')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Offrir un café' }));
     expect(backend.called('open_url').map((c) => c.args.url)).toEqual(['https://buy.stripe.com/8x2fZh20z7rM87067200001']);
@@ -1207,7 +1432,7 @@ describe('SettingsModal', () => {
     expect(screen.queryAllByRole('dialog')).toHaveLength(1);
     cleanup();
     setLang('en');
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'about' });
     expect(screen.getByText('Support Escouade')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Buy a coffee' }));
     expect(backend.called('open_url').at(-1)?.args.url).toBe('https://buy.stripe.com/00w7sLcFdaDYaf8cvq00000');
@@ -1216,7 +1441,7 @@ describe('SettingsModal', () => {
 
   it('says where the local data is, and opens its folder', async () => {
     const backend = fakeBackend({ data_dir: () => 'C:\\Users\\moi\\.escouade', open_path: () => null });
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'advanced' });
     expect(await screen.findByText('~/.escouade')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Ouvrir le dossier' }));
     expect(backend.called('open_path').map((c) => c.args.path)).toEqual(['C:\\Users\\moi\\.escouade']);
@@ -1226,7 +1451,7 @@ describe('SettingsModal', () => {
     fakeBackend();
     const outside = document.createElement('button');
     document.body.prepend(outside);
-    render(SettingsModal, { tab: 'board', projectId: 'p1' });
+    render(SettingsModal, { page: 'board', projectId: 'p1' });
     const dialog = screen.getByRole('dialog', { name: 'Réglages' });
     await expect.poll(() => document.activeElement).toBe(tab('Kanban'));
     await userEvent.tab({ shift: true });
@@ -1234,48 +1459,35 @@ describe('SettingsModal', () => {
     outside.remove();
   });
 
-  it('goes to the first and last tabs with Home and End', async () => {
-    fakeBackend();
-    render(SettingsModal, { tab: 'network' });
-    tab('Réseau').focus();
-    await userEvent.keyboard('{Home}');
-    expect(tab('Application')).toHaveAttribute('aria-selected', 'true');
-    expect(tab('Application')).toHaveFocus();
-    await userEvent.keyboard('{End}');
-    expect(tab('À propos')).toHaveAttribute('aria-selected', 'true');
-  });
-
-  it('tells a screen reader which tabs have changes not saved yet', async () => {
-    fakeBackend();
-    render(SettingsModal, { tab: 'network' });
-    expect(tab('Réseau')).not.toHaveAccessibleDescription();
-    await userEvent.type(screen.getByPlaceholderText('aucun'), 'http://proxy:3128');
-    expect(tab('Réseau')).toHaveAccessibleDescription('Modifié, pas encore enregistré');
-  });
-
-  it('opens on the launch commands when asked for them', async () => {
+  it('opens on the group a link asks for, on its page only (« Kanban (Workflow) »)', async () => {
     fakeBackend();
     const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView');
-    render(SettingsModal, { tab: 'projects', projectId: 'p1', section: 'launch' });
+    render(SettingsModal, { page: 'board', projectId: 'p1', at: 'workflow' });
+    expect(tab('Kanban')).toHaveAttribute('aria-current', 'page');
     await expect.poll(() => scrolled.mock.contexts.length).toBeGreaterThan(0);
     const target = scrolled.mock.contexts.at(-1) as HTMLElement;
-    expect(within(target).getByRole('heading', { name: 'Lancement' })).toBeInTheDocument();
+    expect(within(target).getByRole('heading', { name: 'Workflow' })).toBeInTheDocument();
+    // Another page starts at its top.
+    scrolled.mockClear();
+    await userEvent.click(tab('Lancement'));
+    expect(scrolled).not.toHaveBeenCalled();
+    expect(panel().scrollTop).toBe(0);
     scrolled.mockRestore();
   });
 
   it('comes back with its draft as it was', async () => {
     fakeBackend();
-    settingsForm.open({ tab: 'network' });
+    settingsForm.open({ page: 'advanced' });
     settingsForm.settings.proxyUrl = 'http://proxy:3128';
-    settingsForm.tab = 'projects';
-    render(SettingsModal, { tab: 'network', resume: true });
-    expect(tab('Réseau')).toHaveAttribute('aria-selected', 'true');
+    settingsForm.page = 'project';
+    render(SettingsModal, { page: 'advanced', resume: true });
+    expect(tab('Avancé')).toHaveAttribute('aria-current', 'page');
     expect(screen.getByPlaceholderText('aucun')).toHaveValue('http://proxy:3128');
   });
 
   it('does not close when a selection dragged from a field ends outside', async () => {
     fakeBackend();
-    render(SettingsModal, { tab: 'network' });
+    render(SettingsModal, { page: 'advanced' });
     const overlay = screen.getByRole('dialog', { name: 'Réglages' }).parentElement!;
     await fireEvent.mouseDown(screen.getByPlaceholderText('aucun'));
     await fireEvent.mouseUp(overlay);
@@ -1289,8 +1501,7 @@ describe('SettingsModal', () => {
   it('names the Kanban agents’ default after the model of the account its new agents go to (ESC-128)', async () => {
     fakeBackend({ git_branches: () => ['main'] });
     app.settings.accounts = app.settings.accounts.map((a) => ({ ...a, defaultModel: 'opus' }));
-    render(SettingsModal);
-    await userEvent.click(tab('Kanban'));
+    render(SettingsModal, { page: 'board' });
     expect(within(screen.getByRole('combobox', { name: 'Modèle' })).getByRole('option', { name: 'Par défaut (Opus)' })).toBeInTheDocument();
   });
 
@@ -1312,67 +1523,68 @@ describe('SettingsModal in English', () => {
     setLang('en');
   });
 
-  it('names its tabs and what they set in English, and follows a change of language while it is open', async () => {
+  it('names its pages and what they set in English, and follows a change of language while it is open', async () => {
     fakeBackend();
     setLang('fr');
     render(SettingsModal);
     expect(screen.getByRole('dialog', { name: 'Réglages' })).toBeInTheDocument();
-    expect(screen.getByText('Exécutables et versions de chaque harness, et ce qui vaut pour tous')).toBeInTheDocument();
+    expect(screen.getByText('Les harness de ce poste, leurs comptes, et ce qui se passe à la limite')).toBeInTheDocument();
     setLang('en');
     flushSync();
     const dialog = screen.getByRole('dialog', { name: 'Settings' });
     expect(
-      within(dialog)
-        .getAllByRole('tab')
+      within(nav())
+        .getAllByRole('button')
         .map((x) => x.textContent?.trim()),
     ).toEqual([
-      'Application',
-      'Harness',
-      'Accounts',
+      'General',
+      'Agents',
+      'Accounts and harnesses',
+      'Connected services',
       'Voice',
       'Notifications',
-      'Projects',
-      'Kanban',
-      'Integrations',
       'Plugins',
-      'MCP server',
-      'Terminals',
-      'Network',
-      'About',
+      'Advanced',
+      'demo-api',
+      'site',
+      'All projects',
+      'About1.3.1',
     ]);
-    expect([...dialog.querySelectorAll('.s-group')].map((g) => g.textContent)).toEqual(['Per project', 'System']);
-    expect(within(dialog).getByText('Each harness’s executables and versions, and what holds for them all')).toBeInTheDocument();
-    expect(within(dialog).getByText('Escouade 1.3.1')).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    expect([...nav().querySelectorAll('.s-h')].map((g) => g.textContent)).toEqual(['Escouade', 'Projects']);
+    expect(within(nav()).getByRole('searchbox', { name: 'Search settings' })).toBeInTheDocument();
+    expect(within(dialog).getByText('This machine’s harnesses, their accounts, and what happens at the limit')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Save' })).toBeNull();
+    expect(group('When a quota runs out').getByRole('group', { name: 'Pause the autopilot above quota' })).toBeInTheDocument();
+    expect(screen.getByText('for all projects')).toBeInTheDocument();
+    await userEvent.click(within(panel()).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     const path = screen.getByRole('textbox', { name: 'Executable path' });
     expect(path).toHaveAttribute('placeholder', 'claude (found in PATH)');
     app.claudePathFound = false;
     flushSync();
     expect(path).toHaveAttribute('placeholder', 'not found — enter the path to claude.exe');
     expect(screen.getByRole('switch', { name: 'Auto-resume after the usage limit' })).toBeInTheDocument();
+    await userEvent.click(tab('Agents'));
+    await userEvent.click(within(panel()).getByRole('button', { name: /^Advanced/ }));
     expect(screen.getByRole('spinbutton', { name: 'Stop idle agent processes after (minutes)' })).toBeInTheDocument();
     await userEvent.type(screen.getByRole('spinbutton', { name: /Stop idle/ }), '0');
-    expect(tab('Harness')).toHaveClass('changed');
-    expect(tab('Harness')).toHaveAccessibleDescription('Modified, not saved yet');
   });
 
   it('names the task list setting in English', async () => {
     fakeBackend();
-    render(SettingsModal);
+    render(SettingsModal, { page: 'agents' });
     const todo = screen.getByRole('switch', { name: 'Agents keep a task list' });
     expect(todo).toHaveAttribute('aria-checked', 'true');
     const help = screen.getByText(/Gives agents Claude Code’s task list tool/);
     expect(help).toHaveTextContent(/if they keep a list, Escouade shows their progress in the “Plan” banner/);
     expect(help).toHaveTextContent(/the model does not have to use it/);
     expect(help).not.toHaveTextContent(/so Escouade can show/);
-    expect(screen.getByRole('heading', { name: 'All harnesses' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'New agents' })).toBeInTheDocument();
   });
 
   it('names the remote control setting for all agents in English', async () => {
     const backend = backendSaving();
-    render(SettingsModal);
-    const remote = group('Claude Code');
+    render(SettingsModal, { page: 'agents' });
+    const remote = group('Remote control');
     const all = remote.getByRole('switch', { name: 'Remote control for all agents' });
     expect(remote.getByText('Claude Code only: the other harnesses have no remote control.')).toBeInTheDocument();
     expect(all).toHaveAttribute('aria-checked', 'false');
@@ -1380,8 +1592,8 @@ describe('SettingsModal in English', () => {
       'Every agent of every project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts each one’s claude process right away, and it stays running. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. To set an agent apart: right-click, “Turn off remote control”.',
     );
     await userEvent.click(all);
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(backend.called('save_settings')[0].args.settings).toMatchObject({ remoteControlAll: true });
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ remoteControlAll: true });
   });
 
   it('says of the executable path whether it is found, not whether the current account’s Claude Code is', async () => {
@@ -1389,7 +1601,8 @@ describe('SettingsModal in English', () => {
     // An account with a `claude` of its own is the current one: Claude Code is found, the settings' path is not.
     app.claudeFound = true;
     app.claudePathFound = false;
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'accounts' });
+    await userEvent.click(within(panel()).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     const path = screen.getByRole('textbox', { name: 'Executable path' });
     expect(path).toHaveAttribute('placeholder', 'not found — enter the path to claude.exe');
     app.claudePathFound = true;
@@ -1407,7 +1620,8 @@ describe('SettingsModal in English', () => {
             ? { path: 'C:\\Users\\me\\.local\\bin\\claude.exe', wsl: null, nat: false, canWsl: true }
             : { path: null, wsl: null, nat: false, canWsl: true },
     });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'accounts' });
+    await userEvent.click(within(panel()).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     const field = screen.getByRole('textbox', { name: 'Executable path' });
     // Blank: the one found by itself.
     expect(await screen.findByText('Found: C:\\Users\\me\\.local\\bin\\claude.exe')).toBeInTheDocument();
@@ -1434,11 +1648,11 @@ describe('SettingsModal in English', () => {
 
   it('names no WSL where there is none, and says nothing without an answer', async () => {
     fakeBackend({ claude_locate: () => ({ path: null, wsl: null, nat: false, canWsl: false }) });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'accounts' });
     expect(await screen.findByText('Not found. Give the path to claude.')).toBeInTheDocument();
     cleanup();
     fakeBackend();
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'accounts' });
     await new Promise((r) => setTimeout(r, 400));
     expect(screen.queryByText(/^Found|^Not found/)).toBeNull();
   });
@@ -1449,7 +1663,7 @@ describe('SettingsModal in English', () => {
       { id: 'principal', name: 'Principal', configDir: '', claudePath: '', active: true },
       { id: 'pro', name: 'Pro', configDir: 'C:\\claude\\pro', claudePath: '', active: true },
     ];
-    render(SettingsModal, { tab: 'accounts' });
+    render(SettingsModal, { page: 'accounts' });
     expect(group('When a quota runs out').getByRole('heading', { name: 'When a quota runs out' })).toBeInTheDocument();
     expect(
       screen.getByRole('switch', { name: 'Resume a ticket’s agent stopped by the usage limit on another account' }),
@@ -1477,19 +1691,28 @@ describe('SettingsModal in English', () => {
     expect(panel()).toHaveTextContent(/(Windows|macOS) notifications when the app is not in the foreground/);
     expect(screen.getByRole('button', { name: 'Test the sound' })).toBeInTheDocument();
 
-    await userEvent.click(tab('Terminals'));
+    await userEvent.click(tab('Advanced'));
     expect(panel()).toHaveTextContent('Detected: PowerShell 7, Git Bash');
     expect(screen.getByRole('textbox', { name: /WSL distribution/ })).toHaveAccessibleName('WSL distribution');
 
-    await userEvent.click(tab('Network'));
     expect(screen.getByPlaceholderText('none')).toBeInTheDocument();
     expect(panel()).toHaveTextContent('NO_PROXY, separated by commas');
     expect(screen.getByRole('switch', { name: 'Skip TLS certificate verification' })).toHaveAttribute('aria-checked', 'false');
 
-    await userEvent.click(tab('About'));
+    expect(within(panel()).getByRole('heading', { name: 'Local data' })).toBeInTheDocument();
+    expect(
+      within(panel())
+        .getAllByRole('heading')
+        .map((h) => h.textContent),
+    ).toEqual(['Network', 'Terminals', 'Attachments', 'Search by meaning', 'Local data']);
+
+    await userEvent.click(tab('General'));
     expect(screen.getByRole('button', { name: 'Check for updates' })).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Install updates automatically' })).toBeInTheDocument();
-    expect(screen.getByText('Local data')).toBeInTheDocument();
+
+    await userEvent.click(tab(/^About/));
+    expect(screen.getByRole('button', { name: 'Open the website' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Check for updates' })).toBeNull();
   });
 
   it('says a project’s settings in English, the worktree commands and the launch commands included', async () => {
@@ -1497,30 +1720,20 @@ describe('SettingsModal in English', () => {
     backendSaving({
       suggest_run_commands: () => ({ commands: [{ id: 's1', name: 'API', command: 'cargo run', shell: 'bash', cwd: '' }], refused: 2 }),
     });
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
-    expect(
+    render(SettingsModal, { page: 'project', projectId: 'p1' });
+    const h2 = () =>
       within(panel())
-        .getAllByRole('heading', { level: 2 })
-        .map((h) => h.textContent),
-    ).toEqual([
-      'Identity',
-      'Remote control',
-      'Privacy',
-      'Workflow',
-      'Git',
-      'Worktrees',
-      'Launch',
-      '.escouade.yml',
-      'Shared memory',
-      'Shared Kanban',
-      'Danger zone',
-      'Every project',
-      'New projects',
-    ]);
+        .queryAllByRole('heading', { level: 2 })
+        .map((h) => h.textContent);
+    expect(h2()).toEqual(['Identity']);
+    // Folded at its foot, named with what it hides.
+    expect(within(panel()).getByRole('button', { name: /^Advanced/ })).toHaveTextContent('AdvancedClose the project');
     // The assistant is a row of the identity (2.0 design).
     expect(screen.getByRole('button', { name: 'Open the assistant…' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Project name' })).toHaveValue('demo-api');
     expect(screen.getByRole('button', { name: 'Color 4' })).toBeInTheDocument();
+    await userEvent.click(tab('Git and worktrees'));
+    expect(h2()).toEqual(['Git', 'Worktrees']);
     expect(screen.getByRole('switch', { name: 'One worktree per agent' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Files copied into worktrees' })).toHaveAccessibleDescription(/^Only files git ignores/);
     const commit = within(screen.getByRole('group', { name: 'Commit' }));
@@ -1535,6 +1748,8 @@ describe('SettingsModal in English', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Add a teardown command' }));
     expect(screen.getByRole('group', { name: 'Teardown command 1' })).toBeInTheDocument();
 
+    await userEvent.click(tab('Launch'));
+    expect(h2()).toEqual(['Launch']);
     const launch = group('Launch');
     expect(launch.getByText('Command 1', { selector: 'legend' })).toBeInTheDocument();
     expect(launch.getByLabelText(/^Subfolder/)).toHaveValue('web');
@@ -1543,43 +1758,53 @@ describe('SettingsModal in English', () => {
     // A plural, and what was left out said in the singular and the plural of the count.
     await expect
       .poll(() => app.toasts.at(-1)?.text)
-      .toBe('1 command suggested, 2 left out (invisible characters or too long): review it before saving.');
+      .toBe('1 command suggested, 2 left out (invisible characters or too long): review it before replacing the commands.');
     const proposal = within(await launch.findByRole('region', { name: 'Suggested launch commands' }));
     expect(proposal.getByText('the project folder')).toBeInTheDocument();
     expect(proposal.getByRole('button', { name: 'Ignore' })).toBeInTheDocument();
     expect(proposal.getByRole('button', { name: 'Replace the commands' })).toBeInTheDocument();
 
+    await userEvent.click(tab('Team'));
+    expect(h2()).toEqual(['Shared Kanban', 'Shared settings', 'Shared memory']);
+    await userEvent.click(tab('Privacy'));
+    expect(h2()).toEqual(['Remote control', 'Plugins in this project']);
+    await userEvent.click(tab('Kanban'));
+    expect(h2().at(-1)).toBe('Workflow');
+    await userEvent.click(tab('Project'));
+    await userEvent.click(within(panel()).getByRole('button', { name: /^Advanced/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Close the project…' }));
     expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Close “demo-api”?' });
   });
 
   it('says what keeps the settings from being saved in English', async () => {
     backendSaving();
-    render(SettingsModal, { tab: 'projects', projectId: 'p1' });
+    render(SettingsModal, { page: 'project', projectId: 'p1' });
     await userEvent.clear(screen.getByRole('textbox', { name: 'Project name' }));
-    expect(screen.getByText('The project “demo-api” needs a name.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.getByText('A project needs a name: “demo-api” stays saved.')).toBeInTheDocument();
     await userEvent.type(screen.getByRole('textbox', { name: 'Project name' }), 'api');
+    await userEvent.click(tab('Launch'));
     await userEvent.clear(within(screen.getByRole('group', { name: 'Command 1' })).getByLabelText('Command'));
-    expect(screen.getByText('Every launch command in “api” needs a name and a command line.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Each command needs a name and a command line: the saved commands stay as they were until none is missing one.'),
+    ).toBeInTheDocument();
   });
 
   it('says there is no project open in English', () => {
     resetApp({ projects: [] });
     fakeBackend();
-    render(SettingsModal, { tab: 'projects' });
+    render(SettingsModal, { page: 'project' });
     expect(screen.getByText('No project open.')).toBeInTheDocument();
   });
 
-  it('tells the update check and the saved settings in English', async () => {
+  it('tells the update check in English, and saves a switch without a toast', async () => {
     const backend = fakeBackend({ save_settings: () => [], update_check: () => ({ kind: 'none' }) });
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
     await expect.poll(() => app.toasts.at(-1)?.text).toBe('No update available.');
     await userEvent.click(screen.getByRole('switch', { name: 'Install updates automatically' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await afterGesture();
     expect(backend.called('save_settings')).toHaveLength(1);
-    expect(app.toasts.at(-1)?.text).toBe('Settings saved');
+    expect(app.toasts.at(-1)?.text).toBe('No update available.');
   });
 });
 
@@ -1598,7 +1823,7 @@ describe('SettingsModal, the version of Claude Code', () => {
   it('shows the version found alone, or what keeps it from running', async () => {
     let answer = info({});
     fakeBackend({ claude_locate: () => located, engines: () => [answer] });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'accounts' });
     expect(await screen.findByText('2.1.301')).toHaveAttribute('data-state', 'ready');
     // No word of the tested versions under it (ESC-159).
     expect(screen.queryByText(/testé/i)).toBeNull();
@@ -1609,22 +1834,22 @@ describe('SettingsModal, the version of Claude Code', () => {
       'Claude Code 2.0.14 est trop ancien pour Escouade, qui demande au moins la version 2.1.283 : son flux JSON n’a été vérifié qu’à partir de celle-ci (docs/PROTOCOL.md). Mets-le à jour (claude update).';
     answer = info({ version: '2.0.14', state: 'tooOld', note: refusal });
     fakeBackend({ claude_locate: () => located, engines: () => [answer] });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'accounts' });
     expect(await screen.findByText(refusal)).toBeInTheDocument();
     expect(screen.getByText('2.0.14')).toHaveClass('bad');
     expect(screen.getByText('2.0.14')).toHaveAccessibleDescription(refusal);
     cleanup();
     answer = info({ state: 'notConnected' });
     fakeBackend({ claude_locate: () => located, engines: () => [answer] });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'accounts' });
     expect(
-      await screen.findByText('Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes.'),
+      await screen.findByText('Aucun compte connecté : connecte l’un de ses comptes ci-dessous, ou ajoutes-en un.'),
     ).toBeInTheDocument();
   });
 
   it('shows a version newer than the tested ones as ready, with no warning (ESC-159)', async () => {
     fakeBackend({ claude_locate: () => located, engines: () => [info({ version: '2.1.999' })] });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'accounts' });
     const version = await screen.findByText('2.1.999');
     expect(version).toHaveAttribute('data-state', 'ready');
     expect(version).not.toHaveClass('warn');
@@ -1635,8 +1860,9 @@ describe('SettingsModal, the version of Claude Code', () => {
 
   it('shows no version while the path typed is not the saved one, nor for a claude not found', async () => {
     const backend = fakeBackend({ claude_locate: () => located, engines: () => [info({})] });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'accounts' });
     expect(await screen.findByText('2.1.301')).toBeInTheDocument();
+    await userEvent.click(within(panel()).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     await userEvent.type(screen.getByRole('textbox', { name: "Chemin de l'exécutable" }), 'C:\autre\claude.exe');
     await waitFor(() => expect(screen.queryByText('2.1.301')).toBeNull());
     expect(backend.called('engines').length).toBeGreaterThan(0);
@@ -1645,13 +1871,11 @@ describe('SettingsModal, the version of Claude Code', () => {
   it('says it in English too', async () => {
     setLang('en');
     fakeBackend({ claude_locate: () => located, engines: () => [info({ state: 'notConnected' })] });
-    render(SettingsModal, { tab: 'claude' });
-    expect(
-      await screen.findByText('No account signed in: add or sign in an account of this harness in the Accounts tab.'),
-    ).toBeInTheDocument();
+    render(SettingsModal, { page: 'accounts' });
+    expect(await screen.findByText('No account signed in: sign in one of its accounts below, or add one.')).toBeInTheDocument();
     cleanup();
     fakeBackend({ claude_locate: () => located, engines: () => [info({ version: null })] });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'accounts' });
     expect(await screen.findByText('Unknown version: claude didn’t tell it.')).toBeInTheDocument();
   });
 
@@ -1659,13 +1883,13 @@ describe('SettingsModal, the version of Claude Code', () => {
     const labels = ['Les agents tiennent une liste de tâches', 'Remote control pour tous les agents'];
     const view = 'Vue des nouveaux agents';
     fakeBackend({ claude_locate: () => located });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'agents' });
     for (const name of labels) expect(screen.getByRole('switch', { name })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: view })).toBeInTheDocument();
     cleanup();
     app.engines = [BARE_ENGINE];
     fakeBackend({ claude_locate: () => located });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'agents' });
     for (const name of labels) expect(screen.queryByRole('switch', { name })).toBeNull();
     expect(screen.queryByRole('group', { name: view })).toBeNull();
   });
@@ -1695,23 +1919,27 @@ describe('SettingsModal, Claude Code updated by Escouade (ESC-133)', () => {
   it('says what the last update did, its error in a line, or that the user turned it off in Claude Code', async () => {
     let answer = status({ state: 'updated', version: '2.1.302', from: '2.1.301', at: 1 });
     fakeBackend({ claude_locate: () => located, engines: () => [info()], claude_update_status: () => answer });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'accounts' });
+    await userEvent.click(within(panel()).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     expect(screen.getByRole('switch', { name: SWITCH })).toHaveAttribute('aria-checked', 'true');
     expect(await screen.findByText('Mis à jour en 2.1.302 (depuis la 2.1.301).')).toBeInTheDocument();
     cleanup();
     answer = status({ state: 'upToDate', version: '2.1.302', at: 1 });
     fakeBackend({ claude_locate: () => located, engines: () => [info()], claude_update_status: () => answer });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'accounts' });
+    await userEvent.click(within(panel()).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     expect(await screen.findByText('À jour (2.1.302).')).toBeInTheDocument();
     cleanup();
     answer = status({ state: 'failed', line: 'Error: EACCES: permission denied', at: 1 });
     fakeBackend({ claude_locate: () => located, engines: () => [info()], claude_update_status: () => answer });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'accounts' });
+    await userEvent.click(within(panel()).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     expect(await screen.findByText('Échec de la mise à jour : Error: EACCES: permission denied')).toHaveClass('bad');
     cleanup();
     answer = status({ state: 'userOff', line: 'DISABLE_AUTOUPDATER' });
     fakeBackend({ claude_locate: () => located, engines: () => [info()], claude_update_status: () => answer });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'accounts' });
+    await userEvent.click(within(panel()).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     expect(
       await screen.findByText('Coupée dans Claude Code lui-même (DISABLE_AUTOUPDATER) : Escouade ne le met pas à jour non plus.'),
     ).toBeInTheDocument();
@@ -1724,7 +1952,8 @@ describe('SettingsModal, Claude Code updated by Escouade (ESC-133)', () => {
       claude_update_status: () => status({ state: 'upToDate', version: '2.1.302' }),
       save_settings: () => [],
     });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'accounts' });
+    await userEvent.click(within(panel()).getByRole('button', { name: /^(Avancé|Advanced)/ }));
     expect(await screen.findByText('À jour (2.1.302).')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('switch', { name: SWITCH }));
     expect(
@@ -1732,7 +1961,7 @@ describe('SettingsModal, Claude Code updated by Escouade (ESC-133)', () => {
         'Coupée : Claude Code n’est plus mis à jour, ni par Escouade ni par lui-même. Lance claude update de temps en temps.',
       ),
     ).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await afterGesture();
     expect(backend.called('save_settings').at(-1)!.args.settings.claudeSelfUpdate).toBe(false);
   });
 
@@ -1744,7 +1973,7 @@ describe('SettingsModal, Claude Code updated by Escouade (ESC-133)', () => {
       engines: () => [info({ located: { ...located, path: null }, version: null, state: 'absent', note: cut })],
       claude_update_status: () => status({ state: 'missing', line: cut }),
     });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'accounts' });
     await waitFor(() => expect(screen.getAllByText(cut).length).toBe(2));
   });
 });
@@ -1772,28 +2001,30 @@ describe('SettingsModal, the « Harness » tab (ESC-29)', () => {
     ...over,
   });
 
-  it('lists each harness with its executable and its version, and leaves signing in to the Accounts tab', async () => {
+  it('lists each harness with its state and its version beside its name, its accounts under it, its path in « Avancé »', async () => {
     fakeBackend({ claude_locate: () => located, engines: () => [claude(), bare()] });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'accounts' });
     const own = await screen.findByRole('region', { name: 'Claude Code' });
-    expect(within(own).getByRole('textbox', { name: "Chemin de l'exécutable" })).toBeInTheDocument();
+    expect(within(own).getByRole('heading', { name: 'Claude Code' })).toBeInTheDocument();
+    expect(within(own).getByRole('button', { name: 'Ajouter un compte Claude Code…' })).toBeInTheDocument();
+    expect(within(own).getByRole('listitem', { name: 'Principal' })).toBeInTheDocument();
+    expect(within(own).queryByRole('textbox', { name: "Chemin de l'exécutable" })).toBeNull();
     expect(await within(own).findByText('2.1.301')).toHaveAttribute('data-state', 'notConnected');
     expect(
-      within(own).getByText(/Aucun compte connecté : ajoute ou connecte un compte de ce harness dans l’onglet Comptes\.$/),
+      within(own).getByText(/Aucun compte connecté : connecte l’un de ses comptes ci-dessous, ou ajoutes-en un\.$/),
     ).toBeInTheDocument();
     const other = screen.getByRole('region', { name: 'Harness nu' });
-    expect(within(other).getByText('Trouvé : C:\bin\codex.exe')).toBeInTheDocument();
     expect(within(other).getByText('0.163.0')).toHaveAttribute('data-state', 'ready');
-    // An account signs in from Réglages › Comptes (ESC-128): the tab has no state line nor « Se connecter… » any more.
-    expect(screen.queryByRole('button', { name: 'Se connecter…' })).toBeNull();
-    expect(screen.queryByText('État')).toBeNull();
+    expect(within(other).getByText(/^Prêt/)).toBeInTheDocument();
+    await userEvent.click(within(panel()).getByRole('button', { name: /^(Avancé|Advanced)/ }));
+    expect(screen.getByRole('textbox', { name: "Chemin de l'exécutable" })).toBeInTheDocument();
   });
 
   it('says that the cost of a harness that does not tell it is estimated, and what it cannot do', async () => {
     const estimated = { ...BARE_ENGINE, caps: { ...BARE_ENGINE.caps, cost: 'estimated' as const } };
     app.engines = [CLAUDE_ENGINE, estimated];
     fakeBackend({ claude_locate: () => located, engines: () => [claude({ state: 'ready' }), bare({ caps: estimated.caps })] });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'accounts' });
     const other = await screen.findByRole('region', { name: 'Harness nu' });
     expect(within(other).getByText('Coût')).toBeInTheDocument();
     expect(
@@ -1813,45 +2044,41 @@ describe('SettingsModal, the « Harness » tab (ESC-29)', () => {
         bare({ located: { path: null, wsl: null, nat: false, canWsl: true }, version: null, state: 'absent' }),
       ],
     });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'accounts' });
     const other = await screen.findByRole('region', { name: 'Harness nu' });
     expect(await within(other).findByText('Introuvable')).toHaveAttribute('data-engine-state', 'absent');
     expect(within(other).getByText('npm install -g @openai/codex')).toBeInTheDocument();
     expect(await within(screen.getByRole('region', { name: 'Claude Code' })).findByText('2.1.301')).toHaveAttribute('data-state', 'ready');
     // Its path is not set here (Claude Code's alone is): no « Indique le chemin de claude » under it (ESC-84).
     expect(within(other).queryByText(/chemin de claude/)).toBeNull();
-    expect(within(other).getByText('Introuvable.')).toBeInTheDocument();
   });
 
   it('says it in English too', async () => {
     setLang('en');
     fakeBackend({ claude_locate: () => located, engines: () => [claude(), bare()] });
-    render(SettingsModal, { tab: 'claude' });
+    render(SettingsModal, { page: 'accounts' });
     const own = await screen.findByRole('region', { name: 'Claude Code' });
-    expect(
-      await within(own).findByText(/No account signed in: add or sign in an account of this harness in the Accounts tab\.$/),
-    ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Sign in…' })).toBeNull();
-    expect(within(screen.getByRole('region', { name: 'Harness nu' })).getByText('Found: C:\bin\codex.exe')).toBeInTheDocument();
+    expect(await within(own).findByText(/No account signed in: sign in one of its accounts below, or add one\.$/)).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Harness nu' })).getByText(/^Ready/)).toBeInTheDocument();
   });
 });
 
-describe('SettingsModal, À propos (choice 13 of the 2.0 design)', () => {
+describe('SettingsModal, Général › Mises à jour (choice 13 of the 2.0 design)', () => {
   beforeEach(() => resetApp());
 
   it('keeps a download of an update that failed while it lasts, with the way through the browser', async () => {
     fakeBackend();
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     expect(screen.queryByText(/^Mise à jour /)).toBeNull();
     cleanup();
     app.updateTrouble = { version: '1.9.0', message: 'le proxy a refusé le fichier (403)', page: 'https://example.com/v1.9.0' };
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     expect(screen.getByText('Mise à jour 1.9.0')).toBeInTheDocument();
     expect(screen.getByText('Téléchargement impossible : le proxy a refusé le fichier (403)')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Télécharger dans le navigateur' })).toBeInTheDocument();
     cleanup();
     app.updateTrouble = { version: '1.9.0', message: 'délai dépassé', page: null };
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     expect(screen.getByText('Téléchargement impossible : délai dépassé')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Télécharger dans le navigateur' })).toBeNull();
   });
@@ -1873,7 +2100,7 @@ describe('SettingsModal, À propos (choice 13 of the 2.0 design)', () => {
 
   it('shows an update found by the button while it downloads, then ready, and says so to a screen reader (ESC-250)', async () => {
     const { ready } = found('2.5.0');
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     const live = screen.getByTestId('update-live');
     expect(live).toHaveAttribute('aria-live', 'polite');
     expect(live).toHaveTextContent('');
@@ -1892,7 +2119,7 @@ describe('SettingsModal, À propos (choice 13 of the 2.0 design)', () => {
   it('shows an update the automatic check found, ready, its restart through the update’s window and its notes', async () => {
     const backend = fakeBackend();
     app.update = { version: '2.6.0', notes: '- Une rangée dans À propos', ready: true };
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     const row = within(updateRow());
     expect(row.getByText('Escouade 2.6.0 prête')).toBeInTheDocument();
     // The notes, folded until asked for.
@@ -1902,7 +2129,7 @@ describe('SettingsModal, À propos (choice 13 of the 2.0 design)', () => {
     expect(row.getByRole('button', { name: 'Masquer les nouveautés' })).toHaveAttribute('aria-expanded', 'true');
     // As the status bar: the update’s window (unsaved files, agents at work), which comes back here once put off.
     await userEvent.click(row.getByRole('button', { name: 'Redémarrer maintenant' }));
-    expect(app.modal).toEqual({ kind: 'update', back: 'about' });
+    expect(app.modal).toEqual({ kind: 'update', back: 'general' });
     expect(backend.called('update_restart')).toEqual([]);
   });
 
@@ -1911,7 +2138,7 @@ describe('SettingsModal, À propos (choice 13 of the 2.0 design)', () => {
     app.update = { version: '2.6.1', notes: '', ready: true };
     app.now = 1_000_000;
     app.restartAt = 1_000_000 + 9_500;
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     const row = within(updateRow());
     expect(row.getByText('Redémarrage dans 10 s')).toBeInTheDocument();
     // No notes: nothing to unfold.
@@ -1924,7 +2151,7 @@ describe('SettingsModal, À propos (choice 13 of the 2.0 design)', () => {
 
   it('finds and offers an update with the automatic updates turned off', async () => {
     found('2.7.0');
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     await userEvent.click(screen.getByRole('switch', { name: 'Installer les mises à jour automatiquement' }));
     await userEvent.click(screen.getByRole('button', { name: 'Rechercher une mise à jour' }));
     expect(await screen.findByText('Escouade 2.7.0 disponible')).toBeInTheDocument();
@@ -1932,7 +2159,7 @@ describe('SettingsModal, À propos (choice 13 of the 2.0 design)', () => {
 
   it('shows nothing found with the toast alone, and a failed check with its error alone', async () => {
     fakeBackend({ update_check: () => ({ kind: 'none' }) });
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     await userEvent.click(screen.getByRole('button', { name: 'Rechercher une mise à jour' }));
     await expect.poll(() => app.toasts.at(-1)?.text).toBe('Aucune mise à jour disponible.');
     expect(screen.queryByText(/^Escouade \S+ (disponible|prête)$/)).toBeNull();
@@ -1945,7 +2172,7 @@ describe('SettingsModal, À propos (choice 13 of the 2.0 design)', () => {
 
   it('gives way to the download that failed, never both rows, and to a newer version found meanwhile', async () => {
     const { ready } = found('2.8.0');
-    render(SettingsModal, { tab: 'about' });
+    render(SettingsModal, { page: 'general' });
     await userEvent.click(screen.getByRole('button', { name: 'Rechercher une mise à jour' }));
     expect(await screen.findByText('Escouade 2.8.0 disponible')).toBeInTheDocument();
     ready({ kind: 'failed', trouble: { message: 'le proxy a refusé le fichier (403)', show: false, page: null } });

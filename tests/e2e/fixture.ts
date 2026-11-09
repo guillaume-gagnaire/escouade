@@ -1,7 +1,7 @@
 // Launches the real app on a throwaway data folder, with the fake `claude` CLI, and connects
 // Playwright to its WebView2 through the DevTools protocol.
 
-import { test as base, chromium, expect, type Browser, type Page } from '@playwright/test';
+import { test as base, chromium, expect, type Browser, type Locator, type Page } from '@playwright/test';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -284,6 +284,12 @@ const NO_STORE = 'http://127.0.0.1:9';
 export const SHOW = !!process.env.ESCOUADE_E2E_SHOW && process.env.ESCOUADE_E2E_SHOW !== '0';
 
 /**
+ * `ESCOUADE_E2E_VIEWPORT=1024x728`: the size of the window at each start, as the CI's runner bounds it (its screen); else
+ * the window keeps its own (1440 × 900: off every screen, nothing bounds it). A test that sets its own size still does.
+ */
+const VIEWPORT = /^(\d+)x(\d+)$/.exec(process.env.ESCOUADE_E2E_VIEWPORT ?? '');
+
+/**
  * WebView2 draws and runs its timers in full even though its window is not seen: Chromium slows down a window it takes for
  * hidden or covered. Off the screens, the window was drawn without them in short tests (ESC-126): they keep it so in the long
  * ones. The same in ci.yml, where they reach WebView2 by the machine policy.
@@ -470,6 +476,7 @@ export const test = base.extend<{
     const attach = async (launch: Instance): Promise<Page> => {
       try {
         const { browser, page } = await connect(port, () => launch.stopped);
+        if (VIEWPORT) await page.setViewportSize({ width: Number(VIEWPORT[1]), height: Number(VIEWPORT[2]) });
         launch.browser = browser;
         return page;
       } catch (e) {
@@ -538,7 +545,10 @@ export const test = base.extend<{
         return `--- page ---\n${shown}\n--- app (${instance.stopped ?? 'running'}) ---\n${tail(path.join(data, 'app.log'), 25)}`;
       };
       try {
-        await expect(page.getByRole('button', { name: LABELS[language].addProject }).first()).toBeVisible();
+        // A runner's window thread stops for 7 to 10 s at times while the app starts (« window thread: paused 9725 ms » in
+        // its log), its page still blank: longer than the 15 s of an expect, which failed a test there before it began
+        // (shell.spec.ts, tall-fields.spec.ts on the CI of 2026-11-08, ESC-393).
+        await expect(page.getByRole('button', { name: LABELS[language].addProject }).first()).toBeVisible({ timeout: 45_000 });
       } catch (e) {
         throw new Error(`${(e as Error).message.split('\n')[0]}\n${await state()}`);
       }
@@ -615,6 +625,78 @@ export async function unfoldSections(page: Page) {
   // One at a time: the list shrinks as each one unfolds (`all()` would look for an nth that is gone).
   const folded = page.locator('.sec-h > .fold[aria-expanded="false"]');
   while ((await folded.count()) > 0) await folded.first().click();
+}
+
+/** The pages of a project in the bar of the settings (ESC-379), shown under the project unfolded. */
+const PROJECT_PAGES = new Set([
+  'Projet',
+  'Git et worktrees',
+  'Lancement',
+  'Kanban',
+  'Tickets importés',
+  'Équipe',
+  'Confidentialité',
+  'Project',
+  'Git and worktrees',
+  'Launch',
+  'Imported tickets',
+  'Team',
+  'Privacy',
+]);
+
+/** The bar of the settings window: its pages, its projects (direction A, ESC-379). */
+export const settingsNav = (where: Page | Locator) => where.getByRole('dialog', { name: /^(Réglages|Settings)$/ }).getByRole('navigation');
+
+/** An entry of the bar of the settings: a page by its name (« À propos », « Comptes et harness »), or a project. */
+export function settingsEntry(where: Page | Locator, name: string | RegExp) {
+  const nav = 'goto' in where ? settingsNav(where) : where.getByRole('navigation');
+  return nav.getByRole('button', typeof name === 'string' ? { name, exact: true } : { name });
+}
+
+/**
+ * Opens the settings on a page (ESC-379, in place of the 2.0 tabs): `where` is the app's page (the window is opened by
+ * « Réglages (Ctrl+,) » when it is not), or the settings dialog. A page of a project (« Kanban », « Projet »…) is the
+ * one of `project` (its name; else the one chosen, else the first), unfolded first. Answers the dialog.
+ */
+export async function openSettingsPage(where: Page | Locator, name: string | RegExp, opts: { project?: string | RegExp } = {}) {
+  let dialog: Locator;
+  if ('goto' in where) {
+    dialog = where.getByRole('dialog', { name: /^(Réglages|Settings)$/ });
+    if (!(await dialog.isVisible())) await where.getByRole('button', { name: /^(Réglages|Settings) \(/ }).click();
+  } else dialog = where;
+  const nav = dialog.getByRole('navigation');
+  if (opts.project !== undefined) {
+    const row = nav
+      .locator('button[aria-expanded]')
+      .filter({ has: dialog.page().locator('.lbl', { hasText: opts.project }) })
+      .first();
+    if ((await row.getAttribute('aria-expanded')) !== 'true') await row.click();
+  } else if (typeof name === 'string' && PROJECT_PAGES.has(name) && !(await settingsEntry(dialog, name).isVisible())) {
+    await nav.locator('button[aria-expanded]').first().click();
+  }
+  const entry = settingsEntry(dialog, name);
+  await entry.click();
+  await expect(entry).toHaveAttribute('aria-current', 'page');
+  return dialog;
+}
+
+/** Unfolds « Avancé » at the foot of the page shown (direction A): the rare settings it folds. Answers the dialog. */
+export async function openAdvanced(dialog: Locator) {
+  const fold = dialog.locator('#settings-panel').getByRole('button', { name: /^(Avancé|Advanced)/ });
+  if ((await fold.getAttribute('aria-expanded')) !== 'true') await fold.click();
+  await expect(fold).toHaveAttribute('aria-expanded', 'true');
+  return dialog;
+}
+
+/**
+ * Closes the settings window once what was changed in it is saved (ESC-380): no « Enregistrer », each setting is saved
+ * as it changes, a text when it loses the focus. The field typed in is left first (a click on the page's title).
+ */
+export async function closeSettings(dialog: Locator) {
+  await dialog.locator('.s-head h1').click();
+  await expect(dialog).toHaveAttribute('data-saving', 'false');
+  await dialog.locator('.s-head .close').click();
+  await expect(dialog).toBeHidden();
 }
 
 export async function send(page: Page, text: string) {

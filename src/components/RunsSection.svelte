@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { paneDrag } from '../lib/pane-drag.svelte';
   import { t } from '../lib/i18n';
   import { launchStatus, restartLaunch, runHere, runIn, startAll, stopAll, stopLaunch } from '../lib/launch-actions';
   import { menu } from '../lib/menu.svelte';
@@ -54,11 +55,11 @@
   }
 
   function configure() {
-    app.modal = { kind: 'settings', tab: 'projects', projectId: project.id, section: 'launch' };
+    app.modal = { kind: 'settings', page: 'launch', projectId: project.id };
   }
   /** The same settings, where Claude reads the project at once to fill in the commands (to read before saving). */
   function propose() {
-    app.modal = { kind: 'settings', tab: 'projects', projectId: project.id, section: 'launch', suggest: true };
+    app.modal = { kind: 'settings', page: 'launch', projectId: project.id, suggest: true };
   }
   const isRunning = (c: RunCommand) => app.launches[c.id]?.status === 'running';
 
@@ -96,7 +97,8 @@
     aria-current={selected === c.id ? 'true' : undefined}
     data-run={c.id}
     use:tip={c.command}
-    onclick={() => app.selectLaunch(c.id)}
+    onclick={(e) => (e.ctrlKey || e.metaKey ? app.openBeside({ kind: 'launch', id: c.id }) : app.selectLaunch(c.id))}
+    onpointerdown={(e) => paneDrag.press(e, { kind: 'launch', id: c.id }, c.name)}
     onkeydown={(e) => e.key === 'Enter' && e.target === e.currentTarget && app.selectLaunch(c.id)}
   >
     <i class="d {tn}" aria-hidden="true"></i>

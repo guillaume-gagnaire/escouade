@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, send, test, type App } from './fixture';
+import { addProject, expect, send, test, type App, openSettingsPage } from './fixture';
 import { keepClaude, keepCodex, keepCopilot } from './real-keep';
 
 const WANTED = new Set((process.env.ESCOUADE_E2E_REAL ?? '').split(',').map((s) => s.trim()));
@@ -270,14 +270,14 @@ function checkFiles(repo: string, commitsBefore: string) {
   expect(git(repo, 'status', '--porcelain', '--', '.escouade')).toMatch(/\.escouade/);
 }
 
-/** « Relire » in Réglages › Projets › Workflow, then whether the files were touched (mtime and text). */
+/** « Relire » in Réglages › Projets › Kanban › Workflow, then whether the files were touched (mtime and text). */
 async function rereadLeavesFiles(page: Page, repo: string) {
   const before = Object.fromEntries(
     Object.keys(workflowFiles(repo)).map((f) => [f, fs.statSync(path.join(repo, '.escouade', 'workflows', f)).mtimeMs]),
   );
   await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
   const settings = page.getByRole('dialog', { name: 'Réglages' });
-  await settings.getByRole('tab', { name: 'Projets' }).click();
+  await openSettingsPage(settings, 'Kanban');
   const reread = settings.getByRole('button', { name: /^Relire/ });
   if (await reread.isVisible()) {
     await reread.click();

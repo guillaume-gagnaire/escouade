@@ -8,13 +8,17 @@
   import { app } from '../../lib/state.svelte';
   import type { Project } from '../../lib/types';
   import { ciShown, redTargetHolds, targetCiOf } from '../../lib/branch-ci';
-  import { fSince } from '../../lib/format';
+  import { fAgo, fSince } from '../../lib/format';
   import CiPill from '../CiPill.svelte';
   import Icon from '../Icon.svelte';
   import BoardColumn from './BoardColumn.svelte';
   import EnvironmentsView from './EnvironmentsView.svelte';
   import { tip } from '../../lib/tip';
   import { prColumnShown } from '../../lib/ticket-prs';
+  import { hasTab } from '../../lib/code-host';
+  import { arrange, notInProduction } from '../../lib/environments';
+  import { envsView } from '../../lib/envs-view.svelte';
+  import EnvsMenu from './EnvsMenu.svelte';
 
   let { project: given }: { project: Project } = $props();
 
@@ -46,14 +50,26 @@
   /** The project's harness has no account (ESC-128): « Ajouter un compte… » beside why nothing starts. */
   const engine = $derived(project.engine ?? defaultEngine());
   const noAccount = $derived(!hasAccount(engine));
+  /** « Environnements » only for a project whose code host reads deployments (ESC-390). */
+  const envsTab = $derived(hasTab(app.codeHosts[project.id], 'deployments'));
   /** The view « Environnements » in place of the tickets (ESC-67). */
-  const envs = $derived(!!app.envView[project.id]);
+  const envs = $derived(envsTab && !!app.envView[project.id]);
+  const envData = $derived(app.environments[project.id]);
+  /** The environments the view shows (ESC-390): its tab counts them, the tickets not in their production are said. */
+  const shownEnvs = $derived(arrange(envData?.environments ?? [], envsView.of(project.id)).shown);
+  const late = $derived(envs ? notInProduction(all, shownEnvs, app.now) : []);
   /** The CI of its target branch (ESC-63), as last read: the pill of the header; none without a host Escouade reads. */
   const targetCi = $derived(targetCiOf(project));
   /** Its pill: none for a target without any CI. */
   const targetPill = $derived(ciShown(targetCi) ? targetCi : null);
   /** « Pause quand la CI de la cible est rouge » holds the autopilot's tickets back now. */
   const redHold = $derived(s.autopilot && redTargetHolds(s, targetCi));
+
+  /** « Escouade · GitHub · lu il y a 2 min », the line of the environments. */
+  const envLine = $derived(
+    t('envs.view.sub', { project: project.name, host: envData?.host || '—' }) +
+      (envData?.readAt ? ` · ${t('envs.view.read', { since: fAgo(envData.readAt / 1000, app.now) })}` : ''),
+  );
 
   async function toggleAutopilot() {
     // The project comes back through the backend's event, in order with any newer one: its answer is not written over it.
@@ -62,79 +78,99 @@
 </script>
 
 <main class="board">
+  <!-- Two rows (direction A of design/kanban-envs-2-2, ESC-390): the title and what acts on the board; then its views
+       and what the board says, each in a place of its own at every width. -->
   <header class="head">
-    <div class="h-title">
+    <div class="h1">
       <h1>{envs ? t('envs.view.title') : 'Kanban'}</h1>
-      <div class="crumbs" use:tip={{ text: `${project.name} · ${sub}`, cut: true }}>
-        <span class="proj-name">{project.name}</span><span aria-hidden="true">·</span><span class="num sub">{sub}</span>
-      </div>
-      <!-- Beside the title and its line, in the room they leave: the controls keep their place (ESC-67). -->
-      <div class="tabs" role="group" aria-label={t('envs.tabs.label')}>
+      <span class="crumbs" use:tip={{ text: `${project.name} · ${sub}`, cut: true }}>{project.name} · <span class="num">{sub}</span></span>
+      <div class="actions">
+        <!-- Its label goes in a narrow window, its icon stays. -->
         <button
-          class:on={!envs}
-          aria-pressed={!envs}
-          aria-label={t('envs.tabs.tickets')}
-          use:tip={t('envs.tabs.tickets')}
-          onclick={() => (app.envView[project.id] = false)}
-          ><Icon name="kanban" size={14} /><span class="tl">{t('envs.tabs.tickets')}</span></button
+          class="btn imp"
+          aria-label={t('common.import')}
+          use:tip={t('board.header.importTitle')}
+          onclick={() => (app.modal = { kind: 'import', projectId: project.id })}
+          ><Icon name="import" size={14} /><span class="l">{t('common.import')}</span></button
         >
         <button
-          class:on={envs}
-          aria-pressed={envs}
-          aria-label={t('envs.tabs.environments')}
-          use:tip={t('envs.tabs.environments')}
-          data-env-tab
-          onclick={() => (app.envView[project.id] = true)}
-          ><Icon name="globe" size={14} /><span class="tl">{t('envs.tabs.environments')}</span></button
+          class="auto"
+          role="switch"
+          aria-checked={s.autopilot}
+          aria-label={t('board.header.autopilot')}
+          use:tip={t('board.header.autopilotTitle')}
+          onclick={toggleAutopilot}
         >
+          <span class="l">{s.autopilot ? t('board.header.autopilot') : t('board.header.autopilotOff')}</span><span
+            class="knob"
+            aria-hidden="true"
+          ></span>
+        </button>
       </div>
     </div>
-    {#if targetPill}
-      <!-- The CI of its target branch (ESC-63): « main ✗ depuis 2 h »; its jobs, their logs and their re-run on a click. -->
-      <span class="target-ci"><CiPill ci={targetPill} of={{ kind: 'target', id: project.id }} projectId={project.id} /></span>
-    {/if}
-    {#if !app.enginesFound.length}
-      <!-- No place is worth showing: nothing starts without a harness. -->
-      <span class="places missing" use:tip={{ text: t('board.header.noEngine'), cut: true }}>{t('board.header.noEngine')}</span>
-    {:else if issue}
-      <!-- Nor while the target branch cannot start a ticket. -->
-      <span class="places missing" use:tip={{ text: issue, cut: true }}>{issue}</span>
-      {#if noAccount}<button class="btn add-account" onclick={() => addAccount(engine)}>{t('accounts.tab.add')}</button>{/if}
-    {:else if pause || redHold}
-      <!-- Nor while the autopilot is paused (a quota, a limit, a red target): the band under the header says why. -->
-    {:else}
-      <span class="places" use:tip={{ text: places, cut: true }}>{places}</span>
-    {/if}
-    <div class="actions">
-      <!-- Its label goes in a narrow window, its icon and its name stay. -->
-      <button
-        class="btn imp"
-        aria-label={t('common.import')}
-        use:tip={t('board.header.importTitle')}
-        onclick={() => (app.modal = { kind: 'import', projectId: project.id })}
-        ><Icon name="import" size={14} /><span class="l">{t('common.import')}</span></button
-      >
-      <!-- Its tooltip holds the summary in full: the summary is cut in a narrow window. -->
-      <button
-        class="cfg"
-        use:tip={t('board.header.settingsTitle', { summary })}
-        onclick={() => (app.modal = { kind: 'settings', tab: 'board', projectId: project.id })}
-      >
-        <span class="k">{t('board.header.afterApproval')}</span><b class="v">{summary}</b><Icon name="down" size={14} />
-      </button>
-      <button
-        class="auto"
-        role="switch"
-        aria-checked={s.autopilot}
-        aria-label={t('board.header.autopilot')}
-        use:tip={t('board.header.autopilotTitle')}
-        onclick={toggleAutopilot}
-      >
-        <span class="l">{s.autopilot ? t('board.header.autopilot') : t('board.header.autopilotOff')}</span><span
-          class="knob"
-          aria-hidden="true"
-        ></span>
-      </button>
+    <div class="h2">
+      <div class="tabs" role="group" aria-label={t('envs.tabs.label')}>
+        <button class:on={!envs} aria-pressed={!envs} aria-label={t('envs.tabs.tickets')} onclick={() => (app.envView[project.id] = false)}
+          ><Icon name="kanban" size={14} />{t('envs.tabs.tickets')}<span class="c">{tickets.length}</span></button
+        >
+        {#if envsTab}
+          <button
+            class:on={envs}
+            aria-pressed={envs}
+            aria-label={t('envs.tabs.environments')}
+            data-env-tab
+            onclick={() => (app.envView[project.id] = true)}
+            ><Icon name="globe" size={14} />{t('envs.tabs.environments')}{#if envData?.environments.length}<span class="c"
+                >{shownEnvs.length}</span
+              >{/if}</button
+          >
+        {/if}
+      </div>
+      <span class="sp"></span>
+      {#if envs}
+        <span class="said" use:tip={{ text: envLine, cut: true }}>{envLine}</span>
+        {#if late.length}
+          <span class="late" data-not-in-prod><Icon name="clock" size={14} />{t('envs.view.notInProd', { count: late.length })}</span>
+        {/if}
+        <i class="sep" aria-hidden="true"></i>
+        <EnvsMenu {project} />
+        <button
+          class="icon-btn"
+          aria-label={t('envs.view.refresh')}
+          use:tip={t('envs.view.refreshTitle')}
+          aria-busy={!!envsView.reading[project.id]}
+          disabled={!!envsView.reading[project.id]}
+          onclick={() => envsView.refresh(project.id)}><Icon name="restart" size={14} /></button
+        >
+      {:else}
+        {#if targetPill}
+          <!-- The CI of its target branch (ESC-63): « main ✗ depuis 2 h »; its jobs, their logs and their re-run on a click. -->
+          <span class="target-ci"><CiPill ci={targetPill} of={{ kind: 'target', id: project.id }} projectId={project.id} /></span>
+        {/if}
+        {#if !app.enginesFound.length}
+          <!-- No place is worth showing: nothing starts without a harness. -->
+          <span class="places missing" use:tip={{ text: t('board.header.noEngine'), cut: true }}>{t('board.header.noEngine')}</span>
+        {:else if issue}
+          <!-- Nor while the target branch cannot start a ticket. -->
+          <span class="places missing" use:tip={{ text: issue, cut: true }}>{issue}</span>
+          {#if noAccount}<button class="btn add-account" onclick={() => addAccount(engine)}>{t('accounts.tab.add')}</button>{/if}
+        {:else if pause || redHold}
+          <!-- Nor while the autopilot is paused (a quota, a limit, a red target): the band under the header says why. -->
+        {:else}
+          <span class="places" use:tip={{ text: places, cut: true }}>{places}</span>
+        {/if}
+        <i class="sep" aria-hidden="true"></i>
+        <!-- Its tooltip holds the summary in full: the summary is cut in a narrow window. Its name stays « Après
+             validation : <résumé> » at every width, when « Après validation : » is no longer shown (ESC-393). -->
+        <button
+          class="cfg"
+          aria-label="{t('board.header.afterApproval')} {summary}"
+          use:tip={t('board.header.settingsTitle', { summary })}
+          onclick={() => (app.modal = { kind: 'settings', page: 'board', projectId: project.id })}
+        >
+          <span class="k">{t('board.header.afterApproval')}</span><b class="v">{summary}</b><Icon name="down" size={12} />
+        </button>
+      {/if}
     </div>
   </header>
   {#if pause}
@@ -162,7 +198,7 @@
     <div class="band shared" role="status">
       <Icon name="shield" size={14} />
       <span class="why" use:tip={{ text: t('settings.shared.banner'), cut: true }}>{t('settings.shared.banner')}</span>
-      <button class="btn" onclick={() => (app.modal = { kind: 'settings', tab: 'projects', projectId: project.id })}
+      <button class="btn" onclick={() => (app.modal = { kind: 'settings', page: 'team', projectId: project.id, at: 'shared' })}
         >{t('settings.shared.bannerButton')}</button
       >
     </div>
@@ -195,16 +231,97 @@
     display: flex;
     flex-direction: column;
   }
-  /* As the conversation's header (lot 4): the title and its line, then what the board says and its controls. */
+  /*
+   * Two rows (direction A, ESC-390). The first: the title, its line, and what acts on the board (import, autopilot). The
+   * second, under a line: the board's views, then what it says (CI, places) and « Après validation ». Each keeps its
+   * place at every width: what is long is cut with its tooltip, what is said twice goes in a narrow window.
+   */
+  .board {
+    container: board / inline-size;
+  }
   .head {
     flex: none;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    min-height: 60px;
-    padding: 0 14px 0 22px;
     border-bottom: 1px solid var(--line);
     white-space: nowrap;
+  }
+  .h1 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 52px;
+    padding: 0 14px 0 22px;
+  }
+  h1 {
+    flex: none;
+    margin: 0;
+    font-size: 15px;
+    font-weight: 620;
+    letter-spacing: -0.015em;
+  }
+  .crumbs {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .actions {
+    flex: none;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .h2 {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 40px;
+    padding: 0 14px 0 14px;
+  }
+  .sp {
+    flex: 1 0 0;
+  }
+  /* « Tickets · Environnements » (ESC-67): the board's two views, underlined as the tabs of a page. */
+  .tabs {
+    flex: none;
+    align-self: stretch;
+    display: flex;
+    gap: 2px;
+  }
+  .tabs button {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 8px;
+    border: none;
+    background: transparent;
+    box-shadow: inset 0 -2px 0 transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 550;
+    cursor: pointer;
+    transition:
+      color 0.15s,
+      box-shadow 0.15s;
+  }
+  .tabs button:hover {
+    color: var(--text);
+  }
+  .tabs button.on {
+    color: var(--text);
+    box-shadow: inset 0 -2px 0 var(--text);
+  }
+  .tabs button:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -4px;
+  }
+  .tabs .c {
+    color: var(--dim);
+    font-size: 11.5px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
   }
   .target-ci {
     display: flex;
@@ -212,123 +329,81 @@
     min-width: 0;
     max-width: 240px;
   }
-  .h-title {
-    display: grid;
-    grid-template-columns: auto minmax(0, auto);
-    justify-content: start;
-    gap: 2px;
+  /* What the places say, on one line; the full text in its tooltip. */
+  .places,
+  .said {
+    flex: 0 1 auto;
     min-width: 0;
-    margin-right: auto;
-  }
-  .h-title > :not(.tabs) {
-    grid-column: 1;
-  }
-  h1 {
-    margin: 0;
-    font-size: 15px;
-    font-weight: 620;
-    letter-spacing: -0.015em;
-  }
-  .crumbs {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    overflow: hidden;
-    color: var(--muted);
-    font-size: 12px;
-  }
-  .proj-name {
-    flex: none;
-  }
-  .sub {
-    min-width: 0;
+    max-width: 36ch;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-  /*
-   * What the places say, on up to three lines when it is long; the full text in its tooltip. Under 1240 pixels the usual
-   * ones give their room to the controls, as in the preview; why nothing starts stays, capped.
-   */
-  .places {
-    flex: 0 1 auto;
-    max-width: 30ch;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
-    overflow: hidden;
-    white-space: normal;
-    text-align: right;
     color: var(--muted);
     font-size: 12.5px;
-    line-height: 1.3;
+  }
+  .said {
+    max-width: 44ch;
   }
   .places.missing {
     color: var(--del);
     font-weight: 550;
   }
-  .add-account {
+  .late {
     flex: none;
-  }
-  .actions {
-    flex: none;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  /* « Tickets · Environnements » (ESC-67): the board's two views. */
-  .tabs {
-    grid-column: 2;
-    grid-row: 1 / 3;
-    align-self: center;
-    margin-left: 14px;
-    display: flex;
-    gap: 2px;
-    padding: 3px;
-    border-radius: 9px;
-    background: var(--raise);
-  }
-  .tabs button {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    height: 24px;
-    padding: 0 10px;
+    color: var(--wait);
+    font-size: 12.5px;
+    font-weight: 550;
+  }
+  .sep {
+    flex: none;
+    width: 1px;
+    height: 16px;
+    background: var(--line-2);
+  }
+  .add-account {
+    flex: none;
+  }
+  .icon-btn {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .icon-btn:hover:not(:disabled) {
+    background: var(--hover);
+    color: var(--text);
+  }
+  .icon-btn:disabled {
+    opacity: 0.5;
+  }
+  /* « Après validation : merge squash → main », the button of the Kanban's settings, quiet in the second row. */
+  .cfg {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex: 0 1 auto;
+    min-width: 0;
+    height: 28px;
+    padding: 0 8px;
     border: none;
     border-radius: 7px;
     background: transparent;
     color: var(--muted);
     font: inherit;
     font-size: 12.5px;
-    font-weight: 550;
     cursor: pointer;
-  }
-  .tabs button.on {
-    background: rgba(var(--fg-rgb), 0.08);
-    box-shadow: inset 0 0 0 1px var(--line-2);
-    color: var(--text);
-  }
-  /* « Après validation : merge squash → main », the button of the Kanban's settings. */
-  .cfg {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    height: 30px;
-    padding: 0 9px 0 11px;
-    border: none;
-    border-radius: 8px;
-    background: transparent;
-    box-shadow: inset 0 0 0 1px var(--line-2);
-    color: var(--muted);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: box-shadow 0.15s;
+    transition: background-color 0.15s;
   }
   .cfg:hover {
-    box-shadow: inset 0 0 0 1px var(--line-3);
+    background: var(--hover);
   }
   .cfg .k {
     flex: none;
@@ -383,24 +458,35 @@
   .auto[aria-checked='true'] .knob::after {
     left: 14px;
   }
-  @media (max-width: 1240px) {
-    .places:not(.missing) {
+  /* A narrower board: « Après validation : » goes (in its tooltip), the summary is cut. */
+  @container board (max-width: 1000px) {
+    .cfg .k {
       display: none;
     }
-    /* The tabs keep their icons alone: their names are in their tooltips. */
-    .tabs .tl {
-      display: none;
+    .v {
+      max-width: 24ch;
     }
-    .tabs button {
-      padding: 0 7px;
-    }
-    .places.missing {
-      max-width: 132px;
-      font-size: 11.5px;
+    .said {
+      max-width: 26ch;
     }
   }
-  /* A narrow window: a long summary is cut, whole in its tooltip. */
-  @media (max-width: 1100px) {
+  /* The narrowest: « Importer » keeps its icon, the views their names without their counts. */
+  @container board (max-width: 860px) {
+    .imp .l {
+      display: none;
+    }
+    .imp {
+      width: 30px;
+      padding: 0;
+      justify-content: center;
+    }
+    .tabs .c {
+      display: none;
+    }
+    .places,
+    .said {
+      max-width: 18ch;
+    }
     .v {
       max-width: 22ch;
     }

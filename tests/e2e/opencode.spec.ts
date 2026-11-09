@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, FAKE_OPENCODE, send, test, type App } from './fixture';
+import { addProject, expect, FAKE_OPENCODE, send, test, type App, openSettingsPage } from './fixture';
 
 type Entry = {
   launch?: { argv: string[]; config: any; password: boolean };
@@ -150,7 +150,7 @@ test.describe('an agent on OpenCode', () => {
     // The settings list them too, searched, the favorite marked.
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
-    await dialog.getByRole('tab', { name: 'Harness' }).click();
+    await openSettingsPage(dialog, 'Comptes et harness');
     const favorites = dialog.getByTestId('model-favorites-opencode');
     // The list sits under its label, whose description keeps the width of the row: not a letter a line (ESC-127).
     const desc = dialog.getByText('Ceux des fournisseurs connectés à OpenCode', { exact: false });
@@ -232,7 +232,7 @@ test.describe('OpenCode 2', () => {
     expect(opencodeLog(app).filter((e) => e.launch)).toEqual([]);
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
-    await dialog.getByRole('tab', { name: 'Harness' }).click();
+    await openSettingsPage(dialog, 'Comptes et harness');
     const group = dialog.locator('section[data-engine="opencode"]');
     // Its version line says it, refused (1.8.2: no state line any more).
     await expect(group.locator('[data-state]')).toHaveAttribute('data-state', 'unsupported');
@@ -289,7 +289,7 @@ test.describe('OpenCode, its cost and its budget (ESC-45)', () => {
     // « Budget par jour ($) » in its account's settings: reached, the status bar says it.
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Réglages' });
-    await settings.getByRole('tab', { name: 'Comptes' }).click();
+    await openSettingsPage(settings, 'Comptes et harness');
     const opencode = settings.getByRole('list', { name: 'Comptes OpenCode' });
     // Claude Code's accounts have their quota: no budget for them.
     await expect(
@@ -303,7 +303,7 @@ test.describe('OpenCode, its cost and its budget (ESC-45)', () => {
     await expect(day).toContainText(/0,004\s\$\s\/\s0,002\s\$/);
 
     // The texts written by OpenCode: its model chosen among those of its providers.
-    await settings.getByRole('tab', { name: 'Application' }).click();
+    await openSettingsPage(settings, 'Agents');
     await settings.getByRole('group', { name: 'Modèle des textes rédigés' }).getByRole('button', { name: 'OpenCode' }).click();
     const model = settings.getByRole('combobox', { name: 'Modèle' });
     await expect(model.locator('option')).toHaveText(['Par défaut (Coder)', 'Coder · Paid']);

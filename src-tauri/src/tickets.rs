@@ -2190,6 +2190,7 @@ impl<R: Runtime> Core<R> {
         };
         // As its worktree will be: the branch it is on has isola's configuration.
         let from = taken_up.as_deref().unwrap_or(&target);
+        self.need_isola(&project.path);
         let isola = self.launch.on_rev(&project.path, from, &project.id).await;
         // Reserved at once: no other start or launch preparation gets this block meanwhile.
         let ports = if isola { None } else { self.reserve_ports() };
@@ -2957,7 +2958,10 @@ impl<R: Runtime> Core<R> {
     /// The approval `approve_begin` started: its validation, a failed step blocking the ticket,
     /// then what may start starts.
     async fn approve_run(self: &Arc<Self>, id: &str, t: Ticket) {
-        if let Err(e) = self.validate(&t).await {
+        let validated = self.validate(&t).await;
+        // The decision numbers it gave are on the target now, or free again (ESC-377).
+        self.docs_numbers_release(&t.project_id, &t.key).await;
+        if let Err(e) = validated {
             log::warn!("ticket {}: validation failed: {e:#}", t.key);
             let reason = error_line(&e);
             // One that left "À tester" meanwhile (back with its agent, or to do, maybe started
@@ -3816,6 +3820,7 @@ impl<R: Runtime> Core<R> {
         let Some(worktree) = worktree else {
             bail!(Refusal::NoWorktree);
         };
+        self.need_isola(&worktree.path);
         if self.launch.manages(&worktree.path, &project_id) {
             bail!(tr!(
                 "isola lance ce worktree : « ▶ Tester » suffit, sans recette.",
@@ -4023,6 +4028,7 @@ impl<R: Runtime> Core<R> {
             .worktree
             .clone()
             .ok_or_else(|| anyhow!(Refusal::NoWorktree))?;
+        self.need_isola(&wt.path);
         let Some(env) = self.launch.for_dir(&wt.path, &meta.project_id) else {
             bail!(tr!(
                 "isola ne lance pas ce worktree (isola introuvable, ou pas de .isola.toml).",

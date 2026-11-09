@@ -117,10 +117,6 @@ export default defineZone('boardSettings', {
     autopilot: 'Autopilot',
     autoAssign: 'Assign tickets automatically',
     autoAssignDesc: 'A free agent takes the next “To do” ticket',
-    quotaPause: 'Pause above quota',
-    quotaPauseHint: 'for all projects',
-    quotaPauseDesc:
-      'The autopilot starts no ticket while the 5-hour window or the weekly window is above this threshold. A ticket launched by hand still starts.',
 
     redTargetPause: 'Pause while the target’s CI is red',
 

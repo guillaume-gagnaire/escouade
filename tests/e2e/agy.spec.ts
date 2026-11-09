@@ -5,12 +5,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, FAKE_AGY, send, test, type App } from './fixture';
+import { addProject, expect, FAKE_AGY, send, test, type App, openSettingsPage } from './fixture';
 
 const SHOTS = process.env.ESCOUADE_E2E_SHOTS;
 
 type Entry = {
-  launch?: { argv: string[]; cwd: string; home: string; geminiKey: string | null };
+  launch?: { argv: string[]; cwd: string; home: string; geminiKey: string | null; allow?: string[] | null };
   user?: string;
 };
 
@@ -68,11 +68,11 @@ test.describe('an agent on Antigravity CLI', () => {
   }) => {
     const { page } = app;
     await addProject(page, app.repo);
-    // Réglages › Harness: found, with its version.
+    // Réglages › Comptes et harness: found, with its version.
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Réglages' });
-    await settings.getByRole('tab', { name: 'Harness' }).click();
-    const agy = settings.getByRole('region', { name: 'Antigravity CLI' });
+    await openSettingsPage(settings, 'Comptes et harness');
+    const agy = settings.getByRole('region', { name: 'Antigravity CLI', exact: true });
     await expect(agy.locator('[data-state]')).toHaveText('1.4.9');
     await agy.scrollIntoViewIfNeeded();
     await shots(page, 'harness');
@@ -94,8 +94,8 @@ test.describe('an agent on Antigravity CLI', () => {
     // Its MCP config is its own folder's (the server's entry there when the agents may drive Escouade).
     expect(fs.existsSync(path.join(launch.home, '.gemini', 'config', 'mcp_config.json'))).toBe(true);
 
-    // A command: refused by `agy`, asked once the turn is over; « Pour cet agent » keeps the rule in its own settings, and
-    // the turn goes on with it.
+    // A command: refused by `agy`, asked once the turn is over; « Pour cet agent » is kept by the plugin, and the turn goes
+    // on with the rule written for it alone (ESC-371).
     await send(page, 'commande');
     const card = page.getByTestId('permission-pending');
     await expect(card).toContainText('npm test');
@@ -103,16 +103,23 @@ test.describe('an agent on Antigravity CLI', () => {
     await card.getByRole('button', { name: 'Pour cet agent' }).click();
     await expect(page.getByText('Fait.')).toBeVisible();
     expect(said(app).at(-1)).toContain('The user allowed the command `npm test`');
-    const rules = fs.readFileSync(path.join(launch.home, '.gemini', 'antigravity-cli', 'settings.json'), 'utf8');
-    expect(rules).toContain('command(npm test)');
+    // The rule is in the settings `agy` read when launched again for the turn, then taken back once it is over (ESC-371):
+    // « Pour cet agent » is kept by the plugin, which allows the very same call again.
+    expect(agentLaunches(app).some((l) => (l.allow ?? []).includes('command(npm test)'))).toBe(true);
+    const settingsFile = path.join(launch.home, '.gemini', 'antigravity-cli', 'settings.json');
+    await expect.poll(() => fs.readFileSync(settingsFile, 'utf8')).not.toContain('command(npm test)');
+    // Asked again: `agy` refuses it (its rule is gone), the plugin allows it at once for « Pour cet agent », without a card.
     await send(page, 'commande encore');
-    await expect(page.getByText('Tests passés.')).toBeVisible();
+    await expect(page.getByText('Fait.')).toHaveCount(2);
     await expect(card).toHaveCount(0);
+    expect(said(app).at(-1)).toContain('The user allowed the command `npm test`');
 
-    // A write in its folder goes by its rules, its diff on its row; one beside it asks, with its diff, answered from the
-    // list (Ctrl+J then 1).
+    // A write in its folder: refused by `agy` (no rule lets a write through), accepted by Escouade's rules without a card,
+    // its diff on its row; one beside it asks, with its diff, answered from the list (Ctrl+J then 1).
     await send(page, 'fichier');
-    await expect(page.getByText('Fichier écrit.')).toBeVisible();
+    await expect(page.getByText('Fait.')).toHaveCount(3);
+    await expect(card).toHaveCount(0);
+    expect(fs.existsSync(path.join(app.repo, 'notes.txt'))).toBe(true);
     await expect(page.locator('main.conv').getByText('notes.txt').first()).toBeVisible();
     await send(page, 'fichier dehors');
     await expect(card).toContainText('Hors du dossier de l’agent');
@@ -122,7 +129,7 @@ test.describe('an agent on Antigravity CLI', () => {
     await page.locator('body').evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await page.keyboard.press('Control+j');
     await page.keyboard.press('1');
-    await expect(page.getByText('Fait.')).toHaveCount(2);
+    await expect(page.getByText('Fait.')).toHaveCount(4);
     expect(fs.existsSync(path.join(path.dirname(app.repo), 'dehors.txt'))).toBe(true);
 
     // A question `agy` skipped: its card, the answer sent as the turn goes on.
@@ -205,9 +212,9 @@ test.describe('Antigravity CLI’s accounts', () => {
     await addProject(page, app.repo);
     await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
     const settings = page.getByRole('dialog', { name: 'Réglages' });
-    await settings.getByRole('tab', { name: 'Comptes' }).click();
+    await openSettingsPage(settings, 'Comptes et harness');
     // None of its own (ESC-128): Antigravity CLI installed, « Aucun compte ».
-    await expect(settings.getByRole('group', { name: 'Comptes Antigravity CLI' })).toContainText('Aucun compte');
+    await expect(settings.getByRole('region', { name: 'Antigravity CLI', exact: true })).toContainText('Aucun compte');
     await settings.getByRole('button', { name: 'Ajouter un compte Antigravity CLI…' }).click();
     const modal = page.getByRole('dialog', { name: 'Ajouter un compte Antigravity CLI' });
     await expect(modal.getByText('Antigravity CLI n’est pas encore connecté sur cette machine', { exact: false })).toBeVisible();

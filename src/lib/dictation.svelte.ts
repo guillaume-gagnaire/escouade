@@ -58,8 +58,9 @@ class Dictation {
     const active = document.activeElement;
     const live = this.targets.filter((x) => x.el()?.isConnected);
     const inside = live.filter((x) => active && x.el()?.contains(active));
-    // The innermost: a ticket's form is above the composer.
-    return inside.at(-1) ?? live.at(-1) ?? null;
+    // The innermost: a ticket's form is above the composer. None has the focus: the active pane's (ESC-392), else the last shown.
+    const inPane = live.filter((x) => x.el()?.closest('[data-pane-active="true"]'));
+    return inside.at(-1) ?? inPane.at(-1) ?? live.at(-1) ?? null;
   }
 
   /** The button (or the shortcut) is pressed for `target`. */

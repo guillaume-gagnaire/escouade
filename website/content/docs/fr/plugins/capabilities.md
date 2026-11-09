@@ -60,7 +60,7 @@ Tout ce qui sort passe par `net/fetch`, `net/stream` ou `ws/open` : voir [les ap
 
 Un appel refusé répond `-32003`. Un appel qui échoue en route répond `-32004`.
 
-**Réglages › Réseau.** Le proxy, ses exclusions et les certificats non vérifiés sont suivis, et un changement atteint l’appel suivant, sans relancer le plugin. Par un proxy, seul le nom est jugé, et le journal le dit.
+**Réglages › Avancé › Réseau.** Le proxy, ses exclusions et les certificats non vérifiés sont suivis, et un changement atteint l’appel suivant, sans relancer le plugin. Par un proxy, seul le nom est jugé, et le journal le dit.
 
 **La fenêtre** dit « Se connecte à », puis chaque hôte, avec « appliqué par Escouade ».
 

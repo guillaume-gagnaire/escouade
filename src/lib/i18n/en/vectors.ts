@@ -2,7 +2,7 @@ import type { Tree } from '../types';
 
 // « Recherche par le sens » (ESC-254): the vectors’ model, one for every project of this machine, used by the shared memory and the docs.
 export default {
-  allTitle: 'Every project',
+  model: 'Local model',
   label: 'Search by meaning',
   desc: 'Besides the words, the shared memory and the docs are searched by meaning, with a small multilingual model ({model}, {license} license) that runs on this machine. One download of {size}, for every project; after that, nothing leaves the machine.',
   download: 'Download ({size})',

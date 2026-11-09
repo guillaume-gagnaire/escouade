@@ -585,7 +585,7 @@ impl<R: Runtime> Core<R> {
     /// tools.
     fn pr_review_reader(&self) -> Result<String> {
         let chosen = self.settings.read().writer_engine;
-        let id = engine::oneshot::writer(chosen, &self.engines_found())
+        let id = engine::oneshot::writer(chosen, &self.engines_usable())
             .unwrap_or(crate::model::EngineId::CLAUDE);
         reader_of(engine::by_id(id))
     }

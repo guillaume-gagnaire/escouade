@@ -1,6 +1,6 @@
 # Themes
 
-A **declarative** plugin can give Escouade other colors: values for the interface’s tokens, dark and light, and a palette of project colors. It is picked in **Settings › Application › Colors** and applies at once, terminals and editor included.
+A **declarative** plugin can give Escouade other colors: values for the interface’s tokens, dark and light, and a palette of project colors. It is picked in **Settings › General › Colors** and applies at once, terminals and editor included.
 
 ## A theme in the manifest
 
@@ -13,7 +13,7 @@ The “High contrast” plugin, whole: one theme, dark and light, and its projec
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.high-contrast",
   "name": { "fr": "Contraste élevé", "en": "High contrast" },
-  "version": "1.1.0",
+  "version": "1.1.2",
   "description": {
     "fr": "Un thème à fort contraste, clair et sombre : texte pur, bordures nettes, couleurs d'état franches.",
     "en": "A high-contrast theme, light and dark: pure text, sharp borders, plain status colors."
@@ -72,7 +72,8 @@ The “High contrast” plugin, whole: one theme, dark and light, and its projec
         "projectColors": ["#ffd400", "#00e0ff", "#ff5cf0", "#7cff4f", "#ff8a00", "#b48cff"]
       }
     ]
-  }
+  },
+  "store": { "docs": "docs" }
 }
 ```
 
@@ -112,7 +113,7 @@ Terminals take their colors from `--well`, `--code-fg`, `--text`, the ANSI color
 
 ## Allowed values
 
-Escouade filters each value before putting it on the window. What does not pass is left out, and the token keeps Escouade’s value; Settings › Application says how many values of the chosen theme were left out.
+Escouade filters each value before putting it on the window. What does not pass is left out, and the token keeps Escouade’s value; Settings › General says how many values of the chosen theme were left out.
 
 - **Colors** (almost every token): `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, the functions `rgb()`, `rgba()`, `hsl()`, `hsla()`, `hwb()`, `lab()`, `lch()`, `oklab()`, `oklch()`, `color()` and `color-mix()`, relative colors (`oklch(from var(--wait) l c h / 0.1)`), `transparent`, `white`, `black`, and `var()` of another token of the list (or of `--p`). One color per token, 160 characters at most.
 - **The proportions** `--sel` and `--glow`: a percentage from 0 to 100% (`26%`).
@@ -125,10 +126,10 @@ Never `url()`, another function (`image-set()`, `attr()`, `env()`…), quotes, b
 ## What the user sees
 
 - **The choice.** The “Colors” row, under “Theme”: “Escouade”, then the themes of the plugins installed and turned on for the app. With no theme installed, a “Browse themes” button opens the Plugins view on its “Themes” category.
-- **At once.** The window, the open terminals (without reopening them) and the editor take the theme as soon as it is chosen; the palette replaces Escouade’s in the “New project” wizard, in Settings › Project and in a tile’s menu. A project keeps its color: if it is not in the palette, it is added at the end.
+- **At once.** The window, the open terminals (without reopening them) and the editor take the theme as soon as it is chosen; the palette replaces Escouade’s in the “New project” wizard, in Settings › Projects › Project and in a tile’s menu. A project keeps its color: if it is not in the palette, it is added at the end.
 - **At startup.** The chosen theme is kept with the settings, and put on before the first paint.
-- **The plugin removed.** Turned off, uninstalled or gone invalid, its theme leaves the window and Escouade’s colors come back; Settings › Application says so. The choice stays: the plugin turned on again, its theme comes back.
+- **The plugin removed.** Turned off, uninstalled or gone invalid, its theme leaves the window and Escouade’s colors come back; Settings › General says so. The choice stays: the plugin turned on again, its theme comes back.
 
 ## Testing a theme
 
-`escouade-plugin validate` checks the manifest. To see the theme, install the plugin’s folder in development (Plugins view › “In development”), pick it in Settings › Application and switch from Dark to Light. The “High contrast” example plugin, the manifest above (`plugins/high-contrast` in Escouade’s repository), is a starting point: see [Example plugins](plugins/examples#high-contrast).
+`escouade-plugin validate` checks the manifest. To see the theme, install the plugin’s folder in development (Plugins view › “In development”), pick it in Settings › General and switch from Dark to Light. The “High contrast” example plugin, the manifest above (`plugins/high-contrast` in Escouade’s repository), is a starting point: see [Example plugins](plugins/examples#high-contrast).

@@ -2,6 +2,9 @@
 
 Un plugin ajoute à Escouade ce qu’elle ne fait pas seule : un thème, un harness, des notifications, des règles pour les autorisations de tes agents. Cette page dit ce qu’un plugin peut faire, sous quelles formes il vient, d’où il vient et par où commencer.
 
+> [!TIP]
+> Les plugins publiés sont sur le store, [store.escouade.dev](https://store.escouade.dev) : sources de tickets, hébergeurs, harness, voix, notifications, thèmes, règles. Ils s’installent depuis l’app (voir [installer un plugin](plugins/installer)).
+
 ## Ce qu’un plugin apporte
 
 Un plugin se décrit dans un fichier, son [manifeste](plugins/manifest), et y déclare ce qu’il ajoute :

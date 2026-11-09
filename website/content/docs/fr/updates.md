@@ -7,7 +7,18 @@ Escouade se met à jour seule depuis les releases GitHub : elle télécharge en 
 - Escouade cherche une nouvelle version peu après son démarrage, puis cinq minutes après la fin de chaque vérification. Elle lit le fichier `latest.json` de la dernière release publiée sur [GitHub](https://github.com/guillaume-gagnaire/escouade/releases). Une release n’est publiée qu’une fois les fichiers des trois systèmes déposés et vérifiés : Escouade ne tombe jamais sur une release à moitié construite.
 - Quand une version plus récente existe, elle la télécharge aussitôt, sans rien te demander, et vérifie sa signature. Pendant le téléchargement, la barre d’état affiche « Mise à jour 1.8.0… » (avec le numéro de la version).
 - Une fois téléchargée, la mise à jour attend : la barre d’état affiche « Mise à jour 1.8.0 prête · Redémarrer ». Elle s’installe quand tu redémarres l’app, quand l’app redémarre d’elle-même, ou quand tu la quittes.
-- L’installation se fait sans fenêtre d’installeur. Le proxy et la vérification des certificats réglés dans Réglages › Réseau valent aussi pour les vérifications et les téléchargements. Quand quelque chose échoue, voir [« Quand ça échoue »](#quand-ca-echoue).
+- L’installation se fait sans fenêtre d’installeur. Le proxy et la vérification des certificats réglés dans Réglages › Avancé › Réseau valent aussi pour les vérifications et les téléchargements. Quand quelque chose échoue, voir [« Quand ça échoue »](#quand-ca-echoue).
+
+## Versions bêta
+
+Une bêta est une version en avance, publiée pour que des volontaires l’essaient avant tout le monde : elle porte le numéro de la version qu’elle prépare suivi de `-beta` et d’un numéro, par exemple « 2.2.0-beta.1 ». Elle peut avoir des défauts que la version stable n’aura plus.
+
+L’option « Recevoir les versions bêta » (Réglages › Général, décochée par défaut) décide si tu les reçois :
+
+- **Décochée**, Escouade ignore toute bêta et ne lit que `latest.json`, qui n’en contient jamais. Si tu es déjà sur une bêta, tu y restes jusqu’à la version stable qui la suit (2.2.0 après 2.2.0-beta.3) ; une version plus ancienne, comme une 2.1.5, ne la remplace pas.
+- **Cochée**, Escouade lit d’abord `beta.json`, dans la dernière release stable, qui donne la version la plus récente, bêta ou stable ; s’il manque, elle lit `latest.json`. La cocher lance aussitôt une recherche, et le réglage s’enregistre tout de suite, sans « Enregistrer ».
+
+Une bêta se reconnaît partout où Escouade dit une version : « Escouade 2.2.0-beta.1 (bêta) » dans Réglages › Général et en bas de la barre des réglages, « Mise à jour 2.2.0-beta.1 (bêta)… » dans la barre d’état. Ses notes sont dans la fenêtre de la mise à jour comme pour une autre version ; elle n’est pas annoncée sur Discord.
 
 ## Installer une mise à jour
 
@@ -24,7 +35,7 @@ Escouade s’arrête proprement avant d’installer : les processus des agents e
 
 ### Redémarrer automatiquement
 
-Le réglage « Installer les mises à jour automatiquement » (Réglages › À propos, activé par défaut) laisse Escouade redémarrer d’elle-même : « Escouade redémarre d’elle-même quand aucun agent ne travaille et que tout est enregistré. »
+Le réglage « Installer les mises à jour automatiquement » (Réglages › Général, activé par défaut) laisse Escouade redémarrer d’elle-même : « Escouade redémarre d’elle-même quand aucun agent ne travaille et que tout est enregistré. »
 
 L’app est au repos quand rien de ceci n’est vrai :
 
@@ -50,7 +61,7 @@ L’app reste sur l’ancienne version et le dit : « La mise à jour vers 1.8.
 
 ## Chercher à la main
 
-Réglages › À propos montre la version installée (« Escouade 1.7.5 », par exemple) et un bouton « Rechercher une mise à jour ». La réponse est « Aucune mise à jour disponible. » (seulement quand la vérification a vraiment répondu), ou la mise à jour apparaît dans l’onglet, « Escouade 1.8.0 disponible » puis « Escouade 1.8.0 prête » avec « Redémarrer maintenant », comme dans la barre d’état. Quand tu cherches toi-même, une panne se dit toujours, avec sa raison : « Vérification des mises à jour impossible » ou « Téléchargement de la mise à jour impossible », suivis de la cause. Une recherche automatique est plus patiente : voir [« Quand ça échoue »](#quand-ca-echoue). Derrière un proxy ou un certificat d’entreprise, voir [« Derrière un proxy d’entreprise »](#derriere-un-proxy-d-entreprise) et le [dépannage](troubleshooting).
+Réglages › Général montre la version installée (« Escouade 1.7.5 », par exemple) et un bouton « Rechercher une mise à jour ». La réponse est « Aucune mise à jour disponible. » (seulement quand la vérification a vraiment répondu), ou la mise à jour apparaît dans l’onglet, « Escouade 1.8.0 disponible » puis « Escouade 1.8.0 prête » avec « Redémarrer maintenant », comme dans la barre d’état. Quand tu cherches toi-même, une panne se dit toujours, avec sa raison : « Vérification des mises à jour impossible » ou « Téléchargement de la mise à jour impossible », suivis de la cause. Une recherche automatique est plus patiente : voir [« Quand ça échoue »](#quand-ca-echoue). Derrière un proxy ou un certificat d’entreprise, voir [« Derrière un proxy d’entreprise »](#derriere-un-proxy-d-entreprise) et le [dépannage](troubleshooting).
 
 ## Quand ça échoue
 
@@ -67,7 +78,7 @@ L’erreur dit ce que la requête a rencontré :
 - le proxy par lequel la requête est passée, s’il y en a un, par exemple `127.0.0.1:9000` ;
 - ce que la réponse dit d’elle-même : l’en-tête `Proxy-Agent`, ou un en-tête `Server` ou une page de blocage qui nomme un proxy connu (Zscaler, Netskope, Squid, Blue Coat, Forcepoint, Fortinet, Palo Alto, Umbrella, Sophos, Skyhigh…), dont elle cite le début. Un simple en-tête `Via` ne suffit pas à nommer un proxy : certains l’ajoutent à toutes leurs réponses, même au refus d’un site.
 
-Pour un 403, elle ajoute « bloqué par le réseau ou un proxy ? ». Par exemple : « 403 Forbidden de release-assets.githubusercontent.com, par le proxy 127.0.0.1:9000 (Zscaler/6.2) : bloqué par le réseau ou un proxy ? ». Pour un 407, elle dit que le proxy demande une authentification, et qu’il faut mettre l’identifiant et le mot de passe dans l’adresse du proxy, dans Réglages › Réseau.
+Pour un 403, elle ajoute « bloqué par le réseau ou un proxy ? ». Par exemple : « 403 Forbidden de release-assets.githubusercontent.com, par le proxy 127.0.0.1:9000 (Zscaler/6.2) : bloqué par le réseau ou un proxy ? ». Pour un 407, elle dit que le proxy demande une authentification, et qu’il faut mettre l’identifiant et le mot de passe dans l’adresse du proxy, dans Réglages › Avancé › Réseau.
 
 Escouade s’annonce avec un User-Agent honnête, `Escouade/<version> (<système>; <architecture>)` pour la recherche comme pour le téléchargement. Elle ne se fait jamais passer pour un navigateur.
 
@@ -79,7 +90,7 @@ Un proxy d’entreprise (Zscaler, Netskope, Squid…) laisse souvent passer la r
 
 Quand un proxy d’entreprise qui se fait connaître refuse l’installateur, le message le nomme : « le proxy de ton entreprise (Zscaler/6.2) a refusé l’installateur (403 Forbidden de release-assets.githubusercontent.com, par le proxy 127.0.0.1:9000). Télécharge-le dans le navigateur : il faudra peut-être confirmer l’avertissement du proxy. »
 
-Quand le proxy refuse la requête (403, 407, tunnel refusé), Escouade ne la refait pas sans lui : elle ne contourne aucune règle de ton entreprise, et le message explique le refus. Pour un 407, il dit que le proxy demande une authentification : mets l’identifiant et le mot de passe dans l’adresse du proxy, dans Réglages › Réseau (par exemple `http://utilisateur:motdepasse@proxy:3128`).
+Quand le proxy refuse la requête (403, 407, tunnel refusé), Escouade ne la refait pas sans lui : elle ne contourne aucune règle de ton entreprise, et le message explique le refus. Pour un 407, il dit que le proxy demande une authentification : mets l’identifiant et le mot de passe dans l’adresse du proxy, dans Réglages › Avancé › Réseau (par exemple `http://utilisateur:motdepasse@proxy:3128`).
 
 Seul un proxy injoignable (réglé mais arrêté, ou poste hors du réseau de l’entreprise) entraîne un second essai, sans proxy. [Le journal de l’app](troubleshooting#ou-est-le-journal-de-l-app) dit alors si l’accès direct a marché, et si les deux essais échouent, le message d’échec les dit.
 
@@ -96,7 +107,7 @@ Demande d’autoriser :
 
 ### Le réglage de proxy
 
-Si ton entreprise te donne l’adresse de son proxy, renseigne-la dans Réglages › Réseau : la recherche et le téléchargement passent alors par lui. Si le proxy déchiffre le trafic avec un certificat de l’entreprise, installe ce certificat sur le système. Voir [les réglages du réseau](settings-network).
+Si ton entreprise te donne l’adresse de son proxy, renseigne-la dans Réglages › Avancé › Réseau : la recherche et le téléchargement passent alors par lui. Si le proxy déchiffre le trafic avec un certificat de l’entreprise, installe ce certificat sur le système. Voir [les réglages du réseau](settings-network).
 
 ## Selon le système
 

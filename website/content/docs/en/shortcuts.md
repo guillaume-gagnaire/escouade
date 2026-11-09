@@ -12,7 +12,7 @@ Shortcuts are written the way the app writes them in English: `Ctrl+Shift+A`, `C
 
 `Esc` closes the open dialog. Two notes on the keyboard:
 
-- Global shortcuts ignore any combination with `Alt`, because `Ctrl+Alt` is `AltGr` on a French keyboard. The shortcuts that use `Alt` belong to one area: `Alt+1` … `Alt+9` (questions), `Alt+←` and `Alt+→` (editor), `Alt+↑` and `Alt+↓` (worktree settings), `Alt+click` (editor).
+- Global shortcuts ignore any combination with `Alt`, because `Ctrl+Alt` is `AltGr` on a French keyboard, except `Ctrl+Alt` and an arrow, which types nothing, to go from pane to pane of the [split screen](split-screen). The shortcuts that use `Alt` belong to one area: `Alt+1` … `Alt+9` (questions), `Alt+←` and `Alt+→` (editor), `Alt+↑` and `Alt+↓` (worktree settings), `Alt+click` (editor).
 - The digits of `Ctrl+1` … `Ctrl+9` and `Alt+1` … `Alt+9` are read from the physical key: on an AZERTY keyboard, you don’t need `Shift`.
 
 ## On macOS
@@ -148,6 +148,11 @@ On macOS, the app’s shortcuts use `⌘`, which the shell never receives: they 
 |---|---|---|
 | `Ctrl+Shift+L` | Switch between the classic layout and “Conversation and files side by side”. | Everywhere, terminals included |
 | `Ctrl+Shift+B` | Show or hide the panel of uncommitted files. | Everywhere, terminals included, in the classic layout (side by side, the panel is always shown) |
+| `Ctrl+\` | [Split screen](split-screen): split what is shown with the next agent, or go back to one pane. On a French AZERTY keyboard: `Ctrl+*`. | Everywhere, terminals included |
+| `Ctrl+Shift+\` | Turn the active pane’s split. | Split screen, terminals included |
+| `Ctrl+Alt+←` `→` `↑` `↓` | Go to the pane on that side. | Split screen, terminals included |
+| `Ctrl+Shift+W` | Close the active pane. | Split screen, terminals included |
+| `Ctrl+click` | On an agent’s card, a terminal’s or a launch’s row: open it beside. | Sidebar |
 
 A separator that has focus (with `Tab`) can be adjusted from the keyboard:
 
@@ -169,7 +174,7 @@ A double click on a separator restores its size too.
 | Shortcut | Action | Where |
 |---|---|---|
 | `Ctrl+,` | Open the settings. | Everywhere, terminals included |
-| `Ctrl+=` (or `Ctrl++`) / `Ctrl+-` | Zoom the whole interface in / out one step (see [“Display”](settings-application#display)). | Everywhere, terminals included, dialog open or not |
+| `Ctrl+=` (or `Ctrl++`) / `Ctrl+-` | Zoom the whole interface in / out one step (see [“Appearance”](settings-application#appearance)). | Everywhere, terminals included, dialog open or not |
 | `Ctrl+0` | Go back to a 100% zoom. | Everywhere, terminals included, dialog open or not |
 | `Esc` | Close the settings. | Settings open |
 | `Alt+↑` / `Alt+↓` | Move a setup or teardown command up / down, from any field of the command. | Project settings, worktree command lists |

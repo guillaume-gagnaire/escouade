@@ -15,7 +15,7 @@
     },
     {
       "method": "engine/launch",
-      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"TEMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMPDIR\",\"value\":\"<home>/tmp\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"},{\"path\":\"<home>/tmp/.escouade\",\"text\":\"Antigravity's temporary folder for this agent (TEMP, TMP), made by Escouade./n\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
     },
     {
       "method": "agent/frames",
@@ -80,21 +80,7 @@
     },
     {
       "method": "agent/frames",
-      "result": {
-        "items": [
-          {
-            "error": null,
-            "interrupted": false,
-            "op": "turn",
-            "usage": {
-              "cache": 0,
-              "cost": 0.0,
-              "input": 6734,
-              "output": 1
-            }
-          }
-        ]
-      }
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"error\":null,\"interrupted\":false,\"op\":\"turn\",\"usage\":{\"cache\":0,\"cost\":0.0,\"input\":6734,\"output\":1}}]}"
     },
     {
       "method": "agent/interrupt",
@@ -119,7 +105,7 @@
     },
     {
       "method": "engine/launch",
-      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"TEMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMPDIR\",\"value\":\"<home>/tmp\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"},{\"path\":\"<home>/tmp/.escouade\",\"text\":\"Antigravity's temporary folder for this agent (TEMP, TMP), made by Escouade./n\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
     },
     {
       "method": "agent/frames",
@@ -184,21 +170,7 @@
     },
     {
       "method": "agent/frames",
-      "result": {
-        "items": [
-          {
-            "error": null,
-            "interrupted": false,
-            "op": "turn",
-            "usage": {
-              "cache": 0,
-              "cost": 0.0,
-              "input": 6752,
-              "output": 1
-            }
-          }
-        ]
-      }
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"error\":null,\"interrupted\":false,\"op\":\"turn\",\"usage\":{\"cache\":0,\"cost\":0.0,\"input\":6752,\"output\":1}}]}"
     },
     {
       "method": "agent/frames",
@@ -240,21 +212,7 @@
     },
     {
       "method": "agent/frames",
-      "result": {
-        "items": [
-          {
-            "error": null,
-            "interrupted": false,
-            "op": "turn",
-            "usage": {
-              "cache": 0,
-              "cost": 0.0,
-              "input": 6833,
-              "output": 4
-            }
-          }
-        ]
-      }
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"error\":null,\"interrupted\":false,\"op\":\"turn\",\"usage\":{\"cache\":0,\"cost\":0.0,\"input\":6833,\"output\":4}}]}"
     },
     {
       "method": "agent/interrupt",
@@ -279,7 +237,7 @@
     },
     {
       "method": "engine/launch",
-      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"TEMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMPDIR\",\"value\":\"<home>/tmp\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"},{\"path\":\"<home>/tmp/.escouade\",\"text\":\"Antigravity's temporary folder for this agent (TEMP, TMP), made by Escouade./n\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
     },
     {
       "method": "agent/frames",
@@ -357,47 +315,15 @@
     },
     {
       "method": "agent/frames",
-      "result": {
-        "items": [
-          {
-            "call": "agy-14dc9b9f-2",
-            "canAlways": true,
-            "description": null,
-            "diff": null,
-            "input": null,
-            "op": "permission",
-            "parent": null,
-            "reason": null,
-            "request": "acp-a-2-agy-a-2",
-            "tool": null
-          }
-        ]
-      }
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"call\":\"agy-14dc9b9f-2\",\"canAlways\":true,\"description\":\"« Autoriser » vaut pour le tour suivant ; une écriture couvre aussi ce qui est sous son chemin. « Toujours » : de même, à chaque retour de cet appel.\",\"diff\":null,\"input\":null,\"op\":\"permission\",\"parent\":null,\"reason\":null,\"request\":\"acp-a-2-agy-a-2\",\"tool\":null}]}"
     },
     {
       "method": "agent/answerPermission",
-      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/escouade-always.json\",\"text\":\"[/\"command(echo hi)/\"]\"},{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\",/n      /\"command(echo hi)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"launch\":{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\",\"--conversation\",\"14dc9b9f-e4d1-4ac7-b333-d0d0f067b0d0\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\",/n      /\"command(echo hi)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]},\"op\":\"relaunch\"},{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"The user allowed the command `echo hi`: do it again now, then go on./\"}}\",\"op\":\"write\"}]}"
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"command(echo hi)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"launch\":{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\",\"--conversation\",\"14dc9b9f-e4d1-4ac7-b333-d0d0f067b0d0\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"TEMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMPDIR\",\"value\":\"<home>/tmp\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"command(echo hi)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"path\":\"<home>/tmp/.escouade\",\"text\":\"Antigravity's temporary folder for this agent (TEMP, TMP), made by Escouade./n\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]},\"op\":\"relaunch\"},{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"The user allowed the command `echo hi`: do it again now, then go on./\"}}\",\"op\":\"write\"}]}"
     },
     {
       "method": "agent/interrupt",
-      "result": {
-        "items": [
-          {
-            "op": "pause"
-          },
-          {
-            "error": null,
-            "interrupted": true,
-            "op": "turn",
-            "usage": {
-              "cache": 0,
-              "cost": 0.0,
-              "input": 6761,
-              "output": 35
-            }
-          }
-        ]
-      }
+      "result": "{\"items\":[{\"op\":\"pause\"},{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"error\":null,\"interrupted\":true,\"op\":\"turn\",\"usage\":{\"cache\":0,\"cost\":0.0,\"input\":6761,\"output\":35}}]}"
     }
   ],
   "04-write-denied-print": [
@@ -416,7 +342,7 @@
     },
     {
       "method": "engine/launch",
-      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"TEMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMPDIR\",\"value\":\"<home>/tmp\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"},{\"path\":\"<home>/tmp/.escouade\",\"text\":\"Antigravity's temporary folder for this agent (TEMP, TMP), made by Escouade./n\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
     },
     {
       "method": "agent/frames",
@@ -557,21 +483,7 @@
     },
     {
       "method": "agent/frames",
-      "result": {
-        "items": [
-          {
-            "error": null,
-            "interrupted": false,
-            "op": "turn",
-            "usage": {
-              "cache": 0,
-              "cost": 0.0,
-              "input": 13869,
-              "output": 547
-            }
-          }
-        ]
-      }
+      "result": "{\"items\":[{\"level\":\"warn\",\"op\":\"notice\",\"text\":\"Antigravity a refusé un appel (write_file) sans dire lequel : aucune carte n’a pu être posée. Redemandez-le si besoin.\"},{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"error\":null,\"interrupted\":false,\"op\":\"turn\",\"usage\":{\"cache\":0,\"cost\":0.0,\"input\":13869,\"output\":547}}]}"
     },
     {
       "method": "agent/interrupt",
@@ -596,7 +508,7 @@
     },
     {
       "method": "engine/launch",
-      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"TEMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMPDIR\",\"value\":\"<home>/tmp\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"},{\"path\":\"<home>/tmp/.escouade\",\"text\":\"Antigravity's temporary folder for this agent (TEMP, TMP), made by Escouade./n\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
     },
     {
       "method": "agent/frames",
@@ -744,47 +656,15 @@
     },
     {
       "method": "agent/frames",
-      "result": {
-        "items": [
-          {
-            "call": "agy-8851eea7-2",
-            "canAlways": true,
-            "description": "Hors du dossier de l’agent",
-            "diff": null,
-            "input": null,
-            "op": "permission",
-            "parent": null,
-            "reason": null,
-            "request": "acp-a-3-agy-a-2",
-            "tool": null
-          }
-        ]
-      }
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"call\":\"agy-8851eea7-2\",\"canAlways\":true,\"description\":\"Hors du dossier de l’agent/n« Autoriser » vaut pour le tour suivant ; une écriture couvre aussi ce qui est sous son chemin. « Toujours » : de même, à chaque retour de cet appel.\",\"diff\":null,\"input\":null,\"op\":\"permission\",\"parent\":null,\"reason\":null,\"request\":\"acp-a-3-agy-a-2\",\"tool\":null}]}"
     },
     {
       "method": "agent/answerPermission",
-      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/escouade-always.json\",\"text\":\"[/\"write_file(C://tmp//esc269//work//b.txt)/\"]\"},{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\",/n      /\"write_file(C://tmp//esc269//work//b.txt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"launch\":{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\",\"--conversation\",\"8851eea7-291e-43fe-8bb4-aa5337407bc4\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\",/n      /\"write_file(C://tmp//esc269//work//b.txt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]},\"op\":\"relaunch\"},{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"The user allowed writing C://tmp//esc269//work//b.txt: do it again now, then go on./\"}}\",\"op\":\"write\"}]}"
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://tmp//esc269//work//b.txt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": [/n      /\"write_file(C://wt//.git)/\",/n      /\"write_file(C://wt//.husky)/\",/n      /\"write_file(C://wt//.githooks)/\",/n      /\"write_file(C://wt//.agents)/\",/n      /\"write_file(C://wt//.gemini)/\",/n      /\"write_file(C://tmp//esc269//work//b.txt//.git)/\",/n      /\"write_file(C://tmp//esc269//work//b.txt//.husky)/\",/n      /\"write_file(C://tmp//esc269//work//b.txt//.githooks)/\",/n      /\"write_file(C://tmp//esc269//work//b.txt//.agents)/\",/n      /\"write_file(C://tmp//esc269//work//b.txt//.gemini)/\"/n    ]/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"launch\":{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\",\"--conversation\",\"8851eea7-291e-43fe-8bb4-aa5337407bc4\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"TEMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMPDIR\",\"value\":\"<home>/tmp\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://tmp//esc269//work//b.txt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": [/n      /\"write_file(C://wt//.git)/\",/n      /\"write_file(C://wt//.husky)/\",/n      /\"write_file(C://wt//.githooks)/\",/n      /\"write_file(C://wt//.agents)/\",/n      /\"write_file(C://wt//.gemini)/\",/n      /\"write_file(C://tmp//esc269//work//b.txt//.git)/\",/n      /\"write_file(C://tmp//esc269//work//b.txt//.husky)/\",/n      /\"write_file(C://tmp//esc269//work//b.txt//.githooks)/\",/n      /\"write_file(C://tmp//esc269//work//b.txt//.agents)/\",/n      /\"write_file(C://tmp//esc269//work//b.txt//.gemini)/\"/n    ]/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"path\":\"<home>/tmp/.escouade\",\"text\":\"Antigravity's temporary folder for this agent (TEMP, TMP), made by Escouade./n\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]},\"op\":\"relaunch\"},{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"The user allowed writing C://tmp//esc269//work//b.txt: do it again now, then go on./\"}}\",\"op\":\"write\"}]}"
     },
     {
       "method": "agent/interrupt",
-      "result": {
-        "items": [
-          {
-            "op": "pause"
-          },
-          {
-            "error": null,
-            "interrupted": true,
-            "op": "turn",
-            "usage": {
-              "cache": 0,
-              "cost": 0.0,
-              "input": 13895,
-              "output": 1180
-            }
-          }
-        ]
-      }
+      "result": "{\"items\":[{\"op\":\"pause\"},{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"error\":null,\"interrupted\":true,\"op\":\"turn\",\"usage\":{\"cache\":0,\"cost\":0.0,\"input\":13895,\"output\":1180}}]}"
     }
   ],
   "06-hook-allow-not-enough": [
@@ -803,7 +683,7 @@
     },
     {
       "method": "engine/launch",
-      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"TEMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMPDIR\",\"value\":\"<home>/tmp\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"},{\"path\":\"<home>/tmp/.escouade\",\"text\":\"Antigravity's temporary folder for this agent (TEMP, TMP), made by Escouade./n\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
     },
     {
       "method": "agent/frames",
@@ -881,47 +761,15 @@
     },
     {
       "method": "agent/frames",
-      "result": {
-        "items": [
-          {
-            "call": "agy-19cb8157-2",
-            "canAlways": true,
-            "description": null,
-            "diff": null,
-            "input": null,
-            "op": "permission",
-            "parent": null,
-            "reason": null,
-            "request": "acp-a-2-agy-a-2",
-            "tool": null
-          }
-        ]
-      }
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"call\":\"agy-19cb8157-2\",\"canAlways\":true,\"description\":\"« Autoriser » vaut pour le tour suivant ; une écriture couvre aussi ce qui est sous son chemin. « Toujours » : de même, à chaque retour de cet appel.\",\"diff\":null,\"input\":null,\"op\":\"permission\",\"parent\":null,\"reason\":null,\"request\":\"acp-a-2-agy-a-2\",\"tool\":null}]}"
     },
     {
       "method": "agent/answerPermission",
-      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/escouade-always.json\",\"text\":\"[/\"command(echo hi2)/\"]\"},{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\",/n      /\"command(echo hi2)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"launch\":{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\",\"--conversation\",\"19cb8157-4136-4723-b980-b8f0ac719d91\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\",/n      /\"command(echo hi2)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]},\"op\":\"relaunch\"},{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"The user allowed the command `echo hi2`: do it again now, then go on./\"}}\",\"op\":\"write\"}]}"
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"command(echo hi2)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"launch\":{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\",\"--conversation\",\"19cb8157-4136-4723-b980-b8f0ac719d91\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"TEMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMPDIR\",\"value\":\"<home>/tmp\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"command(echo hi2)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"path\":\"<home>/tmp/.escouade\",\"text\":\"Antigravity's temporary folder for this agent (TEMP, TMP), made by Escouade./n\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]},\"op\":\"relaunch\"},{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"The user allowed the command `echo hi2`: do it again now, then go on./\"}}\",\"op\":\"write\"}]}"
     },
     {
       "method": "agent/interrupt",
-      "result": {
-        "items": [
-          {
-            "op": "pause"
-          },
-          {
-            "error": null,
-            "interrupted": true,
-            "op": "turn",
-            "usage": {
-              "cache": 0,
-              "cost": 0.0,
-              "input": 6762,
-              "output": 38
-            }
-          }
-        ]
-      }
+      "result": "{\"items\":[{\"op\":\"pause\"},{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"error\":null,\"interrupted\":true,\"op\":\"turn\",\"usage\":{\"cache\":0,\"cost\":0.0,\"input\":6762,\"output\":38}}]}"
     }
   ],
   "07-mcp-denied-print": [
@@ -940,7 +788,7 @@
     },
     {
       "method": "engine/launch",
-      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"TEMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMPDIR\",\"value\":\"<home>/tmp\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"},{\"path\":\"<home>/tmp/.escouade\",\"text\":\"Antigravity's temporary folder for this agent (TEMP, TMP), made by Escouade./n\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
     },
     {
       "method": "agent/frames",
@@ -1076,21 +924,7 @@
     },
     {
       "method": "agent/frames",
-      "result": {
-        "items": [
-          {
-            "error": null,
-            "interrupted": false,
-            "op": "turn",
-            "usage": {
-              "cache": 0,
-              "cost": 0.0,
-              "input": 14553,
-              "output": 78
-            }
-          }
-        ]
-      }
+      "result": "{\"items\":[{\"level\":\"warn\",\"op\":\"notice\",\"text\":\"Antigravity a refusé un appel (mcp) sans dire lequel : aucune carte n’a pu être posée. Redemandez-le si besoin.\"},{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"error\":null,\"interrupted\":false,\"op\":\"turn\",\"usage\":{\"cache\":0,\"cost\":0.0,\"input\":14553,\"output\":78}}]}"
     },
     {
       "method": "agent/interrupt",
@@ -1115,7 +949,7 @@
     },
     {
       "method": "engine/launch",
-      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"TEMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMPDIR\",\"value\":\"<home>/tmp\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"},{\"path\":\"<home>/tmp/.escouade\",\"text\":\"Antigravity's temporary folder for this agent (TEMP, TMP), made by Escouade./n\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
     },
     {
       "method": "agent/frames",
@@ -1292,21 +1126,7 @@
     },
     {
       "method": "agent/frames",
-      "result": {
-        "items": [
-          {
-            "error": null,
-            "interrupted": false,
-            "op": "turn",
-            "usage": {
-              "cache": 0,
-              "cost": 0.0,
-              "input": 22077,
-              "output": 108
-            }
-          }
-        ]
-      }
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"error\":null,\"interrupted\":false,\"op\":\"turn\",\"usage\":{\"cache\":0,\"cost\":0.0,\"input\":22077,\"output\":108}}]}"
     },
     {
       "method": "agent/interrupt",
@@ -1331,7 +1151,7 @@
     },
     {
       "method": "engine/launch",
-      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"TEMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMPDIR\",\"value\":\"<home>/tmp\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"},{\"path\":\"<home>/tmp/.escouade\",\"text\":\"Antigravity's temporary folder for this agent (TEMP, TMP), made by Escouade./n\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
     },
     {
       "method": "agent/frames",
@@ -1450,21 +1270,7 @@
     },
     {
       "method": "agent/frames",
-      "result": {
-        "items": [
-          {
-            "error": null,
-            "interrupted": false,
-            "op": "turn",
-            "usage": {
-              "cache": 0,
-              "cost": 0.0,
-              "input": 14793,
-              "output": 623
-            }
-          }
-        ]
-      }
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"error\":null,\"interrupted\":false,\"op\":\"turn\",\"usage\":{\"cache\":0,\"cost\":0.0,\"input\":14793,\"output\":623}}]}"
     },
     {
       "method": "agent/interrupt",
@@ -1489,7 +1295,7 @@
     },
     {
       "method": "engine/launch",
-      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"TEMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMPDIR\",\"value\":\"<home>/tmp\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"},{\"path\":\"<home>/tmp/.escouade\",\"text\":\"Antigravity's temporary folder for this agent (TEMP, TMP), made by Escouade./n\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
     },
     {
       "method": "agent/frames",
@@ -1600,21 +1406,7 @@
     },
     {
       "method": "agent/frames",
-      "result": {
-        "items": [
-          {
-            "error": null,
-            "interrupted": false,
-            "op": "turn",
-            "usage": {
-              "cache": 0,
-              "cost": 0.0,
-              "input": 14511,
-              "output": 36
-            }
-          }
-        ]
-      }
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"error\":null,\"interrupted\":false,\"op\":\"turn\",\"usage\":{\"cache\":0,\"cost\":0.0,\"input\":14511,\"output\":36}}]}"
     },
     {
       "method": "agent/interrupt",
@@ -1639,7 +1431,7 @@
     },
     {
       "method": "engine/launch",
-      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\",\"--mode\",\"plan\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\",\"--mode\",\"plan\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"TEMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMPDIR\",\"value\":\"<home>/tmp\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"},{\"path\":\"<home>/tmp/.escouade\",\"text\":\"Antigravity's temporary folder for this agent (TEMP, TMP), made by Escouade./n\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
     },
     {
       "method": "agent/frames",
@@ -1848,49 +1640,15 @@
     },
     {
       "method": "agent/frames",
-      "result": {
-        "items": [
-          {
-            "call": "acp-a-3-agy-a-plan-1",
-            "canAlways": true,
-            "description": null,
-            "diff": null,
-            "input": {
-              "plan": "# Le plan"
-            },
-            "op": "permission",
-            "parent": null,
-            "reason": null,
-            "request": "acp-a-3-agy-a-plan-1",
-            "tool": "ExitPlanMode"
-          }
-        ]
-      }
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"call\":\"acp-a-3-agy-a-plan-1\",\"canAlways\":true,\"description\":null,\"diff\":null,\"input\":{\"plan\":\"# Le plan\"},\"op\":\"permission\",\"parent\":null,\"reason\":null,\"request\":\"acp-a-3-agy-a-plan-1\",\"tool\":\"ExitPlanMode\"}]}"
     },
     {
       "method": "agent/answerPermission",
-      "result": "{\"items\":[{\"mode\":\"acceptEdits\",\"op\":\"mode\"},{\"launch\":{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\",\"--mode\",\"accept-edits\",\"--conversation\",\"fb7ae382-cc7b-4e20-96f2-042fc23ad3db\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"command(git add)/\",/n      /\"command(git commit)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]},\"op\":\"relaunch\"},{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"The plan is approved: carry it out now./\"}}\",\"op\":\"write\"}]}"
+      "result": "{\"items\":[{\"mode\":\"acceptEdits\",\"op\":\"mode\"},{\"launch\":{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\",\"--conversation\",\"fb7ae382-cc7b-4e20-96f2-042fc23ad3db\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"TEMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMPDIR\",\"value\":\"<home>/tmp\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"path\":\"<home>/tmp/.escouade\",\"text\":\"Antigravity's temporary folder for this agent (TEMP, TMP), made by Escouade./n\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]},\"op\":\"relaunch\"},{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"The plan is approved: carry it out now./\"}}\",\"op\":\"write\"}]}"
     },
     {
       "method": "agent/interrupt",
-      "result": {
-        "items": [
-          {
-            "op": "pause"
-          },
-          {
-            "error": null,
-            "interrupted": true,
-            "op": "turn",
-            "usage": {
-              "cache": 0,
-              "cost": 0.0,
-              "input": 16402,
-              "output": 448
-            }
-          }
-        ]
-      }
+      "result": "{\"items\":[{\"op\":\"pause\"},{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"error\":null,\"interrupted\":true,\"op\":\"turn\",\"usage\":{\"cache\":0,\"cost\":0.0,\"input\":16402,\"output\":448}}]}"
     }
   ],
   "12-subagent-tasks": [
@@ -1909,7 +1667,7 @@
     },
     {
       "method": "engine/launch",
-      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"TEMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMPDIR\",\"value\":\"<home>/tmp\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"},{\"path\":\"<home>/tmp/.escouade\",\"text\":\"Antigravity's temporary folder for this agent (TEMP, TMP), made by Escouade./n\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
     },
     {
       "method": "agent/frames",
@@ -2288,21 +2046,7 @@
     },
     {
       "method": "agent/frames",
-      "result": {
-        "items": [
-          {
-            "error": null,
-            "interrupted": false,
-            "op": "turn",
-            "usage": {
-              "cache": 0,
-              "cost": 0.0,
-              "input": 41193,
-              "output": 2024
-            }
-          }
-        ]
-      }
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"error\":null,\"interrupted\":false,\"op\":\"turn\",\"usage\":{\"cache\":0,\"cost\":0.0,\"input\":41193,\"output\":2024}}]}"
     },
     {
       "method": "agent/interrupt",
@@ -2327,7 +2071,7 @@
     },
     {
       "method": "engine/launch",
-      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
+      "result": "{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"TEMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMPDIR\",\"value\":\"<home>/tmp\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"path\":\"<home>/.gemini/config/mcp_config.json\",\"text\":\"{/n  /\"mcpServers/\": {}/n}\"},{\"path\":\"<home>/tmp/.escouade\",\"text\":\"Antigravity's temporary folder for this agent (TEMP, TMP), made by Escouade./n\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]}"
     },
     {
       "method": "agent/frames",
@@ -2405,26 +2149,11 @@
     },
     {
       "method": "agent/frames",
-      "result": {
-        "items": [
-          {
-            "call": "agy-01f902d3-2",
-            "canAlways": true,
-            "description": null,
-            "diff": null,
-            "input": null,
-            "op": "permission",
-            "parent": null,
-            "reason": null,
-            "request": "acp-a-2-agy-a-2",
-            "tool": null
-          }
-        ]
-      }
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"call\":\"agy-01f902d3-2\",\"canAlways\":true,\"description\":\"« Autoriser » vaut pour le tour suivant ; une écriture couvre aussi ce qui est sous son chemin. « Toujours » : de même, à chaque retour de cet appel.\",\"diff\":null,\"input\":null,\"op\":\"permission\",\"parent\":null,\"reason\":null,\"request\":\"acp-a-2-agy-a-2\",\"tool\":null}]}"
     },
     {
       "method": "agent/answerPermission",
-      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/escouade-always.json\",\"text\":\"[/\"command(echo hi6)/\"]\"},{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\",/n      /\"command(echo hi6)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"},{\"launch\":{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\",\"--conversation\",\"01f902d3-93de-4e28-aefb-c37184b99f66\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"write_file(C://wt)/\",/n      /\"command(echo hi6)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  }/n}\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]},\"op\":\"relaunch\"},{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"The user allowed the command `echo hi6`: do it again now, then go on./\"}}\",\"op\":\"write\"}]}"
+      "result": "{\"items\":[{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"command(echo hi6)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"launch\":{\"args\":[\"-p=\",\"--input-format\",\"stream-json\",\"--output-format\",\"stream-json\",\"--model\",\"gemini-3.8-flash\",\"--effort\",\"high\",\"--conversation\",\"01f902d3-93de-4e28-aefb-c37184b99f66\"],\"env\":[{\"name\":\"AGY_CLI_DISABLE_AUTO_UPDATE\",\"value\":\"1\"},{\"name\":\"TEMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMP\",\"value\":\"<home>/tmp\"},{\"name\":\"TMPDIR\",\"value\":\"<home>/tmp\"},{\"name\":\"USERPROFILE\",\"value\":\"<home>\"},{\"name\":\"HOME\",\"value\":\"<home>\"}],\"fenceApplied\":false,\"fenceByClient\":false,\"files\":[{\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [/n      /\"command(echo hi6)/\"/n    ],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"path\":\"<home>/tmp/.escouade\",\"text\":\"Antigravity's temporary folder for this agent (TEMP, TMP), made by Escouade./n\"}],\"readOnly\":false,\"removeEnv\":[\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"ESCOUADE_AGY_HOME\"],\"trust\":[],\"writes\":[]},\"op\":\"relaunch\"},{\"line\":\"{/\"event/\":/\"user/\",/\"message/\":{/\"content/\":/\"The user allowed the command `echo hi6`: do it again now, then go on./\"}}\",\"op\":\"write\"}]}"
     },
     {
       "method": "agent/frames",
@@ -2458,24 +2187,7 @@
     },
     {
       "method": "agent/interrupt",
-      "result": {
-        "items": [
-          {
-            "op": "pause"
-          },
-          {
-            "error": null,
-            "interrupted": true,
-            "op": "turn",
-            "usage": {
-              "cache": 0,
-              "cost": 0.0,
-              "input": 7190,
-              "output": 37
-            }
-          }
-        ]
-      }
+      "result": "{\"items\":[{\"op\":\"pause\"},{\"op\":\"file\",\"path\":\"<home>/.gemini/antigravity-cli/settings.json\",\"text\":\"{/n  /\"permissions/\": {/n    /\"allow/\": [],/n    /\"ask/\": [],/n    /\"deny/\": []/n  },/n  /\"toolPermission/\": /\"request-review/\"/n}\"},{\"error\":null,\"interrupted\":true,\"op\":\"turn\",\"usage\":{\"cache\":0,\"cost\":0.0,\"input\":7190,\"output\":37}}]}"
     }
   ]
 }

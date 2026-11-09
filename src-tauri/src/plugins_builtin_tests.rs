@@ -84,6 +84,24 @@ fn a_plugin_of_the_registry_runs_on_the_app_that_gives_it() {
     assert_eq!(v.manifest.unwrap().escouade.min, "2.1.2");
 }
 
+/// A pre-release of the app (2.2.0-beta.1) gives its plugins all the same: their version is the app's, pre-release
+/// and all, their `escouade.min` its numbers alone, which is all a manifest takes there.
+#[test]
+fn a_pre_release_of_the_app_gives_its_plugins() {
+    let dir = base("beta");
+    let plugins = Plugins::load_in(
+        DataDir::new(dir.join("data")),
+        "2.2.0-beta.1",
+        dir.join("app"),
+    );
+    for id in [ID, "dev.escouade.linear"] {
+        let v = plugins.get(id, Lang::En).expect("the registry gives it");
+        assert!(v.manifest.is_some(), "{id}: {:?}", v.state);
+        assert_eq!(v.version, "2.2.0-beta.1", "{id}");
+        assert_eq!(v.manifest.unwrap().escouade.min, "2.2.0", "{id}");
+    }
+}
+
 /// The sorting is by the origin and the hand, never by the id: a reserved id of anyone else's hand is refused, and
 /// the app's programs are the app's alone.
 #[test]
@@ -210,12 +228,23 @@ fn every_folder_of_the_app_s_plugins_has_what_it_needs_and_is_in_the_registry() 
         let name = dir.display();
         let text = std::fs::read_to_string(dir.join(manifest::FILE))
             .unwrap_or_else(|_| panic!("{name}: no {}", manifest::FILE));
-        let readme = std::fs::read_to_string(dir.join("README.md"))
-            .unwrap_or_else(|_| panic!("{name}: no README.md"));
-        assert!(
-            readme.lines().count() > 5,
-            "{name}: a README that says something"
-        );
+        // Its page: README.md, or one by language (README.fr.md and README.en.md), as the store takes them.
+        let pages: Vec<String> = match std::fs::read_to_string(dir.join("README.md")) {
+            Ok(one) => vec![one],
+            Err(_) => ["README.fr.md", "README.en.md"]
+                .iter()
+                .map(|f| {
+                    std::fs::read_to_string(dir.join(f))
+                        .unwrap_or_else(|_| panic!("{name}: no README.md, nor {f}"))
+                })
+                .collect(),
+        };
+        for readme in &pages {
+            assert!(
+                readme.lines().count() > 5,
+                "{name}: a README that says something"
+            );
+        }
         let m = manifest::read(&text, Hand::Builtin)
             .manifest
             .unwrap_or_else(|p| panic!("{name}: {p:?}"));

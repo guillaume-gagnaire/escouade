@@ -2,7 +2,7 @@
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.team-rules",
   "name": { "fr": "Règles de l'équipe", "en": "Team rules" },
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": {
     "fr": "Autorise ou refuse les commandes des agents selon les règles de l'équipe, écrites dans rules.json.",
     "en": "Allows or denies the agents' commands by the team's rules, written in rules.json."
@@ -13,5 +13,6 @@
   "escouade": { "api": "1", "min": "2.2.0" },
   "run": { "js": "dist/plugin.mjs" },
   "activation": ["event:request.permission"],
-  "permissions": { "decide": true }
+  "permissions": { "decide": true },
+  "store": { "docs": "docs" }
 }

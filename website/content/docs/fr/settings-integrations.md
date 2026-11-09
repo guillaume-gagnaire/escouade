@@ -1,25 +1,27 @@
-# Réglages : Intégrations
+# Réglages : Services connectés et Tickets importés
 
-L’onglet « Intégrations » des réglages connecte Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues et Azure Boards, lie chaque projet à une source de tickets, et règle ce qu’Escouade écrit sur les tickets externes et ce qu’elle importe toute seule.
+La page « Services connectés » connecte les hébergeurs de code et les comptes de Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues et Azure Boards, et règle la synchronisation et l’import automatique, pour tous les projets.
 
-## Ouvrir l’onglet
+La page « Tickets importés » de chaque projet le lie à ses sources et fait correspondre leurs statuts. Un point ambre sur « Services connectés », dans la barre des réglages, dit un jeton expiré ou illisible.
 
-Ouvre les réglages avec `Ctrl+,` (`⌘,` sous macOS), puis choisis « Intégrations ». Les tickets importés et leur synchronisation sont expliqués dans [les intégrations](integrations).
+## Ouvrir les pages
 
-L’onglet a deux parties, chacune avec son titre et une ligne qui dit à quoi elle sert :
+Ouvre les réglages avec `Ctrl+,` (`⌘,` sous macOS), puis choisis « Services connectés », ou, sous « Projets », la page « Tickets importés » du projet. Les tickets importés et leur synchronisation sont expliqués dans [les intégrations](integrations).
+
+Services connectés a deux parties, chacune avec son titre et une ligne qui dit à quoi elle sert :
 
 - **« Hébergeurs de code »** : « PR et MR des agents, CI et déploiements : un compte par instance, que chaque projet trouve par son remote. » (voir [plus bas](#hebergeurs-de-code)) ;
-- **« Sources du Kanban »** : « Import et synchro des tickets : un ticket importé suit sa colonne là-bas (état, commentaires). » Tout le reste de l’onglet est sous elle.
+- **« Sources du Kanban »** : « Import et synchro des tickets : un ticket importé suit sa colonne là-bas (état, commentaires). » Le reste de la page est sous elle.
 
 Un hébergeur n’est pas une source : connecter GitLab ou GitHub comme hébergeur sert aux PR et à la CI ; ses tickets ne viennent dans le Kanban qu’une fois une source liée au projet. GitHub Issues, GitLab Issues et Azure Boards reprennent pour cela le compte de leur hébergeur, sans rien redemander.
 
 Les sources réunissent trois sortes de réglages :
 
-- « Comptes connectés » est commun à toute l’app et s’enregistre tout de suite, sans « Enregistrer ».
-- « Sources liées à … » et « Correspondance des statuts » sont propres au projet sélectionné dans la barre « Projet » en haut de la fenêtre. Ils restent dans un brouillon jusqu’à « Enregistrer » ; « Annuler » les abandonne.
-- « Synchronisation » et « Import automatique » sont communs à tous les projets, et passent aussi par « Enregistrer ».
+- « Comptes connectés » est commun à toute l’app et s’enregistre tout de suite.
+- « Sources liées à … » et « Correspondance des statuts » sont dans la page « Tickets importés » de chaque projet. Ils s’enregistrent au geste.
+- « Synchronisation » et « Import automatique » sont communs à tous les projets, et s’enregistrent au geste.
 
-Sans projet ouvert, l’onglet affiche « Aucun projet ouvert. ».
+Sans projet ouvert, « Tickets importés » affiche « Aucun projet ouvert. ».
 
 ## Comptes connectés
 
@@ -134,7 +136,7 @@ Quand tu lies une source, Escouade préremplit les menus d’après le nom des s
 
 L’interrupteur « Commenter » d’une colonne ajoute un commentaire sur le ticket externe quand un ticket arrive dans la colonne. Il vaut pour toutes les sources du projet. Par défaut, il est activé pour « À tester » et « Terminé », désactivé pour « À faire » et « En cours ».
 
-Le commentaire est écrit dans la langue de « Langue des textes rédigés par les agents » (onglet [« Application »](settings-application)) :
+Le commentaire est écrit dans la langue de « Langue des textes rédigés par les agents » (page [« Général »](settings-application)) :
 
 | Colonne | Commentaire |
 |---|---|
@@ -169,7 +171,7 @@ L’import automatique n’importe un ticket qu’une fois par projet : un ticke
 
 ## Hébergeurs de code
 
-La première partie de l’onglet connecte les [hébergeurs de code](code-hosts) : GitHub, GitLab, Bitbucket Cloud, Gitea, Forgejo et Azure DevOps. Ils servent aux pull requests (merge requests sur GitLab) des agents et des tickets, à la CI et aux déploiements, pas aux tickets eux-mêmes. Un compte par instance (github.com, gitlab.com, celle de ton entreprise…) ; chaque projet trouve le sien par son remote. « Connecter un hébergeur… » demande l’hébergeur, l’adresse (vide : son instance publique) et un jeton (vide : celui de sa CLI, `gh`, `glab` ou `az`) ; un remote sans compte propose « Connecter » suivi de son hôte.
+La première partie de « Services connectés » connecte les [hébergeurs de code](code-hosts) : GitHub, GitLab, Bitbucket Cloud, Gitea, Forgejo et Azure DevOps. Ils servent aux pull requests (merge requests sur GitLab) des agents et des tickets, à la CI et aux déploiements, pas aux tickets eux-mêmes. Un compte par instance (github.com, gitlab.com, celle de ton entreprise…) ; chaque projet trouve le sien par son remote. « Connecter un hébergeur… » demande l’hébergeur, l’adresse (vide : son instance publique) et un jeton (vide : celui de sa CLI, `gh`, `glab` ou `az`) ; un remote sans compte propose « Connecter » suivi de son hôte.
 
 Chaque instance dit sur sa ligne si elle sert aussi de source du Kanban :
 

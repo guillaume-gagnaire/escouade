@@ -1,9 +1,9 @@
 ---
 title: "Livraison et mises à jour"
 subject: "Introduction"
-sources: ["docs/SPEC.md",".github/workflows/release.yml",".github/workflows/discord.yml"]
-tickets: []
-decisions: []
+sources: ["docs/SPEC.md",".github/workflows/release.yml",".github/workflows/discord.yml","scripts/beta-channel.mjs","src-tauri/src/updates.rs"]
+tickets: ["ESC-374","ESC-380"]
+decisions: [114]
 compared: null
 ---
 
@@ -25,7 +25,17 @@ L'interface est en français et en anglais (voir *Langues*).
 
 - L'app cherche une nouvelle version sur GitHub Releases (`guillaume-gagnaire/escouade`) 8 s après son lancement, puis toutes les 5 minutes. « Rechercher une mise à jour » vérifie à la demande.
 - Une version trouvée est téléchargée tout de suite en arrière-plan (15 min au plus) et sa signature vérifiée. Ses octets sont gardés jusqu'à l'installation. Une seule version est prête à la fois : une plus récente remplace l'autre, et une version retirée du serveur n'est jamais installée.
+- Ce qui est lu dépend de « Recevoir les versions bêta » (voir *Versions bêta*) : décochée, `latest.json` de la dernière release seul ; cochée, `beta.json` de la même release d'abord, puis `latest.json` quand il manque. L'adresse de `beta.json` se déduit de celle de la configuration (dernier segment remplacé).
 - La vérification et le téléchargement envoient `User-Agent: Escouade/<version> (<système>; <architecture>)` (Windows, macOS ou Linux), jamais celui d'un navigateur. Escouade ne déguise pas son trafic pour passer une règle de sécurité d'entreprise : elle s'annonce pour qu'on puisse l'autoriser.
+
+### Versions bêta
+
+- Une bêta porte la version qu'elle prépare suivie de `-beta.N` (tag `v2.2.0-beta.1`) ; l'ordre est celui de semver (`beta.10` après `beta.9`, une bêta avant sa version).
+- « Recevoir les versions bêta » (Réglages › À propos), **décochée par défaut** : décochée, une version distante n'est proposée que plus récente et sans suffixe de préversion. Une app sur une bêta reste dessus jusqu'à la version stable qui la suit (2.2.0 après 2.2.0-beta.3), jamais une plus ancienne (2.1.5). Cochée, toute version plus récente est proposée, bêta comprise.
+- `latest.json` de la dernière release ne contient jamais une bêta : les versions sans l'option (2.1.3 et avant), qui ne lisent que lui, ne la voient jamais.
+- `beta.json`, toujours dans la dernière release stable, contient la plus récente des versions, stable ou bêta (voir *CI/CD*).
+- L'option s'enregistre aussitôt, comme tout réglage (voir *Réglages*) ; la cocher lance une vérification comme « Rechercher une mise à jour », la décocher une vérification silencieuse qui retire une bêta proposée.
+- Une app sur une bêta le dit après sa version, dans Réglages › À propos et en bas de la colonne des onglets (« Escouade 2.2.0-beta.1 (bêta) ») ; une mise à jour bêta aussi, dans la barre de statut, l'onglet et la modale (« Escouade 2.2.0-beta.2 (bêta) est prête »).
 
 ### Échecs
 
@@ -89,10 +99,12 @@ Sur GitHub Actions :
 - `ci.yml` (push, PR) : lint, typecheck et tests du frontend, `cargo fmt --check`, `clippy`, `cargo test`, build de vérification, sous Windows et sous macOS ; les tests de bout en bout sous Windows seulement.
 - `release.yml` (tag `v*`) : la release GitHub est créée en brouillon (une release déjà là pour le tag y repasse ; un tag avec un `-` est une pré-version). Les builds Windows, macOS et Linux (AppImage et `.deb`) déposent chacun leurs fichiers dans ce brouillon : la signature des artefacts de mise à jour (secret `TAURI_SIGNING_PRIVATE_KEY`), l'installeur, le `.dmg`, l'AppImage, le `.deb`, et `latest.json`, que lit la mise à jour.
 - Un dernier job vérifie `latest.json` : la version du tag ; les plateformes `windows-x86_64`, `darwin-aarch64`, `darwin-x86_64` et `linux-x86_64` ; la signature et le lien de chaque entrée ; chaque fichier désigné, présent et entier. Puis il publie la release (« latest », sauf une pré-version) et relit ce que lit la mise à jour. La mise à jour ne voit donc jamais une release à moitié construite.
+- **Canal bêta** (`scripts/beta-channel.mjs`, testé) : une bêta publiée dépose son `latest.json` (avec ses notes) en `beta.json` dans la release « latest », à la place de celui qui y est, sauf s'il porte une version plus récente. Une version stable, avant d'être marquée « latest », met dans sa release son propre `latest.json` en `beta.json`, sauf si le `beta.json` de la release « latest » actuelle est plus récent (une bêta de la version suivante en cours) : elle reprend alors celui-là. Après la publication, le contrôle relit aussi `…/releases/latest/download/beta.json` (la version du tag ou une plus récente) et vérifie que `latest.json` n'y porte pas de préversion.
 - Un build raté laisse le brouillon, et « latest » reste la précédente ; relancer les jobs ratés est sans danger.
 - **Notes de version**, tirées des deux changelogs, qui ont chacun une section par version :
   - celles de la release GitHub : la section de la version dans `CHANGELOG.en.md`, en anglais ;
   - celles de `latest.json`, que montre la modale « Escouade X est prête » : sa section de `CHANGELOG.md`, en français.
+  - une préversion sans section à elle prend celle de `## [Non publié]` (`## [Unreleased]` en anglais) : une bêta sort sans qu'on renomme la section.
 - **Discord** : une fois la release publiée, le job `announce` poste ses notes sur les deux salons du Discord d'Escouade, chacun à part (un salon qui refuse n'empêche pas l'autre) : le salon français (section de `CHANGELOG.md`, webhook du secret `DISCORD_WEBHOOK_URL`) et le salon anglais (section de `CHANGELOG.en.md`, `DISCORD_WEBHOOK_URL_EN`). Rien pour une pré-version ni pour un build raté. `discord.yml` se lance aussi à la main pour une version déjà publiée (`gh workflow run discord.yml -f tag=vX.Y.Z`, `-f lang=fr` ou `en` pour un seul salon) ; un salon refusé se reposte seul en relançant le job raté.
 - Les commits sont atomiques, sur `main`, sans push.
 
@@ -100,6 +112,7 @@ Sur GitHub Actions :
 
 - « Installer les mises à jour automatiquement » : activé par défaut.
 - « Rechercher une mise à jour » : vérifie à la demande.
+- « Recevoir les versions bêta » : désactivé par défaut, enregistré aussitôt (voir *Versions bêta*).
 - Le proxy des mises à jour est celui de Réglages › Réseau (voir *Réglages*).
 
 ## Limites

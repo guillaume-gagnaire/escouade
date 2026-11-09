@@ -304,6 +304,23 @@ pub const BUILTIN_HARNESSES: &[BuiltinHarness] = &[
     },
 ];
 
+/// The plugin of the app that a harness of the core goes through (INT-10), None for one a plugin describes (it is in the
+/// registry only while its plugin is on).
+pub fn plugin_of_engine(engine: EngineId) -> Option<&'static str> {
+    use super::builtin as b;
+    Some(match engine {
+        EngineId::CLAUDE => b::CLAUDE,
+        EngineId::CODEX => b::CODEX,
+        EngineId::COPILOT => b::COPILOT,
+        EngineId::CURSOR => b::CURSOR,
+        EngineId::OPENCODE => b::OPENCODE,
+        EngineId::VIBE => b::MISTRAL,
+        EngineId::AGY => b::ANTIGRAVITY,
+        EngineId::GEMINI => b::GEMINI,
+        _ => return None,
+    })
+}
+
 /// The harnesses of the plugins the app gives that are on, by their plugin, each made once for each runtime (by its
 /// address: a test makes several).
 /// The plugins of the core's harnesses the user uninstalled (`Plugins::uninstalled`): an agent of theirs says so, and that the

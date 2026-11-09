@@ -73,7 +73,7 @@ Keys are in English, in `snake_case` (lowercase words joined by `_`), sorted int
 
 ### The version key
 
-`version` is the number of the file’s format, a whole number: `1` today. Escouade writes it at the top of every file it creates. It is not required: without it, the file is read as version 1, and the “.escouade.yml” group of Settings › Projects says so (“no “version” key: read as version 1”). A value that is not a whole number of at least 1 (`one`, `'1'`, `0`) is told the same way, and the file is read as version 1.
+`version` is the number of the file’s format, a whole number: `1` today. Escouade writes it at the top of every file it creates. It is not required: without it, the file is read as version 1, and the “Shared settings” group of Settings › Projects › Team says so (“no “version” key: read as version 1”). A value that is not a whole number of at least 1 (`one`, `'1'`, `0`) is told the same way, and the file is read as version 1.
 
 ### An older or a newer version
 
@@ -126,7 +126,7 @@ The harness of the project’s new agents and tickets that don’t choose anothe
 |---|---|---|---|---|
 | `private` | Boolean | `true`, `false` | each machine’s setting | `private: true` |
 
-“Private project”: the agents of the other projects don’t see it through Escouade’s MCP server and don’t read its files (see [Settings › Projects](settings-projects)). The repository is sensitive for the whole team, hence its place in the file; the accounts reserved to the project stay each machine’s own.
+“Private project”: the agents of the other projects don’t see it through Escouade’s MCP server and don’t read its files (see [Settings › Projects › Privacy](settings-projects)). The repository is sensitive for the whole team, hence its place in the file; the accounts reserved to the project stay each machine’s own.
 
 The file can make a project private, never public again: on a machine where the project is private, `private: false` isn’t applied, the setting becomes a local setting of this machine and a warning says so (“private: false ignored: this project is private on this machine, untick “Private project” to make it public”). To make it public, untick “Private project” yourself.
 
@@ -197,7 +197,7 @@ The project’s “Launch” commands (dev servers, watchers), each in its own t
 - `tests_before_approve`: “Re-run the tests first” before a ticket is approved; without a test command, nothing runs again.
 - `on_conflict`: “On conflict” at the merge: ask you (`ask`), let the agent resolve it (`agent`), or give up (`abort`).
 - `remove_worktree`: “Delete the worktree of a done or deleted ticket”.
-- `model`, `effort`, `mode`: the model, effort and mode of the ticket agents (Settings › Kanban, group “Agents”). An empty value (`model: ''`) leaves the account’s. `bypassPermissions` is never in the file: a repository doesn’t lift the permissions of whoever opens it. Read, it is refused (“bypassPermissions is not shared: it is set on each machine”); set in the window, it stays a local setting, which the export doesn’t write.
+- `model`, `effort`, `mode`: the model, effort and mode of the ticket agents (Settings › Projects › Kanban, group “Agents”). An empty value (`model: ''`) leaves the account’s. `bypassPermissions` is never in the file: a repository doesn’t lift the permissions of whoever opens it. Read, it is refused (“bypassPermissions is not shared: it is set on each machine”); set in the window, it stays a local setting, which the export doesn’t write.
 
 ### workflows
 
@@ -205,7 +205,7 @@ The project’s “Launch” commands (dev servers, watchers), each in its own t
 |---|---|---|---|---|
 | `workflows.enabled` | Boolean | `true`, `false` | `true` | `enabled: false` |
 
-- `enabled`: `false` stands for “No workflow for this project” (Settings › Projects › Workflow): Escouade neither reads nor writes the project’s [workflows](workflows) and follows no agent in them, on every machine that reads the file; `.escouade/workflows/` is left as it is.
+- `enabled`: `false` stands for “No workflow for this project” (Settings › Projects › Kanban › Workflow): Escouade neither reads nor writes the project’s [workflows](workflows) and follows no agent in them, on every machine that reads the file; `.escouade/workflows/` is left as it is.
 
 ### plugins
 
@@ -223,7 +223,7 @@ plugins:
     channel: '#team-api'
 ```
 
-The plugins the project **proposes**, like VS Code’s recommended extensions. When the project opens, Escouade says how many your machine lacks; at the head of Settings › Projects, a band names them, each with what it asks for and “See in the store”, which opens its page in the view Plugins. Nothing is installed nor switched on by itself: a cloned repository must not be able to run a program. Installing stays your gesture, plugin by plugin, after the window that shows its permissions. An installed plugin leaves the band; “Not for this project” silences it on this machine, and it comes back only for a plugin the file would propose later. An id that is none (`Slack`) is told and ignored.
+The plugins the project **proposes**, like VS Code’s recommended extensions. When the project opens, Escouade says how many your machine lacks; at the head of Settings › Projects › Project, a band names them, each with what it asks for and “See in the store”, which opens its page in the view Plugins. Nothing is installed nor switched on by itself: a cloned repository must not be able to run a program. Installing stays your gesture, plugin by plugin, after the window that shows its permissions. An installed plugin leaves the band; “Not for this project” silences it on this machine, and it comes back only for a plugin the file would propose later. An id that is none (`Slack`) is told and ignored.
 
 Under `plugins.<id>`, the settings the project gives the plugin: those it declares (`contributes.settings`), with a value of their type, go before those of its page when it asks for them for this project (`settings/get` with the project, see [the plugins’ API](plugins/api)). A key it does not declare, or one of its secrets, is never given to it: **never a secret in this file**, they go to the system’s keychain, through its page. A private project gives nothing to a plugin not switched on in it.
 
@@ -321,15 +321,15 @@ The file is read again as soon as it changes: after a `git pull`, a branch switc
 
 A cloned repository can come from anyone. The file’s commands (`worktrees.setup`, `worktrees.teardown`, `launch` and `board.test_command`) never run before you approve them, and reading the file runs none. Until you approve them, the project keeps its own, and the Kanban shows “The commands of .escouade.yml wait for your approval: they don’t run yet.”.
 
-“Read them” opens Settings › Projects, group “.escouade.yml”, which shows each command in full, with its shell and folder. “Trust these commands” applies them. If the file changes them later (a command, its shell or folder, a command added or removed), Escouade asks for your approval again; until then, the ones you approved stay in place. Commands the same as those the project already has need no approval.
+“Read them” opens Settings › Projects › Team, group “Shared settings”, which shows each command in full, with its shell and folder. “Trust these commands” applies them. If the file changes them later (a command, its shell or folder, a command added or removed), Escouade asks for your approval again; until then, the ones you approved stay in place. Commands the same as those the project already has need no approval.
 
 > [!WARNING]
 > Read each command before you trust it: the setup runs in every new worktree, before its agent’s first message.
 
 ## Marked settings
 
-In Settings › Projects and Settings › Kanban, a setting the file defines says so under its label: “Defined by .escouade.yml”. Changing it and saving makes it a local setting of this machine, which goes before the file, even when the file is read again: “Local setting of this machine: it goes before .escouade.yml.”. Under the setting, “Write into .escouade.yml” puts your value into the file (to commit), and “Use the file’s value” hands it back to the file.
+In the pages of a project in Settings › Projects, a setting the file defines says so under its label: “Defined by .escouade.yml”. Changing it makes it a local setting of this machine, which goes before the file, even when the file is read again: “Local setting of this machine: it goes before .escouade.yml.”. Under the setting, “Write into .escouade.yml” puts your value into the file (to commit), and “Use the file’s value” hands it back to the file.
 
 ## Export a project’s settings
 
-To share a project that is already set up, Settings › Projects › “Export to .escouade.yml” writes the file at the root of the repository from the project’s saved settings: every key, in the order of the complete example (a target branch still empty is left out, and so is the `bypassPermissions` mode). An existing file keeps its comments, the order of its keys and the keys Escouade doesn’t know; a new file starts with the schema line and `version: 1`. The exported commands are the project’s own: they need no approval. Then commit the file.
+To share a project that is already set up, Settings › Projects › Team › “Export to .escouade.yml” writes the file at the root of the repository from the project’s saved settings: every key, in the order of the complete example (a target branch still empty is left out, and so is the `bypassPermissions` mode). An existing file keeps its comments, the order of its keys and the keys Escouade doesn’t know; a new file starts with the schema line and `version: 1`. The exported commands are the project’s own: they need no approval. Then commit the file.

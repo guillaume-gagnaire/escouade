@@ -1,5 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { cardEnvironments, envState, FOLLOWED_FOR, lanes, merged, notInProduction, shortSha } from './environments';
+import {
+  arrange,
+  cardEnvironments,
+  envState,
+  FOLLOWED_FOR,
+  hiddenWhy,
+  isShown,
+  lanes,
+  merged,
+  moveBefore,
+  moveBy,
+  NO_PREFS,
+  notInProduction,
+  ordered,
+  parsePrefs,
+  setShown,
+  shortSha,
+} from './environments';
 import type { Environment } from './types';
 import { ticket } from '../test/ipc';
 
@@ -55,5 +72,55 @@ describe('environments (ESC-67)', () => {
     expect(envState({ ...base, unsupported: true })).toBe('unsupported');
     expect(envState({ ...base, environments: [env('staging')] })).toBe('ready');
     expect(shortSha('0123456789')).toBe('0123456');
+  });
+});
+
+describe('the environments shown (ESC-390)', () => {
+  const ran = (name: string, production = false): Environment => ({
+    ...env(name, production),
+    running: { environment: name, state: 'success', url: null },
+  });
+  const ENVS = [env('github-pages'), ran('npm'), ran('staging'), ran('production', true)];
+
+  it('shows by default those where a deployment succeeded, and says the others never ran', () => {
+    const a = arrange(ENVS, NO_PREFS);
+    expect(a.shown.map((e) => e.name)).toEqual(['npm', 'staging', 'production']);
+    expect(a.neverRan.map((e) => e.name)).toEqual(['github-pages']);
+    expect(hiddenWhy(ENVS[0], NO_PREFS)).toBe('neverRan');
+    expect(hiddenWhy(ENVS[1], NO_PREFS)).toBeNull();
+  });
+
+  it('keeps only the choices that differ from the default', () => {
+    let p = setShown(NO_PREFS, ENVS[1], false);
+    expect(p).toEqual({ order: [], hidden: ['npm'], shown: [] });
+    expect(hiddenWhy(ENVS[1], p)).toBe('byYou');
+    expect(arrange(ENVS, p).neverRan.map((e) => e.name)).toEqual(['github-pages']);
+    p = setShown(p, ENVS[0], true);
+    expect(p).toEqual({ order: [], hidden: ['npm'], shown: ['github-pages'] });
+    expect(isShown(ENVS[0], p)).toBe(true);
+    p = setShown(setShown(p, ENVS[1], true), ENVS[0], false);
+    expect(p).toEqual(NO_PREFS);
+  });
+
+  it('orders by the user, the environments they never placed after in the backend’s order', () => {
+    const p = moveBy(NO_PREFS, ENVS, 'npm', 1);
+    expect(p.order).toEqual(['github-pages', 'staging', 'npm', 'production']);
+    expect(moveBy(p, ENVS, 'github-pages', -1)).toBe(p);
+    expect(moveBefore(NO_PREFS, ENVS, 'npm', null).order).toEqual(['github-pages', 'staging', 'production', 'npm']);
+    expect(moveBefore(NO_PREFS, ENVS, 'production', 'staging').order).toEqual(['github-pages', 'npm', 'production', 'staging']);
+    // An environment new since the order was given comes after the ones placed.
+    expect(ordered([...ENVS, ran('qa')], { ...NO_PREFS, order: ['production', 'npm'] }).map((e) => e.name)).toEqual([
+      'production',
+      'npm',
+      'github-pages',
+      'staging',
+      'qa',
+    ]);
+  });
+
+  it('reads back what was kept, whatever was written', () => {
+    expect(parsePrefs(JSON.stringify({ order: ['a'], hidden: ['b', 3], shown: 'x' }))).toEqual({ order: ['a'], hidden: ['b'], shown: [] });
+    expect(parsePrefs('{oops')).toEqual(NO_PREFS);
+    expect(parsePrefs(null)).toEqual(NO_PREFS);
   });
 });

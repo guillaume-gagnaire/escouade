@@ -28,6 +28,8 @@ export const ICONS = {
     '<path d="M2.75 5h5.5M11.25 5h2M2.75 11h2M7.75 11h5.5" /><circle cx="9.75" cy="5" r="1.5" /><circle cx="6.25" cy="11" r="1.5" />',
   sound: '<path d="M2.75 6.25h2.25L8.25 3.5v9L5 9.75H2.75z" /><path d="M10.75 5.9a3 3 0 0 1 0 4.2M12.5 4.25a5.4 5.4 0 0 1 0 7.5" />',
   down: '<path d="M4.5 6.25L8 9.75l3.5-3.5" />',
+  /** A handle to drag a row by (the environments menu, ESC-390). */
+  grip: '<circle cx="6" cy="4" r=".9" /><circle cx="10" cy="4" r=".9" /><circle cx="6" cy="8" r=".9" /><circle cx="10" cy="8" r=".9" /><circle cx="6" cy="12" r=".9" /><circle cx="10" cy="12" r=".9" />',
   right: '<path d="M6.25 4.5L9.75 8l-3.5 3.5" />',
   left: '<path d="M9.75 4.5L6.25 8l3.5 3.5" />',
   monitor: '<rect x="2" y="2.75" width="12" height="8.5" rx="1.4" /><path d="M6 13.25h4M8 11.25v2" />',
@@ -40,6 +42,17 @@ export const ICONS = {
   'lay-1': '<rect x="2.25" y="3" width="11.5" height="10" rx="1.75" />',
   'lay-2': '<rect x="2.25" y="3" width="11.5" height="10" rx="1.75" /><path d="M9.25 3v10" />',
   import: '<path d="M8 2.75v7.5M5 7.5l3 3 3-3M3 12.75h10" />',
+  // The cells of the split screen's compass (ESC-392): where a content dropped goes, the part of the pane it takes.
+  'pane-l':
+    '<rect x="2.25" y="3" width="11.5" height="10" rx="1.75" /><rect x="4" y="4.75" width="3.5" height="6.5" rx=".75" fill="currentColor" stroke="none" />',
+  'pane-r':
+    '<rect x="2.25" y="3" width="11.5" height="10" rx="1.75" /><rect x="8.5" y="4.75" width="3.5" height="6.5" rx=".75" fill="currentColor" stroke="none" />',
+  'pane-t':
+    '<rect x="2.25" y="3" width="11.5" height="10" rx="1.75" /><rect x="4" y="4.75" width="8" height="2.75" rx=".75" fill="currentColor" stroke="none" />',
+  'pane-b':
+    '<rect x="2.25" y="3" width="11.5" height="10" rx="1.75" /><rect x="4" y="8.5" width="8" height="2.75" rx=".75" fill="currentColor" stroke="none" />',
+  'pane-c':
+    '<rect x="2.25" y="3" width="11.5" height="10" rx="1.75" /><rect x="5.25" y="5.75" width="5.5" height="4.5" rx=".75" fill="currentColor" stroke="none" />',
   merge:
     '<circle cx="4.75" cy="3.75" r="1.5" /><circle cx="4.75" cy="12.25" r="1.5" /><circle cx="11.25" cy="9.25" r="1.5" /><path d="M4.75 5.25v5.5M4.75 5.5c0 2.4 2.4 3.75 5 3.75" />',
   pr: '<circle cx="4.75" cy="3.75" r="1.5" /><circle cx="4.75" cy="12.25" r="1.5" /><circle cx="11.25" cy="12.25" r="1.5" /><path d="M4.75 5.25v5.5M11.25 10.75V6.5c0-1-.75-1.75-1.75-1.75H7.5M9 3.25l-1.5 1.5L9 6.25" />',

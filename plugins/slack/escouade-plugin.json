@@ -2,7 +2,7 @@
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.slack",
   "name": "Slack",
-  "version": "2.0.0",
+  "version": "2.0.2",
   "description": {
     "fr": "Les tickets à tester et les agents qui attendent, dans le salon Slack de chaque projet.",
     "en": "Tickets to test and agents waiting, in each project's Slack channel."
@@ -20,5 +20,6 @@
   },
   "contributes": {
     "secrets": [{ "key": "token", "title": { "fr": "Jeton du bot Slack (xoxb-…)", "en": "Slack bot token (xoxb-…)" } }]
-  }
+  },
+  "store": { "docs": "docs" }
 }

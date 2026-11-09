@@ -6,13 +6,21 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- The “Harness” menus now offer only the harnesses you can use: program installed, plugin on and at least one account. The one already chosen stays listed with the reason, and Settings › Accounts and harnesses still shows those without an account yet.
+- The Kanban header now has two rows where nothing overlaps, and the Environments view shows only the environments you pick, leaving out those never deployed; the PR and Environments tabs only appear with a code host. In a narrow window, a screen reader still finds “After approval” there.
 - OpenCode: `git commit` and `git add` are accepted at once only in their plain form, and a write to `.git`, `.opencode` or `opencode.json` always asks: these rules are all that protects it.
 - OpenCode: a private project holds better. Its rules are set before a session opens, and “Always” is no longer offered under a fence.
 - Claude Code: a discussion also refuses PowerShell commands, instead of showing them on a card.
+- Antigravity CLI: its terminal view follows its plugin’s rules. It no longer allows writes in the agent’s folder or git add and git commit at once, asks for a private project’s commands, and forgets the “Always” kept by 2.2.0.
+- Antigravity CLI: its terminal view has its own temporary folder, as its plugin does, instead of yours, where it wrote without asking.
 
 ### New
 
 - Agents can be sorted into folders in the sidebar: drag a card into a folder, fold it without losing sight of what waits for an answer, and an agent that creates others puts them with itself. The MCP server reads and sets these folders.
+- Split screen: drag an agent, a terminal, a launch or the editor from the sidebar onto the work area to open it beside, above or below, up to four panes. The ringed pane takes your typing, your voice and your answers; Ctrl+ splits or goes back to one pane, and the layout comes back at the next start.
+- Settings are rebuilt: a bar on the left with Escouade’s pages (General, Agents, Accounts and harnesses, Connected services, Voice, Notifications, Plugins, Advanced), then each project’s pages, and everything applies as soon as you change it, with no “Save”. A search (Ctrl+F) finds a setting by its name, in English or French, and opens its page; an amber dot marks the page that needs you, such as a harness without an account or an expired token.
+- Escouade's plugins come in the installer: at the first start, even offline, Escouade installs those your configuration uses, and the Plugins view offers the others, installed in one click with no download.
+- On store.escouade.dev, a plugin's documentation can have its pages in French and in English: each visitor reads those of their language, else those of the other, and a link from one page to another stays on the store.
 - A plugin no longer keeps what Escouade lent it: the host of a failed connection attempt closes at once, and a removed account takes back its host and its token. An address that only looks local, such as `http://localhost:1@exemple.dev`, is refused right in the form.
 - The documentation has a page on code hosts: what Escouade does on GitHub, GitLab, Bitbucket, Gitea, Forgejo and Azure DevOps, its limits, and what has really been tried. The Privacy page says your tokens stay with you and nothing goes through an Escouade server.
 - If you accepted the usage statistics, they also count PRs opened and merged, CI fixes and reviews by an agent, without a name or an address.
@@ -31,6 +39,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - The Antigravity CLI plugin now runs in WASM too, with no process of its own: its agents behave as before, and `agy` being slow to write its transcript no longer holds other agents back.
 - `escouade-plugin build` compiles a plugin in Rust to WASM, the same to the byte on Windows and on Linux, with a compiler it downloads itself; `test` and `dev` compile it too before playing it.
 - A sandboxed plugin can reach the instance you give it (your own GitLab, your local network), follow the proxy and the certificates of Settings › Network, and receive live data; the install window says so, and its journal keeps each connection.
+- Escouade’s plugins shipped with the installer install only if you use them: your accounts, your projects and your voice settings say so, and what worked keeps working. The others install with no network when you need them, or in one click in the Plugins view.
 - Escouade's own plugins can soon be switched off and uninstalled like any other: they come with the installer, install with no network, and a new version is offered, never installed without you. The Plugins view offers again what you uninstalled.
 - A sandboxed plugin can read and write in your agents’ folders and run commands on your computer, but only what it declares: the install window says so, Escouade enforces it, and the plugin’s journal keeps each write, each command and each refusal.
 - A plugin can be written in Rust and run sandboxed inside Escouade, compiled to WASM, on the same host as a JS/TS plugin. A plugin waiting for a slow network answer keeps answering everything else.
@@ -90,12 +99,17 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - After the merge, a done ticket’s card says where it runs (“staging ✓ · production ⏳”), and the board’s “Environments” view shows what is deployed where, the tickets waiting for production and a failed deployment with its job. On a card “In review”, “Open preview” opens the pull request’s Vercel, Netlify or Cloudflare Pages preview.
 - `escouade-plugin test`, `validate` and `dev` play a plugin as the version of Escouade you choose (`--escouade 2.2.0`), to write for a version to come.
 
+### Changes
+
+- The “Harness” menu beside “New agent” only lists the harnesses ready to serve: installed, with an account. Those missing or without an account are set up in Settings › Harness and Settings › Accounts. Thanks to @Metalzoid (#21).
+
 ### Removed
 
 - The code index is removed: measured with real agents on changes in several places, it saved neither tokens nor oversights, and each harness finds the code with its own tools. Its databases are erased from your machine at the update, and the search by meaning of the memory and the docs is now set in Settings › Projects › Every project.
 
 ### Fixes
 
+- macOS: 2.2.0-beta.3 closed a few seconds after it started as soon as a WASM plugin started (Claude Code first of all). The app may now run the code the plugins’ engine compiles.
 - Remote Control: an agent created just as you turn the setting on for all agents now keeps its Remote Control. It could lose it silently until the setting next changed.
 - Copilot CLI reads a command the way its shell does: `git add x; node evil.js` and any chained, redirected or out-of-worktree command now gets a card, and so does a write in `.git`. That write gets a card on Cursor, Gemini, Mistral Vibe and the ACP harnesses too.
 - A private project's fence and read-only mode now hold when a harness plugin restarts, for instance after a language or network change. A fenced agent no longer gets "For this session" on Copilot CLI, and a `git commit` that reads its message from a file gets a card. A Cursor, Gemini or Mistral Vibe agent also keeps its session: its messages no longer stay waiting after a restart.
@@ -109,6 +123,19 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - Fable’s quota bar is named “Fable 7d”, like the other windows, by its length.
 - An agent saved on a harness this version doesn’t have (a later version’s, or a removed plugin’s) is read and kept with its conversation, marked “harness missing”; it doesn’t start, and no agent is created on that harness.
 - The install window of a plugin with no program no longer says Escouade does not filter its network: its webhooks go to the declared host only. It also says what sets off each webhook, and names the store once.
+- Two tickets approved at the same moment no longer get the same decision number. A duplicate already there no longer crashes the Decisions view: it shows both.
+
+## [2.1.5] — 2026-11-08
+
+### Fixes
+
+- **Antigravity CLI is turned off:** with agy 1.5, its agents could run a command or write a file without asking you, even in “Ask”. Escouade no longer starts it and says so in Settings › Harness; it comes back with a fix.
+
+## [2.1.4] — 2026-11-07
+
+### New
+
+- **Beta versions:** the “Receive beta versions” option (Settings › About, unticked by default) lets you try the next versions before everyone else. Unticked, Escouade ignores the betas; an app on a beta says so beside its version.
 
 ## [2.1.3] — 2026-11-06
 

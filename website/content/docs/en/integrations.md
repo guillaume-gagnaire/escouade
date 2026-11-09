@@ -6,7 +6,7 @@ Escouade imports tickets from Jira, Trello, GitHub Issues, Linear, ClickUp, GitL
 
 ## Connecting a service
 
-Accounts are connected in Settings › Integrations, “Connected accounts” group (see [Integrations settings](settings-integrations)). For each service, “Connect…” opens a form. “Connect” checks the credentials with the service (“Checking…”), then the line reads “Connected · ” followed by who you are there (for example `ada@atlas.dev · atlas.atlassian.net`). If the service refuses, the reason shows under the form. The connection is saved at once: it does not go through “Save”.
+Accounts are connected in Settings › Connected services, “Connected accounts” group (see [Integrations settings](settings-integrations)). For each service, “Connect…” opens a form. “Connect” checks the credentials with the service (“Checking…”), then the line reads “Connected · ” followed by who you are there (for example `ada@atlas.dev · atlas.atlassian.net`). If the service refuses, the reason shows under the form. The connection is saved at once: it does not go through “Save”.
 
 | Service | What you give | Where to get it |
 |---|---|---|
@@ -14,13 +14,13 @@ Accounts are connected in Settings › Integrations, “Connected accounts” gr
 | Trello | “API key” and “Token” | “Get an API key”, then “Get a token for this key” (available once the key is typed: a read and write token that never expires) |
 | GitHub | “Token”, optional | “Create a GitHub token”. Left empty, Escouade uses the one from the `gh` CLI (`gh auth login`); the account then shows with “· via gh” |
 | Linear | “API key” | “Create a Linear API key” |
-| GitLab | Nothing more: the GitLab code host’s account (gitlab.com or your instance, an `api` token or the one from `glab`) | “Connect GitLab…” opens the form of Settings › Integrations › “Code hosts”. One account serves the merge requests and the tickets |
+| GitLab | Nothing more: the GitLab code host’s account (gitlab.com or your instance, an `api` token or the one from `glab`) | “Connect GitLab…” opens the form of Settings › Connected services › “Code hosts”. One account serves the merge requests and the tickets |
 | ClickUp | “API key” (`pk_…`) | “Create a ClickUp API key” (ClickUp’s Settings › Apps). The row then says “Connected · ” followed by your name in ClickUp |
-| Azure Boards | Nothing more: the Azure DevOps code host’s account (an organization of dev.azure.com or a collection of Azure DevOps Server; a personal access token with the Work Items right, read and write, or the one from `az`) | “Connect Azure DevOps…” opens the form of Settings › Integrations › “Code hosts”. One account serves the pull requests and the work items. Without the Work Items right, Azure refuses and the error says where to make another token (the organization’s tokens page) |
+| Azure Boards | Nothing more: the Azure DevOps code host’s account (an organization of dev.azure.com or a collection of Azure DevOps Server; a personal access token with the Work Items right, read and write, or the one from `az`) | “Connect Azure DevOps…” opens the form of Settings › Connected services › “Code hosts”. One account serves the pull requests and the work items. Without the Work Items right, Azure refuses and the error says where to make another token (the organization’s tokens page) |
 
 ### Code host or source of tickets
 
-A [code host](code-hosts) (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps) serves the agents’ pull requests, CI and deployments; a source of the Kanban serves the tickets. Settings › Integrations shows them in two named parts. Connecting your GitLab as a code host puts no ticket in the Kanban: a GitLab project still has to be linked as a source (see below), which the import window offers in one click. Bitbucket and Gitea have no source yet: their row says “No tickets: PRs and CI only”.
+A [code host](code-hosts) (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps) serves the agents’ pull requests, CI and deployments; a source of the Kanban serves the tickets. Settings › Connected services shows them in two named parts. Connecting your GitLab as a code host puts no ticket in the Kanban: a GitLab project still has to be linked as a source (see below), which the import window offers in one click. Bitbucket and Gitea have no source yet: their row says “No tickets: PRs and CI only”.
 
 “Disconnect” forgets the account and its secrets. Projects keep their links, unused until you connect again.
 
@@ -36,18 +36,18 @@ GitHub (the code host and GitHub Issues), GitLab (the code host; GitLab Issues i
 
 These plugins are switched off in the Plugins view, for the whole app or for one project (see [the plugins shipped with Escouade](plugins/installer#the-plugins-shipped-with-escouade)). Switched off or stopped, a plugin says so instead of going quiet:
 
-- **a code host**: the agent’s card shows “Code host stopped: PRs no longer followed” and keeps the PRs read last; Settings › Integrations says under the account “The plugin GitHub is switched off (Settings › Plugins): this account serves nothing, its PRs are no longer followed”, or that it stopped and why;
+- **a code host**: the agent’s card shows “Code host stopped: PRs no longer followed” and keeps the PRs read last; Settings › Connected services says under the account “The plugin GitHub is switched off (Settings › Plugins): this account serves nothing, its PRs are no longer followed”, or that it stopped and why;
 - **a source**: the sync stops, and its failure says “The plugin dev.escouade.trello is not answering: …”; the imported tickets stay.
 
 Switched back on, the plugin picks up where it stopped: the first read that works clears the message.
 
 ## Linking a project to a source
 
-A project links to one place per service: a Jira project, a Trello board, a GitHub repository, a Linear team, a ClickUp list, a GitLab project, or an Azure DevOps project. In Settings › Integrations, the “Sources linked to `<project>`” group offers, for each connected service, a list: “Jira project”, “Trello board”, “GitHub Issues repository”, “Linear team”, “ClickUp list”, “GitLab Issues project”, “Azure Boards project”. “None” unlinks the service. For GitHub, the project’s own repository, when its remote is on GitHub, comes first (“(the project’s repository)”); likewise for GitLab, when the remote is on a connected instance, and for Azure Boards, when it is on the connected organization. Azure DevOps projects are grouped by organization. GitLab projects are grouped by instance, with their groups and subgroups in the path (“acme/back/api”). For ClickUp, the lists of all your workspaces are grouped by space and folder (“Product › Sprints”), as in ClickUp’s sidebar: the lists outside a folder first, archived ones left out; typing the first letters of a name, with the menu open, goes to it.
+A project links to one place per service: a Jira project, a Trello board, a GitHub repository, a Linear team, a ClickUp list, a GitLab project, or an Azure DevOps project. In Settings › Projects › Imported tickets, the “Sources linked to `<project>`” group offers, for each connected service, a list: “Jira project”, “Trello board”, “GitHub Issues repository”, “Linear team”, “ClickUp list”, “GitLab Issues project”, “Azure Boards project”. “None” unlinks the service. For GitHub, the project’s own repository, when its remote is on GitHub, comes first (“(the project’s repository)”); likewise for GitLab, when the remote is on a connected instance, and for Azure Boards, when it is on the connected organization. Azure DevOps projects are grouped by organization. GitLab projects are grouped by instance, with their groups and subgroups in the path (“acme/back/api”). For ClickUp, the lists of all your workspaces are grouped by space and folder (“Product › Sprints”), as in ClickUp’s sidebar: the lists outside a folder first, archived ones left out; typing the first letters of a name, with the menu open, goes to it.
 
 Choosing a source loads its statuses and pre-fills the status mapping (see below). Then save the settings.
 
-From the Kanban, “Import” with no linked source shows “No source linked to this project”, names the seven sources and offers “Link a source”, which opens this same tab at “Kanban sources”. When the project’s remote is on a connected code host whose source exists (GitHub, GitLab, Azure DevOps), it offers “Link acme/api (GitLab Issues)” right away: one click links the project with the default statuses, and its tickets show at once.
+From the Kanban, “Import” with no linked source shows “No source linked to this project”, names the seven sources and offers “Link a source”, which opens the project’s “Imported tickets” page. When the project’s remote is on a connected code host whose source exists (GitHub, GitLab, Azure DevOps), it offers “Link acme/api (GitLab Issues)” right away: one click links the project with the default statuses, and its tickets show at once.
 
 ## Importing tickets
 
@@ -93,7 +93,7 @@ It keeps twenty criteria at most, of 300 characters at most. With no criterion f
 
 ## Importing by label
 
-Settings › Integrations › “Automatic import” lets Escouade import on its own:
+Settings › Connected services › “Automatic import” lets Escouade import on its own:
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -138,7 +138,7 @@ The last column, “Comment”, chooses the columns whose arrival writes a comme
 
 ### The language of comments
 
-Comments are published for your team: they are written in the “Language of texts written by the agents” (Settings › Application, see [Application settings](settings-application)), not in the interface’s language. The outcome of a done ticket is quoted there in that same language.
+Comments are published for your team: they are written in the “Language of texts written by the agents” (Settings › General, see [Application settings](settings-application)), not in the interface’s language. The outcome of a done ticket is quoted there in that same language.
 
 ## Failed syncs
 

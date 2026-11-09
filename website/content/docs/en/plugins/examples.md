@@ -44,7 +44,7 @@ A theme with no code: values for the window’s tokens, dark and light, and a pa
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.high-contrast",
   "name": { "fr": "Contraste élevé", "en": "High contrast" },
-  "version": "1.1.0",
+  "version": "1.1.2",
   "description": {
     "fr": "Un thème à fort contraste, clair et sombre : texte pur, bordures nettes, couleurs d'état franches.",
     "en": "A high-contrast theme, light and dark: pure text, sharp borders, plain status colors."
@@ -103,11 +103,12 @@ A theme with no code: values for the window’s tokens, dark and light, and a pa
         "projectColors": ["#ffd400", "#00e0ff", "#ff5cf0", "#7cff4f", "#ff8a00", "#b48cff"]
       }
     ]
-  }
+  },
+  "store": { "docs": "docs" }
 }
 ```
 
-Pick it in Settings › Application, “Colors” row.
+Pick it in Settings › General, “Colors” row.
 
 ## Discord
 
@@ -120,7 +121,7 @@ Two declared webhooks, no program: a ticket moved to “To review”, and an age
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.discord",
   "name": "Discord",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "description": {
     "fr": "Les tickets à tester et les agents qui attendent, dans un salon Discord : un webhook, sans code.",
     "en": "Tickets to test and agents waiting, in a Discord channel: a webhook, no code."
@@ -156,7 +157,8 @@ Two declared webhooks, no program: a ticket moved to “To review”, and an age
         }
       }
     ]
-  }
+  },
+  "store": { "docs": "docs" }
 }
 ```
 
@@ -173,7 +175,7 @@ A TypeScript program, written with the [SDK](plugins/sdk). It posts in each proj
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.slack",
   "name": "Slack",
-  "version": "2.0.0",
+  "version": "2.0.2",
   "description": {
     "fr": "Les tickets à tester et les agents qui attendent, dans le salon Slack de chaque projet.",
     "en": "Tickets to test and agents waiting, in each project's Slack channel."
@@ -191,7 +193,8 @@ A TypeScript program, written with the [SDK](plugins/sdk). It posts in each proj
   },
   "contributes": {
     "secrets": [{ "key": "token", "title": { "fr": "Jeton du bot Slack (xoxb-…)", "en": "Slack bot token (xoxb-…)" } }]
-  }
+  },
+  "store": { "docs": "docs" }
 }
 ```
 
@@ -305,7 +308,7 @@ A TypeScript program that decides permissions before they reach you (see [Permis
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.team-rules",
   "name": { "fr": "Règles de l'équipe", "en": "Team rules" },
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": {
     "fr": "Autorise ou refuse les commandes des agents selon les règles de l'équipe, écrites dans rules.json.",
     "en": "Allows or denies the agents' commands by the team's rules, written in rules.json."
@@ -316,7 +319,8 @@ A TypeScript program that decides permissions before they reach you (see [Permis
   "escouade": { "api": "1", "min": "2.2.0" },
   "run": { "js": "dist/plugin.mjs" },
   "activation": ["event:request.permission"],
-  "permissions": { "decide": true }
+  "permissions": { "decide": true },
+  "store": { "docs": "docs" }
 }
 ```
 
@@ -445,7 +449,7 @@ A harness without code: Goose, Block’s open source agent, described over ACP. 
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.goose",
   "name": "Goose",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": {
     "fr": "Goose, l'agent open source de Block, comme harness : décrit par ACP, sans code.",
     "en": "Goose, Block's open source agent, as a harness: described over ACP, no code."
@@ -507,6 +511,6 @@ A harness without code: Goose, Block’s open source agent, described over ACP. 
       }
     ]
   },
-  "store": { "categories": ["harness"] }
+  "store": { "categories": ["harness"], "docs": "docs" }
 }
 ```

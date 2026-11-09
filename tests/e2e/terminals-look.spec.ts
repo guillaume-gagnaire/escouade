@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium, type Browser, type Locator, type Page } from '@playwright/test';
-import { addProject, expect, FAKE_COPILOT, FAKE_OPENCODE, test, unfoldSections } from './fixture';
+import { addProject, expect, FAKE_COPILOT, FAKE_OPENCODE, test, unfoldSections, closeSettings } from './fixture';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const PREVIEW = path.join(ROOT, 'design', 'app-redesign', 'index.html');
@@ -105,7 +105,7 @@ async function shots(page: Page, preview: Page, screen: string, size: (typeof SI
   await preview.screenshot({ path: path.join(SHOTS, `${n}.preview.png`) });
 }
 
-/** The launch commands of the project, as Réglages › Projets writes them. */
+/** The launch commands of the project, as Réglages › Projets › Lancement writes them. */
 async function commands(page: Page, list: { name: string; command: string; dir?: string }[]) {
   // The header's « Commandes de lancement… »: in a short window (the runner's), the section folds and « Configurer » with it.
   await page.getByRole('button', { name: 'Commandes de lancement…', exact: true }).click();
@@ -117,8 +117,7 @@ async function commands(page: Page, list: { name: string; command: string; dir?:
     await cfg.getByLabel('Commande').fill(c.command);
     if (c.dir) await cfg.getByLabel(/Sous-dossier/).fill(c.dir);
   }
-  await dialog.getByRole('button', { name: 'Enregistrer' }).click();
-  await expect(dialog).toBeHidden();
+  await closeSettings(dialog);
   await unfoldSections(page);
 }
 
@@ -570,8 +569,7 @@ test.describe('in English', () => {
     await cfg.getByLabel('Name').fill('Front');
     await cfg.getByLabel('Command').fill('Start-Sleep 600');
     await cfg.getByLabel(/Subfolder/).fill('web');
-    await dialog.getByRole('button', { name: 'Save' }).click();
-    await expect(dialog).toBeHidden();
+    await closeSettings(dialog);
     await unfoldSections(page);
     const front = page.locator('.run').filter({ has: page.locator('.name', { hasText: /^Front$/ }) });
     await page.getByRole('button', { name: 'Run all', exact: true }).click();

@@ -1,0 +1,1496 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Réglages 2.2 — trois directions (ESC-375)</title>
+    <!-- Inter, from the app's own packages (npm ci at the root). -->
+    <link rel="stylesheet" href="../../node_modules/@fontsource-variable/inter/opsz.css" />
+    <style>
+      /* ---------- The tokens of src/app.css, both themes (copied, not changed) ---------- */
+      @property --p {
+        syntax: '<color>';
+        inherits: true;
+        initial-value: oklch(0.72 0.12 48);
+      }
+      :root {
+        --p: oklch(0.72 0.12 48);
+        --frame: color-mix(in oklch, var(--p) 8%, #08090a);
+        --panel: color-mix(in oklch, var(--p) 4.5%, #0e0f11);
+        --raise: color-mix(in oklch, var(--p) 6%, #15161a);
+        --raise-2: color-mix(in oklch, var(--p) 6%, #1b1c20);
+        --well: color-mix(in oklch, var(--p) 2%, #0a0b0d);
+        --fg-rgb: 255, 255, 255;
+        --line: rgba(255, 255, 255, 0.075);
+        --line-2: rgba(255, 255, 255, 0.12);
+        --line-3: rgba(255, 255, 255, 0.2);
+        --hover: rgba(255, 255, 255, 0.045);
+        --text: #f7f8f8;
+        --soft: #d0d3d8;
+        --muted: #989da6;
+        --dim: #8f949e;
+        --brand: #35c1bd;
+        --p-ink: color-mix(in oklch, var(--p) 70%, white);
+        --p-soft: color-mix(in oklch, var(--p) 14%, transparent);
+        --run: oklch(0.79 0.15 155);
+        --wait: oklch(0.84 0.14 82);
+        --wait-bg: oklch(from var(--wait) l c h / 0.07);
+        --wait-line: oklch(from var(--wait) l c h / 0.32);
+        --add: oklch(0.8 0.13 155);
+        --del: oklch(0.74 0.14 22);
+        --warn-ink: oklch(0.8 0.1 60);
+        --shade: 1;
+        --glow: 14%;
+        --sel: 40%;
+        --scrim: rgba(3, 4, 5, 0.62);
+        --primary: #f2f3f4;
+        --primary-hover: #fff;
+        --on-primary: #08090a;
+        --on-primary-line: rgba(0, 0, 0, 0.12);
+        --on-tile: #101114;
+        --font: 'Inter Variable', Inter, system-ui, 'Segoe UI', sans-serif;
+        --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+        --ease: cubic-bezier(0.16, 1, 0.3, 1);
+        color-scheme: dark;
+      }
+      :root[data-theme='light'] {
+        --frame: color-mix(in oklch, var(--p) 7%, #f0f1f3);
+        --panel: color-mix(in oklch, var(--p) 2.5%, #fdfdfd);
+        --raise: color-mix(in oklch, var(--p) 4%, #f4f5f7);
+        --raise-2: color-mix(in oklch, var(--p) 5%, #eceef1);
+        --well: color-mix(in oklch, var(--p) 2.5%, #f6f7f9);
+        --fg-rgb: 15, 17, 22;
+        --line: rgba(15, 17, 22, 0.09);
+        --line-2: rgba(15, 17, 22, 0.14);
+        --line-3: rgba(15, 17, 22, 0.24);
+        --hover: rgba(15, 17, 22, 0.045);
+        --text: #15171c;
+        --soft: #363a42;
+        --muted: #555a63;
+        --dim: #5c616a;
+        --brand: oklch(0.52 0.09 190);
+        --p-ink: color-mix(in oklch, var(--p) 50%, #15171c);
+        --run: oklch(0.48 0.13 155);
+        --wait: oklch(0.5 0.11 70);
+        --wait-bg: oklch(from var(--wait) l c h / 0.09);
+        --wait-line: oklch(from var(--wait) l c h / 0.4);
+        --add: oklch(0.47 0.12 155);
+        --del: oklch(0.5 0.18 25);
+        --warn-ink: oklch(0.49 0.11 55);
+        --shade: 0.3;
+        --glow: 10%;
+        --sel: 26%;
+        --scrim: rgba(24, 26, 32, 0.3);
+        --primary: #1b1d22;
+        --primary-hover: #30333a;
+        --on-primary: #f7f8f8;
+        --on-primary-line: rgba(0, 0, 0, 0.3);
+        color-scheme: light;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--frame);
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 13px;
+        line-height: 1.45;
+        font-feature-settings: 'cv11', 'ss03';
+        -webkit-font-smoothing: antialiased;
+      }
+      button {
+        font: inherit;
+        color: inherit;
+      }
+      ::selection {
+        background: color-mix(in oklch, var(--p) var(--sel), transparent);
+      }
+      ::-webkit-scrollbar {
+        width: 10px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(var(--fg-rgb), 0.09);
+        border-radius: 10px;
+        border: 3px solid transparent;
+        background-clip: padding-box;
+      }
+      .icon {
+        flex: none;
+      }
+      .num {
+        font-variant-numeric: tabular-nums;
+      }
+      .mono {
+        font-family: var(--mono);
+        font-size: 0.92em;
+      }
+
+      /* ---------- The common controls of src/app.css ---------- */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        height: 30px;
+        padding: 0 11px;
+        border: none;
+        border-radius: 8px;
+        background: rgba(var(--fg-rgb), 0.04);
+        box-shadow: inset 0 0 0 1px var(--line-2);
+        color: var(--text);
+        font-size: 13px;
+        font-weight: 550;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .btn > .icon {
+        color: var(--muted);
+      }
+      .btn.primary {
+        background: var(--primary);
+        box-shadow: inset 0 -1px 0 var(--on-primary-line);
+        color: var(--on-primary);
+      }
+      .btn.ghost {
+        background: transparent;
+        box-shadow: none;
+        color: var(--muted);
+      }
+      .btn.danger {
+        color: var(--del);
+      }
+      .btn.sm {
+        height: 26px;
+        padding: 0 9px;
+        font-size: 12.5px;
+      }
+      .icon-btn {
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        border-radius: 7px;
+        background: transparent;
+        color: var(--muted);
+        flex: none;
+      }
+      .segmented {
+        display: inline-flex;
+        gap: 2px;
+        padding: 3px;
+        border-radius: 9px;
+        background: rgba(var(--fg-rgb), 0.035);
+        box-shadow: inset 0 0 0 1px var(--line);
+      }
+      .segmented button {
+        display: inline-flex;
+        align-items: center;
+        height: 28px;
+        padding: 0 12px;
+        border: none;
+        border-radius: 7px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 12.5px;
+        font-weight: 550;
+        white-space: nowrap;
+      }
+      .segmented button[aria-pressed='true'] {
+        background: var(--raise-2);
+        color: var(--text);
+        box-shadow:
+          0 1px 2px rgba(0, 0, 0, calc(0.4 * var(--shade))),
+          inset 0 0 0 1px var(--line-2);
+      }
+      .field {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: 30px;
+        padding: 0 10px;
+        border-radius: 7px;
+        background: var(--well);
+        box-shadow: inset 0 0 0 1px var(--line-2);
+        color: var(--text);
+        font-size: 12.5px;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      .field.ph {
+        color: var(--muted);
+      }
+      .field.select {
+        justify-content: space-between;
+      }
+      .field.select .icon {
+        color: var(--muted);
+      }
+      .field.search {
+        color: var(--muted);
+      }
+      .field.search .icon {
+        color: var(--muted);
+      }
+      .field.search kbd {
+        margin-left: auto;
+      }
+      kbd {
+        display: inline-flex;
+        align-items: center;
+        height: 18px;
+        padding: 0 5px;
+        border: 1px solid var(--line-2);
+        border-radius: 4px;
+        color: var(--muted);
+        font: 500 11px/1 var(--font);
+      }
+      .switch {
+        position: relative;
+        width: 34px;
+        height: 20px;
+        flex: none;
+        border: none;
+        border-radius: 10px;
+        padding: 0;
+        background: rgba(var(--fg-rgb), 0.14);
+      }
+      .switch::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, calc(0.4 * var(--shade)));
+      }
+      .switch[aria-checked='true'] {
+        background: color-mix(in oklch, var(--p) 75%, black);
+      }
+      .switch[aria-checked='true']::after {
+        left: 16px;
+      }
+
+      /* ---------- Group and Row of src/components/settings (.sg, .sr) ---------- */
+      .sg {
+        padding: 20px 0 4px;
+      }
+      .sg + .sg {
+        border-top: 1px solid var(--line);
+      }
+      .sg h2 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 620;
+      }
+      .hg {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+      .hg .act {
+        display: inline-flex;
+        gap: 8px;
+        margin-left: auto;
+      }
+      .note {
+        max-width: 64ch;
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+        text-wrap: pretty;
+      }
+      .sr {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px 28px;
+        padding: 13px 0;
+      }
+      .sg > h2 + .sr,
+      .sg > .hg + .sr,
+      .sg > .note + .sr {
+        margin-top: 6px;
+      }
+      .sr + .sr {
+        border-top: 1px solid rgba(var(--fg-rgb), 0.05);
+      }
+      .sr.wide > .lab,
+      .sr.wide > .ctl {
+        flex-basis: 100%;
+      }
+      .lab {
+        display: grid;
+        flex: 1 1 180px;
+        gap: 3px;
+        min-width: min(180px, 100%);
+      }
+      .lab .l {
+        font-weight: 550;
+      }
+      .lab .h {
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .lab .d {
+        max-width: 62ch;
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+        text-wrap: pretty;
+      }
+      .lab .warn {
+        margin: 0;
+        color: var(--warn-ink);
+        font-size: 12px;
+      }
+      .ctl {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        flex: 0 1 auto;
+        min-width: 0;
+      }
+      .sr.wide > .ctl {
+        justify-content: flex-start;
+      }
+      /* The state beside a group's title: a pill in a state's colour, or a quiet one. */
+      .state {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 20px;
+        padding: 0 8px;
+        border-radius: 10px;
+        background: rgba(var(--fg-rgb), 0.05);
+        box-shadow: inset 0 0 0 1px var(--line);
+        color: var(--soft);
+        font-size: 11.5px;
+        font-weight: 500;
+        font-variant-numeric: tabular-nums;
+      }
+      .state i {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+      .state.run {
+        color: var(--run);
+        background: oklch(from var(--run) l c h / 0.1);
+        box-shadow: inset 0 0 0 1px oklch(from var(--run) l c h / 0.28);
+      }
+      .state.wait {
+        color: var(--wait);
+        background: var(--wait-bg);
+        box-shadow: inset 0 0 0 1px var(--wait-line);
+      }
+      .state.del {
+        color: var(--del);
+        background: oklch(from var(--del) l c h / 0.08);
+        box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.3);
+      }
+      /* An account, a plugin: a row with a mark in front. */
+      .item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 11px 0;
+      }
+      .item + .item {
+        border-top: 1px solid rgba(var(--fg-rgb), 0.05);
+      }
+      .item .who {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+        flex: 1;
+      }
+      .item .who b {
+        font-weight: 550;
+      }
+      .item .who span {
+        color: var(--muted);
+        font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .item .who span.ok {
+        color: var(--soft);
+      }
+      .item .side {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex: none;
+      }
+      .mark {
+        display: inline-grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        flex: none;
+        border-radius: 7px;
+        background: rgba(var(--fg-rgb), 0.06);
+        box-shadow: inset 0 0 0 1px var(--line);
+        color: var(--soft);
+        font-size: 11px;
+        font-weight: 650;
+      }
+      .tile {
+        display: inline-grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        flex: none;
+        border-radius: 8px;
+        background: var(--c);
+        color: var(--on-tile);
+        font-size: 11.5px;
+        font-weight: 700;
+      }
+      .tile.sm {
+        width: 18px;
+        height: 18px;
+        border-radius: 5px;
+        font-size: 9px;
+      }
+      .sq {
+        width: 8px;
+        height: 8px;
+        flex: none;
+        border-radius: 2.5px;
+        background: var(--c);
+      }
+      .seal {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: var(--brand);
+        font-size: 11.5px;
+        font-weight: 550;
+      }
+      .swatches {
+        display: flex;
+        gap: 6px;
+      }
+      .swatches span {
+        width: 20px;
+        height: 20px;
+        border-radius: 6px;
+        background: var(--c);
+      }
+      .swatches span.on {
+        box-shadow:
+          0 0 0 2px var(--raise),
+          0 0 0 4px var(--c);
+      }
+      .chev {
+        color: var(--muted);
+      }
+      .dotw {
+        width: 7px;
+        height: 7px;
+        flex: none;
+        border-radius: 50%;
+        background: var(--wait);
+      }
+
+      /* ---------- A preview's stage: the app dimmed behind the window ---------- */
+      .stage {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(1200px 700px at 0% 0%, color-mix(in oklch, var(--p) var(--glow), transparent), transparent 60%),
+          var(--frame);
+      }
+      .stage::before {
+        /* The app's shell, behind: the rail, the sidebar and the panel. */
+        content: '';
+        position: absolute;
+        inset: 44px 8px 30px 336px;
+        border-radius: 12px;
+        background: var(--panel);
+        box-shadow:
+          0 0 0 1px var(--line),
+          0 8px 24px -6px rgba(0, 0, 0, calc(0.5 * var(--shade)));
+      }
+      .stage::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: var(--scrim);
+      }
+      .win {
+        position: relative;
+        z-index: 1;
+        overflow: hidden;
+        border-radius: 14px;
+        background: var(--raise);
+        box-shadow:
+          inset 0 0 0 1px var(--line-2),
+          0 24px 64px -12px rgba(0, 0, 0, calc(0.75 * var(--shade)));
+      }
+      .foot {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 12px 20px;
+        border-top: 1px solid var(--line);
+      }
+      .foot .left {
+        margin-right: auto;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .head {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+      }
+      .head h1 {
+        margin: 0;
+        font-size: 17px;
+        font-weight: 640;
+        letter-spacing: -0.02em;
+      }
+      .head p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+      .head .close {
+        margin-left: auto;
+      }
+      /* « Avancé », folded: a quiet row that opens the rare settings in place. */
+      .fold {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        margin-top: 8px;
+        padding: 12px 0;
+        border: none;
+        border-top: 1px solid var(--line);
+        background: transparent;
+        color: var(--muted);
+        font-size: 12.5px;
+        font-weight: 550;
+        text-align: left;
+      }
+      .fold .icon {
+        color: var(--muted);
+      }
+      .fold .names {
+        margin-left: 4px;
+        color: var(--dim);
+        font-weight: 400;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* ---------- Direction A: the side bar of categories ---------- */
+      .a {
+        display: grid;
+        grid-template-columns: 252px minmax(0, 1fr);
+        width: 1120px;
+        height: 780px;
+      }
+      .a-nav {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        min-height: 0;
+        padding: 14px 10px 12px;
+        border-right: 1px solid var(--line);
+        background: rgba(0, 0, 0, calc(0.2 * var(--shade)));
+        overflow: hidden;
+      }
+      .a-nav .field.search {
+        width: 100%;
+        margin-bottom: 8px;
+      }
+      .a-h {
+        padding: 12px 10px 4px;
+        color: var(--muted);
+        font-size: 11.5px;
+        font-weight: 600;
+      }
+      .a-i {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 30px;
+        padding: 0 10px;
+        border-radius: 8px;
+        color: var(--soft);
+        font-size: 13px;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      .a-i .icon {
+        color: var(--muted);
+      }
+      .a-i .lbl {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .a-i .dotw,
+      .a-i .end {
+        margin-left: auto;
+      }
+      .a-i .end {
+        color: var(--muted);
+      }
+      .a-i.on {
+        background: rgba(var(--fg-rgb), 0.07);
+        box-shadow: inset 0 0 0 1px var(--line-2);
+        color: var(--text);
+      }
+      .a-i.on .icon {
+        color: var(--text);
+      }
+      .a-i.sub {
+        height: 28px;
+        padding-left: 30px;
+        font-size: 12.5px;
+      }
+      .a-i .sq {
+        margin: 0 4px;
+      }
+      .a-bot {
+        margin-top: auto;
+        padding-top: 8px;
+        border-top: 1px solid var(--line);
+      }
+      .a-bot .ver {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 11.5px;
+        font-variant-numeric: tabular-nums;
+      }
+      .a-main {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+      }
+      .a-main .head {
+        padding: 20px 14px 14px 32px;
+        border-bottom: 1px solid var(--line);
+      }
+      .a-body {
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        padding: 0 40px 20px 32px;
+      }
+      .a-body > .inner {
+        max-width: 720px;
+      }
+
+      /* ---------- Direction B: the home of the settings ---------- */
+      .b {
+        display: flex;
+        flex-direction: column;
+        width: 1060px;
+        height: 820px;
+      }
+      .b-top {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 52px;
+        padding: 0 12px 0 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      .b-crumb {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 550;
+      }
+      .b-crumb .up {
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .b-crumb .icon {
+        color: var(--muted);
+      }
+      .b-top .field.search {
+        width: 280px;
+        margin-left: auto;
+      }
+      .b-body {
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        padding: 0 48px 24px;
+      }
+      .b-page {
+        max-width: 700px;
+        margin: 0 auto;
+      }
+      .b-page .head {
+        padding: 22px 0 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      .b-home {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 0 44px;
+        padding-top: 22px;
+      }
+      .b-hello {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding-bottom: 18px;
+      }
+      .b-hello h1 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 640;
+        letter-spacing: -0.02em;
+      }
+      .b-hello .field.search {
+        width: 360px;
+        height: 34px;
+        margin-left: auto;
+      }
+      .b-todo {
+        grid-column: 1 / -1;
+        margin-bottom: 18px;
+        padding: 4px 16px;
+        border-radius: 10px;
+        background: var(--wait-bg);
+        box-shadow: inset 0 0 0 1px var(--wait-line);
+      }
+      .b-todo .item .who b {
+        color: var(--text);
+      }
+      .b-todo .item + .item {
+        border-top-color: oklch(from var(--wait) l c h / 0.18);
+      }
+      .b-col h2 {
+        margin: 0 0 4px;
+        color: var(--muted);
+        font-size: 11.5px;
+        font-weight: 600;
+      }
+      .b-link {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 0;
+      }
+      .b-link + .b-link {
+        border-top: 1px solid rgba(var(--fg-rgb), 0.05);
+      }
+      .b-link .mark {
+        width: 30px;
+        height: 30px;
+        color: var(--soft);
+      }
+      .b-link .who {
+        display: grid;
+        gap: 1px;
+        flex: 1;
+        min-width: 0;
+      }
+      .b-link .who b {
+        font-weight: 550;
+      }
+      .b-link .who span {
+        color: var(--muted);
+        font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .b-about {
+        grid-column: 1 / -1;
+        display: flex;
+        gap: 18px;
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      /* ---------- Direction C: two scopes, few tabs, sections that fold ---------- */
+      .c {
+        display: flex;
+        flex-direction: column;
+        width: 1000px;
+        height: 780px;
+      }
+      .c-top {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 14px 14px 0 28px;
+      }
+      .c-top h1 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 640;
+        letter-spacing: -0.01em;
+      }
+      .c-top .segmented .sq {
+        margin-right: 7px;
+      }
+      .c-top .field.search {
+        width: 240px;
+        margin-left: auto;
+      }
+      .c-tabs {
+        display: flex;
+        gap: 22px;
+        padding: 0 28px;
+        margin-top: 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      .c-tabs > span {
+        position: relative;
+        padding: 10px 0 11px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 550;
+      }
+      .c-tabs > span.on {
+        color: var(--text);
+      }
+      .c-tabs > span.on::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: -1px;
+        height: 2px;
+        border-radius: 1px;
+        background: var(--text);
+      }
+      .c-tabs .dotw {
+        display: inline-block;
+        margin-left: 6px;
+        vertical-align: 1px;
+      }
+      .c-body {
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        padding: 6px 28px 20px;
+      }
+      .c-body .inner {
+        max-width: 760px;
+      }
+      .acc {
+        border-bottom: 1px solid var(--line);
+      }
+      .acc-h {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 46px;
+      }
+      .acc-h h2 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 620;
+      }
+      .acc-h .sum {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .acc-h .sum.wait {
+        color: var(--wait);
+      }
+      .acc-h .chev {
+        flex: none;
+      }
+      .acc.open .acc-h .chev {
+        transform: rotate(90deg);
+      }
+      .acc-b {
+        padding: 0 0 10px 26px;
+      }
+      .acc-b .sr:first-child {
+        padding-top: 4px;
+      }
+
+      /* ---------- The page of the three directions (no route) ---------- */
+      .gallery {
+        height: 100%;
+        overflow: auto;
+        padding: 40px 48px 80px;
+        background: var(--frame);
+      }
+      .gallery h1 {
+        margin: 0 0 6px;
+        font-size: 24px;
+        font-weight: 640;
+        letter-spacing: -0.02em;
+      }
+      .gallery > p {
+        max-width: 80ch;
+        margin: 0 0 30px;
+        color: var(--muted);
+      }
+      .gallery section {
+        margin-bottom: 44px;
+      }
+      .gallery h2 {
+        margin: 0 0 4px;
+        font-size: 16px;
+        font-weight: 620;
+      }
+      .gallery h2 small {
+        margin-left: 8px;
+        color: var(--wait);
+        font-size: 12px;
+        font-weight: 550;
+      }
+      .gallery section > p {
+        max-width: 80ch;
+        margin: 0 0 14px;
+        color: var(--muted);
+      }
+      .shots {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+        gap: 14px;
+      }
+      .shots a {
+        display: grid;
+        gap: 6px;
+        color: var(--soft);
+        font-size: 12px;
+        text-decoration: none;
+      }
+      .shots img {
+        width: 100%;
+        border-radius: 8px;
+        box-shadow: 0 0 0 1px var(--line-2);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script src="icons.js"></script>
+    <script>
+      // The three directions of ESC-375, each screen at its route: #<direction>-<screen> (a-general, b-accueil, c-plugins…),
+      // ?theme=light for the light theme. No route: the page of the three directions and their captures.
+      const params = new URLSearchParams(location.search);
+      if (params.get('theme') === 'light') document.documentElement.dataset.theme = 'light';
+
+      const BRAND = '#35c1bd';
+      const HUE = (h) => `oklch(0.72 0.12 ${h})`;
+      const PROJECTS = [
+        { id: 'demo-api', ab: 'DA', c: HUE(48) },
+        { id: 'studio-web', ab: 'SW', c: HUE(300) },
+        { id: 'mobile-app', ab: 'MA', c: HUE(150), private: true },
+        { id: 'infra', ab: 'IN', c: HUE(250) },
+      ];
+
+      // ---------- The pieces, drawn as the app draws them ----------
+      const I = (n, s = 16) =>
+        `<svg class="icon" width="${s}" height="${s}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
+      const sw = (on) => `<button class="switch" role="switch" aria-checked="${!!on}"></button>`;
+      const seg = (opts, on) =>
+        `<span class="segmented">${opts.map((o) => `<button aria-pressed="${o === on}">${o}</button>`).join('')}</span>`;
+      const sel = (v, w = 200) => `<span class="field select" style="width:${w}px">${v}${I('down', 14)}</span>`;
+      const inp = (v, w = 200, ph = '') => `<span class="field ${v ? '' : 'ph'}" style="width:${w}px">${v || ph}</span>`;
+      const btn = (t, cls = '', ic) => `<button class="btn ${cls}">${ic ? I(ic, 14) : ''}${t}</button>`;
+      const state = (t, cls = '') => `<span class="state ${cls}"><i></i>${t}</span>`;
+      const row = (l, d, c, o = {}) =>
+        `<div class="sr${o.wide ? ' wide' : ''}"><div class="lab"><b class="l">${l}${o.hint ? ` <span class="h">${o.hint}</span>` : ''}</b>${d ? `<p class="d">${d}</p>` : ''}${o.warn ? `<p class="warn">${o.warn}</p>` : ''}</div>${c ? `<div class="ctl">${c}</div>` : ''}</div>`;
+      const group = (title, rows, o = {}) =>
+        `<section class="sg">${title ? `<div class="hg"><h2>${title}</h2>${o.state || ''}${o.act ? `<span class="act">${o.act}</span>` : ''}</div>` : ''}${o.note ? `<p class="note">${o.note}</p>` : ''}${rows.join('')}</section>`;
+      const fold = (title, names) => `<button class="fold">${I('right', 14)}${title}<span class="names">${names}</span></button>`;
+      const item = (mark, name, line, side, o = {}) =>
+        `<div class="item">${mark}<div class="who"><b>${name}</b><span class="${o.ok ? 'ok' : ''}">${line}</span></div>${side ? `<div class="side">${side}</div>` : ''}</div>`;
+      const mk = (t) => `<span class="mark">${t}</span>`;
+      const tile = (p, sm) => `<span class="tile${sm ? ' sm' : ''}" style="--c:${p.c}">${p.ab}</span>`;
+      const SEAL = `<span class="seal">${I('shield', 13)}Vérifié</span>`;
+      const foot = (left = '') =>
+        `<div class="foot">${left ? `<span class="left">${left}</span>` : ''}${btn('Annuler')}${btn('Enregistrer', 'primary')}</div>`;
+
+      // ---------- The settings, with the app's own words (src/lib/i18n/fr), as the new organisation sorts them ----------
+      const S = {
+        apparence: () =>
+          group('Apparence', [
+            row(
+              'Thème',
+              'Système suit le thème de Windows, macOS ou Linux, et ses changements. Appliqué tout de suite, barre de titre comprise.',
+              seg(['Système', 'Clair', 'Sombre'], 'Système'),
+            ),
+            row(
+              'Couleurs',
+              'Celles d’Escouade, ou celles d’un thème apporté par un plugin, en clair comme en sombre.',
+              sel('Escouade', 170),
+            ),
+            row(
+              'Zoom de l’interface',
+              'Aussi au clavier : <kbd>Ctrl+=</kbd> pour agrandir, <kbd>Ctrl+-</kbd> pour réduire, <kbd>Ctrl+0</kbd> pour revenir à 100 %.',
+              seg(['90 %', '100 %', '110 %', '125 %', '150 %'], '100 %'),
+            ),
+            row('Taille du texte des terminaux', 'De 9 à 24, avant le zoom de l’interface, qui s’y ajoute.', inp('13', 64), {
+              hint: 'en pixels, 13 par défaut',
+            }),
+          ]),
+        langue: () =>
+          group('Langue', [
+            row('Langue de l’interface', '', seg(['Système (Français)', 'English', 'Français'], 'Système (Français)')),
+            row(
+              'Langue des textes rédigés par les agents',
+              'Messages de commit et descriptions de pull request proposés, commentaires publiés dans Jira, Trello, GitHub, Linear, ClickUp, GitLab et Azure Boards, consignes données aux agents.',
+              seg(['Comme l’interface (par défaut)', 'English', 'Français'], 'Comme l’interface (par défaut)'),
+            ),
+          ]),
+        majs: () =>
+          group(
+            'Mises à jour',
+            [
+              row('Escouade 2.2.0', 'Aucune mise à jour disponible.', btn('Rechercher une mise à jour')),
+              row(
+                'Installer les mises à jour automatiquement',
+                'Escouade redémarre d’elle-même quand aucun agent ne travaille et que tout est enregistré.',
+                sw(true),
+              ),
+              row(
+                'Recevoir les versions bêta',
+                'Les bêtas arrivent avant tout le monde et peuvent avoir des défauts. Décochée, l’app reste sur sa bêta jusqu’à la version stable qui la suit.',
+                sw(false),
+              ),
+            ],
+            { note: '' },
+          ),
+        toi: () =>
+          group('Toi', [
+            row(
+              'Ton nom',
+              'Écrit dans les tickets que tu partages et dans ceux que tu fais avancer : tes coéquipiers le voient sur leur Kanban.',
+              inp('Camille Martin', 200),
+            ),
+            row(
+              'Statistiques d’usage',
+              'Les fonctionnalités utilisées, la version d’Escouade et le système, sous un identifiant tiré au hasard : rien qui t’identifie, ni tes projets ni ton code.',
+              btn('En détail', 'ghost') + sw(true),
+            ),
+          ]),
+        claude: (o = {}) =>
+          group(
+            'Claude Code',
+            [
+              item(
+                mk('P'),
+                'Principal',
+                'Connecté · camille@exemple.dev · Nouveaux agents : Celui du harness',
+                btn('Usage sur claude.ai', 'ghost sm') + sw(true),
+                { ok: true },
+              ),
+              item(
+                mk('Pr'),
+                'Pro',
+                'Connecté · camille@studio.dev · Réservé aux projets : mobile-app',
+                btn('Usage sur claude.ai', 'ghost sm') + sw(true),
+                { ok: true },
+              ),
+            ],
+            { state: state('Prêt · 2.1.301', 'run'), act: btn('Ajouter un compte Claude Code…', '', 'plus') },
+          ),
+        codex: () =>
+          group('Codex', [], {
+            state: state('Aucun compte', 'wait'),
+            note: 'Aucun agent ni ticket ne démarre sur Codex avant qu’un compte soit ajouté.',
+            act: btn('Ajouter un compte Codex…', '', 'plus'),
+          }),
+        limite: () =>
+          group(
+            'Quand un quota est épuisé',
+            [
+              row(
+                'Changer de compte à',
+                'Un agent passe sur un autre compte de son harness à la fin de son tour quand sa fenêtre de 5 h atteint ce seuil.',
+                seg(['80 %', '90 %', '95 %', 'À la limite'], '95 %'),
+              ),
+              row(
+                'Pause du pilote auto au-delà du quota',
+                'Le pilote auto ne démarre aucun ticket tant que la fenêtre de 5 h ou la fenêtre hebdomadaire dépasse ce seuil. Un ticket lancé à la main part quand même.',
+                seg(['80 %', '90 %', '95 %', '100 %'], '95 %'),
+                { hint: 'pour tous les projets' },
+              ),
+              row(
+                'Reprendre sur un autre compte un agent de ticket arrêté par la limite',
+                'Sinon il attend la remise à zéro de son compte',
+                sw(true),
+              ),
+              row('Reprise automatique après la limite d’usage', '« continue » envoyé une fois le quota réinitialisé', sw(true)),
+            ],
+            {},
+          ),
+        installed: (o = {}) =>
+          group(
+            'Installés',
+            [
+              item(mk('CC'), `Claude Code <span class="h num" style="color:var(--muted);font-weight:400">v2.2.0</span>`, 'Un harness, dans « Nouvel agent » : Claude Code', SEAL + sw(true)),
+              item(mk('Cx'), `Codex <span class="h num" style="color:var(--muted);font-weight:400">v2.2.0</span>`, 'Un harness, dans « Nouvel agent » : Codex', SEAL + sw(true)),
+              item(
+                mk('GH'),
+                `GitHub <span class="h num" style="color:var(--muted);font-weight:400">v1.4.1</span>`,
+                'Un hébergeur de code : GitHub · Actif sur 3 projets sur 4',
+                SEAL + btn('Réglages', 'sm') + sw(true),
+              ),
+              item(
+                mk('Li'),
+                `Linear <span class="h num" style="color:var(--muted);font-weight:400">v1.2.0</span>`,
+                'Une source du Kanban : Linear · Actif sur 1 projet sur 4',
+                SEAL + btn('Réglages', 'sm') + sw(true),
+              ),
+              item(
+                mk('Dg'),
+                `Deepgram <span class="h num" style="color:var(--muted);font-weight:400">v1.0.3</span>`,
+                'Un service de voix, dans Réglages › Voix · secret gardé dans le trousseau',
+                SEAL + btn('Réglages', 'sm') + sw(true),
+              ),
+              item(
+                mk('Ce'),
+                `Contraste élevé <span class="h num" style="color:var(--muted);font-weight:400">v1.0.0</span>`,
+                'Un thème, dans Réglages › Général › Couleurs : Contraste élevé',
+                SEAL + sw(true),
+              ),
+            ],
+            { act: o.noAct ? '' : btn('Ouvrir la vue Plugins', '', 'puzzle') },
+          ),
+        seed: () =>
+          group(
+            'Proposés par Escouade',
+            [
+              item(mk('Co'), 'Copilot CLI', 'Pas encore installé.', btn('Installer', 'sm')),
+              item(mk('Cu'), 'Cursor CLI', 'Pas encore installé.', btn('Installer', 'sm')),
+              item(mk('Tr'), 'Trello', 'Tu l’as désinstallé (v1.3.0). Escouade ne le remet pas sans toi.', btn('Installer', 'sm')),
+              item(mk('is'), 'isola', 'Pas encore installé.', btn('Installer', 'sm')),
+            ],
+            {
+              note: 'Dans l’installeur, rien à télécharger : chacun s’installe aussi tout seul au geste qui le demande (ajouter un compte, choisir une source, un hébergeur ou un service de voix).',
+            },
+          ),
+        verified: () =>
+          group('Sécurité', [
+            row(
+              'N’installer que des versions vérifiées',
+              'Liste de révocation lue à 14:02 · nº 418, signée, relue toutes les 6 heures',
+              sw(true),
+            ),
+          ]),
+        identite: () =>
+          group('Identité', [
+            row('Nom du projet', '', inp('demo-api', 240)),
+            row('Dossier', '', `<span class="mono" style="color:var(--soft)">C:\\escouade-demo\\demo-api</span>` + btn('Ouvrir', 'ghost sm')),
+            row(
+              'Couleur',
+              'Elle teinte toute la fenêtre quand le projet est ouvert.',
+              `<span class="swatches">${[48, 300, 200, 150, 250, 0, 25, 70]
+                .map((h, i) => `<span style="--c:${HUE(h)}" class="${i === 0 ? 'on' : ''}"></span>`)
+                .join('')}</span>`,
+            ),
+            row(
+              'Tuile',
+              'Une à trois lettres ou chiffres, ou un emoji ; ou un logo (PNG, JPEG, WebP, SVG ou ICO, 1 Mo au plus) ; et le libellé sous la tuile.',
+              tile(PROJECTS[0]) + inp('DA', 56) + btn('Choisir une image…', 'sm'),
+            ),
+            row(
+              'Harness par défaut',
+              'Celui des nouveaux agents et des tickets du projet, sauf s’ils en choisissent un autre.',
+              seg(['Claude Code', 'Codex'], 'Claude Code'),
+            ),
+            row(
+              'Compte préféré',
+              'Le compte sur lequel partent les nouveaux agents et les tickets de ce projet.',
+              seg(['Automatique', 'Principal', 'Pro'], 'Automatique'),
+            ),
+          ]),
+        projetPlus: () =>
+          group('', [
+            row(
+              'Assistant de configuration',
+              'Revoir les réglages du projet étape par étape, ou y copier ceux d’un autre projet.',
+              btn('Ouvrir l’assistant…'),
+            ),
+          ]),
+      };
+
+      // ---------- Direction A: the side bar of categories, the projects in it ----------
+      const A_APP = [
+        ['general', 'sliders', 'Général'],
+        ['agents', 'agents', 'Agents'],
+        ['comptes', 'user', 'Comptes et harness', true],
+        ['services', 'link', 'Services connectés', true],
+        ['voix', 'mic', 'Voix'],
+        ['notifs', 'bell', 'Notifications'],
+        ['plugins', 'puzzle', 'Plugins'],
+        ['avance', 'term', 'Avancé'],
+      ];
+      const A_PROJECT = ['Projet', 'Git et worktrees', 'Lancement', 'Kanban', 'Tickets importés', 'Équipe', 'Confidentialité'];
+      function aNav(on) {
+        const app = A_APP.map(
+          ([id, ic, l, w]) =>
+            `<div class="a-i${on === id ? ' on' : ''}">${I(ic)}<span class="lbl">${l}</span>${w ? '<span class="dotw"></span>' : ''}</div>`,
+        ).join('');
+        const projects = PROJECTS.map((p, i) => {
+          const open = on === 'projet' && i === 0;
+          return (
+            `<div class="a-i">${`<span class="sq" style="--c:${p.c}"></span>`}<span class="lbl">${p.id}</span>${p.private ? `<span class="end">${I('lock', 13)}</span>` : ''}</div>` +
+            (open ? A_PROJECT.map((s, j) => `<div class="a-i sub${j === 0 ? ' on' : ''}"><span class="lbl">${s}</span></div>`).join('') : '')
+          );
+        }).join('');
+        return `<nav class="a-nav">
+          <span class="field search">${I('search', 14)}Rechercher un réglage<kbd>Ctrl+F</kbd></span>
+          <span class="a-h">Escouade</span>${app}
+          <span class="a-h">Projets</span>${projects}
+          <div class="a-i">${I('folder')}<span class="lbl">Tous les projets</span></div>
+          <div class="a-bot"><div class="a-i">${I('info')}<span class="lbl">À propos</span><span class="ver">2.2.0</span></div></div>
+        </nav>`;
+      }
+      function aWin(on, title, desc, body, o = {}) {
+        return `<div class="win a">${aNav(on)}<div class="a-main">
+          <div class="head">${o.tile || ''}<div><h1>${title}</h1><p>${desc}</p></div><button class="icon-btn close">${I('close', 14)}</button></div>
+          <div class="a-body"><div class="inner">${body}</div></div></div></div>`;
+      }
+      const A = {
+        general: () =>
+          aWin(
+            'general',
+            'Général',
+            'Thème, zoom, langue, mises à jour et ce qui te concerne',
+            S.apparence() + S.langue() + S.majs() + S.toi() + fold('Avancé', 'Taille du texte de l’éditeur'),
+          ),
+        comptes: () =>
+          aWin(
+            'comptes',
+            'Comptes et harness',
+            'Les harness de ce poste, leurs comptes, et ce qui se passe à la limite',
+            S.claude() +
+              S.codex() +
+              S.limite() +
+              fold('Avancé', 'Ordre des harness · Modèle de passation · Chemin de l’exécutable · Mettre à jour Claude Code · Projection des quotas'),
+          ),
+        plugins: () =>
+          aWin('plugins', 'Plugins', 'Ce qu’ils ajoutent à Escouade, d’où ils viennent et ce qu’ils peuvent faire', S.installed() + S.seed()),
+        projet: () =>
+          aWin(
+            'projet',
+            'demo-api',
+            'Ce projet seulement : son nom, sa tuile, son harness et son compte',
+            S.identite() + S.projetPlus() + fold('Zone sensible', 'Fermer le projet…'),
+            { tile: tile(PROJECTS[0]) },
+          ),
+      };
+
+      // ---------- Direction B: a home that says what needs you, then a page at a time ----------
+      function bTop(crumb) {
+        return `<div class="b-top">
+          ${crumb ? `<button class="icon-btn">${I('left', 14)}</button><span class="b-crumb"><span class="up">Réglages</span>${I('right', 12)}${crumb}</span>` : ''}
+          ${crumb ? `<span class="field search">${I('search', 14)}Rechercher un réglage<kbd>Ctrl+F</kbd></span>` : '<span style="margin-left:auto"></span>'}
+          <button class="icon-btn">${I('close', 14)}</button></div>`;
+      }
+      function bWin(crumb, body) {
+        return `<div class="win b">${crumb ? bTop(crumb) : ""}<div class="b-body">${body}</div>${foot()}</div>`;
+      }
+      const bLink = (mark, name, sum, o = {}) =>
+        `<div class="b-link">${mark}<div class="who"><b>${name}</b><span>${sum}</span></div>${o.wait ? '<span class="dotw"></span>' : ''}<span class="chev">${I('right', 14)}</span></div>`;
+      const bPage = (title, desc, body, o = {}) =>
+        `<div class="b-page"><div class="head">${o.tile || ''}<div><h1>${title}</h1><p>${desc}</p></div></div>${body}</div>`;
+      const B = {
+        accueil: () =>
+          bWin(
+            '',
+            `<div class="b-home">
+              <div class="b-hello"><h1>Réglages</h1><span class="field search">${I('search', 14)}Rechercher un réglage, un projet, un compte<kbd>Ctrl+F</kbd></span><button class="icon-btn">${I('close', 14)}</button></div>
+              <div class="b-todo">
+                ${item(`<span class="dotw"></span>`, 'Codex n’a aucun compte', 'Aucun agent ni ticket ne démarre sur Codex avant qu’un compte soit ajouté.', btn('Ajouter un compte Codex…', 'sm'))}
+                ${item(`<span class="dotw"></span>`, 'Jeton expiré ou révoqué · github.com', 'Les PR de demo-api et studio-web ne sont plus suivies.', btn('Reconnecter', 'sm'))}
+              </div>
+              <div class="b-col"><h2>Escouade</h2>
+                ${bLink(mk(I('sliders')), 'Général', 'Système · 100 % · Français · mises à jour automatiques')}
+                ${bLink(mk(I('agents')), 'Agents', 'Vue Escouade · liste de tâches · remote control coupé')}
+                ${bLink(mk(I('user')), 'Comptes et harness', 'Claude Code : 2 comptes · Codex : aucun compte', { wait: true })}
+                ${bLink(mk(I('link')), 'Services connectés', 'github.com · Linear', { wait: true })}
+                ${bLink(mk(I('mic')), 'Voix', 'Local (Whisper) · Ctrl+Maj+Espace')}
+                ${bLink(mk(I('bell')), 'Notifications', '4 types sur 4 · son activé')}
+                ${bLink(mk(I('puzzle')), 'Plugins', '6 installés · 4 proposés par Escouade')}
+                ${bLink(mk(I('term')), 'Avancé', 'Aucun proxy · PowerShell 7 · pièces jointes')}
+              </div>
+              <div class="b-col"><h2>Projets</h2>
+                ${bLink(tile(PROJECTS[0]), 'demo-api', 'Claude Code · un worktree par agent · 2 commandes de lancement')}
+                ${bLink(tile(PROJECTS[1]), 'studio-web', 'Claude Code · 2 dépôts · Kanban partagé')}
+                ${bLink(tile(PROJECTS[2]), `mobile-app <span style="color:var(--muted)">${I('lock', 12)}</span>`, 'Projet privé · compte réservé : Pro')}
+                ${bLink(tile(PROJECTS[3]), 'infra', 'Codex · aucun compte de son harness', { wait: true })}
+                ${bLink(mk(I('folder')), 'Tous les projets', 'Nouveaux projets publics · 1 projet fermé')}
+              </div>
+              <div class="b-about"><span>Escouade 2.2.0</span><span>Crédits et licences</span><span>Site web</span><span>Discord</span><span>Soutenir Escouade</span></div>
+            </div>`,
+          ),
+        general: () =>
+          bWin(
+            'Général',
+            bPage('Général', 'Thème, zoom, langue, mises à jour et ce qui te concerne', S.apparence() + S.langue() + S.majs() + S.toi()),
+          ),
+        comptes: () =>
+          bWin(
+            'Comptes et harness',
+            bPage(
+              'Comptes et harness',
+              'Les harness de ce poste, leurs comptes, et ce qui se passe à la limite',
+              S.claude() + S.codex() + S.limite(),
+            ),
+          ),
+        plugins: () =>
+          bWin(
+            'Plugins',
+            bPage('Plugins', 'Ce qu’ils ajoutent à Escouade, d’où ils viennent et ce qu’ils peuvent faire', S.installed() + S.seed() + S.verified()),
+          ),
+        projet: () =>
+          bWin(
+            `<span class="sq" style="--c:${PROJECTS[0].c}"></span>demo-api`,
+            bPage(
+              'demo-api',
+              'Ce projet seulement',
+              `<div style="display:flex;gap:6px;flex-wrap:wrap;padding:14px 0 2px">${['Identité', 'Git et worktrees', 'Lancement', 'Kanban', 'Tickets importés', 'Équipe', 'Confidentialité']
+                .map((s, i) => `<span class="state" style="${i === 0 ? 'color:var(--text);background:rgba(var(--fg-rgb),.08);box-shadow:inset 0 0 0 1px var(--line-2)' : ''}">${s}</span>`)
+                .join('')}</div>` +
+                S.identite() +
+                S.projetPlus(),
+              { tile: tile(PROJECTS[0]) },
+            ),
+          ),
+      };
+
+      // ---------- Direction C: two scopes, four tabs each, sections that fold with what they hold ----------
+      function cTop(scope, tabs, on) {
+        const p = PROJECTS[0];
+        return `<div class="c-top"><h1>Réglages</h1>
+            <span class="segmented"><button aria-pressed="${scope === 'app'}">Escouade</button><button aria-pressed="${scope === 'projet'}"><span class="sq" style="--c:${p.c}"></span>demo-api ${I('down', 12)}</button></span>
+            <span class="field search">${I('search', 14)}Rechercher un réglage<kbd>Ctrl+F</kbd></span>
+            <button class="icon-btn">${I('close', 14)}</button></div>
+          <div class="c-tabs">${tabs.map(([t, w]) => `<span class="${t === on ? 'on' : ''}">${t}${w ? '<span class="dotw"></span>' : ''}</span>`).join('')}</div>`;
+      }
+      const C_APP = [['Général'], ['Comptes', true], ['Plugins'], ['Avancé']];
+      const C_PROJECT = [['Projet'], ['Git et lancement'], ['Kanban et tickets'], ['Équipe et confidentialité']];
+      const acc = (title, sum, body, o = {}) =>
+        `<div class="acc${body ? ' open' : ''}"><div class="acc-h"><span class="chev">${I('right', 14)}</span><h2>${title}</h2>${o.state || ''}<span class="sum${o.wait ? ' wait' : ''}">${sum}</span></div>${body ? `<div class="acc-b">${body}</div>` : ''}</div>`;
+      // A group's rows without its own title (the section's head says it).
+      const rows = (html) => html.replace(/^<section class="sg">(<div class="hg">[\s\S]*?<\/div>)?/, '').replace(/<\/section>$/, '');
+      function cWin(scope, on, body) {
+        return `<div class="win c">${cTop(scope, scope === 'app' ? C_APP : C_PROJECT, on)}<div class="c-body"><div class="inner">${body}</div></div>${foot()}</div>`;
+      }
+      const C = {
+        general: () =>
+          cWin(
+            'app',
+            'Général',
+            acc('Apparence', 'Système · Escouade · 100 %', rows(S.apparence())) +
+              acc('Langue', 'Système (Français) · textes comme l’interface', rows(S.langue())) +
+              acc('Mises à jour', 'Escouade 2.2.0 · automatiques · pas de bêta', '') +
+              acc('Agents', 'Vue Escouade · liste de tâches · délai de 10 s', '') +
+              acc('Notifications', '4 types sur 4 · son activé', '') +
+              acc('Voix', 'Local (Whisper) · Ctrl+Maj+Espace', '') +
+              acc('Toi', 'Camille Martin · statistiques d’usage', ''),
+          ),
+        comptes: () =>
+          cWin(
+            'app',
+            'Comptes',
+            acc('Claude Code', 'Principal, Pro', rows(S.claude()), { state: state('Prêt · 2.1.301', 'run') }) +
+              acc('Codex', 'Ajoute un compte pour lancer des agents sur Codex', '', { state: state('Aucun compte', 'wait'), wait: true }) +
+              acc('Hébergeurs de code', 'github.com · jeton expiré', '', { wait: true }) +
+              acc('Sources du Kanban', 'Linear · connecté', '') +
+              acc('Quand un quota est épuisé', 'changer de compte à 95 % · pause du pilote auto à 95 %', ''),
+          ),
+        plugins: () =>
+          cWin(
+            'app',
+            'Plugins',
+            acc('Installés', '6 · tous vérifiés', rows(S.installed({ noAct: true }))) +
+              acc('Proposés par Escouade', 'Copilot CLI, Cursor CLI, Trello, isola · rien à télécharger', '') +
+              acc('Sécurité', 'versions vérifiées seulement', '') +
+              `<div style="padding-top:14px">${btn('Ouvrir la vue Plugins', '', 'puzzle')}</div>`,
+          ),
+        projet: () =>
+          cWin(
+            'projet',
+            'Projet',
+            acc('Identité', 'demo-api · Claude Code · compte automatique', rows(S.identite())) +
+              acc('Remote control', 'coupé', '') +
+              acc('Assistant de configuration', 'revoir les réglages étape par étape', '') +
+              acc('Zone sensible', 'Fermer le projet…', ''),
+          ),
+      };
+
+      // ---------- The page of the three directions ----------
+      const SCREENS = {
+        a: ['general', 'projet', 'comptes', 'plugins'],
+        b: ['accueil', 'general', 'projet', 'comptes', 'plugins'],
+        c: ['general', 'projet', 'comptes', 'plugins'],
+      };
+      const NAMES = { general: 'Général', projet: 'Un projet', comptes: 'Comptes', plugins: 'Plugins', accueil: 'Accueil' };
+      function gallery() {
+        const dir = (k, title, rec, text) =>
+          `<section><h2>${title}${rec ? '<small>recommandée</small>' : ''}</h2><p>${text}</p><div class="shots">${SCREENS[k]
+            .flatMap((s) => [
+              `<a href="#${k}-${s}"><img src="captures/${k}-${s}.png" alt="${title}, ${NAMES[s]}, sombre" />${NAMES[s]} · sombre</a>`,
+              `<a href="?theme=light#${k}-${s}"><img src="captures/${k}-${s}-light.png" alt="${title}, ${NAMES[s]}, clair" />${NAMES[s]} · clair</a>`,
+            ])
+            .join('')}</div></section>`;
+        return `<div class="gallery"><h1>Réglages 2.2 — trois directions</h1>
+          <p>ESC-375. Trois façons d’organiser les mêmes réglages, avec les textes et les jetons de l’app. Le diagnostic, l’organisation et le plan sont dans PROPOSITION.md ; l’inventaire dans INVENTAIRE.md ; l’existant dans existant/.</p>
+          ${dir('a', 'A — La barre des catégories', true, 'Une barre à gauche, toujours là : la recherche, les catégories d’Escouade, puis chaque projet avec ses pages. La fenêtre prend la couleur de ce qu’elle règle : le teal pour Escouade, celle du projet pour un projet.')}
+          ${dir('b', 'B — L’accueil des réglages', false, 'Une page d’accueil dit d’abord ce qui attend (un harness sans compte, un jeton expiré), puis chaque catégorie et chaque projet avec ce qu’ils valent. Un clic ouvre une page, un fil d’Ariane y ramène.')}
+          ${dir('c', 'C — Deux portées, des sections qui se replient', false, 'Escouade ou un projet, choisi en haut ; quatre onglets de chaque côté ; des sections repliées qui disent leur valeur sans s’ouvrir.')}
+        </div>`;
+      }
+
+      function render() {
+        const m = location.hash.match(/^#([abc])-([a-z]+)$/);
+        const root = document.getElementById('root');
+        if (!m) {
+          document.documentElement.style.setProperty('--p', BRAND);
+          root.innerHTML = gallery();
+          return;
+        }
+        const [, d, s] = m;
+        // The window takes the colour of what it sets: Escouade's teal, or the project's own.
+        document.documentElement.style.setProperty('--p', s === 'projet' ? PROJECTS[0].c : BRAND);
+        const screen = { a: A, b: B, c: C }[d][s];
+        root.innerHTML = `<div class="stage">${screen ? screen() : ''}</div>`;
+      }
+      addEventListener('hashchange', render);
+      render();
+    </script>
+  </body>
+</html>

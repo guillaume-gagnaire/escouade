@@ -6,13 +6,21 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Les menus « Harness » ne proposent plus que les harness utilisables : programme installé, plugin actif et au moins un compte. Celui déjà choisi reste affiché avec la raison, et Réglages › Comptes et harness montre toujours ceux qui n’ont pas encore de compte.
+- Le Kanban a un en-tête sur deux rangées, où rien ne se chevauche plus, et la vue Environnements ne montre que les environnements choisis, sans ceux qui n’ont jamais été déployés ; les onglets PR et Environnements n’apparaissent qu’avec un hébergeur de code. Dans une fenêtre étroite, un lecteur d’écran y trouve toujours « Après validation ».
 - OpenCode : `git commit` et `git add` ne passent d'office que sous leur forme simple, et une écriture dans `.git`, `.opencode` ou `opencode.json` demande toujours : ces règles sont sa seule protection.
 - OpenCode : un projet privé tient mieux. Ses règles sont posées avant l'ouverture d'une session, et « Toujours » n'est plus proposé sous clôture.
 - Claude Code : une discussion refuse aussi les commandes PowerShell, au lieu de les présenter sur une carte.
+- Antigravity CLI : sa vue terminal suit les règles de son plugin. Elle n’autorise plus d’office les écritures du dossier de l’agent ni git add et git commit, demande les commandes d’un projet privé, et oublie les « Toujours » gardés par la 2.2.0.
+- Antigravity CLI : sa vue terminal a son propre dossier temporaire, comme son plugin, au lieu du tien, où il écrivait sans rien demander.
 
 ### Nouveautés
 
 - Les agents se rangent en dossiers dans la barre latérale : on glisse une carte dans un dossier, on le replie sans perdre de vue ce qui attend une réponse, et un agent qui en crée d’autres les range avec lui. Le serveur MCP lit et règle ces dossiers.
+- L’écran partagé : glisse un agent, un terminal, un lancement ou l’éditeur depuis la barre latérale sur la zone de travail pour l’ouvrir à côté, au-dessus ou en dessous, jusqu’à quatre volets. Le volet entouré reçoit ta saisie, ta voix et tes réponses ; Ctrl+ partage ou revient à un volet, et la disposition revient au prochain lancement.
+- Les réglages sont refaits : une barre à gauche avec les pages d’Escouade (Général, Agents, Comptes et harness, Services connectés, Voix, Notifications, Plugins, Avancé), puis les pages de chaque projet, et tout s’applique dès que tu le changes, sans « Enregistrer ». Une recherche (Ctrl+F) trouve un réglage par son nom, en français comme en anglais, et ouvre sa page ; un point ambre signale la page qui attend quelque chose de toi, comme un harness sans compte ou un jeton expiré.
+- Les plugins d'Escouade sont dans l'installeur : à la première ouverture, même sans réseau, Escouade installe ceux que ta configuration utilise, et la vue Plugins propose les autres, installables d'un clic sans téléchargement.
+- Sur store.escouade.dev, la documentation d'un plugin peut avoir ses pages en français et en anglais : chacun lit celles de sa langue, sinon celles de l'autre, et un lien d'une page à l'autre reste sur le store.
 - Un plugin ne garde plus ce qu’Escouade lui a prêté : l’hôte d’un essai de connexion raté se referme aussitôt, et un compte retiré reprend son hôte et son jeton. Une adresse qui se fait passer pour locale, comme `http://localhost:1@exemple.dev`, est refusée dès le formulaire.
 - La documentation a une page sur les hébergeurs de code : ce qu'Escouade fait chez GitHub, GitLab, Bitbucket, Gitea, Forgejo et Azure DevOps, ses limites, et ce qui a vraiment été essayé. La page Confidentialité dit que tes jetons restent chez toi et que rien ne passe par un serveur d'Escouade.
 - Si tu as accepté les statistiques d'usage, elles comptent aussi les PR ouvertes et mergées, les corrections de CI et les relectures par un agent, sans nom ni adresse.
@@ -31,6 +39,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Le plugin Antigravity CLI tourne désormais lui aussi en WASM, sans process à lui : ses agents se comportent comme avant, et une lenteur d’`agy` à écrire son transcript ne retient plus les autres agents.
 - `escouade-plugin build` compile un plugin en Rust en WASM, à l’octet près le même sous Windows et sous Linux, avec un compilateur qu’il télécharge lui-même ; `test` et `dev` le compilent aussi avant de le jouer.
 - Un plugin isolé peut joindre l’instance que tu lui donnes (GitLab maison, réseau local), en suivant le proxy et les certificats de Réglages › Réseau, et recevoir du réseau en continu ; la fenêtre d’installation le dit, et le journal garde chaque connexion.
+- Les plugins d’Escouade livrés avec l’installeur ne s’installent que si tu t’en sers : tes comptes, tes projets et ta voix le disent, et ce qui marchait marche. Les autres s’installent sans réseau au moment où tu en as besoin, ou d’un clic dans la vue Plugins.
 - Les plugins d’Escouade pourront se couper et se désinstaller comme les autres : ils arrivent avec l’installeur, s’installent sans réseau, et une nouvelle version est proposée, jamais installée sans toi. La vue Plugins repropose ce que tu as désinstallé.
 - Un plugin isolé peut lire et écrire dans les dossiers de tes agents et lancer des commandes de ton ordinateur, mais seulement ce qu’il déclare : la fenêtre d’installation le dit, Escouade l’applique, et le journal du plugin garde chaque écriture, chaque commande et chaque refus.
 - Un plugin peut être écrit en Rust et tourner isolé dans Escouade, compilé en WASM, sur le même hôte qu’un plugin en JS/TS. Un plugin qui attend une réponse lente du réseau continue de répondre à tout le reste.
@@ -90,12 +99,17 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Après le merge, la carte d’un ticket terminé dit où il tourne (« staging ✓ · production ⏳ »), et la vue « Environnements » du Kanban montre ce qui est déployé où, les tickets qui attendent la production et un déploiement en échec avec son job. Sur une carte « En revue », « Ouvrir l’aperçu » ouvre l’aperçu Vercel, Netlify ou Cloudflare Pages de la PR.
 - `escouade-plugin test`, `validate` et `dev` jouent un plugin comme la version d’Escouade de ton choix (`--escouade 2.2.0`), pour écrire pour une version à venir.
 
+### Modifications
+
+- Le menu « Harness » à côté de « Nouvel agent » ne liste plus que les harness prêts à servir : installés et avec un compte. Ceux qui manquent ou n’ont pas de compte se règlent dans Réglages › Harness et Réglages › Comptes. Merci à @Metalzoid (#21).
+
 ### Retiré
 
 - L’index du code est retiré : mesuré avec de vrais agents sur des changements à plusieurs endroits, il ne faisait pas économiser de tokens ni éviter d’oubli, et chaque harness trouve le code par ses propres outils. Ses bases sont effacées de ta machine à la mise à jour, et la recherche par le sens de la mémoire et des docs se règle maintenant dans Réglages › Projets › Tous les projets.
 
 ### Corrections
 
+- macOS : la 2.2.0-beta.3 se fermait quelques secondes après son démarrage dès qu’un plugin WASM se lançait (Claude Code au premier chef). L’app a maintenant le droit d’exécuter le code que compile le moteur des plugins.
 - Remote control : un agent tout juste créé pendant que tu allumes le réglage pour tous les agents garde bien son contrôle à distance. Il pouvait le perdre sans rien dire jusqu'au prochain changement du réglage.
 - Copilot CLI lit une commande comme son shell la lit : `git add x; node evil.js` et toute commande enchaînée, redirigée ou lancée hors du worktree passent par une carte, et une écriture dans `.git` aussi. Cette écriture passe aussi par une carte sur Cursor, Gemini, Mistral Vibe et les harness ACP.
 - La clôture d'un projet privé et la lecture seule tiennent quand un plugin de harness redémarre, par exemple après un changement de langue ou de réseau. Un agent clôturé n'a plus « Pour cette session » sur Copilot CLI, et un `git commit` qui lit son message dans un fichier lui passe par une carte. Un agent Cursor, Gemini ou Mistral Vibe garde aussi sa session : ses messages ne restent plus en attente après un redémarrage.
@@ -109,6 +123,19 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - La barre du quota de Fable s’appelle « Fable 7 j », comme les autres fenêtres, par sa durée.
 - Un agent enregistré sur un harness que cette version n’a pas (celui d’une version plus récente, ou d’un plugin retiré) est lu et gardé avec sa conversation, marqué « harness absent » ; il ne démarre pas, et aucun agent n’est créé sur ce harness.
 - La fenêtre d’installation d’un plugin sans programme ne dit plus qu’Escouade ne filtre pas son réseau : ses webhooks ne partent que vers l’hôte déclaré. Elle dit aussi ce qui déclenche chaque webhook, et le store une seule fois.
+- Deux tickets validés au même moment ne reçoivent plus le même numéro de décision. Un doublon déjà présent ne fait plus planter la vue Décisions : elle montre les deux.
+
+## [2.1.5] — 2026-11-08
+
+### Corrections
+
+- **Antigravity CLI est coupé :** avec agy 1.5, ses agents pouvaient lancer une commande ou écrire un fichier sans te le demander, même en « Demander ». Escouade ne le lance plus et le dit dans Réglages › Harness ; il revient avec un correctif.
+
+## [2.1.4] — 2026-11-07
+
+### Nouveautés
+
+- **Versions bêta :** l’option « Recevoir les versions bêta » (Réglages › À propos, décochée par défaut) te fait essayer les prochaines versions avant tout le monde. Décochée, Escouade ignore les bêtas ; une app sur une bêta le dit à côté de sa version.
 
 ## [2.1.3] — 2026-11-06
 
