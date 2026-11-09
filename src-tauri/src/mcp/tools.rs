@@ -269,7 +269,7 @@ pub struct UpdateFolderArgs {
     )]
     pub principal: Option<String>,
     #[schemars(
-        description = "Its rank among the folders and agents the read tools list (archived ones left out), from 0; past the end, the bottom."
+        description = "Its rank among the folders and agents the read tools list, from 0, not counting the agents that wait (they come first) nor archived ones; past the end, the bottom."
     )]
     pub position: Option<u32>,
 }
@@ -293,7 +293,7 @@ pub struct MoveAgentArgs {
     )]
     pub folder: Option<String>,
     #[schemars(
-        description = "Its rank among the folders and agents the read tools list in that place (archived ones left out), in the folder or in the project's list, from 0. Left out, the bottom."
+        description = "Its rank among the folders and agents the read tools list in that place, in the folder or in the project's list, from 0, not counting the agents that wait (they come first, or under the folder's principal), the principal nor archived ones. Left out, the bottom."
     )]
     pub position: Option<u32>,
     #[schemars(

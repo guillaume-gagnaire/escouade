@@ -1808,7 +1808,8 @@ impl<R: Runtime> Core<R> {
         );
         let closed_index = entries.into_iter().map(|e| (e.id.clone(), e)).collect();
         // The sidebar's order of each project settled once (a state from before the folders has
-        // none), so the window gets it complete; saved with the next write.
+        // none), so the window gets it complete; ids that are no agent any more dropped; saved
+        // with the next write.
         for p in &mut state.projects {
             let owned: Vec<crate::folders::OwnedMember> = state
                 .agents
@@ -1825,6 +1826,7 @@ impl<R: Runtime> Core<R> {
                 .iter()
                 .map(crate::folders::OwnedMember::as_member)
                 .collect();
+            crate::folders::prune(p, &members);
             crate::folders::settle(p, &members);
         }
         // Read before the agents are made: a turn does not survive a restart (they come back done).

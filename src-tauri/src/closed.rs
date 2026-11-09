@@ -779,8 +779,9 @@ impl<R: Runtime> Core<R> {
         for ticket in tickets {
             self.hub.emit(UiEvent::Ticket { ticket });
         }
-        // Its sidebar order settled with its agents back (one closed before the folders has none).
-        self.layout_hook(&project.id, |_| {});
+        // Its sidebar order settled with its agents back (one closed before the folders has none),
+        // the ids that are no agent of it dropped.
+        self.prune_layout(&project.id);
         // The Remote Control settings are applied to them as when the app starts (`start_remote`):
         // the project's own setting and the agents set apart come back with them.
         handles

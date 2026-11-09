@@ -44,7 +44,7 @@ use super::files::{self, Drafted};
 use super::images;
 use super::read::{
     answerable, asked_questions, board_view, folder_rows, json, request_type, ticket_view,
-    todo_keys, TicketView,
+    todo_keys, FolderRef, TicketView,
 };
 use super::resolve::{self, Sight};
 use super::tools::{
@@ -772,20 +772,35 @@ pub(super) async fn start_ticket<R: Runtime>(
     // Told with `create_agent`'s: one at a time, so the two never make a folder each for a caller.
     let folder = if t.column == Column::Todo {
         let _one = core.mcp.acting.lock().await;
-        let folder = core
+        let filed = core
             .auto_folder(&t.project_id, caller, a.folder.as_deref())
             .map_err(failure)?;
-        core.edit_ticket(&t.id, |x| {
-            x.folder = folder.clone();
-            Ok(())
-        })
-        .map_err(refusal)?;
+        let folder = filed.as_ref().map(|(id, _)| id.clone());
+        let made_folder = filed.filter(|(_, made)| *made).map(|(id, _)| id);
+        let before = t.folder.clone();
+        let started = core
+            .edit_ticket(&t.id, |x| {
+                x.folder = folder.clone();
+                Ok(())
+            })
+            .and_then(|_| core.ticket_start_on(&t.id, account, model, effort));
+        // Refused: the ticket keeps its folder, and none is left made for it.
+        if let Err(e) = started {
+            let _ = core.edit_ticket(&t.id, |x| {
+                x.folder = before;
+                Ok(())
+            });
+            if let Some(id) = &made_folder {
+                let _ = core.folder_delete(&t.project_id, id);
+            }
+            return Err(refusal(e));
+        }
         folder
     } else {
+        core.ticket_start_on(&t.id, account, model, effort)
+            .map_err(refusal)?;
         None
     };
-    core.ticket_start_on(&t.id, account, model, effort)
-        .map_err(refusal)?;
     // The pass of the board that takes it up may meet what the checks above did not (a usage
     // limit hit meanwhile): the answer says it, rather than `starting` for a ticket that stays.
     // Behind a launch under way it may not have come to it yet: queued, it goes in its turn.
@@ -802,13 +817,13 @@ pub(super) async fn start_ticket<R: Runtime>(
     // The model its harness runs it on (a harness other than Claude Code: its own, by default).
     let model = core.model_for(engine, model);
     let mut answer = json!({ "key": started.key, "starting": true, "model": model });
-    answer["folder"] = folder
-        .and_then(|id| {
-            let p = core.project(&started.project_id).ok()?;
-            let f = p.agent_folders.iter().find(|f| f.id == id)?;
-            Some(json!({ "id": f.id, "name": f.name }))
-        })
-        .unwrap_or(serde_json::Value::Null);
+    answer["folder"] = json!(folder.and_then(|id| {
+        let p = core.project(&started.project_id).ok()?;
+        p.agent_folders
+            .iter()
+            .find(|f| f.id == id)
+            .map(FolderRef::of)
+    }));
     // A model that takes no effort (Haiku) goes without one: none is said.
     if crate::engine::by_id(engine).supports_effort(&model) {
         answer["effort"] = json!(effort);
@@ -1741,9 +1756,10 @@ pub(super) async fn create_agent<R: Runtime>(
             project = project.name
         )));
     }
-    let folder = core
+    let filed = core
         .auto_folder(&project.id, caller, a.folder.as_deref())
         .map_err(failure)?;
+    let folder = filed.as_ref().map(|(id, _)| id.clone());
     let view = core
         .create_agent_with(
             &project.id,
@@ -1756,8 +1772,17 @@ pub(super) async fn create_agent<R: Runtime>(
                 ..Default::default()
             },
         )
-        .await
-        .map_err(failure)?;
+        .await;
+    let view = match view {
+        Ok(v) => v,
+        Err(e) => {
+            // Nothing was made: the folder made for it goes, its caller back where it was.
+            if let Some((id, true)) = &filed {
+                let _ = core.folder_delete(&project.id, id);
+            }
+            return Err(failure(e));
+        }
+    };
     let (id, name) = (view.meta.id, view.meta.name);
     // Under its author's name, as every message from the server: not taken for the user's words.
     let origin = activity::caller_name(core, Some(caller));
@@ -1773,12 +1798,10 @@ pub(super) async fn create_agent<R: Runtime>(
     json(&json!({ "id": id, "name": name, "folder": folder_ref(core, &project.id, &id) }))
 }
 
-/// `{ id, name }` of the folder holding `agent`, as the tools that file agents say it; null when loose.
-fn folder_ref<R: Runtime>(core: &Core<R>, project_id: &str, agent: &str) -> serde_json::Value {
-    core.project(project_id)
-        .ok()
-        .and_then(|p| folders::folder_of(&p, agent).map(|f| json!({ "id": f.id, "name": f.name })))
-        .unwrap_or(serde_json::Value::Null)
+/// The folder holding `agent`, as the tools that file agents say it; null when loose.
+fn folder_ref<R: Runtime>(core: &Core<R>, project_id: &str, agent: &str) -> Option<FolderRef> {
+    let p = core.project(project_id).ok()?;
+    folders::folder_of(&p, agent).map(FolderRef::of)
 }
 
 /// The agent `asked` names (in the project `project` when given), who is not the caller and,
@@ -2358,8 +2381,10 @@ fn folder_answer<R: Runtime>(
 }
 
 /// The stored index that puts `item` at `rank` of what the read tools list at a level (a folder's
-/// agents, or the project's list when `folder` is None): archived agents are not counted, and a
-/// rank past the end is the bottom. `item_move` counts the level once `item` is taken out.
+/// agents, or the project's list when `folder` is None) apart from what has a fixed place there:
+/// the agents that wait (they come first, or under the principal) and the folder's principal.
+/// Archived agents are not counted either, and a rank past the end is the bottom. `item_move`
+/// counts the level once `item` is taken out.
 fn stored_index<R: Runtime>(
     core: &Core<R>,
     project_id: &str,
@@ -2371,19 +2396,23 @@ fn stored_index<R: Runtime>(
     let owned = core.folder_members(project_id);
     let members: Vec<_> = owned.iter().map(folders::OwnedMember::as_member).collect();
     folders::settle(&mut p, &members);
-    let level: &[String] = match folder {
+    let (level, principal): (&[String], Option<&String>) = match folder {
         Some(f) => p
             .agent_folders
             .iter()
             .find(|x| x.id == f)
-            .map_or(&[], |x| &x.agents),
-        None => &p.agent_order,
+            .map_or((&[], None), |x| (&x.agents, x.principal.as_ref())),
+        None => (&p.agent_order, None),
     };
     let rest: Vec<&String> = level.iter().filter(|i| *i != item).collect();
-    // Folders and live agents only: an archived agent or an id that is no agent has no rank.
+    // Folders and live agents that do not wait only: an archived agent, an id that is no agent,
+    // a waiting agent or the principal has no rank.
     let listed = |i: &&String| {
-        p.agent_folders.iter().any(|f| f.id == **i)
-            || owned.iter().any(|m| !m.archived && m.id == **i)
+        Some(*i) != principal
+            && (p.agent_folders.iter().any(|f| f.id == **i)
+                || owned
+                    .iter()
+                    .any(|m| !m.archived && !m.waiting && m.id == **i))
     };
     Ok(rest
         .iter()
@@ -2561,7 +2590,7 @@ pub(super) fn move_agent<R: Runtime>(
     let answer = json(&json!({
         "id": found.id,
         "name": found.name,
-        "folder": folder.map(|f| json!({ "id": f.id, "name": f.name })),
+        "folder": folder.map(FolderRef::of),
     }))?;
     Ok((answer, changed))
 }

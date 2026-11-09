@@ -5527,6 +5527,122 @@ async fn a_position_counts_what_the_read_tools_list_archived_ones_left_out() {
     h.core.mcp.stop();
 }
 
+#[tokio::test]
+async fn a_position_does_not_count_the_agents_that_wait_nor_the_principal() {
+    let h = harness("mcp-folder-waiting");
+    let p = project(&h).await;
+    let w = put_agent(&h, &p, "w", 1);
+    let a = put_agent(&h, &p, "a", 2);
+    let b = put_agent(&h, &p, "b", 3);
+    let x = put_agent(&h, &p, "x", 4);
+    h.core.agent(&w.id).unwrap().lock().meta.status = AgentStatus::Waiting;
+    let cl = external(&h).await;
+    // The list shows w (it waits, so it comes first), a, b, x: rank 1 of the others is before b.
+    read(&cl, "move_agent", json!({ "agent": x.id, "position": 1 })).await;
+    assert_eq!(
+        h.core.shown_agents_of(&p.id),
+        [w.id.clone(), a.id.clone(), x.id.clone(), b.id.clone()]
+    );
+    read(&cl, "move_agent", json!({ "agent": x.id, "position": 0 })).await;
+    assert_eq!(
+        h.core.shown_agents_of(&p.id),
+        [w.id.clone(), x.id.clone(), a.id.clone(), b.id.clone()]
+    );
+    // In a folder: the principal is on top and not counted either.
+    let f = h
+        .core
+        .folder_create(
+            &p.id,
+            Some("F"),
+            &[a.id.clone(), b.id.clone(), w.id.clone()],
+            Some(&a.id),
+            None,
+        )
+        .unwrap();
+    read(
+        &cl,
+        "move_agent",
+        json!({ "agent": x.id, "folder": f.id, "position": 0 }),
+    )
+    .await;
+    let stored = h.core.project(&p.id).unwrap().agent_folders[0]
+        .agents
+        .clone();
+    assert_eq!(stored[0], a.id);
+    assert_eq!(stored[1], x.id);
+    cl.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+/// The project's harness set to one this version does not have: nothing is made on it.
+fn harness_absent(h: &Harness) {
+    h.core.projects.write()[0].engine = Some(serde_json::from_str("\"ghost\"").unwrap());
+}
+
+#[tokio::test]
+async fn a_refused_creation_leaves_no_folder_and_the_caller_where_it_was() {
+    let h = harness("mcp-create-refused");
+    let p = project(&h).await;
+    let boss = put_agent(&h, &p, "boss", 1);
+    harness_absent(&h);
+    let c = as_agent(&h, &boss.id).await;
+    let out = refused(
+        &c,
+        "create_agent",
+        json!({ "project": p.id, "message": "un" }),
+    )
+    .await;
+    assert!(!out.is_empty());
+    let after = h.core.project(&p.id).unwrap();
+    assert!(after.agent_folders.is_empty(), "{:?}", after.agent_folders);
+    assert_eq!(after.agent_order, std::slice::from_ref(&boss.id));
+    // A named folder made for the call goes too; one that existed stays.
+    refused(
+        &c,
+        "create_agent",
+        json!({ "project": p.id, "message": "un", "folder": "Front" }),
+    )
+    .await;
+    assert!(h.core.project(&p.id).unwrap().agent_folders.is_empty());
+    let kept = h
+        .core
+        .folder_create(&p.id, Some("Kept"), &[], None, None)
+        .unwrap();
+    refused(
+        &c,
+        "create_agent",
+        json!({ "project": p.id, "message": "un", "folder": "Kept" }),
+    )
+    .await;
+    let after = h.core.project(&p.id).unwrap();
+    assert_eq!(after.agent_folders.len(), 1);
+    assert_eq!(after.agent_folders[0].id, kept.id);
+    assert!(after.agent_folders[0].agents.is_empty());
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_ticket_refused_its_start_keeps_its_folder_and_makes_none() {
+    let h = harness("mcp-ticket-refused");
+    let p = project(&h).await;
+    let boss = put_agent(&h, &p, "boss", 1);
+    let a = made(&h, &p, "Un ticket [ok]").await;
+    h.core
+        .edit_ticket(&a.id, |t| {
+            t.engine = Some(serde_json::from_str("\"ghost\"").unwrap());
+            Ok(())
+        })
+        .unwrap();
+    let c = as_agent(&h, &boss.id).await;
+    refused(&c, "start_ticket", json!({ "ticket": a.key })).await;
+    assert_eq!(stored(&h, &a.id).folder, None);
+    assert!(h.core.project(&p.id).unwrap().agent_folders.is_empty());
+    assert!(folder_holding(&h, &p.id, &boss.id).is_none());
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
 // ---------- agents and tickets filed in folders on creation ----------
 
 /// The folder of `project` that holds `agent`, if any.

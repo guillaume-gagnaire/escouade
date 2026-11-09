@@ -16,9 +16,9 @@ use crate::folders;
 use crate::forge::{CheckState, PrState, PullRequest};
 use crate::git;
 use crate::model::{
-    AgentMeta, AgentStatus, Column, Criterion, EngineId, PauseReason, PendingView, Project,
-    QuotaMeter, RateWindow, RemoteSource, Service, Ticket, TicketPr, FIVE_HOURS, MAX_PENDING_FIELD,
-    MAX_PENDING_ITEMS, WEEK,
+    AgentFolder, AgentMeta, AgentStatus, Column, Criterion, EngineId, PauseReason, PendingView,
+    Project, QuotaMeter, RateWindow, RemoteSource, Service, Ticket, TicketPr, FIVE_HOURS,
+    MAX_PENDING_FIELD, MAX_PENDING_ITEMS, WEEK,
 };
 use crate::plan::PlanState;
 use serde::Serialize;
@@ -304,6 +304,15 @@ pub(super) struct FolderRef {
     pub(super) name: String,
 }
 
+impl FolderRef {
+    pub(super) fn of(f: &AgentFolder) -> Self {
+        FolderRef {
+            id: f.id.clone(),
+            name: f.name.clone(),
+        }
+    }
+}
+
 /// `list_agents`: the agents not archived, in the sidebar's order, project by project in the
 /// app's order, of every project the caller sees or of `project`.
 pub(super) fn agents<R: Runtime>(
@@ -347,10 +356,7 @@ pub(super) fn agents<R: Runtime>(
             let own = projects.get(v.meta.project_id.as_str());
             let folder = own.and_then(|p| folders::folder_of(p, &v.meta.id));
             AgentRow {
-                folder: folder.map(|f| FolderRef {
-                    id: f.id.clone(),
-                    name: f.name.clone(),
-                }),
+                folder: folder.map(FolderRef::of),
                 principal: folder.is_some_and(|f| f.principal.as_deref() == Some(&v.meta.id)),
                 workflow: tracked[&v.meta.project_id].of_agent(&v.meta.id),
                 work: WorkCounts::of(v.meta.plan.as_ref()),

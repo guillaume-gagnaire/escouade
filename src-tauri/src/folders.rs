@@ -79,6 +79,35 @@ pub fn settle(p: &mut Project, members: &[Member]) -> bool {
     (p.agent_folders.clone(), p.agent_order.clone()) != before
 }
 
+/// `base`, or the first of « base 2 », « base 3 »… no folder bears (in any case), `except` aside.
+pub fn free_name(p: &Project, base: &str, except: Option<&str>) -> String {
+    let taken = |n: &str| {
+        p.agent_folders
+            .iter()
+            .any(|f| Some(f.id.as_str()) != except && f.name.to_lowercase() == n.to_lowercase())
+    };
+    std::iter::once(base.to_string())
+        .chain((2..).map(|n| format!("{base} {n}")))
+        .find(|n| !taken(n))
+        .unwrap()
+}
+
+/// Drops from the order and the folders the ids that are no agent of the project (archived ones
+/// count) nor a folder: only where the whole project is known (`Core::load`, a closed project
+/// coming back), never from a snapshot that may be stale (`settle`).
+pub fn prune(p: &mut Project, members: &[Member]) {
+    let known = |i: &String| {
+        members.iter().any(|m| m.id == i) || p.agent_folders.iter().any(|f| &f.id == i)
+    };
+    let keep: Vec<String> = p.agent_order.iter().filter(|i| known(i)).cloned().collect();
+    p.agent_order = keep;
+    let ids: Vec<String> = p.agent_folders.iter().map(|f| f.id.clone()).collect();
+    for f in &mut p.agent_folders {
+        f.agents
+            .retain(|a| members.iter().any(|m| m.id == a) || ids.contains(a));
+    }
+}
+
 pub fn folder_of<'a>(p: &'a Project, agent: &str) -> Option<&'a AgentFolder> {
     p.agent_folders
         .iter()
@@ -323,6 +352,17 @@ impl<R: Runtime> Core<R> {
         Ok(out)
     }
 
+    /// Drops the ids that are no agent of the project from its layout (`prune`): where the whole
+    /// project is back (a closed one coming back).
+    pub(crate) fn prune_layout(&self, project_id: &str) {
+        let owned = self.folder_members(project_id);
+        let members: Vec<Member> = owned.iter().map(OwnedMember::as_member).collect();
+        let _ = self.edit_layout(project_id, |p| {
+            prune(p, &members);
+            Ok(())
+        });
+    }
+
     /// A new folder (named « Dossier », « Dossier 2 »… without a name) holding `agents`, in the
     /// place of `at` (the bottom without it).
     pub fn folder_create(
@@ -420,6 +460,9 @@ impl<R: Runtime> Core<R> {
         folder: &str,
         agent: Option<&str>,
     ) -> Result<()> {
+        let name = agent
+            .and_then(|a| self.agent(a).ok())
+            .map(|h| h.lock().meta.name.clone());
         self.edit_layout(project_id, |p| {
             let f = Self::folder_mut(p, folder)?;
             if agent.is_some_and(|a| !f.agents.iter().any(|x| x == a)) {
@@ -432,6 +475,12 @@ impl<R: Runtime> Core<R> {
             if let Some(a) = agent {
                 f.agents.retain(|x| x != a);
                 f.agents.insert(0, a.to_string());
+            }
+            // A folder never renamed follows its principal (`follow_principal`).
+            if let (false, Some(name)) = (f.named, name) {
+                let id = f.id.clone();
+                let free = free_name(p, &name, Some(&id));
+                Self::folder_mut(p, &id)?.name = free;
             }
             Ok(())
         })
@@ -467,13 +516,14 @@ impl<R: Runtime> Core<R> {
     /// `asked`: "" none; a folder's id or name (made under that name when none is, the caller,
     /// if an agent of this project with no folder, going in it as its principal); None: the caller's
     /// folder if it is an agent of this project, made after it (its name, following it, it the
-    /// principal) when it has none. Anyone else: none.
+    /// principal) when it has none. Anyone else: none. `true` with the id: the folder was made
+    /// here (`folder_delete` takes it back when what it was for fails).
     pub fn auto_folder(
         &self,
         project_id: &str,
         caller: &crate::mcp::Caller,
         asked: Option<&str>,
-    ) -> Result<Option<String>> {
+    ) -> Result<Option<(String, bool)>> {
         let own = match caller {
             crate::mcp::Caller::Agent(id) => self
                 .agent(id)
@@ -501,7 +551,7 @@ impl<R: Runtime> Core<R> {
                     None => project.agent_folders.iter().filter(by_name).collect(),
                 };
                 match same.as_slice() {
-                    [f] => return Ok(Some(f.id.clone())),
+                    [f] => return Ok(Some((f.id.clone(), false))),
                     [] => (asked.to_string(), true),
                     _ => bail!(tr!(
                         "Plusieurs dossiers s’appellent « {asked} » : donne son id.",
@@ -510,8 +560,8 @@ impl<R: Runtime> Core<R> {
                 }
             }
             None => match (&own, held) {
-                (_, Some(f)) => return Ok(Some(f)),
-                (Some((_, _, name)), None) => (name.clone(), false),
+                (_, Some(f)) => return Ok(Some((f, false))),
+                (Some((_, _, name)), None) => (free_name(&project, name, None), false),
                 (None, None) => return Ok(None),
             },
         };
@@ -527,7 +577,7 @@ impl<R: Runtime> Core<R> {
             who.as_deref(),
             who.as_deref(),
         )?;
-        Ok(Some(f.id))
+        Ok(Some((f.id, true)))
     }
 
     /// Hook of `create_agent_with`, `duplicate_agent`, `delete_agent`: edits the layout without
@@ -547,17 +597,26 @@ impl<R: Runtime> Core<R> {
             (m.project_id.clone(), m.name.clone())
         };
         let follows = |p: &Project| {
-            p.agent_folders
-                .iter()
-                .any(|f| !f.named && f.principal.as_deref() == Some(agent_id) && f.name != name)
+            p.agent_folders.iter().any(|f| {
+                !f.named
+                    && f.principal.as_deref() == Some(agent_id)
+                    && f.name != free_name(p, &name, Some(&f.id))
+            })
         };
         if !self.project(&pid).is_ok_and(|p| follows(&p)) {
             return;
         }
         self.layout_hook(&pid, |p| {
-            for f in &mut p.agent_folders {
-                if !f.named && f.principal.as_deref() == Some(agent_id) {
-                    f.name = name.clone();
+            let ids: Vec<String> = p
+                .agent_folders
+                .iter()
+                .filter(|f| !f.named && f.principal.as_deref() == Some(agent_id))
+                .map(|f| f.id.clone())
+                .collect();
+            for id in ids {
+                let free = free_name(p, &name, Some(&id));
+                if let Some(f) = p.agent_folders.iter_mut().find(|f| f.id == id) {
+                    f.name = free;
                 }
             }
         });

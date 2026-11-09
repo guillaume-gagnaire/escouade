@@ -448,6 +448,113 @@ mod core_hooks {
     }
 
     #[tokio::test]
+    async fn a_principal_chosen_renames_a_folder_never_renamed() {
+        let h = harness("fo-star-name");
+        let (p, _) = h.project(false).await;
+        let a = agent(&h, &p.id, None).await;
+        let b = agent(&h, &p.id, None).await;
+        h.core.rename_agent(&b, "beta").await.unwrap();
+        let f = h
+            .core
+            .folder_create(&p.id, Some("X"), &[a.clone(), b.clone()], None, None)
+            .unwrap();
+        // Named by hand: it keeps its name.
+        h.core.folder_principal(&p.id, &f.id, Some(&b)).unwrap();
+        assert_eq!(h.core.project(&p.id).unwrap().agent_folders[0].name, "X");
+        // Never renamed: it takes the new principal's name.
+        h.core.projects.write()[0].agent_folders[0].named = false;
+        h.core.folder_principal(&p.id, &f.id, Some(&b)).unwrap();
+        assert_eq!(h.core.project(&p.id).unwrap().agent_folders[0].name, "beta");
+    }
+
+    #[tokio::test]
+    async fn a_folder_made_for_a_caller_takes_a_free_name() {
+        use crate::mcp::Caller;
+        let h = harness("fo-dup-name");
+        let (p, _) = h.project(false).await;
+        let a = agent(&h, &p.id, None).await;
+        h.core.rename_agent(&a, "alpha").await.unwrap();
+        let old = h
+            .core
+            .folder_create(&p.id, Some("alpha"), std::slice::from_ref(&a), None, None)
+            .unwrap();
+        h.core.item_move(&p.id, &a, None, None).unwrap();
+        let (made, fresh) = h
+            .core
+            .auto_folder(&p.id, &Caller::Agent(a.clone()), None)
+            .unwrap()
+            .unwrap();
+        assert!(fresh);
+        let names: Vec<String> = h
+            .core
+            .project(&p.id)
+            .unwrap()
+            .agent_folders
+            .iter()
+            .map(|f| f.name.clone())
+            .collect();
+        assert_eq!(names, ["alpha", "alpha 2"]);
+        // "alpha" stays unambiguous.
+        let again = h
+            .core
+            .auto_folder(&p.id, &Caller::External, Some("alpha"))
+            .unwrap();
+        assert_eq!(again, Some((old.id.clone(), false)));
+        // A folder that follows its principal's name takes a free one too.
+        let b = agent(&h, &p.id, None).await;
+        let g = h
+            .core
+            .folder_create(&p.id, Some("tmp"), std::slice::from_ref(&b), Some(&b), None)
+            .unwrap();
+        h.core.projects.write()[0]
+            .agent_folders
+            .iter_mut()
+            .find(|f| f.id == g.id)
+            .unwrap()
+            .named = false;
+        h.core.rename_agent(&b, "alpha").await.unwrap();
+        let pf = h.core.project(&p.id).unwrap().agent_folders;
+        assert_eq!(pf.iter().find(|f| f.id == g.id).unwrap().name, "alpha 3");
+        assert_ne!(made, g.id);
+    }
+
+    #[tokio::test]
+    async fn an_id_that_is_no_agent_is_dropped_when_the_state_loads() {
+        let h = harness("fo-ghosts");
+        let (p, _) = h.project(false).await;
+        let a = agent(&h, &p.id, None).await;
+        let b = agent(&h, &p.id, None).await;
+        h.core.archive_agent(&b, true).await.unwrap();
+        let f = h
+            .core
+            .folder_create(&p.id, None, std::slice::from_ref(&a), None, None)
+            .unwrap();
+        {
+            let mut ps = h.core.projects.write();
+            ps[0].agent_order.push("ghost".into());
+            ps[0].agent_folders[0].agents.push("ghost2".into());
+        }
+        h.core.save_now();
+        let app = mock_app();
+        let (re, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
+        let rp = re.project(&p.id).unwrap();
+        assert_eq!(rp.agent_folders[0].agents, vec![a]);
+        // The archived agent stays; the unknown ids went; the folder is still there.
+        assert_eq!(rp.agent_order, vec![b, f.id]);
+    }
+
+    #[tokio::test]
+    async fn an_id_that_is_no_agent_is_dropped_when_a_closed_project_comes_back() {
+        let h = harness("fo-ghosts-closed");
+        let (p, dir) = h.project(false).await;
+        let a = agent(&h, &p.id, None).await;
+        h.core.projects.write()[0].agent_order.push("ghost".into());
+        crate::closed_tests::close(&h, &p.id).await;
+        let back = crate::closed_tests::add_again(&h, &dir).await;
+        assert_eq!(back.agent_order, vec![a]);
+    }
+
+    #[tokio::test]
     async fn a_move_to_a_folder_that_went_is_refused() {
         let h = harness("fo-refuse");
         let (p, _) = h.project(false).await;
