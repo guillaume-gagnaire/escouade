@@ -142,11 +142,11 @@
   </Row>
   <!-- From two harnesses that can be used on (ESC-391), or the one chosen that cannot any more beside one, saying why: the
        one of its new agents and tickets (none chosen: Claude Code). -->
-  {#if choosesEngine(draft.engine ?? 'claude')}
+  {#if choosesEngine(draft.engine ?? 'claude', project.id)}
     <Row label={t('settings.project.engine')} desc={t('settings.project.engineDesc')} shared="agents.engine">
       <Chips
         label={t('settings.project.engine')}
-        options={engineOptions(draft.engine ?? 'claude')}
+        options={engineOptions(draft.engine ?? 'claude', project.id)}
         bind:value={() => draft.engine ?? 'claude', (v) => (draft.engine = v)}
       />
     </Row>

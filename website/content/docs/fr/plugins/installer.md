@@ -70,7 +70,7 @@ Elle dit, avant que rien ne soit installé :
 
 ## Les plugins livrés avec Escouade
 
-Certaines intégrations d’Escouade sont des plugins, livrés avec l’app, signés et mis à jour avec elle : la vue Plugins les range sous « Livrés avec Escouade », avec la même page que les autres (ce qu’ils ajoutent, leurs permissions, leur journal). Ils sont actifs partout d’office, projets privés compris, comme quand ils faisaient partie de l’app.
+Certaines intégrations d’Escouade sont des plugins, livrés avec l’app, signés et mis à jour avec elle : la vue Plugins les range sous « Livrés avec Escouade », avec la même page que les autres (ce qu’ils ajoutent, leurs permissions, leur journal). Ils sont actifs partout d’office, sauf dans les projets privés, comme tout plugin.
 
 | Plugin | Ce qu’il sert |
 | --- | --- |
@@ -109,6 +109,7 @@ Ce qu’Escouade ne peut pas lire sûrement (un fichier de réglages abîmé, un
 
 - **Pour toute l’app** : l’interrupteur de sa ligne, ou « Désactiver » sur sa page. Désactivé, rien de lui ne tourne et aucun projet ne le reçoit ; son process est arrêté.
 - **Par projet** : l’onglet Projets de sa page, une ligne par projet ouvert. Un plugin installé est actif dans chaque projet, **sauf les projets privés** : un projet privé est coupé d’office, et la ligne le dit (« rien ne lui parvient »). L’y activer est un choix fait un par un ; la ligne rappelle alors qu’Escouade ne peut pas empêcher un programme de lire le disque.
+- **Un plugin de harness** (Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode, Gemini CLI, Mistral Vibe, Antigravity CLI, ou un plugin qui décrit un harness) suit la même règle, car son plugin reçoit tout ce que fait l’agent. Coupé pour un projet, le harness n’y est plus proposé, ses agents de ce projet ne démarrent pas et ne reçoivent rien, et le couper arrête ceux qui tournent. Dans un projet privé, le premier agent sur un harness te demande d’abord « Activer … pour ce projet privé ? », avec ce que le plugin recevra et ses permissions : « Activer » l’allume pour ce projet seulement, « Annuler » ne lance rien. Un agent ou un ticket dont le harness est coupé pour son projet le dit sur sa carte, avec « Activer ». Le Kanban, le pilote auto et les outils MCP ne l’activent jamais à ta place : le ticket reste bloqué, avec la raison.
 
 > [!NOTE]
 > Un projet qui propose un plugin dans son `.escouade.yml` ne l’installe ni ne l’active jamais seul : c’est toujours la fenêtre d’installation, et ton accord.

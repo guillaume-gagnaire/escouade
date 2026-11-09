@@ -31,7 +31,7 @@ A program talks to Escouade through [the protocol](plugins/api); [the SDK](plugi
 ## What a plugin cannot do
 
 - **Read another one’s secrets**: a plugin has only its own, never those of an account, a harness or another plugin.
-- **Act in a private project** without your consent: a plugin you install is off there from the start (only the plugins shipped with Escouade are on there, like the rest of the app).
+- **Act in a private project** without your consent: a plugin you install is off there from the start, those shipped with Escouade included; a harness starts its first agent there only once you turned it on.
 - **Install itself**: a project can propose a plugin in its [`.escouade.yml`](escouade-yml#plugins), never install it; an `escouade://` link opens its page, never the install.
 - **Receive what it did not ask for**: a fact outside `permissions.events` is never sent to it, a secret outside `permissions.secrets` is refused (see [permissions](plugins/permissions)).
 - **Change the interface** beyond what its manifest declares: no view of its own.

@@ -103,6 +103,13 @@ test.describe('a private project, two accounts, the first out of quota', () => {
     await page.getByRole('textbox', { name: 'Titre du ticket' }).fill('Premier [ok]');
     await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const doing = page.getByRole('region', { name: 'En cours' });
+    // Private, Claude Code is off there until the user turns it on (ESC-404): the autopilot does not ask in their place,
+    // the ticket is blocked with why and « Activer » on its card.
+    const card = doing.getByRole('button', { name: /DEM-1/ });
+    await expect(card.getByText(/Claude Code n’est pas activé pour ce projet privé/)).toBeVisible({ timeout: 30_000 });
+    expect(processes(app.launches())).toEqual([]);
+    await card.locator('.blocked button', { hasText: 'Activer' }).click();
+    await page.getByRole('dialog', { name: 'Activer Claude Code pour ce projet privé ?' }).getByRole('button', { name: 'Activer' }).click();
     // « Reprise à 14:20 », or « Reprise le mardi 27 octobre à 00:30 » when the reset falls the next day (a run near midnight).
     await expect(doing.getByRole('button', { name: /DEM-1/ }).getByText(/^Reprise (à |le .* à )/)).toBeVisible({ timeout: 60_000 });
     // The autopilot waits for Principal alone, the project's own: Pro, under its threshold, would not hold it back.

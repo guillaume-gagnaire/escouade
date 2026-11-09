@@ -145,6 +145,7 @@ export default defineZone('settings', {
     notFound: '{name} (program not found)',
     pluginOff: '{name} (plugin off)',
     noAccount: '{name} (no account)',
+    projectOff: '{name} (off for this project)',
   },
   claude: {
     models: {

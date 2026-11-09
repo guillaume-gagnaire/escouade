@@ -47,7 +47,7 @@
 
   const projectEngine = $derived(project?.engine ?? 'claude');
   /** The harnesses a discussion runs on (`holds`), in the usual menu's order. */
-  const engines = $derived(engineOptions(engine).filter((e) => holds(e.value)));
+  const engines = $derived(engineOptions(engine, projectId).filter((e) => holds(e.value)));
   /** Its harness when none is chosen: the project's, else the first that keeps a discussion from writing. */
   const baseEngine = $derived(holds(projectEngine) ? projectEngine : (engines[0]?.value ?? 'claude'));
   const optionsOf = $derived(project ? { project, engine: engine ?? baseEngine } : null);

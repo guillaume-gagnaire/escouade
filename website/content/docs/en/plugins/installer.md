@@ -70,7 +70,7 @@ It tells, before anything is installed:
 
 ## The plugins shipped with Escouade
 
-Some of Escouade’s integrations are plugins, shipped with the app, signed and updated with it: the Plugins view lists them under “Shipped with Escouade”, with the same page as the others (what they add, their permissions, their journal). They are on everywhere from the start, private projects included, as when they were part of the app.
+Some of Escouade’s integrations are plugins, shipped with the app, signed and updated with it: the Plugins view lists them under “Shipped with Escouade”, with the same page as the others (what they add, their permissions, their journal). They are on everywhere from the start, but in the private projects, like any plugin.
 
 | Plugin | What it serves |
 | --- | --- |
@@ -109,6 +109,7 @@ What Escouade cannot read surely (a damaged settings file, a project on an unplu
 
 - **For the whole app**: the switch of its line, or “Switch off” on its page. Switched off, nothing of it runs and no project gets it; its process is stopped.
 - **By project**: the Projects tab of its page, a line per open project. An installed plugin is on in every project, **but the private projects**: a private project is off by default, and the line says so (“nothing reaches it”). Switching it on there is a choice made one by one; the line then reminds that Escouade cannot keep a program from reading the disk.
+- **A harness plugin** (Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode, Gemini CLI, Mistral Vibe, Antigravity CLI, or a plugin that describes a harness) follows the same rule, since its plugin gets all the agent does. Off for a project, the harness is no longer offered there, its agents of that project do not start and get nothing, and turning it off stops those that run. In a private project, the first agent on a harness first asks you “Turn on … for this private project?”, with what the plugin will get and its permissions: “Turn on” switches it on for this project alone, “Cancel” starts nothing. An agent or a ticket whose harness is off for its project says so on its card, with “Turn on”. The Kanban, the autopilot and the MCP tools never turn it on in your place: the ticket stays blocked, with the reason.
 
 > [!NOTE]
 > A project that recommends a plugin in its `.escouade.yml` never installs or switches it on by itself: it is always the install window, and your consent.

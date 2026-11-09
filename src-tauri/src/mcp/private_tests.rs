@@ -42,6 +42,8 @@ async fn world(name: &str) -> World {
     let neighbour = other_project(&h, "Voisin").await;
     let vault = other_project(&h, "Coffre").await;
     let vault = make_private(&h, &vault);
+    // Its agents' harness turned on for it by the user (ESC-404).
+    crate::harness_scope_tests::turn_on_every_harness(&h, &vault.id);
     let tickets = [
         put(&h, ticket(&open, "PUB-1", "Ouvert", Column::Doing, 1)),
         put(&h, ticket(&neighbour, "VOI-1", "Voisin", Column::Doing, 2)),

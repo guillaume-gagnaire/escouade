@@ -172,6 +172,7 @@ export default {
     notFound: '{name} (programme introuvable)',
     pluginOff: '{name} (plugin coupé)',
     noAccount: '{name} (aucun compte)',
+    projectOff: '{name} (coupé pour ce projet)',
   },
   claude: {
     /** The models of a harness that lists those of its providers (OpenCode). */

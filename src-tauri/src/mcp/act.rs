@@ -717,6 +717,10 @@ pub(super) async fn start_ticket<R: Runtime>(
     if t.column == Column::Todo {
         let project = project_of(core, &t.project_id)?;
         let engine = core.ticket_engine(&t);
+        // Its harness off for the project (ESC-404): no tool turns it on, the user does.
+        if let Some(why) = core.harness_refusal(engine, &project.id) {
+            return Err(ToolError::Refused(why));
+        }
         // Set on an account (by this call or before), it waits for that one alone (ESC-153).
         let pinned = Ticket {
             account: account.clone().unwrap_or_else(|| t.account.clone()),

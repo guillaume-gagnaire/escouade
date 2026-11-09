@@ -321,6 +321,20 @@ pub fn plugin_of_engine(engine: EngineId) -> Option<&'static str> {
     })
 }
 
+/// The plugin a harness goes through, whatever its state (ESC-404): the app's own (`plugin_of_engine`), else the one
+/// that describes it (PLG-6), from the registry's or from its id (`plugin:<owner>:<harness>`); None for a harness of the
+/// core alone (the test's fake).
+pub fn plugin_of(engine: EngineId) -> Option<String> {
+    if let Some(p) = plugin_of_engine(engine) {
+        return Some(p.to_string());
+    }
+    if let Some((_, owner, _)) = DESCRIBED.lock().iter().find(|(id, _, _)| *id == engine) {
+        return Some(owner.clone());
+    }
+    let rest = engine.as_str().strip_prefix("plugin:")?;
+    rest.rsplit_once(':').map(|(owner, _)| owner.to_string())
+}
+
 /// The harnesses of the plugins the app gives that are on, by their plugin, each made once for each runtime (by its
 /// address: a test makes several).
 /// The plugins of the core's harnesses the user uninstalled (`Plugins::uninstalled`): an agent of theirs says so, and that the

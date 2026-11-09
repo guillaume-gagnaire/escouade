@@ -2179,6 +2179,8 @@ impl<R: Runtime> Core<R> {
             .set_routes(crate::integrations::Bases::from_env().faked());
         // The harnesses the plugins describe (PLG-6), before the window asks for the registry.
         core.sync_harnesses();
+        // Once (ESC-404): a private project's harnesses in use there turned on for it.
+        core.migrate_private_harnesses();
         // The pinned Javy of the run.js plugins downloads through Réglages › Avancé › Réseau (ESC-320); their modules are
         // made ready in the cache, precompiled again for this version of the app when it changed.
         {
@@ -3580,6 +3582,9 @@ impl<R: Runtime> Core<R> {
         if !engine::written(engine) {
             bail!(engine::absent_line(engine, crate::i18n::ui()));
         }
+        // Its harness's plugin off for its project (ESC-404): the plugin would get all it does.
+        let project_id = h.lock().meta.project_id.clone();
+        self.check_harness_in(engine, &project_id)?;
         // In the Claude Code view, its interface has the session (`tui`).
         if h.lock().meta.terminal {
             bail!(tr!(
@@ -5228,6 +5233,12 @@ impl<R: Runtime> Core<R> {
         let naming = if names { text.as_str() } else { "" };
         // In the Claude Code view: typed in its interface.
         let h = self.agent(id)?;
+        // Its harness's plugin off for its project (ESC-404): nothing is sent, the composer keeps the message.
+        let (engine, project_id) = {
+            let rt = h.lock();
+            (rt.meta.engine, rt.meta.project_id.clone())
+        };
+        self.check_harness_in(engine, &project_id)?;
         // Its worktree went to another branch since it was last told (`agentbranch`): the agent
         // reads it first, the conversation shows the message alone.
         let note = self.branch_note(id);
@@ -6311,6 +6322,9 @@ impl<R: Runtime> Core<R> {
         if !crate::engine::written(engine) {
             bail!(engine::absent_line(engine, crate::i18n::ui()));
         }
+        // Nor on one whose plugin is off for the project (ESC-404): the window asks the user first, in a private
+        // project; a tool, the Kanban or the app itself never turns it on.
+        self.check_harness_in(engine, project_id)?;
         // Whatever the agent is (ticket, discussion, planner…), a spec in Escouade is the one to follow.
         let follow = self.docs_follow(&project, self.lang().claude).await;
         let mut meta = AgentMeta {
@@ -7567,9 +7581,14 @@ impl<R: Runtime> Core<R> {
             project,
         } = ask;
         let settings = self.settings.read().clone();
+        // About a project: among the harnesses on for it (ESC-404).
+        let usable = match project {
+            Some(p) => self.engines_usable_in(p),
+            None => self.engines_usable(),
+        };
         // None found: Claude Code's, which says what is missing, as before there was a choice.
-        let id = engine::oneshot::writer(settings.writer_engine, &self.engines_usable())
-            .unwrap_or(EngineId::CLAUDE);
+        let id =
+            engine::oneshot::writer(settings.writer_engine, &usable).unwrap_or(EngineId::CLAUDE);
         let engine = engine::by_id(id);
         let account = self.account_for(id, agent, project)?;
         accounts::key_ready(&account)?;

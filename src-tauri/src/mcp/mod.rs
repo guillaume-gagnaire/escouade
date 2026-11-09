@@ -25,6 +25,8 @@ mod engines_tests;
 mod files;
 #[cfg(test)]
 mod files_tests;
+#[cfg(test)]
+mod harness_scope_tests;
 mod http;
 mod images;
 #[cfg(test)]
