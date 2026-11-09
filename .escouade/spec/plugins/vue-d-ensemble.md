@@ -3,7 +3,7 @@ title: "Les plugins : vue d'ensemble"
 subject: "plugins"
 sources: ["docs/PLUGINS.md","docs/STORE.md","docs/TODO-2.2.md","schemas/plugin-1.json","schemas/plugin-protocol-1.json","website/content/docs/fr/plugins/introduction.md","src-tauri/src/harness_scope.rs","src-tauri/src/harness_scope_tests.rs"]
 tickets: ["ESC-184","ESC-339","ESC-404"]
-decisions: ["le-bouton-projet-par-projet-d-un-plugin"]
+decisions: [142]
 compared: null
 ---
 

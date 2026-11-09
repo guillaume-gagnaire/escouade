@@ -1,9 +1,9 @@
 ---
-number: null
+number: 142
 id: "le-bouton-projet-par-projet-d-un-plugin"
 title: "Le bouton projet par projet d'un plugin s'applique à son harness, activé au premier usage dans un projet privé"
 date: "2026-11-09"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-404"
 pages: ["plugins/vue-d-ensemble","plugins/livres-avec-escouade"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/vue-d-ensemble","added":9,"removed":1},{"page":"plugins/livres-avec-escouade","added":2,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-09T21:01:38+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
