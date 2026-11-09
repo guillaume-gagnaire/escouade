@@ -98,8 +98,8 @@
     },
     {
       "id": "dev.escouade.isola",
-      "version": "2.2.0",
-      "sha256": "168e72261c8de61710e3dc9532a62ac6d3a39d7cacb1ff5f22e8ed22307118d7"
+      "version": "2.2.1",
+      "sha256": "7de0624234864f9767de3869bdd664f7e4d39d21051d0d62174f2f398cd1b9c6"
     },
     {
       "id": "dev.escouade.jira",
