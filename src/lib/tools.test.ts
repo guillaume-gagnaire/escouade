@@ -168,7 +168,12 @@ describe('the tools of Escouade’s own server', () => {
     // A folder: the one it acts on, else its project; an agent put in a folder is the agent.
     expect(arg('update_folder', { folder: 'Front', name: 'Interface' })).toBe('Front');
     expect(arg('move_agent', { agent: 'fix-login', folder: 'Front' })).toBe('fix-login');
-    expect(arg('create_folder', { name: 'Front' })).toBe('');
+    // The folder before the project, so a card says which folder it deletes; a folder made is its name.
+    expect(arg('delete_folder', { project: 'demo', folder: 'Front' })).toBe('Front');
+    expect(arg('create_folder', { project: 'demo', name: 'Front', agents: ['a'] })).toBe('Front');
+    expect(arg('create_folder', { name: 'Front' })).toBe('Front');
+    // Another tool with a name keeps its summary.
+    expect(arg('write_memory', { project: 'demo', name: 'note' })).toBe('demo');
     // The Kanban a tool reads or sets is its project's; a ticket started with its own model is the ticket.
     expect(arg('get_board', { project: 'demo' })).toBe('demo');
     expect(arg('set_board', { project: 'demo', autopilot: true, model: 'sonnet' })).toBe('demo');

@@ -1778,9 +1778,10 @@ const ESCOUADE_TOOLS: &str = "mcp__escouade__";
 
 /// What a tool of Escouade is about, first found first (`toolArg` in `src/lib/tools.ts` reads
 /// them in the same order): the ticket it makes, the ticket or the agent it acts on, what an agent
-/// it starts is told, the line an agent reports, the project it reads, the folder it acts on.
+/// it starts is told, the line an agent reports, the folder it acts on, the project it reads. A
+/// folder made (`create_folder`) is its name.
 const ESCOUADE_MAIN_ARGS: &[&str] = &[
-    "title", "ticket", "agent", "message", "line", "project", "folder",
+    "title", "ticket", "agent", "message", "line", "folder", "project",
 ];
 
 /// What a tool is asked to act on, as the conversation's card sums it up (`toolArg` in
@@ -1828,8 +1829,9 @@ fn tool_arg_in(lang: Lang, tool: &str, input: &Value, cwd: &str) -> String {
             .to_string(),
         // A tool of Escouade's own server: its main argument (the ticket's title, the ticket, the
         // agent…), whatever comes first in what Claude sends. Its card lists them all.
-        t if t.starts_with(ESCOUADE_TOOLS) => ESCOUADE_MAIN_ARGS
+        t if t.starts_with(ESCOUADE_TOOLS) => (t.ends_with("__create_folder").then_some("name"))
             .iter()
+            .chain(ESCOUADE_MAIN_ARGS)
             .find_map(|k| input[*k].as_str())
             .unwrap_or_default()
             .to_string(),
@@ -2526,6 +2528,19 @@ mod tests {
         );
         assert_eq!(
             arg("list_tickets", json!({"project":"demo","column":"todo"})),
+            "demo"
+        );
+        // The folder before the project; a folder made is its name; another tool's name is not one.
+        assert_eq!(
+            arg("delete_folder", json!({"project":"demo","folder":"Front"})),
+            "Front"
+        );
+        assert_eq!(
+            arg("create_folder", json!({"project":"demo","name":"Front"})),
+            "Front"
+        );
+        assert_eq!(
+            arg("write_memory", json!({"project":"demo","name":"note"})),
             "demo"
         );
         assert_eq!(arg("list_projects", json!({})), "");

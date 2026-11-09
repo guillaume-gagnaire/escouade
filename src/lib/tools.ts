@@ -75,9 +75,9 @@ const ESCOUADE_TOOLS: Record<string, Key> = {
 /**
  * What a tool of Escouade is about, first found first (`ESCOUADE_MAIN_ARGS` of the backend's `tool_arg` reads them in
  * the same order): the ticket it makes, the ticket or the agent it acts on, what an agent it starts is told, the line an
- * agent reports, the project it reads, the folder it acts on.
+ * agent reports, the folder it acts on, the project it reads. A folder made (`create_folder`) is its name.
  */
-const ESCOUADE_MAIN_ARGS = ['title', 'ticket', 'agent', 'message', 'line', 'project', 'folder'];
+const ESCOUADE_MAIN_ARGS = ['title', 'ticket', 'agent', 'message', 'line', 'folder', 'project'];
 
 /** The most characters of a value the permission card of a tool of Escouade shows. */
 export const ARG_MAX = 2000;
@@ -200,7 +200,8 @@ export function toolArg(tool: ToolItem, cwd: string): string {
   const i = tool.input ?? {};
   const p = (x: unknown) => (typeof x === 'string' ? relPath(cwd, x) : '');
   if (isEscouadeTool(tool.name)) {
-    const main = ESCOUADE_MAIN_ARGS.map((k) => i[k]).find((v) => typeof v === 'string');
+    const keys = tool.name === `${ESCOUADE}create_folder` ? ['name', ...ESCOUADE_MAIN_ARGS] : ESCOUADE_MAIN_ARGS;
+    const main = keys.map((k) => i[k]).find((v) => typeof v === 'string');
     return typeof main === 'string' ? main.slice(0, 160) : '';
   }
   switch (tool.name) {
