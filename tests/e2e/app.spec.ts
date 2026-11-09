@@ -47,10 +47,16 @@ test('a permission can be refused with an explanation typed in the composer', as
   await addProject(page, app.repo);
   await send(page, 'permission');
   await expect(page.getByTestId('permission-pending')).toContainText('rm -rf build');
-  // For 500 ms after a request appears, Entrée in the composer answers nothing (HOLD_MS): a press
-  // meant for a message would answer a request not read yet.
+  // For 500 ms after its card starts listening, Entrée in the composer answers nothing (HOLD_MS): a press
+  // meant for a message would answer a request not read yet, and the text stays in the field. The card
+  // may start listening later than it shows (a busy runner): press again while the text is still there.
+  const box = page.locator('.composer textarea');
+  await box.fill('utilise npm run clean');
   await page.waitForTimeout(600);
-  await send(page, 'utilise npm run clean');
+  await expect(async () => {
+    if ((await box.inputValue()) !== '') await box.press('Enter');
+    await expect(box).toHaveValue('', { timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
   await expect(page.getByText('Compris : utilise npm run clean')).toBeVisible();
   const refused = page.locator('.req-card.done', { hasText: 'rm -rf build' });
   await expect(refused.locator('.by')).toContainText('Refusé');
