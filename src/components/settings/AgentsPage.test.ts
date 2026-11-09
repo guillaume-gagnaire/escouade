@@ -9,7 +9,7 @@ import { setLang } from '../../lib/i18n';
 import { mcp } from '../../lib/mcp.svelte';
 import { app } from '../../lib/state.svelte';
 import type { Account, EngineDecl, McpActivityEntry, McpDeclaration, McpStatus } from '../../lib/types';
-import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp, SETTINGS } from '../../test/ipc';
+import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp, SETTINGS, usableEngines } from '../../test/ipc';
 import { afterGesture } from '../../test/settings';
 import SettingsModal from '../modals/SettingsModal.svelte';
 import McpActivity from './McpActivity.svelte';
@@ -448,7 +448,7 @@ describe('McpSection — every harness installed (ESC-119)', () => {
       { ...BARE_ENGINE, id: 'copilot', name: 'Copilot CLI', speaker: 'Copilot' },
       { ...BARE_ENGINE, id: 'opencode', name: 'OpenCode', speaker: 'OpenCode' },
     ];
-    app.enginesFound = ['claude', 'codex', 'copilot', 'opencode'];
+    usableEngines('claude', 'codex', 'copilot', 'opencode');
     app.settings = { ...SETTINGS, accounts: [PRINCIPAL, PRO, CODEX_PRO], mcpEnabled: true };
   });
 
@@ -583,12 +583,14 @@ describe('the page « Agents »', () => {
       expect(within(panel()).getByRole('heading', { name: 'Textes rédigés' })).toBeInTheDocument();
       expect(choices(WRITER)).toEqual(['Claude Haiku']);
       expect(choice(WRITER, 'Claude Haiku')).toHaveAttribute('aria-pressed', 'true');
-      expect(panel()).toHaveTextContent('Seuls les harness installés sont proposés.');
+      expect(panel()).toHaveTextContent(
+        'Seuls les harness utilisables sont proposés : programme installé, plugin actif et au moins un compte.',
+      );
     });
 
     it('lists only the harnesses installed, and saves the one chosen', async () => {
       app.engines = [CLAUDE_ENGINE, BARE_ENGINE, { ...BARE_ENGINE, id: 'cursor', name: 'Absent', writer: 'Absent mini' }];
-      app.enginesFound = ['claude', 'codex'];
+      usableEngines('claude', 'codex');
       const backend = fakeBackend({ save_settings: () => [] });
       render(SettingsModal, { page: 'agents' });
       expect(choices(WRITER)).toEqual(['Claude Haiku', 'Nu mini']);
@@ -598,9 +600,21 @@ describe('the page « Agents »', () => {
       expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ writerEngine: 'codex' });
     });
 
+    it('leaves out a harness whose plugin is off or that has no account, and goes to another (ESC-391)', () => {
+      app.engines = [CLAUDE_ENGINE, BARE_ENGINE, { ...BARE_ENGINE, id: 'cursor', name: 'Sans compte', writer: 'Sans compte mini' }];
+      usableEngines('claude', 'codex');
+      app.enginesFound = ['claude', 'codex', 'cursor'];
+      app.enginesOff = ['codex'];
+      app.settings = { ...app.settings, writerEngine: 'codex' };
+      fakeBackend();
+      render(SettingsModal, { page: 'agents' });
+      expect(choices(WRITER)).toEqual(['Claude Haiku']);
+      expect(choice(WRITER, 'Claude Haiku')).toHaveAttribute('aria-pressed', 'true');
+    });
+
     it('shows the harness the texts go to when the one chosen is not installed any more', () => {
       app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
-      app.enginesFound = ['codex'];
+      usableEngines('codex');
       app.settings = { ...app.settings, writerEngine: 'claude' };
       fakeBackend();
       render(SettingsModal, { page: 'agents' });
@@ -611,7 +625,7 @@ describe('the page « Agents »', () => {
     it('chooses the model of a harness that takes the one given, among those of its account (ESC-45)', async () => {
       const OPENCODE = { ...BARE_ENGINE, id: 'opencode' as const, name: 'OpenCode', writer: 'OpenCode', writerTakesModel: true };
       app.engines = [CLAUDE_ENGINE, BARE_ENGINE, OPENCODE];
-      app.enginesFound = ['claude', 'codex', 'opencode'];
+      usableEngines('claude', 'codex', 'opencode');
       app.engineModels = {
         // Codex picks its own: no menu for it.
         codex: [{ id: 'gpt-x', label: 'GPT-X', efforts: [], defaultEffort: null, images: false, default: true }],
@@ -652,7 +666,9 @@ describe('the page « Agents »', () => {
       render(SettingsModal, { page: 'agents' });
       expect(within(panel()).getByRole('heading', { name: 'Written texts' })).toBeInTheDocument();
       expect(choices('Model for written texts')).toEqual(['Claude Haiku']);
-      expect(panel()).toHaveTextContent('Only the installed harnesses are offered.');
+      expect(panel()).toHaveTextContent(
+        'Only the harnesses that can be used are offered: program installed, plugin on and at least one account.',
+      );
     });
   });
 });

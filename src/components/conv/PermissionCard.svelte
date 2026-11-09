@@ -80,7 +80,8 @@
   }
 
   // Listened to without its own keys too: the message field waits the same moment before refusing it.
-  captureKeys(() => pending && current, onKeydown);
+  // In the split screen (ESC-392), only the active pane's request takes the keys.
+  captureKeys(() => pending && current && app.keysFor(agentId), onKeydown);
 </script>
 
 {#if pending}

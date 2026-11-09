@@ -1211,3 +1211,10 @@ kbd,
   font-size: 11.5px;
   line-height: 1.5;
 }
+
+/* A content dragged from the sidebar onto the work area (ESC-392): the hand closed, no text selected on the way. */
+.pane-dragging,
+.pane-dragging * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}

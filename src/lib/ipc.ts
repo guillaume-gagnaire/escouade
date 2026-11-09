@@ -1,5 +1,6 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type {
+  CodeHost,
   MergeHow,
   EngineDecl,
   PageBounds,
@@ -220,6 +221,7 @@ export const api = {
   engines: () => invoke<EngineInfo[]>('engines'),
   /** The harnesses found now, the PATH of today read first (ESC-186). */
   enginesFoundNow: () => invoke<EngineId[]>('engines_found_now'),
+  enginesOffNow: () => invoke<EngineId[]>('engines_off_now'),
   /** The registry of now: the harnesses the plugins describe come and go with them (PLG-6). */
   enginesDeclared: () => invoke<EngineDecl[]>('engines_declared'),
   /** The items of Principal's folder a new account may share (those it has), files first. */
@@ -463,6 +465,7 @@ export const api = {
   agentNoPr: (id: string) => invoke<NoPr | null>('agent_no_pr', { id }),
   /** The open pull requests of the project, on the remote of its target. */
   projectPrs: (projectId: string) => invoke<PrRead<ProjectPrs>>('project_prs', { projectId }),
+  projectCodeHost: (projectId: string) => invoke<CodeHost | null>('project_code_host', { projectId }),
   overviewPrs: () => invoke<OverviewPrs[]>('overview_prs'),
   /** « Lancer un agent sur cette PR » (ESC-65): an agent in a worktree on the branch of the open pull request `number`. */
   createAgentOnPr: (projectId: string, number: number) => invoke<Agent>('create_agent_on_pr', { projectId, number }),

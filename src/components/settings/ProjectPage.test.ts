@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
-import { BARE_ENGINE, CLAUDE_ENGINE, branchInfo, fakeBackend, gitInfo, project, resetApp } from '../../test/ipc';
+import { BARE_ENGINE, CLAUDE_ENGINE, branchInfo, fakeBackend, gitInfo, project, resetApp, usableEngines } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
 import { afterGesture } from '../../test/settings';
 
@@ -110,7 +110,7 @@ describe('ProjectPage: its default harness (ESC-29)', () => {
   });
 
   it('is Claude Code until another is chosen, and saved with the project', async () => {
-    app.enginesFound = ['claude', 'codex'];
+    usableEngines('claude', 'codex');
     const backend = fakeBackend();
     render(SettingsModal, { page: 'project', projectId: 'p1' });
     const group = screen.getByRole('group', { name: LABEL });
@@ -120,5 +120,23 @@ describe('ProjectPage: its default harness (ESC-29)', () => {
     expect(group).toBeInTheDocument();
     await afterGesture();
     expect(backend.called('update_project').at(-1)!.args.project.engine).toBe('codex');
+  });
+
+  it('offers only the harnesses that can be used, and keeps the one chosen saying why it cannot any more (ESC-391)', () => {
+    usableEngines('claude', 'codex');
+    app.enginesOff = ['codex'];
+    fakeBackend();
+    const { unmount } = render(SettingsModal, { page: 'project', projectId: 'p1' });
+    // Codex found with an account, its plugin off: Claude Code alone, no menu.
+    expect(screen.queryByRole('group', { name: LABEL })).toBeNull();
+    unmount();
+    resetApp({ projects: [project({ engine: 'codex' })] });
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    usableEngines('claude', 'codex');
+    app.enginesOff = ['codex'];
+    render(SettingsModal, { page: 'project', projectId: 'p1' });
+    screen.getByRole('group', { name: LABEL });
+    expect(screen.getByRole('button', { name: 'Harness nu (plugin coupé)', pressed: true })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Claude Code', pressed: false })).toBeInTheDocument();
   });
 });

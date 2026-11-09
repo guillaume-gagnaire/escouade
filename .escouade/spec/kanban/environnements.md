@@ -1,9 +1,9 @@
 ---
 title: "Environnements et déploiements"
 subject: "kanban"
-sources: ["docs/TODO-1.8.md (chapitre 2, « Les déploiements »)","design/esc-67/README.md"]
-tickets: ["ESC-67","ESC-68"]
-decisions: [61]
+sources: ["docs/TODO-1.8.md (chapitre 2, « Les déploiements »)","design/esc-67/README.md","design/kanban-envs-2-2/README.md"]
+tickets: ["ESC-67","ESC-68","ESC-390"]
+decisions: [61,129]
 compared: null
 ---
 
@@ -29,17 +29,25 @@ Après le merge, Escouade suit les déploiements du dépôt chez son hébergeur 
 
 ### La vue « Environnements »
 
-- Elle s'ouvre par « Tickets · Environnements » dans l'en-tête du Kanban et prend la place des colonnes ; son titre devient « Environnements ».
-- Une ligne : le projet, l'hébergeur, « lu il y a … » ; « N tickets pas encore en production » quand le dépôt a une production ; « Rafraîchir », qui relit tout de suite.
-- Un couloir par environnement, dans l'ordre où le code avance : d'abord « Mergés, pas encore déployés », puis chaque environnement, production en dernier (direction A, choisie sur aperçu le 2026-11-02).
-- En tête de chaque environnement : ce qui y tourne (commit court, il y a combien de temps, par qui), son adresse cliquable, et un déploiement en cours (« Déploiement en cours · <commit> »).
-- Sous la tête, les tickets qui y sont arrivés, chacun dans le dernier environnement qu'il a atteint, le plus récent en haut ; huit au plus, puis « + N autres ». Un clic ouvre sa PR ou son commit.
+- Elle s'ouvre par l'onglet « Environnements » de la seconde rangée de l'en-tête du Kanban (voir *Kanban*) et prend la place des colonnes ; son titre devient « Environnements ». L'onglet n'existe que pour un projet dont l'hébergeur de code a une API de déploiements (GitHub, GitLab, Bitbucket Cloud) et dont le plugin est actif ; il compte les environnements montrés. L'hébergeur parti pendant que la vue est ouverte, le Kanban revient aux tickets.
+- La seconde rangée de l'en-tête dit, à droite : le projet, l'hébergeur, « lu il y a … » ; « N tickets pas encore en production » quand le dépôt montre une production ; le menu des environnements montrés ; « Rafraîchir » (icône), qui relit tout de suite.
+- Un couloir par environnement montré, sans cadre : d'abord « Mergés, pas encore déployés », puis chaque environnement dans l'ordre choisi (direction A d'ESC-67 choisie sur aperçu le 2026-11-02 ; direction A d'ESC-390 le 2026-11-08).
+- En tête de chaque environnement, au-dessus d'un filet : son nom, son nombre de tickets, « production » pour la production ; ce qui y tourne (commit court · il y a combien de temps · par qui) ou « Aucun déploiement réussi » ; son adresse cliquable ; un déploiement en cours (« Déploiement en cours · <commit> », une roue qui tourne, immobile sous `prefers-reduced-motion`).
+- Sous la tête, les tickets qui y sont arrivés, chacun dans le dernier environnement montré qu'il a atteint, le plus récent en haut ; huit au plus, puis « + N autres ». Un clic ouvre sa PR ou son commit. Un couloir vide le dit à sa place : « Rien n'attend un déploiement. » pour les mergés, « Aucun ticket n'est arrivé ici. » pour un environnement.
 - Le dépôt n'a aucun déploiement : la vue le dit. L'hébergeur n'en a pas d'API : « Gitea n'a pas d'API de déploiements : Escouade ne suit que la CI de la branche cible. » Une lecture qui échoue est dite, la dernière lue reste affichée.
+
+### Les environnements montrés
+
+- D'office, la vue montre les environnements où un déploiement a déjà réussi. Les autres (`github-pages` jamais construit) n'ont pas de couloir, et une ligne sous les couloirs le dit : « github-pages n'est pas montré : aucun déploiement réussi. »
+- Le menu « 2 environnements sur 3 » (« 2 sur 3 » dans une fenêtre étroite) liste tous les environnements du dépôt, chacun avec une case et ce qui le décrit : son nombre de tickets, « production », « aucun déploiement réussi » ou « masqué par toi ». Une case décochée masque l'environnement (une publication de paquet comme `npm`, par exemple) ; cochée, elle montre même un environnement sans déploiement réussi.
+- L'ordre se change en glissant une ligne, ou par Alt+↑ et Alt+↓ sur sa case. Un environnement jamais rangé vient après ceux qui l'ont été, dans l'ordre de l'hébergeur.
+- Un ticket se place dans le dernier environnement montré qu'il a atteint : masquer un environnement rend ses tickets aux mergés en attente, ou à l'environnement d'avant. « Pas encore en production » ne compte que la production montrée.
+- Le choix est gardé pour le projet, sur la machine (les préférences de la fenêtre) ; ce qui revient au choix d'office est oublié. Échap ou un clic ailleurs ferme le menu.
 
 ### Un déploiement en échec
 
-- Le dernier déploiement d'un environnement a échoué : son couloir est bordé de rouge, avec « Dernier déploiement en échec · <commit> » et « Voir le job », qui ouvre son journal chez l'hébergeur. Ce qui y tourne reste le dernier déploiement réussi.
-- Une notification le dit une fois par déploiement (« Déploiement en échec : production (<commit>) »), dans tout environnement ; un clic ouvre le Kanban du projet. Ce qui avait déjà échoué à la première lecture n'est pas notifié. Elle a son propre réglage, « Déploiement en échec » (voir *Notifications*).
+- Le dernier déploiement d'un environnement a échoué : le filet sous sa tête passe au rouge, avec « Dernier déploiement en échec · <commit> » et « Voir le job », qui ouvre son journal chez l'hébergeur. Ce qui y tourne reste le dernier déploiement réussi.
+- Une notification le dit une fois par déploiement (« Déploiement en échec : production (<commit>) »), dans tout environnement, montré ou non ; un clic ouvre le Kanban du projet. Ce qui avait déjà échoué à la première lecture n'est pas notifié. Elle a son propre réglage, « Déploiement en échec » (voir *Notifications*).
 
 ### Un déploiement en production réussi
 
@@ -62,3 +70,4 @@ Après le merge, Escouade suit les déploiements du dépôt chez son hébergeur 
 - Les essais réels : seulement contre les faux serveurs des tests. GitHub est à essayer avec le compte de l'utilisateur ; GitLab et Bitbucket Cloud d'après leur documentation (voir `docs/TODO-1.8.md`).
 - Gitea et Forgejo : la CI de la cible n'a pas encore de vue à elle.
 - Relancer ou approuver un déploiement depuis Escouade.
+- Le choix des environnements montrés ne se partage pas avec l'équipe (`.escouade.yml`) : il reste sur la machine.

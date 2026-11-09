@@ -6,6 +6,8 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Les menus « Harness » ne proposent plus que les harness utilisables : programme installé, plugin actif et au moins un compte. Celui déjà choisi reste affiché avec la raison, et Réglages › Comptes et harness montre toujours ceux qui n’ont pas encore de compte.
+- Le Kanban a un en-tête sur deux rangées, où rien ne se chevauche plus, et la vue Environnements ne montre que les environnements choisis, sans ceux qui n’ont jamais été déployés ; les onglets PR et Environnements n’apparaissent qu’avec un hébergeur de code. Dans une fenêtre étroite, un lecteur d’écran y trouve toujours « Après validation ».
 - OpenCode : `git commit` et `git add` ne passent d'office que sous leur forme simple, et une écriture dans `.git`, `.opencode` ou `opencode.json` demande toujours : ces règles sont sa seule protection.
 - OpenCode : un projet privé tient mieux. Ses règles sont posées avant l'ouverture d'une session, et « Toujours » n'est plus proposé sous clôture.
 - Claude Code : une discussion refuse aussi les commandes PowerShell, au lieu de les présenter sur une carte.
@@ -14,6 +16,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- L’écran partagé : glisse un agent, un terminal, un lancement ou l’éditeur depuis la barre latérale sur la zone de travail pour l’ouvrir à côté, au-dessus ou en dessous, jusqu’à quatre volets. Le volet entouré reçoit ta saisie, ta voix et tes réponses ; Ctrl+ partage ou revient à un volet, et la disposition revient au prochain lancement.
 - Les réglages sont refaits : une barre à gauche avec les pages d’Escouade (Général, Agents, Comptes et harness, Services connectés, Voix, Notifications, Plugins, Avancé), puis les pages de chaque projet, et tout s’applique dès que tu le changes, sans « Enregistrer ». Une recherche (Ctrl+F) trouve un réglage par son nom, en français comme en anglais, et ouvre sa page ; un point ambre signale la page qui attend quelque chose de toi, comme un harness sans compte ou un jeton expiré.
 - Les plugins d'Escouade sont dans l'installeur : à la première ouverture, même sans réseau, Escouade installe ceux que ta configuration utilise, et la vue Plugins propose les autres, installables d'un clic sans téléchargement.
 - Sur store.escouade.dev, la documentation d'un plugin peut avoir ses pages en français et en anglais : chacun lit celles de sa langue, sinon celles de l'autre, et un lien d'une page à l'autre reste sur le store.

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { CREDITS_URL } from '../../lib/conversation';
-  import { offered } from '../../lib/engines';
+  import { found as foundEngines } from '../../lib/engines';
   import { t } from '../../lib/i18n';
   import { DISCORD_URL, siteUrl, supportUrl } from '../../lib/links';
   import { openUrl } from '../../lib/opener';
@@ -13,7 +13,7 @@
   // The page « À propos », at the foot of the bar (PROPOSITION.md §2): who it is (the logo, the version, the harnesses
   // found), the credits, the site, Discord, the support. Its updates and its statistics went to « Général », its local
   // data to « Avancé ».
-  const found = $derived(offered());
+  const found = $derived(foundEngines());
   const open = (url: string) => openUrl(url).catch((e) => app.toast(String(e), 'error'));
 </script>
 

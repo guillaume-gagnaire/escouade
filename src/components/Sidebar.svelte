@@ -5,6 +5,8 @@
 
 <script lang="ts">
   import { tick, untrack } from 'svelte';
+  import { paneDrag } from '../lib/pane-drag.svelte';
+  import { itemKey, leaves, type PaneItem } from '../lib/panes';
   import { keyLabel } from '../lib/platform';
   import { SIDE_MIN, sideWidth } from '../lib/side-width.svelte';
   import Splitter from './Splitter.svelte';
@@ -13,7 +15,7 @@
   import { branchSummary, deltaDetail, repoLabel } from '../lib/repos';
   import { api } from '../lib/ipc';
   import { fDur, fUsd, fWhen, tildify } from '../lib/format';
-  import { accountName, defaultEngine, hasAccount, newAgentAccount, newAgentDefaults } from '../lib/accounts';
+  import { accountName, defaultEngine, newAgentAccount, newAgentDefaults } from '../lib/accounts';
   import {
     cardActivity,
     cardSpend,
@@ -60,6 +62,7 @@
   import { estimateHint, spent } from '../lib/spend';
   import { drivenAgents, pendingFor, pendingLabel, pendingText } from '../lib/later';
   import { app, type HeaderFolded } from '../lib/state.svelte';
+  import { hasTab } from '../lib/code-host';
   import { shortWindow } from '../lib/short-window.svelte';
   import { closeTerminal, newTerminal, terminalIn } from '../lib/term-actions';
   import { canPrepare, prepareLaunch, stopTests } from '../lib/test-launch.svelte';
@@ -144,9 +147,37 @@
   const termSelected = $derived(app.selectedTerm[project.id] ?? null);
   /** Another view (terminal, launch log, board) fills the main area: no agent is highlighted. */
   const otherView = $derived(!!termSelected || !!app.runCommand || app.boardOn || app.docsOn || app.prsOn);
+  /** The contents of the split screen's panes (ESC-392), when it is on screen: each is highlighted, the active one more. */
+  const paneKeys = $derived(app.panesOn && app.panes ? new Set(leaves(app.panes.root).map(itemKey)) : null);
+  const inPane = (key: string) => !!paneKeys?.has(key) && app.panes?.active !== key;
+
+  /** « Ouvrir à côté », « Ouvrir en dessous » (ESC-392): what a card's or a row's menu offers. */
+  function besideItems(item: PaneItem): MenuItem[] {
+    return [
+      {
+        label: t('shell.panes.openBeside'),
+        hint: `${keyLabel('Ctrl')}+${t('shell.panes.click')}`,
+        onClick: () => app.openBeside(item, 'right'),
+      },
+      { label: t('shell.panes.openBelow'), onClick: () => app.openBeside(item, 'bottom') },
+    ];
+  }
+
+  /** A click on a card or a row: with Ctrl (Cmd), beside the content on screen. */
+  function open(e: MouseEvent, item: PaneItem, select: () => void) {
+    if (e.ctrlKey || e.metaKey) app.openBeside(item, 'right');
+    else select();
+  }
   const review = $derived(app.reviewCount(project.id));
   /** The word of the project's code host (« PR », « MR » on GitLab): read by its view, else by one of its agents (ESC-65). */
   const prsWord = $derived(app.prWords[project.id] ?? app.projectAgents.find((a) => a.prWord)?.prWord ?? 'PR');
+  /** The « PR » tab only for a project whose remote is on a code host whose plugin is on (ESC-390). */
+  const prsTab = $derived(hasTab(app.codeHosts[project.id], 'pullRequests'));
+  // Its code host read when the project shows, and again when the window comes back (its remote may have changed).
+  $effect(() => {
+    const id = project.id;
+    untrack(() => void app.readCodeHost(id));
+  });
   /** Who waits for an answer goes first (2.0 design). */
   const agents = $derived(sidebarOrder(app.projectAgents));
   /** The requests answered from the list, until the agent's request is gone: one click answers once. */
@@ -376,6 +407,7 @@
             },
           ]
         : []),
+      ...(a.archived ? [] : besideItems({ kind: 'agent', id: a.id })),
       ...foldedItems(folded),
       ...handoverItems(e, a),
       ...remoteItems(a),
@@ -553,7 +585,8 @@
     await app.refreshEngines();
     if (!moreBtn) return;
     const own = project.engine ?? defaultEngine();
-    const setUp = offered().filter((e) => hasAccount(e.id));
+    // Those that can be used (ESC-391): found, their plugin on, with an account.
+    const setUp = offered();
     const harnesses: MenuItem[] = setUp.map((e, i) => {
       const account = newAgentAccount(project, e.id);
       const d = newAgentDefaults(project, e.id);
@@ -751,10 +784,11 @@
 {/snippet}
 
 <!-- The keys 1, 2… of the list, wherever the focus is but a field. -->
-<svelte:window onkeydown={listKey} />
+<svelte:window onkeydown={listKey} onfocus={() => void app.readCodeHost(project.id)} />
 
 <aside class="side">
-  <div class="seg segmented" role="group" aria-label={t('nav.sidebar.viewLabel')}>
+  <!-- Agents · Kanban · PR · Docs (direction A of design/kanban-envs-2-2): words alone, each tab its own width. -->
+  <div class="seg" role="group" aria-label={t('nav.sidebar.viewLabel')}>
     <button
       class:on={!app.boardOn && !app.docsOn && !app.prsOn}
       aria-pressed={!app.boardOn && !app.docsOn && !app.prsOn}
@@ -762,24 +796,21 @@
         app.closeBoard(project.id);
         app.closeDocs(project.id);
         app.closePrs(project.id);
-      }}
-      ><Icon name="agents" size={14} />{t('common.agents')}<span class="count" aria-hidden="true">{app.projectAgents.length}</span></button
+      }}>{t('common.agents')}<span class="count" aria-hidden="true">{app.projectAgents.length}</span></button
     >
     <button class:on={app.boardOn} aria-pressed={app.boardOn} onclick={() => app.openBoard(project.id)}
-      ><Icon name="kanban" size={14} />Kanban{#if review}<span class="badge" use:tip={t('nav.sidebar.toReview', { count: review })}
-          >{review}</span
-        >{/if}</button
+      >Kanban{#if review}<span class="badge" use:tip={t('nav.sidebar.toReview', { count: review })}>{review}</span>{/if}</button
     >
-    <!-- The project's open pull requests (ESC-65), in the host's word: « PR », « MR » on GitLab. -->
-    <button
-      class:on={app.prsOn}
-      aria-pressed={app.prsOn}
-      onclick={() => app.openPrs(project.id)}
-      use:tip={t('prs.list.tabHint', { word: prsWord })}><Icon name="pr" size={14} />{t('prs.list.tab', { word: prsWord })}</button
-    >
-    <button class:on={app.docsOn} aria-pressed={app.docsOn} onclick={() => app.openDocs(project.id)}
-      ><Icon name="file" size={14} />{t('docs.tab')}</button
-    >
+    {#if prsTab}
+      <!-- The project's open pull requests (ESC-65), in the host's word: « PR », « MR » on GitLab; only with a code host. -->
+      <button
+        class:on={app.prsOn}
+        aria-pressed={app.prsOn}
+        onclick={() => app.openPrs(project.id)}
+        use:tip={t('prs.list.tabHint', { word: prsWord })}>{t('prs.list.tab', { word: prsWord })}</button
+      >
+    {/if}
+    <button class:on={app.docsOn} aria-pressed={app.docsOn} onclick={() => app.openDocs(project.id)}>{t('docs.tab')}</button>
   </div>
 
   {#if app.docsOn}
@@ -809,7 +840,7 @@
 
     <div class="agents">
       {#each agents as a (a.id)}
-        {@const sel = a.id === selectedAgentId && !otherView}
+        {@const sel = paneKeys ? app.panes?.active === `agent:${a.id}` : a.id === selectedAgentId && !otherView}
         {@const s = spent(a)}
         {@const ticket = app.ticketOf(a.id)}
         {@const plan = planView(a)?.mini}
@@ -829,6 +860,7 @@
           class:error={a.status === 'error'}
           class:awaits={!!pending}
           class:sel
+          class:inpane={inPane(`agent:${a.id}`)}
           class:alert={app.attention[a.id]}
           class:flash={flashing[a.id]}
           style:--alert={a.status === 'error' ? 'var(--del)' : a.status === 'waiting' ? 'var(--wait)' : 'var(--run)'}
@@ -836,7 +868,8 @@
           tabindex="0"
           aria-current={sel ? 'true' : undefined}
           data-agent={a.id}
-          onclick={() => app.selectAgent(a.id)}
+          onclick={(e) => open(e, { kind: 'agent', id: a.id }, () => app.selectAgent(a.id))}
+          onpointerdown={(e) => paneDrag.press(e, { kind: 'agent', id: a.id }, a.name, engineName(a.engine))}
           onkeydown={(e) => cardKey(e, a)}
           oncontextmenu={(e) => agentMenu(e, a)}
         >
@@ -1265,12 +1298,15 @@
         {#each terms as term (term.id)}
           <div
             class="row-item term"
-            class:sel={termSelected === term.id}
+            class:sel={paneKeys ? app.panes?.active === `term:${term.id}` : termSelected === term.id}
+            class:inpane={inPane(`term:${term.id}`)}
             role="button"
             tabindex="0"
             aria-current={termSelected === term.id ? 'true' : undefined}
             data-shell={term.shell}
-            onclick={() => app.selectTerm(term.id)}
+            onclick={(e) => open(e, { kind: 'term', id: term.id }, () => app.selectTerm(term.id))}
+            onpointerdown={(e) => paneDrag.press(e, { kind: 'term', id: term.id }, term.name)}
+            oncontextmenu={(e) => menu.show(e, besideItems({ kind: 'term', id: term.id }))}
             onkeydown={(e) => e.key === 'Enter' && e.target === e.currentTarget && app.selectTerm(term.id)}
           >
             <span class="ti"><Icon name="term" size={14} /></span>
@@ -1422,22 +1458,64 @@
     inset: 0 0 0 -6px;
   }
 
-  /* Agents | Kanban | PR | Docs: each at least its own width, the short « PR » the least, and the room left shared
-     between the four (`auto` tracks stretch), so that they fill the bar as the three did. */
+  /*
+   * Agents | Kanban | PR | Docs (direction A, ESC-390): words alone, each tab its own width and the room left shared,
+   * the tab shown raised as a key of the panel; three tabs without a code host fill the bar the same way.
+   */
   .seg {
-    display: grid;
-    grid-template-columns: auto auto auto auto;
-    gap: 0;
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 10px;
+    background: var(--raise);
+    box-shadow: inset 0 0 0 1px var(--line);
   }
   .seg button {
-    gap: 4px;
-    padding: 0 3px;
+    flex: 1 1 auto;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    height: 28px;
+    padding: 0 6px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 550;
     white-space: nowrap;
+    cursor: pointer;
+    transition:
+      color 0.15s,
+      background-color 0.15s;
+  }
+  .seg button:hover {
+    color: var(--text);
+  }
+  .seg button.on {
+    background: var(--panel);
+    color: var(--text);
+    box-shadow:
+      inset 0 0 0 1px var(--line-2),
+      0 1px 2px rgba(0, 0, 0, calc(0.18 * var(--shade)));
+  }
+  .seg button:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
   }
   .seg .count {
     color: var(--dim);
     font-size: 11.5px;
+    font-weight: 500;
     font-variant-numeric: tabular-nums;
+  }
+  .seg .badge {
+    min-width: 16px;
+    height: 16px;
+    font-size: 10px;
   }
   .badge {
     min-width: 17px;
@@ -1498,12 +1576,6 @@
   }
   /* Narrow (ESC-204), « Nouvel agent » stays whole: its shortcut goes, still in its tooltip; on a card, the bars of a
      plan and of a ticket's loops go, their words stay. */
-  /* Below its default width, the four views keep their words, without their icons. */
-  @container sidebar (max-width: 255px) {
-    .seg button :global(.icon) {
-      display: none;
-    }
-  }
   @container sidebar (max-width: 250px) {
     .new-agent kbd,
     .plan-bar,
@@ -1562,6 +1634,11 @@
   }
   .agent.sel {
     background: rgba(var(--fg-rgb), 0.06);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+  }
+  /* Shown in a pane of the split screen that is not the active one (ESC-392). */
+  .agent.inpane,
+  .row-item.inpane {
     box-shadow: inset 0 0 0 1px var(--line-2);
   }
   .agent.waiting {

@@ -6,7 +6,7 @@ import { setLang } from '../../lib/i18n';
 import { app, type TicketFormDraft } from '../../lib/state.svelte';
 import { menu } from '../../lib/menu.svelte';
 import type { Account, AttachedFile, Ticket, TicketDraft, ToldModel } from '../../lib/types';
-import { BARE_ENGINE, branchInfo, CLAUDE_ENGINE, fakeBackend, project, resetApp, ticket } from '../../test/ipc';
+import { BARE_ENGINE, branchInfo, CLAUDE_ENGINE, fakeBackend, project, resetApp, ticket, usableEngines } from '../../test/ipc';
 import TicketForm from './TicketForm.svelte';
 
 /** The group « Après » (`name`), its popover opened: its search and the tickets to check are in it. */
@@ -1557,7 +1557,7 @@ describe('TicketForm: its harness (ESC-29)', () => {
 
   it('runs on the project’s harness by default, and sends the one chosen with the ticket', async () => {
     fakeBackend();
-    app.enginesFound = ['claude', 'codex'];
+    usableEngines('claude', 'codex');
     const { onsubmit } = show();
     expect(field()).toHaveAccessibleName('Harness Celui du projet (Claude Code)');
     await userEvent.click(field()!);
@@ -1571,7 +1571,7 @@ describe('TicketForm: its harness (ESC-29)', () => {
 
   it('shows the harness of an edited ticket, and gives it back to the project’s', async () => {
     fakeBackend();
-    app.enginesFound = ['claude', 'codex'];
+    usableEngines('claude', 'codex');
     const { onsubmit } = show({ ticket: ticket({ engine: 'codex' }) });
     expect(field()).toHaveAccessibleName('Harness Harness nu');
     await userEvent.click(field()!);
@@ -1579,6 +1579,21 @@ describe('TicketForm: its harness (ESC-29)', () => {
     menu.close();
     await userEvent.type(screen.getByRole('textbox', { name: 'Titre du ticket' }), '{Enter}');
     expect(onsubmit).toHaveBeenCalledWith(expect.objectContaining({ engine: null }));
+  });
+
+  it('offers only the harnesses that can be used, and keeps the ticket’s saying why it cannot any more (ESC-391)', async () => {
+    fakeBackend();
+    usableEngines('claude', 'codex');
+    app.settings = { ...app.settings, accounts: app.settings.accounts.filter((a) => a.engine !== 'codex') };
+    // Codex found without an account: no field.
+    const { unmount } = show();
+    expect(field()).toBeNull();
+    unmount();
+    show({ ticket: ticket({ engine: 'codex' }) });
+    expect(field()).toHaveAccessibleName('Harness Harness nu (aucun compte)');
+    await userEvent.click(field()!);
+    expect(menu.open!.items.map((i) => i.label)).toEqual(['Celui du projet (Claude Code)', 'Claude Code', 'Harness nu (aucun compte)']);
+    menu.close();
   });
 });
 
@@ -1697,7 +1712,7 @@ describe('TicketForm: its account, model and effort (ESC-153)', () => {
 
   it('sets the account back to « Auto » when the harness changes, and says so', async () => {
     fakeBackend();
-    app.enginesFound = ['claude', 'codex'];
+    usableEngines('claude', 'codex');
     show();
     await pick('Compte', 'Pro');
     await userEvent.click(screen.getByRole('button', { name: /^Harness/ }));

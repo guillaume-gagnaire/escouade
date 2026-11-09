@@ -2,7 +2,7 @@
   import { onDestroy, untrack } from 'svelte';
   import { accountName, backToAccounts, engineOfAccount, isPrincipal, principalId, SHARED_FILES } from '../../lib/accounts';
   import { tildify } from '../../lib/format';
-  import { byKey as goesByKey, engineName, offered } from '../../lib/engines';
+  import { byKey as goesByKey, engineName, found } from '../../lib/engines';
   import { t, type Key } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { IS_MAC } from '../../lib/platform';
@@ -110,10 +110,10 @@
 
   /** The account signing in; none while it is still to make. */
   let account = $state<Account | null>(untrack(() => app.settings.accounts.find((a) => a.id === accountId) ?? null));
-  /** The harness of the account: the one asked for, else the first offered (Claude Code's when it is found). */
-  let engine = $state<EngineId>(untrack(() => (account ? engineOfAccount(account) : (asked ?? offered()[0]?.id ?? 'claude'))));
+  /** The harness of the account: the one asked for, else the first found (Claude Code's when it is found). */
+  let engine = $state<EngineId>(untrack(() => (account ? engineOfAccount(account) : (asked ?? found()[0]?.id ?? 'claude'))));
   /** The harnesses an account may be added to: those found, a menu from two on. */
-  const engines = $derived(offered());
+  const engines = $derived(found());
   const says = $derived(SAYS[engine] ?? CLAUDE_SAYS);
   const keySays = $derived(KEY_SAYS[engine] ?? CURSOR_KEY_SAYS);
   let name = $state('');

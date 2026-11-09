@@ -593,6 +593,54 @@ async fn a_fake_host_plugs_into_the_core_through_the_interface_alone() {
     assert_eq!(view.unknown[0].host, "fake.dev");
 }
 
+/// ESC-390: the sidebar's « PR » tab and the board's « Environnements » follow the project's code
+/// host: a remote recognised by a host whose plugin is on.
+#[tokio::test]
+async fn a_project_has_a_code_host_only_on_a_remote_a_host_recognises() {
+    let h = harness("forge-code-host");
+    let server = FakeServer::start().await;
+    *h.core.forges.write() = Registry::standard().with(std::sync::Arc::new(FakeHost {
+        api: server.url.clone(),
+    }));
+    let (p, r) = h.project(false).await;
+    // No remote: no code host.
+    assert_eq!(h.core.project_code_host(&p.id).await, None);
+    // A remote on a host Escouade does not know: none either.
+    git(
+        &r,
+        &["remote", "add", "origin", "git@code.example:ada/notes.git"],
+    );
+    assert_eq!(h.core.project_code_host(&p.id).await, None);
+    // On a host it knows, served by the core: its name, its word and what it reads.
+    git(
+        &r,
+        &["remote", "set-url", "origin", "git@fake.dev:ada/notes.git"],
+    );
+    let host = h.core.project_code_host(&p.id).await.unwrap();
+    assert_eq!((host.kind.as_str(), host.word.as_str()), ("fake", "CR"));
+    // On GitHub, served by its plugin: the project has it while its plugin is on, not once it is off.
+    git(
+        &r,
+        &[
+            "remote",
+            "set-url",
+            "origin",
+            "https://github.com/ada/notes.git",
+        ],
+    );
+    let github = h.core.project_code_host(&p.id).await.unwrap();
+    assert_eq!(
+        (github.name.as_str(), github.word.as_str()),
+        ("GitHub", "PR")
+    );
+    assert!(github.pull_requests && github.deployments);
+    h.core
+        .plugins
+        .choose(crate::plugins::builtin::GITHUB, |c| c.enabled = false)
+        .unwrap();
+    assert_eq!(h.core.project_code_host(&p.id).await, None);
+}
+
 #[tokio::test]
 async fn github_com_is_one_account_for_issues_and_pull_requests() {
     let h = harness("forge-github");

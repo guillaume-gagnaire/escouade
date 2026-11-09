@@ -661,6 +661,8 @@ impl<R: Runtime> Core<R> {
                     .is_some_and(|l| l.engine == *e && l.until.is_some_and(|t| t > now))
             })
             .filter(|e| self.engine_found_for(*e, &project))
+            // Its plugin on (ESC-391): one off starts no agent.
+            .filter(|e| self.engine_plugged(*e))
             .collect())
     }
 

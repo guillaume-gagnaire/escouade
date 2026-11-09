@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { paneDrag } from '../lib/pane-drag.svelte';
   import { t } from '../lib/i18n';
   import { launchStatus, restartLaunch, runHere, runIn, startAll, stopAll, stopLaunch } from '../lib/launch-actions';
   import { menu } from '../lib/menu.svelte';
@@ -96,7 +97,8 @@
     aria-current={selected === c.id ? 'true' : undefined}
     data-run={c.id}
     use:tip={c.command}
-    onclick={() => app.selectLaunch(c.id)}
+    onclick={(e) => (e.ctrlKey || e.metaKey ? app.openBeside({ kind: 'launch', id: c.id }) : app.selectLaunch(c.id))}
+    onpointerdown={(e) => paneDrag.press(e, { kind: 'launch', id: c.id }, c.name)}
     onkeydown={(e) => e.key === 'Enter' && e.target === e.currentTarget && app.selectLaunch(c.id)}
   >
     <i class="d {tn}" aria-hidden="true"></i>

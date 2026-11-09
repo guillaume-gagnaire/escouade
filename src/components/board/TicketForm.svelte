@@ -396,7 +396,12 @@
 
   /** « Celui du projet (…) », then each harness found. */
   const projectEngine = $derived(app.projects.find((p) => p.id === projectId)?.engine ?? 'claude');
-  const engineLabel = $derived(engine ? engineName(engine) : t('board.form.engineProject', { engine: engineName(projectEngine) }));
+  /** Its harness, and why it cannot be used any more when it cannot (ESC-391: « Codex (plugin coupé) »). */
+  const engineLabel = $derived(
+    engine
+      ? (engineOptions(engine).find((o) => o.value === engine)?.label ?? engineName(engine))
+      : t('board.form.engineProject', { engine: engineName(projectEngine) }),
+  );
 
   function engineMenu() {
     if (!engineButton) return;
@@ -789,7 +794,7 @@
       ></textarea>
     </div>
     <div class="fgrid">
-      {#if choosesEngine()}
+      {#if choosesEngine(engine)}
         <div class="engine">
           <!-- The project's: its brand says which, the rest of its name for a screen reader. -->
           {@render select(

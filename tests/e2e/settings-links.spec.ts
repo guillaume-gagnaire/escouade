@@ -76,8 +76,14 @@ test('Lancement’s « Proposer des commandes » opens Projets › demo-api › 
 
 test('the Kanban’s « Après validation » opens Projets › demo-api › Kanban', async ({ app }) => {
   const page = app.page;
+  // At the runner's 1024 × 728, the board is under 1000 px: « Après validation : » is no longer shown, only its summary,
+  // and the button keeps its name, in view (ESC-393).
+  await page.setViewportSize({ width: 1024, height: 728 });
   await page.getByRole('button', { name: /^Kanban/ }).click();
-  await page.getByRole('button', { name: /^Après validation :/ }).click();
+  const button = page.getByRole('button', { name: /^Après validation :/ });
+  await expect(button).toBeInViewport({ ratio: 1 });
+  await expect(button.getByText('Après validation :')).toBeHidden();
+  await button.click();
   const dialog = await landsOn(page, 'Kanban');
   await expect(dialog.getByRole('radiogroup', { name: /Quand je valide un ticket/ })).toBeVisible();
   // The workflow of the project is on this page now, at its foot.

@@ -8,6 +8,7 @@ vi.mock('../../lib/terminals', () => ({ launchLog: () => ({}), disposeLog() {} }
 const opened = vi.hoisted(() => [] as string[]);
 vi.mock('../../lib/opener', () => ({ openUrl: vi.fn(async (u: string) => void opened.push(u)), openPath: vi.fn() }));
 
+import { offered } from '../../lib/engines';
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import type { Account, AccountStatus, ClosedProject } from '../../lib/types';
@@ -768,6 +769,18 @@ describe('AccountsTab with two harnesses (ESC-30)', () => {
     expect(within(empty).queryByRole('list')).toBeNull();
     await userEvent.click(within(empty).getByRole('button', { name: 'Ajouter un compte Harness nu…' }));
     expect(app.modal).toEqual({ kind: 'account', engine: 'codex' });
+  });
+
+  it('still shows a harness found that no menu « Harness » offers, without an account or with its plugin off (ESC-391)', () => {
+    app.enginesFound = ['claude', 'codex'];
+    app.enginesOff = ['codex'];
+    app.settings.accounts = [PRO];
+    fakeBackend({ account_status: statuses, save_settings: () => [] });
+    render(SettingsModal, { page: 'accounts' });
+    expect(offered().map((e) => e.id)).toEqual(['claude']);
+    const empty = screen.getByRole('region', { name: 'Harness nu' });
+    expect(within(empty).getByText('Aucun compte')).toBeInTheDocument();
+    expect(within(empty).getByRole('button', { name: 'Ajouter un compte Harness nu…' })).toBeInTheDocument();
   });
 
   it('shows « Aucun compte » for every harness found on a first installation, and no account to add to one not found', () => {

@@ -187,4 +187,28 @@ export default {
     soundOn: 'On',
     soundOff: 'Off',
   },
+  /** The split screen (ESC-392): panes of the work area, filled by dragging from the sidebar. */
+  panes: {
+    region: 'Volet : {name}',
+    close: 'Fermer le volet',
+    closeTip: 'Fermer le volet ({shortcut})',
+    handle: 'Taille des volets',
+    handleTip: 'Tirer pour régler · double clic : moitié-moitié',
+    editor: 'Éditeur',
+    openBeside: 'Ouvrir à côté',
+    openBelow: 'Ouvrir en dessous',
+    /** After the key of Ctrl+clic, in a menu's hint. */
+    click: 'clic',
+    zone: {
+      left: 'À gauche',
+      right: 'À droite',
+      top: 'En haut',
+      bottom: 'En bas',
+      center: 'Remplacer',
+    },
+    full: 'Plus de place pour un volet de plus',
+    hintSides: 'Bord : à côté',
+    hintMiddle: 'Milieu : remplacer',
+    hintCancel: 'Échap : annuler',
+  },
 } as const satisfies Tree;

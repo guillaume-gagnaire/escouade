@@ -80,21 +80,48 @@ export function anyCan(flag: Flag): boolean {
   return app.engines.some((e) => e.caps[flag]);
 }
 
-/** The harnesses offered (menus « Harness », brand): those declared whose program is found, in the backend's order. */
-export function offered(): EngineDecl[] {
+/** The harnesses whose program is found, in the backend's order: where they are set up (Réglages › Comptes et harness, a new account, À propos). */
+export function found(): EngineDecl[] {
   return app.engines.filter((e) => app.enginesFound.includes(e.id));
 }
 
-/** Whether there is a harness to choose: the menus « Harness » show from two harnesses found on. */
-export function choosesEngine(): boolean {
-  return offered().length > 1;
+/** Why a harness cannot be used (ESC-391): its program not found, its plugin off or not installed, no account of its own. */
+export type Unusable = 'notFound' | 'pluginOff' | 'noAccount';
+
+/** Why `engine` cannot be used, null when it can: its program found, its plugin on, and an account of its own in Escouade (`Core::engines_usable`). */
+export function unusable(engine: EngineId): Unusable | null {
+  if (!app.enginesFound.includes(engine)) return 'notFound';
+  if (app.enginesOff.includes(engine)) return 'pluginOff';
+  if (!(app.settings.accounts ?? []).some((a) => (a.engine ?? 'claude') === engine)) return 'noAccount';
+  return null;
 }
 
-/** The harnesses offered, as the options of a menu « Harness »; `current` stays listed even if it is not found any more. */
+/**
+ * The harnesses offered (menus « Harness », their brand), in the backend's order: those that can be used (ESC-391), not all
+ * those found. Réglages › Comptes et harness lists those found without an account, to add one (`found`).
+ */
+export function offered(): EngineDecl[] {
+  return app.engines.filter((e) => !unusable(e.id));
+}
+
+/**
+ * Whether there is a harness to choose: the menus « Harness » show from two harnesses offered on, or `current` beside one
+ * when it cannot be used any more (its menu says why).
+ */
+export function choosesEngine(current?: EngineId | null): boolean {
+  return engineOptions(current).length > 1;
+}
+
+/**
+ * The harnesses offered, as the options of a menu « Harness »; `current` stays listed even if it cannot be used any more,
+ * with why (« Codex (plugin coupé) »).
+ */
 export function engineOptions(current?: EngineId | null): { value: EngineId; label: string }[] {
-  const list = offered();
-  const kept = current && !list.some((e) => e.id === current) ? app.engines.filter((e) => e.id === current) : [];
-  return [...list, ...kept].map((e) => ({ value: e.id, label: e.name }));
+  const list = offered().map((e) => ({ value: e.id, label: e.name }));
+  if (!current || list.some((o) => o.value === current) || !app.engines.some((e) => e.id === current)) return list;
+  const why = unusable(current);
+  const name = engineName(current);
+  return [...list, { value: current, label: why ? t(`settings.engineWhy.${why}`, { name }) : name }];
 }
 
 /** The usual names of the harnesses, before the backend declared them (the window's first frames). */

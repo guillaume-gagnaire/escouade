@@ -1,10 +1,12 @@
 <script lang="ts">
-  // The view « Environnements » of a project's board (ESC-67, direction A chosen on preview): one lane per environment,
-  // the way code goes (merged → staging → production), each with what runs there (commit, when, who, its address) and
-  // the tickets that reached it; a failed deployment is marked on its environment with its job's link.
+  // The view « Environnements » of a project's board (ESC-67; direction A of design/kanban-envs-2-2, ESC-390): the tickets
+  // merged and deployed nowhere yet, then one lane per environment shown, in the order the user gave, each headed by
+  // what runs there (commit, when, who, its address), a deployment under way and a failed one with its job's link. Its
+  // line, its menu of the environments and « Rafraîchir » are in the board's header.
   import { onDestroy, onMount } from 'svelte';
-  import { envState, lanes, notInProduction, shortSha } from '../../lib/environments';
-  import { fAgo } from '../../lib/format';
+  import { arrange, envState, lanes, shortSha } from '../../lib/environments';
+  import { envsView } from '../../lib/envs-view.svelte';
+  import { fAgo, fList } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { openUrl } from '../../lib/opener';
@@ -22,26 +24,17 @@
 
   const data = $derived(app.environments[project.id]);
   const all = $derived(Object.values(app.tickets).filter((x) => x.projectId === project.id));
-  const shown = $derived(envState(data));
-  const envs = $derived(data?.environments ?? []);
-  const placed = $derived(lanes(all, envs, app.now));
-  const late = $derived(notInProduction(all, envs, app.now));
-  let reading = $state(false);
-
-  async function refresh() {
-    if (reading) return;
-    reading = true;
-    const p = await app.run(api.projectEnvironmentsRead(project.id));
-    if (p) app.environments[project.id] = p;
-    reading = false;
-  }
+  const phase = $derived(envState(data));
+  const set = $derived(arrange(data?.environments ?? [], envsView.of(project.id)));
+  /** The lanes of the environments shown: a ticket deployed only where the user hid goes back among those that wait. */
+  const placed = $derived(lanes(all, set.shown, app.now));
 
   let keep: ReturnType<typeof setInterval> | undefined;
   onMount(async () => {
     const p = await app.run(api.projectEnvironments(project.id));
     if (p) app.environments[project.id] = p;
     // Read when never read, or read more than a minute ago.
-    if (!p?.readAt || Date.now() - p.readAt > 60_000) void refresh();
+    if (!p?.readAt || Date.now() - p.readAt > 60_000) void envsView.refresh(project.id);
     keep = setInterval(() => void api.projectEnvironments(project.id).catch(() => {}), KEEP_EVERY);
   });
   onDestroy(() => clearInterval(keep));
@@ -77,50 +70,42 @@
   {#each tickets.slice(0, SHOWN) as x (x.id)}
     {@render card(x, merged)}
   {:else}
-    <span class="none">{t('envs.view.empty')}</span>
+    <p class="empty">{merged ? t('envs.view.waitingEmpty') : t('envs.view.empty')}</p>
   {/each}
-  {#if tickets.length > SHOWN}<span class="none">{t('envs.view.more', { count: tickets.length - SHOWN })}</span>{/if}
+  {#if tickets.length > SHOWN}<span class="more">{t('envs.view.more', { count: tickets.length - SHOWN })}</span>{/if}
 {/snippet}
 
 <section class="envs" aria-label={t('envs.view.title')}>
-  <div class="bar">
-    <span class="sub"
-      >{t('envs.view.sub', { project: project.name, host: data?.host || '—' })}{#if data?.readAt}{' · '}{t('envs.view.read', {
-          since: fAgo(data.readAt / 1000, app.now),
-        })}{/if}</span
-    >
-    {#if late.length}
-      <span class="late" data-not-in-prod><Icon name="clock" size={14} />{t('envs.view.notInProd', { count: late.length })}</span>
-    {/if}
-    <button class="btn small" use:tip={t('envs.view.refreshTitle')} aria-busy={reading} disabled={reading} onclick={refresh}
-      ><Icon name="restart" size={14} />{t('envs.view.refresh')}</button
-    >
-  </div>
-  {#if data?.error && shown === 'ready'}
+  {#if data?.error && phase === 'ready'}
     <p class="note err" role="status">{t('envs.view.error', { error: data.error })}</p>
   {/if}
 
-  {#if shown === 'ready'}
-    <div class="lanes" style:--n={envs.length + 1}>
+  {#if phase === 'ready'}
+    <div class="lanes" style:--n={set.shown.length + 1}>
       <section class="lane" data-env-lane="waiting">
-        <h2><i class="dot wt"></i>{t('envs.view.waiting')}<span class="n">{placed.waiting.length}</span></h2>
+        <div class="lh">
+          <h2><i class="dot wt"></i>{t('envs.view.waiting')}<span class="n">{placed.waiting.length}</span></h2>
+        </div>
         {@render list(placed.waiting, true)}
       </section>
       {#each placed.lanes as l (l.env.name)}
         {@const e = l.env}
         <section class="lane" data-env-lane={e.name}>
-          <h2>
-            <i class="dot" class:ok={!!e.running && !e.failed} class:ko={e.failed}></i>{e.name}<span class="n">{l.tickets.length}</span>
-          </h2>
-          <div class="runs" class:bad={e.failed} data-env={e.name}>
-            {#if e.running}
-              <span class="line"
-                ><span class="mono">{shortSha(e.running.sha)}</span>{#if when(e.running)}<span class="meta">{' · '}{when(e.running)}</span
-                  >{/if}{#if e.running.author}<span class="meta">{' · '}{t('envs.view.by', { author: e.running.author })}</span>{/if}</span
-              >
-            {:else}
-              <span class="meta">{t('envs.view.nothingRuns')}</span>
-            {/if}
+          <div class="lh" class:bad={e.failed} data-env={e.name}>
+            <h2>
+              <i class="dot" class:ok={!!e.running && !e.failed} class:ko={e.failed}></i><span class="name">{e.name}</span><span class="n"
+                >{l.tickets.length}</span
+              >{#if e.production}<span class="tag">{t('envs.view.production')}</span>{/if}
+            </h2>
+            <span class="m">
+              {#if e.running}
+                <span class="mono">{shortSha(e.running.sha)}</span>{#if when(e.running)}{' · '}{when(
+                    e.running,
+                  )}{/if}{#if e.running.author}{' · '}{t('envs.view.by', { author: e.running.author })}{/if}
+              {:else}
+                {t('envs.view.nothingRuns')}
+              {/if}
+            </span>
             {#if e.url}
               {@const url = e.url}
               <button class="link" use:tip={url} onclick={() => app.run(openUrl(url))}
@@ -128,26 +113,38 @@
               >
             {/if}
             {#if e.failed}
-              <span class="fail" role="status" data-env-failed
-                >{e.latest?.sha ? t('envs.view.failed', { sha: shortSha(e.latest.sha) }) : t('envs.view.failedNoSha')}</span
+              <span class="fail"
+                ><Icon name="close" size={12} /><span class="ft" role="status" data-env-failed
+                  >{e.latest?.sha ? t('envs.view.failed', { sha: shortSha(e.latest.sha) }) : t('envs.view.failedNoSha')}</span
+                >{#if e.latest?.log}{@const log = e.latest.log}<button class="link job" onclick={() => app.run(openUrl(log))}
+                    >{t('envs.view.job')}<Icon name="ext" size={12} /></button
+                  >{/if}</span
               >
-              {#if e.latest?.log}
-                {@const log = e.latest.log}
-                <button class="link" onclick={() => app.run(openUrl(log))}>{t('envs.view.job')}<Icon name="ext" size={12} /></button>
-              {/if}
             {:else if e.latest}
-              <span class="meta">{t('envs.view.underWay', { sha: shortSha(e.latest.sha) })}</span>
+              <span class="wip" data-env-underway
+                ><i class="spin" aria-hidden="true"></i>{t('envs.view.underWay', { sha: shortSha(e.latest.sha) })}</span
+              >
             {/if}
           </div>
           {@render list(l.tickets, false)}
         </section>
       {/each}
     </div>
+    {#if !set.shown.length}
+      <p class="note" role="status">{t('envs.view.noneShown')}</p>
+    {:else if set.neverRan.length}
+      <p class="note" data-never-ran>
+        <Icon name="read" size={14} />{t('envs.view.neverRan', {
+          count: set.neverRan.length,
+          names: fList(set.neverRan.map((e) => e.name)),
+        })}
+      </p>
+    {/if}
   {:else}
-    <p class="note" class:err={shown === 'error'} role="status">
-      {#if shown === 'loading'}{t('envs.view.loading')}
-      {:else if shown === 'unsupported'}{t('envs.view.unsupported', { host: data?.host ?? '' })}
-      {:else if shown === 'error'}{t('envs.view.error', { error: data?.error ?? '' })}
+    <p class="note" class:err={phase === 'error'} role="status">
+      {#if phase === 'loading'}{t('envs.view.loading')}
+      {:else if phase === 'unsupported'}{t('envs.view.unsupported', { host: data?.host ?? '' })}
+      {:else if phase === 'error'}{t('envs.view.error', { error: data?.error ?? '' })}
       {:else}{t('envs.view.none', { host: data?.host ?? '' })}{/if}
     </p>
   {/if}
@@ -159,49 +156,27 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-  }
-  .bar {
-    flex: none;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px 0 22px;
-  }
-  .sub {
-    margin-right: auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--muted);
-    font-size: 12px;
-  }
-  .late {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--wait);
-    font-size: 12.5px;
-    font-weight: 550;
-    white-space: nowrap;
+    overflow: auto;
   }
   .note {
-    margin: 16px 22px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 22px 16px;
     color: var(--muted);
-    font-size: 13px;
+    font-size: 12.5px;
   }
   .note.err {
+    margin-top: 16px;
     color: var(--del);
   }
-  /* One lane per environment, side by side as the board's columns; under 240 pixels each, it scrolls sideways. */
+  /* One lane per environment shown, side by side as the board's columns; under 250 pixels each, it scrolls sideways. */
   .lanes {
-    flex: 1;
-    min-height: 0;
     display: grid;
-    grid-template-columns: repeat(var(--n, 3), minmax(240px, 1fr));
+    grid-template-columns: repeat(var(--n, 3), minmax(250px, 1fr));
+    align-items: start;
     gap: 14px;
-    padding: 16px 16px 16px 18px;
-    overflow: auto;
+    padding: 16px 16px 12px 18px;
   }
   .lane {
     display: flex;
@@ -209,19 +184,50 @@
     gap: 8px;
     min-width: 0;
   }
+  /* The head of a lane: no box, a line under it; what runs there, under way, failed. */
+  .lh {
+    display: grid;
+    justify-items: start;
+    gap: 4px;
+    margin-bottom: 4px;
+    padding: 2px 2px 10px;
+    border-bottom: 1px solid var(--line);
+    font-size: 12px;
+  }
+  .lh.bad {
+    border-bottom-color: oklch(from var(--del) l c h / 0.6);
+  }
   h2 {
+    justify-self: stretch;
     margin: 0;
-    padding: 0 2px;
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12.5px;
+    min-width: 0;
+    color: var(--text);
+    font-size: 13px;
     font-weight: 600;
-    color: var(--soft);
+  }
+  .name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .n {
     color: var(--muted);
+    font-size: 12px;
     font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .tag {
+    margin-left: auto;
+    padding: 1px 7px;
+    border-radius: 6px;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 550;
   }
   .dot {
     flex: none;
@@ -239,30 +245,16 @@
   .dot.ko {
     background: var(--del);
   }
-  /* What runs there: raised, framed in red when its newest deployment failed. */
-  .runs {
-    display: grid;
-    justify-items: start;
-    gap: 6px;
-    padding: 12px;
-    border-radius: 11px;
-    background: var(--raise);
-    box-shadow: inset 0 0 0 1px var(--line);
-    font-size: 12.5px;
-  }
-  .runs.bad {
-    box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.45);
-  }
-  .line {
+  .m {
     min-width: 0;
+    color: var(--muted);
+  }
+  .m .mono {
+    color: var(--soft);
   }
   .mono {
     font-family: var(--mono, ui-monospace, Consolas, monospace);
-    font-size: 12px;
-  }
-  .meta {
-    color: var(--muted);
-    font-size: 12px;
+    font-size: 11.5px;
   }
   .link {
     display: inline-flex;
@@ -285,14 +277,49 @@
   .link:hover {
     text-decoration: underline;
   }
+  .wip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--wait);
+  }
+  .spin {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border: 1.6px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spin {
+      animation: none;
+    }
+  }
   .fail {
-    padding: 2px 8px;
-    border-radius: 6px;
+    justify-self: stretch;
+    display: flex;
+    align-items: center;
+    gap: 6px;
     color: var(--del);
-    background: oklch(from var(--del) l c h / 0.1);
-    box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.35);
-    font-size: 12px;
     font-weight: 550;
+  }
+  .fail .ft {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .fail .job {
+    margin-left: auto;
+    flex: none;
+    font-weight: 500;
   }
   /* A ticket that reached the lane: as a small card of the board. */
   .tk {
@@ -315,15 +342,35 @@
   }
   .key {
     color: var(--muted);
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 600;
   }
   .title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
     color: var(--soft);
-    font-size: 13px;
+    font-size: 12.5px;
   }
-  .none {
-    padding: 0 4px;
+  .meta {
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  /* A lane without a ticket: said in its place, hatched lightly. */
+  .empty {
+    margin: 0;
+    padding: 14px 12px;
+    border-radius: 10px;
+    background: repeating-linear-gradient(135deg, transparent 0 6px, rgba(var(--fg-rgb), 0.02) 6px 12px);
+    box-shadow: inset 0 0 0 1px var(--line);
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+  }
+  .more {
+    padding: 2px 4px;
     color: var(--muted);
     font-size: 12px;
   }

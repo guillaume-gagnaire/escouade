@@ -2549,6 +2549,38 @@ impl<R: Runtime> Core<R> {
             .collect()
     }
 
+    /// Whether the plugin `engine` goes through is installed and on (ESC-391): a harness of the app's own plugins
+    /// (INT-10) whose plugin is off or gone starts no agent. One a plugin describes is in the registry only while its
+    /// plugin is on.
+    pub fn engine_plugged(&self, engine: EngineId) -> bool {
+        let Some(plugin) = crate::plugins::harness::plugin_of_engine(engine) else {
+            return true;
+        };
+        self.plugins
+            .get(plugin, crate::i18n::Lang::En)
+            .is_some_and(|v| v.state == crate::plugins::State::Ready && v.choices.enabled)
+    }
+
+    /// The harnesses of the registry whose plugin is off or not installed (ESC-391): the menus « Harness » do not offer
+    /// them, and say so of the one already chosen.
+    pub fn engines_unplugged(&self) -> Vec<EngineId> {
+        engine::registry::all()
+            .into_iter()
+            .map(|h| h.id())
+            .filter(|&e| !self.engine_plugged(e))
+            .collect()
+    }
+
+    /// The harnesses that can be used (ESC-391), in the registry's order: their program found, their plugin on, and at
+    /// least one account of theirs in Escouade. Those the menus « Harness » offer, and among which the texts' writer is.
+    pub fn engines_usable(&self) -> Vec<EngineId> {
+        let accounts = self.settings.read().accounts.clone();
+        self.engines_found()
+            .into_iter()
+            .filter(|&e| self.engine_plugged(e) && accounts.iter().any(|a| a.engine == e))
+            .collect()
+    }
+
     /// The harnesses the plugins on describe (PLG-6), put in the registry or taken out of it: at the start, and after
     /// a plugin is installed, removed, turned on or off. Answers whether the registry changed.
     pub fn sync_harnesses(&self) -> bool {

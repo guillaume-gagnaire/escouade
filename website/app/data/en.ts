@@ -414,6 +414,7 @@ export const en: Catalog = {
       'code-hosts': 'Code hosts',
       editor: 'The editor',
       terminals: 'Terminals',
+      'split-screen': 'Split screen',
       launch: 'Running the project',
       board: 'The Kanban',
       autopilot: 'Autopilot',

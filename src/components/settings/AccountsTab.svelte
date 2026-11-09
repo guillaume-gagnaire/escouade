@@ -27,7 +27,7 @@
     engineName,
     modelsOf,
     modesOf,
-    offered,
+    found as foundEngines,
     showsCost,
     usagePage,
     usageSite,
@@ -99,7 +99,7 @@
   /** « Quand un quota est épuisé » is in the window's fields, saved as they change with the other settings (ESC-380). */
   const draft = $derived(settingsForm.settings);
   /** The harnesses found: going on on the next one asks for two. */
-  const found = $derived(offered());
+  const found = $derived(foundEngines());
   /** An account's meters, as its quota was last read. */
   const metersOf = (a: Account) => metersShown(app.usage.accounts.find((u) => u.id === a.id) ?? null, engineOfAccount(a));
 

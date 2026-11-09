@@ -418,6 +418,7 @@ export const fr: Catalog = {
       'code-hosts': 'Hébergeurs de code',
       editor: 'L’éditeur',
       terminals: 'Les terminaux',
+      'split-screen': 'L’écran partagé',
       launch: 'Lancer le projet',
       board: 'Le Kanban',
       autopilot: 'Le pilote auto',

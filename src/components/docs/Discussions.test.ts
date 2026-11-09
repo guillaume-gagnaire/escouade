@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { docsStore } from '../../lib/docs.svelte';
 import { handleShortcut } from '../../lib/shortcuts';
 import { app } from '../../lib/state.svelte';
-import { agent, fakeBackend, resetApp } from '../../test/ipc';
+import { menu } from '../../lib/menu.svelte';
+import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp, usableEngines } from '../../test/ipc';
 import type { Discussion, DocsTree } from '../../lib/types';
 import DocsSidebar from './DocsSidebar.svelte';
 import DocsView from './DocsView.svelte';
@@ -226,6 +227,24 @@ describe('the discussions of the Docs tab', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Commencer' }));
     await waitFor(() => expect(b.called('discussion_start')).toHaveLength(1));
     expect(b.called('discussion_start')[0].args.start).toMatchObject({ engine: 'claude' });
+  });
+
+  it('offers in its menu « Harness » only the harnesses that can be used (ESC-391)', async () => {
+    resetApp();
+    app.engines = [CLAUDE_ENGINE, { ...BARE_ENGINE, caps: { ...BARE_ENGINE.caps, readOnly: true } }];
+    usableEngines('claude', 'codex');
+    app.enginesOff = ['codex'];
+    backend({});
+    render(NewDiscussionModal, { projectId: app.projects[0].id });
+    const dialog = screen.getByRole('dialog', { name: 'Nouvelle discussion' });
+    await userEvent.click(within(dialog).getByRole('button', { name: /^Harness : Claude Code/ }));
+    expect(menu.open!.items.map((i) => i.label)).toEqual(['Claude Code']);
+    menu.close();
+    // Its plugin back on: offered.
+    app.enginesOff = [];
+    await userEvent.click(within(dialog).getByRole('button', { name: /^Harness : Claude Code/ }));
+    expect(menu.open!.items.map((i) => i.label)).toEqual(['Claude Code', 'Harness nu']);
+    menu.close();
   });
 
   it('starts the preset of a gesture with its own first message', async () => {

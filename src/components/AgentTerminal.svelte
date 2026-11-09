@@ -29,6 +29,7 @@
 
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { paneCtx } from '../lib/pane-context';
   import { t } from '../lib/i18n';
   import type { DictationTarget } from '../lib/dictation.svelte';
   import { mountTerminal, roomOf, typeIntoTerminal } from '../lib/terminals';
@@ -43,6 +44,8 @@
   // « Vue Claude Code »: the agent's conversation in Claude Code's own interface. Escouade still follows it (status,
   // notifications, cost, plan) through its hooks and its transcript.
   let { agent }: { agent: Agent } = $props();
+  /** Its pane of the split screen (ESC-392), if it is in one: only the active pane's terminal takes the focus. */
+  const pane = paneCtx();
   /** Its harness, as the texts name it. */
   const engine = $derived(engineName(agent.engine));
 
@@ -147,7 +150,7 @@
     const id = term;
     const el = box;
     if (!id || !el) return;
-    mountTerminal(id, el);
+    mountTerminal(id, el, { focus: untrack(() => !pane || pane.active) });
     const ro = new ResizeObserver(() => {
       try {
         getXTerm(id)?.fit.fit();
@@ -158,7 +161,7 @@
     ro.observe(el);
     return () => {
       ro.disconnect();
-      mountTerminal(id, null);
+      mountTerminal(id, null, { from: el });
     };
   });
 

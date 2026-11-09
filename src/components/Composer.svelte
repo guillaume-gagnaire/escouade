@@ -57,8 +57,10 @@
   import MicButton from './MicButton.svelte';
   import Dropdown from './Dropdown.svelte';
   import { tip } from '../lib/tip';
+  import { mayFocus, paneCtx } from '../lib/pane-context';
 
   let { agent }: { agent: Agent } = $props();
+  const pane = paneCtx();
 
   // The agent object is replaced on every backend update: only its id may drive the draft.
   const agentId = $derived(agent.id);
@@ -256,9 +258,12 @@
     });
   });
 
+  // Asked to take the focus: the composer shown alone, or the active pane's of the split screen (ESC-392).
   $effect(() => {
     void app.focusComposer;
-    queueMicrotask(() => ta?.focus());
+    queueMicrotask(() => {
+      if (mayFocus(pane)) ta?.focus();
+    });
   });
 
   function autosize() {

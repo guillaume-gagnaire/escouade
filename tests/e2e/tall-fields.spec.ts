@@ -36,6 +36,12 @@ async function tallField(page: Page, dialog: Locator, field: Locator, next: Loca
   expect(await clear(next, field), `under the field, clear of it, ${label}`).toBe(true);
   for (const b of buttons) expect(await hit(b), `${await b.textContent()} beside it, ${label}`).toBe(true);
   await page.mouse.wheel(0, -20_000);
+  // The wheel scrolls on the compositor, and `mouse.wheel` returns before the page has it. On a slow runner the scroll
+  // landed after the focus and the Tab below, its delta added to where the focus had scrolled: back at the top, the
+  // focused button out of sight (ESC-393). Up again first, the field's top in the window.
+  await expect
+    .poll(async () => (await field.boundingBox())!.y >= (await dialog.boundingBox())!.y, { message: `back up, ${label}` })
+    .toBe(true);
   await field.focus();
   for (let i = 0; i < 10 && !(await next.evaluate((n) => n === document.activeElement)); i++) await page.keyboard.press('Tab');
   await expect(next, label).toBeFocused();

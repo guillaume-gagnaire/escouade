@@ -2,6 +2,7 @@
 
 import type { ThemeChoice } from './appearance';
 import type { Lang } from './i18n/locale.svelte';
+import type { PaneLayout } from './panes';
 
 export type AgentStatus = 'idle' | 'running' | 'waiting' | 'done' | 'error';
 
@@ -1237,6 +1238,16 @@ export interface Deployment {
   log?: string | null;
 }
 
+/** A project's code host (`forge::connect::CodeHost`, ESC-390): its remote recognised by a host whose plugin is on. */
+export interface CodeHost {
+  kind: string;
+  name: string;
+  /** Its word for a pull request: « PR », « MR » on GitLab. */
+  word: string;
+  pullRequests: boolean;
+  deployments: boolean;
+}
+
 /** An environment as the view « Environnements » shows it (`deploys::Environment`). */
 export interface Environment {
   name: string;
@@ -1970,6 +1981,8 @@ export interface UiState {
   selectedAgent: Record<string, string>;
   /** 'split': conversation on the left half, uncommitted files and their diff on the right. */
   layout?: '' | 'split';
+  /** The split screen of each project (ESC-392), by project id (`lib/panes.ts`); absent: one content fills the work area. */
+  panes?: Record<string, PaneLayout>;
 }
 
 /** The checkout of an agent's own folder (`GitInfo.agentGit`): the branch HEAD is really on, whatever its worktree was made on. */
@@ -2635,6 +2648,8 @@ export type UiEvent =
   /** Why no ticket of the project's board starts (its target branch), or null once they may. */
   | { type: 'boardIssue'; projectId: string; issue: string | null }
   | { type: 'environments'; environments: ProjectEnvironments }
+  /** The code hosts may have changed (a host's plugin on or off, an account connected or gone): read again (ESC-390). */
+  | { type: 'codeHosts' }
   | { type: 'prReview'; review: AgentReview }
   | { type: 'prReviewGone'; projectId: string; number: number }
   /** Why no ticket of a project that goes to any account starts for now, or null once they may; `projects`: the same for the paused projects that prefer an account. */
@@ -2736,6 +2751,8 @@ export interface InitialState {
   engines: EngineDecl[];
   /** The harnesses whose program is found: the only ones offered (absent before 1.8: Claude Code, when found). */
   enginesFound?: EngineId[];
+  /** The harnesses whose plugin is off or not installed (absent before ESC-391: none). */
+  enginesOff?: EngineId[];
   /** The kinds of ticket sources the core knows (absent before INT-1: the seven of the window). */
   sources?: SourceDecl[];
   /** Why no ticket of a project's board starts, by project (none: they may). */

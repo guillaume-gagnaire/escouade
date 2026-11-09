@@ -1,6 +1,7 @@
 // Test utilities: a fake Tauri backend recording every command.
 
 import { mockIPC, mockWindows } from '@tauri-apps/api/mocks';
+import { envsView } from '../lib/envs-view.svelte';
 import { buffers } from '../lib/editor/buffers.svelte';
 import { navHistory } from '../lib/editor/history';
 import { recentFiles } from '../lib/editor/quick-open';
@@ -20,6 +21,7 @@ import type {
   BranchCi,
   BranchInfo,
   EngineDecl,
+  EngineId,
   GitInfo,
   Project,
   PullRequest,
@@ -390,6 +392,19 @@ export function branchInfo(over: Partial<BranchInfo> = {}): BranchInfo {
   };
 }
 
+/**
+ * Harnesses found here, each with an account of its own beside Claude Code's Principal (ESC-391): the menus « Harness »
+ * offer only those that can be used, not every one found.
+ */
+export function usableEngines(...engines: EngineId[]) {
+  app.enginesFound = engines;
+  const have = new Set((app.settings.accounts ?? []).map((a) => a.engine ?? 'claude'));
+  const added = engines
+    .filter((e) => !have.has(e))
+    .map((e) => ({ id: `principal-${e}`, name: e, engine: e, configDir: '', claudePath: '', active: true }));
+  app.settings = { ...app.settings, accounts: [...(app.settings.accounts ?? []), ...added] };
+}
+
 /** Puts the app singleton back into a known state. */
 export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets?: Ticket[] } = {}) {
   const projects = over.projects ?? [project()];
@@ -406,6 +421,10 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.docsEdit = null;
   app.docsShare = {};
   app.boardIssues = {};
+  app.codeHosts = {};
+  envsView.forget();
+  app.envView = {};
+  app.environments = {};
   app.targetCi = {};
   app.setupOutput = {};
   app.relaunched = {};
@@ -413,6 +432,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.claudePathFound = true;
   app.engines = [CLAUDE_ENGINE];
   app.enginesFound = ['claude'];
+  app.enginesOff = [];
   app.accountModels = {};
   app.engineModels = {};
   app.projectPauses = {};

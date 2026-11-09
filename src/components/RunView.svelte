@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+  import { paneCtx } from '../lib/pane-context';
   import { t } from '../lib/i18n';
   import { keyLabel, primaryKey } from '../lib/platform';
   import { launchStatus, log, restartLaunch, runHere, stopLaunch } from '../lib/launch-actions';
@@ -11,6 +13,8 @@
   import Icon from './Icon.svelte';
 
   let { cmd, project }: { cmd: RunCommand; project: Project } = $props();
+  /** Its pane of the split screen (ESC-392), if it is in one: only the active pane's terminal takes the focus. */
+  const pane = paneCtx();
   let box = $state<HTMLDivElement>();
   let searchOpen = $state(false);
   let query = $state('');
@@ -46,7 +50,7 @@
     const el = box;
     if (!el) return;
     log(id);
-    mountTerminal(logKey(id), el);
+    mountTerminal(logKey(id), el, { focus: untrack(() => !pane || pane.active) });
     const ro = new ResizeObserver(() => {
       try {
         getXTerm(logKey(id))?.fit.fit();
@@ -57,7 +61,7 @@
     ro.observe(el);
     return () => {
       ro.disconnect();
-      mountTerminal(logKey(id), null);
+      mountTerminal(logKey(id), null, { from: el });
     };
   });
 
