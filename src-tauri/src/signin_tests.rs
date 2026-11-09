@@ -314,3 +314,112 @@ async fn the_launches_of_an_account_out_of_date_wait_for_the_first_ones_refresh(
     assert_eq!(log.iter().filter(|e| **e).count(), 1, "{log:?}");
     assert!(log[0], "{log:?}");
 }
+
+/// Whether a process of the agent is alive.
+fn has_process(h: &Harness, id: &str) -> bool {
+    h.core.agent(id).unwrap().lock().proc.is_some()
+}
+
+#[tokio::test]
+async fn a_login_typed_to_the_agent_starts_its_process_again_on_its_session() {
+    let h = harness("login-typed");
+    let (p, _) = h.project(true).await;
+    let pro = pro(&h);
+    signed_in(&pro, "a");
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.core
+        .send_message(&id, "Bonjour".into(), vec![])
+        .await
+        .unwrap();
+    h.wait("idle", |h| {
+        !h.agent(&id).status.is_active() && h.agent(&id).session_id.is_some()
+    })
+    .await;
+    assert!(has_process(&h, &id));
+    // Signed in again in the terminal of « Se connecter » (ESC-401).
+    signed_in(&pro, "b");
+    h.core.agent_signed_in(&id).await.unwrap();
+    // The process that held the old sign-in is gone: the next message starts one on its session.
+    assert!(!has_process(&h, &id));
+    assert_eq!(
+        notices(&h, &id),
+        [(
+            "info".to_string(),
+            "Compte Pro connecté : l’agent reprend sur ce compte, avec sa session.".to_string()
+        )]
+    );
+    h.core
+        .send_message(&id, "Encore".into(), vec![])
+        .await
+        .unwrap();
+    h.wait("answered", |h| {
+        !h.agent(&id).status.is_active() && config_dirs(h, &cwd(h, &id)).len() == 2
+    })
+    .await;
+    let session = h.agent(&id).session_id.unwrap();
+    let resumed = &h.launch_log(&cwd(&h, &id))[1]["argv"];
+    assert!(resumed
+        .as_array()
+        .unwrap()
+        .contains(&json!(format!("--resume={session}"))));
+    assert_eq!(config_dirs(&h, &cwd(&h, &id))[1], json!(pro.config_dir));
+}
+
+#[tokio::test]
+async fn a_login_typed_while_the_agent_waits_for_one_lets_it_go_on() {
+    let h = harness("login-typed-waiting");
+    let (p, _) = h.project(true).await;
+    let pro = pro(&h);
+    std::fs::write(
+        Path::new(&pro.config_dir).join(".credentials.json"),
+        r#"{"claudeAiOauth":{"accessToken":"","refreshToken":"","expiresAt":0}}"#,
+    )
+    .unwrap();
+    lost_for(&pro, "1");
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.core
+        .send_message(&id, "Bonjour".into(), vec![])
+        .await
+        .unwrap();
+    h.wait("waits for a sign-in", |h| h.agent(&id).sign_in.is_some())
+        .await;
+    signed_in(&pro, "b");
+    h.core.agent_signed_in(&id).await.unwrap();
+    // The turn that waited goes on, at once.
+    h.wait("gone on", |h| {
+        went_on(h, &id) && !h.agent(&id).status.is_active()
+    })
+    .await;
+    assert_eq!(h.agent(&id).sign_in, None);
+}
+
+#[tokio::test]
+async fn a_logout_typed_to_the_agent_signs_its_account_out_by_its_harness() {
+    let h = harness("logout-typed");
+    let (p, _) = h.project(true).await;
+    let pro = pro(&h);
+    signed_in(&pro, "a");
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.core
+        .send_message(&id, "Bonjour".into(), vec![])
+        .await
+        .unwrap();
+    h.wait("idle", |h| !h.agent(&id).status.is_active()).await;
+    h.core.agent_logout(&id).await.unwrap();
+    // `claude auth logout` ran in the account's folder: its sign-in is gone, never read by Escouade.
+    assert!(!Path::new(&pro.config_dir)
+        .join(".credentials.json")
+        .exists());
+    assert!(!has_process(&h, &id));
+    assert_eq!(
+        notices(&h, &id),
+        [(
+            "info".to_string(),
+            "Compte Pro déconnecté. /login le reconnecte.".to_string()
+        )]
+    );
+    // Its harness refusing: said, nothing changed.
+    std::fs::write(Path::new(&pro.config_dir).join("fake-logout-fails"), "").unwrap();
+    let err = h.core.agent_logout(&id).await.unwrap_err().to_string();
+    assert!(err.contains("Failed to log out."), "{err}");
+}

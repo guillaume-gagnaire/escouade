@@ -345,6 +345,16 @@ async function mcpCommand(args) {
 
 if (argv[0] === 'mcp') {
   mcpCommand(argv.slice(1));
+} else if (argv[0] === 'auth' && argv[1] === 'logout') {
+  // `claude auth logout` (`/logout` typed to an agent, ESC-401): the sign-in of its folder goes (the tests' own, never
+  // the user's), as Claude Code 2.1.319 says it; a <dir>/fake-logout-fails file makes it fail.
+  if (configDir && fs.existsSync(path.join(configDir, 'fake-logout-fails'))) {
+    process.stderr.write('Failed to log out.\n');
+    process.exit(1);
+  }
+  if (configDir) fs.rmSync(path.join(configDir, '.credentials.json'), { force: true });
+  process.stdout.write('Successfully logged out from your Anthropic account.\n');
+  process.exit(0);
 } else if (argv.includes('-p') && argv.some((a) => a.includes('[sourd]'))) {
   // One-shot mode (`-p --output-format json`), used by the app to name agents.
   setTimeout(() => {}, 20_000);

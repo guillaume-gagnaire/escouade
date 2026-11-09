@@ -803,6 +803,8 @@ pub fn run() {
                 commands::set_agent_options,
                 commands::set_agent_account,
                 commands::resume_on_account,
+                commands::agent_signed_in,
+                commands::agent_logout,
                 commands::continue_on_engine,
                 commands::back_to_previous_account,
                 commands::rename_agent,

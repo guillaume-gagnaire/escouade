@@ -111,6 +111,40 @@ export default defineZone('composer', {
     numberPlaceholder: 'A number',
   },
 
+  interactive: {
+    where: {
+      account: 'opens in Accounts',
+      menu: 'opens in the menu',
+      mode: 'switches to Plan mode',
+      settings: 'opens in Settings',
+      remote: 'Escouade’s Remote Control',
+      view: 'opens in the {harness} view',
+      kept: 'not from Escouade',
+    },
+    desc: {
+      login: 'Sign in the agent’s account',
+      logout: 'Sign out the agent’s account',
+      plan: 'Switch to Plan mode',
+      usage: 'The accounts’ quotas',
+      remoteControl: 'Reach the agent from claude.ai and the Claude app',
+    },
+    toView: '{command} opens in the {harness} view. “Escouade view” brings back the conversation, which goes on.',
+    noView: '{command} only works in the {harness} view, which a ticket’s agent doesn’t have.',
+    noViewHarness: '{command} doesn’t open from Escouade for {harness}.',
+    kept: {
+      session: '{command} isn’t offered here: the agent keeps its session. A new agent opens another one.',
+      exit: '{command} isn’t offered here: nothing to quit, the agent stays in Escouade.',
+    },
+    noEffort: 'This model takes no effort.',
+    noPlan: '{harness} has no Plan mode.',
+    noRemote: '{harness} has no Remote Control.',
+    remoteAlready: 'This agent’s Remote Control is already on.',
+    logout: {
+      title: 'Sign out the {account} account?',
+      body: '{harness} signs out of this account, for every agent that uses it. The account stays in Escouade: /login or “Sign in” signs it in again.',
+      confirm: 'Sign out',
+    },
+  },
   model: {
     multiplier: '×{n}',
     multiplierTitle: 'Costs {n} times the base rate',

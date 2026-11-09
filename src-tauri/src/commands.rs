@@ -1588,6 +1588,19 @@ pub async fn resume_on_account(core: CoreState<'_>, agent_id: String, account: S
         .map_err(err)
 }
 
+/// `/login` typed to the agent (ESC-401): its account was just signed in; it goes on, on it,
+/// with its session.
+#[tauri::command]
+pub async fn agent_signed_in(core: CoreState<'_>, id: String) -> Res<()> {
+    core.agent_signed_in(&id).await.map_err(err)
+}
+
+/// `/logout` typed to the agent (ESC-401), confirmed: its account signs out by its harness.
+#[tauri::command]
+pub async fn agent_logout(core: CoreState<'_>, id: String) -> Res<()> {
+    core.agent_logout(&id).await.map_err(err)
+}
+
 /// « Revenir sur <compte> »: a resume on another account failed; the agent goes back.
 #[tauri::command]
 pub async fn back_to_previous_account(core: CoreState<'_>, agent_id: String) -> Res<()> {

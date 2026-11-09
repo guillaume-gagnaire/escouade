@@ -33,6 +33,7 @@
   import { t } from '../lib/i18n';
   import type { DictationTarget } from '../lib/dictation.svelte';
   import { mountTerminal, roomOf, typeIntoTerminal } from '../lib/terminals';
+  import { takeViewCommand } from '../lib/interactive';
   import MicButton from './MicButton.svelte';
   import { app } from '../lib/state.svelte';
   import { engineName, speakerOf } from '../lib/engines';
@@ -51,6 +52,10 @@
 
   /** How often the view asks whether the interface still asks about the trust of its folder. */
   const TRUST_POLL_MS = 1500;
+
+  /** How long an interactive command typed in the composer waits for the interface to take it (ESC-401), and how often it tries. */
+  const VIEW_COMMAND_WAIT_MS = 20_000;
+  const VIEW_COMMAND_RETRY_MS = 500;
 
   /** How long the note about a session not found stays, once the interface is up on the new one. */
   const LOST_NOTE_MS = 6000;
@@ -221,6 +226,32 @@
       lost = true;
       void start(false);
     });
+  });
+
+  // An interactive command typed in the composer (ESC-401): typed in the interface once it is up, as a message typed
+  // there. Its interface takes nothing typed before it is ready (the backend says so): tried again a moment later.
+  $effect(() => {
+    const id = agentId;
+    if (!term || exited) return;
+    const command = untrack(() => takeViewCommand(id));
+    if (!command) return;
+    let gone = false;
+    const until = Date.now() + VIEW_COMMAND_WAIT_MS;
+    const tryIt = async () => {
+      while (!gone) {
+        try {
+          await api.sendMessage(id, command);
+          return;
+        } catch (e) {
+          if (Date.now() > until) return app.toast(String(e), 'error');
+          await new Promise((r) => setTimeout(r, VIEW_COMMAND_RETRY_MS));
+        }
+      }
+    };
+    void tryIt();
+    return () => {
+      gone = true;
+    };
   });
 
   // The note goes a few seconds after the interface is up on the new session.

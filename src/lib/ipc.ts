@@ -385,6 +385,10 @@ export const api = {
   setAgentAccount: (id: string, account: string) => invoke<void>('set_agent_account', { id, account }),
   /** « Reprendre sur <compte> »: the agent stopped by the usage limit goes on, with its session, on another account. */
   resumeOnAccount: (agentId: string, account: string) => invoke<void>('resume_on_account', { agentId, account }),
+  /** `/login` typed to the agent (ESC-401): its account was just signed in; it goes on, on it, with its session. */
+  agentSignedIn: (id: string) => invoke<void>('agent_signed_in', { id }),
+  /** `/logout` typed to the agent (ESC-401), confirmed: its account signs out by its harness's own command. */
+  agentLogout: (id: string) => invoke<void>('agent_logout', { id }),
   /** « Continuer sur <harness> » and « Revenir sur <harness> »: the agent goes on on another harness, by a handover. */
   continueOnEngine: (agentId: string, engine: EngineId) => invoke<void>('continue_on_engine', { agentId, engine }),
   /** « Revenir sur <compte> »: a resume on another account failed; the agent goes back to the account it came from. */

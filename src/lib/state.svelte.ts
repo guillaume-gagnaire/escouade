@@ -168,7 +168,8 @@ export type Modal =
   | { kind: 'newDiscussion'; projectId: string; preset?: DiscussionPreset }
   /** « Ajouter un compte… » (a new Claude account, then its sign-in), or « Se connecter… » for the account `accountId`. */
   /** `back`: the settings' tab it came from and goes back to (Comptes Claude by default). */
-  | { kind: 'account'; accountId?: string; back?: SettingsPage; engine?: EngineId; reserveFor?: string }
+  /** `forAgent`: opened by `/login` typed to that agent (ESC-401), which goes on once signed in; closed, back to it. */
+  | { kind: 'account'; accountId?: string; back?: SettingsPage; engine?: EngineId; reserveFor?: string; forAgent?: string }
   | { kind: 'testLaunch'; agentId: string }
   | { kind: 'import'; projectId: string }
   /** The update downloaded (`app.update`), which a restart installs; `back`, the settings' tab it was opened from and goes back to. */

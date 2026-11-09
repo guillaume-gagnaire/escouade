@@ -299,7 +299,13 @@
 {:else if app.modal?.kind === 'rename'}
   <RenameModal title={app.modal.title} value={app.modal.value} onSubmit={app.modal.onSubmit} />
 {:else if app.modal?.kind === 'account'}
-  <AccountModal accountId={app.modal.accountId} back={app.modal.back} engine={app.modal.engine} reserveFor={app.modal.reserveFor} />
+  <AccountModal
+    accountId={app.modal.accountId}
+    back={app.modal.back}
+    engine={app.modal.engine}
+    reserveFor={app.modal.reserveFor}
+    forAgent={app.modal.forAgent}
+  />
 {:else if app.modal?.kind === 'testLaunch'}
   <TestLaunchModal agentId={app.modal.agentId} />
 {:else if app.modal?.kind === 'import'}

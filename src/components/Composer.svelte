@@ -16,6 +16,8 @@
   } from '../lib/attachments';
   import { accountName, accountsOf, newAgentAccount, serves } from '../lib/accounts';
   import { applyCompletion, detectTrigger, filterCommands, type Trigger } from '../lib/complete';
+  import { interactiveCommands, interactiveOf, queueViewCommand, takeViewCommand, type Opens } from '../lib/interactive';
+  import { canSwitchView, inHarnessView, toggleRemote } from '../lib/agent-actions';
   import { conversationOf } from '../lib/conversations.svelte';
   import { getDraft, giveBack, setDraft } from '../lib/drafts';
   import { hold, holdModeOf, settled } from '../lib/outbox.svelte';
@@ -70,7 +72,8 @@
   let files = $state<DraftAttachment[]>(initial.files);
   let ta = $state<HTMLTextAreaElement>();
   let trigger = $state<Trigger | null>(null);
-  let suggestions = $state<{ label: string; detail: string; value: string }[]>([]);
+  /** `mark`: where an interactive command opens (ESC-401), said before it is pressed. */
+  let suggestions = $state<{ label: string; detail: string; value: string; mark?: string }[]>([]);
   let sel = $state(0);
   let sending = $state(false);
   /** The agent whose message being sent the backend holds until its worktree is prepared. */
@@ -291,23 +294,52 @@
       const files = await api.fileSuggestions(agent.id, trig.query).catch(() => [] as string[]);
       if (seq !== reqSeq) return;
       suggestions = files.slice(0, 12).map((f) => ({ label: basename(f), detail: dirname(f), value: f }));
-    } else if (!can(agent, 'slashCommands')) {
-      // Its harness offers no `/` command to a client.
-      suggestions = [];
     } else {
+      // Its harness's own, when it offers them to a client; and its interactive ones, which it does not list there, each
+      // marked with where it opens (ESC-401).
       let cmds = commandCache.get(agent.id);
-      if (!cmds) {
+      if (!cmds && can(agent, 'slashCommands')) {
         cmds = await api.getCommands(agent.id).catch(() => []);
         if (cmds.length) commandCache.set(agent.id, cmds);
       }
       if (seq !== reqSeq) return;
-      suggestions = filterCommands(cmds, trig.query).map((c) => ({
+      const harness = engineName(agent.engine);
+      const marks = new Map(
+        interactiveCommands(agent.engine)
+          .filter((c) => c.name !== 'effort' || capsOf(agent.engine)?.effort)
+          .map((c) => [c.name, t(`composer.interactive.where.${c.where}`, { harness })]),
+      );
+      const listed = (cmds ?? []).map((c) => ({ ...c, mark: marks.get(c.name) }));
+      const known = new Set(listed.map((c) => c.name));
+      const added = [...marks]
+        .filter(([name]) => !known.has(name))
+        .map(([name, mark]) => ({ name, description: descOf(name), argumentHint: undefined as string | undefined, mark }));
+      suggestions = filterCommands([...listed, ...added], trig.query).map((c) => ({
         label: '/' + c.name + (c.argumentHint ? ' ' + c.argumentHint : ''),
         detail: c.description,
         value: c.name,
+        mark: c.mark,
       }));
     }
     sel = 0;
+  }
+
+  /** What an interactive command does, for those its harness does not describe (none for the others: their mark says it). */
+  function descOf(name: string): string {
+    switch (name) {
+      case 'login':
+        return t('composer.interactive.desc.login');
+      case 'logout':
+        return t('composer.interactive.desc.logout');
+      case 'plan':
+        return t('composer.interactive.desc.plan');
+      case 'usage':
+        return t('composer.interactive.desc.usage');
+      case 'remote-control':
+        return t('composer.interactive.desc.remoteControl');
+      default:
+        return '';
+    }
   }
 
   function accept(i: number) {
@@ -317,6 +349,12 @@
     text = r.text;
     suggestions = [];
     trigger = null;
+    // An interactive command picked alone opens at once (ESC-401), but /plan, which takes the text that follows.
+    const opens = interactiveOf(agent.engine, text);
+    if (opens && opens.kind !== 'plan') {
+      void send();
+      return;
+    }
     queueMicrotask(() => {
       ta?.setSelectionRange(r.caret, r.caret);
       ta?.focus();
@@ -510,6 +548,13 @@
   async function send() {
     const body = text.trim();
     if ((!body && !files.length) || reading || copying) return;
+    // An interactive command of its harness (ESC-401) never goes as a message: it opens what it stands for.
+    const opens = interactiveOf(agent.engine, body);
+    if (opens) {
+      text = '';
+      await openInteractive(opens, body);
+      return;
+    }
     // The one before waits for the worktree, which can take minutes: this one is not dropped without a word.
     if (sending && heldFor === agent.id) {
       app.toast(t('composer.send.alreadyWaiting'));
@@ -600,6 +645,78 @@
     app.run(api.interrupt(agent.id));
   }
 
+  /** What an interactive command typed or picked opens (ESC-401, `lib/interactive.ts`); `typed`: the command as typed. */
+  async function openInteractive(o: Opens, typed: string) {
+    const a = app.agents[agent.id] ?? agent;
+    const harness = engineName(a.engine);
+    const command = typed.split(/\s/)[0];
+    switch (o.kind) {
+      case 'login':
+        // « Se connecter » of Réglages › Comptes et harness, for its account; once signed in, the agent goes on.
+        app.modal = { kind: 'account', accountId: a.account, forAgent: a.id };
+        return;
+      case 'logout': {
+        const account = app.settings.accounts.find((x) => x.id === a.account);
+        app.modal = {
+          kind: 'confirm',
+          title: t('composer.interactive.logout.title', { account: account ? accountName(account) : a.account }),
+          body: t('composer.interactive.logout.body', { harness }),
+          confirm: t('composer.interactive.logout.confirm'),
+          danger: true,
+          onConfirm: () => {
+            app.modal = null;
+            void app.run(api.agentLogout(a.id));
+          },
+        };
+        return;
+      }
+      case 'menu':
+        if (o.menu === 'effort' && !effortOk) return app.toast(t('composer.interactive.noEffort'), 'info');
+        menu = null;
+        toggleMenu(o.menu);
+        return;
+      case 'plan':
+        if (!capsOf(a.engine)?.modes.some((m) => m.id === 'plan')) return app.toast(t('composer.interactive.noPlan', { harness }), 'info');
+        setOption({ mode: 'plan' });
+        if (o.rest) {
+          text = o.rest;
+          await send();
+        }
+        return;
+      case 'settings':
+        app.modal = { kind: 'settings', page: o.page };
+        return;
+      case 'remote':
+        if (!can(a, 'remoteControl')) return app.toast(t('composer.interactive.noRemote', { harness }), 'info');
+        if (a.remoteControl) return app.toast(t('composer.interactive.remoteAlready'), 'info');
+        await toggleRemote(a);
+        return;
+      case 'view':
+        if (!canSwitchView(a)) {
+          // Given back: nothing was done with it.
+          text = typed;
+          const why = can(a, 'terminalView') ? 'composer.interactive.noView' : 'composer.interactive.noViewHarness';
+          return app.toast(t(why, { command, harness }), 'info');
+        }
+        queueViewCommand(a.id, o.command);
+        if (!inHarnessView(a)) {
+          try {
+            await api.setAgentView(a.id, true);
+          } catch (e) {
+            // Refused (a turn under way): the command is back in the field.
+            takeViewCommand(a.id);
+            text = typed;
+            return app.toast(String(e), 'error');
+          }
+        }
+        app.toast(t('composer.interactive.toView', { command, harness }), 'info');
+        return;
+      case 'kept':
+        app.toast(t(o.why === 'exit' ? 'composer.interactive.kept.exit' : 'composer.interactive.kept.session', { command }), 'info');
+        return;
+    }
+  }
+
   function toggleMenu(m: 'model' | 'effort' | 'mode' | 'account') {
     menu = menu === m ? null : m;
     // Its account's models read again when a day old (ESC-186).
@@ -684,6 +801,7 @@
           >
             <span class="sl mono">{s.label}</span>
             <span class="sd">{s.detail}</span>
+            {#if s.mark}<span class="mark"><Icon name="ext" size={11} />{s.mark}</span>{/if}
           </button>
         {/each}
       </div>
@@ -1045,6 +1163,16 @@
   .sl {
     flex: none;
     font-size: 12.5px;
+  }
+  .mark {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    color: var(--dim);
+    font-size: 11px;
+    white-space: nowrap;
   }
   .sd {
     min-width: 0;
