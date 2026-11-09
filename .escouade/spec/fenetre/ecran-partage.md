@@ -3,7 +3,7 @@ title: "Écran partagé"
 subject: "fenetre"
 sources: ["docs/SPLIT.md","design/split-view/index.html"]
 tickets: ["ESC-392","ESC-399"]
-decisions: [128,"un-contenu-qui-part-ne-defait-pas-l-ecra"]
+decisions: [128,134]
 compared: null
 ---
 

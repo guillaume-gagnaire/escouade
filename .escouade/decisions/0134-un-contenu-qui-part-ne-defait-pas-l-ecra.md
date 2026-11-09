@@ -1,9 +1,9 @@
 ---
-number: null
+number: 134
 id: "un-contenu-qui-part-ne-defait-pas-l-ecra"
 title: "Un contenu qui part ne défait pas l'écran partagé"
 date: "2026-11-09"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-399"
 pages: ["fenetre/ecran-partage"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/ecran-partage","added":12,"removed":3}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-09T15:37:14+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
