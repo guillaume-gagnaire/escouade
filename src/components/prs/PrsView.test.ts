@@ -89,6 +89,23 @@ describe('the « Pull requests » view (ESC-65)', () => {
     await waitFor(() => expect(backend.called('create_agent_on_pr').at(-1)?.args).toEqual({ projectId: 'p1', number: 11 }));
   });
 
+  it('once on screen, sets the tab’s badge back to zero and marks the new ones until the next opening (ESC-403)', async () => {
+    fakeBackend({ project_prs: () => ({ data: { word: 'PR', prs: PRS, me: 'ada' } }) });
+    app.ui.prSeen = { p1: { mark: 10, open: [10, 11, 12], own: [], fresh: [] } };
+    expect(app.prsNew('p1')).toBe(2);
+    const view = render(PrsView, { project: project() });
+    const rows = await screen.findAllByRole('listitem');
+    expect(app.prsNew('p1')).toBe(0);
+    expect(within(rows[0]).getByText('Nouvelle')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('Nouvelle')).toBeInTheDocument();
+    expect(within(rows[2]).queryByText('Nouvelle')).toBeNull();
+    view.unmount();
+
+    render(PrsView, { project: project() });
+    await screen.findAllByRole('listitem');
+    expect(screen.queryByText('Nouvelle')).toBeNull();
+  });
+
   it('opens the agent already on a pull request instead of starting another', async () => {
     const backend = fakeBackend({ project_prs: () => ({ data: { word: 'PR', prs: PRS, me: 'ada' } }) });
     resetApp({

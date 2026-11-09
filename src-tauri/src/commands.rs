@@ -2133,6 +2133,12 @@ pub async fn project_prs(
     Ok(core.project_prs(&project_id).await)
 }
 
+/// The background reading of the project on screen's list, for the PR tab's badge (ESC-403).
+#[tauri::command]
+pub async fn project_prs_watch(core: CoreState<'_>, project_id: String) -> Res<bool> {
+    Ok(core.project_prs_watch(&project_id).await)
+}
+
 /// The open pull requests of every project, as recently read, for the overview (ESC-68).
 #[tauri::command]
 pub async fn overview_prs(core: CoreState<'_>) -> Res<Vec<crate::prview::OverviewPrs>> {

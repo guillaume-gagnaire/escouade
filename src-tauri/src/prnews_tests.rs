@@ -456,3 +456,106 @@ async fn near_the_hosts_limit_what_can_wait_is_not_read() {
     assert_eq!(read.data.unwrap().prs.len(), 1);
     assert!(server.requests().is_empty());
 }
+
+#[tokio::test]
+async fn every_reading_of_the_list_tells_the_window_its_numbers_without_asking_more() {
+    let h = harness("prnews-read-event");
+    let server = FakeServer::start().await;
+    let (p, _, _) = github_project(&h, &server, false).await;
+    let reads = |h: &Harness| -> Vec<Value> {
+        h.events
+            .lock()
+            .iter()
+            .filter(|e| e["type"] == "prsRead")
+            .cloned()
+            .collect()
+    };
+    open_pulls(&server, &[3, 4]);
+    h.core.project_prs(&p.id).await.data.unwrap();
+    let got = reads(&h);
+    assert_eq!(got.len(), 1);
+    assert_eq!(got[0]["projectId"], json!(p.id));
+    assert_eq!(got[0]["numbers"], json!([3, 4]));
+    // What is given again without asking the host tells nothing new.
+    server.clear_requests();
+    h.core.project_prs_recent(&p.id).await;
+    assert_eq!(reads(&h).len(), 1);
+    assert!(server.requests().is_empty());
+}
+
+/// The requests for the list made so far.
+fn list_reads(server: &FakeServer) -> usize {
+    server
+        .requests()
+        .iter()
+        .filter(|r| r.path() == "/graphql")
+        .count()
+}
+
+#[tokio::test]
+async fn the_badges_reading_waits_two_minutes_after_any_other_and_longer_after_each_failure() {
+    let h = harness("prnews-watch");
+    let server = FakeServer::start().await;
+    let (p, _, _) = github_project(&h, &server, false).await;
+    open_pulls(&server, &[3]);
+    server.clear_requests();
+    assert!(
+        h.core.project_prs_watch(&p.id).await,
+        "nothing read yet: it reads"
+    );
+    assert_eq!(list_reads(&server), 1);
+    // Read under two minutes ago, by itself or by the view: no reading more.
+    assert!(!h.core.project_prs_watch(&p.id).await);
+    h.core.project_prs(&p.id).await.data.unwrap();
+    server.clear_requests();
+    assert!(!h.core.project_prs_watch(&p.id).await);
+    assert_eq!(list_reads(&server), 0);
+    let age = |h: &Harness, by: u64| {
+        let mut lists = h.core.pr_lists.lock();
+        let list = lists.get_mut(&p.id).unwrap();
+        if let Some((at, _, _)) = list.read.as_mut() {
+            *at -= std::time::Duration::from_secs(by);
+        }
+        if let Some(after) = list.watch_after.as_mut() {
+            *after -= std::time::Duration::from_secs(by);
+        }
+    };
+    age(&h, 121);
+    assert!(h.core.project_prs_watch(&p.id).await);
+    assert_eq!(list_reads(&server), 1);
+
+    // The host fails: the next reading waits longer each time, and nothing is told for it.
+    server.on(
+        "POST",
+        "/graphql#OpenPulls",
+        500,
+        json!({ "message": "boom" }),
+    );
+    age(&h, 121);
+    assert!(h.core.project_prs_watch(&p.id).await);
+    let waits = |h: &Harness| {
+        let lists = h.core.pr_lists.lock();
+        let after = lists[&p.id].watch_after.unwrap();
+        after.saturating_duration_since(std::time::Instant::now())
+    };
+    let first = waits(&h);
+    assert!(first > std::time::Duration::from_secs(200), "{first:?}");
+    age(&h, 121);
+    server.clear_requests();
+    assert!(!h.core.project_prs_watch(&p.id).await, "still waiting");
+    assert_eq!(list_reads(&server), 0);
+    age(&h, 3600);
+    assert!(h.core.project_prs_watch(&p.id).await);
+    assert!(waits(&h) > first, "longer the second time");
+    assert!(waits(&h) <= std::time::Duration::from_secs(30 * 60));
+    assert!(h
+        .events
+        .lock()
+        .iter()
+        .all(|e| e["type"] != "toast" && e["type"] != "notice"));
+
+    // A good reading, whoever made it, ends the wait.
+    open_pulls(&server, &[3, 4]);
+    h.core.project_prs(&p.id).await.data.unwrap();
+    assert!(h.core.pr_lists.lock()[&p.id].watch_after.is_none());
+}

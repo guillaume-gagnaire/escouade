@@ -3,6 +3,7 @@
 import type { ThemeChoice } from './appearance';
 import type { Lang } from './i18n/locale.svelte';
 import type { PaneLayout } from './panes';
+import type { PrSeen } from './prnew';
 
 export type AgentStatus = 'idle' | 'running' | 'waiting' | 'done' | 'error';
 
@@ -1991,6 +1992,8 @@ export interface UiState {
   layout?: '' | 'split';
   /** The split screen of each project (ESC-392), by project id (`lib/panes.ts`); absent: one content fills the work area. */
   panes?: Record<string, PaneLayout>;
+  /** What was seen of each project's pull requests (ESC-403), by project id (`lib/prnew.ts`): the PR tab's badge. */
+  prSeen?: Record<string, PrSeen>;
 }
 
 /** The checkout of an agent's own folder (`GitInfo.agentGit`): the branch HEAD is really on, whatever its worktree was made on. */
@@ -2653,6 +2656,8 @@ export type UiEvent =
   | { type: 'openUrl'; url: string }
   | { type: 'focusBoard'; projectId: string }
   | { type: 'focusPrs'; projectId: string }
+  /** A reading of the project's list of pull requests, whoever made it: its open ones (ESC-403). */
+  | { type: 'prsRead'; projectId: string; numbers: number[] }
   /** Why no ticket of the project's board starts (its target branch), or null once they may. */
   | { type: 'boardIssue'; projectId: string; issue: string | null }
   | { type: 'environments'; environments: ProjectEnvironments }

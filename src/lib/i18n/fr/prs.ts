@@ -81,6 +81,11 @@ export default {
     /** The sidebar's button, its word: « PR », « MR » on GitLab. */
     tab: '{word}',
     tabHint: 'Les {word} ouvertes du projet',
+    /** The tab, read out, with its badge: the ones come since it was last opened (ESC-403). */
+    tabNew: { one: '{word}, {count} nouvelle', other: '{word}, {count} nouvelles' },
+    /** The mark of a new one in the list, until the tab is opened again. */
+    new: 'Nouvelle',
+    newHint: 'Arrivée depuis ta dernière visite',
     title: 'Pull requests',
     titleMr: 'Merge requests',
     open: { one: '{count} ouverte', other: '{count} ouvertes' },

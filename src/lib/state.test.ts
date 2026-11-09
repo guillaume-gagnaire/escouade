@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { agent, CLAUDE_ENGINE, board, fakeBackend, gitInfo, project, resetApp, SETTINGS, ticket } from '../test/ipc';
+import { agent, CLAUDE_ENGINE, board, fakeBackend, gitInfo, project, pullRequest, resetApp, SETTINGS, ticket } from '../test/ipc';
 import { conversationOf } from './conversations.svelte';
 import { buffers } from './editor/buffers.svelte';
 import { navHistory } from './editor/history';
@@ -8,7 +8,7 @@ import { fileSearches } from './editor/search.svelte';
 import { trees } from './editor/trees.svelte';
 import { locale, setLang } from './i18n';
 import { app } from './state.svelte';
-import type { CodeHost, InitialState, LaunchState, UiEvent } from './types';
+import type { CodeHost, InitialState, LaunchState, Ticket, UiEvent } from './types';
 
 /** Starts the app against a fake backend and returns a function pushing backend events. */
 async function start(over: Partial<InitialState> = {}, handlers: Record<string, (args: any) => unknown> = {}) {
@@ -1433,6 +1433,39 @@ describe('board', () => {
     emit({ type: 'focusPrs', projectId: 'p2' });
     expect(app.ui.activeProject).toBe('p2');
     expect(app.prsOn).toBe(true);
+  });
+
+  it('counts the pull requests come since the PR tab was opened, from the readings made, not Escouade’s (ESC-403)', async () => {
+    const { emit, backend } = await start({
+      agents: [agent({ prs: [pullRequest({ number: 7 })] })],
+      tickets: [ticket({ id: 't1', projectId: 'p1', pr: { number: 8 } as Ticket['pr'] })],
+    });
+    emit({ type: 'prsRead', projectId: 'p1', numbers: [1, 2] });
+    expect(app.prsNew('p1')).toBe(0);
+    emit({ type: 'prsRead', projectId: 'p1', numbers: [1, 2, 3, 7, 8] });
+    expect(app.prsNew('p1')).toBe(1);
+    expect(app.prsNew('p2')).toBe(0);
+    await new Promise((r) => setTimeout(r, 300));
+    const saved = backend.called('set_ui').at(-1)?.args.ui.prSeen;
+    expect(saved.p1).toMatchObject({ mark: 2, open: [1, 2, 3, 7, 8] });
+
+    // A restart: what was seen comes back with the interface's state.
+    app.prsOpened('p1');
+    expect(app.prsNew('p1')).toBe(0);
+    await new Promise((r) => setTimeout(r, 300));
+    const again = await start({ ui: backend.called('set_ui').at(-1)?.args.ui });
+    expect(app.ui.prSeen?.p1).toMatchObject({ mark: 8, fresh: [3] });
+    again.emit({ type: 'prsRead', projectId: 'p1', numbers: [1, 2, 3, 7, 8, 9] });
+    expect(app.prsNew('p1')).toBe(1);
+  });
+
+  it('a reading made while the PR tab is on screen counts nothing (ESC-403)', async () => {
+    const { emit } = await start();
+    emit({ type: 'prsRead', projectId: 'p1', numbers: [1] });
+    app.openPrs('p1');
+    emit({ type: 'prsRead', projectId: 'p1', numbers: [1, 2] });
+    expect(app.prsNew('p1')).toBe(0);
+    expect(app.ui.prSeen?.p1.fresh).toEqual([2]);
   });
 
   it('shows the board of the project of a notification even when another view is up', async () => {

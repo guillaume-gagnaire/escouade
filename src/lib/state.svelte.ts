@@ -26,6 +26,7 @@ import type { FormImage } from './ticket-images';
 import { setSources } from './integrations';
 import { applyTheme } from './theme';
 import { hasTab } from './code-host';
+import { newCount, opened, readSeen, seenOf, type PrSeen } from './prnew';
 import { workflows } from './workflows.svelte';
 import {
   activeItem,
@@ -745,7 +746,13 @@ class AppState {
     this.projectPauses = s.projectPauses ?? {};
     this.accounts = s.accounts ?? [];
     this.attention = {};
-    this.ui = { ...s.ui, view: s.ui.view || 'project', selectedAgent: s.ui.selectedAgent ?? {}, panes: readPanes(s.ui.panes) };
+    this.ui = {
+      ...s.ui,
+      view: s.ui.view || 'project',
+      selectedAgent: s.ui.selectedAgent ?? {},
+      panes: readPanes(s.ui.panes),
+      prSeen: readSeens(s.ui.prSeen),
+    };
     this.overviewFrom = 'project';
     if (!this.ui.activeProject || !this.projects.some((p) => p.id === this.ui.activeProject)) {
       // Never the one the page crashed on (ESC-290): it is offered again, not opened.
@@ -866,6 +873,9 @@ class AppState {
       case 'focusPrs':
         // The click of a review asked of the user.
         this.openPrs(e.projectId);
+        break;
+      case 'prsRead':
+        this.prsRead(e.projectId, e.numbers);
         break;
       case 'pluginSeeded':
         this.toast(e.text, 'ok');
@@ -1561,6 +1571,32 @@ class AppState {
     this.persistUi();
   }
 
+  /** The new pull requests of a project (ESC-403): the PR tab's badge. */
+  prsNew(projectId: string) {
+    return newCount(this.ui.prSeen?.[projectId]);
+  }
+
+  /** A reading of a project's list of pull requests, whoever made it (ESC-403): those Escouade opened, its tickets' and
+   * its agents', are never new. */
+  prsRead(projectId: string, numbers: number[]) {
+    const escouade = new Set<number>();
+    for (const tk of Object.values(this.tickets)) if (tk.projectId === projectId && tk.pr) escouade.add(tk.pr.number);
+    for (const a of Object.values(this.agents)) if (a.projectId === projectId) for (const p of a.prs ?? []) escouade.add(p.number);
+    const shown = this.prsOn && this.project?.id === projectId;
+    this.setPrSeen(projectId, readSeen(this.ui.prSeen?.[projectId], numbers, escouade, shown));
+  }
+
+  /** The project's PR view came on screen (ESC-403): its badge back to zero, its new ones marked in the list. */
+  prsOpened(projectId: string) {
+    const next = opened(this.ui.prSeen?.[projectId]);
+    if (next) this.setPrSeen(projectId, next);
+  }
+
+  private setPrSeen(projectId: string, seen: PrSeen) {
+    this.ui.prSeen = { ...this.ui.prSeen, [projectId]: seen };
+    this.persistUi();
+  }
+
   closePrs(projectId = this.ui.activeProject) {
     if (projectId) this.prs[projectId] = false;
   }
@@ -1971,3 +2007,14 @@ class AppState {
 }
 
 export const app = new AppState();
+
+/** What was seen of each project's pull requests, as the interface's state gave it back (ESC-403). */
+function readSeens(v: unknown): Record<string, PrSeen> {
+  const out: Record<string, PrSeen> = {};
+  if (v && typeof v === 'object')
+    for (const [id, raw] of Object.entries(v)) {
+      const seen = seenOf(raw);
+      if (seen) out[id] = seen;
+    }
+  return out;
+}

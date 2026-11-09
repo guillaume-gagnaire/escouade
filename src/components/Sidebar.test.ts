@@ -1573,6 +1573,26 @@ describe('Sidebar editor entries', () => {
   });
 });
 
+describe('the PR tab’s badge of the new ones (ESC-403)', () => {
+  it('shows how many came since the tab was opened, read out, and nothing when none', async () => {
+    resetApp({ projects: [project()], agents: [agent()] });
+    fakeBackend({ project_code_host: () => GITHUB_HOST });
+    app.ui.prSeen = { p1: { mark: 4, open: [3, 4], own: [], fresh: [] } };
+    render(Sidebar, { project: project() });
+    const tab = await screen.findByRole('button', { name: 'PR' });
+    expect(within(tab).queryByTestId('prs-new')).toBeNull();
+
+    app.prsRead('p1', [3, 4, 5, 6]);
+    await waitFor(() => expect(tab).toHaveAccessibleName('PR, 2 nouvelles'));
+    expect(within(tab).getByTestId('prs-new')).toHaveTextContent('2');
+    expect(within(tab).getByTestId('prs-new')).toHaveClass('badge');
+
+    app.prsOpened('p1');
+    await waitFor(() => expect(tab).toHaveAccessibleName('PR'));
+    expect(within(tab).queryByTestId('prs-new')).toBeNull();
+  });
+});
+
 describe('Sidebar tabs and the code host (ESC-390)', () => {
   const tabs = () =>
     within(screen.getByRole('group', { name: 'Vue du projet' }))

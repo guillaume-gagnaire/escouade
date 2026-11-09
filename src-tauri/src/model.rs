@@ -2285,6 +2285,9 @@ pub struct UiState {
     /// The split screen of each project (ESC-392), by project id: its tree of panes as the interface wrote it
     /// (`lib/panes.ts`), kept whole and read back at the start. Absent: one content fills the work area.
     pub panes: HashMap<String, Value>,
+    /// What was seen of each project's pull requests (ESC-403), by project id, as the interface wrote
+    /// it (`lib/prnew.ts`), kept whole: the PR tab's badge counts the new ones from it.
+    pub pr_seen: HashMap<String, Value>,
 }
 
 /// A choice of Claude Code's model picker (`initialize`): an alias or a full id, and the model
@@ -3071,6 +3074,14 @@ pub enum UiEvent {
     #[serde(rename_all = "camelCase")]
     FocusPrs {
         project_id: String,
+    },
+    /// The project's list of pull requests was read, whoever read it (the view, the « PR et CI »
+    /// tab, the overview, the tools): the numbers of its open ones, for the PR tab's badge of the new
+    /// ones (ESC-403). Told by a reading already made, never by one of its own.
+    #[serde(rename_all = "camelCase")]
+    PrsRead {
+        project_id: String,
+        numbers: Vec<u64>,
     },
     /// Why no ticket of the project's board starts (its target branch has no commit yet, or is
     /// gone), or None once they may start again.

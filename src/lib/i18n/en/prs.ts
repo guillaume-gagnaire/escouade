@@ -62,6 +62,9 @@ export default defineZone('prs', {
   list: {
     tab: '{word}',
     tabHint: 'The project’s open {word}s',
+    tabNew: { one: '{word}, {count} new', other: '{word}, {count} new' },
+    new: 'New',
+    newHint: 'Arrived since your last visit',
     title: 'Pull requests',
     titleMr: 'Merge requests',
     open: { one: '{count} open', other: '{count} open' },

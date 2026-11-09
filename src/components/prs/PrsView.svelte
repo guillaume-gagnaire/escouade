@@ -21,6 +21,7 @@
     savedFilter,
     type PrFilter,
   } from '../../lib/prlist';
+  import { freshIn } from '../../lib/prnew';
   import { openPr, prKey } from '../../lib/prs';
   import { reviewMark } from '../../lib/prreview';
   import { failureTitle } from '../../lib/prview';
@@ -53,6 +54,8 @@
   const agents = $derived(Object.values(app.agents).filter((a) => a.projectId === project.id));
   const at = $derived(shown.findIndex((p) => prKey(p) === chosen));
   const reviews = $derived(app.prReviews[project.id] ?? {});
+  /** Those come since the tab was last opened (ESC-403), marked until it is opened again. */
+  const fresh = $derived(freshIn(app.ui.prSeen?.[project.id]));
   /** The review that fills the view, in place of the list (ESC-66). */
   const reviewing = $derived.by(() => {
     const n = app.prReviewOpen[project.id];
@@ -85,6 +88,8 @@
       read = null;
       readAt = null;
       chosen = null;
+      // On screen: the tab's badge back to zero, its new ones marked below.
+      app.prsOpened(project.id);
       void load();
       app.loadPrReviews(project.id).catch(() => {});
     });
@@ -217,6 +222,7 @@
                 <span class="n num">#{p.number}</span>
                 <span class="title">
                   <span class="t">{p.title}</span>
+                  {#if fresh.has(p.number)}<span class="tag new" use:tip={t('prs.list.newHint')}>{t('prs.list.new')}</span>{/if}
                   {#if p.draft}<span class="tag">{t('prs.list.draft')}</span>{/if}
                   {#if fork}<span class="tag fork" use:tip={t('prs.list.forkHint', { repo: p.headRepo ?? '?', branch: p.head })}
                       ><Icon name="branch" size={11} />{t('prs.list.fork', { owner: fork })}</span
@@ -558,6 +564,10 @@
   }
   .tag.review.fail {
     color: var(--del);
+  }
+  .tag.new {
+    color: var(--p-ink);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 45%, transparent);
   }
   .tag.agent {
     color: var(--p-ink);
