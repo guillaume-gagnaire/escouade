@@ -48,7 +48,7 @@
             "--disallowedTools",
             "mcp__escouade"
           ],
-          "env": [],
+          "env": [{ "name": "CLAUDE_CODE_ARTIFACT", "value": "1" }],
           "fenceApplied": false,
           "fenceByClient": false,
           "files": [],
