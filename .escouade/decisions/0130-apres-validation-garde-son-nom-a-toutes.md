@@ -1,9 +1,9 @@
 ---
-number: null
+number: 130
 id: "apres-validation-garde-son-nom-a-toutes"
 title: "« Après validation » garde son nom à toutes les largeurs du Kanban"
 date: "2026-11-08"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-393"
 pages: ["kanban/kanban"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"kanban/kanban","added":1,"removed":1}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-09T07:18:23+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
