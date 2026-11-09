@@ -476,10 +476,17 @@ pub fn plugin_install(
     // A run.js plugin's module compiled and precompiled now, in the cache, off this thread (ESC-320).
     core.plugin_runtime.prepare(&view.id);
     let from_store = matches!(view.origin, crate::plugins::Origin::Store { .. });
+    let from_seed = matches!(
+        view.origin,
+        crate::plugins::Origin::Store { seed: true, .. }
+    );
     core.telemetry
         .track(crate::telemetry::Event::PluginInstalled { from_store });
-    // The store's count, only with the user's consent to the statistics (docs/STORE.md §5.4).
-    if from_store && core.settings.read().telemetry == Some(true) {
+    // The store's count, only with the user's consent to the statistics (docs/STORE.md §5.4); a version of the seed
+    // through the counts the seed keeps, once (ESC-394).
+    if from_seed {
+        core.spawn_seed_counts();
+    } else if from_store && core.settings.read().telemetry == Some(true) {
         let settings = core.settings.read().clone();
         let (store, id, version) = (core.store.clone(), view.id.clone(), view.version.clone());
         let update = staged.is_some_and(|(_, update)| update);

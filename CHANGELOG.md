@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Les plugins qu’Escouade installe d’elle-même depuis l’installeur comptent désormais dans le nombre d’installations du store, si tu as accepté les statistiques, même installés hors ligne ou avant ta réponse ; ceux des bêtas de la 2.2 se comptent une fois.
 - Les menus « Harness » ne proposent plus que les harness utilisables : programme installé, plugin actif et au moins un compte. Celui déjà choisi reste affiché avec la raison, et Réglages › Comptes et harness montre toujours ceux qui n’ont pas encore de compte.
 - Le Kanban a un en-tête sur deux rangées, où rien ne se chevauche plus, et la vue Environnements ne montre que les environnements choisis, sans ceux qui n’ont jamais été déployés ; les onglets PR et Environnements n’apparaissent qu’avec un hébergeur de code. Dans une fenêtre étroite, un lecteur d’écran y trouve toujours « Après validation ».
 - OpenCode : `git commit` et `git add` ne passent d'office que sous leur forme simple, et une écriture dans `.git`, `.opencode` ou `opencode.json` demande toujours : ces règles sont sa seule protection.

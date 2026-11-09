@@ -44,6 +44,7 @@ async fn seed_of(fake: &Fake, name: &str) -> Seed {
         dir: Some(dir),
         entries,
         unsigned: false,
+        counts: true,
     }
 }
 

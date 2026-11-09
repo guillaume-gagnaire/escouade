@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- The plugins Escouade installs by itself from the installer now count in the store’s number of installs, if you accepted the statistics, even when installed offline or before you answered; those of the 2.2 betas count once.
 - The “Harness” menus now offer only the harnesses you can use: program installed, plugin on and at least one account. The one already chosen stays listed with the reason, and Settings › Accounts and harnesses still shows those without an account yet.
 - The Kanban header now has two rows where nothing overlaps, and the Environments view shows only the environments you pick, leaving out those never deployed; the PR and Environments tabs only appear with a code host. In a narrow window, a screen reader still finds “After approval” there.
 - OpenCode: `git commit` and `git add` are accepted at once only in their plain form, and a write to `.git`, `.opencode` or `opencode.json` always asks: these rules are all that protects it.

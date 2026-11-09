@@ -11,7 +11,7 @@
 use super::store::{self, Fetched, Reason, RevocationList};
 use crate::i18n::Lang;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 /// `plugins/seed.json`, as the repository holds it.
@@ -52,6 +52,9 @@ pub struct Seed {
     /// Whether a version without a signature is taken: a build of development alone, whose modules are those of
     /// `scripts/seed-dev.sh`, as it runs a program that is not signed.
     pub unsigned: bool,
+    /// Whether what it installs counts on the store (`POST /api/v1/installs`, ESC-394): a release's seed alone, never
+    /// the folder of a build of development (`scripts/seed-dev.sh`, the end-to-end tests').
+    pub counts: bool,
 }
 
 impl Seed {
@@ -92,6 +95,7 @@ impl Seed {
             dir,
             entries,
             unsigned: cfg!(debug_assertions),
+            counts: !cfg!(debug_assertions),
         }
     }
 
@@ -215,11 +219,36 @@ fn bytes(folder: &Path, name: &str, max: u64, lang: Lang) -> Result<Vec<u8>, Str
 }
 
 /// What the app keeps of the seed beside the plugins (`<plugins>/.seed.json`): what the user uninstalled, which the seed
-/// does not put back.
+/// does not put back, and the store's counts of its installs (ESC-394).
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub(super) struct Notes {
     #[serde(default)]
     pub removed: BTreeMap<String, Removed>,
+    /// The installs of the seed not counted yet on the store: made offline, before the user answered on the statistics,
+    /// or the store did not answer. Sent once the user agreed, forgotten if they refused.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub pending: BTreeSet<Count>,
+    /// The installs of the seed the store counted, or a refusal forgot: never sent again.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub counted: BTreeSet<Count>,
+}
+
+/// An install of the seed for the store's count: its id and its version, nothing of this machine.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct Count {
+    pub id: String,
+    pub version: String,
+}
+
+impl Notes {
+    /// Notes the install of `id` at `version` to be counted, unless it was or is already (once per version).
+    pub fn note_count(&mut self, id: &str, version: &str) -> bool {
+        let c = Count {
+            id: id.to_string(),
+            version: version.to_string(),
+        };
+        !self.counted.contains(&c) && self.pending.insert(c)
+    }
 }
 
 /// A plugin of the seed the user uninstalled.

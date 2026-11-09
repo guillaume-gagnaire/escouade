@@ -55,7 +55,15 @@ async function openInstalled(page: Page) {
 }
 
 test.describe('the seed, the store in reach', () => {
-  test.use({ preStart: usesTrello });
+  // The statistics accepted: a build of development's seed is never counted on the store all the same (ESC-394).
+  test.use({
+    preStart: {
+      run: (root: string) => {
+        usesTrello.run(root);
+        return { telemetry: true };
+      },
+    },
+  });
   test.beforeAll(async () => {
     await seed([{ id: TRELLO, version: '2.2.0' }]);
     process.env.ESCOUADE_STORE_URL = fake.url;
@@ -102,6 +110,14 @@ test.describe('the seed, the store in reach', () => {
     await dialog.getByRole('button', { name: /^(Installer|Mettre à jour)/ }).click();
     await expect(dialog).toBeHidden();
     await expect(page.getByRole('region', { name: 'Proposés par Escouade' })).toHaveCount(0);
+
+    // The statistics accepted, the seed of a build of development counts nothing on the store (ESC-394): only the click
+    // that installed 2.3.0 from the store counts, as any install from the store.
+    await openInstalled(page);
+    await page.getByRole('button', { name: 'Relire maintenant' }).click();
+    await expect(page.getByRole('table', { name: 'Ajoutés' })).toContainText('Trello');
+    const state = await (await fetch(`${fake.url}/_fake/state`)).json();
+    expect(state.installs).toEqual([{ id: TRELLO, version: '2.3.0', event: 'install' }]);
   });
 });
 

@@ -31,6 +31,7 @@ async fn seed_of(fake: &Fake, name: &str, plugins: &[(&str, &str)]) -> Seed {
         dir: Some(dir),
         entries,
         unsigned: false,
+        counts: true,
     }
 }
 
@@ -597,4 +598,214 @@ fn a_build_of_development_without_the_seeds_files_runs_the_registrys_plugins() {
     // Its files there: the seed takes it.
     std::fs::create_dir_all(empty.join(TRELLO)).unwrap();
     assert!(Seed::of_app(Some(empty)).has(TRELLO));
+}
+
+// The store's count of the seed's installs (ESC-394, docs/STORE.md §5.4): an install from the seed counts as an install,
+// with the user's consent to the statistics, once per version, kept while the store does not answer.
+
+fn installs(state: &Value) -> Vec<Value> {
+    state["installs"].as_array().unwrap().clone()
+}
+
+fn counted(id: &str, version: &str) -> Value {
+    json!({ "id": id, "version": version, "event": "install" })
+}
+
+fn pending(plugins: &Plugins) -> Vec<(String, String)> {
+    plugins
+        .seed_counts_pending()
+        .into_iter()
+        .map(|c| (c.id, c.version))
+        .collect()
+}
+
+#[tokio::test]
+async fn an_install_from_the_seed_waits_for_the_consent_then_counts_once() {
+    let fake = Fake::start().trusted();
+    let seed = seed_of(&fake, "count", &[(TRELLO, "2.2.0")]).await;
+    let data = data_of("count");
+    let store = fake.store(&data);
+    let plugins = started(&data, seed.clone());
+    assert_eq!(
+        pending(&plugins),
+        [(TRELLO.to_string(), "2.2.0".to_string())]
+    );
+
+    // Not answered yet on the statistics: nothing is sent, it waits.
+    plugins.send_seed_counts(&store, &http(), None).await;
+    assert!(installs(&fake.state().await).is_empty());
+    assert_eq!(pending(&plugins).len(), 1);
+
+    // A yes: sent, with its id, its version and `install` alone.
+    plugins.send_seed_counts(&store, &http(), Some(true)).await;
+    assert_eq!(installs(&fake.state().await), [counted(TRELLO, "2.2.0")]);
+    assert!(pending(&plugins).is_empty());
+
+    // Once: not again, nor at the next start.
+    plugins.send_seed_counts(&store, &http(), Some(true)).await;
+    drop(plugins);
+    let plugins = started(&data, seed);
+    assert!(pending(&plugins).is_empty());
+    plugins.send_seed_counts(&store, &http(), Some(true)).await;
+    assert_eq!(installs(&fake.state().await).len(), 1);
+}
+
+#[tokio::test]
+async fn an_install_from_the_seed_is_forgotten_on_a_refusal() {
+    let fake = Fake::start().trusted();
+    let seed = seed_of(&fake, "refused", &[(TRELLO, "2.2.0")]).await;
+    let data = data_of("refused");
+    let store = fake.store(&data);
+    let plugins = started(&data, seed.clone());
+    plugins.send_seed_counts(&store, &http(), Some(false)).await;
+    assert!(pending(&plugins).is_empty());
+    // A yes later sends nothing of it, nor does a start.
+    plugins.send_seed_counts(&store, &http(), Some(true)).await;
+    drop(plugins);
+    let plugins = started(&data, seed);
+    assert!(pending(&plugins).is_empty());
+    plugins.send_seed_counts(&store, &http(), Some(true)).await;
+    assert!(installs(&fake.state().await).is_empty());
+}
+
+#[tokio::test]
+async fn an_install_from_the_seed_for_a_gesture_counts() {
+    let fake = Fake::start().trusted();
+    let seed = seed_of(&fake, "gesture", &[(TRELLO, "2.2.0")]).await;
+    let data = data_of("gesture");
+    let store = fake.store(&data);
+    let list = seed.revocations();
+    let plugins = Plugins::load_seeded(data.clone(), "2.2.0", seed);
+    plugins.apply_store(list, Default::default());
+    plugins.sync_seed(Lang::Fr, &|_| false);
+    assert!(plugins.get(TRELLO, Lang::Fr).is_none(), "not used yet");
+    assert!(pending(&plugins).is_empty());
+
+    plugins
+        .need(TRELLO, Lang::Fr)
+        .unwrap()
+        .expect("installed now");
+    plugins.send_seed_counts(&store, &http(), Some(true)).await;
+    assert_eq!(installs(&fake.state().await), [counted(TRELLO, "2.2.0")]);
+}
+
+#[tokio::test]
+async fn a_count_the_store_does_not_take_stays_and_goes_later() {
+    let fake = Fake::start().trusted();
+    let seed = seed_of(&fake, "offline", &[(TRELLO, "2.2.0")]).await;
+    let data = data_of("offline");
+    let plugins = started(&data, seed.clone());
+
+    // The store in trouble (503): kept.
+    let store = fake.store(&data);
+    fake.post("/_fake/down", json!({ "down": true })).await;
+    plugins.send_seed_counts(&store, &http(), Some(true)).await;
+    assert_eq!(pending(&plugins).len(), 1);
+    // No network at all: kept.
+    let nowhere = Store::load(
+        &data,
+        "http://127.0.0.1:9".into(),
+        "http://127.0.0.1:9/mirror".into(),
+        "2.2.0",
+    );
+    plugins
+        .send_seed_counts(&nowhere, &http(), Some(true))
+        .await;
+    assert_eq!(pending(&plugins).len(), 1);
+    assert!(installs(&fake.state().await).is_empty());
+
+    // Back at the next start: sent, once.
+    fake.post("/_fake/down", json!({ "down": false })).await;
+    drop(plugins);
+    let plugins = started(&data, seed);
+    plugins.send_seed_counts(&store, &http(), Some(true)).await;
+    assert_eq!(installs(&fake.state().await), [counted(TRELLO, "2.2.0")]);
+    assert!(pending(&plugins).is_empty());
+}
+
+#[tokio::test]
+async fn a_beta_s_installs_from_the_seed_never_counted_count_once_with_their_version() {
+    let fake = Fake::start().trusted();
+    let data = data_of("beta");
+    let store = fake.store(&data);
+    // A 2.2.0-beta: the seed installed Trello and counted nothing (no notes of counts).
+    let beta = Seed {
+        counts: false,
+        ..seed_of(&fake, "beta", &[(TRELLO, "2.2.0")]).await
+    };
+    drop(started(&data, beta));
+    let notes = std::fs::read_to_string(data.plugins_dir().join(".seed.json")).unwrap_or_default();
+    assert!(!notes.contains("pending"), "{notes}");
+
+    // The app with this fix, its seed a newer version: the one installed counts, the newer is offered and not installed.
+    let seed = seed_of(&fake, "fixed", &[(TRELLO, "2.3.0")]).await;
+    let plugins = started(&data, seed.clone());
+    assert_eq!(plugins.get(TRELLO, Lang::Fr).unwrap().version, "2.2.0");
+    assert_eq!(
+        pending(&plugins),
+        [(TRELLO.to_string(), "2.2.0".to_string())]
+    );
+    plugins.send_seed_counts(&store, &http(), Some(true)).await;
+    drop(plugins);
+    let plugins = started(&data, seed);
+    plugins.send_seed_counts(&store, &http(), Some(true)).await;
+    assert_eq!(installs(&fake.state().await), [counted(TRELLO, "2.2.0")]);
+}
+
+#[tokio::test]
+async fn nothing_counts_of_a_plugin_the_app_gives_a_folder_in_development_or_a_seed_of_development()
+{
+    let fake = Fake::start().trusted();
+    // A seed of development (`scripts/seed-dev.sh`, the end-to-end tests'): installed, never counted.
+    let data = data_of("dev-seed");
+    let dev = Seed {
+        counts: false,
+        ..seed_of(&fake, "dev-seed", &[(TRELLO, "2.2.0")]).await
+    };
+    let plugins = started(&data, dev);
+    assert!(plugins.get(TRELLO, Lang::Fr).is_some());
+    assert!(pending(&plugins).is_empty());
+    assert!(
+        !Seed::of_app(None).counts,
+        "a build of development's seed never counts"
+    );
+
+    // A plugin the app gives (isola while it is given) and a folder in development, beside a seed that counts.
+    let data = data_of("given");
+    drop(Plugins::load_for_core(data.clone(), "2.2.0"));
+    let counting = Seed {
+        counts: true,
+        ..Seed::default()
+    };
+    let plugins = started(&data, counting.clone());
+    assert!(plugins
+        .list(Lang::Fr)
+        .iter()
+        .any(|v| v.origin == Origin::Builtin));
+    let src = temp_dir("in-dev");
+    std::fs::write(
+        src.join(crate::plugins::manifest::FILE),
+        json!({
+            "id": "dev.exemple.mine",
+            "name": "Mine",
+            "version": "1.0.0",
+            "escouade": { "api": "1", "min": "2.1.0" },
+            "contributes": { "themes": [{ "id": "mine" }] },
+            "later": true
+        })
+        .to_string(),
+    )
+    .unwrap();
+    std::fs::create_dir_all(src.join("themes")).unwrap();
+    std::fs::write(src.join("themes/mine.json"), "{}").unwrap();
+    let preview = plugins.inspect_dev(&src, Lang::Fr).unwrap();
+    plugins.install(&preview.token, Lang::Fr).unwrap();
+    drop(plugins);
+    let plugins = started(&data, counting);
+    assert!(plugins.get("dev.exemple.mine", Lang::Fr).is_some());
+    assert!(pending(&plugins).is_empty());
+    plugins
+        .send_seed_counts(&fake.store(&data), &http(), Some(true))
+        .await;
+    assert!(installs(&fake.state().await).is_empty());
 }

@@ -826,20 +826,40 @@ impl Store {
     }
 
     /// Counts an install or an update on the store (`POST /api/v1/installs`): only when the user
-    /// accepted the statistics (the caller checks), without any id of this machine.
-    pub async fn count(&self, http: &reqwest::Client, id: &str, version: &str, update: bool) {
+    /// accepted the statistics (the caller checks), without any id of this machine. Whether the store answered for good:
+    /// counted, or refused for a reason that sending again would not change (a 4xx but 408 and 429); false offline or on
+    /// an error of the store's, which a later try may get past (ESC-394).
+    pub async fn count(
+        &self,
+        http: &reqwest::Client,
+        id: &str,
+        version: &str,
+        update: bool,
+    ) -> bool {
         let body = serde_json::json!({
             "id": id,
             "version": version,
             "event": if update { "update" } else { "install" },
         });
-        if let Err(e) = http
+        match http
             .post(format!("{}/api/v1/installs", self.base))
             .json(&body)
             .send()
             .await
         {
-            log::info!("the store's count of installs is not reached: {e}");
+            Ok(r) => {
+                let s = r.status();
+                let settled = s.is_success()
+                    || (s.is_client_error() && s.as_u16() != 408 && s.as_u16() != 429);
+                if !settled {
+                    log::info!("the store's count of installs answered {s}: sent again later");
+                }
+                settled
+            }
+            Err(e) => {
+                log::info!("the store's count of installs is not reached: {e}");
+                false
+            }
         }
     }
 }
