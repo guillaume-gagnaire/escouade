@@ -36,6 +36,8 @@ ou non, sans qu'un agent qui attend une réponse ne passe inaperçu, et sans qu'
 5. **Glisser-déposer** : un agent lâché sur un dossier y entre ; tiré hors de lui, il en sort. Dossiers et agents hors
    dossier se réordonnent dans la même liste, les agents aussi dans un dossier. **Un clic n'est jamais un
    déplacement** : il faut un minimum de mouvement, bouton maintenu, pour que le glisser commence.
+   Réalisé par le geste au pointeur de l'écran partagé (`paneDrag`), relâché dans la liste ou sur la zone de travail
+   (décision de l'utilisateur du 2026-11-09) : plus de glisser-déposer HTML5 dans la barre latérale.
 6. **Un dossier replié ne cache jamais un agent qui attend une réponse.**
 7. **MCP : parité** avec ce que fait l'utilisateur (sauf replier, qui est de l'affichage). Outils ci-dessous.
 8. **Pas de rangement rétroactif** : les agents existants restent hors dossier ; les dossiers servent à partir de la
