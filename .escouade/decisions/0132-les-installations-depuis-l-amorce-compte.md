@@ -1,9 +1,9 @@
 ---
-number: null
+number: 132
 id: "les-installations-depuis-l-amorce-compte"
 title: "Les installations depuis l'amorce comptent au store, gardées en attente jusqu'à l'accord"
 date: "2026-11-09"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-394"
 pages: ["store/store-dans-l-app","plugins/livres-avec-escouade"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"store/store-dans-l-app","added":6,"removed":0},{"page":"plugins/livres-avec-escouade","added":2,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-09T13:15:44+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
