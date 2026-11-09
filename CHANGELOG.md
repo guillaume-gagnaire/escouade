@@ -14,6 +14,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Le Kanban a un en-tête sur deux rangées, où rien ne se chevauche plus, et la vue Environnements ne montre que les environnements choisis, sans ceux qui n’ont jamais été déployés ; les onglets PR et Environnements n’apparaissent qu’avec un hébergeur de code. Dans une fenêtre étroite, un lecteur d’écran y trouve toujours « Après validation ».
 - OpenCode : `git commit` et `git add` ne passent d'office que sous leur forme simple, et une écriture dans `.git`, `.opencode` ou `opencode.json` demande toujours : ces règles sont sa seule protection.
 - OpenCode : un projet privé tient mieux. Ses règles sont posées avant l'ouverture d'une session, et « Toujours » n'est plus proposé sous clôture.
+- Claude Code : un agent crée des artefacts comme dans un terminal, au lieu de dire « unknown skill artifact-design ». Le lien de la page publiée s’affiche sur la ligne de l’outil et s’ouvre dans ton navigateur d’un clic.
 - Claude Code : une discussion refuse aussi les commandes PowerShell, au lieu de les présenter sur une carte.
 - Antigravity CLI : sa vue terminal suit les règles de son plugin. Elle n’autorise plus d’office les écritures du dossier de l’agent ni git add et git commit, demande les commandes d’un projet privé, et oublie les « Toujours » gardés par la 2.2.0.
 - Antigravity CLI : sa vue terminal a son propre dossier temporaire, comme son plugin, au lieu du tien, où il écrivait sans rien demander.

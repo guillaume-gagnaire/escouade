@@ -205,6 +205,9 @@ export default {
   /** A tool call (its row) and the summary of its result. */
   tool: {
     openFile: 'Ouvrir {path} dans l’éditeur',
+    /** The link of the page an `Artifact` call published (ESC-400), opened in the browser. */
+    openArtifact: 'Ouvrir l’artefact',
+    openArtifactTip: 'Ouvrir {url} dans le navigateur',
     running: 'en cours',
     subTools: { one: '{count} outil', other: '{count} outils' },
     more: { one: 'Afficher la suite ({count} caractère)', other: 'Afficher la suite ({count} caractères)' },
@@ -221,6 +224,14 @@ export default {
     taskCreate: 'Tâche : {subject}',
     taskUpdate: 'Tâche #{id} : {status}',
     taskStatus: { pending: 'à faire', inProgress: 'en cours', completed: 'terminée', deleted: 'supprimée', changed: 'modifiée' },
+    /** The tools of Claude Code's artifacts (ESC-400): their names, and the line of a deletion. */
+    artifact: {
+      publish: 'Artefact',
+      comments: 'Commentaires d’artefact',
+      data: 'Données d’artefact',
+      check: 'Vérification d’artefact',
+      delete: 'Supprimer {target}',
+    },
   },
   patch: { more: { one: '… {n} ligne de plus', other: '… {n} lignes de plus' } },
 

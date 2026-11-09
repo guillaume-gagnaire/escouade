@@ -155,6 +155,26 @@ fn the_fence_is_the_settings_file_the_core_wrote() {
     assert!(!bare.fence_applied);
 }
 
+/// Its stream-json makes Claude Code an Agent SDK session (`CLAUDE_CODE_ENTRYPOINT=sdk-cli`), whose artifacts are off
+/// unless `CLAUDE_CODE_ARTIFACT` says on (ESC-400, Claude Code 2.1.319): without it, no `Artifact` tool and « Unknown skill:
+/// artifact-design » (tests/fixtures/claude-artifacts). Every launch turns them on, a discussion's too.
+#[test]
+fn a_launch_turns_on_the_artifacts_as_the_terminal_has_them() {
+    for read_only in [false, true] {
+        let l = agent().launch(&LaunchParams {
+            read_only,
+            ..params()
+        });
+        assert!(
+            l.env
+                .iter()
+                .any(|v| v.name == "CLAUDE_CODE_ARTIFACT" && v.value == "1"),
+            "{:?}",
+            l.env
+        );
+    }
+}
+
 #[test]
 fn a_discussion_is_refused_what_writes_in_one_value() {
     let l = agent().launch(&LaunchParams {

@@ -14,6 +14,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - The Kanban header now has two rows where nothing overlaps, and the Environments view shows only the environments you pick, leaving out those never deployed; the PR and Environments tabs only appear with a code host. In a narrow window, a screen reader still finds “After approval” there.
 - OpenCode: `git commit` and `git add` are accepted at once only in their plain form, and a write to `.git`, `.opencode` or `opencode.json` always asks: these rules are all that protects it.
 - OpenCode: a private project holds better. Its rules are set before a session opens, and “Always” is no longer offered under a fence.
+- Claude Code: an agent creates artifacts as in a terminal, instead of saying “unknown skill artifact-design”. The link of the published page shows on the tool’s row and opens in your browser with a click.
 - Claude Code: a discussion also refuses PowerShell commands, instead of showing them on a card.
 - Antigravity CLI: its terminal view follows its plugin’s rules. It no longer allows writes in the agent’s folder or git add and git commit at once, asks for a private project’s commands, and forgets the “Always” kept by 2.2.0.
 - Antigravity CLI: its terminal view has its own temporary folder, as its plugin does, instead of yours, where it wrote without asking.

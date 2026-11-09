@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Test double of the `claude` CLI in `--input-format/--output-format stream-json` mode.
 // It replays the frame shapes documented in docs/PROTOCOL.md. The user message text picks the
-// scenario: "question", "permission", "edit", "slow", "crash", "grandchild", "raisonnement" (a thinking block
+// scenario: "[artefact]" (an artifact published, or its skill unknown without CLAUDE_CODE_ARTIFACT; ESC-400), "question", "permission", "edit", "slow", "crash", "grandchild", "raisonnement" (a thinking block
 // before the reply); anything else is a
 // plain reply ("grandchild" starts a program that lasts a minute in its folder, and says its pid; with
 // [detached] too, that program outlives the process). A `--resume=missing…` session fails like an
@@ -11,9 +11,9 @@
 // "flood 90s" (60 s by default) keeps it busy for that long, as an agent hard at work: a text streamed in small deltas (one
 // every 15 ms) and a tool call with ~1.5 KB of output every ~170 ms, then the turn ends; an interrupt stops it.
 // "flood-real 90s" (60 s by default) plays a busy superpowers agent for that long, timers pacing it: a 40-task plan, then subagents, tool results of 2-30 KB.
-// Every launch appends {argv, cwd, pid, proxy, tls, configDir, todoTools, autoUpdater} (its process id, which names a
+// Every launch appends {argv, cwd, pid, proxy, tls, configDir, todoTools, autoUpdater, artifact} (its process id, which names a
 // new session of it `sess-<pid>`, its HTTPS_PROXY,
-// NODE_TLS_REJECT_UNAUTHORIZED, CLAUDE_CONFIG_DIR, CLAUDE_CODE_ENABLE_TODO_TOOLS and DISABLE_AUTOUPDATER, null when unset) to $FAKE_CLAUDE_LOG, by
+// NODE_TLS_REJECT_UNAUTHORIZED, CLAUDE_CONFIG_DIR, CLAUDE_CODE_ENABLE_TODO_TOOLS, DISABLE_AUTOUPDATER and CLAUDE_CODE_ARTIFACT, null when unset) to $FAKE_CLAUDE_LOG, by
 // default <tmp>/fake-claude-<cwd with non-alphanumerics replaced by _>.jsonl, and every user message
 // read on stdin to <log>.stdin.jsonl.
 // With CLAUDE_CONFIG_DIR (a Claude account of its own), it keeps its sessions where Claude Code
@@ -157,6 +157,7 @@ fs.appendFileSync(
     configDir: process.env.CLAUDE_CONFIG_DIR ?? null,
     todoTools: process.env.CLAUDE_CODE_ENABLE_TODO_TOOLS ?? null,
     autoUpdater: process.env.DISABLE_AUTOUPDATER ?? null,
+    artifact: process.env.CLAUDE_CODE_ARTIFACT ?? null,
   }) + '\n',
 );
 
@@ -2990,6 +2991,67 @@ function startSession() {
           ],
         },
       });
+      return;
+    }
+    if (text.includes('[artefact]')) {
+      // An artifact asked for (ESC-400), as Claude Code 2.1.319 does it (tests/fixtures/claude-artifacts): its stream-json
+      // session has them only when CLAUDE_CODE_ARTIFACT says on; else its skill is unknown and no tool publishes.
+      const on = ['1', 'true', 'yes', 'on'].includes(
+        String(process.env.CLAUDE_CODE_ARTIFACT ?? '')
+          .toLowerCase()
+          .trim(),
+      );
+      const skill = `toolu_s${msg}`;
+      assistant({ type: 'tool_use', id: skill, name: 'Skill', input: { skill: 'artifact-design' } });
+      if (!on) {
+        out({
+          type: 'user',
+          message: {
+            role: 'user',
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: skill,
+                content: '<tool_use_error>Unknown skill: artifact-design</tool_use_error>',
+                is_error: true,
+              },
+            ],
+          },
+          parent_tool_use_id: null,
+          tool_use_result: 'Error: Unknown skill: artifact-design',
+        });
+        streamText('Je n’ai pas pu charger la skill `artifact-design`.');
+        result();
+        return;
+      }
+      toolResult(skill, 'Launching skill: artifact-design', { tool_use_result: { success: true, commandName: 'artifact-design' } });
+      const file = path.join(os.tmpdir(), 'scratchpad', 'esc400-trial.html');
+      const url = 'https://claude.ai/artifact/AbCdEfGhIjKlMnOpQrStUv';
+      const call = `toolu_a${msg}`;
+      assistant({
+        type: 'tool_use',
+        id: call,
+        name: 'Artifact',
+        input: { file_path: file, icon: 'page', description: 'Une page d’essai.' },
+      });
+      toolResult(
+        call,
+        `Published ${file} at ${url} (Version 1, version id 1794233240-12f1) Icon: "page".\n\nLive subscription: none — this is a print (-p), cloud, subagent, or teammate session, which does not keep track of new versions of this artifact published elsewhere. Expected; not an error.`,
+        {
+          tool_use_result: {
+            url,
+            path: file,
+            title: 'ESC-400 trial',
+            updated: false,
+            owned: true,
+            icon: 'page',
+            audience: 'owner',
+            seq: 1,
+          },
+        },
+      );
+      streamText(`La page est publiée, privée : ${url}`);
+      result();
       return;
     }
     if (text.includes('edit')) {

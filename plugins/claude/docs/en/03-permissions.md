@@ -6,7 +6,7 @@ This page says what the plugin does on your machine, and what it cannot do.
 
 Nothing. The plugin is a WASM module Escouade runs in its host: it has no process, no command, no network and no access to the disk. Its manifest declares no permission, and the host grants a module only what its manifest declares.
 
-Escouade’s core finds `claude` on the machine and launches it. The plugin only describes the launch (the arguments, the first message), and the core checks that description before it launches anything:
+Escouade’s core finds `claude` on the machine and launches it. The plugin only describes the launch (the arguments, a variable, the first message), and the core checks that description before it launches anything:
 
 - Escouade’s token is never among the arguments, which anyone on the machine can read;
 - for a private project, the fence is in the launch;
@@ -14,6 +14,8 @@ Escouade’s core finds `claude` on the machine and launches it. The plugin only
 - a file to write can only be in the agent’s own folder.
 
 A description that doesn’t hold is refused, and the agent doesn’t start.
+
+The one variable it sets is `CLAUDE_CODE_ARTIFACT=1`: in stream-json, Claude Code takes itself for the Agent SDK and turns its artifacts off without it (“Unknown skill: artifact-design”). With it, an agent creates artifacts as in a terminal. What turns them off for you (`CLAUDE_CODE_DISABLE_ARTIFACT=1`, your Claude Code settings, your organization) still does.
 
 ## What it reads
 

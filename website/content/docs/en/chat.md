@@ -179,6 +179,12 @@ A click on the line (or `Enter` when it has focus) unfolds it:
 
 Tools that only reread the task list (`TaskList`, `TaskGet`) are displayed in softer shades. The tools of Escouade’s MCP server carry an “Escouade · …” badge (see [the MCP server](mcp)).
 
+### Claude Code’s artifacts
+
+A Claude Code agent creates artifacts as it does in a terminal: pages published on claude.ai, private until you share them. Their tools are named in plain words: “Artifact” to publish (the row says the file published), “Artifact comments”, “Artifact data”. Once the page is published, the tool’s row shows “Open the artifact”: a click opens its link in your browser, never before. The link the agent writes in its reply opens the same way.
+
+Deleting an artifact needs your consent: the permission card says “Artifact · Delete” followed by its link. To keep an agent from creating any, turn artifacts off in Claude Code itself (the `CLAUDE_CODE_DISABLE_ARTIFACT=1` variable or its setting): Escouade only makes them available, as in a terminal.
+
 ### Files the agent sends
 
 Claude Code can send files to the user (its `SendUserFile` tool): a screenshot, a render, a report. Escouade shows them in the conversation, in a “Sent by Claude” card that says how many images and files there are:
