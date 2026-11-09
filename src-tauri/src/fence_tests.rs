@@ -28,6 +28,10 @@ async fn project_in(h: &Harness, name: &str, private: bool) -> (Project, PathBuf
         let mut projects = h.core.projects.write();
         projects.iter_mut().find(|x| x.id == p.id).unwrap().private = true;
     }
+    // Its agents run on Claude Code once the user turned it on for it (ESC-404).
+    if private {
+        crate::harness_scope_tests::turn_on_every_harness(h, &p.id);
+    }
     (p, r)
 }
 
@@ -168,6 +172,13 @@ async fn what_another_project_makes_waits_for_the_next_start_but_its_own_made_pr
     let mut p = h.core.project(&open.id).unwrap();
     p.private = true;
     h.core.update_project(p).unwrap();
+    // Made private, its harness is off there until the user turns it on (ESC-404): nothing goes to it before.
+    assert!(h
+        .core
+        .send_message(&a, "Pas encore".into(), Vec::new())
+        .await
+        .is_err());
+    crate::harness_scope_tests::turn_on_every_harness(&h, &open.id);
     h.turn(&a, "Maintenant").await;
     assert_eq!(h.launches(&open_dir).len(), 2);
     for rule in claude_rules(&vault_dir) {

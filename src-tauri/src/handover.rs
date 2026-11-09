@@ -663,6 +663,8 @@ impl<R: Runtime> Core<R> {
             .filter(|e| self.engine_found_for(*e, &project))
             // Its plugin on (ESC-391): one off starts no agent.
             .filter(|e| self.engine_plugged(*e))
+            // And on for its project (ESC-404): none goes to a harness off there, nor asks the user on its own.
+            .filter(|e| self.harness_on_in(*e, &project))
             .collect())
     }
 

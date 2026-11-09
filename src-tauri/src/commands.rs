@@ -88,6 +88,8 @@ pub struct InitialState {
     engines_found: Vec<crate::model::EngineId>,
     /// The harnesses whose plugin is off or not installed (ESC-391): not offered, though their program is found.
     engines_off: Vec<crate::model::EngineId>,
+    /// The harnesses not on for a project (ESC-404), by project.
+    harness_scope: BTreeMap<String, crate::harness_scope::HarnessScope>,
     sources: Vec<crate::integrations::source::SourceDecl>,
     /// Why no ticket of a project's board starts, by project.
     board_issues: HashMap<String, String>,
@@ -172,6 +174,7 @@ pub fn subscribe(
         engines: crate::engine::registry::declared(),
         engines_found: core.engines_found(),
         engines_off: core.engines_unplugged(),
+        harness_scope: core.harness_scope(),
         sources: crate::integrations::source::declared(),
         board_issues,
         autopilot_pause,
@@ -562,18 +565,39 @@ pub fn plugin_set_enabled(
 
 /// A plugin's switch in a project (a private one included: the user sets it there one by one).
 #[tauri::command(async)]
-pub fn plugin_set_project(
-    core: CoreState,
+pub async fn plugin_set_project(
+    core: CoreState<'_>,
     id: String,
     project: String,
     on: bool,
 ) -> Result<crate::plugins::PluginView, String> {
-    core.plugins
-        .choose(&id, |c| {
-            c.projects.insert(project, on);
-        })
+    // Off, the agents of its harnesses in the project stop (ESC-404).
+    core.set_plugin_project(&id, &project, on)
+        .await
         .map_err(|e| e.to_string())?;
     plugin_view(&core, &id)
+}
+
+/// « Activer » of a harness for a project (ESC-404): the user's agreement, asked by the window before the first agent
+/// of a private project, or on the card of an agent or a ticket whose harness is off there. No tool does it.
+#[tauri::command(async)]
+pub fn harness_enable_in(core: CoreState, project: String, engine: EngineId) -> Res<()> {
+    core.enable_harness_in(&project, engine).map_err(err)
+}
+
+/// The plugin a harness goes through (ESC-404): the window's question shows what it will get and its permissions.
+#[tauri::command(async)]
+pub fn harness_plugin_of(engine: EngineId) -> Option<String> {
+    crate::plugins::harness::plugin_of(engine)
+}
+
+/// The harnesses that are not on, project by project (ESC-404): `off`, not offered; `asks`, offered behind the
+/// question of a private project.
+#[tauri::command(async)]
+pub fn harness_scope(
+    core: CoreState,
+) -> std::collections::BTreeMap<String, crate::harness_scope::HarnessScope> {
+    core.harness_scope()
 }
 
 /// Takes back a permission of a plugin, or gives it again: its process stops, and the next one

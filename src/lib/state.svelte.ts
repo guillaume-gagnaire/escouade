@@ -64,6 +64,7 @@ import type {
   ToldModel,
   EngineDecl,
   EngineId,
+  HarnessScope,
   PageEvent,
   AgentReview,
   Project,
@@ -162,6 +163,11 @@ export type Modal =
       onCancel?: () => void;
     }
   | { kind: 'rename'; title: string; value: string; onSubmit: (v: string) => void | Promise<void> }
+  /**
+   * The agreement to a harness in a project (ESC-404): before the first agent of a private project on it, or from the card
+   * of an agent or a ticket whose harness is off there. `onEnabled` once its plugin is on for the project.
+   */
+  | { kind: 'harnessConsent'; projectId: string; engine: EngineId; onEnabled: () => void | Promise<void>; onCancel?: () => void }
   /**
    * « Nouvelle discussion » of the Docs tab (ESC-261), its role and subject given by a gesture of the spec (« Mettre la spec
    * à jour », « Écrire une première spec ») with the first message it sends.
@@ -359,6 +365,8 @@ class AppState {
   enginesFound = $state.raw<EngineId[]>([]);
   /** The harnesses whose plugin is off or not installed (ESC-391): found perhaps, but not offered. */
   enginesOff = $state.raw<EngineId[]>([]);
+  /** The harnesses not on for a project, by project (ESC-404): left out of its menus, or asked for first. */
+  harnessScope = $state.raw<Record<string, HarnessScope>>({});
   version = $state('');
   filesOpen = $state(false);
   filesScope = $state<'agent' | 'project'>('agent');
@@ -771,6 +779,7 @@ class AppState {
     this.accountModels = s.accountModels ?? {};
     this.enginesFound = s.enginesFound ?? (s.claudeFound ? ['claude'] : []);
     this.enginesOff = s.enginesOff ?? [];
+    this.harnessScope = s.harnessScope ?? {};
     if (s.sources) setSources(s.sources);
     this.restartAt = s.restartAt ?? null;
     this.failedUpdate = s.failedUpdate ?? null;
@@ -1082,6 +1091,8 @@ class AppState {
     // Their plugins (ESC-391): one turned off, removed or installed since.
     const off = await api.enginesOffNow().catch(() => null);
     if (off && off.join() !== this.enginesOff.join()) this.enginesOff = off;
+    // Project by project (ESC-404): one turned on or off for a project since.
+    await this.refreshHarnessScope();
   }
 
   markSeen() {
@@ -1675,6 +1686,15 @@ class AppState {
   replaceProject(p: Project) {
     const i = this.projects.findIndex((x) => x.id === p.id);
     if (i >= 0) this.projects[i] = p;
+    // Made private or not (ESC-404): its harnesses not turned on there now ask first, or no longer. Read again whatever
+    // changed: the settings' draft may have put its privacy in place already.
+    void this.refreshHarnessScope();
+  }
+
+  /** The harnesses not on for a project, read again (ESC-404). Nothing said when it fails: what was read stays. */
+  async refreshHarnessScope(): Promise<void> {
+    const scope = await api.harnessScope().catch(() => null);
+    if (scope && JSON.stringify(scope) !== JSON.stringify(this.harnessScope)) this.harnessScope = scope;
   }
 
   /** The ticket of an agent: the one it works on ("En cours", "À tester"), else its last one. */
@@ -1933,6 +1953,10 @@ class AppState {
     base: string | null = null,
   ) {
     if (!projectId) return;
+    // A private project's harness not turned on yet (ESC-404): asked once, nothing made before « Activer ». One just made
+    // private whose harnesses were not read again yet is read first.
+    if (this.projects.find((p) => p.id === projectId)?.private && !this.harnessScope[projectId]) await this.refreshHarnessScope();
+    if (this.harnessAsked(projectId, engine) && !(await this.harnessAgreed(projectId, engine))) return;
     try {
       const a = await api.createAgent(projectId, null, engine, isolated, base);
       this.agents[a.id] = a;
@@ -1942,6 +1966,40 @@ class AppState {
     } catch (e) {
       this.refused(e);
     }
+  }
+
+  /**
+   * Whether a new agent of the project may go on `engine` (its project's harness when null), asking first when it waits
+   * for the user's agreement in a private project (ESC-404): true once its plugin is on there, false on « Annuler ». One
+   * turned off for the project is the core's to refuse, with why.
+   */
+  harnessAgreed(projectId: string, engine: EngineId | null = null): Promise<boolean> {
+    const on = this.harnessOf(projectId, engine);
+    if (!this.harnessAsked(projectId, engine)) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      this.modal = {
+        kind: 'harnessConsent',
+        projectId,
+        engine: on,
+        onEnabled: () => resolve(true),
+        onCancel: () => resolve(false),
+      };
+    });
+  }
+
+  /** The harness a new agent of the project goes on: `engine`, else the project's, else the default one. */
+  private harnessOf(projectId: string, engine: EngineId | null): EngineId {
+    return engine ?? this.projects.find((p) => p.id === projectId)?.engine ?? this.engines[0]?.id ?? 'claude';
+  }
+
+  /** Whether a new agent of the project on `engine` waits for the user's agreement first (ESC-404). */
+  harnessAsked(projectId: string, engine: EngineId | null = null): boolean {
+    return !!this.harnessScope[projectId]?.asks.includes(this.harnessOf(projectId, engine));
+  }
+
+  /** « Activer » of the card of an agent or a ticket whose harness is off for its project (ESC-404), then `then`. */
+  enableHarness(projectId: string, engine: EngineId, then?: () => void | Promise<void>) {
+    this.modal = { kind: 'harnessConsent', projectId, engine, onEnabled: async () => await then?.() };
   }
 
   /** A copy of the agent (« Dupliquer la conversation »), shown at once, like a new agent. */

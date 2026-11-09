@@ -2167,6 +2167,9 @@ impl<R: Runtime> Core<R> {
         let lang = self.lang().claude;
         // Its account, picked now: whether its model takes the mode `auto` is what its `claude` told.
         let engine = t.engine.unwrap_or(project.engine());
+        // Its harness off for the project (ESC-404): blocked with why, before anything is made; the Kanban does not ask
+        // the user's agreement in their place (« Activer » on its card).
+        self.check_harness_in(engine, &project.id)?;
         let account = self.ticket_start_account(project, t, engine)?;
         // Its ticket's own model and effort come first, then the board's; the mode is the board's.
         let defaults = accounts::defaults(accounts::find(&settings, &account), engine);

@@ -588,8 +588,8 @@
     await app.refreshEngines();
     if (!moreBtn) return;
     const own = project.engine ?? defaultEngine();
-    // Those that can be used (ESC-391): found, their plugin on, with an account.
-    const setUp = offered();
+    // Those that can be used (ESC-391): found, their plugin on, with an account; not one turned off for the project (ESC-404).
+    const setUp = offered(project.id);
     const harnesses: MenuItem[] = setUp.map((e, i) => {
       const account = newAgentAccount(project, e.id);
       const d = newAgentDefaults(project, e.id);

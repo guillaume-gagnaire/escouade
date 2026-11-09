@@ -284,6 +284,8 @@ async fn a_private_project_never_goes_on_its_own_to_an_account_it_shares() {
     project.private = true;
     project.shared_on_limit = false;
     h.core.update_project(project).unwrap();
+    // Its harness turned on for it by the user (ESC-404).
+    crate::harness_scope_tests::turn_on_every_harness(&h, &p.id);
     uses(&pro, "fake-pct", 96);
     let id = agent_on(&h, &p, "pro").await.id;
     turn_over(&h, &id, "Bonjour").await;

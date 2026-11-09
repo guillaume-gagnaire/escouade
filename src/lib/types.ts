@@ -2768,6 +2768,8 @@ export interface InitialState {
   enginesFound?: EngineId[];
   /** The harnesses whose plugin is off or not installed (absent before ESC-391: none). */
   enginesOff?: EngineId[];
+  /** The harnesses not on for a project, by project (absent before ESC-404: none). */
+  harnessScope?: Record<string, HarnessScope>;
   /** The kinds of ticket sources the core knows (absent before INT-1: the seven of the window). */
   sources?: SourceDecl[];
   /** Why no ticket of a project's board starts, by project (none: they may). */
@@ -3448,4 +3450,13 @@ export interface CacheHeat {
   /** The local day (YYYY-MM-DD) of `savedToday`. */
   day: string;
   savedToday: number;
+}
+
+/**
+ * The harnesses of a project whose plugin is not on there (ESC-404): `off`, turned off by the user, not offered; `asks`, a
+ * private project's not turned on yet, offered behind the question of its first agent.
+ */
+export interface HarnessScope {
+  off: EngineId[];
+  asks: EngineId[];
 }

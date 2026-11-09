@@ -45,6 +45,7 @@ import type {
   ClaudeLocated,
   ClaudeUpdateStatus,
   EngineId,
+  HarnessScope,
   EngineInfo,
   ClosedProject,
   CommitScope,
@@ -222,6 +223,12 @@ export const api = {
   /** The harnesses found now, the PATH of today read first (ESC-186). */
   enginesFoundNow: () => invoke<EngineId[]>('engines_found_now'),
   enginesOffNow: () => invoke<EngineId[]>('engines_off_now'),
+  /** The harnesses not on for a project, by project (ESC-404). */
+  harnessScope: () => invoke<Record<string, HarnessScope>>('harness_scope'),
+  /** « Activer »: the plugin of `engine` turned on for the project (ESC-404), the user's gesture alone. */
+  harnessEnableIn: (project: string, engine: EngineId) => invoke<void>('harness_enable_in', { project, engine }),
+  /** The plugin the harness `engine` goes through, null for none. */
+  harnessPluginOf: (engine: EngineId) => invoke<string | null>('harness_plugin_of', { engine }),
   /** The registry of now: the harnesses the plugins describe come and go with them (PLG-6). */
   enginesDeclared: () => invoke<EngineDecl[]>('engines_declared'),
   /** The items of Principal's folder a new account may share (those it has), files first. */

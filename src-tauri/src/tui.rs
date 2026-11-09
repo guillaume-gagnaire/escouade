@@ -1150,6 +1150,12 @@ impl<R: Runtime> Core<R> {
         on_data: impl Fn(Vec<u8>) + Send + 'static,
     ) -> Result<TermInfo> {
         let h = self.agent(id)?;
+        // Its harness's plugin off for its project (ESC-404): its interface does not start either.
+        let (engine, project_id) = {
+            let rt = h.lock();
+            (rt.meta.engine, rt.meta.project_id.clone())
+        };
+        self.check_harness_in(engine, &project_id)?;
         if crate::engine::of(&h.lock().meta).attaches() {
             return self.open_attached(&h, id, size, Box::new(on_data)).await;
         }

@@ -13,6 +13,9 @@
 
 <section class="projects">
   <p class="intro">{t('plugins.projects.intro')}</p>
+  {#if Array.isArray(plugin.manifest?.contributes.harnesses) && (plugin.manifest.contributes.harnesses as unknown[]).length}
+    <p class="intro">{t('plugins.projects.harnessNote')}</p>
+  {/if}
   {#if !plugin.choices.enabled}<p class="off" role="status">{t('plugins.projects.appOff')}</p>{/if}
   {#each app.projects as project (project.id)}
     {@const on = activeIn(plugin, project)}

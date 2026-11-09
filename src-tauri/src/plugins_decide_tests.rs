@@ -323,6 +323,8 @@ async fn a_private_project_and_a_question_are_not_given_to_a_plugin() {
         .find(|x| x.id == p.id)
         .unwrap()
         .private = true;
+    // Claude Code turned on for it by the user (ESC-404): the decider is another plugin, still off there.
+    crate::harness_scope_tests::turn_on_every_harness(&h, &p.id);
     let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
     ask_permission(&h, &id, "permission").await;
     left_to_the_user(&h, &id).await;

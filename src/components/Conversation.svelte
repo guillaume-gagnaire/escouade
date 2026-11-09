@@ -35,7 +35,7 @@
   import { workflows } from '../lib/workflows.svelte';
   import { contextUse, estimateHint, fSpentUsd, spent } from '../lib/spend';
   import HeatFigure from './HeatFigure.svelte';
-  import { capsOf, engineName, showsCost, speakerOf } from '../lib/engines';
+  import { capsOf, engineName, harnessHeld, showsCost, speakerOf } from '../lib/engines';
   import { injectedSource, parseAgentMessage, subagentLabels } from '../lib/events';
   import { localCommandViews } from '../lib/localcmd';
   import { subagentInfo } from '../lib/subagents';
@@ -615,6 +615,25 @@
   {/if}
 {/snippet}
 
+<!-- Its harness off for its project (ESC-404): it does not start nor get anything until « Activer », the same agreement as
+     before a first agent. -->
+{#snippet harnessCard()}
+  {#if !agent.archived && harnessHeld(agent.projectId, agent.engine ?? 'claude')}
+    {@const project = app.projects.find((p) => p.id === agent.projectId)}
+    {@const off = !!app.harnessScope[agent.projectId]?.off.includes(agent.engine ?? 'claude')}
+    <div class="banner held" class:top={harnessView} role="region" aria-label={t('plugins.harness.enable')} data-testid="harness-held">
+      <span
+        >{off || !project?.private
+          ? t('plugins.harness.cardOff', { name: engineName(agent.engine) })
+          : t('plugins.harness.cardPrivate', { name: engineName(agent.engine) })}</span
+      >
+      <button class="btn primary" onclick={() => app.enableHarness(agent.projectId, agent.engine ?? 'claude')}
+        >{t('plugins.harness.enable')}</button
+      >
+    </div>
+  {/if}
+{/snippet}
+
 <!-- Above a request a subagent made: which one, and the way to its conversation, where it is answered too. -->
 {#snippet asks(sub: string | undefined, request: string)}
   {@const from = sub ? subOf(sub) : null}
@@ -809,6 +828,7 @@
   {#if pageView}
     <DevPage {agent} />
   {:else if harnessView && !agent.archived}
+    {@render harnessCard()}
     {@render nextStart()}
     <AgentTerminal {agent} />
   {:else}
@@ -984,6 +1004,7 @@
       {#if agent.status === 'error'}
         <div class="banner err">{t('conv.stopped', { engine: speakerOf(agent.engine) })}</div>
       {/if}
+      {@render harnessCard()}
       {@render nextStart()}
       <Composer {agent} />
     {/if}
@@ -1629,6 +1650,9 @@
   .banner.err {
     background: oklch(from var(--del) l c h / 0.07);
     box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.35);
+  }
+  .banner.held {
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--warn, var(--p)) 45%, transparent);
   }
   .banner.next {
     box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 40%, transparent);

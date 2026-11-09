@@ -674,6 +674,8 @@ async fn a_private_projects_agent_is_handed_over_by_the_option_only_to_an_accoun
     let mut project = h.core.project(&p.id).unwrap();
     project.private = true;
     h.core.update_project(project).unwrap();
+    // Claude Code turned on for it by the user (ESC-404); Minimal goes through no plugin.
+    crate::harness_scope_tests::turn_on_every_harness(&h, &p.id);
     // P is private, Relais shared: the agent waits for the reset, on Claude Code.
     let id = agent_on(&h, &p, "pro").await.id;
     turn_over(&h, &id, "Bonjour").await;

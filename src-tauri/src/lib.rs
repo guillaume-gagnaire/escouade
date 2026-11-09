@@ -107,6 +107,9 @@ mod fsedit;
 mod gemini_tui_tests;
 mod git;
 mod handover;
+mod harness_scope;
+#[cfg(test)]
+mod harness_scope_tests;
 mod heat;
 mod hub;
 mod integrations;
@@ -684,6 +687,9 @@ pub fn run() {
                 commands::plugin_approve_commands,
                 commands::plugin_set_enabled,
                 commands::plugin_set_project,
+                commands::harness_enable_in,
+                commands::harness_scope,
+                commands::harness_plugin_of,
                 commands::plugin_set_permission,
                 commands::plugin_set_setting,
                 commands::plugin_secrets,

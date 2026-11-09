@@ -41,6 +41,7 @@
   import PrModal from './components/modals/PrModal.svelte';
   import CiModal from './components/modals/CiModal.svelte';
   import ConfirmModal from './components/modals/ConfirmModal.svelte';
+  import HarnessConsentModal from './components/plugins/HarnessConsentModal.svelte';
   import MergeReposModal from './components/modals/MergeReposModal.svelte';
   import CommitReposModal from './components/modals/CommitReposModal.svelte';
   import { isMulti } from './lib/repos';
@@ -315,6 +316,10 @@
   <!-- A choice can ask the next question (save, then delete): a dialog of its own, which takes the focus. -->
   {#key app.modal}
     <ConfirmModal {...app.modal} />
+  {/key}
+{:else if app.modal?.kind === 'harnessConsent'}
+  {#key app.modal}
+    <HarnessConsentModal {...app.modal} />
   {/key}
 {:else if app.modal?.kind === 'newDiscussion'}
   <NewDiscussionModal projectId={app.modal.projectId} preset={app.modal.preset} />

@@ -2,8 +2,8 @@
 title: "Les plugins livrés avec Escouade"
 subject: "plugins"
 sources: ["docs/PLUGINS.md §4.3, §4.4","docs/TODO-2.2.md (INT-4, INT-8.1)","src-tauri/src/plugins/builtin.rs","docs/PLUGINS.md §4.13","plugins/github/README.fr.md","plugins/gitlab/README.fr.md","plugins/gitea/README.fr.md","plugins/azure-devops/README.fr.md","docs/PLUGINS.md §8.7, §8.13, §8.14","src-tauri/src/plugins/seed.rs","src-tauri/src/plugins/sort.rs","src-tauri/src/plugins_builtin_tests.rs","src-tauri/src/plugins_sort_tests.rs","docs/PLUGINS.md §8.32","plugins/seed.json","tests/e2e/real-seed.spec.ts","https://store.escouade.dev/api/v1/catalog.json"]
-tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339","ESC-344","ESC-351","ESC-349","ESC-348","ESC-345","ESC-350","ESC-367","ESC-370","ESC-373","ESC-354","ESC-394"]
-decisions: [80,92,110,113,117]
+tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339","ESC-344","ESC-351","ESC-349","ESC-348","ESC-345","ESC-350","ESC-367","ESC-370","ESC-373","ESC-354","ESC-394","ESC-404"]
+decisions: [80,92,110,113,117,"le-bouton-projet-par-projet-d-un-plugin"]
 compared: null
 ---
 
@@ -26,6 +26,7 @@ Certains plugins sont donnés par l'app : livrés avec elle, signés avec elle, 
 ## Ce que l'utilisateur peut
 
 - Le couper pour l'app ou pour un projet (comme tout plugin) ; coupé pour l'app, rien de lui ne démarre. Ses choix sont gardés.
+- Comme tout plugin, il est coupé d'office dans un projet privé, jusqu'à ce que l'utilisateur l'y active. Pour un plugin de harness, coupé pour un projet veut dire que ses agents n'y tournent pas (voir *Les harness livrés*, plus bas).
 - Pas le désinstaller : le bouton n'y est pas.
 - Un plugin du store, d'un dossier ou d'un dépôt qui porte le même identifiant est refusé (l'aperçu dit pourquoi). Une copie du même identifiant déjà installée avant que l'app le donne cède la place au démarrage, ses choix gardés.
 
@@ -58,6 +59,8 @@ Cursor CLI, Mistral Vibe (dans le plugin Mistral), Gemini CLI, OpenCode, Copilot
 
 Antigravity CLI aussi (`dev.escouade.antigravity-cli`, INT-10.8), ses comptes inchangés ; voir *Antigravity CLI en plugin*.
 Claude Code (`dev.escouade.claude-code`, INT-10.5) est servi lui aussi par un plugin livré ; voir *Claude Code en plugin*.
+
+Le bouton projet par projet de ces plugins s'applique à leur harness (ESC-404), comme le dit *Les plugins : vue d'ensemble* : coupé pour un projet, le harness n'y est plus proposé et ses agents de ce projet ne démarrent ni ne reçoivent rien ; le couper arrête ceux qui tournent. Dans un projet privé, où il est coupé d'office, le premier agent sur lui demande l'accord de l'utilisateur (« Activer ») ; le Kanban, le pilote auto et les outils MCP ne le demandent jamais à sa place et bloquent le ticket, avec la raison. À la mise à jour, un projet privé qui avait déjà des agents sur un de ces harness l'a gardé allumé. Le cœur en décide : aucun de ces plugins n'a changé pour cela.
 
 ## L'amorce : la sortie de l'origine `builtin` (ESC-338)
 
