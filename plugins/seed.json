@@ -23,8 +23,8 @@
     },
     {
       "id": "dev.escouade.claude-code",
-      "version": "2.2.3",
-      "sha256": "6be6068aa3c4c115da35f93fcfca972f341112553e7443aa47d92c46decd8c14"
+      "version": "2.2.4",
+      "sha256": "7687bc8e6f0def9d9d7ce5e7ae64eb8dcd91069c5b46b37a6541ab320e34bbda"
     },
     {
       "id": "dev.escouade.clickup",
