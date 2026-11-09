@@ -1071,7 +1071,8 @@
                   class="prnum {prTone(p)}"
                   aria-label={t('prs.chipLabel', { word, number: p.number, state: stateWord(p) })}
                   use:tip={{ text: prTip(word, p), aria: false }}
-                  onclick={() => openPr(p)}><Icon name={prIcon(p)} size={12} />{p.repo ? `${repoLabel(p.repo)} ` : ''}#{p.number}</button
+                  onclick={() => openPr(p, word)}
+                  ><Icon name={prIcon(p)} size={12} />{p.repo ? `${repoLabel(p.repo)} ` : ''}#{p.number}</button
                 >
                 <!-- Where it goes and its CI in words (ESC-305): « #41 → main · CI en échec ». -->
                 <span class="prto">{t('prs.to', { base: p.base })}</span>

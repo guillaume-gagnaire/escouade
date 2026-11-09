@@ -8,7 +8,9 @@ import {
   cardPrs,
   fixPr,
   hasOwnBranch,
+  openPr,
   openPrOf,
+  openPrPage,
   ownBranch,
   prGlyph,
   prIcon,
@@ -94,6 +96,32 @@ describe('the pull requests of an agent', () => {
     askOpenPr(agent({ worktree: WT, prs: [pr()] }));
     expect(app.modal).toBeNull();
     expect(openUrl).toHaveBeenCalledWith('https://github.com/acme/demo/pull/7');
+  });
+
+  it('opens its web page in the browser, and says in a toast why when it cannot (ESC-402)', async () => {
+    openUrl.mockClear();
+    await openPr(pr({ url: ' https://github.com/acme/demo/pull/7 ' }));
+    expect(openUrl).toHaveBeenCalledWith('https://github.com/acme/demo/pull/7');
+    expect(app.toasts).toEqual([]);
+
+    // The system refuses it: its reason said.
+    openUrl.mockImplementationOnce(() => Promise.reject('aucun navigateur'));
+    await openPr(pr());
+    expect(app.toasts.at(-1)).toMatchObject({
+      text: 'La PR #7 ne s’ouvre pas dans le navigateur : aucun navigateur',
+      kind: 'error',
+    });
+
+    // No web page to open: said, nothing asked of the system.
+    openUrl.mockClear();
+    for (const url of ['', 'github.com/acme/demo/pull/7', 'file:///C:/x']) {
+      await openPrPage({ url, number: 8, word: 'MR' });
+      expect(app.toasts.at(-1)).toMatchObject({
+        text: 'La MR #8 ne s’ouvre pas dans le navigateur : son hébergeur n’a pas donné l’adresse de sa page.',
+        kind: 'error',
+      });
+    }
+    expect(openUrl).not.toHaveBeenCalled();
   });
 
   it('names the menus’ item after the host’s word and the open one', async () => {

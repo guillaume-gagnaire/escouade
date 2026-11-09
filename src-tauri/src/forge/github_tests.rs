@@ -188,6 +188,8 @@ async fn a_branchs_pull_requests_are_found_by_its_name() {
         .unwrap();
     assert_eq!(prs.len(), 1);
     assert_eq!(prs[0].number, 14768);
+    // Its web page, never its API's address: the buttons open it in the browser (ESC-402).
+    assert_eq!(prs[0].url, "https://github.com/cli/cli/pull/14768");
     assert_eq!(
         server.requests()[0].json()["variables"]["branch"],
         "babakks/refresh-token-bump-deps"

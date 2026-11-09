@@ -2900,6 +2900,34 @@ describe('Sidebar — an agent’s pull requests (ESC-64)', () => {
     expect(menu.open!.items.map((i) => i.label)).toContain('Voir la PR #12');
   });
 
+  it('opens the page of a pull request from its number and from « Voir la PR », and says why it cannot (ESC-402)', async () => {
+    const prs = [pullRequest({ number: 12, url: 'https://github.com/acme/demo/pull/12' })];
+    resetApp({ projects: [project()], agents: [agent({ worktree: WT, prs, prWord: 'PR' })] });
+    const refusal: string[] = [];
+    const backend = fakeBackend({
+      open_url: () => {
+        if (refusal.length) throw refusal.shift();
+      },
+    });
+    const opened = () => backend.called('open_url').map((c) => c.args.url);
+    render(Sidebar, { project: project() });
+    const num = within(screen.getByRole('group', { name: 'Pull requests de refacto-auth' })).getByRole('button', { name: /PR #12/ });
+    await userEvent.click(num);
+    num.focus();
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(opened()).toEqual(['https://github.com/acme/demo/pull/12', 'https://github.com/acme/demo/pull/12']));
+    await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
+    await menu.open!.items.find((i) => i.label === 'Voir la PR #12')!.onClick!();
+    await waitFor(() => expect(opened()).toHaveLength(3));
+    expect(opened()[2]).toBe('https://github.com/acme/demo/pull/12');
+
+    refusal.push('aucun navigateur');
+    await userEvent.click(num);
+    await waitFor(() =>
+      expect(app.toasts.at(-1)).toMatchObject({ text: 'La PR #12 ne s’ouvre pas dans le navigateur : aucun navigateur', kind: 'error' }),
+    );
+  });
+
   it('offers « Ouvrir une PR… » in the card’s menu of an agent with a branch, and shows nothing without a pull request', async () => {
     resetApp({
       projects: [project()],

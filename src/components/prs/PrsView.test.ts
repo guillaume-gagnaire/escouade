@@ -63,8 +63,18 @@ describe('the « Pull requests » view (ESC-65)', () => {
     });
     render(PrsView, { project: project() });
     const rows = await screen.findAllByRole('listitem');
-    await userEvent.click(within(rows[2]).getByRole('button', { name: 'Ouvrir dans le navigateur' }));
+    const browser = within(rows[2]).getByRole('button', { name: 'Ouvrir dans le navigateur' });
+    await userEvent.click(browser);
     expect(openUrl).toHaveBeenCalledWith('https://github.com/acme/demo/pull/10');
+    // By Entrée too, and a refusal said with its reason (ESC-402).
+    browser.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(openUrl).toHaveBeenCalledTimes(2);
+    openUrl.mockImplementationOnce(() => Promise.reject('aucun navigateur'));
+    await userEvent.click(browser);
+    await waitFor(() =>
+      expect(app.toasts.at(-1)).toMatchObject({ text: 'La PR #10 ne s’ouvre pas dans le navigateur : aucun navigateur', kind: 'error' }),
+    );
 
     await userEvent.click(within(rows[2]).getByRole('button', { name: 'Lancer un agent' }));
     await waitFor(() => expect(backend.called('create_agent_on_pr').map((c) => c.args)).toEqual([{ projectId: 'p1', number: 10 }]));

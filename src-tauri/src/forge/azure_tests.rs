@@ -478,6 +478,11 @@ async fn a_branchs_pull_requests_are_found_by_its_ref_newest_first() {
         .await
         .unwrap();
     assert_eq!(prs.iter().map(|p| p.number).collect::<Vec<_>>(), [22, 7]);
+    // Their web pages, never their API's address: the buttons open them in the browser (ESC-402).
+    assert_eq!(
+        prs[1].url,
+        "https://dev.azure.com/acme/Demo%20Project/_git/demo/pullrequest/7"
+    );
     let asked = server
         .requests()
         .into_iter()

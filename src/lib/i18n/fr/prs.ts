@@ -10,6 +10,9 @@ export default {
   openHint: 'Pousse la branche {branch} et ouvre sa {word}, titre et description proposés.',
   /** The item of the menus once one is open. */
   see: 'Voir la {word} #{number}',
+  /** A button that opens its page could not (ESC-402): `{why}` is the system's refusal, or `noPage`. */
+  openFailed: 'La {word} #{number} ne s’ouvre pas dans le navigateur : {why}',
+  noPage: 'son hébergeur n’a pas donné l’adresse de sa page.',
   /** On the card when the plugin that serves its code host does not answer (switched off, stopped): its pull requests
    * read last stay. The tooltip says why. */
   down: 'Hébergeur arrêté : {word} plus suivies',

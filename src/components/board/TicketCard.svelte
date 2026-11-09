@@ -37,7 +37,7 @@
   import { shareTicket } from '../../lib/share-actions';
   import { docsStore } from '../../lib/docs.svelte';
   import { pageTitle } from '../../lib/planning';
-  import { prIcon, prTone } from '../../lib/prs';
+  import { openPrPage, prIcon, prTone } from '../../lib/prs';
   import {
     asPull,
     canFixCi,
@@ -506,7 +506,7 @@
       <button
         class="prnum {prTone(pull)}"
         aria-label={t('prs.chipLabel', { word: p.word, number: p.number, state: prStateWord(p) })}
-        onclick={(e) => act(e, () => app.run(openUrl(p.url)))}><Icon name={prIcon(pull)} size={12} />{p.word} #{p.number}</button
+        onclick={(e) => act(e, () => openPrPage(p))}><Icon name={prIcon(pull)} size={12} />{p.word} #{p.number}</button
       >
       <span class="prstate {prStateKey(p)}">{prStateWord(p)}</span>
       {#if ci}<button

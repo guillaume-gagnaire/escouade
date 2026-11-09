@@ -267,7 +267,7 @@
                   class="icon-btn"
                   aria-label={t('prs.view.openInBrowser')}
                   use:tip={t('prs.view.openInBrowser')}
-                  onclick={() => openPr(p)}><Icon name="ext" size={14} /></button
+                  onclick={() => openPr(p, word)}><Icon name="ext" size={14} /></button
                 >
               </span>
             </li>

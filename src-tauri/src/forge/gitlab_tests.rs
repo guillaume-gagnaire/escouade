@@ -282,6 +282,10 @@ async fn the_open_merge_requests_cost_one_call() {
         prs.iter().map(|p| p.number).collect::<Vec<_>>(),
         [3164, 3165]
     );
+    // Its web page, never its API's address: the buttons open it in the browser (ESC-402).
+    assert!(prs
+        .iter()
+        .all(|p| p.url == "https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3101"));
     assert!(prs[1].draft);
     // Whose review is asked (« Relecture demandée », ESC-65).
     assert_eq!(prs[0].reviewers, ["ada", "bob"]);

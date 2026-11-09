@@ -2444,6 +2444,31 @@ describe('Conversation header — the agent’s pull requests (ESC-64)', () => {
     expect(screen.queryByRole('button', { name: 'Ouvrir une MR' })).not.toBeInTheDocument();
   });
 
+  it('opens the page of its pull request from the header by a click and by Entrée, and says why it cannot (ESC-402)', async () => {
+    const prs = [pullRequest({ number: 12, url: 'https://gitlab.com/acme/demo/-/merge_requests/12' })];
+    const a = agent({ id: 'pr4', worktree: WT, prs, prWord: 'MR' });
+    resetApp({ projects: [project()], agents: [a] });
+    let refuse = false;
+    const b = fakeBackend({
+      get_conversation: () => [],
+      open_url: () => {
+        if (refuse) throw 'aucun navigateur';
+      },
+    });
+    render(Conversation, { agent: a, project: project() });
+    const twelve = screen.getByRole('button', { name: 'Ouvrir la MR #12 dans le navigateur (ouverte)' });
+    await userEvent.click(twelve);
+    twelve.focus();
+    await userEvent.keyboard('{Enter}');
+    const url = 'https://gitlab.com/acme/demo/-/merge_requests/12';
+    await waitFor(() => expect(b.called('open_url').map((c) => c.args.url)).toEqual([url, url]));
+    refuse = true;
+    await userEvent.click(twelve);
+    await waitFor(() =>
+      expect(app.toasts.at(-1)).toMatchObject({ text: 'La MR #12 ne s’ouvre pas dans le navigateur : aucun navigateur', kind: 'error' }),
+    );
+  });
+
   it('offers nothing to open to a ticket’s agent, whose pull request is only read, and is said in English', () => {
     const a = agent({ id: 'pr3', worktree: WT, ticketId: 't1' });
     resetApp({ projects: [project()], agents: [a] });

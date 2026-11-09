@@ -273,8 +273,19 @@ describe('the « PR et CI » tab', () => {
     expect(list).toHaveTextContent('CI en cours');
     await userEvent.click(within(list).getByRole('button', { name: 'Ouvrir l’agent refacto-auth' }));
     expect(app.ui.selectedAgent.p1).toBe('a1');
-    await userEvent.click(within(list).getByRole('button', { name: 'Ouvrir la PR #13 dans le navigateur (ouverte)' }));
+    openUrl.mockClear();
+    const browser = within(list).getByRole('button', { name: 'Ouvrir la PR #13 dans le navigateur (ouverte)' });
+    await userEvent.click(browser);
     expect(openUrl).toHaveBeenCalledWith('https://github.com/acme/demo/pull/13');
+    // By Entrée too, and a refusal said with its reason (ESC-402).
+    browser.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(openUrl).toHaveBeenCalledTimes(2);
+    openUrl.mockImplementationOnce(() => Promise.reject('aucun navigateur'));
+    await userEvent.click(browser);
+    await waitFor(() =>
+      expect(app.toasts.at(-1)).toMatchObject({ text: 'La PR #13 ne s’ouvre pas dans le navigateur : aucun navigateur', kind: 'error' }),
+    );
     expect(backend.called('project_prs').map((c) => c.args)).toEqual([{ projectId: 'p1' }]);
   });
 

@@ -6,6 +6,8 @@ export default defineZone('prs', {
   openButton: 'Open a {word}',
   openHint: 'Pushes the branch {branch} and opens its {word}, with a proposed title and description.',
   see: 'View {word} #{number}',
+  openFailed: '{word} #{number} didn’t open in the browser: {why}',
+  noPage: 'its code host gave no address for its page.',
   down: 'Code host stopped: {word}s no longer followed',
   downHint: '{why}. The {word}s read last stay; Settings › Plugins turns it back on.',
 
