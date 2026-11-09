@@ -46,6 +46,8 @@ export default defineZone('integrations', {
     servedByPlugin: 'Served by the plugin {plugin}',
     disconnect: 'Disconnect',
     connectEllipsis: 'Connect…',
+    connectAnother: 'Connect an account…',
+    disconnectOne: 'Disconnect {label}',
     connect: 'Connect',
     checking: 'Checking…',
     formLabel: 'Connect to {service}',
@@ -106,6 +108,11 @@ export default defineZone('integrations', {
     title: 'Sources linked to {project}',
     connectFirst: 'Connect an account in Connected services to link a source to this project.',
     openServices: 'Open Connected services',
+    account: 'Account',
+    accountOf: '{service} account',
+    paused:
+      'This source’s account is disconnected: it is paused (no import, no sync), its settings are kept. Choose another account, or connect it again in Connected services.',
+    gone: 'Account disconnected',
     none: 'None',
     pick: {
       jira: 'Jira project',

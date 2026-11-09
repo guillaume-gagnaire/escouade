@@ -461,6 +461,24 @@ pub fn source_vault_name(service: Service, a: &Account) -> String {
     )
 }
 
+/// The account of the source `service` as its plugin names it (`account:<name>`): the first
+/// account's is `source_account`'s, the others' their id (ESC-397).
+pub fn source_account_of(service: Service, id: &str) -> String {
+    if crate::integrations::is_first(service, id) {
+        source_account(service)
+    } else {
+        id.to_string()
+    }
+}
+
+/// The keychain's name of the account `id` of the source `service` (`a.plugin` serving it).
+pub fn source_vault_name_of(service: Service, id: &str, a: &Account) -> String {
+    vault_name(
+        &serving(&kind_of_source(service), &a.plugin),
+        &source_account_of(service, id),
+    )
+}
+
 /// The keychain's name of a code host's account.
 pub fn forge_vault_name(a: &forge::accounts::ForgeAccount) -> String {
     vault_name(&serving(&a.kind, &a.plugin), &a.host())
@@ -498,7 +516,8 @@ pub fn hosts_of(accounts: &Accounts, plugin: &str) -> Vec<String> {
         .map(|a| a.host())
         .collect();
     for service in source::registry().services() {
-        if let Some(a) = accounts.get(service) {
+        // Every account of the source (several per service, ESC-397).
+        for (_, a) in accounts.list(service) {
             if !a.site.is_empty() && serving(&kind_of_source(service), &a.plugin) == plugin {
                 hosts.push(forge::host_of(&a.site));
             }
@@ -567,9 +586,6 @@ pub fn shared(accounts: &Accounts, kinds: &[AccountKind]) -> Vec<Shared> {
         });
     }
     for service in source::registry().services() {
-        let Some(a) = accounts.get(service) else {
-            continue;
-        };
         if source::registry()
             .get(service)
             .and_then(|k| k.host())
@@ -578,16 +594,18 @@ pub fn shared(accounts: &Accounts, kinds: &[AccountKind]) -> Vec<Shared> {
             // A code host's account, listed above (github.com's).
             continue;
         }
-        let id = kind_of_source(service);
-        list.push(Shared {
-            points: kind(&id, &a.plugin)
-                .map(|k| points(&k, None))
-                .unwrap_or_default(),
-            plugin: serving(&id, &a.plugin),
-            account: source_account(service),
-            label: a.label.clone(),
-            kind: id,
-        });
+        for (account, a) in accounts.list(service) {
+            let id = kind_of_source(service);
+            list.push(Shared {
+                points: kind(&id, &a.plugin)
+                    .map(|k| points(&k, None))
+                    .unwrap_or_default(),
+                plugin: serving(&id, &a.plugin),
+                account: source_account_of(service, &account),
+                label: a.label.clone(),
+                kind: id,
+            });
+        }
     }
     list
 }

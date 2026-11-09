@@ -621,7 +621,7 @@ async fn an_account_added_through_another_plugin_is_served_by_it_for_issues_and_
     assert_eq!(mrs.pull_request(&repo(), 7).await.unwrap().number, 7);
     let containers = h
         .core
-        .integration_containers(Service::GITLAB, None)
+        .integration_containers(Service::GITLAB, "", None)
         .await
         .unwrap();
     assert_eq!(containers.len(), 2);

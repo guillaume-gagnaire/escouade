@@ -1144,7 +1144,7 @@ describe('board', () => {
   });
 
   it('knows the external accounts from the start, and says what the automatic import brought', async () => {
-    const accounts = [{ service: 'jira' as const, connected: true, label: '@ada' }];
+    const accounts = [{ service: 'jira' as const, id: 'jira', connected: true, label: '@ada' }];
     const { emit } = await start({ accounts });
     expect(app.accounts).toEqual(accounts);
     emit({ type: 'toast', text: '2 tickets importés depuis GitHub dans demo' });

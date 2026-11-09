@@ -457,6 +457,8 @@ export interface SourceLink {
   name: string;
   /** The state an imported ticket's external one gets when it comes into each column (none: left as it is). */
   states: Partial<Record<Column, ExternalState>>;
+  /** The account of its service that serves it (AccountView.id, ESC-397); none: the service's first. */
+  account?: string;
 }
 
 export interface ProjectIntegrations {
@@ -478,10 +480,14 @@ export interface ExternalRef {
   url: string;
   /** Why its last sync failed, until one succeeds. */
   error: string | null;
+  /** The account it was imported with, which it keeps; none: the service's first. */
+  account?: string;
 }
 
 export interface AccountView {
   service: Service;
+  /** Its id among its service's accounts (SourceLink.account); empty for a service without any, and for GitLab Issues and Azure Boards. */
+  id?: string;
   connected: boolean;
   /** « ada@atlas.dev · atlas.atlassian.net », « @ada ». */
   label: string;

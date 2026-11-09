@@ -157,7 +157,7 @@ async fn a_removed_site_closes_its_host_and_gives_its_token_back() {
     assert!(reaches(&h, JIRA, &server.url).await);
     assert_eq!(lent(&h, JIRA, "jira").as_deref(), Some("good"));
 
-    h.core.integration_disconnect(Service::JIRA).unwrap();
+    h.core.integration_disconnect(Service::JIRA, "").unwrap();
     assert!(!reaches(&h, JIRA, &server.url).await);
     assert_eq!(lent(&h, JIRA, "jira"), None);
 }

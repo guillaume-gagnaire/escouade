@@ -1087,6 +1087,11 @@ pub struct SourceLink {
     /// The state an imported ticket's external one is given when it comes into each column
     /// (none: left as it is).
     pub states: BTreeMap<Column, ExternalState>,
+    /// The account of its service that serves it (`AccountView::id`, ESC-397); empty: the
+    /// service's first one (a link from before). GitLab Issues and Azure Boards have none: their
+    /// container names its instance.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub account: String,
 }
 
 /// What a project's tickets have to do with external ticket systems.
@@ -1133,6 +1138,10 @@ pub struct ExternalRef {
     pub url: String,
     /// Why its last sync failed, until one succeeds.
     pub error: Option<String>,
+    /// The account it was imported with (`SourceLink::account`), which it keeps; empty: the
+    /// service's first one.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub account: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -4383,6 +4392,7 @@ mod tests {
             },
         );
         let link = SourceLink {
+            account: "jira-1".into(),
             service: Service::JIRA,
             container: "ATL".into(),
             name: "Atlas".into(),
@@ -4400,6 +4410,7 @@ mod tests {
             container: "acme/api".into(),
             url: "https://github.com/acme/api/issues/42".into(),
             error: None,
+            account: String::new(),
         };
         let t = serde_json::to_value(Ticket {
             external: Some(r),

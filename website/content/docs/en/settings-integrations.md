@@ -25,7 +25,7 @@ With no project open, “Imported tickets” shows “No project open.”.
 
 ## Connected accounts
 
-One account per service: Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues, and Azure Boards. Each service shows “Not connected” with a “Connect…” button, or “Connected · ” followed by the account with a “Disconnect” button. Under the title, the app reminds you: “Tokens stay on this machine, stored apart from your settings, and are only used for calls to these services.”
+Jira, Trello, Linear, and ClickUp take several accounts: one Jira per client, for instance, or two identities on the same site. Each service shows “Not connected” with a “Connect…” button, or its accounts, each “Connected · ” followed by the account with its own “Disconnect” button, and “Connect an account…” to add one. GitHub Issues has github.com’s account, GitLab Issues and Azure Boards those of their code host. Under the title, the app reminds you: “Tokens stay on this machine, stored apart from your settings, and are only used for calls to these services.”
 
 GitLab Issues has no account of its own: its row says “The GitLab code host’s account: it is connected and disconnected in Code hosts.”, and its “Connect GitLab…” button opens the code host’s form (see [GitLab Issues](#gitlab-issues)). Azure Boards likewise with the Azure DevOps code host: “The Azure DevOps code host’s account: it is connected and disconnected in Code hosts.”, “Its token needs the Work Items right (read and write).” and “Connect Azure DevOps…” (see [Azure Boards](#azure-boards)).
 
@@ -86,7 +86,9 @@ No field: Azure Boards takes the Azure DevOps code host’s accounts (an organiz
 
 Click “Connect” once the fields are filled in; the button reads “Checking…” during the call, and “Cancel” closes the form. Escouade checks the credentials with the service and only keeps them if it accepts them. If it refuses them, or can’t be reached, its answer shows in red under the fields, for example “Jira refuses these credentials (401)”. A missing field is reported before any call, for example “Give the token.”.
 
-“Disconnect” forgets the account and its secrets. Projects keep their linked sources: they’re unused until an account of that service is connected again. To switch accounts, disconnect the old one, then connect the other.
+Connecting the same account again (for Jira, the same site and e-mail; for the others, the same user of the service) updates it, for example with a new token, instead of adding a second one.
+
+“Disconnect” forgets that account and its secrets, without touching the service’s other accounts. Projects whose source went through it keep it paused: no import, no sync, its settings intact. Their “Imported tickets” page says so, with an amber dot in the settings bar, and offers to choose another account.
 
 ### Where tokens are kept
 
@@ -97,6 +99,8 @@ If the keychain doesn’t give a token back at startup, the account shows “Sys
 ## Sources linked to a project
 
 The group is titled “Sources linked to” followed by the project’s name. While no account is connected, it says: “Connect an account above to link a source to this project.”
+
+When the service has several accounts, an “Account” menu first chooses the one that serves the project’s source (by default, the first one connected): two projects can thus take their tickets from two different Jiras. Sync, automatic import, “⤓ Import”, comments and links to the external ticket go through that account; a ticket already imported keeps its own.
 
 For each connected service, a menu chooses the project’s source: “Jira project”, “Trello board”, “GitHub Issues repository”, “Linear team”, “ClickUp list”, “GitLab Issues project”, or “Azure Boards project”. “None” (the default) unlinks. A project has at most one source per service.
 

@@ -119,6 +119,8 @@ struct Named {
     url: String,
     /// A source's account: its instance (GitLab Issues on a GitLab's).
     site: String,
+    /// A source's account after its first: the name of its secret, `account:<name>` (ESC-397).
+    name: String,
     email: String,
     user: String,
     api: Option<String>,
@@ -236,11 +238,19 @@ impl Hosts {
         let account: Named = arg(params, "account")?;
         let url = account.address().trim_end_matches('/').to_string();
         // Its account: its instance's host (github.com's), else the source's own (`SourceKind::account_name`).
-        let name = kind.account_name(&url);
+        // An account of the source after its first names its secret (`account:<name>`, Escouade 2.2 and later).
+        let name = match account.name.trim() {
+            "" => kind.account_name(&url),
+            name => name.to_string(),
+        };
         let token = self.token(cx, kind.name(), &name).await?;
         // The user is part of the key: a client made before the account knew it (at « Connecter ») must not serve the
         // calls after it (ClickUp's « Mes tâches » filters on it).
-        let key = format!("{id}\n{url}\n{:?}\n{token}\n{}", account.api, account.user);
+        // So is the account's name: two accounts of one source each keep their client.
+        let key = format!(
+            "{id}\n{url}\n{name}\n{:?}\n{token}\n{}",
+            account.api, account.user
+        );
         if let Some(c) = self.source_clients.lock().get(&key) {
             return Ok(c.clone());
         }
@@ -253,7 +263,7 @@ impl Hosts {
         };
         let client: Arc<dyn TicketSource> = Arc::from(kind.client(self.http()?, &creds));
         let mut clients = self.source_clients.lock();
-        clients.retain(|k, _| !k.starts_with(&format!("{id}\n{}\n", creds.url)));
+        clients.retain(|k, _| !k.starts_with(&format!("{id}\n{}\n{name}\n", creds.url)));
         Ok(clients.entry(key).or_insert(client).clone())
     }
 

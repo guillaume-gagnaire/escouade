@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-jira"
-version = "2.2.3"
+version = "2.2.4"
 description = "Le plugin Jira d'Escouade : les tickets d'un projet Jira Cloud dans le Kanban, ses statuts comme colonnes"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"

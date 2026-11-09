@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-trello"
-version = "2.2.3"
+version = "2.2.4"
 description = "Le plugin Trello d'Escouade : les cartes d'un tableau dans le Kanban, leurs listes comme colonnes"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"

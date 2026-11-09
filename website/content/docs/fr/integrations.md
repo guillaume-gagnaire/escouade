@@ -22,7 +22,9 @@ Les comptes se connectent dans Réglages › Services connectés, groupe « Com
 
 Un [hébergeur de code](code-hosts) (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps) sert aux pull requests, à la CI et aux déploiements des agents ; une source du Kanban sert aux tickets. Réglages › Services connectés les montre en deux parties nommées. Connecter son GitLab comme hébergeur ne met aucun ticket dans le Kanban : il faut encore lier un projet GitLab comme source (voir plus bas), ce que la fenêtre d’import propose d’un clic. Bitbucket et Gitea n’ont pas encore de source : leur ligne dit « Pas de tickets : PR et CI seulement ».
 
-« Déconnecter » oublie le compte et ses secrets. Les projets gardent leurs liens, inutilisés jusqu’à une nouvelle connexion.
+Jira, Trello, Linear et ClickUp prennent plusieurs comptes : « Connecter un compte… » en ajoute un à côté des autres, et chaque projet choisit, sur sa page Tickets importés, le compte qui sert sa source. Un projet peut ainsi prendre ses tickets dans le Jira d’un client, un autre dans celui d’un autre client. Connecter de nouveau le même compte (Jira : même site et même e-mail) le met à jour.
+
+« Déconnecter » oublie ce compte et ses secrets, sans toucher aux autres. Les sources des projets qui l’utilisaient se mettent en pause, leurs réglages gardés, et leur page Tickets importés le dit.
 
 ### Où sont gardés les jetons
 

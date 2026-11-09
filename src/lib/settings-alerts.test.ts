@@ -27,6 +27,21 @@ describe('the amber dots of the settings bar', () => {
     expect(a['p1:project']).toEqual(a['project:p1']);
   });
 
+  it('says a source whose account was disconnected is paused, on the project and on its page Tickets importés (ESC-397)', () => {
+    const link = (account?: string) => ({ service: 'jira' as const, container: 'MOB', name: 'MOB — Mobile', states: {}, account });
+    const a = alertsOf({
+      ...none,
+      ticketAccounts: [{ service: 'jira', id: 'jira', connected: true, label: 'ada', unread: false }] as never,
+      sources: [
+        { id: 'p1', links: [link('jira-gone')] },
+        { id: 'p2', links: [link()] },
+      ],
+    });
+    expect(a['p1:tickets']).toEqual(['Source Jira « MOB — Mobile » en pause : son compte est déconnecté']);
+    expect(a['project:p1']).toEqual(a['p1:tickets']);
+    expect(a['p2:tickets']).toBeUndefined();
+  });
+
   it('says a token expired or unread on Services connectés', () => {
     const a = alertsOf({
       ...none,

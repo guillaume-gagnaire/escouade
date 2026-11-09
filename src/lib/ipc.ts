@@ -700,11 +700,13 @@ export const api = {
   forgeGuess: (url: string) => invoke<string | null>('forge_guess', { url }),
   forgeTokenPage: (kind: string, url: string) => invoke<string>('forge_token_page', { kind, url }),
   integrationConnect: (service: Service, account: AccountForm) => invoke<AccountView>('integration_connect', { service, account }),
-  integrationDisconnect: (service: Service) => invoke<AccountView[]>('integration_disconnect', { service }),
+  integrationDisconnect: (service: Service, account?: string) =>
+    invoke<AccountView[]>('integration_disconnect', { service, ...(account ? { account } : {}) }),
   /** Jira projects, Trello boards, GitHub repositories (the project's own first). */
-  integrationContainers: (service: Service, projectId: string | null) =>
-    invoke<Container[]>('integration_containers', { service, projectId }),
-  integrationStates: (service: Service, container: string) => invoke<StatesView>('integration_states', { service, container }),
+  integrationContainers: (service: Service, projectId: string | null, account?: string) =>
+    invoke<Container[]>('integration_containers', { service, projectId, ...(account ? { account } : {}) }),
+  integrationStates: (service: Service, container: string, account?: string) =>
+    invoke<StatesView>('integration_states', { service, container, ...(account ? { account } : {}) }),
   /** `page`: the `next` of the page before (« Afficher plus »); none for the first one. */
   integrationIssues: (projectId: string, service: Service, text: string, filters: string[], page?: string) =>
     invoke<IssuePage>('integration_issues', { projectId, service, text, filters, page }),

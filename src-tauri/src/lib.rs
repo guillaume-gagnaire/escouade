@@ -249,6 +249,8 @@ mod terminal_tests;
 mod test_tmp;
 mod testlaunch;
 mod text;
+#[cfg(test)]
+mod ticket_accounts_tests;
 mod ticketfiles;
 mod ticketimages;
 mod ticketprs;

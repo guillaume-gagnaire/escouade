@@ -9,9 +9,10 @@ import { t } from './i18n';
 import { api } from './ipc';
 import { pluginsApi, type PluginRun, type PluginView } from './plugins';
 import { plugins } from './plugins-view.svelte';
+import { linkServed, SERVICES } from './integrations';
 import { errorText } from './refusal';
 import { app } from './state.svelte';
-import type { AccountView, ForgeAccountView, ForgesView } from './types';
+import type { AccountView, ForgeAccountView, ForgesView, SourceLink } from './types';
 
 /** What makes the dots: the state of the app, and what the window reads when it opens. */
 export interface AlertsInput {
@@ -22,6 +23,8 @@ export interface AlertsInput {
   forges: Pick<ForgeAccountView, 'label' | 'status'>[];
   /** The ticket systems' accounts. */
   ticketAccounts: Pick<AccountView, 'label' | 'connected' | 'unread'>[];
+  /** The sources each project links (ESC-397): one whose account was disconnected is paused. */
+  sources?: { id: string; links: SourceLink[] }[];
   plugins: Pick<PluginView, 'id' | 'name' | 'state' | 'choices' | 'declarative'>[];
   /** Each plugin's process, as last read. */
   runs: Record<string, PluginRun['status']>;
@@ -57,6 +60,14 @@ export function alertsOf(input: AlertsInput): Record<string, string[]> {
     if (f.status?.health === 'unread') add('services', t('settings.nav.alerts.unread', { label: f.label }));
   }
   for (const a of input.ticketAccounts) if (a.connected && a.unread) add('services', t('settings.nav.alerts.unread', { label: a.label }));
+  for (const p of input.sources ?? []) {
+    for (const l of p.links) {
+      if (linkServed(input.ticketAccounts as AccountView[], l)) continue;
+      const reason = t('settings.nav.alerts.sourcePaused', { service: SERVICES[l.service]?.name ?? l.service, name: l.name });
+      add(`project:${p.id}`, reason);
+      add(`${p.id}:tickets`, reason);
+    }
+  }
   for (const p of input.plugins) {
     const problem = pluginProblem(p, input.runs[p.id]);
     if (problem) add('plugins', t('settings.nav.alerts.plugin', { name: p.name, state: problem }));
@@ -109,6 +120,7 @@ class SettingsAlerts {
       orphans: projectsWithoutAccount().map((p) => ({ id: p.id, harness: engineName(engineOfProject(p)) })),
       forges: this.forges,
       ticketAccounts: app.accounts,
+      sources: app.projects.map((p) => ({ id: p.id, links: p.integrations?.links ?? [] })),
       plugins: plugins.list,
       runs: this.runs,
     });

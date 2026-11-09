@@ -1,7 +1,17 @@
 <script lang="ts">
   import { COLUMNS } from '../../lib/board';
   import { t } from '../../lib/i18n';
-  import { linkSource, pickLabel, SERVICE_IDS, SERVICES, setColumnState, toggleComment } from '../../lib/integrations';
+  import {
+    accountsOf,
+    isFirstAccount,
+    linkServed,
+    linkSource,
+    pickLabel,
+    SERVICE_IDS,
+    SERVICES,
+    setColumnState,
+    toggleComment,
+  } from '../../lib/integrations';
   import { api } from '../../lib/ipc';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
@@ -19,10 +29,49 @@
   const draft = $derived(settingsForm.project!);
   const integ = $derived(draft.integrations);
   const connected = $derived(SERVICE_IDS.filter((id) => app.accounts.find((a) => a.service === id)?.connected));
-  /** The links whose account is connected, in the services' order. */
-  const linked = $derived(SERVICE_IDS.filter((id) => connected.includes(id) && integ.links.some((l) => l.service === id)));
-
   const linkOf = (id: Service) => integ.links.find((l) => l.service === id);
+  /** A linked source whose account was disconnected (ESC-397): paused, its settings kept. */
+  const paused = (id: Service) => {
+    const l = linkOf(id);
+    return !!l && !linkServed(app.accounts, l);
+  };
+  /** The services shown: those with an account connected, and those with a paused source. */
+  const shown = $derived(SERVICE_IDS.filter((id) => connected.includes(id) || paused(id)));
+  /** The links whose account is connected, in the services' order. */
+  const linked = $derived(SERVICE_IDS.filter((id) => connected.includes(id) && !!linkOf(id) && !paused(id)));
+
+  /** The accounts a source may be served by: several for Jira, Trello, Linear and ClickUp (ESC-397). */
+  const choices = (id: Service) => accountsOf(app.accounts, id);
+  /** The account chosen in the menu for a source not linked yet, or whose account is gone. */
+  let picked = $state<Record<string, string>>({});
+  /** The account (its id, empty for the first one) that serves the project's source for `id`, or will. */
+  function accountOf(id: Service): string {
+    const l = linkOf(id);
+    const id0 = l && !paused(id) ? (l.account ?? '') : (picked[id] ?? (paused(id) ? '' : (choices(id)[0]?.id ?? '')));
+    return isFirstAccount(id, id0) ? '' : id0;
+  }
+  /** The account's menu: when the service has several, or the source's is gone. */
+  const asksAccount = (id: Service) => choices(id).length > 1 || (paused(id) && choices(id).length > 0);
+
+  /** Its containers, by its account (none: the first one's, as before ESC-397). */
+  const fetchContainers = (id: Service, account: string) =>
+    account ? api.integrationContainers(id, project.id, account) : api.integrationContainers(id, project.id);
+  const fetchStates = (id: Service, account: string, container: string) =>
+    account ? api.integrationStates(id, container, account) : api.integrationStates(id, container);
+
+  function setAccount(id: Service, account: string) {
+    picked[id] = account;
+    const norm = isFirstAccount(id, account) ? undefined : account;
+    // The source keeps its container and its states: they are the project's (ESC-397).
+    draft.integrations = {
+      ...integ,
+      links: integ.links.map((l) => {
+        if (l.service !== id) return l;
+        const { account: _, ...rest } = l;
+        return norm ? { ...rest, account: norm } : rest;
+      }),
+    };
+  }
 
   /** Containers by service and project, states by service and container, as fetched (or why not). */
   let containers = $state<Record<string, Container[]>>({});
@@ -31,16 +80,16 @@
   /** The container whose states are on their way, by service and project. */
   let linking = $state<Record<string, string>>({});
 
-  const containersKey = (id: Service) => `${id}|${project.id}`;
-  const statesKey = (id: Service, container: string) => `${id}|${container}`;
+  const containersKey = (id: Service) => `${id}|${accountOf(id)}|${project.id}`;
+  const statesKey = (id: Service, container: string) => `${id}|${accountOf(id)}|${container}`;
 
   $effect(() => {
-    for (const id of connected) {
+    for (const id of shown) {
+      if (paused(id) && !picked[id]) continue;
       const key = containersKey(id);
       if (containers[key] || failed[key]) continue;
       containers[key] = [];
-      api
-        .integrationContainers(id, project.id)
+      fetchContainers(id, accountOf(id))
         .then((list) => {
           containers[key] = list;
         })
@@ -57,8 +106,7 @@
       const key = statesKey(id, container);
       if (states[key] || failed[key]) continue;
       states[key] = [];
-      api
-        .integrationStates(id, container)
+      fetchStates(id, accountOf(id), container)
         .then((v) => {
           states[key] = v.states;
         })
@@ -72,6 +120,7 @@
     // This project's draft, even if another one is chosen meanwhile.
     const target = draft;
     const key = containersKey(id);
+    const account = accountOf(id);
     if (!containerId) {
       target.integrations = linkSource(target.integrations, id, null, {});
       return;
@@ -79,13 +128,13 @@
     const c = containers[key]?.find((x) => x.id === containerId) ?? { id: containerId, name: containerId };
     linking[key] = containerId;
     try {
-      const v = await api.integrationStates(id, containerId);
+      const v = await fetchStates(id, account, containerId);
       states[statesKey(id, containerId)] = v.states;
-      target.integrations = linkSource(target.integrations, id, c, v.defaults);
+      target.integrations = linkSource(target.integrations, id, c, v.defaults, account);
     } catch (e) {
       // Linked all the same, without states: the states say why they are missing.
       failed[statesKey(id, containerId)] = String(e);
-      target.integrations = linkSource(target.integrations, id, c, {});
+      target.integrations = linkSource(target.integrations, id, c, {}, account);
     } finally {
       delete linking[key];
     }
@@ -131,13 +180,27 @@
       <button class="btn" onclick={() => (settingsForm.page = 'services')}>{t('integrations.sources.openServices')}</button>
     </div>
   {/if}
-  {#each connected as id (id)}
+  {#each shown as id (id)}
     {@const list = containers[containersKey(id)] ?? []}
     {@const current = linkOf(id)}
     {@const why = failed[containersKey(id)]}
+    {@const stopped = paused(id)}
     <div class="src">
       <div class="who"><ServiceBadge {id} small /><span class="l">{SERVICES[id].name}</span></div>
       <div class="pick">
+        {#if stopped}<p class="warn" role="status">{t('integrations.sources.paused')}</p>{/if}
+        {#if asksAccount(id)}
+          <span class="k">{t('integrations.sources.account')}</span>
+          <select
+            class="field select"
+            aria-label={t('integrations.sources.accountOf', { service: SERVICES[id].name })}
+            value={stopped && !picked[id] ? '' : accountOf(id) || id}
+            onchange={(e) => setAccount(id, e.currentTarget.value)}
+          >
+            {#if stopped && !picked[id]}<option value="" disabled>{t('integrations.sources.gone')}</option>{/if}
+            {#each choices(id) as a (a.id)}<option value={a.id}>{a.label}</option>{/each}
+          </select>
+        {/if}
         <span class="k">{SERVICES[id].container}</span>
         <select
           class="field select"
@@ -214,6 +277,12 @@
     line-height: 1.45;
     color: var(--del);
     overflow-wrap: anywhere;
+  }
+  .warn {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--warn-ink);
   }
   .empty {
     display: flex;

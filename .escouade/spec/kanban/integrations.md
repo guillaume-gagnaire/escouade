@@ -2,8 +2,8 @@
 title: "Intégrations"
 subject: "Kanban"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md"]
-tickets: ["ESC-213","ESC-214","ESC-215","ESC-216","ESC-344","ESC-380","ESC-383"]
-decisions: [121]
+tickets: ["ESC-213","ESC-214","ESC-215","ESC-216","ESC-344","ESC-380","ESC-383","ESC-397"]
+decisions: [121,"plusieurs-comptes-par-source-de-tickets"]
 compared: null
 ---
 
@@ -197,3 +197,32 @@ Dans Réglages › Projets › <projet> › Tickets importés (pour ce projet) :
 - Ces quatre plugins ne sont plus des process `escouade-plugins <nom>` : chacun est un module WASM, dans l'hôte de l'app (voir *Tous les plugins en WASM*). Ce que les sections ci-dessus disent de leur process ne vaut plus ; le reste, Kanban, import, synchro, comptes et trousseau, ne change pas.
 - Ils ne reçoivent plus le proxy et la vérification TLS au lancement : c'est l'hôte qui les suit, et un changement atteint l'appel suivant, sans relancer le plugin.
 - Jira déclare `{account}`, pour joindre le site du compte.
+
+## Plusieurs comptes par source (ESC-397)
+
+Ce que les sections ci-dessus disent d'« un compte par service » et des sources liées « pour chaque compte connecté » ne vaut plus pour Jira, Trello, Linear et ClickUp : chacun prend plusieurs comptes (deux sites Jira, ou deux identités sur le même site), et chaque projet choisit celui qui sert sa source.
+
+### Les comptes
+
+- Chaque compte a un id stable : le premier de chaque service est celui d'avant (id = le nom du service, `jira`), les suivants `<service>-<8 hex>`, jamais redonné après une déconnexion.
+- Le premier reste dans son champ d'`integrations.json` et sous ses entrées du trousseau d'avant (`jira`, `plugin:dev.escouade.jira:account:jira`) : une 2.1 le lit et le garde. Les suivants sont dans `~/.escouade/ticket-accounts.json`, que la 2.1 ne réécrit pas, leur secret au trousseau sous `plugin:<plugin>:account:<id>`, jamais dans le fichier tant que le trousseau le prend. Un retour en 2.1 ne voit que le premier compte de chaque service.
+- « Comptes connectés » liste tous les comptes : sous le service, une ligne par compte (« Connecté · <compte> », ses avertissements, son « Déconnecter »), et « Connecter un compte… » pour en ajouter un. Un service à un seul compte reste sur une ligne, comme avant.
+- Un compte identique est mis à jour, pas dupliqué : Jira, même site et même e-mail (casse ignorée) ; Trello, Linear, ClickUp, même utilisateur du service. Sinon le compte s'ajoute ; le premier n'est repris que quand le service n'a plus aucun compte.
+- « Déconnecter » efface ce compte et ses secrets seuls. Un effacement refusé est retenté au démarrage suivant (`ticket-accounts.json`, noms des entrées seulement).
+- GitHub Issues garde le compte de github.com, un seul ; GitLab Issues et Azure Boards suivent les comptes de leur hébergeur, déjà un par instance : leur source nomme son instance par son conteneur (`<hôte>/<groupes>/<projet>`, `<org>/<projet>`), sans compte à choisir.
+
+### Le compte d'une source liée
+
+- Sur la page Tickets importés, quand le service a plusieurs comptes, un menu « Compte » précède le conteneur (premier compte par défaut). Les conteneurs et les états sont lus avec ce compte ; la source enregistre son compte (`account` du lien, absent pour le premier).
+- Deux projets peuvent lier la même source de deux comptes différents ; la correspondance des statuts reste par source liée. Changer de compte garde le conteneur et les états.
+- La synchro, l'import automatique, « ⤓ Importer », les commentaires et le lien vers le ticket externe passent par le compte de la source liée. Un ticket importé garde son compte (`account` de sa référence externe) : ses opérations le prennent, même si la source du projet change ensuite de compte.
+- Les plugins Jira, Trello, Linear et ClickUp lisent le secret du compte que l'appel nomme (`account.name`, `account:<id>`) à partir de leur version 2.2.4. Un plugin installé depuis le store dans une version plus ancienne n'en sert qu'un : un compte après le premier est refusé, avec « mets-le à jour (2.2.4 au moins) dans la vue Plugins ».
+
+### Un compte déconnecté que des projets utilisent
+
+- Leurs sources se mettent en pause, configuration gardée : pas d'import automatique, « ⤓ Importer » ne les propose plus, et leurs opérations de synchro échouent avec « Aucun compte Jira connecté » (ou « Le compte Jira de cette source est déconnecté : choisis-en un autre… ») et sont retentées comme les autres.
+- La page Tickets importés du projet le dit sous la source (« Le compte de cette source est déconnecté : elle est en pause (ni import ni synchro), ses réglages sont gardés. … ») et propose les comptes restants ; le point ambre de R8 est sur le projet et sur sa page Tickets importés (« Source Jira « ATL » en pause : son compte est déconnecté »).
+
+### La migration
+
+- Rien à refaire : le compte unique d'une 2.1.5 ou d'une 2.2.0-beta.4 est le premier compte de sa liste, et les sources liées et les tickets importés sans compte le désignent.

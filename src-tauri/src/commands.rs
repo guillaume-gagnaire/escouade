@@ -3241,28 +3241,39 @@ pub async fn integration_connect(
 }
 
 #[tauri::command]
-pub fn integration_disconnect(core: CoreState, service: Service) -> Res<Vec<AccountView>> {
-    core.integration_disconnect(service).map_err(err)
+pub fn integration_disconnect(
+    core: CoreState,
+    service: Service,
+    account: Option<String>,
+) -> Res<Vec<AccountView>> {
+    core.integration_disconnect(service, account.as_deref().unwrap_or(""))
+        .map_err(err)
 }
 
 #[tauri::command]
 pub async fn integration_containers(
     core: CoreState<'_>,
     service: Service,
+    account: Option<String>,
     project_id: Option<String>,
 ) -> Res<Vec<Container>> {
-    core.integration_containers(service, project_id.as_deref())
-        .await
-        .map_err(err)
+    core.integration_containers(
+        service,
+        account.as_deref().unwrap_or(""),
+        project_id.as_deref(),
+    )
+    .await
+    .map_err(err)
 }
 
 #[tauri::command]
 pub async fn integration_states(
     core: CoreState<'_>,
     service: Service,
+    account: Option<String>,
     container: String,
 ) -> Res<StatesView> {
-    core.integration_states(service, &container)
+    core.integration_states(service, account.as_deref().unwrap_or(""), &container)
         .await
         .map_err(err)
 }

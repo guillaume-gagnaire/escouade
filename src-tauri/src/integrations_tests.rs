@@ -100,6 +100,7 @@ impl Harness {
         self.link(
             &p.id,
             SourceLink {
+                account: String::new(),
                 service: Service::TRELLO,
                 container: "b1".into(),
                 name: "Atlas".into(),
@@ -253,6 +254,7 @@ async fn a_jira_issue_is_imported_then_moved_and_commented_as_its_ticket_goes() 
     h.link(
         &p.id,
         SourceLink {
+            account: String::new(),
             service: Service::JIRA,
             container: "ATL".into(),
             name: "ATL — Atlas".into(),
@@ -399,6 +401,7 @@ async fn a_failed_sync_is_noted_on_the_ticket_until_one_succeeds_and_loops_can_b
     h.link(
         &p.id,
         SourceLink {
+            account: String::new(),
             service: Service::TRELLO,
             container: "b1".into(),
             name: "Atlas".into(),
@@ -495,6 +498,7 @@ async fn nothing_is_said_of_a_ticket_made_by_hand_nor_with_the_sync_turned_off()
     h.link(
         &p.id,
         SourceLink {
+            account: String::new(),
             service: Service::GITHUB,
             container: "acme/api".into(),
             name: "acme/api".into(),
@@ -672,7 +676,7 @@ async fn accounts_are_checked_saved_apart_and_forgotten() {
     let app = mock_app();
     let (reloaded, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
     assert!(reloaded.integration_accounts()[2].connected);
-    let views = h.core.integration_disconnect(Service::GITHUB).unwrap();
+    let views = h.core.integration_disconnect(Service::GITHUB, "").unwrap();
     assert!(!views[2].connected);
     assert!(!std::fs::read_to_string(&file).unwrap().contains("ada"));
 }
@@ -739,7 +743,7 @@ async fn an_accounts_secrets_go_to_the_keychain_never_to_the_file_and_leave_with
         .unwrap();
     assert_eq!(keychain.entry("github"), None);
     // Disconnected, its secrets go.
-    h.core.integration_disconnect(Service::TRELLO).unwrap();
+    h.core.integration_disconnect(Service::TRELLO, "").unwrap();
     assert_eq!(keychain.entry("trello"), None);
 }
 
@@ -772,7 +776,7 @@ async fn a_token_the_keychain_refuses_stays_in_the_file_and_the_window_is_told()
     assert!(views.contains(r#""inFile":true"#), "{views}");
     assert!(!views.contains("jira-secret"), "{views}");
     // Disconnected, it leaves the file; the keychain never had it: nothing to say.
-    let views = h.core.integration_disconnect(Service::JIRA).unwrap();
+    let views = h.core.integration_disconnect(Service::JIRA, "").unwrap();
     assert!(!views[0].connected && !views[0].in_file);
     assert!(!std::fs::read_to_string(&file)
         .unwrap()
@@ -836,7 +840,7 @@ async fn a_keychain_unreadable_at_a_start_loses_nothing_and_no_call_goes_without
     let calls = server.requests().len();
     for service in [Service::TRELLO, Service::GITHUB] {
         let e = again
-            .integration_containers(service, None)
+            .integration_containers(service, "", None)
             .await
             .unwrap_err();
         assert_eq!(
@@ -906,10 +910,10 @@ async fn a_secret_the_keychain_cannot_forget_is_said_and_forgotten_at_the_next_s
         .unwrap();
     let keychain = secrets::memory_of(&h.core.data);
     keychain.refuse.store(true, Ordering::SeqCst);
-    let views = h.core.integration_disconnect(Service::TRELLO).unwrap();
+    let views = h.core.integration_disconnect(Service::TRELLO, "").unwrap();
     assert!(!views[1].connected);
     // GitHub through gh has no token of its own to remove: nothing to say.
-    h.core.integration_disconnect(Service::GITHUB).unwrap();
+    h.core.integration_disconnect(Service::GITHUB, "").unwrap();
     let toasts: Vec<Value> = h
         .events
         .lock()
@@ -1140,7 +1144,7 @@ async fn the_projects_own_repository_comes_first_and_the_states_come_with_their_
     );
     let list = h
         .core
-        .integration_containers(Service::GITHUB, Some(&p.id))
+        .integration_containers(Service::GITHUB, "", Some(&p.id))
         .await
         .unwrap();
     let names: Vec<&str> = list.iter().map(|c| c.name.as_str()).collect();
@@ -1148,7 +1152,7 @@ async fn the_projects_own_repository_comes_first_and_the_states_come_with_their_
     assert_eq!(list[0].id, "acme/demo");
     let v = h
         .core
-        .integration_states(Service::GITHUB, "acme/demo")
+        .integration_states(Service::GITHUB, "", "acme/demo")
         .await
         .unwrap();
     assert_eq!(v.states.len(), 4);
@@ -1157,7 +1161,7 @@ async fn the_projects_own_repository_comes_first_and_the_states_come_with_their_
     // No account: said so.
     assert_eq!(
         h.core
-            .integration_containers(Service::TRELLO, None)
+            .integration_containers(Service::TRELLO, "", None)
             .await
             .unwrap_err()
             .to_string(),
@@ -1196,6 +1200,7 @@ async fn the_automatic_import_brings_the_labelled_tickets_once() {
     h.link(
         &p.id,
         SourceLink {
+            account: String::new(),
             service: Service::GITHUB,
             container: "acme/api".into(),
             name: "acme/api".into(),
@@ -1266,6 +1271,7 @@ async fn a_ticket_deleted_once_imported_by_label_is_not_brought_back() {
     h.link(
         &p.id,
         SourceLink {
+            account: String::new(),
             service: Service::GITHUB,
             container: "acme/api".into(),
             name: "acme/api".into(),
@@ -1284,6 +1290,7 @@ async fn a_ticket_deleted_once_imported_by_label_is_not_brought_back() {
     h.link(
         &p.id,
         SourceLink {
+            account: String::new(),
             service: Service::GITHUB,
             container: "acme/api".into(),
             name: "acme/api".into(),
@@ -1340,6 +1347,7 @@ async fn syncs_reach_the_service_in_the_order_of_the_changes_and_the_last_one_sa
     h.link(
         &p.id,
         SourceLink {
+            account: String::new(),
             service: Service::TRELLO,
             container: "b1".into(),
             name: "Atlas".into(),
@@ -1957,7 +1965,7 @@ async fn a_linear_issue_is_imported_then_moved_and_commented_as_its_ticket_goes(
     // The defaults of the columns, as the window offers them.
     let states = h
         .core
-        .integration_states(Service::LINEAR, "t1")
+        .integration_states(Service::LINEAR, "", "t1")
         .await
         .unwrap();
     assert_eq!(states.defaults[&Column::Doing].id, "s-doing");
@@ -1965,6 +1973,7 @@ async fn a_linear_issue_is_imported_then_moved_and_commented_as_its_ticket_goes(
     h.link(
         &p.id,
         SourceLink {
+            account: String::new(),
             service: Service::LINEAR,
             container: "t1".into(),
             name: "Engineering (ENG)".into(),
@@ -2093,7 +2102,7 @@ async fn a_clickup_task_is_imported_with_its_checklist_then_moved_and_commented_
     h.set_autopilot(&p.id, false);
     let states = h
         .core
-        .integration_states(Service::CLICKUP, "l1")
+        .integration_states(Service::CLICKUP, "", "l1")
         .await
         .unwrap();
     assert_eq!(states.defaults[&Column::Doing].id, "in progress");
@@ -2101,6 +2110,7 @@ async fn a_clickup_task_is_imported_with_its_checklist_then_moved_and_commented_
     h.link(
         &p.id,
         SourceLink {
+            account: String::new(),
             service: Service::CLICKUP,
             container: "l1".into(),
             name: "Sprint 12".into(),
@@ -2237,7 +2247,7 @@ async fn gitlab_issues_take_the_code_hosts_account_and_follow_their_ticket() {
     assert!(!h.core.integration_accounts()[5].connected);
     let e = h
         .core
-        .integration_containers(Service::GITLAB, None)
+        .integration_containers(Service::GITLAB, "", None)
         .await
         .unwrap_err();
     assert!(e.to_string().contains("Hébergeurs de code"), "{e}");
@@ -2285,7 +2295,7 @@ async fn gitlab_issues_take_the_code_hosts_account_and_follow_their_ticket() {
     );
     let list = h
         .core
-        .integration_containers(Service::GITLAB, Some(&p.id))
+        .integration_containers(Service::GITLAB, "", Some(&p.id))
         .await
         .unwrap();
     let container = format!("{host}/acme/back/api");
@@ -2295,7 +2305,7 @@ async fn gitlab_issues_take_the_code_hosts_account_and_follow_their_ticket() {
     assert_eq!(list.len(), 2, "{list:?}");
     let states = h
         .core
-        .integration_states(Service::GITLAB, &container)
+        .integration_states(Service::GITLAB, "", &container)
         .await
         .unwrap();
     let ids: Vec<&str> = states.states.iter().map(|s| s.id.as_str()).collect();
@@ -2306,6 +2316,7 @@ async fn gitlab_issues_take_the_code_hosts_account_and_follow_their_ticket() {
     h.link(
         &p.id,
         SourceLink {
+            account: String::new(),
             service: Service::GITLAB,
             container: container.clone(),
             name: "acme/back/api".into(),
@@ -2369,7 +2380,7 @@ async fn gitlab_issues_take_the_code_hosts_account_and_follow_their_ticket() {
         .all(|w| w.headers["private-token"] == "glpat-secret"));
     assert_eq!(h.sync_error(&t.id), None);
     // Its source cannot be disconnected apart: the code host's « Déconnecter » does it.
-    assert!(h.core.integration_disconnect(Service::GITLAB).is_err());
+    assert!(h.core.integration_disconnect(Service::GITLAB, "").is_err());
     h.core.forge_disconnect(&host).await.unwrap();
     assert!(!h.core.integration_accounts()[5].connected);
 }
@@ -2447,7 +2458,7 @@ async fn azure_boards_take_the_code_hosts_account_and_follow_their_work_item() {
     assert!(!h.core.integration_accounts()[6].connected);
     let e = h
         .core
-        .integration_containers(Service::AZURE, None)
+        .integration_containers(Service::AZURE, "", None)
         .await
         .unwrap_err();
     assert!(e.to_string().contains("Hébergeurs de code"), "{e}");
@@ -2489,7 +2500,7 @@ async fn azure_boards_take_the_code_hosts_account_and_follow_their_work_item() {
     );
     let list = h
         .core
-        .integration_containers(Service::AZURE, Some(&p.id))
+        .integration_containers(Service::AZURE, "", Some(&p.id))
         .await
         .unwrap();
     let container = "acme/Web Shop".to_string();
@@ -2499,7 +2510,7 @@ async fn azure_boards_take_the_code_hosts_account_and_follow_their_work_item() {
     assert_eq!(list.len(), 2, "{list:?}");
     let states = h
         .core
-        .integration_states(Service::AZURE, &container)
+        .integration_states(Service::AZURE, "", &container)
         .await
         .unwrap();
     let ids: Vec<&str> = states.states.iter().map(|s| s.id.as_str()).collect();
@@ -2508,6 +2519,7 @@ async fn azure_boards_take_the_code_hosts_account_and_follow_their_work_item() {
     h.link(
         &p.id,
         SourceLink {
+            account: String::new(),
             service: Service::AZURE,
             container: container.clone(),
             name: "Web Shop".into(),
@@ -2563,7 +2575,7 @@ async fn azure_boards_take_the_code_hosts_account_and_follow_their_work_item() {
         .contains("est prêt à tester"));
     assert_eq!(h.sync_error(&t.id), None);
     // Its source cannot be disconnected apart: the code host's « Déconnecter » does it.
-    assert!(h.core.integration_disconnect(Service::AZURE).is_err());
+    assert!(h.core.integration_disconnect(Service::AZURE, "").is_err());
     h.core.forge_disconnect(&host).await.unwrap();
     assert!(!h.core.integration_accounts()[6].connected);
 }

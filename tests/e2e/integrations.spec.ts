@@ -3,6 +3,8 @@
 // their external ones moved and commented while the fake `claude` works them.
 
 import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import { addProject, expect, test, openSettingsPage, closeSettings, settingsEntry } from './fixture';
 import { startFakeTrackers } from '../fixtures/fake-trackers.mjs';
 
@@ -311,4 +313,82 @@ test('GitLab Issues takes the GitLab code host’s account, its project offered 
   // The issue carries it in GitLab.
   const now = await (await fetch(`${trackers.url}${issue}`, { headers: { 'PRIVATE-TOKEN': 'x' } })).json();
   expect(now.labels).toEqual(['claude-ready', 'Doing']);
+});
+
+test('two Jira accounts serve two projects, each importing and syncing with its own, and one disconnected pauses its source (1024 × 728)', async ({
+  app,
+}) => {
+  const { page } = app;
+  await page.setViewportSize({ width: 1024, height: 728 });
+  // A second Jira site (another fake), and a second project in a repository of its own.
+  const other = await startFakeTrackers(0);
+  try {
+    const mobile = path.join(path.dirname(app.repo), 'mobile');
+    fs.mkdirSync(mobile, { recursive: true });
+    for (const args of [
+      ['init', '-q', '-b', 'main'],
+      ['config', 'user.email', 'e2e@test'],
+      ['config', 'user.name', 'e2e'],
+      ['commit', '-q', '--allow-empty', '-m', 'init'],
+    ])
+      execFileSync('git', args, { cwd: mobile, stdio: 'pipe' });
+    await addProject(page, app.repo, { firstAgent: false });
+    await addProject(page, mobile, { firstAgent: false });
+
+    // Two accounts side by side: the second added by « Connecter un compte… », the first one kept.
+    const settings = await openSettingsPage(page, 'Services connectés');
+    await settings.getByRole('button', { name: 'Connecter…' }).first().click();
+    let jira = settings.getByRole('form', { name: 'Connexion à Jira' });
+    await jira.getByLabel('Site').fill(trackers.url);
+    await jira.getByLabel('E-mail').fill('ada@atlas.dev');
+    await jira.getByLabel("Jeton d'API").fill('jeton');
+    await jira.getByRole('button', { name: 'Connecter' }).click();
+    const first = `ada@atlas.dev · ${new URL(trackers.url).host}`;
+    const second = `ada@atlas.dev · ${new URL(other.url).host}`;
+    await expect(settings.getByText(`Connecté · ${first}`)).toBeVisible();
+    await settings.getByRole('button', { name: 'Connecter un compte…' }).click();
+    jira = settings.getByRole('form', { name: 'Connexion à Jira' });
+    await jira.getByLabel('Site').fill(other.url);
+    await jira.getByLabel('E-mail').fill('ada@atlas.dev');
+    await jira.getByLabel("Jeton d'API").fill('jeton');
+    await jira.getByRole('button', { name: 'Connecter' }).click();
+    await expect(settings.getByText(`Connecté · ${second}`)).toBeVisible();
+    await expect(settings.getByText(`Connecté · ${first}`)).toBeVisible();
+
+    // Each project chooses its account, then its Jira project.
+    await openSettingsPage(settings, 'Tickets importés', { project: 'demo-api' });
+    await settings.getByRole('combobox', { name: 'Compte Jira' }).selectOption({ label: first });
+    await settings.getByRole('combobox', { name: 'Projet Jira' }).selectOption('ATL');
+    await expect(settings.getByRole('combobox', { name: 'Jira — En cours' })).toHaveValue('3');
+    await openSettingsPage(settings, 'Tickets importés', { project: 'mobile' });
+    await settings.getByRole('combobox', { name: 'Compte Jira' }).selectOption({ label: second });
+    await settings.getByRole('combobox', { name: 'Projet Jira' }).selectOption('ATL');
+    await expect(settings.getByRole('combobox', { name: 'Jira — En cours' })).toHaveValue('3');
+    await closeSettings(settings);
+
+    // The import of « mobile » reads its own site: its ticket points there, and its external one moves there alone.
+    await page.getByRole('button', { name: /^Kanban/ }).click();
+    await page.getByRole('button', { name: 'Importer' }).click();
+    const imp = page.getByRole('dialog', { name: 'Importer des tickets' });
+    await imp.getByRole('checkbox', { name: /ATL-1287/ }).click();
+    await imp.getByRole('button', { name: 'Importer 1 ticket' }).click();
+    await expect(imp).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Ouvrir ATL-1287 dans Jira' })).toBeVisible();
+    const moved = async (url: string) =>
+      ((await (await fetch(`${url}/__writes`)).json()) as Write[]).filter((w) => w.path.endsWith('/transitions')).length;
+    await expect.poll(() => moved(other.url), { timeout: 60_000 }).toBeGreaterThan(0);
+    expect(await moved(trackers.url)).toBe(0);
+
+    // The second account goes alone: the first stays, « mobile »'s source is paused, its settings kept, and said so.
+    const again = await openSettingsPage(page, 'Services connectés');
+    await again.getByRole('button', { name: `Déconnecter ${second}` }).click();
+    await expect(again.getByText(`Connecté · ${second}`)).toHaveCount(0);
+    await expect(again.getByText(`Connecté · ${first}`)).toBeVisible();
+    await openSettingsPage(again, 'Tickets importés', { project: 'mobile' });
+    await expect(again.getByText(/^Le compte de cette source est déconnecté/)).toBeVisible();
+    await expect(again.getByRole('combobox', { name: 'Projet Jira' })).toHaveValue('ATL');
+    await expect(settingsEntry(again, 'Tickets importés').locator('[data-alert]')).toBeVisible();
+  } finally {
+    await other.close();
+  }
 });
