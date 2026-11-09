@@ -341,77 +341,62 @@
     (document.querySelector<HTMLElement>(focus) ?? document.querySelector<HTMLElement>(chev))?.focus();
   }
 
-  // Dragging, as the project rail's tiles do (ProjectRail.svelte): a line shows where it lands, a folder's header lights up
-  // when an agent hovers it (it goes in at the bottom).
-  let dragId = $state<string | null>(null);
+  // Dragging, by the pointer gesture of the split screen (paneDrag): over the list a line shows where it lands, a folder's
+  // header lights up when an agent hovers it (it goes in at the bottom); released on the work area, a card opens in a pane.
   /** The drop line: sits before the drawn row `before` of level `level` (a folder's id; null: the project's), null at its end. */
   let drop = $state<{ level: string | null; before: string | null } | null>(null);
   let overFolder = $state<string | null>(null);
+  /** The agent or folder being dragged (wherever the pointer is). */
+  const dragging = $derived(paneDrag.on ? paneDrag.sidebarId : null);
   /** Where the dragged item would land, null when it would not move or may not go there: no line then. */
-  const place = $derived(dragId && drop ? dropPlace(project, items, dragId, drop.level, drop.before) : null);
-
-  function onDragStart(e: DragEvent, id: string) {
-    e.stopPropagation();
-    dragId = id;
-    e.dataTransfer?.setData('text/plain', id);
-  }
-  function endDrag() {
-    dragId = drop = overFolder = null;
-  }
-
-  /** The dragged item may not land here: no line, the drop refused, and the list around it not asked. */
-  function refuse(e: DragEvent) {
-    e.stopPropagation();
-    drop = overFolder = null;
-  }
+  const place = $derived(dragging && drop ? dropPlace(project, items, dragging, drop.level, drop.before) : null);
 
   /** Over a drawn row (an agent's card or a folder's header at the project level): the line goes above it or under it. */
-  function overRow(e: DragEvent, id: string) {
-    if (dragId === null) return;
+  function aimRow(id: string, r: DOMRect, y: number) {
     const level = folderOf(id)?.folder.id ?? null;
-    // A folder goes among the project's rows only: inside another folder it has no place (and the list below gets none).
-    if (level && isFolder(dragId)) return refuse(e);
-    e.preventDefault();
-    e.stopPropagation();
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    overFolder = null;
     const row = rowIds(level);
-    const i = row.indexOf(id);
-    overFolder = null;
-    drop = { level, before: e.clientY < r.top + r.height / 2 ? id : (row[i + 1] ?? null) };
+    drop = { level, before: y < r.top + r.height / 2 ? id : (row[row.indexOf(id) + 1] ?? null) };
   }
-  /** Over a folder's header: an agent goes in (it lights up); a folder goes before or after it. */
-  function overHeader(e: DragEvent, id: string) {
-    if (dragId === null) return;
-    if (isFolder(dragId)) return overRow(e, id);
-    e.preventDefault();
-    e.stopPropagation();
-    drop = null;
-    overFolder = id;
-  }
-  /** Over the free space of a folder's body: the end of that folder. */
-  function overBody(e: DragEvent, id: string) {
-    if (dragId === null) return;
-    if (isFolder(dragId)) return refuse(e);
-    e.preventDefault();
-    e.stopPropagation();
-    overFolder = null;
-    drop = { level: id, before: null };
-  }
-  /** Over the free space of the list: the end of the project's rows. */
-  function overList(e: DragEvent) {
-    if (dragId === null) return;
-    e.preventDefault();
-    overFolder = null;
+
+  /** What the pointer at (x, y) would put where, from the element under it: the rules of the list, kept as they were. */
+  function aim(id: string, x: number, y: number) {
+    const dragsFolder = isFolder(id);
+    drop = overFolder = null;
+    for (const n of document.elementsFromPoint(x, y)) {
+      const el = n.closest<HTMLElement>('[data-agent], .folder-h, .folder-b');
+      if (!el) continue;
+      const folder = el.closest<HTMLElement>('[data-folder]')?.dataset.folder;
+      if (el.matches('.folder-b')) {
+        // A folder has no place inside another one; the free space of a body is the end of that folder.
+        if (!dragsFolder && folder) drop = { level: folder, before: null };
+      } else if (el.matches('.folder-h')) {
+        if (dragsFolder) aimRow(folder!, el.getBoundingClientRect(), y);
+        else overFolder = folder ?? null;
+      } else {
+        const agentId = el.dataset.agent!;
+        // A folder goes among the project's rows only: inside another folder it has no place.
+        if (!(dragsFolder && folderOf(agentId))) aimRow(agentId, el.getBoundingClientRect(), y);
+      }
+      return;
+    }
+    // The free space of the list: the end of the project's rows.
     drop = { level: null, before: null };
   }
-  /** Dropped: on a folder's header (`into`) an agent goes in at the bottom; elsewhere where the line is. */
-  function onDrop(e: DragEvent, into?: string) {
-    e.preventDefault();
-    e.stopPropagation();
-    const id = dragId;
-    const p = id && (into && !isFolder(id) ? dropPlace(project, items, id, into, null) : place);
-    endDrag();
-    if (id && p) void move(id, p);
+
+  $effect(() => {
+    if (paneDrag.on && paneDrag.inSidebar && paneDrag.sidebarId) aim(paneDrag.sidebarId, paneDrag.x, paneDrag.y);
+    else drop = overFolder = null;
+  });
+
+  /** Released over the list: on a folder's header an agent goes in at the bottom; elsewhere where the line is. */
+  function dropHere(id: string) {
+    const p =
+      overFolder && !isFolder(id)
+        ? dropPlace(project, items, id, overFolder, null)
+        : drop && dropPlace(project, items, id, drop.level, drop.before);
+    drop = overFolder = null;
+    if (p) void move(id, p);
   }
 
   /**
@@ -1069,21 +1054,19 @@
         class:inpane={inPane(`agent:${a.id}`)}
         class:alert={app.attention[a.id]}
         class:flash={flashing[a.id]}
-        class:dragging={dragId === a.id}
+        class:dragging={dragging === a.id}
         style:--alert={a.status === 'error' ? 'var(--del)' : a.status === 'waiting' ? 'var(--wait)' : 'var(--run)'}
         role="button"
         tabindex="0"
         aria-current={sel ? 'true' : undefined}
         data-agent={a.id}
         onclick={(e) => open(e, { kind: 'agent', id: a.id }, () => app.selectAgent(a.id))}
-        onpointerdown={(e) => paneDrag.press(e, { kind: 'agent', id: a.id }, a.name, engineName(a.engine))}
+        onpointerdown={(e) => {
+          if (renaming !== a.id)
+            paneDrag.press(e, { kind: 'agent', id: a.id }, a.name, engineName(a.engine), { id: a.id, drop: () => dropHere(a.id) });
+        }}
         onkeydown={(e) => cardKey(e, a)}
         oncontextmenu={(e) => agentMenu(e, a)}
-        draggable={renaming !== a.id}
-        ondragstart={(e) => onDragStart(e, a.id)}
-        ondragover={(e) => overRow(e, a.id)}
-        ondrop={onDrop}
-        ondragend={endDrag}
       >
         <div class="a-top">
           <StatusDot status={a.status} awaits={!!pending} />
@@ -1455,7 +1438,7 @@
       {/if}
     {/snippet}
 
-    <div class="agents" ondragover={overList} ondrop={onDrop} role="presentation">
+    <div class="agents" data-sidebar-drop role="presentation">
       {#each items as it (it.kind === 'agent' ? it.agent.id : it.folder.id)}
         {@render line(null, it.kind === 'agent' ? it.agent.id : it.folder.id)}
         {#if it.kind === 'agent'}
@@ -1463,18 +1446,16 @@
         {:else}
           {@const f = it.folder}
           {@const cards = f.folded ? foldedCards(it, selectedAgentId) : [...(it.principal ? [it.principal] : []), ...it.agents]}
-          <section class="folder" class:over={overFolder === f.id} class:dragging={dragId === f.id} data-folder={f.id}>
+          <section class="folder" class:over={overFolder === f.id} class:dragging={dragging === f.id} data-folder={f.id}>
             <!-- A click on the header outside its name and its field folds it, as the chevron does (which has the keys). -->
             <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
             <div
               class="folder-h"
               role="group"
               aria-label={f.name}
-              draggable={renaming !== f.id}
-              ondragstart={(e) => onDragStart(e, f.id)}
-              ondragover={(e) => overHeader(e, f.id)}
-              ondrop={(e) => onDrop(e, f.id)}
-              ondragend={endDrag}
+              onpointerdown={(e) => {
+                if (renaming !== f.id) paneDrag.press(e, null, f.name, '', { id: f.id, drop: () => dropHere(f.id) });
+              }}
               oncontextmenu={(e) => folderMenu(e, f)}
               onclick={(e) => {
                 if (!(e.target as HTMLElement).closest('.name, .rename, .chev')) app.run(api.agentFolderFold(project.id, f.id, !f.folded));
@@ -1511,7 +1492,7 @@
               {#if it.waiting}<span class="pill wait" aria-hidden="true">{it.waiting}</span>{/if}
               <span class="sr">{folderCounts(it)}</span>
             </div>
-            <div class="folder-b" ondragover={(e) => overBody(e, f.id)} role="presentation">
+            <div class="folder-b" role="presentation">
               {#each cards as a (a.id)}
                 {@render line(f.id, a.id)}
                 {@render card(a, a.id === it.principal?.id)}

@@ -1,5 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
+import { tick } from 'svelte';
+import '../test/pointer';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { getDraft } from '../lib/drafts';
 import { buffers } from '../lib/editor/buffers.svelte';
@@ -3472,18 +3474,55 @@ describe('Sidebar agent folders', () => {
     expect(backend.called('agent_folder_move')[0].args.index).toBeUndefined();
   });
 
+  /** A hand's drag: press `from`, move past the threshold over `over` (what is under the pointer, the list's elements), release. */
+  async function gesture(from: Element, over: Element[], release = true) {
+    document.elementsFromPoint = () => over;
+    onTestFinished(() => void window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
+    const pt = (type: string, x: number, y: number) =>
+      new PointerEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true, cancelable: true });
+    await fireEvent(from, pt('pointerdown', 10, 10));
+    await fireEvent(window, pt('pointermove', 10, 40));
+    await tick();
+    if (release) await fireEvent(window, pt('pointerup', 10, 40));
+  }
+
   it('dragging a card onto a folder asks for the move', async () => {
     withFolders();
     const backend = fakeBackend();
     render(Sidebar, { project: app.projects[0] });
     const header = folderOf('f1').querySelector<HTMLElement>('.folder-h')!;
-    await fireEvent.dragStart(card('a3'));
-    await fireEvent.dragOver(header);
+    await gesture(card('a3'), [header, folderOf('f1'), document.querySelector('.agents')!], false);
     expect(folderOf('f1')).toHaveClass('over');
-    await fireEvent.drop(header);
+    expect(card('a3')).toHaveClass('dragging');
+    await fireEvent(window, new PointerEvent('pointerup', { clientX: 10, clientY: 40, button: 0 }));
     await waitFor(() => expect(backend.called('agent_folder_move')).toHaveLength(1));
     expect(backend.called('agent_folder_move')[0].args).toMatchObject({ itemId: 'a3', folderId: 'f1' });
-    expect(folderOf('f1')).not.toHaveClass('over');
+    await waitFor(() => expect(folderOf('f1')).not.toHaveClass('over'));
+  });
+
+  it('a card dragged over a card in a folder shows the drop line', async () => {
+    withFolders();
+    fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    expect(document.querySelector('.drop')).toBeNull();
+    await gesture(card('a3'), [card('a1'), folderOf('f1'), document.querySelector('.agents')!], false);
+    expect(document.querySelector('.drop')).not.toBeNull();
+    await fireEvent.keyDown(window, { key: 'Escape' });
+    await tick();
+    expect(document.querySelector('.drop')).toBeNull();
+  });
+
+  it('a press released without moving opens the agent and moves nothing', async () => {
+    withFolders();
+    const backend = fakeBackend();
+    await new Promise((r) => setTimeout(r, 0)); // the previous drag's click trap is gone
+    const selectAgent = vi.spyOn(app, 'selectAgent');
+    render(Sidebar, { project: app.projects[0] });
+    await fireEvent(card('a3'), new PointerEvent('pointerdown', { clientX: 10, clientY: 10, button: 0, bubbles: true }));
+    await fireEvent(window, new PointerEvent('pointerup', { clientX: 10, clientY: 10, button: 0 }));
+    await fireEvent.click(card('a3'));
+    expect(selectAgent).toHaveBeenCalledWith('a3');
+    expect(backend.called('agent_folder_move')).toHaveLength(0);
   });
 
   it('a folder dragged over the inside of another folder has no place, not the bottom of the list', async () => {
@@ -3505,12 +3544,14 @@ describe('Sidebar agent folders', () => {
     });
     const backend = fakeBackend();
     render(Sidebar, { project: app.projects[0] });
-    await fireEvent.dragStart(folderOf('f2').querySelector('.folder-h')!);
-    await fireEvent.dragOver(card('a1'));
+    const list = document.querySelector('.agents')!;
+    await gesture(folderOf('f2').querySelector('.folder-h')!, [card('a1'), folderOf('f1'), list], false);
     expect(document.querySelector('.drop')).toBeNull();
-    await fireEvent.dragOver(folderOf('f1').querySelector('.folder-b')!);
+    document.elementsFromPoint = () => [folderOf('f1').querySelector('.folder-b')!, folderOf('f1'), list];
+    await fireEvent(window, new PointerEvent('pointermove', { clientX: 10, clientY: 50, button: 0 }));
+    await tick();
     expect(document.querySelector('.drop')).toBeNull();
-    await fireEvent.drop(card('a1'));
+    await fireEvent(window, new PointerEvent('pointerup', { clientX: 10, clientY: 40, button: 0 }));
     expect(backend.called('agent_folder_move')).toHaveLength(0);
   });
 

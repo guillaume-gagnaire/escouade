@@ -3,7 +3,21 @@
 // agent gets when it creates agents through MCP.
 
 import fs from 'node:fs';
+import type { Locator, Page } from '@playwright/test';
 import { addProject, expect, send, test, type App } from './fixture';
+
+/** Drags `from` to `to` as a hand would (the pointer gesture of the split screen, tests/e2e/split-screen.spec.ts). */
+async function drag(page: Page, from: Locator, to: Locator, targetPosition?: { x: number; y: number }) {
+  const b = (await from.boundingBox())!;
+  const t = (await to.boundingBox())!;
+  const x = b.x + Math.min(60, b.width / 2);
+  const y = b.y + Math.min(14, b.height / 2);
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 12, y + 12, { steps: 3 });
+  await page.mouse.move(t.x + (targetPosition?.x ?? t.width / 2), t.y + (targetPosition?.y ?? t.height / 2), { steps: 12 });
+  await page.mouse.up();
+}
 
 /** The ids of the cards drawn, in the order the list shows them (folders' cards included). */
 const order = (page: import('@playwright/test').Page) =>
@@ -38,7 +52,7 @@ test('a folder made by hand takes an agent dragged in and out, and a click moves
   await expect(folder.getByRole('group', { name: 'Front', exact: true })).toBeVisible();
 
   // The second card dragged onto the header goes in.
-  await side().locator(`.agent[data-agent="${b}"]`).dragTo(folder.locator('.folder-h'));
+  await drag(page, side().locator(`.agent[data-agent="${b}"]`), folder.locator('.folder-h'));
   await expect.poll(() => inside(page, 'Front')).toEqual([b]);
 
   // A click on another card opens it and moves nothing.
@@ -54,12 +68,18 @@ test('a folder made by hand takes an agent dragged in and out, and a click moves
   expect(await order(page)).toEqual(before);
 
   // Dragged out, onto the loose cards: it is no longer in the folder.
-  await side()
-    .locator(`.agent[data-agent="${b}"]`)
-    .dragTo(side().locator(`.agent[data-agent="${a}"]`), { targetPosition: { x: 40, y: 4 } });
+  await drag(page, side().locator(`.agent[data-agent="${b}"]`), side().locator(`.agent[data-agent="${a}"]`), { x: 40, y: 4 });
   await expect.poll(() => inside(page, 'Front')).toEqual([]);
   await expect(side().locator('section.folder .agent')).toHaveCount(0);
   expect(await order(page)).toContain(b);
+
+  // The same gesture released on the work area opens a card beside what is shown (the split screen), and moves nothing.
+  const work = page.locator('.work').first();
+  const before2 = await order(page);
+  await drag(page, side().locator(`.agent[data-agent="${c}"]`), work, { x: (await work.boundingBox())!.width * 0.9, y: 200 });
+  await expect(page.getByTestId('pane')).toHaveCount(2);
+  await expect(page.locator(`[data-pane-key="agent:${c}"]`)).toBeVisible();
+  expect(await order(page)).toEqual(before2);
 });
 
 test('a folded folder keeps showing its agent that waits for an answer', async ({ app }) => {
