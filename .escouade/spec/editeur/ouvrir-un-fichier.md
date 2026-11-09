@@ -3,7 +3,7 @@ title: "Ouvrir un fichier"
 subject: "Éditeur"
 sources: ["docs/SPEC.md"]
 tickets: ["ESC-396"]
-decisions: ["les-commandes-de-lancement-prennent-le-c"]
+decisions: [133]
 compared: null
 order: 28
 ---
