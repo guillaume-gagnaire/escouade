@@ -64,6 +64,9 @@ class PaneDrag {
     window.addEventListener('pointercancel', this.cancel, true);
     window.addEventListener('keydown', this.key, true);
     window.addEventListener('blur', this.cancel);
+    // No text selected from the press on: it would begin within the threshold, before the drag (and WebKit takes no
+    // unprefixed user-select).
+    document.addEventListener('selectstart', this.noSelect, true);
   }
 
   private move = (e: PointerEvent) => {
@@ -125,12 +128,15 @@ class PaneDrag {
 
   private cancel = () => this.end();
 
+  private noSelect = (e: Event) => e.preventDefault();
+
   private end() {
     window.removeEventListener('pointermove', this.move, true);
     window.removeEventListener('pointerup', this.up, true);
     window.removeEventListener('pointercancel', this.cancel, true);
     window.removeEventListener('keydown', this.key, true);
     window.removeEventListener('blur', this.cancel);
+    document.removeEventListener('selectstart', this.noSelect, true);
     document.documentElement.classList.remove('pane-dragging');
     this.pressed = false;
     this.item = null;

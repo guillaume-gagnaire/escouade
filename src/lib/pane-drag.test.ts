@@ -58,6 +58,22 @@ describe('paneDrag with the sidebar list', () => {
     expect(paneDrag.target).toBeNull();
   });
 
+  it('no text is selected from a press until it ends, a drag or a click', () => {
+    const selectStart = () => {
+      const e = new Event('selectstart', { bubbles: true, cancelable: true });
+      card.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    expect(selectStart()).toBe(false);
+    press({ kind: 'agent', id: 'a1' }, { id: 'a1', drop: vi.fn() });
+    // Within the threshold too: the selection would begin there, before the drag.
+    expect(selectStart()).toBe(true);
+    window.dispatchEvent(ev('pointermove', 10, 60));
+    expect(selectStart()).toBe(true);
+    window.dispatchEvent(ev('pointerup', 10, 60));
+    expect(selectStart()).toBe(false);
+  });
+
   it('under the threshold nothing happens', () => {
     const drop = vi.fn();
     press({ kind: 'agent', id: 'a1' }, { id: 'a1', drop });
