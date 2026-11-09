@@ -3,7 +3,7 @@ title: "Pilotage de Claude Code"
 subject: "Harness"
 sources: ["docs/SPEC.md","tests/fixtures/claude-artifacts"]
 tickets: ["ESC-106","ESC-133","ESC-400"]
-decisions: ["les-agents-claude-code-ont-leurs-artefac"]
+decisions: [136]
 compared: null
 ---
 

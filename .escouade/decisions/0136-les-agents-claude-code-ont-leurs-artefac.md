@@ -1,9 +1,9 @@
 ---
-number: null
+number: 136
 id: "les-agents-claude-code-ont-leurs-artefac"
 title: "Les agents Claude Code ont leurs artefacts, comme dans un terminal"
 date: "2026-11-09"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-400"
 pages: ["harness/claude-code","conversation/conversation"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"harness/claude-code","added":2,"removed":0},{"page":"conversation/conversation","added":1,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-09T16:02:39+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

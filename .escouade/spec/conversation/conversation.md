@@ -3,7 +3,7 @@ title: "Conversation"
 subject: "Conversation"
 sources: ["docs/SPEC.md"]
 tickets: ["ESC-76","ESC-127","ESC-95","ESC-108","ESC-89","ESC-400"]
-decisions: ["les-agents-claude-code-ont-leurs-artefac"]
+decisions: [136]
 compared: "2026-10-30T05:32:58+01:00"
 gaps: [{"text":"La spec dit que l'en-tête se replie sous 1000 px (Tokens et Fichiers s'effacent, la vue cachée perd son mot) et sous 760 px (Durée aussi, boutons réduits à l'icône), puis sous 580 px pour les chiffres. Le code utilise d'autres seuils échelonnés. À 1100 px, Durée et le mot de la vue cachée disparaissent. À 960 px, c'est Fichiers. À 880 px, c'est Tokens. À 800 px, les boutons passent à l'icône. À 680 px, le sélecteur de disposition disparaît. À 440 px, les vues en segments disparaissent. Seul le seuil de 580 px pour les chiffres correspond.","code":["src/components/Conversation.svelte"]}]
 order: 13
