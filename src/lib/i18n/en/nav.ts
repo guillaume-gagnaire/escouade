@@ -90,6 +90,14 @@ export default defineZone('nav', {
       makePrincipal: 'Make this agent the main agent',
       removePrincipal: 'Remove the main agent role',
       delete: 'Delete the folder',
+      deleteModal: {
+        title: 'Delete the folder “{name}”?',
+        out: 'Take the agents out of the folder',
+        archive: { one: 'Archive the agent', other: 'Archive the {count} agents' },
+        remove: { one: 'Delete the agent', other: 'Delete the {count} agents' },
+        worktrees: 'Also delete their worktrees',
+        confirm: 'Delete the folder',
+      },
     },
     menu: {
       duplicate: 'Duplicate the conversation',

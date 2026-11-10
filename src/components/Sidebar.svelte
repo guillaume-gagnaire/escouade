@@ -549,13 +549,20 @@
     };
   }
 
+  /** A folder with agents on show asks what becomes of them; an empty one, or of archived agents only, goes at once. */
+  function deleteFolder(f: AgentFolder) {
+    if (f.agents.some((id) => app.agents[id] && !app.agents[id].archived)) {
+      app.modal = { kind: 'deleteFolder', projectId: project.id, folderId: f.id };
+    } else app.run(api.agentFolderDelete(project.id, f.id));
+  }
+
   /** The menu of a folder's header. */
   function folderMenu(e: MouseEvent, f: AgentFolder) {
     menu.show(e, [
       { label: t('common.rename'), onClick: () => startFolderRename(f) },
       ...stepItems(f.id),
       { label: '', separator: true },
-      { label: t('nav.sidebar.folders.delete'), danger: true, onClick: () => app.run(api.agentFolderDelete(project.id, f.id)) },
+      { label: t('nav.sidebar.folders.delete'), danger: true, onClick: () => deleteFolder(f) },
     ]);
   }
 

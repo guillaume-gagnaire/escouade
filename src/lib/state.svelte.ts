@@ -163,6 +163,8 @@ export type Modal =
       /** Where cancelling goes back to (no modal by default). */
       onCancel?: () => void;
     }
+  /** « Supprimer le dossier » of a folder that holds agents: what becomes of them (docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md). */
+  | { kind: 'deleteFolder'; projectId: string; folderId: string }
   | { kind: 'rename'; title: string; value: string; onSubmit: (v: string) => void | Promise<void> }
   /**
    * The agreement to a harness in a project (ESC-404): before the first agent of a private project on it, or from the card

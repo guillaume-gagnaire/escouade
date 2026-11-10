@@ -113,6 +113,14 @@ export default {
       makePrincipal: 'Faire de cet agent l’agent principal',
       removePrincipal: 'Retirer le rôle d’agent principal',
       delete: 'Supprimer le dossier',
+      deleteModal: {
+        title: 'Supprimer le dossier « {name} » ?',
+        out: 'Sortir les agents du dossier',
+        archive: { one: 'Archiver l’agent', other: 'Archiver les {count} agents' },
+        remove: { one: 'Supprimer l’agent', other: 'Supprimer les {count} agents' },
+        worktrees: 'Supprimer aussi leurs worktrees',
+        confirm: 'Supprimer le dossier',
+      },
     },
     // The menu of an agent's card.
     menu: {

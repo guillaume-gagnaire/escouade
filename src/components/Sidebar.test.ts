@@ -3680,7 +3680,7 @@ describe('Sidebar agent folders', () => {
     expect(backend.called('agent_folder_create')[0].args.agentId).toBeUndefined();
   });
 
-  it('Supprimer le dossier asks for its deletion', async () => {
+  it('Supprimer le dossier opens the modal when the folder has agents', async () => {
     withFolders();
     const backend = fakeBackend();
     render(Sidebar, { project: app.projects[0] });
@@ -3688,7 +3688,26 @@ describe('Sidebar agent folders', () => {
     const labels = menu.open!.items.filter((i) => !i.separator).map((i) => i.label);
     expect(labels).toEqual(['Renommer', 'Monter', 'Descendre', 'Supprimer le dossier']);
     menu.open!.items.find((i) => i.label === 'Supprimer le dossier')!.onClick!();
+    expect(app.modal).toEqual({ kind: 'deleteFolder', projectId: 'p1', folderId: 'f1' });
+    expect(backend.called('agent_folder_delete')).toHaveLength(0);
+  });
+
+  it('Supprimer le dossier deletes at once a folder with no visible agent', async () => {
+    resetApp({
+      projects: [
+        project({
+          agentFolders: [{ id: 'f1', name: 'Auth', named: true, principal: null, agents: ['a1'] }],
+          agentOrder: ['f1'],
+        }),
+      ],
+      agents: [agent({ id: 'a1', archived: true })],
+    });
+    const backend = fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    await fireEvent.contextMenu(folderOf('f1').querySelector('.folder-h')!);
+    menu.open!.items.find((i) => i.label === 'Supprimer le dossier')!.onClick!();
     await waitFor(() => expect(backend.called('agent_folder_delete')).toHaveLength(1));
     expect(backend.called('agent_folder_delete')[0].args).toMatchObject({ projectId: 'p1', folderId: 'f1' });
+    expect(app.modal).toBeNull();
   });
 });
