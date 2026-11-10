@@ -2,7 +2,7 @@
 name = "escouade-plugin-cli"
 # Always the app's own (scripts/version.mjs keeps them together): `escouade-plugin --version` says it, and the store's
 # `version.json` names it (`compiler.prelude`), which the local review compares with the machine's.
-version = "2.2.0-beta.6"
+version = "2.2.0-beta.7"
 description = "L'outil des auteurs de plugins d'Escouade sans l'app : lire le manifeste et compiler un plugin run.js ou run.wasm en WASM"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"
