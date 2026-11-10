@@ -81,8 +81,10 @@ ou non, sans qu'un agent qui attend une réponse ne passe inaperçu, et sans qu'
   « Nouveau dossier avec cet agent » (l'agent y entre, sans devenir principal). Le dossier naît en mode renommage,
   sous le nom « Dossier », « Dossier 2 »…
 - **Menu d'un dossier** (clic droit sur son en-tête) : Renommer, Monter, Descendre, Supprimer.
-- **Supprimer un dossier** : ne supprime ni n'archive aucun agent ; ils reviennent hors dossier, à la place du
-  dossier, dans leur ordre. Pas de confirmation (rien ne se perd).
+- **Supprimer un dossier** : vide (ou sans agent non archivé), il part tout de suite. Sinon une modale (décision de
+  l'utilisateur du 2026-11-10) propose : sortir les agents du dossier (par défaut, à la place du dossier, dans leur
+  ordre), les archiver, ou les supprimer (avec leurs worktrees si la case est cochée). Le MCP `delete_folder` sort
+  toujours les agents.
 - **Agent principal** : au clic droit d'un agent d'un dossier, « Faire de cet agent l'agent principal » / « Retirer le rôle d'agent principal » (libellés revus le 2026-11-09).
   Au plus un par dossier : en désigner un retire l'étoile au précédent, qui reste dans le dossier.
 - **Menu d'un agent**, en plus : « Déplacer vers » ▸ chaque dossier du projet, « Nouveau dossier… », « Hors dossier »

@@ -136,7 +136,7 @@ A busy sidebar can be sorted into folders: a frame with a name, a chevron to fol
 - **Sort**: drag a card onto a folder’s header to put it in, out of the frame to take it out; with the keyboard, `Alt+↑` and `Alt+↓` move the card or folder that has the focus one step. “Move to…” and “No folder” in the card’s menu do the same. A folder cannot be dragged into another.
 - **The main agent**: “Make this agent the main agent” puts a star (“Main agent”) on an agent of the folder, which goes first; “Remove the main agent role” takes it back.
 - **Fold**: a folded folder still shows the card of its agents that wait for an answer and that of the open agent. The choice is kept from one launch to the next.
-- **Delete**: “Delete the folder” (right-click on its header) takes its agents out without stopping any.
+- **Delete**: “Delete the folder” (right-click on its header) goes at once for an empty folder. With agents in it, a window asks what becomes of them: take them out of the folder (the default), archive them, or delete them (with their worktrees if the box is ticked, in red). Archived agents are never touched.
 
 An agent that creates others through [the MCP server](mcp) puts them with itself in a folder named after it, where it is the main agent.
 
