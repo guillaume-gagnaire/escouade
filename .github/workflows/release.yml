@@ -130,7 +130,9 @@ jobs:
             os: ubuntu-22.04
             args: --config src-tauri/tauri.ort-linux.conf.json
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 75
+    # The universal macOS app went past 75 min on several betas: two targets of ~44 min each (no Rust cache on a tag),
+    # then signed and notarized.
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v7
 
@@ -267,6 +269,11 @@ jobs:
           AZURE_CLIENT_ID: ${{ runner.os == 'Windows' && secrets.AZURE_CLIENT_ID || '' }}
           AZURE_CLIENT_SECRET: ${{ runner.os == 'Windows' && secrets.AZURE_CLIENT_SECRET || '' }}
           AZURE_TENANT_ID: ${{ runner.os == 'Windows' && secrets.AZURE_TENANT_ID || '' }}
+          # Thin LTO over 16 units, not the full LTO in one unit of src-tauri/Cargo.toml (which the modules of the plugins
+          # share, built with it by scripts/plugins-wasm.sh): the universal macOS app took ~44 min for each of its two
+          # targets (2026-11-10).
+          CARGO_PROFILE_RELEASE_LTO: thin
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: '16'
         with:
           releaseId: ${{ needs.create.outputs.release-id }}
           tagName: ${{ github.ref_name }}
