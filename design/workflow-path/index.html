@@ -1,0 +1,1278 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>ESC-406 · Suivi des workflows : trois directions</title>
+    <style>
+      @font-face {
+        font-family: 'Inter Variable';
+        font-weight: 100 900;
+        src: url('../../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2');
+      }
+      /* The app's tokens (src/app.css), dark then light. */
+      :root {
+        --p: oklch(0.72 0.12 48);
+        --frame: color-mix(in oklch, var(--p) 8%, #08090a);
+        --panel: color-mix(in oklch, var(--p) 4.5%, #0e0f11);
+        --raise: color-mix(in oklch, var(--p) 6%, #15161a);
+        --raise-2: color-mix(in oklch, var(--p) 6%, #1b1c20);
+        --well: color-mix(in oklch, var(--p) 2%, #0a0b0d);
+        --fg-rgb: 255, 255, 255;
+        --line: rgba(255, 255, 255, 0.075);
+        --line-2: rgba(255, 255, 255, 0.12);
+        --line-3: rgba(255, 255, 255, 0.2);
+        --hover: rgba(255, 255, 255, 0.045);
+        --text: #f7f8f8;
+        --soft: #d0d3d8;
+        --muted: #989da6;
+        --run: oklch(0.79 0.15 155);
+        --wait: oklch(0.84 0.14 82);
+        --del: oklch(0.74 0.14 22);
+        --font: 'Inter Variable', Inter, system-ui, 'Segoe UI', sans-serif;
+        --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+      }
+      :root[data-theme='light'] {
+        --frame: color-mix(in oklch, var(--p) 7%, #f0f1f3);
+        --panel: color-mix(in oklch, var(--p) 2.5%, #fdfdfd);
+        --raise: color-mix(in oklch, var(--p) 4%, #f4f5f7);
+        --raise-2: color-mix(in oklch, var(--p) 5%, #eceef1);
+        --well: color-mix(in oklch, var(--p) 2.5%, #f6f7f9);
+        --fg-rgb: 15, 17, 22;
+        --line: rgba(15, 17, 22, 0.09);
+        --line-2: rgba(15, 17, 22, 0.14);
+        --line-3: rgba(15, 17, 22, 0.24);
+        --hover: rgba(15, 17, 22, 0.045);
+        --text: #15171c;
+        --soft: #363a42;
+        --muted: #555a63;
+        --run: oklch(0.48 0.13 155);
+        --wait: oklch(0.5 0.11 70);
+        --del: oklch(0.5 0.18 25);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 28px 32px 40px;
+        background: var(--frame);
+        color: var(--text);
+        font: 400 13px/1.45 var(--font);
+        font-feature-settings: 'cv11', 'ss03';
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 20px;
+        font-weight: 650;
+        letter-spacing: -0.015em;
+      }
+      .lede {
+        max-width: 860px;
+        margin: 0 0 22px;
+        color: var(--muted);
+      }
+      .cap {
+        margin: 0 0 8px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .cap b {
+        color: var(--soft);
+        font-weight: 600;
+      }
+      .row {
+        display: flex;
+        align-items: flex-start;
+        gap: 28px;
+      }
+      code,
+      .mono {
+        font-family: var(--mono);
+        font-size: 11px;
+      }
+
+      /* ---------- the tab's column, 340 px ---------- */
+      .col {
+        width: 340px;
+        border-radius: 12px;
+        background: var(--panel);
+        box-shadow: inset 0 0 0 1px var(--line-2);
+        overflow: hidden;
+      }
+      .col-h {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 14px 8px;
+      }
+      .col-h b {
+        font-size: 13.5px;
+        font-weight: 600;
+      }
+      .col-h span {
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 11.5px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .col-h .seg {
+        display: inline-flex;
+        flex: none;
+        margin-left: auto;
+        padding: 2px;
+        border-radius: 7px;
+        box-shadow: inset 0 0 0 1px var(--line);
+      }
+      .col-h .seg i {
+        width: 22px;
+        height: 20px;
+        border-radius: 5px;
+      }
+      .col-h .seg i.on {
+        background: var(--raise-2);
+      }
+      .dgw {
+        margin: 2px 14px 4px;
+      }
+      .key {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 12px;
+        padding: 6px 14px 12px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .key span {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .key svg {
+        width: 20px;
+        height: 10px;
+        overflow: visible;
+      }
+      .ags {
+        padding: 8px 8px 10px;
+        border-top: 1px solid var(--line);
+      }
+      .ags h4 {
+        margin: 2px 6px 4px;
+        color: var(--muted);
+        font-size: 11.5px;
+        font-weight: 550;
+      }
+      .ags div {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 28px;
+        padding: 0 6px;
+        border-radius: 6px;
+        font-size: 12.5px;
+      }
+      .ags div.cur {
+        background: var(--hover);
+      }
+      .ags i {
+        flex: none;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--muted);
+      }
+      .ags .cur i {
+        background: var(--run);
+      }
+      .ags .wait i {
+        background: var(--wait);
+      }
+      .ags span {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+
+      /* ---------- the drawing ---------- */
+      svg.dg {
+        display: block;
+        overflow: visible;
+        font-family: var(--font);
+      }
+      .dg text {
+        fill: var(--text);
+        font-size: 12.5px;
+      }
+      .dg .e {
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      /* Possible: light and dashed. Taken: full and marked. */
+      .dg .e.poss {
+        stroke: var(--line-3);
+        stroke-width: 1.2;
+        stroke-dasharray: 2.5 3.5;
+      }
+      .dg .e.walk {
+        stroke: var(--text);
+        stroke-width: 2.4;
+      }
+      .dg .e.rposs {
+        stroke: oklch(from var(--del) l c h / 0.5);
+        stroke-width: 1.2;
+        stroke-dasharray: 2.5 3.5;
+      }
+      .dg .e.rtook {
+        stroke: var(--del);
+        stroke-width: 2.4;
+      }
+      .dg .e.head {
+        stroke-dasharray: none;
+      }
+      .n rect {
+        fill: var(--raise);
+        stroke: var(--line-2);
+      }
+      .n .nm {
+        font-weight: 600;
+        letter-spacing: -0.005em;
+      }
+      .n .cmd {
+        fill: var(--muted);
+        font: 500 10.5px var(--mono);
+      }
+      .n.poss rect {
+        fill: var(--panel);
+        stroke: var(--line-3);
+        stroke-dasharray: 3 3;
+      }
+      .n.poss .nm {
+        fill: var(--soft);
+        font-weight: 550;
+      }
+      .n.done rect {
+        stroke: var(--muted);
+        stroke-width: 1.4;
+      }
+      .n.on rect {
+        fill: color-mix(in oklch, var(--run) 9%, var(--raise));
+        stroke: var(--run);
+        stroke-width: 1.8;
+      }
+      .n.off {
+        opacity: 0.62;
+      }
+      .n.off rect {
+        fill: none;
+        stroke: var(--line-3);
+        stroke-dasharray: 1.5 3;
+      }
+      .n .tag,
+      .n .cnt {
+        fill: var(--muted);
+        font-size: 10.5px;
+        font-weight: 550;
+      }
+      .n.on .tag {
+        fill: var(--run);
+      }
+      .bead circle {
+        fill: var(--text);
+      }
+      .bead text {
+        fill: var(--panel);
+        font-size: 10px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+      .bead.on circle {
+        fill: var(--run);
+      }
+      .ag {
+        fill: var(--panel);
+        stroke: var(--muted);
+        stroke-width: 1.5;
+      }
+      .ag.wait {
+        stroke: var(--wait);
+      }
+      .self rect {
+        fill: color-mix(in oklch, var(--del) 10%, var(--raise));
+        stroke: oklch(from var(--del) l c h / 0.45);
+        stroke-dasharray: 2.5 2.5;
+      }
+      .self.took rect {
+        stroke: var(--del);
+        stroke-width: 1.4;
+        stroke-dasharray: none;
+      }
+      .self text {
+        fill: var(--del);
+        font-size: 10.5px;
+        font-weight: 600;
+      }
+      .door rect {
+        fill: var(--raise-2);
+        stroke: var(--text);
+        stroke-width: 1.3;
+      }
+      .door text {
+        fill: var(--text);
+        font: 500 11px var(--mono);
+      }
+      .door text.lb {
+        fill: var(--muted);
+        font: 550 10.5px var(--font);
+      }
+      .door.alt rect {
+        fill: var(--panel);
+        stroke: var(--line-3);
+        stroke-width: 1;
+        stroke-dasharray: 2 2.5;
+      }
+      .door.alt text {
+        fill: var(--muted);
+      }
+      .lbl {
+        fill: var(--muted) !important;
+        font-size: 11px !important;
+        font-weight: 550;
+      }
+      .exit rect {
+        fill: var(--panel);
+        stroke: var(--line-3);
+        stroke-dasharray: 3 3;
+      }
+      .exit circle {
+        fill: none;
+        stroke: var(--soft);
+        stroke-width: 1.3;
+      }
+      .exit circle.in {
+        fill: var(--soft);
+        stroke: none;
+      }
+      .exit text {
+        fill: var(--soft);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .chip rect {
+        fill: var(--panel);
+        stroke: var(--line-2);
+      }
+      .chip text {
+        fill: var(--soft);
+        font-size: 10.5px;
+        font-weight: 500;
+      }
+      .chip.ret rect {
+        fill: color-mix(in oklch, var(--del) 9%, var(--panel));
+        stroke: oklch(from var(--del) l c h / 0.45);
+        stroke-dasharray: 2.5 2.5;
+      }
+      .chip.ret.took rect {
+        stroke: var(--del);
+        stroke-width: 1.3;
+        stroke-dasharray: none;
+      }
+      .chip.ret text {
+        fill: var(--del);
+      }
+      .who rect {
+        fill: var(--panel);
+        stroke: var(--line-2);
+      }
+      .who circle {
+        fill: var(--muted);
+      }
+      .who.cur rect {
+        stroke: oklch(from var(--run) l c h / 0.55);
+      }
+      .who.cur circle {
+        fill: var(--run);
+      }
+      .who.wait circle {
+        fill: var(--wait);
+      }
+      .who text {
+        fill: var(--soft);
+        font-size: 10.5px;
+        font-weight: 500;
+      }
+      .fold rect {
+        fill: none;
+        stroke: var(--line-2);
+        stroke-dasharray: 1.5 3;
+      }
+      .fold text {
+        fill: var(--muted);
+        font-size: 11.5px;
+        font-weight: 500;
+      }
+      .fold text.why {
+        font-size: 10.5px;
+        font-weight: 400;
+      }
+
+      /* ---------- the journal (C) and the thread (B) ---------- */
+      .jr {
+        margin: 0;
+        padding: 0 14px 10px;
+        list-style: none;
+      }
+      .jr-h {
+        display: flex;
+        gap: 6px;
+        align-items: baseline;
+        margin: 0;
+        padding: 10px 14px 6px;
+        border-top: 1px solid var(--line);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .jr-h span {
+        color: var(--muted);
+        font-weight: 400;
+      }
+      .jr li {
+        display: grid;
+        grid-template-columns: 22px 1fr auto;
+        gap: 0 8px;
+        align-items: baseline;
+        padding: 3px 0;
+        font-size: 12.5px;
+      }
+      .jr .k {
+        color: var(--muted);
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+      }
+      .jr .nm b {
+        font-weight: 600;
+      }
+      .jr .nm em {
+        color: var(--muted);
+        font-style: normal;
+      }
+      .jr .d {
+        color: var(--muted);
+        font-size: 11.5px;
+        font-variant-numeric: tabular-nums;
+      }
+      .jr .why {
+        grid-column: 2 / 4;
+        color: var(--del);
+        font-size: 11.5px;
+      }
+      .jr li.on .nm b,
+      .jr li.on .d {
+        color: var(--run);
+      }
+      .jr li.nx {
+        color: var(--muted);
+      }
+      .jr li.nx .nm b {
+        font-weight: 500;
+      }
+
+      .th {
+        position: relative;
+        margin: 0;
+        padding: 4px 14px 6px;
+        list-style: none;
+      }
+      .th li {
+        position: relative;
+        padding: 0 0 12px 34px;
+      }
+      /* The rail: full and marked where the agent went, light and dashed where it may go. */
+      .th li::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 10px;
+        border-left: 2.4px solid var(--text);
+      }
+      .th li.g::before,
+      .th li.on::before {
+        left: 10.6px;
+        border-left: 1.2px dashed var(--line-3);
+      }
+      .th li.on::before {
+        top: 20px;
+      }
+      .th li.back::before {
+        border-color: var(--del);
+      }
+      .th li.last::before {
+        display: none;
+      }
+      .th .b {
+        position: absolute;
+        top: 5px;
+        left: 2px;
+        display: grid;
+        place-items: center;
+        width: 19px;
+        height: 19px;
+        border-radius: 50%;
+        background: var(--text);
+        color: var(--panel);
+        font-size: 10px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+      .th li.on .b {
+        background: var(--run);
+      }
+      .th li.g .b {
+        top: 8px;
+        left: 5px;
+        width: 13px;
+        height: 13px;
+        border: 1.2px dashed var(--muted);
+        background: var(--panel);
+      }
+      .th .c {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        min-height: 30px;
+        padding: 5px 10px;
+        border-radius: 9px;
+        background: var(--raise);
+        box-shadow: inset 0 0 0 1px var(--line-2);
+      }
+      .th .c b {
+        font-size: 12.5px;
+        font-weight: 600;
+      }
+      .th .c em {
+        color: var(--muted);
+        font-size: 11.5px;
+        font-style: normal;
+      }
+      .th .c .d {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 11.5px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .th li.on .c {
+        background: color-mix(in oklch, var(--run) 9%, var(--raise));
+        box-shadow: inset 0 0 0 1.8px var(--run);
+      }
+      .th li.on .d {
+        color: var(--run);
+        font-weight: 550;
+      }
+      .th li.g .c {
+        background: none;
+        box-shadow: none;
+        outline: 1px dashed var(--line-3);
+        outline-offset: -1px;
+      }
+      .th li.g .c b {
+        color: var(--soft);
+        font-weight: 550;
+      }
+      .th .why {
+        margin: 5px 0 0;
+        color: var(--del);
+        font-size: 11.5px;
+      }
+      .th li.g .why {
+        color: var(--muted);
+      }
+      .th li.g .why.r {
+        color: oklch(from var(--del) l c h / 0.85);
+      }
+      .th .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 24px;
+        padding: 0 10px;
+        border-radius: 12px;
+        background: var(--raise-2);
+        box-shadow: inset 0 0 0 1.3px var(--text);
+        color: var(--muted);
+        font-size: 10.5px;
+        font-weight: 550;
+      }
+      .th .pill code {
+        color: var(--text);
+      }
+      .th .pill.alt {
+        background: none;
+        box-shadow: none;
+        outline: 1px dashed var(--line-3);
+        outline-offset: -1px;
+      }
+      .th .pill.alt code {
+        color: var(--muted);
+      }
+      .th .doors {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+      }
+      .th li.ent .b {
+        top: 3px;
+        background: var(--raise-2);
+        box-shadow: inset 0 0 0 1.3px var(--text);
+        color: var(--text);
+      }
+      .foldh {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        margin: 2px 14px 10px;
+        padding: 6px 10px;
+        border-radius: 8px;
+        outline: 1px dashed var(--line-2);
+        outline-offset: -1px;
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+      .foldh small {
+        display: block;
+        font-size: 10.5px;
+      }
+
+      /* ---------- enlarged ---------- */
+      .big {
+        width: 1100px;
+        border-radius: 12px;
+        background: var(--panel);
+        box-shadow: inset 0 0 0 1px var(--line-2);
+        overflow: hidden;
+      }
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 48px;
+        padding: 0 12px 0 16px;
+        border-bottom: 1px solid var(--line);
+      }
+      .bar b {
+        font-weight: 600;
+      }
+      .bar .sub {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .bar .grow {
+        flex: 1;
+      }
+      .bar .btn {
+        display: inline-flex;
+        align-items: center;
+        height: 28px;
+        padding: 0 10px;
+        border-radius: 7px;
+        box-shadow: inset 0 0 0 1px var(--line-2);
+        color: var(--soft);
+        font-size: 12px;
+      }
+      .canvas {
+        display: flex;
+        background:
+          radial-gradient(circle at 1px 1px, rgba(var(--fg-rgb), 0.07) 1px, transparent 1.5px) 0 0 / 18px 18px,
+          var(--well);
+      }
+      .canvas > .dg,
+      .canvas > .hth {
+        margin: 36px 40px;
+      }
+      .canvas .mid {
+        flex: 1;
+        display: grid;
+        justify-content: center;
+        padding: 30px 0;
+      }
+      .canvas .side {
+        flex: none;
+        width: 300px;
+        margin-left: auto;
+        border-left: 1px solid var(--line);
+        background: var(--panel);
+      }
+      .canvas .side .jr-h {
+        border-top: 0;
+        padding-top: 14px;
+      }
+      .big .key {
+        padding: 10px 16px;
+        border-top: 1px solid var(--line);
+      }
+      .hth {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 22px 0;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .hth li {
+        display: flex;
+        align-items: flex-start;
+      }
+      .hth .lk {
+        position: relative;
+        width: 40px;
+        height: 58px;
+      }
+      .hth .lk::before {
+        content: '';
+        position: absolute;
+        top: 28px;
+        right: 3px;
+        left: 3px;
+        border-top: 2.4px solid var(--text);
+      }
+      .hth .lk::after {
+        content: '';
+        position: absolute;
+        top: 24.5px;
+        right: 3px;
+        width: 7px;
+        height: 7px;
+        border: solid var(--text);
+        border-width: 2.4px 2.4px 0 0;
+        transform: rotate(45deg);
+      }
+      .hth .lk.back::before,
+      .hth .lk.back::after {
+        border-color: var(--del);
+      }
+      .hth .lk.g::before {
+        border-top: 1.2px dashed var(--line-3);
+        top: 28.6px;
+      }
+      .hth .lk.g::after {
+        border-color: var(--line-3);
+        border-width: 1.2px 1.2px 0 0;
+        top: 25.5px;
+      }
+      .hth .lk.wide {
+        width: 170px;
+      }
+      .hth .lk span {
+        position: absolute;
+        right: 12px;
+        bottom: 36px;
+        left: 6px;
+        color: var(--del);
+        font-size: 10.5px;
+        line-height: 1.25;
+      }
+      .hth .card {
+        position: relative;
+        width: 140px;
+        min-height: 58px;
+        padding: 9px 11px;
+        border-radius: 9px;
+        background: var(--raise);
+        box-shadow: inset 0 0 0 1.4px var(--muted);
+      }
+      .hth .card b {
+        display: block;
+        font-size: 12.5px;
+        font-weight: 600;
+      }
+      .hth .card em {
+        color: var(--muted);
+        font-size: 11px;
+        font-style: normal;
+      }
+      .hth .card .b {
+        position: absolute;
+        top: -8px;
+        right: 9px;
+        display: grid;
+        place-items: center;
+        width: 19px;
+        height: 19px;
+        border-radius: 50%;
+        background: var(--text);
+        color: var(--panel);
+        font-size: 10px;
+        font-weight: 700;
+      }
+      .hth .card.on {
+        background: color-mix(in oklch, var(--run) 9%, var(--raise));
+        box-shadow: inset 0 0 0 1.8px var(--run);
+      }
+      .hth .card.on .b {
+        background: var(--run);
+      }
+      .hth .card.on em {
+        color: var(--run);
+      }
+      .hth .card.g {
+        background: var(--panel);
+        box-shadow: none;
+        outline: 1px dashed var(--line-3);
+        outline-offset: -1px;
+      }
+      .hth .card.g b {
+        color: var(--soft);
+        font-weight: 550;
+      }
+      .hth .card.ent {
+        width: auto;
+        min-height: 0;
+        margin-top: 15px;
+        padding: 5px 11px;
+        border-radius: 14px;
+        background: var(--raise-2);
+        box-shadow: inset 0 0 0 1.3px var(--text);
+      }
+      .hth .card.ent em {
+        font-size: 10.5px;
+        font-weight: 550;
+      }
+      .hth .stack {
+        display: grid;
+        gap: 8px;
+      }
+      .hth .stack .card {
+        min-height: 0;
+      }
+      .hth .stack .card.r em {
+        color: oklch(from var(--del) l c h / 0.9);
+      }
+      .hth .brk {
+        flex-basis: 100%;
+        height: 0;
+      }
+
+      /* ---------- the page of the choice ---------- */
+      .pick section {
+        margin: 0 0 36px;
+        padding: 20px 22px 22px;
+        border-radius: 14px;
+        background: var(--panel);
+        box-shadow: inset 0 0 0 1px var(--line-2);
+      }
+      .pick h2 {
+        margin: 0 0 4px;
+        font-size: 16px;
+        font-weight: 650;
+      }
+      .pick p {
+        max-width: 900px;
+        margin: 0 0 6px;
+        color: var(--soft);
+      }
+      .pick p.m {
+        color: var(--muted);
+      }
+      .pick .shots {
+        display: grid;
+        gap: 14px;
+        margin-top: 14px;
+      }
+      .pick img {
+        display: block;
+        max-width: 100%;
+        border-radius: 10px;
+        box-shadow: 0 0 0 1px var(--line-2);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      // ESC-406: three directions for « partir d'un point d'entrée, montrer où ça peut aller et où ça va vraiment ».
+      // `?d=a|b|c` draws one direction (`#colonne` or `#grand`, `&theme=light`); without `d`, the page of the choice shows
+      // the captures of render.mjs. The workflow is GSD as the app reads it from `.claude/commands/gsd/` (the same steps,
+      // commands and conditions as `#loops-diagram` of design/app-redesign); the agent and its passages are made up.
+      const q = new URLSearchParams(location.search);
+      const D = q.get('d');
+      if (q.get('theme') === 'light') document.documentElement.dataset.theme = 'light';
+      const route = location.hash.slice(1) || 'colonne';
+
+      const STEPS = {
+        discuss: { name: 'Discuter', cmd: '/gsd:discuss-phase' },
+        plan: { name: 'Planifier', cmd: '/gsd:plan-phase' },
+        exec: { name: 'Exécuter', cmd: '/gsd:execute-phase' },
+        verify: { name: 'Vérifier', cmd: '/gsd:verify-work' },
+      };
+      const DOOR = '/gsd:plan-phase';
+      const DOORS = ['/gsd:autonomous', '/gsd:next', '/gsd:discuss-phase', '/gsd:plan-phase', '/gsd:quick'];
+      const LOOP_WHY = 'plan refusé par gsd-plan-checker : la tâche 4 n’a pas de test';
+      const BACK_WHY = 'écarts : 2 tests rouges dans checkout.spec.ts';
+      /** The real path of « paiement-3ds », in its order: a loop on Planifier, a way back from Vérifier. */
+      const PATH = [
+        { n: 1, s: 'plan', pass: 1, d: '4 min', loop: `${LOOP_WHY} · tour 1 sur 3` },
+        { n: 2, s: 'plan', pass: 2, d: '6 min' },
+        { n: 3, s: 'exec', pass: 1, d: '21 min' },
+        { n: 4, s: 'verify', pass: 1, d: '5 min', back: BACK_WHY },
+        { n: 5, s: 'plan', pass: 3, d: '3 min' },
+        { n: 6, s: 'exec', pass: 2, d: 'en cours · 8 min', on: true },
+      ];
+      const nth = (p) => (p === 1 ? '' : `${p}e passage`);
+
+      const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      const cv = document.createElement('canvas').getContext('2d');
+      const SANS = "'Inter Variable'";
+      const MONO = "'JetBrains Mono', ui-monospace, Consolas, monospace";
+      const F = {
+        name: `600 12.5px ${SANS}`,
+        chip: `500 10.5px ${SANS}`,
+        exit: `600 12px ${SANS}`,
+        fold: `500 11.5px ${SANS}`,
+        cmd: `500 10.5px ${MONO}`,
+        door: `500 11px ${MONO}`,
+      };
+      const mw = (t, f) => ((cv.font = F[f]), cv.measureText(t).width);
+      const fit = (t, max, f) => {
+        if (mw(t, f) <= max) return t;
+        let s = t;
+        while (s.length > 1 && mw(`${s}…`, f) > max) s = s.slice(0, -1);
+        return `${s.trimEnd()}…`;
+      };
+      const r1 = (n) => Math.round(n * 10) / 10;
+      /** An orthogonal path with rounded corners (as src/lib/workflow-diagram.ts). */
+      function path(pts, r = 7) {
+        let d = `M${r1(pts[0][0])} ${r1(pts[0][1])}`;
+        for (let i = 1; i < pts.length; i++) {
+          const [x, y] = pts[i];
+          const next = pts[i + 1];
+          if (!next) {
+            d += ` L${r1(x)} ${r1(y)}`;
+            break;
+          }
+          const [px, py] = pts[i - 1];
+          const k1 = Math.min(r, Math.hypot(x - px, y - py) / 2);
+          const k2 = Math.min(r, Math.hypot(next[0] - x, next[1] - y) / 2);
+          const [ux, uy, vx, vy] = [Math.sign(x - px), Math.sign(y - py), Math.sign(next[0] - x), Math.sign(next[1] - y)];
+          d += ` L${r1(x - ux * k1)} ${r1(y - uy * k1)} Q${r1(x)} ${r1(y)} ${r1(x + vx * k2)} ${r1(y + vy * k2)}`;
+        }
+        return d;
+      }
+      const edge = (pts, cls) => `<path class="e ${cls}" d="${path(pts)}"/>`;
+      function head(x, y, dx, dy, cls) {
+        const s = /walk|rtook/.test(cls) ? 4.6 : 4;
+        return `<path class="e ${cls} head" d="M${r1(x - dx * s - dy * s)} ${r1(y - dy * s - dx * s)} L${r1(x)} ${r1(y)} L${r1(x - dx * s + dy * s)} ${r1(y - dy * s + dx * s)}"/>`;
+      }
+      function chip(x, y, text, kind, anchor, max, took) {
+        const ic = kind === 'ret' ? '↩ ' : '';
+        const shown = fit(ic + text, max, 'chip');
+        const w = mw(shown, 'chip') + 14;
+        const left = anchor === 'end' ? x - w : anchor === 'start' ? x : x - w / 2;
+        return `<g class="chip ${kind} ${took ? 'took' : ''}"><rect x="${r1(left)}" y="${r1(y - 9)}" width="${r1(w)}" height="18" rx="9"/><text x="${r1(left + 7)}" y="${r1(y + 3.6)}">${esc(shown)}</text></g>`;
+      }
+      /** The door taken (full), or one of the doors to choose from (`alt`). */
+      function door(x, y, text, { alt = false, label = '' } = {}) {
+        const lw = label ? mw(label, 'chip') + 7 : 0;
+        const w = mw(text, 'door') + 20 + lw;
+        return {
+          w,
+          svg: `<g class="door ${alt ? 'alt' : ''}"><rect x="${r1(x)}" y="${y}" width="${r1(w)}" height="24" rx="12"/>${label ? `<text class="lb" x="${r1(x + 10)}" y="${y + 15.6}">${label}</text>` : ''}<text x="${r1(x + 10 + lw)}" y="${y + 15.8}">${esc(text)}</text></g>`,
+        };
+      }
+      /** What the agent's path says of each step: its passages (their numbers in the path), where it is, what is next. */
+      function stepState(id, agent) {
+        if (!agent) return { state: 'poss', beads: [] };
+        const ps = PATH.filter((p) => p.s === id);
+        const on = ps.some((p) => p.on);
+        return { state: on ? 'on' : ps.length ? 'done' : 'poss', beads: ps, next: id === 'verify' };
+      }
+      const OTHERS = { plan: [{ name: 'onboarding' }], verify: [{ name: 'facture-pdf', wait: true }] };
+
+      /** A step. A: the numbers of its passages as beads; C: calm, « 3 passages ». */
+      function node(x, y, w, h, id, v, agent, { off = false, lr = false } = {}) {
+        const s = STEPS[id];
+        const st = off ? { state: 'off', beads: [] } : stepState(id, agent);
+        let o = `<g class="n ${st.state}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="9"/>`;
+        let right = 0;
+        if (v === 'a') {
+          st.beads
+            .slice()
+            .reverse()
+            .forEach((p, i) => {
+              const cx = x + w - 15 - i * 20;
+              o += `<g class="bead ${p.on ? 'on' : ''}"><circle cx="${cx}" cy="${y + 16}" r="8.5"/><text x="${cx}" y="${y + 19.6}" text-anchor="middle">${p.n}</text></g>`;
+            });
+          right = st.beads.length * 20 + 4;
+        } else if (st.beads.length > 1) {
+          const t = `${st.beads.length} passages`;
+          o += `<text class="cnt" x="${x + w - 10}" y="${y + 19}" text-anchor="end">${t}</text>`;
+          right = mw(t, 'chip') + 8;
+        }
+        o += `<text class="nm" x="${x + 11}" y="${y + 20}">${esc(fit(s.name, w - 22 - right, 'name'))}</text>`;
+        const others = agent && !off ? (OTHERS[id] ?? []) : [];
+        let br = x + w - 9;
+        if (id === 'plan' && !off) {
+          const t = agent ? '↻ 1 sur 3' : '↻ ×3';
+          const sw = mw(t, 'chip') + 14;
+          o += `<g class="self ${agent ? 'took' : ''}"><rect x="${r1(br - sw)}" y="${y + h - 23}" width="${r1(sw)}" height="16" rx="8"/><text x="${r1(br - sw + 7)}" y="${y + h - 11.4}">${t}</text></g>`;
+          br -= sw + 7;
+        }
+        if (st.state === 'on') o += `<text class="tag" x="${br}" y="${y + h - 11}" text-anchor="end">en cours</text>`;
+        else if (st.next) {
+          o += `<text class="tag" x="${br}" y="${y + h - 11}" text-anchor="end">prochaine</text>`;
+          br -= mw('prochaine', 'chip') + 8;
+        }
+        if (!lr) others.forEach((a, i) => (o += `<circle class="ag ${a.wait ? 'wait' : ''}" cx="${br - 5 - i * 11}" cy="${y + h - 15}" r="4"/>`));
+        o += `<text class="cmd" x="${x + 11}" y="${y + h - 11}">${esc(fit(s.cmd, br - x - 24, 'cmd'))}</text></g>`;
+        if (lr)
+          others.forEach((a) => {
+            const ww = mw(a.name, 'chip') + 24;
+            o += `<g class="who ${a.wait ? 'wait' : ''}"><rect x="${x}" y="${y + h + 7}" width="${r1(ww)}" height="18" rx="9"/><circle cx="${x + 9}" cy="${y + h + 16}" r="3"/><text x="${x + 17}" y="${y + h + 19.6}">${a.name}</text></g>`;
+          });
+        return o;
+      }
+      function exitPill(x, y, label) {
+        const w = mw(label, 'exit') + 44;
+        return {
+          w,
+          svg: (xx) =>
+            `<g class="exit"><rect x="${r1(xx)}" y="${y}" width="${r1(w)}" height="28" rx="14"/><circle cx="${r1(xx + 15)}" cy="${y + 14}" r="5"/><circle class="in" cx="${r1(xx + 15)}" cy="${y + 14}" r="2.2"/><text x="${r1(xx + 27)}" y="${y + 18.2}">${label}</text></g>`,
+        };
+      }
+
+      /** Down the column (A and C). `agent`: its path on it; else the doors to choose from. `open`: the fold opened. */
+      function graphTD(v, { agent = true, open = false, W = 312 } = {}) {
+        let o = '';
+        const L = 4;
+        const nw = W - L - 30;
+        const nh = 52;
+        const cx = L + nw / 2;
+        const lane = W - 10;
+        let y = 2;
+        const ids = agent ? ['plan', 'exec', 'verify'] : ['discuss', 'plan', 'exec', 'verify'];
+        if (agent) {
+          const d = door(0, y, DOOR, { label: 'Entrée' });
+          const dx = cx - d.w / 2;
+          o += door(dx, y, DOOR, { label: 'Entrée' }).svg;
+          y += 24;
+        } else {
+          o += `<text class="lbl" x="${L}" y="${y + 12}">Entrée : par où l’agent commence</text>`;
+          y += 22;
+          let x = L;
+          DOORS.forEach((dr, i) => {
+            const d = door(x, y, dr, { alt: i > 0 });
+            if (x + d.w > W - 4) ((x = L), (y += 29));
+            o += door(x, y, dr, { alt: i > 0 }).svg;
+            x += d.w + 6;
+          });
+          y += 24;
+        }
+        const top = y;
+        y += 24;
+        const at = {};
+        ids.forEach((id, i) => {
+          at[id] = y;
+          y += nh + (i < ids.length - 1 ? 30 : 0);
+        });
+        // The ways forward: taken (full, marked) or possible (light, dashed).
+        const walked = (a, b) => agent && PATH.some((p, i) => p.s === a && PATH[i + 1]?.s === b);
+        const fcx = agent ? cx : L + 60;
+        o += edge([[fcx, top], [fcx, at[ids[0]] - 1]], agent ? 'walk' : 'poss') + head(fcx, at[ids[0]] - 1, 0, 1, agent ? 'walk' : 'poss');
+        ids.slice(1).forEach((id, i) => {
+          const c = walked(ids[i], id) ? 'walk' : 'poss';
+          o += edge([[cx, at[ids[i]] + nh], [cx, at[id] - 1]], c) + head(cx, at[id] - 1, 0, 1, c);
+        });
+        // The way back from Vérifier to Planifier, by the gutter.
+        const rc = agent ? 'rtook' : 'rposs';
+        const sy = at.verify + nh * 0.6;
+        const ty = at.plan + nh * 0.4;
+        o += edge([[L + nw, sy], [lane, sy], [lane, ty], [L + nw + 1, ty]], rc) + head(L + nw + 1, ty, -1, 0, rc);
+        // The exit.
+        const ex = exitPill(0, 0, 'Phase finie');
+        const ey = y + 40;
+        o += edge([[cx, y], [cx, ey - 1]], 'poss') + head(cx, ey - 1, 0, 1, 'poss');
+        o += chip(cx, y + 19, 'phase validée', 'cond', 'mid', 200);
+        o += exitPill(0, ey, 'Phase finie').svg(cx - ex.w / 2);
+        ids.forEach((id) => (o += node(L, at[id], nw, nh, id, v, agent)));
+        o += chip(lane + 5, at.exec + nh + 15, agent ? BACK_WHY : 'écarts', 'ret', 'end', Math.min(nw / 2 - 2, 190), agent);
+        y = ey + 28;
+        if (agent) {
+          y += 16;
+          o += `<g class="fold"><rect x="${L}" y="${y}" width="${W - L * 2}" height="${open ? 104 : 28}" rx="8"/><text x="${L + 11}" y="${y + 18}">${open ? '▾' : '▸'}  1 étape hors de ce chemin</text>`;
+          if (open) {
+            o += `<text class="why" x="${L + 11}" y="${y + 92}">${esc(`pas atteignable depuis ${DOOR}`)}</text></g>`;
+            o += node(L + 10, y + 28, nw - 16, 46, 'discuss', v, false, { off: true });
+            y += 104;
+          } else {
+            o += '</g>';
+            y += 28;
+          }
+        }
+        return `<svg class="dg" viewBox="0 0 ${W} ${y + 4}" width="${W}" height="${y + 4}">${o}</svg>`;
+      }
+
+      /** Across, enlarged (A and C). */
+      function graphLR(v) {
+        const nw = v === 'a' ? 172 : 150;
+        const gap = v === 'a' ? 56 : 44;
+        const nh = 62;
+        const y = 16;
+        const cy = y + nh / 2;
+        let o = '';
+        let x = 0;
+        const d = door(x, cy - 12, DOOR, { label: 'Entrée' });
+        o += d.svg;
+        x += d.w;
+        const ids = ['plan', 'exec', 'verify'];
+        const at = {};
+        let from = x;
+        ids.forEach((id, i) => {
+          x += i ? gap : 40;
+          at[id] = x;
+          o += edge([[from, cy], [x - 1, cy]], 'walk') + head(x - 1, cy, 1, 0, 'walk');
+          x += nw;
+          from = x;
+        });
+        const eg = 122;
+        o += edge([[x, cy], [x + eg - 1, cy]], 'poss') + head(x + eg - 1, cy, 1, 0, 'poss');
+        o += chip(x + eg / 2, cy, 'phase validée', 'cond', 'mid', 200);
+        const ex = exitPill(0, cy - 14, 'Phase finie');
+        o += ex.svg(x + eg);
+        const W = x + eg + ex.w + 2;
+        const lane = y + nh + 46;
+        const sx = at.verify + nw * 0.9;
+        const tx = at.plan + nw * 0.86;
+        o += edge([[sx, y + nh], [sx, lane], [tx, lane], [tx, y + nh + 1]], 'rtook') + head(tx, y + nh + 1, 0, -1, 'rtook');
+        ids.forEach((id) => (o += node(at[id], y, nw, nh, id, v, true, { lr: true })));
+        o += chip((sx + tx) / 2, lane, BACK_WHY, 'ret', 'mid', 320, true);
+        const fy = lane + 34;
+        const ft = '▸  1 étape hors de ce chemin';
+        o += `<g class="fold"><rect x="0" y="${fy}" width="${r1(mw(ft, 'fold') + 24)}" height="28" rx="8"/><text x="11" y="${fy + 18}">${ft}</text></g>`;
+        return `<svg class="dg" viewBox="0 0 ${r1(W)} ${fy + 32}" width="${r1(W)}" height="${fy + 32}">${o}</svg>`;
+      }
+
+      // ---------- the words ----------
+      const KEY = `<div class="key">
+        <span><svg viewBox="0 0 20 10"><path class="e walk" d="M1 5h18" style="fill:none;stroke:var(--text);stroke-width:2.4;stroke-linecap:round"/></svg>pris par l’agent</span>
+        <span><svg viewBox="0 0 20 10"><path d="M1 5h18" style="fill:none;stroke:var(--line-3);stroke-width:1.2;stroke-dasharray:2.5 3.5;stroke-linecap:round"/></svg>possible</span>
+        <span><svg viewBox="0 0 20 10"><path d="M1 5h18" style="fill:none;stroke:var(--del);stroke-width:2.4;stroke-linecap:round"/></svg>retour pris</span>
+        <span><svg viewBox="0 0 20 10"><path d="M1 5h18" style="fill:none;stroke:var(--del);stroke-width:1.2;stroke-dasharray:2.5 3.5;stroke-linecap:round;opacity:.6"/></svg>retour possible</span>
+      </div>`;
+      const AGENTS = `<div class="ags"><h4>Agents · 3</h4>
+        <div class="cur"><i></i>paiement-3ds<span>Exécuter · 2e passage</span></div>
+        <div class="wait"><i></i>facture-pdf<span>Vérifier · attend</span></div>
+        <div><i></i>onboarding<span>Planifier</span></div></div>`;
+      const journal = () =>
+        `<h4 class="jr-h">Parcours <span>· entré par <code>${DOOR}</code> · 6 passages</span></h4><ol class="jr">` +
+        PATH.map(
+          (p) =>
+            `<li class="${p.on ? 'on' : ''}"><span class="k">${p.n}</span><span class="nm"><b>${STEPS[p.s].name}</b>${nth(p.pass) ? ` <em>· ${nth(p.pass)}</em>` : ''}</span><span class="d">${p.d}</span>` +
+            (p.loop ? `<span class="why">↻ ${esc(p.loop)}</span>` : '') +
+            (p.back ? `<span class="why">↩ retour à Planifier · ${esc(p.back)}</span>` : '') +
+            '</li>',
+        ).join('') +
+        `<li class="nx"><span class="k">→</span><span class="nm"><b>Vérifier</b> <em>· ensuite</em></span><span class="d"></span></li></ol>`;
+
+      /** B, down the column: the path unrolled, a row per passage; then what may come, light. */
+      function thread({ agent = true, open = false } = {}) {
+        let o = '<ol class="th">';
+        if (agent) {
+          o += `<li class="ent"><span class="b">→</span><span class="pill">Entrée <code>${DOOR}</code></span></li>`;
+          PATH.forEach((p, i) => {
+            const prev = PATH[i - 1];
+            const cls = [p.on ? 'on' : '', p.back || p.loop ? 'back' : ''].join(' ');
+            o +=
+              `<li class="${cls}"><span class="b">${p.n}</span><div class="c"><b>${STEPS[p.s].name}</b>${nth(p.pass) ? `<em>${nth(p.pass)}</em>` : ''}<span class="d">${p.d}</span></div>` +
+              (p.loop ? `<p class="why">↻ ${esc(p.loop)}</p>` : '') +
+              (p.back ? `<p class="why">↩ retour à Planifier · ${esc(p.back)}</p>` : '') +
+              '</li>';
+            void prev;
+          });
+          o += `<li class="g"><span class="b"></span><div class="c"><b>Vérifier</b><em>prochaine</em></div></li>`;
+          o += `<li class="g last"><span class="b"></span><div class="c"><b>Phase finie</b><em>si phase validée</em></div><p class="why r">↩ ou retour à Planifier · écarts</p></li>`;
+        } else {
+          o += `<li class="ent g"><span class="b">→</span><div class="doors">${DOORS.map((d, i) => `<span class="pill ${i ? 'alt' : ''}"><code>${d}</code></span>`).join('')}</div></li>`;
+          const g = (name, cmd, why = '', last = false) =>
+            `<li class="g ${last ? 'last' : ''}"><span class="b"></span><div class="c"><b>${name}</b><em class="mono">${cmd}</em></div>${why}</li>`;
+          o += g('Discuter', '/gsd:discuss-phase');
+          o += g('Planifier', '/gsd:plan-phase', '<p class="why r">↻ jusqu’à 3 tours · plan refusé par gsd-plan-checker</p>');
+          o += g('Exécuter', '/gsd:execute-phase');
+          o += g('Vérifier', '/gsd:verify-work', '<p class="why r">↩ peut revenir à Planifier · écarts</p>');
+          o += g('Phase finie', 'si phase validée', '', true);
+        }
+        o += '</ol>';
+        if (agent)
+          o += `<div class="foldh"><span>${open ? '▾' : '▸'}</span><div>1 étape hors de ce chemin${open ? `<small>Discuter <code>/gsd:discuss-phase</code> · pas atteignable depuis <code>${DOOR}</code></small>` : ''}</div></div>`;
+        return o;
+      }
+      /** B, enlarged: the same thread across, on two lines. */
+      function threadWide() {
+        const card = (p) =>
+          `<div class="card ${p.on ? 'on' : ''}"><span class="b">${p.n}</span><b>${STEPS[p.s].name}</b><em>${[nth(p.pass), p.on ? 'en cours' : p.d].filter(Boolean).join(' · ')}</em></div>`;
+        let o = `<ol class="hth"><li><div class="card ent"><em>Entrée</em> <code>${DOOR}</code></div></li>`;
+        PATH.forEach((p, i) => {
+          const prev = PATH[i - 1];
+          const why = prev?.loop ?? prev?.back;
+          
+          o += `<li><div class="lk ${why ? 'back wide' : ''}">${why ? `<span>${prev.loop ? '↻' : '↩'} ${esc(why)}</span>` : ''}</div>${card(p)}</li>`;
+        });
+        o += `<li><div class="lk g"></div><div class="card g"><b>Vérifier</b><em>prochaine</em></div></li>`;
+        o += `<li><div class="lk g"></div><div class="stack"><div class="card g"><b>Phase finie</b><em>si phase validée</em></div><div class="card g r"><b>↩ Planifier</b><em>si écarts</em></div></div></li>`;
+        return o + '</ol>';
+      }
+
+      // ---------- the frames ----------
+      const col = (cap, sub, body) =>
+        `<div><p class="cap">${cap}</p><div class="col"><div class="col-h"><b>GSD</b><span>${sub}</span><div class="seg"><i></i><i class="on"></i></div></div>${body}</div></div>`;
+      const big = (body) =>
+        `<p class="cap"><b>En grand</b> · sur tout le panneau de travail, agent paiement-3ds</p><div class="big"><div class="bar"><b>GSD</b><span class="sub">· entré par <code>${DOOR}</code> · paiement-3ds, 6 passages</span><span class="grow"></span><span class="btn">− 100 % +</span><span class="btn">Ajuster</span><span class="btn">Copier en Mermaid</span><span class="btn">✕</span></div><div class="canvas">${body}</div>${KEY}</div>`;
+      const NAMES = {
+        a: ['A · Le tracé sur la carte', 'Un seul dessin : la carte de ce qui est possible depuis l’entrée, le chemin de l’agent tracé dessus en trait plein, chaque passage numéroté sur son étape.'],
+        b: ['B · Le fil déroulé', 'Le chemin de l’agent déroulé dans l’ordre, une ligne par passage (Planifier y revient trois fois) ; les possibles ne sont dessinés qu’après l’étape en cours.'],
+        c: ['C · La carte et son parcours', 'La carte reste calme (trait plein sur ce qui est pris, « 3 passages »), et l’ordre se lit dessous dans un parcours numéroté, toujours visible.'],
+      };
+      const SUB_AGENT = `3 étapes sur 4 depuis <code>${DOOR}</code>`;
+
+      function sheet(d) {
+        const [title, says] = NAMES[d];
+        const draw =
+          d === 'b'
+            ? (o) => thread(o)
+            : (o) => `<div class="dgw">${graphTD(d, o)}</div>` + (d === 'c' && o.agent !== false ? journal() : '');
+        const key = d === 'b' ? '' : KEY;
+        if (route === 'grand') {
+          const body = d === 'b' ? threadWide() : d === 'c' ? `<div class="mid">${graphTD('c', { W: 440 })}</div><div class="side">${journal()}</div>` : graphLR(d);
+          return `<h1>${title}</h1><p class="lede">${says}</p>${big(body)}`;
+        }
+        return `<h1>${title}</h1><p class="lede">${says}</p><div class="row">
+          ${col('<b>Dans la colonne</b> · 340 px, agent paiement-3ds', SUB_AGENT, draw({ agent: true }) + key + AGENTS)}
+          ${col('<b>Sans agent</b> · on choisit la porte, la première par défaut', '4 étapes · 5 portes', draw({ agent: false }) + key)}
+          ${col('<b>« Hors de ce chemin » ouvert</b>', SUB_AGENT, draw({ agent: true, open: true }) + key)}
+        </div>`;
+      }
+      function pick() {
+        const shots = (d) =>
+          ['colonne', 'grand', 'colonne-light', 'grand-light'].map((s) => `<img src="captures/${d}-${s}.png" alt="${NAMES[d][0]}, ${s}" />`).join('');
+        const NOTES = {
+          a: 'Pour : tout tient dans le dessin, à la hauteur d’aujourd’hui ; on suit les numéros 1 à 6 pour refaire le chemin. Contre : au-delà de quatre ou cinq passages d’une même étape, les numéros se resserrent (« +3 »).',
+          b: 'Pour : l’ordre saute aux yeux, raisons des retours écrites en entier. Contre : ce n’est plus un diagramme du workflow, la hauteur grandit avec les passages, et on voit moins la forme du workflow (où sont les retours possibles).',
+          c: 'Pour : la carte reste lisible même après vingt passages, le parcours écrit sert aussi au lecteur d’écran. Contre : deux endroits à lire, et plus de hauteur dans la colonne.',
+        };
+        return (
+          `<div class="pick"><h1>ESC-406 · Suivi des workflows : partir d’un point d’entrée</h1><p class="lede">Trois directions sur le même cas : GSD, l’agent paiement-3ds entré par <code>${DOOR}</code>, un tour de boucle sur Planifier, un retour depuis Vérifier, en cours sur Exécuter (2e passage). « Discuter » n’est pas atteignable depuis cette entrée : replié.</p>` +
+          ['a', 'b', 'c'].map((d) => `<section><h2>${NAMES[d][0]}</h2><p>${NAMES[d][1]}</p><p class="m">${NOTES[d]}</p><div class="shots">${shots(d)}</div></section>`).join('') +
+          '</div>'
+        );
+      }
+      (async () => {
+        await Promise.all(Object.values(F).map((f) => document.fonts.load(f)));
+        document.getElementById('app').innerHTML = D ? sheet(D) : pick();
+        document.body.dataset.ready = '1';
+      })();
+    </script>
+  </body>
+</html>

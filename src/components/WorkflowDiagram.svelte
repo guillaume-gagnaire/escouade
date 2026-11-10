@@ -2,15 +2,33 @@
   import { t } from '../lib/i18n';
   import { app } from '../lib/state.svelte';
   import { tip } from '../lib/tip';
-  import { layout, type DgAgent, type DgLayout, type DgModel, type DgProgress, type Measure } from '../lib/workflow-diagram';
+  import {
+    layout,
+    scopeTo,
+    type DgAgent,
+    type DgEntry,
+    type DgLayout,
+    type DgModel,
+    type DgPass,
+    type DgProgress,
+    type Measure,
+  } from '../lib/workflow-diagram';
   import Icon from './Icon.svelte';
 
   // The Diagram view of the Workflow tab (ESC-245, choices 196 to 212; `#loops-diagram*` of the preview), loaded only when
   // it opens: the workflow drawn down the column, and enlarged over the whole work panel (`big`), across when it fits.
   // Every name, command and condition comes from the repository's files: drawn as text, never as HTML.
+  // It always starts from an entry (ESC-406, direction A of design/workflow-path): the door the agent read came in by
+  // (`entry`), else one of `entries` to choose from. Only what that entry reaches is drawn, light and dashed as what may
+  // happen; the agent's `path` is traced over it in full lines, each passage numbered on its step, and said in words in
+  // an ordered list for a screen reader. The steps the entry does not reach fold under the diagram.
   let {
     model,
     progress,
+    entries = [],
+    entry = null,
+    path = [],
+    reader = '',
     agents,
     big = false,
     onclose,
@@ -18,6 +36,11 @@
   }: {
     model: DgModel;
     progress: DgProgress;
+    entries?: DgEntry[];
+    entry?: DgEntry | null;
+    path?: DgPass[];
+    /** The name of the agent read, for the list of its path. */
+    reader?: string;
     agents: Record<string, DgAgent[]>;
     big?: boolean;
     onclose?: () => void;
@@ -55,6 +78,50 @@
   };
   const rounds = (n: number) => `×${n}`;
 
+  // ---------- from an entry (ESC-406) ----------
+  /** The door chosen when no agent is read: the first until another is picked. */
+  let picked = $state<string | null>(null);
+  const chosen = $derived(entry ?? entries.find((e) => e.door === picked) ?? entries[0] ?? null);
+  // Where the agent went stays in its diagram, even off the paths of its door.
+  const passed = $derived(entry ? [...path.map((p) => p.step), ...(progress.on ? [progress.on] : [])] : []);
+  const scope = $derived(chosen ? scopeTo(model, chosen, passed) : { model, off: [] });
+  const scoped = $derived(scope.model);
+  /** « n étapes hors de ce chemin », opened. */
+  let open = $state(false);
+  const choosing = $derived(!entry && entries.length > 1);
+  const words = $derived({ entryLabel: t('workflow.dg.entry'), tags: { next: t('workflow.dg.keyNext'), on: t('workflow.dg.onTag') } });
+  function pickKey(e: KeyboardEvent, i: number) {
+    const d = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    const to = entries[(i + d + entries.length) % entries.length];
+    picked = to.door;
+    const group = (e.currentTarget as HTMLElement).parentElement;
+    queueMicrotask(() => group?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus());
+  }
+  /** One passage in words: where, how it came there and why, which stay, whether the agent is there. */
+  function say(p: DgPass): string {
+    const from = model.steps.find((s) => s.id === p.from)?.name ?? '';
+    let out =
+      p.via === 'entry'
+        ? p.door
+          ? t('workflow.dg.passEntry', { name: p.name, door: p.door })
+          : t('workflow.dg.passGo', { name: p.name })
+        : p.via === 'back'
+          ? p.reason
+            ? t('workflow.dg.passBack', { name: p.name, from, reason: p.reason })
+            : t('workflow.dg.passBackPlain', { name: p.name, from })
+          : p.via === 'loop'
+            ? p.reason
+              ? t('workflow.dg.passLoop', { name: p.name, reason: p.reason })
+              : t('workflow.dg.passLoopPlain', { name: p.name })
+            : t('workflow.dg.passGo', { name: p.name });
+    if (p.pass > 1) out = t('workflow.dg.passNth', { say: out, n: p.pass });
+    return p.on ? t('workflow.dg.passOn', { say: out }) : out;
+  }
+  const selfSays = (s: NonNullable<DgLayout['nodes'][number]['self']>) =>
+    s.turns ? (s.max ? `${s.turns}/${s.max}` : `×${s.turns}`) : s.max ? rounds(s.max) : '';
+
   // ---------- in the column: at the width of the tab ----------
   let wrap = $state<HTMLElement>();
   let width = $state(312);
@@ -66,7 +133,7 @@
     width = Math.max(Math.round(el.clientWidth), 200);
     return () => ro.disconnect();
   });
-  const narrow = $derived(layout(model, { width, progress, agents, measure, maxRounds: rounds }));
+  const narrow = $derived(layout(scoped, { width, progress, agents, measure, maxRounds: rounds, ...words }));
 
   // ---------- enlarged: over the work panel, zoom and scroll ----------
   let canvas = $state<HTMLElement>();
@@ -81,10 +148,10 @@
   });
   const fitOf = (l: DgLayout) => Math.min((room.w - 88) / l.width, (room.h - 72) / l.height);
   // Across when it holds at 85 % or more; else down, as in the column but wider (choice 208).
-  const wide = $derived(big ? layout(model, { dir: 'LR', names: true, progress, agents, measure, maxRounds: rounds }) : null);
+  const wide = $derived(big ? layout(scoped, { dir: 'LR', names: true, progress, agents, measure, maxRounds: rounds, ...words }) : null);
   const tall = $derived(
     big && room.w
-      ? layout(model, { width: Math.min(Math.max(room.w - 88, 320), 560), progress, agents, measure, maxRounds: rounds })
+      ? layout(scoped, { width: Math.min(Math.max(room.w - 88, 320), 560), progress, agents, measure, maxRounds: rounds, ...words })
       : null,
   );
   const shown = $derived(wide && tall && fitOf(wide) < 0.85 && fitOf(tall) > fitOf(wide) ? tall : (wide ?? narrow));
@@ -133,7 +200,14 @@
         ? t('workflow.dg.stepDone', { name: n.full })
         : n.state === 'next'
           ? t('workflow.dg.stepNext', { name: n.full })
-          : n.full;
+          : n.state === 'seen'
+            ? t('workflow.dg.stepSeen', { name: n.full })
+            : n.full;
+  /** The numbers of the agent's passages in a step, whole (the beads show the last ones). */
+  const passesOf = (id: string) => {
+    const all = progress.seen[id] ?? [];
+    return all.length ? t('workflow.dg.passesTip', { count: all.length, list: all.join(', ') }) : '';
+  };
   const reading = $derived(Object.values(agents).flat());
 </script>
 
@@ -148,7 +222,12 @@
   >
     {#each l.edges as e, i (i)}<path class="e {e.cls}" d={e.d} />{/each}
     {#each l.doors as d, i (i)}
-      <g class="dg-door"><rect x={d.x} y={d.y} width={d.w} height="20" rx="10" /><text x={d.x + 7} y={d.y + 13.5}>{d.text}</text></g>
+      <g class="dg-door" class:taken={d.taken} data-door={d.full}>
+        <title>{d.label ? `${d.label} · ${d.full}` : d.full}</title>
+        <rect x={d.x} y={d.y} width={d.w} height="20" rx="10" />
+        {#if d.label}<text class="lb" x={d.x + 7} y={d.y + 13.5}>{d.label}</text>{/if}
+        <text x={d.x + d.w - 7} y={d.y + 13.5} text-anchor="end">{d.text}</text>
+      </g>
     {/each}
     {#if l.exit}
       {@const e = l.exit}
@@ -159,26 +238,44 @@
       </g>
     {/if}
     {#each l.nodes as n (n.id)}
-      <g class="dg-node {n.state}" class:guess={n.guessed} data-step={n.id} tabindex="-1" role="listitem" aria-label={ariaOf(n)}>
-        <title>{n.full}{n.cmd ? ` · ${n.cmd}` : ''}</title>
+      <g
+        class="dg-node {n.state}"
+        class:guess={n.guessed}
+        class:passed={n.beads.length > 0}
+        data-step={n.id}
+        tabindex="-1"
+        role="listitem"
+        aria-label={ariaOf(n)}
+      >
+        <title>{n.full}{n.cmd ? ` · ${n.cmd}` : ''}{n.beads.length ? ` · ${passesOf(n.id)}` : ''}</title>
         <rect x={n.x} y={n.y} width={n.w} height={n.h} rx="9" />
-        {#if n.state === 'done'}<use class="ck" href="#i-check" x={n.x + 9} y={n.y + 9} width="14" height="14" />{/if}
-        <text class="nm" x={n.x + 10 + (n.state === 'done' ? 16 : 0)} y={n.y + 17}>{n.name}</text>
+        {#if n.state === 'done' && !n.beads.length}<use class="ck" href="#i-check" x={n.x + 9} y={n.y + 9} width="14" height="14" />{/if}
+        <text class="nm" x={n.x + 10 + (n.state === 'done' && !n.beads.length ? 16 : 0)} y={n.y + 17}>{n.name}</text>
+        {#if n.beadsMore}<text class="more" x={n.beadsMore.x} y={n.beadsMore.y} text-anchor="end">{n.beadsMore.text}</text>{/if}
+        {#each n.beads as b (b.n)}
+          <g class="dg-bead" class:on={b.on} data-pass={b.n}>
+            <circle cx={b.cx} cy={b.cy} r="8" /><text x={b.cx} y={b.cy + 3.5} text-anchor="middle">{b.n}</text>
+          </g>
+        {/each}
         {#if n.cmd}<text class="cmd" x={n.x + 10} y={n.y + n.h - (n.h > 50 ? 14 : 10)}>{n.cmd}</text>{/if}
         {#if n.self}
           {@const s = n.self}
           <g class="dg-self" class:took={s.took}>
-            <title>{t('workflow.dg.selfTip', { cond: s.cond, count: s.max ?? 0 })}</title>
+            <title
+              >{s.turns
+                ? t('workflow.dg.turnsTip', { cond: s.cond, count: s.turns })
+                : t('workflow.dg.selfTip', { cond: s.cond, count: s.max ?? 0 })}</title
+            >
             <rect x={s.x} y={s.y} width="44" height="16" rx="8" />
             <use href="#i-restart" x={s.x + 5} y={s.y + 3} width="10" height="10" />
-            {#if s.max}<text x={s.x + 18} y={s.y + 11.6}>{rounds(s.max)}</text>{/if}
+            {#if selfSays(s)}<text x={s.x + 18} y={s.y + 11.6}>{selfSays(s)}</text>{/if}
           </g>
         {/if}
         {#each n.dots as d (d.id)}
           <circle class="ag" class:cur={d.cur} class:wait={d.wait} cx={d.cx} cy={d.cy} r="4"><title>{d.name}</title></circle>
         {/each}
-        {#if n.more}<text class="more" x={n.x + n.w - 40} y={n.y + 16} text-anchor="end">{n.more}</text>{/if}
-        {#if n.tag}<text class="tag" x={n.tag.x} y={n.tag.y} text-anchor="end">{t('workflow.nextTag')}</text>{/if}
+        {#if n.more}<text class="more" x={n.moreX} y={n.dots[0].cy + 3.6} text-anchor="end">{n.more}</text>{/if}
+        {#if n.tag}<text class="tag" x={n.tag.x} y={n.tag.y} text-anchor="end">{n.tag.text}</text>{/if}
         {#if n.fork}<path class="dg-fork" d={n.fork} />{/if}
       </g>
       {#if n.who}
@@ -204,22 +301,80 @@
 
 {#snippet legend()}
   <div class="dg-key">
+    <span><svg viewBox="0 0 18 10"><path class="k-taken" d="M1 5h16" /></svg>{t('workflow.dg.keyTaken')}</span>
+    <span><svg viewBox="0 0 18 10"><path class="k-poss" d="M1 5h16" /></svg>{t('workflow.dg.keyPossible')}</span>
+    <span><svg viewBox="0 0 18 10"><path class="k-took" d="M1 5h16" /></svg>{t('workflow.dg.keyBackTook')}</span>
     <span><svg viewBox="0 0 18 10"><path class="k-ret" d="M1 5h16" /></svg>{t('workflow.dg.keyBack')}</span>
     <span><svg viewBox="0 0 18 10"><path class="k-fork" d="M9 .5l4.5 4.5L9 9.5 4.5 5z" /></svg>{t('workflow.dg.keyChoice')}</span>
-    <span><svg viewBox="0 0 18 10"><path class="k-again" d="M1 5h16" /></svg>{t('workflow.dg.keyAgain')}</span>
-    <span><svg viewBox="0 0 18 10"><rect class="k-next" x="1" y="1" width="16" height="8" rx="2.5" /></svg>{t('workflow.dg.keyNext')}</span>
   </div>
 {/snippet}
 
+<!-- No agent read: the doors to start from, the first until another is picked. -->
+{#snippet pick()}
+  {#if choosing}
+    <div class="dg-pick" role="radiogroup" aria-label={t('workflow.dg.entryPick')} data-testid="workflow-entries">
+      <span class="lb">{t('workflow.dg.entryPick')}</span>
+      {#each entries as e, i (e.door)}
+        <button
+          class="mono"
+          role="radio"
+          aria-checked={e.door === chosen?.door}
+          tabindex={e.door === chosen?.door ? 0 : -1}
+          onclick={() => (picked = e.door)}
+          onkeydown={(ev) => pickKey(ev, i)}>{e.door}</button
+        >
+      {/each}
+    </div>
+  {/if}
+{/snippet}
+
+<!-- What the entry does not reach: folded, opened on demand. -->
+{#snippet aside()}
+  {#if scope.off.length && chosen}
+    <div class="dg-off" data-testid="workflow-off">
+      <button class="h" aria-expanded={open} onclick={() => (open = !open)}>
+        <svg viewBox="0 0 10 10" class:open aria-hidden="true"><path d="M3.5 2l3 3-3 3" /></svg>
+        {t('workflow.dg.off', { count: scope.off.length })}
+      </button>
+      {#if open}
+        <ul>
+          {#each scope.off as s (s.id)}
+            <li>
+              <b>{s.name}</b>{#if s.cmd}<span class="mono">{s.cmd}</span>{/if}
+            </li>
+          {/each}
+        </ul>
+        <p>{t('workflow.dg.offWhy', { door: chosen.door })}</p>
+      {/if}
+    </div>
+  {/if}
+{/snippet}
+
+<!-- The path in words, in its order, for a screen reader: the drawing alone says it by lines and colours. -->
+{#snippet told()}
+  {#if path.length}
+    <ol class="dg-told" aria-label={t('workflow.dg.path', { name: reader })} data-testid="workflow-path">
+      {#each path as p (p.n)}<li>{say(p)}</li>{/each}
+    </ol>
+  {/if}
+{/snippet}
+
+{@render pick()}
 <div class="dg-wrap" bind:this={wrap} data-testid="workflow-diagram">
   {@render svg(narrow, 1)}
 </div>
+{#if !big}{@render told()}{/if}
+{@render aside()}
 {@render legend()}
 
 {#if big}
   <section class="dg-big" use:portal aria-label={t('workflow.dg.label', { name: model.name })} data-testid="workflow-diagram-big">
     <div class="dg-bar">
-      <span class="dg-title"><Icon name="flow" size={14} /><b>{model.name}</b></span>
+      <span class="dg-title"
+        ><Icon name="flow" size={14} /><b>{model.name}</b>{#if entry}<span class="by"
+            >· {t('workflow.dg.enteredBy')} <span class="mono">{entry.door}</span></span
+          >{/if}</span
+      >
       <span class="grow"></span>
       <div class="dg-zoom" role="group" aria-label={t('workflow.dg.zoom')}>
         <button class="icon-btn" aria-label={t('workflow.dg.zoomOut')} use:tip={t('workflow.dg.zoomOut')} onclick={() => setZoom(z - 0.1)}
@@ -236,6 +391,7 @@
         ><Icon name="close" size={14} /></button
       >
     </div>
+    {@render pick()}
     <!-- The canvas scrolls and zooms by the keyboard: a region that takes the focus. -->
     <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
     <div
@@ -252,6 +408,8 @@
     >
       {@render svg(shown, z)}
     </div>
+    {@render told()}
+    {@render aside()}
     {#if reading.length}
       <div class="dg-side">
         <h4>{t('workflow.dg.agents')}</h4>
@@ -282,28 +440,31 @@
     fill: var(--text);
     font-size: 12.5px;
   }
+  /* What may happen is light and dashed; what the agent took is full and marked (ESC-406): told apart by the line
+     itself, not by its colour alone. */
   .dg .e {
     fill: none;
     stroke: var(--line-3);
-    stroke-width: 1.4;
+    stroke-width: 1.2;
+    stroke-dasharray: 2.5 3.5;
     stroke-linecap: round;
     stroke-linejoin: round;
   }
   .dg .e.walked {
-    stroke: var(--muted);
-  }
-  .dg .e.door {
-    stroke-dasharray: 2 3;
+    stroke: var(--text);
+    stroke-width: 2.4;
+    stroke-dasharray: none;
   }
   .dg .e.back {
     stroke: oklch(from var(--del) l c h / 0.6);
   }
   .dg .e.took {
     stroke: var(--del);
-    stroke-width: 1.8;
+    stroke-width: 2.4;
+    stroke-dasharray: none;
   }
   .dg .e.again {
-    stroke-dasharray: 3 4;
+    stroke-dasharray: 1 4;
   }
   .dg .e.head {
     stroke-dasharray: none;
@@ -315,26 +476,45 @@
     stroke-linecap: round;
     stroke-linejoin: round;
   }
+  /* A step the agent has not passed is a possible: dashed, quieter. */
   .dg-node rect {
-    fill: var(--raise);
-    stroke: var(--line-2);
+    fill: var(--panel);
+    stroke: var(--line-3);
+    stroke-dasharray: 3 3;
   }
   .dg-node:hover rect {
-    stroke: var(--line-3);
+    stroke: var(--muted);
   }
   .dg-node .nm {
-    font-weight: 600;
+    fill: var(--soft);
+    font-weight: 550;
     letter-spacing: -0.005em;
+  }
+  .dg-node:is(.done, .seen, .on, .passed) rect {
+    fill: var(--raise);
+    stroke: var(--muted);
+    stroke-width: 1.4;
+    stroke-dasharray: none;
+  }
+  .dg-node:is(.done, .seen, .on, .passed) .nm {
+    fill: var(--text);
+    font-weight: 600;
+  }
+  .dg-bead circle {
+    fill: var(--text);
+  }
+  .dg-bead text {
+    fill: var(--panel);
+    font-size: 10px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .dg-bead.on circle {
+    fill: var(--run);
   }
   .dg-node .cmd {
     fill: var(--muted);
     font: 500 10.5px var(--mono);
-  }
-  .dg-node.done rect {
-    fill: var(--panel);
-  }
-  .dg-node.done .nm {
-    fill: var(--soft);
   }
   .dg-node .ck {
     color: var(--muted);
@@ -342,15 +522,17 @@
   .dg-node.on rect {
     fill: color-mix(in oklch, var(--run) 8%, var(--raise));
     stroke: var(--run);
-    stroke-width: 1.5;
+    stroke-width: 1.8;
   }
-  .dg-node.next rect,
-  .dg-node.guess rect {
-    stroke: var(--line-3);
+  .dg-node.next:not(.passed) rect {
+    stroke: var(--muted);
     stroke-dasharray: 4 3;
   }
   .dg-node.guess rect {
     stroke-dasharray: 1.5 3;
+  }
+  .dg-node.on .tag {
+    fill: var(--run);
   }
   .dg-node .tag,
   .dg-node .more {
@@ -378,9 +560,12 @@
   .dg-self rect {
     fill: color-mix(in oklch, var(--del) 10%, var(--raise));
     stroke: oklch(from var(--del) l c h / 0.45);
+    stroke-dasharray: 2.5 2.5;
   }
   .dg-self.took rect {
     stroke: var(--del);
+    stroke-width: 1.4;
+    stroke-dasharray: none;
   }
   .dg-self use {
     color: var(--del);
@@ -400,12 +585,26 @@
     fill: var(--soft);
     font: 500 11px var(--mono);
   }
+  .dg-door text.lb {
+    fill: var(--muted);
+    font: 550 10.5px var(--font);
+  }
+  .dg-door.taken rect {
+    fill: var(--raise-2);
+    stroke: var(--text);
+    stroke-width: 1.3;
+    stroke-dasharray: none;
+  }
+  .dg-door.taken text:not(.lb) {
+    fill: var(--text);
+  }
   .dg-exit rect {
     fill: var(--panel);
-    stroke: var(--line-2);
+    stroke: var(--line-3);
+    stroke-dasharray: 3 3;
   }
   .dg-exit.next rect {
-    stroke: var(--line-3);
+    stroke: var(--muted);
     stroke-dasharray: 4 3;
   }
   .dg-exit circle {
@@ -434,9 +633,12 @@
   .dg-chip.ret rect {
     fill: color-mix(in oklch, var(--del) 9%, var(--panel));
     stroke: oklch(from var(--del) l c h / 0.45);
+    stroke-dasharray: 2.5 2.5;
   }
   .dg-chip.ret.took rect {
     stroke: var(--del);
+    stroke-width: 1.3;
+    stroke-dasharray: none;
   }
   .dg-chip.ret text,
   .dg-chip.ret use {
@@ -511,21 +713,152 @@
     stroke-width: 1.5;
     stroke-linecap: round;
   }
-  .k-ret {
-    stroke: var(--del);
+  .dg-key .k-taken {
+    stroke: var(--text);
+    stroke-width: 2.4;
   }
-  .k-again {
+  .k-poss {
     stroke: var(--line-3);
-    stroke-dasharray: 3 3;
+    stroke-dasharray: 2.5 3.5;
+  }
+  .dg-key .k-took {
+    stroke: var(--del);
+    stroke-width: 2.4;
+  }
+  .k-ret {
+    stroke: oklch(from var(--del) l c h / 0.6);
+    stroke-dasharray: 2.5 3.5;
   }
   .dg-key .k-fork {
     fill: var(--panel);
     stroke: var(--muted);
     stroke-width: 1.2;
   }
-  .k-next {
-    stroke: var(--line-3);
-    stroke-dasharray: 3 2;
+
+  /* The doors to choose from, when no agent is read. */
+  .dg-pick {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 14px 8px;
+  }
+  .dg-pick .lb {
+    flex-basis: 100%;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 550;
+  }
+  .dg-pick button {
+    max-width: 100%;
+    height: 22px;
+    padding: 0 9px;
+    overflow: hidden;
+    border: 0;
+    border-radius: 11px;
+    background: none;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--muted);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .dg-pick button:hover {
+    background: var(--hover);
+    color: var(--soft);
+  }
+  .dg-pick button[aria-checked='true'] {
+    background: var(--raise-2);
+    box-shadow: inset 0 0 0 1.3px var(--text);
+    color: var(--text);
+  }
+  .dg-pick button:focus-visible {
+    outline: 2px solid var(--focus, var(--text));
+    outline-offset: 2px;
+  }
+  /* What the entry does not reach. */
+  .dg-off {
+    margin: 4px 14px 6px;
+    border-radius: 8px;
+    box-shadow: inset 0 0 0 1px var(--line);
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  .dg-off .h {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    height: 28px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: inherit;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .dg-off .h:hover {
+    color: var(--soft);
+  }
+  .dg-off .h:focus-visible {
+    outline: 2px solid var(--focus, var(--text));
+    outline-offset: -2px;
+  }
+  .dg-off .h svg {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .dg-off .h svg.open {
+    transform: rotate(90deg);
+  }
+  .dg-off ul {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    padding: 2px 10px 6px 26px;
+    list-style: none;
+  }
+  .dg-off li {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+  }
+  .dg-off li b {
+    flex: none;
+    color: var(--soft);
+    font-weight: 550;
+  }
+  .dg-off li span {
+    overflow: hidden;
+    font-size: 10.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .dg-off p {
+    margin: 0;
+    padding: 0 10px 8px 26px;
+    font-size: 11px;
+  }
+  /* The path in words: read, not seen. */
+  .dg-told {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   /* Enlarged: the whole work panel. */
@@ -554,10 +887,34 @@
     color: var(--text);
   }
   .dg-title b {
-    overflow: hidden;
+    flex: none;
     font-weight: 600;
+  }
+  .dg-title .by {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 12px;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .dg-big .dg-pick {
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .dg-big .dg-pick .lb {
+    flex-basis: auto;
+    margin-right: 4px;
+  }
+  .dg-big .dg-off {
+    position: absolute;
+    bottom: 52px;
+    left: 14px;
+    max-width: min(320px, calc(100% - 28px));
+    margin: 0;
+    background: var(--raise);
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, calc(0.35 * var(--shade, 1))),
+      inset 0 0 0 1px var(--line-2);
   }
   .grow {
     flex: 1;

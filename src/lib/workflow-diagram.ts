@@ -5,7 +5,7 @@
 
 import { t } from './i18n';
 import type { Workflow, WorkflowTrack } from './types';
-import { doneSteps, labelIn, nextOf, plainLine, stepsOf, TICKETS } from './workflow-view';
+import { currentPhase, doneSteps, labelIn, nextOf, plainLine, stepsOf, TICKETS } from './workflow-view';
 
 /** A workflow as the diagram reads it: its steps in their order, the ways forward and back, the entries, the exit. */
 export interface DgModel {
@@ -88,6 +88,88 @@ export function diagramOf(w: Workflow, ticketLoops = 0): DgModel {
   };
 }
 
+// ---------- From an entry: what it reaches (ESC-406) ----------
+
+/** A way into the workflow: what is typed (a command, a skill, the prompt of a loop, else the step's own name) and the step it enters. */
+export type DgEntry = DgModel['entries'][number];
+
+/**
+ * Every way into `w`, to choose from when no agent is read: its entry doors, each into the step it enters, the first
+ * step in front when no door leads to it (alone when the workflow has no door). The diagram's own `entries` stay the
+ * three of « Copier en Mermaid ».
+ */
+export function entriesOf(w: Workflow, m: DgModel): DgEntry[] {
+  if (w.kind === 'prompt') return m.entries;
+  const first = m.steps[0];
+  if (!first) return [];
+  const ids = new Set(m.steps.map((s) => s.id));
+  const byCmd = new Map(m.steps.filter((s) => s.cmd).map((s) => [s.cmd, s.id]));
+  const out: DgEntry[] = [];
+  for (const d of w.doors) {
+    if (d.role !== 'entry' || !d.command || out.some((e) => e.door === d.command)) continue;
+    out.push({ door: d.command, to: d.enters.find((e) => ids.has(e)) ?? byCmd.get(d.command) ?? first.id });
+  }
+  if (!out.some((e) => e.to === first.id)) out.unshift({ door: first.cmd || first.name, to: first.id });
+  return out;
+}
+
+/** The steps reached from `to` by the ways forward and the ways back, `to` first; none when `to` is no step. */
+export function reachOf(m: DgModel, to: string): Set<string> {
+  const reach = new Set<string>();
+  if (!m.steps.some((s) => s.id === to)) return reach;
+  const todo = [to];
+  while (todo.length) {
+    const at = todo.shift()!;
+    if (reach.has(at)) continue;
+    reach.add(at);
+    for (const e of [...m.go, ...m.back]) if (e.from === at && !reach.has(e.to)) todo.push(e.to);
+  }
+  return reach;
+}
+
+/**
+ * The entry `tr` took: the door of its first passage as typed, without its arguments, else the command of the step it
+ * began in. Without a history (« Tickets », a track just read), the first entry that reaches its step, else its step.
+ * Null when it cannot be known: no agent, another workflow, steps the workflow no longer has.
+ */
+export function entryOf(w: Workflow, m: DgModel, tr: WorkflowTrack | null): DgEntry | null {
+  if (!tr || tr.workflow !== w.id) return null;
+  if (w.kind === 'prompt') return m.entries[0] ?? null;
+  const steps = new Map(m.steps.map((s) => [s.id, s]));
+  const began = currentPhase(w, tr.passages).find((p) => p.step && steps.has(p.step));
+  if (began) {
+    const s = steps.get(began.step!)!;
+    return { door: began.door?.trim().split(/\s+/)[0] || s.cmd || s.name, to: s.id };
+  }
+  const on = tr.step ? steps.get(tr.step) : undefined;
+  if (!on) return null;
+  return entriesOf(w, m).find((e) => reachOf(m, e.to).has(on.id)) ?? { door: on.cmd || on.name, to: on.id };
+}
+
+/**
+ * The diagram from `entry`: only the steps it reaches, their ways, the exit when its step is reached (the next round
+ * only when it goes back to a step reached); `off`, the steps out of this path, folded under the diagram. An entry
+ * that leads to no step known keeps the whole diagram. `passed`, the steps the agent went through: one it reached
+ * otherwise (a command typed on the way) stays, with where it leads.
+ */
+export function scopeTo(m: DgModel, entry: DgEntry, passed: string[] = []): { model: DgModel; off: DgModel['steps'] } {
+  const reach = reachOf(m, entry.to);
+  if (!reach.size) return { model: { ...m, entries: [] }, off: [] };
+  for (const id of passed) if (!reach.has(id)) for (const s of reachOf(m, id)) reach.add(s);
+  const exit = m.exit && reach.has(m.exit.from) ? { ...m.exit, again: reach.has(m.steps[0].id) ? m.exit.again : '' } : null;
+  return {
+    model: {
+      name: m.name,
+      steps: m.steps.filter((s) => reach.has(s.id)),
+      go: m.go.filter((g) => reach.has(g.from) && reach.has(g.to)),
+      back: m.back.filter((b) => reach.has(b.from) && reach.has(b.to)),
+      entries: [entry],
+      exit,
+    },
+    off: m.steps.filter((s) => !reach.has(s.id)),
+  };
+}
+
 // ---------- Mermaid ----------
 
 /**
@@ -138,21 +220,93 @@ export function toMermaid(m: DgModel): string {
 
 // ---------- Where the agents are ----------
 
-export type DgState = 'done' | 'on' | 'next' | '';
+/** `seen`: passed by the agent, not done in its pass (a way back undid it). */
+export type DgState = 'done' | 'on' | 'next' | 'seen' | '';
 
-/** One agent's progress on the diagram: the steps done, the one it is on, the next ones, the ways back it took. */
+/** One stay of the agent in a step, in the order of its path (ESC-406). */
+export interface DgPass {
+  /** Its number in the path, from 1. */
+  n: number;
+  step: string;
+  name: string;
+  /** The nth stay in this step. */
+  pass: number;
+  /** How it came there: by the entry, a way forward, a way back, or a round of the step's own loop. */
+  via: 'entry' | 'go' | 'back' | 'loop';
+  from: string | null;
+  /** Why it came back or went round: as the step wrote it, else the condition of the workflow. */
+  reason: string;
+  door: string | null;
+  /** The agent is there now. */
+  on: boolean;
+  ms: number;
+}
+
+/**
+ * The real path of `tr` in `w`, in the order it went (ESC-406): its passages of the current phase, as the tracking
+ * keeps them (they survive a restart), each with how it came there. What is no step of the workflow is skipped.
+ */
+export function pathOf(w: Workflow, m: DgModel, tr: WorkflowTrack | null): DgPass[] {
+  if (!tr || tr.workflow !== w.id) return [];
+  const at = new Map(m.steps.map((s, i) => [s.id, i]));
+  const ps = currentPhase(w, tr.passages).filter((p) => p.step && at.has(p.step));
+  const stays: Record<string, number> = {};
+  return ps.map((p, i) => {
+    const step = p.step!;
+    const prev = ps[i - 1];
+    const door = p.door?.trim().split(/\s+/)[0] || null;
+    let via: DgPass['via'] = 'entry';
+    let reason = '';
+    if (prev) {
+      const back = m.back.find((b) => b.from === prev.step && b.to === step);
+      via = prev.step === step ? 'loop' : back || prev.outcome === 'back' || at.get(step)! < at.get(prev.step!)! ? 'back' : 'go';
+      if (via !== 'go') reason = prev.reason ?? back?.cond ?? '';
+    }
+    return {
+      n: i + 1,
+      step,
+      name: m.steps[at.get(step)!].name,
+      pass: (stays[step] = (stays[step] ?? 0) + 1),
+      via,
+      from: prev?.step ?? null,
+      reason,
+      door: prev ? door : door || m.steps[at.get(step)!].cmd || null,
+      on: i === ps.length - 1 && !tr.outside && tr.step === step,
+      ms: p.ms,
+    };
+  });
+}
+
+/**
+ * One agent's progress on the diagram: the steps done, the one it is on, the next ones; and its path on it (ESC-406):
+ * the numbers of its passages by step, the ways forward and back it took, the rounds of each loop, why it came back.
+ */
 export interface DgProgress {
   done: string[];
   on: string | null;
   next: string[];
   /** The exit comes next (the end of the cycle). */
   exitNext?: boolean;
+  /** The ways back and the loops taken, `from>to`. */
   took: string[];
+  /** The numbers of the passages in each step, in their order. */
+  seen: Record<string, number[]>;
+  /** The number of the passage in course. */
+  at: number | null;
+  /** The ways forward taken, `from>to`. */
+  walked: string[];
+  /** The rounds taken of a step's own loop. */
+  rounds: Record<string, number>;
+  /** Why the last time, by way back or loop (`from>to`). */
+  reasons: Record<string, string>;
 }
+
+/** No agent read: nothing taken. */
+export const NO_PROGRESS: DgProgress = { done: [], on: null, next: [], took: [], seen: {}, at: null, walked: [], rounds: {}, reasons: {} };
 
 /** The progress of `tr` in `w` (of the current phase): done, on, next (each branch of a choice), the ways back taken. */
 export function progressOf(w: Workflow, m: DgModel, tr: WorkflowTrack | null): DgProgress {
-  if (!tr) return { done: [], on: null, next: [], took: [] };
+  if (!tr) return { ...NO_PROGRESS };
   // The steps done and the next as the column says them (ESC-244): the diagram adds the other branches of a choice.
   const done = w.kind === 'prompt' ? [] : doneSteps(w, tr);
   const on = tr.outside ? null : (tr.step ?? null);
@@ -161,11 +315,20 @@ export function progressOf(w: Workflow, m: DgModel, tr: WorkflowTrack | null): D
   const from = n?.to ? (onId ?? m.go.find((g) => g.to === n.to)?.from ?? null) : null;
   const branches = n?.to ? [n.to, ...m.go.filter((g) => g.from === from && g.to !== n.to).map((g) => g.to)] : [];
   const took = new Set<string>();
-  const ps = tr.passages.filter((p) => p.workflow === w.id && p.step);
-  for (let i = 1; i < ps.length; i++) {
-    const a = ps[i - 1].step!;
-    const b = ps[i].step!;
-    if (m.back.some((x) => x.from === a && x.to === b)) took.add(`${a}>${b}`);
+  const walked = new Set<string>();
+  const seen: DgProgress['seen'] = {};
+  const rounds: DgProgress['rounds'] = {};
+  const reasons: DgProgress['reasons'] = {};
+  const path = pathOf(w, m, tr);
+  for (const p of path) {
+    (seen[p.step] ??= []).push(p.n);
+    const way = `${p.from}>${p.step}`;
+    if (p.via === 'go') walked.add(way);
+    else if (p.via !== 'entry') {
+      took.add(way);
+      if (p.reason) reasons[way] = p.reason;
+      if (p.via === 'loop') rounds[p.step] = (rounds[p.step] ?? 0) + 1;
+    }
   }
   return {
     done,
@@ -173,6 +336,11 @@ export function progressOf(w: Workflow, m: DgModel, tr: WorkflowTrack | null): D
     next: branches.filter((x) => !done.includes(x) && x !== onId),
     ...(n?.exit && m.exit ? { exitNext: true } : {}),
     took: [...took],
+    seen,
+    at: path.find((p) => p.on)?.n ?? null,
+    walked: [...walked],
+    rounds,
+    reasons,
   };
 }
 
@@ -194,11 +362,17 @@ export interface DgNode {
   state: DgState;
   guessed: boolean;
   /** A loop on itself: its pill, its rounds, its condition. */
-  self: { x: number; y: number; max: number | null; cond: string; took: boolean } | null;
+  self: { x: number; y: number; max: number | null; cond: string; took: boolean; turns: number } | null;
   dots: { cx: number; cy: number; id: string; cur: boolean; wait: boolean; name: string }[];
   more: string;
-  /** Where « prochaine » goes, when there is room. */
-  tag: { x: number; y: number } | null;
+  /** Where the count of the agents beyond three ends. */
+  moreX: number;
+  /** « ensuite » or « en cours », in words at the foot of the step, when there is room. */
+  tag: { x: number; y: number; text: string } | null;
+  /** The numbers of the agent's passages in this step (ESC-406), the last ones when there are many. */
+  beads: { cx: number; cy: number; n: number; on: boolean }[];
+  /** How many passages the beads leave out (« +6 »). */
+  beadsMore: { x: number; y: number; text: string } | null;
   /** The diamond of a choice. */
   fork: string | null;
   /** Enlarged: its agent by name under it. */
@@ -221,7 +395,8 @@ export interface DgLayout {
   /** The lines, then their heads: `fwd`, `walked`, `door`, `back`, `took`, `again`. */
   edges: { d: string; cls: string }[];
   nodes: DgNode[];
-  doors: { x: number; y: number; w: number; text: string }[];
+  /** `taken`: the door the agent came in by, drawn full; `label`, « Entrée » in front of it. */
+  doors: { x: number; y: number; w: number; text: string; full: string; label: string; taken: boolean }[];
   chips: DgChip[];
   /** Next: the end of the cycle comes after the step the agent is on. */
   exit: { x: number; y: number; w: number; h: number; label: string; next: boolean } | null;
@@ -264,11 +439,13 @@ export function layout(
   {
     dir = 'TD',
     width = 312,
-    progress = { done: [], on: null, next: [], took: [] },
+    progress = NO_PROGRESS,
     agents = {},
     names = false,
     measure,
     maxRounds = (n: number) => `×${n}`,
+    entryLabel = '',
+    tags = { next: '', on: '' },
   }: {
     dir?: 'TD' | 'LR';
     width?: number;
@@ -277,6 +454,10 @@ export function layout(
     names?: boolean;
     measure: Measure;
     maxRounds?: (n: number) => string;
+    /** « Entrée », written in the door. */
+    entryLabel?: string;
+    /** The words at the foot of the next step and of the one in course. */
+    tags?: { next: string; on: string };
   },
 ): DgLayout {
   const lr = dir === 'LR';
@@ -287,6 +468,10 @@ export function layout(
   const done = new Set(progress.done);
   const took = new Set(progress.took);
   const nexts = new Set(progress.next);
+  const walked = new Set(progress.walked);
+  const hasPath = Object.keys(progress.seen).length > 0;
+  // The one door of a diagram scoped to its entry is the one the agent read came in by.
+  const taken = m.entries.length === 1 && (hasPath || !!progress.on || progress.done.length > 0);
   const backs = m.back.filter((b) => b.from !== b.to && rank[b.to] < rank[b.from]);
   const selfs = Object.fromEntries(m.back.filter((b) => b.from === b.to).map((b) => [b.from, b]));
   // A way back goes by the left gutter when the step it leaves has a neighbour on its right.
@@ -315,7 +500,8 @@ export function layout(
   const crossTotal = lr ? cols * crossSize + (cols - 1) * crossGap : crossSize;
   type Box = { main: number; mainSize: number; cross: number; crossSize: number };
   const box: Record<string, Box> = {};
-  const doorW = (text: string) => measure(text, 'door') + 14;
+  const labelW = entryLabel ? measure(entryLabel, 'chip') + 6 : 0;
+  const doorW = (text: string) => measure(text, 'door') + 14 + labelW;
   const midDoorW: Record<string, number> = Object.fromEntries(midEntries.map((e) => [e.to, doorW(e.door)]));
   // Between two ranks: in the column, the condition of a way back takes the top of the gap, a choice's the bottom.
   const forkFrom = new Set(m.go.filter((g) => m.go.filter((x) => x.from === g.from).length > 1).map((g) => g.from));
@@ -356,7 +542,8 @@ export function layout(
     box[id].cross + (midDoorW[id] && !lr ? Math.max(box[id].crossSize / 2, midDoorW[id] + 30) : box[id].crossSize / 2);
   let exitBox: Box | null = null;
   if (m.exit && box[m.exit.from]) {
-    main += lr && m.exit.cond ? Math.max(GAP, Math.min(measure(m.exit.cond, 'chip'), 160) + 36) : GAP;
+    // Down the column, a condition on the way to the exit leaves the line seen above and under it.
+    main += m.exit.cond ? (lr ? Math.max(GAP, Math.min(measure(m.exit.cond, 'chip'), 160) + 36) : 46) : GAP;
     const len = measure(m.exit.label, 'exit') + 44;
     const ex = box[m.exit.from];
     exitBox = lr
@@ -406,9 +593,12 @@ export function layout(
     chips.push({ x: r1(left), y: r1(y - 9), w: r1(w), text: shown, full: text, kind, took: tk });
   };
   const doors: DgLayout['doors'] = [];
+  const doorCls = taken ? 'door walked' : 'door';
   const door = (x: number, y: number, text: string) => {
-    const w = doorW(text);
-    doors.push({ x: r1(x), y: r1(y), w: r1(w), text });
+    // Down the column, a long door is cut to the width left.
+    const shown = lr ? text : fit(text, Math.max(width - x - 14 - labelW - 2, 24), measure, 'door');
+    const w = doorW(shown);
+    doors.push({ x: r1(x), y: r1(y), w: r1(w), text: shown, full: text, label: entryLabel, taken });
     return w;
   };
   // The entries: at the head, into the first step; one into a later step comes in just above it.
@@ -428,11 +618,11 @@ export function layout(
             ],
             5,
           ),
-          cls: 'door',
+          cls: doorCls,
         });
         y += 26;
       }
-      arrow(first.x - 1, first.y + first.h / 2, 1, 0, 'door');
+      arrow(first.x - 1, first.y + first.h / 2, 1, 0, doorCls);
     } else {
       const widths = topEntries.map((e) => doorW(e.door));
       const total = widths.reduce((a, b) => a + b, 0) + (widths.length - 1) * 6;
@@ -451,18 +641,18 @@ export function layout(
             ],
             5,
           ),
-          cls: 'door',
+          cls: doorCls,
         });
         x += widths[i] + 6;
       });
-      arrow(cx, first.y - 1, 0, 1, 'door');
+      arrow(cx, first.y - 1, 0, 1, doorCls);
     }
   }
   for (const e of midEntries) {
     const b = R(box[e.to]);
     const w = door(b.x + 8, b.y - (lr ? 32 : 25), e.door);
-    edges.push({ d: `M${r1(b.x + 8 + w / 2)} ${r1(b.y - (lr ? 12 : 5))} V${r1(b.y - 1)}`, cls: 'door' });
-    arrow(b.x + 8 + w / 2, b.y - 1, 0, 1, 'door');
+    edges.push({ d: `M${r1(b.x + 8 + w / 2)} ${r1(b.y - (lr ? 12 : 5))} V${r1(b.y - 1)}`, cls: doorCls });
+    arrow(b.x + 8 + w / 2, b.y - 1, 0, 1, doorCls);
   }
   // The ways forward: from the end of a step to the start of the next, turning in the middle of the gap.
   for (const g of m.go) {
@@ -474,7 +664,9 @@ export function layout(
     const ac = a.cross + a.crossSize / 2;
     const bc = arrive(g.to);
     const mid = am + splitAt(rank[g.from]);
-    const cls = done.has(g.from) && (done.has(g.to) || progress.on === g.to) ? 'walked' : 'fwd';
+    // Taken: as the path went; without a history (« Tickets »), between the steps done up to the one in course.
+    const went = hasPath ? walked.has(`${g.from}>${g.to}`) : done.has(g.from) && (done.has(g.to) || progress.on === g.to);
+    const cls = went ? 'walked' : 'fwd';
     const pts: [number, number][] =
       Math.abs(ac - bc) < 0.5 ? [P(am, ac), P(bm - 1, bc)] : [P(am, ac), P(mid, ac), P(mid, bc), P(bm - 1, bc)];
     edges.push({ d: path(pts), cls });
@@ -503,7 +695,8 @@ export function layout(
     const d1 = right ? 1 : -1;
     edges.push({ d: path([P(sm, sEdge), P(sm, L), P(tm, L), P(tm, tEdge + d1)], 7), cls });
     arrow(...P(tm, tEdge + d1), lr ? 0 : -d1, lr ? -d1 : 0, cls);
-    const say = [b.cond, b.max ? maxRounds(b.max) : ''].filter(Boolean).join(' · ');
+    // Taken: why the agent came back, as the step wrote it; else the condition of the workflow.
+    const say = (tk && progress.reasons[`${b.from}>${b.to}`]) || [b.cond, b.max ? maxRounds(b.max) : ''].filter(Boolean).join(' · ');
     if (!say) continue;
     if (lr) chip(...P(tb.main + tb.mainSize + (s.main - tb.main - tb.mainSize) / 2, L), say, 'ret', 'mid', 220, tk);
     else
@@ -552,15 +745,35 @@ export function layout(
   // The steps: done, on (the agent read), next; a loop on itself; who is on it.
   const nodes: DgNode[] = m.steps.map((s) => {
     const b = R(box[s.id]);
-    const state: DgState = progress.on === s.id ? 'on' : done.has(s.id) ? 'done' : nexts.has(s.id) ? 'next' : '';
+    const passed = progress.seen[s.id] ?? [];
+    const state: DgState = progress.on === s.id ? 'on' : done.has(s.id) ? 'done' : nexts.has(s.id) ? 'next' : passed.length ? 'seen' : '';
     const on = agents[s.id] ?? [];
-    const dotsW = on.length ? 8 + Math.min(on.length, 3) * 9 : 0;
-    const room = b.w - 24 - (state === 'done' ? 16 : 0) - dotsW;
-    const tagRoom = state === 'next' && room > 120;
     const loop = selfs[s.id];
+    // The head of the step: its name, then the numbers of the agent's passages, the last three beyond four.
+    const shownPasses = passed.length > 4 ? passed.slice(-3) : passed;
+    const beads = shownPasses.map((n, i) => ({
+      cx: r1(b.x + b.w - 14 - (shownPasses.length - 1 - i) * 19),
+      cy: r1(b.y + 14),
+      n,
+      on: n === progress.at,
+    }));
+    const moreText = passed.length > shownPasses.length ? `+${passed.length - shownPasses.length}` : '';
+    const beadsW = beads.length ? beads.length * 19 + 4 + (moreText ? measure(moreText, 'chip') + 6 : 0) : 0;
+    const beadsMore = moreText ? { x: r1(b.x + b.w - 14 - beads.length * 19 + 6), y: r1(b.y + 17.6), text: moreText } : null;
+    const check = state === 'done' && !beads.length;
+    const room = b.w - 24 - (check ? 16 : 0) - beadsW;
+    // The foot of the step, from the right: its loop, « ensuite » or « en cours », who is on it; then its command.
+    const footY = b.y + b.h - (lr ? 18 : 14);
+    let foot = b.x + b.w - 10 - (loop ? 50 : 0);
+    const tagText = state === 'on' ? tags.on : state === 'next' ? tags.next : '';
+    const tagW = tagText ? measure(tagText, 'chip') : 0;
+    const tag = tagText && foot - tagW - b.x > 96 ? { x: r1(foot), y: r1(footY + 3.6), text: tagText } : null;
+    if (tag) foot -= tagW + 8;
     const dots = on
       .slice(0, 3)
-      .map((a, i) => ({ cx: r1(b.x + b.w - 12 - i * 9), cy: r1(b.y + 13), id: a.id, cur: a.cur, wait: a.wait, name: a.name }));
+      .map((a, i) => ({ cx: r1(foot - 4 - i * 9), cy: r1(footY), id: a.id, cur: a.cur, wait: a.wait, name: a.name }));
+    const moreX = foot - Math.min(on.length, 3) * 9 - 4;
+    if (on.length) foot = moreX - (on.length > 3 ? measure(`+${on.length - 3}`, 'chip') + 4 : 0);
     let who: DgNode['who'] = null;
     if (names && on.length) {
       // Enlarged: the agent read first, else the first; the others by their count. Clear of the ways back.
@@ -584,17 +797,27 @@ export function layout(
       y: r1(b.y),
       w: r1(b.w),
       h: r1(b.h),
-      name: fit(s.name, room - (tagRoom ? 58 : 0), measure, 'name'),
+      name: fit(s.name, room, measure, 'name'),
       full: s.name,
-      cmd: s.cmd ? fit(s.cmd, b.w - 20 - (loop ? 54 : 0), measure, 'cmd') : '',
+      cmd: s.cmd ? fit(s.cmd, Math.max(foot - b.x - 16, 24), measure, 'cmd') : '',
       state,
       guessed: !!s.guessed,
       self: loop
-        ? { x: r1(b.x + b.w - 50), y: r1(b.y + b.h - (lr ? 26 : 22)), max: loop.max, cond: loop.cond, took: took.has(`${s.id}>${s.id}`) }
+        ? {
+            x: r1(b.x + b.w - 50),
+            y: r1(b.y + b.h - (lr ? 26 : 22)),
+            max: loop.max,
+            cond: progress.reasons[`${s.id}>${s.id}`] ?? loop.cond,
+            took: took.has(`${s.id}>${s.id}`),
+            turns: progress.rounds[s.id] ?? 0,
+          }
         : null,
       dots,
       more: on.length > 3 ? `+${on.length - 3}` : '',
-      tag: tagRoom ? { x: r1(b.x + b.w - 10 - dotsW), y: r1(b.y + 16.5) } : null,
+      moreX: r1(moreX),
+      tag,
+      beads,
+      beadsMore,
       fork: forkFrom.has(s.id)
         ? lr
           ? `M${r1(b.x + b.w)} ${r1(b.y + b.h / 2 - 5)} l5 5 l-5 5 l-5 -5 z`

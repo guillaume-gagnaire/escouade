@@ -195,6 +195,12 @@ describe('where the agent read is', () => {
       // At the end of the cycle, the exit comes next (ESC-244's nextOf).
       exitNext: true,
       took: ['gsd:verify-work>gsd:plan-phase'],
+      // Its path on the diagram (ESC-406): the numbers of its passages, the ways it took, why it came back.
+      seen: { 'gsd:discuss-phase': [1], 'gsd:plan-phase': [2, 5], 'gsd:execute-phase': [3, 6], 'gsd:verify-work': [4, 7] },
+      at: 7,
+      walked: ['gsd:discuss-phase>gsd:plan-phase', 'gsd:plan-phase>gsd:execute-phase', 'gsd:execute-phase>gsd:verify-work'],
+      rounds: {},
+      reasons: { 'gsd:verify-work>gsd:plan-phase': '2 écarts : le curseur n’est pas validé' },
     });
     expect(progressOf(w, m, null).on).toBeNull();
   });

@@ -1,9 +1,9 @@
 ---
 title: "Workflows"
 subject: "Kanban"
-sources: ["docs/SPEC.md","Retour d'un utilisateur sur le Discord (2026-10-30), ticket ESC-309","docs/PLUGINS.md §4.5, choix 158 de design/app-redesign/UX-NOTES.md"]
-tickets: ["ESC-195","ESC-309","ESC-200"]
-decisions: []
+sources: ["docs/SPEC.md","Retour d'un utilisateur sur le Discord (2026-10-30), ticket ESC-309","docs/PLUGINS.md §4.5, choix 158 de design/app-redesign/UX-NOTES.md","Demande de l'utilisateur du 2026-11-10 (ticket ESC-406) et son choix sur aperçu : direction A de design/workflow-path/index.html"]
+tickets: ["ESC-195","ESC-309","ESC-200","ESC-245","ESC-406"]
+decisions: ["le-diagramme-d-un-workflow-part-d-un-poi"]
 compared: "2026-10-31T10:04:30+01:00"
 gaps: [{"text":"La page dit que rien d'une machine ni aucune empreinte n'entre dans le fichier. Quand un workflow a été affiné, le code écrit dans `workflow.refined` l'empreinte de la lecture d'origine, et cette empreinte est versionnée dans le dépôt.","code":["src-tauri/src/workflowfiles.rs","src-tauri/src/workflow.rs"]}]
 ---
@@ -78,3 +78,39 @@ Un plugin peut apprendre à Escouade un workflow qu'elle ne lit pas seule : `con
 - Le workflow est suivi comme ceux qu'Escouade lit : onglet, carte, faits `workflow.*`. Son id est `plugin:<plugin>:<id>` : il ne prend jamais la place d'un workflow lu par l'app.
 - Un graphe qui ne tient pas (étape sans nom, deux étapes du même nom, transition vers une étape absente, plus de 50 workflows) est refusé en entier, avec la raison. Un plugin qui plante ne fait pas perdre ce qui était lu. Délai : 60 s.
 - Le registre qui appellera les lecteurs lit les manifestes avec INT-6 ; le lecteur et son contrat existent, sans être encore appelés par l'app.
+
+## Le diagramme de l'onglet Workflow
+
+La vue « Diagramme » de l'onglet Workflow (à côté de la vue « Colonne », le choix retenu pour toute l'app) dessine le workflow en couches, dans la colonne de l'onglet et agrandi sur tout le panneau de travail. Elle part toujours d'un point d'entrée, montre où le workflow peut aller depuis lui, et où l'agent lu est vraiment allé.
+
+### Le point d'entrée
+
+- **Avec un agent lu** (l'agent ouvert, ou celui choisi dans la liste sous le diagramme) : la porte par laquelle il est entré, d'après le premier passage de sa phase en cours. C'est la porte tapée (commande ou skill), sans ses arguments ; sinon la commande de l'étape où il a commencé ; pour une boucle de prompt, son prompt. Une porte que le workflow ne connaît pas est montrée comme elle a été tapée, vers l'étape où elle a mené.
+- Un agent sans historique (« Tickets », un suivi juste lu) : la première entrée du workflow qui atteint son étape, sinon son étape.
+- **Sans agent**, ou quand l'entrée ne peut pas être connue (ses étapes n'existent plus dans le workflow) : un choix des portes en tête, « Entrée : par où l'agent commence », la première par défaut. Ce sont toutes les portes d'entrée du workflow, chacune vers l'étape où elle entre ; la première étape y figure en tête si aucune porte n'y mène. Une seule entrée : pas de choix. Les flèches du clavier passent d'une porte à l'autre.
+- La porte est dessinée en tête, « Entrée » puis ce qui se tape ; une porte qui entre plus loin est juste au-dessus de son étape.
+
+### Où ça peut aller
+
+- Seules sont dessinées les étapes atteignables depuis l'entrée, par les transitions et les retours ; la sortie quand son étape est atteinte, et le tour suivant seulement s'il revient à une étape atteinte.
+- Les autres étapes se replient sous le diagramme en « n étapes hors de ce chemin ». Ouvert, le repli liste leur nom et leur commande et dit « Pas atteignable depuis <porte> ».
+- Ce qui est possible est dessiné léger : trait fin et pointillé, étape au bord pointillé, conditions des choix et des retours lisibles sur leur trait.
+- « Copier en Mermaid » copie toujours le workflow entier, sans les agents.
+
+### Où ça va vraiment
+
+- Le chemin de l'agent lu est tracé par-dessus, dans l'ordre où il l'a parcouru, d'après les passages que son suivi garde : il revient tel quel après un redémarrage. Les passages hors du workflow, ou d'une étape qu'il n'a plus, sont sautés.
+- Chaque passage porte son numéro dans le chemin sur son étape (« 1, 2, 5 » sur une étape où il est revenu). Au-delà de quatre passages d'une même étape, les trois derniers et « +n » ; l'infobulle de l'étape les dit tous.
+- Ce qui a été pris est en trait plein et épais : la porte, les transitions, et les retours pris, en rouge, avec la raison que l'étape a donnée (sinon la condition du workflow). Le plein contre le pointillé distingue le pris du possible sans la couleur.
+- Un tour de boucle (la même étape de nouveau) se lit sur la pastille de l'étape : « 1/3 » pour un tour pris sur trois, sa raison dans l'infobulle.
+- L'étape en cours est entourée de vert, son numéro en vert, et dit « en cours » ; la prochaine possible dit « ensuite ». Une étape qu'un retour a défaite garde ses numéros sans être « faite ».
+- Un agent sans historique (« Tickets ») n'a pas de numéros : ses étapes faites sont cochées et les traits entre elles pleins.
+
+### Plusieurs agents
+
+Seul l'agent lu a son chemin. Les autres agents du workflow restent des pastilles sur leur étape (verte pour l'agent lu, ambre pour celui qui attend, « +n » au-delà de trois) ; en choisir un dans la liste lit le sien, depuis sa propre entrée.
+
+### En mots
+
+- Le chemin se lit aussi dans une liste ordonnée pour un lecteur d'écran, « Chemin de <agent>, dans l'ordre », dans la colonne comme en grand : « Planifier, entrée par /gsd:plan-phase », « Planifier, tour de boucle : <raison>, 2e passage », « Planifier, retour depuis Vérifier : <raison>, 3e passage », « Exécuter, 2e passage, en cours ».
+- La colonne et la vue agrandie suivent la même logique ; à 1024 px de large, rien ne déborde du panneau (340 px) ni de la vue agrandie.
