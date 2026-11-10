@@ -46,6 +46,26 @@ Each agent is placed by what it does: the door it typed, the sub-agents it launc
 
 Every stay in a step is kept in the agent’s history: the time, the duration, the cost, what was done in it, the outcome, and for a return, the reason the step gives. The history is kept with the agent after a restart. An agent that does something else (its message comes from no door and its tools signal no step) is “outside the workflow” until the next door.
 
+## The diagram: where it may go, where it really goes
+
+In the Workflow tab, the “Diagram” view always starts from an entry point.
+
+- **With an agent**, it is the door it came in by: the command or the skill it typed, the prompt loop, else the first step Escouade saw it in. It is written at the head, “Entry”, in a full line.
+- **Without an agent**, you choose the door in “Entry: where the agent starts”. The first one is taken by default; the arrow keys move from one to the next.
+
+The diagram only shows what that entry reaches, by the transitions, the ways back and the exit. The rest folds into “n steps off this path”, which opens with a click.
+
+Two lines read at a glance:
+
+- **what is possible**: a light dashed line, steps with a dashed edge, with the conditions of the choices and the ways back;
+- **what the agent took**: a full, thick line. Each stay has its number on its step, in the order of the path (“1, 2, 5” on a step it came back to). A way back it took is full and red, with the reason the step gave; a loop says its rounds (“1/3”). The step in progress is ringed in green and says “in progress”, the next one “next”.
+
+The other agents of the same workflow stay dots on their step; pick one in the list to see its path. The enlarged view follows the same logic.
+
+For a screen reader, the path is an ordered list too: “Plan, entered by /gsd:plan-phase”, “Plan, back from Verify: 2 red tests, pass 3”, “Execute, pass 2, in progress”. The path comes from the agent’s history: it is back as it was after a restart.
+
+“Copy as Mermaid” still copies the whole workflow, without the agents.
+
 ## What each harness lets be followed
 
 | Harness | The step | The sub-agent running | The cost per step |

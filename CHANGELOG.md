@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Le diagramme d’un workflow part de la porte par laquelle l’agent est entré et ne montre que ce qu’elle atteint : le possible en pointillé léger, son vrai chemin en trait plein, chaque passage numéroté dans l’ordre, les retours avec leur raison. Sans agent, tu choisis la porte ; le reste se replie en « étapes hors de ce chemin ».
 - Plugins : « Chercher maintenant » relit le store avant de chercher, et propose donc une version publiée depuis le démarrage. La page dit quand le store a été lu ; s’il ne répond pas, elle le dit et cherche dans les offres déjà lues.
 - Un harness coupé pour un projet dans les réglages de son plugin l’est vraiment : il n’y est plus proposé et ses agents de ce projet ne démarrent ni ne reçoivent plus rien. Dans un projet privé, le premier agent sur un harness te demande d’abord de l’activer, en disant ce que son plugin recevra. À la mise à jour, un projet privé garde allumés les harness qu’il utilisait déjà.
 - Écran partagé : archiver ou supprimer un agent ne défait plus la disposition. Un autre agent prend sa place, et le terminal mis à côté ou en dessous reste où il était.

@@ -70,17 +70,18 @@ test('the workflow as a diagram: switched to, inside 340 px, enlarged, copied in
   await tab.getByRole('tab', { name: 'Diagramme' }).click();
   const dg = tab.getByTestId('workflow-diagram');
   const nodes = dg.locator('.dg-node');
-  await expect(nodes).toHaveCount(4);
+  // From the door the open agent took (ESC-406): Execute, which reaches Verify, and Plan by the way back; not Discuss.
+  await expect(nodes).toHaveCount(3);
+  await expect(dg.locator('.dg-door')).toHaveAttribute('data-door', '/gsd:execute-phase');
   await expect(tab.locator('.wf-step')).toHaveCount(0);
   // As the column says them (ESC-244): the open agent only executed, nothing of its pass is done yet.
-  await expect(nodes.nth(0)).toHaveAttribute('aria-label', 'Discuss phase');
-  await expect(nodes.nth(1)).toHaveAttribute('aria-label', 'Plan phase');
-  await expect(nodes.nth(2)).toHaveAttribute('aria-label', 'Execute phase, en cours');
-  await expect(nodes.nth(3)).toHaveAttribute('aria-label', 'Verify work, ensuite');
+  await expect(nodes.nth(0)).toHaveAttribute('aria-label', 'Plan phase');
+  await expect(nodes.nth(1)).toHaveAttribute('aria-label', 'Execute phase, en cours');
+  await expect(nodes.nth(2)).toHaveAttribute('aria-label', 'Verify work, ensuite');
   // Each agent a dot on its step, the open one current; the loop on Plan, the way back from Verify, the exit.
-  await expect(nodes.nth(2).locator('circle.ag.cur title')).toHaveText(a2);
-  await expect(nodes.nth(1).locator('circle.ag title')).toHaveText(a1);
-  await expect(nodes.nth(1).locator('.dg-self')).toContainText('×3');
+  await expect(nodes.nth(1).locator('circle.ag.cur title')).toHaveText(a2);
+  await expect(nodes.nth(0).locator('circle.ag title')).toHaveText(a1);
+  await expect(nodes.nth(0).locator('.dg-self')).toContainText('×3');
   await expect(dg.locator('.dg-chip.ret')).toHaveCount(1);
   await expect(dg.locator('.dg-exit')).toContainText('Sortie');
 
@@ -102,10 +103,12 @@ test('the workflow as a diagram: switched to, inside 340 px, enlarged, copied in
     });
     return { out: out.length, overlap, names };
   });
-  expect(fit).toEqual({ out: 0, overlap: false, names: [true, true, true, true] });
+  expect(fit).toEqual({ out: 0, overlap: false, names: [true, true, true] });
 
-  // Kept from an agent to another: the diagram stays, the other agent current.
+  // Kept from an agent to another: the diagram stays, the other agent current; it came in by Discuss, the four steps.
   await page.locator('.card').filter({ hasText: a1 }).click();
+  await expect(nodes).toHaveCount(4);
+  await expect(dg.locator('.dg-door')).toHaveAttribute('data-door', '/gsd:discuss-phase');
   await expect(nodes.nth(1).locator('circle.ag.cur title')).toHaveText(a1);
   await expect(nodes.nth(0)).toHaveAttribute('aria-label', 'Discuss phase, faite');
   await expect(nodes.nth(1)).toHaveAttribute('aria-label', 'Plan phase, en cours');

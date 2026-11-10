@@ -518,12 +518,14 @@ describe('the Diagram view of the tab (ESC-245)', () => {
     // The loop on Plan, ×3; the way back from Verify, taken by pagination-users.
     expect(nodes[1].querySelector('.dg-self')).toHaveTextContent('×3');
     expect(dg.querySelectorAll('path.e.took:not(.head)')).toHaveLength(1);
-    expect(dg.querySelector('.dg-chip.ret.took title')).toHaveTextContent('If gaps are found');
+    // Taken: it says why the agent came back, as the step wrote it (ESC-406).
+    expect(dg.querySelector('.dg-chip.ret.took title')).toHaveTextContent('2 écarts : le curseur');
     // Each agent a dot on its step, the open one current.
     expect(nodes[3].querySelector('circle.ag.cur title')).toHaveTextContent('pagination-users');
     expect(nodes[2].querySelector('circle.ag.wait title')).toHaveTextContent('refacto-auth');
     expect(dg.querySelector('.dg-exit')).toHaveTextContent('Sortie');
-    expect([...dg.querySelectorAll('.dg-door')].map((d) => d.textContent)).toContain('/gsd:autonomous');
+    // It starts from the door the agent took, alone (ESC-406).
+    expect([...dg.querySelectorAll('.dg-door')].map((d) => d.getAttribute('data-door'))).toEqual(['/gsd:discuss-phase']);
   });
 
   it('copies the workflow in Mermaid, without its agents', async () => {
@@ -545,7 +547,8 @@ describe('the Diagram view of the tab (ESC-245)', () => {
     const w = gsd();
     w.steps[0] = { ...w.steps[0], name: trap, named: true };
     w.transitions[0] = { ...w.transitions[0], from: trap };
-    await open(scanOf(w), gsdTracks());
+    // No agent read: the workflow from its first door, the trapped step in it.
+    await open(scanOf(w), []);
     const dg = await screen.findByTestId('workflow-diagram');
     await waitFor(() => expect(dg.querySelectorAll('.dg-node')).toHaveLength(4));
     expect(document.querySelector('img')).toBeNull();

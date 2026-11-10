@@ -33,7 +33,7 @@
     withTickets,
     workflowTitle,
   } from '../lib/workflow-view';
-  import { diagramOf, progressOf, toMermaid, type DgAgent } from '../lib/workflow-diagram';
+  import { diagramOf, entriesOf, entryOf, pathOf, progressOf, toMermaid, type DgAgent } from '../lib/workflow-diagram';
   import { workflows } from '../lib/workflows.svelte';
   import Icon from './Icon.svelte';
 
@@ -190,6 +190,10 @@
   let big = $state(false);
   const model = $derived(wf ? diagramOf(wf, Math.max(0, ...tickets.map((tk) => tk.maxLoops))) : null);
   const progress = $derived(wf && model ? progressOf(wf, model, reader) : null);
+  // From an entry (ESC-406): the door the agent read came in by, else the doors to choose from; its path in its order.
+  const entries = $derived(wf && model ? entriesOf(wf, model) : []);
+  const entry = $derived(wf && model ? entryOf(wf, model, reader) : null);
+  const path = $derived(wf && model ? pathOf(wf, model, reader) : []);
   /** Who is on each step of the diagram: the agent read first. */
   const dgAgents = $derived.by(() => {
     const out: Record<string, DgAgent[]> = {};
@@ -229,7 +233,18 @@
 {#snippet diagram()}
   {#if model && progress}
     {#await loadDiagram() then { default: Diagram }}
-      <Diagram {model} {progress} agents={dgAgents} {big} onclose={() => (big = false)} oncopy={copyMermaid} />
+      <Diagram
+        {model}
+        {progress}
+        {entries}
+        {entry}
+        {path}
+        reader={reader ? nameOf(reader.agentId) : ''}
+        agents={dgAgents}
+        {big}
+        onclose={() => (big = false)}
+        oncopy={copyMermaid}
+      />
     {/await}
   {/if}
 {/snippet}
