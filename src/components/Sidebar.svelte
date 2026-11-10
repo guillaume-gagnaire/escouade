@@ -69,7 +69,7 @@
   import { canPrepare, prepareLaunch, stopTests } from '../lib/test-launch.svelte';
   import { returnHeld } from '../lib/outbox.svelte';
   import { backTarget, forwardTargets } from '../lib/handover';
-  import type { Agent, AgentStatus, BranchInfo, EngineId, Project } from '../lib/types';
+  import type { Agent, AgentStatus, BranchInfo, Project } from '../lib/types';
   import RunsSection from './RunsSection.svelte';
   import EngineMark from './EngineMark.svelte';
   import StatusDot from './StatusDot.svelte';
@@ -374,7 +374,17 @@
         ? { label: t('nav.sidebar.menu.restore'), onClick: () => app.run(api.archiveAgent(a.id, false)) }
         : { label: t('nav.sidebar.menu.archive'), hint: t('nav.sidebar.menu.archiveHint'), onClick: () => confirmArchive(a) },
       ...(a.worktree && !a.archived && project.runCommands.length
-        ? [{ label: t('nav.sidebar.menu.launch'), onClick: () => launchMenu(e, a) }]
+        ? [
+            {
+              label: t('nav.sidebar.menu.launch'),
+              // The project's launch commands, each to run in the agent's worktree.
+              submenu: project.runCommands.map((c) => ({
+                label: c.name,
+                hint: c.cwd || undefined,
+                onClick: () => runIn(project, c, a.id),
+              })),
+            },
+          ]
         : []),
       ...(canPrepare(a) ? [{ label: t('nav.sidebar.menu.prepareLaunch'), onClick: () => prepareLaunch(a) }] : []),
       // Its base branch goes into its own, as the project's strategy says.
@@ -412,7 +422,7 @@
         : []),
       ...(a.archived ? [] : besideItems({ kind: 'agent', id: a.id })),
       ...foldedItems(folded),
-      ...handoverItems(e, a),
+      ...handoverItems(a),
       ...remoteItems(a),
       { label: '', separator: true },
       { label: t('nav.sidebar.menu.delete'), danger: true, onClick: () => confirmDelete(a) },
@@ -437,19 +447,8 @@
     return items;
   }
 
-  /** « Lancer… »: the project's launch commands, each to run in the agent's worktree, where its menu was. */
-  async function launchMenu(e: MouseEvent, a: Agent) {
-    const at = { x: e.clientX, y: e.clientY };
-    // Once the card's menu is gone.
-    await tick();
-    menu.open = {
-      ...at,
-      items: project.runCommands.map((c) => ({ label: c.name, hint: c.cwd || undefined, onClick: () => runIn(project, c, a.id) })),
-    };
-  }
-
-  /** « Continuer sur un autre harness… » at any time, and « Revenir sur <harness> » once the quota of the one it left came back (ESC-88). */
-  function handoverItems(e: MouseEvent, a: Agent): MenuItem[] {
+  /** « Continuer sur un autre harness » at any time, and « Revenir sur <harness> » once the quota of the one it left came back (ESC-88). */
+  function handoverItems(a: Agent): MenuItem[] {
     if (a.archived) return [];
     const forward = forwardTargets(a);
     const back = backTarget(a);
@@ -457,7 +456,15 @@
     const waits = a.status === 'running';
     const busy = { disabled: waits, title: waits ? t('handover.waitTurn') : undefined };
     const items: MenuItem[] = [];
-    if (forward.length) items.push({ label: t('handover.menu'), ...busy, onClick: () => engineMenu(e, a, forward) });
+    if (forward.length)
+      items.push({
+        label: t('handover.menu'),
+        ...busy,
+        submenu: forward.map((x) => ({
+          label: t('handover.continueOn', { harness: engineName(x) }),
+          onClick: () => app.run(api.continueOnEngine(a.id, x)),
+        })),
+      });
     if (back)
       items.push({
         label: t('handover.back', { harness: engineName(back) }),
@@ -465,19 +472,6 @@
         onClick: () => app.run(api.continueOnEngine(a.id, back)),
       });
     return items;
-  }
-
-  /** The harnesses the agent may go on on, where its menu was. */
-  async function engineMenu(e: MouseEvent, a: Agent, engines: EngineId[]) {
-    const at = { x: e.clientX, y: e.clientY };
-    await tick();
-    menu.open = {
-      ...at,
-      items: engines.map((x) => ({
-        label: t('handover.continueOn', { harness: engineName(x) }),
-        onClick: () => app.run(api.continueOnEngine(a.id, x)),
-      })),
-    };
   }
 
   function remoteItems(a: Agent): MenuItem[] {
@@ -662,15 +656,6 @@
   /** The agents of the project that have a worktree to open a terminal in (not the archived ones), as the list shows them. */
   const worktreeAgents = () => app.projectAgents.filter((a) => a.worktree);
 
-  /** The agents whose worktree can hold a terminal, one entry each. */
-  function worktreeMenu() {
-    if (!termMenuBtn || !worktreeAgents().length) return;
-    menu.showAt(
-      termMenuBtn,
-      worktreeAgents().map((a) => ({ label: a.name, onClick: () => terminalIn(project.id, { agentId: a.id }, a.name) })),
-    );
-  }
-
   function shellMenu() {
     if (!termMenuBtn) return;
     if (!app.shells.length) {
@@ -684,11 +669,8 @@
             { label: '', separator: true },
             {
               label: t('nav.sidebar.inWorktree'),
-              // Once this menu is gone and has given the focus back to the button: the next one takes it from there.
-              onClick: async () => {
-                await tick();
-                worktreeMenu();
-              },
+              // The agents whose worktree can hold a terminal, one entry each.
+              submenu: worktreeAgents().map((a) => ({ label: a.name, onClick: () => terminalIn(project.id, { agentId: a.id }, a.name) })),
             },
           ]
         : []),

@@ -61,7 +61,7 @@ Au clic droit sur sa carte :
 - Renommer.
 - « Dupliquer la conversation » (ci-dessous).
 - Archiver : l'agent passe dans l'historique du projet, d'où il se rouvre.
-- « Lancer… » : pour un agent à worktree non archivé, dans un projet qui a des commandes de lancement (voir *Lancement* ci-dessous).
+- « Lancer » : pour un agent à worktree non archivé, dans un projet qui a des commandes de lancement ; son sous-menu liste les commandes (voir *Lancement* ci-dessous, et *Fenêtre*, « Menus »).
 - « Préparer le lancement » : pour un agent à worktree, pas tant que son ticket est « En cours » (voir *Lancement de test*).
 - « Intégrer <base> » : pour un agent à worktree non archivé (voir *Git & fichiers*).
 - « Ouvrir dans l'éditeur ».
@@ -162,7 +162,7 @@ La section entre Agents et Terminaux : les commandes qui lancent le projet pour 
 
 #### Dans le worktree d'un agent
 
-- Dès qu'un agent non archivé du projet a un worktree, ▶ ouvre un menu : « Dans le projet » ou « Dans le worktree de <agent> ». Au clic droit d'une carte, « Lancer… » liste les commandes.
+- Dès qu'un agent non archivé du projet a un worktree, ▶ ouvre un menu : « Dans le projet » ou « Dans le worktree de <agent> ». Au clic droit d'une carte, le sous-menu de « Lancer » liste les commandes.
 - La commande tourne dans le même sous-dossier, pris dans le worktree et confiné à lui. Elle est refusée, avec sa raison, quand ce dossier n'y est pas (« Le dossier « web » de « Front » n'existe pas dans le worktree de « refacto-auth » (sa branche ne l'a pas, ou pas encore). »), et pour un agent archivé, sans worktree, au worktree disparu, ou dont le ticket est en validation.
 - Son terminal s'appelle « Front · refacto-auth », dans un groupe au nom de l'agent, avec son propre état et son propre log.
 - Elle reçoit `ESCOUADE_PORT_BASE` et `ESCOUADE_PORT_END`, le bloc de ports de l'agent, réservé alors s'il n'en a pas.
@@ -173,7 +173,7 @@ La section entre Agents et Terminaux : les commandes qui lancent le projet pour 
 
 - Menu `+` : PowerShell 7 (cherché dans le PATH, Program Files et l'alias du Microsoft Store ; à défaut, Windows PowerShell 5.1), Git Bash, WSL (Ubuntu).
 - Un vrai terminal : autocomplétion du shell (Tab, PSReadLine, bash-completion), historique, Ctrl+R, couleurs ANSI, programmes plein écran (vim, less, htop), redimensionnement, copier-coller, recherche, liens cliquables (voir *Fenêtre*).
-- Il s'ouvre dans le dossier du projet. « Dans le worktree de… », au bas du menu `+`, liste les agents du projet qui ont un worktree (pas les archivés, dans l'ordre de la barre latérale ; ni l'entrée ni son séparateur sans un tel agent) et ouvre le terminal dans le worktree choisi.
+- Il s'ouvre dans le dossier du projet. « Dans le worktree d'un agent », au bas du menu `+`, ouvre un sous-menu des agents du projet qui ont un worktree (pas les archivés, dans l'ordre de la barre latérale ; ni l'entrée ni son séparateur sans un tel agent) et ouvre le terminal dans le worktree choisi.
 - « Ouvrir un terminal » du menu d'un agent (clic droit sur sa carte, ou « … » de l'en-tête de sa conversation, voir *Conversation*) l'ouvre dans le worktree de l'agent. « Ouvrir un terminal ici », dans l'arborescence de l'éditeur, l'ouvre dans un dossier de la source affichée, confiné à elle ; un worktree disparu est refusé.
 - Les terminaux ne survivent pas à un redémarrage d'Escouade.
 - Saisie : chaque terminal écrit ses frappes dans l'ordre, sans attendre les autres. Un programme qui ne lit pas son entrée ne bloque que son terminal : ni la fenêtre, ni la saisie, le redimensionnement ou la fermeture des autres terminaux. Au-delà de 32 Mo en attente, la saisie de ce terminal est refusée (« le terminal ne lit plus son entrée ») ; l'écriture se fait par 256 Ko au plus. Si l'écriture échoue parce que le programme est parti, le journal le dit (« its input can no longer be written »). Fermer un terminal, et arrêter ses programmes, ne fige jamais la fenêtre.

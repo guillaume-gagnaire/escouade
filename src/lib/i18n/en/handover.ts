@@ -5,7 +5,7 @@ import { defineZone } from '../types';
 export default defineZone('handover', {
   continueOn: 'Continue on {harness}',
   another: 'Continue on another harness',
-  menu: 'Continue on another harness…',
+  menu: 'Continue on another harness',
   back: 'Go back to {harness}',
   backHint: 'The {harness} quota is back: the agent stays on its current harness until you bring it back.',
   waitTurn: 'Wait for the turn to end',

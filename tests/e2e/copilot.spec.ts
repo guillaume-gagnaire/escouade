@@ -308,7 +308,7 @@ test.describe('« Continuer sur Copilot CLI » from a terminal view (ESC-120)', 
   /** « Continuer sur <harness> » from the menu of the card shown. */
   async function continueOn(page: Page, harness: string) {
     await page.locator('.card.sel').click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'Continuer sur un autre harness…' }).click();
+    await page.getByRole('menuitem', { name: 'Continuer sur un autre harness' }).hover();
     await page.getByRole('menuitem', { name: `Continuer sur ${harness}` }).click();
   }
 

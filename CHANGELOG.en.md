@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Menus no longer give way to another one: “Run” and “Continue on another harness” in an agent’s menu, and “In an agent’s worktree” in the terminals’ “+” menu, open their list beside them, on hover. A menu taller than the window stops before its edge and scrolls, a chevron telling there is more to see.
 - A workflow’s diagram starts from the door the agent came in by and only shows what it reaches: the possible in a light dashed line, its real path in a full one, each stay numbered in order, the ways back with their reason. Without an agent, you choose the door; the rest folds into “steps off this path”.
 - Plugins: “Look now” reads the store again before looking, so a version published since the start is offered. The page says when the store was read; when it does not answer, it says so and looks in the offers already read.
 - A harness turned off for a project in its plugin’s settings now really is: it is no longer offered there, and its agents of that project no longer start or get anything. In a private project, the first agent on a harness first asks you to turn it on, saying what its plugin will get. On update, a private project keeps on the harnesses it already used.
