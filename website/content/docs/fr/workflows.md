@@ -46,6 +46,26 @@ Chaque agent est placé d’après ce qu’il fait : la porte qu’il a tapée, 
 
 Chaque passage dans une étape reste dans l’historique de l’agent : l’heure, la durée, le coût, ce qui s’y est fait, l’issue, et pour un retour, la raison que l’étape donne. L’historique est gardé après un redémarrage, avec l’agent. Un agent qui fait autre chose (son message ne vient d’aucune porte et ses outils ne signalent aucune étape) est « hors du workflow » jusqu’à la porte suivante.
 
+## Le diagramme : où ça peut aller, où ça va vraiment
+
+Dans l’onglet Workflow, la vue « Diagramme » part toujours d’un point d’entrée.
+
+- **Avec un agent**, c’est la porte par laquelle il est entré : la commande ou la skill qu’il a tapée, la boucle de prompt, sinon la première étape où Escouade l’a vu. Elle est écrite en tête, « Entrée », en trait plein.
+- **Sans agent**, tu choisis la porte dans « Entrée : par où l’agent commence ». La première est prise par défaut ; les flèches du clavier passent de l’une à l’autre.
+
+Le diagramme ne montre que ce que cette entrée atteint, par les transitions, les retours et la sortie. Le reste se replie en « n étapes hors de ce chemin », que tu ouvres d’un clic.
+
+Deux traits se lisent d’un coup d’œil :
+
+- **ce qui est possible** : trait léger et pointillé, étapes au bord pointillé, avec les conditions des choix et des retours ;
+- **ce que l’agent a pris** : trait plein et épais. Chaque passage porte son numéro sur son étape, dans l’ordre du parcours (« 1, 2, 5 » sur une étape où il est revenu). Un retour pris est plein et rouge, avec la raison que l’étape a donnée ; une boucle dit ses tours (« 1/3 »). L’étape en cours est entourée de vert et dit « en cours », la suivante « ensuite ».
+
+Les autres agents du même workflow restent des pastilles sur leur étape ; choisis-en un dans la liste pour voir son chemin. La vue agrandie suit la même logique.
+
+Pour un lecteur d’écran, le chemin est aussi une liste ordonnée : « Planifier, entrée par /gsd:plan-phase », « Planifier, retour depuis Vérifier : 2 tests rouges, 3e passage », « Exécuter, 2e passage, en cours ». Le chemin vient de l’historique de l’agent : il revient tel quel après un redémarrage.
+
+« Copier en Mermaid » copie toujours le workflow entier, sans les agents.
+
 ## Ce que chaque harness permet de suivre
 
 | Harness | L’étape | Le sous-agent en cours | Le coût par étape |
