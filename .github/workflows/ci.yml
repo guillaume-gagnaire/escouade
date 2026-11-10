@@ -15,8 +15,9 @@ concurrency:
 # The jobs run side by side (the run took 42 min one after the other, at 1.8.4): the frontend's checks once, on Linux;
 # Windows builds its Rust tests (a nextest archive) and the app once, then runs the tests in 2 parts and the end-to-end
 # tests in 5, each part on a runner of its own; macOS builds its Rust tests once too and runs them in 2 parts, beside
-# its bundle, Clippy and the webview probe; Linux tests and builds its packages. A public repository's runners cost
-# nothing. On 2026-11-10 the run took 42 to 60 min, the macOS tests on one runner its longest job (ESC-406's push).
+# its bundle, Clippy and the webview probe; Linux tests beside its packages and its plugins. A public repository's
+# runners cost nothing. On 2026-11-10 the run took 42 to 60 min, the macOS tests on one runner its longest job
+# (ESC-406's push).
 jobs:
   front:
     name: Frontend (format, types, Vitest)
@@ -476,7 +477,7 @@ jobs:
           retention-days: 7
 
   linux:
-    name: Linux (lint, tests and packages)
+    name: Linux (lint and tests)
     needs: escouade-js
     runs-on: ubuntu-22.04
     timeout-minutes: 45
@@ -551,6 +552,54 @@ jobs:
           status=${PIPESTATUS[0]}
           node ../scripts/nextest-annotations.mjs nextest.log target/nextest/ci/junit.xml $status
           exit $status
+
+  # Beside the tests, off their way (they took 26 to 35 min one after the other, on 2026-11-10): the webview probe, the
+  # packages, the plugin templates and Escouade's own plugins.
+  linux-packages:
+    name: Linux (webview, packages and plugins)
+    needs: escouade-js
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      # Two commits: on a pull request, the merge and its base, which `plugins/ci.mjs --changed` compares.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      # escouade-js, embedded in the app (src-tauri/build.rs).
+      - name: Download escouade-js
+        uses: actions/download-artifact@v7
+        with:
+          name: escouade-js
+          path: src-tauri/escouade-js/target
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      # libasound2-dev: the microphone (cpal); libclang-dev and cmake: whisper.cpp, built by whisper-rs.
+      - name: System libraries (WebKitGTK, tray, AppImage, sound, whisper.cpp)
+        run: |
+          # A stalled mirror once held this step 28 minutes (2026-11-04): each request gives up after 30 s and is tried again.
+          # Then Azure's mirror crawled through the big packages for all the 45 minutes of the job (2026-11-06): apt only leaves
+          # a mirror that fails, so Canonical's, already in the runner's list, goes first and Azure's stays behind it.
+          [ ! -f /etc/apt/apt-mirrors.txt ] || sudo sed -i -E 's/^(http:\/\/azure\.archive\S*\s+priority:)1/\14/' /etc/apt/apt-mirrors.txt
+          sudo apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libasound2-dev libclang-dev cmake
+
+      - name: Rust toolchain (pinned in src-tauri/rust-toolchain.toml)
+        working-directory: src-tauri
+        run: rustup toolchain install
+
+      # The cache of the tests' job (named `linux`): the dependencies built there serve the packages too.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          shared-key: linux
+
+      - name: Install dependencies
+        run: npm ci
 
       # A launch's page in a real WebKitGTK (ESC-311): no command of Escouade answers it, its storage is
       # its project's, its devtools open, and it sees a phone's then a tablet's width.
