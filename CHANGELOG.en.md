@@ -120,6 +120,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### Fixes
 
+- Settings: opening a project that has a logo no longer spreads the logo over the whole window. It stays in its tile, at the top of the page.
 - macOS: 2.2.0-beta.3 closed a few seconds after it started as soon as a WASM plugin started (Claude Code first of all). The app may now run the code the plugins’ engine compiles.
 - Remote Control: an agent created just as you turn the setting on for all agents now keeps its Remote Control. It could lose it silently until the setting next changed.
 - Copilot CLI reads a command the way its shell does: `git add x; node evil.js` and any chained, redirected or out-of-worktree command now gets a card, and so does a write in `.git`. That write gets a card on Cursor, Gemini, Mistral Vibe and the ACP harnesses too.

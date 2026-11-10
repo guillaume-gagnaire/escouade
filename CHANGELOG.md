@@ -120,6 +120,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Corrections
 
+- Réglages : ouvrir un projet qui a un logo n’étale plus ce logo sur toute la fenêtre. Il reste dans sa tuile, en tête de la page.
 - macOS : la 2.2.0-beta.3 se fermait quelques secondes après son démarrage dès qu’un plugin WASM se lançait (Claude Code au premier chef). L’app a maintenant le droit d’exécuter le code que compile le moteur des plugins.
 - Remote control : un agent tout juste créé pendant que tu allumes le réglage pour tous les agents garde bien son contrôle à distance. Il pouvait le perdre sans rien dire jusqu'au prochain changement du réglage.
 - Copilot CLI lit une commande comme son shell la lit : `git add x; node evil.js` et toute commande enchaînée, redirigée ou lancée hors du worktree passent par une carte, et une écriture dans `.git` aussi. Cette écriture passe aussi par une carte sur Cursor, Gemini, Mistral Vibe et les harness ACP.
