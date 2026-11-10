@@ -3,7 +3,7 @@ title: "Workflows"
 subject: "Kanban"
 sources: ["docs/SPEC.md","Retour d'un utilisateur sur le Discord (2026-10-30), ticket ESC-309","docs/PLUGINS.md §4.5, choix 158 de design/app-redesign/UX-NOTES.md","Demande de l'utilisateur du 2026-11-10 (ticket ESC-406) et son choix sur aperçu : direction A de design/workflow-path/index.html"]
 tickets: ["ESC-195","ESC-309","ESC-200","ESC-245","ESC-406"]
-decisions: ["le-diagramme-d-un-workflow-part-d-un-poi"]
+decisions: [143]
 compared: "2026-10-31T10:04:30+01:00"
 gaps: [{"text":"La page dit que rien d'une machine ni aucune empreinte n'entre dans le fichier. Quand un workflow a été affiné, le code écrit dans `workflow.refined` l'empreinte de la lecture d'origine, et cette empreinte est versionnée dans le dépôt.","code":["src-tauri/src/workflowfiles.rs","src-tauri/src/workflow.rs"]}]
 ---

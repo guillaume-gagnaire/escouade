@@ -1,9 +1,9 @@
 ---
-number: null
+number: 143
 id: "le-diagramme-d-un-workflow-part-d-un-poi"
 title: "Le diagramme d'un workflow part d'un point d'entrée : le possible en léger, le chemin de l'agent tracé et numéroté dessus"
 date: "2026-11-10"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-406"
 pages: ["kanban/workflows"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"kanban/workflows","added":24,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-10T09:56:35+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
