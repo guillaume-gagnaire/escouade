@@ -130,7 +130,8 @@ jobs:
             os: ubuntu-22.04
             args: --config src-tauri/tauri.ort-linux.conf.json
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 75
+    # The universal macOS app (two targets built, then signed and notarized) went past 75 min on several betas.
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v7
 
