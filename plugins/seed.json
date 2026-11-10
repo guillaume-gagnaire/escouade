@@ -28,8 +28,8 @@
     },
     {
       "id": "dev.escouade.clickup",
-      "version": "2.2.3",
-      "sha256": "2e3071fbf68bb9e18d3dec4ad8b0f37bdd2be231c947b5c3ff8ca945fd04f3c2"
+      "version": "2.2.4",
+      "sha256": "32d9d19740b95ebf494e8c80bcff0616603a0c65ca56172af2c1684045973c68"
     },
     {
       "id": "dev.escouade.codex",
@@ -103,13 +103,13 @@
     },
     {
       "id": "dev.escouade.jira",
-      "version": "2.2.3",
-      "sha256": "3128b8ecde60efa6e97833f42ec3805c17bbb4526a890b2bb4de3414a7cd28ea"
+      "version": "2.2.4",
+      "sha256": "0b1a9bd05ee0b77b951a0ab510315d676a150dda72cfaa68dd45fed24e4a96f4"
     },
     {
       "id": "dev.escouade.linear",
-      "version": "2.2.3",
-      "sha256": "1b4ebe2f5e2ef385c650e5550c6c5bc3c06fa9125a35089be01609597ae733ad"
+      "version": "2.2.4",
+      "sha256": "a769402f11d1673694f82f1b6b483a88e76ddb4585eb7f02d1a2a1592f18b526"
     },
     {
       "id": "dev.escouade.mistral",
@@ -138,8 +138,8 @@
     },
     {
       "id": "dev.escouade.trello",
-      "version": "2.2.3",
-      "sha256": "648f16b8c20aeea884cd4017ad3bdc59e1493752192e028ba42db70387a4dd89"
+      "version": "2.2.4",
+      "sha256": "106437d20e90e539871a610db347d0c1c9ac123ea0112607b38604af6076dc39"
     }
   ]
 }
