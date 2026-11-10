@@ -2,6 +2,7 @@
 // and what the view reads of them — what each may do in words, the strongest first, its category, its projects.
 import { invoke } from '@tauri-apps/api/core';
 import { t } from './i18n';
+import type { StoreView } from './store';
 import type { Project } from './types';
 
 export type Origin =
@@ -216,7 +217,8 @@ export const pluginsApi = {
   setSecret: (id: string, key: string, value: string) => invoke<void>('plugin_set_secret', { id, key, value }),
   run: (id: string) => invoke<PluginRun>('plugin_run', { id }),
   start: (id: string) => invoke<PluginRun>('plugin_start', { id }),
-  checkUpdates: () => invoke<PluginView[]>('plugins_check_updates'),
+  /** « Rechercher des mises à jour »: the store read again first (ESC-405), the plugins then, and the store as it was read. */
+  checkUpdates: () => invoke<{ plugins: PluginView[]; store: StoreView }>('plugins_check_updates'),
   /** The icon of an installed plugin (PLG-13), a `data:image/png` address; null: its letters. */
   icon: (id: string) => invoke<string | null>('plugin_icon', { id }),
 };

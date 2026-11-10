@@ -648,6 +648,20 @@ describe('AccountModal', () => {
     expect(b.called('refresh_usage')).toHaveLength(1);
   });
 
+  it('opened by /login typed to an agent, lets that agent go on once signed in, and closes back to it (ESC-401)', async () => {
+    const b = backend([BEFORE, BEFORE, IN], { agent_signed_in: () => undefined });
+    app.settings.accounts = [PRINCIPAL, PRO];
+    app.modal = { kind: 'account', accountId: 'pro', forAgent: 'a1' };
+    render(AccountModal, { accountId: 'pro', forAgent: 'a1' });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(b.called('agent_signed_in')).toEqual([]);
+    await vi.advanceTimersByTimeAsync(2000);
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Connecté au compte ada@pro.dev'));
+    expect(b.called('agent_signed_in').map((c) => c.args)).toEqual([{ id: 'a1' }]);
+    await userEvent.click(screen.getByRole('button', { name: 'Terminé' }));
+    expect(app.modal).toBeNull();
+  });
+
   it('signs an account that is signed in already in again, the same way', async () => {
     backend([BEFORE, BEFORE, IN]);
     app.settings.accounts = [PRINCIPAL, PRO];

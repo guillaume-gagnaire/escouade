@@ -136,6 +136,10 @@ export default defineZone('plugins', {
     empty: 'Your plugins are up to date.',
     check: 'Look now',
     checking: 'Looking…',
+    when: '{date} {time}',
+    read: 'Store read on {when}',
+    unreachable: 'Store unreachable: offers of {when}',
+    unreachableNone: 'Store unreachable: no offer read yet',
     row: 'v{from} → v{to}',
     update: 'Update',
   },
@@ -267,6 +271,25 @@ export default defineZone('plugins', {
     pluginLabel: '{name} in this project',
     appOffShort: 'switched off for the whole app',
     noneInstalled: 'No plugin installed that is switched on project by project.',
+    harnessNote: 'Off for a project, its harness is no longer offered there and its agents of that project do not run.',
+  },
+
+  harness: {
+    askTitle: 'Turn on {name} for this private project?',
+    offTitle: 'Turn on {name} for {project}?',
+    askBody:
+      'The project {project} is private: its plugins are off there by default. An agent on {name} goes through its plugin, {plugin}, which gets all the agent does.',
+    offBody:
+      '{name} is off for the project {project}. An agent on {name} goes through its plugin, {plugin}, which gets all the agent does.',
+    gets: 'What it will get',
+    getsWhat: 'What the agent writes and reads in this project, its commands and their output, and its whole transcript.',
+    perms: 'Its permissions',
+    after: 'Turned on, it is for this project alone: you turn it off in Settings › Plugins.',
+    enable: 'Turn on',
+    loading: 'Reading the plugin…',
+    cardPrivate: '{name} is not turned on for this private project: this agent does not start and gets nothing.',
+    cardOff: '{name} is off for this project: this agent does not start and gets nothing.',
+    ticketWhy: 'Its harness, {name}, is not turned on for this project.',
   },
 
   settings: {

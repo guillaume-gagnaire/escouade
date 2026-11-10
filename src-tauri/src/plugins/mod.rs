@@ -318,6 +318,15 @@ pub fn secret_keys(m: &Manifest) -> Vec<String> {
 }
 
 /// A newer version found for an installed plugin: offered, never installed by itself (§3.2).
+/// How the store was read for « Rechercher des mises à jour » (ESC-405): when its offers were last read, and why it did
+/// not answer this time (the offers of `read_at` were looked at).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoreRead {
+    pub read_at: Option<String>,
+    pub error: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Update {
@@ -531,6 +540,10 @@ pub struct Plugins {
     seed: seed::Seed,
     /// Why the seed did not install a plugin, by id.
     seed_refused: RwLock<BTreeMap<String, String>>,
+    /// One change of `.seed.json` at a time.
+    seed_notes_lock: Mutex<()>,
+    /// One sending of the seed's counts at a time (`send_seed_counts`).
+    counting: tokio::sync::Mutex<()>,
 }
 
 type ReloadHook = Box<dyn Fn(&str) + Send + Sync>;
@@ -645,6 +658,8 @@ impl Plugins {
             offers: RwLock::new(HashMap::new()),
             seed,
             seed_refused: RwLock::new(BTreeMap::new()),
+            seed_notes_lock: Mutex::new(()),
+            counting: tokio::sync::Mutex::new(()),
         });
         let index = me.index();
         let loaded: Vec<Loaded> = me
@@ -1260,8 +1275,16 @@ impl Plugins {
 
     /// Installs what the inspection `token` set aside, in place of an installed plugin of the same
     /// id (an update): the user's choices of that one kept (a permission taken back stays so), or
-    /// those an uninstall kept.
+    /// those an uninstall kept. A version of the seed is noted to be counted on the store (ESC-394, `send_seed_counts`).
     pub fn install(&self, token: &str, lang: Lang) -> Result<PluginView, Refusal> {
+        let view = self.install_staged(token, lang)?;
+        if self.seed.counts && matches!(view.origin, Origin::Store { seed: true, .. }) {
+            self.note_seed(|n| n.note_count(&view.id, &view.version));
+        }
+        Ok(view)
+    }
+
+    fn install_staged(&self, token: &str, lang: Lang) -> Result<PluginView, Refusal> {
         let staged = self.staged.lock().remove(token).ok_or_else(|| {
             Refusal::other(tr_in!(
                 lang,
@@ -1465,6 +1488,31 @@ impl Plugins {
         }
         self.save()?;
         Ok(true)
+    }
+
+    /// « Rechercher des mises à jour » (ESC-405): the store's catalogue and revocation list read again first (`http`, the
+    /// client of Réglages › Avancé › Réseau; a reading under way or of less than `fresh` taken as it is), then
+    /// `check_updates`. A store that does not answer stops nothing: the offers kept are looked at, and said with their date.
+    pub async fn look_for_updates(
+        &self,
+        store: &store::Store,
+        http: Result<reqwest::Client, String>,
+        lang: Lang,
+        fresh: std::time::Duration,
+    ) -> StoreRead {
+        match http {
+            Ok(http) => {
+                store.refresh_within(&http, lang, fresh).await;
+            }
+            Err(e) => store.unreachable(&e, lang),
+        }
+        self.apply_store(store.revocations(), store.offers());
+        self.check_updates().await;
+        let v = store.view();
+        StoreRead {
+            read_at: v.read_at,
+            error: v.error,
+        }
     }
 
     /// Looks for a newer version of each installed plugin: a later tag of its repository, a later
@@ -1684,6 +1732,7 @@ impl Plugins {
     /// Changes what the app keeps of the seed with `f`, saved when it says it changed something. Not saved, the seed would
     /// put back a plugin the user took away: it is said in the log, and the list of installed plugins is not touched.
     fn note_seed(&self, f: impl FnOnce(&mut seed::Notes) -> bool) {
+        let _l = self.seed_notes_lock.lock();
         let mut notes = self.seed_notes();
         if !f(&mut notes) {
             return;
@@ -1740,6 +1789,7 @@ impl Plugins {
                 }
             }
         }
+        self.note_seed_installs();
         let mut updates = self.updates.write();
         for l in self.loaded.read().iter() {
             if let Origin::Store { version, .. } = &l.installed.origin {
@@ -1840,6 +1890,89 @@ impl Plugins {
             return Err(Refusal::other(reason));
         }
         self.install(&p.token, lang)
+    }
+
+    /// The installs of the seed made before the store counted them (ESC-394), noted to be counted once: those of the
+    /// betas of 2.2, installed before the seed counted anything, and any of the seed's version still installed and never
+    /// counted. Only an origin `store` marked `seed`: not a plugin the app gives, not a folder in development, not an
+    /// update from the store (counted as an update when installed), and never in a build of development.
+    fn note_seed_installs(&self) {
+        if !self.seed.counts {
+            return;
+        }
+        let installed: Vec<(String, String)> = self
+            .loaded
+            .read()
+            .iter()
+            .filter_map(|l| match &l.installed.origin {
+                Origin::Store {
+                    version,
+                    seed: true,
+                    ..
+                } => Some((l.installed.id.clone(), version.clone())),
+                _ => None,
+            })
+            .collect();
+        if installed.is_empty() {
+            return;
+        }
+        self.note_seed(|n| {
+            installed
+                .iter()
+                .fold(false, |changed, (id, v)| n.note_count(id, v) || changed)
+        });
+    }
+
+    /// The installs of the seed not counted yet on the store (ESC-394).
+    pub fn seed_counts_pending(&self) -> Vec<seed::Count> {
+        self.seed_notes().pending.into_iter().collect()
+    }
+
+    /// Sends the store the installs of the seed not counted yet, as `plugin_install` counts one (docs/STORE.md §5.4):
+    /// with the user's consent to the statistics (`consent`, `settings.telemetry`) and nothing else than the id, the
+    /// version and `install`. Without an answer yet they wait; on a refusal they are forgotten. A count the store does not
+    /// take now (offline, an error of its own) stays to be sent at the next call: the start, the store read again every 6
+    /// hours, a gesture that installs from the seed, a yes to the statistics. One sending at a time, one try per count.
+    pub async fn send_seed_counts(
+        &self,
+        store: &store::Store,
+        http: &reqwest::Client,
+        consent: Option<bool>,
+    ) {
+        let _one = self.counting.lock().await;
+        let pending = self.seed_counts_pending();
+        if pending.is_empty() {
+            return;
+        }
+        match consent {
+            None => return,
+            Some(false) => {
+                self.note_seed(|n| {
+                    let gone = std::mem::take(&mut n.pending);
+                    n.counted.extend(gone);
+                    true
+                });
+                return;
+            }
+            Some(true) => {}
+        }
+        for c in pending {
+            if store.count(http, &c.id, &c.version, false).await {
+                log::info!(
+                    "plugin {} v{}: its install from the seed counted",
+                    c.id,
+                    c.version
+                );
+                self.note_seed(|n| {
+                    n.pending.remove(&c);
+                    n.counted.insert(c);
+                    true
+                });
+            } else {
+                // Offline or the store in trouble: the others would fare no better now.
+                break;
+            }
+        }
     }
 
     /// What installing the seed's version of `id` would do, on the user's click: the install window of an update, or of a

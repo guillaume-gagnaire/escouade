@@ -85,41 +85,62 @@ export function found(): EngineDecl[] {
   return app.engines.filter((e) => app.enginesFound.includes(e.id));
 }
 
-/** Why a harness cannot be used (ESC-391): its program not found, its plugin off or not installed, no account of its own. */
-export type Unusable = 'notFound' | 'pluginOff' | 'noAccount';
+/**
+ * Why a harness cannot be used (ESC-391): its program not found, its plugin off or not installed, no account of its own;
+ * in a project, its plugin turned off for it (ESC-404).
+ */
+export type Unusable = 'notFound' | 'pluginOff' | 'noAccount' | 'projectOff';
 
-/** Why `engine` cannot be used, null when it can: its program found, its plugin on, and an account of its own in Escouade (`Core::engines_usable`). */
-export function unusable(engine: EngineId): Unusable | null {
+/**
+ * Why `engine` cannot be used, null when it can: its program found, its plugin on, and an account of its own in Escouade
+ * (`Core::engines_usable`); in the project `projectId`, its plugin not turned off for it. A private project's harness not
+ * turned on yet can be used: its first agent asks (`harnessAsks`).
+ */
+export function unusable(engine: EngineId, projectId?: string | null): Unusable | null {
   if (!app.enginesFound.includes(engine)) return 'notFound';
   if (app.enginesOff.includes(engine)) return 'pluginOff';
   if (!(app.settings.accounts ?? []).some((a) => (a.engine ?? 'claude') === engine)) return 'noAccount';
+  if (projectId && app.harnessScope[projectId]?.off.includes(engine)) return 'projectOff';
   return null;
+}
+
+/** Whether `engine` waits for the user's agreement in the private project `projectId` (ESC-404): asked once, at its first agent. */
+export function harnessAsks(projectId: string | null | undefined, engine: EngineId | null | undefined): boolean {
+  return !!projectId && !!engine && !!app.harnessScope[projectId]?.asks.includes(engine);
+}
+
+/** Whether the agents of `engine` do not run in the project `projectId` (ESC-404): turned off there, or not turned on yet. */
+export function harnessHeld(projectId: string | null | undefined, engine: EngineId | null | undefined): boolean {
+  if (!projectId || !engine) return false;
+  const scope = app.harnessScope[projectId];
+  return !!scope && (scope.off.includes(engine) || scope.asks.includes(engine));
 }
 
 /**
  * The harnesses offered (menus « Harness », their brand), in the backend's order: those that can be used (ESC-391), not all
- * those found. Réglages › Comptes et harness lists those found without an account, to add one (`found`).
+ * those found; in a project, but those turned off for it (ESC-404). Réglages › Comptes et harness lists those found without
+ * an account, to add one (`found`).
  */
-export function offered(): EngineDecl[] {
-  return app.engines.filter((e) => !unusable(e.id));
+export function offered(projectId?: string | null): EngineDecl[] {
+  return app.engines.filter((e) => !unusable(e.id, projectId));
 }
 
 /**
  * Whether there is a harness to choose: the menus « Harness » show from two harnesses offered on, or `current` beside one
  * when it cannot be used any more (its menu says why).
  */
-export function choosesEngine(current?: EngineId | null): boolean {
-  return engineOptions(current).length > 1;
+export function choosesEngine(current?: EngineId | null, projectId?: string | null): boolean {
+  return engineOptions(current, projectId).length > 1;
 }
 
 /**
- * The harnesses offered, as the options of a menu « Harness »; `current` stays listed even if it cannot be used any more,
- * with why (« Codex (plugin coupé) »).
+ * The harnesses offered, as the options of a menu « Harness » (of the project `projectId`); `current` stays listed even if it
+ * cannot be used any more, with why (« Codex (plugin coupé) », « Codex (coupé pour ce projet) »).
  */
-export function engineOptions(current?: EngineId | null): { value: EngineId; label: string }[] {
-  const list = offered().map((e) => ({ value: e.id, label: e.name }));
+export function engineOptions(current?: EngineId | null, projectId?: string | null): { value: EngineId; label: string }[] {
+  const list = offered(projectId).map((e) => ({ value: e.id, label: e.name }));
   if (!current || list.some((o) => o.value === current) || !app.engines.some((e) => e.id === current)) return list;
-  const why = unusable(current);
+  const why = unusable(current, projectId);
   const name = engineName(current);
   return [...list, { value: current, label: why ? t(`settings.engineWhy.${why}`, { name }) : name }];
 }

@@ -6,7 +6,7 @@ Cette page dit ce que le plugin fait sur ta machine, et ce qu’il ne peut pas f
 
 Rien. Le plugin est un module WASM qu’Escouade fait tourner dans son hôte : il n’a ni process, ni commande, ni réseau, ni accès au disque. Son manifeste ne déclare aucune permission, et l’hôte n’accorde à un module que ce que son manifeste déclare.
 
-C’est le cœur d’Escouade qui trouve `claude` sur la machine et le lance. Le plugin lui décrit seulement le lancement (les arguments, le premier message), et le cœur vérifie cette description avant de lancer quoi que ce soit :
+C’est le cœur d’Escouade qui trouve `claude` sur la machine et le lance. Le plugin lui décrit seulement le lancement (les arguments, une variable, le premier message), et le cœur vérifie cette description avant de lancer quoi que ce soit :
 
 - le jeton d’Escouade n’est jamais dans les arguments, que tout le monde peut lire sur la machine ;
 - pour un projet privé, la clôture est dans le lancement ;
@@ -14,6 +14,8 @@ C’est le cœur d’Escouade qui trouve `claude` sur la machine et le lance. Le
 - un fichier à écrire ne peut l’être que dans le dossier propre à l’agent.
 
 Une description qui ne tient pas est refusée et l’agent ne démarre pas.
+
+La seule variable qu’il pose est `CLAUDE_CODE_ARTIFACT=1` : en stream-json, Claude Code se croit dans l’Agent SDK et coupe ses artefacts sans elle (« Unknown skill: artifact-design »). Avec elle, un agent crée des artefacts comme dans un terminal. Ce qui les coupe pour toi (`CLAUDE_CODE_DISABLE_ARTIFACT=1`, tes réglages de Claude Code, ton organisation) les coupe toujours.
 
 ## Ce qu’il lit
 

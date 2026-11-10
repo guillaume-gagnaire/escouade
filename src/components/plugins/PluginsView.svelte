@@ -82,6 +82,7 @@
           {:else if page.kind === 'updates'}
             <h2>{t('plugins.updates.title')}</h2>
             <span class="sub">{t('plugins.updates.sub')}</span>
+            {#if plugins.storeRead}<span class="sub read" class:warn={!!plugins.store?.error} role="status">{plugins.storeRead}</span>{/if}
           {:else if page.kind === 'dev'}
             <h2>{t('plugins.dev.title')}</h2>
             <span class="sub">{t('plugins.dev.sub')}</span>
@@ -107,8 +108,10 @@
             >
           {/if}
           {#if page.kind === 'updates'}
-            <button class="btn" disabled={plugins.checking} onclick={() => plugins.checkUpdates()}
-              >{plugins.checking ? t('plugins.updates.checking') : t('plugins.updates.check')}</button
+            <button class="btn" disabled={plugins.checking} aria-busy={plugins.checking} onclick={() => plugins.checkUpdates()}
+              >{#if plugins.checking}<i class="spin" aria-hidden="true"></i>{/if}{plugins.checking
+                ? t('plugins.updates.checking')
+                : t('plugins.updates.check')}</button
             >
           {:else if page.kind === 'dev'}
             <button class="btn" onclick={() => plugins.fromFolder(true)}><Icon name="folder" size={14} />{t('plugins.loadDev')}</button>
@@ -409,5 +412,25 @@
     display: grid;
     place-items: center;
     color: var(--muted);
+  }
+  /* « Rechercher des mises à jour » under way (ESC-405). */
+  .spin {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border: 1.6px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spin {
+      animation: none;
+    }
   }
 </style>

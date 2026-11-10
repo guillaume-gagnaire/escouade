@@ -88,6 +88,8 @@ pub struct InitialState {
     engines_found: Vec<crate::model::EngineId>,
     /// The harnesses whose plugin is off or not installed (ESC-391): not offered, though their program is found.
     engines_off: Vec<crate::model::EngineId>,
+    /// The harnesses not on for a project (ESC-404), by project.
+    harness_scope: BTreeMap<String, crate::harness_scope::HarnessScope>,
     sources: Vec<crate::integrations::source::SourceDecl>,
     /// Why no ticket of a project's board starts, by project.
     board_issues: HashMap<String, String>,
@@ -172,6 +174,7 @@ pub fn subscribe(
         engines: crate::engine::registry::declared(),
         engines_found: core.engines_found(),
         engines_off: core.engines_unplugged(),
+        harness_scope: core.harness_scope(),
         sources: crate::integrations::source::declared(),
         board_issues,
         autopilot_pause,
@@ -476,10 +479,17 @@ pub fn plugin_install(
     // A run.js plugin's module compiled and precompiled now, in the cache, off this thread (ESC-320).
     core.plugin_runtime.prepare(&view.id);
     let from_store = matches!(view.origin, crate::plugins::Origin::Store { .. });
+    let from_seed = matches!(
+        view.origin,
+        crate::plugins::Origin::Store { seed: true, .. }
+    );
     core.telemetry
         .track(crate::telemetry::Event::PluginInstalled { from_store });
-    // The store's count, only with the user's consent to the statistics (docs/STORE.md §5.4).
-    if from_store && core.settings.read().telemetry == Some(true) {
+    // The store's count, only with the user's consent to the statistics (docs/STORE.md §5.4); a version of the seed
+    // through the counts the seed keeps, once (ESC-394).
+    if from_seed {
+        core.spawn_seed_counts();
+    } else if from_store && core.settings.read().telemetry == Some(true) {
         let settings = core.settings.read().clone();
         let (store, id, version) = (core.store.clone(), view.id.clone(), view.version.clone());
         let update = staged.is_some_and(|(_, update)| update);
@@ -555,18 +565,39 @@ pub fn plugin_set_enabled(
 
 /// A plugin's switch in a project (a private one included: the user sets it there one by one).
 #[tauri::command(async)]
-pub fn plugin_set_project(
-    core: CoreState,
+pub async fn plugin_set_project(
+    core: CoreState<'_>,
     id: String,
     project: String,
     on: bool,
 ) -> Result<crate::plugins::PluginView, String> {
-    core.plugins
-        .choose(&id, |c| {
-            c.projects.insert(project, on);
-        })
+    // Off, the agents of its harnesses in the project stop (ESC-404).
+    core.set_plugin_project(&id, &project, on)
+        .await
         .map_err(|e| e.to_string())?;
     plugin_view(&core, &id)
+}
+
+/// « Activer » of a harness for a project (ESC-404): the user's agreement, asked by the window before the first agent
+/// of a private project, or on the card of an agent or a ticket whose harness is off there. No tool does it.
+#[tauri::command(async)]
+pub fn harness_enable_in(core: CoreState, project: String, engine: EngineId) -> Res<()> {
+    core.enable_harness_in(&project, engine).map_err(err)
+}
+
+/// The plugin a harness goes through (ESC-404): the window's question shows what it will get and its permissions.
+#[tauri::command(async)]
+pub fn harness_plugin_of(engine: EngineId) -> Option<String> {
+    crate::plugins::harness::plugin_of(engine)
+}
+
+/// The harnesses that are not on, project by project (ESC-404): `off`, not offered; `asks`, offered behind the
+/// question of a private project.
+#[tauri::command(async)]
+pub fn harness_scope(
+    core: CoreState,
+) -> std::collections::BTreeMap<String, crate::harness_scope::HarnessScope> {
+    core.harness_scope()
 }
 
 /// Takes back a permission of a plugin, or gives it again: its process stops, and the next one
@@ -701,13 +732,22 @@ pub fn plugin_start(core: CoreState, id: String) -> Result<PluginRun, String> {
     Ok(plugin_run(core, id))
 }
 
-/// Looks for newer versions of the installed plugins (offered, never installed).
+/// What « Rechercher des mises à jour » found: the plugins as they are now, and the store as it was read (`readAt`,
+/// `error` when it did not answer: the offers of `readAt` were looked at).
+#[derive(serde::Serialize)]
+pub struct UpdatesLooked {
+    plugins: Vec<crate::plugins::PluginView>,
+    store: crate::plugins::store::StoreView,
+}
+
+/// Looks for newer versions of the installed plugins (offered, never installed), the store read again first (ESC-405).
 #[tauri::command(async)]
-pub async fn plugins_check_updates(
-    core: CoreState<'_>,
-) -> Result<Vec<crate::plugins::PluginView>, ()> {
-    core.plugins.check_updates().await;
-    Ok(core.plugins.list(crate::i18n::ui()))
+pub async fn plugins_check_updates(core: CoreState<'_>) -> Result<UpdatesLooked, ()> {
+    core.look_for_updates().await;
+    Ok(UpdatesLooked {
+        plugins: core.plugins.list(crate::i18n::ui()),
+        store: core.store.view(),
+    })
 }
 
 /// The user agrees to the commands a plugin runs on facts, as they are now, or takes the
@@ -1581,6 +1621,19 @@ pub async fn resume_on_account(core: CoreState<'_>, agent_id: String, account: S
         .map_err(err)
 }
 
+/// `/login` typed to the agent (ESC-401): its account was just signed in; it goes on, on it,
+/// with its session.
+#[tauri::command]
+pub async fn agent_signed_in(core: CoreState<'_>, id: String) -> Res<()> {
+    core.agent_signed_in(&id).await.map_err(err)
+}
+
+/// `/logout` typed to the agent (ESC-401), confirmed: its account signs out by its harness.
+#[tauri::command]
+pub async fn agent_logout(core: CoreState<'_>, id: String) -> Res<()> {
+    core.agent_logout(&id).await.map_err(err)
+}
+
 /// « Revenir sur <compte> »: a resume on another account failed; the agent goes back.
 #[tauri::command]
 pub async fn back_to_previous_account(core: CoreState<'_>, agent_id: String) -> Res<()> {
@@ -2111,6 +2164,12 @@ pub async fn project_prs(
     project_id: String,
 ) -> Res<crate::prview::Read<crate::prview::ProjectPrs>> {
     Ok(core.project_prs(&project_id).await)
+}
+
+/// The background reading of the project on screen's list, for the PR tab's badge (ESC-403).
+#[tauri::command]
+pub async fn project_prs_watch(core: CoreState<'_>, project_id: String) -> Res<bool> {
+    Ok(core.project_prs_watch(&project_id).await)
 }
 
 /// The open pull requests of every project, as recently read, for the overview (ESC-68).
@@ -3221,28 +3280,39 @@ pub async fn integration_connect(
 }
 
 #[tauri::command]
-pub fn integration_disconnect(core: CoreState, service: Service) -> Res<Vec<AccountView>> {
-    core.integration_disconnect(service).map_err(err)
+pub fn integration_disconnect(
+    core: CoreState,
+    service: Service,
+    account: Option<String>,
+) -> Res<Vec<AccountView>> {
+    core.integration_disconnect(service, account.as_deref().unwrap_or(""))
+        .map_err(err)
 }
 
 #[tauri::command]
 pub async fn integration_containers(
     core: CoreState<'_>,
     service: Service,
+    account: Option<String>,
     project_id: Option<String>,
 ) -> Res<Vec<Container>> {
-    core.integration_containers(service, project_id.as_deref())
-        .await
-        .map_err(err)
+    core.integration_containers(
+        service,
+        account.as_deref().unwrap_or(""),
+        project_id.as_deref(),
+    )
+    .await
+    .map_err(err)
 }
 
 #[tauri::command]
 pub async fn integration_states(
     core: CoreState<'_>,
     service: Service,
+    account: Option<String>,
     container: String,
 ) -> Res<StatesView> {
-    core.integration_states(service, &container)
+    core.integration_states(service, account.as_deref().unwrap_or(""), &container)
         .await
         .map_err(err)
 }

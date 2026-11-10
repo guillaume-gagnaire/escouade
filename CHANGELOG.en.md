@@ -6,10 +6,21 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Plugins: “Look now” reads the store again before looking, so a version published since the start is offered. The page says when the store was read; when it does not answer, it says so and looks in the offers already read.
+- A harness turned off for a project in its plugin’s settings now really is: it is no longer offered there, and its agents of that project no longer start or get anything. In a private project, the first agent on a harness first asks you to turn it on, saying what its plugin will get. On update, a private project keeps on the harnesses it already used.
+- Split screen: archiving or deleting an agent no longer undoes the layout. Another agent takes its place, and the terminal you put beside or below stays where it was.
+- A button that opens a pull request in the browser now says why it did not open, with the reason, instead of doing nothing: the PR list, the review, the ticket card, the status bar, the agent’s header and menu, and the PR and CI tab.
+- Claude Code’s interactive commands work from an agent’s field: `/login` signs in the agent’s account, which picks up its conversation, and screen commands like `/permissions` or `/hooks` open in its terminal view. The “/” menu says where each one opens.
+- Several Jira, Trello, Linear or ClickUp accounts connect side by side, and each project chooses the one that serves its source: a different Jira per client. An account disconnects alone; the projects that used it say so and keep their settings. Existing accounts stay as they are, but going back to 2.1 only sees the first account of each service.
+- The PR tab shows a badge as soon as a new PR arrives on the project on screen, with how many; opening the tab clears it and marks the new ones “New” in the list. Those Escouade opened don’t count.
+- Each agent shows the temperature of its cache, from 100 °C when it just served to 0 °C when it expires: a message sent warm costs far less. Hovering the header details the last turn and what a cold start would cost, and the status bar says what the cache saved today.
+- The plugins Escouade installs by itself from the installer now count in the store’s number of installs, if you accepted the statistics, even when installed offline or before you answered; those of the 2.2 betas count once.
+- Launch commands and the steps of “▶ Test” are interactive while they run: you answer their prompts, use a dev server's keys and stop them with Ctrl+C in their view, as in a terminal. Once ended, their log is read-only again.
 - The “Harness” menus now offer only the harnesses you can use: program installed, plugin on and at least one account. The one already chosen stays listed with the reason, and Settings › Accounts and harnesses still shows those without an account yet.
 - The Kanban header now has two rows where nothing overlaps, and the Environments view shows only the environments you pick, leaving out those never deployed; the PR and Environments tabs only appear with a code host. In a narrow window, a screen reader still finds “After approval” there.
 - OpenCode: `git commit` and `git add` are accepted at once only in their plain form, and a write to `.git`, `.opencode` or `opencode.json` always asks: these rules are all that protects it.
 - OpenCode: a private project holds better. Its rules are set before a session opens, and “Always” is no longer offered under a fence.
+- Claude Code: an agent creates artifacts as in a terminal, instead of saying “unknown skill artifact-design”. The link of the published page shows on the tool’s row and opens in your browser with a click.
 - Claude Code: a discussion also refuses PowerShell commands, instead of showing them on a card.
 - Antigravity CLI: its terminal view follows its plugin’s rules. It no longer allows writes in the agent’s folder or git add and git commit at once, asks for a private project’s commands, and forgets the “Always” kept by 2.2.0.
 - Antigravity CLI: its terminal view has its own temporary folder, as its plugin does, instead of yours, where it wrote without asking.

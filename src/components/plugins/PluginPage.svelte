@@ -184,10 +184,13 @@
           </div>
         </div>
         {#if !dev}
-          <button class="btn check" disabled={plugins.checking} onclick={() => plugins.checkUpdates()}
-            >{plugins.checking ? t('plugins.updates.checking') : t('plugins.versions.check')}</button
+          <button class="btn check" disabled={plugins.checking} aria-busy={plugins.checking} onclick={() => plugins.checkUpdates()}
+            >{#if plugins.checking}<i class="spin" aria-hidden="true"></i>{/if}{plugins.checking
+              ? t('plugins.updates.checking')
+              : t('plugins.versions.check')}</button
           >
           {#if !plugin.update && !plugins.checking}<span class="hint">{t('plugins.versions.upToDate')}</span>{/if}
+          {#if plugins.storeRead}<span class="hint" class:warn={!!plugins.store?.error} role="status">{plugins.storeRead}</span>{/if}
         {/if}
       {:else if tab === 'projects'}
         <PluginProjects {plugin} />
@@ -603,5 +606,28 @@
     margin: 0;
     color: var(--del);
     font-size: 12px;
+  }
+  /* « Rechercher des mises à jour » under way (ESC-405). */
+  .spin {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border: 1.6px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spin {
+      animation: none;
+    }
+  }
+  .hint.warn {
+    color: var(--warn-ink);
   }
 </style>

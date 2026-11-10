@@ -191,6 +191,16 @@ impl ProcessTicketSource {
         }
     }
 
+    /// An account of a source after its first (ESC-397): the plugin reads the secret
+    /// `account:<name>` instead of its source's own, and its budget is its own.
+    pub fn named(mut self, name: Option<&str>) -> Self {
+        if let Some(name) = name.filter(|n| !n.is_empty()) {
+            self.account["name"] = json!(name);
+            self.line.budget = Some(super::accounts::budget_key(&self.line.plugin, name));
+        }
+        self
+    }
+
     /// The account where its API is when the core says it (github.com's as GitHub Issues reaches
     /// it: `ESCOUADE_GITHUB_API`, a fake one).
     pub fn with_api(mut self, api: &str) -> Self {

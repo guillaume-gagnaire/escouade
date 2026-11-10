@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- `Hosts`: a source served from several accounts. An account after its first names its secret (`account:<name>`), and each one keeps its own client.
+- Its refusals send to the settings pages of Escouade 2.2: Connected services, and Advanced › Network.
+
 ## 0.1.1
 
 - In a module, a task woken by another goes on in the same turn. It used to sleep until the next line, for ever when none came: a call waiting for `proc/exit`, for instance. A turn is bounded, and tasks still awake at its end get the next one.

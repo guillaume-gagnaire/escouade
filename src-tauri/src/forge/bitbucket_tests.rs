@@ -210,6 +210,14 @@ async fn the_open_pull_requests_come_newest_first_with_their_fork_and_draft() {
     }
     let prs = client(&server).open_pull_requests(&repo()).await.unwrap();
     assert_eq!(prs.iter().map(|p| p.number).collect::<Vec<_>>(), [43, 42]);
+    // Their web pages, never their API's address: the buttons open them in the browser (ESC-402).
+    assert_eq!(
+        prs.iter().map(|p| p.url.as_str()).collect::<Vec<_>>(),
+        [
+            "https://bitbucket.org/acme/demo/pull-requests/43",
+            "https://bitbucket.org/acme/demo/pull-requests/42"
+        ]
+    );
     assert!(prs[0].draft);
     assert!(prs[0].fork);
     assert_eq!(prs[0].head_repo, "ada/demo-fork");

@@ -91,6 +91,28 @@ const TASK_STATUS: Record<string, Key> = {
   deleted: 'conv.tools.taskStatus.deleted',
 };
 
+/** The tools of Claude Code's artifacts (ESC-400): their names in words (keys only: the text is read where it is shown). */
+const ARTIFACT_TOOLS: Record<string, Key> = {
+  Artifact: 'conv.tools.artifact.publish',
+  ArtifactComments: 'conv.tools.artifact.comments',
+  ArtifactData: 'conv.tools.artifact.data',
+  ArtifactCheck: 'conv.tools.artifact.check',
+};
+
+/** The address of an artifact on claude.ai, as `Artifact` says it published one. */
+const ARTIFACT_URL = /(?<![\w./-])https:\/\/(?:[a-z0-9-]+\.)?claude\.ai\/artifact\/[A-Za-z0-9_-]+/;
+
+/**
+ * The link of the page an `Artifact` call published, to open in the browser at the user's gesture: null while it runs,
+ * when it failed, or when it did not publish (a deletion, a listing).
+ */
+export function artifactLink(tool: ToolItem): string | null {
+  if (tool.name !== 'Artifact' || tool.status !== 'ok' || !tool.result || tool.result.isError) return null;
+  const action = tool.input?.action;
+  if (action !== undefined && action !== 'publish') return null;
+  return ARTIFACT_URL.exec(tool.result.text ?? '')?.[0] ?? null;
+}
+
 /** A tool of Escouade's own MCP server. */
 export const isEscouadeTool = (name: string) => name.startsWith(ESCOUADE);
 
@@ -98,6 +120,7 @@ export const isEscouadeTool = (name: string) => name.startsWith(ESCOUADE);
 export function toolIcon(name: string): IconName {
   if (isEscouadeTool(name)) return 'kanban';
   if (name.startsWith('mcp__')) return 'plug';
+  if (Object.hasOwn(ARTIFACT_TOOLS, name)) return 'page';
   switch (name) {
     case 'Read':
     case 'NotebookRead':
@@ -139,6 +162,7 @@ export function toolLabel(name: string): string {
     return `${server}·${tool ?? ''}`;
   }
   if (name === 'Task' || name === 'Agent') return 'Agent';
+  if (Object.hasOwn(ARTIFACT_TOOLS, name)) return t(ARTIFACT_TOOLS[name]);
   return name;
 }
 
@@ -235,6 +259,13 @@ export function toolArg(tool: ToolItem, cwd: string): string {
       return i.skill ?? i.command ?? '';
     case 'SlashCommand':
       return i.command ?? '';
+    case 'Artifact': {
+      // What it publishes: its title, else its file's name; what it acts on otherwise (an address).
+      const file = typeof i.file_path === 'string' ? i.file_path.split(/[\\/]/).pop() : '';
+      const target = [i.title, file, i.url].find((v) => typeof v === 'string' && v) ?? '';
+      if (i.action === 'delete') return t('conv.tools.artifact.delete', { target });
+      return typeof i.action === 'string' && i.action !== 'publish' ? `${i.action} · ${target}` : target;
+    }
     default: {
       const first = Object.values(i).find((v) => typeof v === 'string');
       return typeof first === 'string' ? first.slice(0, 160) : '';
@@ -271,6 +302,10 @@ export function toolResultSummary(tool: ToolItem): string {
     case 'TaskList':
     case 'TaskGet':
       return '';
+    case 'Artifact':
+      // The row shows the link of the page it published instead.
+      if (artifactLink(tool)) return '';
+      return lastLine(r.text) ? lastLine(r.text).slice(0, 80) : '✓';
     default:
       return lastLine(r.text) ? lastLine(r.text).slice(0, 80) : '✓';
   }

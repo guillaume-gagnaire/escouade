@@ -177,7 +177,7 @@
       class="icon-btn ext"
       aria-label={t('prs.chipLabel', { word: w, number: p.number, state: stateWord(p) })}
       use:tip={{ text: t('prs.view.openInBrowser'), aria: false }}
-      onclick={() => openPr(p)}><Icon name="ext" size={13} /></button
+      onclick={() => openPr(p, w)}><Icon name="ext" size={13} /></button
     >
   </li>
 {/snippet}
@@ -196,7 +196,7 @@
             class="icon-btn ext"
             aria-label={t('prs.chipLabel', { word, number: p.number, state: stateWord(p) })}
             use:tip={{ text: t('prs.view.openInBrowser'), aria: false }}
-            onclick={() => openPr(p)}><Icon name="ext" size={14} /></button
+            onclick={() => openPr(p, word)}><Icon name="ext" size={14} /></button
           >
         </div>
         <b class="title">{p.title}</b>
@@ -321,7 +321,7 @@
           <div class="sec-h"><h3 id="hosts-others">{t('prs.view.others', { word })}</h3></div>
           <ul class="list">
             {#each others as o (prKey(o))}
-              {@render prRow(o, word, () => openPr(o), t('prs.tipHead', { word, number: o.number, title: o.title }))}
+              {@render prRow(o, word, () => openPr(o, word), t('prs.tipHead', { word, number: o.number, title: o.title }))}
             {/each}
           </ul>
         </section>
@@ -362,7 +362,7 @@
             {@render prRow(
               p,
               word,
-              () => (owner ? app.selectAgent(owner.id) : openPr(p)),
+              () => (owner ? app.selectAgent(owner.id) : openPr(p, word)),
               owner ? t('prs.view.project.ofAgent', { agent: owner.name }) : t('prs.tipHead', { word, number: p.number, title: p.title }),
             )}
           {/each}

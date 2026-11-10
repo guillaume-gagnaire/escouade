@@ -5,7 +5,7 @@ The plugin comes with Escouade, you do not install it from the store. In the Plu
 - under **Shipped with Escouade** while the app gives it itself: signed with it, updated with it, its version is Escouade’s. You can turn it off, not uninstall it;
 - under **Offered by Escouade** once the installer holds its store version: Escouade installs it with no network at the first start, then it is a plugin like any other, which you can turn off, uninstall and update.
 
-Its WASM module is not yet in Escouade’s installers: it comes there with its store version. If its page says it stopped for want of a module, see Troubleshooting.
+Its WASM module is in Escouade’s installers, like the other first-party plugins: Escouade installs it from there, with no network, at its first start. If its page says it stopped for want of a module, see Troubleshooting.
 
 To be of use, it needs two things: the `isola` program on the machine, and an `.isola.toml` in the project.
 
@@ -14,7 +14,8 @@ To be of use, it needs two things: the `isola` program on the machine, and an `.
 Install [isola](https://github.com/cyucelen/isola) as its documentation says, and check it is on your PATH: `isola --help` must answer in a terminal.
 
 - Escouade looks for `isola` in the absolute folders of the PATH, at most every 30 seconds: installed while Escouade runs, it is found soon after, without restarting the app.
-- On Windows, Escouade only starts an `isola.exe` or an `isola.com`, never an `isola.cmd` or an `isola.bat` (they only run through a shell).
+- isola does not exist for Windows: it publishes no Windows build, and `go install` fails there (isola relies on process groups and file locks that only Unix has). On Windows, the plugin finds no `isola` program: every worktree is nobody’s, and tickets start as without isola, with a recipe on the reserved ports. Nothing to turn off, nothing breaks.
+- Should isola have a Windows version one day, Escouade would only start an `isola.exe` or an `isola.com`, never an `isola.cmd` or an `isola.bat` (they only run through a shell).
 
 ## 2. Add an `.isola.toml` to the project
 

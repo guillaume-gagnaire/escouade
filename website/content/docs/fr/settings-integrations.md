@@ -25,7 +25,7 @@ Sans projet ouvert, « Tickets importés » affiche « Aucun projet ouvert. 
 
 ## Comptes connectés
 
-Un compte par service : Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues et Azure Boards. Chaque service affiche « Non connecté » avec un bouton « Connecter… », ou « Connecté · » suivi du compte avec un bouton « Déconnecter ». Sous le titre, l’app rappelle : « Les jetons restent sur cette machine, à part des réglages, et ne servent qu’aux appels de ces services. »
+Jira, Trello, Linear et ClickUp prennent plusieurs comptes : un Jira par client, par exemple, ou deux identités sur le même site. Chaque service affiche « Non connecté » avec un bouton « Connecter… », ou ses comptes, chacun « Connecté · » suivi du compte avec son bouton « Déconnecter », et « Connecter un compte… » pour en ajouter un. GitHub Issues a le compte de github.com, GitLab Issues et Azure Boards ceux de leur hébergeur. Sous le titre, l’app rappelle : « Les jetons restent sur cette machine, à part des réglages, et ne servent qu’aux appels de ces services. »
 
 GitLab Issues n’a pas de compte à lui : sa ligne dit « Compte de l’hébergeur GitLab : il se connecte et se déconnecte dans Hébergeurs de code. », et son bouton « Connecter GitLab… » ouvre le formulaire de l’hébergeur (voir [GitLab Issues](#gitlab-issues)). Azure Boards de même avec l’hébergeur Azure DevOps : « Compte de l’hébergeur Azure DevOps : il se connecte et se déconnecte dans Hébergeurs de code. », « Son jeton doit avoir le droit Work Items (lecture et écriture). » et « Connecter Azure DevOps… » (voir [Azure Boards](#azure-boards)).
 
@@ -86,7 +86,9 @@ Aucun champ : Azure Boards prend les comptes de l’hébergeur Azure DevOps (une
 
 Clique sur « Connecter » une fois les champs remplis ; le bouton dit « Vérification… » pendant l’appel, et « Annuler » ferme le formulaire. Escouade vérifie les identifiants auprès du service et ne les garde que s’il les accepte. S’il les refuse, ou s’il est injoignable, sa réponse s’affiche en rouge sous les champs, par exemple « Jira refuse ces identifiants (401) ». Un champ manquant est signalé avant tout appel, par exemple « Indique le jeton. ».
 
-« Déconnecter » oublie le compte et ses secrets. Les projets gardent leurs sources liées : elles ne servent plus tant qu’un compte du service n’est pas reconnecté. Pour changer de compte, déconnecte l’ancien puis connecte l’autre.
+Connecter de nouveau le même compte (pour Jira, le même site et le même e-mail ; pour les autres, le même utilisateur du service) le met à jour, par exemple avec un nouveau jeton, au lieu d’en ajouter un second.
+
+« Déconnecter » oublie ce compte et ses secrets, sans toucher aux autres comptes du service. Les projets dont une source passait par lui la gardent en pause : ni import ni synchronisation, sa configuration intacte. Leur page « Tickets importés » le dit, avec un point ambre dans la barre des réglages, et propose de choisir un autre compte.
 
 ### Où sont gardés les jetons
 
@@ -97,6 +99,8 @@ Si le trousseau ne rend pas un jeton au démarrage, le compte affiche « Trouss
 ## Sources liées à un projet
 
 Le groupe s’appelle « Sources liées à » suivi du nom du projet. Tant qu’aucun compte n’est connecté, il dit : « Connecte un compte ci-dessus pour lier une source à ce projet. »
+
+Quand le service a plusieurs comptes, un menu « Compte » choisit d’abord celui qui sert la source du projet (par défaut, le premier connecté) : deux projets peuvent ainsi prendre leurs tickets dans deux Jira différents. La synchronisation, l’import automatique, « ⤓ Importer », les commentaires et les liens vers le ticket externe passent par ce compte ; un ticket déjà importé garde le sien.
 
 Pour chaque service connecté, un menu choisit la source du projet : « Projet Jira », « Tableau Trello », « Dépôt GitHub Issues », « Équipe Linear », « Liste ClickUp », « Projet GitLab Issues » ou « Projet Azure Boards ». « Aucun » (par défaut) délie. Un projet a au plus une source par service.
 

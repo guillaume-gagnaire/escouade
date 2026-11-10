@@ -15,6 +15,7 @@ import errors from './errors';
 import format from './format';
 import git from './git';
 import handover from './handover';
+import heat from './heat';
 import integrations from './integrations';
 import mcp from './mcp';
 import memory from './memory';
@@ -57,6 +58,7 @@ export const en = defineCatalog({
   errors,
   accounts,
   handover,
+  heat,
   mcp,
   memory,
   vectors,

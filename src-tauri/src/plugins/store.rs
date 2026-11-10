@@ -28,6 +28,8 @@ pub const STORE_URL: &str = "https://store.escouade.dev";
 pub const MIRROR_URL: &str = "https://escouade.dev";
 /// How often the revocation list (and the catalogue with it) is read again.
 pub const EVERY: Duration = Duration::from_secs(6 * 3600);
+/// A reading of the store this recent is taken as it is by « Rechercher des mises à jour » (ESC-405): close clicks read once.
+pub const FRESH: Duration = Duration::from_secs(30);
 /// The archive as the store keeps it: 50 MB at most (as `store/server/utils/tar.ts`).
 pub const ARCHIVE_MAX: u64 = 50 * 1024 * 1024;
 /// What an archive may unpack to: a gzip bomb stops here.
@@ -414,6 +416,8 @@ pub struct Store {
     cache: RwLock<Cache>,
     /// One reading at a time.
     reading: tokio::sync::Mutex<()>,
+    /// When the last reading ended (read or not), in this process.
+    last: parking_lot::Mutex<Option<std::time::Instant>>,
 }
 
 impl Store {
@@ -454,6 +458,7 @@ impl Store {
                 ..Cache::default()
             }),
             reading: tokio::sync::Mutex::new(()),
+            last: parking_lot::Mutex::new(None),
         }
     }
 
@@ -560,6 +565,40 @@ impl Store {
     /// A failure keeps what was cached and says it (`StoreView::error`).
     pub async fn refresh(&self, http: &reqwest::Client, lang: Lang) {
         let _r = self.reading.lock().await;
+        self.refresh_locked(http, lang).await;
+    }
+
+    /// `refresh` for a gesture of the user (ESC-405): a reading under way when it is asked, or one that ended less than
+    /// `fresh` ago, is taken as it is. True when it read the store itself.
+    pub async fn refresh_within(
+        &self,
+        http: &reqwest::Client,
+        lang: Lang,
+        fresh: Duration,
+    ) -> bool {
+        let asked = std::time::Instant::now();
+        let _r = self.reading.lock().await;
+        let recent = self
+            .last
+            .lock()
+            .is_some_and(|t| t >= asked || asked.duration_since(t) < fresh);
+        if recent {
+            return false;
+        }
+        self.refresh_locked(http, lang).await;
+        true
+    }
+
+    /// Says the store could not be read (no client of Réglages › Avancé › Réseau): the catalogue kept stays.
+    pub fn unreachable(&self, why: &str, lang: Lang) {
+        self.cache.write().error = Some(tr_in!(
+            lang,
+            "Le store ne répond pas ({why}) : le catalogue gardé sur ce poste est montré.",
+            "The store does not answer ({why}): the catalog kept on this machine is shown."
+        ));
+    }
+
+    async fn refresh_locked(&self, http: &reqwest::Client, lang: Lang) {
         let etag = self.cache.read().etag.clone();
         let mut req = http.get(format!("{}/api/v1/catalog.json", self.base));
         if !etag.is_empty() {
@@ -609,6 +648,7 @@ impl Store {
         }
         self.save_meta();
         self.refresh_revocations_locked(http, lang).await;
+        *self.last.lock() = Some(std::time::Instant::now());
     }
 
     async fn refresh_revocations_locked(&self, http: &reqwest::Client, lang: Lang) {
@@ -826,20 +866,40 @@ impl Store {
     }
 
     /// Counts an install or an update on the store (`POST /api/v1/installs`): only when the user
-    /// accepted the statistics (the caller checks), without any id of this machine.
-    pub async fn count(&self, http: &reqwest::Client, id: &str, version: &str, update: bool) {
+    /// accepted the statistics (the caller checks), without any id of this machine. Whether the store answered for good:
+    /// counted, or refused for a reason that sending again would not change (a 4xx but 408 and 429); false offline or on
+    /// an error of the store's, which a later try may get past (ESC-394).
+    pub async fn count(
+        &self,
+        http: &reqwest::Client,
+        id: &str,
+        version: &str,
+        update: bool,
+    ) -> bool {
         let body = serde_json::json!({
             "id": id,
             "version": version,
             "event": if update { "update" } else { "install" },
         });
-        if let Err(e) = http
+        match http
             .post(format!("{}/api/v1/installs", self.base))
             .json(&body)
             .send()
             .await
         {
-            log::info!("the store's count of installs is not reached: {e}");
+            Ok(r) => {
+                let s = r.status();
+                let settled = s.is_success()
+                    || (s.is_client_error() && s.as_u16() != 408 && s.as_u16() != 429);
+                if !settled {
+                    log::info!("the store's count of installs answered {s}: sent again later");
+                }
+                settled
+            }
+            Err(e) => {
+                log::info!("the store's count of installs is not reached: {e}");
+                false
+            }
         }
     }
 }

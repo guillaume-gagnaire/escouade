@@ -26,10 +26,15 @@ async fn vault(h: &Harness) -> Project {
         )
         .await
         .unwrap();
-    let mut projects = h.core.projects.write();
-    let found = projects.iter_mut().find(|x| x.id == p.id).unwrap();
-    found.private = true;
-    found.clone()
+    let found = {
+        let mut projects = h.core.projects.write();
+        let found = projects.iter_mut().find(|x| x.id == p.id).unwrap();
+        found.private = true;
+        found.clone()
+    };
+    // Its harness turned on for it by the user (ESC-404).
+    crate::harness_scope_tests::turn_on_every_harness(h, &found.id);
+    found
 }
 
 fn after(title: &str, ids: &[&str]) -> TicketDraft {

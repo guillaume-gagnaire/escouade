@@ -45,6 +45,7 @@ import type {
   ClaudeLocated,
   ClaudeUpdateStatus,
   EngineId,
+  HarnessScope,
   EngineInfo,
   ClosedProject,
   CommitScope,
@@ -222,6 +223,12 @@ export const api = {
   /** The harnesses found now, the PATH of today read first (ESC-186). */
   enginesFoundNow: () => invoke<EngineId[]>('engines_found_now'),
   enginesOffNow: () => invoke<EngineId[]>('engines_off_now'),
+  /** The harnesses not on for a project, by project (ESC-404). */
+  harnessScope: () => invoke<Record<string, HarnessScope>>('harness_scope'),
+  /** « Activer »: the plugin of `engine` turned on for the project (ESC-404), the user's gesture alone. */
+  harnessEnableIn: (project: string, engine: EngineId) => invoke<void>('harness_enable_in', { project, engine }),
+  /** The plugin the harness `engine` goes through, null for none. */
+  harnessPluginOf: (engine: EngineId) => invoke<string | null>('harness_plugin_of', { engine }),
   /** The registry of now: the harnesses the plugins describe come and go with them (PLG-6). */
   enginesDeclared: () => invoke<EngineDecl[]>('engines_declared'),
   /** The items of Principal's folder a new account may share (those it has), files first. */
@@ -385,6 +392,10 @@ export const api = {
   setAgentAccount: (id: string, account: string) => invoke<void>('set_agent_account', { id, account }),
   /** « Reprendre sur <compte> »: the agent stopped by the usage limit goes on, with its session, on another account. */
   resumeOnAccount: (agentId: string, account: string) => invoke<void>('resume_on_account', { agentId, account }),
+  /** `/login` typed to the agent (ESC-401): its account was just signed in; it goes on, on it, with its session. */
+  agentSignedIn: (id: string) => invoke<void>('agent_signed_in', { id }),
+  /** `/logout` typed to the agent (ESC-401), confirmed: its account signs out by its harness's own command. */
+  agentLogout: (id: string) => invoke<void>('agent_logout', { id }),
   /** « Continuer sur <harness> » and « Revenir sur <harness> »: the agent goes on on another harness, by a handover. */
   continueOnEngine: (agentId: string, engine: EngineId) => invoke<void>('continue_on_engine', { agentId, engine }),
   /** « Revenir sur <compte> »: a resume on another account failed; the agent goes back to the account it came from. */
@@ -465,6 +476,8 @@ export const api = {
   agentNoPr: (id: string) => invoke<NoPr | null>('agent_no_pr', { id }),
   /** The open pull requests of the project, on the remote of its target. */
   projectPrs: (projectId: string) => invoke<PrRead<ProjectPrs>>('project_prs', { projectId }),
+  /** The background reading of the list for the PR tab's badge (ESC-403): made only when due; whether it read. */
+  projectPrsWatch: (projectId: string) => invoke<boolean>('project_prs_watch', { projectId }),
   projectCodeHost: (projectId: string) => invoke<CodeHost | null>('project_code_host', { projectId }),
   overviewPrs: () => invoke<OverviewPrs[]>('overview_prs'),
   /** « Lancer un agent sur cette PR » (ESC-65): an agent in a worktree on the branch of the open pull request `number`. */
@@ -696,11 +709,13 @@ export const api = {
   forgeGuess: (url: string) => invoke<string | null>('forge_guess', { url }),
   forgeTokenPage: (kind: string, url: string) => invoke<string>('forge_token_page', { kind, url }),
   integrationConnect: (service: Service, account: AccountForm) => invoke<AccountView>('integration_connect', { service, account }),
-  integrationDisconnect: (service: Service) => invoke<AccountView[]>('integration_disconnect', { service }),
+  integrationDisconnect: (service: Service, account?: string) =>
+    invoke<AccountView[]>('integration_disconnect', { service, ...(account ? { account } : {}) }),
   /** Jira projects, Trello boards, GitHub repositories (the project's own first). */
-  integrationContainers: (service: Service, projectId: string | null) =>
-    invoke<Container[]>('integration_containers', { service, projectId }),
-  integrationStates: (service: Service, container: string) => invoke<StatesView>('integration_states', { service, container }),
+  integrationContainers: (service: Service, projectId: string | null, account?: string) =>
+    invoke<Container[]>('integration_containers', { service, projectId, ...(account ? { account } : {}) }),
+  integrationStates: (service: Service, container: string, account?: string) =>
+    invoke<StatesView>('integration_states', { service, container, ...(account ? { account } : {}) }),
   /** `page`: the `next` of the page before (« Afficher plus »); none for the first one. */
   integrationIssues: (projectId: string, service: Service, text: string, filters: string[], page?: string) =>
     invoke<IssuePage>('integration_issues', { projectId, service, text, filters, page }),

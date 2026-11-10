@@ -3,6 +3,7 @@
 import type { ThemeChoice } from './appearance';
 import type { Lang } from './i18n/locale.svelte';
 import type { PaneLayout } from './panes';
+import type { PrSeen } from './prnew';
 
 export type AgentStatus = 'idle' | 'running' | 'waiting' | 'done' | 'error';
 
@@ -457,6 +458,8 @@ export interface SourceLink {
   name: string;
   /** The state an imported ticket's external one gets when it comes into each column (none: left as it is). */
   states: Partial<Record<Column, ExternalState>>;
+  /** The account of its service that serves it (AccountView.id, ESC-397); none: the service's first. */
+  account?: string;
 }
 
 export interface ProjectIntegrations {
@@ -478,10 +481,14 @@ export interface ExternalRef {
   url: string;
   /** Why its last sync failed, until one succeeds. */
   error: string | null;
+  /** The account it was imported with, which it keeps; none: the service's first. */
+  account?: string;
 }
 
 export interface AccountView {
   service: Service;
+  /** Its id among its service's accounts (SourceLink.account); empty for a service without any, and for GitLab Issues and Azure Boards. */
+  id?: string;
   connected: boolean;
   /** « ada@atlas.dev · atlas.atlassian.net », « @ada ». */
   label: string;
@@ -1451,6 +1458,8 @@ export interface LaunchState {
   stopping: boolean;
   code: number | null;
   startedAt: number;
+  /** When the user last typed Ctrl+C in its view (ESC-396): an exit soon after is a stop, not a crash. */
+  interruptedAt?: number;
 }
 
 export interface Worktree {
@@ -1580,6 +1589,8 @@ export interface Agent {
   pending: string[];
   /** The same requests summed up, in the same order: what « Vue d’ensemble » shows without the conversation. */
   requests: PendingRequest[];
+  /** The temperature of its cache (ESC-398): absent until a turn told something cached. */
+  heat?: CacheHeat | null;
   contextTokens: number;
   /** Size of the context window of the conversation's model (0 until a turn told it). */
   contextWindow: number;
@@ -1983,6 +1994,8 @@ export interface UiState {
   layout?: '' | 'split';
   /** The split screen of each project (ESC-392), by project id (`lib/panes.ts`); absent: one content fills the work area. */
   panes?: Record<string, PaneLayout>;
+  /** What was seen of each project's pull requests (ESC-403), by project id (`lib/prnew.ts`): the PR tab's badge. */
+  prSeen?: Record<string, PrSeen>;
 }
 
 /** The checkout of an agent's own folder (`GitInfo.agentGit`): the branch HEAD is really on, whatever its worktree was made on. */
@@ -2645,6 +2658,8 @@ export type UiEvent =
   | { type: 'openUrl'; url: string }
   | { type: 'focusBoard'; projectId: string }
   | { type: 'focusPrs'; projectId: string }
+  /** A reading of the project's list of pull requests, whoever made it: its open ones (ESC-403). */
+  | { type: 'prsRead'; projectId: string; numbers: number[] }
   /** Why no ticket of the project's board starts (its target branch), or null once they may. */
   | { type: 'boardIssue'; projectId: string; issue: string | null }
   | { type: 'environments'; environments: ProjectEnvironments }
@@ -2753,6 +2768,8 @@ export interface InitialState {
   enginesFound?: EngineId[];
   /** The harnesses whose plugin is off or not installed (absent before ESC-391: none). */
   enginesOff?: EngineId[];
+  /** The harnesses not on for a project, by project (absent before ESC-404: none). */
+  harnessScope?: Record<string, HarnessScope>;
   /** The kinds of ticket sources the core knows (absent before INT-1: the seven of the window). */
   sources?: SourceDecl[];
   /** Why no ticket of a project's board starts, by project (none: they may). */
@@ -3406,3 +3423,40 @@ export type DocsShared =
   | { kind: 'nothing' }
   | { kind: 'done'; committed: number; message: string; pulled: boolean }
   | { kind: 'conflict'; conflict: DocsConflict };
+
+/** Why a cache went cold before its time (ESC-398). */
+export type HeatBroken = 'model' | 'compaction' | 'prompt' | 'account' | 'conversation';
+
+/** The state of an agent's cache as the backend keeps it (`heat.rs`): the window counts its degrees down. */
+export interface CacheHeat {
+  /** When it last served (ms). */
+  at: number;
+  /** How long it lives without a request (s); null: its harness does not tell. */
+  ttl: number | null;
+  broken?: HeatBroken | string | null;
+  /** Tokens of its last turn read from the cache, and written to it; null when told only together (`cached`). */
+  read: number | null;
+  written: number | null;
+  cached: number;
+  /** Its input at full price. */
+  fresh: number;
+  /** What a next message reads again. */
+  context: number;
+  /** USD; null when the price or the tokens read are not known. */
+  saved: number | null;
+  warm: number | null;
+  cold: number | null;
+  model: string;
+  /** The local day (YYYY-MM-DD) of `savedToday`. */
+  day: string;
+  savedToday: number;
+}
+
+/**
+ * The harnesses of a project whose plugin is not on there (ESC-404): `off`, turned off by the user, not offered; `asks`, a
+ * private project's not turned on yet, offered behind the question of its first agent.
+ */
+export interface HarnessScope {
+  off: EngineId[];
+  asks: EngineId[];
+}

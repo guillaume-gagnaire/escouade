@@ -2,7 +2,8 @@
   import { t } from '../../lib/i18n';
   import { firstChangedLine, patchLines } from '../../lib/diff';
   import { callTitle, isSubagentCall } from '../../lib/subagents';
-  import { hasDiff, isQuietTool, toolArg, toolIcon, toolLabel, toolResultSummary } from '../../lib/tools';
+  import { artifactLink, hasDiff, isQuietTool, toolArg, toolIcon, toolLabel, toolResultSummary } from '../../lib/tools';
+  import { openOutside } from '../../lib/links';
   import type { ConvItem, ToolItem } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import Markdown from './Markdown.svelte';
@@ -37,6 +38,8 @@
   const arg = $derived(toolArg(item, cwd));
   const diff = $derived(hasDiff(item));
   const res = $derived(toolResultSummary(item));
+  // The page an `Artifact` call published (ESC-400): its link, opened in the browser at the user's click.
+  const artifact = $derived(artifactLink(item));
   const subTools = $derived(children.filter((c) => c.kind === 'tool') as ToolItem[]);
   const subText = $derived(
     children.filter((c) => c.kind === 'text' && c.text.trim()).at(-1) as { text: string; streaming: boolean } | undefined,
@@ -90,6 +93,17 @@
       <span class="spin" role="img" aria-label={t('conv.tool.running')}></span>
     {:else if diff}
       <span class="res"><span class="add">+{item.result?.add}</span> <span class="del">−{item.result?.del}</span></span>
+    {:else if artifact}
+      <button
+        class="res artifact"
+        data-artifact={artifact}
+        aria-label={t('conv.tool.openArtifactTip', { url: artifact })}
+        use:tip={t('conv.tool.openArtifactTip', { url: artifact })}
+        onclick={(e) => {
+          e.stopPropagation();
+          openOutside(artifact);
+        }}><Icon name="ext" size={14} />{t('conv.tool.openArtifact')}</button
+      >
     {:else if res}
       <span class="res"
         >{#if item.status === 'ok'}<span class="ok"><Icon name="check" size={14} /></span>{/if}{res}</span
@@ -252,6 +266,23 @@
   }
   .res + .res {
     margin-left: 0;
+  }
+  /* The link of an artifact published: a button that reads as a link. */
+  .res.artifact {
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: 12px;
+    color: var(--p-ink);
+    cursor: pointer;
+  }
+  .res.artifact:hover {
+    text-decoration: underline;
+  }
+  .res.artifact:focus-visible {
+    outline: 2px solid var(--p-ink);
+    outline-offset: 1px;
+    border-radius: 4px;
   }
   .res .ok {
     display: flex;

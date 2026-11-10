@@ -693,7 +693,7 @@ fn clickup_is_a_plugin_of_the_app_that_the_registry_of_sources_names() {
     let m = v.manifest.unwrap();
     assert_eq!(m.run.unwrap().wasm.as_deref(), Some("Cargo.toml"));
     assert_eq!(m.permissions.network, ["api.clickup.com"]);
-    assert_eq!(m.permissions.secrets, ["account:clickup"]);
+    assert_eq!(m.permissions.secrets, ["account:clickup", "account:*"]);
 }
 
 /// The text of the form's missing token is the plugin's (its manifest).

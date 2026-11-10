@@ -1,9 +1,9 @@
 ---
 title: "Pull requests"
 subject: "Git & fichiers"
-sources: ["docs/SPEC.md","docs/TODO-1.8.md","src/components/PrPanel.svelte","src-tauri/src/prview.rs"]
-tickets: ["ESC-64","ESC-161","ESC-305","ESC-56","ESC-58","ESC-65","ESC-66","ESC-68","ESC-383"]
-decisions: [15]
+sources: ["docs/SPEC.md","docs/TODO-1.8.md","src/components/PrPanel.svelte","src-tauri/src/prview.rs","src/lib/prs.ts","tests/fixtures/forges/"]
+tickets: ["ESC-64","ESC-161","ESC-305","ESC-56","ESC-58","ESC-65","ESC-66","ESC-68","ESC-383","ESC-402"]
+decisions: [15,135]
 compared: "2026-10-30T18:20:19+01:00"
 ---
 
@@ -44,6 +44,12 @@ Escouade ouvre la pull request d'un agent ordinaire et suit celles de tout agent
 - Sur la carte, chaque numéro est suivi de sa cible (« #41 → main ») et, pour une PR ouverte qui a une CI, de son état en mots (« CI verte », « CI en échec », « CI en cours », « CI ignorée »), dans la couleur de son signe. Un clic sur ces mots choisit l'agent et ouvre le panneau latéral sur l'onglet « PR et CI » (côte à côte, le panneau est déjà là).
 - Un clic sur un numéro ouvre la PR dans le navigateur. L'infobulle dit « PR #12 · titre », puis l'état, la CI (la dernière exécution d'un check relancé), les approbations, les changements demandés, les fils ouverts, le conflit.
 - La même PR suit le bouton de branche de la barre d'état (voir *Branches*).
+
+### Ouvrir dans le navigateur
+
+- Chaque geste qui ouvre une PR ouvre sa page web chez l'hébergeur dans le navigateur du système, au clic comme au clavier (Entrée) : son numéro sous la carte de l'agent, dans l'en-tête de sa conversation et dans la barre d'état, « Voir la PR #n » de ses menus, l'icône de l'onglet « PR et CI », celle de la vue « Pull requests » et de la relecture, et le numéro de la PR d'un ticket « En revue ».
+- L'adresse est celle de la page de la PR que donne l'hébergeur, jamais celle de son API : GitHub `https://github.com/<dépôt>/pull/<n>`, GitLab `…/-/merge_requests/<n>`, Bitbucket `…/pull-requests/<n>`, Gitea et Forgejo `…/pulls/<n>`, Azure DevOps `…/_git/<dépôt>/pullrequest/<n>`.
+- Un geste qui n'ouvre rien le dit toujours, dans un toast d'erreur : « La PR #12 ne s'ouvre pas dans le navigateur : <raison> ». La raison est le refus du système (aucun navigateur, adresse refusée), ou « son hébergeur n'a pas donné l'adresse de sa page. » quand l'adresse est vide ou n'est pas une page web (http ou https) ; rien n'est alors demandé au système. Un clic ne reste jamais sans effet ni message (ESC-402).
 
 ### L'onglet « PR et CI »
 

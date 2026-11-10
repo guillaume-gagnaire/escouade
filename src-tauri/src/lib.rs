@@ -107,6 +107,10 @@ mod fsedit;
 mod gemini_tui_tests;
 mod git;
 mod handover;
+mod harness_scope;
+#[cfg(test)]
+mod harness_scope_tests;
+mod heat;
 mod hub;
 mod integrations;
 #[cfg(test)]
@@ -249,6 +253,8 @@ mod terminal_tests;
 mod test_tmp;
 mod testlaunch;
 mod text;
+#[cfg(test)]
+mod ticket_accounts_tests;
 mod ticketfiles;
 mod ticketimages;
 mod ticketprs;
@@ -681,6 +687,9 @@ pub fn run() {
                 commands::plugin_approve_commands,
                 commands::plugin_set_enabled,
                 commands::plugin_set_project,
+                commands::harness_enable_in,
+                commands::harness_scope,
+                commands::harness_plugin_of,
                 commands::plugin_set_permission,
                 commands::plugin_set_setting,
                 commands::plugin_secrets,
@@ -803,6 +812,8 @@ pub fn run() {
                 commands::set_agent_options,
                 commands::set_agent_account,
                 commands::resume_on_account,
+                commands::agent_signed_in,
+                commands::agent_logout,
                 commands::continue_on_engine,
                 commands::back_to_previous_account,
                 commands::rename_agent,
@@ -842,6 +853,7 @@ pub fn run() {
                 commands::project_prs,
                 commands::project_code_host,
                 commands::overview_prs,
+                commands::project_prs_watch,
                 commands::pr_reviews,
                 commands::pr_review_start,
                 commands::pr_review_note,

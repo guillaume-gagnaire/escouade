@@ -11,6 +11,7 @@ import { readPref, writePref } from '../lib/prefs';
 import { app } from '../lib/state.svelte';
 import type { AttachedFile } from '../lib/types';
 import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp } from '../test/ipc';
+import { takeViewCommand } from '../lib/interactive';
 import Composer from './Composer.svelte';
 
 // Where a file lies on the disk is the system's to say: no file has a known path unless a test gives one.
@@ -1406,5 +1407,102 @@ describe('Composer: the models of a Codex account (ESC-186)', () => {
     expect(menu().map((m) => m.textContent?.trim())).toEqual(['GPT-6-Luna', 'gpt-5.6-sol de config.toml']);
     await userEvent.click(screen.getByRole('menuitemradio', { name: /gpt-5.6-sol/ }));
     expect(backend.calls.some((c) => JSON.stringify(c.args).includes('gpt-5.6-sol'))).toBe(true);
+  });
+});
+
+describe('Composer: the interactive commands of its harness (ESC-401)', () => {
+  beforeEach(() => resetApp());
+
+  it('marks them in the « / » menu with where they open, beside the commands its harness lists', async () => {
+    const { textarea } = setup();
+    await userEvent.type(textarea, '/log');
+    const options = await screen.findAllByRole('option');
+    expect(options.map((o) => o.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+      '/login Connecter le compte de l’agent s’ouvre dans Comptes',
+      '/logout Déconnecter le compte de l’agent s’ouvre dans Comptes',
+    ]);
+    await userEvent.clear(textarea);
+    await userEvent.type(textarea, '/hoo');
+    expect((await screen.findByRole('option')).textContent).toContain('s’ouvre dans la vue Claude Code');
+    // A command of its harness's list keeps no mark.
+    await userEvent.clear(textarea);
+    await userEvent.type(textarea, '/comp');
+    expect((await screen.findByRole('option')).textContent?.trim()).toBe('/compact Compacte le contexte');
+  });
+
+  it('/login opens the sign-in of the agent’s account, for it, and sends nothing', async () => {
+    const { a, backend, textarea } = setup();
+    await userEvent.type(textarea, '/login{Enter}');
+    expect(app.modal).toEqual({ kind: 'account', accountId: 'principal', forAgent: a.id });
+    expect(textarea.value).toBe('');
+    expect(backend.called('send_message')).toEqual([]);
+  });
+
+  it('/logout asks first, then signs the account out through Escouade', async () => {
+    const { a, backend, textarea } = setup();
+    await userEvent.type(textarea, '/logout{Enter}');
+    expect(app.modal).toMatchObject({ kind: 'confirm', confirm: 'Déconnecter', danger: true });
+    expect(backend.called('agent_logout')).toEqual([]);
+    if (app.modal?.kind === 'confirm') await app.modal.onConfirm(false);
+    await waitFor(() => expect(backend.called('agent_logout')).toHaveLength(1));
+    expect(backend.called('agent_logout')[0].args).toEqual({ id: a.id });
+    expect(backend.called('send_message')).toEqual([]);
+  });
+
+  it('/hooks switches the agent to the Claude Code view, the command waiting to be typed there, and says it', async () => {
+    const { a, backend, textarea } = setup();
+    await userEvent.type(textarea, '/hooks{Enter}');
+    await waitFor(() => expect(backend.called('set_agent_view')).toHaveLength(1));
+    expect(backend.called('set_agent_view')[0].args).toEqual({ id: a.id, terminal: true });
+    expect(takeViewCommand(a.id)).toBe('/hooks');
+    expect(app.toasts.at(-1)?.text).toBe(
+      '/hooks s’ouvre dans la vue Claude Code. « Vue Escouade » ramène à la conversation, qui continue.',
+    );
+    expect(backend.called('send_message')).toEqual([]);
+  });
+
+  it('a ticket’s agent, which has no Claude Code view, keeps the command in its field and says why', async () => {
+    const { backend, textarea } = setup({ ticketId: 't1' });
+    await userEvent.type(textarea, '/permissions{Enter}');
+    await waitFor(() => expect(app.toasts.at(-1)?.text).toMatch(/ne marche que dans la vue Claude Code/));
+    expect(textarea.value).toBe('/permissions');
+    expect(backend.called('set_agent_view')).toEqual([]);
+    expect(backend.called('send_message')).toEqual([]);
+  });
+
+  it('/model alone opens the model menu; /model opus and /compact go to the agent as before', async () => {
+    const { backend, textarea } = setup({ model: 'sonnet' });
+    await userEvent.type(textarea, '/model{Enter}');
+    expect(await screen.findByRole('menuitemradio', { name: /Sonnet/ })).toBeInTheDocument();
+    expect(backend.called('send_message')).toEqual([]);
+    await userEvent.keyboard('{Escape}');
+    await userEvent.type(textarea, '/model opus');
+    await userEvent.keyboard('{Escape}{Enter}');
+    await userEvent.type(textarea, '/compact');
+    await userEvent.keyboard('{Escape}{Enter}');
+    await waitFor(() => expect(backend.called('send_message').map((c) => c.args.text)).toEqual(['/model opus', '/compact']));
+  });
+
+  it('/resume is never sent: the agent keeps its session, said in one line', async () => {
+    const { backend, textarea } = setup();
+    await userEvent.type(textarea, '/resume{Enter}');
+    await waitFor(() => expect(app.toasts.at(-1)?.text).toMatch(/l’agent garde sa session/));
+    expect(backend.called('send_message')).toEqual([]);
+    expect(backend.called('set_agent_view')).toEqual([]);
+  });
+
+  it('/plan with a text switches to Plan mode, then sends the text alone', async () => {
+    const { a, backend, textarea } = setup({ mode: 'auto' });
+    await userEvent.type(textarea, '/plan refais le cache');
+    await userEvent.keyboard('{Escape}{Enter}');
+    await waitFor(() => expect(backend.called('send_message').map((c) => c.args.text)).toEqual(['refais le cache']));
+    expect(backend.called('set_agent_options').at(-1)?.args).toMatchObject({ id: a.id, mode: 'plan' });
+  });
+
+  it('/usage opens the accounts’ page of Réglages', async () => {
+    const { backend, textarea } = setup();
+    await userEvent.type(textarea, '/usage{Enter}');
+    expect(app.modal).toEqual({ kind: 'settings', page: 'accounts' });
+    expect(backend.called('send_message')).toEqual([]);
   });
 });

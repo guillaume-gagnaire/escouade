@@ -183,6 +183,9 @@
     app.selectProject(p.id);
     app.modal = null;
     if (!agent) return;
+    // Made private already: its harness asked for first (ESC-404).
+    await app.refreshEngines();
+    if (!(await app.harnessAgreed(p.id))) return;
     const a = await app.run(api.createAgent(p.id, agent));
     if (a) {
       app.agents[a.id] = a;

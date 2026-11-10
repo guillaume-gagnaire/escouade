@@ -131,7 +131,8 @@ test('the conversation looks as the preview draws it, in both themes, at both si
           .soft(await lookBut(head.locator('.ctx-meter'), 'width'), `context's gauge, ${where}`)
           .toEqual(await lookBut(pv.locator('.ctx-meter'), 'width'));
         expect
-          .soft(await head.locator('.fig:visible').count(), `figures shown, ${where}`)
+          // The cache's degrees (ESC-398) are not in the 2.0 preview.
+          .soft(await head.locator('.fig:visible:not(.fig-heat)').count(), `figures shown, ${where}`)
           .toBe(await pv.locator('.figures .fig:visible').count());
         const launch = head.locator('.actions .btn.test');
         if (await launch.count())

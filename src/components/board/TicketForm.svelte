@@ -399,7 +399,7 @@
   /** Its harness, and why it cannot be used any more when it cannot (ESC-391: « Codex (plugin coupé) »). */
   const engineLabel = $derived(
     engine
-      ? (engineOptions(engine).find((o) => o.value === engine)?.label ?? engineName(engine))
+      ? (engineOptions(engine, projectId).find((o) => o.value === engine)?.label ?? engineName(engine))
       : t('board.form.engineProject', { engine: engineName(projectEngine) }),
   );
 
@@ -412,7 +412,7 @@
         checked: engine === null,
         onClick: () => setEngine(null),
       },
-      ...engineOptions(engine).map((e) => ({
+      ...engineOptions(engine, projectId).map((e) => ({
         label: e.label,
         engine: e.value,
         checked: engine === e.value,
@@ -794,7 +794,7 @@
       ></textarea>
     </div>
     <div class="fgrid">
-      {#if choosesEngine(engine)}
+      {#if choosesEngine(engine, projectId)}
         <div class="engine">
           <!-- The project's: its brand says which, the rest of its name for a screen reader. -->
           {@render select(

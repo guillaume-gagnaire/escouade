@@ -2,7 +2,7 @@
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.isola",
   "name": "isola",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": {
     "fr": "Les services de chaque worktree sur ses ports et ses adresses *.localhost, avec isola : « ▶ Tester » lance `isola up`, ouvre l'adresse, arrête `isola down` et détruit `isola destroy` avec le worktree.",
     "en": "Each worktree's services on ports and *.localhost addresses of their own, with isola: “▶ Test” runs `isola up`, opens the address, `isola down` stops it and `isola destroy` tears it down with the worktree."

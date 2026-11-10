@@ -1,9 +1,9 @@
 ---
 title: "Pilotage de Claude Code"
 subject: "Harness"
-sources: ["docs/SPEC.md"]
-tickets: ["ESC-106","ESC-133"]
-decisions: []
+sources: ["docs/SPEC.md","tests/fixtures/claude-artifacts"]
+tickets: ["ESC-106","ESC-133","ESC-400"]
+decisions: [136]
 compared: null
 ---
 
@@ -22,6 +22,7 @@ Escouade pilote Claude Code dans un chat natif : chaque agent est un process `cl
 - Le process reçoit le `claude` et le `CLAUDE_CONFIG_DIR` du compte de l'agent, et reprend sa session dans ce dossier. Le compte Principal ne reçoit jamais `CLAUDE_CONFIG_DIR` (voir *Comptes*).
 - Le serveur MCP d'Escouade lui est donné par `--mcp-config` tant que « Les agents peuvent piloter Escouade » est activé ; sinon l'agent en est tenu à l'écart (voir *Serveur MCP*).
 - Tant que « Les agents tiennent une liste de tâches » est actif (par défaut), il reçoit `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` : les outils de liste de tâches de Claude Code, d'où se lit l'avancée de l'agent (voir *Avancée d'un plan*).
+- Il reçoit toujours `CLAUDE_CODE_ARTIFACT=1`, discussion comprise : ses artefacts, comme dans un terminal. En stream-json, Claude Code se tient pour une session de l'Agent SDK (`CLAUDE_CODE_ENTRYPOINT=sdk-cli`) et coupe ses artefacts sans cette variable : ni outil `Artifact`, ni skill `artifact-design` (« Unknown skill: artifact-design »). Ce qui les coupe pour l'utilisateur les coupe toujours : `CLAUDE_CODE_DISABLE_ARTIFACT`, ses réglages de Claude Code, son organisation. Supprimer un artefact demande son accord, sur une carte de permission. La vue Claude Code, interactive, les a d'elle-même.
 - Il lit sans demander le dossier de ses fichiers joints : `--add-dir=<données>/attachments/<agent>` à chaque lancement, en chat comme en vue Claude Code. L'agent d'un ticket qui a des fichiers reçoit en plus `--add-dir=<dossier du ticket>/files`. Sans fichier, pas d'argument, et le dossier n'est pas créé (voir *Conversation*, « Fichiers joints »).
 - Ce qu'Escouade dit aux agents et fait écrire à Claude suit « Langue des textes rédigés par Claude » (voir *Langues*).
 
@@ -72,3 +73,4 @@ Dans Réglages › Harness :
 
 - La vue Claude Code n'est jamais proposée pour un agent de ticket.
 - Une session ne se reprend que du même côté, Windows ou WSL.
+- Un artefact ne se supprime pas sans l'accord de l'utilisateur ; un agent en stream-json ne suit pas les nouvelles versions d'un artefact publiées ailleurs (Claude Code le réserve à une session interactive).

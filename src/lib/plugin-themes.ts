@@ -38,6 +38,9 @@ export const THEME_TOKENS: Readonly<Record<string, TokenKind>> = Object.freeze({
     '--teal-ink-2',
     '--disc',
     '--brain',
+    '--heat-hot',
+    '--heat-mid',
+    '--heat-cool',
   ]),
   ...colors([
     '--primary',

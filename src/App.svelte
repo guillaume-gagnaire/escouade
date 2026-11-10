@@ -14,7 +14,10 @@
   import { watchForUpdates } from './lib/updater';
   import { watchPresence } from './lib/presence';
   import { createWarmer } from './lib/warm';
+  import { heatClock } from './lib/heat.svelte';
   import { offerClaudeMemory } from './lib/memory';
+  import { hasTab } from './lib/code-host';
+  import { WATCH_TICK_MS } from './lib/prnew';
   import Board from './components/board/Board.svelte';
   import PrsView from './components/prs/PrsView.svelte';
   import DocsView from './components/docs/DocsView.svelte';
@@ -38,6 +41,7 @@
   import PrModal from './components/modals/PrModal.svelte';
   import CiModal from './components/modals/CiModal.svelte';
   import ConfirmModal from './components/modals/ConfirmModal.svelte';
+  import HarnessConsentModal from './components/plugins/HarnessConsentModal.svelte';
   import MergeReposModal from './components/modals/MergeReposModal.svelte';
   import CommitReposModal from './components/modals/CommitReposModal.svelte';
   import { isMulti } from './lib/repos';
@@ -88,6 +92,12 @@
     app.applyTheme();
   });
 
+  // The one clock of the caches' degrees (ESC-398): it ticks while one of them is warm, and stops with the last.
+  $effect(() => {
+    const agents = Object.values(app.agents).map((a) => ({ heat: a.heat }));
+    untrack(() => heatClock.watch(agents));
+  });
+
   // « Thème » as saved, once the settings are read (until then, the one the page kept: main.ts).
   $effect(() => {
     if (app.ready) applyAppearance(themeChoice(app.settings.theme));
@@ -128,6 +138,19 @@
   $effect(() => {
     const id = app.ui.view === 'project' ? app.ui.activeProject : null;
     if (app.ready && !app.modal && id) untrack(() => void offerClaudeMemory(id));
+  });
+
+  // The PR tab's badge (ESC-403): the list of the project on screen read in the background, window visible, the
+  // backend choosing when (two minutes after any reading, longer after a failure). Nothing is said of a failure.
+  $effect(() => {
+    const id = app.ready && app.ui.view === 'project' ? app.ui.activeProject : null;
+    if (!id || !hasTab(app.codeHosts[id], 'pullRequests')) return;
+    const watch = () => {
+      if (document.visibilityState === 'visible') api.projectPrsWatch(id).catch(() => {});
+    };
+    watch();
+    const timer = setInterval(watch, WATCH_TICK_MS);
+    return () => clearInterval(timer);
   });
 
   const warmSelected = createWarmer((id) => api.warmAgent(id).catch(() => {}));
@@ -294,12 +317,22 @@
   {#key app.modal}
     <ConfirmModal {...app.modal} />
   {/key}
+{:else if app.modal?.kind === 'harnessConsent'}
+  {#key app.modal}
+    <HarnessConsentModal {...app.modal} />
+  {/key}
 {:else if app.modal?.kind === 'newDiscussion'}
   <NewDiscussionModal projectId={app.modal.projectId} preset={app.modal.preset} />
 {:else if app.modal?.kind === 'rename'}
   <RenameModal title={app.modal.title} value={app.modal.value} onSubmit={app.modal.onSubmit} />
 {:else if app.modal?.kind === 'account'}
-  <AccountModal accountId={app.modal.accountId} back={app.modal.back} engine={app.modal.engine} reserveFor={app.modal.reserveFor} />
+  <AccountModal
+    accountId={app.modal.accountId}
+    back={app.modal.back}
+    engine={app.modal.engine}
+    reserveFor={app.modal.reserveFor}
+    forAgent={app.modal.forAgent}
+  />
 {:else if app.modal?.kind === 'testLaunch'}
   <TestLaunchModal agentId={app.modal.agentId} />
 {:else if app.modal?.kind === 'import'}

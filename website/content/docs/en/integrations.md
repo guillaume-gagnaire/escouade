@@ -22,7 +22,9 @@ Accounts are connected in Settings › Connected services, “Connected accounts
 
 A [code host](code-hosts) (GitHub, GitLab, Bitbucket, Gitea, Azure DevOps) serves the agents’ pull requests, CI and deployments; a source of the Kanban serves the tickets. Settings › Connected services shows them in two named parts. Connecting your GitLab as a code host puts no ticket in the Kanban: a GitLab project still has to be linked as a source (see below), which the import window offers in one click. Bitbucket and Gitea have no source yet: their row says “No tickets: PRs and CI only”.
 
-“Disconnect” forgets the account and its secrets. Projects keep their links, unused until you connect again.
+Jira, Trello, Linear and ClickUp take several accounts: “Connect an account…” adds one beside the others, and each project chooses, on its Imported tickets page, the account that serves its source. One project can thus take its tickets from a client’s Jira, another from another client’s. Connecting the same account again (Jira: same site and e-mail) updates it.
+
+“Disconnect” forgets that account and its secrets, without touching the others. The sources of the projects that used it pause, their settings kept, and their Imported tickets page says so.
 
 ### Where the tokens are kept
 

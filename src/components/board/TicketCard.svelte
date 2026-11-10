@@ -32,12 +32,13 @@
   import Icon from '../Icon.svelte';
   import RejectForm from './RejectForm.svelte';
   import { tip } from '../../lib/tip';
+  import { harnessHeld } from '../../lib/engines';
   import { isMulti, repoLabel, touchedRepos } from '../../lib/repos';
   import { alsoOn, authorName, hueOf, initialOf, isMine, isTheirs, sharedFile, theirsLine } from '../../lib/sharing';
   import { shareTicket } from '../../lib/share-actions';
   import { docsStore } from '../../lib/docs.svelte';
   import { pageTitle } from '../../lib/planning';
-  import { prIcon, prTone } from '../../lib/prs';
+  import { openPrPage, prIcon, prTone } from '../../lib/prs';
   import {
     asPull,
     canFixCi,
@@ -70,6 +71,9 @@
     quota,
     onedit,
   }: { ticket: Ticket; project: Project; queueIndex: number; busyCount: number; quota: number | null; onedit: () => void } = $props();
+
+  /** The harness its agent runs on: its own, else its project's (ESC-404: « Activer » when it is off there). */
+  const heldEngine = $derived(ticket.engine ?? project.engine ?? app.engines[0]?.id ?? 'claude');
 
   const s = $derived(project.board);
   /** Why no ticket of the board starts now (its target branch), if so. */
@@ -506,7 +510,7 @@
       <button
         class="prnum {prTone(pull)}"
         aria-label={t('prs.chipLabel', { word: p.word, number: p.number, state: prStateWord(p) })}
-        onclick={(e) => act(e, () => app.run(openUrl(p.url)))}><Icon name={prIcon(pull)} size={12} />{p.word} #{p.number}</button
+        onclick={(e) => act(e, () => openPrPage(p))}><Icon name={prIcon(pull)} size={12} />{p.word} #{p.number}</button
       >
       <span class="prstate {prStateKey(p)}">{prStateWord(p)}</span>
       {#if ci}<button
@@ -707,7 +711,17 @@
   {#if ticket.blocked}
     <div class="blocked" class:conflict={ticket.conflict}>
       <span class="why">{ticket.blocked}</span>
-      {#if ticket.column === 'doing'}
+      {#if ticket.column === 'doing' && harnessHeld(project.id, heldEngine)}
+        <!-- Its harness off for its project (ESC-404): the user's « Activer », the same agreement, then the ticket taken up. -->
+        <div class="row">
+          <button
+            class="btn small primary"
+            onclick={(e) =>
+              act(e, () => app.enableHarness(project.id, heldEngine, () => app.run(api.ticketResume(ticket.id)).then(() => {})))}
+            >{t('plugins.harness.enable')}</button
+          >
+        </div>
+      {:else if ticket.column === 'doing'}
         <div class="row">
           <button class="btn small" onclick={(e) => act(e, () => app.run(api.ticketResume(ticket.id)))}>{t('board.card.resume')}</button>
         </div>

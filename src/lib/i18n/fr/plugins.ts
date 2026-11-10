@@ -136,6 +136,10 @@ export default {
     empty: 'Tes plugins sont à jour.',
     check: 'Chercher maintenant',
     checking: 'Recherche…',
+    when: '{date} {time}',
+    read: 'Store lu le {when}',
+    unreachable: 'Store injoignable : offres du {when}',
+    unreachableNone: 'Store injoignable : aucune offre lue encore',
     row: 'v{from} → v{to}',
     update: 'Mettre à jour',
   },
@@ -266,6 +270,26 @@ export default {
     pluginLabel: '{name} dans ce projet',
     appOffShort: 'désactivé pour toute l’app',
     noneInstalled: 'Aucun plugin installé qui s’active projet par projet.',
+    harnessNote: 'Coupé pour un projet, son harness n’y est plus proposé et ses agents de ce projet ne tournent pas.',
+  },
+
+  /** A harness off for a project (ESC-404): the question before its first agent there, and the cards that say so. */
+  harness: {
+    askTitle: 'Activer {name} pour ce projet privé ?',
+    offTitle: 'Activer {name} pour {project} ?',
+    askBody:
+      'Le projet {project} est privé : ses plugins y sont coupés d’office. Un agent sur {name} passe par son plugin, {plugin}, qui reçoit tout ce que fait l’agent.',
+    offBody:
+      '{name} est coupé pour le projet {project}. Un agent sur {name} passe par son plugin, {plugin}, qui reçoit tout ce que fait l’agent.',
+    gets: 'Ce qu’il recevra',
+    getsWhat: 'Ce que l’agent écrit et lit dans ce projet, ses commandes et leur sortie, et son transcript entier.',
+    perms: 'Ses permissions',
+    after: 'Activé, il l’est pour ce projet seulement : tu le coupes dans Réglages › Plugins.',
+    enable: 'Activer',
+    loading: 'Lecture du plugin…',
+    cardPrivate: '{name} n’est pas activé pour ce projet privé : cet agent ne démarre pas et ne reçoit rien.',
+    cardOff: '{name} est coupé pour ce projet : cet agent ne démarre pas et ne reçoit rien.',
+    ticketWhy: 'Son harness, {name}, n’est pas activé pour ce projet.',
   },
 
   settings: {

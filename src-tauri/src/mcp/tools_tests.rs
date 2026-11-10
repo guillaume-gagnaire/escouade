@@ -566,6 +566,7 @@ async fn a_ticket_is_read_whole_by_its_key_in_any_case_or_its_id() {
                 container: "ATL".into(),
                 url: "https://example.atlassian.net/browse/ATL-12".into(),
                 error: Some("401 Unauthorized".into()),
+                account: String::new(),
             }),
             ..ticket(&p, "DEM-2", "Écrire le fichier", Column::Doing, 2)
         },

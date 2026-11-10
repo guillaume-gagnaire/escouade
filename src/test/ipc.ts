@@ -433,6 +433,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.engines = [CLAUDE_ENGINE];
   app.enginesFound = ['claude'];
   app.enginesOff = [];
+  app.harnessScope = {};
   app.accountModels = {};
   app.engineModels = {};
   app.projectPauses = {};

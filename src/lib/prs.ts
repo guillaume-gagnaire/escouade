@@ -4,7 +4,8 @@
 import { t } from './i18n';
 import type { IconName } from './icons';
 import { api } from './ipc';
-import { openOutside } from './links';
+import { openUrl } from './opener';
+import { errorText } from './refusal';
 import type { MenuItem } from './menu.svelte';
 import { app } from './state.svelte';
 import type { Agent, PrFix, PullRequest } from './types';
@@ -88,13 +89,31 @@ export function prTip(word: string, p: PullRequest): string {
   return `${t('prs.tipHead', { word, number: p.number, title: p.title })}\n${parts.join(' · ')}`;
 }
 
+/** A web page the browser opens: http or https, with a host. */
+const WEB_PAGE = /^https?:\/\/[^/\s]/i;
+
+/**
+ * Opens the web page of a pull request in the system's browser (ESC-402): every button that opens one comes here. A
+ * missing or unreadable address, or the system's refusal, is said in a toast with its reason, never kept silent.
+ */
+export async function openPrPage(p: { url: string; number: number; word?: string }): Promise<void> {
+  const url = (p.url ?? '').trim();
+  const failed = (why: string) => app.toast(t('prs.openFailed', { word: p.word ?? 'PR', number: p.number, why }), 'error');
+  if (!WEB_PAGE.test(url)) return failed(t('prs.noPage'));
+  try {
+    await openUrl(url);
+  } catch (e) {
+    failed(errorText(e));
+  }
+}
+
 /** Opens it in the system's browser. */
-export const openPr = (p: PullRequest) => openOutside(p.url);
+export const openPr = (p: PullRequest, word?: string) => openPrPage({ url: p.url, number: p.number, word });
 
 /** « Ouvrir une PR… »: its window, the title and the description proposed; « Voir la PR #n » once one is open. */
 export function askOpenPr(a: Agent) {
   const open = openPrOf(a);
-  if (open) openPr(open);
+  if (open) void openPr(open, prWord(a));
   else app.modal = { kind: 'pullRequest', agentId: a.id };
 }
 

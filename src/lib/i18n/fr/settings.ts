@@ -41,6 +41,7 @@ export default {
       noAccount: '{harness} n’a aucun compte : aucun agent ni ticket n’y démarre',
       projectNoAccount: 'Aucun compte {harness} ne sert ce projet : ses agents et ses tickets ne démarrent pas',
       unread: 'Jeton illisible dans le trousseau · {label}',
+      sourcePaused: 'Source {service} « {name} » en pause : son compte est déconnecté',
       plugin: '{name} : {state}',
     },
   },
@@ -171,6 +172,7 @@ export default {
     notFound: '{name} (programme introuvable)',
     pluginOff: '{name} (plugin coupé)',
     noAccount: '{name} (aucun compte)',
+    projectOff: '{name} (coupé pour ce projet)',
   },
   claude: {
     /** The models of a harness that lists those of its providers (OpenCode). */

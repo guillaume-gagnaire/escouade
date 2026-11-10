@@ -54,6 +54,7 @@
   import { buffers, lossNotice } from '../lib/editor/buffers.svelte';
   import { menu, type MenuItem } from '../lib/menu.svelte';
   import { modeLabel, modelLabel, MODES, planResume } from '../lib/models';
+  import HeatFigure from './HeatFigure.svelte';
   import { planView } from '../lib/plan';
   import { cardNext, cardStep } from '../lib/workflow-view';
   import { workflows } from '../lib/workflows.svelte';
@@ -173,6 +174,8 @@
   const prsWord = $derived(app.prWords[project.id] ?? app.projectAgents.find((a) => a.prWord)?.prWord ?? 'PR');
   /** The « PR » tab only for a project whose remote is on a code host whose plugin is on (ESC-390). */
   const prsTab = $derived(hasTab(app.codeHosts[project.id], 'pullRequests'));
+  /** The project's pull requests come since its PR tab was last opened (ESC-403). */
+  const prsNew = $derived(app.prsNew(project.id));
   // Its code host read when the project shows, and again when the window comes back (its remote may have changed).
   $effect(() => {
     const id = project.id;
@@ -585,8 +588,8 @@
     await app.refreshEngines();
     if (!moreBtn) return;
     const own = project.engine ?? defaultEngine();
-    // Those that can be used (ESC-391): found, their plugin on, with an account.
-    const setUp = offered();
+    // Those that can be used (ESC-391): found, their plugin on, with an account; not one turned off for the project (ESC-404).
+    const setUp = offered(project.id);
     const harnesses: MenuItem[] = setUp.map((e, i) => {
       const account = newAgentAccount(project, e.id);
       const d = newAgentDefaults(project, e.id);
@@ -807,7 +810,10 @@
         class:on={app.prsOn}
         aria-pressed={app.prsOn}
         onclick={() => app.openPrs(project.id)}
-        use:tip={t('prs.list.tabHint', { word: prsWord })}>{t('prs.list.tab', { word: prsWord })}</button
+        aria-label={prsNew ? t('prs.list.tabNew', { word: prsWord, count: prsNew }) : undefined}
+        use:tip={t('prs.list.tabHint', { word: prsWord })}
+        >{t('prs.list.tab', { word: prsWord })}{#if prsNew}<span class="badge" data-testid="prs-new" aria-hidden="true">{prsNew}</span
+          >{/if}</button
       >
     {/if}
     <button class:on={app.docsOn} aria-pressed={app.docsOn} onclick={() => app.openDocs(project.id)}>{t('docs.tab')}</button>
@@ -966,9 +972,9 @@
             {:else}
               <span class="model">{modelLabel(a.model, app.models)}</span>
               {#if a.prompts || a.activeMs || a.activeSince}
-                <span class="sep">·</span><span class="num">{duration(a)}</span>
+                <span class="sep">·</span><span class="num cut">{duration(a)}</span>
               {:else}
-                <span class="sep">·</span><span>{t('nav.sidebar.noMessage')}</span>
+                <span class="sep">·</span><span class="cut">{t('nav.sidebar.noMessage')}</span>
               {/if}
               {#if wfStep}
                 <!-- Where it is in its workflow takes the place of its plan, which stays in its banner (choice 145). -->
@@ -994,6 +1000,8 @@
             {#if a.worktreePending}<span class="sep">·</span><span class="wt" use:tip={t('nav.sidebar.worktreeLaterTitle')}
                 >{t('nav.sidebar.worktreeLater')}</span
               >{/if}
+            <!-- The temperature of its cache (ESC-398), at the end of the line of its model. -->
+            <HeatFigure agent={a} />
           </div>
           {#if a.status === 'waiting'}
             <!-- What it waits on, answered from here (2.0, new): its choices clicked, or its keys 1, 2… (listKey). Questions one
@@ -1071,7 +1079,8 @@
                   class="prnum {prTone(p)}"
                   aria-label={t('prs.chipLabel', { word, number: p.number, state: stateWord(p) })}
                   use:tip={{ text: prTip(word, p), aria: false }}
-                  onclick={() => openPr(p)}><Icon name={prIcon(p)} size={12} />{p.repo ? `${repoLabel(p.repo)} ` : ''}#{p.number}</button
+                  onclick={() => openPr(p, word)}
+                  ><Icon name={prIcon(p)} size={12} />{p.repo ? `${repoLabel(p.repo)} ` : ''}#{p.number}</button
                 >
                 <!-- Where it goes and its CI in words (ESC-305): « #41 → main · CI en échec ». -->
                 <span class="prto">{t('prs.to', { base: p.base })}</span>
@@ -1782,7 +1791,8 @@
   }
   .a-meta .model,
   .a-meta .bn,
-  .a-meta .wt {
+  .a-meta .wt,
+  .a-meta .cut {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;

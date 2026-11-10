@@ -34,8 +34,17 @@
     back,
     engine: asked,
     reserveFor,
+    forAgent,
     onclose,
-  }: { accountId?: string; back?: SettingsPage; engine?: EngineId; reserveFor?: string; onclose?: () => void } = $props();
+  }: {
+    accountId?: string;
+    back?: SettingsPage;
+    engine?: EngineId;
+    reserveFor?: string;
+    /** `/login` typed to this agent (ESC-401): it goes on, on the account, once signed in; closed, back to it. */
+    forAgent?: string;
+    onclose?: () => void;
+  } = $props();
   /** The project the account is added for, while it is open still. */
   const reservedTo = $derived(reserveFor ? app.projects.find((p) => p.id === reserveFor) : undefined);
 
@@ -400,6 +409,8 @@
     }
     signedIn = { email: s.email };
     clearInterval(poll);
+    // The agent whose `/login` opened it goes on, on this account, with its session.
+    if (forAgent) void app.run(api.agentSignedIn(forAgent));
     seen = setTimeout(finish, SEEN_MS);
   }
 
@@ -437,6 +448,7 @@
   function close() {
     stop();
     if (onclose) onclose();
+    else if (forAgent) app.modal = null;
     else if (reserveFor) app.modal = { kind: 'settings', page: 'privacy', projectId: reserveFor, resume: true };
     else backToAccounts(back);
   }

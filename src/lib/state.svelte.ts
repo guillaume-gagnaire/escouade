@@ -26,6 +26,7 @@ import type { FormImage } from './ticket-images';
 import { setSources } from './integrations';
 import { applyTheme } from './theme';
 import { hasTab } from './code-host';
+import { newCount, opened, readSeen, seenOf, type PrSeen } from './prnew';
 import { workflows } from './workflows.svelte';
 import {
   activeItem,
@@ -39,6 +40,7 @@ import {
   place as placePane,
   prune as prunePanes,
   setRatio as setPaneRatio,
+  settle as settlePanes,
   type PaneItem,
   type PaneLayout,
   type PaneZone,
@@ -62,6 +64,7 @@ import type {
   ToldModel,
   EngineDecl,
   EngineId,
+  HarnessScope,
   PageEvent,
   AgentReview,
   Project,
@@ -161,13 +164,19 @@ export type Modal =
     }
   | { kind: 'rename'; title: string; value: string; onSubmit: (v: string) => void | Promise<void> }
   /**
+   * The agreement to a harness in a project (ESC-404): before the first agent of a private project on it, or from the card
+   * of an agent or a ticket whose harness is off there. `onEnabled` once its plugin is on for the project.
+   */
+  | { kind: 'harnessConsent'; projectId: string; engine: EngineId; onEnabled: () => void | Promise<void>; onCancel?: () => void }
+  /**
    * « Nouvelle discussion » of the Docs tab (ESC-261), its role and subject given by a gesture of the spec (« Mettre la spec
    * à jour », « Écrire une première spec ») with the first message it sends.
    */
   | { kind: 'newDiscussion'; projectId: string; preset?: DiscussionPreset }
   /** « Ajouter un compte… » (a new Claude account, then its sign-in), or « Se connecter… » for the account `accountId`. */
   /** `back`: the settings' tab it came from and goes back to (Comptes Claude by default). */
-  | { kind: 'account'; accountId?: string; back?: SettingsPage; engine?: EngineId; reserveFor?: string }
+  /** `forAgent`: opened by `/login` typed to that agent (ESC-401), which goes on once signed in; closed, back to it. */
+  | { kind: 'account'; accountId?: string; back?: SettingsPage; engine?: EngineId; reserveFor?: string; forAgent?: string }
   | { kind: 'testLaunch'; agentId: string }
   | { kind: 'import'; projectId: string }
   /** The update downloaded (`app.update`), which a restart installs; `back`, the settings' tab it was opened from and goes back to. */
@@ -267,6 +276,9 @@ export const atWork = (a: Pick<Agent, 'status'>) => a.status === 'running' || a.
 /** How many of the last lines of the step running a worktree's setup the window keeps (as the backend does). */
 const SETUP_LINES = 500;
 
+/** How long after a Ctrl+C typed in a launch command's view its exit is taken for the user's stop (ESC-396). */
+const INTERRUPT_WINDOW_MS = 10_000;
+
 /** The title of the question asked on quitting, in the language of the interface (the open dialog is told by it). */
 const quitTitle = () => t('shell.quit.title');
 
@@ -353,6 +365,8 @@ class AppState {
   enginesFound = $state.raw<EngineId[]>([]);
   /** The harnesses whose plugin is off or not installed (ESC-391): found perhaps, but not offered. */
   enginesOff = $state.raw<EngineId[]>([]);
+  /** The harnesses not on for a project, by project (ESC-404): left out of its menus, or asked for first. */
+  harnessScope = $state.raw<Record<string, HarnessScope>>({});
   version = $state('');
   filesOpen = $state(false);
   filesScope = $state<'agent' | 'project'>('agent');
@@ -740,7 +754,13 @@ class AppState {
     this.projectPauses = s.projectPauses ?? {};
     this.accounts = s.accounts ?? [];
     this.attention = {};
-    this.ui = { ...s.ui, view: s.ui.view || 'project', selectedAgent: s.ui.selectedAgent ?? {}, panes: readPanes(s.ui.panes) };
+    this.ui = {
+      ...s.ui,
+      view: s.ui.view || 'project',
+      selectedAgent: s.ui.selectedAgent ?? {},
+      panes: readPanes(s.ui.panes),
+      prSeen: readSeens(s.ui.prSeen),
+    };
     this.overviewFrom = 'project';
     if (!this.ui.activeProject || !this.projects.some((p) => p.id === this.ui.activeProject)) {
       // Never the one the page crashed on (ESC-290): it is offered again, not opened.
@@ -759,6 +779,7 @@ class AppState {
     this.accountModels = s.accountModels ?? {};
     this.enginesFound = s.enginesFound ?? (s.claudeFound ? ['claude'] : []);
     this.enginesOff = s.enginesOff ?? [];
+    this.harnessScope = s.harnessScope ?? {};
     if (s.sources) setSources(s.sources);
     this.restartAt = s.restartAt ?? null;
     this.failedUpdate = s.failedUpdate ?? null;
@@ -816,6 +837,8 @@ class AppState {
         if (prev && atWork(prev) && !atWork(e.agent)) this.runHooks(this.turnEndHooks, e.agent.id);
         // Its setup is over: what it wrote is in its log (and its failure in the conversation).
         if (!e.agent.setup) this.dropSetupOutput(e.agent.id);
+        // Archived: its pane, if it has one, goes to another agent (ESC-399).
+        if (e.agent.archived && !prev?.archived) this.settlePanes();
         break;
       }
       case 'agentRemoved':
@@ -826,6 +849,7 @@ class AppState {
         this.dropSetupOutput(e.id);
         dropConversation(e.id);
         this.forgetEditorSource(e.projectId, e.id);
+        this.settlePanes();
         break;
       case 'ticket': {
         const prev = this.tickets[e.ticket.id];
@@ -841,6 +865,8 @@ class AppState {
         break;
       case 'project':
         this.replaceProject(e.project);
+        // A launch removed leaves its pane.
+        this.settlePanes();
         break;
       case 'devPage':
         for (const f of this.devPageHooks) f(e.page);
@@ -856,6 +882,9 @@ class AppState {
       case 'focusPrs':
         // The click of a review asked of the user.
         this.openPrs(e.projectId);
+        break;
+      case 'prsRead':
+        this.prsRead(e.projectId, e.numbers);
         break;
       case 'pluginSeeded':
         this.toast(e.text, 'ok');
@@ -1062,6 +1091,8 @@ class AppState {
     // Their plugins (ESC-391): one turned off, removed or installed since.
     const off = await api.enginesOffNow().catch(() => null);
     if (off && off.join() !== this.enginesOff.join()) this.enginesOff = off;
+    // Project by project (ESC-404): one turned on or off for a project since.
+    await this.refreshHarnessScope();
   }
 
   markSeen() {
@@ -1285,6 +1316,43 @@ class AppState {
     if (layout) all[projectId] = layout;
     else delete all[projectId];
     this.ui.panes = all;
+    this.persistUi();
+  }
+
+  /**
+   * Every project's split screen once the contents gone have left it (ESC-399): an agent archived or deleted (from its
+   * menu, the board, the MCP server, another screen), a terminal closed, a launch removed. The pane of an agent gone
+   * takes the agent the app shows in its place, the one it would show alone (the first of the project's not shown);
+   * without one it closes. The other panes keep their place and share; the last one left is the one shown alone. The
+   * selection follows the active pane.
+   */
+  settlePanes() {
+    for (const [projectId, raw] of Object.entries(this.ui.panes ?? {})) {
+      const p = this.projects.find((x) => x.id === projectId);
+      if (!p) continue;
+      const standIn = (_: PaneItem, shown: Set<string>): PaneItem | null => {
+        const a = Object.values(this.agents)
+          .filter((x) => x.projectId === projectId && !x.archived && !shown.has(`agent:${x.id}`))
+          .sort((x, y) => x.createdAt - y.createdAt)[0];
+        return a ? { kind: 'agent', id: a.id } : null;
+      };
+      const { layout, alone } = settlePanes(raw, (x) => this.paneExists(p, x), standIn);
+      if (layout === raw) continue;
+      this.setPanes(projectId, layout);
+      if (alone) this.selectIn(projectId, alone);
+      else if (layout && layout.active !== raw.active) this.selectIn(projectId, activeItem(layout));
+    }
+  }
+
+  /** `item` selected the classic way in the project `projectId`, on screen or not: alone, or the active pane's. */
+  private selectIn(projectId: string, item: PaneItem) {
+    this.selectedTerm[projectId] = item.kind === 'term' ? item.id : null;
+    this.selectedLaunch[projectId] = item.kind === 'launch' ? item.id : null;
+    if (item.kind === 'agent') this.ui.selectedAgent[projectId] = item.id;
+    if (item.kind === 'editor') {
+      this.editorReady(projectId);
+      if (!this.ui.panes?.[projectId]) this.editor[projectId].on = true;
+    } else this.closeEditor(projectId);
     this.persistUi();
   }
 
@@ -1514,6 +1582,32 @@ class AppState {
     this.persistUi();
   }
 
+  /** The new pull requests of a project (ESC-403): the PR tab's badge. */
+  prsNew(projectId: string) {
+    return newCount(this.ui.prSeen?.[projectId]);
+  }
+
+  /** A reading of a project's list of pull requests, whoever made it (ESC-403): those Escouade opened, its tickets' and
+   * its agents', are never new. */
+  prsRead(projectId: string, numbers: number[]) {
+    const escouade = new Set<number>();
+    for (const tk of Object.values(this.tickets)) if (tk.projectId === projectId && tk.pr) escouade.add(tk.pr.number);
+    for (const a of Object.values(this.agents)) if (a.projectId === projectId) for (const p of a.prs ?? []) escouade.add(p.number);
+    const shown = this.prsOn && this.project?.id === projectId;
+    this.setPrSeen(projectId, readSeen(this.ui.prSeen?.[projectId], numbers, escouade, shown));
+  }
+
+  /** The project's PR view came on screen (ESC-403): its badge back to zero, its new ones marked in the list. */
+  prsOpened(projectId: string) {
+    const next = opened(this.ui.prSeen?.[projectId]);
+    if (next) this.setPrSeen(projectId, next);
+  }
+
+  private setPrSeen(projectId: string, seen: PrSeen) {
+    this.ui.prSeen = { ...this.ui.prSeen, [projectId]: seen };
+    this.persistUi();
+  }
+
   closePrs(projectId = this.ui.activeProject) {
     if (projectId) this.prs[projectId] = false;
   }
@@ -1592,6 +1686,15 @@ class AppState {
   replaceProject(p: Project) {
     const i = this.projects.findIndex((x) => x.id === p.id);
     if (i >= 0) this.projects[i] = p;
+    // Made private or not (ESC-404): its harnesses not turned on there now ask first, or no longer. Read again whatever
+    // changed: the settings' draft may have put its privacy in place already.
+    void this.refreshHarnessScope();
+  }
+
+  /** The harnesses not on for a project, read again (ESC-404). Nothing said when it fails: what was read stays. */
+  async refreshHarnessScope(): Promise<void> {
+    const scope = await api.harnessScope().catch(() => null);
+    if (scope && JSON.stringify(scope) !== JSON.stringify(this.harnessScope)) this.harnessScope = scope;
   }
 
   /** The ticket of an agent: the one it works on ("En cours", "À tester"), else its last one. */
@@ -1811,8 +1914,10 @@ class AppState {
     if (!found) return;
     const [id, l] = found;
     delete this.exitedTerms[ptyId];
-    const status = l.stopping ? 'stopped' : code === 0 ? 'done' : 'crashed';
-    Object.assign(l, { status, code, ptyId: null, stopping: false });
+    // Ended soon after a Ctrl+C typed in its view (ESC-396): the user stopped it, as with « Stopper ».
+    const interrupted = l.interruptedAt !== undefined && Date.now() - l.interruptedAt <= INTERRUPT_WINDOW_MS;
+    const status = l.stopping || (code !== 0 && interrupted) ? 'stopped' : code === 0 ? 'done' : 'crashed';
+    Object.assign(l, { status, code, ptyId: null, stopping: false, interruptedAt: undefined });
     if (status !== 'crashed') return;
     // « Voir le log »: its log in the main area, in its project.
     const projectId = this.launchProject(id);
@@ -1848,6 +1953,10 @@ class AppState {
     base: string | null = null,
   ) {
     if (!projectId) return;
+    // A private project's harness not turned on yet (ESC-404): asked once, nothing made before « Activer ». One just made
+    // private whose harnesses were not read again yet is read first.
+    if (this.projects.find((p) => p.id === projectId)?.private && !this.harnessScope[projectId]) await this.refreshHarnessScope();
+    if (this.harnessAsked(projectId, engine) && !(await this.harnessAgreed(projectId, engine))) return;
     try {
       const a = await api.createAgent(projectId, null, engine, isolated, base);
       this.agents[a.id] = a;
@@ -1857,6 +1966,40 @@ class AppState {
     } catch (e) {
       this.refused(e);
     }
+  }
+
+  /**
+   * Whether a new agent of the project may go on `engine` (its project's harness when null), asking first when it waits
+   * for the user's agreement in a private project (ESC-404): true once its plugin is on there, false on « Annuler ». One
+   * turned off for the project is the core's to refuse, with why.
+   */
+  harnessAgreed(projectId: string, engine: EngineId | null = null): Promise<boolean> {
+    const on = this.harnessOf(projectId, engine);
+    if (!this.harnessAsked(projectId, engine)) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      this.modal = {
+        kind: 'harnessConsent',
+        projectId,
+        engine: on,
+        onEnabled: () => resolve(true),
+        onCancel: () => resolve(false),
+      };
+    });
+  }
+
+  /** The harness a new agent of the project goes on: `engine`, else the project's, else the default one. */
+  private harnessOf(projectId: string, engine: EngineId | null): EngineId {
+    return engine ?? this.projects.find((p) => p.id === projectId)?.engine ?? this.engines[0]?.id ?? 'claude';
+  }
+
+  /** Whether a new agent of the project on `engine` waits for the user's agreement first (ESC-404). */
+  harnessAsked(projectId: string, engine: EngineId | null = null): boolean {
+    return !!this.harnessScope[projectId]?.asks.includes(this.harnessOf(projectId, engine));
+  }
+
+  /** « Activer » of the card of an agent or a ticket whose harness is off for its project (ESC-404), then `then`. */
+  enableHarness(projectId: string, engine: EngineId, then?: () => void | Promise<void>) {
+    this.modal = { kind: 'harnessConsent', projectId, engine, onEnabled: async () => await then?.() };
   }
 
   /** A copy of the agent (« Dupliquer la conversation »), shown at once, like a new agent. */
@@ -1922,3 +2065,14 @@ class AppState {
 }
 
 export const app = new AppState();
+
+/** What was seen of each project's pull requests, as the interface's state gave it back (ESC-403). */
+function readSeens(v: unknown): Record<string, PrSeen> {
+  const out: Record<string, PrSeen> = {};
+  if (v && typeof v === 'object')
+    for (const [id, raw] of Object.entries(v)) {
+      const seen = seenOf(raw);
+      if (seen) out[id] = seen;
+    }
+  return out;
+}

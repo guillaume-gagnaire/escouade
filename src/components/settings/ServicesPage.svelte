@@ -2,7 +2,7 @@
   import { openUrl } from '../../lib/opener';
   import { t } from '../../lib/i18n';
   import Rich from '../../lib/i18n/Rich.svelte';
-  import { BY_FORGE, SERVICE_IDS, SERVICES, trelloTokenPage } from '../../lib/integrations';
+  import { accountsOf, BY_FORGE, HOSTED, SERVICE_IDS, SERVICES, trelloTokenPage } from '../../lib/integrations';
   import { api } from '../../lib/ipc';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
@@ -20,6 +20,15 @@
   const s = $derived(settingsForm.settings.integrations);
 
   const account = (id: Service) => app.accounts.find((a) => a.service === id);
+  /** The source's accounts, several for Jira, Trello, Linear and ClickUp (ESC-397); one at most for the others. */
+  const listOf = (id: Service) => {
+    const many = accountsOf(app.accounts, id);
+    if (many.length) return many;
+    const a = account(id);
+    return a?.connected && !BY_FORGE[id] ? [a] : [];
+  };
+  /** A source that takes another account beside those connected. */
+  const several = (id: Service) => !HOSTED.includes(id) && !BY_FORGE[id];
 
   /** « Connecter… »: the open forms, the one being checked, and what each service refused. */
   let forms = $state<Partial<Record<Service, AccountForm>>>({});
@@ -33,9 +42,11 @@
     delete refused[id];
     try {
       const view = await api.integrationConnect(id, $state.snapshot(form));
-      app.accounts = app.accounts.some((a) => a.service === id)
-        ? app.accounts.map((a) => (a.service === id ? view : a))
-        : [...app.accounts, view];
+      // The same account again is put right; another one comes after those of its service (ESC-397). The line « Non
+      // connecté » of a source without any goes.
+      const i = app.accounts.findIndex((a) => a.service === id && a.connected && (a.id === view.id || !several(id)));
+      app.accounts =
+        i >= 0 ? app.accounts.map((a, k) => (k === i ? view : a)) : [...app.accounts.filter((a) => a.service !== id || a.connected), view];
       delete forms[id];
     } catch (e) {
       refused[id] = String(e);
@@ -44,8 +55,8 @@
     }
   }
 
-  async function disconnect(id: Service) {
-    const views = await app.run(api.integrationDisconnect(id));
+  async function disconnect(id: Service, account?: string) {
+    const views = await app.run(account ? api.integrationDisconnect(id, account) : api.integrationDisconnect(id));
     if (views) app.accounts = views;
   }
 
@@ -77,21 +88,18 @@
   {#each SERVICE_IDS as id (id)}
     {@const a = account(id)}
     {@const form = forms[id]}
+    {@const list = listOf(id)}
+    {@const one = list.length === 1 ? list[0] : undefined}
     <div class="acct">
       <ServiceBadge {id} />
       <div class="txt">
         <span class="l">{SERVICES[id].name}</span>
-        <span class="d" class:on={a?.connected}
-          >{a?.connected ? t('integrations.accounts.connected', { label: a.label }) : t('integrations.accounts.notConnected')}</span
-        >
-        {#if a?.connected && a.inFile}
-          <span class="d warn">{t('integrations.accounts.keychainUnavailable')}</span>
-        {/if}
-        {#if a?.connected && a.unread}
-          <span class="d warn">{t('integrations.accounts.keychainUnreadable')}</span>
-        {/if}
-        {#if a?.connected && a.plugin}
-          <span class="d">{t('integrations.accounts.servedByPlugin', { plugin: a.plugin })}</span>
+        {#if BY_FORGE[id] || !list.length}
+          <span class="d" class:on={a?.connected}
+            >{a?.connected ? t('integrations.accounts.connected', { label: a.label }) : t('integrations.accounts.notConnected')}</span
+          >
+        {:else if one}
+          {@render state(one)}
         {/if}
         {#if BY_FORGE[id]}<span class="d">{t('integrations.accounts.byForge', { forge: forgeName(id) })}</span>{/if}
         {#if id === 'azure'}<span class="d">{t('integrations.accounts.workItems')}</span>{/if}
@@ -102,13 +110,30 @@
             >{t('integrations.accounts.connectForge', { forge: forgeName(id) })}</button
           >
         {/if}
-      {:else if a?.connected}
-        <button class="btn" onclick={() => disconnect(id)}>{t('integrations.accounts.disconnect')}</button>
-      {:else if !form}
-        <button class="btn" onclick={() => (forms[id] = blank())}>{t('integrations.accounts.connectEllipsis')}</button>
+      {:else}
+        {#if list.length && several(id) && !form}
+          <button class="btn" onclick={() => (forms[id] = blank())}>{t('integrations.accounts.connectAnother')}</button>
+        {/if}
+        {#if one}
+          <button class="btn" onclick={() => disconnect(id, one.id)}>{t('integrations.accounts.disconnect')}</button>
+        {:else if !list.length && !form}
+          <button class="btn" onclick={() => (forms[id] = blank())}>{t('integrations.accounts.connectEllipsis')}</button>
+        {/if}
       {/if}
     </div>
-    {#if form && !a?.connected}
+    {#if list.length > 1}
+      {#each list as acc (acc.id)}
+        <div class="acct sub">
+          <div class="txt">{@render state(acc)}</div>
+          <button
+            class="btn small"
+            aria-label={t('integrations.accounts.disconnectOne', { label: acc.label })}
+            onclick={() => disconnect(id, acc.id)}>{t('integrations.accounts.disconnect')}</button
+          >
+        </div>
+      {/each}
+    {/if}
+    {#if form && (several(id) || !list.length)}
       <form
         class="connect"
         aria-label={t('integrations.accounts.formLabel', { service: SERVICES[id].name })}
@@ -221,6 +246,13 @@
   {/each}
 </Group>
 
+{#snippet state(acc: (typeof app.accounts)[number])}
+  <span class="d on">{t('integrations.accounts.connected', { label: acc.label })}</span>
+  {#if acc.inFile}<span class="d warn">{t('integrations.accounts.keychainUnavailable')}</span>{/if}
+  {#if acc.unread}<span class="d warn">{t('integrations.accounts.keychainUnreadable')}</span>{/if}
+  {#if acc.plugin}<span class="d">{t('integrations.accounts.servedByPlugin', { plugin: acc.plugin })}</span>{/if}
+{/snippet}
+
 <Group title={t('integrations.sync.title')}>
   <Row label={t('integrations.sync.updateStatus')} desc={t('integrations.sync.updateStatusDesc')}>
     <Switch label={t('integrations.sync.updateStatus')} bind:on={s.syncStates} />
@@ -285,6 +317,9 @@
   }
   :global(.note) + .acct {
     margin-top: 6px;
+  }
+  .acct.sub {
+    padding: 7px 0 7px 36px;
   }
   .acct + .acct,
   .connect + .acct {

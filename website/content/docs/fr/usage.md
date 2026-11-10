@@ -14,6 +14,7 @@ La barre occupe le bas de la fenêtre. De gauche à droite :
 | « 4 Claude · 1,2 Go · 6 % CPU » | Les processus Claude en cours, avec la mémoire et le processeur qu’ils prennent. Absent quand aucun ne tourne. L’infobulle liste chaque agent, le plus gourmand en mémoire d’abord. |
 | Quotas | Les deux fenêtres de quota du compte en cours : voir la section suivante. |
 | « Aujourd’hui 4,12 $ » | Ce que les agents ont coûté depuis minuit : voir la section « Le coût ». |
+| « Cache aujourd’hui : ≈ 3,10 $ économisés » | Ce que le cache des agents a fait économiser depuis minuit : voir la section « La température du cache ». Absent tant qu’il n’a rien économisé. |
 | « ⎇ main ↑1 ↓3 » | La branche du projet affiché, quand c’est un dépôt git. Un clic ouvre le sélecteur de branches ([les branches](branches)). |
 | À droite | L’état d’une [mise à jour](updates), « ♪ On » ou « ♪ Off » pour le son des [notifications](notifications), et ⚙ pour les réglages (`Ctrl+,`). |
 
@@ -97,12 +98,40 @@ Tant que Claude travaille, les tokens et le coût montent en direct. Claude Code
 | Où | Ce qui s’affiche |
 |---|---|
 | Carte de l’agent, dans la barre latérale | Ses tokens (« tok »), son coût et le nombre de fichiers modifiés. |
-| En-tête de la conversation | « Tokens » et « Coût », avec « Contexte » et « Durée ». |
+| En-tête de la conversation | « Tokens » et « Coût », avec « Contexte », « Cache » et « Durée ». |
 | Fin d’un tour | La carte « Tâche terminée » (durée, tokens, coût, fichiers modifiés), ou une ligne durée · tokens · coût entre deux tours. |
 | Carte d’un ticket du Kanban | Le coût de son agent. |
 | [Vue d’ensemble](overview) | Le coût de chaque agent. |
 
 Les [statistiques](stats) cumulent tout cela par jour, par semaine ou par mois.
+
+## La température du cache
+
+Chaque agent montre un chiffre en degrés : sur sa carte, au bout de la ligne de son modèle, et dans l’en-tête de sa conversation, sous « Cache ». Il dit combien de temps le cache de l’agent tient encore.
+
+**Comment ça marche.** Le modèle relit toute la conversation à chaque tour. Le début déjà lu est gardé en cache quelques minutes chez le fournisseur et relu pour environ 5 à 10 % du prix. Chaque relecture remet le compteur à zéro. Après une pause plus longue que la durée de vie du cache, tout est relu au plein tarif. Sur Opus 5.5, avec 100 k tokens de contexte, le message suivant coûte environ 0,02 $ au chaud, et 0,40 à 0,50 $ à froid.
+
+| Chiffre | Ce qu’il veut dire |
+|---|---|
+| **100 °C**, en rouge-orangé | Le cache vient de servir. |
+| **64 °C**, en ambre | Il tient encore la moitié de sa durée. |
+| **27 °C**, en bleu | Il refroidit : il expire bientôt. |
+| **0 °C** | Expiré, ou cassé (modèle ou compte changé, contexte compacté, consigne système modifiée, nouvelle conversation) : le prochain tour relira tout. |
+| **— °C** | Le harness ne dit rien de son cache, ou pas combien de temps il vit. |
+
+Le chiffre baisse en ligne droite, de 100 °C au dernier tour qui a servi le cache à 0 °C à son expiration. Le cache vit chez le fournisseur : un redémarrage d’Escouade ne le refroidit pas. Escouade ne fait que montrer : il n’envoie jamais de message pour garder un cache chaud, ce qui coûterait un tour.
+
+**Au survol** du chiffre de l’en-tête, le détail du dernier tour : le temps qui reste, les tokens lus depuis le cache, mis en cache et lus au plein tarif, ce que le cache a fait économiser, et ce que coûterait le prochain message s’il partait à froid. Un lecteur d’écran lit la même chose en mots (« Cache : 72 °C, expire dans 3 min 40 »).
+
+**Harness par harness**, la durée de vie vient de ce que chacun dit :
+
+| Harness | Ce qu’Escouade lit |
+|---|---|
+| Claude Code | Les tokens lus et mis en cache de chaque requête, et leur durée : 1 heure quand il écrit pour une heure (son usage habituel), 5 minutes sinon. |
+| Codex | Les tokens lus du cache à chaque tour. 5 minutes, la durée la plus courte qu’OpenAI annonce (5 à 10 minutes sans activité). |
+| Copilot CLI, OpenCode, et les harness ACP qui le disent | Les tokens du cache de chaque tour, lus et écrits ensemble. 5 minutes sur un modèle d’Anthropic ou d’OpenAI, « — °C » sur un autre. |
+| Gemini CLI, Antigravity CLI, Mistral Vibe | Leurs fournisseurs ne disent pas combien de temps vit leur cache : « — °C ». |
+| Cursor CLI | Il ne dit rien de son cache : « — °C ». |
 
 ## Quand un quota approche de sa limite
 

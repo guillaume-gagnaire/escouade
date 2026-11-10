@@ -268,6 +268,62 @@ describe('ServicesPage', () => {
     });
     expect(b.called('update_project')).toHaveLength(0);
   });
+
+  // ESC-397: several accounts per source.
+  describe('with several accounts', () => {
+    const TWO: AccountView[] = [
+      { service: 'jira', id: 'jira', connected: true, label: 'ada@atlas.dev · atlas.atlassian.net' },
+      { service: 'jira', id: 'jira-2b', connected: true, label: 'bob@mobile.dev · mobile.atlassian.net' },
+      { service: 'trello', id: '', connected: false, label: '' },
+      { service: 'github', id: '', connected: false, label: '' },
+    ];
+
+    it('lists every account of a source, each disconnected alone', async () => {
+      app.accounts = TWO;
+      const b = backend({ integration_disconnect: () => [TWO[0], TWO[2], TWO[3]] });
+      render(SettingsModal, { page: 'services' });
+      const p = within(panel());
+      expect(p.getByText('Connecté · ada@atlas.dev · atlas.atlassian.net')).toBeInTheDocument();
+      expect(p.getByText('Connecté · bob@mobile.dev · mobile.atlassian.net')).toBeInTheDocument();
+      await userEvent.click(p.getByRole('button', { name: 'Déconnecter bob@mobile.dev · mobile.atlassian.net' }));
+      expect(b.called('integration_disconnect')[0].args).toEqual({ service: 'jira', account: 'jira-2b' });
+      await waitFor(() => expect(p.queryByText('Connecté · bob@mobile.dev · mobile.atlassian.net')).toBeNull());
+      expect(p.getByText('Connecté · ada@atlas.dev · atlas.atlassian.net')).toBeInTheDocument();
+    });
+
+    it('adds an account with « Connecter un compte… » instead of replacing the one there', async () => {
+      app.accounts = [TWO[0], TWO[2], TWO[3]];
+      const b = backend({ integration_connect: () => TWO[1] });
+      render(SettingsModal, { page: 'services' });
+      const p = within(panel());
+      await userEvent.click(p.getByRole('button', { name: 'Connecter un compte…' }));
+      const form = p.getByRole('form', { name: 'Connexion à Jira' });
+      await userEvent.type(within(form).getByLabelText('Site'), 'mobile.atlassian.net');
+      await userEvent.type(within(form).getByLabelText('E-mail'), 'bob@mobile.dev');
+      await userEvent.type(within(form).getByLabelText("Jeton d'API"), 'tok');
+      await userEvent.click(within(form).getByRole('button', { name: 'Connecter' }));
+      expect(b.called('integration_connect')[0].args.service).toBe('jira');
+      await waitFor(() => expect(p.getByText('Connecté · bob@mobile.dev · mobile.atlassian.net')).toBeInTheDocument());
+      expect(p.getByText('Connecté · ada@atlas.dev · atlas.atlassian.net')).toBeInTheDocument();
+      expect(app.accounts.filter((a) => a.service === 'jira').map((a) => a.id)).toEqual(['jira', 'jira-2b']);
+    });
+
+    it('puts right the same account connected again, without a second line', async () => {
+      app.accounts = TWO;
+      backend({ integration_connect: () => ({ ...TWO[1] }) });
+      render(SettingsModal, { page: 'services' });
+      const p = within(panel());
+      await userEvent.click(p.getByRole('button', { name: 'Connecter un compte…' }));
+      const form = p.getByRole('form', { name: 'Connexion à Jira' });
+      await userEvent.type(within(form).getByLabelText('Site'), 'mobile.atlassian.net');
+      await userEvent.type(within(form).getByLabelText('E-mail'), 'bob@mobile.dev');
+      await userEvent.type(within(form).getByLabelText("Jeton d'API"), 'tok2');
+      await userEvent.click(within(form).getByRole('button', { name: 'Connecter' }));
+      await waitFor(() => expect(p.queryByRole('form', { name: 'Connexion à Jira' })).toBeNull());
+      expect(app.accounts.filter((a) => a.service === 'jira')).toHaveLength(2);
+      expect(p.getAllByText(/^Connecté · bob@mobile\.dev/)).toHaveLength(1);
+    });
+  });
 });
 
 // The page alone, in English (the window around it is tested above, in French).

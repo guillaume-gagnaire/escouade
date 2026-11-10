@@ -17,6 +17,7 @@
     meterKey,
   } from '../lib/accounts';
   import { dayCostStandsIn, engineName } from '../lib/engines';
+  import { heatClock, savedToday } from '../lib/heat.svelte';
   import { fAgo, fBytes, fPct, fUsd } from '../lib/format';
   import { t } from '../lib/i18n';
   import Rich from '../lib/i18n/Rich.svelte';
@@ -43,6 +44,8 @@
 
   const agents = $derived(Object.values(app.agents).filter((a) => !a.archived));
   // The day's cost: an estimate while a turn runs, or once a harness that tells none (Codex) spent some of it.
+  // What the agents' cache saved today (ESC-398), read again with the caches' clock (a new day starts at 0).
+  const cacheSaved = $derived(savedToday(Object.values(app.agents), heatClock.now));
   const today = $derived.by(() => {
     const byHarness = app.usage.accounts.some((u) => u.todayCost > 0 && estimatedBy(u.engine));
     return { cost: app.usage.todayCost + app.liveCost, estimated: byHarness || app.liveCost > 0, byHarness };
@@ -394,6 +397,14 @@
       {/if}
       <span class="it" use:tip={today.estimated ? estimateHint(today) : undefined}>{t('shell.status.today')} <b>{fSpentUsd(today)}</b></span
       >
+      {#if cacheSaved > 0}
+        <!-- What the agents' cache saved today (ESC-398); the word alone under 1240 pixels, the sentence in its tooltip. -->
+        <span class="it heat-today" data-heat-today use:tip={t('heat.todayHint')}
+          ><span class="ht-long">{t('heat.today', { amount: fUsd(cacheSaved) })}</span><span class="ht-short"
+            >{t('heat.label')} <b>≈&nbsp;{fUsd(cacheSaved)}</b></span
+          ></span
+        >
+      {/if}
       {#if docsShown}
         <span class="vsep"></span>
         <span class="it"><DocsShareItem projectId={docsShown} /></span>
@@ -454,7 +465,7 @@
               text: [prTip(shownPr.word, p), ...(shownPr.more ? [t('shell.status.morePrs', { count: shownPr.more })] : [])].join('\n'),
               aria: false,
             }}
-            onclick={() => openPr(p)}
+            onclick={() => openPr(p, shownPr.word)}
             ><Icon name={prIcon(p)} size={13} /><span class="mono">#{p.number}</span>{#if shownPr.more}<span class="d"
                 >{t('shell.status.morePrs', { count: shownPr.more })}</span
               >{/if}</button
@@ -733,8 +744,17 @@
     .quotas :global(.q .pct),
     .quotas :global(.q .p),
     .quotas .p,
-    .over-word {
+    .over-word,
+    .ht-long {
       display: none;
+    }
+  }
+  .ht-short {
+    display: none;
+  }
+  @container status (max-width: 1239px) {
+    .ht-short {
+      display: inline;
     }
   }
 </style>

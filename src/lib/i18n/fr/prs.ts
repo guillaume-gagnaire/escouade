@@ -10,6 +10,9 @@ export default {
   openHint: 'Pousse la branche {branch} et ouvre sa {word}, titre et description proposés.',
   /** The item of the menus once one is open. */
   see: 'Voir la {word} #{number}',
+  /** A button that opens its page could not (ESC-402): `{why}` is the system's refusal, or `noPage`. */
+  openFailed: 'La {word} #{number} ne s’ouvre pas dans le navigateur : {why}',
+  noPage: 'son hébergeur n’a pas donné l’adresse de sa page.',
   /** On the card when the plugin that serves its code host does not answer (switched off, stopped): its pull requests
    * read last stay. The tooltip says why. */
   down: 'Hébergeur arrêté : {word} plus suivies',
@@ -78,6 +81,11 @@ export default {
     /** The sidebar's button, its word: « PR », « MR » on GitLab. */
     tab: '{word}',
     tabHint: 'Les {word} ouvertes du projet',
+    /** The tab, read out, with its badge: the ones come since it was last opened (ESC-403). */
+    tabNew: { one: '{word}, {count} nouvelle', other: '{word}, {count} nouvelles' },
+    /** The mark of a new one in the list, until the tab is opened again. */
+    new: 'Nouvelle',
+    newHint: 'Arrivée depuis ta dernière visite',
     title: 'Pull requests',
     titleMr: 'Merge requests',
     open: { one: '{count} ouverte', other: '{count} ouvertes' },

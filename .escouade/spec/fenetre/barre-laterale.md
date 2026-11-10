@@ -2,8 +2,8 @@
 title: "Barre latérale"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","src-tauri/src/core.rs","src-tauri/src/engine/claude/mod.rs","src-tauri/src/worktrees.rs"]
-tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390"]
-decisions: [129]
+tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390","ESC-396","ESC-398","ESC-403"]
+decisions: [129,133]
 compared: null
 ---
 
@@ -144,8 +144,10 @@ La section entre Agents et Terminaux : les commandes qui lancent le projet pour 
 
 - Elles se configurent dans l'onglet « Projets » des réglages, groupe « Lancement », qu'ouvrent le ⚙ de la section et « Réglages du projet… ». Chacune a un nom, une ligne de commande, un shell parmi ceux détectés et un sous-dossier facultatif ; elles sont enregistrées avec le projet.
 - Sans commande, la section propose « Configurer » et « ✦ Proposer des commandes ». Le second ouvre ces réglages sur le groupe « Lancement » et lance la lecture du projet.
-- Chaque commande tourne dans son propre terminal, sans saisie : `pwsh -Command …`, `bash --login -c …` ou `wsl -- bash -lc …`. Un clic sur la commande affiche son log dans la zone principale, en lecture seule, gardé d'un lancement à l'autre avec un séparateur « relancé à HH:MM ».
-- Statut en direct : prêt, en cours, arrêté (depuis l'app), terminé (code 0), planté (code N, avec une notification).
+- Chaque commande tourne dans son propre terminal : `pwsh -Command …`, `bash --login -c …` ou `wsl -- bash -lc …`. Un clic sur la commande affiche son log dans la zone principale, gardé d'un lancement à l'autre avec un séparateur « relancé à HH:MM ».
+- Tant qu'elle tourne, sa vue prend le clavier comme un terminal de la section Terminaux (ESC-396) : la frappe, le collage (plusieurs lignes comprises), les touches spéciales et `Ctrl+C` sans sélection vont au programme (réponse à une invite comme « Ok to proceed? », touches d'un serveur de dev, interruption) ; `Ctrl+C` avec une sélection la copie. Les raccourcis de l'app qui passent au-dessus d'un terminal y passent aussi, et dans l'écran partagé seul le volet actif reçoit le clavier. Seules la frappe et les collages de l'utilisateur partent : pas les réponses automatiques du terminal (position du curseur, focus, souris) ; Escouade répond lui-même à la question de position que pose le pseudo-terminal au départ. Une fois le programme terminé, le log redevient en lecture seule, sans curseur (défilement et recherche seulement) ; la relance lui rend le clavier. Cela vaut aussi pour les étapes de « ▶ Tester » (voir *Lancement de test*).
+- Sous Windows, `Ctrl+C` arrête le programme même quand Escouade a été lancé avec Ctrl+C ignoré (par un lanceur qui l'a mis dans un nouveau groupe de processus) : Escouade ne transmet pas ce réglage aux programmes de ses terminaux.
+- Statut en direct : prêt, en cours, arrêté (depuis l'app, ou fini dans les 10 s d'un `Ctrl+C` tapé dans sa vue, sans notification), terminé (code 0), planté (code N, avec une notification).
 - Boutons : lancer ▶, relancer ⟳, stopper ■ (arrête aussi les programmes lancés par la commande), « Tout lancer », « Tout arrêter ».
 - Fermer le projet arrête ses commandes. Elles ne survivent pas à un redémarrage d'Escouade.
 
@@ -203,3 +205,9 @@ La section entre Agents et Terminaux : les commandes qui lancent le projet pour 
 - « Agents » porte le nombre d'agents en gris ; « Kanban », la pastille ambre des tickets « À tester ». « PR » est le mot de l'hébergeur (« MR » sur GitLab).
 - « PR » n'est là que si le projet a un hébergeur de code dont le plugin est actif et qui lit des pull requests (voir *Vue « Pull requests » du projet*). Sans lui, trois onglets remplissent la barre de la même façon. Un hébergeur qui part pendant que la vue des PR est ouverte ramène aux agents.
 - De 220 à 480 px de large, les mots restent entiers.
+
+- « PR » porte la pastille ambre de ses PR nouvelles, arrivées depuis la dernière ouverture de l'onglet et pas ouvertes par Escouade ; l'ouvrir la remet à zéro. Un lecteur d'écran lit « PR, 2 nouvelles ». Voir *Vue « Pull requests » du projet* (ESC-403).
+
+### Température du cache sur la carte (ESC-398)
+
+- Au bout de la ligne du modèle, à droite : la température du cache de l'agent (« 100 °C » → « 0 °C », « — °C » quand son harness ne dit rien), dans la couleur de sa chaleur, son sens en mots pour les lecteurs d'écran et en infobulle. Voir *Température du cache*.

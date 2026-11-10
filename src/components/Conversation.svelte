@@ -34,7 +34,8 @@
   import { stepDividers } from '../lib/workflow-view';
   import { workflows } from '../lib/workflows.svelte';
   import { contextUse, estimateHint, fSpentUsd, spent } from '../lib/spend';
-  import { capsOf, engineName, showsCost, speakerOf } from '../lib/engines';
+  import HeatFigure from './HeatFigure.svelte';
+  import { capsOf, engineName, harnessHeld, showsCost, speakerOf } from '../lib/engines';
   import { injectedSource, parseAgentMessage, subagentLabels } from '../lib/events';
   import { localCommandViews } from '../lib/localcmd';
   import { subagentInfo } from '../lib/subagents';
@@ -614,6 +615,25 @@
   {/if}
 {/snippet}
 
+<!-- Its harness off for its project (ESC-404): it does not start nor get anything until « Activer », the same agreement as
+     before a first agent. -->
+{#snippet harnessCard()}
+  {#if !agent.archived && harnessHeld(agent.projectId, agent.engine ?? 'claude')}
+    {@const project = app.projects.find((p) => p.id === agent.projectId)}
+    {@const off = !!app.harnessScope[agent.projectId]?.off.includes(agent.engine ?? 'claude')}
+    <div class="banner held" class:top={harnessView} role="region" aria-label={t('plugins.harness.enable')} data-testid="harness-held">
+      <span
+        >{off || !project?.private
+          ? t('plugins.harness.cardOff', { name: engineName(agent.engine) })
+          : t('plugins.harness.cardPrivate', { name: engineName(agent.engine) })}</span
+      >
+      <button class="btn primary" onclick={() => app.enableHarness(agent.projectId, agent.engine ?? 'claude')}
+        >{t('plugins.harness.enable')}</button
+      >
+    </div>
+  {/if}
+{/snippet}
+
 <!-- Above a request a subagent made: which one, and the way to its conversation, where it is answered too. -->
 {#snippet asks(sub: string | undefined, request: string)}
   {@const from = sub ? subOf(sub) : null}
@@ -649,7 +669,7 @@
             aria-label={t('prs.chipLabel', { word, number: p.number, state: stateWord(p) })}
             use:tip={{ text: prTip(word, p), aria: false }}
             data-pr={p.number}
-            onclick={() => openPr(p)}><Icon name={prIcon(p)} size={12} />{p.repo ? `${repoLabel(p.repo)} ` : ''}#{p.number}</button
+            onclick={() => openPr(p, word)}><Icon name={prIcon(p)} size={12} />{p.repo ? `${repoLabel(p.repo)} ` : ''}#{p.number}</button
           >
         {/each}
         <!-- Codex's sandbox, which its modes set (but Bypass, which has none): said where it matters. -->
@@ -685,6 +705,8 @@
           </dd>
         </div>
       {/if}
+      <!-- The temperature of its cache (ESC-398): the detail of its last turn on hover or focus. -->
+      <HeatFigure {agent} detail />
       {#if docked}
         <div class="fig fig-files">
           <dt>{t('common.files')}</dt>
@@ -806,6 +828,7 @@
   {#if pageView}
     <DevPage {agent} />
   {:else if harnessView && !agent.archived}
+    {@render harnessCard()}
     {@render nextStart()}
     <AgentTerminal {agent} />
   {:else}
@@ -981,6 +1004,7 @@
       {#if agent.status === 'error'}
         <div class="banner err">{t('conv.stopped', { engine: speakerOf(agent.engine) })}</div>
       {/if}
+      {@render harnessCard()}
       {@render nextStart()}
       <Composer {agent} />
     {/if}
@@ -1288,7 +1312,8 @@
     color: var(--text);
   }
   /* The header folds by the width of the conversation, not the window's (the side panel open, the split layout, a small
-     window), for its name and its state to keep their room (ESC-166): the figures go one by one (Durée, Fichiers, Tokens),
+     window), for its name and its state to keep their room (ESC-166): the figures go one by one (Durée, Fichiers, Tokens; 56 px
+     sooner since the cache's degrees, ESC-398),
      then the words of its buttons (their icon and tooltip stay), then the layout and the views, which « … » takes over. The
      path gives up its project's name before its branch. */
   @container conv (max-width: 1100px) {
@@ -1303,17 +1328,28 @@
       display: none;
     }
   }
-  @container conv (max-width: 960px) {
+  @container conv (max-width: 1016px) {
     .figures .fig-files {
       display: none;
     }
   }
-  @container conv (max-width: 880px) {
+  @container conv (max-width: 936px) {
     .figures .fig-tok {
       display: none;
     }
   }
-  @container conv (max-width: 800px) {
+  /* The context's window and the word « estimé » go before the cache's degrees (ESC-398), which go under 640 px. */
+  @container conv (max-width: 760px) {
+    .fig dd small {
+      display: none;
+    }
+  }
+  @container conv (max-width: 640px) {
+    .figures :global(.fig-heat) {
+      display: none;
+    }
+  }
+  @container conv (max-width: 856px) {
     .head .btn .lbl {
       display: none;
     }
@@ -1614,6 +1650,9 @@
   .banner.err {
     background: oklch(from var(--del) l c h / 0.07);
     box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.35);
+  }
+  .banner.held {
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--warn, var(--p)) 45%, transparent);
   }
   .banner.next {
     box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 40%, transparent);

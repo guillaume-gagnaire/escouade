@@ -13,6 +13,7 @@ import {
   prune,
   rects,
   setRatio,
+  settle,
   zoneAt,
   zoneFits,
   type PaneItem,
@@ -83,6 +84,52 @@ describe('close and prune', () => {
     expect(prune(three, () => true)).toBe(three);
     expect(keys(prune(three, (x) => x.kind !== 'term'))).toEqual(['agent:a', 'agent:b']);
     expect(prune(three, (x) => x.kind === 'term')).toBeNull();
+  });
+});
+
+describe('settle (ESC-399)', () => {
+  // a over t at 70 / 30.
+  const over = setRatio(place(null, ag('a'), 'bottom', tm('t'))!, '', 0.7);
+  const standIn = (ids: string[]) => (_: PaneItem, shown: Set<string>) => {
+    const id = ids.find((x) => !shown.has(`agent:${x}`));
+    return id ? ag(id) : null;
+  };
+
+  it('keeps the layout as it is when nothing is gone', () => {
+    expect(settle(over, () => true, standIn(['b']))).toEqual({ layout: over, alone: null });
+  });
+
+  it('puts the stand-in in the pane of an agent gone, same place and share, active if it was', () => {
+    const { layout, alone } = settle({ ...over, active: 'agent:a' }, (x) => x.kind !== 'agent' || x.id !== 'a', standIn(['b']));
+    expect(alone).toBeNull();
+    expect(layout).toEqual({ root: { dir: 'col', ratio: 0.7, a: { leaf: ag('b') }, b: { leaf: tm('t') } }, active: 'agent:b' });
+    expect(settle({ ...over, active: 'term:t' }, (x) => x.kind !== 'agent', standIn(['b'])).layout?.active).toBe('term:t');
+  });
+
+  it('never takes as stand-in an agent already shown, nor gives one twice', () => {
+    const three = place(over, ag('a'), 'right', ag('b'))!;
+    // a gone, b still shown: a takes c, not b.
+    expect(keys(settle(three, (x) => x.kind !== 'agent' || x.id !== 'a', standIn(['b', 'c'])).layout)).toEqual([
+      'agent:c',
+      'agent:b',
+      'term:t',
+    ]);
+    // a and b gone, only c to stand in: a takes c, b's pane closes, a's split keeps its share.
+    const { layout } = settle(three, (x) => x.kind !== 'agent', standIn(['c']));
+    expect(keys(layout)).toEqual(['agent:c', 'term:t']);
+    expect((layout!.root as { ratio: number }).ratio).toBe(0.7);
+  });
+
+  it('closes the pane of a content without stand-in, its sibling taking its place and the active pane', () => {
+    const three = setRatio(place(over, ag('a'), 'right', ag('b'))!, 'a', 0.4);
+    const { layout, alone } = settle({ ...three, active: 'term:t' }, (x) => x.kind !== 'term', standIn([]));
+    expect(alone).toBeNull();
+    expect(layout).toEqual({ root: { dir: 'row', ratio: 0.4, a: { leaf: ag('a') }, b: { leaf: ag('b') } }, active: 'agent:a' });
+  });
+
+  it('down to one pane, gives the content left to show alone', () => {
+    expect(settle(over, (x) => x.kind !== 'agent', standIn([]))).toEqual({ layout: null, alone: tm('t') });
+    expect(settle(over, () => false, standIn([]))).toEqual({ layout: null, alone: null });
   });
 });
 

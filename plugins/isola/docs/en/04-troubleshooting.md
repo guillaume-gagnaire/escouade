@@ -8,7 +8,9 @@ The ticket starts with a recipe on the reserved ports, as without isola. A workt
 
 - the plugin is on for the app and for the project (**Projects** tab; a private project is off by default);
 - the worktree has an `.isola.toml` at its root;
-- `isola` is found on the PATH (on Windows, an `isola.exe` or `isola.com`).
+- `isola` is found on the PATH.
+
+On Windows, the third never holds: isola does not exist for Windows (see Installing). The plugin finds no program, and the project’s tickets keep their recipe on the reserved ports.
 
 Escouade reads the PATH again at most every 30 seconds: once isola is installed, wait a little. If Escouade was started before you changed the PATH, restart it.
 
@@ -37,7 +39,7 @@ isola did not finish in time: Escouade stopped it. Run the command by hand in th
 
 **“isola {command} couldn’t start: {reason}”**
 Escouade could not start the program. The possible reasons:
-- `no program isola on this machine`: `isola` is no longer on the PATH (on Windows, only an `.exe` or a `.com` counts);
+- `no program isola on this machine`: `isola` is no longer on the PATH;
 - `4 programs at once at most`: the plugin already has four commands under way; try again once they are done;
 - `its instance has ended`: the plugin was stopping; try again.
 
@@ -54,7 +56,7 @@ isola lists the service, but not as `running`. Its status is written on its line
 The plugin’s module could not be called (stopped, turned off, or crashed). Look at the **Journal** tab of its page, then **Restart**.
 
 **Its state or its journal says `its module …plugin.wasm: …`**
-This version of Escouade does not have isola’s module: it comes in the installers with its store version. Meanwhile, turn the plugin off (for the app or for the project): tickets start again with a recipe on the reserved ports.
+The plugin’s module is missing or damaged where Escouade installed it. In the Plugins view, uninstall isola, then **Install** puts it back from Escouade’s installer. Meanwhile, turn the plugin off (for the app or for the project): tickets start again with a recipe on the reserved ports.
 
 ## When a worktree is removed
 

@@ -105,6 +105,8 @@ export function askStash(title: string, again: () => unknown, onCancel?: () => v
  * agent starts (ESC-155): a name git refuses, or that a branch has, is told the same way.
  */
 export async function startAgentOn(projectId: string, branch: string, create = false, base: string | null = null): Promise<boolean> {
+  // A private project's harness not turned on yet (ESC-404): asked first.
+  if (app.harnessAsked(projectId) && !(await app.harnessAgreed(projectId))) return false;
   try {
     const a = create ? await api.createAgentOnNewBranch(projectId, branch, base) : await api.createAgentOnBranch(projectId, branch);
     app.agents[a.id] = a;
@@ -123,6 +125,7 @@ export async function startAgentOn(projectId: string, branch: string, create = f
  * `number` (a fork's fetched by the reference its host keeps), shown at once like a new agent. Refusals as for a branch.
  */
 export async function startAgentOnPr(projectId: string, number: number, branch: string): Promise<boolean> {
+  if (app.harnessAsked(projectId) && !(await app.harnessAgreed(projectId))) return false;
   try {
     const a = await api.createAgentOnPr(projectId, number);
     app.agents[a.id] = a;

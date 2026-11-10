@@ -2666,6 +2666,49 @@ impl<R: Runtime> Core<R> {
         )?;
         Ok(info)
     }
+
+    /// Signs `account` out by its harness's own command (`Engine::logout_args`), run with its folder
+    /// as « Se connecter… » runs its sign-in, in the temporary folder, without a window: Escouade never
+    /// reads nor touches the sign-in itself. Refused for a harness with no such command, and with
+    /// what it printed when it fails.
+    pub(crate) async fn sign_out(&self, account: &Account) -> Result<()> {
+        let harness = engine::by_id(account.engine);
+        let args: Vec<String> = harness
+            .logout_args()
+            .iter()
+            .map(|a| a.to_string())
+            .collect();
+        if args.is_empty() {
+            let name = harness.name();
+            bail!(tr!(
+                "{name} ne se déconnecte pas depuis Escouade : fais-le dans son terminal.",
+                "{name} doesn’t sign out from Escouade: do it in its terminal."
+            ));
+        }
+        let settings = self.settings.read().clone();
+        let program = program(account, &settings).ok_or_else(|| {
+            anyhow::anyhow!(engine::missing_line(account.engine, crate::i18n::ui()))
+        })?;
+        // Run where it reads nothing of a project's (its version is read there too).
+        let cwd = std::env::temp_dir().to_string_lossy().into_owned();
+        let env = [settings.claude_env(), launch_env(account)].concat();
+        let launch = program.launch(&cwd, &args, &env)?;
+        let mut cmd = tokio::process::Command::new(&launch.program);
+        cmd.args(&launch.args).envs(launch.env).current_dir(&cwd);
+        #[cfg(windows)]
+        cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
+        crate::proc::no_inherited_fds(&mut cmd);
+        let out = crate::proc::output_within(cmd, std::time::Duration::from_secs(30)).await?;
+        if !out.status.success() {
+            let said = [out.stderr, out.stdout]
+                .iter()
+                .map(|b| String::from_utf8_lossy(b).trim().to_string())
+                .find(|s| !s.is_empty())
+                .unwrap_or_else(|| format!("{}", out.status));
+            bail!(said);
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

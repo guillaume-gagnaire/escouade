@@ -8,7 +8,9 @@ Le ticket part avec une recette sur les ports réservés, comme sans isola. Un w
 
 - le plugin est actif pour l’app et pour le projet (onglet **Projets** ; un projet privé est coupé d’office) ;
 - le worktree a un `.isola.toml` à sa racine ;
-- `isola` est trouvé sur le PATH (sous Windows, un `isola.exe` ou `isola.com`).
+- `isola` est trouvé sur le PATH.
+
+Sous Windows, la troisième ne tient jamais : isola n’existe pas pour Windows (voir Installer). Le plugin ne trouve pas de programme, et les tickets du projet gardent leur recette sur les ports réservés.
 
 Escouade relit le PATH au plus toutes les 30 secondes : après avoir installé isola, attends un peu. Si Escouade a été lancé avant que tu modifies le PATH, relance-le.
 
@@ -37,7 +39,7 @@ isola n’a pas fini à temps : Escouade l’a arrêté. Lance la commande à la
 
 **« isola {commande} n’a pas pu démarrer : {raison} »**
 Escouade n’a pas pu lancer le programme. Les raisons possibles :
-- `no program isola on this machine` : `isola` n’est plus sur le PATH (sous Windows, seul un `.exe` ou un `.com` compte) ;
+- `no program isola on this machine` : `isola` n’est plus sur le PATH ;
 - `4 programs at once at most` : le plugin a déjà quatre commandes en cours ; réessaie quand elles ont fini ;
 - `its instance has ended` : le plugin s’arrêtait ; réessaie.
 
@@ -54,7 +56,7 @@ isola liste le service, mais pas dans l’état `running`. Son état est écrit 
 Le module du plugin n’a pas pu être appelé (arrêté, coupé, ou planté). Regarde l’onglet **Journal** de sa page, puis **Relancer**.
 
 **Son état ou son journal dit `its module …plugin.wasm: …`**
-Cette version d’Escouade n’a pas le module d’isola : il arrive dans les installeurs avec sa version du store. En attendant, coupe le plugin (pour l’app ou pour le projet) : les tickets repartent avec une recette sur les ports réservés.
+Le module du plugin manque ou est abîmé là où Escouade l’a installé. Dans la vue Plugins, désinstalle isola, puis **Installer** le remet depuis l’installeur d’Escouade. En attendant, coupe le plugin (pour l’app ou pour le projet) : les tickets repartent avec une recette sur les ports réservés.
 
 ## À la suppression d’un worktree
 

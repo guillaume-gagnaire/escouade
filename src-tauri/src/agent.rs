@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 mod agy;
 mod agy_tui;
+mod cache;
 mod claude;
 mod codex;
 mod codex_tui;
@@ -194,6 +195,10 @@ pub struct AgentRt {
     pub context_window: u64,
     /// Model of the conversation's latest message (it may be switched mid-process).
     main_model: String,
+    /// The turn that warms its cache, from its first request to its end (`crate::heat`).
+    warming: Option<crate::heat::Warming>,
+    /// A compaction asked of its harness: the turn that ends it does not warm its cache.
+    heat_compacting: bool,
     /// The sign-in of its account when its process started (`usage::Stored::stamp`, ESC-162).
     pub(crate) launch_stamp: Option<String>,
     /// The restarts of its process since its turn stopped on a sign-in that could not be
@@ -537,6 +542,8 @@ impl AgentRt {
             context_tokens: 0,
             context_window: 0,
             main_model: String::new(),
+            warming: None,
+            heat_compacting: false,
             launch_stamp: None,
             sign_in_retries: 0,
             announced_tasks: HashMap::new(),
@@ -638,8 +645,10 @@ impl AgentRt {
 
     pub fn view(&self) -> AgentView {
         let (live_tokens, live_cost) = self.live_totals();
+        let mut meta = self.meta.clone();
+        meta.heat = self.heat_view();
         AgentView {
-            meta: self.meta.clone(),
+            meta,
             active_since: self.active_since,
             alive: self.proc.is_some() || self.tui.is_some(),
             escouade_next: self.escouade_next && (self.proc.is_some() || self.tui.is_some()),

@@ -100,6 +100,28 @@ beforeEach(() => {
 });
 
 describe('the review of a pull request by an agent (ESC-66)', () => {
+  it('opens the page of its pull request by a click and by Entrée, and says why it cannot (ESC-402)', async () => {
+    app.prReviews.p1 = { 12: review({ url: 'https://bitbucket.org/acme/demo/pull-requests/12' }) };
+    let refuse = false;
+    const b = fakeBackend({
+      open_url: () => {
+        if (refuse) throw 'aucun navigateur';
+      },
+    });
+    show();
+    const browser = screen.getByRole('button', { name: 'Ouvrir dans le navigateur' });
+    await userEvent.click(browser);
+    browser.focus();
+    await userEvent.keyboard('{Enter}');
+    const url = 'https://bitbucket.org/acme/demo/pull-requests/12';
+    await waitFor(() => expect(b.called('open_url').map((c) => c.args.url)).toEqual([url, url]));
+    refuse = true;
+    await userEvent.click(browser);
+    await waitFor(() =>
+      expect(app.toasts.at(-1)).toMatchObject({ text: 'La PR #12 ne s’ouvre pas dans le navigateur : aucun navigateur', kind: 'error' }),
+    );
+  });
+
   it('shows its comments file by file with their lines, and holds the publication until each is decided', async () => {
     const user = userEvent.setup();
     const b = backend(review());

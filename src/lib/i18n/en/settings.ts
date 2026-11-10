@@ -38,6 +38,7 @@ export default defineZone('settings', {
       noAccount: '{harness} has no account: no agent or ticket starts on it',
       projectNoAccount: 'No {harness} account serves this project: its agents and tickets don’t start',
       unread: 'Token unreadable in the keychain · {label}',
+      sourcePaused: '{service} source “{name}” paused: its account is disconnected',
       plugin: '{name}: {state}',
     },
   },
@@ -144,6 +145,7 @@ export default defineZone('settings', {
     notFound: '{name} (program not found)',
     pluginOff: '{name} (plugin off)',
     noAccount: '{name} (no account)',
+    projectOff: '{name} (off for this project)',
   },
   claude: {
     models: {

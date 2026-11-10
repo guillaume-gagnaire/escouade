@@ -6958,6 +6958,8 @@ fn private_with_own(h: &Harness, p: &Project, own: &[&str], shared: bool) {
     project.private = true;
     project.shared_on_limit = shared;
     h.core.update_project(project).unwrap();
+    // Its harness turned on for it by the user (ESC-404).
+    crate::harness_scope_tests::turn_on_every_harness(h, &p.id);
     h.set_settings(|s| {
         for a in s
             .accounts
@@ -9419,6 +9421,8 @@ async fn a_ticket_is_refused_an_account_its_project_may_not_use() {
     let mut project = h.core.project(&p.id).unwrap();
     project.private = true;
     h.core.update_project(project).unwrap();
+    // Its harness turned on for it by the user (ESC-404).
+    crate::harness_scope_tests::turn_on_every_harness(&h, &p.id);
     h.set_settings(|s| {
         for a in s.accounts.iter_mut().filter(|a| a.id == team.id) {
             a.projects = vec![p.id.clone()];

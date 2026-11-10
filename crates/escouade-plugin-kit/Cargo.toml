@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-kit"
-version = "0.1.1"
+version = "0.1.2"
 description = "What Escouade's plugins in Rust share, in process or as a WASM module: the loop, the service of code hosts and Kanban sources, their typed errors and their rate limits"
 authors = ["Guillaume Gagnaire"]
 license = "MIT"

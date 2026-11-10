@@ -31,7 +31,7 @@ Un programme parle à Escouade par [le protocole](plugins/api) ; [le SDK](plugin
 ## Ce qu’un plugin ne peut pas faire
 
 - **Lire les secrets d’un autre** : un plugin n’a que les siens, jamais ceux d’un compte, d’un harness ou d’un autre plugin.
-- **Agir dans un projet privé** sans ton accord : un plugin installé y est coupé d’office (seuls les plugins livrés avec Escouade y sont actifs, comme le reste de l’app).
+- **Agir dans un projet privé** sans ton accord : un plugin installé y est coupé d’office, ceux livrés avec Escouade compris ; un harness n’y lance son premier agent qu’une fois que tu l’y as activé.
 - **S’installer seul** : un projet peut proposer un plugin dans son [`.escouade.yml`](escouade-yml#plugins), jamais l’installer ; un lien `escouade://` ouvre sa page, jamais l’installation.
 - **Recevoir ce qu’il n’a pas demandé** : un fait hors de `permissions.events` ne lui est pas envoyé, un secret hors de `permissions.secrets` lui est refusé (voir [les permissions](plugins/permissions)).
 - **Changer l’interface** au-delà de ce que son manifeste déclare : pas de vue à lui.

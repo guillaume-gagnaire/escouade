@@ -20,6 +20,10 @@ impl AgentRt {
             if self.meta.session_id.as_deref() != Some(session.as_str()) {
                 // Another conversation: what the plan was about is not in its context.
                 self.reset_plan(fx);
+                // Its cache held the conversation it leaves; a copy's holds the same one.
+                if self.meta.session_id.is_some() && self.meta.fork_of.is_none() {
+                    self.heat_break(crate::heat::broken::CONVERSATION, fx);
+                }
                 if self.saw_init {
                     self.notice("info", notice, fx);
                 }
@@ -53,7 +57,7 @@ impl AgentRt {
         fx.agent_changed = true;
         if main {
             if !model.is_empty() {
-                self.main_model = model;
+                self.main_model = model.clone();
             }
             self.context_tokens = [
                 &usage["input_tokens"],
@@ -63,6 +67,12 @@ impl AgentRt {
             .iter()
             .filter_map(|v| v.as_u64())
             .sum();
+            let model = if model.is_empty() {
+                self.model_in_use()
+            } else {
+                model
+            };
+            self.heat_message(&model, &usage, fx);
         }
         // A turn started without a user message from us (queued message, background task).
         if !self.meta.status.is_active() {
@@ -402,6 +412,7 @@ impl AgentRt {
         let interrupted = std::mem::take(&mut self.interrupted);
         // The exact figures below replace the running estimate.
         self.live.clear();
+        self.heat_close();
         if limited && is_error && !interrupted {
             fx.limited = Some(resets);
         } else if self.meta.resume_at.take().is_some() {

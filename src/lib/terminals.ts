@@ -29,7 +29,7 @@ export interface XTerm {
   fit: FitAddon;
   search: SearchAddon;
   host: HTMLDivElement;
-  /** A log: no input, no cursor. */
+  /** A log: no input, no cursor (a launch command's, once its run ended). */
   readOnly?: boolean;
   /** The backend's id of an interactive terminal, once it has one. */
   id?: string;
@@ -272,7 +272,7 @@ function createXTerm(readOnly: boolean, room?: Room | null): XTerm {
       return false;
     }
     // A log only scrolls (Shift+PageUp…): every other key goes on to the app's shortcuts.
-    return !readOnly || (e.shiftKey && SCROLL_KEYS.has(e.key));
+    return !x.readOnly || (e.shiftKey && SCROLL_KEYS.has(e.key));
   };
   term.attachCustomKeyEventHandler((e) => {
     const toTerminal = keyToTerminal(e);
@@ -594,18 +594,47 @@ async function interactive(
 export const logKey = (commandId: string) => `run:${commandId}`;
 
 /**
- * The read-only log of a launch command, kept across its runs.
- * `onResize` gets the new size so the running process can follow it.
+ * The log of a launch command, kept across its runs. `onResize` gets the new size so the running process can follow it;
+ * `input` is the backend's id of the terminal its run types into, null when nothing runs (ESC-396): while it runs, what
+ * the user types and pastes in it goes to its program, as in an interactive terminal (`setLogLive` says so on screen),
+ * and `sent` is told of it.
+ * Only the user's own input goes: the pseudo-console's cursor queries are answered by the backend, not by xterm.js.
  */
-export function launchLog(commandId: string, onResize: (cols: number, rows: number) => void): XTerm {
+export function launchLog(
+  commandId: string,
+  onResize: (cols: number, rows: number) => void,
+  input: () => string | null = () => null,
+  sent: (data: string) => void = () => {},
+): XTerm {
   const key = logKey(commandId);
   let x = xterms.get(key);
   if (!x) {
-    x = createXTerm(true);
-    x.term.onResize(({ cols, rows }) => onResize(cols, rows));
+    const log = createXTerm(true);
+    log.term.onResize(({ cols, rows }) => onResize(cols, rows));
+    log.term.onData((d) => {
+      const to = input();
+      if (!to || !userInput(log, performance.now())) return;
+      api.termWrite(to, d).catch(() => {});
+      sent(d);
+    });
+    x = log;
     xterms.set(key, x);
   }
   return x;
+}
+
+/**
+ * Whether a launch command's log takes the keyboard (ESC-396): while its run lasts, keys, pastes and Ctrl+C go to its
+ * program, with a cursor, as in a terminal of the sidebar; once it ended, it is a read-only log again.
+ */
+export function setLogLive(commandId: string, live: boolean) {
+  const x = xterms.get(logKey(commandId));
+  if (!x || x.readOnly === !live) return;
+  x.readOnly = !live;
+  x.term.options.disableStdin = !live;
+  x.term.options.cursorBlink = live;
+  x.term.options.cursorInactiveStyle = live ? 'outline' : 'none';
+  x.term.options.theme = terminalTheme(!live);
 }
 
 export function disposeLog(commandId: string) {

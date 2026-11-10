@@ -2,6 +2,7 @@
 // and the install window — a plugin is read and set aside first (`inspect*`), installed only on the user's consent.
 import { open } from '@tauri-apps/plugin-dialog';
 import { untrack } from 'svelte';
+import { fDayMonth, fTime } from './format';
 import { t } from './i18n';
 import { pluginsApi, type Category, type PluginPreview, type PluginRefusal, type PluginView, type SeedOffer } from './plugins';
 import { storeApi, type CatalogPlugin, type DeepLink, type StoreView, type Suggestion } from './store';
@@ -89,6 +90,16 @@ class PluginsStore {
 
   byId(id: string) {
     return this.list.find((p) => p.id === id) ?? null;
+  }
+
+  /** When the store was read, beside « Rechercher des mises à jour » (ESC-405); that it did not answer, and of when the offers looked at are. */
+  get storeRead(): string {
+    const s = this.store;
+    if (!s) return '';
+    const at = s.readAt ? Date.parse(s.readAt) : null;
+    const when = at === null ? '' : t('plugins.updates.when', { date: fDayMonth(at), time: fTime(at) });
+    if (s.error) return at === null ? t('plugins.updates.unreachableNone') : t('plugins.updates.unreachable', { when });
+    return at === null ? '' : t('plugins.updates.read', { when });
   }
 
   get catalog(): CatalogPlugin[] {
@@ -287,10 +298,15 @@ class PluginsStore {
     }
   }
 
+  /** « Rechercher des mises à jour »: the store read again by the core first (ESC-405); `store` says when, or that it did not answer. */
   async checkUpdates() {
     this.checking = true;
     try {
-      this.list = (await pluginsApi.checkUpdates()) ?? this.list;
+      const got = await pluginsApi.checkUpdates();
+      if (got) {
+        this.list = got.plugins;
+        this.store = got.store;
+      }
     } catch (e) {
       this.error = errorText(e);
     }

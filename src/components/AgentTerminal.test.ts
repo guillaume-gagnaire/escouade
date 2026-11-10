@@ -72,6 +72,7 @@ import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
 import type { Agent, TuiExit } from '../lib/types';
 import { agent, fakeBackend, project, resetApp } from '../test/ipc';
+import { queueViewCommand, takeViewCommand } from '../lib/interactive';
 import AgentTerminal from './AgentTerminal.svelte';
 
 beforeEach(() => {
@@ -129,6 +130,24 @@ describe('the agent in Claude Code’s interface', () => {
     render(AgentTerminal, { agent: a });
     await waitFor(() => expect(terms.mounted).toContain('t1'));
     expect(terms.opened).toEqual([a.id]);
+  });
+
+  it('types the interactive command the composer sent it to once its interface takes it (ESC-401)', async () => {
+    const a = agent({ terminal: true });
+    resetApp({ projects: [project()], agents: [a] });
+    let n = 0;
+    const b = fakeBackend({
+      send_message: () => {
+        // Not ready yet the first time, as the backend says of an interface that is starting.
+        if (n++ === 0) throw new Error('pas encore prête');
+      },
+    });
+    queueViewCommand(a.id, '/hooks');
+    render(AgentTerminal, { agent: a });
+    await waitFor(() => expect(b.called('send_message')).toHaveLength(2), { timeout: 3000 });
+    expect(b.called('send_message').map((c) => c.args.text)).toEqual(['/hooks', '/hooks']);
+    // Once only.
+    expect(takeViewCommand(a.id)).toBeUndefined();
   });
 
   it('shows the one this window holds already rather than starting another', async () => {
