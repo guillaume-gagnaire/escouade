@@ -18,9 +18,14 @@
 //
 // `--changed [<git revision>]` runs only the plugins a change touches, compared to that revision (by default to where
 // the branch left main, working tree included): the CI of a branch. docs/PLUGINS.md §8.6.4 says what runs them all.
-import { spawnSync } from 'node:child_process';
+//
+// The plugins are checked side by side, as many at once as the machine has cores (ESCOUADE_CI_JOBS for another number):
+// each compilation of a module has a folder of its own, and the download of the toolchain they share is locked across
+// processes (escouade-plugin's rust.rs). One after the other, their 23 modules took 6 to 11 min of the CI's Linux. The
+// output of each plugin is printed whole once it is checked.
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { availableParallelism, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { listPlugins, parseArgs, problemsOf, touchedBy } from './ci-lib.mjs';
@@ -85,65 +90,93 @@ if (!since) {
   process.exit(2);
 }
 
-function run(cwd, command, ...args) {
-  console.log(`\n$ ${[command, ...args].join(' ')}   (${cwd})`);
+/** A command run for one plugin, its output kept in `log`, printed whole once the plugin is checked: whether it passed. */
+function run(log, cwd, command, ...args) {
+  log.push(`\n$ ${[command, ...args].join(' ')}   (${cwd})\n`);
   // On Windows, npm and npx are .cmd scripts, which only a shell starts (the words here have no spaces to quote).
   const windows = process.platform === 'win32';
-  const r = spawnSync(windows ? [command, ...args].join(' ') : command, windows ? [] : args, {
-    cwd,
-    stdio: 'inherit',
-    shell: windows,
-    env: { ...process.env, ESCOUADE_PLUGIN_BIN: bin },
+  return new Promise((done) => {
+    const child = spawn(windows ? [command, ...args].join(' ') : command, windows ? [] : args, {
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: windows,
+      env: { ...process.env, ESCOUADE_PLUGIN_BIN: bin },
+    });
+    child.stdout.on('data', (d) => log.push(String(d)));
+    child.stderr.on('data', (d) => log.push(String(d)));
+    child.on('error', (e) => {
+      log.push(`✗ ${command} ${args.join(' ')}: ${e.message}\n`);
+      done(false);
+    });
+    child.on('close', (code, signal) => {
+      if (code !== 0) log.push(`✗ ${command} ${args.join(' ')}: exit ${code ?? signal}\n`);
+      done(code === 0);
+    });
   });
-  if (r.status !== 0) console.error(`✗ ${command} ${args.join(' ')}: exit ${r.status ?? r.signal}`);
-  return r.status === 0;
 }
 
 /** The steps of a plugin in TypeScript, until one fails: whether all passed. */
-function checkTypeScript({ name }, folder) {
-  if (!run(folder, 'npm', 'install', '--no-audit', '--no-fund')) return false;
-  if (!run(folder, 'npm', 'run', 'typecheck') || !run(folder, 'npm', 'test')) return false;
+async function checkTypeScript({ name }, folder, log) {
+  if (!(await run(log, folder, 'npm', 'install', '--no-audit', '--no-fund'))) return false;
+  if (!(await run(log, folder, 'npm', 'run', 'typecheck')) || !(await run(log, folder, 'npm', 'test'))) return false;
   const built = join(tmp, `${name}.mjs`);
-  if (
-    !run(folder, 'npx', 'esbuild', 'src/main.ts', '--bundle', '--platform=node', '--format=esm', '--target=node20', `--outfile=${built}`)
-  ) {
-    return false;
-  }
+  const esbuild = ['esbuild', 'src/main.ts', '--bundle', '--platform=node', '--format=esm', '--target=node20', `--outfile=${built}`];
+  if (!(await run(log, folder, 'npx', ...esbuild))) return false;
   if (lf(readFileSync(built, 'utf8')) !== lf(readFileSync(join(folder, 'dist', 'plugin.mjs'), 'utf8'))) {
-    console.error(`✗ ${name}: dist/plugin.mjs is not the build of src/ (npm run build, then commit dist/)`);
+    log.push(`✗ ${name}: dist/plugin.mjs is not the build of src/ (npm run build, then commit dist/)\n`);
     return false;
   }
-  console.log(`✓ ${name}: dist/plugin.mjs is the build of src/`);
+  log.push(`✓ ${name}: dist/plugin.mjs is the build of src/\n`);
   return true;
 }
 
 /** Each step of a plugin, until one fails: whether all passed. */
-function check(plugin) {
+async function check(plugin, log) {
   const { name, id, version } = plugin;
   const folder = join(HERE, name);
   const problems = problemsOf(folder, plugin);
   if (problems.length > 0) {
-    for (const problem of problems) console.error(`✗ ${name}: ${problem}`);
+    for (const problem of problems) log.push(`✗ ${name}: ${problem}\n`);
     return false;
   }
-  if (plugin.node ? !checkTypeScript(plugin, folder) : !plugin.cargo && plugin.nodeTests && !run(folder, 'node', '--test')) {
+  if (plugin.node) {
+    if (!(await checkTypeScript(plugin, folder, log))) return false;
+  } else if (!plugin.cargo && plugin.nodeTests && !(await run(log, folder, 'node', '--test'))) {
     return false;
   }
   // By its relative folder, as an author runs it beside the plugin; a reserved id is Escouade's own hand.
   const hand = plugin.ofTheApp ? ['--builtin'] : String(id).startsWith('dev.escouade.') ? ['--first-party'] : [];
   const judged = ['--escouade', since];
-  if (!run(HERE, bin, 'validate', name, ...hand, ...judged)) return false;
+  if (!(await run(log, HERE, bin, 'validate', name, ...hand, ...judged))) return false;
   if (plugin.ofTheApp) return true;
-  if (!plugin.wasm) return run(HERE, bin, 'test', name, ...hand, ...judged);
+  if (!plugin.wasm) return run(log, HERE, bin, 'test', name, ...hand, ...judged);
   // Compiled once, as the store does it, then played: `test` would compile it again.
   const module = join(tmp, `${id}-${version}.wasm`);
-  return run(HERE, bin, 'build', name, ...hand, '--out', tmp) && run(HERE, bin, 'test', name, ...hand, ...judged, '--wasm', module);
+  if (!(await run(log, HERE, bin, 'build', name, ...hand, '--out', tmp))) return false;
+  return run(log, HERE, bin, 'test', name, ...hand, ...judged, '--wasm', module);
 }
 
 /** The tests of the crates of a workspace, in one go: one build, whatever their number. `--no-fail-fast`: as for the plugins. */
-function testCrates(workspace, crates) {
+async function testCrates(workspace, crates) {
   if (crates.length === 0) return true;
-  return run(workspace, 'cargo', 'test', '--locked', '--no-fail-fast', ...crates.flatMap((c) => ['-p', c]));
+  const log = [];
+  const passed = await run(log, workspace, 'cargo', 'test', '--locked', '--no-fail-fast', ...crates.flatMap((c) => ['-p', c]));
+  process.stdout.write(log.join(''));
+  return passed;
+}
+
+/** `work` on each item, `width` at a time: their results, in the order of the items. */
+async function eachAtOnce(items, width, work) {
+  const results = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await work(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(width, items.length)) }, worker));
+  return results;
 }
 
 const lf = (s) => s.replace(/\r\n/g, '\n');
@@ -155,11 +188,23 @@ try {
   const names_of = (list) => list.map((p) => p.cargo.name);
   const started = Date.now();
   const tested = [
-    testCrates(WORKSPACE, names_of(crates.filter((p) => !p.wasm))),
-    testCrates(HERE, names_of(crates.filter((p) => p.wasm))),
+    await testCrates(WORKSPACE, names_of(crates.filter((p) => !p.wasm))),
+    await testCrates(HERE, names_of(crates.filter((p) => p.wasm))),
   ].every(Boolean);
   if (crates.length > 0) console.log(`\ncargo test of ${crates.length} crates: ${Math.round((Date.now() - started) / 1000)} s`);
-  const failed = plugins.filter((plugin) => !check(plugin)).map((p) => p.name);
+  const jobs = Number(process.env.ESCOUADE_CI_JOBS) || availableParallelism();
+  const checking = Date.now();
+  const passed = await eachAtOnce(plugins, jobs, async (plugin) => {
+    const log = [];
+    const ok = await check(plugin, log).catch((e) => {
+      log.push(`✗ ${plugin.name}: ${e.message}\n`);
+      return false;
+    });
+    process.stdout.write(`\n──── ${plugin.name}${ok ? '' : ' ✗'}\n${log.join('')}`);
+    return ok;
+  });
+  console.log(`\n${plugins.length} plugins checked, ${jobs} at a time: ${Math.round((Date.now() - checking) / 1000)} s`);
+  const failed = plugins.filter((_, i) => !passed[i]).map((p) => p.name);
   if (!tested) console.error(`\n✗ cargo test fails: its output above says for which crates`);
   if (failed.length > 0) console.error(`\n✗ ${failed.length} of ${names.length} plugins fail: ${failed.join(', ')}`);
   if (!tested || failed.length > 0) {
