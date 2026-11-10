@@ -42,7 +42,8 @@ describe('DeleteFolderModal', () => {
     open([agent({ id: 'a1', worktree: wt }), agent({ id: 'a2' })]);
     await userEvent.click(screen.getByRole('radio', { name: 'Supprimer les 2 agents' }));
     expect(confirm()).toHaveClass('danger');
-    expect(screen.getByRole('checkbox', { name: 'Supprimer aussi leurs worktrees' })).toBeChecked();
+    // One of the two has a worktree: its own, in the singular.
+    expect(screen.getByRole('checkbox', { name: 'Supprimer aussi son worktree' })).toBeChecked();
   });
 
   it('has no worktrees box when no agent has a worktree', async () => {

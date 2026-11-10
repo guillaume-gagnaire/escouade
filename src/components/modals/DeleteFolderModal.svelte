@@ -22,7 +22,7 @@
     .map((a) => app.ticketOf(a.id))
     .filter((k) => k?.column === 'doing' || k?.column === 'review')
     .map((k) => k!.key);
-  const hasWorktree = agents.some((a) => a.worktree);
+  const withWorktree = agents.filter((a) => a.worktree).length;
   const unsaved = agents.reduce((n, a) => n + buffers.unsavedIn(projectId, a.id), 0);
 
   // A folder gone in the meantime: nothing to ask.
@@ -63,7 +63,7 @@
       {t('nav.sidebar.folders.deleteModal.archive', { count })}
     </label>
     {#if choice === 'archive' && tickets.length}
-      <p class="note">{t('nav.sidebar.archiveBody', { key: tickets.join(', ') })}</p>
+      <p class="note">{t('nav.sidebar.folders.deleteModal.tickets', { count: tickets.length, keys: tickets.join(', ') })}</p>
     {/if}
     <label class="opt">
       <input type="radio" name="choice" value="remove" bind:group={choice} />
@@ -71,10 +71,10 @@
     </label>
     {#if choice === 'remove'}
       {#if unsaved}<p class="note">{lossNotice(unsaved).trim()}</p>{/if}
-      {#if hasWorktree}
+      {#if withWorktree}
         <label class="opt sub">
           <input type="checkbox" bind:checked={removeWorktree} />
-          {t('nav.sidebar.folders.deleteModal.worktrees')}
+          {t('nav.sidebar.folders.deleteModal.worktrees', { count: withWorktree })}
         </label>
       {/if}
     {/if}
