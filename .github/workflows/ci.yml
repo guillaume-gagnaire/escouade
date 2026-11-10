@@ -14,8 +14,9 @@ concurrency:
 
 # The jobs run side by side (the run took 42 min one after the other, at 1.8.4): the frontend's checks once, on Linux;
 # Windows builds its Rust tests (a nextest archive) and the app once, then runs the tests in 2 parts and the end-to-end
-# tests in 3, each part on a runner of its own; macOS tests and builds its bundle side by side; Linux tests and builds
-# its packages. A public repository's runners cost nothing.
+# tests in 5, each part on a runner of its own; macOS builds its Rust tests once too and runs them in 2 parts, beside
+# its bundle, Clippy and the webview probe; Linux tests and builds its packages. A public repository's runners cost
+# nothing. On 2026-11-10 the run took 42 to 60 min, the macOS tests on one runner its longest job (ESC-406's push).
 jobs:
   front:
     name: Frontend (format, types, Vitest)
@@ -409,14 +410,14 @@ jobs:
           exit $status
 
   windows-e2e:
-    name: Windows (end-to-end ${{ matrix.shard }}/3)
+    name: Windows (end-to-end ${{ matrix.shard }}/5)
     needs: windows-build
     runs-on: windows-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@v7
 
@@ -455,13 +456,14 @@ jobs:
           New-ItemProperty -Path $key -Name 'escouade.exe' -Value '--remote-debugging-port=9222 --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling' -PropertyType String -Force | Out-Null
 
       # A test that fails runs again twice (playwright.config.ts): the one that passes then is reported
-      # as flaky, and its trace is kept. Each runner takes a third of the tests (Playwright's shards).
+      # as flaky, and its trace is kept. Each runner takes a fifth of the tests (Playwright's shards): in 3, a part took
+      # up to 19 min after the 16 of the build.
       - name: End-to-end tests (Playwright over WebView2)
         env:
           ESCOUADE_E2E_CDP_PORT: 9222
           # As in the environment of an agent of Escouade: the tests must not depend on it.
           CLAUDE_CODE_ENABLE_TODO_TOOLS: '1'
-        run: npx playwright test --shard=${{ matrix.shard }}/3
+        run: npx playwright test --shard=${{ matrix.shard }}/5
 
       # The traces of the tests that failed, or that ran again (there is none when all passed first time).
       - name: Upload Playwright traces
@@ -605,13 +607,12 @@ jobs:
             src-tauri/target/debug/bundle/deb/*.deb
           retention-days: 7
 
-  macos:
-    name: macOS (lint and tests)
+  # The Rust tests built once, as on Windows: compiling them took 12 min and running them 16 on one runner of 3 vCPUs.
+  macos-build:
+    name: macOS (build)
     needs: escouade-js
     runs-on: macos-latest
-    # 16 to 45 min on 2026-11-01 as the plugins' tests grew (WASM, harness, voice); 53 min on 2026-11-10, and one run
-    # cut at 60 after 48 min of Rust tests: room above the slowest runner.
-    timeout-minutes: 80
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
 
@@ -631,23 +632,66 @@ jobs:
         working-directory: src-tauri
         run: rustup toolchain install
 
+      # The cache the macOS tests had (their job was named `macos`), which the bundle shares.
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          shared-key: macos
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Clippy
-        working-directory: src-tauri
-        run: cargo clippy --all-targets -- -D warnings
 
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
 
+      # What the tests play in the app's host, in the archive below (.config/nextest.toml).
       - name: The modules of the plugins, which the tests play
         run: sh scripts/plugins-wasm.sh
+
+      # The test binaries, with what they run beside them (escouade-hook, examples/fake_codex): built once, run by
+      # the two macos-rust runners.
+      - name: Rust tests, built once (nextest archive)
+        working-directory: src-tauri
+        run: cargo nextest archive --profile ci --archive-file ../nextest-macos.tar.zst
+
+      - name: Upload the Rust tests
+        uses: actions/upload-artifact@v7
+        with:
+          name: nextest-macos
+          path: nextest-macos.tar.zst
+          retention-days: 1
+          compression-level: 0
+
+  macos-rust:
+    name: macOS (Rust tests ${{ matrix.part }}/2)
+    needs: macos-build
+    runs-on: macos-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [1, 2]
+    steps:
+      - uses: actions/checkout@v7
+
+      # The fake harnesses of the tests (tests/fixtures) are Node scripts, with Node's own modules only.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Rust toolchain (pinned in src-tauri/rust-toolchain.toml)
+        working-directory: src-tauri
+        run: rustup toolchain install
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: Download the Rust tests
+        uses: actions/download-artifact@v7
+        with:
+          name: nextest-macos
 
       # One process per test (src-tauri/.config/nextest.toml): a test that hangs is killed after
       # 3 minutes and named, one that fails runs again twice. Reading the job's log takes admin
@@ -659,26 +703,18 @@ jobs:
         # As in the environment of an agent of Escouade: the tests must not depend on it.
         env:
           CLAUDE_CODE_ENABLE_TODO_TOOLS: '1'
+        # Extracted where the build put it (the same path on every macOS runner): the paths cargo wrote into the tests
+        # (`CARGO_BIN_EXE_escouade-hook`, the fake codex beside them) are right as they are.
         run: |
           set +e
-          cargo nextest run --profile ci --test-threads 3 2>&1 | tee nextest.log
+          cargo nextest run --archive-file ../nextest-macos.tar.zst --workspace-remap . --extract-to . --extract-overwrite             --profile ci --test-threads 3 --partition count:${{ matrix.part }}/2 2>&1 | tee nextest.log
           status=${PIPESTATUS[0]}
           node ../scripts/nextest-annotations.mjs nextest.log target/nextest/ci/junit.xml $status
           exit $status
 
-      # A launch's page in a real WKWebView (ESC-311), in the runner's own session: its devtools last,
-      # then first, as a user opens them.
-      - name: A launch's page in a real webview
-        working-directory: src-tauri
-        shell: bash
-        run: |
-          set +e
-          cargo run --example devpage_probe -- --devtools-last; last=$?
-          cargo run --example devpage_probe; first=$?
-          exit $((last || first))
-
+  # Beside the tests, off their way: the bundle, Clippy (6 min) and the webview probe (4 min).
   macos-bundle:
-    name: macOS (app bundle)
+    name: macOS (app bundle, Clippy and webview)
     needs: escouade-js
     runs-on: macos-latest
     timeout-minutes: 45
@@ -709,6 +745,10 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
 
       # The Release builds one app for Apple Silicon and Intel Macs: whisper.cpp (dictation) is built for Intel
       # here too, as it is there (a check builds what build scripts build, cmake's whisper.cpp among them).
@@ -745,3 +785,14 @@ jobs:
           name: escouade-macos-debug
           path: src-tauri/target/debug/bundle/dmg/*.dmg
           retention-days: 7
+
+      # A launch's page in a real WKWebView (ESC-311), in the runner's own session: its devtools last,
+      # then first, as a user opens them.
+      - name: A launch's page in a real webview
+        working-directory: src-tauri
+        shell: bash
+        run: |
+          set +e
+          cargo run --example devpage_probe -- --devtools-last; last=$?
+          cargo run --example devpage_probe; first=$?
+          exit $((last || first))
