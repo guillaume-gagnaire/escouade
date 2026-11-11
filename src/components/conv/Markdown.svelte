@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { galleryOf } from '../../lib/gallery';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
@@ -12,7 +13,7 @@
   let el = $state<HTMLDivElement>();
   let html = $state('');
   let scheduled = false;
-  let viewing = $state<{ name: string; url: string } | null>(null);
+  let viewing = $state<ReturnType<typeof galleryOf> | null>(null);
 
   // While streaming, re-render at most once per frame; highlight code once the text is final.
   $effect(() => {
@@ -55,6 +56,8 @@
           img.src = url;
           img.alt = off.textContent ?? '';
           img.dataset.localSrc = src;
+          img.dataset.agent = id;
+          img.dataset.view = '';
           off.replaceWith(img);
         }, missing);
       }
@@ -73,10 +76,11 @@
     img.src = url;
     img.alt = label.firstChild?.textContent?.split(' · ')[0] ?? '';
     img.dataset.remoteSrc = src;
+    img.dataset.view = '';
     label.replaceWith(img);
   }
 
-  /** A click on an image shown opens it full size; the rest is the copy buttons'. */
+  /** A click on an image shown opens it full size, among the others of its conversation; the rest is the copy buttons'. */
   function onclick(e: MouseEvent) {
     const show = (e.target as HTMLElement).closest<HTMLElement>('[data-show-img]');
     if (show) {
@@ -86,7 +90,7 @@
     }
     const img = (e.target as HTMLElement).closest('img');
     if (img?.src && img.complete && img.naturalWidth > 0) {
-      viewing = { name: img.alt || img.dataset.localSrc || img.dataset.remoteSrc || '', url: img.src };
+      viewing = galleryOf(img);
       return;
     }
     handleMarkdownClick(e);
@@ -97,5 +101,5 @@
 <div class="md" bind:this={el} {onclick}>{@html html}</div>
 
 {#if viewing}
-  <ImageViewer images={[viewing]} onclose={() => (viewing = null)} />
+  <ImageViewer images={viewing.images} bind:index={viewing.index} onclose={() => (viewing = null)} />
 {/if}

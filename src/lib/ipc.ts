@@ -641,10 +641,14 @@ export const api = {
   /** The file `index` an agent sent, opened with its application or shown in its folder (`reveal`). */
   sentFileOpen: (agentId: string, itemId: string, index: number, reveal: boolean) =>
     invoke<void>('sent_file_open', { agentId, itemId, index, reveal }),
-  /** The image a message of the agent shows by a local path: its `data:` URL, or null (not an image, too heavy, gone, refused). */
   /** An image of the web a message shows, downloaded by the core at the user's click (https, 10 MB at most): its `data:` URL. */
   remoteImage: (src: string) => invoke<string>('remote_image', { src }),
+  /** The image a message of the agent shows by a local path: its `data:` URL, or null (not an image, too heavy, gone, refused). */
   agentLocalImage: (agentId: string, src: string) => invoke<string | null>('agent_local_image', { agentId, src }),
+  /** That image opened with its application, or shown in its folder (`reveal`). */
+  agentLocalOpen: (agentId: string, src: string, reveal: boolean) => invoke<void>('agent_local_open', { agentId, src, reveal }),
+  /** « Enregistrer sous… » of an image shown (its `data:` URL): the core asks where in the system's dialog; false when cancelled. */
+  saveImage: (dataUrl: string, name: string) => invoke<boolean>('save_image', { dataUrl, name }),
   /** Creates an empty folder, its parents with it; refused when something is already there. */
   fsMkdir: (projectId: string, agentId: string | null, path: string) => invoke<void>('fs_mkdir', { projectId, agentId, path }),
   fsBase: (projectId: string, agentId: string | null, path: string) => invoke<FileBase | null>('fs_base', { projectId, agentId, path }),

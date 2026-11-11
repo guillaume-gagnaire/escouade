@@ -366,13 +366,27 @@ pub(crate) fn target(
     };
     // A program the agent sent is never run, whatever the window asks: shown in its folder only.
     if !reveal && (runnable_name(name) || runnable(&found)) {
-        anyhow::bail!(tr_in!(
-            lang,
-            "« {name} » est un programme ou un script : Escouade ne l’ouvre pas, elle l’affiche dans son dossier.",
-            "“{name}” is a program or a script: Escouade doesn’t open it, it shows it in its folder."
-        ));
+        return Err(not_run(lang, name));
     }
     Ok(found)
+}
+
+/// The refusal to open a program or a script `name`: Escouade only shows it in its folder.
+fn not_run(lang: crate::i18n::Lang, name: &str) -> anyhow::Error {
+    anyhow::anyhow!(tr_in!(
+        lang,
+        "« {name} » est un programme ou un script : Escouade ne l’ouvre pas, elle l’affiche dans son dossier.",
+        "“{name}” is a program or a script: Escouade doesn’t open it, it shows it in its folder."
+    ))
+}
+
+/// `path` opened with its application, or shown in its folder (`reveal`).
+fn open_or_reveal(path: PathBuf, reveal: bool) -> anyhow::Result<()> {
+    if reveal {
+        crate::fsedit::reveal(crate::fsedit::Reveal::Select(path))
+    } else {
+        crate::outside::open(crate::outside::What::Path(&path))
+    }
 }
 
 /// The extensions of what the system runs when it opens it: programs, scripts, installers,
@@ -437,17 +451,66 @@ pub(crate) fn runnable(path: &Path) -> bool {
 /// `file:///…`): its `data:` URL, read as a file sent is, its fence kept. None for what is no
 /// image of the formats shown, heavier than `MAX_IMAGE`, gone, or refused.
 pub(crate) fn local_image(cwd: &str, src: &str, fence: &Fence) -> Option<String> {
+    image_url(&local_path(cwd, src, fence)?)
+}
+
+/// The file a message names by a local path (`C:/…/a.png`, `file:///…`, `%20` decoded), on this
+/// machine: None when the fence refuses it.
+fn local_path(cwd: &str, src: &str, fence: &Fence) -> Option<PathBuf> {
     let src = src.trim();
     let src = src
         .strip_prefix("file:///")
         .or_else(|| src.strip_prefix("file://"))
         .unwrap_or(src);
-    let decoded = percent_decode(src);
-    let path = resolve(cwd, &decoded);
-    if fence.covers(&path.to_string_lossy()) {
-        return None;
+    let path = resolve(cwd, &percent_decode(src));
+    (!fence.covers(&path.to_string_lossy())).then_some(path)
+}
+
+/// The image a message shows by a local path, to open or show in its folder (the image viewer):
+/// only an image it shows (`local_image`), never a program opened.
+pub(crate) fn local_target(
+    cwd: &str,
+    src: &str,
+    reveal: bool,
+    fence: &Fence,
+    lang: crate::i18n::Lang,
+) -> anyhow::Result<PathBuf> {
+    let Some(path) = local_path(cwd, src, fence).filter(|p| image_url(p).is_some()) else {
+        anyhow::bail!(tr_in!(
+            lang,
+            "Image introuvable : {src}",
+            "Image not found: {src}"
+        ));
+    };
+    if !reveal && runnable(&path) {
+        return Err(not_run(lang, &name_of(src)));
     }
-    image_url(&path)
+    Ok(path)
+}
+
+/// The bytes of an image the window shows (a `data:` URL the core made) and the name to save it
+/// under (« Enregistrer sous… » of the image viewer): refused when they are no image of the formats
+/// shown. The name made safe (`safe_name`), its format's extension added when it has none.
+pub(crate) fn image_to_save(data_url: &str, name: &str) -> anyhow::Result<(Vec<u8>, String)> {
+    use base64::Engine;
+    let bytes = data_url
+        .strip_prefix("data:image/")
+        .and_then(|rest| rest.split_once(";base64,"))
+        .and_then(|(_, b)| base64::engine::general_purpose::STANDARD.decode(b).ok())
+        .unwrap_or_default();
+    let Some(media) = image_kind(&bytes) else {
+        anyhow::bail!("not an image");
+    };
+    let mut name = safe_name(name);
+    if Path::new(&name).extension().is_none() {
+        name.push('.');
+        name.push_str(match media {
+            "image/jpeg" => "jpg",
+            "image/svg+xml" => "svg",
+            m => m.trim_start_matches("image/"),
+        });
+    }
+    Ok((bytes, name))
 }
 
 /// `%20` and the like of a path written as a URL, as bytes; the rest as it is.
@@ -671,11 +734,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
                 &fence,
                 lang,
             )?;
-            if reveal {
-                crate::fsedit::reveal(crate::fsedit::Reveal::Select(path))
-            } else {
-                crate::outside::open(crate::outside::What::Path(&path))
-            }
+            open_or_reveal(path, reveal)
         })
         .await?
     }
@@ -685,6 +744,16 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
         let cwd = self.agent(id)?.lock().meta.cwd.clone();
         let (fence, src) = (self.agent_fence(id), src.to_string());
         Ok(tokio::task::spawn_blocking(move || local_image(&cwd, &src, &fence)).await?)
+    }
+
+    /// That image opened with its application, or shown in its folder (`reveal`): `local_target`.
+    pub async fn open_local_image(&self, id: &str, src: &str, reveal: bool) -> anyhow::Result<()> {
+        let cwd = self.agent(id)?.lock().meta.cwd.clone();
+        let (fence, src, lang) = (self.agent_fence(id), src.to_string(), crate::i18n::ui());
+        tokio::task::spawn_blocking(move || {
+            open_or_reveal(local_target(&cwd, &src, reveal, &fence, lang)?, reveal)
+        })
+        .await?
     }
 }
 
@@ -836,6 +905,34 @@ mod tests {
         assert!(sent[12].get("copy").is_none());
         let shown = view(&folder, &cwd, &input, Some(&sent), &Fence::default());
         assert!(shown.iter().all(|s| s.kind == "image" && s.url.is_some()));
+    }
+
+    #[test]
+    fn the_viewer_opens_only_an_image_a_message_shows_and_saves_only_an_image() {
+        let root = test_dir("sent-viewer");
+        let (mine, private) = (root.join("mine"), root.join("private"));
+        let secret = file(&private, "secret.png", PNG);
+        file(&mine, "a b.png", PNG);
+        file(&mine, "notes.pdf", PDF);
+        let (fence, cwd) = (
+            Fence::new(vec![private.clone()]),
+            mine.to_string_lossy().to_string(),
+        );
+        let open = |src: &str| local_target(&cwd, src, false, &fence, crate::i18n::Lang::En);
+        assert_eq!(open("a%20b.png").unwrap(), mine.join("a b.png"));
+        assert!(open("notes.pdf").is_err());
+        assert!(open(secret.as_str()).is_err());
+        assert!(open("gone.png").is_err());
+
+        let url = data_url("image/png", PNG);
+        assert_eq!(
+            image_to_save(&url, "plan").unwrap(),
+            (PNG.to_vec(), "plan.png".into())
+        );
+        assert_eq!(image_to_save(&url, "a/b.png").unwrap().1, "a_b.png");
+        assert!(image_to_save(&data_url("image/png", PDF), "x.png").is_err());
+        assert!(image_to_save(&data_url("application/pdf", PNG), "x").is_err());
+        assert!(image_to_save("https://example.com/a.png", "a.png").is_err());
     }
 
     #[test]

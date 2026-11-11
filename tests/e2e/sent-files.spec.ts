@@ -44,7 +44,7 @@ test('the images and the file an agent sends show in its conversation, and the i
 
   // The viewer: the image clicked, the next one, Échap.
   await thumbs.nth(1).click();
-  const viewer = page.getByRole('dialog', { name: 'Images envoyées' });
+  const viewer = page.getByRole('dialog', { name: 'Visionneuse d’images' });
   await expect(viewer).toBeVisible();
   await expect(viewer.getByRole('img')).toHaveAttribute('alt', 'vue-dessus.png');
   await expect(viewer).toContainText('2 sur 2');
@@ -67,7 +67,7 @@ test('the images and the file an agent sends show in its conversation, and the i
   await expect.poll(() => said.locator('img[alt="rendu"]').evaluate((i) => (i as HTMLImageElement).naturalWidth)).toBe(160);
   await expect(said.locator('[data-img-off]')).toHaveText('web');
   await said.locator('img[alt="rendu"]').click();
-  await expect(page.getByRole('dialog', { name: 'Images envoyées' }).getByRole('img')).toHaveAttribute('alt', 'rendu');
+  await expect(page.getByRole('dialog', { name: 'Visionneuse d’images' }).getByRole('img')).toHaveAttribute('alt', 'rendu');
   await page.keyboard.press('Escape');
   // One of the web is never loaded by itself: its label, and the core downloads it on « Afficher l’image » alone.
   await send(page, 'aussi ![plan](https://example.com/plan.png?d=secret)');
