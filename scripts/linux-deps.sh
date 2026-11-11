@@ -9,8 +9,10 @@
 #   that fails, not a slow one;
 # - 2026-11-11, with Canonical's put first for that, a Release's runner could not reach it: each of the ~140 packages
 #   waited 20 s before falling back, and the step ran past an hour twice.
-# So each order of the mirrors is tried for 8 minutes at most (a normal run takes one or two): the runner's own first
-# (Azure's), then Canonical's first, then the runner's again. dpkg is set right after an attempt cut in its middle.
+# So each order of the mirrors is tried for 9 minutes at most, 27 for the three, under the 30 of a Linux job (a normal
+# run takes one or two): the runner's own first (Azure's), then Canonical's first, then the runner's again. dpkg is
+# set right after an attempt cut in its middle. The same day the runners' DNS failed now and then, Azure's mirror too:
+# then only waiting helps, and a job ends at its limit rather than past an hour.
 set -u
 
 PACKAGES="libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libasound2-dev libclang-dev cmake"
@@ -21,12 +23,12 @@ attempt() {
   echo "::group::apt ($1)"
   [ -f "$MIRRORS" ] && cat "$MIRRORS"
   # shellcheck disable=SC2086 # the options and the packages are words
-  timeout 480 sudo DEBIAN_FRONTEND=noninteractive apt-get $OPTS update &&
-    timeout 480 sudo DEBIAN_FRONTEND=noninteractive apt-get $OPTS install -y $PACKAGES
+  timeout 180 sudo DEBIAN_FRONTEND=noninteractive apt-get $OPTS update &&
+    timeout 360 sudo DEBIAN_FRONTEND=noninteractive apt-get $OPTS install -y $PACKAGES
   status=$?
   echo "::endgroup::"
   [ "$status" -eq 0 ] && return 0
-  echo "::warning::apt failed or ran past 8 minutes ($1): trying another order of the mirrors"
+  echo "::warning::apt failed or ran past its time ($1): trying another order of the mirrors"
   sudo dpkg --configure -a || true
   return 1
 }
