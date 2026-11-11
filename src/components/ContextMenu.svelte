@@ -232,8 +232,12 @@
           onmouseenter={inSub ? undefined : () => hover(i)}
           onmouseleave={inSub ? undefined : () => clearTimeout(hoverTimer)}
           onclick={() => {
-            // Its submenu opens on hovering it, never on a click.
-            if (parent) return;
+            // Its submenu opens on hovering it, and at once on a click: a tap, a trackpad, a click before the delay.
+            if (parent) {
+              clearTimeout(hoverTimer);
+              openSub = i;
+              return;
+            }
             menu.close();
             item.onClick?.();
           }}

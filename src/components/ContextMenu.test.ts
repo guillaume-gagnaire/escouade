@@ -195,7 +195,7 @@ describe('ContextMenu, a submenu beside it', () => {
   ];
   const sub = () => screen.queryByRole('menu', { name: 'Lancer' });
 
-  it('opens on hovering its entry, never on a click, and its entries run and close both menus', async () => {
+  it('opens on hovering its entry, and its entries run and close both menus', async () => {
     const ran: string[] = [];
     render(ContextMenu);
     menu.open = { x: 10, y: 10, items: entries(ran) };
@@ -203,17 +203,25 @@ describe('ContextMenu, a submenu beside it', () => {
     expect(parent).toHaveAttribute('aria-haspopup', 'menu');
     expect(parent).toHaveAttribute('aria-expanded', 'false');
     expect(parent.querySelector('.chev')).not.toBeNull();
-    // A click (without the pointer coming over it first) neither closes the menu nor opens the submenu.
-    await fireEvent.click(parent);
-    await rest();
-    expect(menu.open).not.toBeNull();
-    expect(sub()).toBeNull();
     await userEvent.hover(parent);
     const opened = await screen.findByRole('menu', { name: 'Lancer' });
     expect(parent).toHaveAttribute('aria-expanded', 'true');
     await userEvent.click(within(opened).getByRole('menuitem', { name: 'API' }));
     expect(ran).toEqual(['API']);
     expect(menu.open).toBeNull();
+  });
+
+  it('opens at once on a click of its entry, which keeps the menu: a tap, a trackpad, a click before the delay', async () => {
+    const ran: string[] = [];
+    render(ContextMenu);
+    menu.open = { x: 10, y: 10, items: entries(ran) };
+    const parent = await screen.findByRole('menuitem', { name: 'Lancer' });
+    // A click without the pointer coming over it first: no wait for the hover's delay.
+    await fireEvent.click(parent);
+    expect(await screen.findByRole('menu', { name: 'Lancer' })).toBeVisible();
+    expect(parent).toHaveAttribute('aria-expanded', 'true');
+    expect(menu.open).not.toBeNull();
+    expect(ran).toEqual([]);
   });
 
   it('puts the chevron of its entry on the side it opens: the right, the left near the right edge of the window', async () => {
