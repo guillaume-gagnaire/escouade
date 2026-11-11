@@ -881,6 +881,8 @@ pub fn run() {
                 commands::sent_files,
                 commands::sent_file_open,
                 commands::agent_local_image,
+                commands::agent_local_open,
+                commands::save_image,
                 commands::remote_image,
                 commands::fs_mkdir,
                 commands::fs_base,

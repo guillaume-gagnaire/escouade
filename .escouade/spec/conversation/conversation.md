@@ -144,3 +144,14 @@ La conversation est la vue d'un agent dans Escouade : son en-tête, ses messages
 - Parmi les chiffres de l'en-tête, après Coût : « Cache » et la température du cache de l'agent (« 72 °C », « — °C »), dans la couleur de sa chaleur. Au survol ou au focus, le détail du dernier tour. Voir *Température du cache*.
 
 - Pour lui faire place, les chiffres se replient plus tôt : Durée et le mot de la vue cachée sous 1100 px de conversation (inchangé), Fichiers sous 1016 px, Tokens sous 936 px, les mots des boutons sous 856 px ; sous 760 px, la fenêtre du contexte (« / 200 k ») et le mot « estimé » ; sous 640 px, « Cache » (la carte de l'agent le garde) ; sous 580 px, tous les chiffres.
+
+### Visionneuse d'images
+
+- S'ouvre d'un clic sur une image de la conversation : une vignette de ce que l'agent a envoyé (`SendUserFile`), ou une image du texte d'une réponse (par un chemin local, ou du web une fois affichée). Par-dessus toute la fenêtre, sur un fond sombre dans les deux thèmes ; un damier sous une image transparente.
+- **Galerie** : toutes les images dessinées de la conversation, dans leur ordre (dans l'écran partagé, celles de son volet ; hors d'une conversation, celles du message). « n sur N », « Image précédente » et « Image suivante » (‹ ›, et ← → tant que l'image est ajustée), en bas une bande de vignettes, celle de l'image affichée en surbrillance et gardée en vue. Changer d'image la remet ajustée.
+- **Taille** : ajustée à la place par défaut, et de nouveau quand la fenêtre change ; jamais agrandie au-delà de sa propre taille.
+- **Zoom**, de l'ajustement à 800 % : un clic sur l'image (sa taille réelle au point cliqué, 200 % pour une image plus petite que la place ; un autre clic la réajuste), le pincement du trackpad, Ctrl ou ⌘ + molette (vers le curseur), les boutons − et +, le pourcentage (« Ajuster à l'écran » ou « Taille réelle »), les touches + − 0 sans modificateur (Ctrl + et Ctrl − restent le zoom de l'interface). La molette seule fait défiler l'image zoomée.
+- **Déplacement** de l'image zoomée : à la main, ou par les flèches. Un glissement qui finit à côté de l'image ne ferme pas la visionneuse.
+- **Actions** : « Copier l'image » (en PNG ; un GIF par sa première image), « Enregistrer sous… » (la boîte du système, ouverte par l'app, qui n'écrit qu'une image), « Ouvrir » et « Afficher dans le dossier » (le fichier envoyé, ou l'image du texte par son chemin, dans la clôture de l'agent ; un programme n'est jamais ouvert). Une image du web n'a que « Ouvrir dans le navigateur ».
+- Échap, × ou un clic à côté de l'image ferme ; une fenêtre ouverte par-dessus se ferme d'abord. Rien ne s'y sélectionne.
+- Limites : seules les images dessinées sont de la galerie (« Afficher les N précédents » en ajoute) ; les images d'un message de l'utilisateur n'y sont pas (sa bulle les compte) ; sous Linux, WebKitGTK peut refuser la copie d'une image.

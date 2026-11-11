@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- La visionneuse d’images tient dans la fenêtre, même avec une grande photo, et suit sa taille. Elle zoome d’un clic sur l’image, au pincement, par Ctrl ou ⌘ + molette, par ses boutons ou par + − 0, et l’image zoomée se déplace à la main. Elle passe d’une image à l’autre dans toute la conversation, avec une bande de vignettes, et copie, enregistre, ouvre l’image ou l’affiche dans son dossier.
 - Tous les plugins tournent désormais dans Escouade, en WASM : le programme à part qui servait ceux d’Escouade a disparu, et l’installeur s’allège d’autant. Un plugin qui demande à lancer un programme natif (`run.command`) ne démarre plus, d’où qu’il vienne, et sa page dit pourquoi.
 - La documentation des plugins dit l’état réel : tous tournent en WASM, ceux d’Escouade s’installent depuis l’installeur sans réseau, et la page du protocole ne parle plus de process. Les pages des intégrations listent les services servis par un plugin.
 - Le diagramme d’un workflow part de la porte par laquelle l’agent est entré et ne montre que ce qu’elle atteint : le possible en pointillé léger, son vrai chemin en trait plein, chaque passage numéroté dans l’ordre, les retours avec leur raison. Sans agent, tu choisis la porte ; le reste se replie en « étapes hors de ce chemin ».

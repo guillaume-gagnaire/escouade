@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- The image viewer fits in the window, even with a large photo, and follows its size. It zooms with a click on the image, a pinch, Ctrl or ⌘ + wheel, its buttons or + − 0, and a zoomed image moves by hand. It goes from one image to the next across the whole conversation, with a strip of thumbnails, and copies, saves, opens the image or shows it in its folder.
 - Every plugin now runs inside Escouade, in WASM: the separate program that served Escouade’s own is gone, and the installer is lighter for it. A plugin that asks to start a native program (`run.command`) no longer starts, wherever it comes from, and its page says why.
 - The plugin documentation now says how it really is: every plugin runs in WASM, Escouade’s own install from the installer with no network, and the protocol page no longer talks about processes. The integration pages list the services a plugin serves.
 - A workflow’s diagram starts from the door the agent came in by and only shows what it reaches: the possible in a light dashed line, its real path in a full one, each stay numbered in order, the ways back with their reason. Without an agent, you choose the door; the rest folds into “steps off this path”.

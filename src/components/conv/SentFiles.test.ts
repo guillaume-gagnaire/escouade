@@ -43,7 +43,7 @@ describe('SentFiles', () => {
     expect(screen.getByText('2 images')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Voir b.png en grand' }));
-    const viewer = screen.getByRole('dialog', { name: 'Images envoyées' });
+    const viewer = screen.getByRole('dialog', { name: 'Visionneuse d’images' });
     expect(within(viewer).getByRole('img')).toHaveAttribute('src', B);
     expect(within(viewer).getByText('2 sur 2')).toBeInTheDocument();
     // Next goes round to the first; the arrows too.
@@ -96,6 +96,51 @@ describe('SentFiles', () => {
     expect(within(screen.getByRole('dialog')).getByRole('img')).toHaveAttribute('src', A);
     // One image: no previous nor next.
     expect(screen.queryByRole('button', { name: 'Image suivante' })).not.toBeInTheDocument();
+  });
+
+  it('pages through the images of the whole conversation, zooms, saves and opens the one shown', async () => {
+    const { default: Markdown } = await import('./Markdown.svelte');
+    const backend = fakeBackend({
+      sent_files: () => [
+        { name: 'a.png', kind: 'image', state: 'ok', size: 10, url: A },
+        { name: 'b.png', kind: 'image', state: 'ok', size: 10, url: B },
+      ],
+      agent_local_image: () => A,
+      save_image: () => true,
+    });
+    // A conversation: what the agent sent, then a message that shows an image by its path.
+    const conv = document.body.appendChild(document.createElement('div'));
+    conv.dataset.gallery = '';
+    render(SentFiles, { target: conv, props: { item: call({ files: ['C:/w/a.png', 'C:/w/b.png'] }), agentId: 'ag', engine: 'claude' } });
+    render(Markdown, { target: conv, props: { text: '![rendu](C:/w/r.png)', agentId: 'ag' } });
+    await waitFor(() => expect(thumbs()).toHaveLength(2));
+    await waitFor(() => expect(conv.querySelector('img[alt="rendu"]')).not.toBeNull());
+
+    await userEvent.click(screen.getByRole('button', { name: 'Voir b.png en grand' }));
+    const viewer = screen.getByRole('dialog', { name: 'Visionneuse d’images' });
+    expect(within(viewer).getByText('2 sur 3')).toBeInTheDocument();
+    await userEvent.click(within(viewer).getByRole('button', { name: 'Image suivante' }));
+    expect(within(viewer).getByRole('img')).toHaveAttribute('alt', 'rendu');
+    // The strip goes straight to one.
+    await userEvent.click(within(viewer).getByRole('button', { name: 'Image 1 sur 3 : a.png' }));
+    expect(within(viewer).getByText('1 sur 3')).toBeInTheDocument();
+
+    // Fitted at first (here at its own size); + zooms, 0 fits it again.
+    expect(within(viewer).getByRole('button', { name: 'Taille réelle' })).toHaveTextContent('100 %');
+    await userEvent.click(within(viewer).getByRole('button', { name: 'Zoom avant (+)' }));
+    expect(within(viewer).getByRole('button', { name: 'Ajuster à l’écran (0)' })).toHaveTextContent('125 %');
+    await userEvent.keyboard('0');
+    expect(within(viewer).getByRole('button', { name: 'Taille réelle' })).toHaveTextContent('100 %');
+
+    // Saved by the core, opened by its source: the call's file, the message's path.
+    await userEvent.click(within(viewer).getByRole('button', { name: 'Enregistrer sous…' }));
+    expect(backend.called('save_image').map((c) => c.args)).toEqual([{ dataUrl: A, name: 'a.png' }]);
+    await userEvent.click(within(viewer).getByRole('button', { name: 'Ouvrir a.png' }));
+    expect(backend.called('sent_file_open').map((c) => c.args)).toEqual([{ agentId: 'ag', itemId: 'toolu_1', index: 0, reveal: false }]);
+    await userEvent.click(within(viewer).getByRole('button', { name: 'Image 3 sur 3 : rendu' }));
+    await userEvent.click(within(viewer).getByRole('button', { name: 'Afficher rendu dans le dossier' }));
+    expect(backend.called('agent_local_open').map((c) => c.args)).toEqual([{ agentId: 'ag', src: 'C:/w/r.png', reveal: true }]);
+    conv.remove();
   });
 
   it('never offers to open a program or a script the agent sent: only its folder', async () => {

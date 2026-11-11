@@ -273,7 +273,7 @@
   </header>
 
   <div class="scroll" bind:this={scroller} onscroll={() => (stick = atBottom())}>
-    <div class="msgs" bind:this={content}>
+    <div class="msgs" data-gallery bind:this={content}>
       {#if conv.error}
         <div class="note err">{t('conv.loadError', { error: conv.error })}</div>
       {:else if !info}

@@ -171,12 +171,27 @@ export default {
     loading: 'Chargement…',
     /** A thumbnail, as a button: it opens the viewer. */
     view: 'Voir {name} en grand',
-    /** The viewer of the images. */
-    viewer: 'Images envoyées',
+    /** The viewer of the images of a conversation. */
+    viewer: 'Visionneuse d’images',
     prev: 'Image précédente',
     next: 'Image suivante',
     close: 'Fermer (Échap)',
     counter: '{n} sur {count}',
+    zoom: 'Zoom',
+    zoomIn: 'Zoom avant (+)',
+    zoomOut: 'Zoom arrière (−)',
+    /** The percentage, as a button: back to the size that shows it all, or to its own size. */
+    fit: 'Ajuster à l’écran (0)',
+    actual: 'Taille réelle',
+    copy: 'Copier l’image',
+    copied: 'Image copiée',
+    save: 'Enregistrer sous…',
+    saved: 'Image enregistrée',
+    /** « Ouvrir » of an image of the web. */
+    openWeb: 'Ouvrir dans le navigateur',
+    /** The strip of thumbnails, and each of them. */
+    strip: 'Toutes les images',
+    thumb: 'Image {n} sur {count} : {name}',
     /** An image of a message, by a path the agent wrote, that cannot be shown. */
     imageMissing: 'Image introuvable : {src}',
     /** An image of the web in a message: not loaded until asked (its address could carry a secret out). */
