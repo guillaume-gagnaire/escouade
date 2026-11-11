@@ -7,14 +7,30 @@
   import { forgeBadge } from '../../lib/forges';
   import { t } from '../../lib/i18n';
   import Rich from '../../lib/i18n/Rich.svelte';
+  import { installed } from '../../lib/installed';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
   import type { ForgeAccountView, ForgeForm, ForgesView } from '../../lib/types';
   import Group from './Group.svelte';
+  import NoPlugin from './NoPlugin.svelte';
 
   // The code hosts' accounts, one per instance: how each stands (checked when the tab opens), the
   // projects whose remote is on it, and the hosts of the projects' remotes without one.
-  let view = $state<ForgesView | null>(null);
+  let all = $state<ForgesView | null>(null);
+  /**
+   * What is shown of it: the code hosts an installed plugin brings (ESC-407). The account of one whose plugin is gone
+   * stays kept, hidden, and so does a project's host of its kind; a host whose kind is not known yet stays.
+   */
+  const view = $derived.by((): ForgesView | null => {
+    if (!all) return null;
+    const on = (kind: string | null) => !kind || installed('forges', kind);
+    return {
+      ...all,
+      providers: all.providers.filter((p) => on(p.kind)),
+      accounts: all.accounts.filter((a) => on(a.kind)),
+      unknown: all.unknown.filter((u) => on(u.kind)),
+    };
+  });
   let checking = $state(false);
   let form = $state<ForgeForm | null>(null);
   let sending = $state(false);
@@ -26,7 +42,7 @@
 
   function take(v: ForgesView | null | undefined) {
     if (!v) return;
-    view = v;
+    all = v;
     settingsAlerts.takeForges(v);
     if (v.issues?.length) app.accounts = v.issues;
   }
@@ -140,11 +156,15 @@
         >{checking ? t('integrations.forges.checking') : t('integrations.forges.recheck')}</button
       >
     {/if}
-    <button class="btn" disabled={!!form} onclick={() => open()}
-      ><Icon name="plus" size={14} />{t('integrations.forges.connectEllipsis')}</button
-    >
+    {#if !view || view.providers.length}
+      <button class="btn" disabled={!!form} onclick={() => open()}
+        ><Icon name="plus" size={14} />{t('integrations.forges.connectEllipsis')}</button
+      >
+    {/if}
   {/snippet}
-  {#if view && !view.accounts.length && !view.unknown.length && !form}
+  {#if view && !view.providers.length}
+    <NoPlugin text={t('settings.noPlugin.forges')} />
+  {:else if view && !view.accounts.length && !view.unknown.length && !form}
     <p class="empty">{t('integrations.forges.empty')}</p>
   {/if}
   {#each view?.accounts ?? [] as a (a.host)}

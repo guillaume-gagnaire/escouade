@@ -1,5 +1,9 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { BARE_ENGINE, CLAUDE_ENGINE, resetApp } from '../test/ipc';
+import { firstHandPlugins } from '../test/plugins';
 import { setLang } from './i18n';
+import { plugins } from './plugins-view.svelte';
+import { app } from './state.svelte';
 import { SETTINGS_ROWS, pageInfo } from './settings-pages';
 import { rowElement, searchSettings } from './settings-search';
 
@@ -8,10 +12,26 @@ const PROJECTS = [{ id: 'p1' }, { id: 'p2' }];
 /** Upper case, the accents taken off: what someone types in a hurry. */
 const rough = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toUpperCase();
 
+const rowLabel = (id: string) => SETTINGS_ROWS.find((r) => r.id === id)!.labelIn('fr');
 const found = (query: string, id: string, current: string | null = 'p1') =>
   searchSettings(query, PROJECTS, current, 10_000).some((h) => h.row?.id === id);
 
-afterEach(() => setLang('fr'));
+/** Claude Code, Codex, and OpenCode (its models its providers', the texts written on the model chosen): every row is on its page. */
+const OPENCODE = { ...BARE_ENGINE, id: 'opencode' as const, models: [], writerTakesModel: true };
+
+beforeEach(() => {
+  resetApp();
+  app.engines = [CLAUDE_ENGINE, BARE_ENGINE, OPENCODE];
+  app.enginesFound = ['claude', 'codex', 'opencode'];
+  plugins.list = firstHandPlugins();
+  plugins.loaded = true;
+});
+
+afterEach(() => {
+  setLang('fr');
+  plugins.list = [];
+  plugins.loaded = false;
+});
 
 describe('the search of the settings', () => {
   // Each row of the register, by its label in each language, whatever the language of the interface: as written, then
@@ -26,6 +46,26 @@ describe('the search of the settings', () => {
         }).map((r) => `${r.id} (« ${r.labelIn(lang)} »)`);
         expect(missed).toEqual([]);
       });
+
+  // ESC-407: what an installed plugin brings alone is found; its plugin gone, its row is no longer on its page, nor found.
+  it('finds no row of what no installed plugin brings', () => {
+    // The core keeps declaring its own harnesses: their plugins decide. Claude Code's and OpenCode's uninstalled.
+    plugins.list = firstHandPlugins('claude', 'opencode');
+    for (const id of ['engineOrder', 'selfUpdate', 'handoverOnLimit', 'handoverModel', 'favoriteModels', 'writerModel'])
+      expect(found(rowLabel(id), id), id).toBe(false);
+    expect(found(rowLabel('claudePath'), 'claudePath')).toBe(true);
+    // No harness's plugin at all.
+    plugins.list = firstHandPlugins('claude', 'opencode', 'codex');
+    for (const id of ['accountsList', 'claudePath', 'terminalView', 'todoTools']) expect(found(rowLabel(id), id), id).toBe(false);
+    // No source of tickets installed: their sync, their import and the mapping of their states go; the groups that say so stay.
+    plugins.list = firstHandPlugins('jira', 'trello', 'github', 'linear', 'clickup', 'gitlab', 'azure');
+    for (const id of ['sync', 'autoImport', 'mapping']) expect(found(rowLabel(id), id), id).toBe(false);
+    expect(found(rowLabel('ticketAccounts'), 'ticketAccounts')).toBe(true);
+    // Back with their plugins.
+    plugins.list = firstHandPlugins();
+    for (const id of ['sync', 'engineOrder', 'selfUpdate', 'handoverOnLimit', 'favoriteModels'])
+      expect(found(rowLabel(id), id), id).toBe(true);
+  });
 
   it('opens a row of a project in each project, the one chosen first', () => {
     const hits = searchSettings('worktree par agent', PROJECTS, 'p2').filter((h) => h.row?.id === 'worktreePerAgent');

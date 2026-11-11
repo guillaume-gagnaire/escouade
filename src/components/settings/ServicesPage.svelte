@@ -3,12 +3,14 @@
   import { t } from '../../lib/i18n';
   import Rich from '../../lib/i18n/Rich.svelte';
   import { accountsOf, BY_FORGE, HOSTED, SERVICE_IDS, SERVICES, trelloTokenPage } from '../../lib/integrations';
+  import { installedOf } from '../../lib/installed';
   import { api } from '../../lib/ipc';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import type { AccountForm, Service } from '../../lib/types';
   import Chips from './Chips.svelte';
   import ForgesSection from './ForgesSection.svelte';
+  import NoPlugin from './NoPlugin.svelte';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
   import ServiceBadge from './ServiceBadge.svelte';
@@ -18,6 +20,8 @@
   // accounts of the ticket sources (connected at once, apart from the draft), and the sync and automatic import of every
   // project (the app's settings). What a project links is on its page « Tickets importés ».
   const s = $derived(settingsForm.settings.integrations);
+  /** The sources an installed plugin brings (ESC-407): the accounts of one whose plugin is gone stay kept, hidden. */
+  const sources = $derived(installedOf('ticketSources', SERVICE_IDS));
 
   const account = (id: Service) => app.accounts.find((a) => a.service === id);
   /** The source's accounts, several for Jira, Trello, Linear and ClickUp (ESC-397); one at most for the others. */
@@ -85,7 +89,8 @@
 </header>
 
 <Group title={t('integrations.accounts.title')} note={t('integrations.accounts.note')}>
-  {#each SERVICE_IDS as id (id)}
+  {#if !sources.length}<NoPlugin text={t('settings.noPlugin.sources')} />{/if}
+  {#each sources as id (id)}
     {@const a = account(id)}
     {@const form = forms[id]}
     {@const list = listOf(id)}
@@ -253,35 +258,38 @@
   {#if acc.plugin}<span class="d">{t('integrations.accounts.servedByPlugin', { plugin: acc.plugin })}</span>{/if}
 {/snippet}
 
-<Group title={t('integrations.sync.title')}>
-  <Row label={t('integrations.sync.updateStatus')} desc={t('integrations.sync.updateStatusDesc')}>
-    <Switch label={t('integrations.sync.updateStatus')} bind:on={s.syncStates} />
-  </Row>
-  <Row label={t('integrations.sync.loopSummary')} desc={t('integrations.sync.loopSummaryDesc')}>
-    <Switch label={t('integrations.sync.loopSummary')} bind:on={s.loopComments} />
-  </Row>
-  <Row label={t('integrations.sync.extractCriteria')} desc={t('integrations.sync.extractCriteriaDesc')}>
-    <Switch label={t('integrations.sync.extractCriteria')} bind:on={s.extractCriteria} />
-  </Row>
-</Group>
+<!-- The sync and the import of the sources: while one is installed (ESC-407), their choices kept otherwise. -->
+{#if sources.length}
+  <Group title={t('integrations.sync.title')}>
+    <Row label={t('integrations.sync.updateStatus')} desc={t('integrations.sync.updateStatusDesc')}>
+      <Switch label={t('integrations.sync.updateStatus')} bind:on={s.syncStates} />
+    </Row>
+    <Row label={t('integrations.sync.loopSummary')} desc={t('integrations.sync.loopSummaryDesc')}>
+      <Switch label={t('integrations.sync.loopSummary')} bind:on={s.loopComments} />
+    </Row>
+    <Row label={t('integrations.sync.extractCriteria')} desc={t('integrations.sync.extractCriteriaDesc')}>
+      <Switch label={t('integrations.sync.extractCriteria')} bind:on={s.extractCriteria} />
+    </Row>
+  </Group>
 
-<Group title={t('integrations.autoImport.title')}>
-  <Row label={t('integrations.autoImport.enable')} desc={t('integrations.autoImport.enableDesc')}>
-    <Switch label={t('integrations.autoImport.enable')} bind:on={s.autoImport} />
-  </Row>
-  <Row label={t('integrations.autoImport.label')} hint={t('integrations.autoImport.labelHint')}>
-    <input
-      class="field mono input"
-      aria-label={t('integrations.autoImport.label')}
-      spellcheck="false"
-      placeholder="claude-ready"
-      bind:value={s.importLabel}
-    />
-  </Row>
-  <Row label={t('integrations.autoImport.every')}>
-    <Chips label={t('integrations.autoImport.every')} options={every} mono bind:value={s.importEvery} />
-  </Row>
-</Group>
+  <Group title={t('integrations.autoImport.title')}>
+    <Row label={t('integrations.autoImport.enable')} desc={t('integrations.autoImport.enableDesc')}>
+      <Switch label={t('integrations.autoImport.enable')} bind:on={s.autoImport} />
+    </Row>
+    <Row label={t('integrations.autoImport.label')} hint={t('integrations.autoImport.labelHint')}>
+      <input
+        class="field mono input"
+        aria-label={t('integrations.autoImport.label')}
+        spellcheck="false"
+        placeholder="claude-ready"
+        bind:value={s.importLabel}
+      />
+    </Row>
+    <Row label={t('integrations.autoImport.every')}>
+      <Chips label={t('integrations.autoImport.every')} options={every} mono bind:value={s.importEvery} />
+    </Row>
+  </Group>
+{/if}
 
 <style>
   .part {

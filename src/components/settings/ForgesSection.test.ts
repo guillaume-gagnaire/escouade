@@ -5,6 +5,9 @@ import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import type { ForgeAccountView, ForgeProvider, ForgesView } from '../../lib/types';
 import { fakeBackend, project, resetApp } from '../../test/ipc';
+import { firstHandPlugins } from '../../test/plugins';
+import { plugins } from '../../lib/plugins-view.svelte';
+import { settingsForm } from '../../lib/settings.svelte';
 import ForgesSection from './ForgesSection.svelte';
 
 const opened = vi.hoisted(() => [] as string[]);
@@ -110,6 +113,39 @@ describe('ForgesSection', () => {
   beforeEach(() => {
     resetApp({ projects: [project()] });
     opened.length = 0;
+    plugins.list = [];
+    plugins.loaded = false;
+  });
+
+  // ESC-407: only the code hosts an installed plugin brings; the account of one uninstalled stays kept, hidden.
+  it('lists only the code hosts whose plugin is installed, the account of one uninstalled kept', async () => {
+    plugins.list = firstHandPlugins('gitea');
+    plugins.loaded = true;
+    const be = fakeBackend({ forges: () => VIEW, forge_check: () => VIEW });
+    render(ForgesSection);
+    await waitFor(() => row('github.com'));
+    expect(screen.queryByRole('group', { name: 'codeberg.org' })).toBeNull();
+    expect(row('gitlab.acme.dev')).toBeInTheDocument();
+    // A host whose kind is not known yet stays: Escouade asks it.
+    expect(row('git.example.org')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Connecter un hébergeur…' }));
+    const kinds = within(screen.getByRole('combobox', { name: 'Hébergeur' }))
+      .getAllByRole('option')
+      .map((o) => o.textContent);
+    expect(kinds).toEqual(['GitHub', 'GitLab', 'Bitbucket']);
+    expect(be.called('forge_disconnect')).toEqual([]);
+  });
+
+  it('says in a line that no code host is installed, with the way to Réglages › Plugins and nothing to connect', async () => {
+    plugins.list = firstHandPlugins('github', 'gitlab', 'bitbucket', 'gitea', 'azure');
+    plugins.loaded = true;
+    fakeBackend({ forges: () => VIEW, forge_check: () => VIEW });
+    render(ForgesSection);
+    const line = (await screen.findByText('Aucun hébergeur de code installé : un hébergeur s’installe avec son plugin.')).closest('p')!;
+    expect(screen.queryByRole('button', { name: 'Connecter un hébergeur…' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'github.com' })).toBeNull();
+    await userEvent.click(within(line).getByRole('button', { name: 'Ouvrir Réglages › Plugins' }));
+    expect(settingsForm.page).toBe('plugins');
   });
 
   it('shows how each account stands, the rights it lacks and the projects on it', async () => {

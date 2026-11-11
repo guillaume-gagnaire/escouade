@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Les réglages ne montrent plus que ce qu’apportent tes plugins installés : harness, sources de tickets, hébergeurs de code et services de voix. Plus d’offre « Non installé » au milieu des pages : on installe dans Réglages › Plugins ou depuis l’accueil, et ce qu’un plugin désinstallé avait réglé revient avec lui.
 - La visionneuse d’images tient dans la fenêtre, même avec une grande photo, et suit sa taille. Elle zoome d’un clic sur l’image, au pincement, par Ctrl ou ⌘ + molette, par ses boutons ou par + − 0, et l’image zoomée se déplace à la main. Elle passe d’une image à l’autre dans toute la conversation, avec une bande de vignettes, et copie, enregistre, ouvre l’image ou l’affiche dans son dossier. Merci à @Metalzoid (#25).
 - Les menus ne s’effacent plus pour en ouvrir un autre : « Lancer » et « Continuer sur un autre harness » dans le menu d’un agent, et « Dans le worktree d’un agent » dans le menu « + » des terminaux, ouvrent leur liste à côté, au survol ou au clic. Un menu plus haut que la fenêtre s’arrête avant son bord et défile, un chevron disant ce qui reste à voir. Merci à @Metalzoid (#24).
 - Tous les plugins tournent désormais dans Escouade, en WASM : le programme à part qui servait ceux d’Escouade a disparu, et l’installeur s’allège d’autant. Un plugin qui demande à lancer un programme natif (`run.command`) ne démarre plus, d’où qu’il vienne, et sa page dit pourquoi.

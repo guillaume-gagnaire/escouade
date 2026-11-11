@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { anyCan, writerOf, writerOptions } from '../../lib/engines';
+  import { writerOf, writerOptions } from '../../lib/engines';
+  import { installedEngines } from '../../lib/installed';
   import { t } from '../../lib/i18n';
   import { settingsForm, type NumberSetting } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
@@ -38,7 +39,9 @@
   /** What the menu shows: the model chosen while it is one of them, else the default. */
   const writerModel = $derived(writerModels?.some((m) => m.id === s.writerModel) ? (s.writerModel ?? '') : '');
   /** The harnesses that have a remote control (Claude Code): the others have none, which the row says. */
-  const remote = $derived(app.engines.filter((e) => e.caps.remoteControl));
+  const remote = $derived(installedEngines().filter((e) => e.caps.remoteControl));
+  /** What only some harnesses do, among those an installed plugin brings (ESC-407). */
+  const anyCan = (flag: 'terminalView' | 'todoTools') => installedEngines().some((e) => e.caps[flag]);
 </script>
 
 <!-- Settings of what only some harnesses do: shown while one of them is there. -->

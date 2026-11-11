@@ -4,7 +4,10 @@
 // conversations). A hit names its page; opening it unfolds « Avancé » when the row is there, and lights the row.
 
 import { normalize } from './conversation';
+import { found, writerOptions } from './engines';
 import { tIn, type Lang } from './i18n';
+import { harnessInstalled, installedEngines, installedOf } from './installed';
+import { SERVICE_IDS } from './integrations';
 import { pageInfo, SETTINGS_PAGES, SETTINGS_ROWS, type RowInfo, type SettingsPage } from './settings-pages';
 
 const LANGS: Lang[] = ['fr', 'en'];
@@ -27,6 +30,38 @@ interface Doc {
   descs: string[];
 }
 
+/**
+ * The rows a page shows only while an installed plugin brings what they set (ESC-407): a harness (its declaration in
+ * `installedEngines`), a ticket source. The search finds nothing that is not on screen.
+ */
+/** The harnesses found on this machine whose plugin is installed. */
+const foundInstalled = () => found().filter((e) => harnessInstalled(e.id)).length;
+
+const SHOWN: Record<string, () => boolean> = {
+  // Comptes et harness.
+  harnesses: () => installedEngines().length > 0,
+  accountsList: () => installedEngines().length > 0,
+  favoriteModels: () => installedEngines().some((e) => !e.models.length),
+  engineOrder: () => installedEngines().length > 1,
+  handoverOnLimit: () => foundInstalled() > 1,
+  handoverModel: () => foundInstalled() > 1,
+  claudePath: () => installedEngines().length > 0,
+  selfUpdate: () => harnessInstalled('claude'),
+  // Agents.
+  terminalView: () => installedEngines().some((e) => e.caps.terminalView),
+  todoTools: () => installedEngines().some((e) => e.caps.todoTools),
+  writer: () => writerOptions().length > 0,
+  writerModel: () => installedEngines().some((e) => e.writerTakesModel),
+  remoteAll: () => installedEngines().some((e) => e.caps.remoteControl),
+  // Services connectés and Tickets importés: their groups stay, saying that none is installed; the rest goes.
+  sync: () => installedOf('ticketSources', SERVICE_IDS).length > 0,
+  autoImport: () => installedOf('ticketSources', SERVICE_IDS).length > 0,
+  mapping: () => installedOf('ticketSources', SERVICE_IDS).length > 0,
+};
+
+/** Whether the row is on its page, as the plugins installed have it. */
+export const rowShown = (r: RowInfo) => SHOWN[r.id]?.() ?? true;
+
 /** Every row, and every page, with its texts in both languages folded. Read at each search: the catalogs are loaded. */
 function docs(): Doc[] {
   const pages: Doc[] = SETTINGS_PAGES.map((p) => ({
@@ -35,7 +70,7 @@ function docs(): Doc[] {
     labels: LANGS.map((l) => normalize(tIn(l, `settings.pages.${p.id}.label`))),
     descs: LANGS.map((l) => normalize(tIn(l, `settings.pages.${p.id}.desc`))),
   }));
-  const rows: Doc[] = SETTINGS_ROWS.map((r) => ({
+  const rows: Doc[] = SETTINGS_ROWS.filter(rowShown).map((r) => ({
     page: r.page,
     row: r,
     labels: LANGS.map((l) => normalize(r.labelIn(l))),

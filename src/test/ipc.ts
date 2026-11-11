@@ -33,6 +33,7 @@ import type {
   Usage,
 } from '../lib/types';
 import claudeEngine from '../../tests/fixtures/engines/claude.json';
+import { firstHandPlugins } from './plugins';
 
 /** Claude Code as the backend declares it (the Rust tests keep the file the same as its declaration). */
 export const CLAUDE_ENGINE = claudeEngine as EngineDecl;
@@ -53,6 +54,8 @@ const ANSWERS: Record<string, unknown> = {
 
 /** What the backend answers by default from the arguments of a call. */
 const DEFAULTS: Record<string, (args: any) => unknown> = {
+  // The plugins of the first hand that bring a source, a code host or a voice service, installed (ESC-407).
+  plugins_list: () => firstHandPlugins(),
   // A launch's page (ESC-311): opened where it was asked.
   devpage_open: (a) => ({ agentId: a.agentId, projectId: 'p1', title: a.title, url: a.url, detached: a.detached }),
   devpage_detach: (a) => ({ agentId: a.agentId, projectId: 'p1', title: '', url: '', detached: a.detached }),

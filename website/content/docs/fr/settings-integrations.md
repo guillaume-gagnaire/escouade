@@ -2,7 +2,7 @@
 
 La page « Services connectés » connecte les hébergeurs de code et les comptes de Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues et Azure Boards, et règle la synchronisation et l’import automatique, pour tous les projets.
 
-La page « Tickets importés » de chaque projet le lie à ses sources et fait correspondre leurs statuts. Un point ambre sur « Services connectés », dans la barre des réglages, dit un jeton expiré ou illisible.
+La page « Tickets importés » de chaque projet le lie à ses sources et fait correspondre leurs statuts. Les deux pages ne listent que les hébergeurs et les sources dont le plugin est installé (ils s’installent dans Réglages › Plugins) ; les comptes et les liens d’un plugin désinstallé sont gardés et reviennent avec lui. Sans aucun, la page le dit en une ligne, avec « Ouvrir Réglages › Plugins ». Un point ambre sur « Services connectés », dans la barre des réglages, dit un jeton expiré ou illisible.
 
 ## Ouvrir les pages
 

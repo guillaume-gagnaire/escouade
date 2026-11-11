@@ -61,6 +61,17 @@ describe('the accounts of each harness', () => {
     expect(accountEngines()).toEqual(['claude']);
   });
 
+  it('leave out a harness whose plugin is gone, its accounts kept (ESC-407)', () => {
+    app.engines = [CLAUDE_ENGINE];
+    app.settings.engineOrder = ['codex', 'claude'];
+    expect(engineOrder()).toEqual(['claude']);
+    expect(accountEngines()).toEqual(['claude']);
+    expect(app.settings.accounts.map((x) => x.id)).toEqual(['principal', 'pro', 'principal-codex', 'work']);
+    // Its plugin back: its place and its accounts with it.
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
+    expect(engineOrder()).toEqual(['codex', 'claude']);
+  });
+
   it('serve the agents of their harness alone: a new agent never goes to another harness’s account', () => {
     app.usage.current = { claude: 'pro', codex: 'work' };
     expect(usableFor(undefined).map((a) => a.id)).toEqual(['principal', 'pro']);

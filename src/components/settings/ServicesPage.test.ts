@@ -6,6 +6,8 @@ import { settingsForm } from '../../lib/settings.svelte';
 import { app } from '../../lib/state.svelte';
 import type { AccountView } from '../../lib/types';
 import { fakeBackend, project, resetApp } from '../../test/ipc';
+import { firstHandPlugins } from '../../test/plugins';
+import { plugins } from '../../lib/plugins-view.svelte';
 import SettingsModal from '../modals/SettingsModal.svelte';
 import ServicesPage from './ServicesPage.svelte';
 import { afterGesture } from '../../test/settings';
@@ -40,6 +42,38 @@ describe('ServicesPage', () => {
     app.accounts = ACCOUNTS;
     app.modal = { kind: 'settings', page: 'services' };
     opened.length = 0;
+    plugins.list = firstHandPlugins();
+    plugins.loaded = true;
+  });
+
+  // ESC-407: only the sources an installed plugin brings; the account of one uninstalled stays kept, and comes back with it.
+  it('lists only the sources whose plugin is installed, the account of one uninstalled kept', async () => {
+    plugins.list = firstHandPlugins('jira');
+    const b = backend({ plugins_list: () => plugins.list });
+    const { unmount } = render(SettingsModal, { page: 'services' });
+    const accounts = within(screen.getByRole('heading', { name: 'Comptes connectés' }).closest('.sg') as HTMLElement);
+    expect(accounts.queryByText('Jira')).toBeNull();
+    expect(accounts.queryByText(/ada@atlas.dev/)).toBeNull();
+    expect(accounts.getByText('Trello')).toBeInTheDocument();
+    expect(within(panel()).queryByText(/Non installé/)).toBeNull();
+    expect(b.called('integration_disconnect')).toEqual([]);
+    expect(app.accounts).toEqual(ACCOUNTS);
+    unmount();
+    plugins.list = firstHandPlugins();
+    render(SettingsModal, { page: 'services' });
+    expect(
+      within(screen.getByRole('heading', { name: 'Comptes connectés' }).closest('.sg') as HTMLElement).getByText(/ada@atlas.dev/),
+    ).toBeInTheDocument();
+  });
+
+  it('says in a line that no source is installed, without their sync nor their import', async () => {
+    plugins.list = firstHandPlugins('jira', 'trello', 'github', 'linear', 'clickup', 'gitlab', 'azure');
+    backend({ plugins_list: () => plugins.list });
+    render(SettingsModal, { page: 'services' });
+    expect(within(panel()).getByText('Aucune source de tickets installée : une source s’installe avec son plugin.')).toBeInTheDocument();
+    expect(within(panel()).queryByRole('heading', { name: 'Synchronisation' })).toBeNull();
+    expect(within(panel()).queryByRole('switch', { name: 'Importer les tickets étiquetés' })).toBeNull();
+    expect(within(panel()).queryByText('Non connecté')).toBeNull();
   });
 
   it('is a page of Escouade, in its teal, and the old « integrations » tab leads to it', () => {

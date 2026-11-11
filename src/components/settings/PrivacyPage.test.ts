@@ -181,7 +181,13 @@ describe('PrivacyPage: « Projet privé » (ESC-139)', () => {
     expect(backend.called('save_settings')).toHaveLength(0);
   });
 
+  /** The eight harnesses of the first hand, their plugins installed. */
+  const EIGHT = ['claude', 'codex', 'opencode', 'copilot', 'cursor', 'vibe', 'agy', 'gemini'].map((id) =>
+    id === 'claude' ? CLAUDE_ENGINE : { ...BARE_ENGINE, id, caps: { ...BARE_ENGINE.caps, remoteControl: false } },
+  );
+
   it('says, harness by harness, whether its files are kept by a guard or a barrier, for a private project only (ESC-140, choice 28)', async () => {
+    app.engines = EIGHT;
     render(SettingsModal, { page: 'privacy', projectId: 'p1' });
     expect(screen.queryByRole('list', { name: 'Ses fichiers' })).toBeNull();
     await userEvent.click(screen.getByRole('switch', { name: 'Projet privé' }));
@@ -206,6 +212,16 @@ describe('PrivacyPage: « Projet privé » (ESC-139)', () => {
     expect(within(list).getByText(/que son mode Bypass ne lève pas/)).toBeVisible();
     expect(within(list).getByText(/que son mode Bypass \(yolo\) ne lève pas/)).toBeVisible();
     expect(screen.getByText(/Une barrière pour tous les harness demanderait un compte système par projet/)).toBeVisible();
+  });
+
+  it('names only the harnesses whose plugin is installed (ESC-407)', async () => {
+    // OpenCode's plugin uninstalled: the core no longer declares it.
+    app.engines = EIGHT.filter((e) => e.id !== 'opencode');
+    render(SettingsModal, { page: 'privacy', projectId: 'p1' });
+    await userEvent.click(screen.getByRole('switch', { name: 'Projet privé' }));
+    const rows = within(screen.getByRole('list', { name: 'Ses fichiers' })).getAllByRole('listitem');
+    expect(rows).toHaveLength(7);
+    expect(rows.some((r) => r.textContent?.startsWith('OpenCode'))).toBe(false);
   });
 
   it('shows a private project as it is, its lock among the projects of the settings', async () => {

@@ -1,8 +1,9 @@
 <script lang="ts">
   import { conversation } from '../../lib/conversation.svelte';
-  import { ONLINE_SERVICES, onlineService } from '../../lib/dictation';
+  import { onlineService } from '../../lib/dictation';
   import { fBytes } from '../../lib/format';
   import { t } from '../../lib/i18n';
+  import { voiceServices } from '../../lib/installed';
   import { api } from '../../lib/ipc';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
@@ -10,6 +11,7 @@
   import type { SpeechInfo, SpeechVoice } from '../../lib/types';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
+  import NoPlugin from './NoPlugin.svelte';
   import OnlineKey from './OnlineKey.svelte';
   import OnlineModel from './OnlineModel.svelte';
   import OnlineVoiceField from './OnlineVoiceField.svelte';
@@ -24,17 +26,22 @@
   const s = $derived(settingsForm.settings.voice.speech);
   const online = $derived(s.engine === 'online');
   const service = $derived(onlineService(s.onlineService));
+  /** The services an installed plugin brings (ESC-407): the choice of one whose plugin is gone stays kept, hidden. */
+  const services = $derived(voiceServices());
+  const serviceIn = $derived(services.some((o) => o.id === service.id));
+  /** On line with a service installed: its model, its key and its voices are shown. */
+  const shown = $derived(online && serviceIn);
   const catalog = $derived(onlineVoice.catalogs[service.id]);
   const model = $derived(modelIn(catalog, 'speak', s.onlineModels[service.id]).id);
   $effect(() => {
-    if (!online) return;
+    if (!shown) return;
     void onlineVoice.loadKeys();
     void onlineVoice.load(service.id);
   });
   /** Whether `model` of the service reads `lang`. */
   const reads = (lang: string) => !!catalog?.defaultVoices[`${model}|${lang}`];
   const rateDesc = $derived.by(() => {
-    if (!online) return t('voice.speech.rateDesc');
+    if (!shown) return t('voice.speech.rateDesc');
     const speed = catalog?.speed;
     if (!speed) return t('voice.speech.rateNone', { service: service.label });
     if (service.id === 'deepgram') return t('voice.speech.rateEnglish', { service: service.label, min: speed[0], max: speed[1] });
@@ -116,11 +123,13 @@
 
 <Group
   title={t('voice.speech.title')}
-  note={online
+  note={shown
     ? t('voice.speech.onlineNote', { service: service.label, host: service.host })
-    : info && !info.available
-      ? t('voice.speech.unavailable')
-      : t('voice.speech.note')}
+    : online
+      ? undefined
+      : info && !info.available
+        ? t('voice.speech.unavailable')
+        : t('voice.speech.note')}
 >
   <Row label={t('voice.speech.engine')} desc={t('voice.speech.engineDesc')}>
     <Chips
@@ -132,14 +141,19 @@
       bind:value={s.engine}
     />
   </Row>
-  {#if online}
-    <Row label={t('voice.settings.service')} desc={t('voice.settings.serviceDesc', { service: service.label })}>
+  {#if online && !services.length}
+    <NoPlugin text={t('settings.noPlugin.voice')} />
+  {:else if online}
+    <Row label={t('voice.settings.service')} desc={serviceIn ? t('voice.settings.serviceDesc', { service: service.label }) : undefined}>
       <select class="field input service" aria-label={t('voice.speech.serviceLabel')} bind:value={s.onlineService}>
-        {#each ONLINE_SERVICES as o (o.id)}
+        {#if !serviceIn}<option value={s.onlineService} disabled>{t('voice.settings.servicePick')}</option>{/if}
+        {#each services as o (o.id)}
           <option value={o.id}>{o.label}</option>
         {/each}
       </select>
     </Row>
+  {/if}
+  {#if shown}
     <OnlineModel
       {service}
       purpose="speak"
@@ -167,7 +181,7 @@
       {/each}
     {/if}
   {/if}
-  {#if online}
+  {#if shown}
     <!-- Piper's settings are those of « Local (Piper) »: on line, only what happens when the service fails. -->
     <Row
       label={t('voice.speech.fallbackLabel', { service: service.label })}
