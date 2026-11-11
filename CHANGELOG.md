@@ -6,6 +6,8 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Tous les plugins tournent désormais dans Escouade, en WASM : le programme à part qui servait ceux d’Escouade a disparu, et l’installeur s’allège d’autant. Un plugin qui demande à lancer un programme natif (`run.command`) ne démarre plus, d’où qu’il vienne, et sa page dit pourquoi.
+- La documentation des plugins dit l’état réel : tous tournent en WASM, ceux d’Escouade s’installent depuis l’installeur sans réseau, et la page du protocole ne parle plus de process. Les pages des intégrations listent les services servis par un plugin.
 - Le diagramme d’un workflow part de la porte par laquelle l’agent est entré et ne montre que ce qu’elle atteint : le possible en pointillé léger, son vrai chemin en trait plein, chaque passage numéroté dans l’ordre, les retours avec leur raison. Sans agent, tu choisis la porte ; le reste se replie en « étapes hors de ce chemin ».
 - Plugins : « Chercher maintenant » relit le store avant de chercher, et propose donc une version publiée depuis le démarrage. La page dit quand le store a été lu ; s’il ne répond pas, elle le dit et cherche dans les offres déjà lues.
 - Un harness coupé pour un projet dans les réglages de son plugin l’est vraiment : il n’y est plus proposé et ses agents de ce projet ne démarrent ni ne reçoivent plus rien. Dans un projet privé, le premier agent sur un harness te demande d’abord de l’activer, en disant ce que son plugin recevra. À la mise à jour, un projet privé garde allumés les harness qu’il utilisait déjà.
@@ -121,6 +123,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Corrections
 
+- Réglages : ouvrir un projet qui a un logo n’étale plus ce logo sur toute la fenêtre. Il reste dans sa tuile, en tête de la page.
 - macOS : la 2.2.0-beta.3 se fermait quelques secondes après son démarrage dès qu’un plugin WASM se lançait (Claude Code au premier chef). L’app a maintenant le droit d’exécuter le code que compile le moteur des plugins.
 - Remote control : un agent tout juste créé pendant que tu allumes le réglage pour tous les agents garde bien son contrôle à distance. Il pouvait le perdre sans rien dire jusqu'au prochain changement du réglage.
 - Copilot CLI lit une commande comme son shell la lit : `git add x; node evil.js` et toute commande enchaînée, redirigée ou lancée hors du worktree passent par une carte, et une écriture dans `.git` aussi. Cette écriture passe aussi par une carte sur Cursor, Gemini, Mistral Vibe et les harness ACP.

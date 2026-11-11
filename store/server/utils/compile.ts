@@ -22,7 +22,7 @@ import { sha256 } from './versions';
 // Javy runs the bundle's initialisation itself, but inside wasmtime's WASM sandbox (Wizer): the plugin's code
 // never runs as a process of the store, has no system call, no file and no network there.
 //
-// A `run.wasm` plugin is another matter (ESC-336, docs/PLUGINS.md §8.5.3, §8.5.4): cargo runs in native the build scripts
+// A `run.wasm` plugin is another matter (ESC-336, docs/PLUGINS-DESIGN.md §8.5.3, §8.5.4): cargo runs in native the build scripts
 // and the procedural macros of its dependencies, as the user the store runs as, who could read the store's secrets in
 // `/proc/<pid>/environ`. So:
 // - `escouade-plugin` refuses, before anything runs, what is not on its closed list (`rust_native.json`), and it is the
@@ -98,7 +98,7 @@ export async function compileTwice(one: CompileOne, input: CompileInput): Promis
 export const COMPILE_TIMEOUT = 120_000;
 /** 1 GiB of resident memory for the compilation's processes together. */
 export const COMPILE_MEMORY = 1024 * 1024 * 1024;
-/** Five minutes for a `run.wasm`, and two for its `cargo fetch` before it (docs/PLUGINS.md §8.5.3). */
+/** Five minutes for a `run.wasm`, and two for its `cargo fetch` before it (docs/PLUGINS-DESIGN.md §8.5.3). */
 export const RUST_TIMEOUT = 300_000;
 export const FETCH_TIMEOUT = 120_000;
 /** 2 GiB for a `run.wasm`: 1 GiB stops `lto = "fat"`, 1.5 passes (the study's measure). */

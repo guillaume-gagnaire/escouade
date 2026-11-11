@@ -2,9 +2,9 @@ import { compareVersions, sha256, type VersionFile } from '../../server/utils/ve
 import type { Catalog, CatalogPlugin, CatalogVersion } from '../../server/utils/catalog';
 
 // Downloads what the review reads (docs/STORE.md §4.2, step 1): the catalogue's entry of the version, its
-// `version.json`, its archive and its binaries, from the store's app API (/api/v1, STORE-6), and checks every
-// fingerprint: `version.json` against the catalogue, the archive, the binaries and the module the store compiled of a
-// `run.js` plugin (ESC-324) against `version.json`. A
+// `version.json` and its archive, from the store's app API (/api/v1, STORE-6), and checks every fingerprint: `version.json`
+// against the catalogue, the archive and the module the store compiled (ESC-324) against `version.json`. No binary of a
+// system is fetched: the store publishes none (ESC-355). A
 // fingerprint that does not hold stops the review: what would be read is not what the store hands out. Then the tag on
 // GitHub, compared to the commit the store froze (a tag moved after the submission shows here).
 
@@ -15,8 +15,6 @@ export interface Downloaded {
   json: string;
   file: VersionFile;
   archive: Buffer;
-  /** By platform (`linux-x64`…), as `version.json` names them. */
-  binaries: Record<string, Buffer>;
   /** The module the store compiled of a `run.js` plugin, when `version.json` names one (ESC-323). */
   wasm: Buffer | null;
 }
@@ -89,14 +87,6 @@ export async function download(src: Source, cat: Catalog, id: string, version: s
   if (sha256(archive) !== file.archive.sha256)
     throw new Integrity(`Archive : empreinte ${sha256(archive)}, version.json dit ${file.archive.sha256}`);
 
-  const binaries: Record<string, Buffer> = {};
-  for (const [platform, b] of Object.entries(file.binaries ?? {})) {
-    const path = entry.files.binaries[platform];
-    if (!path || !b) throw new Integrity(`Binaire ${platform} : absent du catalogue`);
-    const bytes = await get(src, `${src.store}${path}`, `Binaire ${platform}`);
-    if (sha256(bytes) !== b.sha256) throw new Integrity(`Binaire ${platform} : empreinte ${sha256(bytes)}, version.json dit ${b.sha256}`);
-    binaries[platform] = bytes;
-  }
   let wasm: Buffer | null = null;
   if (file.wasm) {
     if (!entry.files.wasm) throw new Integrity('Module WASM : version.json en nomme un, le catalogue n’en sert pas');
@@ -105,7 +95,7 @@ export async function download(src: Source, cat: Catalog, id: string, version: s
     if (sha256(wasm) !== file.wasm.sha256)
       throw new Integrity(`Module WASM : empreinte ${sha256(wasm)}, version.json dit ${file.wasm.sha256}`);
   }
-  return { plugin, entry, json, file, archive, binaries, wasm };
+  return { plugin, entry, json, file, archive, wasm };
 }
 
 /**

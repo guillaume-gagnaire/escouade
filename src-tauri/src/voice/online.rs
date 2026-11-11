@@ -1,6 +1,6 @@
 //! The dictation by a service on line, as the app sees it (ESC-110): which service the settings choose, and its key, kept
 //! in the system's keychain (`secrets`), never in a file nor in the log. What goes to the service and what its answers mean
-//! is its plugin's (`escouade_voice`, docs/PLUGINS.md §4.13): each call carries the key to it, and it keeps nothing.
+//! is its plugin's (`escouade_voice`, docs/PLUGINS-DESIGN.md §4.13): each call carries the key to it, and it keeps nothing.
 
 use super::transcribe::Transcriber;
 use crate::integrations::secrets::SecretStore;

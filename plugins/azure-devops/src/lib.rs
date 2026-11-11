@@ -1,4 +1,4 @@
-//! The plugin « Azure DevOps » (`dev.escouade.azure-devops`, docs/PLUGINS.md §4.4): Azure DevOps on dev.azure.com (its
+//! The plugin « Azure DevOps » (`dev.escouade.azure-devops`, docs/PLUGINS-DESIGN.md §4.4): Azure DevOps on dev.azure.com (its
 //! former `<org>.visualstudio.com` too) and Azure DevOps Server, on one account per organization (a Server's:
 //! collection). It serves the code host `azure` (pull requests, merge and auto-complete, the policies' and Azure
 //! Pipelines' checks, the builds' logs and their retry, threads, reviews: `pulls`) and, on the same account, the

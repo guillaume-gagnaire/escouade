@@ -42,8 +42,8 @@ test.describe('a link to a plugin of the store, and a bad one', () => {
     const installed = (await page.evaluate(() =>
       (window as unknown as { __TAURI_INTERNALS__: { invoke(c: string): Promise<unknown> } }).__TAURI_INTERNALS__.invoke('plugins_list'),
     )) as { id: string; origin: { kind: string } }[];
-    // The plugins the app gives (INT-4) are there from the start: nothing else is installed.
-    expect(installed.filter((p) => p.origin.kind !== 'builtin')).toEqual([]);
+    // The workspace's of a build of development are there from the start: nothing else is installed.
+    expect(installed.filter((p) => p.origin.kind !== 'workspace')).toEqual([]);
   });
 });
 

@@ -1,4 +1,4 @@
-//! The plugin « Gitea / Forgejo » (`dev.escouade.gitea`, docs/PLUGINS.md §4.4): Gitea, Forgejo and Codeberg (a Forgejo)
+//! The plugin « Gitea / Forgejo » (`dev.escouade.gitea`, docs/PLUGINS-DESIGN.md §4.4): Gitea, Forgejo and Codeberg (a Forgejo)
 //! and every instance of them, on one account per instance. It serves the code host `gitea`: pull requests, merge and
 //! auto-merge (on a protected branch), combined statuses and Actions (logs, reruns), reviews and their threads. It
 //! is a module (`run.wasm`); the kit (`escouade-plugin-kit::hosts`) answers the protocol, gets each

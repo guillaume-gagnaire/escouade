@@ -1,4 +1,4 @@
-//! The app's seed (ESC-338, docs/PLUGINS.md §8.7): what the store published for the last version of each plugin of the
+//! The app's seed (ESC-338, docs/PLUGINS-DESIGN.md §8.7): what the store published for the last version of each plugin of the
 //! first hand, shipped in the installer, the same bytes and the same signature: `<seed>/<id>/version.json`, its
 //! `.minisig`, `archive.tar.gz` and `plugin.wasm`, with the revocation list of the day (`<seed>/revocations.json`).
 //!
@@ -85,9 +85,9 @@ impl Seed {
                 ours
             });
             // A build of development without the seed's files (no `scripts/seed-dev.sh`, no `seed.ts fetch`) runs the
-            // registry's plugins as before, from `scripts/plugins-wasm.sh` (ESC-354): the list names them, the folder
-            // has them not. A release keeps them, and says what it lacks.
-            if cfg!(debug_assertions) {
+            // workspace's modules (`Origin::Workspace`, `scripts/plugins-wasm.sh`, ESC-354), and so do the tests, built in
+            // release too (`cargo test --release`). A release keeps them, and says what it lacks.
+            if cfg!(any(debug_assertions, test)) {
                 entries.retain(|e| dir.as_ref().is_some_and(|d| d.join(&e.id).is_dir()));
             }
         }
@@ -193,7 +193,6 @@ impl Seed {
             minisig,
             unverified: None,
             files,
-            program: None,
             module,
             seed: true,
             unsigned,

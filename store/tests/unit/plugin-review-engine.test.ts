@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { Runner } from '../../scripts/plugin-review/attest';
+import type { Runner } from '../../scripts/plugin-review/engine';
 import { engineFolder, engineHelp, engineSteps, fetchEngine } from '../../scripts/plugin-review/engine';
 import { recompile } from '../../scripts/plugin-review/recompile';
 import { Refused, type CompileOne } from '../../server/utils/compile';

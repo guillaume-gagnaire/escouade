@@ -1,4 +1,4 @@
-// The themes a plugin brings (PLG-7, ESC-179; docs/PLUGINS.md §1.10): values for the published tokens of src/app.css
+// The themes a plugin brings (PLG-7, ESC-179; docs/PLUGINS-DESIGN.md §1.10): values for the published tokens of src/app.css
 // (DESIGN.md « Les jetons »), dark and light, and a palette of project colours. Nothing of a theme reaches the window
 // unfiltered: only the tokens of the list, only values of their kind — a colour (hex, rgb(), hsl(), oklch(),
 // color-mix(), a var() of another token of the list…), a proportion (`--glow`, `--sel`), a number (`--shade`), three

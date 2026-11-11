@@ -1,7 +1,7 @@
 ---
 title: "Cursor CLI en plugin"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4 (INT-10.1)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-222"]
+sources: ["docs/PLUGINS-DESIGN.md §4 (INT-10.1)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-222"]
 tickets: ["ESC-222","ESC-281","ESC-282","ESC-346"]
 decisions: []
 compared: null

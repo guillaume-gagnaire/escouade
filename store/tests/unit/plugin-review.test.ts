@@ -3,9 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { verifyAttestation } from '../../scripts/plugin-review/attest';
 import {
-  benchFolder,
   DEFAULT_IMAGE,
   findCli,
   findEngine,
@@ -172,7 +170,7 @@ describe('the extraction', () => {
 });
 
 describe('the download', () => {
-  it('checks version.json against the catalogue, the archive and the binaries against version.json', async () => {
+  it('checks version.json against the catalogue, and the archive against version.json', async () => {
     const src = { store: store.url, githubApi: store.githubApi };
     const cat = await catalog(src);
     const ok = await download(src, cat, 'dev.exemple.slack', '1.0.0');
@@ -316,22 +314,6 @@ describe('the bench in a container', () => {
     expect(r.played && r.raw).toMatch(/^arrêté au bout de 2 s/);
   });
 
-  it('plays the program of the release where the manifest names it, executable', () => {
-    const src = join(root, 'bench-src');
-    extract(tarball({ 'escouade-plugin.json': '{}', 'README.md': 'x' }), src);
-    const dest = benchFolder(
-      src,
-      join(root, 'bench-dest'),
-      { run: { command: 'bin/tool', windows: 'bin/tool.exe' } },
-      Buffer.from('\x7fELF'),
-    );
-    expect(readFileSync(join(dest, 'bin/tool'), 'latin1')).toBe('\x7fELF');
-    if (process.platform !== 'win32') expect(statSync(join(dest, 'bin/tool')).mode & 0o100).toBeTruthy();
-    // A program path that leaves the folder is not written.
-    benchFolder(src, join(root, 'bench-dest-2'), { run: { command: '../../evil' } }, Buffer.from('x'));
-    expect(existsSync(join(root, 'evil'))).toBe(false);
-  });
-
   it('picks the refusals out of what the plugin wrote', () => {
     expect(
       refusals(
@@ -342,50 +324,6 @@ describe('the bench in a container', () => {
         'x\nopen EACCES /root',
       ),
     ).toEqual(['connect ENETUNREACH 1.2.3.4:443', 'open EACCES /root']);
-  });
-});
-
-describe('the attestations', () => {
-  const statement = (commit: string) => [
-    {
-      verificationResult: {
-        statement: {
-          predicate: {
-            buildDefinition: {
-              externalParameters: { workflow: { path: '.github/workflows/release.yml' } },
-              resolvedDependencies: [{ digest: { gitCommit: commit } }],
-            },
-          },
-        },
-      },
-    },
-  ];
-  const run =
-    (status: number, out: unknown, err = '') =>
-    () => ({ status, stdout: typeof out === 'string' ? out : JSON.stringify(out), stderr: err });
-
-  it('want gh to verify a signature that names the commit relu', () => {
-    const c = 'a'.repeat(40);
-    let asked: string[] = [];
-    expect(
-      verifyAttestation('/w/binaries/linux-x64', 'o/r', c, (a) => {
-        asked = a;
-        return run(0, statement(c))();
-      }),
-    ).toEqual({ state: 'verified', workflow: '.github/workflows/release.yml' });
-    expect(asked).toEqual(['attestation', 'verify', '/w/binaries/linux-x64', '--repo', 'o/r', '--format', 'json']);
-    expect(verifyAttestation('/b', 'o/r', c, run(0, statement('b'.repeat(40))))).toEqual({ state: 'other-commit', commit: 'b'.repeat(40) });
-    expect(verifyAttestation('/b', 'o/r', c, run(1, '', 'no attestations found'))).toEqual({
-      state: 'refused',
-      why: 'no attestations found',
-    });
-    expect(verifyAttestation('/b', 'o/r', c, run(4, '', 'To get started with GitHub CLI, please run:  gh auth login')).state).toBe(
-      'unchecked',
-    );
-    expect(verifyAttestation('/b', 'o/r', c, () => ({ status: null, stdout: '', stderr: '', error: new Error('ENOENT') }))).toEqual({
-      state: 'unchecked',
-      why: '`gh` introuvable',
-    });
   });
 });
 

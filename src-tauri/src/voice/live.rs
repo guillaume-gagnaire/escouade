@@ -1,7 +1,7 @@
 //! The transcription as one speaks (ESC-136), as the app sees it: « Transcription en temps réel », for a service that
 //! offers it. A stream is opened as a sentence starts, its sound goes while it is said, the text understood so far comes
 //! back as it goes (`Partial`), and the sentence's end asks for its final text. What it says to its service, by a WebSocket
-//! with the user's key, is its plugin's (`escouade_voice::live`, docs/PLUGINS.md §8.4.4).
+//! with the user's key, is its plugin's (`escouade_voice::live`, docs/PLUGINS-DESIGN.md §8.4.4).
 //!
 //! One stream by sentence (by dictation). Opening it takes the time of the first syllables, while what was heard waits in
 //! the stream's queue: the sentence does not wait for it. A stream that cannot open, or breaks, says why (`OnlineError`):

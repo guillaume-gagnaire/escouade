@@ -1,6 +1,6 @@
 # A described ACP harness
 
-An agent that speaks **ACP** (Agent Client Protocol) becomes a harness of Escouade through a **declarative** plugin: its manifest describes it, without a line of code, and the ACP plugin shipped with Escouade does the rest.
+An agent that speaks **ACP** (Agent Client Protocol) becomes a harness of Escouade through a **declarative** plugin: its manifest describes it, without a line of code, and Escouade’s ACP plugin does the rest.
 
 That plugin (`dev.escouade.acp`) launches the agent, speaks to it and shows its conversation, its permissions, its diffs and the end of its turns, as for Claude Code. The agent shows in the “Harness” menu beside “New agent”.
 

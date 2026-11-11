@@ -261,7 +261,7 @@
         <button class="btn" onclick={() => plugins.setEnabled(plugin.id, !plugin.choices.enabled)}
           >{plugin.choices.enabled ? t('plugins.page.disable') : t('plugins.page.enable')}</button
         >
-        {#if plugin.origin.kind !== 'builtin'}<button class="btn" onclick={uninstall}>{t('plugins.page.uninstall')}</button>{/if}
+        {#if plugin.origin.kind !== 'workspace'}<button class="btn" onclick={uninstall}>{t('plugins.page.uninstall')}</button>{/if}
         {#if store || plugin.inStore}<button class="btn report" onclick={() => openUrl(storePage)}>{t('plugins.store.report')}</button>{/if}
       </div>
     </aside>

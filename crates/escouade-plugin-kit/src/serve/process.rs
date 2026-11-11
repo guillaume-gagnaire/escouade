@@ -54,7 +54,7 @@ where
     Ok(())
 }
 
-/// The whole life of a plugin of `escouade-plugins`: its language, then its loop on the standard input and output, on
+/// The whole life of a plugin run natively (its tests): its language, then its loop on the standard input and output, on
 /// a runtime of its own. Its exit code.
 pub fn run<P: Plugin>(name: &str, plugin: P) -> i32 {
     crate::i18n::from_env();
@@ -65,7 +65,7 @@ pub fn run<P: Plugin>(name: &str, plugin: P) -> i32 {
     {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("escouade-plugins {name}: {e}");
+            eprintln!("{name}: {e}");
             return 1;
         }
     };
@@ -79,7 +79,7 @@ pub fn run<P: Plugin>(name: &str, plugin: P) -> i32 {
     match result {
         Ok(()) => 0,
         Err(e) => {
-            eprintln!("escouade-plugins {name}: {e}");
+            eprintln!("{name}: {e}");
             1
         }
     }

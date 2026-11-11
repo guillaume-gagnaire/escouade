@@ -1,4 +1,4 @@
-//! The service of the code hosts and of the Kanban's sources, for every plugin that serves some (docs/PLUGINS.md §4.4,
+//! The service of the code hosts and of the Kanban's sources, for every plugin that serves some (docs/PLUGINS-DESIGN.md §4.4,
 //! §4.5): GitHub today, GitLab, Bitbucket, Gitea and Azure DevOps after it. A plugin gives its kinds — a
 //! [`ForgeKind`] for each host it serves, a [`SourceKind`] for each source — and [`Hosts`] answers the core's adapters
 //! (`ProcessForge`, `ProcessTicketSource`) for them:

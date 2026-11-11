@@ -1,5 +1,5 @@
 //! The reader of workflows a plugin brings (ESC-200, choice 158 of `UX-NOTES.md`;
-//! `docs/PLUGINS.md` §4.5): a plugin that learns Escouade a workflow it does not read by itself
+//! `docs/PLUGINS-DESIGN.md` §4.5): a plugin that learns Escouade a workflow it does not read by itself
 //! (a framework of its own, a team's convention). Escouade gives it the project's files the
 //! plugin declared (`contributes.workflowReaders[].files`), by `workflow/read`; it answers the
 //! graph of the workflow (steps, transitions, ways back), and what follows is the same as for a

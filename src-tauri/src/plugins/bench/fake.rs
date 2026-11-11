@@ -1,21 +1,19 @@
-//! The fake Escouade (PLG-3, ESC-175): a plugin's program started as the app starts it (in its
-//! folder, its three variables, in a Job object that takes its tree), spoken to in JSON-RPC 2.0, one
+//! The fake Escouade (PLG-3, ESC-175): a plugin's module started as the app starts it, spoken to in JSON-RPC 2.0, one
 //! message per line, without the app. It sends what it is told to (`call`, `notify`) and keeps what
 //! the plugin does on its own: the secrets it asks for (served from the session's, its own keys
 //! only, as `runtime` serves them), its `log` lines, its standard error, what it sends that answers
 //! nothing. The bench plays its scenarios through it; `escouade-plugin dev` lets an author drive it
 //! by hand.
 //!
-//! A `run.js` plugin is played in WASM (ESC-322), in the app's own host (`plugins::wasm`): its module, an instance on a
-//! thread of its own, `net/fetch` served by the host and closed to what `permissions.network` does not name; no Node.
+//! A plugin is played in WASM (`run.js`, ESC-322; `run.wasm`, ESC-331), in the app's own host (`plugins::wasm`): its
+//! module, an instance on a thread of its own, `net/fetch` served by the host and closed to what `permissions.network` does not name; no Node.
 //! As in the app, its instance ends once it answered `shutdown`, and a fault (its time, its memory, an exception) ends
 //! it as a crash ends a process. Its `fs/*` and `proc/*` are the app's (ESC-333), on the manifest as it is, around one agent
 //! of the bench, `BENCH_AGENT`, in a scratch folder that goes with the session; offline, it runs no program.
 
-use crate::job::Job;
 use crate::plugins::manifest::Manifest;
 use crate::plugins::runtime::{
-    matches, notification_line, request_line, METHOD_NOT_FOUND, NOT_YOURS, PROTOCOL,
+    matches, notification_line, request_line, METHOD_NOT_FOUND, NOT_YOURS,
 };
 use crate::plugins::{files, procs, wasm};
 use parking_lot::Mutex;
@@ -23,12 +21,9 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
 use std::path::Path;
-use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::Command;
 use tokio::sync::{mpsc, oneshot, Notify};
 
 /// The key of the bench's agent, for `fs/*` and `proc/*`.
@@ -221,104 +216,12 @@ impl Shared {
 /// A plugin's program, run by the fake Escouade.
 pub struct Session {
     shared: Arc<Shared>,
-    job: Option<Job>,
-    kill: Mutex<Option<oneshot::Sender<()>>>,
-    pub pid: Option<u32>,
 }
 
 impl Session {
-    /// Starts `program` for the plugin of `manifest` in `folder`; `secrets` are the values kept for
-    /// its keys; a key of its own with none gets `<made>-<key>`, or `null` as in the app.
-    pub fn start(
-        folder: &Path,
-        manifest: &Manifest,
-        program: &Path,
-        app_version: &str,
-        secrets: HashMap<String, String>,
-        made: Option<String>,
-    ) -> std::io::Result<Self> {
-        let run = manifest.run.as_ref().ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::InvalidInput, "a declarative plugin")
-        })?;
-        let mut cmd = Command::new(program);
-        cmd.args(&run.args)
-            .current_dir(folder)
-            .env("ESCOUADE_PLUGIN_ID", &manifest.id)
-            .env("ESCOUADE_PLUGIN_API", PROTOCOL.to_string())
-            .env("ESCOUADE_VERSION", app_version)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true);
-        #[cfg(windows)]
-        cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
-        crate::job::isolate(&mut cmd);
-        crate::proc::no_inherited_fds(&mut cmd);
-        let mut child = cmd.spawn()?;
-        let job = Job::for_child(&child);
-        let pid = child.id();
-        let mut stdin = child.stdin.take().expect("piped");
-        let stdout = child.stdout.take().expect("piped");
-        let stderr = child.stderr.take().expect("piped");
-        let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
-        let (kill_tx, mut kill_rx) = oneshot::channel::<()>();
-        let shared = Shared::new(tx, folder, manifest, secrets, made, false);
-
-        tokio::spawn(async move {
-            while let Some(bytes) = rx.recv().await {
-                if stdin.write_all(&bytes).await.is_err() || stdin.flush().await.is_err() {
-                    break;
-                }
-            }
-        });
-
-        let (err_tx, err_rx) = oneshot::channel::<()>();
-        {
-            let shared = shared.clone();
-            tokio::spawn(async move {
-                let mut lines = BufReader::new(stderr).split(b'\n');
-                while let Ok(Some(line)) = lines.next_segment().await {
-                    let line = String::from_utf8_lossy(&line)
-                        .trim_end_matches('\r')
-                        .to_string();
-                    shared.tell(line);
-                }
-                let _ = err_tx.send(());
-            });
-        }
-
-        {
-            let shared = shared.clone();
-            tokio::spawn(async move {
-                let mut lines = BufReader::new(stdout).split(b'\n');
-                loop {
-                    tokio::select! {
-                        next = lines.next_segment() => match next {
-                            Ok(Some(bytes)) => incoming(&shared, &String::from_utf8_lossy(&bytes)),
-                            _ => break,
-                        },
-                        _ = &mut kill_rx => {
-                            let _ = child.start_kill();
-                            break;
-                        }
-                    }
-                }
-                let code = child.wait().await.ok().and_then(|s| s.code());
-                let _ = tokio::time::timeout(Duration::from_millis(500), err_rx).await;
-                shared.end(code);
-            });
-        }
-
-        Ok(Self {
-            shared,
-            job,
-            kill: Mutex::new(Some(kill_tx)),
-            pid,
-        })
-    }
-
     /// Starts the instance of `module`, the WASM of the plugin of `manifest` in `folder`, in Escouade's host,
-    /// with its limits; `secrets` and `made` as for a process.
+    /// with its limits; `secrets` are the values kept for its keys; a key of its own with none gets `<made>-<key>`, or
+    /// `null` as in the app.
     pub fn start_wasm(
         folder: &Path,
         manifest: &Manifest,
@@ -403,12 +306,7 @@ impl Session {
                 });
                 s4.end(code);
             })?;
-        Ok(Self {
-            shared,
-            job: None,
-            kill: Mutex::new(None),
-            pid: None,
-        })
+        Ok(Self { shared })
     }
 
     /// The `initialize` Escouade sends, offering `version` of the protocol.
@@ -513,18 +411,9 @@ impl Session {
         }
     }
 
-    /// Ends it and its whole tree, as a crash would.
+    /// Ends it, as a crash would: its input closed, its thread ends it.
     pub fn kill(&self) {
-        if let Some(job) = &self.job {
-            job.terminate();
-        }
-        if let Some(k) = self.kill.lock().take() {
-            let _ = k.send(());
-        }
-        // An instance: its input closed, its thread ends it.
-        if self.shared.wasm {
-            self.shared.tx.lock().take();
-        }
+        self.shared.tx.lock().take();
     }
 }
 

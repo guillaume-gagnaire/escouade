@@ -1,4 +1,4 @@
-//! « Vue Antigravity » (`view/translate`, docs/PLUGINS.md §8): what Antigravity CLI's own interface (`agy`, in a terminal)
+//! « Vue Antigravity » (`view/translate`, docs/PLUGINS-DESIGN.md §8): what Antigravity CLI's own interface (`agy`, in a terminal)
 //! writes in its transcript (`brain/<id>/.system_generated/logs/transcript_full.jsonl` of the agent's home), read by the core a
 //! line at a time and translated here.
 //!

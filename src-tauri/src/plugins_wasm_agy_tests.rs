@@ -35,7 +35,7 @@ fn home_of(name: &str) -> PathBuf {
 /// The module, the home `home` its agent `a`'s, its permissions those of its manifest.
 fn hosted(module: wasmtime::Module, home: &Path) -> Hosted {
     let text = std::fs::read_to_string(root().join("plugins/antigravity/escouade-plugin.json"));
-    let manifest = read_manifest(&text.unwrap(), Hand::Builtin)
+    let manifest = read_manifest(&text.unwrap(), Hand::First)
         .manifest
         .expect("its manifest");
     let agents: Agents = Arc::default();

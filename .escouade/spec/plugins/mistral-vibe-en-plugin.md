@@ -1,7 +1,7 @@
 ---
 title: "Mistral Vibe en plugin"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4.5, §4.6, §4.13 (INT-10.6, INT-10.6 bis), §8.28","docs/TODO-2.2.md, INT-10.6","Ticket ESC-281","Ticket ESC-327","Ticket ESC-350","plugins/mistral/README.md"]
+sources: ["docs/PLUGINS-DESIGN.md §4.5, §4.6, §4.13 (INT-10.6, INT-10.6 bis), §8.28","docs/TODO-2.2.md, INT-10.6","Ticket ESC-281","Ticket ESC-327","Ticket ESC-350","plugins/mistral/README.md"]
 tickets: ["ESC-281","ESC-327","ESC-350"]
 decisions: [57]
 compared: null

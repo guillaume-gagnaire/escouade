@@ -50,7 +50,7 @@ A plugin written in JS or TypeScript ships as `run.js`: its manifest names its b
 - **The “Verified by Escouade” review** recompiles the bundle it read and compares the fingerprint to the published module’s: what was read is what runs. Another fingerprint refuses the version.
 - **The plugin’s page** says “Runs inside Escouade, sandboxed · compiled to WASM by the store”, and its list row “Compiled to WASM by the store”.
 
-A plugin of the store runs neither Node nor any program of its own: the “Binaries” check refuses `run.command`, with the reason (“`run.command` would start a native program: the store no longer publishes one, every plugin runs in WASM.”). Installed from a folder or a git repository, outside the store, a plugin started by a command is still allowed, unverified.
+A plugin of the store runs neither Node nor any program of its own: the “Binaries” check refuses `run.command`, with the reason (“`run.command` would start a native program: the store no longer publishes one, every plugin runs in WASM.”). Outside the store either, Escouade no longer starts `run.command`, whatever the plugin’s origin.
 
 ## A plugin in Rust
 

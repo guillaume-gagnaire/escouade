@@ -1,13 +1,13 @@
 ---
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §8 (ESC-330)","docs/PLUGINS.md §8.16 (ESC-341)","docs/PLUGINS.md §8.17 (ESC-335)","docs/PLUGINS.md §8.18 (ESC-336)","docs/PLUGINS.md §8.19 (ESC-344)","docs/PLUGINS.md §8.20 (ESC-337)","docs/PLUGINS.md §8.22 (ESC-351)","docs/PLUGINS.md §8.23 (ESC-349)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire","docs/PLUGINS.md §8.24 (ESC-348)","docs/PLUGINS.md §8.25 (ESC-345)","docs/PLUGINS.md §8.27 (ESC-347)","docs/PLUGINS.md §8.28 (ESC-350)","docs/PLUGINS.md §8.29 (ESC-358)","Accord de l'utilisateur du 2026-11-06 : publication et MIT d'escouade-voice"]
+sources: ["docs/PLUGINS-DESIGN.md §8 (ESC-330)","docs/PLUGINS-DESIGN.md §8.16 (ESC-341)","docs/PLUGINS-DESIGN.md §8.17 (ESC-335)","docs/PLUGINS-DESIGN.md §8.18 (ESC-336)","docs/PLUGINS-DESIGN.md §8.19 (ESC-344)","docs/PLUGINS-DESIGN.md §8.20 (ESC-337)","docs/PLUGINS-DESIGN.md §8.22 (ESC-351)","docs/PLUGINS-DESIGN.md §8.23 (ESC-349)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire","docs/PLUGINS-DESIGN.md §8.24 (ESC-348)","docs/PLUGINS-DESIGN.md §8.25 (ESC-345)","docs/PLUGINS-DESIGN.md §8.27 (ESC-347)","docs/PLUGINS-DESIGN.md §8.28 (ESC-350)","docs/PLUGINS-DESIGN.md §8.29 (ESC-358)","Accord de l'utilisateur du 2026-11-06 : publication et MIT d'escouade-voice"]
 tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-352","ESC-349","ESC-348","ESC-345","ESC-346","ESC-347","ESC-350","ESC-358","ESC-353"]
 decisions: [73,71,70,72,75,80,84,86,89,92,93,96,99,103]
 compared: null
 ---
 
-**Cette page dit la cible, et ce qui en tourne déjà.** ESC-330 a fait l'étude et le prototype, le portage suit le plan de `docs/PLUGINS.md` §8.10. Seul ce que dit « Ce qui tourne déjà » est dans l'app. Pour le reste, *Les plugins livrés avec Escouade* et *Les programmes JS/TS des plugins, en WASM sans Node* disent ce qui est vrai aujourd'hui.
+**Cette page dit la cible, et ce qui en tourne déjà.** ESC-330 a fait l'étude et le prototype, le portage suit le plan de `docs/PLUGINS-DESIGN.md` §8.10. Seul ce que dit « Ce qui tourne déjà » est dans l'app. Pour le reste, *Les plugins livrés avec Escouade* et *Les programmes JS/TS des plugins, en WASM sans Node* disent ce qui est vrai aujourd'hui.
 
 ## Ce qui tourne déjà (ESC-331, ESC-333)
 
@@ -62,7 +62,7 @@ La mécanique est dans l'app, et `plugins/seed.json` reste vide tant que la prem
 
 ## Les capacités
 
-Ce qu'un plugin fait hors du protocole se déclare au manifeste, est appliqué par Escouade et se dit dans la fenêtre d'installation : le réseau, y compris les instances que l'utilisateur donne, les flux et le WebSocket ; le serveur local d'un harness lancé par le cœur ; les fichiers de racines nommées, appelés de façon synchrone ; les commandes nommées. Les minuteurs sont un droit de base. Détail : `docs/PLUGINS.md` §8.4.
+Ce qu'un plugin fait hors du protocole se déclare au manifeste, est appliqué par Escouade et se dit dans la fenêtre d'installation : le réseau, y compris les instances que l'utilisateur donne, les flux et le WebSocket ; le serveur local d'un harness lancé par le cœur ; les fichiers de racines nommées, appelés de façon synchrone ; les commandes nommées. Les minuteurs sont un droit de base. Détail : `docs/PLUGINS-DESIGN.md` §8.4.
 
 ## Le modèle
 
@@ -114,7 +114,7 @@ Publié le 2026-11-05 : `escouade-plugin-protocol`, `escouade-plugin-kit` et `es
 - `escouade-plugin-protocol`, `escouade-plugin-kit` et `escouade-acp` sortent en `0.1.0`, sous licence MIT comme le SDK. Un plugin en Rust garde ainsi le choix de sa licence. Les plugins de la première main et l'app restent en GPL-3.0-or-later.
 - Leur documentation, en anglais, se lira sur docs.rs pour le natif et pour `wasm32-wasip1`.
 - Les plugins dépendent de ces crates par version. Dans le dépôt, `[patch.crates-io]` les ramène sur `crates/`. Le store, qui ne lit que le dossier du plugin, compilera ce qui est publié.
-- Un plugin de la première main ne se compile pas encore seul dans son dossier : il reste membre du workspace de l'app et n'a pas de `Cargo.lock` à lui. C'est à régler avant que le store le compile (`docs/PLUGINS.md` §8.16).
+- Un plugin de la première main ne se compile pas encore seul dans son dossier : il reste membre du workspace de l'app et n'a pas de `Cargo.lock` à lui. C'est à régler avant que le store le compile (`docs/PLUGINS-DESIGN.md` §8.16).
 
 ## Ce qui tourne déjà : le store compile un `run.wasm` (ESC-336)
 
@@ -131,7 +131,7 @@ Ces quatre plugins sont les premiers portés. Ce qui précède dit qu'aucun plug
 
 - Chacun est en `run.wasm`, en version `2.2.0`, `escouade.min` `2.2.0`, ses identifiants inchangés. Il n'est plus dans `escouade-plugins`.
 - **Deux compilations.** Dans le dépôt, un second workspace, `plugins/Cargo.toml`, tient les plugins portés et les compile contre `crates/` par son `[patch.crates-io]` : tests de l'app et build de développement (`scripts/plugins-wasm.sh`). Dans son dossier, chaque plugin porté a son propre `Cargo.lock`, qui fixe les crates publiées sur crates.io. Cargo l'ignore dans le workspace ; `escouade-plugin build` et le store le lisent, dans le dossier seul. Le module que le store publie est celui-là. `scripts/plugin-lock.sh` écrit ce lock.
-- Pour les mêmes sources, chacun a la même empreinte sous Windows et sous Linux (`docs/PLUGINS.md` §8.19).
+- Pour les mêmes sources, chacun a la même empreinte sous Windows et sous Linux (`docs/PLUGINS-DESIGN.md` §8.19).
 - Chacun passe le banc avec `--first-party`, et `plugins/ci.mjs` le compile et le joue.
 - Chacun répond comme son natif : mêmes réponses et mêmes requêtes au service, sur neuf appels enregistrés avant le portage (`tests/fixtures/plugins/parity/`).
 - **Jira déclare `{account}`** : il joint le site que l'utilisateur a tapé, comme il le faisait en process. C'est la seule permission qui change.
@@ -169,12 +169,12 @@ GitHub, GitLab, Bitbucket, Gitea et Azure DevOps sont portés comme les quatre s
 
 ## Ce qui tourne déjà : isola, le premier plugin qui lance un programme (ESC-351)
 
-- isola est en `run.wasm`, en version `2.2.0`, `escouade.min` `2.2.0`, son identifiant inchangé. Il n'est plus dans `escouade-plugins`. Il suit les *deux compilations* de ESC-344 : même module sous Windows et sous Linux (`docs/PLUGINS.md` §8.22).
+- isola est en `run.wasm`, en version `2.2.0`, `escouade.min` `2.2.0`, son identifiant inchangé. Il n'est plus dans `escouade-plugins`. Il suit les *deux compilations* de ESC-344 : même module sous Windows et sous Linux (`docs/PLUGINS-DESIGN.md` §8.22).
 - **`proc/*`.** L'hôte lance `isola ls --json`, `isola down` et `isola destroy`, les trois lignes de `permissions.commands`, montrées dans la fenêtre des permissions. Un autre programme, ou les mêmes avec un argument de plus, est refusé et va au journal. `isola up` n'y est pas : le cœur le lance dans un terminal, une fois le `.isola.toml` approuvé.
 - **Le worktree est prêté le temps d'un appel.** Le plugin reçoit un nom (`agent`), jamais un chemin, et le donne à `proc/spawn`. Le prêt finit avec l'appel : le plugin ne garde aucun worktree. Un plugin qui n'est pas un harness n'a pas d'autre moyen de joindre un worktree.
 - **Il répond comme son natif** : mêmes réponses et mêmes commandes sur quinze appels enregistrés avant le portage. Seul le texte d'un programme qui ne démarre pas vient maintenant de l'hôte.
 - **Un programme introuvable pour l'hôte n'est pas installé.** Le cœur cherche `isola` comme l'hôte : sous Windows, un `.exe` ou un `.com`, jamais un `.cmd`. Sans lui, un worktree n'est à personne.
-- **isola n'a pas de release pour Windows** à ce jour (0.5.0 : Linux et macOS). Le vrai programme n'a pas été essayé avec le module : voir `docs/PLUGINS.md` §8.22, c'est à faire avant Z1.
+- **isola n'a pas de release pour Windows** à ce jour (0.5.0 : Linux et macOS). Le vrai programme n'a pas été essayé avec le module : voir `docs/PLUGINS-DESIGN.md` §8.22, c'est à faire avant Z1.
 - **Avant Z2**, comme les quatre de ESC-344, son module n'est pas dans l'installeur.
 
 ## OpenCode, le premier harness porté à un serveur local (ESC-349)

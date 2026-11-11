@@ -3,7 +3,7 @@
 //! `Agent` for each agent, the harness being described with each agent (`described` of `engine/launch` and `agent/attach`)
 //! or the plugin's own, as its manifest declares it.
 //!
-//! It lives in this crate and not in a plugin: a plugin is compiled from its folder alone (docs/PLUGINS.md §8.5.3), so it
+//! It lives in this crate and not in a plugin: a plugin is compiled from its folder alone (docs/PLUGINS-DESIGN.md §8.5.3), so it
 //! cannot depend on another by a path.
 
 use crate::view::View;
@@ -88,7 +88,7 @@ pub fn serve_as(name: &str, own: Option<HarnessDecl>) -> i32 {
 }
 
 /// A file of the agent `agent`, as a state machine must have it before it answers: from the disk natively; in a module
-/// through the host, which judges it against the folders of that agent (`fs/read`, docs/PLUGINS.md §8.4.6) and the
+/// through the host, which judges it against the folders of that agent (`fs/read`, docs/PLUGINS-DESIGN.md §8.4.6) and the
 /// plugin's `permissions.files`. None when it cannot be read, or is refused.
 #[cfg(not(target_family = "wasm"))]
 pub fn agent_file(_agent: &str, path: &Path) -> Option<String> {

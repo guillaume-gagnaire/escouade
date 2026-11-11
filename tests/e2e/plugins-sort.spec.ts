@@ -1,4 +1,4 @@
-// The sort of the seed (ESC-373, docs/PLUGINS.md §8.7) on the real app, its files those of tests/fixtures/store/fake-store.mjs:
+// The sort of the seed (ESC-373, docs/PLUGINS-DESIGN.md §8.7) on the real app, its files those of tests/fixtures/store/fake-store.mjs:
 // a first installation installs nothing; « Ajouter un compte… » on a harness at the start installs its plugin from the seed,
 // with no network, and says it; the view Plugins proposes the others and installs one in a click; a plugin uninstalled is
 // not put back at the next start; Réglages › Plugins (ESC-384) proposes it again, and installs it in a click.

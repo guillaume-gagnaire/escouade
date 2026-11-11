@@ -1,4 +1,4 @@
-//! « Vue Copilot » (`view/translate`, docs/PLUGINS.md §8): what Copilot's own interface writes in its session's log
+//! « Vue Copilot » (`view/translate`, docs/PLUGINS-DESIGN.md §8): what Copilot's own interface writes in its session's log
 //! (`session-state/<id>/events.jsonl`), read by the core a line at a time and translated here.
 //!
 //! The log's entries are the events of the session, as `copilot --server --stdio` sends them (`session.event`), less those it

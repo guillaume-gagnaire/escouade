@@ -14,11 +14,11 @@ Une version vérifiée a été relue par Escouade et signée ; l’app vérifie 
 
 ### Un plugin peut-il voir mes projets privés ?
 
-Pas d’office : un plugin que tu installes est coupé dans chaque projet privé, et rien de ce projet ne lui est envoyé tant que tu ne l’y allumes pas. Un programme `run.command` a cependant tes droits sur le disque (voir [les permissions](plugins/permissions)). Les plugins livrés avec Escouade, eux, y sont actifs, comme le reste de l’app.
+Pas d’office : un plugin que tu installes est coupé dans chaque projet privé, et rien de ce projet ne lui est envoyé tant que tu ne l’y allumes pas. Chaque plugin tourne en WASM dans Escouade : il ne lit sur le disque que les dossiers qu’il déclare, et jamais ceux d’un projet où il est coupé (voir [les permissions](plugins/permissions)).
 
 ### Comment arrêter un plugin qui fait quelque chose que je ne veux pas ?
 
-Son interrupteur, dans la vue Plugins, l’arrête pour toute l’app ; son onglet Projets, pour un projet ; son onglet Permissions retire une permission seule. Son journal dit ce qu’il a fait. Un plugin livré avec Escouade se coupe de la même façon.
+Son interrupteur, dans la vue Plugins, l’arrête pour toute l’app ; son onglet Projets, pour un projet ; son onglet Permissions retire une permission seule. Son journal dit ce qu’il a fait. Un plugin d’Escouade se coupe de la même façon.
 
 ### Un projet peut-il installer un plugin à ma place ?
 

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Builds escouade-js, Escouade's Javy plugin (src-tauri/escouade-js/: the QuickJS of Javy 9.1 and the `escouade-turn`
-# export, docs/PLUGINS.md §5.2), for wasm32-wasip1, then initializes it with the pinned Javy:
+# export, docs/PLUGINS-DESIGN.md §5.2), for wasm32-wasip1, then initializes it with the pinned Javy:
 # src-tauri/escouade-js/target/escouade-js.wasm and its SHA-256 beside it (escouade-js.wasm.sha256). The app's build
 # script embeds it (src-tauri/build.rs): without it, the app runs no `run.js` plugin and says why. CI builds it once
 # (the `escouade-js` job) and hands it to every job that builds the app.

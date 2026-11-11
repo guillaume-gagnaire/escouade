@@ -1,5 +1,5 @@
 //! Tests of the conformance bench of the plugins (PLG-3, ESC-175): it passes on the fake plugin
-//! (tests/fixtures/fake-plugin.mjs) and on Escouade's own plugins (plugins/<id>/, ESC-182 and ESC-314, their
+//! (tests/fixtures/plugins/fake/plugin.mjs) and on Escouade's own plugins (plugins/<id>/, ESC-182 and ESC-314, their
 //! programs as their folders hold them: `dist/` built and committed), and fails, with the right reason, on a plugin that ignores
 //! `initialize`, answers past its delay, takes a version it does not speak, asks for another's
 //! secret or writes its own out, or does not end at `shutdown`. `escouade-plugin` runs the same.
@@ -18,27 +18,22 @@ fn example(name: &str) -> PathBuf {
     root().join("plugins").join(name)
 }
 
-/// The fake plugin in a folder of the test's own, its program started with `args`; it asks for
+/// The fake plugin in a folder of the test's own, its module told `args`; it asks for
 /// `ticket.*`, decides, and keeps the secret `token`.
 fn fake(name: &str, args: &[&str]) -> PathBuf {
-    #[cfg(windows)]
-    crate::paths::trim_test_path();
     let dir = std::env::temp_dir()
         .join(format!(
             "plugin-bench-{name}-{}",
             uuid::Uuid::new_v4().simple()
         ))
         .join("plugin");
-    std::fs::create_dir_all(&dir).unwrap();
-    for f in ["fake-plugin.mjs", "fake-plugin.cmd", "fake-plugin"] {
-        std::fs::copy(root().join("tests/fixtures").join(f), dir.join(f)).unwrap();
-    }
+    let run = crate::plugins_runtime_tests::fake_module(&dir, args);
     let manifest = json!({
         "id": "dev.test.fake",
         "name": "Faux plugin",
         "version": "1.0.0",
         "escouade": { "api": "1", "min": "2.1.0" },
-        "run": { "command": "fake-plugin", "windows": "fake-plugin.cmd", "args": args },
+        "run": run,
         "activation": ["event:ticket.column"],
         "permissions": { "events": ["ticket.*"], "decide": true, "secrets": ["token"] }
     });
@@ -248,7 +243,7 @@ async fn a_plugin_that_ignores_shutdown_fails_on_it() {
     assert_eq!(verdict(&r, Scenario::Shutdown), Verdict::Fail);
     assert_eq!(
         said(&r, Scenario::Shutdown),
-        "no answer to shutdown within 1000 ms: Escouade ends its job"
+        "no answer to shutdown within 1000 ms: Escouade ends its instance"
     );
     assert_eq!(verdict(&r, Scenario::Crash), Verdict::Pass);
 }

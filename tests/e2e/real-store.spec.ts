@@ -238,14 +238,14 @@ test('the plugins the app gives: each one that has a program starts', async ({ a
   const { page } = app;
   await addProject(page, app.repo);
   await openInstalled(page);
-  const table = page.getByRole('table', { name: 'Livrés avec Escouade' });
+  const table = page.getByRole('table', { name: 'Du dépôt' });
   await expect(table).toBeVisible();
   const names = await table.locator('.nm b').allInnerTexts();
   note(`\n## Les plugins livrés (${names.length})\n`);
   await shot(page, 'builtin');
   for (const name of names) {
     await openInstalled(page);
-    await page.getByRole('table', { name: 'Livrés avec Escouade' }).locator('.nm', { hasText: name }).first().click();
+    await page.getByRole('table', { name: 'Du dépôt' }).locator('.nm', { hasText: name }).first().click();
     await expect(page.locator('.phead')).toContainText(name);
     const journal = page.getByRole('tab', { name: 'Journal' });
     if ((await journal.count()) === 0) {

@@ -4,7 +4,7 @@ version = "0.0.0"
 edition = "2021"
 publish = false
 
-# The host of the prototype (ESC-330, docs/PLUGINS.md §8.9): what `src-tauri/src/plugins/wasm.rs` would become for a
+# The host of the prototype (ESC-330, docs/PLUGINS-DESIGN.md §8.9): what `src-tauri/src/plugins/wasm.rs` would become for a
 # `run.wasm` module, and the two native plugins it is measured against, on the real crates of the repository.
 [workspace]
 

@@ -3,7 +3,7 @@
 What the installer carries (`bundle.resources` of `tauri.conf.json`) so that Escouade works from its first start, with no
 network: for each entry of `plugins/seed.json`, the files the store published, the same bytes and the same signature
 (`<id>/version.json`, `version.json.minisig`, `archive.tar.gz`, `plugin.wasm`), and the revocation list of the day
-(`revocations.json` and its `.minisig`). See `docs/PLUGINS.md` §8.7.
+(`revocations.json` and its `.minisig`). See `docs/PLUGINS-DESIGN.md` §8.7.
 
 Nothing but this file is committed:
 

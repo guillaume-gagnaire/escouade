@@ -1,19 +1,19 @@
 # Le protocole
 
-Un plugin qui a un programme parle à Escouade en JSON-RPC 2.0 : dans l’app, en WASM, s’il est en JS, en TypeScript ou en Rust ; sur son entrée et sa sortie standard s’il est un process. Cette page décrit les messages et le process.
+Un plugin qui a un programme parle à Escouade en JSON-RPC 2.0. Tout programme de plugin tourne **dans l’app, en WASM** (en JS, en TypeScript ou en Rust) : Escouade ne lance aucun programme natif. Cette page décrit les messages et l’instance qui les reçoit.
 
-Un plugin `run.js` ou `run.wasm` parle le même protocole : [ce qui change en WASM](#un-programme-en-wasm) vient plus bas, et [les appels](plugins/calls) donnent un exemple en TS et en Rust pour chaque méthode.
+Un plugin `run.js` ou `run.wasm` parle ce protocole : [ce que l’hôte WASM lui donne et lui refuse](#un-programme-en-wasm) vient plus bas, et [les appels](plugins/calls) donnent un exemple en TS et en Rust pour chaque méthode.
 
 ## Quand le programme démarre
 
-- **À sa première activation, jamais avant.** Escouade lance le programme de `run` quand un fait de sa liste `activation` se produit (`event:ticket.column`), ou au premier appel qu’il lui fait. Un plugin sans `activation` ne tourne pas ; un plugin sans `run` est déclaratif : rien ne s’exécute.
-- **Un process par plugin.** Il sert tous les projets et tous les agents où le plugin est actif : Escouade distingue ses appels par leur `id`.
-- **Dans le dossier du plugin**, avec trois variables : `ESCOUADE_PLUGIN_ID` (son id), `ESCOUADE_PLUGIN_API` (la version du protocole, `1`) et `ESCOUADE_VERSION` (celle d’Escouade).
-- **Avec tout ce qu’il lance.** Sous Windows, le process est dans un Job object ; sous macOS et Linux, il mène son groupe de processus. Quand Escouade l’arrête, ce qu’il a lancé s’arrête avec lui ; sous Windows, même si Escouade plante.
+- **À sa première activation, jamais avant.** Escouade démarre le module de `run` quand un fait de sa liste `activation` se produit (`event:ticket.column`), ou au premier appel qu’il lui fait. Un plugin sans `activation` ne tourne pas ; un plugin sans `run` est déclaratif : rien ne s’exécute.
+- **Une instance par plugin.** Elle sert tous les projets et tous les agents où le plugin est actif : Escouade distingue ses appels par leur `id`.
+- **Sans environnement.** Le module ne lit ni variables ni arguments : `initialize` lui dit la version du protocole, celle d’Escouade et la langue de l’app (`lang`). Changer la langue relance les plugins qui tournent.
+- **Avec ce qu’il lance.** Les programmes qu’il démarre par `proc/spawn` (`permissions.commands`) s’arrêtent avec son instance.
 
 ## Les messages
 
-- Du JSON-RPC 2.0, **un message par ligne** : du JSON en UTF-8, sans retour à la ligne, terminé par `\n`. La sortie standard ne sert qu’au protocole ; écris tes traces sur la sortie d’erreur, qui va au [journal](#le-journal).
+- Du JSON-RPC 2.0, **un message par ligne** : du JSON en UTF-8, sans retour à la ligne, terminé par `\n`, sur l’entrée et la sortie standard du module. La sortie standard ne sert qu’au protocole ; écris tes traces sur la sortie d’erreur, ou par `log`, qui vont au [journal](#le-journal). Le SDK et le kit font tout cela pour toi.
 - **Des lots dans les deux sens** : un tableau JSON de messages, sur une ligne. Réponds à un lot par un lot ; les réponses peuvent venir dans n’importe quel ordre, chacune avec l’`id` de sa requête.
 - Une notification n’a pas d’`id` et n’attend pas de réponse.
 
@@ -74,8 +74,8 @@ Chaque délai dépassé est noté au journal : « test/do: no answer within 300
 | `settings/get` | `{}`, ou `{ "project": "<id>" }` | Ses réglages, tels que l’utilisateur les a choisis dans l’onglet Réglages de sa page : un objet par clé de `contributes.settings`, sans celles laissées à leur valeur par défaut. Avec un projet (le `project.id` d’un fait), ceux que son [`.escouade.yml`](escouade-yml) lui donne sous `plugins.<id>` passent devant, s’il est activé dans ce projet : seulement les clés qu’il déclare, d’une valeur de leur type, jamais un secret. |
 | `log` (notification) | `{ "level": "info", "message": "…" }` | Aucune : la ligne va au journal du plugin. |
 | `files/read` | `{ "path": "data/words.txt" }` | `"…"`, le texte d’un fichier de son dossier, en texte UTF-8, 256 Ko au plus, aux deux transports. Refusé (`-32003`, gardé au journal) : un chemin absolu, avec `..` ou un lecteur, un lien qui mène hors du dossier, un nom caché (`.env`, `.git`), le manifeste. `-32005` pour un fichier absent, `-32004` pour un fichier trop gros ou qui n’est pas du texte. |
-| `net/fetch` | `{ "url": "https://…", "method": "POST", "headers": {}, "body": "…" }` | `{ "status": 200, "headers": {}, "body": "…" }`, pour un plugin en WASM seulement : voir [le réseau](#le-reseau-par-escouade). |
-| `net/stream`, `ws/*`, `timer/*`, `fs/*`, `proc/*` | Voir [les appels](plugins/calls). | Pour un plugin en WASM seulement ; un process reçoit `-32601`. |
+| `net/fetch` | `{ "url": "https://…", "method": "POST", "headers": {}, "body": "…" }` | `{ "status": 200, "headers": {}, "body": "…" }`, voir [le réseau](#le-reseau-par-escouade). |
+| `net/stream`, `ws/*`, `timer/*`, `fs/*`, `proc/*` | Voir [les appels](plugins/calls). | Servis par l’hôte WASM, chacun sous sa permission. |
 
 Une autre méthode répond l’erreur `-32601` et le note au journal. Les erreurs propres à Escouade : `-32001` pour un secret qui n’est pas celui du plugin, `-32002` pour un trousseau injoignable, `-32003` pour ce que le plugin ne peut pas atteindre (un hôte, un fichier), `-32004` pour une requête qui échoue en route, `-32005` pour un fichier absent, `-32602` pour des paramètres qui ne tiennent pas.
 
@@ -92,15 +92,11 @@ Les secrets d’un plugin sont dans le trousseau du système, sous un nom à lui
 - **Un plantage relance le plugin**, trois fois en cinq minutes. Au quatrième, il est arrêté : « stopped after 4 crashes within 5 minutes ». Il ne redémarre plus seul ; le bouton « Relancer » de son journal, dans la vue Plugins, le relance, ses plantages oubliés.
 - **Les appels en cours** quand il plante échouent : leur réponse par défaut s’applique.
 - **Pendant la relance**, ce qu’Escouade lui envoie attend dans une file de 256 messages, puis part dans l’ordre une fois `initialize` répondu. Une file pleine perd son plus vieux message, et le journal le dit.
-- **Ce que chaque agent lui avait attaché** (pour un harness, `agent/attach` : sa session, son mode, son modèle) est redonné au nouveau process avant tout autre message.
-
-## La mémoire
-
-Escouade lit la mémoire du plugin et de tout ce qu’il a lancé toutes les deux secondes, comme celle des agents. Au-delà de 1 Go, le plugin est arrêté, sans relance : « stopped: 1100 MB of memory, past the limit of 1024 MB ».
+- **Ce que chaque agent lui avait attaché** (pour un harness, `agent/attach` : sa session, son mode, son modèle) est redonné à la nouvelle instance avant tout autre message.
 
 ## La fermeture d’Escouade
 
-Quand Escouade se ferme, il envoie `shutdown` à chaque plugin qui tourne, attend sa réponse une seconde au plus pour tous, puis arrête son process et tout ce qu’il a lancé. Réponds à `shutdown`, puis termine-toi : ce que tu n’as pas écrit avant est perdu.
+Quand Escouade se ferme, il envoie `shutdown` à chaque plugin qui tourne, attend sa réponse une seconde au plus pour tous, puis arrête son instance et les programmes qu’elle a lancés. Réponds à `shutdown`, puis termine-toi : ce que tu n’as pas écrit avant est perdu.
 
 ## Le journal
 
@@ -118,13 +114,13 @@ Ses méthodes, leurs paramètres, leurs réponses et leurs délais sont décrits
 
 ## Un programme en WASM
 
-Un plugin dont le manifeste dit `"run": { "js": "dist/plugin.mjs" }` ou `"run": { "wasm": "Cargo.toml" }` ne lance pas de process : Escouade fait tourner son module **dans l’app, en WASM**, sans Node sur la machine. Une instance par plugin, sur un fil à elle, qui garde son état d’un appel à l’autre comme un process. Le protocole est le même : les mêmes messages, portés par l’entrée et la sortie standard du module, la même poignée de main, les mêmes délais, le même journal et les mêmes relances ; [le SDK](plugins/sdk) et [le kit Rust](plugins/rust) le parlent pour toi.
+Le manifeste d’un plugin qui a un programme dit le manifeste dit `"run": { "js": "dist/plugin.mjs" }` ou `"run": { "wasm": "Cargo.toml" }` est un programme que fait tourner Escouade **dans l’app, en WASM**, sans Node ni Rust sur la machine. Une instance par plugin, sur un fil à elle, qui garde son état d’un appel à l’autre. Les messages passent par l’entrée et la sortie standard du module ; la poignée de main, les délais, le journal et les relances sont ceux de toute la page ; [le SDK](plugins/sdk) et [le kit Rust](plugins/rust) parlent le protocole pour toi.
 
 Le module est compilé une fois : par le store pour un plugin du store (l’app le télécharge et vérifie son empreinte contre `version.json`), par l’app pour un `run.js` installé depuis un dossier ou un dépôt git. Un `run.wasm` hors du store vient avec son `plugin.wasm`, à côté du manifeste. L’app le précompile à l’installation, le garde dans son cache et le précompile à nouveau après une mise à jour d’Escouade. Il lui faut Escouade 2.2.0 ou plus récent.
 
 ### Le réseau, par Escouade
 
-Un plugin en WASM n’ouvre pas de connexion : tout passe par Escouade, par `net/fetch`, `net/stream` et `ws/open`, que seul un plugin en WASM reçoit (un process a son propre réseau, et ces méthodes lui répondent `-32601`). `fetch` en JS et le client du kit en Rust y mènent. Escouade envoie la requête :
+Un plugin n’ouvre pas de connexion : tout passe par Escouade, par `net/fetch`, `net/stream` et `ws/open`. `fetch` en JS et le client du kit en Rust y mènent. Escouade envoie la requête :
 
 - **en https seulement**, vers un hôte de `permissions.network` ou l’un de ses sous-domaines (`slack.com` couvre `api.slack.com`) ; jamais vers une adresse IP écrite dans l’URL, que `permissions.network` ne nomme pas ;
 - **sans suivre de redirection** : le plugin reçoit la réponse 3xx, que le client du kit suit en Rust ;
@@ -144,15 +140,15 @@ Un appel refusé répond `-32003` et le journal le garde (« slack.com resolves
 
 ### Les limites
 
-- **64 Mo de mémoire, 2 s par tour de travail**, 500 ms quand il tient une décision.
-- **Une boucle sans fin, une mémoire qui grossit ou une exception non rattrapée** finissent l’instance, et le journal dit pourquoi (« a turn ran past 2000 ms: Escouade stopped its instance », « its instance crashed: … ») ; une nouvelle est faite, comme après le plantage d’un process, avec les mêmes trois relances en cinq minutes, puis le plugin est arrêté.
+- **64 Mo de mémoire, 2 s par tour de travail**, 500 ms quand il tient une décision ; `limits` du manifeste en demande plus, jusqu’à 256 Mo et 10 s par tour.
+- **Une boucle sans fin, une mémoire qui grossit ou une exception non rattrapée** finissent l’instance, et le journal dit pourquoi (« a turn ran past 2000 ms: Escouade stopped its instance », « its instance crashed: … ») ; une nouvelle est faite, avec les trois relances en cinq minutes, puis le plugin est arrêté.
 - **Des minuteurs** : `setTimeout` et `clearTimeout` existent en JS, `sleep` et `timeout` dans le kit, 10 ms au moins, 64 à la fois.
 - **Un bundle fait avec le SDK 0.2** ne tourne pas en WASM : le plugin s’arrête et son journal dit de le reconstruire avec `@escouade-dev/plugin` 0.3 ou plus récent.
 
 ### Ce qu’un plugin en WASM ne peut pas faire
 
-Rien de ce qu’il ne déclare pas : ni réseau, ni fichier hors de son dossier, ni programme. Il ne lit pas l’environnement et ne charge aucun module natif ou distant. Un bundle qui importe autre chose que `node:fs` et `node:readline`, ou qui a des `export`, n’est pas compilé, et le plugin s’arrête avec la raison. Ses secrets et ses réglages sont les siens seulement, comme pour un process. C’est pourquoi la fenêtre d’installation dit « Tourne dans Escouade, isolé », puis chaque [capacité](plugins/capabilities) qu’il demande, et non « Lance un programme sur ton ordinateur, avec tes droits ».
+Rien de ce qu’il ne déclare pas : ni réseau, ni fichier hors de son dossier, ni programme. Il ne lit pas l’environnement et ne charge aucun module natif ou distant. Un bundle qui importe autre chose que `node:fs` et `node:readline`, ou qui a des `export`, n’est pas compilé, et le plugin s’arrête avec la raison. Ses secrets et ses réglages sont les siens seulement. C’est pourquoi la fenêtre d’installation dit « Tourne dans Escouade, isolé », puis chaque [capacité](plugins/capabilities) qu’il demande, et non « Lance un programme sur ton ordinateur, avec tes droits ».
 
 ## Ce que l’utilisateur change
 
-Un plugin désactivé, une permission retirée ou rendue, une mise à jour installée : son process est arrêté, et le suivant reçoit le manifeste et les permissions de maintenant. Une permission de secret retirée fait répondre `-32001` à `secrets/get` pour cette clé, comme pour un secret qui n’est pas le sien.
+Un plugin désactivé, une permission retirée ou rendue, une mise à jour installée : son instance est arrêtée, et la suivante reçoit le manifeste et les permissions de maintenant. Une permission de secret retirée fait répondre `-32001` à `secrets/get` pour cette clé, comme pour un secret qui n’est pas le sien.

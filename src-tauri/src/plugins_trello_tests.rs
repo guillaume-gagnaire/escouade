@@ -269,7 +269,7 @@ async fn a_card_moves_to_its_list_and_is_commented() {
 #[tokio::test(flavor = "multi_thread")]
 async fn the_plugin_says_its_texts_in_the_language_it_is_started_in() {
     let Rig { server, rt, t, .. } = trello().await;
-    rt.set_builtin_env(vec![("ESCOUADE_LANG".into(), "en".into())]);
+    rt.set_lang("en");
     board(&server);
     let page = t.issues("b1", &Query::default()).await.unwrap();
     assert_eq!(page.issues[0].kind, "Card");
@@ -349,8 +349,8 @@ fn trello_is_a_plugin_of_the_app_that_the_registry_of_sources_names() {
         VERSION,
         app_dir(),
     );
-    let v = plugins.get(ID, Lang::En).expect("the registry gives it");
-    assert_eq!(v.origin, Origin::Builtin);
+    let v = plugins.get(ID, Lang::En).expect("the workspace runs it");
+    assert_eq!(v.origin, Origin::Workspace);
     let m = v.manifest.unwrap();
     assert_eq!(m.run.unwrap().wasm.as_deref(), Some("Cargo.toml"));
     assert_eq!(m.permissions.network, ["api.trello.com"]);

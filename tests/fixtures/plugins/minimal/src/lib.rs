@@ -1,10 +1,10 @@
-//! The demonstration plugin (`dev.escouade.minimal`): the least a plugin of the app is, which proves the way from the
-//! registry to a process. It does the handshake and answers `minimal/echo` with what it is given and `minimal/hello`
-//! with the version of Escouade it was told.
+//! The demonstration plugin (`dev.escouade.minimal`), a module (`run.wasm`) of the builds of development and the tests: the
+//! least a plugin of the first hand is, which proves the way from the registry to an instance. It does the handshake and
+//! answers `minimal/echo` with what it is given and `minimal/hello` with the version of Escouade it was told.
 //!
-//! It is also the harness « Minimal » in process (INT-9, docs/PLUGINS.md §4.5): the minimal fake engine of the
-//! conformance bench made a plugin. Its harness is `escouade-plugins minimal-harness` (`minimal_harness.rs`), which the
-//! core launches from the description `engine/launch` gives; its frames come here in batches (`agent/frames`) and go
+//! It is also the harness « Minimal » in process (INT-9, docs/PLUGINS-DESIGN.md §4.5): the minimal fake engine of the
+//! conformance bench made a plugin. Its harness is `tests/fixtures/fake-minimal.mjs`, which the core launches from the
+//! description `engine/launch` gives; its frames come here in batches (`agent/frames`) and go
 //! back as the normalized items of `escouade_plugin_protocol::engine` (the translation `agent/minimal.rs` does in the
 //! core for the in-process fake). What only serves the translation (the calls under way) is kept here, by agent;
 //! what the plugin cannot know (its folder, its session) the core gives it (`agent/attach`).
@@ -14,7 +14,7 @@ use escouade_plugin_protocol::engine::{
     Items, Launch, LaunchParams, OneShotLaunch, OneShotOutput, OneShotParams, OneShotText,
     SendMessage, SetValue, StartAt, TerminalParams, TurnUsage, Usage, Writes,
 };
-use escouade_plugin_protocol::{serve, Refusal};
+use escouade_plugin_protocol::Refusal;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -23,13 +23,14 @@ use std::collections::HashMap;
 /// What it keeps of an agent: what the core told it, and the calls under way (their name, and the file of a patch).
 #[derive(Default)]
 struct Agent {
+    /// Its key, as the core names it (`fs/*` reaches its folder by it).
+    key: String,
     cwd: String,
     calls: HashMap<String, (String, Option<String>)>,
 }
 
 #[derive(Default)]
 struct Plugin {
-    version: String,
     agents: HashMap<String, Agent>,
 }
 
@@ -55,31 +56,49 @@ fn writes(lines: Vec<Value>) -> Result<Value, Refusal> {
 }
 
 pub fn run() -> i32 {
-    let mut plugin = Plugin {
-        version: std::env::var("ESCOUADE_VERSION").unwrap_or_default(),
-        ..Plugin::default()
-    };
-    let stdin = std::io::stdin();
-    let result = serve(
-        stdin.lock(),
-        std::io::stdout().lock(),
+    let mut plugin = Plugin::default();
+    escouade_plugin_protocol::turn::run(
+        "minimal",
         json!({ "harnesses": ["minimal"] }),
-        |m, params| plugin.handle(m, params),
+        move |m, params| plugin.handle(m, params),
+    )
+}
+
+escouade_plugin_protocol::module!(run);
+
+/// Whether `path` is there, read by the host (`fs/read`, under the folder of the agent `agent`).
+#[cfg(target_family = "wasm")]
+fn exists(agent: &str, path: &str) -> bool {
+    escouade_plugin_protocol::turn::host_call("fs/read", json!({ "agent": agent, "path": path }))
+        .is_ok()
+}
+
+/// Writes an empty `path`, by the host (`fs/write`, under the folder of the agent `agent`).
+#[cfg(target_family = "wasm")]
+fn touch(agent: &str, path: &str) {
+    let _ = escouade_plugin_protocol::turn::host_call(
+        "fs/write",
+        json!({ "agent": agent, "path": path, "text": "" }),
     );
-    match result {
-        Ok(()) => 0,
-        Err(e) => {
-            eprintln!("escouade-plugins minimal: {e}");
-            1
-        }
-    }
+}
+
+#[cfg(not(target_family = "wasm"))]
+fn exists(_: &str, path: &str) -> bool {
+    std::path::Path::new(path).exists()
+}
+
+#[cfg(not(target_family = "wasm"))]
+fn touch(_: &str, path: &str) {
+    let _ = std::fs::write(path, "");
 }
 
 impl Plugin {
     fn handle(&mut self, m: &str, params: Value) -> Result<Value, Refusal> {
         match m {
             "minimal/echo" => Ok(params),
-            "minimal/hello" => Ok(json!({ "escouade": self.version })),
+            "minimal/hello" => Ok(json!({
+                "escouade": escouade_plugin_protocol::greeting().map(|g| g.version.clone()).unwrap_or_default()
+            })),
             method::LAUNCH => give(launch(read(params)?)?),
             method::ATTACH => {
                 let a: Attach = read(params)?;
@@ -93,7 +112,8 @@ impl Plugin {
             }
             method::FRAMES => {
                 let f: Frames = read(params)?;
-                let agent = self.agents.entry(f.agent).or_default();
+                let agent = self.agents.entry(f.agent.clone()).or_default();
+                agent.key = f.agent;
                 let mut items = Vec::new();
                 for line in &f.frames {
                     // A line that is no JSON is left aside, as the core leaves it today.
@@ -383,14 +403,14 @@ impl Agent {
             // The scenario « plantage »: the plugin crashes in the middle of a turn, once (its flag written) or each
             // time.
             "crash" => {
-                let flag = s("flag").map(std::path::PathBuf::from);
-                let first = flag.as_ref().is_some_and(|p| !p.exists());
+                let flag = s("flag");
+                let first = flag.as_deref().is_some_and(|p| !exists(&self.key, p));
                 if f["always"] == true || first {
-                    if let Some(p) = flag {
-                        let _ = std::fs::write(p, "");
+                    if let Some(p) = &flag {
+                        touch(&self.key, p);
                     }
-                    eprintln!("escouade-plugins minimal: crashing, as the scenario asks");
-                    std::process::exit(70);
+                    eprintln!("minimal: crashing, as the scenario asks");
+                    panic!("minimal: crashing, as the scenario asks");
                 }
             }
             _ => {}

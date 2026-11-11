@@ -1,4 +1,4 @@
-//! The loop of an asynchronous plugin as a module (ESC-330, docs/PLUGINS.md §8.3): the same `Plugin` and the same `Cx` as
+//! The loop of an asynchronous plugin as a module (ESC-330, docs/PLUGINS-DESIGN.md §8.3): the same `Plugin` and the same `Cx` as
 //! `escouade_plugin_kit::serve`, on one thread. A call is a task; a task that asks the host (`secrets/get`, `net/fetch`)
 //! waits for a line of a later turn, and the turn ends. Each turn reads what came, gives the answers to the tasks that
 //! wait for them, starts the new calls, polls them all once, and writes their lines.

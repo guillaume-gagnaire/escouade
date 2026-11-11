@@ -1,5 +1,5 @@
 //! What the core keeps of OpenCode's rules: the models as it lists them for an account, a model's two names. The agents' own
-//! are its plugin's (`plugins/opencode/src/rules.rs`), which it does not link (docs/PLUGINS.md §8.2).
+//! are its plugin's (`plugins/opencode/src/rules.rs`), which it does not link (docs/PLUGINS-DESIGN.md §8.2).
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};

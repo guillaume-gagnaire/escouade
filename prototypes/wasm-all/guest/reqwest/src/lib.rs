@@ -1,4 +1,4 @@
-//! The part of reqwest the plugins of Escouade use (ESC-330, docs/PLUGINS.md §8.4.1), over the host's `net/fetch`.
+//! The part of reqwest the plugins of Escouade use (ESC-330, docs/PLUGINS-DESIGN.md §8.4.1), over the host's `net/fetch`.
 
 use serde::Serialize;
 use serde_json::{json, Map, Value};

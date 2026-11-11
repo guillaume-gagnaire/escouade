@@ -37,7 +37,6 @@ function pluginProblem(p: AlertsInput['plugins'][number], run: PluginRun['status
   if (!p.choices?.enabled || p.declarative || run?.phase !== 'stopped') return null;
   const stop = run.stop;
   if (stop?.kind === 'crashed') return t('plugins.state.crashed', { count: stop.times ?? 3 });
-  if (stop?.kind === 'memory') return t('plugins.state.memory');
   if (stop?.kind === 'refused') return t('plugins.state.refused', { reason: stop.reason ?? '' });
   return null;
 }

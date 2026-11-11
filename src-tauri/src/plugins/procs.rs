@@ -1,4 +1,4 @@
-//! `proc/*` (ESC-333, docs/PLUGINS.md §8.4.7): the programs a plugin in WASM runs, on `permissions.commands`.
+//! `proc/*` (ESC-333, docs/PLUGINS-DESIGN.md §8.4.7): the programs a plugin in WASM runs, on `permissions.commands`.
 //!
 //! **The module is isolated, the program it runs is not**: it has the user's rights. So the host holds what can be held:
 //! - the first word is a program the core finds on the PATH ([`locate`]), never a path; no shell, and under Windows no

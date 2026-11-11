@@ -1,4 +1,4 @@
-//! What the app and a voice service's plugin say to each other (INT-13, ESC-285; `docs/PLUGINS.md` §1.4 and §4.13):
+//! What the app and a voice service's plugin say to each other (INT-13, ESC-285; `docs/PLUGINS-DESIGN.md` §1.4 and §4.13):
 //! the methods, the shape of a `Spec` on the wire, and an `OnlineError` as a JSON-RPC refusal.
 //!
 //! The app calls, the plugin answers (`voice/*`); the plugin tells the app what comes while it works with notifications

@@ -1,4 +1,4 @@
-//! The data of the code hosts (docs/PLUGINS.md §4.5): what a host's pull requests, checks, reviews and deployments are,
+//! The data of the code hosts (docs/PLUGINS-DESIGN.md §4.5): what a host's pull requests, checks, reviews and deployments are,
 //! as the core and the plugins that serve a host (`forge/*`) both know them. They travel as JSON, in camelCase; a plugin
 //! written in another language writes the same.
 

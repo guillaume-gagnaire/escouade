@@ -1,5 +1,5 @@
 //! The in-process adapters of the ticket sources and the code hosts (INT-5, ESC-211;
-//! `docs/PLUGINS.md` §4.5): `ProcessTicketSource: TicketSource` and `ProcessForge: Forge` answer
+//! `docs/PLUGINS-DESIGN.md` §4.5): `ProcessTicketSource: TicketSource` and `ProcessForge: Forge` answer
 //! the core's calls by JSON-RPC to the plugin's process (`tickets/*`, `forge/*`, `account/me`),
 //! so that the rest of the core does not see the difference.
 //!

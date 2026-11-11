@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Makes the `generated/` folders of the guest from the repository: the real kit (but `serve`), the real plugins Linear and
-// Codex. Each change is printed: it is the whole of what their port costs (docs/PLUGINS.md §8.9). They are copies, not
+// Codex. Each change is printed: it is the whole of what their port costs (docs/PLUGINS-DESIGN.md §8.9). They are copies, not
 // `#[path]`s to the repository, so that a source's path holds no `..`, as a plugin in plugins/<id>/ has none.
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';

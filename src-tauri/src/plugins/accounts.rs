@@ -1,4 +1,4 @@
-//! The accounts shared by a plugin's points (INT-6, ESC-212; `docs/PLUGINS.md` §4.4): what a kind
+//! The accounts shared by a plugin's points (INT-6, ESC-212; `docs/PLUGINS-DESIGN.md` §4.4): what a kind
 //! of account is (`AccountKind`: its hosts, how one connects, the fields to type, the rights its
 //! tokens need, the page that makes one), which plugin serves an account, its name in the keychain
 //! (`plugin:<id>:account:<account>`) and its budget of calls.
@@ -31,7 +31,7 @@
 //! version from before changed after a return to it is taken back. `revert` goes back: the former
 //! entries hold the secrets, the new ones go. A version after this one drops the former entries.
 //!
-//! **The Mistral account** (ESC-327, INT-10.6 bis, `docs/PLUGINS.md` §4.13): the plugin `dev.escouade.mistral` declares
+//! **The Mistral account** (ESC-327, INT-10.6 bis, `docs/PLUGINS-DESIGN.md` §4.13): the plugin `dev.escouade.mistral` declares
 //! the kind `mistral`, whose points are its voice and Mistral Vibe. Its account `mistral` is the key of Réglages › Voix
 //! (former name `dictation-mistral`); a Vibe account that has a key of its own keeps it, as an account `vibe-<id>` of
 //! the same plugin (former name `vibe:<id>`), so that two Mistral organizations stay two accounts. The key goes to the

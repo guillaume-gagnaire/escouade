@@ -26,7 +26,7 @@ function link(change: Record<string, string | null>) {
   return to.search(now);
 }
 const toggle = (k: string) => link({ [k]: on(k) ? null : '1' });
-const verifiedCount = computed(() => data.value?.results.filter((e) => e.trust === 'verified' || e.trust === 'builtin').length ?? 0);
+const verifiedCount = computed(() => data.value?.results.filter((e) => e.trust === 'verified').length ?? 0);
 const marks = (name: string, desc: string) => ({ name: highlight(name, q.value), desc: highlight(desc, q.value) });
 const sortOpen = ref(false);
 </script>
