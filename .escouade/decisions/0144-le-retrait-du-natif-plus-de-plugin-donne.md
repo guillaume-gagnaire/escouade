@@ -1,19 +1,19 @@
 ---
-number: null
+number: 144
 id: "le-retrait-du-natif-plus-de-plugin-donne"
 title: "Le retrait du natif : plus de plugin donné par l'app, plus de run.command lancé (Z3)"
 date: "2026-11-10"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-355"
 pages: []
-tickets: []
+tickets: ["ESC-355"]
 documents: []
 supersedes: []
 superseded_by: null
 changes: []
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-11T02:02:49+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
