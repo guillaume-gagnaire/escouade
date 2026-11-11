@@ -85,7 +85,7 @@ export default defineZone('nav', {
       rename: 'Folder name',
       create: 'New folder',
       createWith: 'New folder with this agent',
-      moveTo: 'Move to…',
+      moveTo: 'Move to',
       outOf: 'No folder',
       makePrincipal: 'Make this agent the main agent',
       removePrincipal: 'Remove the main agent role',

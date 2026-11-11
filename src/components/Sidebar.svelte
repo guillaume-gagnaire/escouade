@@ -515,11 +515,11 @@
   }
 
   /** What an agent's menu offers about folders: where to move it, a folder made of it, its star, a step up or down. */
-  function folderItems(e: MouseEvent, a: Agent): MenuItem[] {
+  function folderItems(a: Agent): MenuItem[] {
     if (a.archived) return [];
     const mine = folderOf(a.id);
     return [
-      { label: t('nav.sidebar.folders.moveTo'), onClick: () => moveMenu(e, a) },
+      { label: t('nav.sidebar.folders.moveTo'), submenu: moveItems(a) },
       ...(mine
         ? [
             {
@@ -532,21 +532,16 @@
     ];
   }
 
-  /** « Déplacer vers… »: each other folder, a new one, out of any, where the agent's menu was (no submenus: a second menu). */
-  async function moveMenu(e: MouseEvent, a: Agent) {
-    const at = { x: e.clientX, y: e.clientY };
+  /** « Déplacer vers », a submenu beside the agent's menu (#24): each other folder, a new one, out of any. */
+  function moveItems(a: Agent): MenuItem[] {
     const mine = folderOf(a.id)?.folder.id ?? null;
-    await tick();
-    menu.open = {
-      ...at,
-      items: [
-        ...items
-          .filter((it): it is FolderItem => it.kind === 'folder' && it.folder.id !== mine)
-          .map((it) => ({ label: it.folder.name, onClick: () => move(a.id, { folderId: it.folder.id, index: null }) })),
-        { label: t('nav.sidebar.folders.create'), onClick: () => newFolder(a.id) },
-        ...(mine ? [{ label: t('nav.sidebar.folders.outOf'), onClick: () => move(a.id, { folderId: null, index: null }) }] : []),
-      ],
-    };
+    return [
+      ...items
+        .filter((it): it is FolderItem => it.kind === 'folder' && it.folder.id !== mine)
+        .map((it) => ({ label: it.folder.name, onClick: () => move(a.id, { folderId: it.folder.id, index: null }) })),
+      { label: t('nav.sidebar.folders.create'), onClick: () => newFolder(a.id) },
+      ...(mine ? [{ label: t('nav.sidebar.folders.outOf'), onClick: () => move(a.id, { folderId: null, index: null }) }] : []),
+    ];
   }
 
   /** A folder with agents on show asks what becomes of them; an empty one, or of archived agents only, goes at once. */
@@ -572,7 +567,7 @@
     const turn = a.status === 'running' || a.status === 'waiting';
     menu.show(e, [
       { label: t('common.rename'), onClick: () => startRename(a) },
-      ...folderItems(e, a),
+      ...folderItems(a),
       // Only for a harness that copies a conversation.
       ...(a.archived || !canFork(a)
         ? []

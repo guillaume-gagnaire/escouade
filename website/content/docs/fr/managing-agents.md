@@ -130,13 +130,13 @@ Un clic sur la carte l’affiche ; `Ctrl+Tab` et `Ctrl+Maj+Tab` passent à l’a
 
 ## Les dossiers d’agents
 
-Une barre latérale chargée se range en dossiers : un cadre avec un nom, un chevron pour le replier, le nombre de ses agents et des pastilles « en cours » et « en attente ».
+Une barre latérale chargée se range en dossiers : un cadre avec un nom, un chevron pour le replier, le nombre de ses agents et des pastilles « en cours » et « en attente ».
 
-- **Créer** : « Nouveau dossier » dans le menu à côté de « Nouvel agent », ou « Nouveau dossier avec cet agent » au clic droit d’une carte. Le nom se tape tout de suite ; un double-clic sur le nom le change plus tard.
-- **Ranger** : glisse une carte sur l’en-tête d’un dossier pour l’y mettre, hors du cadre pour l’en sortir ; au clavier, `Alt+↑` et `Alt+↓` déplacent d’un pas la carte ou le dossier qui a le focus. « Déplacer vers… » et « Hors dossier » du menu de la carte font la même chose. Un dossier ne se glisse pas dans un autre.
-- **L’agent principal** : « Faire de cet agent l’agent principal » met une étoile (« Agent principal ») sur un agent du dossier, qui passe en tête ; « Retirer le rôle d’agent principal » la reprend.
+- **Créer** : « Nouveau dossier » dans le menu à côté de « Nouvel agent », ou « Nouveau dossier avec cet agent » au clic droit d’une carte. Le nom se tape tout de suite ; un double-clic sur le nom le change plus tard.
+- **Ranger** : glisse une carte sur l’en-tête d’un dossier pour l’y mettre, hors du cadre pour l’en sortir ; au clavier, `Alt+↑` et `Alt+↓` déplacent d’un pas la carte ou le dossier qui a le focus. « Déplacer vers » et « Hors dossier » du menu de la carte font la même chose. Un dossier ne se glisse pas dans un autre.
+- **L’agent principal** : « Faire de cet agent l’agent principal » met une étoile (« Agent principal ») sur un agent du dossier, qui passe en tête ; « Retirer le rôle d’agent principal » la reprend.
 - **Replier** : un dossier replié montre encore la carte de ses agents qui attendent une réponse et celle de l’agent ouvert. Le choix est gardé d’un lancement à l’autre.
-- **Supprimer** : « Supprimer le dossier » (clic droit sur son en-tête) part tout de suite pour un dossier vide. Avec des agents dedans, une fenêtre demande ce qu’ils deviennent : les sortir du dossier (par défaut), les archiver ou les supprimer (avec leurs worktrees si la case est cochée, en rouge). Les agents archivés ne sont jamais touchés.
+- **Supprimer** : « Supprimer le dossier » (clic droit sur son en-tête) part tout de suite pour un dossier vide. Avec des agents dedans, une fenêtre demande ce qu’ils deviennent : les sortir du dossier (par défaut), les archiver ou les supprimer (avec leurs worktrees si la case est cochée, en rouge). Les agents archivés ne sont jamais touchés.
 
 Un agent qui en crée d’autres par [le serveur MCP](mcp) les range avec lui dans un dossier à son nom, où il est l’agent principal.
 

@@ -1909,7 +1909,7 @@ describe('Sidebar in English', () => {
     await fireEvent.contextMenu(card);
     expect(items()).toEqual([
       'Rename',
-      'Move to…',
+      'Move to',
       'New folder with this agent',
       'Move up',
       'Move down',
@@ -3495,14 +3495,16 @@ describe('Sidebar agent folders', () => {
     expect(folderOf('f1').querySelector('.folder-h')).toHaveTextContent('1 en cours, 1 en attente');
   });
 
-  it('Déplacer vers puts the agent in a folder', async () => {
+  it('Déplacer vers puts the agent in a folder, from its submenu', async () => {
     withFolders();
     const backend = fakeBackend();
     render(Sidebar, { project: app.projects[0] });
     await fireEvent.contextMenu(card('a3'));
-    menu.open!.items.find((i) => i.label === 'Déplacer vers…')!.onClick!();
-    await waitFor(() => expect(menu.open!.items.some((i) => i.label === 'Auth')).toBe(true));
-    menu.open!.items.find((i) => i.label === 'Auth')!.onClick!();
+    // A submenu beside the agent's menu, as « Lancer » (#24): its entry has no « … ».
+    const entry = menu.open!.items.find((i) => i.label === 'Déplacer vers')!;
+    expect(entry.onClick).toBeUndefined();
+    expect(entry.submenu!.map((i) => i.label)).toContain('Nouveau dossier');
+    entry.submenu!.find((i) => i.label === 'Auth')!.onClick!();
     await waitFor(() => expect(backend.called('agent_folder_move')).toHaveLength(1));
     expect(backend.called('agent_folder_move')[0].args).toMatchObject({ projectId: 'p1', itemId: 'a3', folderId: 'f1' });
   });

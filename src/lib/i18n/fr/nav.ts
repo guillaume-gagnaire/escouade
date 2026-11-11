@@ -108,7 +108,7 @@ export default {
       rename: 'Nom du dossier',
       create: 'Nouveau dossier',
       createWith: 'Nouveau dossier avec cet agent',
-      moveTo: 'Déplacer vers…',
+      moveTo: 'Déplacer vers',
       outOf: 'Hors dossier',
       makePrincipal: 'Faire de cet agent l’agent principal',
       removePrincipal: 'Retirer le rôle d’agent principal',

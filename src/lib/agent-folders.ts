@@ -98,7 +98,7 @@ export function stepPlace(project: Project, items: SidebarItem[], item: string, 
   const row = of(level).filter((i) => seen.has(i));
   const at = row.indexOf(item);
   if (at < 0) return null;
-  // The principal stays on top of its folder: it leaves it by « Hors dossier », « Déplacer vers… » or a drag.
+  // The principal stays on top of its folder: it leaves it by « Hors dossier », « Déplacer vers » or a drag.
   if (isPrincipal(project, level, item)) return null;
   const k = at + by;
   const rest = row.filter((i) => i !== item);
