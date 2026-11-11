@@ -1,4 +1,4 @@
-//! `rustc-canon`, the `RUSTC_WRAPPER` of a `run.wasm` compilation (ESC-330, ESC-335, docs/PLUGINS-DESIGN.md §8.5.2): the same
+//! `rustc-canon`, the `RUSTC_WRAPPER` of a `run.wasm` compilation (ESC-330, ESC-335, docs/PLUGINS.md §8.5.2): the same
 //! rustc on Windows and on Linux gives the same module only if it is told the same things. It is `escouade-plugin`
 //! itself: cargo runs that program again, [`ROOT`] set ([`crate::cli::main`] comes here first). Cargo tells rustc three
 //! things that depend on the machine:
