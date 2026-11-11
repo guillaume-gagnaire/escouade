@@ -79,17 +79,37 @@ fn openai(model: &str) -> Option<Price> {
     })
 }
 
+/// Claude Haiku 5.5's prompts over this many tokens (input, cache reads and writes) pay its higher prices.
+const HAIKU_5_5_LONG: u64 = 100_000;
+
 /// List price of a model id (`claude-opus-5-5`, `claude-haiku-4-5-20251001`, `gpt-6-luna`…), if
-/// known.
+/// known; for a model priced by the length of its prompt (Claude Haiku 5.5), its prices for a short one.
 pub fn price(model: &str) -> Option<Price> {
+    price_for(model, 0)
+}
+
+/// As `price`, for a request whose prompt is `prompt` tokens long (input, cache reads and writes).
+/// platform.claude.com/docs/en/about-claude/pricing, read 2026-11-11.
+pub fn price_for(model: &str, prompt: u64) -> Option<Price> {
     let lower = model.trim().to_ascii_lowercase();
-    // Claude's go by their aliases too (`opus`, `sonnet[1m]`).
     if lower.starts_with("gpt-") || lower.starts_with("o4-") {
         return openai(&lower);
     }
     let m = lower.replace('.', "-");
+    // Claude's go by their aliases too (`opus`, `sonnet[1m]`): Claude Code runs its family's latest model for one.
+    let bare = m.trim_start_matches("claude-");
+    let bare = bare.split('[').next().unwrap_or(bare);
+    let m = match bare {
+        "fable" => "fable-5-2",
+        "opus" => "opus-5-5",
+        "sonnet" => "sonnet-5-5",
+        "haiku" => "haiku-5-5",
+        _ => m.as_str(),
+    };
     let has = |s: &str| m.contains(s);
-    Some(if has("fable-5-1") || has("mythos-5-1") {
+    Some(if has("fable-5-2") || has("mythos-5-2") {
+        p(8.0, 40.0, 0.025)
+    } else if has("fable-5-1") || has("mythos-5-1") {
         p(10.0, 50.0, 0.025)
     } else if has("fable") || has("mythos") {
         p(10.0, 50.0, 0.1)
@@ -99,10 +119,16 @@ pub fn price(model: &str) -> Option<Price> {
         p(15.0, 75.0, 0.1)
     } else if has("opus") {
         p(5.0, 25.0, 0.1)
+    } else if has("sonnet-5-5") {
+        p(2.0, 10.0, 0.05)
     } else if has("sonnet-5") {
         p(2.0, 10.0, 0.1)
     } else if has("sonnet") {
         p(3.0, 15.0, 0.1)
+    } else if has("haiku-5-5") && prompt > HAIKU_5_5_LONG {
+        p(0.5, 2.5, 0.1)
+    } else if has("haiku-5-5") {
+        p(0.1, 0.5, 0.1)
     } else if has("haiku-3") {
         p(0.8, 4.0, 0.1)
     } else if has("haiku") {
@@ -114,7 +140,8 @@ pub fn price(model: &str) -> Option<Price> {
 
 /// Estimated cost in USD of `usage` on `model`, if its price is known.
 pub fn estimate(model: &str, usage: &Usage) -> Option<f64> {
-    Some(cost(price(model)?, usage))
+    let prompt = usage.input + usage.cache_read + usage.write_5m + usage.write_1h;
+    Some(cost(price_for(model, prompt)?, usage))
 }
 
 fn cost(p: Price, usage: &Usage) -> f64 {
@@ -186,8 +213,100 @@ mod tests {
         assert!(close(estimate("claude-fable-5", &u).unwrap(), 10.0 + 12.5));
     }
 
+    /// One million tokens of each kind: what a model's five prices add up to.
+    fn million() -> Usage {
+        Usage {
+            input: 1_000_000,
+            output: 1_000_000,
+            cache_read: 1_000_000,
+            write_5m: 1_000_000,
+            write_1h: 1_000_000,
+            fast: false,
+        }
+    }
+
+    // platform.claude.com/docs/en/about-claude/pricing, read 2026-11-11: input, 5-minute and 1-hour writes, cache hits
+    // (0.025× the input on Fable and Mythos 5.1 and 5.2, 0.05× on Opus and Sonnet 5.5), output.
+    #[test]
+    fn prices_each_current_model_as_the_price_list_does() {
+        let u = million();
+        for (model, cost) in [
+            ("claude-fable-5-2", 8.0 + 10.0 + 16.0 + 0.20 + 40.0),
+            ("claude-mythos-5-2", 8.0 + 10.0 + 16.0 + 0.20 + 40.0),
+            ("claude-fable-5-1", 10.0 + 12.5 + 20.0 + 0.25 + 50.0),
+            ("claude-mythos-5-1", 10.0 + 12.5 + 20.0 + 0.25 + 50.0),
+            ("claude-fable-5", 10.0 + 12.5 + 20.0 + 1.0 + 50.0),
+            ("claude-opus-5-5", 4.0 + 5.0 + 8.0 + 0.20 + 20.0),
+            ("claude-opus-5", 5.0 + 6.25 + 10.0 + 0.50 + 25.0),
+            ("claude-opus-4-8", 5.0 + 6.25 + 10.0 + 0.50 + 25.0),
+            ("claude-sonnet-5-5", 2.0 + 2.5 + 4.0 + 0.10 + 10.0),
+            ("claude-sonnet-5", 2.0 + 2.5 + 4.0 + 0.20 + 10.0),
+            ("claude-sonnet-4-6", 3.0 + 3.75 + 6.0 + 0.30 + 15.0),
+            // Its prompt is 4 million tokens here: the prices for prompts over 100,000 tokens.
+            ("claude-haiku-5-5", 0.50 + 0.625 + 1.0 + 0.05 + 2.50),
+            ("claude-haiku-4-5-20251001", 1.0 + 1.25 + 2.0 + 0.10 + 5.0),
+        ] {
+            let got = estimate(model, &u).unwrap_or(f64::NAN);
+            assert!(close(got, cost), "{model}: {got} instead of {cost}");
+        }
+    }
+
+    // A request's prompt length counts all its input tokens, cache reads and writes included; over 100,000 tokens,
+    // the whole request pays the higher prices.
+    #[test]
+    fn haiku_5_5_is_priced_by_the_length_of_its_prompt() {
+        let short = Usage {
+            input: 40_000,
+            cache_read: 60_000,
+            output: 1_000_000,
+            ..Default::default()
+        };
+        let small = 40_000.0 * 0.10 + 60_000.0 * 0.01 + 1_000_000.0 * 0.50;
+        assert!(close(
+            estimate("claude-haiku-5-5", &short).unwrap(),
+            small / 1e6
+        ));
+        let long = Usage {
+            cache_read: 60_001,
+            ..short.clone()
+        };
+        let large = 40_000.0 * 0.50 + 60_001.0 * 0.05 + 1_000_000.0 * 2.50;
+        assert!(close(
+            estimate("claude-haiku-5-5", &long).unwrap(),
+            large / 1e6
+        ));
+        // Its price alone, the length unknown: the prices up to 100,000 tokens.
+        assert_eq!(price("claude-haiku-5-5").map(|p| p.input), Some(0.10));
+        assert_eq!(
+            price_for("claude-haiku-5-5", 100_001).map(|p| p.input),
+            Some(0.50)
+        );
+    }
+
+    // Claude Code's aliases run the latest model of their family (2.1.321: `fable` is Claude Fable 5.2).
+    #[test]
+    fn an_alias_without_a_version_is_its_family_s_latest_model() {
+        for (alias, model) in [
+            ("fable", "claude-fable-5-2"),
+            ("fable[1m]", "claude-fable-5-2"),
+            ("opus", "claude-opus-5-5"),
+            ("opus[1m]", "claude-opus-5-5"),
+            ("sonnet", "claude-sonnet-5-5"),
+            ("sonnet[1m]", "claude-sonnet-5-5"),
+            ("haiku", "claude-haiku-5-5"),
+        ] {
+            assert_eq!(price(alias), price(model), "{alias}");
+        }
+    }
+
     #[test]
     fn fast_mode_costs_twice_as_much() {
+        let fable = Usage {
+            output: 1_000_000,
+            fast: true,
+            ..Default::default()
+        };
+        assert!(close(estimate("claude-fable-5-2", &fable).unwrap(), 80.0));
         let u = Usage {
             output: 1_000_000,
             fast: true,
