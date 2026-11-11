@@ -37,6 +37,27 @@ attempt() {
 azure_last() { [ ! -f "$MIRRORS" ] || sudo sed -i -E 's/^(http:\/\/azure\.archive\S*\s+priority:)1/\14/' "$MIRRORS"; }
 azure_first() { [ ! -f "$MIRRORS" ] || sudo sed -i -E 's/^(http:\/\/azure\.archive\S*\s+priority:)4/\11/' "$MIRRORS"; }
 
+resolves() { getent ahosts "$1" >/dev/null 2>&1; }
+
+# From 14:00 UTC on 2026-11-11 the runners' resolver failed for every mirror of Ubuntu, Azure's included
+# (actions/runner-images#15296 and #15297). A runner that resolves none of them takes public resolvers, and kernel.org's
+# mirror of Ubuntu last in its list (outside *.ubuntu.com): apt checks the archive's signature whatever the mirror.
+public_dns() {
+  if resolves azure.archive.ubuntu.com || resolves archive.ubuntu.com; then return 0; fi
+  echo "::warning::this runner resolves no mirror of Ubuntu: public resolvers, and kernel.org's mirror last"
+  sudo mkdir -p /etc/systemd/resolved.conf.d
+  printf '%s\n' '[Resolve]' 'DNS=1.1.1.1 1.0.0.1 8.8.8.8 8.8.4.4' |
+    sudo tee /etc/systemd/resolved.conf.d/escouade-ci-dns.conf >/dev/null
+  sudo systemctl restart systemd-resolved || true
+  if [ -f "$MIRRORS" ] && ! grep -q mirrors.edge.kernel.org "$MIRRORS"; then
+    printf 'http://mirrors.edge.kernel.org/ubuntu/\tpriority:5\n' | sudo tee -a "$MIRRORS" >/dev/null
+  fi
+}
+
+public_dns
+# `dns`: only that, for a job whose apt runs elsewhere (Playwright's browsers in the store's job).
+[ "${1:-}" = dns ] && exit 0
+
 attempt "the runner's order" && exit 0
 azure_last
 attempt "Canonical's mirror first" && exit 0
