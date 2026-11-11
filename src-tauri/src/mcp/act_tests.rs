@@ -7,7 +7,7 @@ use super::private_tests::make_private;
 use super::tests::{ACTING, AGENTS_ONLY, EXPOSED};
 use super::tools::{SetBoardArgs, ToolError};
 use super::tools_tests::{
-    as_agent, external, keys, last_entry, link, other_project, project, put, put_agent, read,
+    as_agent, call, external, keys, last_entry, link, other_project, project, put, put_agent, read,
     refused, still, ticket, Client,
 };
 use crate::accounts::PRINCIPAL;
@@ -122,6 +122,8 @@ async fn the_acting_tools_say_what_they_take_and_that_they_change_things() {
         // And of the board's flow, only an approval and a deletion cannot be taken back.
         let destructive = match *name {
             "approve_ticket" | "delete_ticket" | "stop_background_work" => Some(true),
+            // No agent is touched by a folder's deletion: it only puts its agents out of it.
+            "delete_folder" | "create_folder" | "update_folder" | "move_agent" => Some(false),
             "reject_ticket" | "resume_ticket" | "resolve_conflict" | "dismiss_block"
             | "message_subagent" => Some(false),
             _ => None,
@@ -154,6 +156,10 @@ async fn the_acting_tools_say_what_they_take_and_that_they_change_things() {
     assert_eq!(required("create_agent"), ["message", "project"]);
     assert_eq!(required("send_message"), ["agent", "text"]);
     assert_eq!(required("stop_agent"), ["agent"]);
+    assert_eq!(required("create_folder"), ["name"]);
+    assert_eq!(required("update_folder"), ["folder"]);
+    assert_eq!(required("delete_folder"), ["folder"]);
+    assert_eq!(required("move_agent"), ["agent"]);
     assert_eq!(required("stop_background_work"), ["agent", "id"]);
     assert_eq!(required("message_subagent"), ["agent", "subagent", "text"]);
     assert_eq!(required("report_progress"), ["line"]);
@@ -960,7 +966,8 @@ async fn an_agent_is_created_in_a_project_with_its_first_message_and_the_user_s_
     .await;
     let id = v["id"].as_str().unwrap().to_string();
     assert_eq!(v["name"], "agent-1");
-    assert_eq!(v.as_object().unwrap().len(), 2);
+    assert_eq!(v.as_object().unwrap().len(), 3);
+    assert_eq!(v["folder"], serde_json::Value::Null);
     // Made as the window makes one, but the sidebar's selection is the user's. Its first message
     // names it, in the background: its name is waited for, then read as it is.
     h.wait("its name", |h| h.agent(&id).named).await;
@@ -4577,7 +4584,7 @@ async fn a_ticket_is_launched_with_a_model_and_an_effort_of_its_own_and_the_answ
     .await;
     assert_eq!(
         v,
-        json!({ "key": "DEM-1", "starting": true, "model": "opus", "effort": "max" })
+        json!({ "key": "DEM-1", "starting": true, "model": "opus", "effort": "max", "folder": null })
     );
     let t = stored(&h, &a.id);
     assert_eq!((t.model.as_str(), t.effort.as_str()), ("opus", "max"));
@@ -4595,7 +4602,7 @@ async fn a_ticket_is_launched_with_a_model_and_an_effort_of_its_own_and_the_answ
     let v = read(&c, "start_ticket", json!({ "ticket": b.key })).await;
     assert_eq!(
         v,
-        json!({ "key": "DEM-2", "starting": true, "model": "sonnet", "effort": "medium" })
+        json!({ "key": "DEM-2", "starting": true, "model": "sonnet", "effort": "medium", "folder": null })
     );
     let t = stored(&h, &b.id);
     assert_eq!((t.model.as_str(), t.effort.as_str()), ("", ""));
@@ -4638,7 +4645,7 @@ async fn a_ticket_is_launched_with_a_model_and_an_effort_of_its_own_and_the_answ
     .await;
     assert_eq!(
         v,
-        json!({ "key": "DEM-3", "starting": true, "model": "sonnet", "effort": "high" })
+        json!({ "key": "DEM-3", "starting": true, "model": "sonnet", "effort": "high", "folder": null })
     );
     let t = stored(&h, &third.id);
     assert_eq!((t.model.as_str(), t.effort.as_str()), ("sonnet", ""));
@@ -4680,7 +4687,7 @@ async fn the_answer_of_start_ticket_has_no_effort_when_the_model_of_its_agent_ta
     .await;
     assert_eq!(
         v,
-        json!({ "key": "DEM-1", "starting": true, "model": "haiku" })
+        json!({ "key": "DEM-1", "starting": true, "model": "haiku", "folder": null })
     );
     // The same for a Kanban on haiku, with a ticket that says nothing of its own.
     h.core
@@ -4696,7 +4703,7 @@ async fn the_answer_of_start_ticket_has_no_effort_when_the_model_of_its_agent_ta
     let v = read(&c, "start_ticket", json!({ "ticket": b.key })).await;
     assert_eq!(
         v,
-        json!({ "key": "DEM-2", "starting": true, "model": "haiku" })
+        json!({ "key": "DEM-2", "starting": true, "model": "haiku", "folder": null })
     );
     for id in [&a.id, &b.id] {
         h.wait("its turn to end", |h| {
@@ -5235,5 +5242,658 @@ async fn a_ticket_the_board_does_not_start_after_the_tool_checked_says_why_and_s
     assert!(!t.forced);
     assert_eq!(entry(&h).outcome, "refused");
     c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_folder_is_made_renamed_starred_and_deleted_through_mcp() {
+    let h = harness("mcp-folders-write");
+    let p = project(&h).await;
+    let a = put_agent(&h, &p, "a", 1);
+    let b = put_agent(&h, &p, "b", 2);
+    let d = put_agent(&h, &p, "d", 3);
+    let c = external(&h).await;
+    // Made with two agents (named by id and by name) and a principal.
+    let made = read(
+        &c,
+        "create_folder",
+        json!({ "project": "DEMO", "name": " Front ", "agents": [a.id, "B"], "principal": "b" }),
+    )
+    .await;
+    let id = made["id"].as_str().unwrap().to_string();
+    assert_eq!(
+        made,
+        json!({
+            "id": id,
+            "name": "Front",
+            "principal": { "id": b.id, "name": "b" },
+            "agents": [
+                { "id": b.id, "name": "b", "status": "idle" },
+                { "id": a.id, "name": "a", "status": "idle" },
+            ],
+        })
+    );
+    let logged = entry(&h);
+    assert_eq!(
+        (logged.tool.as_str(), logged.outcome),
+        ("create_folder", "ok")
+    );
+    assert!(
+        logged
+            .message
+            .as_deref()
+            .is_some_and(|m| m.contains("Front")),
+        "{logged:?}"
+    );
+    assert_eq!(h.core.project(&p.id).unwrap().agent_folders.len(), 1);
+    // Renamed (by its name in any case), the principal given to the other, the folder put first.
+    let v = read(
+        &c,
+        "update_folder",
+        json!({ "project": "demo", "folder": "FRONT", "name": "Interface", "principal": "a", "position": 0 }),
+    )
+    .await;
+    assert_eq!(v["name"], "Interface");
+    assert_eq!(v["principal"], json!({ "id": a.id, "name": "a" }));
+    let stored = h.core.project(&p.id).unwrap();
+    assert_eq!(stored.agent_folders[0].name, "Interface");
+    assert!(stored.agent_folders[0].named);
+    assert_eq!(stored.agent_order[0], id);
+    // No principal: "".
+    let v = read(
+        &c,
+        "update_folder",
+        json!({ "project": "demo", "folder": id, "principal": "" }),
+    )
+    .await;
+    assert_eq!(v["principal"], json!(null));
+    // Nothing asked, an agent that is not in the folder, an empty name: refused, nothing changed.
+    let none = refused(
+        &c,
+        "update_folder",
+        json!({ "project": "demo", "folder": id }),
+    )
+    .await;
+    assert!(!none.is_empty());
+    let out = refused(
+        &c,
+        "update_folder",
+        json!({ "project": "demo", "folder": id, "principal": d.id }),
+    )
+    .await;
+    assert!(out.contains("dossier") || out.contains("folder"), "{out}");
+    refused(
+        &c,
+        "update_folder",
+        json!({ "project": "demo", "folder": id, "name": "  " }),
+    )
+    .await;
+    assert_eq!(
+        h.core.project(&p.id).unwrap().agent_folders[0].name,
+        "Interface"
+    );
+    let unknown = refused(
+        &c,
+        "update_folder",
+        json!({ "project": "demo", "folder": "nope" }),
+    )
+    .await;
+    assert!(unknown.contains("nope"), "{unknown}");
+    // An agent of Escouade leaves the project out for its own.
+    let own = as_agent(&h, &d.id).await;
+    let v = read(
+        &own,
+        "create_folder",
+        json!({ "name": "Mien", "agents": ["d"] }),
+    )
+    .await;
+    assert_eq!(v["agents"][0]["id"], json!(d.id));
+    own.cancel().await.unwrap();
+    // Deleted: its agents are out of it, nothing else is touched.
+    let v = read(
+        &c,
+        "delete_folder",
+        json!({ "project": "demo", "folder": "interface" }),
+    )
+    .await;
+    assert_eq!(v["deleted"], true);
+    let stored = h.core.project(&p.id).unwrap();
+    assert!(stored.agent_folders.iter().all(|f| f.id != id));
+    assert!(stored.agent_order.contains(&a.id) && stored.agent_order.contains(&b.id));
+    assert_eq!(
+        (entry(&h).tool.as_str(), entry(&h).outcome),
+        ("delete_folder", "ok")
+    );
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn move_agent_puts_an_agent_in_and_out_of_a_folder_at_a_position() {
+    let h = harness("mcp-move-agent");
+    let p = project(&h).await;
+    let a = put_agent(&h, &p, "a", 1);
+    let b = put_agent(&h, &p, "b", 2);
+    let x = put_agent(&h, &p, "x", 3);
+    let f = h
+        .core
+        .folder_create(
+            &p.id,
+            Some("Front"),
+            &[a.id.clone(), b.id.clone()],
+            None,
+            None,
+        )
+        .unwrap();
+    let c = external(&h).await;
+    // Into the folder, at the top.
+    let v = read(
+        &c,
+        "move_agent",
+        json!({ "agent": "x", "folder": "front", "position": 0 }),
+    )
+    .await;
+    assert_eq!(v["folder"], json!({ "id": f.id, "name": "Front" }));
+    let folder = |h: &Harness| {
+        h.core.project(&p.id).unwrap().agent_folders[0]
+            .agents
+            .clone()
+    };
+    assert_eq!(folder(&h), [x.id.clone(), a.id.clone(), b.id.clone()]);
+    // Only a position: it stays in its folder.
+    read(&c, "move_agent", json!({ "agent": x.id, "position": 2 })).await;
+    assert_eq!(folder(&h), [a.id.clone(), b.id.clone(), x.id.clone()]);
+    // Out of it: at the bottom of the list.
+    let v = read(&c, "move_agent", json!({ "agent": "a", "folder": "" })).await;
+    assert_eq!(v["folder"], json!(null));
+    let stored = h.core.project(&p.id).unwrap();
+    assert_eq!(stored.agent_order.last(), Some(&a.id));
+    assert_eq!(folder(&h), [b.id.clone(), x.id.clone()]);
+    assert_eq!(
+        (entry(&h).tool.as_str(), entry(&h).outcome),
+        ("move_agent", "ok")
+    );
+    let missing = refused(&c, "move_agent", json!({ "agent": "b", "folder": "nope" })).await;
+    assert!(missing.contains("nope"), "{missing}");
+    assert_eq!(folder(&h), [b.id.clone(), x.id.clone()]);
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_position_does_not_count_an_id_that_is_no_agent() {
+    let h = harness("mcp-folder-phantom");
+    let p = project(&h).await;
+    let a = put_agent(&h, &p, "a", 1);
+    let b = put_agent(&h, &p, "b", 2);
+    let x = put_agent(&h, &p, "x", 3);
+    let f = h
+        .core
+        .folder_create(&p.id, Some("F"), &[a.id.clone(), b.id.clone()], None, None)
+        .unwrap();
+    // An id of an agent being removed stays in the folder first.
+    h.core.projects.write()[0].agent_folders[0]
+        .agents
+        .insert(0, "ghost".into());
+    let cl = external(&h).await;
+    read(
+        &cl,
+        "move_agent",
+        json!({ "agent": x.id, "folder": f.id, "position": 1 }),
+    )
+    .await;
+    assert_eq!(
+        h.core.shown_agents_of(&p.id),
+        [a.id.clone(), x.id.clone(), b.id.clone()]
+    );
+    cl.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_position_counts_what_the_read_tools_list_archived_ones_left_out() {
+    let h = harness("mcp-folder-position");
+    let p = project(&h).await;
+    // An archived loose agent comes first in the stored list.
+    let gone = put_agent(&h, &p, "gone", 1);
+    let a = put_agent(&h, &p, "a", 2);
+    let b = put_agent(&h, &p, "b", 3);
+    let c = put_agent(&h, &p, "c", 4);
+    let x = put_agent(&h, &p, "x", 5);
+    h.core
+        .folder_create(&p.id, Some("F1"), std::slice::from_ref(&a.id), None, None)
+        .unwrap();
+    let f2 = h
+        .core
+        .folder_create(&p.id, Some("F2"), std::slice::from_ref(&b.id), None, None)
+        .unwrap();
+    // The list shows: c, x, F1, F2.
+    h.core.agent(&gone.id).unwrap().lock().meta.archived = true;
+    let cl = external(&h).await;
+    // F2 at rank 1 of what is listed: after c, before x.
+    read(
+        &cl,
+        "update_folder",
+        json!({ "project": "demo", "folder": f2.id, "position": 1 }),
+    )
+    .await;
+    assert_eq!(
+        h.core.shown_agents_of(&p.id),
+        [c.id.clone(), b.id.clone(), x.id.clone(), a.id.clone()]
+    );
+    // A position past the end: the bottom.
+    read(
+        &cl,
+        "update_folder",
+        json!({ "project": "demo", "folder": f2.id, "position": 40 }),
+    )
+    .await;
+    assert_eq!(
+        h.core.shown_agents_of(&p.id),
+        [c.id.clone(), x.id.clone(), a.id.clone(), b.id.clone()]
+    );
+    // In a folder with an archived member first: rank 1 of the listed ones.
+    let g = h
+        .core
+        .folder_create(
+            &p.id,
+            Some("G"),
+            &[gone.id.clone(), c.id.clone(), x.id.clone()],
+            None,
+            None,
+        )
+        .unwrap();
+    h.core.agent(&gone.id).unwrap().lock().meta.archived = true;
+    read(
+        &cl,
+        "move_agent",
+        json!({ "agent": a.id, "folder": g.id, "position": 1 }),
+    )
+    .await;
+    let rows = read(&cl, "list_folders", json!({ "project": "demo" })).await;
+    let members = rows
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["id"] == json!(g.id))
+        .unwrap()["agents"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["id"].as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(members, [c.id.clone(), a.id.clone(), x.id.clone()]);
+    cl.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_position_does_not_count_the_agents_that_wait_nor_the_principal() {
+    let h = harness("mcp-folder-waiting");
+    let p = project(&h).await;
+    let w = put_agent(&h, &p, "w", 1);
+    let a = put_agent(&h, &p, "a", 2);
+    let b = put_agent(&h, &p, "b", 3);
+    let x = put_agent(&h, &p, "x", 4);
+    h.core.agent(&w.id).unwrap().lock().meta.status = AgentStatus::Waiting;
+    let cl = external(&h).await;
+    // The list shows w (it waits, so it comes first), a, b, x: rank 1 of the others is before b.
+    read(&cl, "move_agent", json!({ "agent": x.id, "position": 1 })).await;
+    assert_eq!(
+        h.core.shown_agents_of(&p.id),
+        [w.id.clone(), a.id.clone(), x.id.clone(), b.id.clone()]
+    );
+    read(&cl, "move_agent", json!({ "agent": x.id, "position": 0 })).await;
+    assert_eq!(
+        h.core.shown_agents_of(&p.id),
+        [w.id.clone(), x.id.clone(), a.id.clone(), b.id.clone()]
+    );
+    // In a folder: the principal is on top and not counted either.
+    let f = h
+        .core
+        .folder_create(
+            &p.id,
+            Some("F"),
+            &[a.id.clone(), b.id.clone(), w.id.clone()],
+            Some(&a.id),
+            None,
+        )
+        .unwrap();
+    read(
+        &cl,
+        "move_agent",
+        json!({ "agent": x.id, "folder": f.id, "position": 0 }),
+    )
+    .await;
+    let stored = h.core.project(&p.id).unwrap().agent_folders[0]
+        .agents
+        .clone();
+    assert_eq!(stored[0], a.id);
+    assert_eq!(stored[1], x.id);
+    cl.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+/// The project's harness set to one this version does not have: nothing is made on it.
+fn harness_absent(h: &Harness) {
+    h.core.projects.write()[0].engine = Some(serde_json::from_str("\"ghost\"").unwrap());
+}
+
+#[tokio::test]
+async fn a_refused_creation_leaves_no_folder_and_the_caller_where_it_was() {
+    let h = harness("mcp-create-refused");
+    let p = project(&h).await;
+    let boss = put_agent(&h, &p, "boss", 1);
+    harness_absent(&h);
+    let c = as_agent(&h, &boss.id).await;
+    let out = refused(
+        &c,
+        "create_agent",
+        json!({ "project": p.id, "message": "un" }),
+    )
+    .await;
+    assert!(!out.is_empty());
+    let after = h.core.project(&p.id).unwrap();
+    assert!(after.agent_folders.is_empty(), "{:?}", after.agent_folders);
+    assert_eq!(after.agent_order, std::slice::from_ref(&boss.id));
+    // A named folder made for the call goes too; one that existed stays.
+    refused(
+        &c,
+        "create_agent",
+        json!({ "project": p.id, "message": "un", "folder": "Front" }),
+    )
+    .await;
+    assert!(h.core.project(&p.id).unwrap().agent_folders.is_empty());
+    let kept = h
+        .core
+        .folder_create(&p.id, Some("Kept"), &[], None, None)
+        .unwrap();
+    refused(
+        &c,
+        "create_agent",
+        json!({ "project": p.id, "message": "un", "folder": "Kept" }),
+    )
+    .await;
+    let after = h.core.project(&p.id).unwrap();
+    assert_eq!(after.agent_folders.len(), 1);
+    assert_eq!(after.agent_folders[0].id, kept.id);
+    assert!(after.agent_folders[0].agents.is_empty());
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_ticket_refused_its_start_keeps_its_folder_and_makes_none() {
+    let h = harness("mcp-ticket-refused");
+    let p = project(&h).await;
+    let boss = put_agent(&h, &p, "boss", 1);
+    let a = made(&h, &p, "Un ticket [ok]").await;
+    h.core
+        .edit_ticket(&a.id, |t| {
+            t.engine = Some(serde_json::from_str("\"ghost\"").unwrap());
+            Ok(())
+        })
+        .unwrap();
+    let c = as_agent(&h, &boss.id).await;
+    refused(&c, "start_ticket", json!({ "ticket": a.key })).await;
+    assert_eq!(stored(&h, &a.id).folder, None);
+    assert!(h.core.project(&p.id).unwrap().agent_folders.is_empty());
+    assert!(folder_holding(&h, &p.id, &boss.id).is_none());
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+// ---------- agents and tickets filed in folders on creation ----------
+
+/// The folder of `project` that holds `agent`, if any.
+fn folder_holding(h: &Harness, project: &str, agent: &str) -> Option<AgentFolder> {
+    let p = h.core.project(project).unwrap();
+    crate::folders::folder_of(&p, agent).cloned()
+}
+
+#[tokio::test]
+async fn an_agent_creating_agents_gets_a_folder_starred_with_them() {
+    let h = harness("mcp-auto-folder");
+    let p = project(&h).await;
+    h.set_board(&p.id, |s| s.max_parallel = 6);
+    let boss = put_agent(&h, &p, "boss", 1);
+    let other = put_agent(&h, &p, "other", 2);
+    let c = as_agent(&h, &boss.id).await;
+    let v = read(
+        &c,
+        "create_agent",
+        json!({ "project": p.id, "message": "un" }),
+    )
+    .await;
+    let first = v["id"].as_str().unwrap().to_string();
+    let f = folder_holding(&h, &p.id, &boss.id).expect("the caller is in a folder");
+    assert_eq!(v["folder"], json!({ "id": f.id, "name": "boss" }));
+    // Named after the caller, starring it, put where it was, with the new agent after it.
+    assert_eq!(f.name, "boss");
+    assert!(!f.named);
+    assert_eq!(f.principal.as_deref(), Some(boss.id.as_str()));
+    assert_eq!(f.agents, vec![boss.id.clone(), first.clone()]);
+    let order = h.core.project(&p.id).unwrap().agent_order;
+    assert_eq!(order, vec![f.id.clone(), other.id.clone()]);
+
+    // The second goes to the same folder.
+    let v = read(
+        &c,
+        "create_agent",
+        json!({ "project": p.id, "message": "deux" }),
+    )
+    .await;
+    let second = v["id"].as_str().unwrap().to_string();
+    assert_eq!(v["folder"]["id"], f.id.as_str());
+    let f2 = folder_holding(&h, &p.id, &boss.id).unwrap();
+    assert_eq!(f2.agents, vec![boss.id.clone(), first, second]);
+    assert_eq!(h.core.project(&p.id).unwrap().agent_folders.len(), 1);
+
+    // The folder keeps the caller's name when it is renamed (the real path, not a flag by hand).
+    h.core.rename_agent(&boss.id, "chef").await.unwrap();
+    assert_eq!(folder_holding(&h, &p.id, &boss.id).unwrap().name, "chef");
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn two_creations_at_once_make_one_folder() {
+    let h = harness("mcp-auto-folder-race");
+    let p = project(&h).await;
+    h.set_board(&p.id, |s| s.max_parallel = 6);
+    let boss = put_agent(&h, &p, "boss", 1);
+    let c = as_agent(&h, &boss.id).await;
+    let (a, b) = tokio::join!(
+        call(
+            &c,
+            "create_agent",
+            json!({ "project": p.id, "message": "un" })
+        ),
+        call(
+            &c,
+            "create_agent",
+            json!({ "project": p.id, "message": "deux" })
+        ),
+    );
+    assert!(!a.1 && !b.1, "{a:?} {b:?}");
+    let folders = h.core.project(&p.id).unwrap().agent_folders;
+    assert_eq!(folders.len(), 1);
+    assert_eq!(folders[0].agents.len(), 3);
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_named_folder_is_made_or_reused() {
+    let h = harness("mcp-named-folder");
+    let p = project(&h).await;
+    h.set_board(&p.id, |s| s.max_parallel = 6);
+    let boss = put_agent(&h, &p, "boss", 1);
+    let c = as_agent(&h, &boss.id).await;
+    // Made under that name, the caller (who had none) star of it and in it.
+    let v = read(
+        &c,
+        "create_agent",
+        json!({ "project": p.id, "message": "un", "folder": "Front" }),
+    )
+    .await;
+    let f = folder_holding(&h, &p.id, &boss.id).unwrap();
+    assert_eq!((f.name.as_str(), f.named), ("Front", true));
+    assert_eq!(f.principal.as_deref(), Some(boss.id.as_str()));
+    assert_eq!(v["folder"], json!({ "id": f.id, "name": "Front" }));
+    // Reused by its name in any case, then by its id.
+    let v = read(
+        &c,
+        "create_agent",
+        json!({ "project": p.id, "message": "deux", "folder": "front" }),
+    )
+    .await;
+    assert_eq!(v["folder"]["id"], f.id.as_str());
+    let v = read(
+        &c,
+        "create_agent",
+        json!({ "project": p.id, "message": "trois", "folder": f.id }),
+    )
+    .await;
+    assert_eq!(v["folder"]["id"], f.id.as_str());
+    let p2 = h.core.project(&p.id).unwrap();
+    assert_eq!(p2.agent_folders.len(), 1);
+    assert_eq!(p2.agent_folders[0].agents.len(), 4);
+    c.cancel().await.unwrap();
+
+    // From outside: a folder with no star.
+    let e = external(&h).await;
+    let v = read(
+        &e,
+        "create_agent",
+        json!({ "project": p.id, "message": "quatre", "folder": "Back" }),
+    )
+    .await;
+    let back = h.core.project(&p.id).unwrap().agent_folders[1].clone();
+    assert_eq!((back.name.as_str(), back.named), ("Back", true));
+    assert_eq!(back.principal, None);
+    assert_eq!(back.agents, vec![v["id"].as_str().unwrap().to_string()]);
+    e.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn an_empty_folder_keeps_the_new_agent_loose() {
+    let h = harness("mcp-loose-folder");
+    let p = project(&h).await;
+    let boss = put_agent(&h, &p, "boss", 1);
+    let c = as_agent(&h, &boss.id).await;
+    let v = read(
+        &c,
+        "create_agent",
+        json!({ "project": p.id, "message": "un", "folder": "" }),
+    )
+    .await;
+    assert_eq!(v["folder"], Value::Null);
+    let p2 = h.core.project(&p.id).unwrap();
+    assert!(p2.agent_folders.is_empty());
+    assert!(crate::folders::folder_of(&p2, v["id"].as_str().unwrap()).is_none());
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn no_folder_in_another_project_nor_from_outside() {
+    let h = harness("mcp-no-folder");
+    let p = project(&h).await;
+    let q = other_project(&h, "autre").await;
+    let boss = put_agent(&h, &p, "boss", 1);
+    // An agent of another project makes an agent here: no folder, and none made for it.
+    let c = as_agent(&h, &boss.id).await;
+    let v = read(
+        &c,
+        "create_agent",
+        json!({ "project": q.id, "message": "un" }),
+    )
+    .await;
+    assert_eq!(v["folder"], Value::Null);
+    c.cancel().await.unwrap();
+    // Claude outside Escouade: none either.
+    let e = external(&h).await;
+    let v = read(
+        &e,
+        "create_agent",
+        json!({ "project": p.id, "message": "deux" }),
+    )
+    .await;
+    assert_eq!(v["folder"], Value::Null);
+    e.cancel().await.unwrap();
+    for id in [&p.id, &q.id] {
+        assert!(h.core.project(id).unwrap().agent_folders.is_empty());
+    }
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_ticket_started_by_an_agent_brings_its_agents_to_its_folder() {
+    let h = harness("mcp-ticket-folder");
+    let p = project(&h).await;
+    let boss = put_agent(&h, &p, "boss", 1);
+    let a = made(&h, &p, "Un ticket [ok]").await;
+    let c = as_agent(&h, &boss.id).await;
+    let v = read(&c, "start_ticket", json!({ "ticket": a.key })).await;
+    let f = folder_holding(&h, &p.id, &boss.id).expect("a folder for the caller");
+    assert_eq!(v["folder"], json!({ "id": f.id, "name": "boss" }));
+    assert_eq!(stored(&h, &a.id).folder.as_deref(), Some(f.id.as_str()));
+    h.wait("its agent to be made", |h| {
+        stored(h, &a.id).agent_id.is_some()
+    })
+    .await;
+    let first = stored(&h, &a.id).agent_id.unwrap();
+    assert_eq!(
+        folder_holding(&h, &p.id, &first).map(|x| x.id),
+        Some(f.id.clone())
+    );
+    h.wait("its turn to end", |h| {
+        stored(h, &a.id).column == Column::Review
+    })
+    .await;
+
+    // Sent back to do, its agent gone: the new one comes to the same folder.
+    h.core
+        .edit_ticket(&a.id, |t| {
+            t.column = Column::Doing;
+            t.iteration = 2;
+            t.agent_id = Some("disparu".into());
+            t.blocked = Some("Interrompu".into());
+            Ok(())
+        })
+        .unwrap();
+    h.core.ticket_resume(&a.id).await.unwrap();
+    h.wait("a new agent", |h| {
+        stored(h, &a.id)
+            .agent_id
+            .is_some_and(|id| id != "disparu" && id != first)
+    })
+    .await;
+    let again = stored(&h, &a.id).agent_id.unwrap();
+    assert_eq!(folder_holding(&h, &p.id, &again).map(|x| x.id), Some(f.id));
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_ticket_whose_folder_went_starts_its_agent_loose() {
+    let h = harness("mcp-ticket-folder-gone");
+    let p = project(&h).await;
+    let a = made(&h, &p, "Un ticket [ok]").await;
+    h.core
+        .edit_ticket(&a.id, |t| {
+            t.folder = Some("disparu".into());
+            Ok(())
+        })
+        .unwrap();
+    h.core.ticket_start_on(&a.id, None, None, None).unwrap();
+    h.wait("its agent to be made", |h| {
+        stored(h, &a.id).agent_id.is_some()
+    })
+    .await;
+    let id = stored(&h, &a.id).agent_id.unwrap();
+    assert!(folder_holding(&h, &p.id, &id).is_none());
     h.core.mcp.stop();
 }

@@ -6,6 +6,8 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- The image viewer fits in the window, even with a large photo, and follows its size. It zooms with a click on the image, a pinch, Ctrl or ⌘ + wheel, its buttons or + − 0, and a zoomed image moves by hand. It goes from one image to the next across the whole conversation, with a strip of thumbnails, and copies, saves, opens the image or shows it in its folder. Thanks to @Metalzoid (#25).
+- Menus no longer give way to another one: “Run” and “Continue on another harness” in an agent’s menu, and “In an agent’s worktree” in the terminals’ “+” menu, open their list beside them, on hover or on a click. A menu taller than the window stops before its edge and scrolls, a chevron telling there is more to see. Thanks to @Metalzoid (#24).
 - Every plugin now runs inside Escouade, in WASM: the separate program that served Escouade’s own is gone, and the installer is lighter for it. A plugin that asks to start a native program (`run.command`) no longer starts, wherever it comes from, and its page says why.
 - The plugin documentation now says how it really is: every plugin runs in WASM, Escouade’s own install from the installer with no network, and the protocol page no longer talks about processes. The integration pages list the services a plugin serves.
 - A workflow’s diagram starts from the door the agent came in by and only shows what it reaches: the possible in a light dashed line, its real path in a full one, each stay numbered in order, the ways back with their reason. Without an agent, you choose the door; the rest folds into “steps off this path”.
@@ -30,6 +32,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### New
 
+- Agents can be sorted into folders in the sidebar: drag a card into a folder, fold it without losing sight of what waits for an answer, and an agent that creates others puts them with itself. The MCP server reads and sets these folders. Thanks to @Metalzoid (#23).
 - Split screen: drag an agent, a terminal, a launch or the editor from the sidebar onto the work area to open it beside, above or below, up to four panes. The ringed pane takes your typing, your voice and your answers; Ctrl+ splits or goes back to one pane, and the layout comes back at the next start.
 - Settings are rebuilt: a bar on the left with Escouade’s pages (General, Agents, Accounts and harnesses, Connected services, Voice, Notifications, Plugins, Advanced), then each project’s pages, and everything applies as soon as you change it, with no “Save”. A search (Ctrl+F) finds a setting by its name, in English or French, and opens its page; an amber dot marks the page that needs you, such as a harness without an account or an expired token.
 - Escouade's plugins come in the installer: at the first start, even offline, Escouade installs those your configuration uses, and the Plugins view offers the others, installed in one click with no download.

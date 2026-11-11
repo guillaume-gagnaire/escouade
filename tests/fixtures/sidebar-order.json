@@ -1,0 +1,111 @@
+[
+  {
+    "name": "flat-oldest-first",
+    "project": { "agentFolders": [], "agentOrder": [] },
+    "agents": [
+      { "id": "a3", "createdAt": 3, "status": "idle", "archived": false },
+      { "id": "a1", "createdAt": 1, "status": "idle", "archived": false },
+      { "id": "a2", "createdAt": 2, "status": "running", "archived": false }
+    ],
+    "shown": ["a1", "a2", "a3"],
+    "items": [
+      ["agent", "a1"],
+      ["agent", "a2"],
+      ["agent", "a3"]
+    ]
+  },
+  {
+    "name": "old-agents-then-new",
+    "project": { "agentFolders": [], "agentOrder": ["a2", "a1"] },
+    "agents": [
+      { "id": "a1", "createdAt": 1, "status": "idle", "archived": false },
+      { "id": "a2", "createdAt": 2, "status": "idle", "archived": false },
+      { "id": "a3", "createdAt": 9, "status": "idle", "archived": false },
+      { "id": "a4", "createdAt": 5, "status": "done", "archived": false }
+    ],
+    "shown": ["a2", "a1", "a4", "a3"],
+    "items": [
+      ["agent", "a2"],
+      ["agent", "a1"],
+      ["agent", "a4"],
+      ["agent", "a3"]
+    ]
+  },
+  {
+    "name": "waiting-loose-lifts-to-top",
+    "project": {
+      "agentFolders": [{ "id": "f1", "name": "F", "named": true, "principal": null, "agents": ["a4"] }],
+      "agentOrder": ["a1", "f1", "a2", "a3"]
+    },
+    "agents": [
+      { "id": "a1", "createdAt": 1, "status": "idle", "archived": false },
+      { "id": "a2", "createdAt": 2, "status": "idle", "archived": false },
+      { "id": "a3", "createdAt": 3, "status": "waiting", "archived": false },
+      { "id": "a4", "createdAt": 4, "status": "idle", "archived": false }
+    ],
+    "shown": ["a3", "a1", "a4", "a2"],
+    "items": [
+      ["agent", "a3"],
+      ["agent", "a1"],
+      ["folder", "f1", ["a4"]],
+      ["agent", "a2"]
+    ]
+  },
+  {
+    "name": "waiting-in-folder-under-principal",
+    "project": {
+      "agentFolders": [{ "id": "f1", "name": "F", "named": false, "principal": "a1", "agents": ["a1", "a2", "a3"] }],
+      "agentOrder": ["f1"]
+    },
+    "agents": [
+      { "id": "a1", "createdAt": 1, "status": "idle", "archived": false },
+      { "id": "a2", "createdAt": 2, "status": "idle", "archived": false },
+      { "id": "a3", "createdAt": 3, "status": "waiting", "archived": false }
+    ],
+    "shown": ["a1", "a3", "a2"],
+    "items": [["folder", "f1", ["a1", "a3", "a2"]]]
+  },
+  {
+    "name": "principal-archived",
+    "project": {
+      "agentFolders": [{ "id": "f1", "name": "F", "named": false, "principal": "a1", "agents": ["a1", "a2", "a3"] }],
+      "agentOrder": ["f1"]
+    },
+    "agents": [
+      { "id": "a1", "createdAt": 1, "status": "idle", "archived": true },
+      { "id": "a2", "createdAt": 2, "status": "idle", "archived": false },
+      { "id": "a3", "createdAt": 3, "status": "idle", "archived": false }
+    ],
+    "shown": ["a2", "a3"],
+    "items": [["folder", "f1", ["a2", "a3"]]]
+  },
+  {
+    "name": "unknown-ids-ignored",
+    "project": {
+      "agentFolders": [{ "id": "f1", "name": "F", "named": false, "principal": "ghost2", "agents": ["ghost2", "a2"] }],
+      "agentOrder": ["ghost", "a1", "f1", "a1", "f-ghost"]
+    },
+    "agents": [
+      { "id": "a1", "createdAt": 1, "status": "idle", "archived": false },
+      { "id": "a2", "createdAt": 2, "status": "idle", "archived": false }
+    ],
+    "shown": ["a1", "a2"],
+    "items": [
+      ["agent", "a1"],
+      ["folder", "f1", ["a2"]]
+    ]
+  },
+  {
+    "name": "empty-folder",
+    "project": {
+      "agentFolders": [{ "id": "f1", "name": "F", "named": true, "principal": null, "agents": [] }],
+      "agentOrder": ["f1", "a1"]
+    },
+    "agents": [{ "id": "a1", "createdAt": 1, "status": "idle", "archived": false }],
+    "shown": ["a1"],
+    "items": [
+      ["folder", "f1", []],
+      ["agent", "a1"]
+    ]
+  }
+]

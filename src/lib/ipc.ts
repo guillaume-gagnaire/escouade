@@ -68,6 +68,7 @@ import type {
   OwnedDiff,
   IsolaService,
   IssuePage,
+  AgentFolder,
   Project,
   RepoMerge,
   RunSuggestion,
@@ -313,6 +314,18 @@ export const api = {
   /** The settings the `.escouade.yml` of a folder gives a new project, its commands left out; null without one. */
   sharedPreview: (path: string) => invoke<Project | null>('shared_preview', { path }),
   reorderProjects: (ids: string[]) => invoke<void>('reorder_projects', { ids }),
+  /** With an agent, the folder takes its place and holds it. */
+  agentFolderCreate: (projectId: string, agentId?: string) => invoke<AgentFolder>('agent_folder_create', { projectId, agentId }),
+  agentFolderRename: (projectId: string, folderId: string, name: string) =>
+    invoke<void>('agent_folder_rename', { projectId, folderId, name }),
+  agentFolderDelete: (projectId: string, folderId: string) => invoke<void>('agent_folder_delete', { projectId, folderId }),
+  agentFolderPrincipal: (projectId: string, folderId: string, agentId: string | null) =>
+    invoke<void>('agent_folder_principal', { projectId, folderId, agentId }),
+  agentFolderFold: (projectId: string, folderId: string, folded: boolean) =>
+    invoke<void>('agent_folder_fold', { projectId, folderId, folded }),
+  /** `folderId` null: out of any folder; `index` absent: the bottom of that level. */
+  agentFolderMove: (projectId: string, itemId: string, folderId: string | null, index?: number) =>
+    invoke<void>('agent_folder_move', { projectId, itemId, folderId, index }),
   /** `erase`: its history goes too (conversations, tickets, settings); else it is kept as a closed project. */
   removeProject: (id: string, erase: boolean) => invoke<void>('remove_project', { id, erase }),
   /** The projects closed with their history kept, the latest closed first. */
@@ -641,10 +654,14 @@ export const api = {
   /** The file `index` an agent sent, opened with its application or shown in its folder (`reveal`). */
   sentFileOpen: (agentId: string, itemId: string, index: number, reveal: boolean) =>
     invoke<void>('sent_file_open', { agentId, itemId, index, reveal }),
-  /** The image a message of the agent shows by a local path: its `data:` URL, or null (not an image, too heavy, gone, refused). */
   /** An image of the web a message shows, downloaded by the core at the user's click (https, 10 MB at most): its `data:` URL. */
   remoteImage: (src: string) => invoke<string>('remote_image', { src }),
+  /** The image a message of the agent shows by a local path: its `data:` URL, or null (not an image, too heavy, gone, refused). */
   agentLocalImage: (agentId: string, src: string) => invoke<string | null>('agent_local_image', { agentId, src }),
+  /** That image opened with its application, or shown in its folder (`reveal`). */
+  agentLocalOpen: (agentId: string, src: string, reveal: boolean) => invoke<void>('agent_local_open', { agentId, src, reveal }),
+  /** « Enregistrer sous… » of an image shown (its `data:` URL): the core asks where in the system's dialog; false when cancelled. */
+  saveImage: (dataUrl: string, name: string) => invoke<boolean>('save_image', { dataUrl, name }),
   /** Creates an empty folder, its parents with it; refused when something is already there. */
   fsMkdir: (projectId: string, agentId: string | null, path: string) => invoke<void>('fs_mkdir', { projectId, agentId, path }),
   fsBase: (projectId: string, agentId: string | null, path: string) => invoke<FileBase | null>('fs_base', { projectId, agentId, path }),

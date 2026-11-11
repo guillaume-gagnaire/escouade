@@ -6,7 +6,7 @@ import type { Account, Agent, EngineDecl } from '../lib/types';
 import { agent, BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, project, resetApp } from '../test/ipc';
 import Sidebar from './Sidebar.svelte';
 
-// « Continuer sur un autre harness… » and « Revenir sur <harness> » in the agent's menu (ESC-88).
+// « Continuer sur un autre harness » and « Revenir sur <harness> » in the agent's menu (ESC-88).
 
 vi.mock('../lib/terminals', async (original) => ({
   ...(await original<typeof import('../lib/terminals')>()),
@@ -38,10 +38,9 @@ describe('Sidebar, the harness of an agent', () => {
     const backend = fakeBackend({ continue_on_engine: () => null });
     render(Sidebar, { project: project() });
     await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
-    item('Continuer sur un autre harness…')!.onClick!();
-    await settle();
-    expect(items().map((i) => i.label)).toEqual(['Continuer sur Codex']);
-    items()[0].onClick!();
+    const harnesses = item('Continuer sur un autre harness')!.submenu!;
+    expect(harnesses.map((i) => i.label)).toEqual(['Continuer sur Codex']);
+    harnesses[0].onClick!();
     await settle();
     expect(backend.called('continue_on_engine')[0].args).toEqual({ agentId: 'a1', engine: 'codex' });
   });
@@ -51,12 +50,12 @@ describe('Sidebar, the harness of an agent', () => {
     fakeBackend();
     const { unmount } = render(Sidebar, { project: project() });
     await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
-    expect(item('Continuer sur un autre harness…')).toMatchObject({ disabled: true, title: 'Attends la fin du tour' });
+    expect(item('Continuer sur un autre harness')).toMatchObject({ disabled: true, title: 'Attends la fin du tour' });
     unmount();
     withTwoHarnesses(agent({ status: 'done' }), [PRINCIPAL, { ...CODEX_ACCOUNT, projects: ['p2'] }]);
     render(Sidebar, { project: project() });
     await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
-    expect(item('Continuer sur un autre harness…')).toBeUndefined();
+    expect(item('Continuer sur un autre harness')).toBeUndefined();
   });
 
   it('offers the way back once the quota of the harness left came back', async () => {
@@ -66,7 +65,7 @@ describe('Sidebar, the harness of an agent', () => {
     render(Sidebar, { project: project() });
     await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
     // The only other harness is the way back: no « Continuer sur… ».
-    expect(item('Continuer sur un autre harness…')).toBeUndefined();
+    expect(item('Continuer sur un autre harness')).toBeUndefined();
     item('Revenir sur Claude Code')!.onClick!();
     await settle();
     expect(backend.called('continue_on_engine')[0].args).toEqual({ agentId: 'a1', engine: 'claude' });
@@ -79,6 +78,6 @@ describe('Sidebar, the harness of an agent', () => {
     render(Sidebar, { project: project() });
     await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
     expect(item('Revenir sur Claude Code')).toBeUndefined();
-    expect(item('Continuer sur un autre harness…')).toBeUndefined();
+    expect(item('Continuer sur un autre harness')).toBeUndefined();
   });
 });

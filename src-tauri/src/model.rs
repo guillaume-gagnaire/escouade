@@ -849,6 +849,28 @@ pub struct Project {
     /// (`workflows.enabled`).
     #[serde(default = "crate::model::yes")]
     pub workflows_enabled: bool,
+    /// Its agent folders (`folders`): groups of agents in the sidebar, with a principal.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub agent_folders: Vec<AgentFolder>,
+    /// The sidebar's order: the ids of the agents out of any folder and of the folders.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub agent_order: Vec<String>,
+}
+
+/// A group of agents in the sidebar.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AgentFolder {
+    pub id: String,
+    pub name: String,
+    /// Renamed (by the user or `update_folder`): it no longer follows its principal's name.
+    pub named: bool,
+    /// Always one of `agents`.
+    pub principal: Option<String>,
+    /// Its members in their order, archived ones included.
+    pub agents: Vec<String>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub folded: bool,
 }
 
 impl Project {
@@ -1293,6 +1315,11 @@ pub struct Ticket {
     /// next one it gets (sent back to do and started again), until the user turns Remote Control
     /// on for one by hand.
     pub remote_off: bool,
+    /// The folder (`AgentFolder::id`) its agents are filed in when made (`start_ticket`'s `folder`,
+    /// else the caller's); a folder that went means no folder. The autopilot and the window never
+    /// set it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
     /// The images pasted or dropped in its form, in their order: files of its folder
     /// (`DataDir::ticket_dir`), sent to its agent with its first message.
     pub images: Vec<TicketImage>,

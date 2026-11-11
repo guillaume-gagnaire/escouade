@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, test } from './fixture';
+import { addProject, expect, test, windowScale } from './fixture';
 
 /** The titles of the top-level windows of the session (Windows): the devtools of WebView2 are one of their own. */
 function windowTitles(): string[] {
@@ -136,6 +136,14 @@ require('node:http').createServer((req, res) => {
 
   // A phone's width: the page itself is 390 px wide, centred; a tablet's, 768; back to the whole room.
   const seen = () => (fs.existsSync(widths) ? fs.readFileSync(widths, 'utf8').trim().split('\n').at(-1) : null);
+  // The window's scale (1 on a CI runner): the test draws at a scale of 1 (FIXED_SCALE, fixture.ts), but the app sizes the
+  // page in physical pixels, so on a display at 125 % a width of 390 reaches it as 488, give or take the pixel a rounding adds.
+  const scale = await windowScale(page);
+  const tolerance = scale === 1 ? 0 : 1;
+  const widthIs = (css: number) => () => {
+    const got = Number(seen());
+    return Math.abs(got - css * scale) <= tolerance;
+  };
   // In the bar, or in « … » when the view is narrow (the CI's window, 1028 px wide).
   const choose = async (name: string) => {
     const radio = page.getByRole('radio', { name });
@@ -144,17 +152,19 @@ require('node:http').createServer((req, res) => {
     await page.getByRole('menuitemradio', { name: new RegExp(`^${name}`) }).click();
   };
   await choose('Mobile');
-  await expect.poll(seen, { timeout: 15_000 }).toBe('390');
+  await expect.poll(widthIs(390), { timeout: 15_000 }).toBe(true);
   await expect(page.getByText('390 px', { exact: true })).toBeVisible();
   // A tablet's, narrowed to the room when it is narrower (« Rétréci à 692 px » in the CI's window).
   await choose('Tablette');
   const said = page.getByText(/^(768 px|Rétréci à \d+ px)$/);
   await expect(said).toBeVisible();
   const tablet = (await said.textContent())!.match(/\d+/)![0];
-  await expect.poll(seen, { timeout: 15_000 }).toBe(tablet);
+  await expect.poll(widthIs(Number(tablet)), { timeout: 15_000 }).toBe(true);
   // The whole room again: wider than a tablet, or the room itself when it was narrowed to it.
   await choose('Pleine largeur');
-  await expect.poll(() => Number(seen()), { timeout: 15_000 }).toBeGreaterThan(tablet === '768' ? 768 : Number(tablet) - 1);
+  await expect
+    .poll(() => Number(seen()), { timeout: 15_000 })
+    .toBeGreaterThan((tablet === '768' ? 768 : Number(tablet) - 1) * scale - tolerance);
 
   // Back to the conversation and to the page again: the same page, not loaded anew.
   await page.getByRole('button', { name: 'Vue Escouade' }).click();

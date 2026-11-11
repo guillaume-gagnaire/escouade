@@ -585,7 +585,7 @@ test('a terminal opens in the worktree of an agent from the + of the terminals a
   };
 
   await page.getByRole('button', { name: 'Nouveau terminal' }).click();
-  await page.getByRole('menuitem', { name: 'Dans le worktree de…' }).click();
+  await page.getByRole('menuitem', { name: 'Dans le worktree d’un agent' }).hover();
   await page.getByRole('menuitem', { name: 'agent-1', exact: true }).click();
   await write('e2e-plus.txt');
 

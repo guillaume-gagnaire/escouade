@@ -8,11 +8,78 @@ import { t } from './i18n';
 import { fSpentUsd, spent } from './spend';
 import type { Pending } from './later';
 import { SUMMED_UP } from './tools';
-import type { Agent } from './types';
+import type { Agent, AgentFolder, Project } from './types';
 
-/** The agents of the sidebar: who waits for an answer goes first, the others keep their order. */
-export function sidebarOrder(agents: Agent[]): Agent[] {
-  return [...agents.filter((a) => a.status === 'waiting'), ...agents.filter((a) => a.status !== 'waiting')];
+/** What the sidebar lists: a loose agent (`lifted`: it waits, so it went to the top) or a folder. */
+export type SidebarItem =
+  | { kind: 'agent'; agent: Agent; lifted: boolean }
+  | {
+      kind: 'folder';
+      folder: AgentFolder;
+      principal: Agent | null;
+      /** Without the principal, in shown order: the waiting ones first. */
+      agents: Agent[];
+      running: number;
+      waiting: number;
+    };
+
+/**
+ * The sidebar's list of `project` (`agents`: its agents that are not archived), the shown order of the core's
+ * `folders::shown`: unknown ids and doubles dropped, what is placed nowhere at the bottom oldest first, the loose agents
+ * that wait first, a folder's principal on top of its own, then its waiting agents.
+ */
+export function sidebarItems(project: Project, agents: Agent[]): SidebarItem[] {
+  const byId = new Map(agents.map((a) => [a.id, a]));
+  const folders = project.agentFolders ?? [];
+  const seen = new Set<string>();
+  const members = new Map<string, Agent[]>();
+  const principals = new Map<string, Agent | null>();
+  for (const f of folders) {
+    const mine = f.agents.filter((id) => byId.has(id) && !seen.has(id) && seen.add(id));
+    members.set(
+      f.id,
+      mine.map((id) => byId.get(id)!),
+    );
+    principals.set(f.id, (f.principal && mine.includes(f.principal) && byId.get(f.principal)) || null);
+  }
+  const folderIds = new Set(folders.map((f) => f.id));
+  const order = (project.agentOrder ?? []).filter((i) => (folderIds.has(i) || byId.has(i)) && !seen.has(i) && seen.add(i));
+  for (const f of folders) if (!seen.has(f.id)) order.push(f.id) && seen.add(f.id);
+  const unlisted = agents.filter((a) => !seen.has(a.id)).sort((a, b) => a.createdAt - b.createdAt);
+  order.push(...unlisted.map((a) => a.id));
+
+  const waits = (i: string) => !folderIds.has(i) && byId.get(i)?.status === 'waiting';
+  const out: SidebarItem[] = order.filter(waits).map((i) => ({ kind: 'agent', agent: byId.get(i)!, lifted: true }));
+  for (const i of order.filter((i) => !waits(i))) {
+    const folder = folders.find((f) => f.id === i);
+    if (!folder) {
+      out.push({ kind: 'agent', agent: byId.get(i)!, lifted: false });
+      continue;
+    }
+    const principal = principals.get(i) ?? null;
+    const mine = members.get(i)!;
+    const rest = mine.filter((a) => a !== principal);
+    const agents = [...rest.filter((a) => a.status === 'waiting'), ...rest.filter((a) => a.status !== 'waiting')];
+    out.push({
+      kind: 'folder',
+      folder,
+      principal,
+      agents,
+      running: mine.filter((a) => a.status === 'running').length,
+      waiting: mine.filter((a) => a.status === 'waiting').length,
+    });
+  }
+  return out;
+}
+
+/** The agents of `items`, flat, in shown order (a folder's principal first). */
+export function shownAgents(items: SidebarItem[]): Agent[] {
+  return items.flatMap((it) => (it.kind === 'agent' ? [it.agent] : [...(it.principal ? [it.principal] : []), ...it.agents]));
+}
+
+/** What a folded folder still shows as cards: its agents that wait, and the open one. */
+export function foldedCards(item: Extract<SidebarItem, { kind: 'folder' }>, selectedId: string | undefined): Agent[] {
+  return [...(item.principal ? [item.principal] : []), ...item.agents].filter((a) => a.status === 'waiting' || a.id === selectedId);
 }
 
 /** The line of a card under its model: what the agent does during a turn, or what its last turns changed. */

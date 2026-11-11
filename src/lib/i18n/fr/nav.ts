@@ -88,7 +88,7 @@ export default {
     exited: 'terminé',
     noShell: 'Aucun shell détecté (PowerShell 7, Git Bash, WSL). Vérifie les réglages.',
     /** In the menu of the « + » of the terminals: opens the list of the agents whose worktree can hold one. */
-    inWorktree: 'Dans le worktree de…',
+    inWorktree: 'Dans le worktree d’un agent',
     modified: '~{n} modifiés',
     added: '+{n} ajoutés',
     deleted: '−{n} supprimés',
@@ -97,6 +97,32 @@ export default {
     noRepo: 'Pas de dépôt git',
     /** The project's folder in the footer: it opens the editor on it. */
     browseFolder: 'Parcourir {path}',
+    /** The folders of agents (docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md). */
+    folders: {
+      collapse: 'Replier {name}',
+      expand: 'Déplier {name}',
+      principal: 'Agent principal',
+      empty: 'Glisse un agent ici',
+      running: { one: '{count} en cours', other: '{count} en cours' },
+      waiting: { one: '{count} en attente', other: '{count} en attente' },
+      rename: 'Nom du dossier',
+      create: 'Nouveau dossier',
+      createWith: 'Nouveau dossier avec cet agent',
+      moveTo: 'Déplacer vers',
+      outOf: 'Hors dossier',
+      makePrincipal: 'Faire de cet agent l’agent principal',
+      removePrincipal: 'Retirer le rôle d’agent principal',
+      delete: 'Supprimer le dossier',
+      deleteModal: {
+        title: 'Supprimer le dossier « {name} » ?',
+        out: 'Sortir les agents du dossier',
+        archive: { one: 'Archiver l’agent', other: 'Archiver les {count} agents' },
+        remove: { one: 'Supprimer l’agent', other: 'Supprimer les {count} agents' },
+        worktrees: { one: 'Supprimer aussi son worktree', other: 'Supprimer aussi leurs worktrees' },
+        tickets: { one: 'Son ticket {keys} repartira « À faire ».', other: 'Leurs tickets {keys} repartiront « À faire ».' },
+        confirm: 'Supprimer le dossier',
+      },
+    },
     // The menu of an agent's card.
     menu: {
       duplicate: 'Dupliquer la conversation',
@@ -106,7 +132,7 @@ export default {
       archiveHint: 'garde la conversation',
       prepareLaunch: 'Préparer le lancement',
       // The project's launch commands, to run in its worktree.
-      launch: 'Lancer…',
+      launch: 'Lancer',
       openTerminal: 'Ouvrir un terminal',
       /** `{engine}`: the agent's harness. */
       toTerminal: 'Vue {engine}',

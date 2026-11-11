@@ -1,5 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
+import { tick } from 'svelte';
+import '../test/pointer';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { getDraft } from '../lib/drafts';
 import { buffers } from '../lib/editor/buffers.svelte';
@@ -203,6 +205,8 @@ describe('Sidebar', () => {
         'Nouvel agent sur une branche…',
         'Nouvel agent depuis une autre branche…',
         '',
+        'Nouveau dossier',
+        '',
         'Harness par défaut du projet…',
       ]);
       // The button itself still makes an agent at once.
@@ -294,6 +298,8 @@ describe('Sidebar', () => {
         'New agent in a worktree',
         'New agent on a branch…',
         'New agent from another branch…',
+        '',
+        'New folder',
         '',
         'Project’s default harness…',
       ]);
@@ -1269,14 +1275,14 @@ describe('Sidebar, a launch command in the worktree of an agent (ESC-19)', () =>
     return menu.open!.items.map((i) => i.label);
   };
 
-  it('offers « Lancer… » for an agent with a worktree, then the commands, run in its worktree', async () => {
+  it('offers « Lancer » for an agent with a worktree, its submenu the commands, run in its worktree', async () => {
     const backend = fakeBackend({ run_start: () => ({ id: 't9', projectId: 'p1', name: 'Front · wt-agent', shell: 'pwsh' }) });
     render(Sidebar, { project: P });
-    expect(await menuOf(/refacto-auth/)).not.toContain('Lancer…');
-    expect(await menuOf(/wt-agent/)).toContain('Lancer…');
-    menu.open!.items.find((i) => i.label === 'Lancer…')!.onClick!();
-    await vi.waitFor(() => expect(menu.open?.items.map((i) => i.label)).toEqual(['Front']));
-    menu.open!.items[0].onClick!();
+    expect(await menuOf(/refacto-auth/)).not.toContain('Lancer');
+    expect(await menuOf(/wt-agent/)).toContain('Lancer');
+    const commands = menu.open!.items.find((i) => i.label === 'Lancer')!.submenu!;
+    expect(commands.map((i) => i.label)).toEqual(['Front']);
+    commands[0].onClick!();
     await vi.waitFor(() => expect(backend.called('run_start')).toHaveLength(1));
     expect(backend.called('run_start')[0].args).toMatchObject({ projectId: 'p1', commandId: 'c1', agentId: 'a2' });
   });
@@ -1285,14 +1291,14 @@ describe('Sidebar, a launch command in the worktree of an agent (ESC-19)', () =>
     resetApp({ projects: [project()], agents: [agent({ id: 'a2', name: 'wt-agent', worktree: WT })] });
     fakeBackend();
     render(Sidebar, { project: project() });
-    expect(await menuOf(/wt-agent/)).not.toContain('Lancer…');
+    expect(await menuOf(/wt-agent/)).not.toContain('Lancer');
   });
 
   it('says it in English', async () => {
     setLang('en');
     fakeBackend();
     render(Sidebar, { project: P });
-    expect(await menuOf(/wt-agent/)).toContain('Run…');
+    expect(await menuOf(/wt-agent/)).toContain('Run');
   });
 });
 
@@ -1323,38 +1329,34 @@ describe('Sidebar terminals menu (ESC-18)', () => {
   });
   afterEach(() => menu.close());
 
-  it('lists the shells, then « Dans le worktree de… » after a separator', async () => {
+  it('lists the shells, then « Dans le worktree d’un agent » after a separator', async () => {
     render(Sidebar, { project: project() });
     await userEvent.click(plus());
-    expect(labels()).toEqual(['PowerShell 7', 'Git Bash', '', 'Dans le worktree de…']);
+    expect(labels()).toEqual(['PowerShell 7', 'Git Bash', '', 'Dans le worktree d’un agent']);
     expect(menu.open!.items[2]).toMatchObject({ separator: true });
     // The shells still open a terminal in the project.
     menu.open!.items[1].onClick!();
     expect(openTerminal).toHaveBeenCalledWith('p1', 'bash', 'bash-1', undefined);
   });
 
-  it('replaces the menu with the agents of the project that have a worktree, in the order of the sidebar', async () => {
+  it('offers in its submenu the agents of the project that have a worktree, in the order of the sidebar', async () => {
     render(Sidebar, { project: project() });
     await userEvent.click(plus());
-    menu.open!.items[3].onClick!();
-    await vi.waitFor(() => expect(labels()).toEqual(['zeta', 'alpha']));
+    const agents = menu.open!.items[3].submenu!;
+    expect(agents.map((i) => i.label)).toEqual(['zeta', 'alpha']);
     // Neither the one in the project’s folder, the archived one, nor the other project’s.
-    expect(menu.open!.items.every((i) => i.hint === undefined && !i.separator)).toBe(true);
-    // Opened from the button, as the first menu was: the keyboard works it.
-    expect(menu.open).toMatchObject({ keyboard: true });
+    expect(agents.every((i) => i.hint === undefined && !i.separator)).toBe(true);
   });
 
   it('opens a terminal in the worktree of the agent chosen, named after it', async () => {
     render(Sidebar, { project: project() });
     await userEvent.click(plus());
-    menu.open!.items[3].onClick!();
-    await vi.waitFor(() => expect(labels()).toEqual(['zeta', 'alpha']));
-    menu.open!.items.find((i) => i.label === 'alpha')!.onClick!();
+    menu.open!.items[3].submenu!.find((i) => i.label === 'alpha')!.onClick!();
     expect(openTerminal).toHaveBeenCalledWith('p1', 'pwsh', 'pwsh · alpha', { agentId: 'a2' });
     await expect.poll(() => app.term?.name).toBe('pwsh · alpha');
   });
 
-  it('works from the keyboard: the focus goes into the second menu and comes back to the button', async () => {
+  it('works from the keyboard: the focus goes into the submenu, beside the menu, and comes back to the button', async () => {
     render(Sidebar, { project: project() });
     render(ContextMenu);
     plus().focus();
@@ -1362,10 +1364,11 @@ describe('Sidebar terminals menu (ESC-18)', () => {
     // (Its name carries the hint: the shell’s glyph.)
     expect(await screen.findByRole('menuitem', { name: /^PowerShell 7/ })).toHaveFocus();
     await userEvent.keyboard('{ArrowDown}{ArrowDown}');
-    expect(screen.getByRole('menuitem', { name: 'Dans le worktree de…' })).toHaveFocus();
+    expect(screen.getByRole('menuitem', { name: 'Dans le worktree d’un agent' })).toHaveFocus();
     await userEvent.keyboard('{Enter}');
     const first = await screen.findByRole('menuitem', { name: 'zeta' });
-    expect(screen.queryByRole('menuitem', { name: /^PowerShell 7/ })).toBeNull();
+    // The menu of the shells stays.
+    expect(screen.getByRole('menuitem', { name: /^PowerShell 7/ })).toBeInTheDocument();
     await vi.waitFor(() => expect(first).toHaveFocus());
     await userEvent.keyboard('{ArrowDown}{Enter}');
     expect(openTerminal).toHaveBeenCalledWith('p1', 'pwsh', 'pwsh · alpha', { agentId: 'a2' });
@@ -1377,7 +1380,7 @@ describe('Sidebar terminals menu (ESC-18)', () => {
     render(Sidebar, { project: project() });
     render(ContextMenu);
     await userEvent.click(plus());
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Dans le worktree de…' }));
+    await userEvent.hover(await screen.findByRole('menuitem', { name: 'Dans le worktree d’un agent' }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'zeta' }));
     expect(openTerminal).toHaveBeenCalledWith('p1', 'pwsh', 'pwsh · zeta', { agentId: 'a1' });
     expect(screen.queryByRole('menu')).toBeNull();
@@ -1419,9 +1422,8 @@ describe('Sidebar terminals menu (ESC-18)', () => {
     setLang('en');
     render(Sidebar, { project: project() });
     await userEvent.click(getByTip(document.body, 'New terminal'));
-    expect(labels()).toEqual(['PowerShell 7', 'Git Bash', '', 'In the worktree of…']);
-    menu.open!.items[3].onClick!();
-    await vi.waitFor(() => expect(labels()).toEqual(['zeta', 'alpha']));
+    expect(labels()).toEqual(['PowerShell 7', 'Git Bash', '', 'In an agent’s worktree']);
+    expect(menu.open!.items[3].submenu!.map((i) => i.label)).toEqual(['zeta', 'alpha']);
   });
 });
 
@@ -1907,6 +1909,10 @@ describe('Sidebar in English', () => {
     await fireEvent.contextMenu(card);
     expect(items()).toEqual([
       'Rename',
+      'Move to',
+      'New folder with this agent',
+      'Move up',
+      'Move down',
       'Duplicate the conversation',
       'Archive',
       'Prepare launch',
@@ -3042,6 +3048,8 @@ describe('Sidebar of the 2.0 design (ESC-73)', () => {
         projects: [project()],
         agents: [agent({ status: 'running' }), agent({ id: 'a2', name: 'tests-e2e', status: 'waiting', createdAt: 2, requests: [ask] })],
       });
+      // a1 is the one open: without a choice, the first of the list is, and a waiting agent now leads it.
+      app.ui.selectedAgent.p1 = 'a1';
       // A menu left open by another test would keep the keys.
       menu.close();
       clock = vi.spyOn(performance, 'now').mockReturnValue(10_000);
@@ -3398,5 +3406,306 @@ describe('Sidebar of the 2.0 design (ESC-73)', () => {
       expect(document.querySelector(`[data-icon="${name}"]`), name).not.toBeNull();
     }
     expect(document.body.textContent).not.toMatch(/[▾▸⎇✦⟳■▶×]/);
+  });
+});
+
+describe('Sidebar agent folders', () => {
+  const folderOf = (id: string) => document.querySelector<HTMLElement>(`section.folder[data-folder="${id}"]`)!;
+  const card = (id: string) => document.querySelector<HTMLElement>(`.agent[data-agent="${id}"]`)!;
+  const withFolders = (folded = false) =>
+    resetApp({
+      projects: [
+        project({
+          agentFolders: [{ id: 'f1', name: 'Auth', named: true, principal: 'a1', agents: ['a2', 'a1', 'a4'], folded }],
+          agentOrder: ['f1', 'a3'],
+        }),
+      ],
+      agents: [
+        agent({ id: 'a1', name: 'chef', status: 'running' }),
+        agent({ id: 'a2', name: 'tests', status: 'waiting', createdAt: 2 }),
+        agent({ id: 'a3', name: 'seul', status: 'idle', createdAt: 3 }),
+        agent({ id: 'a4', name: 'calme', status: 'idle', createdAt: 4 }),
+      ],
+    });
+  const names = (el: HTMLElement) => [...el.querySelectorAll('.agent .name')].map((n) => n.textContent);
+
+  it('a folder shows its principal first with a star', () => {
+    withFolders();
+    fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    expect(names(folderOf('f1'))).toEqual(['chef', 'tests', 'calme']);
+    expect(card('a3').closest('section.folder')).toBeNull();
+    expect(getByTip(card('a1'), 'Agent principal')).toBeInTheDocument();
+    expect(within(card('a2')).queryByRole('img', { name: 'Agent principal' })).toBeNull();
+  });
+
+  it('the star sits before the name of the principal', () => {
+    withFolders();
+    fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    const a1 = card('a1');
+    const star = a1.querySelector('.star')!;
+    const name = a1.querySelector('.name')!;
+    expect(star.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('a click on the header outside the name folds the folder, one on the name does not', async () => {
+    withFolders();
+    const backend = fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    const header = folderOf('f1').querySelector<HTMLElement>('.folder-h')!;
+    await fireEvent.click(header.querySelector('.name')!);
+    expect(backend.called('agent_folder_fold')).toHaveLength(0);
+    await fireEvent.click(header.querySelector('.cnt')!);
+    await waitFor(() => expect(backend.called('agent_folder_fold')).toHaveLength(1));
+    expect(backend.called('agent_folder_fold')[0].args).toMatchObject({ folderId: 'f1', folded: true });
+  });
+
+  it('Alt+ArrowUp into a folded folder leaves the focus on its chevron', async () => {
+    withFolders(true);
+    app.ui.selectedAgent = { p1: 'a1' };
+    // The move lands a3 in the folded folder, where its card is not drawn.
+    fakeBackend({
+      agent_folder_move: () => {
+        app.projects[0].agentFolders![0].agents.push('a3');
+        app.projects[0].agentOrder = ['f1'];
+      },
+    });
+    render(Sidebar, { project: app.projects[0] });
+    card('a3').focus();
+    await fireEvent.keyDown(card('a3'), { key: 'ArrowUp', altKey: true });
+    await waitFor(() => expect(card('a3')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(folderOf('f1').querySelector('.chev')));
+  });
+
+  it('a folded folder still shows the agent that waits', () => {
+    withFolders(true);
+    // The agent open stays drawn too: pick a loose one.
+    app.ui.selectedAgent = { p1: 'a3' };
+    fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    expect(names(folderOf('f1'))).toEqual(['tests']);
+    expect(within(folderOf('f1')).getByRole('button', { name: 'Déplier Auth' })).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('the folder header says its counts to screen readers', () => {
+    withFolders();
+    fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    expect(folderOf('f1').querySelector('.folder-h')).toHaveTextContent('1 en cours, 1 en attente');
+  });
+
+  it('Déplacer vers puts the agent in a folder, from its submenu', async () => {
+    withFolders();
+    const backend = fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    await fireEvent.contextMenu(card('a3'));
+    // A submenu beside the agent's menu, as « Lancer » (#24): its entry has no « … ».
+    const entry = menu.open!.items.find((i) => i.label === 'Déplacer vers')!;
+    expect(entry.onClick).toBeUndefined();
+    expect(entry.submenu!.map((i) => i.label)).toContain('Nouveau dossier');
+    entry.submenu!.find((i) => i.label === 'Auth')!.onClick!();
+    await waitFor(() => expect(backend.called('agent_folder_move')).toHaveLength(1));
+    expect(backend.called('agent_folder_move')[0].args).toMatchObject({ projectId: 'p1', itemId: 'a3', folderId: 'f1' });
+  });
+
+  it('Alt+ArrowUp moves the focused card, into the folder above it', async () => {
+    withFolders();
+    const backend = fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    card('a3').focus();
+    await fireEvent.keyDown(card('a3'), { key: 'ArrowUp', altKey: true });
+    await waitFor(() => expect(backend.called('agent_folder_move')).toHaveLength(1));
+    expect(backend.called('agent_folder_move')[0].args).toMatchObject({ itemId: 'a3', folderId: 'f1' });
+    expect(backend.called('agent_folder_move')[0].args.index).toBeUndefined();
+  });
+
+  /** A hand's drag: press `from`, move past the threshold over `over` (what is under the pointer, the list's elements), release. */
+  async function gesture(from: Element, over: Element[], release = true, y = 40) {
+    document.elementsFromPoint = () => over;
+    onTestFinished(() => void window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
+    const pt = (type: string, x: number, y: number) =>
+      new PointerEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true, cancelable: true });
+    await fireEvent(from, pt('pointerdown', 10, 10));
+    await fireEvent(window, pt('pointermove', 10, y));
+    await tick();
+    if (release) await fireEvent(window, pt('pointerup', 10, y));
+  }
+
+  /** The rows of the list drawn one under the other, 38 px each with 2 px between (jsdom has no layout). */
+  function stack() {
+    const rows = [...document.querySelectorAll<HTMLElement>('.agents > [data-row], .agents > section.folder')];
+    const spy = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      const at = rows.findIndex((r) => r === this || r.contains(this));
+      const top = at < 0 ? 0 : at * 40;
+      return { top, bottom: top + 38, left: 0, right: 200, width: 200, height: 38, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
+    });
+    onTestFinished(() => spy.mockRestore());
+  }
+  const loose = (over: Record<string, Partial<Parameters<typeof agent>[0]>> = {}) =>
+    resetApp({
+      projects: [project({ agentOrder: ['a1', 'a2', 'a3'] })],
+      agents: ['a1', 'a2', 'a3'].map((id, i) => agent({ id, name: id, createdAt: i + 1, ...over[id] })),
+    });
+
+  it('released on the pull request row of a card, an agent lands next to that card, not at the end', async () => {
+    loose({ a2: { worktree: { path: 'C:\\w', branch: 'escouade/x', baseBranch: 'main' }, prWord: 'PR', prDown: 'arrêté' } });
+    const backend = fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    stack();
+    const down = document.querySelector<HTMLElement>('[data-pr-down="a2"]')!;
+    // The lower half of the row of a2 (its card and what is under it): after a2, so before a3.
+    await gesture(card('a1'), [down, document.querySelector('.agents')!], true, 70);
+    await waitFor(() => expect(backend.called('agent_folder_move')).toHaveLength(1));
+    expect(backend.called('agent_folder_move')[0].args).toMatchObject({ itemId: 'a1', index: 1 });
+  });
+
+  it('released in the gap between two cards, it lands by the height, not at the end', async () => {
+    loose();
+    const backend = fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    stack();
+    // The pointer is on the list itself, between a2 (ends at 78) and a3 (starts at 80).
+    await gesture(card('a1'), [document.querySelector('.agents')!], true, 79);
+    await waitFor(() => expect(backend.called('agent_folder_move')).toHaveLength(1));
+    expect(backend.called('agent_folder_move')[0].args).toMatchObject({ itemId: 'a1', index: 1 });
+  });
+
+  it('the drop line is drawn where the agent lands: before the first card that did not move up', async () => {
+    loose({ a1: { status: 'waiting' } });
+    // a1 waits: it is on top whatever its place. Dropping a3 above it lands before a2.
+    app.projects[0].agentOrder = ['a1', 'a2', 'a3'];
+    fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    stack();
+    await gesture(card('a3'), [card('a1'), document.querySelector('.agents')!], false, 5);
+    const line = document.querySelector('.drop')!;
+    expect(line).not.toBeNull();
+    expect(line.nextElementSibling).toBe(document.querySelector('[data-row="a2"]'));
+  });
+
+  it('with no agent left but a folder, the empty message and « Créer un agent » stay', () => {
+    resetApp({
+      projects: [project({ agentFolders: [{ id: 'f1', name: 'Auth', named: true, principal: null, agents: [] }], agentOrder: ['f1'] })],
+      agents: [],
+    });
+    fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    expect(folderOf('f1')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Créer un agent' })).toBeInTheDocument();
+  });
+
+  it('dragging a card onto a folder asks for the move', async () => {
+    withFolders();
+    const backend = fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    const header = folderOf('f1').querySelector<HTMLElement>('.folder-h')!;
+    await gesture(card('a3'), [header, folderOf('f1'), document.querySelector('.agents')!], false);
+    expect(folderOf('f1')).toHaveClass('over');
+    expect(card('a3')).toHaveClass('dragging');
+    await fireEvent(window, new PointerEvent('pointerup', { clientX: 10, clientY: 40, button: 0 }));
+    await waitFor(() => expect(backend.called('agent_folder_move')).toHaveLength(1));
+    expect(backend.called('agent_folder_move')[0].args).toMatchObject({ itemId: 'a3', folderId: 'f1' });
+    await waitFor(() => expect(folderOf('f1')).not.toHaveClass('over'));
+  });
+
+  it('a card dragged over a card in a folder shows the drop line', async () => {
+    withFolders();
+    fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    expect(document.querySelector('.drop')).toBeNull();
+    await gesture(card('a3'), [card('a1'), folderOf('f1'), document.querySelector('.agents')!], false);
+    expect(document.querySelector('.drop')).not.toBeNull();
+    await fireEvent.keyDown(window, { key: 'Escape' });
+    await tick();
+    expect(document.querySelector('.drop')).toBeNull();
+  });
+
+  it('a press released without moving opens the agent and moves nothing', async () => {
+    withFolders();
+    const backend = fakeBackend();
+    await new Promise((r) => setTimeout(r, 0)); // the previous drag's click trap is gone
+    const selectAgent = vi.spyOn(app, 'selectAgent');
+    render(Sidebar, { project: app.projects[0] });
+    await fireEvent(card('a3'), new PointerEvent('pointerdown', { clientX: 10, clientY: 10, button: 0, bubbles: true }));
+    await fireEvent(window, new PointerEvent('pointerup', { clientX: 10, clientY: 10, button: 0 }));
+    await fireEvent.click(card('a3'));
+    expect(selectAgent).toHaveBeenCalledWith('a3');
+    expect(backend.called('agent_folder_move')).toHaveLength(0);
+  });
+
+  it('a folder dragged over the inside of another folder has no place, not the bottom of the list', async () => {
+    resetApp({
+      projects: [
+        project({
+          agentFolders: [
+            { id: 'f1', name: 'Auth', named: true, principal: null, agents: ['a1'] },
+            { id: 'f2', name: 'Autre', named: true, principal: null, agents: ['a2'] },
+          ],
+          agentOrder: ['f2', 'f1', 'a3'],
+        }),
+      ],
+      agents: [
+        agent({ id: 'a1', name: 'un' }),
+        agent({ id: 'a2', name: 'deux', createdAt: 2 }),
+        agent({ id: 'a3', name: 'seul', createdAt: 3 }),
+      ],
+    });
+    const backend = fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    const list = document.querySelector('.agents')!;
+    await gesture(folderOf('f2').querySelector('.folder-h')!, [card('a1'), folderOf('f1'), list], false);
+    expect(document.querySelector('.drop')).toBeNull();
+    document.elementsFromPoint = () => [folderOf('f1').querySelector('.folder-b')!, folderOf('f1'), list];
+    await fireEvent(window, new PointerEvent('pointermove', { clientX: 10, clientY: 50, button: 0 }));
+    await tick();
+    expect(document.querySelector('.drop')).toBeNull();
+    await fireEvent(window, new PointerEvent('pointerup', { clientX: 10, clientY: 40, button: 0 }));
+    expect(backend.called('agent_folder_move')).toHaveLength(0);
+  });
+
+  it('Nouveau dossier in the new agent menu creates one', async () => {
+    withFolders();
+    const backend = fakeBackend({
+      agent_folder_create: () => ({ id: 'f2', name: 'Nouveau dossier', named: false, principal: null, agents: [] }),
+    });
+    render(Sidebar, { project: app.projects[0] });
+    await userEvent.click(screen.getByRole('button', { name: 'Autres façons de créer un agent' }));
+    await waitFor(() => expect(menu.open).not.toBeNull());
+    menu.open!.items.find((i) => i.label === 'Nouveau dossier')!.onClick!();
+    await waitFor(() => expect(backend.called('agent_folder_create')).toHaveLength(1));
+    expect(backend.called('agent_folder_create')[0].args).toMatchObject({ projectId: 'p1' });
+    expect(backend.called('agent_folder_create')[0].args.agentId).toBeUndefined();
+  });
+
+  it('Supprimer le dossier opens the modal when the folder has agents', async () => {
+    withFolders();
+    const backend = fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    await fireEvent.contextMenu(folderOf('f1').querySelector('.folder-h')!);
+    const labels = menu.open!.items.filter((i) => !i.separator).map((i) => i.label);
+    expect(labels).toEqual(['Renommer', 'Monter', 'Descendre', 'Supprimer le dossier']);
+    menu.open!.items.find((i) => i.label === 'Supprimer le dossier')!.onClick!();
+    expect(app.modal).toEqual({ kind: 'deleteFolder', projectId: 'p1', folderId: 'f1' });
+    expect(backend.called('agent_folder_delete')).toHaveLength(0);
+  });
+
+  it('Supprimer le dossier deletes at once a folder with no visible agent', async () => {
+    resetApp({
+      projects: [
+        project({
+          agentFolders: [{ id: 'f1', name: 'Auth', named: true, principal: null, agents: ['a1'] }],
+          agentOrder: ['f1'],
+        }),
+      ],
+      agents: [agent({ id: 'a1', archived: true })],
+    });
+    const backend = fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    await fireEvent.contextMenu(folderOf('f1').querySelector('.folder-h')!);
+    menu.open!.items.find((i) => i.label === 'Supprimer le dossier')!.onClick!();
+    await waitFor(() => expect(backend.called('agent_folder_delete')).toHaveLength(1));
+    expect(backend.called('agent_folder_delete')[0].args).toMatchObject({ projectId: 'p1', folderId: 'f1' });
+    expect(app.modal).toBeNull();
   });
 });

@@ -229,6 +229,80 @@ pub struct ListAgentsArgs {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ListFoldersArgs {
+    #[schemars(
+        description = "The project: its id, or its name in any case. An agent of Escouade may leave it out for its own."
+    )]
+    pub project: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CreateFolderArgs {
+    #[schemars(
+        description = "The project: its id, or its name in any case. An agent of Escouade may leave it out for its own."
+    )]
+    pub project: Option<String>,
+    #[schemars(description = "The folder's name, as the sidebar shows it.")]
+    pub name: String,
+    #[schemars(
+        description = "The agents to put in it, in this order: each one's id, or its name in any case. They leave their place."
+    )]
+    pub agents: Option<Vec<String>>,
+    #[schemars(
+        description = "The folder's principal, shown first and standing for the folder: one of its agents, by id or name."
+    )]
+    pub principal: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct UpdateFolderArgs {
+    #[schemars(
+        description = "The project: its id, or its name in any case. An agent of Escouade may leave it out for its own."
+    )]
+    pub project: Option<String>,
+    #[schemars(description = "The folder: its id, or its name in any case.")]
+    pub folder: String,
+    #[schemars(description = "The new name of the folder.")]
+    pub name: Option<String>,
+    #[schemars(
+        description = "The new principal: an agent of the folder, by id or name, or an empty string for none."
+    )]
+    pub principal: Option<String>,
+    #[schemars(
+        description = "Its rank among the folders and agents the read tools list, from 0, not counting the agents that wait (they come first) nor archived ones; past the end, the bottom."
+    )]
+    pub position: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct DeleteFolderArgs {
+    #[schemars(
+        description = "The project: its id, or its name in any case. An agent of Escouade may leave it out for its own."
+    )]
+    pub project: Option<String>,
+    #[schemars(description = "The folder: its id, or its name in any case.")]
+    pub folder: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct MoveAgentArgs {
+    #[schemars(description = "The agent: its id, or its name in any case.")]
+    pub agent: String,
+    #[schemars(
+        description = "The folder to put it in: its id, or its name in any case; an empty string for outside any folder. Left out, it stays where it is."
+    )]
+    pub folder: Option<String>,
+    #[schemars(
+        description = "Its rank among the folders and agents the read tools list in that place, in the folder or in the project's list, from 0, not counting the agents that wait (they come first, or under the folder's principal), the principal nor archived ones. Left out, the bottom."
+    )]
+    pub position: Option<u32>,
+    #[schemars(
+        description = "The project to look for its name in (two projects may each have an agent of that name): its id, or its name in any case."
+    )]
+    pub project: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ListTicketsArgs {
     #[schemars(description = "The project: its id, or its name in any case.")]
     pub project: String,
@@ -751,6 +825,10 @@ pub struct StartTicketArgs {
         description = "The effort of this ticket's agent (low, medium, high, xhigh or max: those of its harness and model, see list_projects), for this ticket alone: it takes precedence over the Kanban's (a model that takes none, Haiku, goes without). An empty string, or auto, goes back to the Kanban's. Leave it out to leave it as it is."
     )]
     pub effort: Option<String>,
+    #[schemars(
+        description = "The folder the agents of this ticket go in (their sidebar folder), kept on the ticket (also when it is resumed): its id or its name in any case, made under that name if there is none. Leave it out: your own folder, made for you (named after you) if you have none. An empty string: no folder. Left out, from another project or from outside Escouade: no automatic folder."
+    )]
+    pub folder: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -1008,6 +1086,10 @@ pub struct CreateAgentArgs {
         description = "The model, as the project's harness names it (sonnet, opus, haiku for Claude Code; gpt-6-luna… for Codex; list_projects gives its models). Leave it out for the default model."
     )]
     pub model: Option<String>,
+    #[schemars(
+        description = "The folder the new agent goes in (its sidebar folder): its id or its name in any case, made under that name if there is none. Leave it out: your own folder, made for you (named after you) if you have none. An empty string: no folder. Left out, from another project or from outside Escouade: no automatic folder."
+    )]
+    pub folder: Option<String>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -1090,7 +1172,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "List Escouade's Claude Code agents, oldest first (archived ones left out), of every project or of one: their id, name, project (its name) and projectId, status (idle, running, waiting, done or error), whether a question or a permission waits for the user's answer and how many (requests; list_requests gives them), the key of their ticket (null when none), their harness (engine: claude for Claude Code, codex, copilot, cursor or opencode), their model, their Claude account, what they cost so far in US dollars, how many subagents and background tasks they have running (subagentsRunning: the subagents at work, in the foreground or the background; backgroundTasksRunning: the commands, monitors, remote agents, teammates and workflows Claude Code runs for them, never the subagents; an agent that finished its turn may still have some going on, and list_background_work lists them), and their Remote Control: remoteControl (in force now, so the agent is reachable from claude.ai), remoteSource (what turned it on: hand, project or global; off when the user set the agent apart with « Désactiver le remote control », so no setting gives it back; null otherwise), remoteState (the link's state Claude Code reports: ready, connected, unavailable; null without a link) and interfaceRemote (in the Claude Code view: true when its interface runs and was started with Remote Control, so it stays linked to claude.ai until its next launch even after Remote Control was turned off; false when it runs without; null when none runs), and workflow (where it is in its project's workflow: name, step, turn, since in epoch milliseconds, and outside when it does something else; null when it follows none; get_workflow gives the workflow). Remote Control is only read here: no tool turns Remote Control on or off, since it exposes a session on the internet and stays the user's choice in the window.",
+        description = "List Escouade's Claude Code agents in the sidebar's order (archived ones left out), project by project in the app's order, of every project or of one: their id, name, project (its name) and projectId, folder (the agent folder they are in: id and name; null when in none; list_folders gives the folders), principal (true when the agent is its folder's principal), status (idle, running, waiting, done or error), whether a question or a permission waits for the user's answer and how many (requests; list_requests gives them), the key of their ticket (null when none), their harness (engine: claude for Claude Code, codex, copilot, cursor or opencode), their model, their Claude account, what they cost so far in US dollars, how many subagents and background tasks they have running (subagentsRunning: the subagents at work, in the foreground or the background; backgroundTasksRunning: the commands, monitors, remote agents, teammates and workflows Claude Code runs for them, never the subagents; an agent that finished its turn may still have some going on, and list_background_work lists them), and their Remote Control: remoteControl (in force now, so the agent is reachable from claude.ai), remoteSource (what turned it on: hand, project or global; off when the user set the agent apart with « Désactiver le remote control », so no setting gives it back; null otherwise), remoteState (the link's state Claude Code reports: ready, connected, unavailable; null without a link) and interfaceRemote (in the Claude Code view: true when its interface runs and was started with Remote Control, so it stays linked to claude.ai until its next launch even after Remote Control was turned off; false when it runs without; null when none runs), and workflow (where it is in its project's workflow: name, step, turn, since in epoch milliseconds, and outside when it does something else; null when it follows none; get_workflow gives the workflow). Remote Control is only read here: no tool turns Remote Control on or off, since it exposes a session on the internet and stays the user's choice in the window.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
     async fn list_agents(
@@ -1101,6 +1183,105 @@ impl<R: Runtime> Tools<R> {
         let result = read::agents(&ctx.core, &ctx.caller, args.project.as_deref());
         let asked = summary(&[("project", args.project.as_deref())]);
         ctx.reply("list_agents", &asked, result)
+    }
+
+    #[tool(
+        description = "List the agent folders of a project, in the sidebar's order: their id, name, principal (the agent that leads the folder: id and name; null when none) and agents (id, name and status of each, the principal first, archived ones left out). Agents that are in no folder are listed by list_agents.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn list_folders(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<ListFoldersArgs>,
+    ) -> CallToolResult {
+        let result = read::folders(&ctx.core, &ctx.caller, args.project.as_deref());
+        let asked = summary(&[("project", args.project.as_deref())]);
+        ctx.reply("list_folders", &asked, result)
+    }
+
+    #[tool(
+        description = "Make an agent folder in a project's sidebar, as the window's New folder does: at the bottom of the list, holding the agents given in this order (they leave their place) with one of them as its principal, if asked. An agent of Escouade may leave the project out for its own; it acts on its own project and on every project that is not private. Folders hold agents only, never another folder. Answers the folder as list_folders does.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn create_folder(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<CreateFolderArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("name", Some(&args.name)),
+        ]);
+        let result = act::create_folder(&ctx.core, &ctx.caller, args);
+        ctx.reply_changed("create_folder", &asked, result)
+    }
+
+    #[tool(
+        description = "Change an agent folder: its name, its principal (an agent of the folder, or an empty string for none) and its rank in the project's list. What you leave out stays as it is; nothing changes when one of them is refused. A folder that was never renamed follows its principal's name until you give it one. Answers the folder as list_folders does, after the change.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn update_folder(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<UpdateFolderArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("folder", Some(&args.folder)),
+        ]);
+        let result = act::update_folder(&ctx.core, &ctx.caller, args);
+        ctx.reply_changed("update_folder", &asked, result)
+    }
+
+    #[tool(
+        description = "Delete an agent folder, as the window does: its agents come out of it and take its place in their order; no agent is stopped, archived or deleted. Answers the folder's id and name and deleted (true).",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn delete_folder(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<DeleteFolderArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", args.project.as_deref()),
+            ("folder", Some(&args.folder)),
+        ]);
+        let result = act::delete_folder(&ctx.core, &ctx.caller, args);
+        ctx.reply_changed("delete_folder", &asked, result)
+    }
+
+    #[tool(
+        description = "Put an agent in an agent folder, out of any folder (folder: an empty string) or at another rank of where it is, as dragging it in the sidebar does. Left out, the folder is the agent's own and the rank the bottom. The agent keeps running: only its place changes. Answers the agent's id and name and its folder (id and name; null when it is out of any).",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn move_agent(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<MoveAgentArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("agent", Some(&args.agent)),
+            ("folder", args.folder.as_deref()),
+            ("project", args.project.as_deref()),
+        ]);
+        let result = act::move_agent(&ctx.core, &ctx.caller, args);
+        ctx.reply_changed("move_agent", &asked, result)
     }
 
     #[tool(

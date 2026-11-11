@@ -6,6 +6,8 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- La visionneuse d’images tient dans la fenêtre, même avec une grande photo, et suit sa taille. Elle zoome d’un clic sur l’image, au pincement, par Ctrl ou ⌘ + molette, par ses boutons ou par + − 0, et l’image zoomée se déplace à la main. Elle passe d’une image à l’autre dans toute la conversation, avec une bande de vignettes, et copie, enregistre, ouvre l’image ou l’affiche dans son dossier. Merci à @Metalzoid (#25).
+- Les menus ne s’effacent plus pour en ouvrir un autre : « Lancer » et « Continuer sur un autre harness » dans le menu d’un agent, et « Dans le worktree d’un agent » dans le menu « + » des terminaux, ouvrent leur liste à côté, au survol ou au clic. Un menu plus haut que la fenêtre s’arrête avant son bord et défile, un chevron disant ce qui reste à voir. Merci à @Metalzoid (#24).
 - Tous les plugins tournent désormais dans Escouade, en WASM : le programme à part qui servait ceux d’Escouade a disparu, et l’installeur s’allège d’autant. Un plugin qui demande à lancer un programme natif (`run.command`) ne démarre plus, d’où qu’il vienne, et sa page dit pourquoi.
 - La documentation des plugins dit l’état réel : tous tournent en WASM, ceux d’Escouade s’installent depuis l’installeur sans réseau, et la page du protocole ne parle plus de process. Les pages des intégrations listent les services servis par un plugin.
 - Le diagramme d’un workflow part de la porte par laquelle l’agent est entré et ne montre que ce qu’elle atteint : le possible en pointillé léger, son vrai chemin en trait plein, chaque passage numéroté dans l’ordre, les retours avec leur raison. Sans agent, tu choisis la porte ; le reste se replie en « étapes hors de ce chemin ».
@@ -30,6 +32,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- Les agents se rangent en dossiers dans la barre latérale : on glisse une carte dans un dossier, on le replie sans perdre de vue ce qui attend une réponse, et un agent qui en crée d’autres les range avec lui. Le serveur MCP lit et règle ces dossiers. Merci à @Metalzoid (#23).
 - L’écran partagé : glisse un agent, un terminal, un lancement ou l’éditeur depuis la barre latérale sur la zone de travail pour l’ouvrir à côté, au-dessus ou en dessous, jusqu’à quatre volets. Le volet entouré reçoit ta saisie, ta voix et tes réponses ; Ctrl+ partage ou revient à un volet, et la disposition revient au prochain lancement.
 - Les réglages sont refaits : une barre à gauche avec les pages d’Escouade (Général, Agents, Comptes et harness, Services connectés, Voix, Notifications, Plugins, Avancé), puis les pages de chaque projet, et tout s’applique dès que tu le changes, sans « Enregistrer ». Une recherche (Ctrl+F) trouve un réglage par son nom, en français comme en anglais, et ouvre sa page ; un point ambre signale la page qui attend quelque chose de toi, comme un harness sans compte ou un jeton expiré.
 - Les plugins d'Escouade sont dans l'installeur : à la première ouverture, même sans réseau, Escouade installe ceux que ta configuration utilise, et la vue Plugins propose les autres, installables d'un clic sans téléchargement.

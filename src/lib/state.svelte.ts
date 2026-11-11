@@ -13,6 +13,7 @@ import { bgRow } from './bgtasks';
 import type { DocsSpaceId } from './docs';
 import { basename, isAbsPath, relPath } from './format';
 import { setLang, t } from './i18n';
+import { shownAgents, sidebarItems, type SidebarItem } from './sidebar';
 import { dictation } from './dictation.svelte';
 import { conversation } from './conversation.svelte';
 import { mcp } from './mcp.svelte';
@@ -162,6 +163,8 @@ export type Modal =
       /** Where cancelling goes back to (no modal by default). */
       onCancel?: () => void;
     }
+  /** « Supprimer le dossier » of a folder that holds agents: what becomes of them (docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md). */
+  | { kind: 'deleteFolder'; projectId: string; folderId: string }
   | { kind: 'rename'; title: string; value: string; onSubmit: (v: string) => void | Promise<void> }
   /**
    * The agreement to a harness in a project (ESC-404): before the first agent of a private project on it, or from the card
@@ -506,13 +509,18 @@ class AppState {
   /** Estimated cost of the turns running now (their exact cost joins `usage.todayCost` at their end). */
   liveCost = $derived(Object.values(this.agents).reduce((sum, a) => sum + (a.liveCost ?? 0), 0));
 
-  projectAgents = $derived.by(() => {
+  /** What the sidebar lists for the project on screen: its agents that are not archived, folders and order applied. */
+  projectItems = $derived.by(() => {
     const p = this.project;
-    if (!p) return [] as Agent[];
-    return Object.values(this.agents)
-      .filter((a) => a.projectId === p.id && !a.archived)
-      .sort((a, b) => a.createdAt - b.createdAt);
+    if (!p) return [] as SidebarItem[];
+    return sidebarItems(
+      p,
+      Object.values(this.agents).filter((a) => a.projectId === p.id && !a.archived),
+    );
   });
+
+  /** The agents of the project on screen, in the order the sidebar shows them. */
+  projectAgents = $derived(shownAgents(this.projectItems));
 
   archivedAgents = $derived.by(() => {
     const p = this.project;
@@ -528,7 +536,12 @@ class AppState {
     const sel = this.ui.selectedAgent[p.id];
     const a = sel ? this.agents[sel] : undefined;
     if (a && a.projectId === p.id) return a;
-    return this.projectAgents[0] ?? null;
+    // The oldest agent that is not archived, as before the folders: not the first one drawn, which moves with what waits.
+    return (
+      Object.values(this.agents)
+        .filter((x) => x.projectId === p.id && !x.archived)
+        .sort((x, y) => x.createdAt - y.createdAt)[0] ?? null
+    );
   });
 
   term = $derived.by(() => {

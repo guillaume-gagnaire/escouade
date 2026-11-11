@@ -844,7 +844,7 @@
       onfocusin={onFocusIn}
       onpointerdown={grab}
     >
-      <div class="msgs" bind:this={content}>
+      <div class="msgs" data-gallery bind:this={content}>
         {#if conv.error}
           <div class="load-error">
             {t('conv.loadError', { error: conv.error })}

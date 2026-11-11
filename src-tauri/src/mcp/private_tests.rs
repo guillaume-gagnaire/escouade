@@ -80,6 +80,22 @@ enum Names {
 fn naming_calls() -> Vec<(&'static str, Names, Value)> {
     vec![
         ("list_agents", Names::Project, json!({ "project": "{}" })),
+        ("list_folders", Names::Project, json!({ "project": "{}" })),
+        (
+            "create_folder",
+            Names::Project,
+            json!({ "project": "{}", "name": "Un dossier" }),
+        ),
+        (
+            "update_folder",
+            Names::Project,
+            json!({ "project": "{}", "folder": "x", "name": "Autre" }),
+        ),
+        (
+            "delete_folder",
+            Names::Project,
+            json!({ "project": "{}", "folder": "x" }),
+        ),
         ("list_tickets", Names::Project, json!({ "project": "{}" })),
         ("get_board", Names::Project, json!({ "project": "{}" })),
         ("get_workflow", Names::Project, json!({ "project": "{}" })),
@@ -238,6 +254,11 @@ fn naming_calls() -> Vec<(&'static str, Names, Value)> {
             json!({ "agent": "{}", "text": "Bonjour" }),
         ),
         ("stop_agent", Names::Agent, json!({ "agent": "{}" })),
+        (
+            "move_agent",
+            Names::Agent,
+            json!({ "agent": "{}", "folder": "" }),
+        ),
         (
             "message_subagent",
             Names::Agent,
@@ -627,4 +648,50 @@ async fn a_new_project_is_private_when_the_default_for_new_projects_says_so() {
     assert!(!read_back.private);
     let settings: Settings = serde_json::from_value(json!({})).unwrap();
     assert!(!settings.private_projects);
+}
+
+#[tokio::test]
+async fn a_private_project_s_folders_are_named_as_unknown() {
+    let w = world("mcp-private-folders").await;
+    let secret =
+        w.h.core
+            .folder_create(
+                &w.vault.id,
+                Some("Réserve"),
+                &[w.agents[2].id.clone()],
+                None,
+                None,
+            )
+            .unwrap();
+    let c = as_agent(&w.h, &w.agents[0].id).await;
+    // The vault's folder is named by its id or its name, in its project (named any way) or not:
+    // each answers as a folder nothing has.
+    for tool in ["update_folder", "delete_folder"] {
+        let args = json!({ "project": "{}", "folder": MISSING, "name": "Pris" });
+        let (missing, error) = call(&c, tool, with_name(&args, MISSING)).await;
+        assert!(error, "{tool}: {missing}");
+        for project in [&w.vault.id, &w.vault.name] {
+            for folder in [&secret.id, &secret.name] {
+                let asked = json!({ "project": project, "folder": folder, "name": "Pris" });
+                let (text, error) = call(&c, tool, asked).await;
+                assert!(error, "{tool}: {text}");
+                assert_eq!(text.replace(project.as_str(), MISSING), missing, "{tool}");
+                assert!(!text.contains(&secret.name), "{tool}: {text}");
+            }
+        }
+        // In its own project, the folder is not found by its id or its name.
+        for folder in [&secret.id, &secret.name] {
+            let asked = json!({ "folder": folder, "name": "Pris" });
+            let (text, error) = call(&c, tool, asked).await;
+            assert!(error, "{tool} {folder}: {text}");
+            assert!(
+                !text.contains(&w.vault.name) && !text.contains(&w.vault.id),
+                "{text}"
+            );
+        }
+    }
+    let after = w.h.core.project(&w.vault.id).unwrap();
+    assert_eq!(after.agent_folders.len(), 1);
+    assert_eq!(after.agent_folders[0].name, "Réserve");
+    c.cancel().await.unwrap();
 }

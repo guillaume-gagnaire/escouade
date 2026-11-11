@@ -12,12 +12,13 @@ use super::Caller;
 use crate::accounts;
 use crate::agent::{AgentRt, Waiting};
 use crate::core::Core;
+use crate::folders;
 use crate::forge::{CheckState, PrState, PullRequest};
 use crate::git;
 use crate::model::{
-    AgentMeta, AgentStatus, Column, Criterion, EngineId, PauseReason, PendingView, Project,
-    QuotaMeter, RateWindow, RemoteSource, Service, Ticket, TicketPr, FIVE_HOURS, MAX_PENDING_FIELD,
-    MAX_PENDING_ITEMS, WEEK,
+    AgentFolder, AgentMeta, AgentStatus, Column, Criterion, EngineId, PauseReason, PendingView,
+    Project, QuotaMeter, RateWindow, RemoteSource, Service, Ticket, TicketPr, FIVE_HOURS,
+    MAX_PENDING_FIELD, MAX_PENDING_ITEMS, WEEK,
 };
 use crate::plan::PlanState;
 use serde::Serialize;
@@ -290,10 +291,30 @@ struct AgentRow {
     remote: RemoteRead,
     /// Where it is in its project's workflow; null when it follows none.
     workflow: Option<AgentWorkflow>,
+    /// Its folder in the sidebar; null when it is in none.
+    folder: Option<FolderRef>,
+    /// It is the principal of its folder.
+    principal: bool,
 }
 
-/// `list_agents`: the agents not archived, oldest first, of every project the caller sees or of
-/// `project`.
+/// A folder as another row names it.
+#[derive(Serialize)]
+pub(super) struct FolderRef {
+    pub(super) id: String,
+    pub(super) name: String,
+}
+
+impl FolderRef {
+    pub(super) fn of(f: &AgentFolder) -> Self {
+        FolderRef {
+            id: f.id.clone(),
+            name: f.name.clone(),
+        }
+    }
+}
+
+/// `list_agents`: the agents not archived, in the sidebar's order, project by project in the
+/// app's order, of every project the caller sees or of `project`.
 pub(super) fn agents<R: Runtime>(
     core: &Core<R>,
     caller: &Caller,
@@ -303,20 +324,26 @@ pub(super) fn agents<R: Runtime>(
     let scope = project
         .map(|p| resolve::project(core, caller, p))
         .transpose()?;
-    let projects: HashMap<String, String> = core
-        .projects
-        .read()
-        .iter()
-        .map(|p| (p.id.clone(), p.name.clone()))
-        .collect();
+    // The app's order of the projects (one lock at a time, as `projects` does).
+    let mut ordered = core.projects.read().clone();
+    ordered.retain(|p| sight.sees(&p.id) && scope.as_ref().is_none_or(|s| s.id == p.id));
     let keys = ticket_keys(core);
     let settings = core.settings.read().clone();
-    let views: Vec<_> = core
+    let mut by_id: HashMap<String, _> = core
         .agent_views()
         .into_iter()
-        .filter(|v| !v.meta.archived && sight.sees(&v.meta.project_id))
-        .filter(|v| scope.as_ref().is_none_or(|p| v.meta.project_id == p.id))
+        .filter(|v| !v.meta.archived)
+        .map(|v| (v.meta.id.clone(), v))
         .collect();
+    let mut views = Vec::with_capacity(by_id.len());
+    for p in &ordered {
+        views.extend(
+            core.shown_agents_of(&p.id)
+                .into_iter()
+                .filter_map(|id| by_id.remove(&id)),
+        );
+    }
+    let projects: HashMap<&str, &Project> = ordered.iter().map(|p| (p.id.as_str(), p)).collect();
     let mut tracked: HashMap<String, Tracked> = HashMap::new();
     for v in &views {
         tracked
@@ -325,30 +352,97 @@ pub(super) fn agents<R: Runtime>(
     }
     let rows: Vec<AgentRow> = views
         .into_iter()
-        .map(|v| AgentRow {
-            workflow: tracked[&v.meta.project_id].of_agent(&v.meta.id),
-            work: WorkCounts::of(v.meta.plan.as_ref()),
-            remote: RemoteRead::of(&v.meta, v.remote_state.as_deref(), v.interface_remote),
-            project: projects
-                .get(&v.meta.project_id)
-                .cloned()
-                .unwrap_or_default(),
-            waiting: !v.pending.is_empty(),
-            requests: core
-                .agent(&v.meta.id)
-                .map_or(0, |h| answerable_views(&h.lock()).count()),
-            ticket: v.meta.ticket_id.as_ref().and_then(|t| keys.get(t).cloned()),
-            account: accounts::get(&settings, &v.meta.account).name,
-            cost: dollars(v.meta.cost + v.live_cost),
-            project_id: v.meta.project_id,
-            status: v.meta.status,
-            engine: v.meta.engine,
-            model: v.meta.model,
-            name: v.meta.name,
-            id: v.meta.id,
+        .map(|v| {
+            let own = projects.get(v.meta.project_id.as_str());
+            let folder = own.and_then(|p| folders::folder_of(p, &v.meta.id));
+            AgentRow {
+                folder: folder.map(FolderRef::of),
+                principal: folder.is_some_and(|f| f.principal.as_deref() == Some(&v.meta.id)),
+                workflow: tracked[&v.meta.project_id].of_agent(&v.meta.id),
+                work: WorkCounts::of(v.meta.plan.as_ref()),
+                remote: RemoteRead::of(&v.meta, v.remote_state.as_deref(), v.interface_remote),
+                project: own.map(|p| p.name.clone()).unwrap_or_default(),
+                waiting: !v.pending.is_empty(),
+                requests: core
+                    .agent(&v.meta.id)
+                    .map_or(0, |h| answerable_views(&h.lock()).count()),
+                ticket: v.meta.ticket_id.as_ref().and_then(|t| keys.get(t).cloned()),
+                account: accounts::get(&settings, &v.meta.account).name,
+                cost: dollars(v.meta.cost + v.live_cost),
+                project_id: v.meta.project_id,
+                status: v.meta.status,
+                engine: v.meta.engine,
+                model: v.meta.model,
+                name: v.meta.name,
+                id: v.meta.id,
+            }
         })
         .collect();
     json(&rows)
+}
+
+#[derive(Serialize)]
+pub(super) struct FolderMember {
+    id: String,
+    name: String,
+    status: AgentStatus,
+}
+
+#[derive(Serialize)]
+pub(super) struct FolderRow {
+    pub(super) id: String,
+    name: String,
+    principal: Option<FolderRef>,
+    agents: Vec<FolderMember>,
+}
+
+/// The folders of `project` in the sidebar's order, archived agents left out.
+pub(super) fn folder_rows<R: Runtime>(core: &Core<R>, project: &Project) -> Vec<FolderRow> {
+    let owned = core.folder_members(&project.id);
+    let members: Vec<_> = owned.iter().map(folders::OwnedMember::as_member).collect();
+    let member = |id: &str| {
+        core.agent(id).ok().map(|h| {
+            let m = &h.lock().meta;
+            FolderMember {
+                id: m.id.clone(),
+                name: m.name.clone(),
+                status: m.status,
+            }
+        })
+    };
+    folders::shown(project, &members)
+        .into_iter()
+        .filter_map(|s| match s {
+            folders::Shown::Agent(_) => None,
+            folders::Shown::Folder { id, agents } => {
+                let f = project.agent_folders.iter().find(|f| f.id == id)?;
+                let agents: Vec<FolderMember> = agents.iter().filter_map(|a| member(a)).collect();
+                let principal = agents
+                    .iter()
+                    .find(|a| f.principal.as_deref() == Some(&a.id))
+                    .map(|a| FolderRef {
+                        id: a.id.clone(),
+                        name: a.name.clone(),
+                    });
+                Some(FolderRow {
+                    id,
+                    name: f.name.clone(),
+                    principal,
+                    agents,
+                })
+            }
+        })
+        .collect()
+}
+
+/// `list_folders`: the folders of `project`, or of the calling agent's own project without it.
+pub(super) fn folders<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    project: Option<&str>,
+) -> Result<String, ToolError> {
+    let project = resolve::project_or_own(core, caller, project)?;
+    json(&folder_rows(core, &project))
 }
 
 /// A cost without the float's noise (0.30000000000000004).

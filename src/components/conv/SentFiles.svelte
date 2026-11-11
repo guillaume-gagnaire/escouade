@@ -2,6 +2,7 @@
   import { fileCategory } from '../../lib/attachments';
   import { speakerOf } from '../../lib/engines';
   import { fList, fSize } from '../../lib/format';
+  import { galleryOf } from '../../lib/gallery';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { app } from '../../lib/state.svelte';
@@ -51,9 +52,12 @@
     ]),
   );
 
-  let viewing = $state<number | null>(null);
-  const viewed = $derived(images.map((f) => ({ name: f.name, url: f.view!.url! })));
-  const view = (index: number) => (viewing = images.findIndex((f) => f.index === index));
+  // The viewer pages through the images of the whole conversation, from the one clicked.
+  let shown = $state<ReturnType<typeof galleryOf> | null>(null);
+  const view = (e: MouseEvent) => {
+    const img = (e.currentTarget as HTMLElement).querySelector('img');
+    if (img) shown = galleryOf(img);
+  };
 
   const act = (index: number, reveal: boolean) => app.run(api.sentFileOpen(agentId, item.id, index, reveal));
 </script>
@@ -73,13 +77,17 @@
   {#if thumbs.length}
     <div class="thumbs">
       {#each thumbs as f (f.index)}
-        <button
-          class="thumb"
-          aria-label={t('conv.sent.view', { name: f.name })}
-          use:tip={{ text: f.name, cut: true }}
-          onclick={() => view(f.index)}
-        >
-          <img src={f.view!.url} alt={f.name} draggable="false" />
+        <button class="thumb" aria-label={t('conv.sent.view', { name: f.name })} use:tip={{ text: f.name, cut: true }} onclick={view}>
+          <img
+            src={f.view!.url}
+            alt={f.name}
+            draggable="false"
+            data-view
+            data-agent={agentId}
+            data-item={item.id}
+            data-index={f.index}
+            data-name={f.name}
+          />
         </button>
       {/each}
     </div>
@@ -91,8 +99,17 @@
         {@const there = v?.state === 'ok'}
         <div class="row" class:off={v && !there}>
           {#if v?.kind === 'image' && v.url}
-            <button class="th pic" aria-label={t('conv.sent.view', { name: f.name })} onclick={() => view(f.index)}
-              ><img src={v.url} alt="" draggable="false" /></button
+            <button class="th pic" aria-label={t('conv.sent.view', { name: f.name })} onclick={view}
+              ><img
+                src={v.url}
+                alt=""
+                draggable="false"
+                data-view
+                data-agent={agentId}
+                data-item={item.id}
+                data-index={f.index}
+                data-name={f.name}
+              /></button
             >
           {:else}
             <span class="th" aria-hidden="true"
@@ -136,8 +153,8 @@
   {/if}
 </div>
 
-{#if viewing !== null && viewed.length}
-  <ImageViewer images={viewed} bind:index={viewing} onclose={() => (viewing = null)} />
+{#if shown}
+  <ImageViewer images={shown.images} bind:index={shown.index} onclose={() => (shown = null)} />
 {/if}
 
 <style>
