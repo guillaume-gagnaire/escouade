@@ -8,7 +8,7 @@ export default {
   /** The button that opens the menu of the other harnesses. */
   another: 'Continuer sur un autre harness',
   /** The item of the agent's menu that opens the list of harnesses. */
-  menu: 'Continuer sur un autre harness…',
+  menu: 'Continuer sur un autre harness',
   /** Its quota came back: the way back, never taken by itself. */
   back: 'Revenir sur {harness}',
   backHint: 'Le quota {harness} est revenu : l’agent continue sur son harness actuel tant que tu ne le ramènes pas.',

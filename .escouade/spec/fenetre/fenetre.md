@@ -1,7 +1,7 @@
 ---
 title: "Fenêtre"
 subject: "Fenêtre"
-sources: ["docs/SPEC.md"]
+sources: ["docs/SPEC.md","src/components/ContextMenu.svelte"]
 tickets: ["ESC-71","ESC-109","ESC-101","ESC-380"]
 decisions: []
 compared: null
@@ -50,6 +50,13 @@ La fenêtre principale d'Escouade. Elle est sans cadre et suit un thème clair o
 - Un texte coupé par des points de suspension n'a d'infobulle que s'il est coupé.
 - Lecteur d'écran : un contrôle qui n'affiche qu'un symbole ou une icône (⚙, ×, ⌕) est nommé par son infobulle. Un autre contrôle est décrit par elle tant qu'elle est affichée. Un élément hors de l'ordre de tabulation reçoit le texte de son infobulle comme description.
 - Le graphique des stats garde son infobulle riche (titre, séries), au même style.
+
+### Menus
+
+- Une entrée marquée d'un chevron ouvre un sous-menu à côté du menu, à la hauteur de l'entrée, du côté du chevron : à droite (› au bout de l'entrée), ou à gauche (‹ à son début) quand le menu n'a pas à sa droite la place du plus large des sous-menus (380 px) et en a plus à sa gauche. Tous les sous-menus d'un menu s'ouvrent du même côté, connu avant qu'ils s'ouvrent. Un seul niveau. Sont des sous-menus : « Lancer » et « Continuer sur un autre harness » du menu d'un agent, « Dans le worktree d'un agent » du menu `+` des terminaux (voir *Barre latérale*, *Comptes*).
+- Le sous-menu s'ouvre quand le pointeur reste 150 ms sur son entrée, jamais au clic : un clic sur l'entrée ne fait rien. Il reste ouvert tant que le pointeur ne s'est pas posé 150 ms sur une autre entrée du menu : on le rejoint en diagonale, et sortir des deux menus ne le ferme pas. Une entrée grisée n'ouvre pas le sien.
+- Au clavier : →, Entrée ou Espace sur l'entrée ouvrent le sous-menu, le focus sur sa première entrée ; ↑ ↓ Début Fin y tournent en boucle ; ← ou Échap le ferment et rendent le focus à l'entrée ; Tab ferme tout. Le focus hors des menus, Échap ferme d'abord le sous-menu, puis le menu.
+- Un menu ou un sous-menu plus haut que la fenêtre s'arrête à 8 px de ses bords et défile (molette, trackpad, flèches). Chaque bord qui cache des entrées s'estompe sur 28 px, un chevron en son milieu ; l'entrée qui prend le focus sort du dégradé. Faire défiler un menu ferme son sous-menu.
 
 ### Fermer et quitter
 

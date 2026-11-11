@@ -66,7 +66,7 @@ export default defineZone('nav', {
     noTerminals: 'No open terminals',
     exited: 'exited',
     noShell: 'No shell found (PowerShell 7, Git Bash, WSL). Check the settings.',
-    inWorktree: 'In the worktree of…',
+    inWorktree: 'In an agent’s worktree',
     modified: '~{n} modified',
     added: '+{n} added',
     deleted: '−{n} deleted',
@@ -82,7 +82,7 @@ export default defineZone('nav', {
       archiveHint: 'keeps the conversation',
       prepareLaunch: 'Prepare launch',
       // The project's launch commands, to run in its worktree.
-      launch: 'Run…',
+      launch: 'Run',
       openTerminal: 'Open a terminal',
       toTerminal: '{engine} view',
       toRich: 'Escouade view',

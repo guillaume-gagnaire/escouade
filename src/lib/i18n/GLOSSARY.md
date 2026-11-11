@@ -259,7 +259,7 @@ Un texte qui parle d’un agent le nomme comme son harness (ESC-31) : `{engine}`
 | Terminaux / terminal terminé | Terminals / exited | un terminal dont le shell s’est arrêté |
 | À voir (un agent à regarder) | Needs a look | l’info-bulle d’un onglet de projet qui clignote |
 | Réduire / Agrandir / Restaurer (la fenêtre) | Minimize / Maximize / Restore | boutons de la barre de titre |
-| Dans le worktree de… | In the worktree of… | entrée du menu du + des Terminaux : ouvre la liste des agents du projet qui ont un worktree, pour y ouvrir un terminal |
+| Dans le worktree d’un agent | In an agent’s worktree | entrée du menu du + des Terminaux : son sous-menu liste les agents du projet qui ont un worktree, pour y ouvrir un terminal |
 
 ## L8 — conv, composer
 

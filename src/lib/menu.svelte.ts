@@ -30,6 +30,38 @@ export interface MenuItem {
   checked?: boolean;
   /** A row of colors to pick from, named by the label. */
   colors?: { values: string[]; selected: string; onPick: (color: string) => void };
+  /** The entries it opens beside the menu, on hovering it (never on a click), or on → / Enter / Space. One level only. */
+  submenu?: MenuItem[];
+}
+
+/** The gap kept between a menu and the window's edges. */
+export const EDGE = 8;
+
+/** The widest a menu gets (its CSS `max-width`). */
+export const MENU_MAX_W = 380;
+
+export type Side = 'left' | 'right';
+
+/**
+ * The side the submenus of a menu at `frame` open on, known before they open so that their chevrons say it: on the right
+ * when the widest of them has room there, else on the side with the more room.
+ */
+export function sideOf(frame: { left: number; right: number }, viewW: number): Side {
+  const right = viewW - EDGE - (frame.right - 3);
+  const left = frame.left + 3 - EDGE;
+  return right >= MENU_MAX_W || right >= left ? 'right' : 'left';
+}
+
+/**
+ * Where a submenu of `size` stands beside the `frame` of its menu, on its `side`, level with its `entry`; pushed back
+ * into the window when it has no room there, moved up to stay in it.
+ */
+export function beside(entry: DOMRect, frame: DOMRect, size: { w: number; h: number }, view: { w: number; h: number }, side: Side) {
+  // A little over the menu, so that the pointer never crosses a gap.
+  const x = side === 'right' ? frame.right - 3 : frame.left - size.w + 3;
+  // Its first entry level with its parent, past the menu's padding.
+  const y = Math.max(EDGE, Math.min(entry.top - 5, view.h - EDGE - size.h));
+  return { x: Math.max(EDGE, Math.min(x, view.w - EDGE - size.w)), y };
 }
 
 class MenuState {

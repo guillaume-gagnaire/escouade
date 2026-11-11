@@ -88,7 +88,7 @@ export default {
     exited: 'terminé',
     noShell: 'Aucun shell détecté (PowerShell 7, Git Bash, WSL). Vérifie les réglages.',
     /** In the menu of the « + » of the terminals: opens the list of the agents whose worktree can hold one. */
-    inWorktree: 'Dans le worktree de…',
+    inWorktree: 'Dans le worktree d’un agent',
     modified: '~{n} modifiés',
     added: '+{n} ajoutés',
     deleted: '−{n} supprimés',
@@ -106,7 +106,7 @@ export default {
       archiveHint: 'garde la conversation',
       prepareLaunch: 'Préparer le lancement',
       // The project's launch commands, to run in its worktree.
-      launch: 'Lancer…',
+      launch: 'Lancer',
       openTerminal: 'Ouvrir un terminal',
       /** `{engine}`: the agent's harness. */
       toTerminal: 'Vue {engine}',

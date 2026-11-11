@@ -1269,14 +1269,14 @@ describe('Sidebar, a launch command in the worktree of an agent (ESC-19)', () =>
     return menu.open!.items.map((i) => i.label);
   };
 
-  it('offers « Lancer… » for an agent with a worktree, then the commands, run in its worktree', async () => {
+  it('offers « Lancer » for an agent with a worktree, its submenu the commands, run in its worktree', async () => {
     const backend = fakeBackend({ run_start: () => ({ id: 't9', projectId: 'p1', name: 'Front · wt-agent', shell: 'pwsh' }) });
     render(Sidebar, { project: P });
-    expect(await menuOf(/refacto-auth/)).not.toContain('Lancer…');
-    expect(await menuOf(/wt-agent/)).toContain('Lancer…');
-    menu.open!.items.find((i) => i.label === 'Lancer…')!.onClick!();
-    await vi.waitFor(() => expect(menu.open?.items.map((i) => i.label)).toEqual(['Front']));
-    menu.open!.items[0].onClick!();
+    expect(await menuOf(/refacto-auth/)).not.toContain('Lancer');
+    expect(await menuOf(/wt-agent/)).toContain('Lancer');
+    const commands = menu.open!.items.find((i) => i.label === 'Lancer')!.submenu!;
+    expect(commands.map((i) => i.label)).toEqual(['Front']);
+    commands[0].onClick!();
     await vi.waitFor(() => expect(backend.called('run_start')).toHaveLength(1));
     expect(backend.called('run_start')[0].args).toMatchObject({ projectId: 'p1', commandId: 'c1', agentId: 'a2' });
   });
@@ -1285,14 +1285,14 @@ describe('Sidebar, a launch command in the worktree of an agent (ESC-19)', () =>
     resetApp({ projects: [project()], agents: [agent({ id: 'a2', name: 'wt-agent', worktree: WT })] });
     fakeBackend();
     render(Sidebar, { project: project() });
-    expect(await menuOf(/wt-agent/)).not.toContain('Lancer…');
+    expect(await menuOf(/wt-agent/)).not.toContain('Lancer');
   });
 
   it('says it in English', async () => {
     setLang('en');
     fakeBackend();
     render(Sidebar, { project: P });
-    expect(await menuOf(/wt-agent/)).toContain('Run…');
+    expect(await menuOf(/wt-agent/)).toContain('Run');
   });
 });
 
@@ -1323,38 +1323,34 @@ describe('Sidebar terminals menu (ESC-18)', () => {
   });
   afterEach(() => menu.close());
 
-  it('lists the shells, then « Dans le worktree de… » after a separator', async () => {
+  it('lists the shells, then « Dans le worktree d’un agent » after a separator', async () => {
     render(Sidebar, { project: project() });
     await userEvent.click(plus());
-    expect(labels()).toEqual(['PowerShell 7', 'Git Bash', '', 'Dans le worktree de…']);
+    expect(labels()).toEqual(['PowerShell 7', 'Git Bash', '', 'Dans le worktree d’un agent']);
     expect(menu.open!.items[2]).toMatchObject({ separator: true });
     // The shells still open a terminal in the project.
     menu.open!.items[1].onClick!();
     expect(openTerminal).toHaveBeenCalledWith('p1', 'bash', 'bash-1', undefined);
   });
 
-  it('replaces the menu with the agents of the project that have a worktree, in the order of the sidebar', async () => {
+  it('offers in its submenu the agents of the project that have a worktree, in the order of the sidebar', async () => {
     render(Sidebar, { project: project() });
     await userEvent.click(plus());
-    menu.open!.items[3].onClick!();
-    await vi.waitFor(() => expect(labels()).toEqual(['zeta', 'alpha']));
+    const agents = menu.open!.items[3].submenu!;
+    expect(agents.map((i) => i.label)).toEqual(['zeta', 'alpha']);
     // Neither the one in the project’s folder, the archived one, nor the other project’s.
-    expect(menu.open!.items.every((i) => i.hint === undefined && !i.separator)).toBe(true);
-    // Opened from the button, as the first menu was: the keyboard works it.
-    expect(menu.open).toMatchObject({ keyboard: true });
+    expect(agents.every((i) => i.hint === undefined && !i.separator)).toBe(true);
   });
 
   it('opens a terminal in the worktree of the agent chosen, named after it', async () => {
     render(Sidebar, { project: project() });
     await userEvent.click(plus());
-    menu.open!.items[3].onClick!();
-    await vi.waitFor(() => expect(labels()).toEqual(['zeta', 'alpha']));
-    menu.open!.items.find((i) => i.label === 'alpha')!.onClick!();
+    menu.open!.items[3].submenu!.find((i) => i.label === 'alpha')!.onClick!();
     expect(openTerminal).toHaveBeenCalledWith('p1', 'pwsh', 'pwsh · alpha', { agentId: 'a2' });
     await expect.poll(() => app.term?.name).toBe('pwsh · alpha');
   });
 
-  it('works from the keyboard: the focus goes into the second menu and comes back to the button', async () => {
+  it('works from the keyboard: the focus goes into the submenu, beside the menu, and comes back to the button', async () => {
     render(Sidebar, { project: project() });
     render(ContextMenu);
     plus().focus();
@@ -1362,10 +1358,11 @@ describe('Sidebar terminals menu (ESC-18)', () => {
     // (Its name carries the hint: the shell’s glyph.)
     expect(await screen.findByRole('menuitem', { name: /^PowerShell 7/ })).toHaveFocus();
     await userEvent.keyboard('{ArrowDown}{ArrowDown}');
-    expect(screen.getByRole('menuitem', { name: 'Dans le worktree de…' })).toHaveFocus();
+    expect(screen.getByRole('menuitem', { name: 'Dans le worktree d’un agent' })).toHaveFocus();
     await userEvent.keyboard('{Enter}');
     const first = await screen.findByRole('menuitem', { name: 'zeta' });
-    expect(screen.queryByRole('menuitem', { name: /^PowerShell 7/ })).toBeNull();
+    // The menu of the shells stays.
+    expect(screen.getByRole('menuitem', { name: /^PowerShell 7/ })).toBeInTheDocument();
     await vi.waitFor(() => expect(first).toHaveFocus());
     await userEvent.keyboard('{ArrowDown}{Enter}');
     expect(openTerminal).toHaveBeenCalledWith('p1', 'pwsh', 'pwsh · alpha', { agentId: 'a2' });
@@ -1377,7 +1374,7 @@ describe('Sidebar terminals menu (ESC-18)', () => {
     render(Sidebar, { project: project() });
     render(ContextMenu);
     await userEvent.click(plus());
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Dans le worktree de…' }));
+    await userEvent.hover(await screen.findByRole('menuitem', { name: 'Dans le worktree d’un agent' }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'zeta' }));
     expect(openTerminal).toHaveBeenCalledWith('p1', 'pwsh', 'pwsh · zeta', { agentId: 'a1' });
     expect(screen.queryByRole('menu')).toBeNull();
@@ -1419,9 +1416,8 @@ describe('Sidebar terminals menu (ESC-18)', () => {
     setLang('en');
     render(Sidebar, { project: project() });
     await userEvent.click(getByTip(document.body, 'New terminal'));
-    expect(labels()).toEqual(['PowerShell 7', 'Git Bash', '', 'In the worktree of…']);
-    menu.open!.items[3].onClick!();
-    await vi.waitFor(() => expect(labels()).toEqual(['zeta', 'alpha']));
+    expect(labels()).toEqual(['PowerShell 7', 'Git Bash', '', 'In an agent’s worktree']);
+    expect(menu.open!.items[3].submenu!.map((i) => i.label)).toEqual(['zeta', 'alpha']);
   });
 });
 
