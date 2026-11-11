@@ -50,6 +50,8 @@ export default {
     onlineNote:
       'Ce qui part, et où : le son de chaque dictée (un fichier WAV), une fois que tu la finis, vers {service} ({host}), avec ta clé, par le proxy des réglages réseau. Rien d’autre : ni le projet, ni le code, ni la conversation avec l’agent. Le texte revient dans le champ dicté, et {service} le traite selon ses propres conditions. En conversation vocale, le son de chaque phrase que tu dis y part aussi, de la même façon.',
     service: 'Service',
+    /** The service chosen is no longer brought by an installed plugin (ESC-407): kept, another to choose. */
+    servicePick: 'Choisis un service',
     serviceDesc: 'Payé à l’usage sur ton compte {service}.',
     onlineModel: 'Modèle',
     onlineModelDesc:

@@ -141,6 +141,13 @@ export default defineZone('settings', {
   },
 
   /** The harness already chosen in a menu « Harness » that cannot be used any more, and why (ESC-391). */
+  noPlugin: {
+    open: 'Open Settings › Plugins',
+    harnesses: 'No harness installed: a harness is installed with its plugin.',
+    forges: 'No code host installed: a code host is installed with its plugin.',
+    sources: 'No ticket source installed: a source is installed with its plugin.',
+    voice: 'No online voice service installed: a service is installed with its plugin.',
+  },
   engineWhy: {
     notFound: '{name} (program not found)',
     pluginOff: '{name} (plugin off)',
@@ -159,7 +166,6 @@ export default defineZone('settings', {
       missing: '{id} (harness missing)',
       ready: 'Ready',
       notConnected: 'No account',
-      notInstalled: 'Not installed',
       tooOld: 'Too old',
       unsupported: 'Not supported',
     },
@@ -186,9 +192,6 @@ export default defineZone('settings', {
     version: 'Version',
     versionUnknown: 'Unknown version: claude didn’t tell it.',
     versionNotConnected: 'No account signed in: sign in one of its accounts below, or add one.',
-    installSeed: 'Install {harness}',
-    installing: 'Installing…',
-    notInstalledHint: 'Shipped with Escouade: it installs in one click, with no network, then its accounts are added here.',
     processes: 'Processes',
     autoResume: 'Auto-resume after the usage limit',
     autoResumeDesc: '“continue” is sent once the quota has reset',

@@ -7,6 +7,8 @@ import { app } from '../../lib/state.svelte';
 import { onlineVoice } from '../../lib/online-voice.svelte';
 import type { ServiceCatalog, VoiceInfo } from '../../lib/types';
 import { fakeBackend, resetApp } from '../../test/ipc';
+import { firstHandPlugins } from '../../test/plugins';
+import { plugins } from '../../lib/plugins-view.svelte';
 import SettingsModal from '../modals/SettingsModal.svelte';
 import { afterGesture } from '../../test/settings';
 
@@ -60,6 +62,47 @@ describe('Réglages › Voix', () => {
     onlineVoice.keys = [];
     setLang('fr');
     app.modal = { kind: 'settings' };
+    plugins.list = firstHandPlugins();
+    plugins.loaded = true;
+  });
+
+  // ESC-407: only the services an installed plugin brings; the choice of one uninstalled stays kept, its key too.
+  it('offers only the services whose plugin is installed, the choice of one uninstalled kept', async () => {
+    // Groq's plugin uninstalled, Deepgram's switched off.
+    plugins.list = firstHandPlugins('groq').map((p) =>
+      p.id === 'dev.escouade.deepgram' ? { ...p, choices: { ...p.choices, enabled: false } } : p,
+    );
+    app.settings.voice = { ...app.settings.voice, transcription: 'online', onlineService: 'groq' };
+    app.settings.voice.speech = { ...app.settings.voice.speech, engine: 'online', onlineService: 'groq' };
+    const backend = open({ voice_online_keys: () => ['groq'], plugins_list: () => plugins.list });
+    const select = (await screen.findByRole('combobox', { name: 'Service' })) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.text)).toEqual(['Choisis un service', 'OpenAI', 'Mistral', 'ElevenLabs']);
+    expect(select.value).toBe('groq');
+    expect(screen.queryByText(/Groq/)).toBeNull();
+    expect(screen.queryByText('Clé de Groq')).toBeNull();
+    const speech = screen.getByRole('combobox', { name: 'Service de la voix' }) as HTMLSelectElement;
+    expect([...speech.options].map((o) => o.text)).toEqual(['Choisis un service', 'OpenAI', 'Mistral', 'ElevenLabs']);
+    // Nothing changed: the choice stays, for when its plugin is back.
+    await userEvent.click(screen.getByRole('button', { name: 'Changer' }));
+    await userEvent.keyboard('{Escape}');
+    await afterGesture();
+    for (const c of backend.called('save_settings')) expect(c.args.settings.voice.onlineService).toBe('groq');
+    expect(app.settings.voice.onlineService).toBe('groq');
+  });
+
+  it('says in a line that no service on line is installed, with the way to Réglages › Plugins', async () => {
+    plugins.list = firstHandPlugins('openai', 'groq', 'mistral', 'elevenlabs', 'deepgram');
+    app.settings.voice = { ...app.settings.voice, transcription: 'online' };
+    open({ voice_online_keys: () => [], plugins_list: () => plugins.list });
+    const line = (await screen.findByText('Aucun service de voix en ligne installé : un service s’installe avec son plugin.')).closest(
+      'p',
+    )!;
+    expect(screen.queryByRole('combobox', { name: 'Service' })).toBeNull();
+    expect(screen.queryByText(/Clé de/)).toBeNull();
+    // Local is still there: Whisper is Escouade's own.
+    await userEvent.click(within(screen.getByRole('group', { name: 'Transcrite par' })).getByRole('button', { name: 'Local (Whisper)' }));
+    expect(screen.queryByText('Aucun service de voix en ligne installé : un service s’installe avec son plugin.')).toBeNull();
+    expect(line.isConnected).toBe(false);
   });
 
   it('lists the microphones, the system’s first, and saves the one chosen', async () => {

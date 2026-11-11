@@ -48,6 +48,7 @@ export default defineZone('voice', {
     onlineNote:
       'What leaves, and where: the sound of each dictation (a WAV file), once you end it, to {service} ({host}), with your key, through the proxy of the network settings. Nothing else: neither the project, nor the code, nor the conversation with the agent. The text comes back into the field dictated into, and {service} handles it under its own terms. In a voice conversation, the sound of each sentence you say goes there too, the same way.',
     service: 'Service',
+    servicePick: 'Choose a service',
     serviceDesc: 'Paid per use on your {service} account.',
     onlineModel: 'Model',
     onlineModelDesc:

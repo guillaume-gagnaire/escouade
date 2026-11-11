@@ -89,15 +89,13 @@ class SettingsAlerts {
       (v) => this.takeForges(v),
       (e) => console.warn(errorText(e)),
     );
-    // As the app read them (the Plugins page and view read them again); their processes, now. The dots wait for no
-    // list that cannot be read.
-    if (!plugins.loaded) {
-      try {
-        await plugins.load();
-      } catch (e) {
-        console.warn(errorText(e));
-        return;
-      }
+    // Read again with the window: one installed since the app read them (by the seed at the start, ESC-373) is what the
+    // pages list (ESC-407); their processes, now. The dots wait for no list that cannot be read.
+    try {
+      await plugins.load();
+    } catch (e) {
+      console.warn(errorText(e));
+      return;
     }
     const running = plugins.list.filter((p) => p.state?.kind === 'ready' && p.choices?.enabled && !p.declarative);
     const read = await Promise.all(

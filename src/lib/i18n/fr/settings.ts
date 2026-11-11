@@ -168,6 +168,14 @@ export default {
 
   // The « Harness » tab (Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode: « Harness » in French too).
   /** The harness already chosen in a menu « Harness » that cannot be used any more, and why (ESC-391). */
+  /** A part of the settings that no installed plugin brings anything to (ESC-407): one line, and the way to Plugins. */
+  noPlugin: {
+    open: 'Ouvrir Réglages › Plugins',
+    harnesses: 'Aucun harness installé : un harness s’installe avec son plugin.',
+    forges: 'Aucun hébergeur de code installé : un hébergeur s’installe avec son plugin.',
+    sources: 'Aucune source de tickets installée : une source s’installe avec son plugin.',
+    voice: 'Aucun service de voix en ligne installé : un service s’installe avec son plugin.',
+  },
   engineWhy: {
     notFound: '{name} (programme introuvable)',
     pluginOff: '{name} (plugin coupé)',
@@ -190,8 +198,6 @@ export default {
       /** Beside its name, before its version (2.0 design): « Prêt · 2.1.301 ». */
       ready: 'Prêt',
       notConnected: 'Aucun compte',
-      /** A harness of the seed whose plugin is not installed (ESC-373). */
-      notInstalled: 'Non installé',
       tooOld: 'Trop ancienne',
       unsupported: 'Non prise en charge',
     },
@@ -221,10 +227,6 @@ export default {
     version: 'Version',
     versionUnknown: 'Version inconnue : claude ne l’a pas donnée.',
     versionNotConnected: 'Aucun compte connecté : connecte l’un de ses comptes ci-dessous, ou ajoutes-en un.',
-    /** « Installer » of a harness not installed: its plugin from the app's seed, with no network (ESC-373). */
-    installSeed: 'Installer {harness}',
-    installing: 'Installation…',
-    notInstalledHint: 'Livré avec Escouade : il s’installe d’un clic, sans réseau, puis ses comptes s’ajoutent ici.',
     processes: 'Processus',
     autoResume: 'Reprise automatique après la limite d’usage',
     autoResumeDesc: '« continue » envoyé une fois le quota réinitialisé',

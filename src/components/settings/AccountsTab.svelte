@@ -35,9 +35,9 @@
   import { EFFORTS, MODES } from '../../lib/models';
   import { fList, fPct, fUsd, tildify } from '../../lib/format';
   import { t, type Key } from '../../lib/i18n';
+  import { harnessInstalled, installedEngines } from '../../lib/installed';
   import { api } from '../../lib/ipc';
   import { OS } from '../../lib/platform';
-  import { plugins } from '../../lib/plugins-view.svelte';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import type {
@@ -54,6 +54,7 @@
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
   import ModelFavorites from './ModelFavorites.svelte';
+  import NoPlugin from './NoPlugin.svelte';
   import Row from './Row.svelte';
   import Switch from './Switch.svelte';
   import Icon from '../Icon.svelte';
@@ -61,23 +62,11 @@
   import { tip } from '../../lib/tip';
 
   // « Comptes et harness » (R4 of the 2.2 settings, design/settings-2-2/index.html#a-comptes): a group per harness, its
-  // state and version beside its name, its accounts under it, « Ajouter un compte… » on the right; a harness whose plugin
-  // is not installed installs from the app's seed on a click (ESC-373). Then « Quand un quota est épuisé », everything
+  // state and version beside its name, its accounts under it, « Ajouter un compte… » on the right. Only the harnesses an
+  // installed plugin brings (ESC-407): one is installed in Réglages › Plugins or on the home screen, never from here, and
+  // the accounts of one whose plugin is gone stay on the disk, hidden, until it is back. Then « Quand un quota est épuisé », everything
   // that decides where an agent goes at a limit, the autopilot's pause (once in Kanban) and the automatic resume (once in
   // Harness) with it; then « Avancé ».
-
-  /** The plugin of the seed that brings each harness of the first hand (`plugins::sort::of_engine`). */
-  const HARNESS_PLUGINS: Record<string, EngineId> = {
-    'dev.escouade.claude-code': 'claude',
-    'dev.escouade.codex': 'codex',
-    'dev.escouade.copilot-cli': 'copilot',
-    'dev.escouade.cursor-cli': 'cursor',
-    'dev.escouade.opencode': 'opencode',
-    'dev.escouade.mistral': 'vibe',
-    'dev.escouade.antigravity-cli': 'agy',
-    'dev.escouade.gemini-cli': 'gemini',
-    'dev.escouade.goose': 'goose',
-  };
 
   /**
    * What the link to a harness's usage page says: its cost told, its quota not (Mistral Vibe); its quota in its own
@@ -99,7 +88,7 @@
   /** « Quand un quota est épuisé » is in the window's fields, saved as they change with the other settings (ESC-380). */
   const draft = $derived(settingsForm.settings);
   /** The harnesses found: going on on the next one asks for two. */
-  const found = $derived(foundEngines());
+  const found = $derived(foundEngines().filter((e) => harnessInstalled(e.id)));
   /** An account's meters, as its quota was last read. */
   const metersOf = (a: Account) => metersShown(app.usage.accounts.find((u) => u.id === a.id) ?? null, engineOfAccount(a));
 
@@ -111,8 +100,8 @@
     draft.handoverModels = models;
   }
   /**
-   * Every harness declared (its plugin installed) and every one with accounts, in « Ordre des harness »: its declaration,
-   * what is found of it once read, its accounts. One installed without an account says « Aucun compte » (ESC-128).
+   * Every harness declared (its plugin installed, ESC-407), in « Ordre des harness »: its declaration, what is found of it
+   * once read, its accounts. One installed without an account says « Aucun compte » (ESC-128).
    */
   const groups = $derived(
     engineOrder().map((engine) => ({
@@ -124,29 +113,6 @@
   );
   /** The harnesses accounts are added to: found on this machine, or with accounts already (`accountsTabEngines`). */
   const addable = $derived(new Set(accountsTabEngines()));
-  /** The harnesses the seed holds whose plugin is not installed: each installs here on a click, with no network. */
-  const seeded = $derived(
-    plugins.offers
-      .map((o) => ({ id: o.id, engine: HARNESS_PLUGINS[o.id], refused: o.refused }))
-      .filter(
-        (o): o is { id: string; engine: EngineId; refused: string | null } => !!o.engine && !groups.some((g) => g.engine === o.engine),
-      ),
-  );
-  /** The harness whose plugin is installing. */
-  let installing = $state<EngineId | null>(null);
-
-  // The plugins installed and what the seed holds, read again with the page: one may have been installed since.
-  onMount(() => void plugins.load());
-
-  /** « Installer » of a harness not installed: its plugin from the seed (`Core::need_plugin`), then the harnesses read again. */
-  async function installHarness(engine: EngineId) {
-    installing = engine;
-    await app.run(api.pluginNeedEngine(engine));
-    await app.refreshEngines();
-    await plugins.load();
-    installing = null;
-  }
-
   // Where the `claude` of the path is, asked a moment after the path or the distribution changes (a look into WSL
   // may take seconds): an answer to an earlier path is dropped.
   let located = $state<ClaudeLocated | null>(null);
@@ -228,7 +194,7 @@
   }
 
   /** The one the path of the settings is for: the default harness, until each has its own. */
-  const pathOwner = $derived(app.engines[0]?.id);
+  const pathOwner = $derived(installedEngines()[0]?.id);
   /** « Avancé », unfolded by itself when the default harness is not found: its path is set there. */
   let advancedOpen = $state(false);
   let unfolded = false;
@@ -356,6 +322,8 @@
   async function moveEngine(i: number, by: number) {
     const next = [...order];
     [next[i], next[i + by]] = [next[i + by], next[i]];
+    // A harness whose plugin is gone keeps its place after those shown, for when it is back (ESC-407).
+    next.push(...(app.settings.engineOrder ?? []).filter((e) => !next.includes(e)));
     const saved = await app.run(api.engineOrderSet(next));
     if (saved) app.settings.engineOrder = saved;
   }
@@ -474,6 +442,9 @@
 <!-- Always there, empty while every project has an account: a screen reader hears it fill. (Above the groups: between two, it would part their hairline.) -->
 <p class="orphans" class:on={orphans.length > 0} role="status">{orphansText}</p>
 <span id="accounts-last-active" hidden>{t('accounts.tab.lastActive')}</span>
+{#if !groups.length}
+  <NoPlugin text={t('settings.noPlugin.harnesses')} />
+{/if}
 {#each groups as g (g.engine)}
   {@const harness = engineName(g.engine)}
   {@const list = g.list}
@@ -760,29 +731,6 @@
     {/if}
   </Group>
 {/each}
-<!-- The harnesses of the seed not installed (ESC-373): installed here, from the seed, with no network. -->
-{#each seeded as o (o.id)}
-  {@const harness = engineName(o.engine)}
-  <Group title={harness} data-engine={o.engine} aria-label={harness}>
-    {#snippet state()}
-      <span class="hstate off"
-        ><i aria-hidden="true"></i><span data-engine-state="notInstalled">{t('settings.claude.states.notInstalled')}</span></span
-      >
-    {/snippet}
-    {#snippet action()}
-      <button
-        class="btn"
-        disabled={installing !== null}
-        aria-label={t('settings.claude.installSeed', { harness })}
-        onclick={() => installHarness(o.engine)}
-        ><Icon name="download" size={14} />{installing === o.engine
-          ? t('settings.claude.installing')
-          : t('settings.claude.installSeed', { harness })}</button
-      >
-    {/snippet}
-    <p class="hnote" class:bad={!!o.refused}>{o.refused ?? t('settings.claude.notInstalledHint')}</p>
-  </Group>
-{/each}
 <!-- Where an agent goes at a limit, in one place (cause 1 of design/settings-2-2/PROPOSITION.md): the two thresholds side by
      side, « Changer de compte à » first (choice 20 of the 2.0 design). -->
 <Group title={t('accounts.quotas.limitTitle')} anchor="limit">
@@ -873,7 +821,7 @@
       />
     </Row>
   {/if}
-  {#if app.engines.some((e) => e.id === 'claude')}
+  {#if harnessInstalled('claude')}
     {@const said = selfUpdateText(selfUpdate)}
     {@const failed = draft.claudeSelfUpdate && (selfUpdate?.state === 'failed' || selfUpdate?.state === 'missing')}
     <Row label={t('settings.claude.selfUpdate')} desc={t('settings.claude.selfUpdateDesc')}>
@@ -995,14 +943,6 @@
   }
   .hstate.bad i {
     background: var(--del);
-  }
-  .hstate.off {
-    background: rgba(var(--fg-rgb), 0.05);
-    box-shadow: inset 0 0 0 1px var(--line-2);
-    color: var(--muted);
-  }
-  .hstate.off i {
-    background: var(--dim);
   }
   .version {
     font-size: 11px;

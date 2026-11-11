@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { DEFAULT_SHORTCUT, ONLINE_SERVICES, liveOn, onlineService, shortcutLabel, shortcutOf } from '../../lib/dictation';
+  import { DEFAULT_SHORTCUT, liveOn, onlineService, shortcutLabel, shortcutOf } from '../../lib/dictation';
   import { dictation } from '../../lib/dictation.svelte';
   import { fBytes } from '../../lib/format';
   import { t } from '../../lib/i18n';
+  import { voiceServices } from '../../lib/installed';
   import { api } from '../../lib/ipc';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
@@ -10,6 +11,7 @@
   import Chips from './Chips.svelte';
   import { onlineVoice } from '../../lib/online-voice.svelte';
   import Group from './Group.svelte';
+  import NoPlugin from './NoPlugin.svelte';
   import OnlineKey from './OnlineKey.svelte';
   import OnlineModel from './OnlineModel.svelte';
   import Row from './Row.svelte';
@@ -63,11 +65,17 @@
   // the same as the conversation's voice's; its model (ESC-132), its API's list when it gives one.
   const online = $derived(v.transcription === 'online');
   const service = $derived(onlineService(v.onlineService));
+  /**
+   * The services an installed plugin brings (ESC-407), and whether the one chosen is among them: the choice of one whose
+   * plugin is gone stays kept (its key in the keychain too), and comes back with it.
+   */
+  const services = $derived(voiceServices());
+  const serviceIn = $derived(services.some((s) => s.id === service.id));
   $effect(() => {
     void onlineVoice.loadKeys();
   });
   $effect(() => {
-    if (online) void onlineVoice.load(service.id);
+    if (online && serviceIn) void onlineVoice.load(service.id);
   });
   // « Transcription en temps réel » (ESC-136): offered by the service, on unless unticked, kept by service.
   const live = $derived(liveOn(v, service));
@@ -115,17 +123,24 @@
   </Row>
   <p class="vnote">
     {online
-      ? t(live ? 'voice.settings.onlineNoteLive' : 'voice.settings.onlineNote', { service: service.label, host: service.host })
+      ? serviceIn
+        ? t(live ? 'voice.settings.onlineNoteLive' : 'voice.settings.onlineNote', { service: service.label, host: service.host })
+        : ''
       : t('voice.settings.transcriptionNote')}
   </p>
-  {#if online}
-    <Row label={t('voice.settings.service')} desc={t('voice.settings.serviceDesc', { service: service.label })}>
+  {#if online && !services.length}
+    <NoPlugin text={t('settings.noPlugin.voice')} />
+  {:else if online}
+    <Row label={t('voice.settings.service')} desc={serviceIn ? t('voice.settings.serviceDesc', { service: service.label }) : undefined}>
       <select class="field input" aria-label={t('voice.settings.service')} bind:value={v.onlineService}>
-        {#each ONLINE_SERVICES as s (s.id)}
+        {#if !serviceIn}<option value={v.onlineService} disabled>{t('voice.settings.servicePick')}</option>{/if}
+        {#each services as s (s.id)}
           <option value={s.id}>{s.label}</option>
         {/each}
       </select>
     </Row>
+  {/if}
+  {#if online && serviceIn}
     <OnlineModel
       {service}
       purpose="transcribe"

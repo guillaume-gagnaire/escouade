@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import Icon from '../Icon.svelte';
   import { t } from '../../lib/i18n';
-  import { anyCan, engineName } from '../../lib/engines';
+  import { engineName } from '../../lib/engines';
+  import { installedEngines } from '../../lib/installed';
   import { accountName, accountsFor, dedicated, defaultEngine, isPrincipal, sharedBy } from '../../lib/accounts';
   import { api } from '../../lib/ipc';
   import { fList } from '../../lib/format';
@@ -59,6 +60,9 @@
     { id: 'gemini', name: 'Gemini CLI', kind: 'guard' },
   ] as const;
 
+  /** The harnesses of FENCE an installed plugin declares (ESC-407). */
+  const fence = $derived(FENCE.filter((f) => installedEngines().some((e) => e.id === f.id)));
+
   /** The plugins that reach a project one by one (a theme reaches the whole app: it has no switch here). */
   const perProject = $derived(plugins.list.filter((p) => !wholeApp(p)));
 </script>
@@ -73,7 +77,7 @@
     {@const harness = engineName(privateEngine)}
     <div class="sub-h"><b>{t('settings.project.fenceTitle')}</b><span>{t('settings.project.fenceDesc')}</span></div>
     <ul class="fence" aria-label={t('settings.project.fenceTitle')}>
-      {#each FENCE as f (f.id)}
+      {#each fence as f (f.id)}
         <li>
           <span class="engine">{f.name}</span>
           <span class="kind smark" class:barrier={f.kind === 'barrier'}
@@ -124,7 +128,7 @@
 </Group>
 
 <!-- Only while a harness has Remote Control. -->
-{#if anyCan('remoteControl')}
+{#if installedEngines().some((e) => e.caps.remoteControl)}
   <Group title={t('settings.project.remoteTitle')}>
     <Row label={t('settings.project.remote')} desc={t('settings.project.remoteDesc')}>
       {#snippet extra()}

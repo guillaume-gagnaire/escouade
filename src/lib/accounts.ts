@@ -6,6 +6,7 @@ import { capsOf, engineName } from './engines';
 import { fDayMonth, fList, fPct, fTime } from './format';
 import { estimatedBy } from './spend';
 import { t, tIn } from './i18n';
+import { installedEngines } from './installed';
 import { api } from './ipc';
 import { app } from './state.svelte';
 import type { SettingsPage } from './settings.svelte';
@@ -38,11 +39,12 @@ export function defaultEngine(): EngineId {
 }
 
 /**
- * The harnesses Escouade knows (declared, or with an account) in « Ordre des harness » (`Settings.engineOrder`), those it
+ * The harnesses Escouade knows (declared by an installed plugin) in « Ordre des harness » (`Settings.engineOrder`), those it
  * does not list after: the order of the groups of « Comptes ».
  */
 export function engineOrder(): EngineId[] {
-  const known = new Set<EngineId>([...app.engines.map((e) => e.id), ...(app.settings.accounts ?? []).map(engineOfAccount)]);
+  // The harnesses an installed plugin declares alone (ESC-407): the accounts of one whose plugin is gone stay kept, hidden.
+  const known = new Set<EngineId>(installedEngines().map((e) => e.id));
   const out: EngineId[] = [];
   const add = (e: EngineId) => {
     if (known.has(e) && !out.includes(e)) out.push(e);

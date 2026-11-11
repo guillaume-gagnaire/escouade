@@ -127,8 +127,11 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Its apt reaches Ubuntu's mirrors (scripts/linux-deps.sh: public resolvers when the runner's fail).
       - name: Chromium for Playwright
-        run: npx playwright install --with-deps chromium
+        run: |
+          sh ../scripts/linux-deps.sh dns
+          npx playwright install --with-deps chromium
 
       # The built server (node .output/server/index.mjs) on the same base: the pages in both languages and themes,
       # compared to the preview (design/store/), and /api/health.
@@ -496,13 +499,8 @@ jobs:
 
       # libasound2-dev: the microphone (cpal); libclang-dev and cmake: whisper.cpp, built by whisper-rs.
       - name: System libraries (WebKitGTK, tray, AppImage, sound, whisper.cpp)
-        run: |
-          # A stalled mirror once held this step 28 minutes (2026-11-04): each request gives up after 30 s and is tried again.
-          # Then Azure's mirror crawled through the big packages for all the 45 minutes of the job (2026-11-06): apt only leaves
-          # a mirror that fails, so Canonical's, already in the runner's list, goes first and Azure's stays behind it.
-          [ ! -f /etc/apt/apt-mirrors.txt ] || sudo sed -i -E 's/^(http:\/\/azure\.archive\S*\s+priority:)1/\14/' /etc/apt/apt-mirrors.txt
-          sudo apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 update
-          sudo apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libasound2-dev libclang-dev cmake
+        # The mirrors of a runner fail in turns: each order of them tried for a bounded time (scripts/linux-deps.sh).
+        run: sh scripts/linux-deps.sh
 
       - name: Rust toolchain (pinned in src-tauri/rust-toolchain.toml)
         working-directory: src-tauri
@@ -560,13 +558,8 @@ jobs:
 
       # libasound2-dev: the microphone (cpal); libclang-dev and cmake: whisper.cpp, built by whisper-rs.
       - name: System libraries (WebKitGTK, tray, AppImage, sound, whisper.cpp)
-        run: |
-          # A stalled mirror once held this step 28 minutes (2026-11-04): each request gives up after 30 s and is tried again.
-          # Then Azure's mirror crawled through the big packages for all the 45 minutes of the job (2026-11-06): apt only leaves
-          # a mirror that fails, so Canonical's, already in the runner's list, goes first and Azure's stays behind it.
-          [ ! -f /etc/apt/apt-mirrors.txt ] || sudo sed -i -E 's/^(http:\/\/azure\.archive\S*\s+priority:)1/\14/' /etc/apt/apt-mirrors.txt
-          sudo apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 update
-          sudo apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libasound2-dev libclang-dev cmake
+        # The mirrors of a runner fail in turns: each order of them tried for a bounded time (scripts/linux-deps.sh).
+        run: sh scripts/linux-deps.sh
 
       - name: Rust toolchain (pinned in src-tauri/rust-toolchain.toml)
         working-directory: src-tauri
@@ -633,13 +626,8 @@ jobs:
 
       # libasound2-dev: the microphone (cpal); libclang-dev and cmake: whisper.cpp, built by whisper-rs.
       - name: System libraries (WebKitGTK, tray, AppImage, sound, whisper.cpp)
-        run: |
-          # A stalled mirror once held this step 28 minutes (2026-11-04): each request gives up after 30 s and is tried again.
-          # Then Azure's mirror crawled through the big packages for all the 45 minutes of the job (2026-11-06): apt only leaves
-          # a mirror that fails, so Canonical's, already in the runner's list, goes first and Azure's stays behind it.
-          [ ! -f /etc/apt/apt-mirrors.txt ] || sudo sed -i -E 's/^(http:\/\/azure\.archive\S*\s+priority:)1/\14/' /etc/apt/apt-mirrors.txt
-          sudo apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 update
-          sudo apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libasound2-dev libclang-dev cmake
+        # The mirrors of a runner fail in turns: each order of them tried for a bounded time (scripts/linux-deps.sh).
+        run: sh scripts/linux-deps.sh
 
       - name: Rust toolchain (pinned in src-tauri/rust-toolchain.toml)
         working-directory: src-tauri

@@ -2,6 +2,8 @@
 
 The “Connected services” page connects the code hosts and the accounts of Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues, and Azure Boards, and sets the sync and the automatic import, for all projects. Each project’s “Imported tickets” page links it to its sources and maps their statuses.
 
+Both pages list only the code hosts and sources whose plugin is installed (they are installed in Settings › Plugins); the accounts and links of a plugin uninstalled are kept and come back with it. With none, the page says so in a line, with “Open Settings › Plugins”.
+
 An amber dot on “Connected services”, in the settings bar, says a token expired or can’t be read.
 
 ## Open the pages

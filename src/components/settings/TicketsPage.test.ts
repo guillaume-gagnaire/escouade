@@ -6,6 +6,8 @@ import { settingsForm } from '../../lib/settings.svelte';
 import { app } from '../../lib/state.svelte';
 import type { AccountView } from '../../lib/types';
 import { fakeBackend, project, resetApp } from '../../test/ipc';
+import { firstHandPlugins } from '../../test/plugins';
+import { plugins } from '../../lib/plugins-view.svelte';
 import SettingsModal from '../modals/SettingsModal.svelte';
 import TicketsPage from './TicketsPage.svelte';
 import { afterGesture } from '../../test/settings';
@@ -53,6 +55,8 @@ describe('TicketsPage', () => {
     resetApp({ projects: [project()] });
     app.accounts = ACCOUNTS;
     app.modal = { kind: 'settings', page: 'tickets', projectId: 'p1' };
+    plugins.list = firstHandPlugins();
+    plugins.loaded = true;
   });
 
   it('is a page of the project, in its colour, and the old link to the sources leads to it', () => {
@@ -79,6 +83,41 @@ describe('TicketsPage', () => {
     await userEvent.click(p.getByRole('button', { name: 'Ouvrir Services connectés' }));
     expect(nav().getByRole('button', { name: 'Services connectés' })).toHaveAttribute('aria-current', 'page');
     expect(within(panel()).getByRole('heading', { name: 'Comptes connectés' })).toBeInTheDocument();
+  });
+
+  // ESC-407: a source whose plugin is uninstalled is no longer on the page; the project's link to it stays kept.
+  it('lists only the sources whose plugin is installed, the link of one uninstalled kept', async () => {
+    const link = { service: 'jira' as const, container: 'ATL', name: 'ATL — Atlas', states: {} };
+    resetApp({ projects: [project({ integrations: { links: [link], comments: [] } })] });
+    app.accounts = ACCOUNTS;
+    plugins.list = firstHandPlugins('jira');
+    const b = backend({ plugins_list: () => firstHandPlugins('jira') });
+    const { unmount } = render(SettingsModal, { page: 'tickets', projectId: 'p1' });
+    const p = within(panel());
+    // Its account connected, its plugin gone: neither its menu nor its statuses, and the page says to connect one.
+    expect(await p.findByText('Connecte un compte dans Services connectés pour lier une source à ce projet.')).toBeInTheDocument();
+    expect(p.queryByRole('combobox', { name: 'Projet Jira' })).toBeNull();
+    expect(p.queryByText('Correspondance des statuts')).toBeNull();
+    expect(app.projects[0].integrations.links).toEqual([link]);
+    expect(b.called('update_project')).toEqual([]);
+    unmount();
+    // Its plugin back: the source is linked as it was.
+    plugins.list = firstHandPlugins();
+    backend();
+    render(SettingsModal, { page: 'tickets', projectId: 'p1' });
+    const source = await within(panel()).findByRole('combobox', { name: 'Projet Jira' });
+    await waitFor(() => expect(source).toHaveValue('ATL'));
+  });
+
+  it('says in a line that no source is installed, with the way to Réglages › Plugins', async () => {
+    plugins.list = firstHandPlugins('jira', 'trello', 'github', 'linear', 'clickup', 'gitlab', 'azure');
+    backend({ plugins_list: () => plugins.list });
+    render(SettingsModal, { page: 'tickets', projectId: 'p1' });
+    const p = within(panel());
+    const line = (await p.findByText('Aucune source de tickets installée : une source s’installe avec son plugin.')).closest('p')!;
+    expect(p.queryByRole('button', { name: 'Ouvrir Services connectés' })).toBeNull();
+    await userEvent.click(within(line).getByRole('button', { name: 'Ouvrir Réglages › Plugins' }));
+    expect(nav().getByRole('button', { name: 'Plugins' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('links a source with its default states, sets them by column, and saves them with the project', async () => {

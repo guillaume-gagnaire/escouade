@@ -305,7 +305,8 @@ describe('« Couleurs », the theme of a plugin (PLG-7)', () => {
 
   it('chooses a plugin’s theme, saved a moment later, and says what it left out', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    const backend = fakeBackend();
+    // The window reads the plugins again as it opens (ESC-407): the backend gives the same.
+    const backend = fakeBackend({ plugins_list: () => [themed()] });
     plugins.list = [themed()];
     render(SettingsModal, { page: 'general' });
     const select = within(panel()).getByRole('combobox', { name: 'Couleurs' }) as HTMLSelectElement;

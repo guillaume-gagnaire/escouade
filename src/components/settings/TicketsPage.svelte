@@ -12,11 +12,13 @@
     setColumnState,
     toggleComment,
   } from '../../lib/integrations';
+  import { installedOf } from '../../lib/installed';
   import { api } from '../../lib/ipc';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import type { Column, Container, ExternalState, Project, Service } from '../../lib/types';
   import Group from './Group.svelte';
+  import NoPlugin from './NoPlugin.svelte';
   import ServiceBadge from './ServiceBadge.svelte';
   import Switch from './Switch.svelte';
   import { tip } from '../../lib/tip';
@@ -28,7 +30,9 @@
 
   const draft = $derived(settingsForm.project!);
   const integ = $derived(draft.integrations);
-  const connected = $derived(SERVICE_IDS.filter((id) => app.accounts.find((a) => a.service === id)?.connected));
+  /** The sources an installed plugin brings (ESC-407): the link of one whose plugin is gone stays in the project, hidden. */
+  const sources = $derived(installedOf('ticketSources', SERVICE_IDS));
+  const connected = $derived(sources.filter((id) => app.accounts.find((a) => a.service === id)?.connected));
   const linkOf = (id: Service) => integ.links.find((l) => l.service === id);
   /** A linked source whose account was disconnected (ESC-397): paused, its settings kept. */
   const paused = (id: Service) => {
@@ -36,9 +40,9 @@
     return !!l && !linkServed(app.accounts, l);
   };
   /** The services shown: those with an account connected, and those with a paused source. */
-  const shown = $derived(SERVICE_IDS.filter((id) => connected.includes(id) || paused(id)));
+  const shown = $derived(sources.filter((id) => connected.includes(id) || paused(id)));
   /** The links whose account is connected, in the services' order. */
-  const linked = $derived(SERVICE_IDS.filter((id) => connected.includes(id) && !!linkOf(id) && !paused(id)));
+  const linked = $derived(sources.filter((id) => connected.includes(id) && !!linkOf(id) && !paused(id)));
 
   /** The accounts a source may be served by: several for Jira, Trello, Linear and ClickUp (ESC-397). */
   const choices = (id: Service) => accountsOf(app.accounts, id);
@@ -174,7 +178,9 @@
 </script>
 
 <Group title={t('integrations.sources.title', { project: draft.name.trim() || project.name })}>
-  {#if !connected.length}
+  {#if !sources.length}
+    <NoPlugin text={t('settings.noPlugin.sources')} />
+  {:else if !connected.length}
     <div class="empty">
       <p>{t('integrations.sources.connectFirst')}</p>
       <button class="btn" onclick={() => (settingsForm.page = 'services')}>{t('integrations.sources.openServices')}</button>

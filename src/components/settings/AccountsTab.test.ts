@@ -11,6 +11,7 @@ vi.mock('../../lib/opener', () => ({ openUrl: vi.fn(async (u: string) => void op
 import { offered } from '../../lib/engines';
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
+import { settingsForm } from '../../lib/settings.svelte';
 import type { Account, AccountStatus, ClosedProject } from '../../lib/types';
 import {
   agent,
@@ -797,58 +798,63 @@ describe('AccountsTab with two harnesses (ESC-30)', () => {
     expect(within(bare).queryByRole('button', { name: /Ajouter un compte/ })).toBeNull();
   });
 
-  it('installs a harness the seed holds and that is not installed, on a click, with no network (ESC-373)', async () => {
+  // ESC-407: the page lists only the harnesses an installed plugin brings; one is installed in Réglages › Plugins or on the
+  // home screen, never here.
+  it('offers no harness the seed holds that is not installed, and keeps the accounts of one whose plugin is gone', async () => {
     app.engines = [CLAUDE_ENGINE];
-    app.settings.accounts = [PRINCIPAL];
-    app.settings.engineOrder = [];
-    let installed = false;
     const b = fakeBackend({
       account_status: statuses,
       save_settings: () => [],
-      plugin_seed_offers: () =>
-        installed
-          ? []
-          : [
-              { id: 'dev.escouade.codex', name: 'Codex', version: '2.2.0', removed: null, refused: null },
-              { id: 'dev.escouade.trello', name: 'Trello', version: '2.2.0', removed: null, refused: null },
-            ],
-      plugin_need_engine: () => {
-        installed = true;
-      },
-      engines_declared: () => (installed ? [CLAUDE_ENGINE, { ...BARE_ENGINE, id: 'codex', name: 'Codex' }] : [CLAUDE_ENGINE]),
-      engines_found_now: () => ['claude', 'codex'],
-    });
-    render(SettingsModal, { page: 'accounts' });
-    // The harness, not a plugin of another kind.
-    const codex = await screen.findByRole('region', { name: 'Codex' });
-    expect(screen.queryByRole('region', { name: 'Trello' })).toBeNull();
-    expect(within(codex).getByText('Non installé')).toHaveAttribute('data-engine-state', 'notInstalled');
-    expect(
-      within(codex).getByText('Livré avec Escouade : il s’installe d’un clic, sans réseau, puis ses comptes s’ajoutent ici.'),
-    ).toBeInTheDocument();
-    expect(within(codex).queryByRole('button', { name: /Ajouter un compte/ })).toBeNull();
-    await userEvent.click(within(codex).getByRole('button', { name: 'Installer Codex' }));
-    await waitFor(() => expect(b.called('plugin_need_engine')).toEqual([expect.objectContaining({ args: { engine: 'codex' } })]));
-    // Installed: its group as any harness's, its first account to add.
-    await waitFor(() => expect(within(screen.getByRole('region', { name: 'Codex' })).queryByText('Non installé')).toBeNull());
-    expect(
-      within(screen.getByRole('region', { name: 'Codex' })).getByRole('button', { name: 'Ajouter un compte Codex…' }),
-    ).toBeInTheDocument();
-    expect(app.engines.map((e) => e.id)).toEqual(['claude', 'codex']);
-  });
-
-  it('says why the seed refused a harness, as it said it', async () => {
-    app.engines = [CLAUDE_ENGINE];
-    fakeBackend({
-      account_status: statuses,
-      save_settings: () => [],
       plugin_seed_offers: () => [
+        { id: 'dev.escouade.codex', name: 'Codex', version: '2.2.0', removed: '2.2.0', refused: null },
         { id: 'dev.escouade.cursor-cli', name: 'Cursor CLI', version: '2.2.0', removed: null, refused: 'Signature invalide.' },
       ],
     });
+    const { unmount } = render(SettingsModal, { page: 'accounts' });
+    await screen.findByRole('region', { name: 'Claude Code' });
+    // Codex's plugin uninstalled: neither its group nor its accounts, no « Non installé », no button that installs it.
+    expect(screen.queryByRole('region', { name: 'Harness nu' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Codex' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Cursor CLI' })).toBeNull();
+    expect(screen.queryByText('Non installé')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Installer/ })).toBeNull();
+    expect(screen.queryByText('Signature invalide.')).toBeNull();
+    expect(screen.queryByRole('list', { name: 'Comptes Harness nu' })).toBeNull();
+    // A single harness: no « Ordre des harness », nor going on on another one.
+    await userEvent.click(within(document.getElementById('settings-panel')!).getByRole('button', { name: /^Avancé/ }));
+    expect(screen.queryByRole('list', { name: 'Ordre des harness' })).toBeNull();
+    expect(screen.queryByRole('switch', { name: /Continuer sur le harness suivant/ })).toBeNull();
+    // Its accounts are kept: nothing removed, nothing saved without them.
+    expect(app.settings.accounts.map((x) => x.id)).toEqual(['principal', 'pro', 'principal-codex', 'work']);
+    expect(b.called('account_remove')).toEqual([]);
+    expect(b.called('plugin_need_engine')).toEqual([]);
+    unmount();
+    // Its plugin installed again (in Réglages › Plugins): its group and its accounts are back.
+    app.engines = [CLAUDE_ENGINE, BARE_ENGINE];
     render(SettingsModal, { page: 'accounts' });
-    const cursor = await screen.findByRole('region', { name: 'Cursor CLI' });
-    expect(within(cursor).getByText('Signature invalide.')).toHaveClass('bad');
+    expect(items('Comptes Harness nu')).toEqual(['Principal', 'Travail']);
+  });
+
+  it('says in a line, with the way to Réglages › Plugins, that no harness is installed', async () => {
+    app.engines = [];
+    fakeBackend({ account_status: statuses, save_settings: () => [] });
+    render(SettingsModal, { page: 'accounts' });
+    const line = (await screen.findByText('Aucun harness installé : un harness s’installe avec son plugin.')).closest('p')!;
+    expect(within(line).queryByRole('button', { name: /^Installer/ })).toBeNull();
+    await userEvent.click(within(line).getByRole('button', { name: 'Ouvrir Réglages › Plugins' }));
+    expect(settingsForm.page).toBe('plugins');
+  });
+
+  it('keeps the place of a harness whose plugin is gone when the order changes', async () => {
+    app.settings.engineOrder = ['gemini', 'claude', 'codex'];
+    const b = fakeBackend({ account_status: statuses, save_settings: () => [], engine_order_set: (a: { order: string[] }) => a.order });
+    render(SettingsModal, { page: 'accounts' });
+    await userEvent.click(within(document.getElementById('settings-panel')!).getByRole('button', { name: /^Avancé/ }));
+    const order = list('Ordre des harness');
+    expect(within(order).getAllByRole('listitem')).toHaveLength(2);
+    await userEvent.click(within(order).getByRole('button', { name: 'Monter Harness nu' }));
+    await waitFor(() => expect(b.called('engine_order_set')).toHaveLength(1));
+    expect(b.called('engine_order_set')[0].args.order).toEqual(['codex', 'claude', 'gemini']);
   });
 
   it('sets what the new agents of an account go with, among what its own harness has (ESC-128)', async () => {
