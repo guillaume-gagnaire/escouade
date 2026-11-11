@@ -1,4 +1,4 @@
-//! The plugin « GitHub » (`dev.escouade.github`, docs/PLUGINS.md §4.4): github.com, GHE.com and GitHub Enterprise
+//! The plugin « GitHub » (`dev.escouade.github`, docs/PLUGINS-DESIGN.md §4.4): github.com, GHE.com and GitHub Enterprise
 //! Server, on one account per instance. It serves the code host `github` (pull requests, merge and auto-merge, checks,
 //! Actions logs and reruns, reviews and their threads, deployments: `pulls`) and, on github.com's account, the Kanban's
 //! source `github` (GitHub Issues: `issues`). It is a module (`run.wasm`); the kit

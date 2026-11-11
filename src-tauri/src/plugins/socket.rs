@@ -1,4 +1,4 @@
-//! What the sockets of the plugins run over (`ws/open`, docs/PLUGINS.md §8.4.4): the settings' network, as reqwest follows
+//! What the sockets of the plugins run over (`ws/open`, docs/PLUGINS-DESIGN.md §8.4.4): the settings' network, as reqwest follows
 //! it. The proxy (an HTTP CONNECT tunnel, opened by hand, as reqwest opens one; who goes around it, `no_proxy`), and their
 //! « certificats non vérifiés ».
 

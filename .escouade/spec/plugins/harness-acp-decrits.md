@@ -1,7 +1,7 @@
 ---
 title: "Les harness ACP décrits"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §1.1, §4.4, §4.12, §8.27, §8.31","docs/TODO-2.2.md, PLG-6","Essai réel de Goose 1.57.0 sur Ollama, 2026-11-01 (ESC-178)"]
+sources: ["docs/PLUGINS-DESIGN.md §1.1, §4.4, §4.12, §8.27, §8.31","docs/TODO-2.2.md, PLG-6","Essai réel de Goose 1.57.0 sur Ollama, 2026-11-01 (ESC-178)"]
 tickets: ["ESC-178","ESC-222","ESC-281","ESC-282","ESC-347","ESC-361","ESC-362"]
 decisions: []
 compared: null

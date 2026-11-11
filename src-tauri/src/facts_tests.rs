@@ -1,6 +1,6 @@
 //! Tests of the facts' bus (PLG-5, ESC-177): each fact emitted by the core where its state changes,
 //! on the fake harnesses (tests/fixtures/fake-claude, the bench's Minimal), and received by the
-//! fake plugin (tests/fixtures/fake-plugin.mjs, `--keep-facts`); a private project's facts kept
+//! fake plugin (tests/fixtures/plugins/fake/plugin.mjs, `--keep-facts`); a private project's facts kept
 //! from a plugin not turned on for it; a webhook received by a fake HTTP server; a command run on a
 //! fact once agreed to; a full queue that drops its oldest facts and says it in the journal.
 
@@ -24,17 +24,23 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 const FAKE: &str = "dev.test.facts";
 
-fn fixtures() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures")
-}
-
 /// A folder holding a plugin of `manifest` (its `id`, `name`, `version` and `escouade` added), the
-/// fake plugin's program beside it.
+/// fake plugin's module in it, told the `run.args` of `manifest`.
 fn plugin_dir(base: &Path, folder: &str, mut manifest: Value) -> PathBuf {
     let dir = base.join(folder);
-    std::fs::create_dir_all(&dir).unwrap();
-    for f in ["fake-plugin.mjs", "fake-plugin.cmd", "fake-plugin"] {
-        std::fs::copy(fixtures().join(f), dir.join(f)).unwrap();
+    let args: Vec<String> = manifest["run"]["args"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    if manifest.get("run").is_some() {
+        manifest["run"] = crate::plugins_runtime_tests::fake_module(&dir, &args);
+    } else {
+        std::fs::create_dir_all(&dir).unwrap();
     }
     manifest["name"] = json!(folder);
     manifest["version"] = json!("1.0.0");
@@ -51,7 +57,7 @@ fn plugin_dir(base: &Path, folder: &str, mut manifest: Value) -> PathBuf {
 fn keeper(id: &str, events: &[&str]) -> Value {
     json!({
         "id": id,
-        "run": { "command": "fake-plugin", "windows": "fake-plugin.cmd", "args": ["--keep-facts"] },
+        "run": { "args": ["--keep-facts"] },
         "activation": ["event:*"],
         "permissions": { "events": events },
     })
@@ -64,11 +70,9 @@ struct Listening {
 
 /// The fake plugin, which asks for every fact, loaded in development in the harness's core.
 fn listen(h: &Harness) -> Listening {
-    // Else cmd.exe may no longer find node (see `trim_test_path`).
-    #[cfg(windows)]
-    crate::paths::trim_test_path();
     let dir = plugin_dir(&h.dir, "fake-plugin", keeper(FAKE, &["*"]));
-    h.core.plugins.load_dev(&dir, Lang::En).unwrap();
+    let id = h.core.plugins.load_dev(&dir, Lang::En).unwrap().id;
+    crate::plugins_runtime_tests::warm(&h.core.plugin_runtime, &id);
     let rec = Arc::new(Recorder::default());
     h.core.facts.subscribe(rec.clone());
     Listening { rec }
@@ -560,8 +564,6 @@ async fn a_change_of_account_and_of_harness_are_facts() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_private_projects_facts_go_only_to_a_plugin_turned_on_for_it() {
     let h = harness("facts-private");
-    #[cfg(windows)]
-    crate::paths::trim_test_path();
     let rec = Arc::new(Recorder::default());
     h.core.facts.subscribe(rec.clone());
     let (open, _) = h.project(false).await;
@@ -587,7 +589,8 @@ async fn a_private_projects_facts_go_only_to_a_plugin_turned_on_for_it() {
         .private = true;
     for (folder, id) in [("tous", "dev.test.all"), ("coffre", "dev.test.vault")] {
         let dir = plugin_dir(&h.dir, folder, keeper(id, &["*"]));
-        h.core.plugins.load_dev(&dir, Lang::En).unwrap();
+        let id = h.core.plugins.load_dev(&dir, Lang::En).unwrap().id;
+        crate::plugins_runtime_tests::warm(&h.core.plugin_runtime, &id);
     }
     // Turned on for the private project by hand; the other one is not.
     h.core
@@ -607,7 +610,8 @@ async fn a_private_projects_facts_go_only_to_a_plugin_turned_on_for_it() {
             "contributes": { "webhooks": [{ "url": url, "events": ["ticket.created"] }] },
         }),
     );
-    h.core.plugins.load_dev(&dir, Lang::En).unwrap();
+    let id = h.core.plugins.load_dev(&dir, Lang::En).unwrap().id;
+    crate::plugins_runtime_tests::warm(&h.core.plugin_runtime, &id);
     h.set_board(&vault.id, |s| s.autopilot = false);
     h.set_board(&open.id, |s| s.autopilot = false);
     let secret = h
@@ -751,7 +755,8 @@ async fn a_declared_webhook_posts_its_template_to_a_server_with_a_secret_address
             }] },
         }),
     );
-    h.core.plugins.load_dev(&dir, Lang::En).unwrap();
+    let id = h.core.plugins.load_dev(&dir, Lang::En).unwrap().id;
+    crate::plugins_runtime_tests::warm(&h.core.plugin_runtime, &id);
     h.core
         .secrets
         .set(&secret_name("dev.test.discord", "webhook"), &url)
@@ -885,7 +890,8 @@ async fn the_discord_example_posts_the_tickets_to_test_and_the_agents_waiting() 
     let dir = h.dir.join("discord");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("escouade-plugin.json"), manifest.to_string()).unwrap();
-    h.core.plugins.load_dev(&dir, Lang::En).unwrap();
+    let id = h.core.plugins.load_dev(&dir, Lang::En).unwrap().id;
+    crate::plugins_runtime_tests::warm(&h.core.plugin_runtime, &id);
     h.core
         .secrets
         .set(&secret_name("dev.escouade.discord", "webhook"), &url)
@@ -934,7 +940,8 @@ async fn a_webhook_whose_host_a_fact_makes_goes_only_to_a_host_of_permissions_ne
             "contributes": { "webhooks": [{ "url": "http://{{ticket.title}}", "events": ["ticket.created"] }] },
         }),
     );
-    h.core.plugins.load_dev(&dir, Lang::En).unwrap();
+    let id = h.core.plugins.load_dev(&dir, Lang::En).unwrap().id;
+    crate::plugins_runtime_tests::warm(&h.core.plugin_runtime, &id);
     for title in ["evil.dev/x", "a@evil.dev", "127.0.0.1.evil.dev/x"] {
         h.core
             .ticket_create(&p.id, draft(title, &[], 5))
@@ -978,8 +985,6 @@ async fn a_webhook_whose_host_a_fact_makes_goes_only_to_a_host_of_permissions_ne
 #[tokio::test(flavor = "multi_thread")]
 async fn a_command_runs_on_a_fact_only_once_agreed_to_as_it_is() {
     let h = harness("facts-command");
-    #[cfg(windows)]
-    crate::paths::trim_test_path();
     let (p, _) = h.project(false).await;
     h.set_board(&p.id, |s| s.autopilot = false);
     let out = h.dir.join("said.txt");
@@ -1098,11 +1103,9 @@ async fn a_command_runs_on_a_fact_only_once_agreed_to_as_it_is() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_full_queue_drops_its_oldest_facts_and_says_it_in_the_journal() {
-    #[cfg(windows)]
-    crate::paths::trim_test_path();
     let base = std::env::temp_dir().join(format!("facts-queue-{}", uuid::Uuid::new_v4().simple()));
     let mut m = keeper(FAKE, &["ticket.rejected"]);
-    m["run"]["args"] = json!(["--keep-facts", "--deaf"]);
+    m["run"]["args"] = json!(["--keep-facts", "--busy", "1500"]);
     let dir = plugin_dir(&base, "deaf", m);
     let data = DataDir::new(base.join("data"));
     let plugins = Plugins::load(data.clone(), "2.1.1");
@@ -1119,11 +1122,12 @@ async fn a_full_queue_drops_its_oldest_facts_and_says_it_in_the_journal() {
             ..Limits::default()
         },
     );
+    crate::plugins_runtime_tests::warm(&rt, FAKE);
     let dispatch = Dispatch::new(plugins, rt.clone(), store, 4);
     let bus = Bus::new();
     bus.subscribe(dispatch);
     // Started by the first fact: while it starts, the facts wait in the queue of its start (PLG-2);
-    // once it runs, they go to its input, which it no longer reads, then fill its queue of facts.
+    // once it runs, they go to its input, which it is too busy to read, then fill its queue of facts.
     let comment = "x".repeat(4000);
     let full = || {
         rt.journal(FAKE)
@@ -1144,7 +1148,7 @@ async fn a_full_queue_drops_its_oldest_facts_and_says_it_in_the_journal() {
         bus.flush();
         tokio::time::sleep(Duration::from_millis(1)).await;
     }
-    // It ran, and stopped reading: what filled the queue is its input, not its start.
+    // It ran, too busy to read: what filled the queue is its input, not its start.
     assert_eq!(
         rt.status(FAKE).phase,
         PhaseName::Running,

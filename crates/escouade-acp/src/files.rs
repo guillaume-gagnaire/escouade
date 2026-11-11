@@ -1,7 +1,7 @@
 //! The files an agent reads and writes through the client (`fs/read_text_file`, `fs/write_text_file`), on both targets.
 //!
 //! Natively, the client judges a path by `paths` and opens it. A module has no disk, and a path of the host (`C:\wt`) means
-//! nothing to it: the host judges and opens, by `fs/*` (docs/PLUGINS.md §8.4.6), with the agent's key. It holds to the roots
+//! nothing to it: the host judges and opens, by `fs/*` (docs/PLUGINS-DESIGN.md §8.4.6), with the agent's key. It holds to the roots
 //! the plugin declares and to the agent's fence, whatever the code here says, so that a module only keeps the refusals
 //! apart: what an agent is told must stay what it was told.
 

@@ -1,4 +1,4 @@
-//! `RUSTC_WRAPPER` of a `run.wasm` compilation (ESC-330, docs/PLUGINS.md §8.5.2): the same rustc on Windows and on Linux
+//! `RUSTC_WRAPPER` of a `run.wasm` compilation (ESC-330, docs/PLUGINS-DESIGN.md §8.5.2): the same rustc on Windows and on Linux
 //! gives the same module only if it is told the same things. Cargo tells it three things that depend on the machine:
 //!
 //! 1. `-C metadata`: its hash takes in the host of `rustc -vV` and the path of a path dependency, with its `\`. It salts

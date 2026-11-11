@@ -1,5 +1,5 @@
 #!/bin/sh
-# The seed of a build of development (ESC-338, docs/PLUGINS.md §8.7, §8.14): builds the module of each plugin in Rust of plugins/
+# The seed of a build of development (ESC-338, docs/PLUGINS-DESIGN.md §8.7, §8.14): builds the module of each plugin in Rust of plugins/
 # (or of the folders given), then writes src-tauri/seed/ as the release would, not signed: only a build of development takes
 # it. `rustup target add wasm32-wasip1` first. Then run the app with ESCOUADE_SEED_DIR=src-tauri/seed.
 set -e

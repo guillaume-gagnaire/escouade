@@ -1,5 +1,5 @@
 // @vitest-environment node
-// The kit that goes to crates.io (docs/PLUGINS.md §8.6.3): what a crate must hold to be published, and the way the plugins
+// The kit that goes to crates.io (docs/PLUGINS-DESIGN.md §8.6.3): what a crate must hold to be published, and the way the plugins
 // reach it. Nothing here publishes: `cargo publish --dry-run` is the CI's, and the real one the maintainer's.
 import fs from 'node:fs';
 import path from 'node:path';

@@ -440,7 +440,7 @@ impl SourceKind for LinearSource {
 
 ## Goose
 
-Un harness sans code : Goose, l’agent open source de Block, décrit par ACP. Le plugin ACP livré avec Escouade le lance et montre sa conversation ; le manifeste dit ses modes, son mode qui ne change rien, son option de modèle et le nom de ses outils. Goose écrit ses fichiers lui-même : aucun agent d’un projet privé ne démarre sur lui. Voir [Un harness ACP décrit](plugins/harnesses).
+Un harness sans code : Goose, l’agent open source de Block, décrit par ACP. Le plugin ACP d’Escouade le lance et montre sa conversation ; le manifeste dit ses modes, son mode qui ne change rien, son option de modèle et le nom de ses outils. Goose écrit ses fichiers lui-même : aucun agent d’un projet privé ne démarre sur lui. Voir [Un harness ACP décrit](plugins/harnesses).
 
 `plugins/goose/escouade-plugin.json`
 

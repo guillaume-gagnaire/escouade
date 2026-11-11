@@ -4,9 +4,6 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const MANIFEST = 'escouade-plugin.json';
-const APP_PROGRAM = '{escouade}/escouade-plugins';
-/** What the manifest of a plugin the app gives says as its version: the app puts its own (`builtin::manifest_text`). */
-const THE_APPS_VERSION = '0.0.0';
 
 /**
  * What judges or builds every plugin: a change there runs them all. `crates/` is the kit and the bench's library, the
@@ -44,8 +41,6 @@ export function readPlugin(folder, name) {
     name,
     id: manifest.id,
     version: manifest.version,
-    // The app's program (docs/PLUGINS.md §8.6.1): `--builtin`, and no bench, which has no such program to start.
-    ofTheApp: manifest.run?.command === APP_PROGRAM,
     wasm: typeof manifest.run?.wasm === 'string',
     node: has('package.json'),
     nodeTests: has('test'),
@@ -70,12 +65,10 @@ export function problemsOf(folder, plugin) {
   const { cargo } = plugin;
   if (cargo) {
     if (!cargo.name || !cargo.version) problems.push('Cargo.toml has no [package] name and version');
-    // Only for the time the app stamps it: a module's manifest says its own version, as the store reads it.
-    const stamped = plugin.ofTheApp && plugin.version === THE_APPS_VERSION;
-    if (cargo.version && !stamped && cargo.version !== plugin.version) {
+    // A module's manifest says its own version, as the store reads it.
+    if (cargo.version && cargo.version !== plugin.version) {
       problems.push(`${MANIFEST} says version ${plugin.version}, Cargo.toml ${cargo.version}`);
     }
-    if (plugin.wasm && plugin.ofTheApp) problems.push(`${MANIFEST} has both the app's program and run.wasm`);
   }
   return problems;
 }

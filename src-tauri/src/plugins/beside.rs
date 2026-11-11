@@ -1,4 +1,4 @@
-//! What runs beside the thread of a plugin in WASM (ESC-331, ESC-332, docs/PLUGINS.md §8.3 and §8.4): the capabilities of
+//! What runs beside the thread of a plugin in WASM (ESC-331, ESC-332, docs/PLUGINS-DESIGN.md §8.3 and §8.4): the capabilities of
 //! the host, for `run.js` and `run.wasm` alike. A request is a line the module wrote; what it waits for comes back on the
 //! one channel of its thread, as a line, a turn later. All of it goes with the thread: nothing outlives its instance.
 //!

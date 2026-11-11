@@ -1,8 +1,16 @@
+import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sha256 } from '../../server/utils/versions';
-import { gh, type Runner } from './attest';
+
+/** Runs `gh` with `args`; the tests give a fake. */
+export type Runner = (args: string[]) => { status: number | null; stdout: string; stderr: string; error?: Error };
+
+export const gh: Runner = (args) => {
+  const r = spawnSync('gh', args, { encoding: 'utf8', timeout: 120_000 });
+  return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '', error: r.error };
+};
 
 // escouade-js on the machine of the review (ESC-343). `escouade-plugin` embeds it when it is built: built without it, or
 // with another one, it does not compile as the store did, and nothing can be signed. The CI of main builds it once, as

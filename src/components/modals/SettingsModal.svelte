@@ -271,7 +271,9 @@
     padding: 20px 14px 14px 32px;
     border-bottom: 1px solid var(--line);
   }
+  /* `position: relative`: the logo of TileFace is absolute, the whole window without it. */
   .tile {
+    position: relative;
     display: grid;
     flex: none;
     place-items: center;

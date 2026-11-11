@@ -1,6 +1,6 @@
 #!/bin/sh
 # Writes the Cargo.lock of a plugin in `run.wasm`: the one `escouade-plugin build` and the store read, on the crates of
-# crates.io (docs/PLUGINS.md §8.19). In this repository cargo ignores it, so it is made from the plugin's folder alone,
+# crates.io (docs/PLUGINS-DESIGN.md §8.19). In this repository cargo ignores it, so it is made from the plugin's folder alone,
 # out of the workspace of `plugins/` and its `[patch.crates-io]`.
 #
 # It starts from the Cargo.lock of `src-tauri`: the versions of `rust_native.json` (the closed list of what runs natively

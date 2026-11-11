@@ -16,7 +16,7 @@ A plugin describes itself in one file, its [manifest](plugins/manifest), and dec
 - **a workflow reader**, for a workflow Escouade does not read on its own;
 - **its settings and its secrets**, which you fill in on its page.
 
-Some of Escouade’s integrations are plugins themselves, shipped with the app: GitHub, GitLab, Bitbucket, Gitea and Forgejo, Trello, the ACP harnesses, isola and the online voice services (see [the plugins shipped with Escouade](plugins/installer#the-plugins-shipped-with-escouade)).
+Some of Escouade’s integrations are plugins themselves, written by Escouade and signed on the store: GitHub, GitLab, Bitbucket, Gitea and Forgejo, Trello, the harnesses, isola and the online voice services (see [Escouade’s plugins](plugins/installer#escouade-s-plugins)).
 
 ## Three forms
 
@@ -24,21 +24,21 @@ Some of Escouade’s integrations are plugins themselves, shipped with the app: 
 | --- | --- | --- |
 | Declarative | The manifest alone: a theme, webhooks, a described harness. Nothing runs. | Its permissions, with no program |
 | Program in WASM | A bundle in JS or TypeScript (`run.js`), or a module in Rust (`run.wasm`), that Escouade runs inside the app, with no Node or Rust on your machine. It reaches the network, files and programs only through Escouade, and only what it declares. | “Runs inside Escouade, isolated” |
-| Native program | An executable (`run.command`) started in a process, with your rights. The store publishes none: it only comes from a folder or a git repository. | “Runs a program on your computer, with your rights” |
+| Native program | An executable (`run.command`): Escouade no longer starts it, whatever the plugin’s origin, and the store refuses it. The manifest reads, and the plugin’s page says why it does not start. | “Does not start” |
 
 A program talks to Escouade through [the protocol](plugins/api); [the SDK](plugins/sdk) writes it for you in TypeScript, [the kit](plugins/rust) in Rust.
 
 ## What a plugin cannot do
 
 - **Read another one’s secrets**: a plugin has only its own, never those of an account, a harness or another plugin.
-- **Act in a private project** without your consent: a plugin you install is off there from the start, those shipped with Escouade included; a harness starts its first agent there only once you turned it on.
+- **Act in a private project** without your consent: a plugin you install is off there from the start, Escouade’s included; a harness starts its first agent there only once you turned it on.
 - **Install itself**: a project can propose a plugin in its [`.escouade.yml`](escouade-yml#plugins), never install it; an `escouade://` link opens its page, never the install.
 - **Receive what it did not ask for**: a fact outside `permissions.events` is never sent to it, a secret outside `permissions.secrets` is refused (see [permissions](plugins/permissions)).
 - **Change the interface** beyond what its manifest declares: no view of its own.
 
 ## Where it comes from
 
-- **Shipped with Escouade**: signed and updated with the app; it is switched off, never uninstalled.
+- **Escouade’s** (`dev.escouade.*`): reviewed and signed on the store, in the installer; it is switched off and uninstalled like the others.
 - **The store**, [store.escouade.dev](https://store.escouade.dev): each version passes eleven checks there; those Escouade reviewed carry the “Verified by Escouade” seal, the others are “Unverified”.
 - **A folder or a git repository**: allowed, always “Unverified”: nobody reviewed it.
 - **A folder in development**: loaded in place, read again when it changes, to write it.

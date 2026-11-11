@@ -59,9 +59,7 @@ const systems = computed(() => {
   const names = [...new Set(s.map((p) => SYSTEMS[p.split('-')[0]!] ?? p))];
   return names.length ? names.join(', ') : 'Windows, macOS, Linux';
 });
-const hint = computed(() =>
-  page.value.builtin ? words.value.plugin.builtinHint : `Escouade ${page.value.latest?.escouade ?? ''} · ${systems.value}`,
-);
+const hint = computed(() => `Escouade ${page.value.latest?.escouade ?? ''} · ${systems.value}`);
 const copied = ref(false);
 async function copyRepo() {
   if (!repoUrl.value) return;
@@ -95,7 +93,6 @@ async function copyRepo() {
         <button v-if="repoUrl" type="button" class="btn" @click="copyRepo">
           <StoreIcon :name="copied ? 'check' : 'copy'" />{{ copied ? words.plugin.copied : words.plugin.copy }}
         </button>
-        <a v-else-if="page.builtin" class="btn" :href="page.builtin.docs[lang]"><StoreIcon name="ext" />{{ words.plugin.builtinDocs }}</a>
         <span class="hint">{{ hint }}</span>
       </div>
     </section>
@@ -112,7 +109,7 @@ async function copyRepo() {
       {{ words.plugin.sourceChanged(page.status.sourceFrom, words.date(page.status.sourceChangedAt)) }}
     </p>
 
-    <nav v-if="!page.builtin" class="tabs">
+    <nav class="tabs">
       <NuxtLink :class="{ on: tab === 'readme' }" :to="tabLink('readme')">{{ words.plugin.tabs.readme }}</NuxtLink>
       <NuxtLink :class="{ on: tab === 'docs' }" :to="tabLink('docs')"
         >{{ words.plugin.tabs.docs }}<span class="n">{{ docPages.length }}</span></NuxtLink
@@ -122,19 +119,8 @@ async function copyRepo() {
       >
     </nav>
 
-    <div class="plug-body" :class="{ own: page.builtin }">
-      <article v-if="page.builtin" class="readme">
-        <div class="md">
-          <p>{{ words.plugin.builtinNote }}</p>
-          <p>
-            <a class="arrow" :href="page.builtin.docs[lang]">{{ words.plugin.builtinDocs }}</a>
-          </p>
-          <p v-if="page.builtin.source">
-            <a class="arrow" :href="page.builtin.source" rel="noopener noreferrer">{{ words.plugin.builtinSource }}</a>
-          </p>
-        </div>
-      </article>
-      <article v-else-if="tab === 'readme'" class="readme">
+    <div class="plug-body">
+      <article v-if="tab === 'readme'" class="readme">
         <!-- The README as the store rendered it at the check: cut down to a short list of tags, without script, style
              or event (server/utils/readme.ts); the page's policy would refuse them all the same. -->
         <div v-if="readme" class="md" @click="follow" v-html="readme"></div>
@@ -200,13 +186,13 @@ async function copyRepo() {
             >
           </div>
         </div>
-        <div v-if="!page.builtin && signature" class="review-note signed">
+        <div v-if="signature" class="review-note signed">
           <b>{{ words.plugin.reviewedOn(words.date(signature.signedAt)) }}</b>
           <ul v-if="summary.length">
             <li v-for="(l, i) in summary" :key="i">{{ l }}</li>
           </ul>
         </div>
-        <div v-else-if="!page.builtin" class="review-note" :class="{ asked: e.trust === 'review' }">
+        <div v-else class="review-note" :class="{ asked: e.trust === 'review' }">
           <b>{{ e.trust === 'review' ? words.trust.review : words.trust.unverified }}</b>
           <p>{{ e.trust === 'review' ? words.plugin.reviewAsked : words.plugin.reviewNot }}</p>
         </div>
@@ -375,9 +361,6 @@ async function copyRepo() {
   grid-template-columns: minmax(0, 1fr) 340px;
   gap: 56px;
   padding-top: 28px;
-}
-.plug-body.own {
-  border-top: 1px solid var(--line);
 }
 .readme {
   min-width: 0;

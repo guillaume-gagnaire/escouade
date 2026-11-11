@@ -1,4 +1,4 @@
-//! The plugin « GitLab » (`dev.escouade.gitlab`, docs/PLUGINS.md §4.4): gitlab.com and the self-managed instances, on
+//! The plugin « GitLab » (`dev.escouade.gitlab`, docs/PLUGINS-DESIGN.md §4.4): gitlab.com and the self-managed instances, on
 //! one account per instance. It serves the code host `gitlab` (merge requests, merge and auto-merge, pipelines and their
 //! jobs, a job's log, reruns, approvals, discussions, deployments: `merges`) and the Kanban's source `gitlab` (GitLab
 //! Issues, on the same accounts: `issues`; one account per instance, the core asks the one whose host a container

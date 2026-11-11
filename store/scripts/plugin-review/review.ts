@@ -1,7 +1,6 @@
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
-import { verifyAttestation, type Runner } from './attest';
-import { benchFolder, firstPartyBench, playBench, playWasm, type BenchSetup } from './bench';
+import { firstPartyBench, playBench, playWasm, type BenchSetup } from './bench';
 import { recompile, recompileRust } from './recompile';
 import type { CompileOne } from '../../server/utils/compile';
 import { diffFolders, grownPermissions } from './diff';
@@ -44,8 +43,6 @@ export interface ReviewOptions {
   engine?: (sha256: string) => string;
   /** The version of Escouade under development: a first-party plugin is played as it, a third party's never (ESC-343). */
   development?: string;
-  /** Runs `gh` (the tests give a fake). */
-  gh?: Runner;
   /** The repository the script lives in: neither the work nor the reports may be in it. */
   repo: string;
   now?: Date;
@@ -162,20 +159,6 @@ export async function review(o: ReviewOptions): Promise<ReviewDone> {
         ...rustLeads(unpacked.files, got.wasm, (data.manifest?.permissions ?? {}) as Record<string, unknown>, readNativeList()),
       );
 
-    // The binaries, kept to be checked, never run here.
-    const repo = f.repository.replace(/^https:\/\/github\.com\//i, '');
-    data.binaries = [];
-    if (Object.keys(got.binaries).length) mkdirSync(join(dir, 'binaries'));
-    for (const [platform, bytes] of Object.entries(got.binaries)) {
-      const at = join(dir, 'binaries', platform);
-      writeFileSync(at, bytes, { mode: 0o644 });
-      data.binaries.push({
-        platform,
-        sha256: f.binaries[platform as keyof typeof f.binaries]!.sha256,
-        attested: verifyAttestation(at, repo, f.commit, o.gh),
-      });
-    }
-
     const base = baseVersion(got.plugin, o.version, o.since);
     if (base) {
       const old = await download(o.source, cat, o.id, base.version);
@@ -209,11 +192,8 @@ export async function review(o: ReviewOptions): Promise<ReviewDone> {
       data.bench = module
         ? await playWasm(o.bench, unpackedAt, module, firstParty, o.development)
         : { played: false, why: 'aucun module publié à jouer' };
-    else {
-      const linux = got.binaries['linux-x64'] ?? null;
-      const benchDir = data.manifest?.run ? benchFolder(unpackedAt, join(dir, 'bench'), data.manifest, linux) : unpackedAt;
-      data.bench = await playBench(o.bench, benchDir, o.benchWhy, firstParty, o.development);
-    }
+    // Declarative, or a `run.command` the store no longer takes (check 10): the bench says what it is.
+    else data.bench = await playBench(o.bench, unpackedAt, o.benchWhy, firstParty, o.development);
   } catch (e) {
     if (!(e instanceof Integrity)) throw e;
     data.integrity = e.message;

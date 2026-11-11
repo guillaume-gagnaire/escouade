@@ -1,4 +1,4 @@
-//! The stream bench of INT-0, the reference measures (docs/PLUGINS.md §4.8, docs/TODO-2.1.md):
+//! The stream bench of INT-0, the reference measures (docs/PLUGINS-DESIGN.md §4.8, docs/TODO-2.1.md):
 //! the recorded streams of each harness replayed through the core as the app reads them, before
 //! any harness runs in a process of its own, then after each one does.
 //!

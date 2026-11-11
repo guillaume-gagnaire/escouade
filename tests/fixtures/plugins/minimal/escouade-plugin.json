@@ -4,8 +4,8 @@
   "name": "Minimal",
   "version": "0.0.0",
   "description": {
-    "fr": "Le plugin de démonstration livré avec Escouade : le moins qu'un plugin de l'app fasse, pour prouver le chemin du registre au process.",
-    "en": "The demonstration plugin shipped with Escouade: the least a plugin of the app does, to prove the way from the registry to a process."
+    "fr": "Le plugin de démonstration des builds de développement et des tests : le moins qu'un plugin de la première main fasse, un module, pour prouver le chemin du registre à une instance.",
+    "en": "The demonstration plugin of the builds of development and the tests: the least a plugin of the first hand does, a module, to prove the way from the registry to an instance."
   },
   "author": {
     "name": "Escouade",
@@ -18,12 +18,17 @@
     "min": "2.1.0"
   },
   "run": {
-    "command": "{escouade}/escouade-plugins",
-    "args": ["minimal"]
+    "wasm": "Cargo.toml"
   },
   "activation": ["event:ticket.column"],
   "permissions": {
-    "events": ["ticket.column"]
+    "events": ["ticket.column"],
+    "files": [
+      {
+        "root": "agent",
+        "access": "write"
+      }
+    ]
   },
   "contributes": {
     "harnesses": [
@@ -32,7 +37,7 @@
         "name": "Minimal",
         "speaker": "Minimal",
         "locate": {
-          "program": "{escouade}/escouade-plugins"
+          "names": ["fake-minimal"]
         },
         "tested": {
           "oldest": "0",

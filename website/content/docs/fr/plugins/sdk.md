@@ -147,7 +147,7 @@ Le SDK installe `escouade-plugin` dans les `node_modules` du plugin, pour ses sc
 | `escouade-plugin build [dossier]` | Compile `run.js` ou `run.wasm` en WASM, comme le store : `packs/<id>-<version>.wasm` et son `.sha256`. |
 | `escouade-plugin fetch [dossier]` | Télécharge les dépendances d’un `run.wasm` depuis crates.io, sans rien lancer du plugin. |
 
-`test` et `dev` lancent l’`escouade-plugin` livré avec Escouade, pour qu’un plugin soit jugé par le banc de l’app : celui de `ESCOUADE_PLUGIN_BIN`, sinon celui du `PATH`, sinon celui de l’app (`%LOCALAPPDATA%\Escouade` sous Windows, `Escouade.app` sous macOS, `/usr/bin` avec le `.deb`). Sans lui, la commande dit où le trouver.
+`test` et `dev` lancent l’`escouade-plugin` d’Escouade, pour qu’un plugin soit jugé par le banc de l’app : celui de `ESCOUADE_PLUGIN_BIN`, sinon celui du `PATH`, sinon celui de l’app (`%LOCALAPPDATA%\Escouade` sous Windows, `Escouade.app` sous macOS, `/usr/bin` avec le `.deb`). Sans lui, la commande dit où le trouver.
 
 ### L’archive
 

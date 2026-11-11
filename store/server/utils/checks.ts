@@ -70,16 +70,6 @@ export const MANIFEST_FILE = 'escouade-plugin.json';
 export const SYSTEMS = ['windows', 'macos', 'linux'] as const;
 export type System = (typeof SYSTEMS)[number];
 
-/** A binary of the release, fetched and kept by the worker, with what GitHub's attestation says of it. */
-export interface FetchedBinary {
-  platform: Platform;
-  name: string;
-  sha256: string;
-  size: number;
-  /** `attested`: a provenance attestation of this file, built from this commit of this repository. */
-  attestation: { state: 'attested'; workflow: string } | { state: 'none' } | { state: 'mismatch'; commit?: string; repository?: string };
-}
-
 /** What compiled the module of a `run.js` plugin (`escouade-plugin build --json`): Javy's version, the SHA-256 of
  * escouade-js and the version of escouade-plugin, whose prelude and rewriting of the imports wrapped the bundle. */
 export interface JsCompiler {

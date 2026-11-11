@@ -1,4 +1,4 @@
-//! Tests of the `run.wasm` plugins (ESC-331, docs/PLUGINS.md §8.3): the module of tests/fixtures/plugins/reactor, a Rust
+//! Tests of the `run.wasm` plugins (ESC-331, docs/PLUGINS-DESIGN.md §8.3): the module of tests/fixtures/plugins/reactor, a Rust
 //! reactor whose bytes are committed, in the app's host: `serve` on one channel, one turn for what came together,
 //! `net/fetch` beside the thread, `escouade.call`, the limits, the runtime, the cache, the bench and `validate`.
 //!

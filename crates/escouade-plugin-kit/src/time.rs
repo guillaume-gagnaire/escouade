@@ -1,5 +1,5 @@
 //! A plugin's timers, whatever the target: tokio's in process; in a module, the host's (`timer/set`, `timer/fired`,
-//! docs/PLUGINS.md §8.4.5), a task waiting for its timer as it waits for any line.
+//! docs/PLUGINS-DESIGN.md §8.4.5), a task waiting for its timer as it waits for any line.
 
 use std::fmt;
 use std::future::Future;

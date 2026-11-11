@@ -1,4 +1,4 @@
-// The app's seed of plugins (ESC-338, docs/PLUGINS.md §8.7): what the installer carries so that Escouade works from its
+// The app's seed of plugins (ESC-338, docs/PLUGINS-DESIGN.md §8.7): what the installer carries so that Escouade works from its
 // first start, with no network.
 //
 //   npx tsx store/scripts/seed.ts fetch [--list plugins/seed.json] [--to src-tauri/seed] [--store https://store.escouade.dev]

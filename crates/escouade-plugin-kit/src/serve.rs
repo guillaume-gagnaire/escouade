@@ -1,10 +1,10 @@
-//! The loop of a plugin (docs/PLUGINS.md §3, PLG-2), asynchronous: JSON-RPC 2.0, one message a line. Each request is
+//! The loop of a plugin (docs/PLUGINS-DESIGN.md §3, PLG-2), asynchronous: JSON-RPC 2.0, one message a line. Each request is
 //! answered when it ends, several at once (a slow call does not hold back the others); a batch is answered as a batch.
 //! While it answers, the plugin may ask Escouade (`Cx::request`: its secrets, its settings) and write to its journal
 //! (`Cx::log`). `initialize` and `shutdown` are answered here.
 //!
 //! The same [`Plugin`] and the same [`Cx`] on both targets. In process, the loop is on tokio's threads (`process`); in a
-//! module, a reactor on one thread, without tokio (`reactor`, docs/PLUGINS.md §8.3). A module whose tasks outlive its
+//! module, a reactor on one thread, without tokio (`reactor`, docs/PLUGINS-DESIGN.md §8.3). A module whose tasks outlive its
 //! calls, or that reads a stream, has [`crate::host`].
 
 use crate::forge::BoxFuture;

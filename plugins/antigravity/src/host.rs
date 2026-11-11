@@ -1,4 +1,4 @@
-//! What it asks of the host, in a module: the agent's home by `fs/read` (the root `agentHome`, docs/PLUGINS.md §8.4.6),
+//! What it asks of the host, in a module: the agent's home by `fs/read` (the root `agentHome`, docs/PLUGINS-DESIGN.md §8.4.6),
 //! whether a write reaches a file alone (`fs/fileOnly`, ESC-389), a timer, items said unasked. Natively (the tests) it reads the disk, and
 //! nothing rings: the tests call `Client::tick` themselves.
 

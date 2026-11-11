@@ -17,7 +17,6 @@ export function phaseText(status: PluginRun['status'], p: PluginView): string {
   if (status.phase === 'stopped') {
     const stop = status.stop;
     if (stop?.kind === 'crashed') return t('plugins.state.crashed', { count: stop.times ?? 3 });
-    if (stop?.kind === 'memory') return t('plugins.state.memory');
     if (stop?.kind === 'refused') return t('plugins.state.refused', { reason: stop.reason ?? '' });
     return t('plugins.state.stopped');
   }

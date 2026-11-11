@@ -75,6 +75,15 @@ for (const size of [
       'src',
       /^data:image\/svg\+xml;base64,/,
     );
+    // In the settings too, the logo stays in its tiles: the preview's 36 px, the header's 30 px, never the whole window.
+    for (const [img, side] of [
+      [settings.getByRole('img', { name: 'Tuile du projet' }).locator('img'), 36],
+      [settings.locator('.s-head .tile img.logo'), 30],
+    ] as const) {
+      await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth > 0)).toBe(true);
+      const b = (await img.boundingBox())!;
+      expect([Math.round(b.width), Math.round(b.height)]).toEqual([side, side]);
+    }
     await closeSettings(settings);
     fs.rmSync(svg);
     const logo = tile(page).locator('img.logo');

@@ -1,7 +1,7 @@
-//! Tests of the plugins the app gives (INT-4, ESC-210): the registry and the origin `builtin`, the ids `dev.escouade.*`
-//! kept for Escouade's own hand, the switches for the app and for a project, the same id from the store refused, the
-//! program of the app checked before it runs, and the demonstration plugin started by the runtime from
-//! `escouade-plugins` (the one the build made beside the tests).
+//! Tests of the registry of the first hand (docs/PLUGINS-DESIGN.md §8.7) and of the workspace a build of development runs
+//! (`Origin::Workspace`, ESC-355): the ids `dev.escouade.*` kept for Escouade's own hand, the switches for the app and
+//! for a project, a plugin of the same id from elsewhere left as it is, and the demonstration plugin, a module, started
+//! by the runtime.
 
 use crate::i18n::Lang;
 use crate::integrations::secrets::MemoryStore;
@@ -27,16 +27,10 @@ fn base(name: &str) -> PathBuf {
     dir
 }
 
-/// Where the build put its programs: the folder of the tests' own, `deps/`, is beside it.
+/// The folder of the build, beside the tests' own (`deps/`): the workspace's modules are beside it (`plugins-wasm/`).
 fn app_dir() -> PathBuf {
     let exe = std::env::current_exe().unwrap();
-    let dir = exe.parent().unwrap().parent().unwrap().to_path_buf();
-    assert!(
-        dir.join(builtin::program_name()).is_file(),
-        "{} is not built beside the tests (cargo build --bin escouade-plugins)",
-        dir.join(builtin::program_name()).display()
-    );
-    dir
+    exe.parent().unwrap().parent().unwrap().to_path_buf()
 }
 
 fn plugins_in(data: &DataDir) -> Arc<Plugins> {
@@ -48,46 +42,43 @@ fn repo() -> PathBuf {
 }
 
 #[test]
-fn the_registry_gives_the_demonstration_plugin_with_the_origin_builtin_and_the_version_of_the_app()
-{
+fn the_workspace_runs_the_demonstration_plugin_a_module_at_the_version_of_the_app() {
     let data = DataDir::new(base("registry").join("data"));
     let plugins = plugins_in(&data);
     let all = plugins.list(Lang::En);
     assert_eq!(all.len(), REGISTRY.len());
-    let v = plugins.get(ID, Lang::En).expect("the registry gives it");
-    assert_eq!(v.origin, Origin::Builtin);
+    let v = plugins.get(ID, Lang::En).expect("the workspace runs it");
+    assert_eq!(v.origin, Origin::Workspace);
     assert_eq!(v.state, State::Ready);
-    assert_eq!(v.version, VERSION, "their version is Escouade's");
-    assert_eq!(v.fingerprint, "builtin:2.2.0");
+    assert_eq!(v.version, VERSION, "the build's version");
+    assert_eq!(v.fingerprint, "workspace");
     assert!(v.choices.enabled);
     assert_eq!(
-        v.manifest.unwrap().run.unwrap().command,
-        "{escouade}/escouade-plugins"
+        v.manifest.unwrap().run.unwrap().wasm.as_deref(),
+        Some("Cargo.toml")
     );
     assert!(v.update.is_none() && v.withdrawn.is_none() && v.in_store.is_none());
-    assert_eq!(
-        v.origin,
-        serde_json::from_value(json!({ "kind": "builtin" })).unwrap()
-    );
+    // The origin `builtin` reads no more: an entry of 2.1 is kept aside (`plugins_seed_tests`).
+    assert!(serde_json::from_value::<Origin>(json!({ "kind": "builtin" })).is_err());
 }
 
-/// A plugin ported for the store says the version of Escouade it was ported for: the app that gives it runs it all the
-/// same, its version not yet there.
+/// A plugin ported for the store says the version of Escouade it was ported for: a build of development runs the
+/// workspace's all the same, its version not yet there.
 #[test]
-fn a_plugin_of_the_registry_runs_on_the_app_that_gives_it() {
+fn a_plugin_of_the_workspace_runs_on_the_build_that_runs_it() {
     let dir = base("min");
     let plugins = Plugins::load_in(DataDir::new(dir.join("data")), "2.1.2", dir.join("app"));
     let v = plugins
         .get("dev.escouade.linear", Lang::En)
-        .expect("the registry gives it");
+        .expect("the workspace runs it");
     assert!(v.manifest.is_some(), "{:?}", v.state);
     assert_eq!(v.manifest.unwrap().escouade.min, "2.1.2");
 }
 
-/// A pre-release of the app (2.2.0-beta.1) gives its plugins all the same: their version is the app's, pre-release
-/// and all, their `escouade.min` its numbers alone, which is all a manifest takes there.
+/// A pre-release (2.2.0-beta.1) runs the workspace all the same: their version is the build's, pre-release and all,
+/// their `escouade.min` its numbers alone, which is all a manifest takes there.
 #[test]
-fn a_pre_release_of_the_app_gives_its_plugins() {
+fn a_pre_release_runs_the_workspace() {
     let dir = base("beta");
     let plugins = Plugins::load_in(
         DataDir::new(dir.join("data")),
@@ -95,62 +86,50 @@ fn a_pre_release_of_the_app_gives_its_plugins() {
         dir.join("app"),
     );
     for id in [ID, "dev.escouade.linear"] {
-        let v = plugins.get(id, Lang::En).expect("the registry gives it");
+        let v = plugins.get(id, Lang::En).expect("the workspace runs it");
         assert!(v.manifest.is_some(), "{id}: {:?}", v.state);
         assert_eq!(v.version, "2.2.0-beta.1", "{id}");
         assert_eq!(v.manifest.unwrap().escouade.min, "2.2.0", "{id}");
     }
 }
 
-/// The sorting is by the origin and the hand, never by the id: a reserved id of anyone else's hand is refused, and
-/// the app's programs are the app's alone.
+/// The sorting is by the origin and the hand, never by the id: a reserved id of anyone else's hand is refused.
 #[test]
-fn a_reserved_id_or_a_program_of_the_app_is_refused_to_a_plugin_that_is_not_the_apps() {
+fn a_reserved_id_is_refused_to_a_plugin_of_anyone_else_s_hand() {
     let text = builtin::manifest_text(ID, VERSION).unwrap();
-    assert!(manifest::read(&text, Hand::Builtin).manifest.is_ok());
-    for hand in [Hand::Third, Hand::First] {
-        let read = manifest::read(&text, hand);
-        let problems = read.manifest.expect_err("refused");
-        assert!(
-            problems.iter().any(|p| p.path == "run.command"),
-            "{hand:?}: {problems:?}"
-        );
-    }
+    assert!(manifest::read(&text, Hand::First).manifest.is_ok());
     let third = manifest::read(&text, Hand::Third).manifest.unwrap_err();
     assert!(third.iter().any(|p| p.path == "id"), "{third:?}");
     // Nor does a folder copied by hand with the id give it a place: the id is refused to the hand of anyone's.
     let dir = base("reserved");
-    std::fs::write(
-        dir.join(manifest::FILE),
-        text.replace("{escouade}/escouade-plugins", "run.mjs"),
-    )
-    .unwrap();
+    let mut m: serde_json::Value = serde_json::from_str(&text).unwrap();
+    m["run"] = json!({ "js": "plugin.mjs" });
+    std::fs::write(dir.join(manifest::FILE), m.to_string()).unwrap();
+    std::fs::write(dir.join("plugin.mjs"), "").unwrap();
     let plugins = plugins_in(&DataDir::new(dir.join("data")));
     assert!(plugins.inspect_folder(&dir, Lang::En).is_err());
 }
 
+/// No plugin wins by its id (ESC-355): in development, Escouade's own hand may take the id of one of the registry, and
+/// it takes the place of the workspace's.
 #[test]
-fn a_plugin_of_the_store_or_a_folder_with_the_id_of_one_the_app_gives_is_refused() {
+fn a_folder_in_development_with_an_id_of_the_registry_takes_its_place() {
     let dir = base("same-id");
     let src = dir.join("src");
     std::fs::create_dir_all(&src).unwrap();
     let mut m: serde_json::Value =
-        serde_json::from_str(&builtin::manifest_text(ID, "9.9.9").unwrap()).unwrap();
-    m["run"] = json!({ "command": "run.mjs" });
+        serde_json::from_str(&builtin::manifest_text(ID, VERSION).unwrap()).unwrap();
+    m["version"] = json!("9.9.9");
+    m["run"] = json!({ "js": "plugin.mjs" });
     std::fs::write(src.join(manifest::FILE), m.to_string()).unwrap();
+    std::fs::write(src.join("plugin.mjs"), "").unwrap();
     let plugins = plugins_in(&DataDir::new(dir.join("data")));
-    // In development, Escouade's own hand may take the id (ESC-314): the one the app gives still wins.
     let preview = plugins.inspect_dev(&src, Lang::En).unwrap();
-    assert!(preview
-        .refusal
-        .as_deref()
-        .unwrap()
-        .contains("shipped with Escouade"));
-    let err = plugins.install(&preview.token, Lang::En).unwrap_err();
-    assert!(err.to_string().contains("shipped with Escouade"), "{err}");
+    assert!(preview.refusal.is_none(), "{:?}", preview.refusal);
+    plugins.install(&preview.token, Lang::En).unwrap();
     let v = plugins.get(ID, Lang::En).unwrap();
-    assert_eq!(v.origin, Origin::Builtin);
-    assert_eq!(v.version, VERSION);
+    assert!(matches!(v.origin, Origin::Dev { .. }), "{:?}", v.origin);
+    assert_eq!(v.version, "9.9.9");
 }
 
 #[test]
@@ -167,7 +146,10 @@ fn the_switches_hold_across_a_restart_and_the_plugin_cannot_be_removed() {
     assert!(plugins.reaches(ID, Some("p2"), false), "on for the others");
     plugins.choose(ID, |c| c.enabled = false).unwrap();
     assert!(!plugins.reaches(ID, Some("p2"), false), "off for the app");
-    assert!(plugins.remove(ID, false).is_err(), "it cannot be removed");
+    assert!(
+        plugins.remove(ID, false).is_err(),
+        "a module of the workspace cannot be removed"
+    );
     // Read again from the files, as a new start does: still one, still off, no copy of it written.
     let again = plugins_in(&data);
     assert_eq!(again.list(Lang::En).len(), REGISTRY.len());
@@ -177,43 +159,14 @@ fn the_switches_hold_across_a_restart_and_the_plugin_cannot_be_removed() {
     assert!(!data.plugins_dir().join(ID).exists());
 }
 
-#[test]
-fn a_copy_of_its_id_left_by_an_older_install_gives_way_and_keeps_the_choices() {
-    let dir = base("older");
-    let data = DataDir::new(dir.join("data"));
-    let copy = data.plugins_dir().join(ID);
-    std::fs::create_dir_all(&copy).unwrap();
-    std::fs::write(copy.join("junk"), "x").unwrap();
-    std::fs::create_dir_all(data.root()).unwrap();
-    std::fs::write(
-        data.plugins_file(),
-        json!({ "version": 1, "plugins": [{
-            "id": ID,
-            "origin": { "kind": "store", "version": "1.0.0", "sha256": "abc", "verified": true },
-            "fingerprint": "sha256:abc",
-            "installedAt": "2026-10-01T00:00:00Z",
-            "enabled": false
-        }] })
-        .to_string(),
-    )
-    .unwrap();
-    let plugins = plugins_in(&data);
-    let all = plugins.list(Lang::En);
-    assert_eq!(all.len(), REGISTRY.len());
-    assert_eq!(all[0].origin, Origin::Builtin);
-    assert!(!all[0].choices.enabled, "the user's choice is kept");
-    assert!(!copy.exists(), "the stale copy goes");
-}
-
-/// The registry is the folders of `plugins/` whose program is `escouade-plugins` or a module (`plugins/<id-court>/`, docs/PLUGINS.md
-/// §8.6.1) and the demonstration, a fixture: each with its manifest and its README (the rule of INT-4: readable alone),
-/// each manifest holding as the app's own. A plugin to publish has its LICENSE, the root's, and its CHANGELOG too.
+/// The registry is the folders of `plugins/` whose program is a module (`plugins/<id-court>/`, docs/PLUGINS-DESIGN.md §8.6.1) and
+/// the demonstration, a fixture: each with its manifest and its README (the rule of INT-4: readable alone), each
+/// manifest holding as one of the first hand. A plugin to publish has its LICENSE, the root's, and its CHANGELOG too.
 #[test]
 fn every_folder_of_the_app_s_plugins_has_what_it_needs_and_is_in_the_registry() {
     let of_the_app = |dir: &PathBuf| {
-        std::fs::read_to_string(dir.join(manifest::FILE)).is_ok_and(|text| {
-            text.contains("{escouade}/escouade-plugins") || text.contains("\"wasm\"")
-        })
+        std::fs::read_to_string(dir.join(manifest::FILE))
+            .is_ok_and(|text| text.contains("\"wasm\""))
     };
     let folders: Vec<PathBuf> = std::fs::read_dir(repo().join("plugins"))
         .unwrap()
@@ -245,7 +198,7 @@ fn every_folder_of_the_app_s_plugins_has_what_it_needs_and_is_in_the_registry() 
                 "{name}: a README that says something"
             );
         }
-        let m = manifest::read(&text, Hand::Builtin)
+        let m = manifest::read(&text, Hand::First)
             .manifest
             .unwrap_or_else(|p| panic!("{name}: {p:?}"));
         assert!(m.id.starts_with(manifest::RESERVED_PREFIX));
@@ -269,30 +222,6 @@ fn every_folder_of_the_app_s_plugins_has_what_it_needs_and_is_in_the_registry() 
     );
 }
 
-#[test]
-fn only_the_app_s_own_program_is_started_for_a_program_of_the_app() {
-    let app = app_dir();
-    let program = app.join(builtin::program_name());
-    builtin::check_program(&program, &app).expect("the app's own");
-    // The same file, anywhere else: not the app's.
-    let elsewhere = base("copy");
-    let copy = elsewhere.join(builtin::program_name());
-    std::fs::copy(&program, &copy).unwrap();
-    let err = builtin::check_program(&copy, &app).unwrap_err();
-    assert!(err.contains("is not the"), "{err}");
-    // Another file of the app's folder.
-    let other = app.join(if cfg!(windows) {
-        "escouade-hook.exe"
-    } else {
-        "escouade-hook"
-    });
-    if other.exists() {
-        assert!(builtin::check_program(&other, &app).is_err());
-    }
-    // A program that is not there.
-    assert!(builtin::check_program(&app.join("nope"), &app).is_err());
-}
-
 async fn until(what: &str, f: impl Fn() -> bool) {
     let started = Instant::now();
     while !f() {
@@ -312,10 +241,10 @@ fn limits() -> Limits {
     }
 }
 
-/// The demonstration plugin runs: started by the first fact it hears, from the app's `escouade-plugins` (checked
-/// before it runs), the handshake held, and off for the app, nothing of it starts.
+/// The demonstration plugin runs: started by the first fact it hears, its module in WASM, the handshake held, and off
+/// for the app, nothing of it starts.
 #[tokio::test(flavor = "multi_thread")]
-async fn the_demonstration_plugin_runs_from_the_program_of_the_app_unless_it_is_off() {
+async fn the_demonstration_plugin_runs_as_a_module_unless_it_is_off() {
     let data = DataDir::new(base("runs").join("data"));
     let plugins = plugins_in(&data);
     let rt = Runtime::new(
@@ -350,27 +279,6 @@ async fn the_demonstration_plugin_runs_from_the_program_of_the_app_unless_it_is_
         .await
         .unwrap();
     assert_eq!(echo, json!({ "a": [1, 2] }));
-    rt.shutdown();
-}
-
-/// A program of the app that is not the app's own is not run.
-#[tokio::test(flavor = "multi_thread")]
-async fn a_program_of_the_app_that_is_not_the_app_s_own_is_not_started() {
-    let data = DataDir::new(base("refused").join("data"));
-    // The app's folder holds no escouade-plugins here: the registry's plugin names a program that is not there.
-    let empty = base("no-program");
-    let plugins = Plugins::load_in(data.clone(), VERSION, empty);
-    let rt = Runtime::new(
-        plugins,
-        Arc::new(MemoryStore::default()),
-        &data,
-        VERSION,
-        limits(),
-    );
-    rt.activate("event:ticket.column");
-    until("refused", || rt.status(ID).stop.is_some()).await;
-    let stop = format!("{:?}", rt.status(ID).stop);
-    assert!(stop.contains("not the app's own program"), "{stop}");
     rt.shutdown();
 }
 
@@ -471,7 +379,7 @@ fn the_code_hosts_are_modules_that_reach_their_hosts_and_their_instances() {
         ("dev.escouade.gitea", true),
         ("dev.escouade.azure-devops", true),
     ] {
-        let view = plugins.get(id, Lang::En).expect("the registry gives it");
+        let view = plugins.get(id, Lang::En).expect("the workspace runs it");
         let m = view.manifest.expect("its manifest");
         assert_eq!(
             m.run.as_ref().and_then(|r| r.wasm.as_deref()),

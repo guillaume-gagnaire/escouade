@@ -16,7 +16,7 @@ Un plugin se décrit dans un fichier, son [manifeste](plugins/manifest), et y d�
 - **un lecteur de workflows**, pour un workflow qu’Escouade ne lit pas seule ;
 - **ses réglages et ses secrets**, que tu saisis sur sa page.
 
-Certaines intégrations d’Escouade sont elles-mêmes des plugins, livrés avec l’app : GitHub, GitLab, Bitbucket, Gitea et Forgejo, Trello, les harness ACP, isola et les services de voix en ligne (voir [les plugins livrés avec Escouade](plugins/installer#les-plugins-livres-avec-escouade)).
+Certaines intégrations d’Escouade sont elles-mêmes des plugins, écrits par Escouade et signés sur le store : GitHub, GitLab, Bitbucket, Gitea et Forgejo, Trello, les harness, isola et les services de voix en ligne (voir [les plugins d’Escouade](plugins/installer#les-plugins-d-escouade)).
 
 ## Trois formes
 
@@ -24,21 +24,21 @@ Certaines intégrations d’Escouade sont elles-mêmes des plugins, livrés avec
 | --- | --- | --- |
 | Déclaratif | Le manifeste seul : un thème, des webhooks, un harness décrit. Rien ne s’exécute. | Ses permissions, sans programme |
 | Programme en WASM | Un bundle en JS ou en TypeScript (`run.js`), ou un module en Rust (`run.wasm`), qu’Escouade fait tourner dans l’app, sans Node ni Rust chez toi. Il n’atteint le réseau, les fichiers et les programmes que par Escouade, et ce qu’il déclare seulement. | « Tourne dans Escouade, isolé » |
-| Programme natif | Un exécutable (`run.command`) lancé dans un process, avec tes droits. Le store n’en publie aucun : il ne vient que d’un dossier ou d’un dépôt git. | « Lance un programme sur ton ordinateur, avec tes droits » |
+| Programme natif | Un exécutable (`run.command`) : Escouade ne le lance plus, quelle que soit l’origine du plugin, et le store le refuse. Le manifeste se lit, et la page du plugin dit pourquoi il ne démarre pas. | « Ne démarre pas » |
 
 Un programme parle à Escouade par [le protocole](plugins/api) ; [le SDK](plugins/sdk) l’écrit pour toi en TypeScript, [le kit](plugins/rust) en Rust.
 
 ## Ce qu’un plugin ne peut pas faire
 
 - **Lire les secrets d’un autre** : un plugin n’a que les siens, jamais ceux d’un compte, d’un harness ou d’un autre plugin.
-- **Agir dans un projet privé** sans ton accord : un plugin installé y est coupé d’office, ceux livrés avec Escouade compris ; un harness n’y lance son premier agent qu’une fois que tu l’y as activé.
+- **Agir dans un projet privé** sans ton accord : un plugin installé y est coupé d’office, ceux d’Escouade compris ; un harness n’y lance son premier agent qu’une fois que tu l’y as activé.
 - **S’installer seul** : un projet peut proposer un plugin dans son [`.escouade.yml`](escouade-yml#plugins), jamais l’installer ; un lien `escouade://` ouvre sa page, jamais l’installation.
 - **Recevoir ce qu’il n’a pas demandé** : un fait hors de `permissions.events` ne lui est pas envoyé, un secret hors de `permissions.secrets` lui est refusé (voir [les permissions](plugins/permissions)).
 - **Changer l’interface** au-delà de ce que son manifeste déclare : pas de vue à lui.
 
 ## D’où il vient
 
-- **Livré avec Escouade** : signé et mis à jour avec l’app ; il se coupe, il ne se désinstalle pas.
+- **D’Escouade** (`dev.escouade.*`) : relu et signé sur le store, dans l’installeur ; il se coupe et se désinstalle comme les autres.
 - **Le store**, [store.escouade.dev](https://store.escouade.dev) : chaque version y passe onze contrôles ; celles qu’Escouade a relues portent le sceau « Vérifié par Escouade », les autres sont « Non vérifié ».
 - **Un dossier ou un dépôt git** : permis, toujours « Non vérifié » : personne ne l’a relu.
 - **Un dossier en développement** : chargé en place, relu quand il change, pour l’écrire.

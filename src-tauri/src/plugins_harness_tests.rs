@@ -1,9 +1,10 @@
-//! Tests of the contract of the harnesses in process (INT-9, ESC-221; `docs/PLUGINS.md` §4.5 and §4.6), on the
+//! Tests of the contract of the harnesses in process (INT-9, ESC-221; `docs/PLUGINS-DESIGN.md` §4.5 and §4.6), on the
 //! demonstration plugin `dev.escouade.minimal`, whose harness « Minimal » is the minimal fake engine of the bench made a
 //! plugin: the conformance bench played through `ProcessEngine` as through the harnesses written in the core, the
 //! launch described by the plugin and checked by the core, a crash of the plugin in the middle of a turn (once, then
 //! for good), the one-shot question, the terminal view's launch and its hooks both ways, the memory declared, and the
-//! measure against INT-0.
+//! measure against INT-0. The plugin is a module (tests/fixtures/plugins/minimal), its harness
+//! tests/fixtures/fake-minimal.mjs.
 
 use crate::agent::{AgentRt, Effects};
 use crate::board::TurnEnd;
@@ -12,7 +13,6 @@ use crate::engine::{Engine, Escouade, Process, Program, Spawn};
 use crate::integrations::secrets::MemoryStore;
 use crate::model::{AgentMeta, AgentStatus};
 use crate::paths::DataDir;
-use crate::plugins::builtin;
 use crate::plugins::harness::{self, check_launch, ProcessEngine};
 use crate::plugins::runtime::{Limits, PhaseName, Runtime, Stop};
 use crate::plugins::Plugins;
@@ -26,17 +26,24 @@ use tokio::sync::mpsc;
 const ID: &str = "dev.escouade.minimal";
 const VERSION: &str = "2.2.0";
 
-/// Where the build put its programs (`escouade-plugins` among them): the folder of the tests' own, `deps/`, is beside
-/// it.
+/// The folder of the build, beside the tests' own (`deps/`): the workspace's modules are beside it (`plugins-wasm/`).
 fn app_dir() -> PathBuf {
     let exe = std::env::current_exe().unwrap();
-    let dir = exe.parent().unwrap().parent().unwrap().to_path_buf();
-    assert!(
-        dir.join(builtin::program_name()).is_file(),
-        "{} is not built beside the tests (cargo build --bin escouade-plugins)",
-        dir.join(builtin::program_name()).display()
-    );
-    dir
+    exe.parent().unwrap().parent().unwrap().to_path_buf()
+}
+
+/// The harness « Minimal », the program the core launches: `tests/fixtures/fake-minimal.mjs` by its wrapper.
+fn harness_program() -> String {
+    let name = if cfg!(windows) {
+        "fake-minimal.cmd"
+    } else {
+        "fake-minimal"
+    };
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../tests/fixtures")
+        .join(name)
+        .to_string_lossy()
+        .into_owned()
 }
 
 fn limits(restarts: usize) -> Limits {
@@ -67,12 +74,8 @@ fn minimal(name: &str, restarts: usize) -> (Arc<Runtime>, &'static ProcessEngine
         .into_iter()
         .next()
         .expect("its harness declared");
-    let engine: &'static ProcessEngine = Box::leak(Box::new(ProcessEngine::new(
-        rt.clone(),
-        ID,
-        decl,
-        &app_dir(),
-    )));
+    let engine: &'static ProcessEngine =
+        Box::leak(Box::new(ProcessEngine::new(rt.clone(), ID, decl)));
     (rt, engine)
 }
 
@@ -85,7 +88,9 @@ impl Target for InProcess {
     }
 
     fn program(&self) -> Program {
-        self.0.locate("", "").expect("its program, the app's own")
+        self.0
+            .locate(&harness_program(), "")
+            .expect("its program, the fixture")
     }
 
     fn prompt(&self, scenario: Scenario) -> Option<String> {
@@ -158,7 +163,11 @@ fn meta(dir: &Path) -> AgentMeta {
 impl Agent {
     fn spawn_with(engine: &'static ProcessEngine, dir: &Path, f: impl FnOnce(&mut Spawn)) -> Agent {
         let meta = meta(dir);
-        let mut spawn = Spawn::of(&meta, engine.locate("", "").unwrap(), Vec::new());
+        let mut spawn = Spawn::of(
+            &meta,
+            engine.locate(&harness_program(), "").unwrap(),
+            Vec::new(),
+        );
         f(&mut spawn);
         let (tx, heard) = mpsc::unbounded_channel();
         let exit = tx.clone();
@@ -405,10 +414,10 @@ fn the_core_refuses_a_launch_that_does_not_apply_the_fence() {
 }
 
 /// The word of a plugin that it holds the fence itself, on the files its harness reads and writes through it
-/// (`fence_by_client`), is taken from a plugin the app gives only (the generic ACP plugin): a plugin of anyone else's
+/// (`fence_by_client`), is taken from a plugin of the first hand only (the generic ACP plugin): a plugin of anyone else's
 /// that says it keeps the rule, the fence applied and each of its paths in the launch.
 #[test]
-fn only_a_plugin_the_app_gives_may_hold_the_fence_itself() {
+fn only_a_plugin_of_the_first_hand_may_hold_the_fence_itself() {
     let fence = vec!["C:/projets/prive".to_string()];
     let mut by_client = launch(&["agent", "acp"]);
     by_client.fence_applied = false;
@@ -497,7 +506,7 @@ async fn a_one_shot_question_is_described_by_the_plugin_run_by_the_core_and_read
     let dir = bench_dir("int9-oneshot-run");
     let answer = engine
         .one_shot(crate::engine::OneShot {
-            program: engine.locate("", "").unwrap(),
+            program: engine.locate(&harness_program(), "").unwrap(),
             env: Vec::new(),
             weight: crate::engine::Weight::Light,
             cwd: &dir,
@@ -622,7 +631,7 @@ async fn a_harness_of_a_plugin_is_registered_from_its_manifest() {
         .get(ID, crate::i18n::Lang::En)
         .and_then(|v| v.manifest)
         .unwrap();
-    let ids = harness::register(&rt, ID, &m.contributes, &app_dir());
+    let ids = harness::register(&rt, ID, &m.contributes);
     assert_eq!(ids, [crate::model::EngineId::new("minimal")]);
     let found = crate::engine::registry::find(ids[0]).expect("in the registry");
     assert_eq!(found.name(), "Minimal");
@@ -635,7 +644,7 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
     sorted[i]
 }
 
-/// The stream of a harness through its plugin, measured against INT-0 (`docs/PLUGINS.md` §4.6, point 1): the delay
+/// The stream of a harness through its plugin, measured against INT-0 (`docs/PLUGINS-DESIGN.md` §4.6, point 1): the delay
 /// from the line its harness wrote to the items received by the core, at once (`flux`) and at a pace (`rythme`), the
 /// lines per second, and the plugin's memory. Run by hand: `cargo nextest run --run-ignored only
 /// int9_measure --no-capture`.
@@ -669,10 +678,9 @@ async fn int9_measure_the_stream_through_the_plugin() {
             }
         }
         let secs = last.duration_since(started).as_secs_f64();
-        let memory = rt.usage(ID).map(|u| u.memory >> 20).unwrap_or_default();
         delays.sort_by(|a, b| a.partial_cmp(b).unwrap());
         println!(
-            "INT-9 {prompt}: {n} lines in {secs:.2} s ({:.0} lines/s), delay median {:.2} ms, p99 {:.2} ms, max {:.2} ms; plugin {memory} MB",
+            "INT-9 {prompt}: {n} lines in {secs:.2} s ({:.0} lines/s), delay median {:.2} ms, p99 {:.2} ms, max {:.2} ms",
             n as f64 / secs,
             percentile(&delays, 0.5),
             percentile(&delays, 0.99),

@@ -1,15 +1,15 @@
 # The protocol
 
-A plugin with a program talks to Escouade in JSON-RPC 2.0: inside the app, in WASM, if it is in JS, TypeScript or Rust; on its standard input and output if it is a process. This page describes the messages and the process.
+A plugin with a program talks to Escouade in JSON-RPC 2.0. Every plugin program runs **inside the app, in WASM** (in JS, TypeScript or Rust): Escouade starts no native program. This page describes the messages and the instance that receives them.
 
 A `run.js` or `run.wasm` plugin speaks the same protocol: [what changes in WASM](#a-program-in-wasm) comes below, and [the calls](plugins/calls) give an example in TS and in Rust for each method.
 
 ## When the program starts
 
 - **At its first activation, never before.** Escouade starts the program of `run` when a fact of its `activation` list happens (`event:ticket.column`), or at the first call it makes to it. A plugin without `activation` does not run; a plugin without `run` is declarative: nothing runs.
-- **One process per plugin.** It serves every project and every agent where the plugin is enabled: Escouade tells its calls apart by their `id`.
-- **In the plugin’s folder**, with three variables: `ESCOUADE_PLUGIN_ID` (its id), `ESCOUADE_PLUGIN_API` (the protocol’s version, `1`) and `ESCOUADE_VERSION` (Escouade’s).
-- **With everything it starts.** On Windows, the process is in a Job object; on macOS and Linux, it leads its process group. When Escouade stops it, what it started stops with it; on Windows, even if Escouade crashes.
+- **One instance per plugin.** It serves every project and every agent where the plugin is enabled: Escouade tells its calls apart by their `id`.
+- **No environment.** The module reads no variables and no arguments: `initialize` tells it the protocol version, Escouade’s and the app’s language (`lang`). Changing the language restarts the plugins that are running.
+- **With what it starts.** The programs it starts with `proc/spawn` (`permissions.commands`) stop with its instance.
 
 ## The messages
 
@@ -75,7 +75,7 @@ Every delay that runs out is noted in the journal: “test/do: no answer within 
 | `log` (notification) | `{ "level": "info", "message": "…" }` | None: the line goes to the plugin’s journal. |
 | `files/read` | `{ "path": "data/words.txt" }` | `"…"`, the text of a file of its folder, as UTF-8 text, 256 KB at most, on both transports. Refused (`-32003`, kept in the journal): an absolute path, with `..` or a drive, a link that leads out of the folder, a hidden name (`.env`, `.git`), the manifest. `-32005` for a missing file, `-32004` for a file too big or that is not text. |
 | `net/fetch` | `{ "url": "https://…", "method": "POST", "headers": {}, "body": "…" }` | `{ "status": 200, "headers": {}, "body": "…" }`, for a plugin in WASM only: see [the network](#the-network-through-escouade). |
-| `net/stream`, `ws/*`, `timer/*`, `fs/*`, `proc/*` | See [the calls](plugins/calls). | For a plugin in WASM only; a process gets `-32601`. |
+| `net/stream`, `ws/*`, `timer/*`, `fs/*`, `proc/*` | See [the calls](plugins/calls). | Served by the WASM host, each under its permission. |
 
 Any other method answers the error `-32601` and notes it in the journal. Escouade’s own errors: `-32001` for a secret that is not the plugin’s, `-32002` for a keychain out of reach, `-32003` for what the plugin may not reach (a host, a file), `-32004` for a request that fails on the way, `-32005` for a missing file, `-32602` for parameters that do not hold.
 
@@ -92,15 +92,11 @@ A plugin’s secrets are in the system’s keychain, under a name of its own: `p
 - **A crash restarts the plugin**, three times within five minutes. At the fourth, it is stopped: “stopped after 4 crashes within 5 minutes”. It no longer starts by itself; the “Restart” button of its journal, in the view Plugins, starts it again, its crashes forgotten.
 - **The calls under way** when it crashes fail: their default answer applies.
 - **While it restarts**, what Escouade sends it waits in a queue of 256 messages, then goes in order once `initialize` is answered. A full queue loses its oldest message, and the journal says so.
-- **What each agent had attached to it** (for a harness, `agent/attach`: its session, its mode, its model) is given again to the new process before any other message.
-
-## The memory
-
-Escouade reads the memory of the plugin and of everything it started every two seconds, as it does the agents’. Past 1 GB, the plugin is stopped, without a restart: “stopped: 1100 MB of memory, past the limit of 1024 MB”.
+- **What each agent had attached to it** (for a harness, `agent/attach`: its session, its mode, its model) is given again to the new instance before any other message.
 
 ## When Escouade closes
 
-When Escouade closes, it sends `shutdown` to each running plugin, waits for its answer a second at most for all of them, then stops its process and everything it started. Answer `shutdown`, then exit: what you have not written before is lost.
+When Escouade closes, it sends `shutdown` to each running plugin, waits for its answer a second at most for all of them, then stops its instance and the programs it started. Answer `shutdown`, then exit: what you have not written before is lost.
 
 ## The journal
 
@@ -118,13 +114,13 @@ Its methods, their parameters, their answers and their delays are described by a
 
 ## A program in WASM
 
-A plugin whose manifest says `"run": { "js": "dist/plugin.mjs" }` or `"run": { "wasm": "Cargo.toml" }` starts no process: Escouade runs its module **inside the app, in WASM**, with no Node on the machine. One instance per plugin, on a thread of its own, which keeps its state from one call to the next like a process. The protocol is the same: the same messages, carried by the module’s standard input and output, the same handshake, the same delays, the same journal and the same restarts; [the SDK](plugins/sdk) and [the Rust kit](plugins/rust) speak it for you.
+A plugin whose manifest says `"run": { "js": "dist/plugin.mjs" }` or `"run": { "wasm": "Cargo.toml" }` is a program Escouade runs **inside the app, in WASM**, with no Node or Rust on the machine. One instance per plugin, on a thread of its own, which keeps its state from one call to the next. The messages go through the module’s standard input and output; the handshake, the delays, the journal and the restarts are those of the whole page; [the SDK](plugins/sdk) and [the Rust kit](plugins/rust) speak the protocol for you.
 
 The module is compiled once: by the store for a plugin of the store (the app downloads it and checks its fingerprint against `version.json`), by the app for a `run.js` plugin installed from a folder or a git repository. A `run.wasm` plugin outside the store comes with its `plugin.wasm`, beside the manifest. The app precompiles it at install, keeps it in its cache and precompiles it again after an update of Escouade. It needs Escouade 2.2.0 or later.
 
 ### The network, through Escouade
 
-A plugin in WASM opens no connection: everything goes through Escouade, by `net/fetch`, `net/stream` and `ws/open`, which only a plugin in WASM gets (a process has its own network, and these methods answer it `-32601`). `fetch` in JS and the kit’s client in Rust lead there. Escouade sends the request:
+A plugin opens no connection: everything goes through Escouade, by `net/fetch`, `net/stream` and `ws/open`. `fetch` in JS and the kit’s client in Rust lead there. Escouade sends the request:
 
 - **over https only**, to a host of `permissions.network` or one of its subdomains (`slack.com` covers `api.slack.com`); never to an IP address written in the URL, which `permissions.network` does not name;
 - **following no redirect**: the plugin gets the 3xx answer, which the kit’s client follows in Rust;
@@ -145,14 +141,14 @@ A refused call answers `-32003` and the journal keeps it (“slack.com resolves 
 ### The limits
 
 - **64 MB of memory, 2 s per turn of work**, 500 ms while it holds a decision.
-- **An endless loop, a growing memory or an uncaught exception** end the instance, and the journal says why (“a turn ran past 2000 ms: Escouade stopped its instance”, “its instance crashed: …”); a new one is made, as after a process crashes, with the same three restarts in five minutes, then the plugin is stopped.
+- **An endless loop, a growing memory or an uncaught exception** end the instance, and the journal says why (“a turn ran past 2000 ms: Escouade stopped its instance”, “its instance crashed: …”); a new one is made, with the three restarts in five minutes, then the plugin is stopped.
 - **Timers**: `setTimeout` and `clearTimeout` exist in JS, `sleep` and `timeout` in the kit, 10 ms at least, 64 at once.
 - **A bundle made with SDK 0.2** does not run in WASM: the plugin stops and its journal says to rebuild it with `@escouade-dev/plugin` 0.3 or later.
 
 ### What a plugin in WASM cannot do
 
-Nothing it does not declare: no network, no file outside its folder, no program. It does not read the environment and loads no native or remote module. A bundle that imports anything other than `node:fs` and `node:readline`, or that has `export`s, is not compiled, and the plugin stops with the reason. Its secrets and settings are its own only, as for a process. That is why the install window says “Runs inside Escouade, isolated”, then each [capability](plugins/capabilities) it asks for, not “Runs a program on your computer, with your rights”.
+Nothing it does not declare: no network, no file outside its folder, no program. It does not read the environment and loads no native or remote module. A bundle that imports anything other than `node:fs` and `node:readline`, or that has `export`s, is not compiled, and the plugin stops with the reason. Its secrets and settings are its own only. That is why the install window says “Runs inside Escouade, isolated”, then each [capability](plugins/capabilities) it asks for.
 
 ## What the user changes
 
-A plugin switched off, a permission taken back or given again, an update installed: its process is stopped, and the next one gets the manifest and the permissions of now. A secret’s permission taken back makes `secrets/get` answer `-32001` for that key, as for a secret that is not its own.
+A plugin switched off, a permission taken back or given again, an update installed: its instance is stopped, and the next one gets the manifest and the permissions of now. A secret’s permission taken back makes `secrets/get` answer `-32001` for that key, as for a secret that is not its own.

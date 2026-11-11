@@ -1,4 +1,4 @@
-//! The one thread of a module whose tasks are not its calls (docs/PLUGINS.md §8.3, §8.4), without tokio: what were tasks of
+//! The one thread of a module whose tasks are not its calls (docs/PLUGINS-DESIGN.md §8.3, §8.4), without tokio: what were tasks of
 //! a process (reading a stream, a socket, the requests that wait, a timer) are events of the host, each arriving as a line
 //! of a turn. `serve::run` is the simple way, a task a call; this is for a plugin that reads a stream, keeps a socket, or
 //! starts a task no call began, and serves its lines itself.

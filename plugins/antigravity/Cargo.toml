@@ -7,7 +7,7 @@ license = "GPL-3.0-or-later"
 edition = "2021"
 rust-version = "1.88"
 
-# A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5). It is no ACP harness: it holds the client of `agy -p`
+# A module, compiled by `escouade-plugin build` (docs/PLUGINS-DESIGN.md §8.5). It is no ACP harness: it holds the client of `agy -p`
 # in stream-json, without a process nor a runtime of its own, and puts its events in the form the ACP client reads.
 [lib]
 crate-type = ["cdylib"]

@@ -423,7 +423,7 @@ async fn a_comment_is_a_document() {
 #[tokio::test(flavor = "multi_thread")]
 async fn the_plugin_says_its_texts_in_the_language_it_is_started_in() {
     let Rig { server, rt, t, .. } = jira().await;
-    rt.set_builtin_env(vec![("ESCOUADE_LANG".into(), "en".into())]);
+    rt.set_lang("en");
     server.on(
         "POST",
         "/rest/api/3/search/jql",
@@ -508,8 +508,8 @@ fn jira_is_a_plugin_of_the_app_that_the_registry_of_sources_names() {
         VERSION,
         app_dir(),
     );
-    let v = plugins.get(ID, Lang::En).expect("the registry gives it");
-    assert_eq!(v.origin, Origin::Builtin);
+    let v = plugins.get(ID, Lang::En).expect("the workspace runs it");
+    assert_eq!(v.origin, Origin::Workspace);
     let m = v.manifest.unwrap();
     assert_eq!(m.run.unwrap().wasm.as_deref(), Some("Cargo.toml"));
     assert_eq!(m.permissions.network, ["*.atlassian.net", "{account}"]);

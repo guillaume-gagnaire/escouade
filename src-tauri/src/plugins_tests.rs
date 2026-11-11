@@ -59,9 +59,7 @@ fn the_reader_says_of_each_shared_case_what_the_store_says() {
     assert!(cases.len() >= 10);
     for case in cases {
         let name = case["name"].as_str().unwrap();
-        let hand = if case["builtin"].as_bool().unwrap_or(false) {
-            manifest::Hand::Builtin
-        } else if case["firstParty"].as_bool().unwrap_or(false) {
+        let hand = if case["firstParty"].as_bool().unwrap_or(false) {
             manifest::Hand::First
         } else {
             manifest::Hand::Third

@@ -66,7 +66,7 @@ When [isola](https://github.com/cyucelen/isola) is installed and the worktree ha
 
 “▶ Test” then shows the `.isola.toml` under “isola configuration (.isola.toml)” (isola runs the commands in this file in your shell, outside Claude Code’s permission mode, and the agent may have written or edited it) and the address that will open. As with a recipe, nothing runs until “Run” and a modified file is shown again. The test runs `isola up`, waits for each service to answer, then opens the address. “Stop all” runs `isola down`.
 
-isola is a plugin shipped with Escouade, `dev.escouade.isola`: the first “launch environment”, a plugin extension point that handles `up`, the address, `down` and `destroy` of a worktree. Settings › Plugins lists it under “Shipped with Escouade”; you can turn it off for the whole app or for one project, and without it a ticket starts as if there were no isola, with a recipe on the reserved ports. A plugin installed from elsewhere cannot serve this point yet.
+isola is one of Escouade’s plugins, `dev.escouade.isola`: the first “launch environment”, a plugin extension point that handles `up`, the address, `down` and `destroy` of a worktree. Settings › Plugins lists it under “Added”; you can turn it off for the whole app or for one project, and without it a ticket starts as if there were no isola, with a recipe on the reserved ports. A plugin installed from elsewhere cannot serve this point yet.
 
 ## Approving a ticket
 
