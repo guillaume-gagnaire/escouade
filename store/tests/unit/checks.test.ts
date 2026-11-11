@@ -1,6 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { judgeAttestations } from '../../server/utils/attest';
 import {
   CHECK_KEYS,
   closeNames,
@@ -15,7 +14,7 @@ import { GithubError } from '../../server/utils/github';
 import type { Source } from '../../server/utils/source';
 import { isFirstParty } from '../../server/utils/submissions';
 import { readArchive } from '../../server/utils/tar';
-import { attestation, MIT, pluginFiles, png, tarball } from '../fake/plugins.mjs';
+import { MIT, pluginFiles, png, tarball } from '../fake/plugins.mjs';
 
 // The eleven checks (docs/STORE.md §3.3) on plugins valid and booby-trapped: each trap fails its own check, says
 // where and how to fix it in both languages, and the others still say what they found.
@@ -311,28 +310,6 @@ describe('a booby-trapped plugin', () => {
       ].join('\n'),
     );
     expect(rejectionText(results, 'en')).toContain('The documentation: https://escouade.dev/en/docs/plugins/publishing');
-  });
-});
-
-describe('the binaries and their attestations', () => {
-  it('ties a binary to the commit and repository its attestation names', () => {
-    const want = { sha256: 'e'.repeat(64), repository: REPO, commit: COMMIT };
-    expect(judgeAttestations([attestation(want.sha256, { repo: REPO, commit: COMMIT })], want)).toEqual({
-      state: 'attested',
-      workflow: '.github/workflows/release.yml',
-    });
-    expect(judgeAttestations([attestation(want.sha256, { repo: 'evil/fork', commit: COMMIT })], want)).toEqual({
-      state: 'mismatch',
-      commit: COMMIT,
-      repository: 'evil/fork',
-    });
-    expect(judgeAttestations([attestation('0'.repeat(64), { repo: REPO, commit: COMMIT })], want)).toEqual({ state: 'none' });
-    expect(
-      judgeAttestations([{ bundle: { dsseEnvelope: { payload: 'not json', payloadType: 'application/vnd.in-toto+json' } } }], want),
-    ).toEqual({
-      state: 'none',
-    });
-    expect(judgeAttestations([], want)).toEqual({ state: 'none' });
   });
 });
 

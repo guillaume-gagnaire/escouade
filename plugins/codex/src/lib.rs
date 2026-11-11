@@ -1,4 +1,4 @@
-//! The plugin Codex (`dev.escouade.codex`, INT-10.4, docs/PLUGINS.md §4): OpenAI's Codex as a harness. It is no ACP
+//! The plugin Codex (`dev.escouade.codex`, INT-10.4, docs/PLUGINS-DESIGN.md §4): OpenAI's Codex as a harness. It is no ACP
 //! harness: the core finds `codex`, checks the launch this plugin describes and starts its `app-server`; what Codex
 //! writes comes here (`agent/frames`) and goes back as the items of the conversation and the messages to write to it,
 //! by the client of `client`. It is a module (`run.wasm`): what it needs of the disk comes through the host (`fs/*`).

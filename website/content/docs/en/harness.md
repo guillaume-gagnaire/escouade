@@ -54,11 +54,11 @@ The models are those the Claude Code of each account lists in its `/model`, with
 
 A turn’s cost is the one Claude Code gives. The quota is your account’s 5-hour window and weekly window, in the status bar. The [Claude Code view](claude-code-view) runs the agent in Claude Code’s own interface. It alone has [remote control](remote-control), background tasks and reading PDFs.
 
-Claude Code is a plugin shipped with Escouade (`dev.escouade.claude-code`): its agents talk through a program of its own that Escouade starts and watches. It shows in the Plugins view, under “Shipped with Escouade”; off, a Claude Code agent says at its start that it must be turned back on, and keeps its session.
+Claude Code is one of Escouade’s plugins (`dev.escouade.claude-code`): its agents talk through a module Escouade runs in WASM. It shows in the Plugins view, under “Added”; off, a Claude Code agent says at its start that it must be turned back on, and keeps its session.
 
 ## Codex
 
-Codex is a plugin shipped with Escouade (`dev.escouade.codex`): its agents talk through a program of its own that Escouade starts and watches. It shows in the Plugins view, under “Shipped with Escouade”; turned off, a Codex agent says at its start that it needs turning back on, and keeps its session.
+Codex is one of Escouade’s plugins (`dev.escouade.codex`): its agents talk through a module Escouade runs in WASM. It shows in the Plugins view, under “Added”; turned off, a Codex agent says at its start that it needs turning back on, and keeps its session.
 
 ### Installation and account
 
@@ -88,7 +88,7 @@ It doesn’t read PDFs (the button refuses them and says so) and offers only the
 
 ## OpenCode
 
-OpenCode is a plugin shipped with Escouade (`dev.escouade.opencode`): its agents talk through a program of its own that Escouade starts and watches, on their account’s server. It shows in the Plugins view, under “Shipped with Escouade”. If it crashes, the server and the turn go on and the conversation says so; turned off, an OpenCode agent says it needs turning back on, and keeps its session.
+OpenCode is one of Escouade’s plugins (`dev.escouade.opencode`): its agents talk through a module Escouade runs in WASM, on their account’s server. It shows in the Plugins view, under “Added”. If it crashes, the server and the turn go on and the conversation says so; turned off, an OpenCode agent says it needs turning back on, and keeps its session.
 
 ### Installation and account
 
@@ -119,7 +119,7 @@ No “Auto” mode (OpenCode has no reviewer), no sandbox, a single account, no 
 
 ## Copilot CLI
 
-Copilot CLI is a plugin shipped with Escouade (`dev.escouade.copilot-cli`): its agents talk through a program of its own that Escouade starts and watches. It shows in the Plugins view, under “Shipped with Escouade”; turned off, a Copilot agent says at its start that it needs turning back on, and keeps its session.
+Copilot CLI is one of Escouade’s plugins (`dev.escouade.copilot-cli`): its agents talk through a module Escouade runs in WASM. It shows in the Plugins view, under “Added”; turned off, a Copilot agent says at its start that it needs turning back on, and keeps its session.
 
 ### Installation and account
 
@@ -151,7 +151,7 @@ No “Always allow”, no `assisted` mode (experimental), no attached PDFs, no `
 
 ## Cursor CLI
 
-Cursor CLI is a plugin shipped with Escouade (`dev.escouade.cursor-cli`): its agents talk through a program of its own that Escouade starts and watches. It shows in the Plugins view, under “Shipped with Escouade”; turned off, a Cursor agent says at its start that it needs turning back on, and keeps its session.
+Cursor CLI is one of Escouade’s plugins (`dev.escouade.cursor-cli`): its agents talk through a module Escouade runs in WASM. It shows in the Plugins view, under “Added”; turned off, a Cursor agent says at its start that it needs turning back on, and keeps its session.
 
 ### Installation and account
 
@@ -180,7 +180,7 @@ Cursor tells neither the tokens nor the cost of a turn when Escouade drives it: 
 
 ## Mistral Vibe
 
-Mistral Vibe is served by the “Mistral” plugin shipped with Escouade (`dev.escouade.mistral`), which also carries its voice: its agents talk through a program of its own that Escouade starts and watches. It shows in the Plugins view, under “Shipped with Escouade”; turned off, the Mistral voice goes too, and a Vibe agent says at its start that it needs turning back on, and keeps its session.
+Mistral Vibe is served by Escouade’s “Mistral” plugin (`dev.escouade.mistral`), which also carries its voice: its agents talk through a module Escouade runs in WASM. It shows in the Plugins view, under “Added”; turned off, the Mistral voice goes too, and a Vibe agent says at its start that it needs turning back on, and keeps its session.
 
 ### Installation and account
 
@@ -211,7 +211,7 @@ Vibe tells the cost and tokens of each turn: the conversation, the agent’s car
 
 ## Antigravity CLI
 
-Antigravity CLI is a plugin shipped with Escouade (`dev.escouade.antigravity-cli`): its agents talk through a program of its own that Escouade starts and watches. It shows in the Plugins view, under “Shipped with Escouade”; turned off, an Antigravity CLI agent says at its start that it has to be turned back on, and keeps its conversation.
+Antigravity CLI is one of Escouade’s plugins (`dev.escouade.antigravity-cli`): its agents talk through a module Escouade runs in WASM. It shows in the Plugins view, under “Added”; turned off, an Antigravity CLI agent says at its start that it has to be turned back on, and keeps its conversation.
 
 ### Installation and account
 
@@ -244,7 +244,7 @@ Antigravity gives each turn’s tokens (on its card, in the statistics), not the
 
 ## Gemini CLI
 
-Gemini CLI is a plugin shipped with Escouade (`dev.escouade.gemini-cli`): its agents talk through a program of its own that Escouade starts and watches. It shows in the Plugins view, under “Shipped with Escouade”; turned off, a Gemini agent says at its start that it needs turning back on, and keeps its session.
+Gemini CLI is one of Escouade’s plugins (`dev.escouade.gemini-cli`): its agents talk through a module Escouade runs in WASM. It shows in the Plugins view, under “Added”; turned off, a Gemini agent says at its start that it needs turning back on, and keeps its session.
 
 > [!WARNING]
 > Gemini CLI hasn’t been tried with a real account yet: its adapter follows its documentation and what its program does against a fake server. What is left to see for real: the size of its live answers, its questions, its quotas and their messages, its Google sign-in given to each agent, its terminal view and its hooks.
@@ -281,7 +281,7 @@ Gemini gives each turn’s tokens, not their cost nor its quota: its usage is re
 
 ## Other harnesses, by a plugin
 
-An agent that speaks ACP (Goose, say) is described in a plugin’s manifest, without code: see [a described ACP harness](plugins/harnesses). The ACP plugin, shipped with Escouade (`dev.escouade.acp`), starts it and speaks to it; it is switched off in the Plugins view, and the agents of those harnesses then stay, marked “harness missing”, with their conversations. The harnesses of this page are still part of the app.
+An agent that speaks ACP (Goose, say) is described in a plugin’s manifest, without code: see [a described ACP harness](plugins/harnesses). The ACP plugin, Escouade’s (`dev.escouade.acp`), starts it and speaks to it; it is switched off in the Plugins view, and the agents of those harnesses then stay, marked “harness missing”, with their conversations. The harnesses of this page are still part of the app.
 
 ## The MCP server
 

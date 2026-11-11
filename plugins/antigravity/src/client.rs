@@ -16,7 +16,7 @@
 //! (`brain/<id>/.system_generated/logs/transcript_full.jsonl`), written before the event that tells the step over: read
 //! here. The rare time it is late, nothing waits inside a turn: what `agy` said from that step on is held, in its order, and read
 //! again on the host's timer (`tick`), a few hundred milliseconds at most for a batch. `agent/frames` answers what came
-//! before it, and what was held goes out as `agent/items` (docs/PLUGINS.md §8.4.6).
+//! before it, and what was held goes out as `agent/items` (docs/PLUGINS-DESIGN.md §8.4.6).
 
 use crate::host;
 use crate::translate::Translator;

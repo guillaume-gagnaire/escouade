@@ -114,7 +114,7 @@ A program is one of the three, never two:
   "run": { "wasm": "Cargo.toml" },
 ```
 
-- `command`: the path of a program in the plugin’s folder, which a process runs; `windows`, `macos` and `linux` give another one for each system; `args` adds arguments. The install window says “Runs a program on your computer, with your rights”. **The store refuses it**: a plugin of the store never has a `run.command`, each one runs in WASM there. It is still started for a plugin installed from a folder or a git repository, unverified. To run a program of the computer, a plugin in WASM asks for `permissions.commands` ([the programs](plugins/capabilities#the-programs-commands)).
+- `command`: a native program, which **Escouade no longer starts**, whatever the plugin’s origin: the manifest reads, and the plugin’s page says why it does not start. The store refuses it. To run a program of the computer, a plugin in WASM asks for `permissions.commands` ([the programs](plugins/capabilities#the-programs-commands)).
 
 An absolute path, or one that climbs up with `..`, is refused: a plugin only starts what it brings.
 
@@ -126,7 +126,7 @@ An absolute path, or one that climbs up with `..`, is refused: a plugin only sta
 - `secrets`: the secrets it keeps, each with a key and a title;
 - `accounts`: a kind of account, shared by its other points;
 - `ticketSources`, `forges` and `harnesses`: a source of the Kanban, a code host, a harness; each with an `id`, and the account it uses (`account`) among those of `accounts`;
-- `launchEnvironments`: a launch environment, which handles `up`, `ls`, `down` and `destroy` of a worktree and its services; for now reserved to the plugins shipped with Escouade (isola);
+- `launchEnvironments`: a launch environment, which handles `up`, `ls`, `down` and `destroy` of a worktree and its services; for now reserved to Escouade’s plugins (isola);
 - `workflowReaders`: a reader of workflows, to teach Escouade a workflow it does not read by itself. Each has an `id` and `files`, the globs (from the project’s folder, without `..`) of the files it is given; see [The workflow reader](plugins/events#the-workflow-reader);
 - `themes`: themes, described in [Themes](plugins/themes);
 - `webhooks` and `commands`: a webhook or a command on a fact, described in [Events](plugins/events);
@@ -177,4 +177,4 @@ Escouade installs a plugin in four ways:
 
 The list of installed plugins, their origin and their fingerprint are in `~/.escouade/plugins.json`. A copy whose files changed since it was installed is disabled, with the reason.
 
-A plugin’s program starts at its first activation and speaks [the protocol](plugins/api). The facts that start it and that it receives are in [Events](plugins/events). The Plugins view installs, enables and uninstalls plugins from the interface: see [installing a plugin](plugins/installer). The plugins shipped with Escouade need no install: they come with the app.
+A plugin’s program starts at its first activation and speaks [the protocol](plugins/api). The facts that start it and that it receives are in [Events](plugins/events). The Plugins view installs, enables and uninstalls plugins from the interface: see [installing a plugin](plugins/installer). Escouade’s plugins need no install: they come with the app.

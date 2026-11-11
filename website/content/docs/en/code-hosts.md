@@ -15,7 +15,7 @@ A project’s remote says which host it is on. With an account connected for tha
 
 A PR is called an “MR” on GitLab: the app uses the host’s word everywhere.
 
-Each host is a plugin that ships with Escouade: it shows in [Settings › Connected services](settings-integrations#code-hosts) and turns off like [any plugin](plugins/introduction). Its PR then stays on the card as it was last read, and the card says so.
+Each host is a plugin of Escouade’s, signed by it and carried by the installer: it shows in [Settings › Connected services](settings-integrations#code-hosts) and turns off like [any plugin](plugins/introduction). Its PR then stays on the card as it was last read, and the card says so.
 
 ## Supported hosts
 

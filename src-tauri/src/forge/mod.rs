@@ -39,7 +39,7 @@ pub use remote::RepoRef;
 /// What a client's calls give back.
 pub use escouade_plugin_kit::forge::BoxFuture;
 
-// The data of the hosts, shared with the plugins that serve them (docs/PLUGINS.md §4.5).
+// The data of the hosts, shared with the plugins that serve them (docs/PLUGINS-DESIGN.md §4.5).
 pub use escouade_plugin_protocol::forge::{
     Check, CheckState, Deployment, Identity, MergeOptions, MergeStrategy, PrState, PullRequest,
     PullRequestDraft, RateLimit, Review, ReviewComment, ReviewDraft, ReviewLine, ReviewState,

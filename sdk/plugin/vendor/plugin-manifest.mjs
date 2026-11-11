@@ -1,4 +1,4 @@
-// The checks of a plugin's manifest, escouade-plugin.json (docs/PLUGINS.md §3.1, ESC-173), as a library without
+// The checks of a plugin's manifest, escouade-plugin.json (docs/PLUGINS-DESIGN.md §3.1, ESC-173), as a library without
 // dependencies: what the store runs on a submitted plugin (STORE-3, docs/STORE.md §3.3), reading it, never running it.
 // The same rules as the app's reader (crates/escouade-plugin-cli/src/manifest.rs): both go through the cases of
 // tests/fixtures/plugins/manifests.json. The schema for the editors' completion is plugin-1.json, beside this file.
@@ -93,7 +93,7 @@ export function writtenHost(url) {
   return host ? host.replace(/\.+$/, '').toLowerCase() : null;
 }
 
-/** The folders a plugin may name (docs/PLUGINS.md §8.4.6): a closed list the host resolves. */
+/** The folders a plugin may name (docs/PLUGINS-DESIGN.md §8.4.6): a closed list the host resolves. */
 export const FILE_ROOTS = ['plugin', 'agent', 'agentRepo', 'agentHome', 'temp'];
 export const FILE_ACCESS = ['read', 'write'];
 

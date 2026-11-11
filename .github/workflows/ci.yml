@@ -167,7 +167,7 @@ jobs:
           sudo apparmor_parser -r store/deploy/apparmor-bubblewrap
           node store/scripts/image-test.mjs escouade-store:ci src-tauri/escouade-js/target/escouade-js.wasm.sha256
 
-  # escouade-js, the Javy plugin of the run.js plugins (ESC-320, docs/PLUGINS.md §5): built once for wasm32-wasip1 with the
+  # escouade-js, the Javy plugin of the run.js plugins (ESC-320, docs/PLUGINS-DESIGN.md §5): built once for wasm32-wasip1 with the
   # pinned Javy (scripts/escouade-js.sh), its SHA-256 noted, then handed to every job that builds the app, which embeds it.
   escouade-js:
     name: escouade-js (the JS/TS plugins' engine)
@@ -202,7 +202,7 @@ jobs:
             src-tauri/escouade-js/target/escouade-js.wasm.sha256
           retention-days: 7
 
-  # The kit of the plugins in Rust as modules (ESC-334, docs/PLUGINS.md §8.10, A4): these crates compile for wasm32-wasip1, the
+  # The kit of the plugins in Rust as modules (ESC-334, docs/PLUGINS-DESIGN.md §8.10, A4): these crates compile for wasm32-wasip1, the
   # toolchain's file brings the target; Linear and Codex, compiled from their crates, prove it. What A9 will publish stays
   # publishable.
   plugin-kit-wasm:
@@ -318,7 +318,7 @@ jobs:
         with:
           tool: cargo-nextest
 
-      # What the tests of the app and its end-to-end tests play in its host (docs/PLUGINS.md §8.6.4), in the archive below
+      # What the tests of the app and its end-to-end tests play in its host (docs/PLUGINS-DESIGN.md §8.6.4), in the archive below
       # (.config/nextest.toml) and in the app's artifact.
       - name: The modules of the plugins
         shell: bash
@@ -337,13 +337,6 @@ jobs:
       - name: Build the app for end-to-end tests
         run: npx tauri build --debug --no-bundle
 
-      # escouade-plugins, the program of the plugins the app gives, is built beside the app (INT-4). Its Authenticode
-      # signature is checked by the Release (scripts/windows-signing.mjs verify, on the installer), which has the
-      # certificate; the tests of the registry run the build's own program.
-      - name: The app's folder holds escouade-plugins
-        shell: bash
-        run: test -f src-tauri/target/debug/escouade-plugins.exe
-
       - name: Upload the Rust tests
         uses: actions/upload-artifact@v7
         with:
@@ -352,8 +345,8 @@ jobs:
           retention-days: 1
           compression-level: 0
 
-      # The app, its hook and the program of the plugins it gives (each looked for beside it): what the end-to-end tests
-      # drive. Without escouade-plugins, a plugin of the first hand (GitHub, isola, the voice…) has no process to start.
+      # The app, its hook (looked for beside it) and the workspace's modules: what the end-to-end tests drive. Without
+      # plugins-wasm/, a build of development has no plugin of the first hand (GitHub, isola, the voice…) to run.
       - name: Upload the app
         uses: actions/upload-artifact@v7
         with:
@@ -361,7 +354,6 @@ jobs:
           path: |
             src-tauri/target/debug/escouade.exe
             src-tauri/target/debug/escouade-hook.exe
-            src-tauri/target/debug/escouade-plugins.exe
             src-tauri/target/plugins-wasm/
           retention-days: 1
 
@@ -683,14 +675,14 @@ jobs:
           npx tauri build --debug --config src-tauri/tauri.ort-linux.conf.json --config '{"bundle":{"createUpdaterArtifacts":false}}'
           dpkg -c src-tauri/target/debug/bundle/deb/*.deb | grep -q usr/lib/escouade/libonnxruntime.so.1.23.2
 
-      # escouade-hook, the hook of the harnesses that run theirs as commands, escouade-plugin, the command of the
-      # plugins' authors (their conformance bench), and escouade-plugins, the program of the plugins the app gives
-      # (INT-4, which the app checks is its own before it runs it), ship beside the app. On Linux no signature is
-      # checked by the system: the packages are the updater's and the repository's.
-      - name: The packages hold escouade-hook, escouade-plugin and escouade-plugins
+      # escouade-hook, the hook of the harnesses that run theirs as commands, and escouade-plugin, the command of the
+      # plugins' authors (their conformance bench), ship beside the app; escouade-plugins left with ESC-355. On Linux no
+      # signature is checked by the system: the packages are the updater's and the repository's.
+      - name: The packages hold escouade-hook and escouade-plugin, and no escouade-plugins
         run: |
           appimage=$(ls "$PWD"/src-tauri/target/debug/bundle/appimage/*.AppImage)
-          for bin in escouade-hook escouade-plugin escouade-plugins; do
+          ! dpkg -c src-tauri/target/debug/bundle/deb/*.deb | grep -E "usr/bin/escouade-plugins$"
+          for bin in escouade-hook escouade-plugin; do
             dpkg -c src-tauri/target/debug/bundle/deb/*.deb | grep -E "usr/bin/$bin$"
             (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract "usr/bin/$bin" >/dev/null && test -x "squashfs-root/usr/bin/$bin")
           done
@@ -706,7 +698,7 @@ jobs:
       # before a tag: LICENSE and CHANGELOG, their tests (cargo test for the crates), the TypeScript ones' dist/ rebuilt
       # and compared, a crate's version against its manifest, then validate, and the bench for all but those the app still
       # gives (--first-party: their ids dev.escouade.*; the SDK built by the step above). All of them on main; on a
-      # pull request, those it touches (docs/PLUGINS.md §8.6.4).
+      # pull request, those it touches (docs/PLUGINS-DESIGN.md §8.6.4).
       - name: Escouade's own plugins pass their tests, validate and the bench
         env:
           ESCOUADE_PLUGIN_BIN: src-tauri/target/debug/escouade-plugin
@@ -887,12 +879,13 @@ jobs:
           npx tauri build --debug --bundles app,dmg --config src-tauri/tauri.ort-macos.conf.json --config '{"bundle":{"createUpdaterArtifacts":false}}'
           test -f src-tauri/target/debug/bundle/macos/Escouade.app/Contents/Frameworks/libonnxruntime.1.23.2.dylib
 
-      # escouade-hook, escouade-plugin and escouade-plugins ship beside the app, each with a code signature that holds
-      # (ad hoc here, as the Release signs without its certificate: the app checks escouade-plugins's before it runs it).
-      - name: The app holds escouade-hook, escouade-plugin and escouade-plugins, signed
+      # escouade-hook and escouade-plugin ship beside the app, each with a code signature that holds (ad hoc here, as the
+      # Release signs without its certificate); escouade-plugins left with ESC-355.
+      - name: The app holds escouade-hook and escouade-plugin, signed, and no escouade-plugins
         run: |
           macos=src-tauri/target/debug/bundle/macos/Escouade.app/Contents/MacOS
-          for bin in escouade-hook escouade-plugin escouade-plugins; do
+          test ! -e "$macos/escouade-plugins"
+          for bin in escouade-hook escouade-plugin; do
             test -x "$macos/$bin"
             codesign --verify --strict --verbose=2 "$macos/$bin"
           done

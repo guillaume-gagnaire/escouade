@@ -1,4 +1,4 @@
-//! The parity of the views (ESC-352, docs/PLUGINS.md §8): what each terminal view makes of the recordings of its tests, by
+//! The parity of the views (ESC-352, docs/PLUGINS-DESIGN.md §8): what each terminal view makes of the recordings of its tests, by
 //! the entries and hooks the core receives, against `tests/fixtures/plugins/parity/view.json`, written by the translation
 //! the core linked (`ESCOUADE_VIEW_PARITY=record`). The ids and times the core makes are normalized; everything else
 //! of the conversation, of the agent and of each step counts.

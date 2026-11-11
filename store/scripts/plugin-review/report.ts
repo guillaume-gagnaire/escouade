@@ -1,4 +1,3 @@
-import type { Attested } from './attest';
 import type { BenchResult } from './bench';
 import type { Grown } from './diff';
 import type { TagCheck } from './download';
@@ -34,7 +33,6 @@ export interface ReviewData {
   files?: number;
   refusedEntries?: string[];
   manifest?: Record<string, unknown> | null;
-  binaries?: { platform: string; sha256: string; attested: Attested }[];
   leads?: Lead[];
   base?: { version: string; grown: Grown[]; files: number; added: number; removed: number; diff: string } | null;
   bench?: BenchResult;
@@ -89,8 +87,6 @@ export function blockers(d: ReviewData): string[] {
   if (d.tagCheck?.state === 'moved') out.push(`l’étiquette ${d.tag} pointe désormais sur ${d.tagCheck.commit}, pas sur le commit relu`);
   if (d.tagCheck?.state === 'gone') out.push(`l’étiquette ${d.tag} n’existe plus sur le dépôt`);
   if (d.refusedEntries?.length) out.push(`l’archive a des entrées refusées (${d.refusedEntries.length})`);
-  for (const b of d.binaries ?? [])
-    if (b.attested.state !== 'verified') out.push(`le binaire ${b.platform} n’a pas d’attestation vérifiée pour ce commit`);
   if (d.bench?.played && !d.bench.passed) out.push('le banc de conformité échoue');
   if (hasModule(d) && d.recompile?.state !== 'same')
     out.push(
@@ -114,19 +110,6 @@ const fence = (s: string) => {
   return '`'.repeat(ticks);
 };
 const code = (s: string) => `\`${s.replace(/`/g, 'ʼ')}\``;
-
-function attestedText(a: Attested): string {
-  switch (a.state) {
-    case 'verified':
-      return `attestation vérifiée (workflow ${code(a.workflow)})`;
-    case 'other-commit':
-      return `**attestation d’un autre commit** (${a.commit})`;
-    case 'refused':
-      return `**attestation refusée** : ${a.why}`;
-    case 'unchecked':
-      return `**attestation non vérifiée** : ${a.why}`;
-  }
-}
 
 function tagText(d: ReviewData): string {
   const t = d.tagCheck;
@@ -167,9 +150,6 @@ export function renderReport(d: ReviewData): string {
   out.push(`- Empreinte de la version (SHA-256 de version.json) : ${code(d.versionSha256 ?? '')}`);
   out.push(`- Archive : ${code(d.archive?.sha256 ?? '')}, ${d.archive?.size} octets, empreinte vérifiée ; ${d.files} fichiers extraits`);
   for (const r of d.refusedEntries ?? []) out.push(`- **Entrée refusée** : ${r}`);
-  if (d.binaries?.length)
-    for (const b of d.binaries) out.push(`- Binaire ${b.platform} : ${code(b.sha256)}, empreinte vérifiée ; ${attestedText(b.attested)}`);
-  else out.push('- Binaires : aucun');
   if (d.wasm) {
     const c = d.wasm.compiler;
     const by =
@@ -266,7 +246,6 @@ export function renderReport(d: ReviewData): string {
   out.push('## Non vérifié', '');
   const unverified: string[] = [];
   if (b && !b.played) unverified.push('le comportement du plugin (banc non lancé)');
-  for (const x of d.binaries ?? []) if (x.attested.state !== 'verified') unverified.push(`la provenance du binaire ${x.platform}`);
   if (d.tagCheck?.state === 'unknown') unverified.push('l’étiquette sur GitHub');
   if (hasModule(d) && d.recompile?.state !== 'same') {
     const source = moduleSource(d.manifest);
@@ -292,7 +271,6 @@ export function renderPublic(d: ReviewData): string {
   if (d.recompile?.state === 'same') checked.push('module WASM recompilé, même empreinte');
   if (d.bench?.played)
     checked.push(d.bench.where === 'wasm' ? 'banc de conformité dans l’hôte WASM, sans réseau' : 'banc de conformité sans réseau');
-  if (d.binaries?.some((b) => b.attested.state === 'verified')) checked.push('provenance des binaires');
   if (d.base) checked.push(`diff depuis la v${d.base.version}`);
   return [
     `# ${d.id}@${d.version}`,
@@ -337,7 +315,6 @@ export function renderPublicEn(d: ReviewData): string {
   if (d.recompile?.state === 'same') checked.push('WASM module compiled again, same fingerprint');
   if (d.bench?.played)
     checked.push(d.bench.where === 'wasm' ? 'conformance bench in the WASM host, without network' : 'conformance bench without network');
-  if (d.binaries?.some((b) => b.attested.state === 'verified')) checked.push('provenance of the binaries');
   if (d.base) checked.push(`diff since v${d.base.version}`);
   return [
     `# ${d.id}@${d.version}`,

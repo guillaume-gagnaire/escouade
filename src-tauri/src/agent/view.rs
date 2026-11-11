@@ -1,4 +1,4 @@
-//! A terminal view read through its harness's plugin (`view/translate`, ESC-352, docs/PLUGINS.md §8): the core reads the file
+//! A terminal view read through its harness's plugin (`view/translate`, ESC-352, docs/PLUGINS-DESIGN.md §8): the core reads the file
 //! the harness's own interface writes and its hooks (`tui`), the plugin says what its lines mean, and what it gives is applied
 //! as the items of a process are (`agent/items.rs`). What only the core knows goes with each line (`ViewParams`), or as a note
 //! (`{"escouade": …}`: the end of a turn, a hook that says what the file does not).

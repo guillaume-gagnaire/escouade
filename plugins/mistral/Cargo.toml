@@ -7,7 +7,7 @@ license = "GPL-3.0-or-later"
 edition = "2021"
 rust-version = "1.88"
 
-# A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5): its two sides in one instance. The voice is the crate
+# A module, compiled by `escouade-plugin build` (docs/PLUGINS-DESIGN.md §8.5): its two sides in one instance. The voice is the crate
 # `escouade-voice`, as for the other voice services (INT-13); the harness is the ACP client of `escouade-acp` (PLG-6) with its
 # extension `vibe`, served as the generic ACP plugin serves the harnesses a manifest describes. What is not `voice/*` goes
 # to it.

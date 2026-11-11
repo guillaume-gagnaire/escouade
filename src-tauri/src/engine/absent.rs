@@ -1,6 +1,6 @@
 //! The harness an agent names that this version does not have (INT-3): a later version's, a
 //! plugin's gone or turned off. Its agents keep their data and stay in the list, marked « harness
-//! absent » (docs/PLUGINS.md §4.3); they do not start, and none is created on it (`written`). It
+//! absent » (docs/PLUGINS-DESIGN.md §4.3); they do not start, and none is created on it (`written`). It
 //! answers what the core asks of any harness, and nothing of it runs.
 
 use super::registry::{

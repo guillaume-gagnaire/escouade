@@ -1,6 +1,6 @@
 # Le prototype de « tous les plugins en WASM » (ESC-330)
 
-L'étude, les capacités, les décisions et le plan sont dans `docs/PLUGINS.md` §8. Ce dossier n'est construit par rien dans
+L'étude, les capacités, les décisions et le plan sont dans `docs/PLUGINS-DESIGN.md` §8. Ce dossier n'est construit par rien dans
 l'app : il prouve le chemin, et garde de quoi refaire chaque mesure.
 
 **Depuis ESC-334, ce chemin est dans les crates du dépôt** : `escouade-turn`, le `serve` et la façade de reqwest ont rejoint

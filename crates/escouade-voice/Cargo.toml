@@ -15,7 +15,7 @@ edition = "2021"
 rust-version = "1.88"
 workspace = "../../src-tauri"
 
-# The services of `voice/*` (docs/PLUGINS.md §1.4, §4.13, « Ce que P6 a construit »), without a process nor a runtime of
+# The services of `voice/*` (docs/PLUGINS-DESIGN.md §1.4, §4.13, « Ce que P6 a construit »), without a process nor a runtime of
 # their own: what each asks and what its answers mean, then a reactor on the events of the host (`net/fetch`, `net/stream`,
 # `ws/*`, `timer/*`). The four plugins of voice are this crate and one line; Mistral serves its harness beside it. The app
 # links it for what crosses the wire, the names of the services and their catalogs.

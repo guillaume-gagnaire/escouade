@@ -1,7 +1,7 @@
 #!/bin/sh
 # Compiles a `run.wasm` plugin under Linux, in a container, as a Windows or macOS machine does on its own: `escouade-plugin
 # build` from this tree, its toolchain downloaded, twice in two folders. The hashes it prints must be those of the host
-# (docs/PLUGINS.md §8.5.2). The tree is piped in, nothing is mounted, so that it works from Git Bash too.
+# (docs/PLUGINS-DESIGN.md §8.5.2). The tree is piped in, nothing is mounted, so that it works from Git Bash too.
 #
 #   sh scripts/plugin-build-linux.sh [folder [--first-party]]     (by default, the fixture of goldens.json)
 set -e

@@ -1,4 +1,4 @@
-//! The plugin « Bitbucket » (`dev.escouade.bitbucket`, docs/PLUGINS.md §4.4): Bitbucket Cloud (bitbucket.org), on one
+//! The plugin « Bitbucket » (`dev.escouade.bitbucket`, docs/PLUGINS-DESIGN.md §4.4): Bitbucket Cloud (bitbucket.org), on one
 //! account, an Atlassian API token with the e-mail of its account. It serves the code host `bitbucket`: pull requests
 //! (drafts included), merge, commit statuses, pipelines and their step logs, comments on lines and their threads,
 //! deployments. Bitbucket's API has no auto-merge: the core declares the capability absent (`Capabilities::auto_merge`).

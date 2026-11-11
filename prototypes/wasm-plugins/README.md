@@ -1,6 +1,6 @@
 # Le prototype du runtime WASM des plugins JS/TS (ESC-319)
 
-L'étude, les mesures et les décisions sont dans `docs/PLUGINS.md` §5. Ce dossier n'est pas construit par l'app : il
+L'étude, les mesures et les décisions sont dans `docs/PLUGINS-DESIGN.md` §5. Ce dossier n'est pas construit par l'app : il
 prouve le chemin et garde de quoi refaire les mesures.
 
 - `host/` : l'hôte (`src/lib.rs`, ce qui irait dans `src-tauri/src/plugins/wasm.rs`) et le prélude JS

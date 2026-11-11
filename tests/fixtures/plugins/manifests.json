@@ -2,7 +2,7 @@
   "about": "The manifests of escouade-plugin.json and what their reader says of them (ESC-173). Both readers go through every case: the app's (src-tauri/src/plugins/manifest_tests.rs) and the store's library (schemas/plugin-manifest.test.ts). `errors` are `<path> <code>`, in any order; `ignored` the unknown fields, which load nothing and fail nothing. `files` are the files of the plugin's folder a case reads (its `icon`): `png` a PNG's header of that width and height, padded to `size` bytes; `text` a file of that text.",
   "cases": [
     {
-      "name": "the manifest of docs/PLUGINS.md §3.1",
+      "name": "the manifest of docs/PLUGINS-DESIGN.md §3.1",
       "manifest": {
         "$schema": "https://escouade.dev/schemas/plugin-1.json",
         "id": "dev.exemple.slack",
@@ -148,8 +148,8 @@
       "ignored": []
     },
     {
-      "name": "a first-hand plugin with several points (docs/PLUGINS.md §4.4), from the app",
-      "builtin": true,
+      "name": "a first-hand plugin with several points (docs/PLUGINS-DESIGN.md §4.4), a module",
+      "firstParty": true,
       "manifest": {
         "id": "dev.escouade.github",
         "name": "GitHub",
@@ -159,8 +159,7 @@
           "min": "2.1.0"
         },
         "run": {
-          "command": "{escouade}/escouade-plugins",
-          "args": ["github"]
+          "wasm": "Cargo.toml"
         },
         "activation": ["account:github", "project:remote-github"],
         "permissions": {
@@ -200,7 +199,7 @@
       "ignored": []
     },
     {
-      "name": "the same, installed by a user: the ids and the program of Escouade are its own",
+      "name": "the same, installed by a user: the ids of Escouade are its own",
       "manifest": {
         "id": "dev.escouade.github",
         "name": "GitHub",
@@ -210,33 +209,14 @@
           "min": "2.1.0"
         },
         "run": {
-          "command": "{escouade}/escouade-plugins",
-          "args": ["github"]
+          "wasm": "Cargo.toml"
         }
       },
-      "errors": ["id reserved", "run.command reserved"],
+      "errors": ["id reserved"],
       "ignored": []
     },
     {
-      "name": "a plugin of Escouade's own hand from plugins/<id>/ of its repository (ESC-314): its id, not the app's programs",
-      "firstParty": true,
-      "manifest": {
-        "id": "dev.escouade.slack",
-        "name": "Slack",
-        "version": "1.1.0",
-        "escouade": {
-          "api": "1",
-          "min": "2.1.0"
-        },
-        "run": {
-          "command": "{escouade}/escouade-plugins"
-        }
-      },
-      "errors": ["run.command reserved"],
-      "ignored": []
-    },
-    {
-      "name": "the same with its own program: it holds",
+      "name": "a plugin of Escouade's own hand from plugins/<id>/ of its repository (ESC-314), its own program: it holds",
       "firstParty": true,
       "manifest": {
         "id": "dev.escouade.slack",

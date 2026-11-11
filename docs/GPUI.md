@@ -153,7 +153,7 @@ Zed est sorti en stable sous Windows le 2025-10-15, avec DirectX 11 après un es
 
 ### 4.2 Ce que les plugins affichent
 
-**[vérifié]** dans `docs/PLUGINS.md` §1.9, §5.1 et §8.30 :
+**[vérifié]** dans `docs/PLUGINS-DESIGN.md` §1.9, §5.1 et §8.30 :
 
 - **Aucun plugin n'apporte de HTML.** Pas de panneau, de page ni de fenêtre de plugin ; « pas de vue libre : l'iframe isolée reste à essayer ». Les réglages et secrets déclarés sont rendus par nos composants, les thèmes sont des jetons de couleur, les « Vue X » passent par `view/translate`, qui rend des **données** (`typed`, `spoke`, `asks`, `runs`…) que nos composants dessinent.
 - La logique des plugins tourne en WASM dans le cœur, hors de toute webview (§5.1 : « elle n'existe ni dans le mode serveur ni dans le banc en ligne de commande »).
@@ -353,5 +353,5 @@ Toutes consultées le 2026-11-07, sauf autre date.
 - **S10** sur Phoenix, articles du 2026-11-05 environ : Windows Report, « Discord Is Ditching Electron for Rust, Cutting RAM Usage to Just 290MB », <https://windowsreport.com/discord-is-ditching-electron-for-rust-cutting-ram-usage-to-just-290mb/> ; WindowsForum, « Discord Phoenix: Rust and GPUI Replace Electron on Windows, but 290MB RAM Claims Need Testing », <https://windowsforum.com/news/discord-phoenix-rust-and-gpui-replace-electron-on-windows-but-290mb-ram-claims-need-testing.450993/> ; tbreak, <https://tbreak.com/discord-rust-rebuild-electron/>. **[lu]**, par des résumés de recherche ; le message du CTO sur X n'a pas été lu.
 - **S11** un billet du 2026-10-01 disant `gpui` 0.2.2 « roughly 11 months behind Zed main », <https://baeseokjae.github.io/posts/native-app-for-coding-agents-rust-gpui/>. **[lu]** ; recoupé par S1 et S2.
 - **S12** `open-gpui` 0.1.0, un fork de GPUI, dont un commentaire dit que Zed ne pose presque aucune API d'accessibilité sur ses éléments, <https://docs.rs/crate/open-gpui/0.1.0/source/src/window/a11y.rs>. **[lu]**, non vérifié dans Zed.
-- Dans ce dépôt : `docs/REMOTE.md` (2026-10-25), `docs/PLUGINS.md` §1.9, §5.1, §8.30, `src-tauri/src/devpage.rs` et `src/components/DevPage.svelte` (ESC-311), `src-tauri/tauri*.conf.json`, `.github/workflows/release.yml`, `tests/e2e/fixture.ts`, `src/lib/terminals.ts`. **[vérifié]**
+- Dans ce dépôt : `docs/REMOTE.md` (2026-10-25), `docs/PLUGINS-DESIGN.md` §1.9, §5.1, §8.30, `src-tauri/src/devpage.rs` et `src/components/DevPage.svelte` (ESC-311), `src-tauri/tauri*.conf.json`, `.github/workflows/release.yml`, `tests/e2e/fixture.ts`, `src/lib/terminals.ts`. **[vérifié]**
 - Les mesures : `spikes/gpui/results/*.jsonl` et les captures, produites par `spikes/gpui/bench/`. **[vérifié]**

@@ -1,4 +1,4 @@
-//! A plugin in Rust as a reactor (ESC-331, docs/PLUGINS.md §8.3): its state is kept from a turn to the next, it reads what
+//! A plugin in Rust as a reactor (ESC-331, docs/PLUGINS-DESIGN.md §8.3): its state is kept from a turn to the next, it reads what
 //! the host wrote, writes its lines, and the turn ends. Each `probe/*` shows the tests one thing of the host. The lines of
 //! the host are compact JSON, `id` before `params`: a few searches do, and the module has no dependency.
 

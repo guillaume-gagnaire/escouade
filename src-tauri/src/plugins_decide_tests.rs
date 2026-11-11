@@ -1,4 +1,4 @@
-//! Tests of the permission rules (PLG-8, ESC-180): the fake plugin (tests/fixtures/fake-plugin.mjs,
+//! Tests of the permission rules (PLG-8, ESC-180): the fake plugin (tests/fixtures/plugins/fake/plugin.mjs,
 //! `--decide`) that allows, refuses, keeps silent, crashes or leaves it to the user; two plugins
 //! that disagree; « … par <plugin> via Escouade » on the card and told to the harness; a private
 //! project's requests kept from a plugin not on for it; on the eight fake harnesses (Claude Code,
@@ -15,25 +15,16 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-fn fixtures() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures")
-}
-
 /// The folder of the fake plugin `id`, its manifest given `permissions`.
 fn folder_of(h: &Harness, id: &str, name: &str, args: &[&str], permissions: Value) -> PathBuf {
-    #[cfg(windows)]
-    crate::paths::trim_test_path();
     let dir = h.dir.join(id);
-    std::fs::create_dir_all(&dir).unwrap();
-    for f in ["fake-plugin.mjs", "fake-plugin.cmd", "fake-plugin"] {
-        std::fs::copy(fixtures().join(f), dir.join(f)).unwrap();
-    }
+    let run = crate::plugins_runtime_tests::fake_module(&dir, args);
     let manifest = json!({
         "id": id,
         "name": name,
         "version": "1.0.0",
         "escouade": { "api": "1", "min": "2.1.0" },
-        "run": { "command": "fake-plugin", "windows": "fake-plugin.cmd", "args": args },
+        "run": run,
         "permissions": permissions,
     });
     std::fs::write(
@@ -54,7 +45,8 @@ fn install(h: &Harness, src: &Path) {
 /// development in the harness's core.
 fn decider(h: &Harness, id: &str, name: &str, args: &[&str]) {
     let dir = folder_of(h, id, name, args, json!({ "decide": true }));
-    h.core.plugins.load_dev(&dir, Lang::En).unwrap();
+    let id = h.core.plugins.load_dev(&dir, Lang::En).unwrap().id;
+    crate::plugins_runtime_tests::warm(&h.core.plugin_runtime, &id);
     // Started as the app starts them, before the first permission.
     crate::plugins::decide::warm(&h.core.plugins, &h.core.plugin_runtime);
 }
@@ -180,17 +172,30 @@ async fn a_folder_in_development_that_decides_runs_again_once_read_again() {
     let id = "dev.test.warm-dev";
     decider(&h, id, "Warm", &["--decide", "allow"]);
     running(&h, id, "started with the app").await;
-    let before = h.core.plugin_runtime.status(id).pid;
+    let instance = |h: &Harness| {
+        let rt = h.core.plugin_runtime.clone();
+        async move {
+            rt.call(id, "test/state", json!({}))
+                .await
+                .ok()
+                .and_then(|s| s["instance"].as_str().map(str::to_string))
+        }
+    };
+    let before = instance(&h).await.expect("its instance");
 
     let manifest = h.dir.join(id).join("escouade-plugin.json");
     let text = std::fs::read_to_string(&manifest).unwrap();
     std::fs::write(&manifest, text.replace("1.0.0", "1.0.1")).unwrap();
     h.core.plugins.reload(&[id.to_string()]);
     h.wait("started anew, read again", |h| {
-        let s = h.core.plugin_runtime.status(id);
-        s.phase == PhaseName::Running && s.pid != before
+        h.core.plugin_runtime.status(id).phase == PhaseName::Running
     })
     .await;
+    assert_ne!(
+        instance(&h).await.expect("its instance"),
+        before,
+        "a new instance"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -456,7 +461,8 @@ async fn the_team_rules_example_refuses_rm_rf_with_its_reason() {
     let app = env!("CARGO_PKG_VERSION").split(['-', '+']).next().unwrap();
     m["escouade"]["min"] = serde_json::json!(app);
     std::fs::write(&manifest, serde_json::to_string_pretty(&m).unwrap()).unwrap();
-    h.core.plugins.load_dev(&dir, Lang::En).unwrap();
+    let id = h.core.plugins.load_dev(&dir, Lang::En).unwrap().id;
+    crate::plugins_runtime_tests::warm(&h.core.plugin_runtime, &id);
     // Its module made now, before the waits' 60 s: Javy and wasmtime's compilation of a debug build take long on a
     // busy machine (the CI's, 2026-11-02), as the app makes it at an install.
     h.core

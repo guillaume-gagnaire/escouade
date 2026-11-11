@@ -1,6 +1,6 @@
 //! The language of the interface, in which a plugin of the first hand writes what the user reads (an error, a state's
 //! name): French or English, as Escouade's. A plugin is told it by `initialize` (a module has no environment,
-//! docs/PLUGINS.md §8.4.8); a process reads it from `ESCOUADE_LANG` (`fr`, `en`) before that. The core sets it as its
+//! docs/PLUGINS-DESIGN.md §8.4.8); a process reads it from `ESCOUADE_LANG` (`fr`, `en`) before that. The core sets it as its
 //! own changes (`set_ui`).
 
 use std::sync::atomic::{AtomicU8, Ordering};

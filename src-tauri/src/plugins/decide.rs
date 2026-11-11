@@ -1,4 +1,4 @@
-//! The permission rules of the plugins (PLG-8, ESC-180; docs/PLUGINS.md §1.7): before a permission
+//! The permission rules of the plugins (PLG-8, ESC-180; docs/PLUGINS-DESIGN.md §1.7): before a permission
 //! an agent asks for waits for the user (`AgentRt::add_pending`), the plugins of
 //! `permissions.decide` turned on for its project are asked (`permissions/decide`), all at once,
 //! each within its delay (500 ms). A refusal wins; else an allowance; else (`ask`, no answer, an

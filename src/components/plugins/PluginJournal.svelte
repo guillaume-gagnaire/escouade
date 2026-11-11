@@ -78,9 +78,8 @@
 {:else}
   <div class="bar">
     <span class="phase {run?.status.phase ?? 'idle'}"
-      ><i aria-hidden="true"></i>{run ? phaseText(run.status, plugin) : '…'}{#if run?.status.pid}<span class="pid"
-          >{t('plugins.journal.pid', { pid: String(run.status.pid) })}</span
-        >{/if}{#if run && run.status.restarts > 0}<span class="pid">{t('plugins.journal.restarts', { count: run.status.restarts })}</span
+      ><i aria-hidden="true"></i>{run ? phaseText(run.status, plugin) : '…'}{#if run && run.status.restarts > 0}<span class="pid"
+          >{t('plugins.journal.restarts', { count: run.status.restarts })}</span
         >{/if}</span
     >
     {#if run && (run.status.phase === 'idle' || run.status.phase === 'stopped')}

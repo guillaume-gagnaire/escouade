@@ -14,11 +14,11 @@ A verified version was reviewed by Escouade and signed; the app checks the signa
 
 ### Can a plugin see my private projects?
 
-Not from the start: a plugin you install is off in every private project, and nothing of that project is sent to it until you switch it on there. A `run.command` program still has your rights on the disk (see [permissions](plugins/permissions)). The plugins shipped with Escouade are on there, like the rest of the app.
+Not from the start: a plugin you install is off in every private project, and nothing of that project is sent to it until you switch it on there. Every plugin runs in WASM inside Escouade: it reads on the disk only the folders it declares, and never those of a project it is off in (see [permissions](plugins/permissions)).
 
 ### How do I stop a plugin that does something I do not want?
 
-Its switch, in the Plugins view, stops it for the whole app; its Projects tab, for one project; its Permissions tab takes one permission back. Its journal says what it did. A plugin shipped with Escouade is switched off the same way.
+Its switch, in the Plugins view, stops it for the whole app; its Projects tab, for one project; its Permissions tab takes one permission back. Its journal says what it did. One of Escouade’s is switched off the same way.
 
 ### Can a project install a plugin for me?
 

@@ -1,6 +1,6 @@
 //! What the core keeps of Codex's words, for what stays in it (`terminal/launch` is not served yet): the launch of its
 //! interface, an account's quota and models. The agents' own are its plugin's (`plugins/codex/src/words.rs`), which it does
-//! not link (docs/PLUGINS.md §8.2).
+//! not link (docs/PLUGINS-DESIGN.md §8.2).
 
 use serde_json::{json, Value};
 

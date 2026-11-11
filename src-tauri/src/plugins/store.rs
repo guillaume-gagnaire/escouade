@@ -1,7 +1,7 @@
 //! The store in the app (STORE-9, docs/STORE.md §5): the catalogue of store.escouade.dev, kept on
 //! the machine and searched there; the revocation list, signed, read at the start and every 6 hours,
 //! its `serial` never going back; and a version's files, downloaded and checked before anything is
-//! set aside: `version.json` against the catalogue's fingerprint, the archive and the program
+//! set aside: `version.json` against the catalogue's fingerprint, the archive and the module
 //! against `version.json`, the signature with the keys the app embeds (`store_keys`). A gap stops
 //! everything and says so. The store cannot make a seal: it has no key.
 //!
@@ -36,8 +36,6 @@ pub const ARCHIVE_MAX: u64 = 50 * 1024 * 1024;
 pub const UNPACKED_MAX: u64 = 200 * 1024 * 1024;
 /// The entries an archive may hold.
 pub const ENTRIES_MAX: usize = 20_000;
-/// A program of a release: 100 MB at most.
-pub const BINARY_MAX: u64 = 100 * 1024 * 1024;
 /// The module the store compiled of a `run.js` plugin: 32 MB at most (as `store/server/utils/compile.ts`).
 pub const MODULE_MAX: u64 = 32 * 1024 * 1024;
 /// The catalogue, `version.json`, a signature, a list: 20 MB at most.
@@ -178,8 +176,6 @@ pub struct ArchiveRef {
 pub struct Files {
     pub version_json: String,
     pub archive: String,
-    #[serde(default)]
-    pub binaries: BTreeMap<String, String>,
     /// The module the store compiled of a `run.js` plugin (ESC-323).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wasm: Option<String>,
@@ -463,7 +459,7 @@ impl Store {
     }
 
     /// Takes the list `seed` of the app's seed when it is newer than the one kept (or none is): without the store, the
-    /// seed's list is the one that holds (docs/PLUGINS.md §8.7). It is not kept: the seed stays where it is.
+    /// seed's list is the one that holds (docs/PLUGINS-DESIGN.md §8.7). It is not kept: the seed stays where it is.
     pub fn with_seed_list(self, seed: Option<RevocationList>) -> Self {
         if let Some(list) = seed {
             let mut c = self.cache.write();
@@ -716,7 +712,7 @@ impl Store {
 
     /// Downloads version `version` of plugin `id` (the one this Escouade would install when None)
     /// and checks it: `version.json` against the catalogue, the signature with the app's keys when
-    /// the catalogue says it is verified, the archive and this system's program against
+    /// the catalogue says it is verified, the archive and the module against
     /// `version.json`, the manifest against its fingerprint. Refused when `verified_only` and no
     /// seal holds. Nothing is written.
     pub async fn fetch(
@@ -811,23 +807,7 @@ impl Store {
             .map_err(|e| fail("archive.tar.gz", e))?;
         let files = check_archive(&archive, &file, lang)?;
 
-        // 4. This system's program, when the release has one.
-        let here = platform();
-        let program = match (file.binaries.get(&here), entry.files.binaries.get(&here)) {
-            (Some(b), Some(path)) => {
-                let bytes = get(path, BINARY_MAX).await.map_err(|e| fail(&b.name, e))?;
-                if sha256(&bytes) != b.sha256 {
-                    return Err(tr_in!(
-                        lang,
-                        "Le programme reçu pour {here} ne correspond pas à celui que le store a publié : rien n'est installé.",
-                        "The program received for {here} is not the one the store published: nothing is installed."
-                    ));
-                }
-                Some(bytes)
-            }
-            _ => None,
-        };
-
+        // 4. No program of a system is fetched: none is ever started (ESC-355).
         // 5. The module the store compiled of a run.js plugin (ESC-323): the bytes version.json
         // names, so that what was signed is what runs; the app precompiles it at the install.
         let module = match &file.wasm {
@@ -858,7 +838,6 @@ impl Store {
                 .and_then(|l| l.find(id, &entry.version, "unverify"))
                 .map(|e| e.reason.get(lang).to_string()),
             files,
-            program,
             module,
             seed: false,
             unsigned: false,
@@ -1120,8 +1099,6 @@ pub struct VersionFile {
     pub commit: String,
     pub archive: ArchiveRef,
     #[serde(default)]
-    pub binaries: BTreeMap<String, BinaryRef>,
-    #[serde(default)]
     pub manifest_sha256: String,
     /// The module the store compiled of a `run.js` plugin, twice to the same bytes (ESC-323):
     /// its SHA-256, its size and what compiled it. Absent for a plugin of another kind.
@@ -1133,13 +1110,6 @@ pub struct VersionFile {
 pub struct WasmRef {
     pub sha256: String,
     pub size: u64,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct BinaryRef {
-    #[serde(default)]
-    pub name: String,
-    pub sha256: String,
 }
 
 /// A version downloaded and checked, nothing written yet.
@@ -1161,8 +1131,6 @@ pub struct Fetched {
     pub unverified: Option<String>,
     /// The archive's regular files, by their path in the plugin.
     pub files: Vec<(String, Vec<u8>)>,
-    /// This system's program from the release, when it has one.
-    pub program: Option<Vec<u8>>,
     /// The module the store compiled of a `run.js` or `run.wasm` plugin, checked against `version.json`.
     pub module: Option<Vec<u8>>,
     /// Read from the app's seed, not downloaded (`seed`, ESC-338).
@@ -1545,7 +1513,6 @@ mod tests {
             files: Files {
                 version_json: String::new(),
                 archive: String::new(),
-                binaries: BTreeMap::new(),
                 wasm: None,
                 icon: None,
                 signature: None,

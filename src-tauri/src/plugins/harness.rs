@@ -1,4 +1,4 @@
-//! The in-process adapter of a harness (INT-9, `docs/PLUGINS.md` §4.5 and §4.6): `ProcessEngine: Engine` and
+//! The in-process adapter of a harness (INT-9, `docs/PLUGINS-DESIGN.md` §4.5 and §4.6): `ProcessEngine: Engine` and
 //! `ProcessEngineProcess: EngineProcess` speak the contract of `escouade_plugin_protocol::engine` to the plugin's
 //! process, so that the rest of the core does not see the difference (the conformance bench plays them as it plays
 //! the harnesses written in the core).
@@ -117,17 +117,12 @@ pub fn register(
     rt: &Arc<Runtime>,
     plugin: &str,
     contributes: &serde_json::Map<String, Value>,
-    escouade_dir: &Path,
 ) -> Vec<EngineId> {
     harnesses_of(contributes)
         .into_iter()
         .map(|decl| {
-            let engine: &'static ProcessEngine = Box::leak(Box::new(ProcessEngine::new(
-                rt.clone(),
-                plugin,
-                decl,
-                escouade_dir,
-            )));
+            let engine: &'static ProcessEngine =
+                Box::leak(Box::new(ProcessEngine::new(rt.clone(), plugin, decl)));
             crate::engine::registry::register(engine);
             engine.id
         })
@@ -146,7 +141,6 @@ pub fn sync_described(
     rt: &Arc<Runtime>,
     acp_on: bool,
     plugins: &[(String, serde_json::Map<String, Value>)],
-    escouade_dir: &Path,
 ) -> Vec<EngineId> {
     let wanted: Vec<(EngineId, String, proto::HarnessDecl)> = if acp_on {
         plugins
@@ -189,7 +183,6 @@ pub fn sync_described(
             rt.clone(),
             &owner,
             decl.clone(),
-            escouade_dir,
         )));
         crate::engine::registry::register(engine);
         have.push((id, owner, decl));
@@ -209,7 +202,7 @@ pub fn sync(rt: &Arc<Runtime>, plugins: &super::Plugins) -> Vec<EngineId> {
         .collect();
     for h in BUILTIN_HARNESSES {
         let plugin_on = list.iter().any(|v| v.id == h.plugin && on(v));
-        sync_builtin(rt, h, plugin_on, plugins.app_dir());
+        sync_builtin(rt, h, plugin_on);
     }
     // The harnesses of Escouade's own plugins keep their place in the registry (above): only the others are described.
     let described: Vec<(String, serde_json::Map<String, Value>)> = list
@@ -217,7 +210,7 @@ pub fn sync(rt: &Arc<Runtime>, plugins: &super::Plugins) -> Vec<EngineId> {
         .filter(|v| on(v) && !BUILTIN_HARNESSES.iter().any(|h| h.plugin == v.id))
         .filter_map(|v| Some((v.id.clone(), v.manifest.as_ref()?.contributes.clone())))
         .collect();
-    sync_described(rt, acp_on, &described, plugins.app_dir())
+    sync_described(rt, acp_on, &described)
 }
 
 /// What the core knows of a launch when it prepares it (`Prepare`).
@@ -346,7 +339,7 @@ static PLUGGED: Mutex<Vec<(&'static str, usize, &'static ProcessEngine, bool)>> 
 
 /// The harness of `h` put behind its engine's agents when its plugin is on (`on`), taken away when it is not: its
 /// agents are then told so at their start (`spawn_plugged`).
-pub fn sync_builtin(rt: &Arc<Runtime>, h: &BuiltinHarness, on: bool, escouade_dir: &Path) {
+pub fn sync_builtin(rt: &Arc<Runtime>, h: &BuiltinHarness, on: bool) {
     let key = Arc::as_ptr(rt) as usize;
     let mut plugged = PLUGGED.lock();
     // One in force for each plugin: the runtime synced last's (a test's, the app's).
@@ -366,7 +359,7 @@ pub fn sync_builtin(rt: &Arc<Runtime>, h: &BuiltinHarness, on: bool, escouade_di
         log::warn!("the plugin {} declares no harness that reads", h.plugin);
         return;
     };
-    let mut engine = ProcessEngine::new(rt.clone(), h.plugin, decl, escouade_dir);
+    let mut engine = ProcessEngine::new(rt.clone(), h.plugin, decl);
     if let Some(native) = h.native {
         engine = engine.with_native(native);
     }
@@ -442,7 +435,6 @@ pub struct ProcessEngine {
     account_var: &'static str,
     /// The variable of an account's key (`HarnessDecl::key_var`).
     key_var: Option<&'static str>,
-    escouade_dir: PathBuf,
     /// How long after its input is closed its harness is killed, if it does not end by itself (`close_grace_ms`).
     close_grace: Option<Duration>,
     /// The program its harness's launcher runs, and its first arguments (Cursor CLI's `node` and `index.js`: the
@@ -456,13 +448,8 @@ pub struct ProcessEngine {
 pub type Native = fn(&Program) -> Option<(PathBuf, Vec<String>)>;
 
 impl ProcessEngine {
-    /// The harness `decl` of the plugin `plugin`; `escouade_dir` is the folder of the app's programs (`{escouade}`).
-    pub fn new(
-        rt: Arc<Runtime>,
-        plugin: &str,
-        decl: proto::HarnessDecl,
-        escouade_dir: &Path,
-    ) -> Self {
+    /// The harness `decl` of the plugin `plugin`.
+    pub fn new(rt: Arc<Runtime>, plugin: &str, decl: proto::HarnessDecl) -> Self {
         let c = &decl.caps;
         let caps = EngineCaps {
             modes: c
@@ -537,7 +524,6 @@ impl ProcessEngine {
             ),
             key_var: decl.key_var.as_deref().map(leak),
             close_grace: decl.close_grace_ms.map(Duration::from_millis),
-            escouade_dir: escouade_dir.to_path_buf(),
             native: None,
             prepare: None,
             decl,
@@ -550,12 +536,7 @@ impl ProcessEngine {
     /// plugin names no path to run). The core judges the generic ACP plugin, which is the app's: what a manifest says it
     /// holds itself is taken of the first hand alone, here (`fenceOnPermissions`). The fence the client holds on the
     /// files that pass through it (`fs`) stays: that is the app's own code, for a harness of anyone's.
-    pub fn described(
-        rt: Arc<Runtime>,
-        owner: &str,
-        mut decl: proto::HarnessDecl,
-        escouade_dir: &Path,
-    ) -> Self {
+    pub fn described(rt: Arc<Runtime>, owner: &str, mut decl: proto::HarnessDecl) -> Self {
         let first = super::builtin::first_hand(owner);
         if !first {
             decl.locate.program = None;
@@ -565,7 +546,7 @@ impl ProcessEngine {
             }
         }
         let id = described_id(owner, &decl.id);
-        let mut e = Self::new(rt, super::builtin::ACP, decl, escouade_dir);
+        let mut e = Self::new(rt, super::builtin::ACP, decl);
         e.owner = owner.to_string();
         e.first_hand = first;
         e.described = true;
@@ -624,7 +605,7 @@ impl ProcessEngine {
         let launch: proto::Launch = self.call(method::TERMINAL_LAUNCH, &params).await?;
         check_launch(
             self.name,
-            super::builtin::is_builtin(&self.plugin),
+            super::builtin::first_hand(&self.plugin),
             params.escouade.as_ref().map(|g| g.token.as_str()),
             &params.fence,
             params.read_only,
@@ -653,16 +634,7 @@ impl ProcessEngine {
     }
 
     fn program_at(&self, path: &str) -> Option<PathBuf> {
-        let path = match path.strip_prefix("{escouade}/") {
-            Some(rest) => {
-                let p = self.escouade_dir.join(rest);
-                // Only the app's own program, in the folder of the app.
-                super::builtin::check_program(&p, &self.escouade_dir).ok()?;
-                p
-            }
-            None => PathBuf::from(path),
-        };
-        with_exe(&path).filter(|p| p.is_file())
+        with_exe(Path::new(path)).filter(|p| p.is_file())
     }
 }
 
@@ -736,13 +708,14 @@ fn down(name: &str, e: CallError) -> anyhow::Error {
 }
 
 /// The checks of a launch's description (`engine/launch`, `terminal/launch`): what the core guarantees whatever the
-/// plugin. Answers why it is refused. `builtin`: the plugin is one the app gives, the only one whose word that it holds
-/// the fence itself (`fence_by_client`, the generic ACP plugin) is taken; any other's launch must spell the fence. It is
-/// the plugin that serves the harness: what a third party's manifest would have it hold is left out by `described`.
+/// plugin. Answers why it is refused. `first_hand`: the plugin is of Escouade's own hand (`dev.escouade.*`, which installs
+/// signed alone), the only one whose word that it holds the fence itself (`fence_by_client`, the generic ACP plugin) is
+/// taken; any other's launch must spell the fence. It is the plugin that serves the harness: what a third party's
+/// manifest would have it hold is left out by `described`.
 #[allow(clippy::too_many_arguments)]
 pub fn check_launch(
     name: &str,
-    builtin: bool,
+    first_hand: bool,
     token: Option<&str>,
     fence: &[String],
     read_only: bool,
@@ -769,7 +742,7 @@ pub fn check_launch(
         };
         // Held by the plugin on what its harness reads and writes through it (ACP's `fs/*`), or by the launch, every
         // path in it.
-        let held = (builtin && launch.fence_by_client)
+        let held = (first_hand && launch.fence_by_client)
             || (launch.fence_applied && fence.iter().all(|p| said(p)));
         if !held {
             return Err(tr!(
@@ -1322,7 +1295,7 @@ fn told(params: &Value) {
     let (Some(p), Some(items)) = (p, params["items"].as_array()) else {
         return;
     };
-    // Behind the answer of the batch before it, for an agent whose program is its own (docs/PLUGINS.md §8.4.6).
+    // Behind the answer of the batch before it, for an agent whose program is its own (docs/PLUGINS-DESIGN.md §8.4.6).
     if let Some(lines) = p.pushed.lock().as_ref() {
         if lines.try_send(Heard::Items(items.clone())).is_err() {
             log::warn!("{agent}: what its plugin said left aside: its queue is full");
@@ -1671,7 +1644,7 @@ impl ProcessEngineProcess {
                 .is_some_and(|file| launch.args.iter().any(|a| a == file));
         check_launch(
             self.name,
-            super::builtin::is_builtin(&self.plugin),
+            super::builtin::first_hand(&self.plugin),
             token.as_deref(),
             if in_settings { &[] } else { &fence },
             spawn.read_only,
@@ -1754,7 +1727,7 @@ impl ProcessEngineProcess {
         let home = self.attach.lock().home.clone();
         check_launch(
             self.name,
-            super::builtin::is_builtin(&self.plugin),
+            super::builtin::first_hand(&self.plugin),
             spawn.escouade.token(),
             &fence,
             spawn.read_only,

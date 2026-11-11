@@ -1,4 +1,4 @@
-//! A plugin in Rust on both targets (docs/PLUGINS.md §8.3): in process natively, a WASM reactor on `wasm32-wasip1`, with
+//! A plugin in Rust on both targets (docs/PLUGINS-DESIGN.md §8.3): in process natively, a WASM reactor on `wasm32-wasip1`, with
 //! the same source.
 //!
 //! A reactor keeps its state between two calls of its export `escouade-turn`, as an instance of `run.js` does. The host
@@ -31,7 +31,7 @@ fn whole_lines(partial: &mut Vec<u8>, read: &[u8]) -> Vec<String> {
 
 /// Exports the turn of a plugin, `run` being what it runs at its start: `escouade_plugin_protocol::module!(run);`. A
 /// module's first turn calls it; it keeps the plugin (`turn::run`, `escouade_plugin_kit::serve::run`), and every turn
-/// then runs on what came. Natively, it is nothing: `escouade-plugins` calls `run`.
+/// then runs on what came. Natively, it is nothing: a test calls `run`.
 #[macro_export]
 macro_rules! module {
     ($run:path) => {
@@ -60,7 +60,7 @@ pub fn run(
     ) {
         Ok(()) => 0,
         Err(e) => {
-            eprintln!("escouade-plugins {name}: {e}");
+            eprintln!("{name}: {e}");
             1
         }
     }
@@ -73,7 +73,7 @@ pub fn instance_id() -> u64 {
 }
 
 /// A file a state machine must have before it answers: from the disk natively; in a module, read by the host, under a
-/// folder the plugin declares (`fs/read`, docs/PLUGINS.md §8.4.6). None when it cannot be read, or is refused.
+/// folder the plugin declares (`fs/read`, docs/PLUGINS-DESIGN.md §8.4.6). None when it cannot be read, or is refused.
 #[cfg(not(target_family = "wasm"))]
 pub fn read_file(path: &Path) -> Option<String> {
     std::fs::read_to_string(path).ok()

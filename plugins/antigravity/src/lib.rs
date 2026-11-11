@@ -1,4 +1,4 @@
-//! The plugin Antigravity CLI (`dev.escouade.antigravity-cli`, INT-10.8, docs/PLUGINS.md §4): Google's agent in a terminal
+//! The plugin Antigravity CLI (`dev.escouade.antigravity-cli`, INT-10.8, docs/PLUGINS-DESIGN.md §4): Google's agent in a terminal
 //! (`agy`) as a harness, by its mode without a screen in stream-json. It is no ACP harness: the core finds `agy`, checks the
 //! launch this plugin describes and starts it, as many times as its client asks (`relaunches`: it takes its model, effort and
 //! mode at its launch alone, and has no way to stop a turn); what it writes comes here (`agent/frames`) and goes back as the
@@ -8,7 +8,7 @@
 //! (`view/translate`).
 //!
 //! It is a module (`run.wasm`): it reads the agent's home by `fs/read` (`host`), and a transcript written late on the host's
-//! timer (`client`, docs/PLUGINS.md §8.4.6).
+//! timer (`client`, docs/PLUGINS-DESIGN.md §8.4.6).
 
 pub mod client;
 mod host;

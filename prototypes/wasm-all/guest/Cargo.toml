@@ -1,4 +1,4 @@
-# The plugins of the prototype compiled to wasm32-wasip1 (ESC-330, docs/PLUGINS.md §8): a workspace of its own, with
+# The plugins of the prototype compiled to wasm32-wasip1 (ESC-330, docs/PLUGINS-DESIGN.md §8): a workspace of its own, with
 # its own lock, which no build of the app reads. `kit` and `reqwest` stand in for `escouade-plugin-kit` and for
 # reqwest on this target; the plugins' own code is the repository's.
 [workspace]

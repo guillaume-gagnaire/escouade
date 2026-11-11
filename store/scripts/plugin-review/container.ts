@@ -14,7 +14,7 @@ import {
 } from '../../server/utils/compile';
 import type { Engine } from './bench';
 
-// A third party's `run.wasm` compiled again by the review (ESC-337, docs/PLUGINS.md §8.5.5): never on the bare machine.
+// A third party's `run.wasm` compiled again by the review (ESC-337, docs/PLUGINS-DESIGN.md §8.5.5): never on the bare machine.
 // cargo runs in native the build scripts and the procedural macros of what it compiles, and an `include_bytes!` with an
 // absolute path would bring a file of this machine into the module. So the steps of the store (docs/STORE.md §3.3), each
 // in a container of its own, which shows neither `HOME`, nor `~/.escouade-signing`, nor the repository:
@@ -38,7 +38,7 @@ export const TOOLS_VOLUME = 'escouade-review-rust-1.98.0';
 export const FETCH_LIMIT = 15 * 60_000;
 export const BUILD_LIMIT = 10 * 60_000;
 const QUICK_LIMIT = 60_000;
-/** `lto = "fat"` takes 1.5 GiB (docs/PLUGINS.md §8.5.3): 3 GiB leaves the rest to `build.rs` and to the macros. */
+/** `lto = "fat"` takes 1.5 GiB (docs/PLUGINS-DESIGN.md §8.5.3): 3 GiB leaves the rest to `build.rs` and to the macros. */
 const MEMORY = '3g';
 const OOM = 137;
 

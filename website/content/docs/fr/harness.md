@@ -54,11 +54,11 @@ Les modèles sont ceux que le Claude Code de chaque compte liste dans son `/mode
 
 Le coût d’un tour est celui que donne Claude Code. Le quota, ce sont la fenêtre de 5 heures et la fenêtre hebdomadaire de ton compte, dans la barre d’état. La [vue Claude Code](claude-code-view) fait tourner l’agent dans l’interface de Claude Code elle-même. Il est seul à avoir le [remote control](remote-control), les tâches de fond et la lecture des PDF.
 
-Claude Code est un plugin livré avec Escouade (`dev.escouade.claude-code`) : ses agents conversent par un programme à part qu’Escouade lance et surveille. Il se voit dans la vue Plugins, sous « Livrés avec Escouade » ; coupé, un agent de Claude Code dit au lancement qu’il faut le rallumer, et garde sa session.
+Claude Code est un plugin d’Escouade (`dev.escouade.claude-code`) : ses agents conversent par un module qu’Escouade fait tourner en WASM. Il se voit dans la vue Plugins, sous « Ajoutés » ; coupé, un agent de Claude Code dit au lancement qu’il faut le rallumer, et garde sa session.
 
 ## Codex
 
-Codex est un plugin livré avec Escouade (`dev.escouade.codex`) : ses agents conversent par un programme à part qu’Escouade lance et surveille. Il se voit dans la vue Plugins, sous « Livrés avec Escouade » ; coupé, un agent de Codex dit au lancement qu’il faut le rallumer, et garde sa session.
+Codex est un plugin d’Escouade (`dev.escouade.codex`) : ses agents conversent par un module qu’Escouade fait tourner en WASM. Il se voit dans la vue Plugins, sous « Ajoutés » ; coupé, un agent de Codex dit au lancement qu’il faut le rallumer, et garde sa session.
 
 ### Installation et compte
 
@@ -88,7 +88,7 @@ Il ne lit pas les PDF (le bouton les refuse en le disant) et ne propose dans Esc
 
 ## OpenCode
 
-OpenCode est un plugin livré avec Escouade (`dev.escouade.opencode`) : ses agents conversent par un programme à part qu’Escouade lance et surveille, sur le serveur de leur compte. Il se voit dans la vue Plugins, sous « Livrés avec Escouade ». S’il plante, le serveur et le tour continuent et la conversation le dit ; coupé, un agent d’OpenCode dit qu’il faut le rallumer, et garde sa session.
+OpenCode est un plugin d’Escouade (`dev.escouade.opencode`) : ses agents conversent par un module qu’Escouade fait tourner en WASM, sur le serveur de leur compte. Il se voit dans la vue Plugins, sous « Ajoutés ». S’il plante, le serveur et le tour continuent et la conversation le dit ; coupé, un agent d’OpenCode dit qu’il faut le rallumer, et garde sa session.
 
 ### Installation et compte
 
@@ -119,7 +119,7 @@ Pas de mode « Auto » (OpenCode n’a pas de relecteur), pas de bac à sable,
 
 ## Copilot CLI
 
-Copilot CLI est un plugin livré avec Escouade (`dev.escouade.copilot-cli`) : ses agents conversent par un programme à part qu’Escouade lance et surveille. Il se voit dans la vue Plugins, sous « Livrés avec Escouade » ; coupé, un agent de Copilot dit au lancement qu’il faut le rallumer, et garde sa session.
+Copilot CLI est un plugin d’Escouade (`dev.escouade.copilot-cli`) : ses agents conversent par un module qu’Escouade fait tourner en WASM. Il se voit dans la vue Plugins, sous « Ajoutés » ; coupé, un agent de Copilot dit au lancement qu’il faut le rallumer, et garde sa session.
 
 ### Installation et compte
 
@@ -151,7 +151,7 @@ Pas de « Toujours autoriser », pas de mode `assisted` (expérimental), pas d
 
 ## Cursor CLI
 
-Cursor CLI est un plugin livré avec Escouade (`dev.escouade.cursor-cli`) : ses agents conversent par un programme à part qu’Escouade lance et surveille. Il se voit dans la vue Plugins, sous « Livrés avec Escouade » ; coupé, un agent de Cursor dit au lancement qu’il faut le rallumer, et garde sa session.
+Cursor CLI est un plugin d’Escouade (`dev.escouade.cursor-cli`) : ses agents conversent par un module qu’Escouade fait tourner en WASM. Il se voit dans la vue Plugins, sous « Ajoutés » ; coupé, un agent de Cursor dit au lancement qu’il faut le rallumer, et garde sa session.
 
 ### Installation et compte
 
@@ -180,7 +180,7 @@ Cursor ne dit ni les tokens ni le coût d’un tour quand Escouade le pilote : l
 
 ## Mistral Vibe
 
-Mistral Vibe est servi par le plugin « Mistral », livré avec Escouade (`dev.escouade.mistral`), qui porte aussi sa voix : ses agents conversent par un programme à part qu’Escouade lance et surveille. Il se voit dans la vue Plugins, sous « Livrés avec Escouade » ; coupé, la voix Mistral s’en va aussi, et un agent de Vibe dit au lancement qu’il faut le rallumer, et garde sa session.
+Mistral Vibe est servi par le plugin « Mistral » d’Escouade (`dev.escouade.mistral`), qui porte aussi sa voix : ses agents conversent par un module qu’Escouade fait tourner en WASM. Il se voit dans la vue Plugins, sous « Ajoutés » ; coupé, la voix Mistral s’en va aussi, et un agent de Vibe dit au lancement qu’il faut le rallumer, et garde sa session.
 
 ### Installation et compte
 
@@ -211,7 +211,7 @@ Vibe donne le coût et les tokens de chaque tour : la conversation, la carte de 
 
 ## Antigravity CLI
 
-Antigravity CLI est un plugin livré avec Escouade (`dev.escouade.antigravity-cli`) : ses agents conversent par un programme à part qu’Escouade lance et surveille. Il se voit dans la vue Plugins, sous « Livrés avec Escouade » ; coupé, un agent d’Antigravity CLI dit au lancement qu’il faut le rallumer, et garde sa conversation.
+Antigravity CLI est un plugin d’Escouade (`dev.escouade.antigravity-cli`) : ses agents conversent par un module qu’Escouade fait tourner en WASM. Il se voit dans la vue Plugins, sous « Ajoutés » ; coupé, un agent d’Antigravity CLI dit au lancement qu’il faut le rallumer, et garde sa conversation.
 
 ### Installation et compte
 
@@ -244,7 +244,7 @@ Antigravity donne les tokens de chaque tour (sur sa carte, dans les statistiques
 
 ## Gemini CLI
 
-Gemini CLI est un plugin livré avec Escouade (`dev.escouade.gemini-cli`) : ses agents conversent par un programme à part qu’Escouade lance et surveille. Il se voit dans la vue Plugins, sous « Livrés avec Escouade » ; coupé, un agent de Gemini dit au lancement qu’il faut le rallumer, et garde sa session.
+Gemini CLI est un plugin d’Escouade (`dev.escouade.gemini-cli`) : ses agents conversent par un module qu’Escouade fait tourner en WASM. Il se voit dans la vue Plugins, sous « Ajoutés » ; coupé, un agent de Gemini dit au lancement qu’il faut le rallumer, et garde sa session.
 
 > [!WARNING]
 > Gemini CLI n’a pas encore été essayé avec un vrai compte : son adaptateur suit sa documentation et ce que son programme fait contre un faux serveur. Les points à voir en vrai : la taille de ses réponses en direct, ses questions, ses quotas et leurs messages, sa connexion Google donnée à chaque agent, sa vue terminal et ses hooks.
@@ -281,7 +281,7 @@ Gemini donne les tokens de chaque tour, pas leur coût ni son quota : son usage 
 
 ## D’autres harness, par un plugin
 
-Un agent qui parle ACP (Goose, par exemple) se décrit dans le manifeste d’un plugin, sans code : voir [un harness ACP décrit](plugins/harnesses). Le plugin ACP, livré avec Escouade (`dev.escouade.acp`), le lance et lui parle ; il se coupe dans la vue Plugins, et les agents de ces harness restent alors, marqués « harness absent », avec leurs conversations. Les harness de cette page, eux, font encore partie de l’app.
+Un agent qui parle ACP (Goose, par exemple) se décrit dans le manifeste d’un plugin, sans code : voir [un harness ACP décrit](plugins/harnesses). Le plugin ACP d’Escouade (`dev.escouade.acp`), le lance et lui parle ; il se coupe dans la vue Plugins, et les agents de ces harness restent alors, marqués « harness absent », avec leurs conversations. Les harness de cette page, eux, font encore partie de l’app.
 
 ## Le serveur MCP
 

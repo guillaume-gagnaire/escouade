@@ -1,0 +1,25 @@
+# The demonstration plugin, a `run.wasm` module of the tests and of the builds of development (ESC-355): `sh build.sh`
+# makes its plugin.wasm, committed so that the tests need no wasm32-wasip1. A workspace of its own, which no build of the
+# app reads, on the protocol of `crates/`.
+[package]
+name = "escouade-plugin-minimal"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+escouade-plugin-protocol = { path = "../../../../crates/escouade-plugin-protocol" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[workspace]
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true

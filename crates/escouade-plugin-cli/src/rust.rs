@@ -1,4 +1,4 @@
-//! The compilation of the plugins in Rust (ESC-335, docs/PLUGINS.md §8.5): a `"run": { "wasm": "Cargo.toml" }` plugin to
+//! The compilation of the plugins in Rust (ESC-335, docs/PLUGINS-DESIGN.md §8.5): a `"run": { "wasm": "Cargo.toml" }` plugin to
 //! its module, the same bytes on every system, as `run.js` by Javy.
 //!
 //! - **The pinned toolchain**: rustc, cargo and the std of `wasm32-wasip1`, downloaded the first time they are needed from
@@ -25,7 +25,7 @@ pub use toml;
 
 /// The rustc of the modules: the app's. Changing it changes every hash, and every module must be signed again.
 pub const VERSION: &str = "1.98.0";
-/// The target of the modules (docs/PLUGINS.md §8.5.1).
+/// The target of the modules (docs/PLUGINS-DESIGN.md §8.5.1).
 pub const TARGET: &str = "wasm32-wasip1";
 /// `ESCOUADE_RUST_TOOLCHAIN`: a toolchain already there, in place of the one downloaded.
 pub const TOOLCHAIN_VAR: &str = "ESCOUADE_RUST_TOOLCHAIN";
@@ -106,7 +106,7 @@ pub struct Native {
     pub checksum: String,
 }
 
-/// The closed list (docs/PLUGINS.md §8.5.4): the crates read, by name, version and checksum.
+/// The closed list (docs/PLUGINS-DESIGN.md §8.5.4): the crates read, by name, version and checksum.
 pub fn native_list() -> Vec<Native> {
     serde_json::from_str(include_str!("rust_native.json")).expect("rust_native.json")
 }
@@ -228,8 +228,8 @@ impl Refusal {
                 };
                 tr_in!(
                     lang,
-                    "{name} {how} et n'est pas sur la liste relue : son code s'exécuterait en natif à la compilation (docs/PLUGINS.md §8.5.4)",
-                    "{name} {how} and is not on the reviewed list: its code would run in native while compiling (docs/PLUGINS.md §8.5.4)"
+                    "{name} {how} et n'est pas sur la liste relue : son code s'exécuterait en natif à la compilation (docs/PLUGINS-DESIGN.md §8.5.4)",
+                    "{name} {how} and is not on the reviewed list: its code would run in native while compiling (docs/PLUGINS-DESIGN.md §8.5.4)"
                 )
             }
             Refusal::Config(file) => tr_in!(
@@ -276,7 +276,7 @@ pub struct Built {
     pub lock: String,
 }
 
-/// `compiler` of `--json`, then of `version.json` (docs/PLUGINS.md §8.5.3).
+/// `compiler` of `--json`, then of `version.json` (docs/PLUGINS-DESIGN.md §8.5.3).
 pub fn compiler(lock: &str) -> Value {
     serde_json::json!({
         "rust": VERSION,
@@ -1062,7 +1062,7 @@ pub fn lock_at_fault(said: &str) -> bool {
 }
 
 /// Downloads the dependencies of the `run.wasm` plugin of `folder` from crates.io into the `CARGO_HOME` of the data
-/// folder `data`, where `build` finds them without a network (docs/PLUGINS.md §8.5.3). Nothing of the plugin runs, and
+/// folder `data`, where `build` finds them without a network (docs/PLUGINS-DESIGN.md §8.5.3). Nothing of the plugin runs, and
 /// [`check`] comes first: a `.cargo/config.toml` or a `[patch]` would otherwise choose where cargo goes.
 pub fn fetch(
     folder: &Path,

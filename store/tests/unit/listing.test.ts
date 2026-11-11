@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { BUILTINS, isBuiltinId, isOwnId, ownLogo } from '../../server/utils/builtin';
+import { isOwnId, ownLogo } from '../../server/utils/builtin';
 import { EMBEDDED_CATEGORIES } from '../../scripts/plugins-publish/publish';
 import { CATEGORIES } from '../../server/utils/submissions';
 import { asksOf, catalog, home, hueOf, localized, markOf, permissionsOf, search, type Entry } from '../../server/utils/listing';
@@ -173,10 +173,8 @@ describe('the home page and Escouade’s own', () => {
     expect(h.counts['ticket-sources']).toBe(1);
   });
 
-  it('keeps no list of its own: each is a plugin of the store, in the reserve dev.escouade.* (ESC-353)', async () => {
-    expect(BUILTINS).toEqual([]);
+  it('keeps no list of its own: each is a plugin of the store, in the reserve dev.escouade.* (ESC-353, ESC-355)', async () => {
     expect(await catalog(null)).toEqual([]);
-    expect(isBuiltinId('dev.escouade.github')).toBe(false);
     expect(isOwnId('dev.escouade.github')).toBe(true);
     expect(isOwnId('io.github.me.github')).toBe(false);
   });
@@ -187,7 +185,7 @@ describe('the home page and Escouade’s own', () => {
     for (const d of readdirSync(root).filter((x) => existsSync(join(root, x, 'escouade-plugin.json')))) {
       const m = JSON.parse(readFileSync(join(root, d, 'escouade-plugin.json'), 'utf8'));
       if (published.includes(d)) continue;
-      // A module that reads its manifest embeds it: a key added there changes its fingerprint (docs/PLUGINS.md §8.29).
+      // A module that reads its manifest embeds it: a key added there changes its fingerprint (docs/PLUGINS-DESIGN.md §8.29).
       // Its first version kept the tool's categories; a later one may carry a `store` key (its pages, ESC-366), as
       // it has a new fingerprint anyway.
       const code = existsSync(join(root, d, 'src/lib.rs'))

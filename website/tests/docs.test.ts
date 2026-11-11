@@ -457,15 +457,15 @@ describe('the page of the example plugins', () => {
     }
   });
 
-  it('shows every plugin of plugins/ but those the app still gives', () => {
+  it('shows every plugin of plugins/ but the modules of the first hand', () => {
     const examples = readdirSync(new URL('plugins/', REPO), { withFileTypes: true })
       .filter((d) => d.isDirectory() && existsSync(new URL(`plugins/${d.name}/escouade-plugin.json`, REPO)))
       .map((d) => `plugins/${d.name}/escouade-plugin.json`)
-      // The app gives those of `escouade-plugins`, and the ones ported to `run.wasm` (Linear, Trello, Jira, ClickUp: its
-      // registry, then its seed, docs/PLUGINS.md §8.19): neither is an example.
+      // The ones ported to `run.wasm` (the harnesses, the sources, the code hosts, the voices: the seed, docs/PLUGINS.md
+      // §8.7) are no example.
       .filter((file) => {
         const run = JSON.parse(readFileSync(new URL(file, REPO), 'utf8')).run;
-        return run?.command !== '{escouade}/escouade-plugins' && !run?.wasm;
+        return !run?.wasm;
       });
     expect(examples.length).toBe(5);
     for (const lang of LANGS) {

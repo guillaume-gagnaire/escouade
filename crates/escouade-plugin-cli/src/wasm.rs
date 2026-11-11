@@ -1,4 +1,4 @@
-//! The compilation of the JS/TS plugins (ESC-320, ESC-328, docs/PLUGINS.md §5): the bundle of a plugin
+//! The compilation of the JS/TS plugins (ESC-320, ESC-328, docs/PLUGINS-DESIGN.md §5): the bundle of a plugin
 //! (`"run": { "js": "dist/plugin.mjs" }`), after Escouade's prelude (`wasm_prelude.js`), is compiled by the pinned Javy
 //! (9.1.0, downloaded once and checked by its SHA-256) with escouade-js, Escouade's Javy plugin (QuickJS and the
 //! `escouade-turn` export, built by scripts/escouade-js.sh and embedded here), deterministically.

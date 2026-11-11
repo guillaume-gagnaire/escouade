@@ -147,10 +147,7 @@ async fn begin(
             return None;
         }
     };
-    match s.pid {
-        Some(pid) => println!("{} (pid {pid})", program.path().display()),
-        None => println!("{} (WASM)", program.path().display()),
-    }
+    println!("{} (WASM)", program.path().display());
     let mut seen = s.watch();
     tokio::spawn(async move {
         while let Some(x) = seen.recv().await {
