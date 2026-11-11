@@ -9,9 +9,8 @@
 // - declarative: their `node --test`.
 // Then `escouade-plugin validate` and the conformance bench of the app (ESCOUADE_PLUGIN_BIN), `--first-party` for their
 // reserved ids: for a `run.js` plugin (slack, team-rules) the bench plays dist/plugin.mjs compiled to WASM in the app's
-// own host, with no Node, and for a `run.wasm` one the module `escouade-plugin build` makes of its crate. The plugins the
-// app still gives, whose program is `escouade-plugins`, are validated `--builtin`, with no bench: nothing there starts
-// that program, and their tests are their crate's. CI runs this after building the app's escouade-plugin and the SDK.
+// own host, with no Node, and for a `run.wasm` one the module `escouade-plugin build` makes of its crate. CI runs this
+// after building the app's escouade-plugin and the SDK.
 //
 //   npx tsc -p sdk/plugin/tsconfig.json
 //   ESCOUADE_PLUGIN_BIN=src-tauri/target/debug/escouade-plugin node plugins/ci.mjs
@@ -145,10 +144,9 @@ async function check(plugin, log) {
     return false;
   }
   // By its relative folder, as an author runs it beside the plugin; a reserved id is Escouade's own hand.
-  const hand = plugin.ofTheApp ? ['--builtin'] : String(id).startsWith('dev.escouade.') ? ['--first-party'] : [];
+  const hand = String(id).startsWith('dev.escouade.') ? ['--first-party'] : [];
   const judged = ['--escouade', since];
   if (!(await run(log, HERE, bin, 'validate', name, ...hand, ...judged))) return false;
-  if (plugin.ofTheApp) return true;
   if (!plugin.wasm) return run(log, HERE, bin, 'test', name, ...hand, ...judged);
   // Compiled once, as the store does it, then played: `test` would compile it again.
   const module = join(tmp, `${id}-${version}.wasm`);

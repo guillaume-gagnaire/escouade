@@ -368,14 +368,14 @@ describe('the view', () => {
     fakeBackend({
       plugins_list: () => [
         view({ id: 'dev.escouade.slack', origin: store, folder: 'C:/data/plugins/dev.escouade.slack' }),
-        view({ id: 'dev.escouade.github', name: 'GitHub', origin: { kind: 'builtin' } }),
+        view({ id: 'dev.escouade.github', name: 'GitHub', origin: { kind: 'workspace' } }),
       ],
     });
     render(PluginsView);
     const added = await screen.findByRole('table', { name: 'Ajoutés' });
     expect(added.textContent).toContain('Slack');
     expect(added.textContent).not.toContain('GitHub');
-    const shipped = screen.getByRole('table', { name: 'Livrés avec Escouade' });
+    const shipped = screen.getByRole('table', { name: 'Du dépôt' });
     expect(shipped.textContent).toContain('GitHub');
     expect(shipped.textContent).not.toContain('Slack');
   });

@@ -472,63 +472,123 @@ async fn a_module_of_the_seed_is_precompiled_at_its_activation_not_at_the_start(
     assert_eq!(made, Made::Precompiled, "the start did not do it");
 }
 
-/// Until Z2 the registry gives these plugins; the day `plugins/seed.json` names one, it leaves the origin `builtin`, the
-/// user's choices with it, and becomes a plugin like any other.
+/// The list a user of 2.1 has (`plugins.json`): each of `ids` given by the app, its origin `builtin` (gone with ESC-355),
+/// those of `off` switched off, and `others` beside them as they are.
+pub(crate) fn list_of_2_1(data: &DataDir, ids: &[&str], off: &[&str], others: Vec<Value>) {
+    let mut plugins: Vec<Value> = ids
+        .iter()
+        .map(|id| {
+            json!({
+                "id": id,
+                "origin": { "kind": "builtin" },
+                "fingerprint": "builtin:2.1.4",
+                "digest": "",
+                "installedAt": "2026-10-20T10:00:00Z",
+                "enabled": !off.contains(id),
+                "projects": {},
+                "revoked": [],
+                "settings": {},
+            })
+        })
+        .collect();
+    plugins.extend(others);
+    std::fs::create_dir_all(data.root()).unwrap();
+    std::fs::write(
+        data.plugins_file(),
+        serde_json::to_vec_pretty(&json!({ "version": 1, "plugins": plugins })).unwrap(),
+    )
+    .unwrap();
+}
+
+/// A plugin 2.1 gave (its origin `builtin`) is installed from the seed with the user's choices, a plugin like any other,
+/// which uninstalls; no plugin takes its place by its id, and the list keeps nothing of the origin `builtin`.
 #[tokio::test]
-async fn an_id_the_seed_names_leaves_the_origin_builtin_with_its_choices() {
+async fn a_plugin_2_1_gave_is_installed_from_the_seed_with_its_choices_and_uninstalls() {
     let fake = Fake::start().trusted();
     let data = data_of("passage");
-    // A user of a version before: the plugin given, switched off.
-    let plugins = Plugins::load_for_core(data.clone(), "2.2.0");
-    let given = plugins.get(TRELLO, Lang::Fr).unwrap();
-    assert_eq!(given.origin, Origin::Builtin);
-    assert!(plugins.remove(TRELLO, false).is_err(), "given, not removed");
-    plugins.choose(TRELLO, |c| c.enabled = false).unwrap();
-    drop(plugins);
+    list_of_2_1(&data, &[TRELLO, builtin::GITHUB], &[TRELLO], Vec::new());
 
     let seed = seed_of(&fake, "passage", &[(TRELLO, "2.2.0")]).await;
     let plugins = started(&data, seed.clone());
     let view = plugins.get(TRELLO, Lang::Fr).unwrap();
     assert!(matches!(view.origin, Origin::Store { seed: true, .. }));
     assert!(!view.choices.enabled, "the user's choice");
-    assert_eq!(
-        plugins.get(builtin::GITHUB, Lang::Fr).unwrap().origin,
-        Origin::Builtin,
-        "the others are given as before"
-    );
+    let list = std::fs::read_to_string(data.plugins_file()).unwrap();
+    assert!(!list.contains("\"builtin\""), "{list}");
 
-    // Its install is no longer refused, and it goes as any other's.
+    // It goes as any other's.
     assert!(plugins.remove(TRELLO, false).unwrap());
     drop(plugins);
     let plugins = started(&data, seed);
     assert!(
         plugins.get(TRELLO, Lang::Fr).is_none(),
-        "the registry does not put it back"
+        "nothing puts it back"
     );
     assert_eq!(plugins.seed_offers(Lang::Fr).len(), 1);
-    let e = plugins.remove(builtin::GITHUB, false).unwrap_err();
-    assert!(e.to_string().contains("given with Escouade"));
 }
 
-/// A plugin the seed refused for a user of the origin `builtin` keeps running as it did: the app's own program.
+/// A plugin 2.1 gave that the seed cannot give (its files refused) is not run from the app: the view says why, and
+/// proposes it; its choices wait for its install.
 #[tokio::test]
-async fn an_id_the_seed_cannot_give_stays_builtin_and_is_never_removed_with_the_app_s_folder() {
+async fn a_plugin_2_1_gave_that_the_seed_cannot_give_waits_with_its_choices() {
     let fake = Fake::start().trusted();
     let data = data_of("stays");
-    let given = Plugins::load_for_core(data.clone(), "2.2.0");
-    given.choose(TRELLO, |c| c.enabled = false).unwrap();
-    drop(given);
+    list_of_2_1(&data, &[TRELLO], &[TRELLO], Vec::new());
     let seed = Seed {
         dir: Some(temp_dir("stays")),
         ..seed_of(&fake, "listed", &[(TRELLO, "2.2.0")]).await
     };
     let plugins = started(&data, seed);
+    assert!(plugins.get(TRELLO, Lang::Fr).is_none(), "not installed");
+    let offer = plugins
+        .seed_offers(Lang::Fr)
+        .into_iter()
+        .find(|o| o.id == TRELLO)
+        .unwrap();
+    assert!(offer.refused.is_some(), "{offer:?}");
+    assert!(plugins.choices(TRELLO).is_none());
+    let kept = data
+        .plugins_dir()
+        .join(".kept")
+        .join(format!("{TRELLO}.json"));
+    let kept: Value = serde_json::from_slice(&std::fs::read(kept).unwrap()).unwrap();
+    assert_eq!(kept["enabled"], false, "{kept}");
+}
+
+/// A build of development runs the workspace's modules of the plugins the seed has not the files of; what is installed
+/// of an id stays (no plugin wins by its id), and a module of the workspace is not removed.
+#[test]
+fn the_workspace_fills_what_is_not_installed_and_wins_nothing() {
+    let data = data_of("workspace");
+    let plugins = Plugins::load_for_core(data.clone(), "2.2.0");
     assert_eq!(
-        plugins.get(TRELLO, Lang::Fr).unwrap().origin,
-        Origin::Builtin
+        plugins.get(builtin::GITHUB, Lang::Fr).unwrap().origin,
+        Origin::Workspace
     );
-    assert!(plugins.remove(TRELLO, false).is_err());
-    assert!(plugins.app_dir().exists());
+    let e = plugins.remove(builtin::GITHUB, false).unwrap_err();
+    assert!(e.to_string().contains("workspace"), "{e}");
+    // A plugin of anyone with an id of the registry, in development, is not taken away.
+    let src = temp_dir("workspace-dev");
+    std::fs::write(
+        src.join(crate::plugins::manifest::FILE),
+        json!({
+            "id": builtin::GITHUB,
+            "name": "GitHub du développeur",
+            "version": "9.0.0",
+            "escouade": { "api": "1", "min": "2.1.0" },
+            "contributes": { "themes": [{ "id": "mine" }] }
+        })
+        .to_string(),
+    )
+    .unwrap();
+    std::fs::create_dir_all(src.join("themes")).unwrap();
+    std::fs::write(src.join("themes/mine.json"), "{}").unwrap();
+    plugins.load_dev(&src, Lang::Fr).unwrap();
+    drop(plugins);
+    let plugins = Plugins::load_for_core(data, "2.2.0");
+    let v = plugins.get(builtin::GITHUB, Lang::Fr).unwrap();
+    assert!(matches!(v.origin, Origin::Dev { .. }), "{:?}", v.origin);
+    assert_eq!(v.version, "9.0.0");
 }
 
 #[test]
@@ -593,7 +653,7 @@ fn a_build_of_development_without_the_seeds_files_runs_the_registrys_plugins() {
     let plugins = started(&data_of("dev-no-files-data"), seed);
     assert_eq!(
         plugins.get(TRELLO, Lang::Fr).unwrap().origin,
-        Origin::Builtin
+        Origin::Workspace
     );
     // Its files there: the seed takes it.
     std::fs::create_dir_all(empty.join(TRELLO)).unwrap();
@@ -781,7 +841,7 @@ async fn nothing_counts_of_a_plugin_the_app_gives_a_folder_in_development_or_a_s
     assert!(plugins
         .list(Lang::Fr)
         .iter()
-        .any(|v| v.origin == Origin::Builtin));
+        .any(|v| v.origin == Origin::Workspace));
     let src = temp_dir("in-dev");
     std::fs::write(
         src.join(crate::plugins::manifest::FILE),

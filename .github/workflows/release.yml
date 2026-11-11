@@ -289,20 +289,14 @@ jobs:
           $setup = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | Sort-Object LastWriteTime | Select-Object -Last 1
           node scripts/windows-signing.mjs verify $setup.FullName "$env:RUNNER_TEMP\signed-binaries"
 
-      # escouade-plugins, the program of the plugins the app gives (INT-4), signed with the app on each system: the app
-      # checks before it runs it that it is its own (its path in the app's folder and, where the system checks it, its
-      # signature). Windows: the installer's check above covers it (scripts/windows-signing.mjs lists it). macOS: its code
-      # signature holds in the universal app and, with the Developer ID secrets, Gatekeeper is asked (a warning only: the build requires the notarization itself).
-      # Linux: the packages hold it; the updater's signature covers the AppImage. A failure keeps the release a draft.
-      - name: Check the signature of escouade-plugins (macOS)
+      # The app's signature on macOS: its code signature holds in the universal app, without escouade-plugins (gone with
+      # ESC-355: every plugin runs in WASM), and, with the Developer ID secrets, Gatekeeper is asked (a warning only: the
+      # build requires the notarization itself). A failure keeps the release a draft.
+      - name: Check the signature of the app (macOS)
         if: runner.os == 'macOS'
         run: |
           app=$(ls -d src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app | head -n 1)
-          bin="$app/Contents/MacOS/escouade-plugins"
-          test -x "$bin"
-          lipo -info "$bin" | grep -q arm64
-          lipo -info "$bin" | grep -q x86_64
-          codesign --verify --strict --verbose=2 "$bin"
+          test ! -e "$app/Contents/MacOS/escouade-plugins"
           codesign --verify --deep --strict "$app"
           # Only a warning: the build already requires the notarization, and Gatekeeper's reading must not keep a release a draft.
           if [ -n "$APPLE_ID" ]; then spctl --assess --type execute --verbose=2 "$app" || echo "::warning::spctl does not accept $app (the notarization is required by the build itself)"; fi
@@ -326,13 +320,6 @@ jobs:
           test -n "$bin"
           "$bin" --version
           "$bin" --version | grep -qx "escouade-js $(cat src-tauri/escouade-js/target/escouade-js.wasm.sha256)"
-
-      - name: Check escouade-plugins is in the Linux packages
-        if: runner.os == 'Linux'
-        run: |
-          dpkg -c src-tauri/target/release/bundle/deb/*.deb | grep -E 'usr/bin/escouade-plugins$'
-          appimage=$(ls "$PWD"/src-tauri/target/release/bundle/appimage/*.AppImage)
-          (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract usr/bin/escouade-plugins >/dev/null && test -x squashfs-root/usr/bin/escouade-plugins)
 
   # Runs only when the three builds succeeded. The updater reads the latest release, so the draft
   # is published once its latest.json holds every system and each file it names is in: the three

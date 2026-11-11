@@ -3,19 +3,20 @@ import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { addProject, expect, openSettingsPage, test } from './fixture';
 
-// The view Plugins (PLG-4, ESC-176): the fake plugin (tests/fixtures/fake-plugin.mjs) installed from a folder through the
-// install window — its origin, its fingerprint and what it may do shown before anything is installed —, switched off then
-// on again for a project, its process started from its journal, which then tells its start; uninstalled, its copy and
+// The view Plugins (PLG-4, ESC-176): the fake plugin (tests/fixtures/plugins/fake/plugin.mjs, a module of `run.js`) installed
+// from a folder through the install window — its origin, its fingerprint and what it may do shown before anything is
+// installed —, switched off then on again for a project, its instance started from its journal, which then tells its start; uninstalled, its copy and
 // its journal gone. Réglages › Plugins (ESC-384) lists it, what it adds, on how many projects, and leads to its page.
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const ID = 'dev.test.fake';
 
-/** The fake plugin in a folder of the test's own, as an author would have it; `changes` go over its manifest. */
-function fakePlugin(dir: string, changes: Record<string, unknown> = {}) {
+/** The fake plugin in a folder of the test's own, as an author would have it, told `args` (its args.json); `changes` go
+ * over its manifest. */
+function fakePlugin(dir: string, changes: Record<string, unknown> = {}, args: string[] = []) {
   fs.mkdirSync(dir, { recursive: true });
-  for (const f of ['fake-plugin.mjs', 'fake-plugin.cmd', 'fake-plugin'])
-    fs.copyFileSync(path.join(ROOT, 'tests', 'fixtures', f), path.join(dir, f));
+  fs.copyFileSync(path.join(ROOT, 'tests', 'fixtures', 'plugins', 'fake', 'plugin.mjs'), path.join(dir, 'plugin.mjs'));
+  fs.writeFileSync(path.join(dir, 'args.json'), JSON.stringify(args));
   const manifest = {
     id: ID,
     name: 'Faux plugin',
@@ -24,7 +25,7 @@ function fakePlugin(dir: string, changes: Record<string, unknown> = {}) {
     author: { name: 'escouade-tests' },
     license: 'MIT',
     escouade: { api: '1', min: '2.1.0' },
-    run: { command: 'fake-plugin', windows: 'fake-plugin.cmd' },
+    run: { js: 'plugin.mjs' },
     activation: ['event:ticket.column'],
     permissions: { events: ['ticket.column'], network: ['hooks.example.com'], secrets: ['token'] },
     contributes: { secrets: [{ key: 'token', title: { fr: 'Jeton', en: 'Token' } }] },
@@ -53,8 +54,8 @@ const installed = (data: string) => {
   const file = path.join(data, 'plugins.json');
   return fs.existsSync(file)
     ? (JSON.parse(fs.readFileSync(file, 'utf8')).plugins as { id: string; origin: { kind: string }; projects?: Record<string, boolean> }[])
-        // Those the app gives (INT-4) are in the file too, but are not installed.
-        .filter((p) => p.origin.kind !== 'builtin')
+        // The workspace's of a build of development are in the file too, but are not installed.
+        .filter((p) => p.origin.kind !== 'workspace')
     : [];
 };
 
@@ -79,7 +80,7 @@ test('the fake plugin is installed from a folder, switched on for a project, its
   await expect(dialog).toContainText('Personne n’a relu ce plugin.');
   await expect(dialog).toContainText(`Dossier · ${src}`);
   await expect(dialog).toContainText(/sha256:[0-9a-f]{64} · fichiers copiés/);
-  await expect(dialog.locator('.asks li .txt').first()).toContainText('Lance un programme sur ton ordinateur, avec tes droits');
+  await expect(dialog.locator('.asks li .txt').first()).toContainText('Tourne dans Escouade, isolé');
   await expect(dialog).toContainText('Se connecte àhooks.example.com');
   await expect(dialog).toContainText('Garde un secret : Jeton');
   expect(installed(app.data)).toEqual([]);
@@ -140,7 +141,7 @@ test('the fake plugin is installed from a folder, switched on for a project, its
   await expect(log).toContainText('Prêt', { timeout: 15_000 });
   expect(fs.existsSync(path.join(app.data, 'plugin-logs', `${ID}.log`))).toBe(true);
 
-  // Uninstalled: its process stopped, its copy and its journal gone, the folder it came from left.
+  // Uninstalled: its instance stopped, its copy and its journal gone, the folder it came from left.
   await page.getByRole('button', { name: 'Désinstaller' }).click();
   const confirm = page.getByRole('dialog', { name: 'Désinstaller Faux plugin ?' });
   await expect(
@@ -176,13 +177,16 @@ test('a plugin that decides starts at its installation and when it is switched o
 
   const DECIDER = 'dev.test.decider';
   const decider = path.join(app.root, 'decider');
-  fakePlugin(decider, {
-    id: DECIDER,
-    run: { command: 'fake-plugin', windows: 'fake-plugin.cmd', args: ['--decide', 'allow'] },
-    activation: [],
-    permissions: { decide: true },
-    contributes: {},
-  });
+  fakePlugin(
+    decider,
+    {
+      id: DECIDER,
+      activation: [],
+      permissions: { decide: true },
+      contributes: {},
+    },
+    ['--decide', 'allow'],
+  );
   const other = path.join(app.root, 'other');
   fakePlugin(other);
 

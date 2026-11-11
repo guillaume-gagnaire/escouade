@@ -81,7 +81,7 @@ impl Launch {
     /// it once it is turned on there).
     fn decls(&self, project: &str) -> Vec<Decl> {
         self.plugins
-            .builtin_contributions(POINT)
+            .first_hand_contributions(POINT)
             .into_iter()
             .filter(|(plugin, choices, _)| self.rt.reaches(plugin, project, choices))
             .flat_map(|(plugin, _, items)| {

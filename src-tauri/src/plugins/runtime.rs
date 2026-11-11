@@ -1,24 +1,24 @@
-//! The plugins' processes (PLG-2, ESC-174; docs/PLUGINS.md §2.4, §3.5, §4.6): a plugin with a
-//! program (`run`) runs as a process of its own, started at its first activation and never before,
-//! in a Job object (`job.rs`) that takes its whole tree with it. The two speak JSON-RPC 2.0 on its
-//! standard input and output, one message per line; a batch (a JSON array, on one line) goes both
-//! ways.
+//! The plugins' instances (PLG-2, ESC-174; docs/PLUGINS.md §2.4, §3.5, §4.6, §8.3): a plugin with a
+//! program runs in WASM inside Escouade (`run.js`, `run.wasm`: `wasm`), started at its first activation and never
+//! before, on a thread of its own. The two speak JSON-RPC 2.0, one message per line; a batch (a JSON array, on one
+//! line) goes both ways. A `run.command` is no longer started, whatever its origin (ESC-355, §8.8): its manifest still
+//! reads, and its sheet says why it does not start.
 //!
 //! - `initialize` comes first: Escouade gives the version of the protocol it speaks and its
 //!   capabilities, the plugin answers the version it speaks and its own (as in ACP); another version
 //!   stops it, with the reason.
 //! - Every call has a delay (`timeout_of`, by method: short for a decision, long for an import);
 //!   past it, the caller's default answer applies (`call_or`).
-//! - One process serves every agent of its plugin: the calls are told apart by their ids, and what
-//!   an agent attached (`attach`) is given again to the next process after a restart.
+//! - One instance serves every agent of its plugin: the calls are told apart by their ids, and what
+//!   an agent attached (`attach`) is given again to the next instance after a restart.
 //! - A crash restarts it, three times within five minutes, then stops it. While it starts again,
 //!   what is sent to it waits in a bounded queue (the oldest dropped first, and said in its journal),
 //!   then goes in order.
-//! - Its memory, read from its job as `resources.rs` reads the agents', stops it past a limit.
+//! - Its memory and its turns are bounded by its instance (`wasm::Limits`): past them, it fails as a crash does.
 //! - It gets its secrets by `secrets/get`, only its own (`plugin:<id>:<key>`, a key of its
 //!   `permissions.secrets`), never another's; the values it was given are masked in its journal.
 //! - Its standard error and its messages go to its journal (`journal`).
-//! - When Escouade closes, each running plugin is asked to `shutdown`, then its job ends.
+//! - When Escouade closes, each running plugin is asked to `shutdown`, then its instance ends.
 //!
 //! The parameters and results travel as raw JSON (`RawValue`): a frame a harness wrote is handed
 //! on as it came, never read again on the way.
@@ -28,20 +28,16 @@ use super::manifest::{self, Manifest};
 use super::{Plugins, State as Loaded};
 use crate::i18n::Lang;
 use crate::integrations::secrets::SecretStore;
-use crate::job::{Job, JobUsage};
 use crate::paths::DataDir;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-use std::path::{Path, PathBuf};
-use std::process::Stdio;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::Command;
 use tokio::sync::{mpsc, oneshot};
 
 /// The version of the protocol this Escouade speaks: the major version of the plugins' API.
@@ -56,16 +52,9 @@ pub const NOT_YOURS: i64 = -32001;
 /// The error of a keychain out of reach.
 pub const KEYCHAIN: i64 = -32002;
 
-/// How many lines of its standard error a crash tells in the journal.
-const TAIL: usize = 10;
-
-/// What a plugin's process may do before it is stopped.
+/// What a plugin's instance may do before it is stopped.
 #[derive(Debug, Clone)]
 pub struct Limits {
-    /// Its memory (its job's working sets), in bytes.
-    pub memory: u64,
-    /// How often its memory is read.
-    pub sample: Duration,
     /// How many restarts within `window`; one more crash stops it.
     pub restarts: usize,
     pub window: Duration,
@@ -73,7 +62,7 @@ pub struct Limits {
     pub queue: usize,
     /// How long it has to answer `initialize`.
     pub initialize: Duration,
-    /// How long it has to answer `shutdown` before its job ends.
+    /// How long it has to answer `shutdown` before its instance ends.
     pub shutdown: Duration,
     /// What the instance of a `run.js` plugin may take (its memory, its turns).
     pub wasm: super::wasm::Limits,
@@ -82,8 +71,6 @@ pub struct Limits {
 impl Default for Limits {
     fn default() -> Self {
         Self {
-            memory: 1 << 30,
-            sample: Duration::from_secs(2),
             restarts: 3,
             window: Duration::from_secs(5 * 60),
             queue: 256,
@@ -126,8 +113,6 @@ pub enum Stop {
     Shutdown,
     /// It crashed once more than it may restart within the window.
     Crashed { times: usize },
-    /// Its memory went past the limit.
-    Memory { bytes: u64, limit: u64 },
     /// It could not start, or what it answered to `initialize` does not hold.
     Refused { reason: String },
 }
@@ -141,11 +126,6 @@ impl Stop {
             Stop::Crashed { times } => format!(
                 "stopped after {times} crashes within {} minutes",
                 window.as_secs().div_ceil(60)
-            ),
-            Stop::Memory { bytes, limit } => format!(
-                "stopped: {} MB of memory, past the limit of {} MB",
-                bytes >> 20,
-                limit >> 20
             ),
             Stop::Refused { reason } => format!("stopped: {reason}"),
         }
@@ -207,8 +187,6 @@ pub struct Status {
     pub stop: Option<Stop>,
     /// Its restarts within the window.
     pub restarts: usize,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pid: Option<u32>,
     /// What it said it can do, in its answer to `initialize`.
     pub capabilities: Value,
 }
@@ -216,43 +194,6 @@ pub struct Status {
 /// The name of a plugin's secret in the keychain (§3.5).
 pub fn secret_name(plugin: &str, key: &str) -> String {
     format!("plugin:{plugin}:{key}")
-}
-
-/// The program of `run` for this system: in the plugin's `folder`, or in `escouade_dir` (the
-/// folder of the app's programs) for `{escouade}/…`. Always absolute: the process starts in the
-/// plugin's folder, and a relative program would be looked for from there under Unix
-/// (`escouade-plugin test slack` would start `slack/slack/slack`).
-pub(crate) fn program_path(folder: &Path, run: &manifest::Run, escouade_dir: &Path) -> PathBuf {
-    let folder = std::path::absolute(folder).unwrap_or_else(|_| folder.to_path_buf());
-    let escouade_dir =
-        std::path::absolute(escouade_dir).unwrap_or_else(|_| escouade_dir.to_path_buf());
-    let sys = if cfg!(windows) {
-        "windows"
-    } else if cfg!(target_os = "macos") {
-        "macos"
-    } else {
-        "linux"
-    };
-    let p = run.by_system.get(sys).unwrap_or(&run.command);
-    match p.strip_prefix(manifest::ESCOUADE_DIR) {
-        Some(rest) => escouade_dir.join(rest.trim_start_matches(['/', '\\'])),
-        None => folder.join(p),
-    }
-}
-
-/// Whether the program of `run` for this system is one of the app's (`{escouade}/…`).
-fn app_program(run: &manifest::Run) -> bool {
-    let sys = if cfg!(windows) {
-        "windows"
-    } else if cfg!(target_os = "macos") {
-        "macos"
-    } else {
-        "linux"
-    };
-    run.by_system
-        .get(sys)
-        .unwrap_or(&run.command)
-        .starts_with(manifest::ESCOUADE_DIR)
 }
 
 /// Whether `word` is one of `patterns`: the same, or one a `prefix*` takes in.
@@ -349,13 +290,10 @@ struct Inner {
     capabilities: Value,
 }
 
-/// A running process of a plugin.
+/// A running instance of a plugin.
 struct Conn {
     generation: u64,
-    pid: Option<u32>,
     tx: Mutex<Option<mpsc::UnboundedSender<Frame>>>,
-    job: Option<Job>,
-    kill_tx: Mutex<Option<oneshot::Sender<()>>>,
     exited: AtomicBool,
 }
 
@@ -376,19 +314,9 @@ impl Conn {
             .is_some_and(|tx| tx.send((bytes, written)).is_ok())
     }
 
-    /// Ends it and its whole tree.
+    /// Ends it: its input closed, its thread ends, and what runs beside it.
     fn kill(&self) {
         self.tx.lock().take();
-        if let Some(job) = &self.job {
-            job.terminate();
-        }
-        if let Some(k) = self.kill_tx.lock().take() {
-            let _ = k.send(());
-        }
-    }
-
-    fn usage(&self) -> Option<JobUsage> {
-        self.job.as_ref().and_then(Job::usage)
     }
 }
 
@@ -414,8 +342,6 @@ pub struct Runtime {
     /// The temporary folders of the plugins, one each.
     temps: PathBuf,
     app_version: String,
-    /// The folder of the app's programs (`{escouade}` of a plugin of its own).
-    escouade_dir: PathBuf,
     limits: Limits,
     hosts: Mutex<HashMap<String, Arc<Host>>>,
     /// Every plugin's journal, a declarative one's too (its webhooks, its commands).
@@ -441,8 +367,8 @@ pub struct Runtime {
     tried: Mutex<Vec<Tried>>,
     /// The number of the next `Trial`.
     trials: AtomicU64,
-    /// What a plugin the app gives is told when it starts (`ESCOUADE_LANG`, the network of Réglages › Avancé › Réseau).
-    builtin_env: parking_lot::RwLock<Vec<(String, String)>>,
+    /// The language `initialize` says, once the core set it (`set_lang`).
+    lang: parking_lot::RwLock<Option<String>>,
     /// What a program of a plugin gets as an agent does (`set_agent_env`).
     agent_env: parking_lot::RwLock<Vec<(String, String)>>,
     me: Weak<Self>,
@@ -575,30 +501,26 @@ impl Runtime {
         self.net.read().clone()
     }
 
-    /// What a plugin the app gives is told when it starts: the interface's language and the network's settings. A
-    /// change applies to its next process: the core stops the running ones (`forget`).
     /// What a program of a plugin gets as an agent does (`proc/spawn`): the network of Réglages.
     pub fn set_agent_env(&self, env: Vec<(String, String)>) {
         *self.agent_env.write() = env;
     }
 
-    pub fn set_builtin_env(&self, env: Vec<(String, String)>) {
-        *self.builtin_env.write() = env;
+    /// The language every plugin is told at `initialize` (docs/PLUGINS.md §8.4.8). A change applies to its next
+    /// instance: the core stops the running ones (`forget`). Whether it changed.
+    pub fn set_lang(&self, code: &str) -> bool {
+        let mut lang = self.lang.write();
+        let changed = lang.as_deref() != Some(code);
+        *lang = Some(code.to_string());
+        changed
     }
 
-    pub fn builtin_env(&self) -> Vec<(String, String)> {
-        self.builtin_env.read().clone()
-    }
-
-    /// The language `initialize` says: the one the plugins the app gives are told, or the backend's. A module has no
-    /// environment, and a plugin of a third party gets none of `builtin_env` (docs/PLUGINS.md §8.4.8).
+    /// The language `initialize` says: the one the core set, or the backend's.
     fn lang(&self) -> String {
-        let env = self.builtin_env.read();
-        let said = env.iter().find(|(k, _)| k == "ESCOUADE_LANG");
-        said.map_or_else(
-            || crate::i18n::kit(crate::i18n::ui()).code().to_string(),
-            |(_, code)| code.clone(),
-        )
+        self.lang
+            .read()
+            .clone()
+            .unwrap_or_else(|| crate::i18n::kit(crate::i18n::ui()).code().to_string())
     }
 
     /// The core, once made: the projects whose settings a plugin may ask for.
@@ -634,14 +556,12 @@ impl Runtime {
         app_version: &str,
         limits: Limits,
     ) -> Arc<Self> {
-        let escouade_dir = plugins.app_dir().to_path_buf();
         let rt = Arc::new_cyclic(|me| Self {
             plugins: plugins.clone(),
             secrets,
             logs: data.plugin_logs_dir(),
             temps: data.plugin_temp_dir(),
             app_version: app_version.to_string(),
-            escouade_dir,
             limits,
             hosts: Mutex::new(HashMap::new()),
             journals: Mutex::new(HashMap::new()),
@@ -654,7 +574,7 @@ impl Runtime {
             lent: Mutex::new(HashMap::new()),
             tried: Mutex::new(Vec::new()),
             trials: AtomicU64::new(0),
-            builtin_env: parking_lot::RwLock::new(Vec::new()),
+            lang: parking_lot::RwLock::new(None),
             agent_env: parking_lot::RwLock::new(Vec::new()),
             me: me.clone(),
         });
@@ -737,10 +657,10 @@ impl Runtime {
                 .and_then(|m| m.run.as_ref())
                 .is_some_and(|r| r.in_wasm().is_some());
             // A plugin of the seed is precompiled at its first activation: a start does not pay for those that do not serve.
-            // Those of the registry in a module are the seed to come (a harness's is first used by its first agent).
+            // The workspace's of a build of development likewise (a harness's is first used by its first agent).
             let seeded = matches!(
                 v.origin,
-                super::Origin::Store { seed: true, .. } | super::Origin::Builtin
+                super::Origin::Store { seed: true, .. } | super::Origin::Workspace
             );
             if v.state == Loaded::Ready && in_wasm && !seeded {
                 if let Some(h) = self.prepare(&v.id) {
@@ -895,7 +815,6 @@ impl Runtime {
                 phase: PhaseName::Idle,
                 stop: None,
                 restarts: 0,
-                pid: None,
                 capabilities: Value::Null,
             };
         };
@@ -911,16 +830,8 @@ impl Runtime {
             phase,
             stop,
             restarts: inner.restarts.len(),
-            pid: inner.conn.as_ref().and_then(|c| c.pid),
             capabilities: inner.capabilities.clone(),
         }
-    }
-
-    /// What the plugin `id`'s process uses now (its job's memory and CPU), when it runs.
-    pub fn usage(&self, id: &str) -> Option<JobUsage> {
-        let h = self.hosts.lock().get(id).cloned()?;
-        let conn = h.inner.lock().conn.clone()?;
-        conn.usage()
     }
 
     /// The plugin `id`'s journal, the oldest entry first: what its process wrote since Escouade
@@ -1218,7 +1129,7 @@ impl Runtime {
     }
 
     /// Escouade closes: each running plugin is asked to `shutdown`, given `Limits::shutdown` in
-    /// all to answer, then its job ends. Blocks the calling thread for that long at most.
+    /// all to answer, then its instance ends. Blocks the calling thread for that long at most.
     pub fn shutdown(&self) {
         self.quitting.store(true, Ordering::Release);
         let hosts: Vec<Arc<Host>> = self.hosts.lock().values().cloned().collect();
@@ -1250,7 +1161,7 @@ impl Runtime {
             h.journal.push(
                 Kind::Timeout,
                 format!(
-                    "shutdown: no answer within {} ms; its job ends",
+                    "shutdown: no answer within {} ms; its instance ends",
                     self.limits.shutdown.as_millis()
                 ),
             );
@@ -1259,11 +1170,6 @@ impl Runtime {
             c.kill();
             h.fail_all(CallError::Stopped(Stop::Shutdown), &HashSet::new());
         }
-    }
-
-    /// The program of `run` for this system, in the plugin's folder or the app's.
-    fn program_of(&self, folder: &Path, run: &manifest::Run) -> PathBuf {
-        program_path(folder, run, &self.escouade_dir)
     }
 }
 
@@ -1410,7 +1316,14 @@ impl Host {
             inner.generation
         };
         let run = self.manifest.run.as_ref().expect("a host has a program");
-        let conn = if run.in_wasm().is_some() {
+        // A command is no longer started (ESC-355): `runnable` refuses it; this holds whatever comes.
+        if run.in_wasm().is_none() {
+            self.stop_with(Stop::Refused {
+                reason: manifest::command_refused(Lang::En),
+            });
+            return;
+        }
+        let conn = {
             // In WASM (ESC-320, ESC-331): its module from the cache, or made now, off the runtime's threads.
             let js = run.js.as_deref().unwrap_or(super::wasm::MODULE_FILE);
             let (modules, folder, program) = (rt.modules.clone(), self.folder.clone(), run.clone());
@@ -1448,37 +1361,6 @@ impl Host {
                 ),
             );
             log::info!("plugin {}: {} in {took} ms", self.id, made.describe());
-            conn
-        } else {
-            let program = rt.program_of(&self.folder, run);
-            // The app starts no program of its own but its own: that of a plugin it gives is checked before it runs (INT-4).
-            if app_program(run) {
-                if let Err(reason) = super::builtin::check_program(&program, &rt.escouade_dir) {
-                    self.stop_with(Stop::Refused {
-                        reason: format!("not the app's own program: {reason}"),
-                    });
-                    return;
-                }
-            }
-            let conn = match self.spawn(&rt, &program, generation) {
-                Ok(Some(c)) => c,
-                // Stopped meanwhile.
-                Ok(None) => return,
-                Err(e) => {
-                    self.stop_with(Stop::Refused {
-                        reason: format!("cannot start {}: {e}", program.display()),
-                    });
-                    return;
-                }
-            };
-            self.journal.push(
-                Kind::Start,
-                format!(
-                    "started {} (pid {})",
-                    program.display(),
-                    conn.pid.map(|p| p.to_string()).unwrap_or_default()
-                ),
-            );
             conn
         };
         let hello = json!({
@@ -1568,160 +1450,6 @@ impl Host {
         self.wait(id, method, rx, within).await
     }
 
-    /// Starts the process, in its job, with what reads its outputs and watches its memory; none
-    /// when it was stopped meanwhile.
-    fn spawn(
-        self: &Arc<Self>,
-        rt: &Runtime,
-        program: &Path,
-        generation: u64,
-    ) -> std::io::Result<Option<Arc<Conn>>> {
-        let run = self.manifest.run.as_ref().expect("a host has a program");
-        let mut cmd = Command::new(program);
-        cmd.args(&run.args)
-            .current_dir(&self.folder)
-            .env("ESCOUADE_PLUGIN_ID", &self.id)
-            .env("ESCOUADE_PLUGIN_API", PROTOCOL.to_string())
-            .env("ESCOUADE_VERSION", &rt.app_version)
-            .envs(
-                rt.builtin_env
-                    .read()
-                    .iter()
-                    .filter(|_| super::builtin::is_builtin(&self.id))
-                    .cloned(),
-            )
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true);
-        #[cfg(windows)]
-        cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
-        crate::job::isolate(&mut cmd);
-        crate::proc::no_inherited_fds(&mut cmd);
-        let mut child = cmd.spawn()?;
-        let job = Job::for_child(&child);
-        if job.is_none() {
-            log::warn!(
-                "plugin {} (pid {:?}) is not in a job: its tree is not killed as a whole",
-                self.id,
-                child.id()
-            );
-        }
-        let mut stdin = child.stdin.take().expect("piped");
-        let stdout = child.stdout.take().expect("piped");
-        let stderr = child.stderr.take().expect("piped");
-        let (tx, mut rx) = mpsc::unbounded_channel::<Frame>();
-        let (kill_tx, mut kill_rx) = oneshot::channel::<()>();
-        let conn = Arc::new(Conn {
-            generation,
-            pid: child.id(),
-            tx: Mutex::new(Some(tx)),
-            job,
-            kill_tx: Mutex::new(Some(kill_tx)),
-            exited: AtomicBool::new(false),
-        });
-        // Its process of now before anything reads it: an end at once is this one's.
-        {
-            let mut inner = self.inner.lock();
-            if inner.generation != generation
-                || !matches!(inner.phase, Phase::Starting | Phase::Restarting)
-            {
-                // Its job and `kill_on_drop` end it.
-                return Ok(None);
-            }
-            inner.conn = Some(conn.clone());
-        }
-
-        tauri::async_runtime::spawn(async move {
-            while let Some((bytes, written)) = rx.recv().await {
-                if stdin.write_all(&bytes).await.is_err() || stdin.flush().await.is_err() {
-                    break;
-                }
-                if let Some(w) = written {
-                    let _ = w.send(());
-                }
-            }
-        });
-
-        let tail = Arc::new(Mutex::new(VecDeque::<String>::new()));
-        let err_done = {
-            let (done_tx, done_rx) = oneshot::channel::<()>();
-            let host = self.clone();
-            let tail = tail.clone();
-            tauri::async_runtime::spawn(async move {
-                let mut lines = BufReader::new(stderr).split(b'\n');
-                while let Ok(Some(line)) = lines.next_segment().await {
-                    let line = String::from_utf8_lossy(&line)
-                        .trim_end_matches('\r')
-                        .to_string();
-                    host.journal.push(Kind::Stderr, line.clone());
-                    let mut t = tail.lock();
-                    t.push_back(line);
-                    while t.len() > TAIL {
-                        t.pop_front();
-                    }
-                }
-                let _ = done_tx.send(());
-            });
-            done_rx
-        };
-
-        {
-            let host = self.clone();
-            let conn = conn.clone();
-            tauri::async_runtime::spawn(async move {
-                let mut lines = BufReader::new(stdout).split(b'\n');
-                loop {
-                    tokio::select! {
-                        next = lines.next_segment() => match next {
-                            Ok(Some(bytes)) => host.incoming(&conn, &String::from_utf8_lossy(&bytes)),
-                            _ => break,
-                        },
-                        _ = &mut kill_rx => {
-                            let _ = child.start_kill();
-                            break;
-                        }
-                    }
-                }
-                let code = child.wait().await.ok().and_then(|s| s.code());
-                // What it wrote last on its standard error, before its end is told.
-                let _ = tokio::time::timeout(Duration::from_millis(500), err_done).await;
-                conn.exited.store(true, Ordering::Release);
-                let said: Vec<String> = tail.lock().iter().cloned().collect();
-                host.exited(&conn, code, said);
-            });
-        }
-
-        {
-            let host = self.clone();
-            let conn = conn.clone();
-            let limits = rt.limits.clone();
-            tauri::async_runtime::spawn(async move {
-                loop {
-                    tokio::time::sleep(limits.sample).await;
-                    if conn.exited.load(Ordering::Acquire) {
-                        break;
-                    }
-                    // `ps` on macOS and Linux: off the runtime's threads.
-                    let c = conn.clone();
-                    let Ok(Some(u)) = tokio::task::spawn_blocking(move || c.usage()).await else {
-                        continue;
-                    };
-                    if u.memory > limits.memory {
-                        if host.is_current(&conn) {
-                            host.stop_with(Stop::Memory {
-                                bytes: u.memory,
-                                limit: limits.memory,
-                            });
-                        }
-                        break;
-                    }
-                }
-            });
-        }
-        Ok(Some(conn))
-    }
-
     /// Its instance in WASM (`run.js`, `run.wasm`), on a thread of its own, which reads what comes for it and sends
     /// `net/fetch` on its way; none when it was stopped meanwhile. A fault of the instance ends it as a crash ends a
     /// process: `exited` makes another while its budget of restarts lasts.
@@ -1736,10 +1464,7 @@ impl Host {
         let capabilities = self.capabilities(rt, back.clone());
         let conn = Arc::new(Conn {
             generation,
-            pid: None,
             tx: Mutex::new(Some(tx)),
-            job: None,
-            kill_tx: Mutex::new(None),
             exited: AtomicBool::new(false),
         });
         {
@@ -1830,14 +1555,6 @@ impl Host {
             told: told.clone(),
         });
         super::wasm::Capabilities::new(self.access(rt), procs, told)
-    }
-
-    fn is_current(&self, conn: &Conn) -> bool {
-        self.inner
-            .lock()
-            .conn
-            .as_ref()
-            .is_some_and(|c| c.generation == conn.generation)
     }
 
     /// A line of its output: a message, or a batch of them.

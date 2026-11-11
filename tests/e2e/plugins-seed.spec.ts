@@ -82,7 +82,7 @@ test.describe('the seed, the store in reach', () => {
     await openInstalled(page);
     const added = page.getByRole('table', { name: 'Ajoutés' });
     await expect(added).toContainText('Trello');
-    await expect(page.getByRole('table', { name: 'Livrés avec Escouade' })).not.toContainText('Trello');
+    await expect(page.getByRole('table', { name: 'Du dépôt' })).not.toContainText('Trello');
 
     // The store offers 2.3.0: said, and not installed by itself.
     await page.getByRole('button', { name: 'Relire maintenant' }).click();

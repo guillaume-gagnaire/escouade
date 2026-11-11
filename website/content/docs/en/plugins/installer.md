@@ -9,7 +9,7 @@ The puzzle-piece icon of the projects’ rail, under the statistics, opens the v
 Its sidebar:
 
 - **Store**: the catalog of store.escouade.dev, kept on your machine and searched there (see below).
-- **Installed**: every plugin, in two groups, “Added” and “Shipped with Escouade”. A line per plugin: its version, “Not verified” or “In development”, the update found, where it comes from, the projects where it is on (a pill per project, a lock for a private project) and its switch for the whole app.
+- **Installed**: every plugin installed, Escouade’s like the others, under “Added”. A line per plugin: its version, “Not verified” or “In development”, the update found, where it comes from, the projects where it is on (a pill per project, a lock for a private project) and its switch for the whole app.
 - **Updates**: the newer versions found, their count in amber.
 - **In development**: the folders loaded in place.
 - **The categories**: Harnesses, Kanban sources, Code hosts, Themes, Notifications, Permissions, Tools, Languages, drawn from what each plugin adds.
@@ -58,19 +58,19 @@ It tells, before anything is installed:
 
 | Permission | What the window says |
 | --- | --- |
-| `run.command` | “Runs a program on your computer, with your rights”, in bold |
+| `run.command` | “Does not start”: Escouade no longer starts a native program, whatever the plugin’s origin |
 | `run.js` | “Runs inside Escouade, isolated”: a program in WASM, with no access to the disk outside its folder |
 | `permissions.decide` | “Decides your agents’ permissions”, in red |
 | `permissions.commands` | “Runs commands”, and which |
 | `permissions.events` | “Gets these events”, and which |
-| `permissions.network` | “Connects to”, and the host: enforced for a `run.js` program and for webhooks, which Escouade only sends to those hosts; only declared for a `run.command` program, whose network Escouade does not filter |
+| `permissions.network` | “Connects to”, and the host: enforced for a `run.js` or `run.wasm` program and for webhooks, which Escouade only sends to those hosts |
 | `permissions.secrets` | “Keeps a secret:”, and its name |
 
 “Install anyway” installs the plugin; “Cancel” erases what was set aside. A manifest that does not hold opens no window: the reason shows at the top of the view, field by field (see [the manifest](plugins/manifest)).
 
-## The plugins shipped with Escouade
+## Escouade’s plugins
 
-Some of Escouade’s integrations are plugins, shipped with the app, signed and updated with it: the Plugins view lists them under “Shipped with Escouade”, with the same page as the others (what they add, their permissions, their journal). They are on everywhere from the start, but in the private projects, like any plugin.
+Some of Escouade’s integrations are plugins, written by Escouade, reviewed and signed on the store, and in the installer (see below): plugins like the others, with the same page (what they add, their permissions, their journal). They run in WASM inside Escouade, like any plugin. They are on everywhere from the start, but in the private projects.
 
 | Plugin | What it serves |
 | --- | --- |
@@ -85,7 +85,7 @@ Some of Escouade’s integrations are plugins, shipped with the app, signed and 
 
 - **Switching them off**: their switch, for the whole app, or their Projects tab, for one project. Nothing they did is lost, and your choices are kept for when you switch them back on.
 - **What shows**: a code host switched off or stopped no longer follows the PRs, and the agent’s card and Settings › Connected services say so; a source switched off stops its sync, which says why; a voice service switched off leaves Settings › Voice, and dictation goes back to local; the agents of an ACP harness stay, marked “Harness missing”.
-- **No uninstall**, and no update of their own: they change with the app. A plugin by another author cannot take their id (`dev.escouade.*` is reserved); it can serve the same service beside them, and the account says which one serves it.
+- **Uninstalling them**: as any plugin. A new version is offered in the Plugins view, never installed by itself. A plugin by another author cannot take their id (`dev.escouade.*` is reserved); it can serve the same service beside them, and the account says which one serves it.
 
 ## Escouade’s plugins in the installer
 

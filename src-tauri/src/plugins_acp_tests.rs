@@ -34,16 +34,10 @@ fn fixtures() -> PathBuf {
         .join("fixtures")
 }
 
-/// Where the build put its programs (`escouade-plugins` among them).
+/// The folder of the build, beside the tests' own (`deps/`): the workspace's modules are beside it (`plugins-wasm/`).
 pub(crate) fn app_dir() -> PathBuf {
     let exe = std::env::current_exe().unwrap();
-    let dir = exe.parent().unwrap().parent().unwrap().to_path_buf();
-    assert!(
-        dir.join(builtin::program_name()).is_file(),
-        "{} is not built beside the tests (cargo build --bin escouade-plugins)",
-        dir.join(builtin::program_name()).display()
-    );
-    dir
+    exe.parent().unwrap().parent().unwrap().to_path_buf()
 }
 
 /// The manifest of the fake ACP agent's plugin, as its file says it.
@@ -68,7 +62,7 @@ fn fake_acp() -> Program {
     Program::Native(fixtures().join("acp-bin").join(name))
 }
 
-/// The runtime of a data folder of its own: the plugins the app gives in it (the generic ACP plugin among them).
+/// The runtime of a data folder of its own: the workspace's plugins in it (the generic ACP plugin among them).
 pub(crate) fn runtime(name: &str) -> (Arc<Runtime>, Arc<Plugins>, DataDir) {
     let data = DataDir::new(bench_dir(&format!("plg6-{name}")).join("data"));
     let plugins = Plugins::load_in(data.clone(), VERSION, app_dir());
@@ -89,12 +83,7 @@ pub(crate) fn runtime(name: &str) -> (Arc<Runtime>, Arc<Plugins>, DataDir) {
 /// The harness the plugin `owner` describes by `decl`, served by the generic ACP plugin.
 fn described(rt: &Arc<Runtime>, owner: &str, decl: Value) -> &'static ProcessEngine {
     let decl: proto::HarnessDecl = serde_json::from_value(decl).unwrap();
-    Box::leak(Box::new(ProcessEngine::described(
-        rt.clone(),
-        owner,
-        decl,
-        &app_dir(),
-    )))
+    Box::leak(Box::new(ProcessEngine::described(rt.clone(), owner, decl)))
 }
 
 /// The fake ACP agent's harness, from its manifest alone.

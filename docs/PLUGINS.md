@@ -1537,7 +1537,7 @@ Aucun n'est publié aujourd'hui : la décision ne casse rien.
 - **Les versions publiées qui se lancent par Node** (`slack` 1.1.0, `team-rules` 1.1.1) restent pour les apps d'avant : `escouade.max` les borne, et leur 2.0.0 prend le relais.
 - **Un harness décrit** (`contributes.harnesses[].acp`, Goose) ne change pas : le cœur lance le CLI, et `dev.escouade.acp` le sert.
 
-Le transport par process de `runtime.rs` part en dernier, avec ses tests (`tests/fixtures/fake-plugin.mjs`) : ticket Z du plan.
+Le transport par process de `runtime.rs` est parti en dernier, avec ses tests (`tests/fixtures/fake-plugin.mjs`) : Z3 (§8.33).
 
 Le prix : **un outil d'un tiers qu'on ne peut pas compiler en WASM ne s'intègre que par un programme qu'il installe lui-même**, et que le plugin nomme. C'est le sens de la décision du 2026-11-04.
 
@@ -1622,7 +1622,7 @@ Les tickets du portage, dans l'ordre. **Les lettres sont des noms de travail**, 
 | --- |--- |
 | **Z1. Les contrôles et la première publication** | `npm run plugins:publish` (fait, §8.6.2, ESC-353) ; le chef publie chaque plugin, revue et signature une par une la première fois |
 | **Z2. L'amorce réelle** (fait, §8.32) | `plugins/seed.json` rempli, un essai d'installation hors ligne |
-| **Z3. Le retrait** | `escouade-plugins`, `run.command`, le transport par process, `check_program`, l'origine `builtin`, `BUILTINS`, les attestations ; `npm run bench:int0` complet |
+| **Z3. Le retrait** (fait, §8.33) | `escouade-plugins`, `run.command`, le transport par process, `check_program`, l'origine `builtin`, `BUILTINS`, les attestations ; `npm run bench:int0` complet |
 
 **L'ordre demandé par l'utilisateur** se lit ainsi : **le déménagement** (M0), **la CI de `plugins/`** (M1), **les contrôles du store pour un `run.wasm`** (A6, A7), **la publication de chacun** (Z1).
 
@@ -2297,3 +2297,37 @@ Les deux dossiers sont de l'essai : celui « d'une 2.1 » a les fichiers qu'une 
 | `escouade-plugins` aujourd'hui (la démonstration seule, jusqu'à Z3) | 1 012 224 o | 0,30 Mo en xz |
 
 L'amorce pèse donc la moitié de l'`escouade-plugins` prévu en clair, et 2,5 Mo dans l'installeur : les modules partagent leur code (le kit, la bibliothèque standard), que LZMA compresse ensemble. L'installeur de la 2.1.4 publié pèse 22 301 192 o ; celui-ci, sans l'amorce, 34 799 184 o. L'écart ne vient pas de l'amorce : `escouade-plugin.exe` (l'outil `escouade-plugin build`, 39 759 872 o en clair, 9,3 Mo en xz) est maintenant dans l'installeur, et `escouade.exe` porte wasmtime (97 942 016 o, 24,4 Mo en xz).
+
+### 8.33 Ce que Z3 a retiré (ESC-355)
+
+Le natif est parti : tout plugin qui a un programme tourne en WASM dans Escouade, et rien d'autre ne démarre.
+
+- **`escouade-plugins`** n'existe plus (`src-tauri/src/bin/escouade-plugins*`) : ni construit, ni signé (`scripts/windows-signing.mjs`, `scripts/universal-hook.sh`), ni vérifié par `ci.yml` et `release.yml`, qui contrôlent désormais qu'il n'est dans aucun paquet. `scripts/bench/int0.mjs` construit tous les modules au lieu du programme.
+- **Le transport par process** de `runtime.rs` (`spawn`, `program_path`, le Job, la mémoire lue, `Stop::Memory`, `Status::pid`, `Runtime::usage`) est parti, comme celui du banc (`bench/fake.rs`, `Program::Process`). Une instance qui dépasse sa mémoire échoue comme un plantage.
+- **`run.command` ne démarre plus**, quelle que soit l'origine : le manifeste se lit, le plugin se charge coupé (`manifest::command_refused`, dite par la fiche, la fenêtre d'installation et le banc), et `runtime` le refuse encore s'il arrivait jusque-là. L'app ne télécharge plus le programme d'une release (`Fetched::program`, `binaries` de `version.json`).
+- **L'origine `builtin`**, `Hand::Builtin`, `ESCOUADE_DIR` (`{escouade}/…`), `check_program` et sa signature, `builtin:<version>`, `--builtin` d'`escouade-plugin` et « l'identifiant de l'app l'emporte » sont partis. `builtin::REGISTRY` reste la liste des identifiants de l'amorce et de leurs manifestes.
+- **Une build de développement et les tests** lancent les modules de `scripts/plugins-wasm.sh` que l'amorce n'a pas, sous l'origine `workspace` (jamais en release) ; ce qui est installé d'un identifiant garde sa place. La démonstration `dev.escouade.minimal` est un module commité (`tests/fixtures/plugins/minimal/`), son harness `tests/fixtures/fake-minimal.mjs`.
+- **Une entrée `builtin` d'un `plugins.json` de 2.1** n'est plus un plugin : `Plugins::index` garde ses choix dans `.kept/` et l'écarte ; le tri de l'amorce l'installe avec eux s'il le désigne. Une entrée qui ne se lit pas ne fait plus perdre les autres.
+- **La langue** est dite à tout plugin par `initialize` (`Runtime::set_lang`), plus par l'environnement ; la changer relance les plugins qui tournent. Le réseau passe par l'hôte (`set_network`).
+- **Le faux plugin des tests** est un module `run.js` (`tests/fixtures/plugins/fake/plugin.mjs`, ses options dans `args.json`). Les tests de runtime, faits, décisions, comptes, banc et adaptateurs passent sur lui ; ceux qui ne valaient que pour un process (le Job, le `pid`, le chemin d'un programme) sont partis.
+- **Au store** : `BUILTINS`, la confiance `builtin` et ses mots, `server/utils/attest.ts` ; la revue locale ne lance plus `gh attestation verify` et n'écrit plus `binaries/` (`scripts/plugin-review/attest.ts` parti, `gh` dans `engine.ts`). Le contrôle n° 10 refusait déjà `run.command`.
+
+Ce qui reste : le contrat JSON-RPC, le cœur réduit, les harness décrits (`contributes.harnesses[].acp`, Goose), et `slack` 1.1.0 et `team-rules` 1.1.1 au store pour les apps d'avant (`escouade.max`).
+
+**Une suite en release voit le dépôt.** `cargo test --release` (le banc de flux) n'a pas `debug_assertions` : `Seed::of_app` y gardait toute la liste de l'amorce sans ses fichiers, et aucun module du dépôt ne tournait. Les tests écartent maintenant, comme une build de développement, ce dont l'amorce n'a pas les fichiers.
+
+**INT-0**, `npm run bench:int0 -- --label esc-355` complet (tous les harness, le démarrage, la frappe), en release sur l'i9-14900KF sous Windows 11, `bench-results/int0-esc-355.md` :
+
+| | Avant (le module, §8.27) | Après Z3 |
+| --- | --- | --- |
+| Claude Code, ses flux au plus vite : 99e centile | 655 µs | 466 µs |
+| Le long tour au plus vite : 99e centile | 30,7 ms (30,5 ms par le process) | 30,8 ms |
+| Le long tour à son rythme : 99e centile | 32,5 ms (32,2 ms par le process) | 32,6 ms |
+| Le débit au plus vite, le plus lent des harness | | 8 523 lignes/s (Antigravity CLI), 29 625 pour le long tour |
+| Linear par l'hôte : 99e centile | | 1,44 ms |
+
+Dans les seuils : +0,4 ms au 99e centile au plus, plus de 2 200 lignes/s partout. Le démarrage jusqu'à la fenêtre : 448 ms de médiane ; le premier agent prêt : 100 ms ; une frappe dans la vue Claude Code : 13,4 ms de médiane.
+
+**Le poids.** `npx tauri build --bundles nsis` (sans l'amorce, `createUpdaterArtifacts` coupé) : l'installeur pèse **35 570 336 o** (33,92 Mio), sans `escouade-plugins`. Il n'est pas comparable à l'octet près aux 34 799 184 o du §8.32 : `main` a grandi depuis (`escouade.exe` 97 942 016 → 100 240 896 o, `escouade-plugin.exe` 39 759 872 → 41 657 344 o). Ce qui part est le binaire que Z2 a mesuré, 1 012 224 o en clair, 0,30 Mo en xz ; l'amorce ajoute ses 2,5 Mo par-dessus, comme au §8.32.
+
+**Les suites.** clippy `-D warnings` et `cargo fmt --check` propres ; nextest 4 473 tests, tous verts (`round_trips_and_throughput_are_measured` sous la charge de la suite, vert seul) ; svelte-check, vitest (5 037), `format:check`, le store (387), le site (1 359) ; les e2e 366 verts, 23 sautés (les vrais harness), `plugins-view.spec.ts` vert seul après correction de son attente.

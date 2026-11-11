@@ -18,7 +18,6 @@ afterEach(() => {
 });
 
 const manifest = (fields: object) => JSON.stringify({ id: 'dev.escouade.x', version: '2.2.0', ...fields });
-const APP = { run: { command: '{escouade}/escouade-plugins', args: ['x'] } };
 const WASM = { run: { wasm: 'Cargo.toml' } };
 const cargo = (version: string) =>
   `[package]\nname = "escouade-plugin-x"\nversion = "${version}"\n\n[dependencies]\nserde = { version = "1" }\n`;
@@ -63,18 +62,10 @@ describe('problemsOf', () => {
     ]);
   });
 
-  it('takes 0.0.0 from a plugin the app gives, whose version the app stamps, and from no other', () => {
-    const stamped = { version: '0.0.0' };
-    expect(problems({ ...paperwork, 'escouade-plugin.json': manifest({ ...stamped, ...APP }), 'Cargo.toml': cargo('1.0.0') })).toEqual([]);
-    expect(problems({ ...paperwork, 'escouade-plugin.json': manifest({ ...stamped, ...WASM }), 'Cargo.toml': cargo('1.0.0') })).toEqual([
-      'escouade-plugin.json says version 0.0.0, Cargo.toml 1.0.0',
-    ]);
-  });
-
-  it('holds a plugin the app gives to its version when it says one', () => {
-    expect(problems({ ...paperwork, 'escouade-plugin.json': manifest(APP), 'Cargo.toml': cargo('1.0.0') })).toEqual([
-      'escouade-plugin.json says version 2.2.0, Cargo.toml 1.0.0',
-    ]);
+  it('takes 0.0.0 from no plugin: no version is stamped any more (ESC-355)', () => {
+    expect(
+      problems({ ...paperwork, 'escouade-plugin.json': manifest({ version: '0.0.0', ...WASM }), 'Cargo.toml': cargo('1.0.0') }),
+    ).toEqual(['escouade-plugin.json says version 0.0.0, Cargo.toml 1.0.0']);
   });
 
   it('asks every plugin, of any sort, for a LICENSE and a CHANGELOG with something in them', () => {
@@ -94,9 +85,9 @@ describe('problemsOf', () => {
 describe('readPlugin', () => {
   it('sorts a plugin by its folder and its program', () => {
     const dir = folder({ ...paperwork, 'escouade-plugin.json': manifest(WASM), 'Cargo.toml': cargo('2.2.0') });
-    expect(readPlugin(dir, 'x')).toMatchObject({ wasm: true, ofTheApp: false, node: false, cargo: { name: 'escouade-plugin-x' } });
-    const app = folder({ 'escouade-plugin.json': manifest(APP) });
-    expect(readPlugin(app, 'x')).toMatchObject({ wasm: false, ofTheApp: true, cargo: null });
+    expect(readPlugin(dir, 'x')).toMatchObject({ wasm: true, node: false, cargo: { name: 'escouade-plugin-x' } });
+    const js = folder({ 'escouade-plugin.json': manifest({ run: { js: 'dist/plugin.mjs' } }) });
+    expect(readPlugin(js, 'x')).toMatchObject({ wasm: false, cargo: null });
   });
 });
 

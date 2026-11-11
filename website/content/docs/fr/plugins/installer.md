@@ -9,7 +9,7 @@ L’icône en forme de pièce de puzzle de la barre des projets, sous les statis
 Sa barre latérale :
 
 - **Store** : le catalogue de store.escouade.dev, gardé sur ta machine et cherché sur elle (voir plus bas).
-- **Installés** : tous les plugins, en deux groupes, « Ajoutés » et « Livrés avec Escouade ». Une ligne par plugin : sa version, « Non vérifié » ou « En développement », la mise à jour trouvée, d’où il vient, les projets où il est actif (une pastille par projet, un cadenas pour un projet privé) et son interrupteur pour toute l’app.
+- **Installés** : tous les plugins installés, ceux d’Escouade comme les autres, sous « Ajoutés ». Une ligne par plugin : sa version, « Non vérifié » ou « En développement », la mise à jour trouvée, d’où il vient, les projets où il est actif (une pastille par projet, un cadenas pour un projet privé) et son interrupteur pour toute l’app.
 - **Mises à jour** : les versions plus récentes trouvées, leur nombre en ambre.
 - **En développement** : les dossiers chargés en place.
 - **Les catégories** : Harness, Sources du Kanban, Hébergeurs de code, Thèmes, Notifications, Autorisations, Outils, Langues, tirées de ce que chaque plugin ajoute.
@@ -58,19 +58,19 @@ Elle dit, avant que rien ne soit installé :
 
 | Permission | Ce que dit la fenêtre |
 | --- | --- |
-| `run.command` | « Lance un programme sur ton ordinateur, avec tes droits », en gras |
+| `run.command` | « Ne démarre pas » : Escouade ne lance plus de programme natif, quelle que soit l’origine du plugin |
 | `run.js` | « Tourne dans Escouade, isolé » : un programme en WASM, sans accès au disque hors de son dossier |
 | `permissions.decide` | « Décide des autorisations de tes agents », en rouge |
 | `permissions.commands` | « Lance des commandes », et lesquelles |
 | `permissions.events` | « Reçoit ces événements », et lesquels |
-| `permissions.network` | « Se connecte à », et l’hôte : appliqué à un programme `run.js` et aux webhooks, que Escouade n’envoie qu’à ces hôtes ; seulement déclaré pour un programme `run.command`, dont Escouade ne filtre pas le réseau |
+| `permissions.network` | « Se connecte à », et l’hôte : appliqué à un programme `run.js` ou `run.wasm` et aux webhooks, que Escouade n’envoie qu’à ces hôtes |
 | `permissions.secrets` | « Garde un secret : », et son nom |
 
 « Installer quand même » installe le plugin ; « Annuler » efface ce qui avait été mis de côté. Un manifeste qui ne tient pas n’ouvre pas la fenêtre : la raison s’affiche en tête de la vue, champ par champ (voir [le manifeste](plugins/manifest)).
 
-## Les plugins livrés avec Escouade
+## Les plugins d’Escouade
 
-Certaines intégrations d’Escouade sont des plugins, livrés avec l’app, signés et mis à jour avec elle : la vue Plugins les range sous « Livrés avec Escouade », avec la même page que les autres (ce qu’ils ajoutent, leurs permissions, leur journal). Ils sont actifs partout d’office, sauf dans les projets privés, comme tout plugin.
+Certaines intégrations d’Escouade sont des plugins, écrits par Escouade, relus et signés sur le store, et dans l’installeur (voir plus bas) : des plugins comme les autres, avec la même page (ce qu’ils ajoutent, leurs permissions, leur journal). Ils tournent en WASM dans Escouade, comme tout plugin. Ils sont actifs partout d’office, sauf dans les projets privés.
 
 | Plugin | Ce qu’il sert |
 | --- | --- |
@@ -85,7 +85,7 @@ Certaines intégrations d’Escouade sont des plugins, livrés avec l’app, sig
 
 - **Les couper** : leur interrupteur, pour toute l’app, ou leur onglet Projets, pour un projet. Rien de ce qu’ils ont fait n’est perdu, et tes choix sont gardés pour quand tu les rallumes.
 - **Ce qui se voit** : un hébergeur coupé ou arrêté ne suit plus les PR, et la carte de l’agent comme Réglages › Services connectés le disent ; une source coupée arrête sa synchro, qui dit pourquoi ; un service de voix coupé quitte Réglages › Voix, et la dictée repasse en local ; les agents d’un harness ACP restent, marqués « Harness absent ».
-- **Pas de désinstallation**, ni de mise à jour à part : ils changent avec l’app. Un plugin d’un autre auteur ne peut pas prendre leur identifiant (`dev.escouade.*` est réservé) ; il peut servir le même service à côté d’eux, et c’est le compte qui dit lequel le sert.
+- **Les désinstaller** : comme tout plugin. Une nouvelle version est proposée dans la vue Plugins, jamais installée seule. Un plugin d’un autre auteur ne peut pas prendre leur identifiant (`dev.escouade.*` est réservé) ; il peut servir le même service à côté d’eux, et c’est le compte qui dit lequel le sert.
 
 ## Les plugins d’Escouade dans l’installeur
 

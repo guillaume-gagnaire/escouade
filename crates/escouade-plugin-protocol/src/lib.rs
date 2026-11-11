@@ -5,7 +5,7 @@
 //! The protocol Escouade speaks to its plugins (docs/PLUGINS.md §3, schemas/plugin-protocol-1.json): JSON-RPC 2.0,
 //! one message a line, on the plugin's input and output. This crate holds what both sides share: the version, the
 //! names of the methods every plugin answers, the messages of the handshake, and `serve`, the loop a plugin written
-//! in Rust runs (`escouade-plugins`, the program of the plugins the app gives, INT-4).
+//! in Rust runs natively (its tests), as `turn` runs it in a module.
 
 pub mod engine;
 pub mod forge;

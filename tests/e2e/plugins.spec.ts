@@ -14,10 +14,10 @@ function plugin(dir: string, manifest: unknown) {
   fs.writeFileSync(path.join(dir, 'themes', 'contrast.json'), '{}');
 }
 
-// The plugins the app gives (origin builtin), and the others. Each plugin the app comes to give (INT-7, 8, 10, 13…) adds
-// one: the test reads them as a set that holds the demonstration plugin and isola, never as these alone.
-const builtin = (list: { ok: View[] } | { err: unknown }) => ('ok' in list ? list.ok : []).filter((p) => p.origin.kind === 'builtin');
-const others = (list: { ok: View[] } | { err: unknown }) => ('ok' in list ? list.ok : []).filter((p) => p.origin.kind !== 'builtin');
+// The workspace's of a build of development (origin workspace, ESC-355), and the others. The test reads them as a set that
+// holds the demonstration plugin and isola, never as these alone.
+const builtin = (list: { ok: View[] } | { err: unknown }) => ('ok' in list ? list.ok : []).filter((p) => p.origin.kind === 'workspace');
+const others = (list: { ok: View[] } | { err: unknown }) => ('ok' in list ? list.ok : []).filter((p) => p.origin.kind !== 'workspace');
 const OURS = [
   'dev.escouade.minimal',
   'dev.escouade.isola',
@@ -80,7 +80,7 @@ test('a declarative plugin is installed from a folder, and an invalid one says w
     later: { field: 'of a later Escouade' },
   });
 
-  // The app gives its own (INT-4): the demonstration plugin and isola among them, from the start, with the origin builtin.
+  // A build of development runs the workspace's: the demonstration plugin and isola among them, from the start.
   const first = await invoke<View[]>('plugins_list');
   expect(others(first)).toEqual([]);
   expect(builtin(first).map((p) => p.id)).toEqual(expect.arrayContaining(OURS));

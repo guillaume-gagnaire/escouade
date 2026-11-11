@@ -45,9 +45,10 @@ function run(what, command, args, cwd, env) {
 const read = (file) => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null);
 const fmt = (x, digits = 0) => (Number.isFinite(x) ? x.toFixed(digits) : '—');
 
+// All of them: the stream bench replays every harness through its plugin's module (ESC-355).
+run('the modules of the plugins', 'sh', ['scripts/plugins-wasm.sh'], ROOT);
 // A source in WASM (ESC-344): a call of Linear through the app's host. ESCOUADE_NATIVE_PLUGINS, a program of before its
 // port, measures the two and holds the threshold (5 ms more at the 99th percentile).
-run('the modules of the plugins', 'sh', ['scripts/plugins-wasm.sh', 'linear', 'opencode', 'claude', 'acp'], ROOT);
 if (!opencodeOnly)
   run(
     'Linear through the host (release)',
@@ -67,10 +68,8 @@ run(
 );
 if (opencodeOnly) process.exit(0);
 
-// The harnesses that left the core (INT-10) are replayed through their plugin's process: the program of the plugins,
-// beside the release tests.
-run('the plugins’ program (release)', 'cargo', ['build', '--release', '--bin', 'escouade-plugins'], path.join(ROOT, 'src-tauri'));
-
+// The harnesses that left the core (INT-10) are replayed through their plugin's module: the ones built above
+// (scripts/plugins-wasm.sh), beside the release tests.
 run(
   'stream bench (release)',
   'cargo',

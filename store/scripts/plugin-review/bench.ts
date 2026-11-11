@@ -122,28 +122,9 @@ export function findLocalCli(env = process.env, repo?: string, platform = proces
 export const localCommand = (cli: string): string[] => (/\.m?js$/.test(cli) ? [process.execPath, cli] : [cli]);
 
 /**
- * Makes the folder the bench plays: the plugin's files, and its Linux program from the release where its manifest
- * names it (`run.linux`, else `run.command`), so that what runs is what was read and fingerprinted.
- */
-export function benchFolder(src: string, dest: string, manifest: Record<string, unknown>, linuxBinary: Buffer | null): string {
-  cpSync(src, dest, { recursive: true, verbatimSymlinks: true });
-  const run = (manifest.run ?? null) as { command?: string; linux?: string } | null;
-  const program = run?.linux ?? run?.command;
-  if (program && inside(dest, program)) {
-    const at = join(dest, program);
-    if (linuxBinary) {
-      mkdirSync(dirname(at), { recursive: true });
-      writeFileSync(at, linuxBinary);
-    }
-    if (existsSync(at) && statSync(at).isFile()) chmodSync(at, 0o755);
-  }
-  return dest;
-}
-
-/**
  * Whether the bench plays the plugin with `--first-party` (ESC-314): an id `dev.escouade.*` from the app's repository
- * (`plugins/<id>/`), which the store already let through by its GitHub id. It takes the reserved ids, never the app's
- * programs (`{escouade}/…`); any other plugin is played as a third party's.
+ * (`plugins/<id>/`), which the store already let through by its GitHub id. It takes the reserved ids; any other plugin is
+ * played as a third party's.
  */
 export function firstPartyBench(id: string, repository: string, env: Env = process.env): boolean {
   const repo = repository

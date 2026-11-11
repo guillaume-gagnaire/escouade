@@ -6,8 +6,7 @@ authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"
 edition = "2021"
 rust-version = "1.88"
-# The app; `escouade-hook`, `escouade-plugin` and `escouade-plugins` (src/bin) are the other programs the installers ship
-# beside it.
+# The app; `escouade-hook` and `escouade-plugin` (src/bin) are the other programs the installers ship beside it.
 default-run = "escouade"
 
 [features]
@@ -60,7 +59,7 @@ os_info = { version = "3", default-features = false }
 sha2 = "0.10"
 # The store's signatures of the verified plugins (docs/STORE.md §4.5), as the updater checks its own.
 minisign-verify = "0.2"
-# The protocol spoken to the plugins, shared with `escouade-plugins`, the program of the plugins the app gives (INT-4).
+# The protocol spoken to the plugins, shared with the plugins in Rust (`plugins/`, the kit).
 escouade-plugin-protocol = { path = "../crates/escouade-plugin-protocol" }
 # The ACP client (PLG-6), which the core's ACP harnesses share until they come out in process (INT-10).
 escouade-acp = { path = "../crates/escouade-acp" }
@@ -161,8 +160,8 @@ keyring = { version = "3.6", features = ["apple-native"] }
 # The dependencies keep their line tables only (backtraces still say where), Escouade its full debug info: with
 # everything in full, the program database of the debug build went over the MSVC linker's limit (LNK1140, 2026-10-28,
 # when the drive's PDF and Word readers came in).
-# The crates of the plugins Escouade gives build and test with the app (one lock, one target): the protocol, the kit of
-# the Rust plugins, and each plugin of `escouade-plugins` (docs/PLUGINS.md §4.3).
+# The crates of the plugins build and test with the app (one lock, one target): the protocol, the kit of the Rust plugins,
+# the ACP client and the voice; the plugins themselves are the workspace of `plugins/` (docs/PLUGINS.md §8.6.3).
 [workspace]
 members = [
     "../crates/escouade-plugin-protocol",

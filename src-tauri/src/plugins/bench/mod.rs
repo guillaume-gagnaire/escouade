@@ -15,7 +15,7 @@ pub mod cli;
 pub mod fake;
 
 use super::manifest::{self, Manifest};
-use super::runtime::{program_path, timeout_of, METHOD_NOT_FOUND, PROTOCOL};
+use super::runtime::{timeout_of, METHOD_NOT_FOUND, PROTOCOL};
 use crate::i18n::Lang;
 use fake::{Reply, Seen, Session};
 use serde::Serialize;
@@ -236,9 +236,7 @@ pub struct Options {
     pub lang: Lang,
     /// The version of Escouade the plugin is judged for.
     pub app_version: String,
-    /// The folder of the app's programs (`{escouade}/…` of a plugin of Escouade's own).
-    pub escouade_dir: PathBuf,
-    /// Whose hand the plugin is (`--first-party`, `--builtin`): what it may take of Escouade's own.
+    /// Whose hand the plugin is (`--first-party`): what it may take of Escouade's own.
     pub hand: manifest::Hand,
     /// The delay of `initialize`.
     pub initialize: Duration,
@@ -264,10 +262,6 @@ impl Default for Options {
         Self {
             lang: crate::i18n::system(),
             app_version: env!("CARGO_PKG_VERSION").to_string(),
-            escouade_dir: std::env::current_exe()
-                .ok()
-                .and_then(|p| p.parent().map(Path::to_path_buf))
-                .unwrap_or_default(),
             hand: manifest::Hand::Third,
             initialize: timeout_of("initialize"),
             grace: Duration::from_secs(2),
@@ -332,10 +326,9 @@ fn fact_of(patterns: &[String]) -> Option<String> {
     })
 }
 
-/// The program the bench plays: a process, or the module of a plugin in WASM.
+/// The program the bench plays: the module of a plugin in WASM.
 #[derive(Clone)]
 pub enum Program {
-    Process(PathBuf),
     Wasm {
         /// Its bundle or its module, for what the bench says.
         bundle: PathBuf,
@@ -346,7 +339,6 @@ pub enum Program {
 impl Program {
     pub fn path(&self) -> &Path {
         match self {
-            Program::Process(p) => p,
             Program::Wasm { bundle, .. } => bundle,
         }
     }
@@ -361,7 +353,6 @@ impl Program {
         made: Option<String>,
     ) -> std::io::Result<Session> {
         match self {
-            Program::Process(p) => Session::start(folder, m, p, &o.app_version, secrets, made),
             Program::Wasm { module, .. } => Session::start_wasm(
                 folder,
                 m,
@@ -407,8 +398,8 @@ fn reactor_of(folder: &Path, cargo_file: &str, o: &Options) -> Result<Program, (
     })
 }
 
-/// The program of the plugin of `m` in `folder`: its process, its module, or its bundle compiled to its module (in the
-/// cache of `o.data`); why not, in words, and what the author should do.
+/// The program of the plugin of `m` in `folder`: its module, or its bundle compiled to its module (in the cache of
+/// `o.data`); why not, in words, and what the author should do. A `run.command` is not started (ESC-355).
 pub fn program_of(folder: &Path, m: &Manifest, o: &Options) -> Result<Program, (String, String)> {
     let lang = o.lang;
     let run = m.run.as_ref().expect("a program");
@@ -416,7 +407,14 @@ pub fn program_of(folder: &Path, m: &Manifest, o: &Options) -> Result<Program, (
         return reactor_of(folder, cargo_file, o);
     }
     let Some(js) = &run.js else {
-        return Ok(Program::Process(program_path(folder, run, &o.escouade_dir)));
+        return Err((
+            manifest::command_refused(lang),
+            tr_in!(
+                lang,
+                "`run.js` (un bundle du SDK) ou `run.wasm` (un crate Rust en `cdylib`).",
+                "`run.js` (a bundle of the SDK) or `run.wasm` (a Rust crate as a `cdylib`)."
+            ),
+        ));
     };
     let bundle = std::path::absolute(folder.join(js)).unwrap_or_else(|_| folder.join(js));
     let one_file = || {
@@ -792,7 +790,7 @@ fn manifest_of(b: &mut Bench) -> Option<Manifest> {
 /// The scenarios of a program; the round trips measured when asked.
 async fn program(b: &mut Bench<'_>, m: &Manifest) -> Option<Measure> {
     let lang = b.o.lang;
-    // Its process, or its module (made off the runtime's threads: Javy takes a second or two).
+    // Its module (made off the runtime's threads: Javy takes a second or two).
     let (folder, manifest, o) = (b.folder.clone(), m.clone(), b.o.clone());
     let made = tokio::task::spawn_blocking(move || program_of(&folder, &manifest, &o))
         .await
@@ -1108,8 +1106,8 @@ async fn program(b: &mut Bench<'_>, m: &Manifest) -> Option<Measure> {
                         Scenario::Shutdown,
                         tr_in!(
                             lang,
-                            "répond à `shutdown` mais tourne encore : Escouade met fin à son Job",
-                            "answers shutdown but still runs: Escouade ends its job"
+                            "répond à `shutdown` mais tourne encore : Escouade met fin à son instance",
+                            "answers shutdown but still runs: Escouade ends its instance"
                         ),
                         missing,
                     );
@@ -1123,8 +1121,8 @@ async fn program(b: &mut Bench<'_>, m: &Manifest) -> Option<Measure> {
                 Scenario::Shutdown,
                 tr_in!(
                     lang,
-                    "aucune réponse à `shutdown` en {} ms : Escouade met fin à son Job",
-                    "no answer to shutdown within {} ms: Escouade ends its job",
+                    "aucune réponse à `shutdown` en {} ms : Escouade met fin à son instance",
+                    "no answer to shutdown within {} ms: Escouade ends its instance",
                     ms(delay)
                 ),
                 missing,

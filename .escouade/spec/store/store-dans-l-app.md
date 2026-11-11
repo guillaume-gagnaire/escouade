@@ -1,8 +1,8 @@
 ---
 title: "Le store dans l'app"
 subject: "store"
-sources: ["docs/STORE.md","docs/PLUGINS.md","design/plugins/maquettes-b.html","design/app-redesign/UX-NOTES.md","website/content/docs/fr/plugins/installer.md","src-tauri/src/plugins_seed_tests.rs","src-tauri/src/plugins_store_tests.rs"]
-tickets: ["ESC-236","ESC-287","ESC-313","ESC-314","ESC-184","ESC-394","ESC-405"]
+sources: ["docs/STORE.md","docs/PLUGINS.md §8.33","design/plugins/maquettes-b.html","design/app-redesign/UX-NOTES.md","website/content/docs/fr/plugins/installer.md","src-tauri/src/plugins/store.rs","src-tauri/src/plugins_seed_tests.rs","src-tauri/src/plugins_store_tests.rs"]
+tickets: ["ESC-236","ESC-287","ESC-313","ESC-314","ESC-184","ESC-394","ESC-405","ESC-355"]
 decisions: [21,25,67,132]
 compared: "2026-10-31T19:50:53+01:00"
 gaps: [{"text":"La spec dit que le schéma `escouade` est enregistré par les installeurs NSIS et MSI sous Windows. Le code ne produit que l'installeur NSIS (`bundle.targets` vaut [\"nsis\"] et rien ne construit de MSI), donc aucun MSI n'enregistre le schéma.","code":["src-tauri/tauri.conf.json"]},{"text":"La spec dit que le `.deb` et le `.rpm` déclarent `x-scheme-handler/escouade`. Sous Linux, la config ne construit que `appimage` et `deb` (`targets: [\"appimage\", \"deb\"]`). Le gabarit de bureau est prévu pour le rpm, mais aucun `.rpm` n'est produit, donc aucun rpm ne déclare le schéma.","code":["src-tauri/tauri.linux.conf.json"]}]
@@ -26,8 +26,8 @@ Référence : `docs/STORE.md` §5 et §7 (il fait foi) ; aperçu `#b1` à `#b4` 
 - « Pas maintenant » écarte une proposition une semaine, « Ne plus proposer » pour de bon (gardé sur la machine).
 
 ## L'installation
-- « Installer » télécharge `version.json` (comparé à l'empreinte du catalogue), la signature si le catalogue dit la version vérifiée (vérifiée avec les clés embarquées, moins celles que la liste de révocation retire ; le commentaire nomme l'id et la version), l'archive (taille et SHA-256 de `version.json`), le programme du système de la machine (SHA-256), puis lit l'archive en mémoire (liens, chemins absolus ou qui remontent refusés, 50 Mo, 200 Mo décompressés, 20 000 entrées) et compare le manifeste à son empreinte. Un écart arrête tout et le dit ; rien n'est mis de côté.
-- Le programme de la release est écrit là où le manifeste le nomme (`run.<système>`, sinon `run.command`), exécutable.
+- « Installer » télécharge `version.json` (comparé à l'empreinte du catalogue), la signature si le catalogue dit la version vérifiée (vérifiée avec les clés embarquées, moins celles que la liste de révocation retire ; le commentaire nomme l'id et la version), l'archive (taille et SHA-256 de `version.json`), le module que le store a compilé (SHA-256 de `version.json`), puis lit l'archive en mémoire (liens, chemins absolus ou qui remontent refusés, 50 Mo, 200 Mo décompressés, 20 000 entrées) et compare le manifeste à son empreinte. Un écart arrête tout et le dit ; rien n'est mis de côté.
+- Aucun programme d'une release n'est téléchargé ni écrit (ESC-355) : un plugin `run.command`, une version d'avant, s'installe et se charge coupé, sa fiche disant qu'Escouade ne lance plus `run.command`.
 - La fenêtre de PLG-4 dit « Vérifié par Escouade », l'origine « store.escouade.dev », la version → le commit, l'empreinte « archive reçue identique », la signature « vérifiée ici, par l'app » ; une version non vérifiée a sa bande (« Personne n'a relu cette version… ») et « Installer quand même ».
 - Une app qui n'embarque pas encore les clés du store installe sans sceau, sans refuser.
 - **« N'installer que des versions vérifiées »** (en tête des installés, éteint d'office, gardé dans les réglages) refuse une version sans sceau, à l'installation comme à la mise à jour.
@@ -60,17 +60,16 @@ Référence : `docs/STORE.md` §5 et §7 (il fait foi) ; aperçu `#b1` à `#b4` 
 - Le dossier est gardé dans l'origine du plugin installé ; « Vient de » montre une ligne « Dossier » dont le lien ouvre `<dépôt>/tree/<étiquette>/<dossier>` sur GitHub. L'archive reçue est celle du dossier seul.
 
 ## Un plugin d'Escouade venu du store (ESC-314)
-- Les plugins de première main que l'app ne livre pas (`dev.escouade.high-contrast`, `dev.escouade.discord`, `dev.escouade.slack`, `dev.escouade.team-rules`, de `plugins/<id>/` du dépôt de l'app) s'installent depuis le store **comme tout plugin du store** : origine `store` (le dépôt, le dossier, l'étiquette `plugins/<id>/v…`, le commit), copie dans le dossier des plugins des données, mises à jour depuis le catalogue.
+- Les plugins de première main (`dev.escouade.*`, de `plugins/<id-court>/` du dépôt de l'app) s'installent depuis le store **comme tout plugin du store** : origine `store` (le dépôt, le dossier, l'étiquette `plugins/<id-court>/v…`, le commit), copie dans le dossier des plugins des données, mises à jour depuis le catalogue. Ceux de l'amorce ont la même origine, marquée `seed`.
 - **Signés seulement** : une version `dev.escouade.*` sans signature du store est refusée à l'installation, « <id> v… est un plugin d'Escouade (`dev.escouade.*`) que le store n'a pas encore signé : il ne s'installe que signé. ». Un dossier copié ou un dépôt cloné qui prend un id `dev.escouade.*` reste refusé (« réservé aux plugins d'Escouade ») ; un dossier chargé « En développement » le prend, pour que l'auteur l'essaie.
-- Un tel plugin ne prend que l'id : jamais les programmes de l'app (`{escouade}/…`), réservés aux plugins qu'elle livre.
-- **Livré avec l'app ou venu du store, l'origine les distingue, jamais l'id** : un plugin livré a l'origine `builtin` (INT-4) et seul il est rangé dans « Livrés avec Escouade » ; un `dev.escouade.*` du store est rangé dans « Ajoutés », avec son sceau et sa ligne « Vient de ».
+- L'app n'en donne plus aucun (l'origine `builtin` a disparu avec ESC-355) : tous sont rangés dans « Ajoutés », avec leur sceau et leur ligne « Vient de ». Une build de développement range sous « Du dépôt » les modules qu'elle lance de `scripts/plugins-wasm.sh` (origine `workspace`).
 
 ## Ce que la fenêtre d'installation dit du réseau (ESC-184)
-- Chaque hôte de `permissions.network` porte ce qu'Escouade en fait : appliqué pour un `run.js` (« il ne joint aucun autre hôte, ni une adresse de ta machine ou de ton réseau local ») ; appliqué pour un plugin déclaratif (« ses webhooks ne partent que vers cet hôte ») ; seulement déclaré pour un `run.command` (« Escouade ne filtre pas encore son réseau »).
+- Chaque hôte de `permissions.network` porte ce qu'Escouade en fait : appliqué pour un programme en WASM (« il ne joint aucun autre hôte, ni une adresse de ta machine ou de ton réseau local ») ; appliqué pour un plugin déclaratif (« ses webhooks ne partent que vers cet hôte »). Un `run.command` ne démarre pas : la fenêtre le dit à la place de son réseau.
 
 ## Les installations depuis l'amorce comptent (ESC-394)
 - Une installation depuis l'amorce compte au store comme une installation (`POST /api/v1/installs { id, version, event: "install" }`), sous la même règle que « Installer » : avec l'accord aux statistiques seulement, rien que les trois clés. C'est vrai au démarrage (le tri), pour un geste qui demande un plugin, et au clic sur un plugin de l'amorce.
 - L'amorce installe hors ligne, souvent avant que l'utilisateur ait répondu sur les statistiques : le compte attend dans ce que l'app garde de l'amorce, par id et version. Il part dès que l'accord vaut oui et que le store répond, et il est oublié sur un non. Une version comptée ne compte plus jamais.
 - Un envoi qui échoue (hors ligne, erreur du store, 408, 429) reste en attente. Il repart au démarrage suivant, à chaque relecture du store (toutes les 6 heures, ou « Relire maintenant ») et au prochain geste, un essai à la fois. Un autre refus du store (une version qu'il ne publie pas) le règle.
 - Un plugin installé par l'amorce d'une 2.2.0-beta et jamais compté se compte une fois, avec sa version installée, au premier démarrage qui sait compter.
-- Rien ne compte d'un plugin `builtin` (non passé par le store), d'un dossier en développement, d'une mise à jour du store (déjà comptée en `update`), ni de l'amorce d'un build de développement (`scripts/seed-dev.sh`, les e2e).
+- Rien ne compte d'un module du dépôt d'une build de développement (origine `workspace`), d'un dossier en développement, d'une mise à jour du store (déjà comptée en `update`), ni de l'amorce d'un build de développement (`scripts/seed-dev.sh`, les e2e).

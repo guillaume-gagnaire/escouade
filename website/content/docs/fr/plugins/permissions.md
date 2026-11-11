@@ -7,13 +7,13 @@ Ce qu’un plugin demande dans son manifeste, ce que chaque demande lui ouvre, e
 | Dans le manifeste | Ce qu’elle ouvre | Ce qu’Escouade applique |
 | --- | --- | --- |
 | `run.js`, `run.wasm` | Un programme en JS, en TypeScript ou en Rust, dans l’app, en WASM. | Tout : 64 Mo de mémoire, des délais, et rien hors de ce qu’il déclare ici : ni réseau, ni fichier, ni programme. |
-| `run.command` | Un programme lancé dans un process, avec tes droits : il peut lire tes fichiers, lancer d’autres programmes, se connecter où il veut. Le store n’en publie aucun : il ne vient que d’un dossier ou d’un dépôt git. | Rien au-delà de ses autres permissions : Escouade le lance, l’arrête avec tout ce qu’il a lancé, borne sa mémoire à 1 Go, mais ne l’enferme pas. |
+| `run.command` | Un programme natif : Escouade ne le lance plus, quelle que soit l’origine du plugin, et le store le refuse. | Rien : le plugin ne démarre pas, et sa page dit pourquoi. |
 | `permissions.decide` | Autoriser ou refuser ce que tes agents demandent, avant toi. | Une réponse en 500 ms, sinon la demande vient à toi ; un refus l’emporte ; chaque décision est au journal. Jamais donnée par un projet. |
 | `permissions.commands` | Les programmes de ton ordinateur qu’il peut lancer, ligne par ligne. | Rien d’autre ne se lance, sans shell, et le lancement va au journal. Mais le programme lancé a tes droits. |
 | `permissions.files` | Les dossiers qu’il lit ou écrit : le sien, un dossier à lui, ceux de tes agents. | Une liste fermée de racines, résolues par Escouade, liens suivis, jamais un projet privé. Chaque écriture va au journal. |
 | `limits` | Plus de temps ou d’octets pour un appel. | Plafonnées par Escouade : 120 s, 32 Mo, 4 Mo pour un fichier. |
 | `permissions.events` | Les faits qu’il reçoit : un ticket qui change de colonne, un agent qui attend… | Un fait hors de la liste ne lui est jamais envoyé. |
-| `permissions.network` | Les hôtes où il se connecte, les instances que tu lui donnes (`{account}`), le serveur local d’un harness (`local:shared`). | Appliquée à un programme en WASM et aux webhooks : rien d’autre ne part. Seulement montrée pour un programme `run.command`, dont Escouade ne filtre pas le réseau. |
+| `permissions.network` | Les hôtes où il se connecte, les instances que tu lui donnes (`{account}`), le serveur local d’un harness (`local:shared`). | Appliquée à un programme en WASM et aux webhooks : rien d’autre ne part. |
 | `permissions.secrets` | Les secrets qu’il garde au trousseau du système, sous un nom à lui. | Il ne reçoit que ceux de sa liste, jamais ceux d’un autre plugin, d’un compte ou d’un harness ; ils sont masqués dans son journal. |
 
 Pour chaque capacité, ce qu’elle permet, ce qu’Escouade refuse et ce que dit la fenêtre : [les capacités de l’hôte](plugins/capabilities).
@@ -27,7 +27,7 @@ Les points d’extension ajoutent leurs propres lignes à la fenêtre : un harne
 - **Une mise à jour qui demande plus** redemande ton accord, et la fenêtre marque « nouveau » chaque permission en plus.
 
 > [!WARNING]
-> Un programme `run.command` a tes droits. Même coupé pour un projet privé, il pourrait lire ses fichiers sur le disque : Escouade ne lui envoie rien de ce projet, mais ne peut pas l’en empêcher. N’installe un tel programme que d’un auteur en qui tu as confiance, ou une version « Vérifié par Escouade ».
+> Chaque plugin tourne en WASM dans Escouade : il n’a que ce que ses permissions lui donnent. Un programme qu’il lance (`permissions.commands`) a tes droits : n’accepte que ceux d’un auteur en qui tu as confiance, ou d’une version « Vérifié par Escouade ».
 
 ## Pour l’auteur
 

@@ -34,9 +34,9 @@ Quand le trousseau refuse un jeton sous Windows ou macOS, il reste dans ce fichi
 
 ### Les services servis par un plugin
 
-GitHub (l’hébergeur et GitHub Issues), GitLab (l’hébergeur ; GitLab Issues fait encore partie de l’app), Bitbucket, Gitea et Forgejo, Azure DevOps et Trello sont servis par des plugins livrés avec Escouade : rien ne change à l’usage, les comptes et les formulaires sont les mêmes. Un compte servi par le plugin d’un autre auteur le dit : « Servi par le plugin … ». Le jeton reste au trousseau ; Escouade le prête au seul plugin de ce service, quand il en a besoin.
+GitHub (l’hébergeur et GitHub Issues), GitLab (l’hébergeur ; GitLab Issues fait encore partie de l’app), Bitbucket, Gitea et Forgejo, Azure DevOps et Trello sont servis par des plugins d’Escouade : rien ne change à l’usage, les comptes et les formulaires sont les mêmes. Un compte servi par le plugin d’un autre auteur le dit : « Servi par le plugin … ». Le jeton reste au trousseau ; Escouade le prête au seul plugin de ce service, quand il en a besoin.
 
-Ces plugins se coupent dans la vue Plugins, pour toute l’app ou pour un projet (voir [les plugins livrés avec Escouade](plugins/installer#les-plugins-livres-avec-escouade)). Coupé ou arrêté, un plugin le dit au lieu de se taire :
+Ces plugins se coupent dans la vue Plugins, pour toute l’app ou pour un projet (voir [les plugins d’Escouade](plugins/installer#les-plugins-d-escouade)). Coupé ou arrêté, un plugin le dit au lieu de se taire :
 
 - **un hébergeur** : la carte de l’agent porte « Hébergeur arrêté : PR plus suivies » et garde les PR lues en dernier ; Réglages › Services connectés dit sous le compte « Le plugin GitHub est coupé (Réglages › Plugins) : ce compte ne sert plus rien, ses PR ne sont plus suivies », ou qu’il s’est arrêté et pourquoi ;
 - **une source** : la synchro s’arrête, et son échec dit « Le plugin dev.escouade.trello ne répond pas : … » ; les tickets importés restent.

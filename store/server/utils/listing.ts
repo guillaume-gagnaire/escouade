@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { and, eq, isNull, like, lt, sql } from 'drizzle-orm';
 import { accounts, installsDaily, plugins, reports, versions } from '../db/schema';
-import { BUILTINS, isBuiltinId, isOwnId, ownLogo, sourceUrl, type Builtin } from './builtin';
+import { isOwnId, ownLogo } from './builtin';
 import { textOf, type Lang, type Text } from './checks';
 import type { Db } from './db';
 import { renderDocs, type Docs } from './readme';
@@ -40,7 +40,7 @@ export const CATEGORY_NAMES: Record<Category, Text> = {
 export type Ask = { kind: 'run' | 'wasm' | 'decide' | 'events' | 'secret' | 'none' } | { kind: 'net'; host: string };
 
 /** Where a plugin's version stands with the review: Escouade's own, verified (signed, STORE-8), asked, or not. */
-export type Trust = 'builtin' | 'verified' | 'review' | 'unverified';
+export type Trust = 'verified' | 'review' | 'unverified';
 
 export interface Entry {
   id: string;
@@ -164,50 +164,6 @@ export function permissionsOf(m: Record<string, unknown>, binaries: Record<strin
   return out;
 }
 
-/** The words of one of Escouade's own: its program is the app's, signed with it. */
-export function builtinPermissions(b: Builtin): Permission[] {
-  const out: Permission[] = [
-    {
-      icon: 'run',
-      tone: 'strong',
-      text: t('Lance un programme d’Escouade, avec tes droits', 'Runs a program of Escouade, with your rights'),
-      mono: 'escouade-plugins',
-      detail: t('livré et signé avec l’app', 'shipped and signed with the app'),
-    },
-  ];
-  for (const host of b.network) out.push({ icon: 'net', tone: '', text: t('Se connecte à', 'Connects to'), mono: host });
-  if (b.categories.includes('forges') && !b.network.length)
-    out.push({ icon: 'net', tone: '', text: t('Se connecte à l’instance que tu ajoutes', 'Connects to the instance you add') });
-  if (b.secrets) out.push({ icon: 'key', tone: '', text: t('Garde les jetons de tes comptes', 'Keeps your accounts’ tokens') });
-  return out;
-}
-
-function builtinEntry(b: Builtin): Entry {
-  return {
-    id: b.id,
-    name: { fr: b.name, en: b.name.replace(' et ', ' and ') },
-    description: b.description,
-    mark: markOf(b.name),
-    hue: 180,
-    icon: null,
-    logo: b.logo,
-    author: null,
-    own: true,
-    categories: b.categories as Category[],
-    keywords: [],
-    version: null,
-    trust: 'builtin',
-    installs: 0,
-    updatedAt: null,
-    firstAt: null,
-    asks: [
-      { kind: 'run' },
-      ...b.network.map((host) => ({ kind: 'net' as const, host })),
-      ...(b.secrets ? [{ kind: 'secret' as const }] : []),
-    ],
-  };
-}
-
 /** The published versions of every plugin, with its author; the newest version of each plugin first. */
 async function publishedRows(db: Db, where = sql`true`) {
   return db
@@ -299,11 +255,10 @@ function entriesOf(all: Row[], ctx: Context, taken = false): Entry[] {
 /** The plugins its author keeps on the list: not taken off it, not deleted (docs/STORE.md §2.2). */
 const listed = sql`${isNull(plugins.unlistedAt)} and ${isNull(plugins.deletedAt)}`;
 
-/** The whole catalog: Escouade's own, then the published plugins on the list; Escouade's own alone without a database. */
+/** The whole catalog: the published plugins on the list; none without a database. */
 export async function catalog(db: Db | null): Promise<Entry[]> {
-  const own = BUILTINS.map(builtinEntry);
-  if (!db) return own;
-  return [...own, ...entriesOf(await publishedRows(db, listed), await contextOf(db)).filter((e) => !isBuiltinId(e.id))];
+  if (!db) return [];
+  return entriesOf(await publishedRows(db, listed), await contextOf(db));
 }
 
 // ---- The search ----
@@ -351,7 +306,7 @@ export function score(e: Entry, q: string): number {
 }
 
 const runs = (e: Entry) => e.asks.some((a) => a.kind === 'run');
-const verifiedish = (e: Entry) => e.trust === 'builtin' || e.trust === 'verified';
+const verifiedish = (e: Entry) => e.trust === 'verified';
 
 /** The entries that answer `query`, sorted; and what each filter would leave, for the counts of the filters. */
 export function search(entries: Entry[], query: Query): { results: Entry[]; counts: Record<string, number>; all: number } {
@@ -444,16 +399,6 @@ export async function docsOf(db: Db, dir: string, v: typeof versions.$inferSelec
 
 /** A plugin's page: its entry, its last version's files and facts, its versions; null if it has none published. */
 export async function pluginPage(db: Db | null, dir: string, id: string) {
-  const b = BUILTINS.find((x) => x.id === id);
-  if (b)
-    return {
-      entry: builtinEntry(b),
-      builtin: { docs: b.docs, source: b.source ? sourceUrl(b.source) : null },
-      permissions: builtinPermissions(b),
-      versions: [],
-      latest: null,
-      status: null,
-    };
   if (!db || id.length > 214) return null;
   const rows = await publishedRows(db, eq(plugins.id, id));
   const ctx = await contextOf(db);
@@ -472,7 +417,6 @@ export async function pluginPage(db: Db | null, dir: string, id: string) {
     .where(and(eq(reports.pluginId, id), eq(reports.state, 'open')));
   return {
     entry,
-    builtin: null,
     permissions: permissionsOf(m, v.binaries),
     versions: rows.map((r): VersionLine => ({
       version: r.version.version!,
@@ -521,7 +465,7 @@ export async function pluginPage(db: Db | null, dir: string, id: string) {
 export async function authorPage(db: Db | null, login: string) {
   if (login.toLowerCase() === 'escouade') {
     const own = db ? entriesOf(await publishedRows(db, and(like(plugins.id, 'dev.escouade.%'), listed)), await contextOf(db)) : [];
-    return { author: null, builtin: true, plugins: [...BUILTINS.map(builtinEntry), ...own] };
+    return { author: null, builtin: true, plugins: own };
   }
   if (!db || !/^[A-Za-z0-9-]{1,39}$/.test(login)) return null;
   const [account] = await db

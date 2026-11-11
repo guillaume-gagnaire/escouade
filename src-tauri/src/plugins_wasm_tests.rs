@@ -163,7 +163,6 @@ async fn team_rules_decides_in_wasm_by_the_runtime_within_500_ms() {
         Kind::Start,
         "in WASM, isolated: its precompiled module loaded from the cache"
     ));
-    assert_eq!(w.rt.status(&w.id).pid, None, "no process");
     let cases = [
         ("rm -rf build", "deny"),
         ("npm test; git push --force origin main", "deny"),
@@ -379,7 +378,6 @@ async fn the_two_plugins_of_the_app_run_in_wasm_without_node_in_the_path() {
     let w = own("team-rules", Limits::default());
     w.rt.start(&w.id).unwrap();
     until("running", || w.rt.status(&w.id).phase == PhaseName::Running).await;
-    assert_eq!(w.rt.status(&w.id).pid, None, "no process");
     let denied =
         w.rt.call(&w.id, "permissions/decide", ask("git push --force"))
             .await
@@ -869,37 +867,26 @@ async fn a_redirection_is_never_followed_out_of_the_permitted_hosts() {
     w.rt.shutdown();
 }
 
-// ---- The SDK on both transports (ESC-321) ----------------------------------------------------------------------
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum Transport {
-    Node,
-    Wasm,
-}
+// ---- The SDK in WASM (ESC-321) ---------------------------------------------------------------------------------
 
 /// tests/fixtures/plugins/sdk-both, a plugin written for the SDK (its committed bundle), copied to a folder of the
-/// test's own: run by Node (`run.command`) or in WASM (`run.js`), its rules.json pointed at a fake hook.
-fn sdk_both(t: Transport) -> (W, Seen) {
-    // Else cmd.exe may no longer find node (see `trim_test_path`).
-    #[cfg(windows)]
-    crate::paths::trim_test_path();
+/// test's own: in WASM (`run.js`), its rules.json pointed at a fake hook; `command`: its manifest says `run.command`
+/// instead, which Escouade no longer starts (ESC-355).
+fn sdk_both(command: bool) -> (W, Seen) {
     let src = root().join("tests/fixtures/plugins/sdk-both");
     let base = std::env::temp_dir().join(format!(
-        "plugin-sdk-{t:?}-{}",
+        "plugin-sdk-{command}-{}",
         uuid::Uuid::new_v4().simple()
     ));
     let folder = base.join("plugin");
-    for f in ["dist/plugin.mjs", "data/words.txt", "run", "run.cmd"] {
+    for f in ["dist/plugin.mjs", "data/words.txt"] {
         let to = folder.join(f);
         std::fs::create_dir_all(to.parent().unwrap()).unwrap();
         std::fs::copy(src.join(f), to).unwrap();
     }
     let (hook, seen) = fake_slack();
-    let endpoint = match t {
-        Transport::Node => hook.clone(),
-        // In WASM, by net/fetch: the host of permissions.network, routed to the fake hook.
-        Transport::Wasm => "https://hooks.example.dev".to_string(),
-    };
+    // By net/fetch: the host of permissions.network, routed to the fake hook.
+    let endpoint = "https://hooks.example.dev".to_string();
     std::fs::write(
         folder.join("rules.json"),
         json!({ "endpoint": endpoint, "deny": "rm -rf" }).to_string(),
@@ -908,7 +895,7 @@ fn sdk_both(t: Transport) -> (W, Seen) {
     let mut m: Value =
         serde_json::from_str(&std::fs::read_to_string(src.join("escouade-plugin.json")).unwrap())
             .unwrap();
-    if t == Transport::Node {
+    if command {
         m["run"] = json!({ "command": "run", "windows": "run.cmd" });
     }
     std::fs::write(
@@ -928,7 +915,7 @@ fn sdk_both(t: Transport) -> (W, Seen) {
         Limits::default(),
     );
     let id = m["id"].as_str().unwrap().to_string();
-    if t == Transport::Wasm {
+    if !command {
         rt.set_net(Net {
             routes: HashMap::from([("hooks.example.dev".to_string(), hook)]),
             dns: None,
@@ -952,13 +939,16 @@ fn sdk_both(t: Transport) -> (W, Seen) {
     )
 }
 
-/// The same scenario on either transport: a decision by its rules.json (readFileSync), a fact that reads its files
-/// (p.file, one refused, one missing), its secret, and posts by the standard fetch; its journal; shutdown.
-async fn the_sdk_plays(t: Transport) {
-    let (w, seen) = sdk_both(t);
+/// A decision by its rules.json (readFileSync), a fact that reads its files (p.file, one refused, one missing), its
+/// secret, and posts by the standard fetch; its journal; shutdown.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_plugin_written_for_the_sdk_runs_unchanged_in_wasm() {
+    if !ready() {
+        return;
+    }
+    let (w, seen) = sdk_both(false);
     w.rt.start(&w.id).unwrap();
     until("running", || w.rt.status(&w.id).phase == PhaseName::Running).await;
-    assert_eq!(w.rt.status(&w.id).pid.is_some(), t == Transport::Node);
     let denied =
         w.rt.call(&w.id, "permissions/decide", ask("rm -rf build"))
             .await
@@ -1000,17 +990,31 @@ async fn the_sdk_plays(t: Transport) {
     assert!(journal_has(&w, Kind::Stop, "answered shutdown"));
 }
 
+/// A `run.command` is no longer started, whatever its origin (ESC-355, docs/PLUGINS.md §8.8): its manifest reads, the
+/// plugin loads disabled, and its sheet and a call say why.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_plugin_written_for_the_sdk_runs_unchanged_by_node() {
-    the_sdk_plays(Transport::Node).await;
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn a_plugin_written_for_the_sdk_runs_unchanged_in_wasm() {
-    if !ready() {
-        return;
-    }
-    the_sdk_plays(Transport::Wasm).await;
+async fn a_plugin_of_run_command_reads_and_does_not_start_and_says_why() {
+    let (w, _seen) = sdk_both(true);
+    let v = w.plugins.get(&w.id, Lang::En).unwrap();
+    assert!(v.manifest.is_some(), "its manifest reads");
+    let crate::plugins::State::Disabled { reason } = &v.state else {
+        panic!("{:?}", v.state);
+    };
+    assert!(reason.contains("run.command"), "{reason}");
+    assert!(reason.contains("run.wasm"), "{reason}");
+    let fr = w.plugins.get(&w.id, Lang::Fr).unwrap();
+    assert!(
+        matches!(&fr.state, crate::plugins::State::Disabled { reason } if reason.contains("ne lance plus")),
+        "{:?}",
+        fr.state
+    );
+    let refused = w.rt.call(&w.id, "echo", json!({})).await;
+    assert!(
+        matches!(&refused, Err(CallError::Unavailable(why)) if why.contains("run.command")),
+        "{refused:?}"
+    );
+    assert!(w.rt.start(&w.id).is_err());
+    assert_eq!(w.rt.status(&w.id).phase, PhaseName::Idle);
 }
 
 /// An old bundle, built with the SDK before 0.3 (its own stdin), is not run in WASM: the reason is in its journal.
@@ -1213,7 +1217,7 @@ async fn a_run_js_reads_the_folder_of_its_agent_and_runs_a_declared_command() {
     if !ready() {
         return;
     }
-    let (w, _seen) = sdk_both(Transport::Wasm);
+    let (w, _seen) = sdk_both(false);
     let base = w.folder.parent().unwrap().canonicalize().unwrap();
     for d in ["wt", "other"] {
         std::fs::create_dir_all(base.join(d)).unwrap();

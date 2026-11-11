@@ -153,14 +153,12 @@ async fn an_update_from_2_1_installs_only_what_the_settings_use_and_keeps_what_w
     let fake = Fake::start().trusted();
     let data = data_of("sort-update");
     // A user of 2.1: every plugin given by the app, Trello switched off.
-    let given = Plugins::load_for_core(data.clone(), "2.2.0");
-    for id in SEEDED {
-        assert_eq!(given.get(id, Lang::Fr).unwrap().origin, Origin::Builtin);
-    }
-    given
-        .choose(builtin::TRELLO, |c| c.enabled = false)
-        .unwrap();
-    drop(given);
+    let given: Vec<&str> = builtin::REGISTRY
+        .iter()
+        .map(|e| e.id)
+        .filter(|id| *id != builtin::MINIMAL)
+        .collect();
+    crate::plugins_seed_tests::list_of_2_1(&data, &given, &[builtin::TRELLO], Vec::new());
 
     let seed = seed_of(&fake, "sort-update").await;
     let before = requests(&fake.state().await);
@@ -208,10 +206,11 @@ async fn an_update_from_2_1_installs_only_what_the_settings_use_and_keeps_what_w
         .find(|o| o.id == builtin::TRELLO)
         .unwrap();
     assert_eq!(trello.name, "Trello", "named as its manifest names it");
-    // What the seed does not hold is given by the app as before: nothing that worked is lost.
+    // What the seed of this test does not hold runs from the workspace, a build of development's (a release's seed
+    // holds them all).
     assert_eq!(
         plugins.get(builtin::GITLAB, Lang::Fr).unwrap().origin,
-        Origin::Builtin
+        Origin::Workspace
     );
     drop(plugins);
 

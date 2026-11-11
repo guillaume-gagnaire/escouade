@@ -15,7 +15,7 @@ edition = "2021"
 rust-version = "1.88"
 workspace = "../../src-tauri"
 
-# Shared by the plugins of `escouade-plugins` (docs/PLUGINS.md §4.3) and by the core, which takes from it the contract of
+# Shared by the plugins in Rust (`plugins/`, docs/PLUGINS.md §8.3) and by the core, which takes from it the contract of
 # a code host (`Forge`) and its errors, so that a plugin's client and the core's adapters speak the same.
 [dependencies]
 escouade-plugin-protocol = { path = "../escouade-plugin-protocol", version = "0.1.0" }

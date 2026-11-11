@@ -114,7 +114,7 @@ Un programme est l’un des trois, jamais deux :
   "run": { "wasm": "Cargo.toml" },
 ```
 
-- `command` : le chemin d’un programme dans le dossier du plugin, que lance un process ; `windows`, `macos` et `linux` en donnent un autre pour chaque système ; `args` ajoute des arguments. La fenêtre d’installation dit « Lance un programme sur ton ordinateur, avec tes droits ». **Le store le refuse** : un plugin du store n’a jamais de `run.command`, chaque plugin y tourne en WASM. Il reste lancé pour un plugin installé depuis un dossier ou un dépôt git, non vérifié. Pour lancer un programme de l’ordinateur, un plugin en WASM demande `permissions.commands` ([les programmes](plugins/capabilities#les-programmes-commands)).
+- `command` : un programme natif, que **Escouade ne lance plus**, quelle que soit l’origine du plugin : le manifeste se lit, et la page du plugin dit pourquoi il ne démarre pas. Le store le refuse. Pour lancer un programme de l’ordinateur, un plugin en WASM demande `permissions.commands` ([les programmes](plugins/capabilities#les-programmes-commands)).
 
 Un chemin absolu ou qui remonte avec `..` est refusé : un plugin ne lance que ce qu’il apporte.
 
@@ -126,7 +126,7 @@ Un chemin absolu ou qui remonte avec `..` est refusé : un plugin ne lance que c
 - `secrets` : les secrets qu’il garde, chacun avec une clé et un titre ;
 - `accounts` : un genre de compte, partagé par ses autres points ;
 - `ticketSources`, `forges` et `harnesses` : une source du Kanban, un hébergeur de code, un harness ; chacun avec un `id`, et le compte qu’il utilise (`account`) parmi ceux de `accounts` ;
-- `launchEnvironments` : un environnement de lancement, qui prend en charge `up`, `ls`, `down` et `destroy` d’un worktree et ses services ; pour l’instant réservé aux plugins livrés avec Escouade (isola) ;
+- `launchEnvironments` : un environnement de lancement, qui prend en charge `up`, `ls`, `down` et `destroy` d’un worktree et ses services ; pour l’instant réservé aux plugins d’Escouade (isola) ;
 - `workflowReaders` : un lecteur de workflows, pour apprendre à Escouade un workflow qu’elle ne lit pas seule. Chacun a un `id` et `files`, les globs (depuis le dossier du projet, sans `..`) des fichiers qu’il reçoit ; voir [Le lecteur de workflow](plugins/events#le-lecteur-de-workflow) ;
 - `themes` : des thèmes, décrits dans [Les thèmes](plugins/themes) ;
 - `webhooks` et `commands` : un webhook ou une commande sur un fait, décrits dans [Les événements](plugins/events) ;
@@ -177,4 +177,4 @@ Escouade installe un plugin de quatre façons :
 
 La liste des plugins installés, leur origine et leur empreinte sont dans `~/.escouade/plugins.json`. Une copie dont les fichiers ont changé depuis l’installation est désactivée, avec la raison.
 
-Le programme d’un plugin démarre à sa première activation et parle [le protocole](plugins/api). Les faits qui le démarrent et qu’il reçoit sont dans [Les événements](plugins/events). La vue Plugins installe, active et désinstalle les plugins depuis l’interface : voir [installer un plugin](plugins/installer). Les plugins livrés avec Escouade n’ont pas à être installés : ils viennent avec l’app.
+Le programme d’un plugin démarre à sa première activation et parle [le protocole](plugins/api). Les faits qui le démarrent et qu’il reçoit sont dans [Les événements](plugins/events). La vue Plugins installe, active et désinstalle les plugins depuis l’interface : voir [installer un plugin](plugins/installer). Les plugins d’Escouade n’ont pas à être installés : ils viennent avec l’app.

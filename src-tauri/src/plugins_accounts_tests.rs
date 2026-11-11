@@ -531,24 +531,15 @@ fn a_disconnect_forgets_every_name_of_the_account() {
 /// A plugin that serves GitLab accounts (its source and its host), loaded in development in the
 /// harness's core.
 fn gitlab_plugin(h: &crate::core_tests::Harness, id: &str) {
-    #[cfg(windows)]
-    crate::paths::trim_test_path();
     let dir = h.dir.join(id);
-    std::fs::create_dir_all(&dir).unwrap();
-    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures");
-    for f in ["fake-plugin.mjs", "fake-plugin.cmd", "fake-plugin"] {
-        std::fs::copy(fixtures.join(f), dir.join(f)).unwrap();
-    }
+    let run =
+        crate::plugins_runtime_tests::fake_module(&dir, &["--token-from", "account:gitlab.com"]);
     let manifest = json!({
         "id": id,
         "name": "GitLab d'entreprise",
         "version": "1.0.0",
         "escouade": { "api": "1", "min": "2.1.0" },
-        "run": {
-            "command": "fake-plugin",
-            "windows": "fake-plugin.cmd",
-            "args": ["--token-from", "account:gitlab.com"]
-        },
+        "run": run,
         "permissions": { "secrets": ["account:*"] },
         "contributes": {
             "accounts": [{ "id": "gitlab", "name": "GitLab" }],
@@ -565,6 +556,7 @@ fn gitlab_plugin(h: &crate::core_tests::Harness, id: &str) {
         .plugins
         .load_dev(&dir, crate::i18n::Lang::En)
         .unwrap();
+    crate::plugins_runtime_tests::warm(&h.core.plugin_runtime, id);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -651,7 +643,7 @@ fn vibe_account(id: &str, name: &str) -> crate::model::Account {
 fn mistral_manifest() -> manifest::Manifest {
     let text = crate::plugins::builtin::manifest_text("dev.escouade.mistral", "2.2.0").unwrap();
     let v: serde_json::Value = serde_json::from_str(&text).unwrap();
-    manifest::check(&v, Hand::Builtin)
+    manifest::check(&v, Hand::First)
         .manifest
         .expect("the manifest of Mistral holds")
 }

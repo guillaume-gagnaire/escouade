@@ -50,7 +50,7 @@ Un plugin écrit en JS ou en TypeScript se publie en `run.js` : son manifeste no
 - **La revue « Vérifié par Escouade »** recompile le bundle relu et compare l’empreinte à celle du module publié : ce qui a été lu est ce qui tourne. Une autre empreinte refuse la version.
 - **La page du plugin** dit « Tourne dans Escouade, isolé · compilé en WASM par le store », et sa ligne de liste « Compilé en WASM par le store ».
 
-Un plugin du store ne lance ni Node ni aucun programme à lui : le contrôle « Binaires » refuse `run.command`, avec la raison (« `run.command` lancerait un programme natif : le store n’en publie plus, chaque plugin tourne en WASM. »). Installé depuis un dossier ou un dépôt git, hors du store, un plugin lancé par une commande reste permis, non vérifié.
+Un plugin du store ne lance ni Node ni aucun programme à lui : le contrôle « Binaires » refuse `run.command`, avec la raison (« `run.command` lancerait un programme natif : le store n’en publie plus, chaque plugin tourne en WASM. »). Hors du store non plus, Escouade ne lance plus `run.command`, quelle que soit l’origine du plugin.
 
 ## Un plugin en Rust
 

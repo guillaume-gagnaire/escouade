@@ -66,25 +66,29 @@ pub const FILE: &str = "escouade-plugin.json";
 pub const SCHEMA_URL: &str = "https://escouade.dev/schemas/plugin-1.json";
 /// The major version of the plugins' protocol this Escouade serves (`escouade.api`).
 pub const API: u64 = 1;
-/// The ids of Escouade's own plugins: those the app gives (`Hand::Builtin`) and those of its
-/// repository's `plugins/<id>/` (`Hand::First`, ESC-314).
+/// The ids of Escouade's own plugins: those of its repository's `plugins/<id>/` (`Hand::First`, ESC-314).
 pub const RESERVED_PREFIX: &str = "dev.escouade.";
 
 /// Whose hand a manifest is read for: what it may take of Escouade's own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Hand {
-    /// Anyone's plugin: neither the ids `dev.escouade.*` nor the app's programs.
+    /// Anyone's plugin: not the ids `dev.escouade.*`.
     #[default]
     Third,
-    /// A plugin of Escouade's own hand that the app does not give (`plugins/<id>/` of its
-    /// repository, ESC-314): a version of the store signed for it, or its folder in development.
-    /// It may take the ids `dev.escouade.*`, never the app's programs (`{escouade}/…`).
+    /// A plugin of Escouade's own hand (`plugins/<id>/` of its repository, ESC-314): a version of the store signed for
+    /// it, or its folder in development. It may take the ids `dev.escouade.*`.
     First,
-    /// A plugin the app itself gives (INT-4's origin `builtin`): its ids and its programs.
-    Builtin,
 }
-/// The folder of the app's programs, in the `run` of a plugin of Escouade's own.
-pub const ESCOUADE_DIR: &str = "{escouade}";
+
+/// Why a plugin whose `run` is a command does not start (ESC-355, docs/PLUGINS.md §8.8): Escouade runs a plugin in WASM
+/// alone, whatever its origin; the manifest still reads, and the plugin's sheet says this.
+pub fn command_refused(lang: Lang) -> String {
+    tr_in!(
+        lang,
+        "Escouade ne lance plus `run.command` : un plugin se publie en `run.js` ou `run.wasm`, que le store compile pour tous les systèmes.",
+        "Escouade no longer starts `run.command`: a plugin is published as `run.js` or `run.wasm`, which the store compiles for every system."
+    )
+}
 /// The side an icon has at least, in pixels (512 advised).
 pub const ICON_MIN: u32 = 256;
 /// The weight an icon has at most, in bytes.
@@ -207,8 +211,8 @@ impl Problem {
             ),
             Code::Reserved => tr_in!(
                 lang,
-                "est réservé aux plugins d'Escouade (`dev.escouade.*`, `{{escouade}}`).",
-                "is kept for Escouade's own plugins (`dev.escouade.*`, `{{escouade}}`)."
+                "est réservé aux plugins d'Escouade (`dev.escouade.*`).",
+                "is kept for Escouade's own plugins (`dev.escouade.*`)."
             ),
             Code::Version => tr_in!(
                 lang,
@@ -892,22 +896,7 @@ impl Checker {
         Some(s.to_string())
     }
 
-    /// A program of `run`: a path in the plugin's folder, or one of Escouade's (`{escouade}/…`)
-    /// for a plugin of its own.
-    fn program(&mut self, v: &Value, path: &str, builtin: bool) -> Option<String> {
-        let s = self.string(v, path)?;
-        if s.starts_with(ESCOUADE_DIR) {
-            if !builtin {
-                self.problem(path, Code::Reserved);
-                return None;
-            }
-            return Some(s.to_string());
-        }
-        self.inner_path(v, path)
-    }
-
     fn manifest(&mut self, v: &Value, hand: Hand, file: Option<FileOf>) -> Option<Manifest> {
-        let builtin = hand == Hand::Builtin;
         let o = self.object(v, "")?;
         self.ignore_others(
             o,
@@ -985,7 +974,7 @@ impl Checker {
             }
             Some(v) => self.range(v),
         };
-        let run = o.get("run").and_then(|v| self.run(v, builtin, file));
+        let run = o.get("run").and_then(|v| self.run(v, file));
         let activation = o
             .get("activation")
             .map(|v| self.words(v, "activation"))
@@ -1149,7 +1138,7 @@ impl Checker {
         })
     }
 
-    fn run(&mut self, v: &Value, builtin: bool, file: Option<FileOf>) -> Option<Run> {
+    fn run(&mut self, v: &Value, file: Option<FileOf>) -> Option<Run> {
         let o = self.object(v, "run")?;
         let systems = ["windows", "macos", "linux"];
         self.ignore_others(
@@ -1178,9 +1167,7 @@ impl Checker {
                     me.problem(&at, Code::Cargo);
                     return false;
                 }
-                // The app gives a module, not its sources.
-                let found =
-                    (cargo && builtin) || file.is_none_or(|file| file(&icon_path(path)).is_some());
+                let found = file.is_none_or(|file| file(&icon_path(path)).is_some());
                 if !found {
                     me.problem(&at, Code::File);
                 }
@@ -1204,7 +1191,7 @@ impl Checker {
                 self.problem("run.command", Code::Required);
                 None
             }
-            (Some(c), _) => self.program(c, "run.command", builtin),
+            (Some(c), _) => self.inner_path(c, "run.command"),
         };
         let args = o
             .get("args")
@@ -1213,7 +1200,7 @@ impl Checker {
         let mut by_system = std::collections::BTreeMap::new();
         for sys in systems {
             if let Some(p) = o.get(sys) {
-                if let Some(p) = self.program(p, &join("run", sys), builtin) {
+                if let Some(p) = self.inner_path(p, &join("run", sys)) {
                     by_system.insert(sys.to_string(), p);
                 }
             }

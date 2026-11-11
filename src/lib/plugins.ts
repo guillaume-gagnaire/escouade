@@ -24,13 +24,14 @@ export type Origin =
       seed?: boolean;
     }
   /**
-   * A plugin the app gives (INT-4, ESC-210), read from the app's own files. Not the same as a `dev.escouade.*` of the store
-   * (ESC-314): that one is `store`, kept in the data's plugins/ as any other; the origin tells them apart, never the id.
+   * A module of the repository's workspace (`scripts/plugins-wasm.sh`): what a build of development runs of the first hand
+   * where the seed has not its files; never in a release (ESC-355, the origin `builtin` gone). Not the same as a
+   * `dev.escouade.*` of the store: the origin tells them apart, never the id.
    */
-  | { kind: 'builtin' };
+  | { kind: 'workspace' };
 
-/** Whether the app gives this plugin (« Livrés avec l'app »), by its origin alone: a `dev.escouade.*` of the store is not. */
-export const shippedWithApp = (p: Pick<PluginView, 'origin'>) => p.origin.kind === 'builtin';
+/** Whether this plugin is a module of the workspace of a build of development, by its origin alone. */
+export const ofTheWorkspace = (p: Pick<PluginView, 'origin'>) => p.origin.kind === 'workspace';
 
 /** The page of a plugin's source on GitHub: its repository, or its folder at its tag (`<repository>/tree/<tag>/<folder>`). */
 export function sourceUrl(o: { repository: string; tag: string; path?: string }): string {
@@ -176,7 +177,7 @@ export type Phase = 'idle' | 'starting' | 'running' | 'restarting' | 'stopped';
 export interface PluginRun {
   status: {
     phase: Phase;
-    stop?: { kind: 'asked' | 'shutdown' | 'crashed' | 'memory' | 'refused'; times?: number; reason?: string };
+    stop?: { kind: 'asked' | 'shutdown' | 'crashed' | 'refused'; times?: number; reason?: string };
     restarts: number;
     pid?: number;
   };
@@ -428,8 +429,8 @@ export function originOf(o: Origin): string {
       return `${o.url.replace(/^https?:\/\//, '').replace(/\.git$/, '')} · ${o.tag}`;
     case 'store':
       return 'store.escouade.dev';
-    case 'builtin':
-      return 'Escouade';
+    case 'workspace':
+      return 'plugins-wasm';
     default:
       return o.path;
   }
