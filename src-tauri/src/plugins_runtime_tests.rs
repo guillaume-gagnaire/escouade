@@ -1,8 +1,7 @@
-//! Tests of the plugins' runtime (PLG-2, ESC-174) on the fake plugin (tests/fixtures/fake-plugin.mjs,
-//! started by its `.cmd` or its script without extension as a real plugin's program would be):
-//! started at its first activation, `initialize` and the version of the protocol, calls and batches
-//! of raw JSON, the default answer past a delay, the restarts after a crash and the queue kept
-//! meanwhile, the memory limit, the journal, the secrets, and `shutdown` then the end of the job.
+//! Tests of the plugins' runtime (PLG-2, ESC-174) on the fake plugin (tests/fixtures/plugins/fake/plugin.mjs, a module of
+//! `run.js` since the process transport left, ESC-355): started at its first activation, `initialize` and the version of
+//! the protocol, calls and batches of raw JSON, the default answer past a delay, the restarts after a crash and the queue
+//! kept meanwhile, a turn past its time, its memory, the journal, the secrets, and `shutdown`.
 
 use crate::i18n::Lang;
 use crate::integrations::secrets::{MemoryStore, SecretStore};
@@ -31,27 +30,45 @@ pub(crate) struct Fake {
     plugins: Arc<Plugins>,
 }
 
-/// The fake plugin installed in development from a folder of the test's own, its program started
-/// with `args`.
+/// The module of the fake plugin in `dir`, told `args` (its `args.json`): the `run` of its manifest.
+pub(crate) fn fake_module(dir: &Path, args: &[&str]) -> Value {
+    std::fs::create_dir_all(dir).unwrap();
+    std::fs::copy(
+        root().join("tests/fixtures/plugins/fake/plugin.mjs"),
+        dir.join("plugin.mjs"),
+    )
+    .unwrap();
+    std::fs::write(dir.join("args.json"), json!(args).to_string()).unwrap();
+    json!({ "js": "plugin.mjs" })
+}
+
+/// Makes the module of the plugin `id` of `rt` ready, as its install does: Javy takes seconds a bundle, more than a
+/// call waits. Nothing for a plugin that is no module.
+pub(crate) fn warm(rt: &Runtime, id: &str) {
+    assert!(
+        crate::plugins_wasm_tests::ready(),
+        "escouade-js and Javy for the fake plugin"
+    );
+    if let Some(h) = rt.prepare(id) {
+        h.join().unwrap().unwrap_or_else(|e| panic!("{id}: {e}"));
+    }
+}
+
+/// The fake plugin installed in development from a folder of the test's own, told `args` (its `args.json`).
 pub(crate) fn fake(name: &str, args: &[&str], limits: Limits) -> Fake {
-    // Else cmd.exe may no longer find node (see `trim_test_path`).
-    #[cfg(windows)]
-    crate::paths::trim_test_path();
     let base = std::env::temp_dir().join(format!(
         "plugin-runtime-{name}-{}",
         uuid::Uuid::new_v4().simple()
     ));
     let src = base.join("plugin");
     std::fs::create_dir_all(&src).unwrap();
-    for f in ["fake-plugin.mjs", "fake-plugin.cmd", "fake-plugin"] {
-        std::fs::copy(root().join("tests/fixtures").join(f), src.join(f)).unwrap();
-    }
+    let run = fake_module(&src, args);
     let manifest = json!({
         "id": ID,
         "name": "Faux plugin",
         "version": "1.0.0",
         "escouade": { "api": "1", "min": "2.1.0" },
-        "run": { "command": "fake-plugin", "windows": "fake-plugin.cmd", "args": args },
+        "run": run,
         "activation": ["event:ticket.column"],
         "permissions": { "secrets": ["token", "account:*"] },
         "contributes": {
@@ -72,6 +89,7 @@ pub(crate) fn fake(name: &str, args: &[&str], limits: Limits) -> Fake {
     plugins.load_dev(&src, Lang::En).unwrap();
     let store = Arc::new(MemoryStore::default());
     let rt = Runtime::new(plugins.clone(), store.clone(), &data, "2.1.1", limits);
+    warm(&rt, ID);
     Fake {
         rt,
         store,
@@ -80,10 +98,9 @@ pub(crate) fn fake(name: &str, args: &[&str], limits: Limits) -> Fake {
     }
 }
 
-/// Limits for a test: its memory read often, room for a slow machine to start node.
+/// Limits for a test: room for a slow machine to make the module.
 pub(crate) fn quick() -> Limits {
     Limits {
-        sample: Duration::from_millis(100),
         initialize: Duration::from_secs(20),
         shutdown: Duration::from_secs(2),
         ..Limits::default()
@@ -101,29 +118,13 @@ pub(crate) async fn until(what: &str, f: impl Fn() -> bool) {
     }
 }
 
-fn alive(pid: u32) -> bool {
-    #[cfg(windows)]
-    {
-        let out = std::process::Command::new("tasklist")
-            .args(["/FI", &format!("PID eq {pid}"), "/NH"])
-            .output()
-            .unwrap();
-        String::from_utf8_lossy(&out.stdout).contains(&pid.to_string())
-    }
-    #[cfg(unix)]
-    {
-        // SAFETY: signal 0 only asks whether the process exists.
-        unsafe { libc::kill(pid as i32, 0) == 0 }
-    }
-}
-
-/// The pid of node, the fake plugin itself (under `cmd` on Windows).
-async fn node_pid(rt: &Runtime) -> u32 {
+/// What tells the instance of now from the one before it.
+async fn instance(rt: &Runtime) -> String {
     let state = rt
         .call(ID, "test/state", json!({}))
         .await
         .unwrap_or_else(|e| panic!("{e}: {:#?}", rt.journal(ID)));
-    state["pid"].as_u64().unwrap() as u32
+    state["instance"].as_str().unwrap().to_string()
 }
 
 fn journal_has(rt: &Runtime, kind: Kind, text: &str) -> bool {
@@ -137,13 +138,14 @@ fn behave(what: &str) -> Value {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn it_starts_at_its_first_activation_only_in_a_job_that_takes_its_tree() {
+async fn it_starts_at_its_first_activation_only() {
     let f = fake("lazy", &[], quick());
     assert_eq!(f.rt.status(ID).phase, PhaseName::Idle);
     assert!(f.rt.activate("event:agent.created").is_empty());
     tokio::time::sleep(Duration::from_millis(200)).await;
     assert_eq!(f.rt.status(ID).phase, PhaseName::Idle, "nothing started");
-    assert!(f.rt.journal(ID).is_empty());
+    // Its module made ready (as at its install), nothing started.
+    assert!(!journal_has(&f.rt, Kind::Start, ""));
 
     assert_eq!(f.rt.activate("event:ticket.column"), [ID]);
     until("running", || f.rt.status(ID).phase == PhaseName::Running).await;
@@ -152,18 +154,13 @@ async fn it_starts_at_its_first_activation_only_in_a_job_that_takes_its_tree() {
         "it runs already"
     );
     assert_eq!(f.rt.status(ID).capabilities, json!({ "batch": true }));
-    assert!(journal_has(&f.rt, Kind::Start, "started"));
+    assert!(journal_has(&f.rt, Kind::Start, "in WASM"));
     assert!(journal_has(&f.rt, Kind::Ready, "protocol 1"));
 
     let echo = f.rt.call(ID, "echo", json!({ "a": 1 })).await.unwrap();
     assert_eq!(echo, json!({ "a": 1 }));
 
-    // Under `cmd` (Windows), node is a child of the process started: the job takes both.
-    let node = node_pid(&f.rt).await;
-    let started = f.rt.status(ID).pid.unwrap();
-    assert!(alive(node) && alive(started));
     f.rt.stop(ID);
-    until("its tree gone", || !alive(node) && !alive(started)).await;
     assert_eq!(f.rt.status(ID).stop, Some(Stop::Asked));
     assert_eq!(
         f.rt.call(ID, "echo", json!({})).await,
@@ -176,11 +173,11 @@ async fn it_starts_at_its_first_activation_only_in_a_job_that_takes_its_tree() {
     ));
 }
 
-/// What a module cannot read from an environment (docs/PLUGINS.md §8.4.8): the language, for every plugin.
+/// What a module cannot read from an environment (docs/PLUGINS-DESIGN.md §8.4.8): the language, for every plugin.
 #[tokio::test(flavor = "multi_thread")]
 async fn initialize_says_the_language_and_the_version() {
     let f = fake("greeting", &[], quick());
-    f.rt.set_builtin_env(vec![("ESCOUADE_LANG".into(), "en".into())]);
+    f.rt.set_lang("en");
     let state = f.rt.call(ID, "test/state", json!({})).await.unwrap();
     assert_eq!(state["greeting"]["lang"], "en", "{state}");
     assert_eq!(state["greeting"]["escouade"]["version"], "2.1.1", "{state}");
@@ -317,7 +314,6 @@ async fn a_crash_restarts_it_three_times_within_five_minutes_then_stops_it() {
         })
         .await;
     }
-    assert!(journal_has(&f.rt, Kind::Crash, "code 3"));
     assert!(journal_has(&f.rt, Kind::Crash, "crashing on purpose"));
     assert!(journal_has(&f.rt, Kind::Stderr, "crashing on purpose"));
     assert!(journal_has(&f.rt, Kind::Start, "starting again (3 of 3"));
@@ -363,7 +359,7 @@ async fn while_it_restarts_messages_wait_and_what_was_attached_is_given_again() 
             .await
             .unwrap();
     }
-    let before = node_pid(&f.rt).await;
+    let before = instance(&f.rt).await;
     f.rt.detach(ID, "agent-gone");
 
     assert_eq!(
@@ -383,25 +379,50 @@ async fn while_it_restarts_messages_wait_and_what_was_attached_is_given_again() 
     assert!(journal_has(&f.rt, Kind::Dropped, "the oldest message"));
 
     let state = f.rt.call(ID, "test/state", json!({})).await.unwrap();
-    assert_ne!(state["pid"].as_u64().unwrap() as u32, before);
+    assert_ne!(state["instance"].as_str().unwrap(), before);
     assert_eq!(state["attached"], json!(["agent-1", "agent-2"]));
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_loop_takes_the_default_and_shutdown_ends_its_job() {
+async fn a_loop_takes_the_default_and_its_turn_past_its_time_restarts_it() {
     let f = fake("loop", &[], quick());
-    let node = node_pid(&f.rt).await;
+    let before = instance(&f.rt).await;
     let looping =
         f.rt.call_within(ID, "test/do", behave("loop"), Duration::from_millis(300))
             .await;
     assert_eq!(looping, Err(CallError::Timeout));
-    assert_eq!(
-        f.rt.call_or(ID, "permissions/decide", json!({}), json!("default"))
-            .await,
-        json!("default"),
-        "busy: nothing more is answered"
-    );
+    // The epoch stops the turn past its time: the instance fails, and another starts.
+    until("started again", || {
+        let s = f.rt.status(ID);
+        s.phase == PhaseName::Running && s.restarts == 1
+    })
+    .await;
+    assert_ne!(instance(&f.rt).await, before);
+    assert_eq!(f.rt.call(ID, "echo", json!(1)).await, Ok(json!(1)));
+}
 
+#[tokio::test(flavor = "multi_thread")]
+async fn at_the_close_shutdown_is_asked_first() {
+    let f = fake("shutdown", &[], quick());
+    instance(&f.rt).await;
+    let rt = f.rt.clone();
+    let started = Instant::now();
+    tokio::task::spawn_blocking(move || rt.shutdown())
+        .await
+        .unwrap();
+    assert!(started.elapsed() < Duration::from_secs(2));
+    assert!(journal_has(&f.rt, Kind::Stop, "answered shutdown"));
+    assert!(
+        !f.rt.journal(ID).iter().any(|e| e.kind == Kind::Crash),
+        "an end asked for is no crash"
+    );
+    assert_eq!(f.rt.status(ID).stop, Some(Stop::Shutdown));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_shutdown_not_answered_ends_it_past_its_delay() {
+    let f = fake("shutdown-ignored", &["--ignore-shutdown"], quick());
+    instance(&f.rt).await;
     let rt = f.rt.clone();
     let started = Instant::now();
     tokio::task::spawn_blocking(move || rt.shutdown())
@@ -409,7 +430,6 @@ async fn a_loop_takes_the_default_and_shutdown_ends_its_job() {
         .unwrap();
     let took = started.elapsed();
     assert!(took < Duration::from_secs(4), "{took:?}");
-    until("node gone", || !alive(node)).await;
     assert!(journal_has(
         &f.rt,
         Kind::Timeout,
@@ -422,54 +442,26 @@ async fn a_loop_takes_the_default_and_shutdown_ends_its_job() {
     );
 }
 
+/// Past the memory of its instance (64 MiB, `limits.memoryBytes` may ask more), the module fails as a crash does.
 #[tokio::test(flavor = "multi_thread")]
-async fn at_the_close_shutdown_is_asked_first() {
-    let f = fake("shutdown", &[], quick());
-    let node = node_pid(&f.rt).await;
-    let rt = f.rt.clone();
-    let started = Instant::now();
-    tokio::task::spawn_blocking(move || rt.shutdown())
-        .await
-        .unwrap();
-    assert!(started.elapsed() < Duration::from_secs(2));
-    assert!(journal_has(&f.rt, Kind::Stop, "answered shutdown"));
-    until("node gone", || !alive(node)).await;
-    assert!(
-        !f.rt.journal(ID).iter().any(|e| e.kind == Kind::Crash),
-        "an end asked for is no crash"
-    );
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn past_its_memory_limit_it_is_stopped() {
-    let f = fake(
-        "grow",
-        &[],
-        Limits {
-            memory: 200 << 20,
-            ..quick()
-        },
-    );
-    let node = node_pid(&f.rt).await;
-    let _ =
+async fn past_its_memory_its_instance_fails_and_starts_again() {
+    let f = fake("grow", &[], quick());
+    let before = instance(&f.rt).await;
+    let grown =
         f.rt.call_within(
             ID,
             "test/do",
-            json!({ "behave": "grow", "mb": 500 }),
+            json!({ "behave": "grow", "mb": 200 }),
             Duration::from_secs(30),
         )
         .await;
-    until("stopped", || f.rt.status(ID).phase == PhaseName::Stopped).await;
-    let Some(Stop::Memory { bytes, limit }) = f.rt.status(ID).stop else {
-        panic!("{:?}", f.rt.status(ID));
-    };
-    assert_eq!(limit, 200 << 20);
-    assert!(bytes > limit);
-    until("its stop told", || {
-        journal_has(&f.rt, Kind::Stop, "past the limit of 200 MB")
+    assert_eq!(grown, Err(CallError::Crashed));
+    until("started again", || {
+        let s = f.rt.status(ID);
+        s.phase == PhaseName::Running && s.restarts == 1
     })
     .await;
-    until("node gone", || !alive(node)).await;
+    assert_ne!(instance(&f.rt).await, before);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -678,7 +670,7 @@ async fn a_folder_in_development_read_again_stops_its_process_for_the_new_manife
 #[tokio::test(flavor = "multi_thread")]
 async fn an_event_that_changed_nothing_leaves_its_process_running() {
     let f = fake("dev-same", &[], quick());
-    let pid = node_pid(&f.rt).await;
+    let before = instance(&f.rt).await;
 
     // Told directly, as a late event would.
     f.plugins.reload(&[ID.to_string()]);
@@ -690,33 +682,9 @@ async fn an_event_that_changed_nothing_leaves_its_process_running() {
     until("the event read", || f.plugins.revision() > rev).await;
 
     assert_eq!(f.rt.status(ID).phase, PhaseName::Running);
-    assert_eq!(node_pid(&f.rt).await, pid, "the same process");
+    assert_eq!(instance(&f.rt).await, before, "the same instance");
     assert!(!journal_has(&f.rt, Kind::Stop, "stopped"));
     f.rt.shutdown();
-}
-
-/// A plugin given by a relative folder (`escouade-plugin test slack`, run beside it) starts the
-/// program of that folder: the path is absolute, never looked for again from the folder it starts
-/// in, where Unix would find `slack/slack/slack` (ESC-182).
-#[test]
-fn a_relative_folder_gives_an_absolute_program() {
-    let run = crate::plugins::manifest::Run {
-        command: "slack".into(),
-        js: None,
-        wasm: None,
-        args: vec![],
-        by_system: Default::default(),
-    };
-    let here = std::env::current_dir().unwrap();
-    let p = crate::plugins::runtime::program_path(Path::new("slack"), &run, Path::new("app"));
-    assert!(p.is_absolute(), "{}", p.display());
-    assert_eq!(p, here.join("slack").join("slack"));
-    let app = crate::plugins::manifest::Run {
-        command: "{escouade}/escouade-plugins".into(),
-        ..run
-    };
-    let p = crate::plugins::runtime::program_path(Path::new("slack"), &app, Path::new("app"));
-    assert_eq!(p, here.join("app").join("escouade-plugins"));
 }
 
 /// The projects of a test: one open to every plugin, one private; each with the settings its

@@ -1,4 +1,4 @@
-//! The plugin Mistral (`dev.escouade.mistral`, INT-13, INT-10.6 bis, docs/PLUGINS.md §4.13): the voice service, and Mistral
+//! The plugin Mistral (`dev.escouade.mistral`, INT-13, INT-10.6 bis, docs/PLUGINS-DESIGN.md §4.13): the voice service, and Mistral
 //! Vibe as a harness, over ACP, in one instance. What is `voice/*` goes to `escouade_voice`; the rest comes to `handler`.
 //! The harness its manifest declares (`contributes.harnesses[0]`, its `acp` object with the extension `vibe`) is served by
 //! the client of `escouade_acp`, as the generic ACP plugin serves those other plugins describe: the core finds `vibe-acp`,

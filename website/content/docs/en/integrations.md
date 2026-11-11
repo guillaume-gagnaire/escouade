@@ -34,9 +34,9 @@ When the keychain refuses a token on Windows or macOS, it stays in that file and
 
 ### The services a plugin serves
 
-GitHub (the code host and GitHub Issues), GitLab (the code host; GitLab Issues is still part of the app), Bitbucket, Gitea and Forgejo, Azure DevOps, and Trello are served by plugins shipped with Escouade: nothing changes in use, the accounts and the forms are the same. An account served by another author’s plugin says so: “Served by the plugin …”. The token stays in the keychain; Escouade lends it to the plugin of that service alone, when it needs it.
+Every service below is served by a plugin of Escouade’s, written and signed by it, which runs in WASM: GitHub (the code host and GitHub Issues), GitLab (the code host and GitLab Issues), Bitbucket, Gitea and Forgejo, Azure DevOps (the code host and Azure Boards), Trello, Linear, Jira and ClickUp. The installer carries them and installs only those your configuration uses (see [Escouade’s plugins](plugins/installer#escouade-s-plugins-in-the-installer)): nothing changes in use, the accounts and the forms are the same. An account served by another author’s plugin says so: “Served by the plugin …”. The token stays in the keychain; Escouade lends it to the plugin of that service alone, when it needs it.
 
-These plugins are switched off in the Plugins view, for the whole app or for one project (see [the plugins shipped with Escouade](plugins/installer#the-plugins-shipped-with-escouade)). Switched off or stopped, a plugin says so instead of going quiet:
+These plugins are switched off in the Plugins view, for the whole app or for one project (see [Escouade’s plugins](plugins/installer#escouade-s-plugins)). Switched off or stopped, a plugin says so instead of going quiet:
 
 - **a code host**: the agent’s card shows “Code host stopped: PRs no longer followed” and keeps the PRs read last; Settings › Connected services says under the account “The plugin GitHub is switched off (Settings › Plugins): this account serves nothing, its PRs are no longer followed”, or that it stopped and why;
 - **a source**: the sync stops, and its failure says “The plugin dev.escouade.trello is not answering: …”; the imported tickets stay.

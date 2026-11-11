@@ -7,7 +7,7 @@ import { readToken } from '../plugin-review/admin';
 import { publish, Refused, Stop, storeTool } from './publish';
 
 // `npm run plugins:publish -- [--changed] [<court>…]` (from the repository's root or from store/): the first hand's
-// plugins to the store, one after the other, each as a third party's (docs/PLUGINS.md §8.6.2). The chief runs it, never
+// plugins to the store, one after the other, each as a third party's (docs/PLUGINS-DESIGN.md §8.6.2). The chief runs it, never
 // the agent of a ticket: it tags, pushes, submits, publishes and signs for real. What it reads from the environment, all
 // optional, beyond what `plugin-review` reads (docs/STORE.md §4.2):
 //   ESCOUADE_STORE_URL        the store (https://store.escouade.dev)

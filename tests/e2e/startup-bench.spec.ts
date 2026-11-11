@@ -1,4 +1,4 @@
-// The startup measures of INT-0, the reference measures (docs/PLUGINS.md §4.8): how long the app takes to show its window,
+// The startup measures of INT-0, the reference measures (docs/PLUGINS-DESIGN.md §4.8): how long the app takes to show its window,
 // and its first agent to be ready, before any integration runs in a process of its own, then after. A measure, not a test of
 // the app: skipped unless ESCOUADE_BENCH is set (`npm run bench:int0` sets it).
 //

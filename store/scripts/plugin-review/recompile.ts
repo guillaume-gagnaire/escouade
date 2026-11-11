@@ -11,7 +11,7 @@ import { engineSteps } from './engine';
 // `escouade-plugin` built without escouade-js, or with another one: the report says how to get the store's
 // (`engine.ts`, ESC-343).
 //
-// A `run.wasm` (ESC-337, docs/PLUGINS.md §8.5.5) is compiled the same way, from the sources of the archive and their
+// A `run.wasm` (ESC-337, docs/PLUGINS-DESIGN.md §8.5.5) is compiled the same way, from the sources of the archive and their
 // `Cargo.lock`: on this machine for the first hand, in a container for a third party (`container.ts`), whose scripts and
 // macros run in native. Both give the store's module: the compilation is the same on every system.
 

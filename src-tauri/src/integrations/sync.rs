@@ -563,11 +563,11 @@ impl<R: Runtime> Core<R> {
     /// Refused when `own`, installed in a version from before ESC-397, would serve an account
     /// after the first with the first one's secret.
     fn serves_several_accounts(&self, own: &str, service: Service) -> Result<()> {
-        // Given with the app, it is built from the same kit: only one from the store may be older.
+        // The workspace of a build of development is built from the same kit: only an installed one may be older.
         let Some(version) = self
             .plugins
             .get(own, i18n::ui())
-            .filter(|p| !matches!(p.origin, crate::plugins::Origin::Builtin))
+            .filter(|p| !matches!(p.origin, crate::plugins::Origin::Workspace))
             .map(|p| p.version)
         else {
             return Ok(());

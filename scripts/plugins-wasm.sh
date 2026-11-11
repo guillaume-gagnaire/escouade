@@ -1,7 +1,7 @@
 #!/bin/sh
 # Compiles the plugins in Rust as modules, once, in a target they share, into <target>/plugins-wasm/<id-court>/plugin.wasm:
 # what the tests of the app play in its host, and what a build of development runs for a plugin of the registry until the
-# seed gives it (docs/PLUGINS.md §8.6.4, §8.7). `rust-toolchain.toml` brings the target.
+# seed gives it (docs/PLUGINS-DESIGN.md §8.6.4, §8.7). `rust-toolchain.toml` brings the target.
 #
 # Those whose manifest says `run.wasm` are the workspace of `plugins/`, against `crates/` by its `[patch.crates-io]`.
 #

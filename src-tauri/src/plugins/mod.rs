@@ -1,4 +1,4 @@
-//! The installed plugins (docs/PLUGINS.md §3.2, ESC-173): a plugin is installed from a local
+//! The installed plugins (docs/PLUGINS-DESIGN.md §3.2, ESC-173): a plugin is installed from a local
 //! folder or from a git repository at a tag, copied into the plugins' folder of the app's data
 //! (`DataDir::plugins_dir`) and pinned there by its fingerprint (the commit, or the SHA-256 of the
 //! folder's files); a folder in development is loaded in place, and read again when it changes.
@@ -25,7 +25,7 @@ pub mod harness;
 pub mod hosted;
 // The permission rules: the plugins that decide before the user is asked (PLG-8).
 pub mod decide;
-// The plugins the app gives, their registry and the check of their program (INT-4).
+// The plugins of the first hand: the ids of the seed, their manifests, the workspace a build of development runs (ESC-355).
 pub mod builtin;
 // The facts handed to the plugins, their webhooks and their commands (PLG-5).
 pub mod events;
@@ -80,9 +80,10 @@ pub enum Origin {
     Git { url: String, tag: String },
     /// A folder in development, loaded in place.
     Dev { path: String },
-    /// A plugin the app gives (INT-4): shipped with it, its version Escouade's, read from the app and never from the
-    /// plugins' folder. Never written by an install: the registry (`builtin`) makes it.
-    Builtin,
+    /// A plugin of the repository's workspace (`plugins/<id-court>/`), its module the one `scripts/plugins-wasm.sh` left
+    /// in `<target>/plugins-wasm/`: what a build of development and the tests run of the first hand where the seed has
+    /// not its files (ESC-354). Never made by a release, never written by an install: `builtin::REGISTRY` makes it.
+    Workspace,
     /// A version of store.escouade.dev (STORE-9), pinned by the SHA-256 of its `version.json`;
     /// `verified`: its seal held when it was installed (it is checked again at each reading).
     Store {
@@ -110,14 +111,13 @@ pub enum Origin {
 /// What a plugin of `origin` may take of Escouade's own (ESC-314). The ids `dev.escouade.*` go to
 /// a version of the store signed for it (the store takes them from the app's repository alone) and
 /// to a folder in development; never to a folder copied or a repository cloned, which anyone may
-/// hand out. None of them takes the app's programs: that is a plugin the app gives (INT-4's origin
-/// `builtin`, read from the app's own files). The two are told apart by their origin, never by
-/// their id: a `dev.escouade.*` of the store is `Origin::Store`, kept in `<data>/plugins/<id>`. A build of development
-/// gives the same hand to a module of the seed that is not signed (`scripts/seed-dev.sh`); a release does not.
+/// hand out. A build of development gives the same hand to a module of the seed that is not signed
+/// (`scripts/seed-dev.sh`) and to the workspace's; a release does not.
 pub(crate) fn hand_of(origin: &Origin) -> manifest::Hand {
     match origin {
-        Origin::Builtin => manifest::Hand::Builtin,
-        Origin::Store { verified: true, .. } | Origin::Dev { .. } => manifest::Hand::First,
+        Origin::Store { verified: true, .. } | Origin::Dev { .. } | Origin::Workspace => {
+            manifest::Hand::First
+        }
         Origin::Store { seed: true, .. } if cfg!(debug_assertions) => manifest::Hand::First,
         _ => manifest::Hand::Third,
     }
@@ -359,6 +359,19 @@ struct Index {
     plugins: Vec<Installed>,
 }
 
+/// `plugins.json` as it is read: each entry on its own, so that one that does not read (a plugin 2.1 gave) loses
+/// nothing of the others.
+#[derive(Deserialize)]
+struct RawIndex {
+    #[serde(default)]
+    version: u32,
+    #[serde(default)]
+    plugins: Vec<Value>,
+}
+
+/// What pins a plugin of the workspace: nothing but its module, read again at each start.
+const WORKSPACE: &str = "workspace";
+
 /// Why a plugin was not installed: the fields of its manifest that are wrong, or another reason.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -532,7 +545,8 @@ pub struct Plugins {
     reloaded: Mutex<Vec<ReloadHook>>,
     /// The store's revocation list, as last taken (STORE-9).
     revocations: RwLock<Option<store::RevocationList>>,
-    /// The folder of the app's programs (`{escouade}`): where the plugins the app gives run from.
+    /// The folder of the app's program: beside it, a build of development finds the workspace's modules
+    /// (`<target>/plugins-wasm`, `builtin::folder`).
     app_dir: PathBuf,
     /// What the store offers, by id (`Store::offers`).
     offers: RwLock<HashMap<String, store::Offer>>,
@@ -595,22 +609,21 @@ struct Staged {
 }
 
 impl Plugins {
-    /// The plugins of `data`, read once, the folders in development watched; in the tests, without the ones the app
-    /// gives (the core's own are `load_for_core`).
+    /// The plugins of `data`, read once, the folders in development watched; in the tests, without the workspace's
+    /// (the core's own are `load_for_core`).
     #[cfg(test)]
     pub fn load(data: DataDir, app_version: &str) -> Arc<Self> {
         let app_dir = std::env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(Path::to_path_buf))
             .unwrap_or_default();
-        // The tests of the installs and of the runtime count on a list that holds what they put there: the registry
-        // is loaded by `load_in`, which the tests of INT-4 use.
+        // The tests of the installs and of the runtime count on a list that holds what they put there: the workspace
+        // is loaded by `load_in`.
         Self::load_with(data, app_version, app_dir, false, seed::Seed::default())
     }
 
-    /// The plugins of the app's core, the ones the app gives with them (the core uses them: a launch environment, GitHub's
-    /// accounts). In
-    /// the tests their program is the one the build made beside the tests (`deps/`'s parent).
+    /// The plugins of the app's core; in a build of development and the tests, the workspace's with them (the core uses
+    /// them: a launch environment, GitHub's accounts), their modules those the build made beside the tests.
     #[cfg(test)]
     pub fn load_for_core(data: DataDir, app_version: &str) -> Arc<Self> {
         Self::load_seeded(data, app_version, seed::Seed::default())
@@ -628,7 +641,7 @@ impl Plugins {
         Self::load_with(data, app_version, app_dir, true, seed)
     }
 
-    /// As `load`, the app's programs in `app_dir` (the tests').
+    /// As `load`, the workspace's modules beside `app_dir` (the tests').
     #[cfg(test)]
     pub fn load_in(data: DataDir, app_version: &str, app_dir: PathBuf) -> Arc<Self> {
         Self::load_with(data, app_version, app_dir, true, seed::Seed::default())
@@ -638,7 +651,7 @@ impl Plugins {
         data: DataDir,
         app_version: &str,
         app_dir: PathBuf,
-        builtin: bool,
+        workspace: bool,
         seed: seed::Seed,
     ) -> Arc<Self> {
         let me = Arc::new_cyclic(|me| Self {
@@ -663,7 +676,7 @@ impl Plugins {
         });
         let index = me.index();
         let loaded: Vec<Loaded> = me
-            .with_builtin(index.plugins, builtin)
+            .with_workspace(index.plugins, workspace)
             .into_iter()
             .map(|i| me.read(i))
             .collect();
@@ -676,65 +689,88 @@ impl Plugins {
         me
     }
 
-    /// The folder of the app's programs (`{escouade}`).
-    pub(crate) fn app_dir(&self) -> &Path {
-        &self.app_dir
-    }
-
-    /// The list `installed` with the plugins the app gives (`builtin::REGISTRY`) as the app has them now: those
-    /// that left the registry gone, those it adds there with the user's choices kept, and a copy of the same id
-    /// from elsewhere (a version of the store installed before the app gave it) replaced, its choices kept: the
-    /// plugin the app gives wins, and its version is the app's. An id the seed names is no longer given: what is installed
-    /// of it stays, and an `Origin::Builtin` runs until `sync_seed` puts the seed's version in its place (until Z3).
-    fn with_builtin(&self, installed: Vec<Installed>, registry: bool) -> Vec<Installed> {
-        if !registry {
-            return installed;
+    /// The list `installed` with the workspace's plugins, in a build of development and the tests (`Origin::Workspace`):
+    /// each of `builtin::REGISTRY` the seed has not the files of and that is not installed otherwise, its choices those
+    /// kept for it. What is installed of an id (the seed, the store, a folder) stays: no plugin wins by its id.
+    fn with_workspace(&self, installed: Vec<Installed>, workspace: bool) -> Vec<Installed> {
+        let mut out: Vec<Installed> = installed
+            .into_iter()
+            .filter(|i| i.origin != Origin::Workspace || (workspace && self.in_workspace(&i.id)))
+            .collect();
+        if !workspace {
+            return out;
         }
-        let mut out: Vec<Installed> = Vec::new();
-        for i in installed {
-            if i.origin == Origin::Builtin && !builtin::is_builtin(&i.id) {
+        for e in builtin::REGISTRY.iter().filter(|e| self.in_workspace(e.id)) {
+            if out.iter().any(|i| i.id == e.id) {
                 continue;
             }
-            if self.given(&i.id) && i.origin != Origin::Builtin {
-                remove_dir(&self.data.plugins_dir().join(&i.id));
-                remove_dir(&self.proof_dir(&i.id));
-            }
-            out.push(i);
-        }
-        for e in builtin::REGISTRY.iter().filter(|e| self.given(e.id)) {
-            let choices = out
-                .iter()
-                .find(|i| i.id == e.id)
-                .map(|i| i.choices.clone())
-                .unwrap_or_default();
-            let installed_at = out
-                .iter()
-                .find(|i| i.id == e.id && i.origin == Origin::Builtin)
-                .map(|i| i.installed_at.clone())
-                .unwrap_or_else(now);
-            out.retain(|i| i.id != e.id);
             out.push(Installed {
                 id: e.id.to_string(),
-                origin: Origin::Builtin,
-                fingerprint: builtin::fingerprint(&self.app_version),
+                origin: Origin::Workspace,
+                fingerprint: WORKSPACE.to_string(),
                 digest: String::new(),
-                installed_at,
-                choices,
+                installed_at: now(),
+                choices: self.kept(e.id).unwrap_or_default(),
             });
         }
         out
     }
 
-    /// Whether the app itself gives the plugin `id`: in the registry, and not yet moved to the seed.
-    fn given(&self, id: &str) -> bool {
-        builtin::is_builtin(id) && !self.seed.has(id)
+    /// Whether a build of development or a test runs the plugin `id` from the workspace: one of the registry whose files
+    /// the seed has not. A release never does.
+    fn in_workspace(&self, id: &str) -> bool {
+        cfg!(any(debug_assertions, test)) && builtin::is_builtin(id) && !self.seed.has(id)
     }
 
+    /// The list of `plugins.json`, an entry that does not read left out (and said). An entry of a plugin Escouade 2.1
+    /// gave (its origin `builtin`, gone with ESC-355) is not one any more: its choices are kept as « Garder ses réglages »
+    /// keeps them, for the seed to install it with them (`sync_seed`) when the sort wants it, or a gesture; its secrets
+    /// stay in the keychain. It is not noted uninstalled: the user did not take it away.
     fn index(&self) -> Index {
-        std::fs::read(self.data.plugins_file())
+        let Some(raw) = std::fs::read(self.data.plugins_file())
             .ok()
-            .and_then(|b| serde_json::from_slice(&b).ok())
-            .unwrap_or_default()
+            .and_then(|b| serde_json::from_slice::<RawIndex>(&b).ok())
+        else {
+            return Index::default();
+        };
+        let mut plugins = Vec::new();
+        for entry in raw.plugins {
+            if entry["origin"]["kind"] == "builtin" {
+                self.keep_given(&entry);
+                continue;
+            }
+            match serde_json::from_value::<Installed>(entry.clone()) {
+                Ok(i) => plugins.push(i),
+                Err(e) => log::warn!("plugins.json: an entry does not read ({e}): {entry}"),
+            }
+        }
+        Index {
+            version: raw.version,
+            plugins,
+        }
+    }
+
+    /// Keeps the choices of an entry of a plugin 2.1 gave (`index`), unless choices are kept for it already.
+    fn keep_given(&self, entry: &Value) {
+        let Some(id) = entry["id"].as_str().filter(|id| manifest::is_id(id)) else {
+            return;
+        };
+        let kept = self.kept_file(id);
+        if kept.exists() {
+            return;
+        }
+        let choices: Choices = serde_json::from_value(entry.clone()).unwrap_or_default();
+        let saved = kept
+            .parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .and_then(|_| serde_json::to_vec_pretty(&choices).map_err(std::io::Error::other))
+            .and_then(|bytes| crate::paths::write_atomic(&kept, &bytes));
+        match saved {
+            Ok(()) => {
+                log::info!("plugin {id}: given by Escouade 2.1, its choices kept for the seed")
+            }
+            Err(e) => log::warn!("plugin {id}: given by Escouade 2.1, its choices not kept: {e}"),
+        }
     }
 
     fn save(&self) -> std::io::Result<()> {
@@ -756,7 +792,7 @@ impl Plugins {
     fn folder_of(&self, i: &Installed) -> PathBuf {
         match &i.origin {
             Origin::Dev { path } => PathBuf::from(path),
-            Origin::Builtin => builtin::folder(&i.id, &self.app_dir),
+            Origin::Workspace => builtin::folder(&i.id, &self.app_dir),
             _ => self.data.plugins_dir().join(&i.id),
         }
     }
@@ -764,14 +800,15 @@ impl Plugins {
     fn read(&self, installed: Installed) -> Loaded {
         let folder = self.folder_of(&installed);
         let hand = hand_of(&installed.origin);
-        let text = match installed.origin {
-            Origin::Builtin => builtin::manifest_text(&installed.id, &self.app_version)
-                .ok_or(std::io::ErrorKind::NotFound.into()),
-            _ => std::fs::read_to_string(folder.join(manifest::FILE)),
+        let read = match installed.origin {
+            // Its folder holds its module, not its sources: its manifest is the repository's, read as it is.
+            Origin::Workspace => builtin::manifest_text(&installed.id, &self.app_version)
+                .map(|t| manifest::read(&t, hand))
+                .ok_or(Fault::Missing),
+            _ => std::fs::read_to_string(folder.join(manifest::FILE))
+                .map(|t| manifest::read_in(&t, hand, &folder))
+                .map_err(|_| Fault::Missing),
         };
-        let read = text
-            .map(|t| manifest::read_in(&t, hand, &folder))
-            .map_err(|_| Fault::Missing);
         let changed = read.is_ok()
             && !installed.digest.is_empty()
             && digest(&folder).ok().as_deref() != Some(installed.digest.as_str());
@@ -820,15 +857,15 @@ impl Plugins {
             .map(|l| self.view(l, lang))
     }
 
-    /// What the plugins the app gives contribute to `point` (INT-14): for each that holds, its id, the user's choices
-    /// and the items of the point. For the points the core serves itself with a plugin it gives (a launch
-    /// environment), never one from the store or a folder: those are not asked to run a command of the core's.
-    pub fn builtin_contributions(&self, point: &str) -> Vec<(String, Choices, Vec<Value>)> {
+    /// What the plugins of the seed contribute to `point` (INT-14): for each that holds, its id, the user's choices
+    /// and the items of the point. For the points the core serves itself with a plugin of its own hand (a launch
+    /// environment), never one of another or a folder: those are not asked to run a command of the core's.
+    pub fn first_hand_contributions(&self, point: &str) -> Vec<(String, Choices, Vec<Value>)> {
         self.loaded
             .read()
             .iter()
             .filter(|l| {
-                l.installed.origin == Origin::Builtin
+                l.installed.origin == Origin::Workspace
                     || (matches!(l.installed.origin, Origin::Store { .. })
                         && hand_of(&l.installed.origin) == manifest::Hand::First
                         && self.seed.has(&l.installed.id))
@@ -925,6 +962,12 @@ impl Plugins {
                                 i.fingerprint
                             ),
                         }
+                    } else if m.run.as_ref().is_some_and(|r| r.in_wasm().is_none()) {
+                        // A command is no longer started, whatever the origin (ESC-355): its manifest reads, its sheet
+                        // says why.
+                        State::Disabled {
+                            reason: manifest::command_refused(lang),
+                        }
                     } else {
                         match m.refusal(&self.app_version, lang) {
                             Some(reason) => State::Disabled { reason },
@@ -973,7 +1016,7 @@ impl Plugins {
             withdrawn: self.withdrawn_in(l, lang),
             in_store: (!matches!(
                 i.origin,
-                Origin::Store { .. } | Origin::Dev { .. } | Origin::Builtin
+                Origin::Store { .. } | Origin::Dev { .. } | Origin::Workspace
             ))
             .then(|| self.offers.read().get(&i.id).cloned())
             .flatten(),
@@ -1223,8 +1266,8 @@ impl Plugins {
             origin: installed.origin.clone(),
             fingerprint: installed.fingerprint.clone(),
             declarative: m.declarative(),
-            refusal: if self.given(&m.id) {
-                Some(Self::given_with_the_app(&m.id, lang))
+            refusal: if m.run.as_ref().is_some_and(|r| r.in_wasm().is_none()) {
+                Some(manifest::command_refused(lang))
             } else {
                 m.refusal(&self.app_version, lang)
             },
@@ -1251,17 +1294,6 @@ impl Plugins {
             },
         );
         preview
-    }
-
-    /// Why a plugin of the id of one the app gives is refused (INT-4): the one shipped with the app is the app's, and
-    /// is updated with it.
-    fn given_with_the_app(id: &str, lang: Lang) -> String {
-        tr_in!(
-            lang,
-            "{} est livré avec Escouade et mis à jour avec elle : un plugin du même id, d'où qu'il vienne, est refusé.",
-            "{} is shipped with Escouade and updated with it: a plugin of the same id, wherever it comes from, is refused.",
-            id
-        )
     }
 
     /// Forgets what the inspection `token` set aside.
@@ -1292,15 +1324,6 @@ impl Plugins {
                 "This install is no longer current: choose the plugin again."
             ))
         })?;
-        if self.given(&staged.installed.id) {
-            if let Some(dir) = &staged.dir {
-                remove_dir(dir);
-            }
-            return Err(Refusal::other(Self::given_with_the_app(
-                &staged.installed.id,
-                lang,
-            )));
-        }
         let _w = self.writing.lock();
         let mut installed = staged.installed;
         installed.installed_at = now();
@@ -1439,9 +1462,9 @@ impl Plugins {
             .iter()
             .find(|l| l.installed.id == id)
             .map(|l| l.installed.origin.clone());
-        if self.given(id) || origin == Some(Origin::Builtin) {
+        if origin == Some(Origin::Workspace) {
             return Err(std::io::Error::other(format!(
-                "{id} is given with Escouade: turn it off, it cannot be removed"
+                "{id} is a module of the workspace of this build of development: turn it off, it cannot be removed"
             )));
         }
         let _w = self.writing.lock();
@@ -1545,7 +1568,7 @@ impl Plugins {
                             seed: false,
                         })
                 }
-                Origin::Dev { .. } | Origin::Builtin => None,
+                Origin::Dev { .. } | Origin::Workspace => None,
                 Origin::Store { .. } => self.store_update(&i.id, &version),
             };
             let mut updates = self.updates.write();
@@ -1598,7 +1621,7 @@ impl Plugins {
     fn running_version(l: &Loaded) -> Option<String> {
         match &l.installed.origin {
             Origin::Store { version, .. } => Some(version.clone()),
-            Origin::Dev { .. } | Origin::Builtin => None,
+            Origin::Dev { .. } | Origin::Workspace => None,
             _ => l
                 .read
                 .as_ref()
@@ -1617,10 +1640,6 @@ impl Plugins {
     }
 
     fn withdrawn_in(&self, l: &Loaded, lang: Lang) -> Option<Withdrawn> {
-        // No revocation list for the plugins the app gives: a fix comes with a release.
-        if l.installed.origin == Origin::Builtin {
-            return None;
-        }
         let version = Self::running_version(l)?;
         let list = self.revocations.read();
         let list = list.as_ref()?;
@@ -1750,7 +1769,7 @@ impl Plugins {
 
     /// The seed at the start of the app (its first start, or after an update): installs what it holds, is not installed and
     /// the user's configuration uses (`wants`, the sort of `sort`, ESC-373), with no network and by the store's own path,
-    /// but what the user uninstalled. An `Origin::Builtin` of 2.1 takes the seed's version when `wants` names it, and is
+    /// but what the user uninstalled. A plugin Escouade 2.1 gave has its choices kept (`index`): it installs with them
     /// otherwise taken away, its choices kept as « Garder ses réglages » keeps them, proposed by the view. Replaces nothing
     /// that runs from the store: a newer version of the seed is offered (`store_update`). Runs once the revocation lists
     /// are in (`apply_store`), before any plugin starts. Nothing is precompiled here: a module is at its first activation.
@@ -1768,11 +1787,6 @@ impl Plugins {
             let used = wants(&e.id) || (described && e.id == builtin::ACP);
             match here {
                 None if used && !notes.removed.contains_key(&e.id) => {}
-                Some(Origin::Builtin) if used => {}
-                Some(Origin::Builtin) => {
-                    self.retire_builtin(&e.id);
-                    continue;
-                }
                 _ => continue,
             }
             let asked = std::time::Instant::now();
@@ -1815,37 +1829,6 @@ impl Plugins {
                     .and_then(Value::as_array)
                     .is_some_and(|h| h.iter().any(|h| h.get("acp").is_some()))
         })
-    }
-
-    /// Takes an `Origin::Builtin` of 2.1 away that the sort does not keep: nothing of the user's is lost, its choices kept
-    /// for its next install (as « Garder ses réglages »), its secrets left in the keychain. Not noted as uninstalled: the
-    /// user did not take it away, and the view proposes it as any plugin of the seed.
-    fn retire_builtin(&self, id: &str) {
-        let _w = self.writing.lock();
-        let gone = {
-            let mut loaded = self.loaded.write();
-            let at = loaded
-                .iter()
-                .position(|l| l.installed.id == id && l.installed.origin == Origin::Builtin);
-            at.map(|at| loaded.remove(at))
-        };
-        let Some(gone) = gone else {
-            return;
-        };
-        self.updates.write().remove(id);
-        let kept = self.kept_file(id);
-        let saved = kept
-            .parent()
-            .map_or(Ok(()), std::fs::create_dir_all)
-            .and_then(|_| {
-                serde_json::to_vec_pretty(&gone.installed.choices).map_err(std::io::Error::other)
-            })
-            .and_then(|bytes| crate::paths::write_atomic(&kept, &bytes))
-            .and_then(|_| self.save());
-        match saved {
-            Ok(()) => log::info!("plugin {id}: not used by the settings, left in the seed"),
-            Err(e) => log::warn!("plugin {id}: left in the seed, but not saved: {e}"),
-        }
     }
 
     /// The plugin `id` of the seed installed now, with no network, for a gesture that needs it (an account of its
@@ -1987,7 +1970,7 @@ impl Plugins {
         })?;
         let installed = self
             .get(id, lang)
-            .filter(|v| !matches!(v.origin, Origin::Builtin));
+            .filter(|v| !matches!(v.origin, Origin::Workspace));
         if installed.is_some_and(|v| manifest::version(&v.version) >= manifest::version(&e.version))
         {
             return Err(Refusal::other(tr_in!(
@@ -2050,7 +2033,7 @@ impl Plugins {
     }
 
     /// What installing a version downloaded and checked from the store would do (`Store::fetch`):
-    /// its files written in a folder set aside, this system's program where its manifest names it,
+    /// its files written in a folder set aside, its module in the cache,
     /// pinned by the SHA-256 of its `version.json`.
     pub fn inspect_store(&self, f: store::Fetched, lang: Lang) -> Result<Preview, Refusal> {
         let root = self.data.plugins_dir();
@@ -2104,22 +2087,6 @@ impl Plugins {
                     f.id,
                     f.version
                 )));
-            }
-            if let (Some(bytes), Some(program)) = (
-                &f.program,
-                m.run
-                    .as_ref()
-                    .filter(|r| r.in_wasm().is_none())
-                    .map(program_here),
-            ) {
-                let to = inside(&incoming, &program).ok_or_else(|| {
-                    Refusal::other(format!("{program}: a path out of the plugin's folder"))
-                })?;
-                if let Some(dir) = to.parent() {
-                    std::fs::create_dir_all(dir).map_err(fail)?;
-                }
-                std::fs::write(&to, bytes).map_err(fail)?;
-                make_executable(&to).map_err(fail)?;
             }
             // A run.js plugin: the module the store compiled, checked by `fetch` against
             // version.json, goes to the cache, where the install precompiles it (ESC-323).
@@ -2369,19 +2336,6 @@ fn now() -> String {
     chrono::Utc::now().to_rfc3339()
 }
 
-/// The program of `run` on this system: its own (`windows`, `macos`, `linux`), else `command`.
-fn program_here(run: &manifest::Run) -> String {
-    let system = match std::env::consts::OS {
-        "windows" => "windows",
-        "macos" => "macos",
-        _ => "linux",
-    };
-    run.by_system
-        .get(system)
-        .cloned()
-        .unwrap_or_else(|| run.command.clone())
-}
-
 /// `rel` (a path of an archive, `/` between folders) joined to `root`, when it stays inside.
 fn inside(root: &Path, rel: &str) -> Option<PathBuf> {
     let rel = rel.trim_start_matches("./");
@@ -2393,17 +2347,6 @@ fn inside(root: &Path, rel: &str) -> Option<PathBuf> {
         out.push(part);
     }
     (out != root).then_some(out)
-}
-
-#[cfg(unix)]
-fn make_executable(path: &Path) -> std::io::Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))
-}
-
-#[cfg(not(unix))]
-fn make_executable(_: &Path) -> std::io::Result<()> {
-    Ok(())
 }
 
 /// Removes a folder, read-only files included; what cannot be removed stays.

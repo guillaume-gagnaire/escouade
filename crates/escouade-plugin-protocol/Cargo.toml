@@ -15,8 +15,8 @@ edition = "2021"
 rust-version = "1.88"
 workspace = "../../src-tauri"
 
-# Shared by the core (the app speaks this protocol to every plugin) and by `escouade-plugins`, the program of the
-# plugins the app gives (docs/PLUGINS.md §4.3). Light on purpose: that program is one more binary beside the app.
+# Shared by the core (the app speaks this protocol to every plugin) and by the plugins in Rust, as modules (docs/PLUGINS.md
+# §8.3). Light on purpose: every module carries it.
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

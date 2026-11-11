@@ -1,4 +1,4 @@
-//! The plugin Claude Code (`dev.escouade.claude-code`, INT-10.5, docs/PLUGINS.md §4): Claude Code as a harness. The core
+//! The plugin Claude Code (`dev.escouade.claude-code`, INT-10.5, docs/PLUGINS-DESIGN.md §4): Claude Code as a harness. The core
 //! finds `claude`, checks the launch this plugin describes and starts it; what Claude Code writes comes here
 //! (`agent/frames`) and goes back as the items of the conversation and the lines to write to it, by the client of
 //! `client`.

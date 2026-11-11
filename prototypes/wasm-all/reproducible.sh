@@ -1,5 +1,5 @@
 #!/bin/sh
-# One compilation of the modules of the prototype, as the store and the review would make it (docs/PLUGINS.md §8.5), under
+# One compilation of the modules of the prototype, as the store and the review would make it (docs/PLUGINS-DESIGN.md §8.5), under
 # Windows (Git Bash) as under Linux: the pinned toolchain, the lock, the canonical rustc. Prints their SHA-256.
 #   sh reproducible.sh [--plain]   (--plain: without the canonical rustc, to see what it changes)
 set -e

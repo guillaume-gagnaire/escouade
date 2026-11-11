@@ -6,7 +6,7 @@ import { reportVerdict } from '../plugin-review/admin';
 import { catalog, type Source } from '../plugin-review/download';
 import type { CatalogVersion } from '../../server/utils/catalog';
 
-// The chief's gestures for a plugin of the first hand (docs/PLUGINS.md §8.6.2), one after the other: its tag, its
+// The chief's gestures for a plugin of the first hand (docs/PLUGINS-DESIGN.md §8.6.2), one after the other: its tag, its
 // submission to the store as anyone's, its checks, its publication, the local review, then, on the reader's verdict
 // alone, the report and the signature. The store only reviews and signs a published version (docs/STORE.md §4.3): it is
 // published, unverified and asking for the review, before the review reads it; the app takes none of the first hand
@@ -21,7 +21,7 @@ export interface Plugin {
   version: string;
 }
 
-/** A plugin's folder in the repository and its tag (docs/PLUGINS.md §8.6.2). */
+/** A plugin's folder in the repository and its tag (docs/PLUGINS-DESIGN.md §8.6.2). */
 export const folderOf = (p: Plugin) => `plugins/${p.short}`;
 export const tagOf = (p: Plugin) => `${folderOf(p)}/v${p.version}`;
 const label = (p: Plugin) => `${p.id}@${p.version}`;
@@ -67,7 +67,7 @@ function git(repo: string, args: string[]): { ok: boolean; out: string; err: str
 
 /**
  * The categories of a first version whose manifest cannot say them. The module of these three embeds its manifest
- * (`include_str!`, read by `harnesses_of`): a `store` key there would change its fingerprint (docs/PLUGINS.md §8.6.2,
+ * (`include_str!`, read by `harnesses_of`): a `store` key there would change its fingerprint (docs/PLUGINS-DESIGN.md §8.6.2,
  * §8.29). They take it with their next version, when a new fingerprint is due anyway.
  */
 export const EMBEDDED_CATEGORIES: Record<string, string[]> = {

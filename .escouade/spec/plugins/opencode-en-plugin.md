@@ -1,7 +1,7 @@
 ---
 title: "OpenCode en plugin"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4 (INT-10.2)","docs/PLUGINS.md §8.23 (ESC-349)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-223","Ticket ESC-349","Ticket ESC-364","plugins/opencode/src/rules_verdicts.json"]
+sources: ["docs/PLUGINS-DESIGN.md §4 (INT-10.2)","docs/PLUGINS-DESIGN.md §8.23 (ESC-349)","docs/TODO-2.2.md, INT-10.1 à 10.5","Ticket ESC-223","Ticket ESC-349","Ticket ESC-364","plugins/opencode/src/rules_verdicts.json"]
 tickets: ["ESC-223","ESC-349","ESC-352","ESC-364"]
 decisions: [93]
 compared: null

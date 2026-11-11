@@ -1,4 +1,4 @@
-//! The host of a `run.wasm` module (ESC-330, docs/PLUGINS.md §8.3): one instance a plugin, on one thread, driven by the
+//! The host of a `run.wasm` module (ESC-330, docs/PLUGINS-DESIGN.md §8.3): one instance a plugin, on one thread, driven by the
 //! events of the host. Nothing here is built by the app; it is what `src-tauri/src/plugins/wasm.rs` would change.
 //!
 //! - **The module** is a reactor (`crate-type = ["cdylib"]`): `_initialize`, then `escouade-turn`, called once per wake.

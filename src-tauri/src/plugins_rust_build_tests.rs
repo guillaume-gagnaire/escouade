@@ -1,4 +1,4 @@
-//! Tests of `escouade-plugin build` on a `run.wasm` plugin (ESC-335, docs/PLUGINS.md §8.5): each refusal, said in French
+//! Tests of `escouade-plugin build` on a `run.wasm` plugin (ESC-335, docs/PLUGINS-DESIGN.md §8.5): each refusal, said in French
 //! and in English; the closed list; the toolchain's checks; and, by the real program with the real toolchain, the fixture
 //! tests/fixtures/plugins/rust-build compiled twice to the hash of goldens.json, whatever its folder and its target, then
 //! played by the bench. That hash is the same on every system: this test proves it on each one of CI, and

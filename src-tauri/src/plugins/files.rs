@@ -4,7 +4,7 @@
 //!   same to a plugin in WASM and to a process (schemas/plugin-protocol-1.json). Only inside the folder: a relative path,
 //!   `/` between its parts, no `..`, nothing hidden (`.env`, `.git`), not the manifest; and, links followed, still inside
 //!   the folder. 256 KiB at most, UTF-8.
-//! - `fs/read`, `fs/write`, `fs/stat`, `fs/list`, `fs/canon` (ESC-333, docs/PLUGINS.md §8.4.6): what a plugin in WASM
+//! - `fs/read`, `fs/write`, `fs/stat`, `fs/list`, `fs/canon` (ESC-333, docs/PLUGINS-DESIGN.md §8.4.6): what a plugin in WASM
 //!   reads and writes of its agents' folders, by [`Access`]. It names a root of `permissions.files`, a closed list the
 //!   core resolves, and never gets a folder of its own choice: the path, its links followed, must lie under a root of
 //!   that very agent, out of the agent's fence (« Projet privé »), whatever the plugin's code says. Each write and each

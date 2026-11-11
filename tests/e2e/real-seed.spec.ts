@@ -1,4 +1,4 @@
-// The real seed, with no network (ESC-354, docs/PLUGINS.md §8.7): a release build of the app with the seed
+// The real seed, with no network (ESC-354, docs/PLUGINS-DESIGN.md §8.7): a release build of the app with the seed
 // `store/scripts/seed.ts fetch` downloaded (the store's bytes and signatures, checked with the keys the app embeds), on data
 // folders of the test's, every request of the app sent to a closed port (its proxy and the system's). A blank folder installs
 // nothing, and a harness chosen at the start installs its plugin from the seed; a configuration of 2.1 installs its plugins
@@ -45,13 +45,13 @@ function listed(data: string): Entry[] {
   return JSON.parse(fs.readFileSync(file, 'utf8')).plugins as Entry[];
 }
 
-/** What is installed (from the store or its seed): the plugins the app still gives (origin `builtin`, until their version is signed) left out. */
-const installed = (data: string) => listed(data).filter((e) => e.origin.kind !== 'builtin');
+/** What is installed (from the store or its seed): a release has nothing else (the origin `builtin` left with ESC-355). */
+const installed = (data: string) => listed(data);
 
-/** The ids the app still gives. */
+/** What a release would not hold: an origin `builtin` or `workspace`. */
 const given = (data: string) =>
   listed(data)
-    .filter((e) => e.origin.kind === 'builtin')
+    .filter((e) => e.origin.kind === 'builtin' || e.origin.kind === 'workspace')
     .map((e) => e.id);
 
 /** The lines of the app's logs of this test that say `what`. */
@@ -91,7 +91,7 @@ test.describe('a first installation, offline', () => {
     expect(entry!.origin).toMatchObject({ kind: 'store', seed: true, verified: true });
     note(`- Vierge : « Ajouter un compte… » sur Claude Code → la ligne « Plugin Claude Code installé » en ${seen} ms`);
     for (const l of logged(app.data, /installed from the seed/)) note(`  - ${l.trim()}`);
-    note(`  - toujours donnés par l'app (builtin) : ${given(app.data).join(', ') || 'aucun'}`);
+    note(`  - hors de l'amorce et du store (builtin, workspace) : ${given(app.data).join(', ') || 'aucun'}`);
   });
 });
 

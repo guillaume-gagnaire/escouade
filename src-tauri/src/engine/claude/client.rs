@@ -1,6 +1,6 @@
 //! What the core keeps of the words of Claude Code's client, for what stays in it: its models read by a process of their own,
 //! the tools a discussion is refused. The agents' own are its plugin's (`plugins/claude/src/client.rs`), which it does not
-//! link (docs/PLUGINS.md §8.2).
+//! link (docs/PLUGINS-DESIGN.md §8.2).
 
 #[cfg(test)]
 use escouade_plugin_protocol::engine::StartAt;

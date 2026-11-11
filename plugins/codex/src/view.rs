@@ -1,4 +1,4 @@
-//! « Vue Codex » (`view/translate`, docs/PLUGINS.md §8): what Codex's own interface writes in its session's rollout
+//! « Vue Codex » (`view/translate`, docs/PLUGINS-DESIGN.md §8): what Codex's own interface writes in its session's rollout
 //! (`sessions/…/rollout-<date>-<session>.jsonl`), read by the core a line at a time and translated here.
 //!
 //! The rollout's events (`event_msg`) tell what the app-server's notifications tell, in Codex's inner form (snake_case, items

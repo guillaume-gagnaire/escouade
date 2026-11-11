@@ -31,7 +31,7 @@ Outside that range, or for another API, the plugin stays installed but disabled,
 
 - **Escouade** offers **the latest version it can run**: a version written for a newer Escouade is skipped, a version withdrawn by its author too. An update is offered, never installed on its own (see [installing a plugin](plugins/installer#updates)).
 - **A version that asks for more** permissions asks for the user’s consent again.
-- **The plugins shipped with Escouade** have its version and change with it.
+- **Escouade’s plugins** update like the others, through the store; the installer carries a version of them, the seed, which never takes an installed one back.
 
 ## Withdrawing a version
 

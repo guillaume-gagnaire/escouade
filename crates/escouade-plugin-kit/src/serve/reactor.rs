@@ -1,4 +1,4 @@
-//! The loop as a module (docs/PLUGINS.md §8.3): the same `Plugin` and the same `Cx` as in process, on one thread, without
+//! The loop as a module (docs/PLUGINS-DESIGN.md §8.3): the same `Plugin` and the same `Cx` as in process, on one thread, without
 //! tokio. A call is a task; a task that asks the host (`secrets/get`, `net/fetch`, `timer/set`) gives the thread back and
 //! waits for a line of a later turn. Each turn reads what came, gives the answers to the tasks that wait for them, starts
 //! the new calls, polls them all, again those that were woken meanwhile (`tasks`), and writes their lines.

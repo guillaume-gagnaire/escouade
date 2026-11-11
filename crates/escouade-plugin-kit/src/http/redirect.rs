@@ -1,4 +1,4 @@
-//! A call and its redirections, on both targets (docs/PLUGINS.md §8.4.1). In a process reqwest follows them. In a module
+//! A call and its redirections, on both targets (docs/PLUGINS-DESIGN.md §8.4.1). In a process reqwest follows them. In a module
 //! the host hands the 3xx to the plugin, so that a fetch to its `Location` is judged like any other, and the façade's
 //! `send` follows them here, by the same rules: ten hops, a GET without a body after 301, 302 and 303, the same call after
 //! 307 and 308, and what would leave the service stays behind. A renamed repository, or a host that moved to https, leads

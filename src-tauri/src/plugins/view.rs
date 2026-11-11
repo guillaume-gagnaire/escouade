@@ -1,4 +1,4 @@
-//! The terminal views through the modules of their harnesses (`view/translate`, ESC-352, docs/PLUGINS.md §8): the core reads
+//! The terminal views through the modules of their harnesses (`view/translate`, ESC-352, docs/PLUGINS-DESIGN.md §8): the core reads
 //! the file the harness's own interface writes, and the plugin says what its lines mean, so that a correction published on
 //! the store corrects the view too. The core links no plugin.
 //!

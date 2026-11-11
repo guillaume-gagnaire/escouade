@@ -1,4 +1,4 @@
-//! The contract of a harness in process (INT-9, docs/PLUGINS.md §4.5 and §4.6): what the core and the plugin of a
+//! The contract of a harness in process (INT-9, docs/PLUGINS-DESIGN.md §4.5 and §4.6): what the core and the plugin of a
 //! harness say to each other. The core launches the harness itself, from the description the plugin gives
 //! (`engine/launch`), after it checked it (the fence of private projects, read-only, the token of Escouade's server
 //! never among the arguments, the files written in the agent's own folder only). What the harness says comes to the

@@ -4,12 +4,12 @@
 //!
 //! The ACP client of Escouade (Agent Client Protocol v1: JSON-RPC 2.0, one message a line on the agent's input and
 //! output), drawn from the one Cursor CLI was driven with (`engine/cursor/`, `agent/cursor.rs` of the app), with what is
-//! Cursor's own (`cursor/*`) kept apart in `cursor` (docs/PLUGINS.md §1.1, PLG-6).
+//! Cursor's own (`cursor/*`) kept apart in `cursor` (docs/PLUGINS-DESIGN.md §1.1, PLG-6).
 //!
 //! It holds no process: `Agent` is a state machine that reads what the agent wrote (`Agent::frames`) and answers the
 //! normalized items of the conversation (`escouade_plugin_protocol::engine::Item`) and the lines to write back to it
 //! (`Item::Write`, or the `writes` of an answer), as the contract of the harnesses in process wants it (INT-9). The plugin
-//! `dev.escouade.acp` (`escouade-plugins acp`) runs one for each agent of a harness a manifest describes
+//! `dev.escouade.acp` runs one for each agent of a harness a manifest describes
 //! (`contributes.harnesses[].acp`).
 //!
 //! `plugin` is the service of the protocol around them, which a plugin of a harness on this client runs.

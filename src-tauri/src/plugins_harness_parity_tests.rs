@@ -1,4 +1,4 @@
-//! The parity of the harnesses in modules (ESC-346, ESC-350, docs/PLUGINS.md §8.26): played by the host of the app, Codex,
+//! The parity of the harnesses in modules (ESC-346, ESC-350, docs/PLUGINS-DESIGN.md §8.26): played by the host of the app, Codex,
 //! Copilot CLI, Cursor CLI, Gemini CLI and Mistral Vibe answer what their native plugins answered, call by call, on the recordings of their
 //! harness: the description of their launches, the items of each line, what they write back, every call of the contract.
 //!

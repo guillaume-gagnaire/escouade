@@ -1793,7 +1793,7 @@ pub struct FoundWorktree {
 /// a turn's (`TurnRow::engine`, the `engine` column of the statistics). Claude Code for what was
 /// saved before 1.8, when it was the only one.
 ///
-/// An open id (INT-3, docs/PLUGINS.md §4.7): the harnesses written are in the registry
+/// An open id (INT-3, docs/PLUGINS-DESIGN.md §4.7): the harnesses written are in the registry
 /// (`engine::registry::all()`), and the data may name one this version does not have (a later
 /// version's, a plugin's gone), which it keeps as it is: its agents are « harness absent »
 /// (`engine::by_id`). Kept as the string it is (`claude`, `codex`…), as when it was an enumeration:

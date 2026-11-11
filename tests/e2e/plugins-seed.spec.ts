@@ -1,4 +1,4 @@
-// The app's seed (ESC-338, docs/PLUGINS.md §8.7) on the real app, its files those of tests/fixtures/store/fake-store.mjs (the
+// The app's seed (ESC-338, docs/PLUGINS-DESIGN.md §8.7) on the real app, its files those of tests/fixtures/store/fake-store.mjs (the
 // store's bytes and signatures, its key trusted by the debug build): installed at the first start by the store's path, a
 // newer version offered and not installed, uninstalled and not put back, proposed by the view, installed again on a click;
 // a false signature said; a version withdrawn stopped with its reason, the store out of reach. The configuration uses Trello
@@ -82,7 +82,7 @@ test.describe('the seed, the store in reach', () => {
     await openInstalled(page);
     const added = page.getByRole('table', { name: 'Ajoutés' });
     await expect(added).toContainText('Trello');
-    await expect(page.getByRole('table', { name: 'Livrés avec Escouade' })).not.toContainText('Trello');
+    await expect(page.getByRole('table', { name: 'Du dépôt' })).not.toContainText('Trello');
 
     // The store offers 2.3.0: said, and not installed by itself.
     await page.getByRole('button', { name: 'Relire maintenant' }).click();

@@ -31,7 +31,7 @@ Hors de cette plage, ou d’une autre API, le plugin reste installé mais désac
 
 - **Escouade** propose la **dernière version qu’elle peut faire tourner** : une version écrite pour une Escouade plus récente est sautée, une version retirée par son auteur aussi. Une mise à jour est proposée, jamais installée seule (voir [installer un plugin](plugins/installer#les-mises-a-jour)).
 - **Une version qui demande plus** de permissions redemande l’accord de l’utilisateur.
-- **Les plugins livrés avec Escouade** ont sa version et changent avec elle.
+- **Les plugins d’Escouade** se mettent à jour comme les autres, par le store ; l’installeur en porte une version, l’amorce, qui ne redescend jamais une version installée.
 
 ## Retirer une version
 

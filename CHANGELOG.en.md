@@ -7,6 +7,8 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ## [Unreleased]
 
 - Menus no longer give way to another one: “Run” and “Continue on another harness” in an agent’s menu, and “In an agent’s worktree” in the terminals’ “+” menu, open their list beside them, on hover. A menu taller than the window stops before its edge and scrolls, a chevron telling there is more to see.
+- Every plugin now runs inside Escouade, in WASM: the separate program that served Escouade’s own is gone, and the installer is lighter for it. A plugin that asks to start a native program (`run.command`) no longer starts, wherever it comes from, and its page says why.
+- The plugin documentation now says how it really is: every plugin runs in WASM, Escouade’s own install from the installer with no network, and the protocol page no longer talks about processes. The integration pages list the services a plugin serves.
 - A workflow’s diagram starts from the door the agent came in by and only shows what it reaches: the possible in a light dashed line, its real path in a full one, each stay numbered in order, the ways back with their reason. Without an agent, you choose the door; the rest folds into “steps off this path”.
 - Plugins: “Look now” reads the store again before looking, so a version published since the start is offered. The page says when the store was read; when it does not answer, it says so and looks in the offers already read.
 - A harness turned off for a project in its plugin’s settings now really is: it is no longer offered there, and its agents of that project no longer start or get anything. In a private project, the first agent on a harness first asks you to turn it on, saying what its plugin will get. On update, a private project keeps on the harnesses it already used.
@@ -121,6 +123,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### Fixes
 
+- Settings: opening a project that has a logo no longer spreads the logo over the whole window. It stays in its tile, at the top of the page.
 - macOS: 2.2.0-beta.3 closed a few seconds after it started as soon as a WASM plugin started (Claude Code first of all). The app may now run the code the plugins’ engine compiles.
 - Remote Control: an agent created just as you turn the setting on for all agents now keeps its Remote Control. It could lose it silently until the setting next changed.
 - Copilot CLI reads a command the way its shell does: `git add x; node evil.js` and any chained, redirected or out-of-worktree command now gets a card, and so does a write in `.git`. That write gets a card on Cursor, Gemini, Mistral Vibe and the ACP harnesses too.

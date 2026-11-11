@@ -192,11 +192,8 @@ pub fn main(args: Vec<String>, more: Option<More>) -> i32 {
         .and_then(|i| args.get(i + 1))
         .cloned()
         .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
-    // A plugin of Escouade's own hand (`plugins/<id>/` of its repository, ESC-314) takes the ids
-    // `dev.escouade.*`; one the app gives (INT-4), its programs too.
-    let hand = if flag("--builtin") {
-        manifest::Hand::Builtin
-    } else if flag("--first-party") {
+    // A plugin of Escouade's own hand (`plugins/<id>/` of its repository, ESC-314) takes the ids `dev.escouade.*`.
+    let hand = if flag("--first-party") {
         manifest::Hand::First
     } else {
         manifest::Hand::Third

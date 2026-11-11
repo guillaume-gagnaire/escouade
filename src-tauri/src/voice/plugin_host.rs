@@ -1,4 +1,4 @@
-//! A voice service that a plugin serves, in the app (INT-13, ESC-285; `docs/PLUGINS.md` §4.13): `ProcessVoiceService:
+//! A voice service that a plugin serves, in the app (INT-13, ESC-285; `docs/PLUGINS-DESIGN.md` §4.13): `ProcessVoiceService:
 //! VoiceService` answers the core's calls by JSON-RPC to the plugin's module (`voice/*`, `escouade_voice::wire`), as
 //! `ProcessTicketSource` does for the tickets, so that the dictation, the stream, the reading and the catalog do not
 //! see the difference. The key stays in the app's keychain (`dictation-<id>`): each call carries it to the plugin of

@@ -1,4 +1,4 @@
-//! The tasks of a module, on its one thread (docs/PLUGINS.md §8.3): what a turn polls, for the kit's two ways of serving
+//! The tasks of a module, on its one thread (docs/PLUGINS-DESIGN.md §8.3): what a turn polls, for the kit's two ways of serving
 //! (`reactor`, `crate::host`).
 //!
 //! A turn polls every task once: most wait for a line, and what they wait for was set by the turn itself (an answer, a

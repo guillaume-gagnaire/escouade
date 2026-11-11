@@ -237,7 +237,7 @@ async fn without_the_store_key_a_verified_version_installs_without_a_seal() {
 }
 
 #[tokio::test]
-async fn an_unverified_version_installs_with_its_program_unless_only_verified_ones_are_wanted() {
+async fn an_unverified_version_installs_unless_only_verified_ones_are_wanted() {
     let fake = Fake::start().trusted();
     let (_, store, plugins) = ready(&fake, "unverified").await;
     let refused = install(&store, &plugins, "dev.exemple.slack", None, true)
@@ -253,19 +253,16 @@ async fn an_unverified_version_installs_with_its_program_unless_only_verified_on
         .await
         .unwrap();
     assert!(!view.verified);
-    // This system's program from the release, where the manifest names it, not the repository's.
+    // A `run.command` (a version of before ESC-355): installed, its manifest read, it does not start and says why; no
+    // program of the release is fetched nor written.
+    assert!(
+        matches!(&view.state, State::Disabled { reason } if reason.contains("run.command")),
+        "{:?}",
+        view.state
+    );
     let program = if cfg!(windows) { "slack.cmd" } else { "slack" };
-    let written = std::fs::read_to_string(Path::new(&view.folder).join(program)).unwrap();
-    assert!(written.contains(&store::platform()), "{written}");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mode = std::fs::metadata(Path::new(&view.folder).join(program))
-            .unwrap()
-            .permissions()
-            .mode();
-        assert_eq!(mode & 0o111, 0o111);
-    }
+    let kept = std::fs::read_to_string(Path::new(&view.folder).join(program)).unwrap_or_default();
+    assert!(!kept.contains(&store::platform()), "{kept}");
 }
 
 #[tokio::test]

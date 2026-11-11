@@ -1,4 +1,4 @@
-//! A plugin in Rust as a WASM reactor (ESC-330, docs/PLUGINS.md §8.3): the module keeps its state between two calls of
+//! A plugin in Rust as a WASM reactor (ESC-330, docs/PLUGINS-DESIGN.md §8.3): the module keeps its state between two calls of
 //! `escouade-turn`, as an instance of `run.js` does. The host writes on its standard input, which never blocks, then
 //! calls a turn: the plugin reads what came and writes its lines, and the turn ends. Nothing waits inside a turn: an
 //! answer of the host comes as a line of a later turn.

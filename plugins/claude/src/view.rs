@@ -1,4 +1,4 @@
-//! « Vue Claude Code » (`view/translate`, docs/PLUGINS.md §8): what Claude Code's own interface (its TUI, in a terminal)
+//! « Vue Claude Code » (`view/translate`, docs/PLUGINS-DESIGN.md §8): what Claude Code's own interface (its TUI, in a terminal)
 //! writes in its transcript, read by the core a line at a time and translated here.
 //!
 //! The transcript's `assistant` and `user` entries have the shape of the stream's frames: they go through the same

@@ -1,6 +1,6 @@
 //! What the core keeps of Antigravity CLI's words, for what stays in it (`terminal/launch` is not served yet): the launch of
 //! its interface, the files of the agent's own home, its accounts. The agents' own are its plugin's
-//! (`plugins/antigravity/src/words.rs`), which it does not link (docs/PLUGINS.md §8.2).
+//! (`plugins/antigravity/src/words.rs`), which it does not link (docs/PLUGINS-DESIGN.md §8.2).
 
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};

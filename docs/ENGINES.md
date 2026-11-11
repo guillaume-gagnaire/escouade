@@ -2,7 +2,9 @@
 
 Un **moteur** fait tourner les agents d'Escouade : Claude Code, Codex, OpenCode, GitHub Copilot CLI, Cursor CLI (ESC-42 : un client ACP qui lui est propre, pas de moteur ACP générique) Mistral Vibe (ESC-266 : un client ACP à lui, dont la traduction met les messages dans la forme de ceux de Cursor et lui passe la main) Antigravity CLI (ESC-270 : `agy -p` en stream-json, ses événements mis dans la forme d’ACP pour la même traduction) et Gemini CLI (ESC-274 : `gemini --acp`, un client ACP à lui, dont la traduction passe aussi la main à celle de Cursor). Ce que chacun fait pour l'utilisateur, sur le même plan (installation, compte, modèles, modes et ce qui protège, coût et quota, vue terminal, serveur MCP, ce qui n'est pas pris en charge), est dans docs/SPEC.md, « Harness » ; leur protocole dans docs/PROTOCOL.md. L'interface de l'app l'appelle **« Harness »**, le mot anglais gardé tel quel en français comme en anglais (décidé le 2026-10-16) ; le code et ce document disent `engine` et « moteur ».
 
-Ce document décrit la forme de l'interface et ses choix. Il a été écrit avec le premier lot de la refonte multi-moteurs (ESC-26) : l'extraction de Claude Code derrière l'interface, sans changement de comportement. « Le banc de conformité » et la liste à cocher « Ajouter un moteur » sont venus avec le lot 10 (ESC-35).
+**Chaque harness est un plugin** (docs/PLUGINS.md) : Claude Code, Codex, Copilot CLI, Cursor CLI, Gemini CLI, Mistral Vibe, OpenCode et Antigravity CLI sont des plugins de la première main (`plugins/<nom>/`, `dev.escouade.*`), des **modules WASM** que l'app fait tourner dans son process, publiés et signés au store, installés depuis l'amorce de l'installeur ; Goose et tout agent qui parle ACP sont **décrits** par un manifeste (`contributes.harnesses[].acp`) et servis par `dev.escouade.acp`. Il n'existe plus de plugin en process ni de binaire `escouade-plugins`. Le `static` d'`Engine` qui reste au registre (`engine/<harness>/`) n'est que la **façade** de ce que le cœur garde : capacités, comptes, modèles d'un compte, textes rédigés, vue terminal ; la conversation d'un agent passe par le `ProcessEngine` de son plugin (`src-tauri/src/plugins/harness.rs`).
+
+Ce document décrit la forme de l'interface et ses choix. Il a été écrit avec le premier lot de la refonte multi-moteurs (ESC-26) : l'extraction de Claude Code derrière l'interface, sans changement de comportement. « Le banc de conformité » est venu avec le lot 10 (ESC-35) ; « Écrire un plugin de harness » remplace depuis ESC-227 la liste « Ajouter un moteur », qui supposait un moteur écrit dans le cœur.
 
 ## Où est quoi
 
@@ -123,7 +125,7 @@ Le moteur d'un nouvel agent : celui demandé (`AgentOptions.engine`), sinon celu
 
 ## Le registre (ESC-28)
 
-`engine/registry.rs` tient ce que chaque moteur déclare et ce qu'on trouve de lui sur la machine. `registry::all()` liste les moteurs du registre, le moteur par défaut en premier : ceux écrits dans l'app (`registry::BUILT_IN`, les huit), puis ceux ajoutés par `registry::register` (les plugins de harness d'INT-9) ; `registry::find(id)` en cherche un par son id. Un harness de plugin est un `ProcessEngine` (`plugins/harness.rs`, INT-9) : le plugin décrit le lancement et traduit les frames, le cœur lance le harness et applique les éléments (`docs/PLUGINS.md` §4.5).
+`engine/registry.rs` tient ce que chaque moteur déclare et ce qu'on trouve de lui sur la machine. `registry::all()` liste les moteurs du registre, le moteur par défaut en premier : ceux écrits dans l'app (`registry::BUILT_IN`, les huit), puis ceux ajoutés par `registry::register` (les plugins de harness d'INT-9) ; `registry::find(id)` en cherche un par son id. Un harness de plugin est un `ProcessEngine` (`plugins/harness.rs`, INT-9) : le plugin décrit le lancement et traduit les frames, le cœur lance le harness et applique les éléments (`docs/PLUGINS-DESIGN.md` §4.5).
 
 Hors de `engine/` et `agent/`, le cœur ne demande jamais quel harness tourne : il demande au moteur ce qu'il fait (INT-3). Ce que la fenêtre lit est dans `EngineCaps` ; ce que seul le cœur lit est une méthode d'`Engine`, avec sa valeur par défaut, que le moteur concerné remplace : ses modèles (`models_by_alias`, `told_effort`, `told_auto`, `read_told_models`, `listed_models_only`, `account_models`, `default_model`), ses comptes (`store`, `config_dir`, `settings_path`, `keys`, `account_env`, `sign_in_ready`, `key_missing`, `key_malformed`, `account_status`, `machine_key`, `signs_in`, `signs_in_later`, `signed_in_by_files`, `oauth_sign_in`, `sessions_in_agent_home`, `login_shell`, `before_login`), ses dossiers (`session_home` et `principal_sessions` pour la clôture, `memory_dir`, `session_cwd`, `workflow_folders` et `workflow_user` pour l'onglet Workflow), ses textes (`command`, `writer_priced`, `missing_repair`, `interrupted_line`) et le reste (`declares_by_program`, `track_missing`). Seul Claude Code reste nommé ailleurs, comme harness par défaut (ce qui a été enregistré avant la 1.8, ce qui n'a pas encore choisi) et pour sa mise à jour automatique (`selfupdate.rs`). Une ligne d'un moteur qu'Escouade ne pilote pas (OpenCode 2) est refusée quelle que soit la plage testée (`Engine::unsupported_line`, état `unsupported`).
 
@@ -415,59 +417,39 @@ Un flux réel enregistré se rejoue dans la traduction d'un moteur et se compare
 
 Un écart dit le cas, l'élément, le chemin de la clé, l'attendu et l'obtenu. `ESCOUADE_BLESS=1 cargo test --lib <test>` réécrit les cas d'après ce que font leurs frames (leurs `items`, et les clés de leur `agentAfter`, ou six d'entre elles s'il n'en a pas) au lieu de les comparer : le diff se relit avant d'être commité. Un test par moteur rejoue tous ses cas (`replay::check_all(&CLAUDE, "claude")`). Aujourd'hui : trois flux réels de Claude Code (sous-agent à qui l'on écrit, sous-agent arrêté, commande passée en arrière-plan), quatre de Codex 0.163.0 (un tour complet avec commandes approuvées, sous-agent et plan ; le mode Plan avec sa question et son plan ; une reprise ; un tour en échec), lus dans leur forme d'enregistrement (`{"dir", "msg"}`, seul ce que Codex a dit est traduit), et un flux du faux moteur minimal, écrit à la main dans son protocole. Les heures du plan de l'agent (`startedAt`, `endedAt` de ses sous-agents) ne sont pas comparées non plus.
 
-## Ajouter un moteur
+## Écrire un plugin de harness
 
-À cocher dans l'ordre, dans le ticket du moteur. `<moteur>` est son id dans les données (`codex`), une constante d'`EngineId`.
+Un harness s'ajoute **par un plugin**, sans toucher au cœur dans le cas simple. Le contrat complet, les capacités de l'hôte et les limites sont dans docs/PLUGINS.md (§2.2, §3) ; la documentation de l'auteur, sur le site, est `plugins/harnesses` (décrit par ACP) et `plugins/rust` (un module). `<harness>` est son id dans les données (`codex`).
 
-### L'adaptateur
+### Choisir la forme
 
-- [ ] `src-tauri/src/engine/<moteur>/mod.rs` : un `static` qui implémente `Engine` (sans état), déclaré dans `engine/mod.rs` (`mod <moteur>;`).
-- [ ] `spawn` : lancer, reprendre et copier selon `Spawn.start` (`New`, `Resume`, `Fork`), avec le modèle, l'effort, le mode, les consignes ajoutées (`append_prompt`), les dossiers lisibles sans question (`read_dirs`) et le serveur MCP d'Escouade (`spawn.escouade`) ; un `Fork` refusé si le moteur ne copie pas.
-- [ ] Un `EngineProcess` pour son process, dans le Job de l'agent (`job::Job::for_child`) : `initialize` (`Ready` : commandes `/`, modèles), `send_message`, `interrupt`, `set_model`, `set_effort`, `set_mode`, `answer_permission`, `answer_question`, `read_usage`, `rename`, `close_input`, `kill`, `wait_exit`, `wait_gone`. Ce qu'il ne sait pas faire (`stop_task`, `task_output`, `remote_control`) répond « non pris en charge ».
-- [ ] Un transport qui n'est pas une ligne par message (en-têtes `Content-Length`, SSE) est lu dans le process, qui passe une `Value` par frame à `on_frame` ; les réponses à ses propres requêtes restent dans le process.
-- [ ] `message` : la forme de son message, pièces jointes comprises, et le refus d'un fichier qu'il ne lit pas (`caps.images`, `caps.pdf`).
-- [ ] `start_lost` : la session ou le point de copie perdus, lus dans son stderr.
-- [ ] `one_shot` : `Weight::Light` (son modèle le plus rapide, sans outil) et `Weight::Reading` (outils de lecture seule), sans session, sans réglages de l'utilisateur ni serveur MCP. `Weight::Given` : le modèle de `Reading`, aucun outil ; dire `answers_without_tools` seulement si le moteur coupe vraiment tous ses outils, avec un test sur ses arguments.
-- [ ] Sa ligne dans `registry::BUILT_IN` (`engine::by_id` le trouve là), et sa constante dans `EngineId`.
-- [ ] Les méthodes d'`Engine` qu'il remplace parmi celles que le cœur lit (« Le registre » ci-dessus) : ses comptes, ses dossiers, ses modèles.
+| Si le harness… | Écris… | Ce que ça demande |
+|---|---|---|
+| parle ACP (`--acp`, JSON-RPC sur stdio) et n'a rien de particulier | **un manifeste** (`contributes.harnesses[].acp`), sans code | `args`, `env`, `modes`, `modelOption`, `tools`… servis par `dev.escouade.acp` (`crates/escouade-acp`). Exemple : `plugins/goose/`. Un tiers publie ainsi son harness |
+| parle ACP avec des extensions (mots, outils, limites) | **un module Rust** (`run.wasm`) qui sert le client ACP avec son extension | `plugins/cursor/`, `plugins/gemini/`, `plugins/mistral/` ; le kit `escouade-plugin-kit` et `escouade-acp` |
+| a son protocole (stream-json, JSON-RPC à lui, HTTP et SSE) | **un module Rust** qui tient son client et sa traduction | `plugins/claude/`, `codex/`, `copilot/`, `opencode/`, `antigravity/` |
 
-### Les capacités et le registre
+### Le plugin
 
-- [ ] `caps()` : ce qu'il sait faire, ni plus ni moins (`EngineCaps`, voir « Le registre ») ; chaque mode avec son sens chez lui (`ModeCap.meaning`). L'interface masque le reste.
-- [ ] `models()`, `efforts()`, `supports_effort`, `supports_auto` : les menus du composer.
-- [ ] `locate`, `version_args`, `tested()`, `oldest_reason`, `update_command`, `install()` : le trouver, le refuser trop ancien, l'installer.
-- [ ] Le schéma de sa plus récente version testée dans `tests/fixtures/engines/<moteur>-<version>.schema.json`, et les deux tests qui le tiennent (champs lus par Escouade, champs des flux enregistrés).
+- [ ] Un dossier `plugins/<nom>/` (première main) ou le dépôt de l'auteur : `escouade-plugin.json` (`run.wasm` ou `acp`), README, LICENSE, CHANGELOG. `contributes.harnesses[]` **déclare**, sans lancer le plugin : le nom, le programme (`locate` : des **noms** nus cherchés sur le PATH, jamais un chemin), les versions testées, les capacités (modes, effort, images, `readOnly`, `accountsByKey`), les modèles, la variable du dossier des comptes, `memory.dir`.
+- [ ] `permissions` : `files` (la racine `agent`, et `agentHome` en lecture pour les identifiants), `network` si le harness parle HTTP (`local:shared` pour un serveur local que le cœur a lancé), et `commands` seulement pour ce qu'il lance lui-même ; chaque ligne est dite à l'installation.
+- [ ] Le module (le kit Rust, `Plugin::handle` est une machine à états sans attente) répond à `engine/*` : `models`, `efforts`, `launch` (la **description** d'un lancement : arguments, variables, fichiers à écrire, `fenceApplied`, `readOnly`), `oneShot` et `oneShotRead` (un texte rédigé), `userConfig`, `fenceSettings` ; et à `agent/*` : `frames` (les lignes lues, en lots), `sendMessage`, `interrupt`, `setModel`, `setEffort`, `setMode`, `answerPermission`, `answerQuestion`, `readUsage`, `attach` (l'agent redonné après un redémarrage).
+- [ ] **Le plugin ne lance rien.** Le cœur lance le programme qu'il a trouvé, dans son Job object, après avoir vérifié la description (`check_launch`) : le jeton du serveur MCP jamais dans les arguments, la clôture d'un projet privé tenue (`fenceApplied`, chaque chemin refusé présent), `readOnly` tenu quand il est demandé, les fichiers seulement dans le dossier de l'agent. Un harness à serveur partagé (OpenCode) décrit `Launch::shared`. Un harness à plusieurs programmes à la suite (Antigravity) déclare `relaunches`.
+- [ ] Les éléments rendus sont ceux du contrat (`crates/escouade-plugin-protocol/src/engine.rs`) : `text`, `thinking`, `tool`, `toolDone`, `permission`, `question`, `turn`, `notice`, `write`… avec les noms d'outils de Claude Code (`Bash`, `Edit`, `Write`, `Task`, un outil MCP par `mcp::tool_name`). Un champ ou une frame inconnus sont ignorés sans casser le tour.
+- [ ] Une vue terminal : `terminal/launch` et `terminal/hook`, et `view/translate` pour lire le fichier que l'interface du harness écrit. Le PTY reste au cœur.
+- [ ] Les secrets : le plugin ne reçoit que les siens, par `secrets/get` ; les jetons de compte sont prêtés par le cœur.
 
-- [ ] Ses comptes (`Engine::accounts`, la création et la connexion d'un compte) et la lecture de son quota en `QuotaMeter` (voir « Les comptes et le quota »).
+### Le cœur, quand la fonction n'est pas la conversation
 
-### Le traducteur
+Un harness de la première main qui demande quelque chose que le plugin ne donne pas (ses comptes, le quota, la liste des modèles d'un compte sans agent, la vue terminal, le suivi d'un transcript) garde une **façade** au registre : un `static` qui implémente `Engine` (voir « Les deux traits » et « Le registre »), sa ligne dans `registry::BUILT_IN`, sa constante dans `EngineId`, et une ligne de `plugins::harness::BUILTIN_HARNESSES` (l'id du plugin, son `native` et son `prepare` s'il en a). Un harness tiers n'en a pas : son id est `plugin:<plugin>:<harness>`, il entre au registre avec son plugin et en sort avec lui (« harness absent » pour ses agents).
 
-- [ ] `src-tauri/src/agent/<moteur>.rs` (`mod <moteur>;` dans `agent.rs`) : `AgentRt::<moteur>_frame`, que `Engine::translate` appelle.
-- [ ] Les éléments normalisés : `text`, `thinking`, `tool` (puis son résultat : `status` `ok` ou `error`, `result`), `permission` et `question` avec leur demande en attente (`add_pending`, statut `waiting`), `notice`, `event`, et le `turn` de fin de tour avec `Effects.turn_end` (`Finished`, `Interrupted`, `Limited`, `Error`), `Effects.limited` et `Effects.rate`.
-- [ ] Les noms d'outils de Claude Code (`Bash`, `Edit`, `Write`, `Task`…, table de docs/TODO-1.8.md, « Un moteur par agent »), un outil MCP nommé par `mcp::tool_name`, un outil inconnu sous son propre nom ; un fichier modifié passé à `touch`.
-- [ ] La session : `meta.session_id` dès qu'il la dit, `fork_of` et `fork_at` oubliés au premier tour d'une copie, `last_entry` (ou son équivalent) pour copier jusqu'au bon point.
-- [ ] Le plan : sous-agents (`plan_tool_use`, `on_tool_result`), liste de tâches, fin de tour (`PlanState::end_turn`).
-- [ ] L'inconnu toléré : un champ, une frame ou un événement inconnus sont ignorés sans casser le tour (un test, comme `an_unknown_field_or_frame_of_a_newer_claude_code_leaves_the_turn_going`).
+### Le banc et les essais
 
-### Le serveur MCP d'Escouade et les textes
-
-- [ ] `grant_file`, `refusal`, `escouade_launch` : le serveur donné ou refusé, **jamais le jeton dans les arguments** (`no_engine_puts_the_token_on_the_command_line` le vérifie pour chaque moteur de `registry::all()`).
-- [ ] `declared`, `add_declaration`, `remove_declaration`, `manual_declaration` : « Les agents peuvent piloter Escouade » (ou seulement `user_config`).
-- [ ] `speaker`, `instructions_room`, `subagent_relay` : comment les textes nomment ses agents, la place des consignes ajoutées, le message transmis à un sous-agent.
-
-### Le faux moteur et le banc
-
-- [ ] `tests/fixtures/fake-<moteur>.mjs`, avec son `.cmd` (Windows) et un script sans extension (macOS, Linux) : son vrai protocole, rejoué d'après ses flux enregistrés ; le message choisit le scénario, comme pour le faux `claude`.
-- [ ] `src-tauri/src/engine/<moteur>/bench.rs` : sa `Target` et le test qui appelle `bench::run`, avec la liste des scénarios attendus ; le banc passe.
-- [ ] Ses flux réels enregistrés (`tests/fixtures/<moteur>/`), un cas par flux dans `tests/fixtures/replays/<moteur>/` (béni, relu), et le test `replay::check_all(&<MOTEUR>, "<moteur>")`.
-- [ ] S'il a une vue terminal (`caps.terminal_view`) : son interface factice, lancée dans un pseudo-terminal, qui écrit son journal et appelle ses hooks (lot 9).
-- [ ] Les e2e : un agent sur ce moteur (message, approbation, diff, fin de tour), un ticket lancé dessus par le pilote auto.
-
-### Les essais réels
-
-- [ ] Un essai réel avant la release : un vrai compte, un ticket en worktree jusqu'au commit et au merge, un plan avec sous-agents, une limite d'usage si possible ; ses flux enregistrés (voir ci-dessus).
-- [ ] La plage de versions testées mise à jour d'après l'essai (`tested()`).
-- [ ] docs/PROTOCOL.md : sa section (versions testées, méthodes et événements utilisés, correspondance des modes et des outils) ; ce document : sa colonne dans les tables ; README (installation), CHANGELOG et site.
+- [ ] **Le banc des plugins** : `escouade-plugin test --first-party` (ou sans pour un tiers) joue le module dans l'hôte de l'app ; `plugins/ci.mjs` le fait pour tous les plugins du dépôt.
+- [ ] **Le banc de conformité des harness** (« Le banc de conformité » ci-dessus) : une `Target` écrite à côté du moteur (`engine/<harness>/bench.rs`) joue les scénarios sur le faux harness, par le `ProcessEngine` du module (`plugins_harness_tests.rs`).
+- [ ] `tests/fixtures/fake-<harness>.mjs` (son vrai protocole, d'après ses flux enregistrés), ses flux réels dans `tests/fixtures/replays/<harness>/` (bénis, relus), rejoués par la traduction du module.
+- [ ] Un essai réel avant la publication : un vrai compte, un ticket en worktree jusqu'au merge, un plan avec sous-agents, une limite d'usage si possible ; la plage de versions testées mise à jour d'après lui (`tested()`).
+- [ ] La publication : l'étiquette `plugins/<dossier>/vX.Y.Z`, la soumission, la revue, la signature (docs/PLUGINS.md §6) ; puis docs/PROTOCOL.md (sa section), ce document, le README, le CHANGELOG et le site (`harness`).
 
 ## Vérification de l'extraction (ESC-26)
 

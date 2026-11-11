@@ -1,5 +1,5 @@
 // The logos of Escouade's own plugins on the store (PLG-13, ESC-292), drawn inline: a brand's mark where its published
-// rules let a third party show it to say it integrates, without asking (read on 2026-10-29, docs/PLUGINS.md §3.1);
+// rules let a third party show it to say it integrates, without asking (read on 2026-10-29, docs/PLUGINS-DESIGN.md §3.1);
 // otherwise the glyph of its category on the tile of Escouade's logo. The marks' paths come from Simple Icons 16.36
 // (CC0 for the paths; the marks stay their owners').
 

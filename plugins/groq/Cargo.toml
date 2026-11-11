@@ -7,7 +7,7 @@ license = "GPL-3.0-or-later"
 edition = "2021"
 rust-version = "1.88"
 
-# A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5). The service is the crate `escouade-voice`.
+# A module, compiled by `escouade-plugin build` (docs/PLUGINS-DESIGN.md §8.5). The service is the crate `escouade-voice`.
 [lib]
 crate-type = ["cdylib"]
 
