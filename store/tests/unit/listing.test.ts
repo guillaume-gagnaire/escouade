@@ -185,7 +185,7 @@ describe('the home page and Escouade’s own', () => {
     for (const d of readdirSync(root).filter((x) => existsSync(join(root, x, 'escouade-plugin.json')))) {
       const m = JSON.parse(readFileSync(join(root, d, 'escouade-plugin.json'), 'utf8'));
       if (published.includes(d)) continue;
-      // A module that reads its manifest embeds it: a key added there changes its fingerprint (docs/PLUGINS.md §8.29).
+      // A module that reads its manifest embeds it: a key added there changes its fingerprint (docs/PLUGINS-DESIGN.md §8.29).
       // Its first version kept the tool's categories; a later one may carry a `store` key (its pages, ESC-366), as
       // it has a new fingerprint anyway.
       const code = existsSync(join(root, d, 'src/lib.rs'))

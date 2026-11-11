@@ -1,4 +1,4 @@
-//! The network of the host (ESC-332, docs/PLUGINS.md §8.4): `net/fetch` revised (`{account}`, the proxy and the TLS of the
+//! The network of the host (ESC-332, docs/PLUGINS-DESIGN.md §8.4): `net/fetch` revised (`{account}`, the proxy and the TLS of the
 //! settings, `bodyBase64`, the limits), `net/stream`, the WebSocket, `local:shared` and the timers, each rule and each
 //! refusal, on fake local servers. The module of tests/fixtures/plugins/reactor (`probe/host`) plays what lasts: `run.js`
 //! is played by `plugins_wasm_tests.rs`, on the same host.

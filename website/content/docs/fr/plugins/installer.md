@@ -75,10 +75,11 @@ Certaines intégrations d’Escouade sont des plugins, écrits par Escouade, rel
 | Plugin | Ce qu’il sert |
 | --- | --- |
 | GitHub | L’hébergeur GitHub (PR, CI, relectures, déploiements) et la source GitHub Issues, sur un seul compte. Voir [les intégrations](integrations). |
-| GitLab | L’hébergeur GitLab, gitlab.com et tes instances (merge requests, pipelines, discussions, déploiements). GitLab Issues fait encore partie de l’app, sur le même compte. |
+| GitLab | L’hébergeur GitLab, gitlab.com et tes instances (merge requests, pipelines, discussions, déploiements). GitLab Issues, sur le même compte. |
 | Bitbucket | L’hébergeur Bitbucket Cloud. |
 | Gitea / Forgejo | L’hébergeur de Gitea, de Forgejo et de Codeberg. |
-| Trello | La source Trello du Kanban. |
+| Trello, Linear, Jira, ClickUp | Les sources de tickets du Kanban. Azure DevOps sert à la fois l’hébergeur et Azure Boards. |
+| Claude Code, Codex, Copilot CLI, Cursor CLI, Gemini CLI, Mistral Vibe, OpenCode, Antigravity CLI | Les [harness](harness) : chacun fait converser ses agents par un module. |
 | ACP | Les [harness ACP décrits](plugins/harnesses) par un plugin, comme Goose. |
 | isola | L’environnement de lancement isola, pour les [lancements de test](testing). |
 | OpenAI, Groq, Mistral, ElevenLabs, Deepgram | Les services de voix en ligne (voir [Réglages › Voix](settings-voice)). |
@@ -107,7 +108,7 @@ Ce qu’Escouade ne peut pas lire sûrement (un fichier de réglages abîmé, un
 
 ## Activer pour l’app ou par projet
 
-- **Pour toute l’app** : l’interrupteur de sa ligne, ou « Désactiver » sur sa page. Désactivé, rien de lui ne tourne et aucun projet ne le reçoit ; son process est arrêté.
+- **Pour toute l’app** : l’interrupteur de sa ligne, ou « Désactiver » sur sa page. Désactivé, rien de lui ne tourne et aucun projet ne le reçoit ; son instance est arrêtée.
 - **Par projet** : l’onglet Projets de sa page, une ligne par projet ouvert. Un plugin installé est actif dans chaque projet, **sauf les projets privés** : un projet privé est coupé d’office, et la ligne le dit (« rien ne lui parvient »). L’y activer est un choix fait un par un ; la ligne rappelle alors qu’Escouade ne peut pas empêcher un programme de lire le disque.
 - **Un plugin de harness** (Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode, Gemini CLI, Mistral Vibe, Antigravity CLI, ou un plugin qui décrit un harness) suit la même règle, car son plugin reçoit tout ce que fait l’agent. Coupé pour un projet, le harness n’y est plus proposé, ses agents de ce projet ne démarrent pas et ne reçoivent rien, et le couper arrête ceux qui tournent. Dans un projet privé, le premier agent sur un harness te demande d’abord « Activer … pour ce projet privé ? », avec ce que le plugin recevra et ses permissions : « Activer » l’allume pour ce projet seulement, « Annuler » ne lance rien. Un agent ou un ticket dont le harness est coupé pour son projet le dit sur sa carte, avec « Activer ». Le Kanban, le pilote auto et les outils MCP ne l’activent jamais à ta place : le ticket reste bloqué, avec la raison.
 
@@ -116,7 +117,7 @@ Ce qu’Escouade ne peut pas lire sûrement (un fichier de réglages abîmé, un
 
 ## Retirer une permission
 
-L’onglet Permissions de sa page liste ce qu’il peut faire, avec un interrupteur par permission. En retirer une arrête son process ; le suivant démarre sans elle, et le plugin continue, ou s’arrête s’il ne peut pas. Un secret retiré ne lui est plus donné : `secrets/get` lui répond une erreur pour cette clé. Le programme lui-même ne se retire pas : pour l’arrêter, désactive le plugin.
+L’onglet Permissions de sa page liste ce qu’il peut faire, avec un interrupteur par permission. En retirer une arrête son instance ; la suivante démarre sans elle, et le plugin continue, ou s’arrête s’il ne peut pas. Un secret retiré ne lui est plus donné : `secrets/get` lui répond une erreur pour cette clé. Le programme lui-même ne se retire pas : pour l’arrêter, désactive le plugin.
 
 ## Ses réglages et ses secrets
 
@@ -124,7 +125,7 @@ L’onglet Réglages montre les champs qu’il déclare (`contributes.settings`,
 
 ## Le journal
 
-L’onglet Journal montre où en est son process (prêt, en marche, relancé après un plantage, arrêté après trois plantages, arrêté pour sa mémoire…) et les 500 dernières lignes de son journal : ses démarrages, ses arrêts et leur raison, ses plantages, sa sortie d’erreur, ses messages, les appels restés sans réponse et ce qui lui a été refusé. Il est relu toutes les deux secondes, se filtre par genre et se copie en entier. Les secrets qu’il a reçus y sont masqués.
+L’onglet Journal montre où en est son instance (prêt, en marche, relancé après un plantage, arrêté après trois plantages, arrêté pour sa mémoire…) et les 500 dernières lignes de son journal : ses démarrages, ses arrêts et leur raison, ses plantages, sa sortie d’erreur, ses messages, les appels restés sans réponse et ce qui lui a été refusé. Il est relu toutes les deux secondes, se filtre par genre et se copie en entier. Les secrets qu’il a reçus y sont masqués.
 
 - **Démarrer** lance un plugin qui n’a pas encore tourné (il démarre seul à sa première activation).
 - **Relancer** relance un plugin arrêté, ses plantages oubliés.
@@ -148,7 +149,7 @@ Le sceau d’un plugin installé est revérifié sur ta machine, avec le `versio
 
 ## Désinstaller
 
-« Désinstaller », sur sa page, arrête son process et efface son dossier, ses réglages, ses secrets et son journal. La case « Garder ses réglages et ses secrets pour une prochaine installation » les garde : réinstallé, le plugin les retrouve. Un dossier en développement reste où il est.
+« Désinstaller », sur sa page, arrête son instance et efface son dossier, ses réglages, ses secrets et son journal. La case « Garder ses réglages et ses secrets pour une prochaine installation » les garde : réinstallé, le plugin les retrouve. Un dossier en développement reste où il est.
 
 ## Le mode développeur
 

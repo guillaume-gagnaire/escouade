@@ -113,7 +113,7 @@ describe('the compilation of a run.js bundle', () => {
   });
 });
 
-// A `run.wasm` plugin (ESC-336, docs/PLUGINS.md §8.5.3): its dependencies with a network, then the compilation without.
+// A `run.wasm` plugin (ESC-336, docs/PLUGINS-DESIGN.md §8.5.3): its dependencies with a network, then the compilation without.
 const RUST_MANIFEST = Buffer.from(JSON.stringify({ id: 'io.github.sroux.rust', version: '1.0.0', run: { wasm: 'Cargo.toml' } }));
 const rust = (files: Record<string, string> = {}, over: Partial<CompileRust> = {}): CompileRust => ({
   manifest: RUST_MANIFEST,

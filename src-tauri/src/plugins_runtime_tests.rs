@@ -173,7 +173,7 @@ async fn it_starts_at_its_first_activation_only() {
     ));
 }
 
-/// What a module cannot read from an environment (docs/PLUGINS.md §8.4.8): the language, for every plugin.
+/// What a module cannot read from an environment (docs/PLUGINS-DESIGN.md §8.4.8): the language, for every plugin.
 #[tokio::test(flavor = "multi_thread")]
 async fn initialize_says_the_language_and_the_version() {
     let f = fake("greeting", &[], quick());

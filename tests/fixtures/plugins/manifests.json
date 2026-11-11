@@ -2,7 +2,7 @@
   "about": "The manifests of escouade-plugin.json and what their reader says of them (ESC-173). Both readers go through every case: the app's (src-tauri/src/plugins/manifest_tests.rs) and the store's library (schemas/plugin-manifest.test.ts). `errors` are `<path> <code>`, in any order; `ignored` the unknown fields, which load nothing and fail nothing. `files` are the files of the plugin's folder a case reads (its `icon`): `png` a PNG's header of that width and height, padded to `size` bytes; `text` a file of that text.",
   "cases": [
     {
-      "name": "the manifest of docs/PLUGINS.md §3.1",
+      "name": "the manifest of docs/PLUGINS-DESIGN.md §3.1",
       "manifest": {
         "$schema": "https://escouade.dev/schemas/plugin-1.json",
         "id": "dev.exemple.slack",
@@ -148,7 +148,7 @@
       "ignored": []
     },
     {
-      "name": "a first-hand plugin with several points (docs/PLUGINS.md §4.4), a module",
+      "name": "a first-hand plugin with several points (docs/PLUGINS-DESIGN.md §4.4), a module",
       "firstParty": true,
       "manifest": {
         "id": "dev.escouade.github",

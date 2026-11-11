@@ -990,7 +990,7 @@ async fn a_plugin_written_for_the_sdk_runs_unchanged_in_wasm() {
     assert!(journal_has(&w, Kind::Stop, "answered shutdown"));
 }
 
-/// A `run.command` is no longer started, whatever its origin (ESC-355, docs/PLUGINS.md §8.8): its manifest reads, the
+/// A `run.command` is no longer started, whatever its origin (ESC-355, docs/PLUGINS-DESIGN.md §8.8): its manifest reads, the
 /// plugin loads disabled, and its sheet and a call say why.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_plugin_of_run_command_reads_and_does_not_start_and_says_why() {

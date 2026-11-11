@@ -1,7 +1,7 @@
 ---
 title: "Règles d'autorisation des plugins"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §1.7","docs/PLUGINS.md §7.1","docs/TODO-2.1.md (PLG-8)","schemas/plugin-protocol-1.json (permissions/decide)","website/content/docs/fr/plugins/permission-rules.md"]
+sources: ["docs/PLUGINS-DESIGN.md §1.7","docs/PLUGINS-DESIGN.md §7.1","docs/TODO-2.1.md (PLG-8)","schemas/plugin-protocol-1.json (permissions/decide)","website/content/docs/fr/plugins/permission-rules.md"]
 tickets: ["ESC-180","ESC-329"]
 decisions: []
 compared: "2026-10-30T01:50:33+01:00"

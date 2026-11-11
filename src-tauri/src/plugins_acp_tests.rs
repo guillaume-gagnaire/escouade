@@ -1,4 +1,4 @@
-//! Tests of the generic ACP plugin (PLG-6, `dev.escouade.acp`, docs/PLUGINS.md §1.1): a harness only described by a
+//! Tests of the generic ACP plugin (PLG-6, `dev.escouade.acp`, docs/PLUGINS-DESIGN.md §1.1): a harness only described by a
 //! manifest (`contributes.harnesses[].acp`), served by `escouade-plugins acp` on the contract of the harnesses in
 //! process (INT-9). The bench of the harnesses on the fake ACP agent of `tests/fixtures/fake-acp.mjs`, described by
 //! `tests/fixtures/plugins/fake-acp/` without a line of Rust of its own; Cursor CLI's fake (`fake-cursor.mjs`) and its

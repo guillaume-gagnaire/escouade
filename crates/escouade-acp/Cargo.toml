@@ -17,7 +17,7 @@ workspace = "../../src-tauri"
 
 # The client of the Agent Client Protocol (ACP v1) that Escouade speaks, without a process nor a runtime of its own: a
 # state machine that reads the agent's lines and answers the items of the conversation and the lines to write back
-# (docs/PLUGINS.md §1.1, PLG-6). Shared by the plugin `dev.escouade.acp` (a module) and by the core's
+# (docs/PLUGINS-DESIGN.md §1.1, PLG-6). Shared by the plugin `dev.escouade.acp` (a module) and by the core's
 # ACP harnesses until they come out in process (Cursor CLI, Mistral Vibe, Gemini CLI: INT-10.1, 10.6, 10.7).
 [dependencies]
 escouade-plugin-protocol = { path = "../escouade-plugin-protocol", version = "0.1.1" }

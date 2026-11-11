@@ -1,4 +1,4 @@
-//! The installed plugins (docs/PLUGINS.md §3.2, ESC-173): a plugin is installed from a local
+//! The installed plugins (docs/PLUGINS-DESIGN.md §3.2, ESC-173): a plugin is installed from a local
 //! folder or from a git repository at a tag, copied into the plugins' folder of the app's data
 //! (`DataDir::plugins_dir`) and pinned there by its fingerprint (the commit, or the SHA-256 of the
 //! folder's files); a folder in development is loaded in place, and read again when it changes.

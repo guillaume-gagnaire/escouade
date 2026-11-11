@@ -7,7 +7,7 @@ license = "GPL-3.0-or-later"
 edition = "2021"
 rust-version = "1.88"
 
-# A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5), on the ACP client of `escouade-acp` (PLG-6) with its
+# A module, compiled by `escouade-plugin build` (docs/PLUGINS-DESIGN.md §8.5), on the ACP client of `escouade-acp` (PLG-6) with its
 # extension `cursor`, served as the generic ACP plugin serves the harnesses a manifest describes.
 [lib]
 crate-type = ["cdylib"]

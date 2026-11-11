@@ -1,7 +1,7 @@
 ---
 title: "Le retrait du natif (Z3)"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §8.8, §8.10, §8.33","src-tauri/src/plugins/runtime.rs","src-tauri/src/plugins/mod.rs","src-tauri/src/plugins/builtin.rs","src-tauri/src/plugins/store.rs","crates/escouade-plugin-cli/src/manifest.rs","store/scripts/plugin-review/review.ts","store/server/utils/checks.ts","tests/fixtures/plugins/fake/plugin.mjs","tests/fixtures/plugins/minimal/README.md"]
+sources: ["docs/PLUGINS-DESIGN.md §8.8, §8.10, §8.33","src-tauri/src/plugins/runtime.rs","src-tauri/src/plugins/mod.rs","src-tauri/src/plugins/builtin.rs","src-tauri/src/plugins/store.rs","crates/escouade-plugin-cli/src/manifest.rs","store/scripts/plugin-review/review.ts","store/server/utils/checks.ts","tests/fixtures/plugins/fake/plugin.mjs","tests/fixtures/plugins/minimal/README.md"]
 tickets: ["ESC-355"]
 decisions: []
 compared: null
@@ -34,4 +34,4 @@ Le dernier pas de *Tous les plugins en WASM* : ce que cette page appelait « l'�
 
 ## Les tests
 
-Le faux plugin des tests est un module `run.js` (`tests/fixtures/plugins/fake/plugin.mjs`, ses options dans `args.json`) ; la démonstration `dev.escouade.minimal` un module `run.wasm` commité, son harness `tests/fixtures/fake-minimal.mjs`. Les tests qui se servaient du process passent sur eux ; ceux qui ne valaient que pour un process (le Job qui tue l'arbre, le `pid`, le chemin absolu d'un programme) sont partis. Les mesures, le poids de l'installeur et `bench:int0` sont dans `docs/PLUGINS.md` §8.33.
+Le faux plugin des tests est un module `run.js` (`tests/fixtures/plugins/fake/plugin.mjs`, ses options dans `args.json`) ; la démonstration `dev.escouade.minimal` un module `run.wasm` commité, son harness `tests/fixtures/fake-minimal.mjs`. Les tests qui se servaient du process passent sur eux ; ceux qui ne valaient que pour un process (le Job qui tue l'arbre, le `pid`, le chemin absolu d'un programme) sont partis. Les mesures, le poids de l'installeur et `bench:int0` sont dans `docs/PLUGINS-DESIGN.md` §8.33.

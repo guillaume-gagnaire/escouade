@@ -1,4 +1,4 @@
-//! Tests of the reader of workflows a plugin brings (ESC-200, choice 158; `docs/PLUGINS.md` §4.5)
+//! Tests of the reader of workflows a plugin brings (ESC-200, choice 158; `docs/PLUGINS-DESIGN.md` §4.5)
 //! against the fake plugin: the files it is given (its globs, nothing outside the project), the
 //! graph it answers as the core follows it, what does not hold refused whole, and an agent that
 //! follows the workflow of a reader, its `workflow.*` facts as for any other.

@@ -1,7 +1,7 @@
 ---
 title: "Le store dans l'app"
 subject: "store"
-sources: ["docs/STORE.md","docs/PLUGINS.md §8.33","design/plugins/maquettes-b.html","design/app-redesign/UX-NOTES.md","website/content/docs/fr/plugins/installer.md","src-tauri/src/plugins/store.rs","src-tauri/src/plugins_seed_tests.rs","src-tauri/src/plugins_store_tests.rs"]
+sources: ["docs/STORE.md","docs/PLUGINS-DESIGN.md §8.33","design/plugins/maquettes-b.html","design/app-redesign/UX-NOTES.md","website/content/docs/fr/plugins/installer.md","src-tauri/src/plugins/store.rs","src-tauri/src/plugins_seed_tests.rs","src-tauri/src/plugins_store_tests.rs"]
 tickets: ["ESC-236","ESC-287","ESC-313","ESC-314","ESC-184","ESC-394","ESC-405","ESC-355"]
 decisions: [21,25,67,132]
 compared: "2026-10-31T19:50:53+01:00"

@@ -4,7 +4,7 @@
 //! isola's, the program, the `up` command a test launch runs). This module does what needs the program: `launch/ls`
 //! (the services of the worktree, from `isola ls --json`), `launch/down` and `launch/destroy`.
 //!
-//! A module runs nothing itself. It asks the host (`proc/spawn`, docs/PLUGINS.md §8.4.7), which runs what
+//! A module runs nothing itself. It asks the host (`proc/spawn`, docs/PLUGINS-DESIGN.md §8.4.7), which runs what
 //! `permissions.commands` names and nothing else, and finds the program on the PATH. The app lends the worktree for the
 //! time of a call, under the name it gives in `agent`: the module never holds a path. What the program writes and its end
 //! come back as `proc/out` and `proc/exit`.

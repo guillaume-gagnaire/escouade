@@ -21,7 +21,7 @@ import { lockChanges, moduleImports, moduleLeads, readLock, readNativeList, rust
 import { sandboxedCompiler, type CompileOne } from '../../server/utils/compile';
 import { startReviewStore } from '../fake/review-store.mjs';
 
-// The review of a `run.wasm` plugin (ESC-337, docs/PLUGINS.md §8.5.5): the leads of Rust, the recompilation in a container
+// The review of a `run.wasm` plugin (ESC-337, docs/PLUGINS-DESIGN.md §8.5.5): the leads of Rust, the recompilation in a container
 // for a third party and on the machine for the first hand, on a fake store and a fake engine. ESCOUADE_REVIEW_REAL_RUST=1
 // and ESCOUADE_PLUGIN_LINUX play the real one, in a real container, never in CI.
 

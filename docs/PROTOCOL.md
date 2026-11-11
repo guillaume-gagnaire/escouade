@@ -18,9 +18,9 @@ Escouade fait tourner ses agents sur huit harness : Claude Code, Codex, OpenCode
 
 La déclaration du serveur MCP d'Escouade dans la config de chaque harness, pour l'utilisateur, est commune : « Serveur MCP d'Escouade » › « Déclaration dans les harness ».
 
-**Où est le client de chaque harness.** Ce document dit ce qu'Escouade échange avec chaque harness ; ce protocole-là n'a pas changé quand ils sont sortis du cœur, seul le code a bougé (docs/PLUGINS.md §4.5). Le cœur lance le programme, et le plugin livré du harness tient sa conversation : le client de Codex (`plugins/codex/`), de Copilot CLI (`dev.escouade.copilot-cli`) et d'OpenCode (`dev.escouade.opencode`) ; le client ACP partagé (`crates/escouade-acp`) et ses extensions pour Cursor CLI, Mistral Vibe et Gemini CLI, servis par leur plugin. `src-tauri/src/engine/<harness>/` garde la façade : capacités, comptes, quota, textes rédigés, vue terminal. Claude Code et Antigravity CLI sont encore au cœur (ESC-226, ESC-283).
+**Où est le client de chaque harness.** Ce document dit ce qu'Escouade échange avec chaque harness ; ce protocole-là n'a pas changé quand ils sont sortis du cœur, seul le code a bougé (docs/PLUGINS-DESIGN.md §4.5). Le cœur lance le programme, et le plugin livré du harness tient sa conversation : le client de Codex (`plugins/codex/`), de Copilot CLI (`dev.escouade.copilot-cli`) et d'OpenCode (`dev.escouade.opencode`) ; le client ACP partagé (`crates/escouade-acp`) et ses extensions pour Cursor CLI, Mistral Vibe et Gemini CLI, servis par leur plugin. `src-tauri/src/engine/<harness>/` garde la façade : capacités, comptes, quota, textes rédigés, vue terminal. Claude Code et Antigravity CLI sont encore au cœur (ESC-226, ESC-283).
 
-**Le protocole des plugins** n'est pas ici : c'est celui qu'Escouade parle à ses plugins, JSON-RPC 2.0, version 1 (`schemas/plugin-protocol-1.json` pour le socle, `crates/escouade-plugin-protocol` pour les points d'extension). Voir docs/PLUGINS.md §1 et, pour les auteurs, la page `plugins/api` du site.
+**Le protocole des plugins** n'est pas ici : c'est celui qu'Escouade parle à ses plugins, JSON-RPC 2.0, version 1 (`schemas/plugin-protocol-1.json` pour le socle, `crates/escouade-plugin-protocol` pour les points d'extension). Voir docs/PLUGINS-DESIGN.md §1 et, pour les auteurs, la page `plugins/api` du site.
 
 ## Claude Code (stream-json)
 

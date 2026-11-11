@@ -167,7 +167,7 @@ jobs:
           sudo apparmor_parser -r store/deploy/apparmor-bubblewrap
           node store/scripts/image-test.mjs escouade-store:ci src-tauri/escouade-js/target/escouade-js.wasm.sha256
 
-  # escouade-js, the Javy plugin of the run.js plugins (ESC-320, docs/PLUGINS.md §5): built once for wasm32-wasip1 with the
+  # escouade-js, the Javy plugin of the run.js plugins (ESC-320, docs/PLUGINS-DESIGN.md §5): built once for wasm32-wasip1 with the
   # pinned Javy (scripts/escouade-js.sh), its SHA-256 noted, then handed to every job that builds the app, which embeds it.
   escouade-js:
     name: escouade-js (the JS/TS plugins' engine)
@@ -202,7 +202,7 @@ jobs:
             src-tauri/escouade-js/target/escouade-js.wasm.sha256
           retention-days: 7
 
-  # The kit of the plugins in Rust as modules (ESC-334, docs/PLUGINS.md §8.10, A4): these crates compile for wasm32-wasip1, the
+  # The kit of the plugins in Rust as modules (ESC-334, docs/PLUGINS-DESIGN.md §8.10, A4): these crates compile for wasm32-wasip1, the
   # toolchain's file brings the target; Linear and Codex, compiled from their crates, prove it. What A9 will publish stays
   # publishable.
   plugin-kit-wasm:
@@ -318,7 +318,7 @@ jobs:
         with:
           tool: cargo-nextest
 
-      # What the tests of the app and its end-to-end tests play in its host (docs/PLUGINS.md §8.6.4), in the archive below
+      # What the tests of the app and its end-to-end tests play in its host (docs/PLUGINS-DESIGN.md §8.6.4), in the archive below
       # (.config/nextest.toml) and in the app's artifact.
       - name: The modules of the plugins
         shell: bash
@@ -698,7 +698,7 @@ jobs:
       # before a tag: LICENSE and CHANGELOG, their tests (cargo test for the crates), the TypeScript ones' dist/ rebuilt
       # and compared, a crate's version against its manifest, then validate, and the bench for all but those the app still
       # gives (--first-party: their ids dev.escouade.*; the SDK built by the step above). All of them on main; on a
-      # pull request, those it touches (docs/PLUGINS.md §8.6.4).
+      # pull request, those it touches (docs/PLUGINS-DESIGN.md §8.6.4).
       - name: Escouade's own plugins pass their tests, validate and the bench
         env:
           ESCOUADE_PLUGIN_BIN: src-tauri/target/debug/escouade-plugin

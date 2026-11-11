@@ -1,4 +1,4 @@
-// INT-0, the reference measures (docs/PLUGINS.md §4.8), in one command: `npm run bench:int0 -- [--label before] [--rounds 20]
+// INT-0, the reference measures (docs/PLUGINS-DESIGN.md §4.8), in one command: `npm run bench:int0 -- [--label before] [--rounds 20]
 // [--launches 10] [--flux-only]`.
 //
 // 1. The stream bench (src-tauri/src/fluxbench.rs, a release build): the recorded streams of each harness replayed through the

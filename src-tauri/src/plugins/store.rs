@@ -459,7 +459,7 @@ impl Store {
     }
 
     /// Takes the list `seed` of the app's seed when it is newer than the one kept (or none is): without the store, the
-    /// seed's list is the one that holds (docs/PLUGINS.md §8.7). It is not kept: the seed stays where it is.
+    /// seed's list is the one that holds (docs/PLUGINS-DESIGN.md §8.7). It is not kept: the seed stays where it is.
     pub fn with_seed_list(self, seed: Option<RevocationList>) -> Self {
         if let Some(list) = seed {
             let mut c = self.cache.write();

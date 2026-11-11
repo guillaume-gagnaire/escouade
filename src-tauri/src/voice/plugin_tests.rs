@@ -241,7 +241,7 @@ async fn a_long_dictation_goes_through_the_module() {
     rt.shutdown();
 }
 
-/// INT-13, voice: the delay of the final text after the end of a sentence through the plugin's module, the numbers of `docs/PLUGINS.md` §1.4. By hand (`cargo nextest run --run-ignored only int13_measure
+/// INT-13, voice: the delay of the final text after the end of a sentence through the plugin's module, the numbers of `docs/PLUGINS-DESIGN.md` §1.4. By hand (`cargo nextest run --run-ignored only int13_measure
 /// --no-capture`), as INT-12's: two medians of a few ms on a loaded runner would fail at random.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "INT-13 measure: run by hand"]

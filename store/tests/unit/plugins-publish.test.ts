@@ -9,7 +9,7 @@ import { MIT } from '../fake/plugins.mjs';
 import { testKey } from '../fake/minisign.mjs';
 import { FAKE_ADMIN_TOKEN } from '../fake/review-store.mjs';
 
-// `npm run plugins:publish` whole (scripts/plugins-publish/, docs/PLUGINS.md §8.6.2): the command as the chief runs it, its
+// `npm run plugins:publish` whole (scripts/plugins-publish/, docs/PLUGINS-DESIGN.md §8.6.2): the command as the chief runs it, its
 // `plugin-review` included, in a temporary Git repository with a bare `origin`, against the fake store of the app
 // (tests/fixtures/store/fake-store.mjs). Signed by the stand-in for minisign with a key made for the test: no real store,
 // no tag on this repository, no real signature. The store's image has neither Git nor tests/fixtures: skipped there.

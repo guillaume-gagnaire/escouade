@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The plugins of Escouade's own hand in plugins/<id>/ (PLG-10's examples, ESC-182; their ids dev.escouade.*, ESC-314),
-// each as its author checks it before a tag (docs/PLUGINS.md §8.6.4). For all, their LICENSE and CHANGELOG. Then by sort:
+// each as its author checks it before a tag (docs/PLUGINS-DESIGN.md §8.6.4). For all, their LICENSE and CHANGELOG. Then by sort:
 // - with a package.json: `npm install` (their package-lock.json is not committed: plugins/<id>/.gitignore), the
 //   typecheck, their tests against the SDK's fake Escouade, and their dist/plugin.mjs built again and compared to the
 //   one committed (Escouade runs the plugin as the repository holds it);
@@ -16,7 +16,7 @@
 //   ESCOUADE_PLUGIN_BIN=src-tauri/target/debug/escouade-plugin node plugins/ci.mjs
 //
 // `--changed [<git revision>]` runs only the plugins a change touches, compared to that revision (by default to where
-// the branch left main, working tree included): the CI of a branch. docs/PLUGINS.md §8.6.4 says what runs them all.
+// the branch left main, working tree included): the CI of a branch. docs/PLUGINS-DESIGN.md §8.6.4 says what runs them all.
 //
 // The plugins are checked side by side, as many at once as the machine has cores (ESCOUADE_CI_JOBS for another number):
 // each compilation of a module has a folder of its own, and the download of the toolchain they share is locked across

@@ -1,4 +1,4 @@
-//! Tests of the registry of the first hand (docs/PLUGINS.md §8.7) and of the workspace a build of development runs
+//! Tests of the registry of the first hand (docs/PLUGINS-DESIGN.md §8.7) and of the workspace a build of development runs
 //! (`Origin::Workspace`, ESC-355): the ids `dev.escouade.*` kept for Escouade's own hand, the switches for the app and
 //! for a project, a plugin of the same id from elsewhere left as it is, and the demonstration plugin, a module, started
 //! by the runtime.
@@ -159,7 +159,7 @@ fn the_switches_hold_across_a_restart_and_the_plugin_cannot_be_removed() {
     assert!(!data.plugins_dir().join(ID).exists());
 }
 
-/// The registry is the folders of `plugins/` whose program is a module (`plugins/<id-court>/`, docs/PLUGINS.md §8.6.1) and
+/// The registry is the folders of `plugins/` whose program is a module (`plugins/<id-court>/`, docs/PLUGINS-DESIGN.md §8.6.1) and
 /// the demonstration, a fixture: each with its manifest and its README (the rule of INT-4: readable alone), each
 /// manifest holding as one of the first hand. A plugin to publish has its LICENSE, the root's, and its CHANGELOG too.
 #[test]

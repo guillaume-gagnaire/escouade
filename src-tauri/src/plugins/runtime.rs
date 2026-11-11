@@ -1,4 +1,4 @@
-//! The plugins' instances (PLG-2, ESC-174; docs/PLUGINS.md §2.4, §3.5, §4.6, §8.3): a plugin with a
+//! The plugins' instances (PLG-2, ESC-174; docs/PLUGINS-DESIGN.md §2.4, §3.5, §4.6, §8.3): a plugin with a
 //! program runs in WASM inside Escouade (`run.js`, `run.wasm`: `wasm`), started at its first activation and never
 //! before, on a thread of its own. The two speak JSON-RPC 2.0, one message per line; a batch (a JSON array, on one
 //! line) goes both ways. A `run.command` is no longer started, whatever its origin (ESC-355, §8.8): its manifest still
@@ -506,7 +506,7 @@ impl Runtime {
         *self.agent_env.write() = env;
     }
 
-    /// The language every plugin is told at `initialize` (docs/PLUGINS.md §8.4.8). A change applies to its next
+    /// The language every plugin is told at `initialize` (docs/PLUGINS-DESIGN.md §8.4.8). A change applies to its next
     /// instance: the core stops the running ones (`forget`). Whether it changed.
     pub fn set_lang(&self, code: &str) -> bool {
         let mut lang = self.lang.write();

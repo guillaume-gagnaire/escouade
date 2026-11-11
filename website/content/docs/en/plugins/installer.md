@@ -75,10 +75,11 @@ Some of Escouade’s integrations are plugins, written by Escouade, reviewed and
 | Plugin | What it serves |
 | --- | --- |
 | GitHub | The GitHub code host (PRs, CI, reviews, deployments) and the GitHub Issues source, on one account. See [integrations](integrations). |
-| GitLab | The GitLab code host, gitlab.com and your instances (merge requests, pipelines, discussions, deployments). GitLab Issues is still part of the app, on the same account. |
+| GitLab | The GitLab code host, gitlab.com and your instances (merge requests, pipelines, discussions, deployments). GitLab Issues, on the same account. |
 | Bitbucket | The Bitbucket Cloud code host. |
 | Gitea / Forgejo | The code host of Gitea, Forgejo and Codeberg. |
-| Trello | The Trello source of the board. |
+| Trello, Linear, Jira, ClickUp | The board’s ticket sources. Azure DevOps serves both the code host and Azure Boards. |
+| Claude Code, Codex, Copilot CLI, Cursor CLI, Gemini CLI, Mistral Vibe, OpenCode, Antigravity CLI | The [harnesses](harness): each one has its agents talk through a module. |
 | ACP | The [ACP harnesses described](plugins/harnesses) by a plugin, like Goose. |
 | isola | The isola launch environment, for [test launches](testing). |
 | OpenAI, Groq, Mistral, ElevenLabs, Deepgram | The online voice services (see [Settings › Voice](settings-voice)). |
@@ -107,7 +108,7 @@ What Escouade cannot read surely (a damaged settings file, a project on an unplu
 
 ## Switching on for the app or by project
 
-- **For the whole app**: the switch of its line, or “Switch off” on its page. Switched off, nothing of it runs and no project gets it; its process is stopped.
+- **For the whole app**: the switch of its line, or “Switch off” on its page. Switched off, nothing of it runs and no project gets it; its instance is stopped.
 - **By project**: the Projects tab of its page, a line per open project. An installed plugin is on in every project, **but the private projects**: a private project is off by default, and the line says so (“nothing reaches it”). Switching it on there is a choice made one by one; the line then reminds that Escouade cannot keep a program from reading the disk.
 - **A harness plugin** (Claude Code, Codex, Copilot CLI, Cursor CLI, OpenCode, Gemini CLI, Mistral Vibe, Antigravity CLI, or a plugin that describes a harness) follows the same rule, since its plugin gets all the agent does. Off for a project, the harness is no longer offered there, its agents of that project do not start and get nothing, and turning it off stops those that run. In a private project, the first agent on a harness first asks you “Turn on … for this private project?”, with what the plugin will get and its permissions: “Turn on” switches it on for this project alone, “Cancel” starts nothing. An agent or a ticket whose harness is off for its project says so on its card, with “Turn on”. The Kanban, the autopilot and the MCP tools never turn it on in your place: the ticket stays blocked, with the reason.
 
@@ -116,7 +117,7 @@ What Escouade cannot read surely (a damaged settings file, a project on an unplu
 
 ## Taking a permission back
 
-The Permissions tab of its page lists what it can do, with a switch per permission. Taking one back stops its process; the next one starts without it, and the plugin goes on, or stops if it cannot. A secret taken back is no longer given to it: `secrets/get` answers it an error for that key. The program itself is not taken back: to stop it, switch the plugin off.
+The Permissions tab of its page lists what it can do, with a switch per permission. Taking one back stops its instance; the next one starts without it, and the plugin goes on, or stops if it cannot. A secret taken back is no longer given to it: `secrets/get` answers it an error for that key. The program itself is not taken back: to stop it, switch the plugin off.
 
 ## Its settings and secrets
 
@@ -124,7 +125,7 @@ The Settings tab shows the fields it declares (`contributes.settings`, `contribu
 
 ## The journal
 
-The Journal tab shows where its process stands (ready, running, restarted after a crash, stopped after three crashes, stopped for its memory…) and the last 500 lines of its journal: its starts, its stops and their reason, its crashes, its standard error, its messages, the calls left unanswered and what it was refused. It is read again every two seconds, filters by kind and copies whole. The secrets it was given are masked there.
+The Journal tab shows where its instance stands (ready, running, restarted after a crash, stopped after three crashes, stopped for its memory…) and the last 500 lines of its journal: its starts, its stops and their reason, its crashes, its standard error, its messages, the calls left unanswered and what it was refused. It is read again every two seconds, filters by kind and copies whole. The secrets it was given are masked there.
 
 - **Start** starts a plugin that has not run yet (it starts by itself at its first activation).
 - **Restart** starts a stopped plugin again, its crashes forgotten.
@@ -148,7 +149,7 @@ The seal of an installed plugin is checked again on your machine, with the `vers
 
 ## Uninstalling
 
-“Uninstall”, on its page, stops its process and erases its folder, its settings, its secrets and its journal. The box “Keep its settings and its secrets for a later install” keeps them: installed again, the plugin finds them. A folder in development stays where it is.
+“Uninstall”, on its page, stops its instance and erases its folder, its settings, its secrets and its journal. The box “Keep its settings and its secrets for a later install” keeps them: installed again, the plugin finds them. A folder in development stays where it is.
 
 ## The developer mode
 

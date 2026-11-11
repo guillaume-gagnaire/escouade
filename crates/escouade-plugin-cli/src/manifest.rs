@@ -80,7 +80,7 @@ pub enum Hand {
     First,
 }
 
-/// Why a plugin whose `run` is a command does not start (ESC-355, docs/PLUGINS.md §8.8): Escouade runs a plugin in WASM
+/// Why a plugin whose `run` is a command does not start (ESC-355, docs/PLUGINS-DESIGN.md §8.8): Escouade runs a plugin in WASM
 /// alone, whatever its origin; the manifest still reads, and the plugin's sheet says this.
 pub fn command_refused(lang: Lang) -> String {
     tr_in!(
@@ -384,7 +384,7 @@ impl Run {
     }
 }
 
-/// The folders a plugin may name (docs/PLUGINS.md §8.4.6), a closed list the host resolves: no path of its own, no `~`.
+/// The folders a plugin may name (docs/PLUGINS-DESIGN.md §8.4.6), a closed list the host resolves: no path of its own, no `~`.
 pub const FILE_ROOTS: &[&str] = &["plugin", "agent", "agentRepo", "agentHome", "temp"];
 /// What it may do there.
 pub const FILE_ACCESS: &[&str] = &["read", "write"];

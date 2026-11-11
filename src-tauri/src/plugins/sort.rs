@@ -1,4 +1,4 @@
-//! The sort of the seed (ESC-373, docs/PLUGINS.md §8.7): of the plugins of the first hand the app ships, those the user's
+//! The sort of the seed (ESC-373, docs/PLUGINS-DESIGN.md §8.7): of the plugins of the first hand the app ships, those the user's
 //! configuration uses, read in their settings, their projects, their agents and their accounts, never on the network. At
 //! the start, `Plugins::sync_seed` installs these and nothing else; the others stay in the seed, proposed by the view
 //! Plugins, and install with no network on the gesture that needs one (`Core::need_plugin`).

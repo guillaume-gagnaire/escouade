@@ -46,7 +46,7 @@ Détail : `docs/STORE.md` §3 (§3.6 pour les dossiers et la première main), §
 - La documentation des auteurs du site (« Publier sur le store ») dit encore « les dix contrôles » : WASM-6 (ESC-325) la met à jour.
 
 ## L'essai réel sur store.escouade.dev (ESC-184)
-- Fait le 2026-11-04 sous Windows sur les quatre plugins de première main publiés et signés, avec une app de debug qui vérifie les sceaux contre les vraies clés : `tests/e2e/real-store.spec.ts`, sauté sans `ESCOUADE_E2E_REAL_STORE`. Sceau, permissions, activation, désactivation, désinstallation ; Discord et Slack arrêtés à leur configuration, sans webhook ni jeton réels. Résultats : `docs/PLUGINS.md` §7.
+- Fait le 2026-11-04 sous Windows sur les quatre plugins de première main publiés et signés, avec une app de debug qui vérifie les sceaux contre les vraies clés : `tests/e2e/real-store.spec.ts`, sauté sans `ESCOUADE_E2E_REAL_STORE`. Sceau, permissions, activation, désactivation, désinstallation ; Discord et Slack arrêtés à leur configuration, sans webhook ni jeton réels. Résultats : `docs/PLUGINS-DESIGN.md` §7.
 - Reste à faire à la release : macOS et Linux, la révocation (aucune liste publiée), une mise à jour réelle (aucune version installable plus récente).
 
 ## Les plugins en Rust : la compilation au store (ESC-336)

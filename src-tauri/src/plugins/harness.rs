@@ -1,4 +1,4 @@
-//! The in-process adapter of a harness (INT-9, `docs/PLUGINS.md` §4.5 and §4.6): `ProcessEngine: Engine` and
+//! The in-process adapter of a harness (INT-9, `docs/PLUGINS-DESIGN.md` §4.5 and §4.6): `ProcessEngine: Engine` and
 //! `ProcessEngineProcess: EngineProcess` speak the contract of `escouade_plugin_protocol::engine` to the plugin's
 //! process, so that the rest of the core does not see the difference (the conformance bench plays them as it plays
 //! the harnesses written in the core).
@@ -1295,7 +1295,7 @@ fn told(params: &Value) {
     let (Some(p), Some(items)) = (p, params["items"].as_array()) else {
         return;
     };
-    // Behind the answer of the batch before it, for an agent whose program is its own (docs/PLUGINS.md §8.4.6).
+    // Behind the answer of the batch before it, for an agent whose program is its own (docs/PLUGINS-DESIGN.md §8.4.6).
     if let Some(lines) = p.pushed.lock().as_ref() {
         if lines.try_send(Heard::Items(items.clone())).is_err() {
             log::warn!("{agent}: what its plugin said left aside: its queue is full");

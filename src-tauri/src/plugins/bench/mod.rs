@@ -1,4 +1,4 @@
-//! The conformance bench of the plugins (PLG-3, ESC-175; docs/PLUGINS.md §4.5): scenarios played
+//! The conformance bench of the plugins (PLG-3, ESC-175; docs/PLUGINS-DESIGN.md §4.5): scenarios played
 //! against any plugin's folder through the fake Escouade (`fake`), each judged on what the app
 //! would make of what the plugin did, and said with what is missing when it fails. The same bench
 //! runs in the tests and in `escouade-plugin test <folder>` for the authors (`cli`).

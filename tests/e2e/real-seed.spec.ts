@@ -1,4 +1,4 @@
-// The real seed, with no network (ESC-354, docs/PLUGINS.md §8.7): a release build of the app with the seed
+// The real seed, with no network (ESC-354, docs/PLUGINS-DESIGN.md §8.7): a release build of the app with the seed
 // `store/scripts/seed.ts fetch` downloaded (the store's bytes and signatures, checked with the keys the app embeds), on data
 // folders of the test's, every request of the app sent to a closed port (its proxy and the system's). A blank folder installs
 // nothing, and a harness chosen at the start installs its plugin from the seed; a configuration of 2.1 installs its plugins

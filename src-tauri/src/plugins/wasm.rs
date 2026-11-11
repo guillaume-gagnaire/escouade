@@ -1,4 +1,4 @@
-//! The plugins in WASM (ESC-320, docs/PLUGINS.md §5 and §8): a plugin whose program is a bundle of its folder
+//! The plugins in WASM (ESC-320, docs/PLUGINS-DESIGN.md §5 and §8): a plugin whose program is a bundle of its folder
 //! (`"run": { "js": "dist/plugin.mjs" }`) or a Rust module (`"run": { "wasm": "Cargo.toml" }`, ESC-331) runs inside
 //! Escouade, without Node, isolated. One host for both: only the first call differs (`_start`, or `_initialize` when
 //! the module has one).

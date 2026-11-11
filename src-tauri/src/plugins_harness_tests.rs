@@ -1,4 +1,4 @@
-//! Tests of the contract of the harnesses in process (INT-9, ESC-221; `docs/PLUGINS.md` §4.5 and §4.6), on the
+//! Tests of the contract of the harnesses in process (INT-9, ESC-221; `docs/PLUGINS-DESIGN.md` §4.5 and §4.6), on the
 //! demonstration plugin `dev.escouade.minimal`, whose harness « Minimal » is the minimal fake engine of the bench made a
 //! plugin: the conformance bench played through `ProcessEngine` as through the harnesses written in the core, the
 //! launch described by the plugin and checked by the core, a crash of the plugin in the middle of a turn (once, then
@@ -644,7 +644,7 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
     sorted[i]
 }
 
-/// The stream of a harness through its plugin, measured against INT-0 (`docs/PLUGINS.md` §4.6, point 1): the delay
+/// The stream of a harness through its plugin, measured against INT-0 (`docs/PLUGINS-DESIGN.md` §4.6, point 1): the delay
 /// from the line its harness wrote to the items received by the core, at once (`flux`) and at a pace (`rythme`), the
 /// lines per second, and the plugin's memory. Run by hand: `cargo nextest run --run-ignored only
 /// int9_measure --no-capture`.

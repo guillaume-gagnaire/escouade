@@ -2,7 +2,7 @@
 //! least a plugin of the first hand is, which proves the way from the registry to an instance. It does the handshake and
 //! answers `minimal/echo` with what it is given and `minimal/hello` with the version of Escouade it was told.
 //!
-//! It is also the harness « Minimal » in process (INT-9, docs/PLUGINS.md §4.5): the minimal fake engine of the
+//! It is also the harness « Minimal » in process (INT-9, docs/PLUGINS-DESIGN.md §4.5): the minimal fake engine of the
 //! conformance bench made a plugin. Its harness is `tests/fixtures/fake-minimal.mjs`, which the core launches from the
 //! description `engine/launch` gives; its frames come here in batches (`agent/frames`) and go
 //! back as the normalized items of `escouade_plugin_protocol::engine` (the translation `agent/minimal.rs` does in the

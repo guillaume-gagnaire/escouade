@@ -1,4 +1,4 @@
-//! The terminal views of the harnesses on this client (`view/translate`, docs/PLUGINS.md §8): what Cursor CLI, Mistral Vibe and
+//! The terminal views of the harnesses on this client (`view/translate`, docs/PLUGINS-DESIGN.md §8): what Cursor CLI, Mistral Vibe and
 //! Gemini CLI say by their own interface, read by the core a line at a time and translated here. Each line is put in ACP's
 //! form and read by the client ([`Speaker`], which Antigravity CLI's view shares), or told as it is: a row that ended
 //! already, the user's message, what waits for the user.

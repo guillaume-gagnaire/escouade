@@ -1,7 +1,7 @@
 ---
 title: "Gemini CLI en plugin"
 subject: "plugins"
-sources: ["docs/PLUGINS.md §4.5, §4.6 (INT-10.7)","docs/TODO-2.2.md, INT-10.7","Ticket ESC-282","plugins/gemini/README.en.md"]
+sources: ["docs/PLUGINS-DESIGN.md §4.5, §4.6 (INT-10.7)","docs/TODO-2.2.md, INT-10.7","Ticket ESC-282","plugins/gemini/README.en.md"]
 tickets: ["ESC-282","ESC-346","ESC-369"]
 decisions: [63]
 compared: null

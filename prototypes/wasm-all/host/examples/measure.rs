@@ -1,4 +1,4 @@
-//! The measures of `run.wasm` against the native plugin (ESC-330, docs/PLUGINS.md §8.9), as INT-0 reads them: throughput,
+//! The measures of `run.wasm` against the native plugin (ESC-330, docs/PLUGINS-DESIGN.md §8.9), as INT-0 reads them: throughput,
 //! 99th percentile at the fastest and at the recorded pace, memory, start, size. The same lines to the same plugin code,
 //! by a process's pipes and by a module's turns. It stops at the plugin's answer: what the core does of it is INT-0's.
 //!

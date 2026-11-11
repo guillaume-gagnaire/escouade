@@ -1,7 +1,7 @@
 ---
 title: "Les plugins : vue d'ensemble"
 subject: "plugins"
-sources: ["docs/PLUGINS.md","docs/PLUGINS.md §8.8, §8.33","docs/STORE.md","schemas/plugin-1.json","website/content/docs/fr/plugins/introduction.md","src-tauri/src/harness_scope.rs"]
+sources: ["docs/PLUGINS.md","docs/PLUGINS-DESIGN.md §8.8, §8.33","docs/STORE.md","schemas/plugin-1.json","website/content/docs/fr/plugins/introduction.md","src-tauri/src/harness_scope.rs"]
 tickets: ["ESC-184","ESC-339","ESC-404","ESC-355"]
 decisions: [142]
 compared: null
@@ -58,4 +58,4 @@ Le choix d'un plugin pour un projet (`plugins::active_in`) vaut pour ses faits, 
 
 ## L'essai réel
 
-Fait le 2026-11-04 sur Windows, depuis store.escouade.dev (ESC-184) : voir `docs/PLUGINS.md` §7. macOS et Linux restent à faire à la release.
+Fait le 2026-11-04 sur Windows, depuis store.escouade.dev (ESC-184) : voir `docs/PLUGINS-DESIGN.md` §7. macOS et Linux restent à faire à la release.

@@ -2,7 +2,7 @@
 //!
 //! ## Internals
 //!
-//! The protocol Escouade speaks to its plugins (docs/PLUGINS.md §3, schemas/plugin-protocol-1.json): JSON-RPC 2.0,
+//! The protocol Escouade speaks to its plugins (docs/PLUGINS-DESIGN.md §3, schemas/plugin-protocol-1.json): JSON-RPC 2.0,
 //! one message a line, on the plugin's input and output. This crate holds what both sides share: the version, the
 //! names of the methods every plugin answers, the messages of the handshake, and `serve`, the loop a plugin written
 //! in Rust runs natively (its tests), as `turn` runs it in a module.
@@ -57,7 +57,7 @@ pub struct Hello {
     pub escouade: Version,
     pub plugin: Named,
     /// The language of the interface (`fr`, `en`), in which the plugin writes what the user reads: what a module cannot
-    /// get from its environment (docs/PLUGINS.md §8.4.8).
+    /// get from its environment (docs/PLUGINS-DESIGN.md §8.4.8).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lang: Option<String>,
     #[serde(default)]
@@ -94,7 +94,7 @@ impl Hello {
 }
 
 /// What Escouade said of itself at `initialize`, kept by [`greeted`]: what a process reads from its environment, a module
-/// has no other way to get (docs/PLUGINS.md §8.4.8).
+/// has no other way to get (docs/PLUGINS-DESIGN.md §8.4.8).
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Greeting {
     /// The language of the interface, when it was said.

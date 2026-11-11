@@ -110,7 +110,7 @@ export async function tokenAdmin(db: Db, env: Env, header: string | undefined | 
 }
 
 /**
- * What `npm run plugins:publish` is on `/mcp` (ESC-353, docs/PLUGINS.md §8.6.2): the administrator of an administration
+ * What `npm run plugins:publish` is on `/mcp` (ESC-353, docs/PLUGINS-DESIGN.md §8.6.2): the administrator of an administration
  * token, for a command that cannot go through a browser's consent, on the three tools it calls and no other: nothing that
  * takes back, unlists or moves. The same functions, limits and journal as any client; what it submits and publishes are
  * the account's own repositories' versions, unverified, and the app takes none of the first hand unsigned.

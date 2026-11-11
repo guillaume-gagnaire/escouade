@@ -15,7 +15,7 @@ Le dépôt distant d’un projet dit chez quel hébergeur il est. Avec un compte
 
 Une PR s’appelle « MR » sur GitLab : l’app prend le mot de l’hébergeur partout.
 
-Chaque hébergeur est un plugin d’Escouade : il se voit dans [Réglages › Services connectés](settings-integrations#hebergeurs-de-code) et se coupe comme [tout plugin](plugins/introduction). Sa PR reste alors sur la carte telle qu’elle a été lue en dernier, et la carte le dit.
+Chaque hébergeur est un plugin d’Escouade, signé par elle et porté par l’installeur : il se voit dans [Réglages › Services connectés](settings-integrations#hebergeurs-de-code) et se coupe comme [tout plugin](plugins/introduction). Sa PR reste alors sur la carte telle qu’elle a été lue en dernier, et la carte le dit.
 
 ## Les hébergeurs pris en charge
 

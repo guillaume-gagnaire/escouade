@@ -1,4 +1,4 @@
-//! The launch environment of a worktree (INT-14, ESC-286; docs/PLUGINS.md §4.12): what runs a worktree's services on
+//! The launch environment of a worktree (INT-14, ESC-286; docs/PLUGINS-DESIGN.md §4.12): what runs a worktree's services on
 //! ports and addresses of their own, so that a test launch needs no recipe on the reserved ports. isola is the first,
 //! a plugin of Escouade's own hand (`dev.escouade.isola`), a module (`run.wasm`).
 //!
@@ -12,7 +12,7 @@
 //! The core does what needs no process: tell whether a worktree is the environment's (`Launch::for_dir`), read the file
 //! whole for the user, run `up`. The plugin does the rest, by JSON-RPC: `launch/ls` (the services of the worktree, and
 //! their addresses), `launch/down` and `launch/destroy`. A module holds no path: each call lends it the worktree, under a
-//! name of the call's, and it asks the host to run what its manifest names there (`proc/*`, docs/PLUGINS.md §8.4.7). With
+//! name of the call's, and it asks the host to run what its manifest names there (`proc/*`, docs/PLUGINS-DESIGN.md §8.4.7). With
 //! the plugin off (for the app, or for the project; a private project only has it once it is turned on there), or without
 //! its program, or without its file, a worktree is nobody's and a ticket starts as it did without isola.
 //!

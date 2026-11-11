@@ -1,4 +1,4 @@
-//! Tests of the app's seed (ESC-338, docs/PLUGINS.md §8.7), on what the fake store published, its bytes and its signatures:
+//! Tests of the app's seed (ESC-338, docs/PLUGINS-DESIGN.md §8.7), on what the fake store published, its bytes and its signatures:
 //! installed with no network and by the store's path, a newer version offered and never installed by itself, never an
 //! older one, a plugin the user uninstalled left out and proposed, a false signature or a changed file refused, a version
 //! withdrawn stopped with its reason, the range of Escouade, a build of development without signatures, and the passage of

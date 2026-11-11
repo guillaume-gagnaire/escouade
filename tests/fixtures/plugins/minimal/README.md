@@ -8,7 +8,7 @@ The least a plugin of the first hand is, a module (`run.wasm`). It does the hand
 `ticket.column` and does nothing with them, and answers `minimal/echo` (what it is given) and `minimal/hello` (the
 version of Escouade). It proves the way from the registry (`src-tauri/src/plugins/builtin.rs`) to an instance in WASM.
 
-It is also the proof of the contract of the harnesses in process (INT-9, `docs/PLUGINS.md` §4.5): it declares the
+It is also the proof of the contract of the harnesses in process (INT-9, `docs/PLUGINS-DESIGN.md` §4.5): it declares the
 harness « Minimal » (`contributes.harnesses`), the minimal fake engine of the conformance bench made a plugin. The core
 asks it how to launch its harness (`engine/launch`), checks the description and launches the program itself
 (`tests/fixtures/fake-minimal.mjs` in the tests); the plugin translates the harness's frames into the normalized items of

@@ -1,4 +1,4 @@
-// The app's seed (ESC-338, docs/PLUGINS.md §8.7) on the real app, its files those of tests/fixtures/store/fake-store.mjs (the
+// The app's seed (ESC-338, docs/PLUGINS-DESIGN.md §8.7) on the real app, its files those of tests/fixtures/store/fake-store.mjs (the
 // store's bytes and signatures, its key trusted by the debug build): installed at the first start by the store's path, a
 // newer version offered and not installed, uninstalled and not put back, proposed by the view, installed again on a click;
 // a false signature said; a version withdrawn stopped with its reason, the store out of reach. The configuration uses Trello

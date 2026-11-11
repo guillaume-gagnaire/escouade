@@ -7,7 +7,7 @@ license = "GPL-3.0-or-later"
 edition = "2021"
 rust-version = "1.88"
 
-# A module, compiled by `escouade-plugin build` (docs/PLUGINS.md §8.5). It is no ACP harness: it holds the client of
+# A module, compiled by `escouade-plugin build` (docs/PLUGINS-DESIGN.md §8.5). It is no ACP harness: it holds the client of
 # `codex app-server` (JSON-RPC, one message a line) and the translation of its messages, both without a process nor a
 # runtime of their own, and the price list of OpenAI's models.
 [lib]

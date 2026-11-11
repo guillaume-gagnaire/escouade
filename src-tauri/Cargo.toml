@@ -67,9 +67,9 @@ escouade-voice = { path = "../crates/escouade-voice" }
 # What `escouade-plugin` does without the app's host, which the store's image builds alone (ESC-328): the manifest's
 # reader and the compiler of the `run.js` plugins.
 escouade-plugin-cli = { path = "../crates/escouade-plugin-cli" }
-# The contract of a code host and its errors, shared with the Rust plugins of the first hand (docs/PLUGINS.md §4.5).
+# The contract of a code host and its errors, shared with the Rust plugins of the first hand (docs/PLUGINS-DESIGN.md §4.5).
 escouade-plugin-kit = { path = "../crates/escouade-plugin-kit" }
-# No plugin is linked (docs/PLUGINS.md §8.2): the harnesses' views go through their modules (`view/translate`).
+# No plugin is linked (docs/PLUGINS-DESIGN.md §8.2): the harnesses' views go through their modules (`view/translate`).
 # A version's archive from the store (STORE-9): read in memory, its links and climbing paths refused.
 flate2 = "1"
 tar = { version = "0.4", default-features = false }
@@ -109,7 +109,7 @@ yaml-edit = "0.3"
 pdf-extract = "0.12"
 zip = { version = "4.6", default-features = false, features = ["deflate"] }
 quick-xml = "0.42"
-# The JS/TS plugins (`run.js`, ESC-320, docs/PLUGINS.md §5): their module compiled by Javy, run by wasmtime in the
+# The JS/TS plugins (`run.js`, ESC-320, docs/PLUGINS-DESIGN.md §5): their module compiled by Javy, run by wasmtime in the
 # app's process (Cranelift, WASI preview 1 alone: no folder, no socket, only the three standard streams).
 wasmtime = { version = "=50.0.1", default-features = false, features = ["cranelift", "runtime", "std", "parallel-compilation"] }
 wasmtime-wasi = { version = "=50.0.1", default-features = false, features = ["p1"] }
@@ -161,7 +161,7 @@ keyring = { version = "3.6", features = ["apple-native"] }
 # everything in full, the program database of the debug build went over the MSVC linker's limit (LNK1140, 2026-10-28,
 # when the drive's PDF and Word readers came in).
 # The crates of the plugins build and test with the app (one lock, one target): the protocol, the kit of the Rust plugins,
-# the ACP client and the voice; the plugins themselves are the workspace of `plugins/` (docs/PLUGINS.md §8.6.3).
+# the ACP client and the voice; the plugins themselves are the workspace of `plugins/` (docs/PLUGINS-DESIGN.md §8.6.3).
 [workspace]
 members = [
     "../crates/escouade-plugin-protocol",
@@ -180,7 +180,7 @@ default-members = [
 ]
 
 # The plugins depend on the kit by version, as the store reads them (their folder, published crates, the checksum of their
-# own Cargo.lock: docs/PLUGINS.md §8.6.3). Here, development goes on against the kit of this tree. Bump a crate's version
+# own Cargo.lock: docs/PLUGINS-DESIGN.md §8.6.3). Here, development goes on against the kit of this tree. Bump a crate's version
 # with the plugins' requirement in one commit: a patch that no longer matches is dropped by cargo.
 [patch.crates-io]
 escouade-plugin-protocol = { path = "../crates/escouade-plugin-protocol" }

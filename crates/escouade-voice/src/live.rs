@@ -7,7 +7,7 @@
 //! service that bills by the time the stream is open bills only the words. Opening it takes the time of the first
 //! syllables, while what was heard waits in the stream's queue: the sentence does not wait for it.
 //!
-//! The settings' network is followed by the host of the plugin (`ws/open`, docs/PLUGINS.md §8.4.4). A stream that cannot
+//! The settings' network is followed by the host of the plugin (`ws/open`, docs/PLUGINS-DESIGN.md §8.4.4). A stream that cannot
 //! open, or breaks, says why (`OnlineError`): the caller then sends the sentence whole, by a request, as before.
 //!
 //! - ElevenLabs, Scribe v2 Realtime: `wss://…/v1/speech-to-text/realtime`, `input_audio_chunk` (16 kHz PCM in base64),

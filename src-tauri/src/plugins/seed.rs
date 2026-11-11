@@ -1,4 +1,4 @@
-//! The app's seed (ESC-338, docs/PLUGINS.md §8.7): what the store published for the last version of each plugin of the
+//! The app's seed (ESC-338, docs/PLUGINS-DESIGN.md §8.7): what the store published for the last version of each plugin of the
 //! first hand, shipped in the installer, the same bytes and the same signature: `<seed>/<id>/version.json`, its
 //! `.minisig`, `archive.tar.gz` and `plugin.wasm`, with the revocation list of the day (`<seed>/revocations.json`).
 //!

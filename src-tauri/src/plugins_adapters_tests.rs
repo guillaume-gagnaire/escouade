@@ -1,5 +1,5 @@
 //! Tests of the in-process adapters of the ticket sources and the code hosts (INT-5, ESC-211;
-//! `docs/PLUGINS.md` §4.5) against the fake plugin, which serves one source and one host: the same
+//! `docs/PLUGINS-DESIGN.md` §4.5) against the fake plugin, which serves one source and one host: the same
 //! scenarios as the integrations' own tests (a list of containers, states and tickets, a state
 //! pushed, a comment, a pull request read, its checks, a 401, a 404, a refusal that lasts), and
 //! those a process adds: the secret fetched by the plugin, the delay, the plugin that crashes.

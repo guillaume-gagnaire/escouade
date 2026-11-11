@@ -1,4 +1,4 @@
-//! Tests of the accounts shared by a plugin's points (INT-6, ESC-212; `docs/PLUGINS.md` §4.4): the
+//! Tests of the accounts shared by a plugin's points (INT-6, ESC-212; `docs/PLUGINS-DESIGN.md` §4.4): the
 //! kinds of accounts (the core's and a plugin's), the plugin chosen to serve an account, a GitLab
 //! account that serves GitLab Issues and the merge requests (on the fake plugin), the budget of
 //! calls kept per account, the migration of the keychain's names there and back, and the keychain

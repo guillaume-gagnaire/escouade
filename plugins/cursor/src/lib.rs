@@ -1,4 +1,4 @@
-//! The plugin Cursor CLI (`dev.escouade.cursor-cli`, INT-10.1, docs/PLUGINS.md §4): Cursor CLI as a harness, over ACP.
+//! The plugin Cursor CLI (`dev.escouade.cursor-cli`, INT-10.1, docs/PLUGINS-DESIGN.md §4): Cursor CLI as a harness, over ACP.
 //! The harness its manifest declares (`contributes.harnesses[0]`, its `acp` object with the extension `cursor`) is
 //! served by the client of `escouade_acp`, as the generic ACP plugin serves those other plugins describe: the core
 //! finds `agent`, checks the launch this plugin describes and starts it; what Cursor writes comes here

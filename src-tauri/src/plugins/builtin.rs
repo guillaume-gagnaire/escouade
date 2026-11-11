@@ -1,4 +1,4 @@
-//! The registry of the plugins of Escouade's own hand (docs/PLUGINS.md §8.7): the one list of the ids of the app's seed
+//! The registry of the plugins of Escouade's own hand (docs/PLUGINS-DESIGN.md §8.7): the one list of the ids of the app's seed
 //! (`seed`), with their manifests as the repository holds them (`plugins/<id-court>/escouade-plugin.json`, embedded),
 //! which name a plugin of the seed that is not installed, and say what a form of its accounts lacks.
 //!

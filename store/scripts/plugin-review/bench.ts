@@ -137,7 +137,7 @@ export function firstPartyBench(id: string, repository: string, env: Env = proce
 /**
  * The version of Escouade under development (ESC-343): `NEXT` of the site, the version the roadmap announces, whose test
  * fails once it is out. The first-party plugins need it before it exists: the chief publishes and signs them, the
- * release comes after (docs/PLUGINS.md §8.7).
+ * release comes after (docs/PLUGINS-DESIGN.md §8.7).
  */
 export function developmentVersion(site: string): string | undefined {
   const next = /^export const NEXT = '(\d+\.\d+)(\.\d+)?';/m.exec(site);

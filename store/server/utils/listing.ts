@@ -36,7 +36,7 @@ export const CATEGORY_NAMES: Record<Category, Text> = {
   languages: { fr: 'Langues', en: 'Languages' },
 };
 
-/** What a plugin asks for, in one line of a list: the strongest first (docs/PLUGINS.md §3.4). */
+/** What a plugin asks for, in one line of a list: the strongest first (docs/PLUGINS-DESIGN.md §3.4). */
 export type Ask = { kind: 'run' | 'wasm' | 'decide' | 'events' | 'secret' | 'none' } | { kind: 'net'; host: string };
 
 /** Where a plugin's version stands with the review: Escouade's own, verified (signed, STORE-8), asked, or not. */

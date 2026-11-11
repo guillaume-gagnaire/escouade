@@ -1,7 +1,7 @@
 //! The contract of the Kanban's ticket sources (INT-1): what a source answers (`TicketSource`),
 //! what Escouade knows of its kind (`TicketSourceKind`), and the registry of the kinds, as the
 //! code hosts' (`forge::Registry`). Jira, Trello, GitHub Issues, Linear, ClickUp, GitLab Issues
-//! and Azure Boards are behind it, each served by its plugin (`docs/PLUGINS.md` §4): the core keeps the contract.
+//! and Azure Boards are behind it, each served by its plugin (`docs/PLUGINS-DESIGN.md` §4): the core keeps the contract.
 
 use super::*;
 use crate::forge::BoxFuture;

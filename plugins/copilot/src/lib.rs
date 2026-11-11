@@ -1,4 +1,4 @@
-//! The plugin Copilot CLI (`dev.escouade.copilot-cli`, INT-10.3, docs/PLUGINS.md §4): GitHub Copilot CLI as a harness.
+//! The plugin Copilot CLI (`dev.escouade.copilot-cli`, INT-10.3, docs/PLUGINS-DESIGN.md §4): GitHub Copilot CLI as a harness.
 //! It is no ACP harness: the core finds `copilot`, checks the launch this plugin describes and starts it, its messages
 //! framed by `Content-Length` headers (`framing` of the manifest); what Copilot writes comes here (`agent/frames`) and
 //! goes back as the items of the conversation and the messages to write to it, by the client of `client`. It is a module

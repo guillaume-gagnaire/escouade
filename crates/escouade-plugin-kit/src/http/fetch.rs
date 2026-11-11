@@ -1,4 +1,4 @@
-//! The part of reqwest the plugins of Escouade use, over the host's `net/fetch` (docs/PLUGINS.md §8.4.1): what
+//! The part of reqwest the plugins of Escouade use, over the host's `net/fetch` (docs/PLUGINS-DESIGN.md §8.4.1): what
 //! `escouade_plugin_kit::http::reqwest` is in a module, where reqwest does not compile, so that a plugin's client is the
 //! same source on both targets. What `net/fetch` cannot give (a stream) is not here: `crate::host` reads `net/stream`.
 //!

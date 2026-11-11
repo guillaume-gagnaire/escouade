@@ -1,4 +1,4 @@
-//! The plugin OpenCode (`dev.escouade.opencode`, INT-10.2, docs/PLUGINS.md §4, §8): OpenCode 1 (`opencode-ai`, 1.19) as a
+//! The plugin OpenCode (`dev.escouade.opencode`, INT-10.2, docs/PLUGINS-DESIGN.md §4, §8): OpenCode 1 (`opencode-ai`, 1.19) as a
 //! harness, driven through `opencode serve` (HTTP + SSE, docs/PROTOCOL.md, « OpenCode serve »). A module (`run.wasm`)
 //! without tokio: its tasks turn on the events of the host (`host`, `Reactor`).
 //!
@@ -44,7 +44,7 @@ pub const MANIFEST: &str = include_str!("../escouade-plugin.json");
 /// What the line that says a server is ready holds, its address after it.
 pub(crate) const LISTENING: &str = "listening on ";
 
-/// That line, as the core reads the port in it (`local:shared`, docs/PLUGINS.md §8.4.2).
+/// That line, as the core reads the port in it (`local:shared`, docs/PLUGINS-DESIGN.md §8.4.2).
 const LISTENS: &str = "opencode server listening on http://{host}:{port}";
 
 struct Plugin {

@@ -1,4 +1,4 @@
-//! The contract of a code host's client (docs/PLUGINS.md §4.5): what a plugin's client does for one account, and what
+//! The contract of a code host's client (docs/PLUGINS-DESIGN.md §4.5): what a plugin's client does for one account, and what
 //! the core's adapter of a plugin (`ProcessForge`) and the hosts still in the core do the same way. A call a host
 //! cannot do says `Unsupported`, which crosses the protocol as « no such method » (-32601).
 

@@ -2,10 +2,10 @@ import { readFileSync } from 'node:fs';
 import { posix } from 'node:path';
 import type { Lead } from './leads';
 
-// The leads of a `run.wasm` plugin (ESC-337, docs/PLUGINS.md §8.5.5): what `findLeads` does not see in Rust. The store has
+// The leads of a `run.wasm` plugin (ESC-337, docs/PLUGINS-DESIGN.md §8.5.5): what `findLeads` does not see in Rust. The store has
 // refused most of it already (`rust::check`): a lead here says that something got past it, or where to read. Nothing runs.
 
-/** The closed list of what may run in native at a compilation, as `escouade-plugin` holds it (docs/PLUGINS.md §8.17). */
+/** The closed list of what may run in native at a compilation, as `escouade-plugin` holds it (docs/PLUGINS-DESIGN.md §8.17). */
 export interface Native {
   name: string;
   version: string;
@@ -252,7 +252,7 @@ export function moduleImports(bytes: Buffer): Import[] | null {
   }
 }
 
-/** The host's methods a module can name, with the permission each family needs (docs/PLUGINS.md §8.4). */
+/** The host's methods a module can name, with the permission each family needs (docs/PLUGINS-DESIGN.md §8.4). */
 const FAMILIES: { prefix: string[]; permission: string; given: (p: Record<string, unknown>) => boolean }[] = [
   { prefix: ['net', 'ws'], permission: 'permissions.network', given: (p) => filled(p.network) },
   { prefix: ['fs'], permission: 'permissions.files', given: (p) => filled(p.files) },

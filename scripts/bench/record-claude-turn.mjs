@@ -1,4 +1,4 @@
-// Records a long real turn of Claude Code for the stream bench (INT-0, docs/PLUGINS.md §4.8): the frames of
+// Records a long real turn of Claude Code for the stream bench (INT-0, docs/PLUGINS-DESIGN.md §4.8): the frames of
 // `claude -p --output-format stream-json --include-partial-messages`, one a line as they came, and when each came (ms since the
 // launch), to tests/fixtures/claude/long-turn.jsonl and long-turn.times.json. The paths of the machine are put out of it
 // (the user's folder becomes C:\Users\user, the folder of the turn C:\Users\user\repo, and what is left of the user's name `user`).

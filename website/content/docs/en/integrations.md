@@ -34,7 +34,7 @@ When the keychain refuses a token on Windows or macOS, it stays in that file and
 
 ### The services a plugin serves
 
-GitHub (the code host and GitHub Issues), GitLab (the code host; GitLab Issues is still part of the app), Bitbucket, Gitea and Forgejo, Azure DevOps, and Trello are served by Escouade’s plugins: nothing changes in use, the accounts and the forms are the same. An account served by another author’s plugin says so: “Served by the plugin …”. The token stays in the keychain; Escouade lends it to the plugin of that service alone, when it needs it.
+Every service below is served by a plugin of Escouade’s, written and signed by it, which runs in WASM: GitHub (the code host and GitHub Issues), GitLab (the code host and GitLab Issues), Bitbucket, Gitea and Forgejo, Azure DevOps (the code host and Azure Boards), Trello, Linear, Jira and ClickUp. The installer carries them and installs only those your configuration uses (see [Escouade’s plugins](plugins/installer#escouade-s-plugins-in-the-installer)): nothing changes in use, the accounts and the forms are the same. An account served by another author’s plugin says so: “Served by the plugin …”. The token stays in the keychain; Escouade lends it to the plugin of that service alone, when it needs it.
 
 These plugins are switched off in the Plugins view, for the whole app or for one project (see [Escouade’s plugins](plugins/installer#escouade-s-plugins)). Switched off or stopped, a plugin says so instead of going quiet:
 

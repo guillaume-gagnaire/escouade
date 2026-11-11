@@ -1,4 +1,4 @@
-//! The data of the Kanban's sources (docs/PLUGINS.md §4.5, `tickets/*`) as a plugin writes it: containers, states,
+//! The data of the Kanban's sources (docs/PLUGINS-DESIGN.md §4.5, `tickets/*`) as a plugin writes it: containers, states,
 //! tickets and their pages. The core reads them into its own types, which name the source by an id it interns
 //! (`Service`); here it is the string the data holds (`github`, `gitlab`…), the rest is the same JSON.
 

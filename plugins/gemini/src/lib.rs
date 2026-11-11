@@ -1,4 +1,4 @@
-//! The plugin Gemini CLI (`dev.escouade.gemini-cli`, INT-10.7, docs/PLUGINS.md §4): Gemini CLI as a harness, over ACP.
+//! The plugin Gemini CLI (`dev.escouade.gemini-cli`, INT-10.7, docs/PLUGINS-DESIGN.md §4): Gemini CLI as a harness, over ACP.
 //! The harness its manifest declares (`contributes.harnesses[0]`, its `acp` object with the extension `gemini`) is served
 //! by the client of `escouade_acp`, as the generic ACP plugin serves those other plugins describe: the core finds
 //! `gemini`, writes the agent's settings and rules in its `GEMINI_CLI_HOME`, adds `--policy` to the launch this plugin

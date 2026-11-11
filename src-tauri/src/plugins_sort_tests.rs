@@ -1,4 +1,4 @@
-//! Tests of the sort of the seed (ESC-373, docs/PLUGINS.md §8.7): the start installs, of the plugins of the first hand,
+//! Tests of the sort of the seed (ESC-373, docs/PLUGINS-DESIGN.md §8.7): the start installs, of the plugins of the first hand,
 //! what the user's configuration uses and nothing else; an update from 2.1 keeps everything that worked; a first start
 //! installs nothing; a gesture installs what it needs, with no network, even a plugin the user uninstalled, which the
 //! start never puts back; what does not read installs everything.

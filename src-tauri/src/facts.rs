@@ -1,4 +1,4 @@
-//! The facts' bus (PLG-5, ESC-177; docs/PLUGINS.md §1.6): what happened in Escouade, said once,
+//! The facts' bus (PLG-5, ESC-177; docs/PLUGINS-DESIGN.md §1.6): what happened in Escouade, said once,
 //! typed and versioned, where the state changes (an agent's status, a turn's end, a ticket's column,
 //! a project added…), and never read back from the window's events (`UiEvent`), which carry the
 //! whole state for the interface and change with it.
