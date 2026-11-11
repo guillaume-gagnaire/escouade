@@ -775,6 +775,17 @@ export interface EngineInfo extends EngineDecl {
   note: string | null;
 }
 
+/** A group of agents in the sidebar. */
+export interface AgentFolder {
+  id: string;
+  name: string;
+  /** Renamed: it no longer follows its principal's name. */
+  named: boolean;
+  principal: string | null;
+  agents: string[];
+  folded?: boolean;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -851,6 +862,10 @@ export interface Project {
   workflowsInRepo?: boolean;
   /** Off: « Pas de workflow pour ce projet » (ESC-309), nothing read nor written of its workflows; `workflows.enabled` of its .escouade.yml when shared. Absent: on. */
   workflowsEnabled?: boolean;
+  /** Its agent folders; absent when it has none. */
+  agentFolders?: AgentFolder[];
+  /** The sidebar's order: the agents out of any folder and the folders. */
+  agentOrder?: string[];
 }
 
 /** The vectors' model of « Recherche par le sens » (ESC-254): one for every project of this machine. */

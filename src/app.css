@@ -1223,5 +1223,6 @@ kbd,
 .pane-dragging,
 .pane-dragging * {
   cursor: grabbing !important;
+  -webkit-user-select: none !important;
   user-select: none !important;
 }

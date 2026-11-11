@@ -1,9 +1,22 @@
 import { afterEach, describe, expect, it, onTestFinished } from 'vitest';
-import { agent, BARE_ENGINE, CLAUDE_ENGINE, resetApp } from '../test/ipc';
+import { agent, BARE_ENGINE, CLAUDE_ENGINE, project, resetApp } from '../test/ipc';
 import { setLang } from './i18n';
-import { cardActivity, cardSpend, listChoices, listDigit, listRequest, listStep, listTarget, sidebarOrder } from './sidebar';
+import {
+  cardActivity,
+  cardSpend,
+  listChoices,
+  listDigit,
+  listRequest,
+  listStep,
+  listTarget,
+  foldedCards,
+  shownAgents,
+  sidebarItems,
+} from './sidebar';
+import type { SidebarItem } from './sidebar';
+import cases from '../../tests/fixtures/sidebar-order.json';
 import { app } from './state.svelte';
-import type { PendingRequest } from './types';
+import type { Agent, AgentFolder, PendingRequest, Project } from './types';
 
 const question = (over: Partial<PendingRequest> = {}): PendingRequest => ({
   id: 'req_q',
@@ -18,15 +31,58 @@ const question = (over: Partial<PendingRequest> = {}): PendingRequest => ({
   ...over,
 });
 
+type Case = {
+  name: string;
+  project: Pick<Project, 'agentFolders' | 'agentOrder'>;
+  agents: { id: string; createdAt: number; status: Agent['status']; archived: boolean }[];
+  shown: string[];
+  items: (['agent', string] | ['folder', string, string[]])[];
+};
+
+const folderItem = (agents: Agent[], over: Partial<AgentFolder> = {}) => {
+  const f: AgentFolder = { id: 'f1', name: 'F', named: true, principal: null, agents: agents.map((a) => a.id), ...over };
+  const p = { ...project(), agentFolders: [f], agentOrder: ['f1'] };
+  return sidebarItems(p, agents)[0] as Extract<SidebarItem, { kind: 'folder' }>;
+};
+
 describe('the order of the sidebar', () => {
-  it('puts the agents waiting for an answer first, the others in their order', () => {
-    const list = [
-      agent({ id: 'a', status: 'running' }),
-      agent({ id: 'b', status: 'waiting' }),
-      agent({ id: 'c', status: 'idle' }),
-      agent({ id: 'd', status: 'waiting' }),
-    ];
-    expect(sidebarOrder(list).map((a) => a.id)).toEqual(['b', 'd', 'a', 'c']);
+  it.each(cases as Case[])('sidebarItems follows the shared case $name', (c) => {
+    const agents = c.agents.map((a) => agent({ ...a, projectId: 'p1' })).filter((a) => !a.archived);
+    const items = sidebarItems({ ...project(), ...c.project }, agents);
+    expect(
+      items.map((it) =>
+        it.kind === 'agent'
+          ? ['agent', it.agent.id]
+          : ['folder', it.folder.id, [...(it.principal ? [it.principal.id] : []), ...it.agents.map((a) => a.id)]],
+      ),
+    ).toEqual(c.items);
+    expect(shownAgents(items).map((a) => a.id)).toEqual(c.shown);
+  });
+
+  it('lifts the loose agents that wait', () => {
+    const items = sidebarItems(project(), [agent({ id: 'a', createdAt: 1 }), agent({ id: 'b', createdAt: 2, status: 'waiting' })]);
+    expect(items.map((i) => i.kind === 'agent' && [i.agent.id, i.lifted])).toEqual([
+      ['b', true],
+      ['a', false],
+    ]);
+  });
+
+  it('foldedCards keeps the waiting ones and the open agent', () => {
+    const [p, w, o, x] = [agent({ id: 'p' }), agent({ id: 'w', status: 'waiting' }), agent({ id: 'o' }), agent({ id: 'x' })];
+    const f = folderItem([p, w, o, x], { principal: 'p' });
+    expect(foldedCards(f, 'o').map((a) => a.id)).toEqual(['w', 'o']);
+    expect(foldedCards(f, undefined).map((a) => a.id)).toEqual(['w']);
+    expect(foldedCards(folderItem([p, w], { principal: 'p' }), 'p').map((a) => a.id)).toEqual(['p', 'w']);
+  });
+
+  it('the counts of a folder include its principal', () => {
+    const f = folderItem(
+      [agent({ id: 'p', status: 'running' }), agent({ id: 'w', status: 'waiting' }), agent({ id: 'r', status: 'running' })],
+      {
+        principal: 'p',
+      },
+    );
+    expect([f.running, f.waiting]).toEqual([2, 1]);
   });
 });
 

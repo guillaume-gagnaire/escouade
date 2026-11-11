@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { addProject, expect, SHOW, test, openSettingsPage, settingsEntry } from './fixture';
+import { addProject, expect, SHOW, test, openSettingsPage, settingsEntry, windowScale } from './fixture';
 
 const STEPS = [80, 90, 100, 110, 125, 150, 175, 200];
 /** The steps the settings offer in segments (the keys reach the others). */
@@ -66,7 +66,11 @@ test('the zoom of Réglages › Général grows the whole interface at once, not
   await addProject(page, app.repo);
   const base = await page.evaluate(() => devicePixelRatio);
   // The biggest step this window holds, as its size at 100 % says.
+  // In logical pixels, as the app measures it (the page itself is drawn at a scale of 1: see windowScale).
+  const scale = await windowScale(page);
   const room = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+  room.width /= scale;
+  room.height /= scale;
   const fit = STEPS.filter((z) => z <= 100 || ((room.width * 100) / z >= 999.5 && (room.height * 100) / z >= 599.5)).at(-1)!;
   // The step set: the biggest the window holds, or 90 % in a window too small for more than 100 % (a 1024 × 768 screen,
   // as CI's).

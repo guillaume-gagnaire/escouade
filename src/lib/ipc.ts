@@ -68,6 +68,7 @@ import type {
   OwnedDiff,
   IsolaService,
   IssuePage,
+  AgentFolder,
   Project,
   RepoMerge,
   RunSuggestion,
@@ -313,6 +314,18 @@ export const api = {
   /** The settings the `.escouade.yml` of a folder gives a new project, its commands left out; null without one. */
   sharedPreview: (path: string) => invoke<Project | null>('shared_preview', { path }),
   reorderProjects: (ids: string[]) => invoke<void>('reorder_projects', { ids }),
+  /** With an agent, the folder takes its place and holds it. */
+  agentFolderCreate: (projectId: string, agentId?: string) => invoke<AgentFolder>('agent_folder_create', { projectId, agentId }),
+  agentFolderRename: (projectId: string, folderId: string, name: string) =>
+    invoke<void>('agent_folder_rename', { projectId, folderId, name }),
+  agentFolderDelete: (projectId: string, folderId: string) => invoke<void>('agent_folder_delete', { projectId, folderId }),
+  agentFolderPrincipal: (projectId: string, folderId: string, agentId: string | null) =>
+    invoke<void>('agent_folder_principal', { projectId, folderId, agentId }),
+  agentFolderFold: (projectId: string, folderId: string, folded: boolean) =>
+    invoke<void>('agent_folder_fold', { projectId, folderId, folded }),
+  /** `folderId` null: out of any folder; `index` absent: the bottom of that level. */
+  agentFolderMove: (projectId: string, itemId: string, folderId: string | null, index?: number) =>
+    invoke<void>('agent_folder_move', { projectId, itemId, folderId, index }),
   /** `erase`: its history goes too (conversations, tickets, settings); else it is kept as a closed project. */
   removeProject: (id: string, erase: boolean) => invoke<void>('remove_project', { id, erase }),
   /** The projects closed with their history kept, the latest closed first. */

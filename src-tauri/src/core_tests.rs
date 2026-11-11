@@ -33,12 +33,18 @@ pub(crate) struct Harness {
 /// The fake CLI's path. The tests that launch it read the environment it got from the app (its
 /// launch log), so the variable an agent of Escouade runs with is taken out of the test process
 /// first: inherited, `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` would reach every fake, setting or not (the
-/// app leaves the user's environment as it is). `remove_var` is safe in edition 2021; std's own
+/// app leaves the user's environment as it is). The same goes for `CLAUDE_CONFIG_DIR`, which the
+/// agent of an account with a folder of its own runs with: inherited, it would be the folder the
+/// Principal's fake reports (the tests expect none), and the tests would fail on the machine of
+/// whoever runs them from an agent of Escouade. `remove_var` is safe in edition 2021; std's own
 /// readers of the environment (`var`, `Command`) take the same lock, and the value only ever goes
 /// from set to unset, whichever thread of `cargo test` sees it first (nextest: one process a test).
 pub(crate) fn fake_cli() -> String {
     static INHERITED: std::sync::Once = std::sync::Once::new();
-    INHERITED.call_once(|| std::env::remove_var(TODO_TOOLS_VAR));
+    INHERITED.call_once(|| {
+        std::env::remove_var(TODO_TOOLS_VAR);
+        std::env::remove_var("CLAUDE_CONFIG_DIR");
+    });
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("tests")

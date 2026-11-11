@@ -74,6 +74,32 @@ export default defineZone('nav', {
     noRepo: 'No git repository',
     /** The project's folder in the footer: it opens the editor on it. */
     browseFolder: 'Browse {path}',
+    /** The folders of agents (docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md). */
+    folders: {
+      collapse: 'Collapse {name}',
+      expand: 'Expand {name}',
+      principal: 'Main agent',
+      empty: 'Drag an agent here',
+      running: { one: '{count} running', other: '{count} running' },
+      waiting: { one: '{count} waiting', other: '{count} waiting' },
+      rename: 'Folder name',
+      create: 'New folder',
+      createWith: 'New folder with this agent',
+      moveTo: 'Move to…',
+      outOf: 'No folder',
+      makePrincipal: 'Make this agent the main agent',
+      removePrincipal: 'Remove the main agent role',
+      delete: 'Delete the folder',
+      deleteModal: {
+        title: 'Delete the folder “{name}”?',
+        out: 'Take the agents out of the folder',
+        archive: { one: 'Archive the agent', other: 'Archive the {count} agents' },
+        remove: { one: 'Delete the agent', other: 'Delete the {count} agents' },
+        worktrees: { one: 'Also delete its worktree', other: 'Also delete their worktrees' },
+        tickets: { one: 'Its ticket {keys} goes back to “To do”.', other: 'Their tickets {keys} go back to “To do”.' },
+        confirm: 'Delete the folder',
+      },
+    },
     menu: {
       duplicate: 'Duplicate the conversation',
       waitTurn: 'Wait for its turn to end.',

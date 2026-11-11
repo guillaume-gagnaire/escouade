@@ -32,6 +32,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Nouveautés
 
+- Les agents se rangent en dossiers dans la barre latérale : on glisse une carte dans un dossier, on le replie sans perdre de vue ce qui attend une réponse, et un agent qui en crée d’autres les range avec lui. Le serveur MCP lit et règle ces dossiers.
 - L’écran partagé : glisse un agent, un terminal, un lancement ou l’éditeur depuis la barre latérale sur la zone de travail pour l’ouvrir à côté, au-dessus ou en dessous, jusqu’à quatre volets. Le volet entouré reçoit ta saisie, ta voix et tes réponses ; Ctrl+ partage ou revient à un volet, et la disposition revient au prochain lancement.
 - Les réglages sont refaits : une barre à gauche avec les pages d’Escouade (Général, Agents, Comptes et harness, Services connectés, Voix, Notifications, Plugins, Avancé), puis les pages de chaque projet, et tout s’applique dès que tu le changes, sans « Enregistrer ». Une recherche (Ctrl+F) trouve un réglage par son nom, en français comme en anglais, et ouvre sa page ; un point ambre signale la page qui attend quelque chose de toi, comme un harness sans compte ou un jeton expiré.
 - Les plugins d'Escouade sont dans l'installeur : à la première ouverture, même sans réseau, Escouade installe ceux que ta configuration utilise, et la vue Plugins propose les autres, installables d'un clic sans téléchargement.

@@ -298,6 +298,13 @@ const VIEWPORT = /^(\d+)x(\d+)$/.exec(process.env.ESCOUADE_E2E_VIEWPORT ?? '');
  */
 const RENDER_UNSEEN = '--disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling';
 
+/**
+ * The page drawn at a scale of 1, as on a CI runner, whatever the display's (125 % or 150 % is common on a laptop or a wide
+ * screen): at another scale, widths and heights come out fractional (a row of 20.79 px, 391 px for a viewport of 390) and the
+ * tests, which compare pixels, fail with nothing wrong in the app.
+ */
+const FIXED_SCALE = '--force-device-scale-factor=1';
+
 /** How long `restart()` leaves the app to write its state before it ends it. */
 const SAVE_MS = 1500;
 
@@ -408,7 +415,7 @@ export const test = base.extend<{
       // Sent "from claude.ai" to an agent once its Remote Control is on.
       FAKE_CLAUDE_REMOTE_MESSAGE: 'Message depuis le téléphone',
       WEBVIEW2_USER_DATA_FOLDER: path.join(root, 'webview'),
-      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port} ${RENDER_UNSEEN}`,
+      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port} ${RENDER_UNSEEN} ${FIXED_SCALE}`,
       ESCOUADE_HIDDEN_WINDOW: SHOW ? undefined : '1',
       // Never the machine user's own sign-in nor Anthropic's endpoint: Principal's Claude Code
       // folder is a test one (with no sign-in in it), and the quota is asked of nobody.
@@ -576,6 +583,18 @@ export const test = base.extend<{
  * Opens « Nouveau projet » from « + » of the projects' rail (ESC-158), through its menu when projects were closed (it then
  * lists them first): « Ajouter un projet… ».
  */
+/**
+ * The scale of the app's window (1 on a CI runner, 1.25 on a display at 125 %). The page is drawn at a scale of 1
+ * (FIXED_SCALE), so what the app measures in logical pixels (the window's size over this scale) reaches the page in physical
+ * ones: `innerWidth` is the logical width times this scale.
+ */
+export async function windowScale(page: Page): Promise<number> {
+  return page.evaluate(async () => {
+    const t = (window as unknown as { __TAURI_INTERNALS__: { invoke(c: string, a: unknown): Promise<number> } }).__TAURI_INTERNALS__;
+    return t.invoke('plugin:window|scale_factor', { label: 'main' }).catch(() => 1);
+  });
+}
+
 export async function openNewProject(page: Page, lang: Language = 'fr') {
   const words = LABELS[lang];
   await page.getByRole('button', { name: words.addProject }).first().click();

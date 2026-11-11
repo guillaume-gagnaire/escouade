@@ -14,6 +14,7 @@
   import { t } from '../lib/i18n';
   import { branchSummary, deltaDetail, repoLabel } from '../lib/repos';
   import { api } from '../lib/ipc';
+  import { dropPlace, landing, stepPlace, type Place } from '../lib/agent-folders';
   import { fDur, fUsd, fWhen, tildify } from '../lib/format';
   import { accountName, defaultEngine, newAgentAccount, newAgentDefaults } from '../lib/accounts';
   import {
@@ -24,7 +25,9 @@
     listRequest,
     listStep,
     listTarget,
-    sidebarOrder,
+    foldedCards,
+    shownAgents,
+    type SidebarItem,
     type ListDecision,
     type ListRequest,
   } from '../lib/sidebar';
@@ -69,7 +72,7 @@
   import { canPrepare, prepareLaunch, stopTests } from '../lib/test-launch.svelte';
   import { returnHeld } from '../lib/outbox.svelte';
   import { backTarget, forwardTargets } from '../lib/handover';
-  import type { Agent, AgentStatus, BranchInfo, Project } from '../lib/types';
+  import type { Agent, AgentFolder, AgentStatus, BranchInfo, Project } from '../lib/types';
   import RunsSection from './RunsSection.svelte';
   import EngineMark from './EngineMark.svelte';
   import StatusDot from './StatusDot.svelte';
@@ -182,7 +185,10 @@
     untrack(() => void app.readCodeHost(id));
   });
   /** Who waits for an answer goes first (2.0 design). */
-  const agents = $derived(sidebarOrder(app.projectAgents));
+  const agents = $derived(app.projectAgents);
+  /** What the list shows: folders and loose agents (`agents`, flat, is the same in shown order: the keys' and Ctrl+J's). */
+  const items = $derived(app.projectItems);
+  type FolderItem = Extract<SidebarItem, { kind: 'folder' }>;
   /** The requests answered from the list, until the agent's request is gone: one click answers once. */
   let answering = $state<Record<string, string>>({});
   /** The cards that flash green a moment, their agent sent off again from the list. */
@@ -303,9 +309,119 @@
     app.toast(t('nav.sidebar.answered', { name: a.name, choice: said }), 'ok');
   }
 
-  /** Enter opens a card, as a click does. */
+  /** Enter opens a card, as a click does; Alt+↑ / Alt+↓ move it one step (into a folder, out of it at its edges). */
   function cardKey(e: KeyboardEvent, a: Agent) {
-    if (e.target === e.currentTarget && e.key === 'Enter') app.selectAgent(a.id);
+    if (e.target !== e.currentTarget) return;
+    if (e.key === 'Enter') app.selectAgent(a.id);
+    else stepKey(e, a.id, `.agent[data-agent="${CSS.escape(a.id)}"]`);
+  }
+
+  /** The folder an agent is in, null when it is loose. */
+  const folderOf = (id: string) =>
+    items.find((it): it is FolderItem => it.kind === 'folder' && (it.principal?.id === id || it.agents.some((a) => a.id === id)));
+
+  /** The ids of a level as it is drawn (null: the project's): what a drop line can sit before. */
+  function rowIds(level: string | null): string[] {
+    if (!level) return items.map((it) => (it.kind === 'agent' ? it.agent.id : it.folder.id));
+    const f = items.find((it): it is FolderItem => it.kind === 'folder' && it.folder.id === level);
+    if (!f) return [];
+    return (f.folder.folded ? foldedCards(f, selectedAgentId) : [...(f.principal ? [f.principal] : []), ...f.agents]).map((a) => a.id);
+  }
+
+  const isFolder = (id: string) => items.some((it) => it.kind === 'folder' && it.folder.id === id);
+
+  const move = (id: string, p: Place) => app.run(api.agentFolderMove(project.id, id, p.folderId, p.index ?? undefined));
+
+  /** Alt+↑ / Alt+↓ on a card or a folder's chevron: one step; the focus stays on what moved, wherever it is drawn next. */
+  async function stepKey(e: KeyboardEvent, id: string, focus: string) {
+    if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+    e.preventDefault();
+    const p = stepPlace(project, items, id, e.key === 'ArrowUp' ? -1 : 1);
+    if (!p) return;
+    await move(id, p);
+    await tick();
+    // In a folded folder the card is not drawn: the focus goes to the folder's chevron.
+    const chev = p.folderId ? `[data-folder="${CSS.escape(p.folderId)}"] .chev` : focus;
+    (document.querySelector<HTMLElement>(focus) ?? document.querySelector<HTMLElement>(chev))?.focus();
+  }
+
+  // Dragging, by the pointer gesture of the split screen (paneDrag): over the list a line shows where it lands, a folder's
+  // header lights up when an agent hovers it (it goes in at the bottom); released on the work area, a card opens in a pane.
+  /** The drop line: sits before the drawn row `before` of level `level` (a folder's id; null: the project's), null at its end. */
+  let drop = $state<{ level: string | null; before: string | null } | null>(null);
+  let overFolder = $state<string | null>(null);
+  /** The agent or folder being dragged (wherever the pointer is). */
+  const dragging = $derived(paneDrag.on ? paneDrag.sidebarId : null);
+  /** Where the dragged item would land, null when it would not move or may not go there: no line then. */
+  const place = $derived(dragging && drop ? dropPlace(project, items, dragging, drop.level, drop.before) : null);
+  /** The drawn row the line sits before: where the item lands (`landing`), not the row hovered when it is one that moved up. */
+  const lineBefore = $derived.by(() => {
+    if (!dragging || !drop) return null;
+    const next = landing(items, dragging, drop.level, drop.before);
+    return next && rowIds(drop.level).includes(next) ? next : null;
+  });
+
+  /** Over a drawn row (an agent's card or a folder's header at the project level): the line goes above it or under it. */
+  function aimRow(id: string, r: DOMRect, y: number) {
+    const level = folderOf(id)?.folder.id ?? null;
+    overFolder = null;
+    const row = rowIds(level);
+    drop = { level, before: y < r.top + r.height / 2 ? id : (row[row.indexOf(id) + 1] ?? null) };
+  }
+
+  /**
+   * Between the rows (the gap, or the free space of a list): the line goes before the first drawn row of `level` whose
+   * middle is under the pointer, at the end of the level when none is.
+   */
+  function aimGap(level: string | null, y: number) {
+    const rows = level
+      ? document.querySelectorAll<HTMLElement>(`[data-folder="${CSS.escape(level)}"] .folder-b > [data-row]`)
+      : document.querySelectorAll<HTMLElement>('.agents > [data-row], .agents > section.folder');
+    const below = [...rows].find((r) => {
+      const b = r.getBoundingClientRect();
+      return y < b.top + b.height / 2;
+    });
+    drop = { level, before: below ? (below.dataset.row ?? below.dataset.folder!) : null };
+  }
+
+  /** What the pointer at (x, y) would put where, from the element under it: the rules of the list, kept as they were. */
+  function aim(id: string, x: number, y: number) {
+    const dragsFolder = isFolder(id);
+    drop = overFolder = null;
+    for (const n of document.elementsFromPoint(x, y)) {
+      const el = n.closest<HTMLElement>('[data-row], .folder-h, .folder-b');
+      if (!el) continue;
+      const folder = el.closest<HTMLElement>('[data-folder]')?.dataset.folder;
+      if (el.matches('.folder-b')) {
+        // A folder has no place inside another one.
+        if (!dragsFolder && folder) aimGap(folder, y);
+      } else if (el.matches('.folder-h')) {
+        if (dragsFolder) aimRow(folder!, el.getBoundingClientRect(), y);
+        else overFolder = folder ?? null;
+      } else {
+        const agentId = el.dataset.row!;
+        // A folder goes among the project's rows only: inside another folder it has no place.
+        if (!(dragsFolder && folderOf(agentId))) aimRow(agentId, el.getBoundingClientRect(), y);
+      }
+      return;
+    }
+    // The free space of the list, or a gap between its rows.
+    aimGap(null, y);
+  }
+
+  $effect(() => {
+    if (paneDrag.on && paneDrag.inSidebar && paneDrag.sidebarId) aim(paneDrag.sidebarId, paneDrag.x, paneDrag.y);
+    else drop = overFolder = null;
+  });
+
+  /** Released over the list: on a folder's header an agent goes in at the bottom; elsewhere where the line is. */
+  function dropHere(id: string) {
+    const p =
+      overFolder && !isFolder(id)
+        ? dropPlace(project, items, id, overFolder, null)
+        : drop && dropPlace(project, items, id, drop.level, drop.before);
+    drop = overFolder = null;
+    if (p) void move(id, p);
   }
 
   /**
@@ -353,12 +469,110 @@
     if (kept) app.toast(kept, 'info');
   }
 
+  function startFolderRename(f: AgentFolder) {
+    renaming = f.id;
+    renameValue = f.name;
+  }
+
+  async function commitFolderRename(f: AgentFolder) {
+    // Enter then the blur of the removed input: rename once.
+    if (renaming !== f.id) return;
+    const v = renameValue.trim();
+    renaming = null;
+    if (v && v !== f.name) await app.run(api.agentFolderRename(project.id, f.id, v));
+  }
+
+  /** A new folder (holding `agentId`, if any), its name asked at once, once it is drawn. */
+  async function newFolder(agentId?: string) {
+    const f = await app.run(api.agentFolderCreate(project.id, agentId));
+    if (f) startFolderRename(f);
+  }
+
+  /** « 2 en cours, 1 en attente »: what the pills of a folder's header say, for the screen readers. */
+  const folderCounts = (it: FolderItem) =>
+    [
+      it.running && t('nav.sidebar.folders.running', { count: it.running }),
+      it.waiting && t('nav.sidebar.folders.waiting', { count: it.waiting }),
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+  /** Monter / Descendre, greyed at the ends of what `id` can step through. */
+  function stepItems(id: string): MenuItem[] {
+    return [
+      { label: t('nav.rail.up'), hint: t('nav.rail.upKey'), disabled: !stepPlace(project, items, id, -1), onClick: () => stepMove(id, -1) },
+      {
+        label: t('nav.rail.down'),
+        hint: t('nav.rail.downKey'),
+        disabled: !stepPlace(project, items, id, 1),
+        onClick: () => stepMove(id, 1),
+      },
+    ];
+  }
+  function stepMove(id: string, by: -1 | 1) {
+    const p = stepPlace(project, items, id, by);
+    if (p) void move(id, p);
+  }
+
+  /** What an agent's menu offers about folders: where to move it, a folder made of it, its star, a step up or down. */
+  function folderItems(e: MouseEvent, a: Agent): MenuItem[] {
+    if (a.archived) return [];
+    const mine = folderOf(a.id);
+    return [
+      { label: t('nav.sidebar.folders.moveTo'), onClick: () => moveMenu(e, a) },
+      ...(mine
+        ? [
+            {
+              label: t(mine.principal?.id === a.id ? 'nav.sidebar.folders.removePrincipal' : 'nav.sidebar.folders.makePrincipal'),
+              onClick: () => app.run(api.agentFolderPrincipal(project.id, mine.folder.id, mine.principal?.id === a.id ? null : a.id)),
+            },
+          ]
+        : [{ label: t('nav.sidebar.folders.createWith'), onClick: () => newFolder(a.id) }]),
+      ...stepItems(a.id),
+    ];
+  }
+
+  /** « Déplacer vers… »: each other folder, a new one, out of any, where the agent's menu was (no submenus: a second menu). */
+  async function moveMenu(e: MouseEvent, a: Agent) {
+    const at = { x: e.clientX, y: e.clientY };
+    const mine = folderOf(a.id)?.folder.id ?? null;
+    await tick();
+    menu.open = {
+      ...at,
+      items: [
+        ...items
+          .filter((it): it is FolderItem => it.kind === 'folder' && it.folder.id !== mine)
+          .map((it) => ({ label: it.folder.name, onClick: () => move(a.id, { folderId: it.folder.id, index: null }) })),
+        { label: t('nav.sidebar.folders.create'), onClick: () => newFolder(a.id) },
+        ...(mine ? [{ label: t('nav.sidebar.folders.outOf'), onClick: () => move(a.id, { folderId: null, index: null }) }] : []),
+      ],
+    };
+  }
+
+  /** A folder with agents on show asks what becomes of them; an empty one, or of archived agents only, goes at once. */
+  function deleteFolder(f: AgentFolder) {
+    if (f.agents.some((id) => app.agents[id] && !app.agents[id].archived)) {
+      app.modal = { kind: 'deleteFolder', projectId: project.id, folderId: f.id };
+    } else app.run(api.agentFolderDelete(project.id, f.id));
+  }
+
+  /** The menu of a folder's header. */
+  function folderMenu(e: MouseEvent, f: AgentFolder) {
+    menu.show(e, [
+      { label: t('common.rename'), onClick: () => startFolderRename(f) },
+      ...stepItems(f.id),
+      { label: '', separator: true },
+      { label: t('nav.sidebar.folders.delete'), danger: true, onClick: () => deleteFolder(f) },
+    ]);
+  }
+
   /** `folded`: what the header of its conversation, too narrow, no longer shows (ESC-166), offered here instead. */
   function agentMenu(e: MouseEvent, a: Agent, folded?: HeaderFolded) {
     // A copy is made from a conversation at rest: during a turn, the original's session moves on.
     const turn = a.status === 'running' || a.status === 'waiting';
     menu.show(e, [
       { label: t('common.rename'), onClick: () => startRename(a) },
+      ...folderItems(e, a),
       // Only for a harness that copies a conversation.
       ...(a.archived || !canFork(a)
         ? []
@@ -645,6 +859,8 @@
         },
       },
       { label: '', separator: true },
+      { label: t('nav.sidebar.folders.create'), icon: 'folder', onClick: () => newFolder() },
+      { label: '', separator: true },
       {
         label: t('nav.sidebar.defaultHarness'),
         icon: 'sliders',
@@ -706,6 +922,11 @@
 <!-- The chevron of a list that folds: down when open. -->
 {#snippet chev(open: boolean)}
   <span class="chev" aria-hidden="true"><Icon name={open ? 'down' : 'right'} size={12} /></span>
+{/snippet}
+
+<!-- The line where a dragged agent or folder lands: before the row `before` of its level, null at the end of it. -->
+{#snippet line(level: string | null, before: string | null)}
+  {#if place && drop && drop.level === level && lineBefore === before}<div class="drop" aria-hidden="true"></div>{/if}
 {/snippet}
 
 <!-- The button of a list that shows only its first rows: it unrolls the others, then folds them back (the focus stays). -->
@@ -826,20 +1047,28 @@
       >
     </div>
 
-    <div class="agents">
-      {#each agents as a (a.id)}
-        {@const sel = paneKeys ? app.panes?.active === `agent:${a.id}` : a.id === selectedAgentId && !otherView}
-        {@const s = spent(a)}
-        {@const ticket = app.ticketOf(a.id)}
-        {@const plan = planView(a)?.mini}
-        {@const wfStep = cardStep(workflows.scans[project.id]?.workflows ?? [], workflows.tracks[project.id]?.[a.id])}
-        {@const wfNext = cardNext(workflows.scans[project.id]?.workflows ?? [], workflows.tracks[project.id]?.[a.id])}
-        {@const inBg = can(a, 'backgroundTasks') ? bgCount(a.plan) : 0}
-        {@const subsRunning = (a.plan?.agents ?? []).filter((x) => x.status === 'running').length}
-        {@const remote = remoteStateOf(a)}
-        {@const pending = pendingFor(a, app.agents, app.tickets, app.now, can(a, 'backgroundTasks'))}
-        {@const ask = listRequest(a)}
-        {@const act = cardActivity(a, git?.agents[a.id] ?? 0, pending)}
+    {#snippet card(a: Agent, principal = false)}
+      {@const sel = paneKeys ? app.panes?.active === `agent:${a.id}` : a.id === selectedAgentId && !otherView}
+      {@const s = spent(a)}
+      {@const ticket = app.ticketOf(a.id)}
+      {@const plan = planView(a)?.mini}
+      {@const wfStep = cardStep(workflows.scans[project.id]?.workflows ?? [], workflows.tracks[project.id]?.[a.id])}
+      {@const wfNext = cardNext(workflows.scans[project.id]?.workflows ?? [], workflows.tracks[project.id]?.[a.id])}
+      {@const inBg = can(a, 'backgroundTasks') ? bgCount(a.plan) : 0}
+      {@const subsRunning = (a.plan?.agents ?? []).filter((x) => x.status === 'running').length}
+      {@const remote = remoteStateOf(a)}
+      {@const pending = pendingFor(a, app.agents, app.tickets, app.now, can(a, 'backgroundTasks'))}
+      {@const ask = listRequest(a)}
+      {@const act = cardActivity(a, git?.agents[a.id] ?? 0, pending)}
+      {@const prs = cardPrs(a)}
+      {@const subs = a.id === selectedAgentId ? sidebarSubs(a) : null}
+      {@const bg =
+        a.id === selectedAgentId && can(a, 'backgroundTasks')
+          ? sidebarBg(a.plan, { running: bgRunningAll[a.id], finished: bgFinishedAll[a.id] })
+          : null}
+      {@const driven = drivenAgents(a.plan, app.agents, app.tickets, a.id)}
+      <!-- The card and the rows under it (pull requests, sub-agents…) are one row: a drop on any of them is a drop on the card. -->
+      <div class="row" data-row={a.id}>
         <div
           class="agent card"
           class:waiting={a.status === 'waiting'}
@@ -851,18 +1080,30 @@
           class:inpane={inPane(`agent:${a.id}`)}
           class:alert={app.attention[a.id]}
           class:flash={flashing[a.id]}
+          class:dragging={dragging === a.id}
           style:--alert={a.status === 'error' ? 'var(--del)' : a.status === 'waiting' ? 'var(--wait)' : 'var(--run)'}
           role="button"
           tabindex="0"
           aria-current={sel ? 'true' : undefined}
           data-agent={a.id}
           onclick={(e) => open(e, { kind: 'agent', id: a.id }, () => app.selectAgent(a.id))}
-          onpointerdown={(e) => paneDrag.press(e, { kind: 'agent', id: a.id }, a.name, engineName(a.engine))}
+          onpointerdown={(e) => {
+            if (renaming !== a.id)
+              paneDrag.press(e, { kind: 'agent', id: a.id }, a.name, engineName(a.engine), { id: a.id, drop: () => dropHere(a.id) });
+          }}
           onkeydown={(e) => cardKey(e, a)}
           oncontextmenu={(e) => agentMenu(e, a)}
         >
           <div class="a-top">
             <StatusDot status={a.status} awaits={!!pending} />
+            {#if principal}
+              <span
+                class="star"
+                role="img"
+                aria-label={t('nav.sidebar.folders.principal')}
+                use:tip={{ text: t('nav.sidebar.folders.principal'), aria: false }}><Icon name="star" size={12} /></span
+              >
+            {/if}
             {#if renaming === a.id}
               <!-- svelte-ignore a11y_autofocus -->
               <input
@@ -1037,7 +1278,6 @@
             </div>
           {/if}
         </div>
-        {@const prs = cardPrs(a)}
         {#if a.prDown && !a.ticketId}
           <!-- Its code host's plugin does not answer (INT-8.1): said under the card, the pull requests read last kept. -->
           <div class="prdown" role="status" data-pr-down={a.id} use:tip={t('prs.downHint', { why: a.prDown, word: prWord(a) })}>
@@ -1090,7 +1330,6 @@
             {/each}
           </div>
         {/if}
-        {@const subs = a.id === selectedAgentId ? sidebarSubs(a) : null}
         {#if subs}
           <!-- Under the card of the agent open only (choice 10 of the 2.0 design): its subagents, unfolded while one runs. -->
           {@const open = app.subsOpen[a.id] ?? subs.running.length > 0}
@@ -1142,10 +1381,6 @@
             {/if}
           </div>
         {/if}
-        {@const bg =
-          a.id === selectedAgentId && can(a, 'backgroundTasks')
-            ? sidebarBg(a.plan, { running: bgRunningAll[a.id], finished: bgFinishedAll[a.id] })
-            : null}
         {#if bg}
           <!-- Under the card of the agent open too, after the subagents: what its harness runs in the background. -->
           {@const open = app.bgOpen[a.id] ?? bg.runningTotal > 0}
@@ -1198,7 +1433,6 @@
             {/if}
           </div>
         {/if}
-        {@const driven = drivenAgents(a.plan, app.agents, app.tickets, a.id)}
         {#if driven.length}
           <!-- Under the card too (ESC-138): the agents of Escouade it set to work through the MCP server, while they work. -->
           {@const open = drivenOpen[a.id] ?? true}
@@ -1226,12 +1460,84 @@
             {/if}
           </div>
         {/if}
-      {:else}
+      </div>
+    {/snippet}
+
+    <div class="agents" data-sidebar-drop role="presentation">
+      {#each items as it (it.kind === 'agent' ? it.agent.id : it.folder.id)}
+        {@render line(null, it.kind === 'agent' ? it.agent.id : it.folder.id)}
+        {#if it.kind === 'agent'}
+          {@render card(it.agent)}
+        {:else}
+          {@const f = it.folder}
+          {@const cards = f.folded ? foldedCards(it, selectedAgentId) : [...(it.principal ? [it.principal] : []), ...it.agents]}
+          <section class="folder" class:over={overFolder === f.id} class:dragging={dragging === f.id} data-folder={f.id}>
+            <!-- A click on the header outside its name and its field folds it, as the chevron does (which has the keys). -->
+            <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+            <div
+              class="folder-h"
+              role="group"
+              aria-label={f.name}
+              onpointerdown={(e) => {
+                if (renaming !== f.id) paneDrag.press(e, null, f.name, '', { id: f.id, drop: () => dropHere(f.id) });
+              }}
+              oncontextmenu={(e) => folderMenu(e, f)}
+              onclick={(e) => {
+                if (!(e.target as HTMLElement).closest('.name, .rename, .chev')) app.run(api.agentFolderFold(project.id, f.id, !f.folded));
+              }}
+            >
+              <button
+                class="chev fold"
+                aria-expanded={!f.folded}
+                aria-label={t(f.folded ? 'nav.sidebar.folders.expand' : 'nav.sidebar.folders.collapse', { name: f.name })}
+                onclick={() => app.run(api.agentFolderFold(project.id, f.id, !f.folded))}
+                onkeydown={(e) => stepKey(e, f.id, `[data-folder="${CSS.escape(f.id)}"] .chev`)}
+              >
+                <Icon name={f.folded ? 'right' : 'down'} size={12} />
+              </button>
+              {#if renaming === f.id}
+                <!-- svelte-ignore a11y_autofocus -->
+                <input
+                  class="rename"
+                  aria-label={t('nav.sidebar.folders.rename')}
+                  bind:value={renameValue}
+                  autofocus
+                  onkeydown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === 'Enter') commitFolderRename(f);
+                    if (e.key === 'Escape') renaming = null;
+                  }}
+                  onblur={() => commitFolderRename(f)}
+                />
+              {:else}
+                <span class="name" ondblclick={() => startFolderRename(f)} role="presentation">{f.name}</span>
+              {/if}
+              <span class="cnt" aria-hidden="true">{(it.principal ? 1 : 0) + it.agents.length}</span>
+              {#if it.running}<span class="pill run" aria-hidden="true">{it.running}</span>{/if}
+              {#if it.waiting}<span class="pill wait" aria-hidden="true">{it.waiting}</span>{/if}
+              <span class="sr">{folderCounts(it)}</span>
+            </div>
+            <div class="folder-b" role="presentation">
+              {#each cards as a (a.id)}
+                {@render line(f.id, a.id)}
+                {@render card(a, a.id === it.principal?.id)}
+              {/each}
+              {@render line(f.id, null)}
+              {#if !it.principal && !it.agents.length}
+                <p class="folder-empty">{t('nav.sidebar.folders.empty')}</p>
+              {/if}
+            </div>
+          </section>
+        {/if}
+      {/each}
+      {@render line(null, null)}
+      {#if !shownAgents(items).length}
+        <!-- No agent at all (empty folders may remain): the invitation stays. -->
         <div class="empty">
           <p>{t('nav.sidebar.empty')}</p>
           <button class="btn" onclick={() => app.newAgent(project.id)}><Icon name="plus" size={14} />{t('nav.sidebar.createAgent')}</button>
         </div>
-      {/each}
+      {/if}
 
       {#if app.archivedAgents.length}
         <button class="archived-h" aria-expanded={app.showArchived} onclick={() => (app.showArchived = !app.showArchived)}>
@@ -1603,6 +1909,11 @@
     margin: 0 -4px;
     padding: 0 4px 12px;
     mask-image: linear-gradient(to bottom, black calc(100% - 28px), transparent);
+  }
+  .row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
   .agent {
     --tone: var(--run);
@@ -2259,6 +2570,87 @@
     white-space: nowrap;
   }
 
+  /* A folder of agents: a frame (never `.agent`, which the cards are), its cards under a rule. */
+  .folder {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    margin: 2px 0 4px;
+    background: color-mix(in oklch, var(--p-ink) 3%, var(--panel));
+  }
+  .folder.over {
+    box-shadow: inset 0 0 0 1px var(--p-ink);
+  }
+  .folder.dragging,
+  .agent.dragging {
+    opacity: 0.45;
+  }
+  .folder-h {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  .folder-h .name {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+  .folder-h .rename {
+    flex: 1;
+    min-width: 0;
+  }
+  .folder-h .cnt {
+    margin-right: auto;
+  }
+  .folder-h .fold {
+    padding: 0;
+    cursor: pointer;
+  }
+  .folder-h .pill {
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+  .pill.run {
+    color: var(--run);
+  }
+  .pill.wait {
+    color: var(--wait);
+  }
+  .folder-b {
+    margin: 0 6px 4px 14px;
+    padding: 0 0 0 8px;
+    border-left: 1px solid var(--line-2);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 4px;
+  }
+  .folder-empty {
+    margin: 0;
+    padding: 6px 4px;
+    color: var(--dim);
+    font-size: 11.5px;
+  }
+  .star {
+    display: inline-flex;
+    color: var(--p-ink);
+  }
+  .star :global(svg) {
+    fill: currentColor;
+  }
+  /* Where a dragged agent or folder lands. */
+  .drop {
+    pointer-events: none;
+    flex: none;
+    height: 3px;
+    margin: -2px 0;
+    border-radius: 2px;
+    background: var(--p-ink);
+  }
   .empty {
     display: grid;
     justify-items: center;

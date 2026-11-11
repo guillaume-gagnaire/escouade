@@ -1,7 +1,7 @@
 ---
 title: "Barre latérale"
 subject: "Fenêtre"
-sources: ["docs/SPEC.md","src-tauri/src/core.rs","src-tauri/src/engine/claude/mod.rs","src-tauri/src/worktrees.rs"]
+sources: ["docs/SPEC.md","src-tauri/src/core.rs","src-tauri/src/engine/claude/mod.rs","src-tauri/src/worktrees.rs","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md"]
 tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390","ESC-396","ESC-398","ESC-403"]
 decisions: [129,133]
 compared: null
@@ -27,6 +27,23 @@ La colonne d'un projet, à droite de la barre des projets. Elle liste les agents
   - « Nouvel agent depuis une autre branche… » (voir *Git & fichiers*).
 - Un agent naît sous le nom `agent-N`. Après son premier message, le modèle des textes rédigés lui donne un nom court en slug (voir *Langues*). Il se renomme par double-clic.
 - Une fois une pull request ouverte sur sa branche, la branche garde son nom quand l'agent est renommé (voir *Pull requests*).
+
+### Dossiers d'agents
+
+- Les agents d'un projet se rangent en dossiers : un seul niveau, jamais un dossier dans un dossier. La liste est une suite de dossiers et d'agents hors dossier, dans l'ordre que l'utilisateur ou un agent a choisi (l'ordre rangé). Les agents déjà là restent hors dossier : rien n'est rangé après coup.
+- Un dossier est un cadre (`section.folder`, jamais la classe `agent`) : un en-tête, puis les cartes complètes de ses agents sous un filet.
+  - En-tête : le chevron (« Replier <nom> » / « Déplier <nom> »), le nom, le nombre d'agents non archivés, et les pastilles « en cours » (vert) et « en attente » (ambre), absentes à zéro, lues aussi par les lecteurs d'écran (« 2 en cours, 1 en attente »).
+  - Un dossier vide reste, avec « Glisse un agent ici », jusqu'à sa suppression. Sans aucun agent non archivé dans le projet, le message vide et « Créer un agent » restent affichés, même s'il reste des dossiers.
+- L'agent principal est en tête du dossier, avec une étoile à gauche de son nom (infobulle « Agent principal »). Au plus un par dossier : en désigner un retire l'étoile au précédent, qui reste dans le dossier. Un dossier jamais renommé prend alors le nom du nouveau principal (premier nom libre : « <nom> 2 »…).
+- Créer : « Nouveau dossier » dans le menu à côté de « Nouvel agent », ou « Nouveau dossier avec cet agent » au clic droit d'un agent hors dossier (il y entre, sans devenir principal). Le dossier naît en mode renommage (« Nom du dossier »), sous « Dossier », « Dossier 2 »…, en bas de la liste ou à la place de l'agent. Un double clic sur le nom le renomme.
+- Glisser, au pointeur, par le même geste que l'écran partagé (`paneDrag`, pas de glisser-déposer natif) : relâché dans la liste, la carte ou l'en-tête de dossier se range ; relâché sur la zone de travail, une carte d'agent s'ouvre dans un panneau (un dossier n'a pas de panneau). Un trait marque où l'élément tombe (devant la première carte qui n'est pas remontée, là où il tombera vraiment) ; relâché sur les rangées sous une carte (pull requests, sous-agents…) ou dans l'écart entre deux cartes, il se range à côté de cette carte ou selon la hauteur du pointeur, jamais en fin de liste par défaut ; un agent qui survole l'en-tête d'un dossier le surligne et y entre en bas. Un dossier se glisse entier, pas dans un autre dossier. Le glisser ne commence qu'après un minimum de mouvement : un clic ouvre l'agent et ne déplace rien.
+- Au clavier : `Alt+↑` / `Alt+↓` sur une carte ou un chevron d'en-tête le déplace d'un cran, en entrant dans un dossier ou en sortant à ses bords ; le focus suit. L'agent principal ne se déplace pas dans son propre dossier (ni cran, ni dépôt) : « Monter » et « Descendre » sont grisés ; il en sort par « Hors dossier », « Déplacer vers… » ou un glisser hors du dossier.
+- Replier : le choix est gardé par dossier, d'un lancement à l'autre. Un dossier replié ne cache jamais un agent qui attend une réponse : la carte de chacun de ceux-là, et celle de l'agent ouvert, restent sous l'en-tête ; elles rentrent quand ce n'est plus le cas.
+- Ordre affiché : hors dossier, les agents qui attendent une réponse d'abord, puis le reste dans l'ordre rangé ; dans un dossier, l'agent principal, puis ceux qui attendent, puis les autres. Une fois répondu, l'agent reprend sa place rangée. Les dossiers ne bougent pas. `Ctrl+Tab`, `Ctrl+J`, les touches `1`, `2`… et les listes « dans l'ordre de la barre latérale » (menu `+` des terminaux, « Dans le worktree de… ») suivent l'ordre affiché, dossiers repliés ou non.
+- Un agent archivé quitte la liste de son dossier mais garde sa place : restauré, il y revient en bas si le dossier existe encore, sinon hors dossier ; il redevient principal s'il l'était et que le dossier n'en a pas d'autre. La section « Archivés » reste plate.
+- Supprimer un dossier (« Supprimer le dossier ») : vide, ou sans agent non archivé, il part tout de suite. Sinon une modale « Supprimer le dossier « <nom> » ? » offre trois choix exclusifs : « Sortir les agents du dossier » (par défaut : ils reviennent hors dossier, à sa place, dans leur ordre), « Archiver les N agents » (chacun archivé comme seul ; elle signale les tickets en cours ou en revue, qui repartent « À faire ») ou « Supprimer les N agents » (bouton rouge, case « Supprimer aussi leurs worktrees » cochée si l'un en a un, fichiers non enregistrés signalés ; une branche préexistante reste). Les agents sont traités un par un, puis le dossier est supprimé ; les agents archivés du dossier ne sont jamais touchés. Le MCP `delete_folder` ne change pas : il sort les agents. Un agent supprimé quitte son dossier ; s'il était principal, le dossier n'a plus de principal. Un projet fermé garde ses dossiers avec son historique.
+- La copie d'une conversation va dans le dossier de l'original, juste après lui, jamais principale.
+- Un agent qui crée des agents par le MCP les range avec lui dans un dossier à son nom, où il est principal (voir *Serveur MCP*).
 
 ### La carte d'un agent
 
@@ -59,6 +76,9 @@ La colonne d'un projet, à droite de la barre des projets. Elle liste les agents
 Au clic droit sur sa carte :
 
 - Renommer.
+- « Déplacer vers… » : un menu avec chaque autre dossier du projet, « Nouveau dossier » et, pour un agent d'un dossier, « Hors dossier ». Pas pour un agent archivé.
+- « Nouveau dossier avec cet agent » pour un agent hors dossier ; « Faire de cet agent l'agent principal » ou « Retirer le rôle d'agent principal » pour un agent d'un dossier.
+- Monter, Descendre : d'un cran, comme `Alt+↑` / `Alt+↓`.
 - « Dupliquer la conversation » (ci-dessous).
 - Archiver : l'agent passe dans l'historique du projet, d'où il se rouvre.
 - « Lancer » : pour un agent à worktree non archivé, dans un projet qui a des commandes de lancement ; son sous-menu liste les commandes (voir *Lancement* ci-dessous, et *Fenêtre*, « Menus »).
@@ -69,6 +89,8 @@ Au clic droit sur sa carte :
 - « Ouvrir une PR… », ou « Voir la PR #n » tant qu'une est ouverte (voir *Pull requests*).
 - « Activer le remote control » ou « Désactiver le remote control » (ci-dessous).
 - Supprimer : arrête son process et supprime son worktree, après confirmation s'il n'est pas mergé.
+
+Au clic droit sur l'en-tête d'un dossier : Renommer…, Monter, Descendre, « Supprimer le dossier ».
 
 ### Dupliquer la conversation
 

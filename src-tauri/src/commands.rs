@@ -1333,6 +1333,68 @@ pub fn reorder_projects(core: CoreState, ids: Vec<String>) {
     core.reorder_projects(&ids);
 }
 
+/// A folder of agents; with `agent_id`, it takes that agent's place and holds it.
+#[tauri::command(async)]
+pub fn agent_folder_create(
+    core: CoreState,
+    project_id: String,
+    agent_id: Option<String>,
+) -> Res<AgentFolder> {
+    let agents: Vec<String> = agent_id.iter().cloned().collect();
+    core.folder_create(&project_id, None, &agents, None, agent_id.as_deref())
+        .map_err(err)
+}
+
+#[tauri::command(async)]
+pub fn agent_folder_rename(
+    core: CoreState,
+    project_id: String,
+    folder_id: String,
+    name: String,
+) -> Res<()> {
+    core.folder_rename(&project_id, &folder_id, &name)
+        .map_err(err)
+}
+
+#[tauri::command(async)]
+pub fn agent_folder_delete(core: CoreState, project_id: String, folder_id: String) -> Res<()> {
+    core.folder_delete(&project_id, &folder_id).map_err(err)
+}
+
+#[tauri::command(async)]
+pub fn agent_folder_principal(
+    core: CoreState,
+    project_id: String,
+    folder_id: String,
+    agent_id: Option<String>,
+) -> Res<()> {
+    core.folder_principal(&project_id, &folder_id, agent_id.as_deref())
+        .map_err(err)
+}
+
+#[tauri::command(async)]
+pub fn agent_folder_fold(
+    core: CoreState,
+    project_id: String,
+    folder_id: String,
+    folded: bool,
+) -> Res<()> {
+    core.folder_fold(&project_id, &folder_id, folded)
+        .map_err(err)
+}
+
+#[tauri::command(async)]
+pub fn agent_folder_move(
+    core: CoreState,
+    project_id: String,
+    item_id: String,
+    folder_id: Option<String>,
+    index: Option<usize>,
+) -> Res<()> {
+    core.item_move(&project_id, &item_id, folder_id.as_deref(), index)
+        .map_err(err)
+}
+
 /// `erase`: its history goes too; by default it is kept (`closed_projects`).
 #[tauri::command]
 pub async fn remove_project(core: CoreState<'_>, id: String, erase: Option<bool>) -> Res<()> {
