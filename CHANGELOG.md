@@ -126,6 +126,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ### Corrections
 
+- Le coût estimé d’un agent suit la grille actuelle d’Anthropic : Claude Fable 5.2, Sonnet 5.5 et Haiku 5.5 étaient comptés aux prix de modèles plus anciens, et Haiku 5.5 prend ses prix plus élevés au-delà de 100 000 jetons de prompt.
 - Réglages : ouvrir un projet qui a un logo n’étale plus ce logo sur toute la fenêtre. Il reste dans sa tuile, en tête de la page.
 - macOS : la 2.2.0-beta.3 se fermait quelques secondes après son démarrage dès qu’un plugin WASM se lançait (Claude Code au premier chef). L’app a maintenant le droit d’exécuter le code que compile le moteur des plugins.
 - Remote control : un agent tout juste créé pendant que tu allumes le réglage pour tous les agents garde bien son contrôle à distance. Il pouvait le perdre sans rien dire jusqu'au prochain changement du réglage.

@@ -190,7 +190,8 @@ fn saved(model: &str, read: u64, fast: bool) -> Option<f64> {
 /// What a next message would cost to read `context` tokens again on `model`: the cache warm (read), then cold (read at
 /// full price, and written again for the life it had: 1.25× for 5 minutes, 2× for 1 hour at Anthropic).
 pub fn next_message(model: &str, context: u64, ttl: Option<u64>) -> (Option<f64>, Option<f64>) {
-    let Some(p) = pricing::price(model) else {
+    // Its prompt is the context read again: Claude Haiku 5.5 prices a long one higher.
+    let Some(p) = pricing::price_for(model, context) else {
         return (None, None);
     };
     let c = context as f64 / 1e6;

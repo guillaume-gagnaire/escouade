@@ -126,6 +126,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ### Fixes
 
+- An agent’s estimated cost follows Anthropic’s current price list: Claude Fable 5.2, Sonnet 5.5 and Haiku 5.5 were counted at older models’ prices, and Haiku 5.5 takes its higher prices past 100,000 prompt tokens.
 - Settings: opening a project that has a logo no longer spreads the logo over the whole window. It stays in its tile, at the top of the page.
 - macOS: 2.2.0-beta.3 closed a few seconds after it started as soon as a WASM plugin started (Claude Code first of all). The app may now run the code the plugins’ engine compiles.
 - Remote Control: an agent created just as you turn the setting on for all agents now keeps its Remote Control. It could lose it silently until the setting next changed.
