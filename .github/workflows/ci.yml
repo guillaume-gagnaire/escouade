@@ -130,7 +130,7 @@ jobs:
       # Its apt reaches Ubuntu's mirrors (scripts/linux-deps.sh: public resolvers when the runner's fail).
       - name: Chromium for Playwright
         run: |
-          sh scripts/linux-deps.sh dns
+          sh ../scripts/linux-deps.sh dns
           npx playwright install --with-deps chromium
 
       # The built server (node .output/server/index.mjs) on the same base: the pages in both languages and themes,
