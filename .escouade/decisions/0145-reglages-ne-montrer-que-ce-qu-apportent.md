@@ -1,9 +1,9 @@
 ---
-number: null
+number: 145
 id: "reglages-ne-montrer-que-ce-qu-apportent"
 title: "Réglages : ne montrer que ce qu'apportent les plugins installés"
 date: "2026-11-11"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-407"
 pages: ["fenetre/reglages"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/reglages","added":28,"removed":13}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-11T14:38:25+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
