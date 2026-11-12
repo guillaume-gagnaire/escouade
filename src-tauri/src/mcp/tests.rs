@@ -232,6 +232,32 @@ pub(super) async fn post(port: u16, headers: &[(&str, &str)], body: &str) -> (u1
     (resp.status().as_u16(), resp.text().await.unwrap())
 }
 
+/// `post`, where the server may also cut the connection before it has read the whole body: a body
+/// over the cap is refused with 413, which Linux may deliver as a broken pipe to a client still
+/// writing it (Windows lets the 413 be read). None: cut.
+async fn post_or_cut(port: u16, headers: &[(&str, &str)], body: &str) -> Option<(u16, String)> {
+    let mut req = http()
+        .post(url(port))
+        .header("content-type", "application/json")
+        .header("accept", "application/json, text/event-stream");
+    for (name, value) in headers {
+        req = req.header(*name, *value);
+    }
+    let resp = req.body(body.to_string()).send().await.ok()?;
+    Some((resp.status().as_u16(), resp.text().await.ok()?))
+}
+
+/// Refused at the gate for its size: 413 (its text when it says one), or the connection cut while
+/// the body was written.
+async fn refused_for_size(port: u16, headers: &[(&str, &str)], body: &str, says: Option<&str>) {
+    if let Some((status, text)) = post_or_cut(port, headers, body).await {
+        assert_eq!(status, 413, "{text}");
+        if let Some(says) = says {
+            assert_eq!(text, says);
+        }
+    }
+}
+
 pub(super) fn bearer(token: &str) -> String {
     format!("Bearer {token}")
 }
@@ -1422,11 +1448,15 @@ async fn a_request_without_image_or_file_is_capped_far_below_the_one_of_a_ticket
     assert_eq!(status, 200, "{text}");
     // Over it: refused, whatever the tool (and whatever the method).
     let over = MAX_TEXT_BODY + 1;
-    let (status, text) = post(port, &headers, &call_of("list_projects", over)).await;
-    assert_eq!(status, 413, "{text}");
-    assert_eq!(text, "Requête refusée : trop volumineuse");
+    refused_for_size(
+        port,
+        &headers,
+        &call_of("list_projects", over),
+        Some("Requête refusée : trop volumineuse"),
+    )
+    .await;
     let junk = "x".repeat(over);
-    assert_eq!(post(port, &headers, &junk).await.0, 413);
+    refused_for_size(port, &headers, &junk, None).await;
     // The tools that take attachments keep the 32 MiB: it passes the gate (rmcp answers).
     for tool in ["create_ticket", "update_ticket"] {
         let (status, text) = post(port, &headers, &call_of(tool, over)).await;
@@ -1434,7 +1464,6 @@ async fn a_request_without_image_or_file_is_capped_far_below_the_one_of_a_ticket
         assert_ne!(status, 400, "{tool}: {text}");
     }
     // Beyond 32 MiB nothing passes, declared or not.
-    let (status, _) = post(port, &headers, &call_of("create_ticket", MAX_BODY)).await;
-    assert_eq!(status, 413);
+    refused_for_size(port, &headers, &call_of("create_ticket", MAX_BODY), None).await;
     h.core.mcp.stop();
 }
