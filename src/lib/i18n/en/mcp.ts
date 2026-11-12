@@ -7,6 +7,20 @@ export default defineZone('mcp', {
     enable: 'Agents can drive Escouade',
     enableDesc:
       'Escouade’s agents, and every harness installed started outside Escouade (Claude Code, Codex, OpenCode, Copilot CLI, in a terminal or their app), read your projects, agents and tickets, and can create tickets or start agents, which uses quota, approve tickets (tests, merge, push, pull request) or delete them. An agent already running gets the tools the next time its process starts.',
+    answer: 'Agents can answer the other agents’ questions and permissions',
+    answerDesc:
+      'Through answer_permission and answer_question. “Drive Escouade” does not give them: by default, only you (and Claude outside Escouade) answer an agent’s request.',
+    answerNobody: 'Nobody',
+    answerChef: 'Only the squad lead',
+    answerAll: 'Every agent',
+    answerChefDesc: 'The squad lead is chosen project by project, in Settings › Projects › Team.',
+    answerAllWarn:
+      'This takes the human out of the loop: an agent misled by a text it read can allow what another agent asks, without you seeing it.',
+    chef: 'Squad lead',
+    chefDesc:
+      'The agent that answers the other agents’ permissions and questions in this project, when “Agents can answer…” is set to “Only the squad lead” (Settings › Agents). No agent names itself.',
+    chefNone: 'None',
+    chefOff: 'No effect until Settings › Agents › “Agents can answer…” is set to “Only the squad lead”.',
     list: 'Declarations in the harnesses',
     working: 'Declaring in the harnesses installed…',
     where: '{harness} · {name} account',

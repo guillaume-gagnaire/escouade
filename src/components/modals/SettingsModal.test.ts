@@ -1765,7 +1765,7 @@ describe('SettingsModal in English', () => {
     expect(proposal.getByRole('button', { name: 'Replace the commands' })).toBeInTheDocument();
 
     await userEvent.click(tab('Team'));
-    expect(h2()).toEqual(['Shared Kanban', 'Shared settings', 'Shared memory']);
+    expect(h2()).toEqual(['Shared Kanban', 'Squad lead', 'Shared settings', 'Shared memory']);
     await userEvent.click(tab('Privacy'));
     expect(h2()).toEqual(['Remote control', 'Plugins in this project']);
     await userEvent.click(tab('Kanban'));

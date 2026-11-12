@@ -586,6 +586,27 @@ describe('the page « Agents »', () => {
     expect(be.called('save_settings').at(-1)!.args.settings).toMatchObject({ remoteKeepMax: 3 });
   });
 
+  it('offers who answers the other agents’ requests, nobody by default, and warns before every agent (ESC-423)', async () => {
+    const ANSWER = 'Les agents peuvent répondre aux questions et aux permissions des autres agents';
+    const be = backend({ save_settings: () => [] });
+    // Settings saved before it have no such key: nobody.
+    const { agentsAnswer: _, ...before } = app.settings;
+    app.settings = before;
+    render(SettingsModal, { page: 'agents' });
+    expect(choices(ANSWER)).toEqual(['Personne', 'Seulement le chef d’escouade', 'Tous les agents']);
+    expect(choice(ANSWER, 'Personne')).toHaveAttribute('aria-pressed', 'true');
+    expect(panel()).toHaveTextContent('« Piloter Escouade » ne les donne pas');
+    expect(screen.queryByTestId('agents-answer-warning')).toBeNull();
+    await userEvent.click(choice(ANSWER, 'Seulement le chef d’escouade'));
+    expect(panel()).toHaveTextContent('Réglages › Projets › Équipe');
+    await afterGesture();
+    expect(be.called('save_settings').at(-1)!.args.settings).toMatchObject({ agentsAnswer: 'chef' });
+    await userEvent.click(choice(ANSWER, 'Tous les agents'));
+    expect(screen.getByTestId('agents-answer-warning')).toHaveTextContent('Ça retire l’humain de la boucle');
+    await afterGesture();
+    expect(be.called('save_settings').at(-1)!.args.settings).toMatchObject({ agentsAnswer: 'all' });
+  });
+
   it('saves « Serveurs MCP des agents : seulement Escouade », from « Avancé » (ESC-417)', async () => {
     const be = backend({ save_settings: () => [] });
     render(SettingsModal, { page: 'agents' });

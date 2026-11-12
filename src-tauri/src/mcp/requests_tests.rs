@@ -36,7 +36,7 @@ pub(super) async fn live(h: &Harness, p: &Project, name: &str) -> AgentMeta {
 
 /// A new agent of `p` named `name`, told `what` ("permission", "question", "exit plan"): its fake
 /// `claude` asks for it, and the agent waits for the answer.
-async fn asking(h: &Harness, p: &Project, name: &str, what: &str) -> AgentMeta {
+pub(super) async fn asking(h: &Harness, p: &Project, name: &str, what: &str) -> AgentMeta {
     let meta = h
         .core
         .create_agent_with(
@@ -74,12 +74,21 @@ pub(super) fn bash(command: &str) -> Value {
 }
 
 /// A question of `AskUserQuestion` (what Claude Code sends: `questions`).
-fn question(questions: Value) -> Value {
+pub(super) fn question(questions: Value) -> Value {
     json!({ "tool_name": "AskUserQuestion", "tool_use_id": "tq", "input": { "questions": questions } })
 }
 
-fn waiting(h: &Harness, id: &str) -> Vec<String> {
+pub(super) fn waiting(h: &Harness, id: &str) -> Vec<String> {
     h.view(id).pending
+}
+
+/// `chef` made the chef of `p`, with « Seulement le chef d’escouade » (ESC-423), as the user does in
+/// the settings.
+pub(super) fn make_chef(h: &Harness, p: &Project, chef: &str) {
+    h.core.settings.write().agents_answer = AgentsAnswer::Chef;
+    let mut q = h.core.project(&p.id).unwrap();
+    q.chef = Some(chef.into());
+    h.core.update_project(q).unwrap();
 }
 
 /// The request as the conversation of the agent keeps it.
@@ -154,7 +163,12 @@ async fn the_answering_tools_offer_allow_and_deny_and_never_a_lasting_permission
     for name in ANSWERING {
         let v = tool(name);
         let description = v["description"].as_str().unwrap();
-        for word in ["no longer waits", "Claude Code view"] {
+        for word in [
+            "no longer waits",
+            "Claude Code view",
+            "Refused to an agent by default",
+            "squad lead",
+        ] {
             assert!(description.contains(word), "{name}: {description}");
         }
         // They change something, and are no read.
@@ -751,7 +765,8 @@ async fn a_permission_is_refused_through_the_server_and_claude_is_told_who_refus
     let p = project(&h).await;
     let a = asking(&h, &p, "agent-1", "permission").await;
     let b = live(&h, &p, "agent-2").await;
-    // Another agent of the project answers.
+    // Another agent of the project answers: the chef the user chose (ESC-423).
+    make_chef(&h, &p, &b.id);
     let from_b = as_agent(&h, &b.id).await;
     let v = read(
         &from_b,
@@ -868,6 +883,7 @@ async fn a_question_is_answered_through_the_server_as_the_question_card_does() {
     let p = project(&h).await;
     let a = asking(&h, &p, "agent-1", "question").await;
     let b = live(&h, &p, "agent-2").await;
+    make_chef(&h, &p, &b.id);
     let from_b = as_agent(&h, &b.id).await;
     // A single question: its answer needs no question named.
     let v = read(
@@ -1081,6 +1097,8 @@ async fn several_questions_are_answered_one_by_one_and_several_options_only_wher
 async fn an_answer_is_refused_for_always_oneself_a_private_project_a_wrong_kind_or_a_request_gone()
 {
     let h = harness("mcp-req-refusals");
+    // Every agent may answer another (ESC-423): what is refused here is refused all the same.
+    h.core.settings.write().agents_answer = AgentsAnswer::All;
     let p = project(&h).await;
     let other = other_project(&h, "autre").await;
     let perm = asking(&h, &p, "agent-perm", "permission").await;

@@ -63,6 +63,7 @@ type ProjectFields = Pick<
   | 'engine'
   | 'private'
   | 'sharedOnLimit'
+  | 'chef'
   | 'workflowFixes'
   | 'workflowsAutoRead'
   | 'workflowsInRepo'
@@ -118,6 +119,8 @@ export interface ProjectDraft {
   private: boolean;
   /** « Comptes partagés à la limite ». */
   sharedOnLimit: boolean;
+  /** « Chef d’escouade » (ESC-423): the agent's id, empty for none. */
+  chef: string;
   /** The corrections of its workflows (ESC-195). */
   workflowFixes: WorkflowFix[];
   /** « Relire quand les fichiers changent ». */
@@ -160,6 +163,7 @@ function draftOf(p: Project): ProjectDraft {
     engine,
     private: isPrivate,
     sharedOnLimit,
+    chef,
     workflowFixes,
     workflowsAutoRead,
     workflowsInRepo,
@@ -202,6 +206,8 @@ function draftOf(p: Project): ProjectDraft {
     private: !!isPrivate,
     // Absent from a project of the window's tests made before ESC-141.
     sharedOnLimit: !!sharedOnLimit,
+    // Absent from a project saved before ESC-423: none.
+    chef: chef ?? '',
     // Absent from a project of the window's tests made before ESC-195.
     workflowFixes: workflowFixes ?? [],
     workflowsAutoRead: workflowsAutoRead ?? true,
@@ -276,6 +282,7 @@ function fieldsOf(d: ProjectDraft): ProjectFields {
     engine: d.engine,
     private: d.private,
     sharedOnLimit: d.sharedOnLimit,
+    chef: d.chef || null,
     workflowFixes: d.workflowFixes,
     workflowsAutoRead: d.workflowsAutoRead,
     workflowsInRepo: d.workflowsInRepo,

@@ -87,6 +87,15 @@ describe('the search of the settings', () => {
     }
   });
 
+  it('finds who answers the other agents’ requests and the project’s chef (ESC-423)', () => {
+    for (const q of ['répondre aux permissions', 'autres agents', 'answer permissions']) expect(found(q, 'agentsAnswer'), q).toBe(true);
+    for (const q of ['chef d’escouade', 'CHEF', 'squad lead']) expect(found(q, 'chef'), q).toBe(true);
+    expect(searchSettings('chef d’escouade', PROJECTS, 'p1').find((h) => h.row?.id === 'chef')).toMatchObject({
+      page: 'team',
+      projectId: 'p1',
+    });
+  });
+
   it('reads the descriptions too, after the labels', () => {
     // « Exclusions » says NO_PROXY in its hint alone.
     const hits = searchSettings('NO_PROXY', PROJECTS);

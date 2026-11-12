@@ -168,6 +168,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('remoteAll', 'agents', 'settings.claude.remoteAll', s('remoteControlAll')),
   row('remoteKeepMax', 'agents', 'settings.claude.remoteKeepMax', s('remoteKeepMax')),
   row('mcp', 'agents', 'mcp.section.enable', s('mcpEnabled')),
+  row('agentsAnswer', 'agents', 'mcp.section.answer', s('agentsAnswer')),
   row('mcpDeclared', 'agents', 'mcp.section.list'),
   row('idleStop', 'agents', 'settings.claude.idleStop', { advanced: true, ...s('idleStopMinutes') }),
   row('agentsMcp', 'agents', 'settings.claude.agentsMcp', { advanced: true, ...s('agentsMcp') }),
@@ -301,6 +302,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('shareNew', 'team', 'share.settings.shareNew', { project: ['shareNew'] }),
   row('sharedFile', 'team', 'share.settings.files'),
   row('memory', 'team', 'memory.settings.title'),
+  row('chef', 'team', 'mcp.section.chef', { project: ['chef'] }),
 
   // Confidentialité.
   row('private', 'privacy', 'settings.project.private', { project: ['private'] }),

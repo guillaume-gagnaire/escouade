@@ -26,6 +26,7 @@ vi.mock('./terminals', () => ({ launchLog: () => ({}), disposeLog() {} }));
 // `Settings`, of a project or of its board that no page sets would be a setting lost by the new window.
 const SETTINGS_KEYS: Record<keyof Settings, true> = {
   claudePath: true,
+  agentsAnswer: true,
   sound: true,
   osNotifications: true,
   notifyFor: true,
@@ -88,6 +89,7 @@ const SETTINGS_KEYS: Record<keyof Settings, true> = {
 
 const PROJECT_KEYS: Record<Exclude<keyof ProjectDraft, 'board'>, true> = {
   docsBranch: true,
+  chef: true,
   name: true,
   color: true,
   tileLetters: true,

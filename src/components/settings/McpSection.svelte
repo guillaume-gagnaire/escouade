@@ -7,7 +7,9 @@
   import { maskToken, mcp } from '../../lib/mcp.svelte';
   import { IS_MAC } from '../../lib/platform';
   import { app } from '../../lib/state.svelte';
-  import type { McpDeclaration } from '../../lib/types';
+  import { settingsForm } from '../../lib/settings.svelte';
+  import type { AgentsAnswer, McpDeclaration } from '../../lib/types';
+  import Chips from './Chips.svelte';
   import Group from './Group.svelte';
   import Row from './Row.svelte';
   import Icon from '../Icon.svelte';
@@ -19,6 +21,18 @@
   // writes into the config of each account's harness.
 
   const on = $derived(app.settings.mcpEnabled);
+
+  /**
+   * « Les agents peuvent répondre aux questions et aux permissions des autres agents » (ESC-423, audit SEC-03): saved with
+   * the window's draft. Nobody by default, settings saved before it too.
+   */
+  const answerOptions = $derived(
+    (['nobody', 'chef', 'all'] as const).map((value) => ({
+      value,
+      label: t(value === 'nobody' ? 'mcp.section.answerNobody' : value === 'chef' ? 'mcp.section.answerChef' : 'mcp.section.answerAll'),
+    })),
+  );
+  const answer = $derived<AgentsAnswer>(settingsForm.settings.agentsAnswer ?? 'nobody');
   let busy = $state(false);
 
   onMount(() => {
@@ -69,6 +83,20 @@
   <Row label={t('mcp.section.enable')} desc={t('mcp.section.enableDesc')}>
     <button class="switch" class:on role="switch" aria-checked={on} aria-label={t('mcp.section.enable')} disabled={busy} onclick={toggle}
     ></button>
+  </Row>
+  <Row label={t('mcp.section.answer')} desc={t('mcp.section.answerDesc')}>
+    <Chips
+      label={t('mcp.section.answer')}
+      options={answerOptions}
+      bind:value={() => answer, (v) => (settingsForm.settings.agentsAnswer = v)}
+    />
+    {#snippet extra()}
+      {#if answer === 'all'}
+        <p class="warn" role="alert" data-testid="agents-answer-warning">{t('mcp.section.answerAllWarn')}</p>
+      {:else if answer === 'chef'}
+        <p class="more">{t('mcp.section.answerChefDesc')}</p>
+      {/if}
+    {/snippet}
   </Row>
   {#if on}
     <Row label={t('mcp.section.list')} wide>
@@ -121,6 +149,15 @@
   }
   .good {
     color: var(--add);
+  }
+  .warn,
+  .more {
+    max-width: 64ch;
+    margin-top: 6px;
+    color: var(--muted);
+  }
+  .warn {
+    color: var(--warn-ink);
   }
   .bad {
     color: var(--del);
