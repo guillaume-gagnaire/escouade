@@ -369,6 +369,42 @@ fn the_time_of_escouade_call_counts_in_the_turn() {
     assert_eq!(s.fault(), Fault::Timeout(Duration::from_millis(50)));
 }
 
+/// ESC-420: the epoch watches the WASM only. A call to the host that outlasts the turn, followed at once by the end of
+/// the turn (the fixture answers and returns), leaves the epoch no chance to be seen: the host itself cuts the turn at
+/// the return of the call. Many times, so that no race hides it; a decision's turn follows the same rule.
+#[test]
+fn a_long_call_followed_by_the_end_of_the_turn_is_cut() {
+    let slow: Calls = Arc::new(|_, _| {
+        std::thread::sleep(Duration::from_millis(60));
+        Ok(json!(null))
+    });
+    for _ in 0..20 {
+        let limits = wasm::Limits {
+            turn: Duration::from_millis(20),
+            ..wasm::Limits::default()
+        };
+        let s = Served::plain(limits, Some(slow.clone()));
+        s.send(1, "probe/call", json!({}));
+        assert_eq!(s.fault(), Fault::Timeout(Duration::from_millis(20)));
+    }
+    let limits = wasm::Limits {
+        decision: Duration::from_millis(20),
+        ..wasm::Limits::default()
+    };
+    let s = Served::plain(limits, Some(slow));
+    s.send(1, "permissions/decide", json!({}));
+    s.send(2, "probe/call", json!({}));
+    assert_eq!(s.fault(), Fault::Timeout(Duration::from_millis(20)));
+}
+
+#[test]
+fn a_call_within_the_turn_is_not_cut() {
+    let quick: Calls = Arc::new(|_, _| Ok(json!(null)));
+    let s = Served::plain(wasm::Limits::default(), Some(quick));
+    let r = s.call(1, "probe/call", json!({}));
+    assert_eq!(r["answer"], json!({ "result": null }), "{r}");
+}
+
 #[test]
 fn the_limits_of_a_bundle_hold_for_a_module() {
     let limits = wasm::Limits {

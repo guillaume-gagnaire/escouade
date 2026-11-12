@@ -466,6 +466,8 @@ struct State {
     /// The last answer that did not fit, and the request it answers: the same request comes for it, not to be served
     /// twice (a write).
     too_big: Option<(Vec<u8>, String)>,
+    /// When the turn running must end: checked at the return of every host function (the epoch only watches the WASM).
+    deadline: Option<std::time::Instant>,
 }
 
 /// What `escouade.call` serves: a method and its parameters, its result or why not (a code of the protocol, and its
@@ -645,8 +647,23 @@ impl Instance {
                     .build(),
                 calls,
                 too_big: None,
+                deadline: None,
             },
         );
+        // The epoch interrupts the WASM only: a turn that ends right after a long host call (`escouade.call`, a
+        // WASI call) would go unseen. At the return of any host function, a turn past its time is cut, with the
+        // epoch's own trap.
+        store.call_hook(|state, hook| {
+            if matches!(hook, wasmtime::CallHook::ReturningFromHost)
+                && state
+                    .data()
+                    .deadline
+                    .is_some_and(|d| std::time::Instant::now() >= d)
+            {
+                return Err(wasmtime::Trap::Interrupt.into());
+            }
+            Ok(())
+        });
         store.limiter(|s| &mut s.limits);
         store.set_epoch_deadline(u64::MAX / 2);
         let instance = w(linker.instantiate(&mut store, module)).map_err(crashed)?;
@@ -694,7 +711,9 @@ impl Instance {
     fn call(&mut self, f: TypedFunc<(), ()>, within: Duration) -> Result<(), Fault> {
         let ticks = (within.as_millis() as u64 / TICK_MS).max(1);
         self.store.set_epoch_deadline(ticks);
+        self.store.data_mut().deadline = Some(std::time::Instant::now() + within);
         let r = f.call(&mut self.store, ());
+        self.store.data_mut().deadline = None;
         self.store.set_epoch_deadline(u64::MAX / 2);
         match r {
             Ok(()) => Ok(()),
