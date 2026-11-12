@@ -3,7 +3,7 @@ title: "Le contrat des harness en process"
 subject: "plugins"
 sources: ["docs/PLUGINS-DESIGN.md §4.5 et §4.6","docs/PLUGINS-DESIGN.md §8.29 (ESC-352)","docs/PLUGINS-DESIGN.md §8.34 (ESC-359)","docs/PLUGINS.md §2.2 et §8","docs/TODO-2.2.md (INT-9)","crates/escouade-plugin-protocol/src/engine.rs","crates/escouade-acp/src/terminal.rs","src-tauri/src/plugins/harness.rs","src-tauri/src/plugins/shared.rs","src-tauri/src/plugins/view.rs","src-tauri/src/tui.rs"]
 tickets: ["ESC-221","ESC-223","ESC-225","ESC-224","ESC-283","ESC-226","ESC-352","ESC-362","ESC-359"]
-decisions: [34,68,101,"l-interface-d-un-harness-et-la-lecture-d"]
+decisions: [34,68,101,146]
 compared: null
 ---
 

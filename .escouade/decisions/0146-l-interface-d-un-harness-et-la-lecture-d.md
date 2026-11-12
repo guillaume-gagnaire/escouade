@@ -1,9 +1,9 @@
 ---
-number: null
+number: 146
 id: "l-interface-d-un-harness-et-la-lecture-d"
 title: "L'interface d'un harness et la lecture d'un compte passent par son plugin ; le cœur rend ses copies"
 date: "2026-11-12"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-359"
 pages: ["plugins/harness-en-process"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/harness-en-process","added":11,"removed":1}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-12T09:35:11+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
