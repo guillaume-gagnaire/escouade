@@ -753,6 +753,18 @@ impl ProcessEngine {
         self.rt.detach(&self.plugin, &params.agent);
         let mut told: proto::TerminalLaunch = told?;
         crate::bypass::hold(&mut told.launch.args, bypass);
+        self.check_told(&params, fence_by_core, &told.launch)?;
+        check_env(self.name, &self.vars(), &told.launch.env).map_err(|e| anyhow!(e))?;
+        Ok(told)
+    }
+
+    /// The checks of `check_launch_with` on the launch of an interface: its files, its fence, its token, its read-only.
+    fn check_told(
+        &self,
+        params: &proto::TerminalParams,
+        fence_by_core: bool,
+        launch: &proto::Launch,
+    ) -> Result<()> {
         // Its own files: beside its private file, or under its home.
         let private = Path::new(&params.private_file);
         let home = params.home.as_deref();
@@ -766,11 +778,28 @@ impl ProcessEngine {
                 true => Ok(()),
                 false => check_file(self.name, home, f),
             },
-            &told.launch,
+            launch,
         )
-        .map_err(|e| anyhow!(e))?;
-        check_env(self.name, &self.vars(), &told.launch.env).map_err(|e| anyhow!(e))?;
-        Ok(told)
+        .map_err(|e| anyhow!(e))
+    }
+
+    /// The arguments a read « before » (`account/read`) gives back for the interface, judged as those of
+    /// `terminal/launch` are (ESC-429): what opens the mode of no question leaves them unless `bypass`, and the launch
+    /// they make with `launch`'s files and variables passes the same check (the token in no argument, the fence still
+    /// applied). A plugin may change them, not slip past the core's checks; a launch the check refuses is an error.
+    pub fn recheck_args(
+        &self,
+        params: &proto::TerminalParams,
+        fence_by_core: bool,
+        launch: &proto::Launch,
+        given: Vec<String>,
+        bypass: bool,
+    ) -> Result<Vec<String>> {
+        let mut again = launch.clone();
+        again.args = given;
+        crate::bypass::hold(&mut again.args, bypass);
+        self.check_told(params, fence_by_core, &again)?;
+        Ok(again.args)
     }
 
     /// What its account tells by a process of its own (`account/read`): its models, its quota, what its interface needs
@@ -806,9 +835,11 @@ impl ProcessEngine {
             if let Some(done) = step.done.take() {
                 return Ok(done);
             }
-            let Some(launch) = step.launch.take() else {
+            let Some(mut launch) = step.launch.take() else {
                 bail!("{}: {read}: no process to read it by", self.name);
             };
+            // A read never needs the mode of no question: whatever the setting, nothing opens it (ESC-429).
+            crate::bypass::hold(&mut launch.args, false);
             check_env(self.name, &self.vars(), &launch.env).map_err(|e| anyhow!(e))?;
             for f in &launch.files {
                 check_file(self.name, Some(&dir.to_string_lossy()), &f.path)

@@ -1599,6 +1599,8 @@ impl<R: Runtime> Core<R> {
             fence: fence.clone(),
             project: meta.project_id.clone(),
         };
+        let (checked, checked_by_core) =
+            (params.clone(), by_core.is_some() || view.fence_by_core());
         let told = match plugin
             .terminal_launch(
                 params,
@@ -1635,6 +1637,7 @@ impl<R: Runtime> Core<R> {
         }
         // Cursor: the conversation so far, where its interface reads it.
         self.relay_to_interface(view, h).await;
+        let judged = launch.clone();
         env.extend(launch.env.drain(..).map(|v| (v.name, v.value)));
         env.extend(launch.remove_env.drain(..).map(|k| (k, String::new())));
         no_proxy(&mut env);
@@ -1645,7 +1648,7 @@ impl<R: Runtime> Core<R> {
                 Ok(())
             });
         }
-        let mut args = launch.args;
+        let mut args = launch.args.clone();
         args.extend(prepared);
         // What its harness has to be asked before it starts (Codex: the trust of its hooks; Copilot CLI: a model its
         // account does not list), by a process of its account.
@@ -1668,10 +1671,27 @@ impl<R: Runtime> Core<R> {
             let said = match read {
                 Ok(v) => {
                     if let Some(given) = v["args"].as_array() {
-                        args = given
+                        // Judged as `terminal/launch`'s are: a plugin gives back no argument the core refuses.
+                        let given = given
                             .iter()
                             .filter_map(|a| a.as_str().map(str::to_string))
                             .collect();
+                        match plugin.recheck_args(
+                            &checked,
+                            checked_by_core,
+                            &judged,
+                            given,
+                            self.bypass_allowed(),
+                        ) {
+                            Ok(a) => args = a,
+                            Err(e) => {
+                                self.hooks.revoke(id);
+                                if let Some(t) = access.token() {
+                                    self.mcp.release_agent(id, t);
+                                }
+                                return Err(e);
+                            }
+                        }
                     }
                     v["warn"].as_str().map(str::to_string)
                 }

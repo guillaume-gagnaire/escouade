@@ -781,3 +781,63 @@ fn an_interface_writes_its_private_file_and_what_is_beside_it_by_its_name_alone(
     ));
     assert!(!harness::beside(private, "a1.json"));
 }
+
+/// ESC-429: the arguments a read « before » gives back are judged as those of `terminal/launch` are.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_arguments_a_before_read_gives_back_are_checked_again() {
+    let (rt, engine) = minimal("recheck", 3);
+    let params = proto::TerminalParams {
+        agent: "a1".into(),
+        fence: vec!["C:/projets/prive".into()],
+        escouade: Some(proto::Grant {
+            url: "http://127.0.0.1:1/mcp".into(),
+            token: "jeton-secret".into(),
+        }),
+        ..proto::TerminalParams::default()
+    };
+    let launch = proto::Launch {
+        args: vec!["--policy".into(), "C:/projets/prive".into()],
+        fence_applied: true,
+        ..proto::Launch::default()
+    };
+    let s = |v: &[&str]| v.iter().map(|a| a.to_string()).collect::<Vec<_>>();
+    // A plugin may add an argument (Codex's trust) …
+    let ok = engine
+        .recheck_args(
+            &params,
+            false,
+            &launch,
+            s(&["--policy", "C:/projets/prive", "-c", "trust=1"]),
+            false,
+        )
+        .unwrap();
+    assert_eq!(ok, ["--policy", "C:/projets/prive", "-c", "trust=1"]);
+    // … not give back one the core removed: gone with the setting off, kept with it on.
+    let given = s(&[
+        "--policy",
+        "C:/projets/prive",
+        "--dangerously-skip-permissions",
+    ]);
+    let held = engine
+        .recheck_args(&params, false, &launch, given.clone(), false)
+        .unwrap();
+    assert_eq!(held, ["--policy", "C:/projets/prive"]);
+    let kept = engine
+        .recheck_args(&params, false, &launch, given.clone(), true)
+        .unwrap();
+    assert_eq!(kept, given);
+    // … nor the token in an argument, nor drop the fence: the launch is refused.
+    assert!(engine
+        .recheck_args(
+            &params,
+            false,
+            &launch,
+            s(&["--policy", "C:/projets/prive", "--key=jeton-secret"]),
+            true
+        )
+        .is_err());
+    assert!(engine
+        .recheck_args(&params, false, &launch, s(&["-c", "trust=1"]), true)
+        .is_err());
+    rt.shutdown();
+}
