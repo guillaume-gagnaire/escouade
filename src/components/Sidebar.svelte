@@ -26,6 +26,7 @@
     listStep,
     listTarget,
     foldedCards,
+    folderAsks,
     shownAgents,
     type SidebarItem,
     type ListDecision,
@@ -492,7 +493,7 @@
   const folderCounts = (it: FolderItem) =>
     [
       it.running && t('nav.sidebar.folders.running', { count: it.running }),
-      it.waiting && t('nav.sidebar.folders.waiting', { count: it.waiting }),
+      folderAsks(it, app.attention) && t('nav.sidebar.folders.waiting', { count: folderAsks(it, app.attention) }),
     ]
       .filter(Boolean)
       .join(', ');
@@ -1509,7 +1510,7 @@
               {/if}
               <span class="cnt" aria-hidden="true">{(it.principal ? 1 : 0) + it.agents.length}</span>
               {#if it.running}<span class="pill run" aria-hidden="true">{it.running}</span>{/if}
-              {#if it.waiting}<span class="pill wait" aria-hidden="true">{it.waiting}</span>{/if}
+              {#if folderAsks(it, app.attention)}<span class="pill wait" aria-hidden="true">{folderAsks(it, app.attention)}</span>{/if}
               <span class="sr">{folderCounts(it)}</span>
             </div>
             <div class="folder-b" role="presentation">

@@ -3490,9 +3490,30 @@ describe('Sidebar agent folders', () => {
 
   it('the folder header says its counts to screen readers', () => {
     withFolders();
+    // Its waiting agent not seen yet.
+    app.attention = { a2: true };
     fakeBackend();
     render(Sidebar, { project: app.projects[0] });
     expect(folderOf('f1').querySelector('.folder-h')).toHaveTextContent('1 en cours, 1 en attente');
+  });
+
+  it('the waiting pill of a folder goes once its agent was seen, as the agent stops blinking', async () => {
+    withFolders();
+    app.attention = { a2: true };
+    fakeBackend();
+    render(Sidebar, { project: app.projects[0] });
+    const header = () => folderOf('f1').querySelector('.folder-h')!;
+    expect(header().querySelector('.pill.wait')).toHaveTextContent('1');
+    expect(card('a2')).toHaveClass('alert');
+    // Opened: what markSeen does.
+    delete app.attention.a2;
+    await tick();
+    expect(card('a2')).not.toHaveClass('alert');
+    expect(header().querySelector('.pill.wait')).toBeNull();
+    expect(header()).toHaveTextContent('1 en cours');
+    expect(header()).not.toHaveTextContent('en attente');
+    // It still waits for its answer: its card says so, on top of its folder.
+    expect(card('a2')).toHaveClass('waiting');
   });
 
   it('Déplacer vers puts the agent in a folder, from its submenu', async () => {
