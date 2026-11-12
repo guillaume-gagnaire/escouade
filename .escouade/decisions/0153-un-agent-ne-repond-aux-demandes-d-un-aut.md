@@ -1,9 +1,9 @@
 ---
-number: null
+number: 153
 id: "un-agent-ne-repond-aux-demandes-d-un-aut"
 title: "Un agent ne répond aux demandes d'un autre agent que si l'utilisateur l'a choisi"
 date: "2026-11-12"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-423"
 pages: ["harness/serveur-mcp"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"harness/serveur-mcp","added":13,"removed":5}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-12T20:49:58+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
