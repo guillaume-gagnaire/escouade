@@ -1,0 +1,76 @@
+name: Advisories
+
+# The advisories of the dependencies (SEC-02 of the security audit of 2026-11, ESC-422): `cargo deny check advisories` for
+# the app (src-tauri) and the plugins' workspace (plugins), `npm audit --omit=dev` for the app, the store and the site. On
+# every pull request and every push on main, and every night: an advisory published after the last merge fails the night's
+# run. Its own workflow, so that the CI's concurrency and path filters do not touch it. The rules (and the advisories
+# ignored, each with its reason) are in deny.toml at the root.
+on:
+  push:
+    branches: [main, 'release/**']
+  pull_request:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: advisories-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-deny:
+    name: cargo deny (${{ matrix.dir }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: [src-tauri, plugins]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Cargo reads the toolchain from the folder it runs in (src-tauri/rust-toolchain.toml pins one).
+      - name: Rust toolchain
+        working-directory: ${{ matrix.dir }}
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-deny@0.20.2
+
+      # The database is fetched at each run: this is the point of the nightly run.
+      - name: Advisories
+        working-directory: ${{ matrix.dir }}
+        run: cargo deny --locked check advisories
+
+  npm-audit:
+    name: npm audit (${{ matrix.dir }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The app's interface: nothing is left, so a new advisory fails.
+          - dir: .
+            blocking: true
+          # The store and the site have advisories that their own updates close (docs/security/audit-2026-11, annex B):
+          # said in the run, without failing it, until those updates are made; then set blocking to true.
+          - dir: store
+            blocking: false
+          - dir: website
+            blocking: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: npm audit (production dependencies)
+        working-directory: ${{ matrix.dir }}
+        continue-on-error: ${{ !matrix.blocking }}
+        run: npm audit --omit=dev

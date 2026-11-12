@@ -1,0 +1,66 @@
+# cargo-deny, for the app (`cd src-tauri && cargo deny check advisories`) and for the plugins' workspace
+# (`cd plugins && cargo deny check advisories`); the CI runs both on every pull request, on main and every night
+# (.github/workflows/advisories.yml, ESC-422). Started from the one of the security audit of 2026-11
+# (docs/security/audit-2026-11/tools/deny.toml, SEC-02).
+#
+# An advisory is closed by updating the crate. When no compatible update closes it, it is ignored below with the
+# reason, and the ignore leaves with the dependency that carries it: a new advisory fails the job.
+
+[graph]
+all-features = false
+
+[advisories]
+yanked = "warn"
+ignore = [
+    # zip 4.6: the four of `extract`. Escouade never calls `extract`: it reads an entry by its name, in memory
+    # (src-tauri/src/docsextract.rs). The fix is zip 9, a major version that changes the API: its own ticket.
+    { id = "RUSTSEC-2026-0367", reason = "zip: only ZipArchive::extract is concerned, which the app never calls (docsextract.rs reads entries in memory); fixed in zip 9, a major bump" },
+    { id = "RUSTSEC-2026-0368", reason = "zip: only ZipArchive::extract is concerned, which the app never calls (docsextract.rs reads entries in memory); fixed in zip 9, a major bump" },
+    { id = "RUSTSEC-2026-0369", reason = "zip: only extract() is concerned, which the app never calls (docsextract.rs reads entries in memory); fixed in zip 9, a major bump" },
+    { id = "RUSTSEC-2026-0429", reason = "zip: only ZipArchive::extract is concerned, which the app never calls (docsextract.rs reads entries in memory); fixed in zip 9, a major bump" },
+    # libsqlite3-sys 0.35 (rusqlite): a crafted `-wal` file next to a database. The app opens its own databases, in its
+    # own data folder. The fix is libsqlite3-sys 0.39, which comes with a new major of rusqlite.
+    { id = "RUSTSEC-2026-0459", reason = "SQLite reads uninitialised memory with a crafted -wal file; the app only opens its own databases in its data folder; fixed in libsqlite3-sys 0.39 (new rusqlite major)" },
+    # Crates no longer maintained, pulled by Tauri, GTK and zbus (Linux): no fixed version exists; they follow the
+    # dependencies that bring them.
+    { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained (pulled by wgpu, tauri); no fixed version, no known flaw" },
+    { id = "RUSTSEC-2024-0370", reason = "proc-macro-error is unmaintained (pulled by gtk3-rs through tauri on Linux); no fixed version, build-time only" },
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser is unmaintained (font code of a dependency); no fixed version, no known flaw" },
+    { id = "RUSTSEC-2026-0370", reason = "zvariant is unmaintained (zbus, Linux); no fixed version, no known flaw" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names is unmaintained (zbus, Linux); no fixed version, no known flaw" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive is unmaintained (zbus, Linux); no fixed version, no known flaw" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "warn"
+
+[licenses]
+confidence-threshold = 0.8
+allow = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "0BSD",
+    "BSL-1.0",
+    "CC0-1.0",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "MPL-2.0",
+    "GPL-3.0-or-later",
+    "CDLA-Permissive-2.0",
+    "OpenSSL",
+    "Unlicense",
+    "NCSA",
+    "bzip2-1.0.6",
+]

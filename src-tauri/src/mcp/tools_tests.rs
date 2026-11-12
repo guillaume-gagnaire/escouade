@@ -623,13 +623,13 @@ async fn the_tickets_of_a_project_are_listed_in_the_kanban_order() {
     let before = logged(&h);
     read(&c, "list_tickets", json!({ "project": "demo" })).await;
     assert_eq!(logged(&h), before + 1);
-    // A tool the server does not have: a protocol error, logged.
+    // A tool the server does not have: refused at the gate (rmcp never sees its name), logged.
     assert!(c
         .call_tool(CallToolRequestParams::new("nothing_here"))
         .await
         .is_err());
     let (_, tool, _, outcome) = last_entry(&h);
-    assert_eq!((tool.as_str(), outcome), ("nothing_here", "error"));
+    assert_eq!((tool.as_str(), outcome), ("", "refused"));
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }

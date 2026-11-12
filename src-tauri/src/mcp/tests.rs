@@ -1,6 +1,7 @@
 //! The MCP server on a free port, against a real MCP client (rmcp's) and raw HTTP requests.
 
 use super::activity::{self, ActivityEntry, Outcome, KEPT};
+use super::http::{MAX_BODY, MAX_TEXT_BODY};
 use super::tools::Tools;
 use super::*;
 use crate::core_tests::{harness, Harness};
@@ -1354,4 +1355,86 @@ async fn the_external_token_is_kept_in_the_keychain_and_the_same_after_a_restart
     let app = mock_app();
     let (again, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
     assert_eq!(again.mcp.external_token().unwrap(), token);
+}
+
+/// A `tools/call` of `name` with a `padding` of that many characters in its arguments.
+fn call_of(name: &str, padding: usize) -> String {
+    json!({
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": { "name": name, "arguments": { "padding": "x".repeat(padding) } }
+    })
+    .to_string()
+}
+
+#[tokio::test]
+async fn a_call_of_an_unknown_tool_is_refused_before_rmcp_keeps_its_name() {
+    // RUSTSEC-2026-0461: rmcp kept the name of each tool called, refused or not. The long
+    // unknown names of the audit's test (B-05) are refused at the gate, and logged shortened.
+    let h = harness("mcp-unknown-tool");
+    let (port, token) = started(&h);
+    let auth = bearer(&token);
+    let headers = [
+        ("authorization", auth.as_str()),
+        ("mcp-protocol-version", "2026-07-28"),
+    ];
+    for n in 0..5 {
+        let (status, text) = post(
+            port,
+            &headers,
+            &call_of(&format!("audit-{n}-{}", "x".repeat(256 * 1024)), 0),
+        )
+        .await;
+        assert_eq!(status, 400, "{text}");
+        assert_eq!(text, "Requête refusée : outil inconnu");
+    }
+    // In a batch, or with a name that is no string, it is refused all the same.
+    let batch = format!(
+        "[{},{}]",
+        call_of("list_projects", 0),
+        call_of("not_a_tool", 0)
+    );
+    assert_eq!(post(port, &headers, &batch).await.0, 400);
+    let nameless = r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":42}}"#;
+    assert_eq!(post(port, &headers, nameless).await.0, 400);
+    let refused = refusals(&h);
+    assert_eq!(refused.len(), 7, "{refused:?}");
+    assert!(refused
+        .iter()
+        .all(|e| e.message.as_deref().unwrap().len() < 400));
+    // A tool the server has still answers.
+    let plain = [("authorization", auth.as_str())];
+    let (status, text) = post(port, &plain, &call_of("list_projects", 0)).await;
+    assert_eq!(status, 200, "{text}");
+    // Without a token, the body is not even read: 401 as ever.
+    let (status, _) = post(port, &[], &call_of("not_a_tool", 0)).await;
+    assert_eq!(status, 401);
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_request_without_image_or_file_is_capped_far_below_the_one_of_a_ticket_with_images() {
+    let h = harness("mcp-body-cap");
+    let (port, token) = started(&h);
+    let auth = bearer(&token);
+    let headers = [("authorization", auth.as_str())];
+    // Under the cap: a message of 32,000 characters, thrice over, goes through to the tool.
+    let (status, text) = post(port, &headers, &call_of("list_projects", 100_000)).await;
+    assert_eq!(status, 200, "{text}");
+    // Over it: refused, whatever the tool (and whatever the method).
+    let over = MAX_TEXT_BODY + 1;
+    let (status, text) = post(port, &headers, &call_of("list_projects", over)).await;
+    assert_eq!(status, 413, "{text}");
+    assert_eq!(text, "Requête refusée : trop volumineuse");
+    let junk = "x".repeat(over);
+    assert_eq!(post(port, &headers, &junk).await.0, 413);
+    // The tools that take attachments keep the 32 MiB: it passes the gate (rmcp answers).
+    for tool in ["create_ticket", "update_ticket"] {
+        let (status, text) = post(port, &headers, &call_of(tool, over)).await;
+        assert_ne!(status, 413, "{tool}: {text}");
+        assert_ne!(status, 400, "{tool}: {text}");
+    }
+    // Beyond 32 MiB nothing passes, declared or not.
+    let (status, _) = post(port, &headers, &call_of("create_ticket", MAX_BODY)).await;
+    assert_eq!(status, 413);
+    h.core.mcp.stop();
 }

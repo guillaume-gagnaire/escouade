@@ -1,7 +1,53 @@
-# The third-party actions of the workflows are pinned by commit (uses: owner/action@<sha> # vX.Y.Z): Dependabot proposes
-# the new commit and its version in the comment (audit SEC-10).
+# The updates of the dependencies, proposed once a week, grouped (SEC-02 of the security audit of 2026-11, ESC-422). The
+# advisories themselves are told by .github/workflows/advisories.yml. The third-party actions of the workflows are pinned by
+# commit (uses: owner/action@<sha> # vX.Y.Z): Dependabot proposes the new commit and its version in the comment (SEC-10).
 version: 2
 updates:
+  - package-ecosystem: cargo
+    directory: /src-tauri
+    schedule:
+      interval: weekly
+    groups:
+      cargo-app:
+        patterns: ['*']
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: cargo
+    directory: /plugins
+    schedule:
+      interval: weekly
+    groups:
+      cargo-plugins:
+        patterns: ['*']
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      npm-app:
+        patterns: ['*']
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /store
+    schedule:
+      interval: weekly
+    groups:
+      npm-store:
+        patterns: ['*']
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /website
+    schedule:
+      interval: weekly
+    groups:
+      npm-website:
+        patterns: ['*']
+    open-pull-requests-limit: 5
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
