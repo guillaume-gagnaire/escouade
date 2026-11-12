@@ -2,8 +2,8 @@
 //! settings, its progress told, its SHA-256 checked, taken up again where a cut left it).
 
 use super::embed::{Onnx, Prefixes};
-use crate::voice::models::{Cancelled, ChecksumMismatch};
 use anyhow::{bail, Result};
+use escouade_voice_local::models::{Cancelled, ChecksumMismatch};
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};

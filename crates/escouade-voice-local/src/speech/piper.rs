@@ -416,7 +416,7 @@ mod tests {
 
     #[test]
     fn espeak_gives_the_phonemes_of_french_and_english() {
-        let dir = crate::paths::test_dir("speech-espeak");
+        let dir = crate::test_dir("speech-espeak");
         let p = Phonemizer::new(dir.join("espeak-ng-data"));
         assert_eq!(p.phonemes("fr", "bonjour").unwrap(), "bɔ̃ʒˈuʁ");
         assert_eq!(p.phonemes("en-us", "hello world").unwrap(), "həlˈoʊ wˈɜːld");
@@ -431,7 +431,7 @@ mod tests {
 
     #[test]
     fn a_voice_s_settings_are_read_beside_its_model() {
-        let dir = crate::paths::test_dir("speech-config");
+        let dir = crate::test_dir("speech-config");
         let model = dir.join("v.onnx");
         std::fs::write(
             dir.join("v.onnx.json"),
@@ -465,7 +465,7 @@ mod tests {
             return;
         };
         let cold = std::env::var_os("ESCOUADE_SPEECH_TEST_COLD").is_some();
-        let dir = crate::paths::test_dir("speech-preload");
+        let dir = crate::test_dir("speech-preload");
         let piper = std::sync::Arc::new(Piper::new(dir.join("espeak-ng-data")));
         let model = PathBuf::from(&voice);
         if !cold {
@@ -503,7 +503,7 @@ mod tests {
         let Ok(voice) = std::env::var("ESCOUADE_SPEECH_TEST_VOICE") else {
             return;
         };
-        let dir = crate::paths::test_dir("speech-real");
+        let dir = crate::test_dir("speech-real");
         let piper = Piper::new(dir.join("espeak-ng-data"));
         let text = std::env::var("ESCOUADE_SPEECH_TEST_TEXT")
             .unwrap_or_else(|_| "Bonjour ! J'ai corrigé les tests de la page des réglages.".into());
@@ -541,9 +541,9 @@ mod tests {
         w.finalize().unwrap();
         eprintln!("written to {}", wav.display());
         if let Ok(model) = std::env::var("ESCOUADE_VOICE_TEST_MODEL") {
-            use crate::voice::transcribe::Transcriber;
-            let pcm = crate::voice::audio::resample(&all, rate, crate::voice::audio::WHISPER_RATE);
-            let heard = crate::voice::transcribe::Whisper::default()
+            use crate::transcribe::Transcriber;
+            let pcm = crate::audio::resample(&all, rate, crate::audio::WHISPER_RATE);
+            let heard = crate::transcribe::Whisper::default()
                 .transcribe(
                     Path::new(&model),
                     &pcm,

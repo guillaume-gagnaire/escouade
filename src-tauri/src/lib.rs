@@ -138,14 +138,8 @@ mod outside;
 mod pace;
 mod pagecrash;
 mod paths;
-mod plan;
-#[cfg(test)]
-mod plan_later_tests;
-#[cfg(test)]
-mod plan_tests;
-mod planfiles;
-#[cfg(test)]
-mod planfiles_tests;
+// What an agent is getting through, and the plan files it follows: the crate `escouade-plan`.
+use escouade_plan::{plan, planfiles};
 mod plugins;
 #[cfg(test)]
 mod plugins_accounts_tests;

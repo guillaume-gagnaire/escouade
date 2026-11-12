@@ -319,11 +319,9 @@ mod tests {
             .unwrap_or_else(|_| vec![threads()]);
         let wav = std::env::var("ESCOUADE_VOICE_BENCH_WAV")
             .map(PathBuf::from)
-            .unwrap_or_else(|_| {
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("src/voice/testdata/question-fr.wav")
-            });
-        let (samples, rate) = crate::voice::source::read_wav(&wav).unwrap();
-        let samples = crate::voice::audio::resample(&samples, rate, 16_000);
+            .unwrap_or_else(|_| crate::testdata("question-fr.wav"));
+        let (samples, rate) = crate::source::read_wav(&wav).unwrap();
+        let samples = crate::audio::resample(&samples, rate, 16_000);
         println!("whisper.cpp: {}", whisper_rs::print_system_info());
         // Three runs after a first one (the model's pages read from the disk), their median.
         let timed = |f: &mut dyn FnMut()| {

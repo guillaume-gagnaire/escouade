@@ -4,8 +4,8 @@
 // PiperHub's field, sometimes wrong), its dataset's (the MODEL_CARD of the official voices, the card of a dataset's
 // repo), whether it is a character's, and its files' sizes and SHA-256.
 //   node scripts/piper-voices.mjs → scripts/piper-voices/snapshot.json
-// Then `cargo test --lib -- --ignored write_the_voice_catalog` applies the rule (`voice::speech::catalog::admit`) and
-// writes the list the app ships (src-tauri/src/voice/speech/voices.json).
+// Then `cargo test -p escouade-voice-local -- --ignored write_the_voice_catalog` (in src-tauri) applies the rule (`speech::catalog::admit`) and
+// writes the list the app ships (crates/escouade-voice-local/src/speech/voices.json).
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';

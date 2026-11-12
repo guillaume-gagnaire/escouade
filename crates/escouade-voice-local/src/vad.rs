@@ -337,10 +337,8 @@ mod wav_tests {
 
     /// The frames of a WAV of speech, a little noise of a room added (a microphone never gives digital silence).
     fn frames(name: &str, noise: f32) -> (Vec<f32>, f32, f32) {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("src/voice/testdata")
-            .join(name);
-        let (samples, rate) = crate::voice::source::read_wav(&path).unwrap();
+        let path = crate::testdata(name);
+        let (samples, rate) = crate::source::read_wav(&path).unwrap();
         let first = samples.iter().position(|s| s.abs() > 0.02).unwrap() as f32 / rate as f32;
         let last = samples.iter().rposition(|s| s.abs() > 0.02).unwrap() as f32 / rate as f32;
         let mut seed = 7u32;

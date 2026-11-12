@@ -749,7 +749,8 @@ mod tests {
         }
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
         let s: Snapshot = serde_json::from_str(
-            &std::fs::read_to_string(root.join("../scripts/piper-voices/snapshot.json")).unwrap(),
+            &std::fs::read_to_string(root.join("../../scripts/piper-voices/snapshot.json"))
+                .unwrap(),
         )
         .unwrap();
         let mut out = Vec::new();
@@ -762,7 +763,7 @@ mod tests {
         out.sort_by(|a, b| (&a.lang, &a.id).cmp(&(&b.lang, &b.id)));
         println!("{} voices admitted", out.len());
         std::fs::write(
-            root.join("src/voice/speech/voices.json"),
+            root.join("src/speech/voices.json"),
             serde_json::to_string_pretty(&out).unwrap() + "\n",
         )
         .unwrap();

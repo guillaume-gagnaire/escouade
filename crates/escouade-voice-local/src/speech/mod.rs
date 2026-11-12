@@ -229,7 +229,7 @@ impl VoiceStore {
                 file
             )
         };
-        super::models::fetch_checked(
+        crate::models::fetch_checked(
             client,
             &url(&v.json),
             v.json_size,
@@ -240,7 +240,7 @@ impl VoiceStore {
         )
         .await?;
         let json = v.json_size;
-        super::models::fetch_checked(
+        crate::models::fetch_checked(
             client,
             &url(&v.onnx),
             v.onnx_size,

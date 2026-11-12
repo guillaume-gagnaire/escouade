@@ -2,9 +2,9 @@
 //! throwaway folders built the way the superpowers scripts build theirs (`sdd-workspace`,
 //! `task-brief`, `task-done`).
 
-use crate::paths::{make_dir_link, make_file_link, test_dir};
 use crate::plan::TaskStatus;
 use crate::planfiles::*;
+use escouade_base::testing::{make_dir_link, make_file_link, test_dir};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 

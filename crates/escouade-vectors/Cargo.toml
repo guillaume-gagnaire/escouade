@@ -1,0 +1,26 @@
+[package]
+name = "escouade-vectors"
+version = "0.1.0"
+description = "Escouade's local vectors: the texts of a project cut in pieces, made vectors on the machine by a multilingual model (ONNX Runtime), kept in SQLite and searched by their meaning"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../src-tauri"
+# A part of the app, cut out of its crate for it to compile faster (docs/CRATES.md): never published.
+publish = false
+
+[dependencies]
+# ONNX Runtime as the voice links it (its `ort`), made ready by it, and the download of a model.
+escouade-voice-local = { path = "../escouade-voice-local" }
+anyhow = "1"
+parking_lot = "0.12"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }
+sha2 = "0.10"
+rusqlite = { version = "0.37", features = ["bundled"] }
+# The model's own tokenizer (HF tokenizer.json), no regex engine to build (fancy-regex).
+tokenizers = { version = "0.22", default-features = false, features = ["unstable_wasm"] }
+
+[dev-dependencies]
+escouade-base = { path = "../escouade-base", features = ["testing"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "time"] }

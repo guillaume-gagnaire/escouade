@@ -1,0 +1,20 @@
+[package]
+name = "escouade-base"
+version = "0.1.0"
+description = "What every part of Escouade stands on: the languages written in now, the guards of the paths and of a line of text"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../src-tauri"
+# A part of the app, cut out of its crate for it to compile faster (docs/CRATES.md): never published.
+publish = false
+
+[features]
+# The folders and links of the tests (`testing`), for the tests of the crates cut out of the app.
+testing = []
+
+[dependencies]
+# The two languages (`Lang`) and `tr_in!`.
+escouade-plugin-cli = { path = "../escouade-plugin-cli" }
+anyhow = "1"

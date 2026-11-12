@@ -9,7 +9,6 @@
 //! which puts it where the user dictated (the composer at its cursor, a ticket's description, the
 //! terminal of the Claude Code view); it is never sent by itself.
 
-pub mod audio;
 pub mod conversation;
 pub mod live;
 pub mod models;
@@ -24,13 +23,10 @@ pub mod plugin_host;
 #[cfg(test)]
 mod plugin_tests;
 pub mod service;
-pub mod source;
-pub mod speech;
 pub mod spoken;
 #[cfg(test)]
 mod tests;
-pub mod transcribe;
-pub mod vad;
+pub use escouade_voice_local::{audio, source, speech, transcribe, vad};
 
 use crate::i18n::Lang;
 use models::{ModelView, Store};
@@ -50,73 +46,7 @@ pub const MAX_LISTEN: Duration = Duration::from_secs(10 * 60);
 /// How often the level is told to the window.
 const TICK: Duration = Duration::from_millis(50);
 
-/// What went wrong, as the window tells it: each with what to do about it.
-#[derive(Debug, Clone, PartialEq)]
-pub enum VoiceError {
-    /// No microphone at all (or the one chosen and the system's both gone).
-    NoDevice,
-    /// The system keeps the microphone from the app.
-    Denied,
-    /// Another app holds it.
-    Busy,
-    /// No sound system answers (Linux: neither PulseAudio, PipeWire nor ALSA).
-    NoAudioSystem,
-    /// It listened, but not one sample was not zero: what macOS gives an app it keeps the
-    /// microphone from (it refuses nothing), and a muted one.
-    Silent,
-    /// Already listening.
-    AlreadyListening,
-    /// The service on line did not transcribe it (ESC-110).
-    Online(online::OnlineError),
-    Other(String),
-}
-
-impl VoiceError {
-    /// What the window says, in `lang`, on `os` ("windows", "macos", "linux").
-    pub fn message(&self, lang: Lang, os: &str) -> String {
-        match self {
-            VoiceError::NoDevice => tr_in!(
-                lang,
-                "Aucun micro trouvé. Branche un micro, ou choisis-en un dans Réglages › Voix.",
-                "No microphone found. Plug one in, or pick one in Settings › Voice."
-            ),
-            VoiceError::Denied | VoiceError::Silent => {
-                let steps = match (os, lang) {
-                    ("macos", Lang::Fr) => "ouvre Réglages Système › Confidentialité et sécurité › Microphone, coche Escouade, puis relance l’app.",
-                    ("macos", Lang::En) => "open System Settings › Privacy & Security › Microphone, tick Escouade, then restart the app.",
-                    ("windows", Lang::Fr) => "ouvre Paramètres › Confidentialité et sécurité › Microphone, et allume « Accès au microphone » puis « Autoriser les applications de bureau à accéder à votre microphone ».",
-                    ("windows", Lang::En) => "open Settings › Privacy & security › Microphone, and turn on “Microphone access”, then “Let desktop apps access your microphone”.",
-                    (_, Lang::Fr) => "vérifie que PulseAudio ou PipeWire tourne, que le micro n’est pas coupé (pavucontrol, ou les réglages du son), et que ton compte peut s’en servir (groupe audio).",
-                    (_, Lang::En) => "check that PulseAudio or PipeWire is running, that the microphone is not muted (pavucontrol, or the sound settings), and that your account may use it (audio group).",
-                };
-                if *self == VoiceError::Silent {
-                    tr_in!(lang, "Aucun son n’est arrivé du micro : il est coupé, ou le système le refuse à Escouade. Pour l’autoriser, {steps}", "No sound came from the microphone: it is muted, or the system keeps it from Escouade. To allow it, {steps}")
-                } else {
-                    tr_in!(lang, "Le système refuse le micro à Escouade. Pour l’autoriser, {steps}", "The system keeps the microphone from Escouade. To allow it, {steps}")
-                }
-            }
-            VoiceError::Busy => tr_in!(
-                lang,
-                "Le micro est pris par une autre application. Ferme-la, ou choisis un autre micro dans Réglages › Voix.",
-                "The microphone is taken by another app. Close it, or pick another microphone in Settings › Voice."
-            ),
-            VoiceError::NoAudioSystem => tr_in!(
-                lang,
-                "Aucun système de son ne répond. Démarre PulseAudio ou PipeWire (ou vérifie ALSA), puis réessaie.",
-                "No sound system answers. Start PulseAudio or PipeWire (or check ALSA), then try again."
-            ),
-            VoiceError::AlreadyListening => tr_in!(lang, "Une dictée est déjà en cours.", "A dictation is already under way."),
-            VoiceError::Online(e) => e.message(crate::i18n::kit(lang)),
-            VoiceError::Other(e) => tr_in!(lang, "La dictée a échoué : {e}", "Dictation failed: {e}"),
-        }
-    }
-}
-
-impl std::fmt::Display for VoiceError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.message(Lang::En, std::env::consts::OS))
-    }
-}
+pub use escouade_voice_local::VoiceError;
 
 /// What the window is told while it listens and downloads.
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -353,7 +283,7 @@ impl Voice {
     /// WAV file in place of the microphone, `ESCOUADE_VOICE_TRANSCRIPT` gives its text in place of
     /// Whisper, and `ESCOUADE_VOICE_MODELS_URL` is where the models come from (end-to-end tests).
     pub fn for_app(data: PathBuf, emit: Emit) -> Self {
-        whisper_rs::install_logging_hooks();
+        escouade_voice_local::install_logging_hooks();
         let var = |k: &str| {
             if cfg!(debug_assertions) {
                 std::env::var(k).ok().filter(|v| !v.trim().is_empty())

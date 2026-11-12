@@ -23,7 +23,6 @@
 #[allow(unused_imports)] // `of_locale`: the tests'.
 pub use escouade_plugin_cli::i18n::{of_locale, Lang};
 use serde::Serialize;
-use std::sync::atomic::{AtomicU8, Ordering};
 
 /// The languages as the window is told them: the interface's, the system's (the option
 /// « Système (…) » names it) and that of the texts Claude writes.
@@ -35,20 +34,8 @@ pub struct LangInfo {
     pub claude: Lang,
 }
 
-// French until the settings are read: the app was French only up to 1.6.
-static UI: AtomicU8 = AtomicU8::new(Lang::Fr.code());
-static CLAUDE: AtomicU8 = AtomicU8::new(Lang::Fr.code());
-
-/// The language of the interface: what the window, the menus and the notifications are written in.
-pub fn ui() -> Lang {
-    Lang::of_code(UI.load(Ordering::Relaxed))
-}
-
-/// The language of the texts Claude is made to write, and of what agents are told. The core reads
-/// its own (`Core::lang().claude`, the same but in tests): this is for what has no core at hand.
-pub fn claude() -> Lang {
-    Lang::of_code(CLAUDE.load(Ordering::Relaxed))
-}
+// The languages written in now (`ui`, `claude`): in `escouade-base`, which the crates cut out of the app's read too.
+pub use escouade_base::i18n::{claude, ui};
 
 /// The system's language: French when its first preferred locale is French, English otherwise.
 /// Read once per run: a change of the system's language while the app runs (rare, and it often
@@ -91,8 +78,7 @@ pub fn set(info: LangInfo) {
     if cfg!(test) {
         return;
     }
-    UI.store(info.ui.code(), Ordering::Relaxed);
-    CLAUDE.store(info.claude.code(), Ordering::Relaxed);
+    escouade_base::i18n::store(info.ui, info.claude);
     // What the kit of the plugins writes in the core (an error of a code host, `Unsupported`).
     escouade_plugin_kit::i18n::set_ui(kit(info.ui));
 }

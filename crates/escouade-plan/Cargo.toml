@@ -1,0 +1,20 @@
+[package]
+name = "escouade-plan"
+version = "0.1.0"
+description = "What an agent of Escouade is getting through, worked out from its stream, and the plan files it follows"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../src-tauri"
+# A part of the app, cut out of its crate for it to compile faster (docs/CRATES.md): never published.
+publish = false
+
+[dependencies]
+escouade-base = { path = "../escouade-base" }
+parking_lot = "0.12"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+escouade-base = { path = "../escouade-base", features = ["testing"] }

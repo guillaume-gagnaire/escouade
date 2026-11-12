@@ -3,7 +3,7 @@
 //! told once the last one was heard; and the level of what is played now is kept, for the barge-in to tell the agent's
 //! echo from the user.
 
-use crate::voice::audio;
+use crate::audio;
 use parking_lot::Mutex;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};

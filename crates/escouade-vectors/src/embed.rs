@@ -2,6 +2,7 @@
 //! ONNX Runtime on this machine; `Fake` is the deterministic model of the tests.
 
 use anyhow::{anyhow, bail, Context, Result};
+use escouade_voice_local::ort;
 use parking_lot::Mutex;
 use std::path::Path;
 
@@ -58,7 +59,7 @@ pub struct Onnx {
 impl Onnx {
     /// The model `model` (ONNX) and its tokenizer (`tokenizer.json`), loaded. ONNX Runtime is made ready first.
     pub fn load(id: &str, model: &Path, tokenizer: &Path, prefixes: Prefixes) -> Result<Self> {
-        crate::voice::speech::piper::runtime()?;
+        escouade_voice_local::speech::piper::runtime()?;
         let mut tok = tokenizers::Tokenizer::from_file(tokenizer)
             .map_err(|e| anyhow!("{}: {e}", tokenizer.display()))?;
         tok.with_truncation(Some(tokenizers::TruncationParams {

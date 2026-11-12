@@ -5,9 +5,9 @@
 //! (`AgentMeta::plan`), it never works it out again. The forms of the frames are in
 //! docs/PROTOCOL.md (« Avancée : ce que le flux dit »).
 
-use crate::mcp::visible_line;
 use crate::planfiles::FileList;
-use crate::taskout::safe_origin;
+use escouade_base::paths::safe_origin;
+use escouade_base::text::visible_line;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -91,7 +91,7 @@ pub struct PlanTask {
     pub blocked_by: Vec<String>,
     /// The `TaskCreate` call whose result will tell its id.
     #[serde(skip)]
-    pub(crate) call: Option<String>,
+    pub call: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -296,12 +296,13 @@ pub struct PlanState {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub driven: Vec<Driven>,
     /// The latest calls looked at: a frame that comes twice counts once.
+    // Public (as `memory`) for the app to write a plan as a literal, `..Default::default()` taking the rest.
     #[serde(skip)]
-    pub(crate) seen: Seen,
+    pub seen: Seen,
     /// What the frames of background tasks need of the ones before: the calls of commands, and the
     /// commands that run in the foreground.
     #[serde(skip)]
-    pub(crate) memory: BgMemory,
+    pub memory: BgMemory,
 }
 
 /// How many calls `Seen` remembers: a frame that comes twice comes close to itself.
@@ -311,7 +312,7 @@ const SEEN: usize = 512;
 /// they have seen), and not copied with it: the window's view copies the plan at each frame, and
 /// the copies share the one list instead of each carrying 512 ids.
 #[derive(Clone, Default)]
-pub(crate) struct Seen(Arc<Mutex<VecDeque<String>>>);
+pub struct Seen(Arc<Mutex<VecDeque<String>>>);
 
 impl std::fmt::Debug for Seen {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -382,7 +383,7 @@ struct BgRings {
 /// the plan says (two plans are equal whatever they remember), not copied with it (the window's
 /// view copies the plan at each frame; the copies share the lists), and not saved.
 #[derive(Clone, Default)]
-pub(crate) struct BgMemory(Arc<Mutex<BgRings>>);
+pub struct BgMemory(Arc<Mutex<BgRings>>);
 
 impl std::fmt::Debug for BgMemory {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -770,7 +771,7 @@ impl PlanState {
 
     /// A plan with nothing in it, that goes on with what another remembered of the calls and of the
     /// foreground tasks (the agent keeps those while it has no plan to hold them).
-    pub(crate) fn with_memory(memory: BgMemory) -> Self {
+    pub fn with_memory(memory: BgMemory) -> Self {
         Self {
             memory,
             ..Self::default()

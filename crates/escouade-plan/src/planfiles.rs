@@ -5,9 +5,9 @@
 //! que le flux dit »). The parsers are pure; `discover`, `fallback` and `scan` read the disk and
 //! are made to run off the agent's lock.
 
-use crate::mcp::visible_line;
-use crate::paths;
 use crate::plan::{clean, PlanTask, TaskStatus, MAX_TASKS};
+use escouade_base::paths;
+use escouade_base::text::visible_line;
 use std::collections::BTreeSet;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};

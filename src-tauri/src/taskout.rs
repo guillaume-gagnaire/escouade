@@ -18,20 +18,7 @@ pub const MAX_OUTPUT: usize = 8 * 1024;
 /// the first error of a failed build to be in it, still a size the window takes in one go.
 pub const MAX_FINISHED_OUTPUT: usize = 256 * 1024;
 
-/// A path, as Claude Code's frames tell it, that does not lead to another machine: Windows opens a
-/// UNC path (`\\server\share\…`), a verbatim one (`\\?\UNC\…`) or a device (`\\.\…`) over the
-/// network, and sends the credentials of the user along. False for any path that starts with two
-/// separators, whatever their kind (`\\`, `//`, `\/`, `/\`) and whatever the platform this runs on
-/// (the same text is on its way to another one, and a Linux path never begins so). True for
-/// everything else, the empty path and a relative one included: they reach no other machine.
-///
-/// It is asked of the path as the frames say it, before any conversion: the path of a `claude`
-/// under WSL (`/tmp/claude/…`) is turned into `\\wsl.localhost\<distribution>\…` by our own
-/// `Wsl::windows_path`, which is a path to a machine we started, of a path already accepted here.
-pub fn safe_origin(path: &str) -> bool {
-    let mut chars = path.chars();
-    !(matches!(chars.next(), Some('\\' | '/')) && matches!(chars.next(), Some('\\' | '/')))
-}
+pub use escouade_base::paths::safe_origin;
 
 /// The end of a background task's output (`task_output`).
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -182,48 +169,6 @@ mod tests {
         let file = dir.join(format!("{task}.output"));
         std::fs::write(&file, content).unwrap();
         file
-    }
-
-    #[test]
-    fn no_path_that_starts_with_two_separators_is_safe_on_any_platform() {
-        for refused in [
-            // UNC: a share of another machine.
-            r"\\server\share\claude\s1\tasks\b1.output",
-            "//server/share/claude/s1/tasks/b1.output",
-            r"\/server/share/tasks/b1.output",
-            r"/\server\share\tasks\b1.output",
-            // Verbatim, with a drive or a UNC share.
-            r"\\?\C:\Users\x\tasks\b1.output",
-            r"\\?\UNC\server\share\tasks\b1.output",
-            "//?/C:/Users/x/tasks/b1.output",
-            // Devices.
-            r"\\.\pipe\claude",
-            r"\\.\COM1",
-            r"\\",
-            "//",
-            r"\\wsl.localhost\Ubuntu\tmp\claude\tasks\b1.output",
-        ] {
-            assert!(!safe_origin(refused), "{refused:?}");
-        }
-        for safe in [
-            r"C:\Users\x\AppData\Local\Temp\claude\s1\tasks\b1.output",
-            "C:/Users/x/AppData/Local/Temp/claude/s1/tasks/b1.output",
-            r"C:\Users\Jean Dupont\tasks\b1.output",
-            "/tmp/claude/s1/tasks/b1.output",
-            "/tasks/b1.output",
-            // One separator is the root of the current drive, not another machine.
-            r"\tasks\b1.output",
-            // Relative, or nothing: no machine to reach (the callers drop an empty path anyway).
-            "tasks/b1.output",
-            r"tasks\b1.output",
-            "b1.output",
-            "",
-            // Two separators that do not start it.
-            r"C:\\Users\x\tasks\b1.output",
-            "/tmp//claude/tasks/b1.output",
-        ] {
-            assert!(safe_origin(safe), "{safe:?}");
-        }
     }
 
     #[test]

@@ -58,9 +58,6 @@ mod workflow;
 #[cfg(test)]
 mod workflow_tests;
 
-// The one line a text is shown as (also the plan's titles).
-pub(crate) use act::visible_line;
-
 use crate::core::Core;
 use crate::engine::Escouade;
 use crate::integrations::secrets;

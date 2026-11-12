@@ -1,8 +1,8 @@
 //! Where the sound comes from: the microphone through cpal, or a WAV file (the end-to-end tests,
 //! which have no microphone), or what a test hands it.
 
-use super::audio;
-use super::VoiceError;
+use crate::audio;
+use crate::VoiceError;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::mpsc;

@@ -1625,15 +1625,17 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "chrono",
- "cpal",
  "ctor",
  "dirs 6.0.0",
  "escouade-acp",
+ "escouade-base",
+ "escouade-plan",
  "escouade-plugin-cli",
  "escouade-plugin-kit",
  "escouade-plugin-protocol",
+ "escouade-vectors",
  "escouade-voice",
- "espeak-ng",
+ "escouade-voice-local",
  "flate2",
  "futures-util",
  "getrandom 0.4.3",
@@ -1649,7 +1651,6 @@ dependencies = [
  "minisign-verify",
  "notify",
  "objc2",
- "ort",
  "os_info",
  "parking_lot",
  "pdf-extract",
@@ -1679,7 +1680,6 @@ dependencies = [
  "tauri-plugin-updater",
  "tauri-plugin-window-state",
  "tauri-winrt-notification 0.7.3",
- "tokenizers",
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite",
@@ -1692,7 +1692,6 @@ dependencies = [
  "webkit2gtk",
  "webpki-roots",
  "webview2-com",
- "whisper-rs",
  "windows-core 0.62.2",
  "windows-sys 0.60.2",
  "yaml-edit",
@@ -1706,6 +1705,24 @@ dependencies = [
  "base64 0.22.1",
  "dunce",
  "escouade-plugin-protocol",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "escouade-base"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "escouade-plugin-cli",
+]
+
+[[package]]
+name = "escouade-plan"
+version = "0.1.0"
+dependencies = [
+ "escouade-base",
+ "parking_lot",
  "serde",
  "serde_json",
 ]
@@ -1753,6 +1770,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "escouade-vectors"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "escouade-base",
+ "escouade-voice-local",
+ "parking_lot",
+ "reqwest 0.12.28",
+ "rusqlite",
+ "sha2",
+ "tokenizers",
+ "tokio",
+]
+
+[[package]]
 name = "escouade-voice"
 version = "0.1.0"
 dependencies = [
@@ -1761,6 +1793,30 @@ dependencies = [
  "parking_lot",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "escouade-voice-local"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cpal",
+ "dirs 6.0.0",
+ "escouade-base",
+ "escouade-plugin-cli",
+ "escouade-plugin-kit",
+ "escouade-voice",
+ "espeak-ng",
+ "hound",
+ "log",
+ "ort",
+ "parking_lot",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "whisper-rs",
 ]
 
 [[package]]

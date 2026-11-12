@@ -169,7 +169,7 @@ describe('spoken answers', () => {
 describe('the credits', () => {
   it('name every voice the app offers, with its licences and the credit it asks for', async () => {
     const fs = await import('node:fs');
-    const voices = JSON.parse(fs.readFileSync('src-tauri/src/voice/speech/voices.json', 'utf8')) as {
+    const voices = JSON.parse(fs.readFileSync('crates/escouade-voice-local/src/speech/voices.json', 'utf8')) as {
       id: string;
       license: string;
       attribution: string | null;
