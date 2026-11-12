@@ -1,9 +1,9 @@
 ---
-number: null
+number: 150
 id: "les-economies-du-cache-dans-la-barre-d-e"
 title: "Les économies du cache dans la barre d'état, derrière un réglage éteint par défaut"
 date: "2026-11-12"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-421"
 pages: ["fenetre/barre-de-statut","conversation/temperature-du-cache"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/barre-de-statut","added":4,"removed":2},{"page":"conversation/temperature-du-cache","added":2,"removed":2}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-12T17:11:33+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

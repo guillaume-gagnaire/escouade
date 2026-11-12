@@ -3,7 +3,7 @@ title: "Température du cache"
 subject: "conversation"
 sources: ["docs/FEATURES.md §3 (conception du 2026-10-28)","design/features/temperature.png","design/features/temperature-echelle.png","design/features/maquettes-temperature.html","tests/fixtures/claude/long-turn.jsonl","tests/fixtures/codex/full-turn.jsonl","tests/fixtures/copilot/full-turn.jsonl"]
 tickets: ["ESC-398","ESC-421"]
-decisions: [140,"les-economies-du-cache-dans-la-barre-d-e"]
+decisions: [140,150]
 compared: null
 ---
 
