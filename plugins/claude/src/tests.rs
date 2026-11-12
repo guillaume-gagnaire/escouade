@@ -679,3 +679,117 @@ fn a_new_conversation_is_told_in_the_language_of_the_app() {
         }]
     );
 }
+
+/// The entry Claude Code 2.1.322 writes in the transcript when a safety classifier refused the request (ESC-416), field
+/// for field as its code makes it (`cvo` for the synthetic message, `Y9t` for the refusal): `error: "invalid_request"`,
+/// as for many other errors; what tells it is `message.stop_reason: "refusal"`.
+const REFUSAL_ENTRY: &str = include_str!("../tests/refusal-2.1.322.jsonl");
+
+/// The same error as the stream gives it (`--output-format stream-json`): the frame of an `assistant` message.
+fn refusal_frame() -> Value {
+    let e: Value = serde_json::from_str(REFUSAL_ENTRY.lines().next().unwrap()).unwrap();
+    json!({
+        "type": "assistant", "message": e["message"], "parent_tool_use_id": null, "session_id": e["sessionId"],
+        "uuid": e["uuid"], "timestamp": e["timestamp"], "error": e["error"], "request_id": e["requestId"],
+        "is_api_error_message": true, "refused_message_id": e["refusedMessageId"],
+    })
+}
+
+/// The errors of the API Claude Code writes otherwise (`cvo` with `stop_reason: "stop_sequence"`).
+fn api_error_frame(error: &str, text: &str) -> Value {
+    json!({
+        "type": "assistant", "parent_tool_use_id": null, "uuid": "e1", "error": error,
+        "message": { "id": "m1", "model": "<synthetic>", "role": "assistant", "stop_reason": "stop_sequence",
+            "stop_details": null, "type": "message", "content": [{ "type": "text", "text": text }] },
+    })
+}
+
+#[test]
+fn a_safeguards_refusal_is_told_apart_from_the_other_errors_of_the_api() {
+    let refused = items(refusal_frame());
+    assert_eq!(refused[0], Item::Refused { category: None });
+    assert!(
+        matches!(&refused[1], Item::Notice { text, level } if level == "error" && text.contains("safeguards flagged")),
+        "{refused:?}"
+    );
+    for (error, text) in [
+        ("server_error", "API Error: 500 Internal server error"),
+        ("overloaded", "API Error: 529 Overloaded"),
+        ("rate_limit", "You've hit your limit · resets 3pm"),
+        ("invalid_request", "API Error: 400 Prompt is too long"),
+    ] {
+        let got = items(api_error_frame(error, text));
+        assert!(
+            !got.iter().any(|i| matches!(i, Item::Refused { .. })),
+            "{error}: {got:?}"
+        );
+    }
+    // A subagent's refusal ends its call, not the agent's turn.
+    let mut sub = refusal_frame();
+    sub["parent_tool_use_id"] = json!("toolu_1");
+    assert!(!items(sub).iter().any(|i| matches!(i, Item::Refused { .. })));
+    // The category the API gave, when it gave one.
+    let mut cyber = refusal_frame();
+    cyber["message"]["stop_details"] = json!({ "category": "cyber", "explanation": null });
+    assert_eq!(
+        items(cyber)[0],
+        Item::Refused {
+            category: Some("cyber".into())
+        }
+    );
+}
+
+#[test]
+fn a_refused_turn_ends_on_the_refusal_in_the_language_of_the_app() {
+    let result = json!({
+        "type": "result", "subtype": "success", "is_error": true, "uuid": "r1",
+        "result": "API Error: Claude Opus 5.5's safeguards flagged this message",
+    });
+    for (lang, words) in [
+        ("fr", "Refus d'un safeguard d'Anthropic"),
+        ("en", "Refused by an Anthropic safeguard"),
+    ] {
+        let mut t = Translator::default();
+        let mut out = Vec::new();
+        t.frame(&refusal_frame(), lang, &mut out);
+        t.frame(&result, lang, &mut out);
+        let Some(Item::Result { failure, error, .. }) = out.last() else {
+            panic!("{out:?}")
+        };
+        assert_eq!(failure, words);
+        // Claude Code's own words stay on the turn.
+        assert!(error.as_deref().unwrap().contains("safeguards flagged"));
+        // The next turn is not a refusal.
+        let mut out = Vec::new();
+        t.frame(&result, lang, &mut out);
+        let Some(Item::Result { failure, .. }) = out.last() else {
+            panic!("{out:?}")
+        };
+        assert!(failure.contains("safeguards flagged"), "{failure}");
+    }
+}
+
+#[test]
+fn the_view_tells_a_safeguards_refusal_from_its_transcript() {
+    let p = escouade_plugin_protocol::engine::ViewParams {
+        agent: "a1".into(),
+        cwd: "/w".into(),
+        lang: "fr".into(),
+        active: true,
+        ..Default::default()
+    };
+    let mut v = crate::view::View::default();
+    let mut out = Vec::new();
+    v.line(REFUSAL_ENTRY.lines().next().unwrap(), &p, &mut out);
+    assert!(out.contains(&Item::Refused { category: None }), "{out:?}");
+    assert!(out
+        .iter()
+        .any(|i| matches!(i, Item::ViewError { error } if error.contains("safeguards flagged"))));
+    // An error of the API that is no refusal.
+    let mut other: Value = serde_json::from_str(REFUSAL_ENTRY.lines().next().unwrap()).unwrap();
+    other["message"]["stop_reason"] = json!("stop_sequence");
+    other["error"] = json!("server_error");
+    let mut out = Vec::new();
+    v.line(&other.to_string(), &p, &mut out);
+    assert!(!out.iter().any(|i| matches!(i, Item::Refused { .. })));
+}

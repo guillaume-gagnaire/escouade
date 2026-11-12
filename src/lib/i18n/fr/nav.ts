@@ -6,6 +6,9 @@ export default {
   sidebar: {
     /** What an agent is doing (glossary: « En cours » is « Running » for an agent). */
     status: { running: 'En cours', waiting: 'Question', idle: 'Prêt', done: 'Terminé', error: 'Erreur' },
+    /** In place of « Erreur », its last turn refused by a safeguard of Anthropic (ESC-416). */
+    refused: 'Refusé',
+    refusedTitle: 'Refusé par un safeguard d’Anthropic',
     viewLabel: 'Vue du projet',
     /** Its right edge (ESC-204), dragged as the rail's. */
     width: 'Largeur de la barre des agents',

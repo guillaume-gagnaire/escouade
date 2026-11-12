@@ -2,7 +2,8 @@
 // Test double of the `claude` CLI in `--input-format/--output-format stream-json` mode.
 // It replays the frame shapes documented in docs/PROTOCOL.md. The user message text picks the
 // scenario: "[artefact]" (an artifact published, or its skill unknown without CLAUDE_CODE_ARTIFACT; ESC-400), "question", "permission", "edit", "slow", "crash", "grandchild", "raisonnement" (a thinking block
-// before the reply); anything else is a
+// before the reply), "[refus]" (a safeguard refuses the turn, and every turn after it while the conversation holds that
+// message, the resumed session's read up to `--resume-session-at`; ESC-416); anything else is a
 // plain reply ("grandchild" starts a program that lasts a minute in its folder, and says its pid; with
 // [detached] too, that program outlives the process). A `--resume=missing…` session fails like an
 // unknown session does, forked or not; with `--fork-session`, the resumed conversation goes on under a new session id, and a
@@ -1022,6 +1023,19 @@ function startSession() {
   }
   // Forked, as Claude Code does it: the session resumed is left as it is, a new one goes on.
   const sessionId = resume && !argv.includes('--fork-session') ? resume : `sess-${process.pid}`;
+  // The user's messages of the conversation it goes on (ESC-416): the resumed session's, up to its entry
+  // `--resume-session-at` when given, then this process's. A safeguard reads them all at each turn.
+  const heard = [];
+  if (resume && configDir) {
+    const projects = path.join(configDir, 'projects');
+    const folder = fs.readdirSync(projects).find((f) => fs.existsSync(path.join(projects, f, `${resume}.jsonl`)));
+    for (const line of fs.readFileSync(path.join(projects, folder, `${resume}.jsonl`), 'utf8').split('\n')) {
+      if (!line.trim()) continue;
+      const e = JSON.parse(line);
+      if (e.type === 'user') heard.push(JSON.stringify(e.message?.content ?? ''));
+      if (at && e.uuid === at) break;
+    }
+  }
   const model = argv[argv.indexOf('--model') + 1] ?? 'sonnet';
   const usage = { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0, costUSD: 0 };
   let msg = 0;
@@ -2605,6 +2619,41 @@ function startSession() {
       });
       streamText(`pid:${child.pid}`);
       result();
+      return;
+    }
+    heard.push(text);
+    if (heard.some((h) => h.includes('[refus]'))) {
+      // A safeguard's refusal, as Claude Code 2.1.322 writes it (`Y9t`, ESC-416): a synthetic API error typed
+      // `invalid_request` whose message stops on `refusal`. Every turn of a conversation that holds the refused
+      // message is refused again, as Anthropic's classifiers read the whole request.
+      const said =
+        "API Error: Claude Opus 5.5's safeguards flagged this message (https://www.anthropic.com/legal/aup). This sometimes happens with safe, normal conversations. Claude Code can't respond to this message with Claude Opus 5.5.\n\nDouble press esc to edit your last message, or try a different model with /model.";
+      const uuid = `entry-${process.pid}-${++entries}`;
+      const message = {
+        id: `refusal-${process.pid}-${++msg}`,
+        container: null,
+        model: '<synthetic>',
+        role: 'assistant',
+        stop_details: null,
+        stop_reason: 'refusal',
+        stop_sequence: '',
+        type: 'message',
+        usage: { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+        content: [{ type: 'text', text: said }],
+        context_management: null,
+      };
+      out({
+        type: 'assistant',
+        message,
+        parent_tool_use_id: null,
+        session_id: sessionId,
+        uuid,
+        error: 'invalid_request',
+        request_id: 'req_fake',
+        is_api_error_message: true,
+      });
+      keep({ type: 'assistant', uuid, message, error: 'invalid_request', isApiErrorMessage: true });
+      out({ type: 'result', subtype: 'success', is_error: true, duration_ms: 100, session_id: sessionId, result: said });
       return;
     }
     if (text.includes('limite') || limited()) {

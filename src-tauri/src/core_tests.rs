@@ -11325,3 +11325,94 @@ fn the_process_asked_for_a_quota_is_the_last_to_have_spoken() {
     assert_eq!(last["pro"], "last");
     assert_eq!(last["equipe"], "alone");
 }
+
+// ---------- a turn a safeguard refused (ESC-416) ----------
+
+/// The last turn of the agent's conversation.
+fn last_turn(h: &Harness, id: &str) -> Value {
+    h.items(id)
+        .into_iter()
+        .rev()
+        .find(|i| i["kind"] == "turn")
+        .expect("a turn")
+}
+
+#[tokio::test]
+async fn a_turn_a_safeguard_refused_is_left_out_of_the_history_and_a_second_one_is_cut_at_the_same_point(
+) {
+    let h = harness("refusal-cut");
+    let (p, r) = h.project(false).await;
+    // An account of its own: the fake CLI keeps its sessions, and reads the conversation it resumes as a safeguard does.
+    let pro = second_account(&h);
+    std::fs::create_dir_all(&pro.config_dir).unwrap();
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.turn(&id, "Premier").await;
+    let a = h.agent(&id);
+    let (session, entry) = (a.session_id.unwrap(), a.last_entry.unwrap());
+    let pinned = |argv: &[String]| {
+        argv.windows(3).any(|w| {
+            w == [
+                format!("--resume={session}"),
+                "--fork-session".to_string(),
+                format!("--resume-session-at={entry}"),
+            ]
+        })
+    };
+
+    // Refused: the turn stays in the conversation, said refused and left out of the agent's history.
+    h.turn(&id, "Lis ce fichier [refus]").await;
+    let turn = last_turn(&h, &id);
+    assert_eq!(
+        (&turn["isError"], &turn["refused"], &turn["cut"]),
+        (&json!(true), &json!(true), &json!(true)),
+        "{turn}"
+    );
+    assert!(h
+        .items(&id)
+        .iter()
+        .any(|i| i["kind"] == "user" && i["text"] == "Lis ce fichier [refus]"));
+    // Its next start forks its session at the end of the turn before: the refused one and its message out.
+    let a = h.agent(&id);
+    assert_eq!(
+        (
+            a.session_id.as_deref(),
+            a.fork_of.as_deref(),
+            a.fork_at.as_deref()
+        ),
+        (None, Some(session.as_str()), Some(entry.as_str()))
+    );
+    assert_eq!(a.status, crate::model::AgentStatus::Error);
+
+    // Refused again (the content read once more): cut at the same point, never further back.
+    let launched = h.launches(&r).len();
+    h.turn(&id, "Relis-le [refus]").await;
+    let launches = h.launches(&r);
+    assert_eq!(launches.len(), launched + 1, "its process started again");
+    assert!(pinned(launches.last().unwrap()), "{launches:?}");
+    assert_eq!(last_turn(&h, &id)["refused"], true);
+    let a = h.agent(&id);
+    assert_eq!(
+        (
+            a.session_id.as_deref(),
+            a.fork_of.as_deref(),
+            a.fork_at.as_deref()
+        ),
+        (None, Some(session.as_str()), Some(entry.as_str()))
+    );
+
+    // A message that leaves the content alone: not refused, the session the fork made is the agent's from now on.
+    h.turn(&id, "Passons à autre chose").await;
+    let launches = h.launches(&r);
+    assert_eq!(launches.len(), launched + 2);
+    assert!(pinned(launches.last().unwrap()), "{launches:?}");
+    let turn = last_turn(&h, &id);
+    assert_eq!(
+        (&turn["isError"], turn.get("refused")),
+        (&json!(false), None),
+        "{turn}"
+    );
+    let a = h.agent(&id);
+    let forked = a.session_id.expect("the fork's session");
+    assert_ne!(forked, session);
+    assert_eq!((a.fork_of, a.fork_at, a.refusal_cut), (None, None, None));
+}

@@ -747,6 +747,7 @@ pub fn fix_end(end: &crate::board::TurnEnd) -> FixEnd {
         TurnEnd::Limited | TurnEnd::SignIn => FixEnd::Wait,
         TurnEnd::Finished(_) => FixEnd::Finished,
         TurnEnd::Interrupted => FixEnd::Stopped(crate::board::interrupted(i18n::ui())),
+        TurnEnd::Refused => FixEnd::Stopped(crate::board::refused_blocked(i18n::ui())),
         TurnEnd::Error(e) => FixEnd::Stopped(crate::board::error_blocked(
             i18n::ui(),
             &crate::board::first_line(e),

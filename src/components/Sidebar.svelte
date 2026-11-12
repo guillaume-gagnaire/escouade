@@ -1159,6 +1159,9 @@
               <span class="a-state status wk" use:tip={pendingText(pending, app.now)} data-pending
                 >{#if pending.wake}<Icon name="clock" size={12} />{/if}{pendingLabel(pending, app.now)}</span
               >
+            {:else if a.status === 'error' && a.refused}
+              <!-- Its last turn refused by a safeguard (ESC-416), not a mere error. -->
+              <span class="a-state status" data-refused use:tip={t('nav.sidebar.refusedTitle')}>{t('nav.sidebar.refused')}</span>
             {:else}
               <span class="a-state status">{statusLabel(a.status)}</span>
             {/if}

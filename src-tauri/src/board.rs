@@ -45,6 +45,10 @@ pub enum TurnEnd {
     /// Stopped by a sign-in of its account that could not be refreshed (ESC-162): its process
     /// started again, or the agent waits for the account to sign in again (`signin`), and goes on.
     SignIn,
+    /// Refused by a safeguard of the model's provider (ESC-416): its agent's next start leaves the
+    /// refused turn out of its history, and nothing takes it up by itself (it would be refused
+    /// again as it is).
+    Refused,
     Error(String),
     /// The assistant's text of the turn.
     Finished(String),
@@ -290,6 +294,15 @@ pub(crate) fn interrupted(lang: Lang) -> String {
     tr_in!(lang, "Interrompu", "Interrupted")
 }
 
+/// Blocked by a turn a safeguard refused (ESC-416).
+pub(crate) fn refused_blocked(lang: Lang) -> String {
+    tr_in!(
+        lang,
+        "Refus d'un safeguard d'Anthropic",
+        "Refused by an Anthropic safeguard"
+    )
+}
+
 /// Blocked by an error: `why` is its first line.
 pub(crate) fn error_blocked(lang: Lang, why: &str) -> String {
     tr_in!(lang, "Erreur : {why}", "Error: {why}")
@@ -337,6 +350,11 @@ pub fn turn_end(
         TurnEnd::Error(e) => {
             t.reminded = false;
             t.blocked = Some(error_blocked(i18n::ui(), &first_line(e)));
+            next.blocked = true;
+        }
+        TurnEnd::Refused => {
+            t.reminded = false;
+            t.blocked = Some(refused_blocked(i18n::ui()));
             next.blocked = true;
         }
         TurnEnd::Finished(_) => match report.and_then(|r| r.criteria.as_ref()) {

@@ -539,6 +539,11 @@ pub fn turn_ended(end: &crate::board::TurnEnd) -> Body {
         Interrupted => ("interrupted", None),
         Limited => ("limited", None),
         SignIn => ("signIn", None),
+        // An error to what reads the facts (their ends are a contract), with what it was.
+        Refused => (
+            "error",
+            Some(crate::board::refused_blocked(crate::i18n::Lang::En)),
+        ),
         Error(e) => (
             "error",
             Some(e.lines().next().unwrap_or("").chars().take(300).collect()),

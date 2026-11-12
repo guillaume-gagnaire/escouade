@@ -1112,6 +1112,10 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
                 let (end, text) = match e {
                     TurnEnd::Finished(t) => (End::Finished, t.clone()),
                     TurnEnd::Error(t) => (End::Failed, t.clone()),
+                    TurnEnd::Refused => (
+                        End::Failed,
+                        crate::board::refused_blocked(crate::i18n::ui()),
+                    ),
                     TurnEnd::Interrupted | TurnEnd::Limited | TurnEnd::SignIn => {
                         (End::Stopped, String::new())
                     }

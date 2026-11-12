@@ -442,6 +442,8 @@ impl AgentRt {
             self.sign_in_retries = 0;
         }
         let failure = failed.then_some(failure);
+        // Refused by a safeguard (ESC-416): the next start leaves the turn out.
+        let refused = self.take_refused(interrupted) && failed && !limited;
         // The final reply: the text that no tool followed, else what its harness makes of it.
         let reply = match std::mem::take(&mut self.final_text) {
             text if !text.trim().is_empty() => text,
@@ -453,6 +455,8 @@ impl AgentRt {
             TurnEnd::Limited
         } else if sign_in {
             TurnEnd::SignIn
+        } else if refused {
+            TurnEnd::Refused
         } else if let Some(reason) = failure.clone() {
             TurnEnd::Error(reason)
         } else {
@@ -474,13 +478,24 @@ impl AgentRt {
             fx.save = true;
             fx.agent_changed = true;
         }
-        let item = json!({
+        let mut item = json!({
             "kind": "turn", "id": id.unwrap_or_else(new_id), "ts": now_ms(),
             "durationMs": duration, "cost": cost, "tokens": tokens,
             "isError": is_error && !interrupted, "interrupted": interrupted, "error": error,
             "limited": at_limit, "signIn": sign_in, "engine": self.meta.engine,
         });
+        // Refused by a safeguard, and left out of the agent's history (ESC-416).
+        if refused {
+            item["refused"] = json!(true);
+            item["cut"] = json!(true);
+        }
         self.append(item, fx);
+        self.meta.refused = refused;
+        if refused {
+            self.cut_after_refusal(fx);
+        } else if matches!(end, TurnEnd::Finished(_)) {
+            self.forget_refusal(fx);
+        }
         if !self.pending.is_empty() {
             self.clear_pending(fx);
         }

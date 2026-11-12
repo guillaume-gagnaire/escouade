@@ -3019,6 +3019,18 @@ impl<R: Runtime> Core<R> {
         }
     }
 
+    /// A safeguard refused the turn that ended (ESC-416): its process stops, as it holds that turn
+    /// in its memory; the next message starts one that forks its session before it
+    /// (`AgentMeta::refusal_cut`).
+    fn stop_after_refusal(&self, id: &str) {
+        let Ok(h) = self.agent(id) else { return };
+        let stopped = h.lock().detach();
+        if let Some(p) = stopped {
+            p.close_input();
+            self.emit_agent(&h);
+        }
+    }
+
     pub(crate) fn apply(
         self: &Arc<Self>,
         id: &str,
@@ -3088,6 +3100,11 @@ impl<R: Runtime> Core<R> {
         }
         if fx.sign_in_lost {
             self.sign_in_lost_soon(id);
+        }
+        // Before its turn's end is read (a ticket's next message): the process that holds the
+        // refused turn is gone, the next start leaves it out (ESC-416).
+        if fx.refused {
+            self.stop_after_refusal(id);
         }
         if fx.files_changed {
             self.git.refresh(project_id);

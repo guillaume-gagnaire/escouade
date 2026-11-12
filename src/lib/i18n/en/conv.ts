@@ -84,6 +84,7 @@ export default defineZone('conv', {
   newMessages: 'New messages',
   archived: { text: 'Agent archived.', restore: 'Restore' },
   stopped: 'The agent stopped. Send a message to restart {engine} on the same session.',
+  stoppedRefused: 'An Anthropic safeguard refused the last turn. Your next message restarts {engine} without it.',
 
   search: {
     title: 'Search conversations',
@@ -217,6 +218,11 @@ export default defineZone('conv', {
     signIn:
       'The {account} account must sign in again: Claude Code couldn’t refresh its session. The agent will go on by itself once you’re signed in.',
     signInAction: 'Sign in again',
+    refused: 'Refused by an Anthropic safeguard',
+    refusedCut:
+      'Removed from the agent’s history: your next message starts from the end of the turn before. If the refused content came from a tool (a file it read, a page), the agent may read it again and be refused again: rephrase the request or avoid that content.',
+    refusedView:
+      'While it stays in the history, every turn is refused again: in the agent’s terminal, press Esc twice to go back before this message.',
     done: 'Task done',
     tokens: '{tokens} tokens',
     filesEdited: { one: '{count} file edited', other: '{count} files edited' },

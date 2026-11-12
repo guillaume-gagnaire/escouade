@@ -2,7 +2,7 @@
 title: "Agent d'un ticket"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-123"]
+tickets: ["ESC-123","ESC-416"]
 decisions: []
 compared: null
 ---
@@ -33,6 +33,7 @@ Chaque ticket lancé a son agent, dans un worktree à lui. L'agent boucle : à c
   - Sinon : boucle suivante, avec les critères manquants et leurs notes.
 - Sans bilan : un rappel, puis « Bilan des critères manquant ».
 - Stop : « Interrompu ». Erreur ou process mort : « Erreur : … ». Limite d'usage : la reprise automatique s'en charge (voir *Comptes*). Connexion que Claude Code n'a pas pu rafraîchir : la relance du process ou la nouvelle connexion s'en chargent, sans bloquer le ticket.
+- Tour refusé par un safeguard d'Anthropic : « Refus d'un safeguard d'Anthropic ». Rien ne le relance de lui-même, pas même le pilote auto : il serait refusé de nouveau tel quel. « Reprendre » (ou un message) repart sans le tour refusé (voir *Conversation*, « Un tour refusé par un safeguard »).
 - Un ticket bloqué libère sa place ; « Reprendre » relance son agent.
 - Au démarrage de l'app, un tour coupé par l'arrêt est repris. Une validation coupée laisse « Validation interrompue ».
 

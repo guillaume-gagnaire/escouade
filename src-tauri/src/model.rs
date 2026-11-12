@@ -1836,6 +1836,17 @@ impl Worktree {
     }
 }
 
+/// Where a conversation goes on from after a turn a safeguard refused (ESC-416): the session `of`
+/// as it was at its entry `at`, the end of its last whole turn, the refused turn and the message
+/// that opened it left out (`--resume --fork-session --resume-session-at`). `of` None: no turn
+/// before it ended whole, the conversation starts anew.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RefusalCut {
+    pub of: Option<String>,
+    pub at: Option<String>,
+}
+
 /// A worktree of the project's repository that an agent without one of Escouade's went into by
 /// itself (ESC-161: `EnterWorktree`, a `cd`), as its session's latest entry says: its branch is the
 /// one its pull requests are read on, and its header shows. Never the project's folder, nor
@@ -1966,6 +1977,13 @@ pub struct AgentMeta {
     /// The original's latest entry when it was copied: the copy's starts fork its session there
     /// (`--resume-session-at`), the turns it ran since left out. None: the whole session.
     pub fork_at: Option<String>,
+    /// Where its conversation was cut after a turn a safeguard refused (ESC-416), until a turn of
+    /// its ends well: a refusal that follows cuts at the same point, never further back.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub refusal_cut: Option<RefusalCut>,
+    /// Its last turn was refused by a safeguard (ESC-416): its card says so, not a mere error.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub refused: bool,
     pub cwd: String,
     pub worktree: Option<Worktree>,
     /// Its worktree waits for its first message (ESC-156, « Créer le worktree au premier message,

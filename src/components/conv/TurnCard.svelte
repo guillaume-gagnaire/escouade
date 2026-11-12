@@ -93,7 +93,13 @@
 {:else if item.isError && !item.signIn}
   <!-- Stopped by the quota (an amber card, with where it goes on), or failed (a red one). -->
   <div class="card error" class:limit={stopped}>
-    <div class="lt"><Icon name={stopped ? 'clock' : 'close'} size={14} />{t('conv.turn.failed')}</div>
+    <div class="lt">
+      <Icon name={stopped ? 'clock' : 'close'} size={14} />{item.refused ? t('conv.turn.refused') : t('conv.turn.failed')}
+    </div>
+    <!-- Refused by a safeguard (ESC-416): left out of the agent's history, or how to leave it out in its own interface. -->
+    {#if item.refused}
+      <p class="say" data-testid="turn-refused">{item.cut ? t('conv.turn.refusedCut') : t('conv.turn.refusedView')}</p>
+    {/if}
     {#if resumeFailed}
       <!-- The sentence closes with its own period: an error that ends with one does not make two. -->
       <pre class="err">{t('accounts.resume.failed', {

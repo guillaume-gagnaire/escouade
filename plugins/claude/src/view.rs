@@ -196,6 +196,10 @@ impl View {
             if error == "rate_limit" {
                 self.told.rate_limited = true;
             }
+            // A safeguard's refusal (ESC-416), told apart from the API's other errors by its `stop_reason`.
+            if let Some(category) = crate::translate::refusal(e) {
+                out.push(Item::Refused { category });
+            }
             let text = msg["content"][0]["text"].as_str().unwrap_or(error);
             out.push(Item::ViewError {
                 error: text.to_string(),

@@ -6,6 +6,8 @@ export default defineZone('nav', {
     width: 'Width of the agents’ sidebar',
     widthTip: 'Drag to widen · double click: usual width',
     status: { running: 'Running', waiting: 'Question', idle: 'Ready', done: 'Done', error: 'Error' },
+    refused: 'Refused',
+    refusedTitle: 'Refused by an Anthropic safeguard',
     viewLabel: 'Project view',
     toReview: '{count} to review',
     newAgent: 'New agent',

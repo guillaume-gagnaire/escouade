@@ -887,6 +887,13 @@ pub enum Item {
     },
     /// The turn ending next stopped at a limit it waits for: told in its turn, the agent at rest and not in error.
     LimitRest,
+    /// A safety classifier of the model's provider refused the running turn (Claude Code's `stop_reason: "refusal"`,
+    /// ESC-416): its end is a refusal, not an error of the API, and the agent's next start leaves that turn out of its
+    /// history (the end of its last whole turn, `--resume-session-at`). `category`: what the provider said it was.
+    Refused {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        category: Option<String>,
+    },
     /// A harness that declares `opens`: its session is open and its first message may go; `models` are the account's
     /// (`ToldModel`s), for the menu.
     Ready {

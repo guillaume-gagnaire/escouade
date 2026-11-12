@@ -2,7 +2,7 @@
 title: "Conversation"
 subject: "Conversation"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-76","ESC-127","ESC-95","ESC-108","ESC-89","ESC-398","ESC-400"]
+tickets: ["ESC-76","ESC-127","ESC-95","ESC-108","ESC-89","ESC-398","ESC-400","ESC-416"]
 decisions: [136]
 compared: "2026-10-30T05:32:58+01:00"
 gaps: [{"text":"La spec dit que l'en-tête se replie sous 1000 px (Tokens et Fichiers s'effacent, la vue cachée perd son mot) et sous 760 px (Durée aussi, boutons réduits à l'icône), puis sous 580 px pour les chiffres. Le code utilise d'autres seuils échelonnés. À 1100 px, Durée et le mot de la vue cachée disparaissent. À 960 px, c'est Fichiers. À 880 px, c'est Tokens. À 800 px, les boutons passent à l'icône. À 680 px, le sélecteur de disposition disparaît. À 440 px, les vues en segments disparaissent. Seul le seuil de 580 px pour les chiffres correspond.","code":["src/components/Conversation.svelte"]}]
@@ -155,3 +155,15 @@ La conversation est la vue d'un agent dans Escouade : son en-tête, ses messages
 - **Actions** : « Copier l'image » (en PNG ; un GIF par sa première image), « Enregistrer sous… » (la boîte du système, ouverte par l'app, qui n'écrit qu'une image), « Ouvrir » et « Afficher dans le dossier » (le fichier envoyé, ou l'image du texte par son chemin, dans la clôture de l'agent ; un programme n'est jamais ouvert). Une image du web n'a que « Ouvrir dans le navigateur ».
 - Échap, × ou un clic à côté de l'image ferme ; une fenêtre ouverte par-dessus se ferme d'abord. Rien ne s'y sélectionne.
 - Limites : seules les images dessinées sont de la galerie (« Afficher les N précédents » en ajoute) ; les images d'un message de l'utilisateur n'y sont pas (sa bulle les compte) ; sous Linux, WebKitGTK peut refuser la copie d'une image.
+
+### Un tour refusé par un safeguard (ESC-416)
+
+- Les classifieurs de sécurité d'Anthropic lisent toute la requête, donc tout l'historique : tant que le contenu refusé y reste, chaque tour est refusé de nouveau, même anodin. Le plugin Claude Code reconnaît ce refus à part des autres erreurs d'API (500, 529, limite d'usage) : l'erreur synthétique que Claude Code écrit (`isApiErrorMessage`, `error: "invalid_request"`) avec `message.stop_reason: "refusal"`, jamais à son texte anglais.
+- Le tour refusé reste dans la conversation, avec le message qui l'a ouvert. Sa carte rouge s'intitule « Refusé par un safeguard d’Anthropic » (« Refused by an Anthropic safeguard ») au lieu de « Le tour s'est terminé en erreur », dit « Retiré de l’historique de l’agent : ton prochain message repart de la fin du tour d’avant. Si le contenu refusé venait d’un outil (un fichier lu, une page), l’agent peut le relire et être refusé à nouveau : reformule la demande ou évite ce contenu. », puis le texte de Claude Code.
+- Le process de l'agent s'arrête (il garde le tour refusé en mémoire). Son message suivant lance Claude Code avec `--resume=<session> --fork-session --resume-session-at=<dernière entrée du tour d'avant>` : la coupe tombe avant le message de l'utilisateur, jamais au milieu du tour (le contenu refusé peut être un résultat d'outil, et un `tool_use` sans résultat casserait la session). La session du fork devient celle de l'agent, comme après « Dupliquer ». Si le tour refusé était le premier (ou le premier depuis une compaction), le message suivant ouvre une nouvelle conversation.
+- Un deuxième refus de suite recoupe au même point, jamais plus loin ; le premier tour qui finit bien rend la coupe à la fin de ce tour.
+- Dans la vue Claude Code, l'interface est celle de l'utilisateur : Escouade ne la coupe pas sous lui. La carte dit « Tant qu’il reste dans l’historique, chaque tour est refusé à nouveau : dans le terminal de l’agent, double Échap pour revenir avant ce message. »
+- Un ticket dont le tour est refusé passe en bloqué, « Refus d'un safeguard d'Anthropic » (voir *Agent d'un ticket*).
+- Limite : avec Escouade 2.2.x, le plugin 2.2.5 seul dit le refus (raison du blocage, notification) mais ne coupe pas l'historique ; la coupe vient avec le cœur suivant.
+
+- Tant que l'agent reste en erreur sur ce refus, sa carte de la barre latérale dit « Refusé » (infobulle « Refusé par un safeguard d’Anthropic ») au lieu de « Erreur », et le bandeau au-dessus du champ dit « Un safeguard d’Anthropic a refusé le dernier tour. Ton prochain message relance Claude sans lui. » au lieu de « … sur la même session ».

@@ -1586,6 +1586,10 @@ export interface Agent {
   forkOf: string | null;
   /** Where the copy forks it: the original’s latest entry when it was copied (null: the whole session). */
   forkAt: string | null;
+  /** Where its conversation goes on from after a turn a safeguard refused (ESC-416), until a turn ends well. */
+  refusalCut?: { of: string | null; at: string | null };
+  /** Its last turn was refused by a safeguard of Anthropic: its card says « Refusé ». */
+  refused?: boolean;
   cwd: string;
   worktree: Worktree | null;
   /** Its worktree waits for its first message (ESC-156): named first, it gets its branch and its folder under that name. Absent once made, or never waited for. */
@@ -2408,6 +2412,9 @@ export interface TurnItem extends Base {
   limited?: boolean;
   /** Stopped by a sign-in Claude Code could not refresh (ESC-162): its process started again, or the card asks for a new sign-in. */
   signIn?: boolean;
+  /** Refused by a safeguard of Anthropic (ESC-416), and, with `cut`, left out of the agent's history by Escouade. */
+  refused?: boolean;
+  cut?: boolean;
   /** The harness that ran it (absent from turns saved before 1.8, all Claude Code's). */
   engine?: EngineId;
 }

@@ -1002,7 +1002,9 @@
       </div>
     {:else}
       {#if agent.status === 'error'}
-        <div class="banner err">{t('conv.stopped', { engine: speakerOf(agent.engine) })}</div>
+        <div class="banner err">
+          {t(agent.refused && agent.refusalCut ? 'conv.stoppedRefused' : 'conv.stopped', { engine: speakerOf(agent.engine) })}
+        </div>
       {/if}
       {@render harnessCard()}
       {@render nextStart()}

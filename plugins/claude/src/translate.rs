@@ -22,6 +22,29 @@ pub fn lost(text: &str) -> bool {
     LOST.iter().any(|l| text.contains(l))
 }
 
+/// Whether `e`, an assistant frame of the stream or an assistant entry of the transcript, is the error Claude Code writes
+/// when a safety classifier refused the request (ESC-416), and what category the API said it was. Claude Code 2.1.322
+/// (`Y9t`) writes it as a synthetic API error (`isApiErrorMessage`, `error: "invalid_request"`, as for many others) whose
+/// `message.stop_reason` is `"refusal"`, with the API's `stop_details` (`{ category, explanation }` or null): that field,
+/// not its English text (« …'s safeguards flagged this message… »), tells it from a 500, a 529 or a rate limit.
+pub fn refusal(e: &Value) -> Option<Option<String>> {
+    let error = e["error"].is_string() || e["isApiErrorMessage"] == true;
+    (error && e["message"]["stop_reason"] == "refusal").then(|| {
+        e["message"]["stop_details"]["category"]
+            .as_str()
+            .map(str::to_string)
+    })
+}
+
+/// What a turn a safeguard refused says it ended with, in place of Claude Code's error (which its turn still shows).
+pub fn refused_words(lang: &str) -> &'static str {
+    said(
+        lang,
+        "Refus d'un safeguard d'Anthropic",
+        "Refused by an Anthropic safeguard",
+    )
+}
+
 struct Block {
     index: u64,
     item_id: String,
@@ -48,6 +71,8 @@ pub struct Translator {
     /// This turn met the usage limit, and when the limit resets.
     pub rate_limited: bool,
     pub limit_resets_at: Option<i64>,
+    /// This turn was refused by a safeguard (`refusal`): its end says so, not a generic error.
+    pub refused: bool,
     /// Tasks run in the foreground: their tool rows show them end.
     foreground_tasks: HashSet<String>,
 }
@@ -285,6 +310,13 @@ impl Translator {
             if err == "rate_limit" && parent.is_none() {
                 self.rate_limited = true;
             }
+            // A safeguard's refusal of the agent's own turn (a subagent's ends only its call).
+            if parent.is_none() {
+                if let Some(category) = refusal(f) {
+                    self.refused = true;
+                    out.push(Item::Refused { category });
+                }
+            }
             let text = msg["content"][0]["text"].as_str().unwrap_or(err);
             // Its turn says it, and is taken up by itself (`signin`): no error in red before.
             if parent.is_none() && lost(text) {
@@ -503,9 +535,12 @@ impl Translator {
         };
         // A sign-in that could not be refreshed: the core looks at the account's (ESC-162).
         let sign_in = is_error && !limited && error.as_deref().is_some_and(lost);
-        // Always with words: the frame's, else the kind of result it is, else a generic one.
-        let failure = error
-            .clone()
+        let refused = std::mem::take(&mut self.refused);
+        // Always with words: a safeguard's refusal said as one, else the frame's, else the kind of result it is, else a
+        // generic one.
+        let failure = refused
+            .then(|| refused_words(lang).to_string())
+            .or_else(|| error.clone())
             .filter(|e| !e.trim().is_empty())
             .or_else(|| {
                 f["subtype"]

@@ -110,6 +110,8 @@ export default {
   newMessages: 'Nouveaux messages',
   archived: { text: 'Agent archivé.', restore: 'Restaurer' },
   stopped: "L'agent s'est arrêté. Envoie un message pour relancer {engine} sur la même session.",
+  /** After a turn a safeguard refused (ESC-416): its next start leaves that turn out. */
+  stoppedRefused: 'Un safeguard d’Anthropic a refusé le dernier tour. Ton prochain message relance {engine} sans lui.',
 
   /** « Rechercher dans les conversations » (Ctrl+K). */
   search: {
@@ -259,6 +261,12 @@ export default {
     signIn:
       'Le compte {account} doit se reconnecter : Claude Code n’a pas pu rafraîchir sa session. L’agent reprendra seul après la connexion.',
     signInAction: 'Se reconnecter',
+    /** A turn a safeguard of Anthropic refused (ESC-416): `cut` once Escouade left it out of the agent's history, `view` in Claude Code's own interface. */
+    refused: 'Refusé par un safeguard d’Anthropic',
+    refusedCut:
+      'Retiré de l’historique de l’agent : ton prochain message repart de la fin du tour d’avant. Si le contenu refusé venait d’un outil (un fichier lu, une page), l’agent peut le relire et être refusé à nouveau : reformule la demande ou évite ce contenu.',
+    refusedView:
+      'Tant qu’il reste dans l’historique, chaque tour est refusé à nouveau : dans le terminal de l’agent, double Échap pour revenir avant ce message.',
     done: 'Tâche terminée',
     tokens: '{tokens} tokens',
     filesEdited: { one: '{count} fichier modifié', other: '{count} fichiers modifiés' },

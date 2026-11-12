@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.5
+
+- A turn a safeguard of Anthropic refused (`stop_reason: "refusal"` on Claude Code's synthetic API error, which `error: "invalid_request"` alone does not tell from others) is told as one (`Item::Refused`, protocol 0.1.2), in the stream and in the « Vue Claude Code », and its turn ends on « Refus d'un safeguard d'Anthropic » / « Refused by an Anthropic safeguard » instead of Claude Code's English text. Escouade 2.2.x leaves the item aside; from the next version, the agent's next start leaves the refused turn out of its history (ESC-416).
+
 ## 2.2.4
 
 - Its agents create artifacts as in a terminal: each launch sets `CLAUDE_CODE_ARTIFACT=1`, without which Claude Code in stream-json (an Agent SDK session) has no `Artifact` tool and says « Unknown skill: artifact-design » (ESC-400).

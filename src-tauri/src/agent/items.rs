@@ -529,6 +529,7 @@ impl AgentRt {
                 }
             }
             Item::LimitRest => self.limit_rest = true,
+            Item::Refused { .. } => self.refused = true,
             Item::Entry { entry } => {
                 // None: its session's chain starts again (Claude Code's compaction): what its cache held is not read again.
                 if entry.is_none() {
@@ -617,6 +618,9 @@ impl AgentRt {
                     self.meta.cost += usage.cost;
                 }
                 let error = error.filter(|_| !interrupted);
+                // Refused by a safeguard (ESC-416): its interface, the user's, offers its own way out (a double
+                // Escape before the message); its conversation is not cut under it.
+                let refused = self.take_refused(interrupted) && error.is_some();
                 // Stopped by a limit its harness says it waits for: told, not an error of the agent's.
                 let rest = std::mem::take(&mut self.limit_rest) && limited.is_some();
                 let failed = error.is_some() && !rest;
@@ -637,11 +641,16 @@ impl AgentRt {
                     .turn_took
                     .take()
                     .or_else(|| self.active_since.map(|since| (now_ms() - since).max(0)));
-                let item = json!({
+                let mut item = json!({
                     "kind": "turn", "id": new_id(), "ts": now_ms(), "durationMs": took, "cost": usage.cost,
                     "tokens": tokens, "isError": ended_badly, "interrupted": interrupted, "error": error,
                     "limited": limited.is_some(), "engine": self.meta.engine,
                 });
+                if refused {
+                    item["refused"] = json!(true);
+                    item["cut"] = json!(false);
+                }
+                self.meta.refused = refused;
                 self.append(item, fx);
                 if !self.pending.is_empty() {
                     self.clear_pending(fx);
@@ -679,6 +688,8 @@ impl AgentRt {
                     TurnEnd::Limited
                 } else if interrupted {
                     TurnEnd::Interrupted
+                } else if refused {
+                    TurnEnd::Refused
                 } else if let Some(reason) = error {
                     TurnEnd::Error(reason)
                 } else {

@@ -35,6 +35,7 @@ mod items;
 #[cfg(test)]
 mod minimal;
 mod opencode;
+mod refusal;
 pub mod sidechain;
 mod transcript;
 mod vibe;
@@ -142,6 +143,9 @@ pub struct Effects {
     /// The turn was stopped by a sign-in of its account that could not be refreshed (ESC-162):
     /// the core looks at the account's sign-in, and starts the process again or waits (`signin`).
     pub sign_in_lost: bool,
+    /// A safeguard refused the turn that ended (ESC-416): its process, which holds the refused
+    /// turn in its memory, stops, and the next message starts one that leaves it out.
+    pub refused: bool,
     pub files_changed: bool,
     /// A turn ended (or the process died during one): how, with the assistant's text.
     pub turn_end: Option<TurnEnd>,
@@ -320,6 +324,11 @@ pub struct AgentRt {
     turn_took: Option<i64>,
     /// How many task lists a harness of a plugin gave (`Item::Todos`): the id of the next one.
     todo_writes: u32,
+    /// A safeguard refused the running turn (`Item::Refused`, ESC-416): its end is a refusal.
+    refused: bool,
+    /// Where its conversation stood when the running turn began (`refusal::cut_here`): where it
+    /// goes on from if a safeguard refuses that turn.
+    turn_cut: Option<crate::model::RefusalCut>,
 }
 
 /// A stream's process linked to claude.ai, and the session it holds there (its bridge id, when
@@ -590,6 +599,8 @@ impl AgentRt {
             escouade_next: false,
             turn_took: None,
             todo_writes: 0,
+            refused: false,
+            turn_cut: None,
         }
     }
 
@@ -1006,6 +1017,9 @@ impl AgentRt {
             }
         } else if !was && is {
             self.active_since = Some(now);
+            // A turn begins: where it would be cut from, should a safeguard refuse it.
+            self.turn_cut = Some(self.cut_here());
+            self.refused = false;
             // A prompt was sent: the one a cancelled turn put back is no longer there.
             if let Some(t) = self.tui.as_mut() {
                 t.cancelled = None;
@@ -3619,6 +3633,106 @@ mod tests {
         assert_eq!(texts.len(), 1, "{items:?}");
         assert_eq!(texts[0]["text"], "Fait.");
         assert!(!items.iter().any(|i| i["kind"] == "notice"), "{items:?}");
+    }
+
+    /// A turn a safeguard refused, as Claude Code 2.1.322 ends it in stream-json (ESC-416).
+    fn refused_turn(a: &mut AgentRt) -> Effects {
+        let mut fx = Effects::default();
+        a.push_user("u2", "Lis la page", 0, &[], &mut fx);
+        a.handle_frame(&json!({"type":"assistant","error":"invalid_request","is_api_error_message":true,"uuid":"e9","parent_tool_use_id":null,
+            "message":{"id":"m9","model":"<synthetic>","stop_reason":"refusal","stop_details":null,"content":[{"type":"text","text":"API Error: Claude Opus 5.5's safeguards flagged this message"}]}}), &mut fx);
+        let mut fx = Effects::default();
+        a.handle_frame(&json!({"type":"result","subtype":"success","is_error":true,"duration_ms":1,"result":"API Error: Claude Opus 5.5's safeguards flagged this message"}), &mut fx);
+        fx
+    }
+
+    #[test]
+    fn a_refused_turn_goes_on_from_the_end_of_the_turn_before_or_anew_when_it_was_the_first() {
+        // After a whole turn: its session where that turn ended.
+        let mut a = rt();
+        a.meta.session_id = Some("s1".into());
+        a.meta.last_entry = Some("e1".into());
+        let fx = refused_turn(&mut a);
+        assert_eq!(fx.turn_end, Some(TurnEnd::Refused));
+        assert!(fx.refused, "its process stops");
+        assert!(a.meta.refused, "its card says so");
+        assert_eq!(
+            (
+                a.meta.session_id.as_deref(),
+                a.meta.fork_of.as_deref(),
+                a.meta.fork_at.as_deref()
+            ),
+            (None, Some("s1"), Some("e1"))
+        );
+        assert_eq!(
+            engine::Start::of(&a.meta),
+            engine::Start::Fork {
+                of: "s1".into(),
+                at: Some("e1".into())
+            }
+        );
+        // Its first turn: nothing to keep, a new conversation.
+        let mut a = rt();
+        let fx = refused_turn(&mut a);
+        assert_eq!(fx.turn_end, Some(TurnEnd::Refused));
+        assert_eq!(engine::Start::of(&a.meta), engine::Start::New);
+        // A turn that ends well after it: the next refusal cuts from there.
+        let mut fx = Effects::default();
+        a.push_user("u3", "Autre chose", 0, &[], &mut fx);
+        a.handle_frame(&json!({"type":"result","subtype":"success","is_error":false,"duration_ms":1,"result":"ok"}), &mut fx);
+        assert_eq!(a.meta.refusal_cut, None);
+        assert!(!a.meta.refused);
+        // Another error of the API is no refusal.
+        let mut a = rt();
+        a.meta.session_id = Some("s1".into());
+        let mut fx = Effects::default();
+        a.push_user("u2", "Go", 0, &[], &mut fx);
+        a.handle_frame(&json!({"type":"assistant","error":"server_error","parent_tool_use_id":null,
+            "message":{"id":"m9","model":"<synthetic>","stop_reason":"stop_sequence","content":[{"type":"text","text":"API Error: 500"}]}}), &mut fx);
+        let mut fx = Effects::default();
+        a.handle_frame(&json!({"type":"result","subtype":"success","is_error":true,"duration_ms":1,"result":"API Error: 500"}), &mut fx);
+        assert_eq!(fx.turn_end, Some(TurnEnd::Error("API Error: 500".into())));
+        assert_eq!(a.meta.session_id.as_deref(), Some("s1"));
+    }
+
+    #[test]
+    fn a_turn_refused_in_claude_codes_own_interface_is_said_so_and_its_conversation_left_to_it() {
+        let mut a = rt();
+        a.meta.session_id = Some("s1".into());
+        a.meta.last_entry = Some("e1".into());
+        let mut fx = Effects::default();
+        a.push_user("u1", "Go", 0, &[], &mut fx);
+        a.apply_item(
+            escouade_plugin_protocol::engine::Item::Refused { category: None },
+            &mut fx,
+        );
+        let mut fx = Effects::default();
+        a.apply_item(
+            escouade_plugin_protocol::engine::Item::Turn {
+                interrupted: false,
+                limited: None,
+                usage: Default::default(),
+                error: Some("API Error: Claude Opus 5.5's safeguards flagged this message".into()),
+                entry: None,
+            },
+            &mut fx,
+        );
+        assert_eq!(fx.turn_end, Some(TurnEnd::Refused));
+        assert!(!fx.refused);
+        let turn = a
+            .conv
+            .items()
+            .into_iter()
+            .rev()
+            .find(|i| i["kind"] == "turn")
+            .unwrap();
+        assert_eq!(
+            (&turn["refused"], &turn["cut"]),
+            (&json!(true), &json!(false))
+        );
+        assert!(a.meta.refused);
+        assert_eq!(a.meta.session_id.as_deref(), Some("s1"));
+        assert_eq!(a.meta.refusal_cut, None);
     }
 
     #[test]

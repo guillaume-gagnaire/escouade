@@ -9642,3 +9642,39 @@ async fn a_limit_of_fables_week_pauses_no_account_and_waits_for_fables_tickets_a
     assert_eq!(h.ticket(&other.id).column, Column::Todo);
     assert_eq!(h.core.autopilot_pause(), None);
 }
+
+#[tokio::test]
+async fn a_ticket_whose_turn_a_safeguard_refused_is_blocked_for_it_and_is_not_sent_again_by_itself()
+{
+    let h = harness("tk-refusal");
+    let (p, _) = h.project(false).await;
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Lire la page [refus]", &[], 5))
+        .await
+        .unwrap();
+    h.wait_ticket(&t.id, "blocked", |t| t.blocked.is_some())
+        .await;
+    let blocked = h.ticket(&t.id);
+    assert_eq!(
+        (blocked.column, blocked.blocked.as_deref()),
+        (Column::Doing, Some("Refus d'un safeguard d'Anthropic"))
+    );
+    let aid = blocked.agent_id.unwrap();
+    let cwd = std::path::PathBuf::from(h.agent(&aid).cwd);
+    // Nothing takes it up by itself: it would be refused again as it is.
+    h.core.schedule();
+    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+    assert_eq!(h.stdin_messages(&cwd).len(), 1);
+    assert_eq!(
+        h.ticket(&t.id).blocked.as_deref(),
+        Some("Refus d'un safeguard d'Anthropic")
+    );
+    // « Reprendre »: its first turn was refused, nothing came before it, so its next start is a new conversation.
+    let launched = h.launches(&cwd).len();
+    h.core.ticket_resume(&t.id).await.unwrap();
+    h.wait("started again", |h| h.launches(&cwd).len() > launched)
+        .await;
+    let argv = h.launches(&cwd).pop().unwrap();
+    assert!(!argv.iter().any(|a| a.starts_with("--resume")), "{argv:?}");
+}
