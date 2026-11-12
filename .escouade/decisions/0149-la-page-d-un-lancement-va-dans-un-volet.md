@@ -1,9 +1,9 @@
 ---
-number: null
+number: 149
 id: "la-page-d-un-lancement-va-dans-un-volet"
 title: "La page d'un lancement va dans un volet de l'écran partagé, et sa barre prend les contrôles de l'app"
 date: "2026-11-12"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-419"
 pages: ["fenetre/ecran-partage","kanban/page-du-lancement"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/ecran-partage","added":9,"removed":6},{"page":"kanban/page-du-lancement","added":11,"removed":5}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-12T15:03:58+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

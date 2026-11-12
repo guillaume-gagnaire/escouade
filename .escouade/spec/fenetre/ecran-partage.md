@@ -3,7 +3,7 @@ title: "Écran partagé"
 subject: "fenetre"
 sources: ["docs/SPLIT.md","design/split-view/index.html"]
 tickets: ["ESC-392","ESC-399","ESC-419"]
-decisions: [128,134,"la-page-d-un-lancement-va-dans-un-volet"]
+decisions: [128,134,149]
 compared: null
 ---
 
