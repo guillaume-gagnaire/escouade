@@ -347,7 +347,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const QUESTION = path.join(ROOT, 'src-tauri', 'src', 'voice', 'testdata', 'question-fr.wav');
 const SAID = 'Ajoute un test pour la page des réglages, puis lance la suite.';
 const SPOKEN_LOG = path.join(os.tmpdir(), `escouade-e2e-codex-spoken-${process.pid}.txt`);
-const VOICES = JSON.parse(fs.readFileSync(path.join(ROOT, 'src-tauri', 'src', 'voice', 'speech', 'voices.json'), 'utf8')) as {
+const VOICES = JSON.parse(fs.readFileSync(path.join(ROOT, 'crates', 'escouade-voice-local', 'src', 'speech', 'voices.json'), 'utf8')) as {
   id: string;
   onnxSize: number;
   jsonSize: number;
