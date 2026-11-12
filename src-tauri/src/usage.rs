@@ -104,18 +104,10 @@ pub fn reading_of(v: &Value) -> Reading {
     }
 }
 
-/// The app's own requests (quotas, ticket systems): through the proxy, trusting the certificates
-/// the system trusts as well as the usual ones, or none checked when TLS verification is off.
+/// The app's own requests (quotas, ticket systems): through the proxy, trusting the authorities
+/// of `crate::tls` (the system's, the settings' file).
 pub fn http_client(settings: &Settings) -> Result<reqwest::Client> {
-    let mut b = reqwest::Client::builder()
-        .timeout(Duration::from_secs(15))
-        .danger_accept_invalid_certs(settings.insecure_tls);
-    let url = settings.proxy_url.trim();
-    if !url.is_empty() {
-        let proxy =
-            reqwest::Proxy::all(url)?.no_proxy(reqwest::NoProxy::from_string(&settings.no_proxy));
-        b = b.proxy(proxy);
-    }
+    let b = crate::tls::app_builder(settings)?.timeout(Duration::from_secs(15));
     Ok(b.build()?)
 }
 

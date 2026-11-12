@@ -69,11 +69,20 @@ export function byKey(engine: EngineId | null | undefined): boolean {
   return !!capsOf(engine)?.accountsByKey;
 }
 
-/** The modes the harness of `who` takes, among `all` (in their order). */
-export function modesOf<T extends { value: string }>(who: { engine: EngineId | null | undefined }, all: T[]): T[] {
+/**
+ * The modes the harness of `who` takes, among `all` (in their order); « Bypass » only once « Autoriser le mode Bypass »
+ * is on (SEC-09), or for `current`, the mode it is in already.
+ */
+export function modesOf<T extends { value: string }>(who: { engine: EngineId | null | undefined }, all: T[], current?: string): T[] {
   const ids = new Set(capsOf(who.engine)?.modes.map((m) => m.id) ?? []);
-  return all.filter((m) => ids.has(m.value));
+  return all.filter((m) => ids.has(m.value) && (m.value !== BYPASS || app.settings.allowBypass || m.value === current));
 }
+
+/** The mode where a harness asks nothing (`src-tauri/src/bypass.rs`). */
+export const BYPASS = 'bypassPermissions';
+
+/** The mode the assistant of the first start recommends (SEC-09). */
+export { RECOMMENDED_MODE } from './first-mode';
 
 /** Whether any harness Escouade knows has the capability `flag` (for a setting of them all). */
 export function anyCan(flag: Flag): boolean {

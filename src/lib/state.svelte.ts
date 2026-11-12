@@ -29,6 +29,7 @@ import { applyTheme } from './theme';
 import { hasTab } from './code-host';
 import { newCount, opened, readSeen, seenOf, type PrSeen } from './prnew';
 import { workflows } from './workflows.svelte';
+import { modeToAsk } from './first-mode';
 import {
   activeItem,
   close as closePane,
@@ -112,6 +113,8 @@ export type Modal =
   | { kind: 'newProject'; path?: string; historyId?: string; projectId?: string }
   /** The question of the first start: the usage statistics. */
   | { kind: 'telemetry' }
+  /** The first start's question of the mode of new agents (SEC-09). */
+  | { kind: 'firstMode' }
   /** The first launch's other question (ESC-190): the user's name for the team; `then`, what waited for it (a share). */
   | { kind: 'teamName'; projectId?: string; then?: () => void }
   /** ESC-255: what Claude Code remembers of a project, offered once to its shared memory, memory by memory. */
@@ -806,8 +809,10 @@ class AppState {
     this.restartAt = s.restartAt ?? null;
     this.failedUpdate = s.failedUpdate ?? null;
     if (s.pageCrash) this.tellPageCrash(s.pageCrash);
-    // Not answered yet (closed without a choice: asked again at the next start).
-    if (s.settings.telemetry === null) this.modal = { kind: 'telemetry' };
+    // The mode of new agents, then the statistics: not answered yet (closed without a choice: asked again at the next
+    // start). An installation that existed before the first has `auto` (SEC-09).
+    if (modeToAsk(s.settings)) this.modal = { kind: 'firstMode' };
+    else if (s.settings.telemetry === null) this.modal = { kind: 'telemetry' };
     // The user's name for the shared tickets (ESC-190), asked once, after the statistics' question.
     else if (!s.settings.nameAsked) this.modal = { kind: 'teamName' };
     if (s.installed) {

@@ -76,21 +76,14 @@ pub fn platform() -> String {
     format!("{system}-{arch}")
 }
 
-/// The client of the store's requests: Réglages › Avancé › Réseau's proxy, the certificates the system
-/// trusts (a corporate proxy's own authority), TLS unchecked when the user switched it off.
+/// The client of the store's requests: Réglages › Avancé › Réseau's proxy, the authorities of
+/// `crate::tls` (the system's, the settings' file).
 pub fn client(settings: &Settings) -> reqwest::Result<reqwest::Client> {
-    let mut b = reqwest::Client::builder()
+    crate::tls::app_builder(settings)?
         .connect_timeout(Duration::from_secs(15))
         .timeout(Duration::from_secs(300))
         .user_agent(concat!("escouade/", env!("CARGO_PKG_VERSION")))
-        .danger_accept_invalid_certs(settings.insecure_tls);
-    let url = settings.proxy_url.trim();
-    if !url.is_empty() {
-        let proxy =
-            reqwest::Proxy::all(url)?.no_proxy(reqwest::NoProxy::from_string(&settings.no_proxy));
-        b = b.proxy(proxy);
-    }
-    b.build()
+        .build()
 }
 
 // ---- The catalogue (store/server/utils/catalog.ts) ----

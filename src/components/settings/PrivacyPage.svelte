@@ -11,6 +11,7 @@
   import { wholeApp } from '../../lib/plugins-settings';
   import { plugins } from '../../lib/plugins-view.svelte';
   import { settingsForm } from '../../lib/settings.svelte';
+  import { IS_WINDOWS } from '../../lib/platform';
   import { app } from '../../lib/state.svelte';
   import { tip } from '../../lib/tip';
   import type { Account, Project } from '../../lib/types';
@@ -70,7 +71,11 @@
 <!-- « Projet privé »: what the agents of the other projects see of it through the MCP server; for a private one only
      (choice 28 of the 2.0 design), what keeps its files from them harness by harness, then its accounts. -->
 <Group anchor="private">
-  <Row label={t('settings.project.private')} desc={t('settings.project.privateDesc')} shared="private">
+  <Row
+    label={t('settings.project.private')}
+    desc={IS_WINDOWS ? `${t('settings.project.privateDesc')} ${t('settings.project.privateWindows')}` : t('settings.project.privateDesc')}
+    shared="private"
+  >
     <Switch label={t('settings.project.private')} bind:on={draft.private} />
   </Row>
   {#if draft.private}

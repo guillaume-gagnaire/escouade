@@ -53,6 +53,7 @@ fn url(s: &str) -> Url {
 /// A network that goes through `proxy`, or nothing: never the system's, which a test cannot know.
 fn net(proxy: Option<&Server>) -> Network {
     Network {
+        extra_ca: String::new(),
         proxy: proxy.map(|p| url(&format!("http://{}", p.address()))),
         system_proxy: false,
         insecure_tls: false,
@@ -1355,15 +1356,17 @@ async fn a_page_is_read_for_what_is_text_only_and_for_a_few_kilobytes_at_most() 
 }
 
 #[tokio::test]
-async fn the_probe_trusts_a_self_signed_certificate_only_with_tls_verification_off() {
+async fn the_probe_trusts_a_proxys_root_by_the_file_of_authorities_and_never_unchecked_straight() {
     let server = crate::integrations::fake::FakeServer::start_tls().await;
     server.on("GET", "/latest.json", 403, serde_json::json!({}));
     let target = url(&format!("{}/latest.json", server.url));
-    let ask = |insecure_tls: bool| {
+    let ca = authorities(&server);
+    let ask = |insecure_tls: bool, extra_ca: &str| {
         let (target, network) = (
             target.clone(),
             Network {
                 insecure_tls,
+                extra_ca: extra_ca.to_string(),
                 ..Network::default()
             },
         );
@@ -1380,10 +1383,22 @@ async fn the_probe_trusts_a_self_signed_certificate_only_with_tls_verification_o
         }
     };
     // Verified: the certificate is refused, there is no answer.
-    let verified = ask(false).await;
+    let verified = ask(false, "").await;
     assert_eq!((verified.status, verified.answered), (None, false));
     assert_eq!(verified.host, "127.0.0.1");
-    // Not verified: the server answers.
-    let trusting = ask(true).await;
+    // « Ignorer la vérification », straight (no proxy): still refused.
+    let straight = ask(true, "").await;
+    assert_eq!((straight.status, straight.answered), (None, false));
+    // The file of authorities: the server answers.
+    let trusting = ask(false, &ca).await;
     assert_eq!((trusting.status, trusting.answered), (Some(403), true));
+}
+
+/// The fake server's certificate as a file of authorities.
+fn authorities(server: &crate::integrations::fake::FakeServer) -> String {
+    let dir = std::env::temp_dir().join(format!("tls-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("root.pem");
+    std::fs::write(&path, &server.cert_pem).unwrap();
+    path.to_string_lossy().into_owned()
 }

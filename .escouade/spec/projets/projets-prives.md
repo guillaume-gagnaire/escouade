@@ -2,8 +2,8 @@
 title: "Projets privés"
 subject: "Projets"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-139","ESC-140","ESC-142","ESC-364","ESC-371"]
-decisions: []
+tickets: ["ESC-139","ESC-140","ESC-142","ESC-364","ESC-371","ESC-425"]
+decisions: ["certificats-par-un-fichier-d-autorites-p"]
 compared: null
 ---
 
@@ -69,3 +69,8 @@ Changer « Projet privé » ne coupe rien sur le moment ; le serveur MCP le pren
 - Un chemin de la clôture est reconnu à son texte et à son chemin résolu (`..`, chemin relatif joint au dossier de l'agent) ; un nom court ou une jonction ne l'est pas, le `deny` d'`agy` restant la seule garde là.
 - « Toujours » n'est pas offert : ce qu'il couvrirait ne serait plus jugé.
 - Pour une commande, la clôture reste une garde sur son texte : celle qui atteint un chemin sans le nommer passe.
+
+## Ce que l'interface en dit, et les plugins tiers (SEC-08, ESC-425)
+
+- **Sous Windows**, la description de « Projet privé » ajoute : « Sous Windows, la clôture d’un agent est une consigne donnée à son harness, pas un cloisonnement du système : une commande peut la contourner. Pour séparer deux clients, un compte Windows par client. Un plugin tiers n’y est lancé qu’une fois activé par toi pour ce projet. » La doc du site (Réglages › Projets) le dit aussi.
+- **Un harness d'un plugin tiers** (dont l'id ne commence pas par `dev.escouade.`) n'est lancé dans un projet privé qu'une fois allumé pour ce projet par l'utilisateur (« Activer », ou le bouton du projet dans la page du plugin) : avant, son état est « demande » et tout démarrage est refusé (voir *Harness*, un harness coupé pour un projet). La migration unique qui allume, pour un projet privé, les harness que ses agents utilisaient déjà (ESC-404) n'allume que ceux d'Escouade : un harness tiers y demande l'accord.

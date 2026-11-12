@@ -1225,7 +1225,16 @@ impl Fetcher {
     }
 
     fn build(&self, settings: &Settings, by_proxy: bool) -> Option<reqwest::Client> {
-        let mut b = reqwest::Client::builder()
+        // Around the proxy, « Ignorer la vérification des certificats » does not hold (`crate::tls`).
+        let trust = if by_proxy {
+            settings.clone()
+        } else {
+            Settings {
+                insecure: false,
+                ..settings.clone()
+            }
+        };
+        let mut b = crate::tls::builder(&trust)
             .dns_resolver(Arc::new(Guarded {
                 dns: self.dns.clone(),
                 open: self.open(),
@@ -1234,7 +1243,6 @@ impl Fetcher {
             .redirect(reqwest::redirect::Policy::none())
             // The settings' proxy alone, never the system's.
             .no_proxy()
-            .danger_accept_invalid_certs(settings.insecure)
             .user_agent(concat!("escouade/", env!("CARGO_PKG_VERSION")));
         if by_proxy && !settings.proxy.is_empty() {
             // A proxy that is no address stops the call: going around it would leave by a way the user closed.
@@ -1426,8 +1434,10 @@ impl Fetcher {
             let host = host.trim_matches(['[', ']']);
             let tls_name = rustls::pki_types::ServerName::try_from(host.to_string())
                 .map_err(|e| failed(e.to_string()))?;
-            let insecure = self.live.read().insecure;
-            let connector = tokio_rustls::TlsConnector::from(super::socket::tls_config(insecure));
+            // A routed socket goes around the proxy: its certificate is checked whatever the settings say.
+            let mut trust = self.live.read().clone();
+            trust.insecure &= !judged.routed;
+            let connector = tokio_rustls::TlsConnector::from(crate::tls::config(&trust));
             Box::new(
                 connector
                     .connect(tls_name, tcp)

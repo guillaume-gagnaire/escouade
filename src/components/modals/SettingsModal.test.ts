@@ -297,6 +297,29 @@ describe('SettingsModal', () => {
     expect(app.settings.insecureTls).toBe(true);
   });
 
+  it('takes a file of extra authorities, says how many certificates it holds, and offers it in place of skipping the check', async () => {
+    const backend = fakeBackend({
+      save_settings: () => [],
+      check_authorities: ({ path }) => {
+        if (path.endsWith('zscaler.pem')) return 1;
+        throw 'aucun certificat PEM dans ' + path;
+      },
+    });
+    render(SettingsModal);
+    await userEvent.click(tab('Avancé'));
+    // The sentence that sends a Zscaler user to the file rather than to the switch.
+    expect(panel()).toHaveTextContent("Avec Zscaler ou un proxy d'entreprise : choisis son certificat racine");
+    expect(panel()).toHaveTextContent("sans proxy, elle n'a aucun effet");
+    const field = screen.getByRole('textbox', { name: 'Autorités de certification supplémentaires' });
+    await userEvent.type(field, 'C:/certs/vide.txt');
+    expect(await screen.findByText('aucun certificat PEM dans C:/certs/vide.txt')).toBeInTheDocument();
+    await userEvent.clear(field);
+    await userEvent.type(field, 'C:/certs/zscaler.pem');
+    expect(await screen.findByTestId('extra-ca-count')).toHaveTextContent('1 certificat lu');
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ extraCaFile: 'C:/certs/zscaler.pem' });
+  });
+
   it('chooses what to be told about, everything on by default', async () => {
     const backend = backendSaving();
     render(SettingsModal);

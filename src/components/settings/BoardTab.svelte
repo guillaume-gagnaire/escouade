@@ -205,7 +205,10 @@
   <Row label={t('boardSettings.tab.mode')} shared="board.mode">
     <select class="field select" aria-label={t('boardSettings.tab.mode')} bind:value={b.mode}>
       <option value="">{t('boardSettings.tab.default')}</option>
-      {#each MODES as m (m.value)}<option value={m.value}>{m.label}</option>{/each}
+      <!-- « Bypass » once allowed in Réglages › Agents (SEC-09), or kept when the board has it already. -->
+      {#each MODES.filter((m) => m.value !== 'bypassPermissions' || app.settings.allowBypass || b.mode === m.value) as m (m.value)}<option
+          value={m.value}>{m.label}</option
+        >{/each}
     </select>
   </Row>
 </Group>

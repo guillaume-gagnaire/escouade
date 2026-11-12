@@ -64,6 +64,11 @@ For a private project, the agents of the other projects neither read nor write i
 
 A guard is a rule of the harness, which a command can get around; a barrier holds for all its commands. A barrier for every harness would take a system account per project: Escouade doesn’t offer it, as the harnesses and their accounts wouldn’t follow. When you change “Private project”, an agent already running takes its new rules before its next turn: its process starts again, its conversation stays. An agent open in a terminal view takes them at its next launch.
 
+> [!WARNING]
+> On Windows, an agent’s fence is an instruction given to its harness, not a partition of the system: Claude Code has no sandbox there, and a command that builds its path another way reads the folder. The page says so under “Private project”. To keep two clients apart, use one Windows account (or one computer) per client.
+
+A harness served by a third-party plugin (one whose id doesn’t start with `dev.escouade.`) runs in a private project only once you turn it on for that project: its first agent there asks you first (“Turn on”), and the update that turns on, once, the harnesses a private project already used turns on Escouade’s own alone.
+
 ## Workflow
 
 Escouade reads the project’s workflow in your harnesses’ files: their commands, skills, subagents and prompts, `PROMPT.md`, the state files and the instructions, with what they include by `@`. On your machine, at no cost.

@@ -39,9 +39,23 @@ pub struct Settings {
     pub no_proxy: String,
     /// Also export the proxy variables in integrated terminals.
     pub proxy_terminals: bool,
-    /// TLS certificates are not checked (a proxy that decrypts the traffic with a certificate of
-    /// its own): the app's own requests, its updates and Claude Code's.
+    /// « Ignorer la vérification des certificats TLS » (a proxy that decrypts the traffic with a
+    /// certificate of its own): kept for the installations that have it, it holds for the
+    /// connections through `proxy_url` alone, and does nothing with no proxy (`crate::tls`).
+    /// `extra_ca_file` is the way to prefer.
     pub insecure_tls: bool,
+    /// « Autorités de certification supplémentaires »: a `.pem` file trusted as well as the
+    /// system's store (a corporate proxy's root, Zscaler's), by the app, the plugins' network and
+    /// the agents (`NODE_EXTRA_CA_CERTS`, `CODEX_CA_CERTIFICATE`). Empty, none.
+    pub extra_ca_file: String,
+    /// « Autoriser le mode Bypass » (SEC-09): the mode where a harness asks nothing is open to the agents, and Claude
+    /// Code gets `--allow-dangerously-skip-permissions`. None until the first start that knows it settles it
+    /// (`Core::settle_bypass`): on for an installation that already used the mode, off otherwise and for a new one.
+    pub allow_bypass: Option<bool>,
+    /// « Mode par défaut des agents », chosen in the assistant of the first start (SEC-09): the mode of the new agents of
+    /// an account that says none, when its harness has it (`accounts::defaults_with`). Empty, not answered yet:
+    /// `accounts::RECOMMENDED_MODE`; an installation that existed before it was asked has `auto`, as it had.
+    pub agent_mode: String,
     /// Send "continue" by itself to an agent stopped by the usage limit, once the quota resets.
     pub auto_resume: bool,
     /// "Pause au-delà du quota", in percent (80, 90, 95 or 100): no ticket of any board starts
@@ -639,12 +653,32 @@ impl Settings {
         }
     }
 
-    /// The network settings of a Claude Code process: its proxy, and its TLS verification off
-    /// when asked.
+    /// The network settings of a harness's process: its proxy, the file of extra authorities,
+    /// and its TLS verification off when asked and a proxy is configured (with none, the setting
+    /// does nothing, `crate::tls`).
     pub fn claude_env(&self) -> Vec<(String, String)> {
-        let mut env = self.proxy_env();
-        if self.insecure_tls {
+        let mut env = self.network_env();
+        if crate::tls::Net::of(self).unchecked_by_proxy() {
             env.push(("NODE_TLS_REJECT_UNAUTHORIZED".into(), "0".into()));
+        }
+        env
+    }
+
+    /// Whether the mode of no question is open to the agents (`crate::bypass`).
+    pub fn bypass_allowed(&self) -> bool {
+        self.allow_bypass.unwrap_or(false)
+    }
+
+    /// The proxy and the file of extra authorities, as each harness reads it: Node's (Claude
+    /// Code, Copilot CLI, Cursor, Gemini CLI, OpenCode on Bun) adds it to its own authorities,
+    /// Codex's `CODEX_CA_CERTIFICATE` as well.
+    pub fn network_env(&self) -> Vec<(String, String)> {
+        let mut env = self.proxy_env();
+        let ca = self.extra_ca_file.trim();
+        if !ca.is_empty() {
+            for k in EXTRA_CA_VARS {
+                env.push((k.to_string(), ca.to_string()));
+            }
         }
         env
     }
@@ -681,6 +715,9 @@ impl Settings {
     }
 }
 
+/// The variables that give a harness the file of extra authorities (`Settings::network_env`).
+pub const EXTRA_CA_VARS: [&str; 2] = ["NODE_EXTRA_CA_CERTS", "CODEX_CA_CERTIFICATE"];
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -701,6 +738,9 @@ impl Default for Settings {
             no_proxy: "localhost,127.0.0.1".into(),
             proxy_terminals: false,
             insecure_tls: false,
+            extra_ca_file: String::new(),
+            allow_bypass: None,
+            agent_mode: String::new(),
             auto_resume: true,
             quota_pause: 100,
             switch_at: 100,
@@ -3994,14 +4034,12 @@ mod tests {
     }
 
     #[test]
-    fn claude_code_gets_the_proxy_and_skips_tls_verification_only_when_asked() {
+    fn claude_code_gets_the_proxy_and_skips_tls_verification_only_when_asked_and_by_a_proxy() {
         let mut s = Settings::default();
         assert!(s.claude_env().is_empty());
+        // No proxy: « Ignorer la vérification » does nothing (`crate::tls`).
         s.insecure_tls = true;
-        assert_eq!(
-            s.claude_env(),
-            [("NODE_TLS_REJECT_UNAUTHORIZED".to_string(), "0".to_string())]
-        );
+        assert!(s.claude_env().is_empty());
         s.proxy_url = "http://proxy:3128".into();
         let env = s.claude_env();
         assert!(env.contains(&("HTTPS_PROXY".to_string(), "http://proxy:3128".to_string())));

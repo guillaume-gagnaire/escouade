@@ -53,6 +53,7 @@
   import TestLaunchModal from './components/modals/TestLaunchModal.svelte';
   import ImportModal from './components/modals/ImportModal.svelte';
   import TelemetryModal from './components/modals/TelemetryModal.svelte';
+  import FirstModeModal from './components/modals/FirstModeModal.svelte';
   import TeamNameModal from './components/modals/TeamNameModal.svelte';
   import UpdateModal from './components/modals/UpdateModal.svelte';
   import ClaudeMemoryModal from './components/modals/ClaudeMemoryModal.svelte';
@@ -68,6 +69,7 @@
   import StatusBar from './components/StatusBar.svelte';
   import TerminalView from './components/TerminalView.svelte';
   import TitleBar from './components/TitleBar.svelte';
+  import TlsBanner from './components/TlsBanner.svelte';
   import Toasts from './components/Toasts.svelte';
   import Welcome from './components/Welcome.svelte';
   import PaneDrop from './components/panes/PaneDrop.svelte';
@@ -204,6 +206,7 @@
      sidebar on the frame and the work on its panel. -->
 <div class="root" style:--rail="{railWidth.shown}px" style:--side="{sideWidth.shown}px">
   <TitleBar />
+  {#if app.ready}<TlsBanner />{/if}
   <ProjectRail />
   <div class="body">
     {#if initError}
@@ -346,6 +349,8 @@
   <UpdateModal version={app.update.version} notes={app.update.notes} back={app.modal.back} />
 {:else if app.modal?.kind === 'claudeMemory'}
   <ClaudeMemoryModal projectId={app.modal.projectId} offered={app.modal.offered} />
+{:else if app.modal?.kind === 'firstMode'}
+  <FirstModeModal />
 {:else if app.modal?.kind === 'telemetry'}
   <TelemetryModal />
 {:else if app.modal?.kind === 'teamName'}
@@ -390,7 +395,8 @@
     min-width: 1000px;
     display: grid;
     grid-template-columns: var(--rail) minmax(0, 1fr);
-    grid-template-rows: 44px minmax(0, 1fr) 30px;
+    /* The second row, empty unless a band holds it (`TlsBanner`). */
+    grid-template-rows: 44px auto minmax(0, 1fr) 30px;
     background: var(--frame);
     overflow: hidden;
   }
@@ -406,7 +412,7 @@
   }
   .body {
     grid-column: 2;
-    grid-row: 2;
+    grid-row: 3;
     display: flex;
     min-width: 0;
     min-height: 0;

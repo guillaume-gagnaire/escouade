@@ -1,5 +1,6 @@
 <script lang="ts">
   import { writerOf, writerOptions } from '../../lib/engines';
+  import { FIRST_MODES, RECOMMENDED_MODE } from '../../lib/first-mode';
   import { installedEngines } from '../../lib/installed';
   import { t } from '../../lib/i18n';
   import { settingsForm, type NumberSetting } from '../../lib/settings.svelte';
@@ -40,6 +41,13 @@
   const writerModel = $derived(writerModels?.some((m) => m.id === s.writerModel) ? (s.writerModel ?? '') : '');
   /** The harnesses that have a remote control (Claude Code): the others have none, which the row says. */
   const remote = $derived(installedEngines().filter((e) => e.caps.remoteControl));
+  /** « Mode par défaut des agents » (SEC-09): the four modes of the first start's question; empty is the recommended one. */
+  const firstModes = $derived(
+    FIRST_MODES.map((m) => ({
+      value: m,
+      label: t(`composer.mode.${m}.label`) + (m === RECOMMENDED_MODE ? ` · ${t('settings.permissions.recommended')}` : ''),
+    })),
+  );
   /** What only some harnesses do, among those an installed plugin brings (ESC-407). */
   const anyCan = (flag: 'terminalView' | 'todoTools') => installedEngines().some((e) => e.caps[flag]);
 </script>
@@ -65,6 +73,20 @@
   {/if}
   <Row label={t('settings.claude.midTurnDelay')} desc={t('settings.claude.midTurnDelayDesc')}>
     <Chips label={t('settings.claude.midTurnDelay')} options={midTurnDelayOptions} bind:value={s.midTurnDelaySecs} />
+  </Row>
+</Group>
+
+<!-- SEC-09: the mode of new agents chosen at the first start, and the mode of no question allowed or not. -->
+<Group title={t('settings.permissions.title')}>
+  <Row label={t('settings.permissions.agentMode')} desc={t('settings.permissions.agentModeDesc')}>
+    <Chips
+      label={t('settings.permissions.agentMode')}
+      options={firstModes}
+      bind:value={() => s.agentMode || RECOMMENDED_MODE, (v) => (s.agentMode = v)}
+    />
+  </Row>
+  <Row label={t('settings.permissions.allowBypass')} desc={t('settings.permissions.allowBypassDesc')}>
+    <Switch label={t('settings.permissions.allowBypass')} bind:on={() => !!s.allowBypass, (v) => (s.allowBypass = v)} />
   </Row>
 </Group>
 

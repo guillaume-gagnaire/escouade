@@ -738,18 +738,21 @@ impl ProcessEngine {
 
     /// The launch of its interface in a terminal (`terminal/launch`), checked as an agent's launch is: its files under
     /// its home or beside its private file (`TerminalParams::private_file`). `place` is where its `fs/*` reach, under the
-    /// agent's key; `fence_by_core`: the core writes the fence itself in the private file (Claude Code's settings).
+    /// agent's key; `fence_by_core`: the core writes the fence itself in the private file (Claude Code's settings);
+    /// `bypass`: « Autoriser le mode Bypass » (`crate::bypass`).
     pub async fn terminal_launch(
         &self,
         params: proto::TerminalParams,
         place: super::files::AgentPlace,
         fence_by_core: bool,
+        bypass: bool,
     ) -> Result<proto::TerminalLaunch> {
         // Where its `fs/*` reach for the time of the call: no agent is attached, the interface is not the plugin's.
         let _ = self.rt.place_agent(&self.plugin, &params.agent, place);
         let told = self.call(method::TERMINAL_LAUNCH, &params).await;
         self.rt.detach(&self.plugin, &params.agent);
-        let told: proto::TerminalLaunch = told?;
+        let mut told: proto::TerminalLaunch = told?;
+        crate::bypass::hold(&mut told.launch.args, bypass);
         // Its own files: beside its private file, or under its home.
         let private = Path::new(&params.private_file);
         let home = params.home.as_deref();
@@ -2002,7 +2005,9 @@ impl ProcessEngineProcess {
             .call(&self.plugin, method::LAUNCH, serde_json::to_value(&params)?)
             .await
             .map_err(|e| down(self.name, e))?;
-        let launch: proto::Launch = serde_json::from_value(v)?;
+        let mut launch: proto::Launch = serde_json::from_value(v)?;
+        // Without « Autoriser le mode Bypass », nothing opens the mode of no question (SEC-09).
+        crate::bypass::hold(&mut launch.args, spawn.bypass);
         // The settings file the core wrote holds the fence: a launch that names it holds the fence too.
         let in_settings = launch.fence_applied
             && settings

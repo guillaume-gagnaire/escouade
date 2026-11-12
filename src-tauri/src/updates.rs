@@ -816,9 +816,9 @@ impl<R: Runtime> Checker<R> {
             Via::Proxy(proxy) => builder = builder.proxy(proxy.clone()),
             Via::System => {}
         }
-        if self.net.insecure_tls {
-            builder = builder.configure_client(|c| c.danger_accept_invalid_certs(true));
-        }
+        // The plugin's own client, with the same trust as the app's requests (`crate::tls`).
+        let tls = (*crate::tls::config(&self.net.trust(route))).clone();
+        builder = builder.configure_client(move |c| c.use_preconfigured_tls(tls.clone()));
         Ok(builder.build()?)
     }
 

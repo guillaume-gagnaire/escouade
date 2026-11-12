@@ -74,6 +74,18 @@ Désactivé, plus rien ne met Claude Code à jour : lance `claude update` toi-m�
 
 Le modèle, l’effort et le mode avec lesquels partent les nouveaux [agents](managing-agents) se règlent compte par compte, dans sa fiche de [Réglages › Comptes et harness](settings-accounts), parmi ceux de son harness : il n’y a plus de réglage commun ici. Dans le champ de message d’un agent, tu peux les changer pour cet agent seul. Les tickets du Kanban prennent ceux du ticket, sinon de la page [« Kanban »](settings-board) du projet, sinon du compte qui les prend.
 
+### Permissions
+
+| Réglage | Effet | Par défaut |
+|---|---|---|
+| « Mode par défaut des agents » | Le mode des nouveaux agents d’un compte qui n’en dit pas : « Édits auto », « Demander », « Plan » ou « Auto ». Les agents et les tickets en cours gardent le leur. | Choisi au premier démarrage (« Édits auto » recommandé) ; « Auto » pour une installation d’avant la 2.2 |
+| « Autoriser le mode Bypass » | Ouvre le mode « Bypass » aux agents. Éteint, aucun agent ne démarre ni ne passe en Bypass, les menus ne le proposent pas, et Claude Code est lancé sans `--allow-dangerously-skip-permissions`. | Désactivé ; allumé pour une installation qui utilisait déjà Bypass |
+
+Au premier démarrage, Escouade demande ce mode avant toute autre question. « Édits auto » est recommandé : c’est le plus prudent qui laisse un ticket avancer. Les modifications dans le dossier de l’agent passent sans demander (elles restent dans son worktree, visibles dans son diff) et chaque commande demande ton accord : c’est par une commande qu’un contenu piégé ferait du mal. « Demander » arrête un ticket à chaque fichier ; « Auto » laisse un classifieur lancer des commandes sans te les montrer.
+
+> [!WARNING]
+> En mode Bypass, le harness n’attend aucune permission : il lit, écrit et lance des commandes sans rien te montrer, y compris ce qu’un contenu piégé lui ferait faire. À réserver à une machine ou un conteneur jetable.
+
 ### Les niveaux d’effort
 
 | Niveau | Sens |
@@ -92,7 +104,7 @@ Le modèle, l’effort et le mode avec lesquels partent les nouveaux [agents](ma
 | « Demander » | Claude demande ton accord avant chaque action sensible |
 | « Plan » | Claude analyse et propose un plan sans rien modifier |
 | « Édits auto » | Les modifications de fichiers sont acceptées sans demander |
-| « Bypass » | Aucune demande de permission (à réserver aux environnements sûrs) |
+| « Bypass » | Aucune demande de permission (à réserver aux environnements sûrs). Proposé seulement avec « Autoriser le mode Bypass » |
 
 Les demandes d’autorisation et leur traitement sont décrits dans [la conversation](chat), et le mode « Plan » dans [le plan](plan).
 

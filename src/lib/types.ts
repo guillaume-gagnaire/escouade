@@ -38,8 +38,14 @@ export interface Settings {
   proxyUrl: string;
   noProxy: string;
   proxyTerminals: boolean;
-  /** TLS certificates are not checked (a proxy with a certificate of its own). */
+  /** « Ignorer la vérification des certificats TLS »: through the proxy alone, nothing without one (SEC-07). */
   insecureTls: boolean;
+  /** « Autorités de certification supplémentaires »: a `.pem` file trusted as well as the system's store; empty, none. */
+  extraCaFile: string;
+  /** « Autoriser le mode Bypass » (SEC-09): off, no agent goes in `bypassPermissions`. Settled at the first start. */
+  allowBypass: boolean | null;
+  /** « Mode par défaut des agents », chosen at the first start (SEC-09); empty: not answered yet. */
+  agentMode: string;
   /** Send "continue" by itself to an agent stopped by the usage limit, once the quota resets. */
   autoResume: boolean;
   /** « Reprendre sur un autre compte un agent de ticket arrêté par la limite »: such an agent goes on by itself on another usable account, rather than wait for its own to reset. */

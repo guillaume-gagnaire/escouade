@@ -23,6 +23,7 @@ export default {
     missing: '{harness} n’a pas de mode {mode}.',
     missingAuto: '{harness} n’a pas de mode Auto : rien ne décide à ta place.',
     bypassToast: 'Mode Bypass : {engine} agira sans aucune demande de permission.',
+    bypassNotAllowed: 'Le mode Bypass est coupé : à permettre dans Réglages › Agents.',
   },
 
   /** Files attached to a message (`lib/attachments.ts`). */

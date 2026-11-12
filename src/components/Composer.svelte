@@ -149,9 +149,12 @@
   // The modes its harness takes, each with what it means there when that is not what Escouade's menu says.
   const caps = $derived(capsOf(agent.engine));
   // The five modes keep their places: one its harness lacks is greyed, with why (choice 17 of the 2.0 design).
-  const takes = $derived(new Set(modesOf(agent, MODES).map((m) => m.value)));
+  const takes = $derived(new Set(modesOf(agent, MODES, agent.mode).map((m) => m.value)));
   const modeOptions = $derived(
     MODES.map((md) => {
+      // « Bypass » its harness has, not allowed in the settings (SEC-09).
+      if (md.value === 'bypassPermissions' && !takes.has(md.value) && caps?.modes.some((m) => m.id === md.value))
+        return { value: md.value, label: md.label, disabled: true, reason: t('composer.mode.bypassNotAllowed') };
       if (!takes.has(md.value)) {
         const harness = engineName(agent.engine);
         const reason =

@@ -18,6 +18,9 @@ export const OS: Os = typeof navigator !== 'undefined' ? osOf(navigator.platform
 /** True on macOS. */
 export const IS_MAC = OS === 'mac';
 
+/** True on Windows. */
+export const IS_WINDOWS = OS === 'windows';
+
 /** The app's shortcut modifier is held alone: Cmd on macOS, Ctrl elsewhere (for a key or a click). */
 export function primaryKey(e: { ctrlKey: boolean; metaKey: boolean }, mac = IS_MAC): boolean {
   return mac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;

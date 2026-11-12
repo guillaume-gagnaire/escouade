@@ -541,7 +541,7 @@ async fn a_terminal_view_is_launched_from_the_plugin_s_description_and_its_hooks
         ..proto::TerminalParams::default()
     };
     let l = engine
-        .terminal_launch(params, Default::default(), false)
+        .terminal_launch(params, Default::default(), false, true)
         .await
         .unwrap()
         .launch;

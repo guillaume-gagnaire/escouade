@@ -1160,6 +1160,7 @@ impl<R: Runtime> Core<R> {
             (rt.meta.engine, rt.meta.project_id.clone())
         };
         self.check_harness_in(engine, &project_id)?;
+        crate::bypass::check(&h.lock().meta.mode, self.bypass_allowed())?;
         if crate::engine::of(&h.lock().meta).attaches() {
             return self.open_attached(&h, id, size, Box::new(on_data)).await;
         }
@@ -1599,7 +1600,12 @@ impl<R: Runtime> Core<R> {
             project: meta.project_id.clone(),
         };
         let told = match plugin
-            .terminal_launch(params, place, by_core.is_some() || view.fence_by_core())
+            .terminal_launch(
+                params,
+                place,
+                by_core.is_some() || view.fence_by_core(),
+                self.bypass_allowed(),
+            )
             .await
         {
             Ok(t) => t,

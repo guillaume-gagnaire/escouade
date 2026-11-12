@@ -280,7 +280,7 @@
 <style>
   .rail {
     grid-column: 1;
-    grid-row: 2;
+    grid-row: 2 / 4;
     display: flex;
     flex-direction: column;
     align-items: center;

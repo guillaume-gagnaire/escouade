@@ -4,7 +4,7 @@ import { defineZone } from '../types';
 export default defineZone('settings', {
   pages: {
     general: { label: 'General', desc: 'Theme, zoom, language, updates and what concerns you' },
-    agents: { label: 'Agents', desc: 'New agents, written texts, remote control and driving Escouade' },
+    agents: { label: 'Agents', desc: 'New agents, their permissions, written texts, remote control and driving Escouade' },
     accounts: {
       label: 'Accounts and harnesses',
       desc: 'This machine’s harnesses, their accounts, and what happens at the limit',
@@ -154,6 +154,26 @@ export default defineZone('settings', {
     noAccount: '{name} (no account)',
     projectOff: '{name} (off for this project)',
   },
+  permissions: {
+    title: 'Permissions',
+    agentMode: 'Default mode of agents',
+    agentModeDesc: 'The mode of the new agents of an account that sets none. Running agents and tickets keep theirs.',
+    allowBypass: 'Allow Bypass mode',
+    allowBypassDesc:
+      'In Bypass mode, the harness waits for no permission: it reads, writes and runs commands without showing you anything, including what a booby-trapped content would make it do. Off, no agent goes into it and Claude Code is not given --allow-dangerously-skip-permissions. Keep it for a throwaway machine or container.',
+    firstTitle: 'How should your agents ask?',
+    firstBody: 'The permission mode of new agents. You can change it agent by agent, and in Settings › Agents.',
+    recommended: 'Recommended',
+    choose: 'Choose',
+    first: {
+      acceptEdits:
+        'Edits in the agent’s folder go through without asking (they stay in its worktree, visible in its diff); every command asks for your approval. The most careful choice that lets a ticket move forward.',
+      default: 'Every sensitive action asks for your approval, edits included: a ticket stops at every file.',
+      plan: 'The agent analyzes and proposes a plan, without changing or running anything, until you approve it.',
+      auto: 'A classifier approves what it deems safe, commands included, and asks only for the rest.',
+    },
+  },
+
   claude: {
     models: {
       label: 'Models',
@@ -318,10 +338,22 @@ export default defineZone('settings', {
     proxyTerminals: 'Also apply the proxy to the built-in terminals',
     certificates: 'Certificates',
     certificatesNote:
-      'Integrations, quotas, and updates trust recognized certificates and those installed on this system (usually a corporate proxy’s). Claude Code has its own list.',
+      'Escouade trusts recognized certificates, those installed on this system and those of the authorities file. Agents get the file the next time their process starts.',
+    extraCa: 'Extra certificate authorities',
+    extraCaDesc:
+      'With Zscaler or a corporate proxy: choose its root certificate (a .pem file). Escouade, its plugins and its agents trust it on top of the system’s store.',
+    extraCaHint: 'path to a .pem file',
+    extraCaChoose: 'Choose…',
+    extraCaClear: 'Remove',
+    extraCaTitle: 'Root certificate of the proxy',
+    extraCaFilter: 'PEM certificates',
+    extraCaCount: { one: '1 certificate read', other: '{count} certificates read' },
     insecureTls: 'Skip TLS certificate verification',
     insecureTlsDesc:
-      'For a proxy that decrypts traffic with an unrecognized certificate (the “UnknownIssuer” error). Applies to integrations, quotas, updates, and Claude Code processes (the next time their process starts), along with the commands agents run (npm, node…). Use it only on a network you trust: an intercepted connection, tokens included, would no longer be detected.',
+      'Only for the connections that go through the proxy above; with no proxy, it does nothing. An intercepted connection, tokens included, would no longer be detected: prefer the authorities file.',
+    insecureBanner: 'TLS certificates not checked through the proxy {proxy}: an interception, tokens included, would go unnoticed.',
+    insecureBannerNoProxy: '“Skip TLS certificate verification” is on, with no proxy: it does nothing.',
+    insecureBannerAction: 'Choose the root certificate',
   },
 
   about: {
@@ -394,6 +426,8 @@ export default defineZone('settings', {
     private: 'Private project',
     privateDesc:
       'The agents of the other projects do not see it through Escouade’s MCP server: not in the lists, nor by its name, its tickets or its agents. Its own agents see it alone. You, Claude outside Escouade and the app’s views see everything.',
+    privateWindows:
+      'On Windows, an agent’s fence is an instruction given to its harness, not a partition of the system: a command can get around it. To keep two clients apart, one Windows account per client. A third-party plugin runs there only once you turn it on for this project.',
     fenceTitle: 'Its files',
     fenceDesc:
       'The agents of the other projects neither read nor write its folder, its worktrees, its data in Escouade’s folder or its harness sessions. Its own read none of these for the other projects, nor the rest of Escouade’s folder. A guard is a rule of the harness, which a command can get around; a barrier holds for all its commands.',
