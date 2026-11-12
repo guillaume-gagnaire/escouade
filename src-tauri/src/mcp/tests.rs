@@ -1,6 +1,7 @@
 //! The MCP server on a free port, against a real MCP client (rmcp's) and raw HTTP requests.
 
 use super::activity::{self, ActivityEntry, Outcome, KEPT};
+use super::http::{MAX_BODY, MAX_TEXT_BODY};
 use super::tools::Tools;
 use super::*;
 use crate::core_tests::{harness, Harness};
@@ -229,6 +230,32 @@ pub(super) async fn post(port: u16, headers: &[(&str, &str)], body: &str) -> (u1
     }
     let resp = req.body(body.to_string()).send().await.unwrap();
     (resp.status().as_u16(), resp.text().await.unwrap())
+}
+
+/// `post`, where the server may also cut the connection before it has read the whole body: a body
+/// over the cap is refused with 413, which Linux may deliver as a broken pipe to a client still
+/// writing it (Windows lets the 413 be read). None: cut.
+async fn post_or_cut(port: u16, headers: &[(&str, &str)], body: &str) -> Option<(u16, String)> {
+    let mut req = http()
+        .post(url(port))
+        .header("content-type", "application/json")
+        .header("accept", "application/json, text/event-stream");
+    for (name, value) in headers {
+        req = req.header(*name, *value);
+    }
+    let resp = req.body(body.to_string()).send().await.ok()?;
+    Some((resp.status().as_u16(), resp.text().await.ok()?))
+}
+
+/// Refused at the gate for its size: 413 (its text when it says one), or the connection cut while
+/// the body was written.
+async fn refused_for_size(port: u16, headers: &[(&str, &str)], body: &str, says: Option<&str>) {
+    if let Some((status, text)) = post_or_cut(port, headers, body).await {
+        assert_eq!(status, 413, "{text}");
+        if let Some(says) = says {
+            assert_eq!(text, says);
+        }
+    }
 }
 
 pub(super) fn bearer(token: &str) -> String {
@@ -1354,4 +1381,89 @@ async fn the_external_token_is_kept_in_the_keychain_and_the_same_after_a_restart
     let app = mock_app();
     let (again, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
     assert_eq!(again.mcp.external_token().unwrap(), token);
+}
+
+/// A `tools/call` of `name` with a `padding` of that many characters in its arguments.
+fn call_of(name: &str, padding: usize) -> String {
+    json!({
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": { "name": name, "arguments": { "padding": "x".repeat(padding) } }
+    })
+    .to_string()
+}
+
+#[tokio::test]
+async fn a_call_of_an_unknown_tool_is_refused_before_rmcp_keeps_its_name() {
+    // RUSTSEC-2026-0461: rmcp kept the name of each tool called, refused or not. The long
+    // unknown names of the audit's test (B-05) are refused at the gate, and logged shortened.
+    let h = harness("mcp-unknown-tool");
+    let (port, token) = started(&h);
+    let auth = bearer(&token);
+    let headers = [
+        ("authorization", auth.as_str()),
+        ("mcp-protocol-version", "2026-07-28"),
+    ];
+    for n in 0..5 {
+        let (status, text) = post(
+            port,
+            &headers,
+            &call_of(&format!("audit-{n}-{}", "x".repeat(256 * 1024)), 0),
+        )
+        .await;
+        assert_eq!(status, 400, "{text}");
+        assert_eq!(text, "Requête refusée : outil inconnu");
+    }
+    // In a batch, or with a name that is no string, it is refused all the same.
+    let batch = format!(
+        "[{},{}]",
+        call_of("list_projects", 0),
+        call_of("not_a_tool", 0)
+    );
+    assert_eq!(post(port, &headers, &batch).await.0, 400);
+    let nameless = r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":42}}"#;
+    assert_eq!(post(port, &headers, nameless).await.0, 400);
+    let refused = refusals(&h);
+    assert_eq!(refused.len(), 7, "{refused:?}");
+    assert!(refused
+        .iter()
+        .all(|e| e.message.as_deref().unwrap().len() < 400));
+    // A tool the server has still answers.
+    let plain = [("authorization", auth.as_str())];
+    let (status, text) = post(port, &plain, &call_of("list_projects", 0)).await;
+    assert_eq!(status, 200, "{text}");
+    // Without a token, the body is not even read: 401 as ever.
+    let (status, _) = post(port, &[], &call_of("not_a_tool", 0)).await;
+    assert_eq!(status, 401);
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn a_request_without_image_or_file_is_capped_far_below_the_one_of_a_ticket_with_images() {
+    let h = harness("mcp-body-cap");
+    let (port, token) = started(&h);
+    let auth = bearer(&token);
+    let headers = [("authorization", auth.as_str())];
+    // Under the cap: a message of 32,000 characters, thrice over, goes through to the tool.
+    let (status, text) = post(port, &headers, &call_of("list_projects", 100_000)).await;
+    assert_eq!(status, 200, "{text}");
+    // Over it: refused, whatever the tool (and whatever the method).
+    let over = MAX_TEXT_BODY + 1;
+    refused_for_size(
+        port,
+        &headers,
+        &call_of("list_projects", over),
+        Some("Requête refusée : trop volumineuse"),
+    )
+    .await;
+    let junk = "x".repeat(over);
+    refused_for_size(port, &headers, &junk, None).await;
+    // The tools that take attachments keep the 32 MiB: it passes the gate (rmcp answers).
+    for tool in ["create_ticket", "update_ticket"] {
+        let (status, text) = post(port, &headers, &call_of(tool, over)).await;
+        assert_ne!(status, 413, "{tool}: {text}");
+        assert_ne!(status, 400, "{tool}: {text}");
+    }
+    // Beyond 32 MiB nothing passes, declared or not.
+    refused_for_size(port, &headers, &call_of("create_ticket", MAX_BODY), None).await;
+    h.core.mcp.stop();
 }

@@ -2,7 +2,7 @@
 title: "Serveur MCP"
 subject: "Harness"
 sources: ["docs/SPEC.md","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md"]
-tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68"]
+tickets: ["ESC-422"]
 decisions: []
 compared: null
 ---
@@ -255,3 +255,13 @@ Un agent d'Escouade peut omettre le projet pour le sien. Un projet privé est cl
 **Le texte d'un hébergeur est une donnée.** Titres, relectures, commentaires et noms de vérifications sont écrits par quiconque peut ouvrir une PR. Les deux outils répondent donc comme ceux du store pour ce qu'écrit un plugin : un bloc d'avis, puis le JSON entre `<third_party_data>` et `</third_party_data>`, ses `<` échappés pour qu'un titre ne ferme pas la marque. Leurs descriptions et les instructions du serveur le disent.
 
 **Ils ménagent l'hébergeur.** Une liste de moins d'une minute est redonnée sans le lire, celle de la vue « Pull requests » et de la vue d'ensemble comprise ; une PR redemandée dans les 20 s aussi. Quand il reste moins d'un dixième de la limite d'appels, la liste redonne la dernière lue, et `get_pull_request` s'arrête avant le détail et le dit.
+
+## La porte lit le corps de la requête
+
+Après les garde-fous de *Jetons et garde-fous* (`Host`, `Origin`, jeton, chemin), et seulement pour un appelant dont le jeton est connu, la porte du serveur (`Gate::admit`) lit le corps de la requête avant de la passer à la bibliothèque MCP (rmcp). Elle refuse, journalisée comme les autres refus et sans répéter ce que le client a envoyé :
+
+- un `tools/call` (seul ou dans un lot) dont le nom n'est pas un outil du serveur → 400 « Requête refusée : outil inconnu ». La bibliothèque garde en mémoire le nom de chaque outil demandé, même refusé : un jeton suffisait à épuiser la mémoire de l'app (RUSTSEC-2026-0461) ;
+- une requête de plus de 2 Mio qui n'appelle ni `create_ticket` ni `update_ticket` (les seuls outils qui prennent des images ou des fichiers en base64) → 413 ;
+- toute requête de plus de 32 Mio, déclarée ou non → 413. Le « 32 Mio au plus » des images et fichiers ci-dessus ne vaut donc que pour ces deux outils.
+
+Un corps qui n'est pas du JSON est laissé à la bibliothèque, sous le même plafond.

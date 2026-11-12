@@ -7,11 +7,13 @@ use super::activity::{self, clip, Outcome};
 use super::tools::{ToolCtx, Tools};
 use super::{Caller, PATH};
 use crate::core::Core;
+use http_body_util::{BodyExt, Full, Limited};
 use hyper::body::{Body, Bytes, Frame, Incoming, SizeHint};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{header, Request, Response, StatusCode};
 use hyper_util::rt::{TokioIo, TokioTimer};
+use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::transport::streamable_http_server::session::never::NeverSessionManager;
 use rmcp::transport::{StreamableHttpServerConfig, StreamableHttpService};
 use std::convert::Infallible;
@@ -29,6 +31,14 @@ const DRAIN: Duration = Duration::from_secs(5);
 /// 18 MB of images, which a tool is given in base64 (a third more): 24 MB, and the other arguments
 /// are text.
 pub(super) const MAX_BODY: usize = 32 * 1024 * 1024;
+
+/// The most a request may weigh when it carries no image or file: a message, a ticket's text, a
+/// page of the spec are far below (a message is 32,000 characters). Only the tools that take
+/// attachments (`BULKY_TOOLS`) may weigh up to `MAX_BODY`.
+pub(super) const MAX_TEXT_BODY: usize = 2 * 1024 * 1024;
+
+/// The tools that take images or files by their content in base64.
+const BULKY_TOOLS: [&str; 2] = ["create_ticket", "update_ticket"];
 
 /// What the clients may take of the server: a local program, the token unknown to it, could
 /// otherwise hold it with connections that never end their request.
@@ -57,6 +67,8 @@ pub(super) struct Gate<R: Runtime> {
     port: u16,
     core: Weak<Core<R>>,
     mcp: StreamableHttpService<Tools<R>, NeverSessionManager>,
+    /// The tools the server has: a `tools/call` of any other name never reaches rmcp.
+    tools: ToolRouter<Tools<R>>,
 }
 
 /// Why a request was refused before rmcp.
@@ -72,6 +84,13 @@ enum Refusal {
     UnknownToken,
     /// Not the MCP endpoint (its path, shown).
     Path(String),
+    /// A `tools/call` of a tool the server does not have (its name is the client’s: never repeated).
+    UnknownTool,
+    /// A request without image or file weighing more than `MAX_TEXT_BODY` (or one that weighs
+    /// more than `MAX_BODY`).
+    TooLarge,
+    /// The body could not be read.
+    Unreadable,
 }
 
 impl Refusal {
@@ -80,6 +99,8 @@ impl Refusal {
             Refusal::NoHost | Refusal::Host(_) | Refusal::Origin(_) => StatusCode::FORBIDDEN,
             Refusal::NoToken | Refusal::UnknownToken => StatusCode::UNAUTHORIZED,
             Refusal::Path(_) => StatusCode::NOT_FOUND,
+            Refusal::UnknownTool | Refusal::Unreadable => StatusCode::BAD_REQUEST,
+            Refusal::TooLarge => StatusCode::PAYLOAD_TOO_LARGE,
         }
     }
 
@@ -110,6 +131,18 @@ impl Refusal {
                 "Requête refusée : chemin inconnu ({path})",
                 "Request refused: unknown path ({path})"
             ),
+            Refusal::UnknownTool => tr!(
+                "Requête refusée : outil inconnu",
+                "Request refused: unknown tool"
+            ),
+            Refusal::TooLarge => tr!(
+                "Requête refusée : trop volumineuse",
+                "Request refused: too large"
+            ),
+            Refusal::Unreadable => tr!(
+                "Requête refusée : corps illisible",
+                "Request refused: unreadable body"
+            ),
         }
     }
 }
@@ -117,6 +150,7 @@ impl Refusal {
 impl<R: Runtime> Gate<R> {
     pub(super) fn new(port: u16, core: Weak<Core<R>>) -> Self {
         let router = Tools::router();
+        let tools = router.clone();
         // rmcp's own checks of the Host and the Origin stay on behind ours.
         let config = StreamableHttpServerConfig::default()
             .with_legacy_session_mode(false)
@@ -130,20 +164,25 @@ impl<R: Runtime> Gate<R> {
             Arc::new(NeverSessionManager::default()),
             config,
         );
-        Self { port, core, mcp }
+        Self {
+            port,
+            core,
+            mcp,
+            tools,
+        }
     }
 
     /// The answer to `req`: a refusal (logged), or rmcp's, the caller in the request's extensions
     /// for the tools (`ToolCtx`).
-    async fn answer(&self, mut req: Request<Incoming>) -> Response<Reply> {
+    async fn answer(&self, req: Request<Incoming>) -> Response<Reply> {
         let Some(core) = self.core.upgrade() else {
             return text(StatusCode::SERVICE_UNAVAILABLE, String::new());
         };
-        let caller = match self.admit(&core, &req) {
-            Ok(caller) => caller,
+        let asked = format!("{} {}", req.method(), req.uri().path());
+        let (caller, mut req) = match self.admit(&core, req).await {
+            Ok(admitted) => admitted,
             Err((caller, refusal)) => {
                 let message = refusal.message();
-                let asked = format!("{} {}", req.method(), req.uri().path());
                 activity::record(
                     &core,
                     caller.as_ref(),
@@ -168,9 +207,46 @@ impl<R: Runtime> Gate<R> {
             .map(|body| Reply::Mcp(Box::pin(body)))
     }
 
+    /// Who `req` comes from, once its `Host`, its `Origin`, its token, its path and its body
+    /// pass, with the request to give rmcp (its body read, `MAX_BODY` at most); else why it does
+    /// not, with its caller when its token was read. The body is read for a known caller only: a
+    /// `tools/call` must name a tool the server has (rmcp keeps the name of each it is asked,
+    /// refused or not), and a request without image or file stays under `MAX_TEXT_BODY`.
+    async fn admit(
+        &self,
+        core: &Core<R>,
+        req: Request<Incoming>,
+    ) -> Result<(Caller, Request<Full<Bytes>>), (Option<Caller>, Refusal)> {
+        let caller = self.admit_head(core, &req)?;
+        let too_large = |caller: &Caller| (Some(caller.clone()), Refusal::TooLarge);
+        let declared = req
+            .headers()
+            .get(header::CONTENT_LENGTH)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.trim().parse::<usize>().ok());
+        if declared.is_some_and(|n| n > MAX_BODY) {
+            return Err(too_large(&caller));
+        }
+        let (parts, body) = req.into_parts();
+        let bytes = match Limited::new(body, MAX_BODY).collect().await {
+            Ok(collected) => collected.to_bytes(),
+            Err(e)
+                if e.downcast_ref::<http_body_util::LengthLimitError>()
+                    .is_some() =>
+            {
+                return Err(too_large(&caller))
+            }
+            Err(_) => return Err((Some(caller), Refusal::Unreadable)),
+        };
+        if let Err(refusal) = check_body(&self.tools, &bytes) {
+            return Err((Some(caller), refusal));
+        }
+        Ok((caller, Request::from_parts(parts, Full::new(bytes))))
+    }
+
     /// Who `req` comes from, once its `Host`, its `Origin`, its token and its path pass; else
     /// why it does not, with its caller when its token was read.
-    fn admit(
+    fn admit_head(
         &self,
         core: &Core<R>,
         req: &Request<Incoming>,
@@ -213,6 +289,33 @@ impl<R: Runtime> Gate<R> {
             .iter()
             .any(|h| h.eq_ignore_ascii_case(host))
     }
+}
+
+/// Whether a request's body may reach rmcp: a `tools/call` (alone or in a batch) names a tool of
+/// `tools`, and a body that calls none of `BULKY_TOOLS` weighs `MAX_TEXT_BODY` at most. A body
+/// that is not JSON is left to rmcp to answer, under the same cap.
+fn check_body<S: Send + Sync + 'static>(tools: &ToolRouter<S>, body: &[u8]) -> Result<(), Refusal> {
+    let value: serde_json::Value = serde_json::from_slice(body).unwrap_or(serde_json::Value::Null);
+    let messages = match &value {
+        serde_json::Value::Array(list) => list.as_slice(),
+        other => std::slice::from_ref(other),
+    };
+    let mut bulky = false;
+    for message in messages {
+        if message["method"] != "tools/call" {
+            continue;
+        }
+        // A name that is not a string is no tool's either.
+        let name = message["params"]["name"].as_str().unwrap_or_default();
+        if !tools.has_route(name) {
+            return Err(Refusal::UnknownTool);
+        }
+        bulky |= BULKY_TOOLS.contains(&name);
+    }
+    if !bulky && body.len() > MAX_TEXT_BODY {
+        return Err(Refusal::TooLarge);
+    }
+    Ok(())
 }
 
 /// The token of an `Authorization: Bearer <token>` header (the scheme in any case).

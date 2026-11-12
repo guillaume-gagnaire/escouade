@@ -2012,8 +2012,8 @@ async fn arguments_the_schema_refuses_are_neither_logged_nor_answered_with_the_v
         );
         assert_eq!(e.message.as_deref(), Some(DO_NOT_FIT), "{what}");
     }
-    // A tool the server does not have: the name is the client’s. The protocol error does not repeat
-    // it, and the log keeps it short.
+    // A tool the server does not have: the name is the client’s. The gate refuses it before rmcp,
+    // repeats nothing of it, and the log does not keep it.
     let name = "outil-secret-".repeat(100);
     let err = c
         .call_tool(CallToolRequestParams::new(name))
@@ -2021,14 +2021,13 @@ async fn arguments_the_schema_refuses_are_neither_logged_nor_answered_with_the_v
         .unwrap_err();
     assert!(!err.to_string().contains("outil-secret"), "{err}");
     let e = h.core.mcp.activity.entries().pop().unwrap();
-    assert_eq!(e.outcome, "error");
-    assert!(e.tool.chars().count() <= 300, "{}", e.tool.chars().count());
-    assert!(
-        e.message.as_deref().is_some_and(
-            |m| m.starts_with("Appel refusé par le serveur : ") && !m.contains("outil-secret")
-        ),
-        "{e:?}"
+    assert_eq!((e.outcome, e.tool.as_str()), ("refused", ""));
+    assert_eq!(
+        e.message.as_deref(),
+        Some("Requête refusée : outil inconnu")
     );
+    let shown = serde_json::to_string(&e).unwrap();
+    assert!(!shown.contains("outil-secret"), "{shown}");
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }
