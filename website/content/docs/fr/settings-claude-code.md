@@ -179,6 +179,10 @@ Interrupteur allumé, la liste dessous donne chaque déclaration :
 > [!WARNING]
 > Le jeton est écrit en clair dans chacun de ces fichiers. Désactiver change le jeton.
 
+### Les agents peuvent répondre aux questions et aux permissions des autres agents
+
+« Piloter Escouade » ne donne pas aux agents `answer_permission` ni `answer_question`, qui répondent à la demande d’un autre agent : ce choix-là le fait, en trois valeurs. « Personne » (le défaut, pour une nouvelle installation comme après une mise à jour) : seuls toi et Claude hors d’Escouade répondez. « Seulement le chef d’escouade » : l’agent choisi pour chaque projet dans Réglages › Projets › Équipe › « Chef d’escouade » (aucun outil du serveur ne le désigne). « Tous les agents », avec un avertissement : ça retire l’humain de la boucle. Voir [le serveur MCP](mcp).
+
 ## Activité MCP
 
 « Activité MCP », dans l’« Avancé » de la page « Agents », liste ce que le serveur a reçu et répondu, les appels les plus récents en tête. Chaque ligne donne l’heure, qui a appelé (le nom d’un agent, « Claude (hors Escouade) » ou, pour une requête refusée avant de savoir qui l’envoie, « Client inconnu »), l’outil, le résultat (« Fait », « Refusé » ou « Erreur »), puis ce qui a été demandé et, pour un refus ou une erreur, pourquoi. Pour un `set_board` réussi, la ligne dit aussi ce qui a changé, champ par champ, avant et après (« model: opus → sonnet · effort: (défaut) → medium »), ou « Aucun changement ». Les 200 derniers appels sont gardés en mémoire, pas enregistrés. Le bouton « Effacer » vide la liste ; sans appel, elle dit « Aucun appel pour l’instant. ».

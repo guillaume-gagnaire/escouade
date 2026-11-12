@@ -65,7 +65,7 @@ use crate::folders;
 use crate::git;
 use crate::i18n;
 use crate::model::{
-    BoardSettings, Column, EngineId, PauseReason, Project, Ticket, PROGRESS_LINE_MAX,
+    AgentsAnswer, BoardSettings, Column, EngineId, PauseReason, Project, Ticket, PROGRESS_LINE_MAX,
 };
 use crate::telemetry::Event;
 use crate::tickets::{
@@ -1949,6 +1949,38 @@ pub(super) fn not_answered<R: Runtime>(
     }
 }
 
+/// Whether the caller may answer a permission or a question of `found` (ESC-423): Claude outside
+/// Escouade always; an agent as « Les agents peuvent répondre aux questions et aux permissions des
+/// autres agents » says (`Settings::agents_answer`): nobody, the chef the user chose for the
+/// project of the agent that asks (`Project::chef`, never the principal of a folder), or all.
+pub(super) fn may_answer<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    found: &resolve::AgentRef,
+) -> Result<(), ToolError> {
+    let Caller::Agent(id) = caller else {
+        return Ok(());
+    };
+    let chef = || {
+        core.project(&found.project_id)
+            .ok()
+            .and_then(|p| p.chef)
+            .is_some_and(|c| c == *id)
+    };
+    match core.settings.read().agents_answer {
+        AgentsAnswer::All => Ok(()),
+        AgentsAnswer::Chef if chef() => Ok(()),
+        AgentsAnswer::Chef => Err(ToolError::Refused(tr!(
+            "Seul le chef d’escouade que l’utilisateur a choisi pour ce projet répond aux permissions et aux questions des autres agents, et ce n’est pas toi : la demande attend la réponse de l’utilisateur. Le chef se choisit dans Réglages › Projets › Équipe (« Chef d’escouade »).",
+            "Only the squad lead the user chose for this project answers the other agents’ permissions and questions, and it is not you: the request waits for the user’s answer. The lead is chosen in Settings › Projects › Team (“Squad lead”)."
+        ))),
+        AgentsAnswer::Nobody => Err(ToolError::Refused(tr!(
+            "Un agent ne répond pas aux permissions ni aux questions d’un autre agent : la demande attend la réponse de l’utilisateur. Seul l’utilisateur peut le permettre, dans Réglages › Agents › Piloter Escouade (« Les agents peuvent répondre aux questions et aux permissions des autres agents »).",
+            "An agent does not answer another agent’s permissions or questions: the request waits for the user’s answer. Only the user can allow it, in Settings › Agents › Drive Escouade (“Agents can answer the other agents’ questions and permissions”)."
+        ))),
+    }
+}
+
 /// `answer_permission`: the window's « Autoriser » or « Refuser » for a permission, or the approval
 /// of a plan. Never « Toujours autoriser ».
 pub(super) fn answer_permission<R: Runtime>(
@@ -1972,6 +2004,7 @@ pub(super) fn answer_permission<R: Runtime>(
             "An agent does not answer its own requests."
         ),
     )?;
+    may_answer(core, caller, &found)?;
     let waiting = waiting_request(core, &found, &a.request)?;
     let request = waiting.view.id;
     if waiting.view.kind != "permission" {
@@ -2019,6 +2052,7 @@ pub(super) fn answer_question<R: Runtime>(
             "An agent does not answer its own requests."
         ),
     )?;
+    may_answer(core, caller, &found)?;
     let waiting = waiting_request(core, &found, &a.request)?;
     let request = waiting.view.id.clone();
     if request_type(&waiting.view) != "question" {

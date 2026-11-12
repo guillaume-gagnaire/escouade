@@ -81,6 +81,11 @@ pub struct Settings {
     /// (`mcp::install`). A `mcpHarnesses` of before (« <harness> peut piloter Escouade », ESC-50)
     /// is dropped at the load: the one switch says for all (ESC-119).
     pub mcp_enabled: bool,
+    /// « Les agents peuvent répondre aux questions et aux permissions des autres agents » (ESC-423):
+    /// who among the agents may use `answer_permission` and `answer_question` on another agent.
+    /// Nobody by default, for a new installation as for settings saved before it: Claude outside
+    /// Escouade (`Caller::External`) always answers.
+    pub agents_answer: AgentsAnswer,
     /// The MCP server's port on 127.0.0.1: 0 until its first start chooses a free one (47000 to
     /// 47999), kept from then on. The backend's own: a save from the window leaves it as it is.
     pub mcp_port: u16,
@@ -705,6 +710,7 @@ impl Default for Settings {
             writer_engine: None,
             writer_model: String::new(),
             mcp_enabled: false,
+            agents_answer: AgentsAnswer::Nobody,
             mcp_port: 0,
             accounts: Vec::new(),
             engine_order: Vec::new(),
@@ -843,6 +849,12 @@ pub struct Project {
     /// window see every project.
     #[serde(default)]
     pub private: bool,
+    /// « Chef d’escouade » (ESC-423): the agent the user chose, by id, the only one that answers
+    /// the other agents' permissions and questions when `Settings::agents_answer` is `Chef`.
+    /// Set by the window alone (`update_project`), never by a tool of the MCP server; the
+    /// principal of a folder is not it. Of this machine: never in `.escouade.yml`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chef: Option<String>,
     /// « Branche des docs » (ESC-256): where `.escouade/spec`, `decisions` and `documents` live. Empty: the
     /// branch checked out (a ticket’s agent writes them on its own branch); a name: that branch, in a
     /// worktree of its own that Escouade holds and never merges anywhere (`docsbranch`).
@@ -1012,6 +1024,19 @@ pub enum PagesOpen {
     Window,
     /// « Dans le navigateur du système »: as before the browser inside Escouade.
     System,
+}
+
+/// « Les agents peuvent répondre aux questions et aux permissions des autres agents » (ESC-423).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum AgentsAnswer {
+    /// « Personne »: no agent answers for another, the chef neither.
+    #[default]
+    Nobody,
+    /// « Seulement le chef d’escouade »: the agent its project names (`Project::chef`) alone.
+    Chef,
+    /// « Tous les agents »: every agent, which takes the human out of the loop.
+    All,
 }
 
 /// Who writes a project's commits asked from the files panel.

@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Sécurité : un agent ne répond plus aux permissions ni aux questions d’un autre agent, même avec « Les agents peuvent piloter Escouade ». Réglages › Agents dit qui le peut : personne (par défaut), le chef d’escouade que tu choisis pour chaque projet dans Réglages › Projets › Équipe, ou tous les agents.
 - La barre d’état ne montre plus par défaut ce que le cache a fait économiser dans la journée : le réglage « Économies du cache dans la barre d’état », dans Comptes et harness › Avancé, le remet. La température du cache des agents reste affichée.
 - Dans un dossier d’agents, la pastille « en attente » s’efface quand on ouvre l’agent qui attend, comme sa carte cesse de clignoter ; il reste jaune en tête de son dossier. Merci à @Metalzoid (#27).
 - Le remote control pour tous les agents ne lance plus un process par agent : seuls les agents actifs démarrent, et un agent terminé n’est joignable depuis claude.ai qu’après son prochain message, qui retrouve sa session. Le remote control garde au plus 8 process d’agents non actifs (réglable), et Escouade ne lance plus rien pour un harness ou un compte qui ne peut pas s’y relier. Merci à @Chapercher (#26).

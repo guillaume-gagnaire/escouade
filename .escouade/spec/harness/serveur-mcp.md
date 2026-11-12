@@ -1,9 +1,9 @@
 ---
 title: "Serveur MCP"
 subject: "Harness"
-sources: ["docs/SPEC.md","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md"]
-tickets: ["ESC-422"]
-decisions: []
+sources: ["docs/SPEC.md","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","docs/security/audit-2026-11/rapport.md (branche ticket/esc-418, fiche SEC-03)"]
+tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422"]
+decisions: [153]
 compared: null
 ---
 
@@ -43,7 +43,7 @@ L'interrupteur démarre le serveur, le donne aux agents d'Escouade de tous les h
 
 ### Agents d'Escouade
 
-- Le même interrupteur sert les agents de tous les projets ; il n'y a pas de réglage par projet.
+- Le même interrupteur sert les agents de tous les projets ; il n'y a pas de réglage par projet pour l'interrupteur (seul le chef d'escouade se choisit projet par projet : voir *Garde-fous de l'action*).
 - Activé et serveur en marche : le process d'un agent reçoit le serveur avec un jeton à lui, nouveau à chaque lancement (pour Claude Code, `--mcp-config <dossier de données>/mcp/<id>.json`, dans un fichier privé, 0600 sous Unix ; pour les autres harness, la ligne « Serveur MCP d'Escouade (agents) » de la table de *Harness*). Le jeton est oublié quand ce process se termine, à la suppression de l'agent, à la fermeture du projet et à l'arrêt de l'app. Un serveur passé par `--mcp-config` remplace celui du même nom de la portée `user`.
 - Désactivé, ou activé alors que le serveur est arrêté : l'agent est tenu à l'écart du serveur, car une entrée `escouade` de la config de l'utilisateur peut rester déclarée et l'agent l'hériterait (il agirait comme « Claude (hors Escouade) »). `--disallowedTools mcp__escouade` lui refuse les outils, et `--settings <dossier de données>/mcp-refused.json` (`{"deniedMcpServers": [{"serverName": "escouade"}]}`) empêche Claude Code de charger le serveur, faute de quoi l'agent recevrait ses instructions sans aucun de ses outils. En vue Claude Code, ce refus entre dans le fichier `--settings` des hooks (Claude Code ne lit que le dernier `--settings`).
 - **Outils d'Escouade au prochain démarrage.** Un agent dont le process (ou l'interface, en vue Claude Code) a démarré sans les outils, alors qu'un démarrage les lui donnerait maintenant (l'interrupteur activé depuis), le dit : sa conversation montre « Outils d'Escouade au prochain démarrage » avec « Relancer ». Jamais sans process vivant ; recalculé à chaque changement de l'interrupteur ou du serveur.
@@ -53,7 +53,7 @@ L'interrupteur démarre le serveur, le donne aux agents d'Escouade de tous les h
 
 ### Ce qu'un agent voit et touche
 
-- **Entre projets qui ne sont pas privés, rien n'est cloisonné.** L'agent d'un projet qui n'est pas privé lit et agit sur le sien et sur tous les projets qui ne sont pas privés : tickets, agents, messages, arrêts et messages aux sous-agents et aux tâches de fond, réponses aux demandes, Kanban, images et fichiers des tickets, sortie des tâches de fond. Il agit toujours, aussi, par ses autres outils.
+- **Entre projets qui ne sont pas privés, rien n'est cloisonné.** L'agent d'un projet qui n'est pas privé lit et agit sur le sien et sur tous les projets qui ne sont pas privés : tickets, agents, messages, arrêts et messages aux sous-agents et aux tâches de fond, réponses aux demandes (quand l'utilisateur le lui permet : voir *Garde-fous de l'action*), Kanban, images et fichiers des tickets, sortie des tâches de fond. Il agit toujours, aussi, par ses autres outils.
 - **Un projet privé est cloisonné dans les deux sens**, pour les agents d'Escouade (le jeton de chaque agent dit son projet ; relu à chaque appel ; ses fichiers et le reste : voir *Projets privés*) :
   - il n'existe pas pour les agents des autres projets : absent de `list_projects`, `list_agents` et `list_requests` sans argument ; un outil qui le nomme, par son id, son nom, un de ses tickets ou de ses agents, répond « introuvable » mot pour mot comme pour un nom que rien ne porte, et les choix qu'il propose ne citent que ce que l'appelant voit ;
   - ses agents ne voient que lui : `list_projects` ne donne que lui, et tout autre projet, privé ou non, est introuvable de la même façon ;
@@ -106,8 +106,8 @@ Chaque outil est annoté lecture seule ou non. Réponse : un bloc de texte JSON,
 - `send_message` : 32 000 caractères au plus (côté MCP seulement).
 - `stop_agent`.
 - `stop_background_work`, `message_subagent` : voir plus bas.
-- `answer_permission` : autoriser ou refuser une permission, avec un message au refus ; approuver ou renvoyer un plan, comme la carte de la fenêtre.
-- `answer_question` : répondre à une question avec les libellés des options ou un texte libre, au format de la carte de question.
+- `answer_permission` : autoriser ou refuser une permission, avec un message au refus ; approuver ou renvoyer un plan, comme la carte de la fenêtre. Refusé par défaut à un agent (voir *Garde-fous de l'action*).
+- `answer_question` : répondre à une question avec les libellés des options ou un texte libre, au format de la carte de question. Refusé par défaut à un agent, comme `answer_permission`.
 
 #### Les dossiers d'agents
 
@@ -116,6 +116,7 @@ Les outils de dossiers font ce que fait l'utilisateur dans la barre latérale (s
 - `list_agents` donne les agents dans l'ordre de la barre latérale (projet par projet, dans l'ordre de l'app), non plus du plus ancien au plus récent, et chaque agent porte `folder` (`{ id, name }`, `null` hors dossier) et `principal` (vrai pour l'agent principal de son dossier).
 - `create_agent` et `start_ticket` ont un paramètre facultatif `folder` : un dossier du projet (id ou nom) ; un nom qu'aucun dossier ne porte crée le dossier sous ce nom ; `""` : hors dossier. Leur réponse dit où l'agent est rangé (`folder`, `{ id, name }` ou `null`).
 - Sans `folder`, un agent d'Escouade qui crée un agent dans son projet le range dans son propre dossier ; s'il n'en a pas, un dossier est créé à sa place, nommé d'après lui, avec « <nom> 2 », « <nom> 3 »… si un dossier porte déjà ce nom (et qui le suit, avec la même règle, tant qu'il n'est pas renommé), lui-même agent principal, le nouvel agent dedans. Pas de dossier automatique dans un autre projet, pour « Claude (hors Escouade) » ni pour un agent que crée le pilote auto du Kanban ; `folder` reste possible, sans agent principal.
+- Le principal d'un dossier n'est pas le chef d'escouade : il ne gagne aucun droit sur les demandes des agents du dossier.
 - `start_ticket` ne crée pas l'agent tout de suite : le dossier visé est résolu à l'appel et gardé sur le ticket. Son agent y entre à son lancement, comme ceux que le ticket relance plus tard, tant que le dossier existe. Un ticket lancé par l'utilisateur ou par le pilote auto ne retient aucun dossier.
 - Un agent ou un dossier disparu entre-temps est refusé avec sa raison, jamais à moitié fait.
 
@@ -191,6 +192,11 @@ Ceux de la fenêtre et du pilote auto :
 - Le maximum « En parallèle » du projet n'est pas dépassé. Un ticket qui attend d'autres tickets n'est pas lancé ; une dépendance qui ferait attendre deux tickets l'un l'autre est refusée. Un ticket parti n'est ni modifié, ni déplacé, ni relancé.
 - Un agent ne s'écrit pas et ne s'arrête pas lui-même ; on n'écrit pas à un agent archivé. Un agent d'Escouade n'arrête rien de son propre agent, sous-agents et tâches de fond compris, et n'écrit pas à ses propres sous-agents.
 - Un agent ne répond jamais à ses propres demandes. Une demande qui n'attend plus de réponse (l'utilisateur ou un autre client y a répondu, l'agent ne tourne plus) est refusée avec ce motif : jamais deux réponses. Un agent en vue Claude Code n'a rien à répondre ici (ses demandes sont dans son terminal) et le refus le dit.
+- **Répondre à la demande d'un autre agent** (ESC-423, audit SEC-03) : « Les agents peuvent piloter Escouade » ne donne pas `answer_permission` ni `answer_question` aux agents. Claude hors Escouade y répond toujours. Un agent y répond selon « Les agents peuvent répondre aux questions et aux permissions des autres agents » (Réglages › Agents › Piloter Escouade) :
+  - « Personne », le défaut, pour une nouvelle installation comme pour une existante : aucun agent, le chef compris ;
+  - « Seulement le chef d'escouade » : le seul agent que l'utilisateur a choisi pour le projet de l'agent qui demande (Réglages › Projets › Équipe › « Chef d'escouade »). Aucun outil du serveur ne le pose, et le principal d'un dossier ne l'est pas (`create_agent` rend principal tout agent qui en crée un autre). Personne n'est chef tant que l'utilisateur ne l'a pas choisi, mise à jour comprise, et le chef ne compte qu'avec cette valeur ;
+  - « Tous les agents » : chacun, ce qui retire l'humain de la boucle.
+  - Le refus dit la raison et où changer le réglage ; la demande attend la réponse de l'utilisateur. `list_requests` ne change pas : lire n'est pas répondre. La réponse d'un agent permis reste tracée dans la conversation de l'agent qui demandait (« Autorisé par <auteur> via Escouade »).
 - **`set_board` a les contrôles de la fenêtre** : modèle connu ; effort parmi `low`, `medium`, `high`, `xhigh` et `max` ; mode parmi `auto`, `default`, `plan` et `acceptEdits` ; branche cible = une branche locale du projet ; « En parallèle » de 1 à 6. Refusés : `bypassPermissions` (sauf s'il est déjà le mode du Kanban) et `testsFirst: true` sans commande de test, pour l'allumer seulement. Aucun champ donné : erreur. L'aller-retour `get_board` → `set_board` passe toujours : une cible égale à celle du Kanban (même vide, sur une HEAD détachée) ou à celle que `get_board` montre est laissée telle quelle, sans contrôle, même si la branche a été supprimée depuis ; toute autre doit être une branche locale du projet (une cible vide qui diffère de celle du Kanban est une erreur) ; un `testsFirst` déjà allumé passe.
 - `start_ticket`, qui n'a pas de mode, donne les mêmes contrôles au modèle et à l'effort d'un ticket, et à eux seuls.
 
@@ -224,10 +230,12 @@ Les outils d'Escouade passent par les mêmes demandes de permission que les autr
 
 - Réglages › Harness › « Serveur MCP » :
   - l'interrupteur « Les agents peuvent piloter Escouade », enregistré tout de suite, hors brouillon ;
+  - « Les agents peuvent répondre aux questions et aux permissions des autres agents » : « Personne » (le défaut), « Seulement le chef d'escouade », « Tous les agents ». Sa description dit que « Piloter Escouade » ne donne pas ces deux outils ; « Seulement le chef d'escouade » dit où se choisit le chef ; « Tous les agents » porte un avertissement en une phrase : ça retire l'humain de la boucle. Enregistré avec les autres réglages ; la recherche des réglages le trouve ;
   - sous lui, la liste des déclarations : harness et compte (« Codex · compte Principal »), le fichier, son état (« Déclaré », « Pas déclaré » et pourquoi), et en cas d'échec la commande ou l'entrée à coller (jeton masqué, « Copier » ou « Copier la commande » donne le vrai, écrit pour PowerShell ou pour sh) ; « Déclaré dans Claude · compte Principal, compte Pro » ;
   - une note qui dit que le jeton est écrit en clair ;
   - le nombre d'agents qui auront les outils au prochain démarrage ;
   - « Activité MCP ».
+- Réglages › Projets › Équipe › « Chef d'escouade » : un agent du projet (les archivés écartés), ou « Aucun », le défaut, aussi après une mise à jour. Posé par la fenêtre seule, gardé sur ce poste, jamais dans `.escouade.yml`. Tant que le réglage précédent ne vaut pas « Seulement le chef d'escouade », la page dit qu'il est sans effet. La recherche des réglages le trouve.
 - Le remote control se règle dans la fenêtre seulement : Réglages › Harness, Réglages › Projets, clic droit d'un agent.
 
 ## Limites
@@ -239,7 +247,7 @@ Les outils d'Escouade passent par les mêmes demandes de permission que les autr
 - **Exclus volontairement.** Aucun outil ne lance une commande de l'appelant, ni ne supprime un projet ou un agent : un agent poussé par un contenu piégé pourrait s'en servir pour monter en droits. Les tests, le merge et la suppression d'un ticket ne partent que par les outils du flux du Kanban, qui font ce que font les boutons de la fenêtre.
 - **Jamais « Toujours autoriser ».** `answer_permission` n'offre que `allow` et `deny` ; `always` est refusé avec la raison : une règle de permission durable reste la décision de l'utilisateur, dans la fenêtre. De même, `set_board` ne met pas le mode `bypassPermissions` (sauf s'il l'est déjà) et ne règle pas la commande de test.
 - **Remote control en lecture seule.** Aucun outil ne l'allume, ne l'éteint ni ne le règle, pour un agent, un projet ou tous : l'allumer expose une session sur internet (joignable depuis claude.ai et l'app mobile). Les descriptions de `list_projects`, `list_agents` et `get_agent_summary` le disent.
-- **Montées en droits assumées.** `approve_ticket` est ouvert à tout client du serveur, Claude hors Escouade comme les agents (dans les projets qu'ils voient, jamais sur leur propre ticket), et `delete_ticket` supprime comme la fenêtre : un agent poussé par un contenu piégé peut valider ou supprimer le ticket d'un autre agent. Une fois l'interrupteur allumé, tout client voit les demandes et peut y répondre, sans réglage de plus ni limite de ce qu'il peut autoriser : un tel agent peut autoriser une commande demandée par un autre agent d'un projet qu'il voit, une demande à la fois, jamais durablement, jamais dans un projet privé qui n'est pas le sien. `stop_background_work` n'arrête que ce que l'agent a lancé et ne lance aucune commande ; `message_subagent` n'est qu'un message à l'agent sous le nom de son auteur ; `get_background_output` ne lit que le fichier de sortie qu'a gardé Claude Code pour la tâche.
+- **Montées en droits assumées.** `approve_ticket` est ouvert à tout client du serveur, Claude hors Escouade comme les agents (dans les projets qu'ils voient, jamais sur leur propre ticket), et `delete_ticket` supprime comme la fenêtre : un agent poussé par un contenu piégé peut valider ou supprimer le ticket d'un autre agent. Répondre aux demandes des autres agents n'est donné qu'au chef d'escouade ou à tous les agents, quand l'utilisateur l'a choisi (personne par défaut) : un tel agent, poussé par un contenu piégé, peut alors autoriser une commande demandée par un autre agent d'un projet qu'il voit, une demande à la fois, jamais durablement, jamais dans un projet privé qui n'est pas le sien. `stop_background_work` n'arrête que ce que l'agent a lancé et ne lance aucune commande ; `message_subagent` n'est qu'un message à l'agent sous le nom de son auteur ; `get_background_output` ne lit que le fichier de sortie qu'a gardé Claude Code pour la tâche.
 - Un agent qui a les outils agit aussi par ses autres outils : entre projets non privés, le serveur n'est pas un cloisonnement.
 
 ## Les pull requests d'un projet

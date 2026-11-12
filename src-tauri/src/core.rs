@@ -1671,6 +1671,7 @@ pub(crate) fn blank_project(path: &str) -> Project {
         remote_control: false,
         engine: None,
         private: false,
+        chef: None,
         docs_branch: String::new(),
         shared: Default::default(),
         shared_on_limit: false,
@@ -8940,6 +8941,12 @@ impl<R: Runtime> Core<R> {
         // « Projet privé »: the MCP server reads it at each call (`mcp::resolve::Sight`), the
         // harnesses at each start of an agent, before its next turn (`fence`).
         cur.private = p.private;
+        // « Chef d’escouade » (ESC-423): the window's alone, no tool of the MCP server sets it.
+        // An agent of another project, or gone, names no chef.
+        cur.chef = p
+            .chef
+            .map(|c| c.trim().to_string())
+            .filter(|c| !c.is_empty());
         cur.shared_on_limit = p.shared_on_limit;
         // Its workflows' corrections and when they are read again (ESC-195).
         cur.workflow_fixes = crate::workflowfix::cleaned(p.workflow_fixes);

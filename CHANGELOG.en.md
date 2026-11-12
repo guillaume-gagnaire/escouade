@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Security: an agent no longer answers another agent’s permissions or questions, even with “Agents can drive Escouade”. Settings › Agents says who may: nobody (the default), the squad lead you choose for each project in Settings › Projects › Team, or every agent.
 - The status bar no longer shows by default what the cache saved today: the “Cache savings in the status bar” setting, in Accounts and harnesses › Advanced, brings it back. The agents’ cache temperature stays shown.
 - In an agents’ folder, the “waiting” pill goes once the waiting agent is opened, as its card stops blinking; it stays yellow on top of its folder. Thanks to @Metalzoid (#27).
 - Remote control for all agents no longer starts a process for each agent: only the active ones start, and a done agent can be reached from claude.ai only after its next message, which takes its session back. The remote control keeps at most 8 processes of agents that are not active (adjustable), and Escouade no longer starts anything for a harness or an account that cannot be linked. Thanks to @Chapercher (#26).

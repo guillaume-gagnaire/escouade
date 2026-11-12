@@ -179,6 +179,10 @@ With the switch on, the list below gives each declaration:
 > [!WARNING]
 > The token is written in plain text in each of these files. Turning it off changes the token.
 
+### Agents can answer the other agents’ questions and permissions
+
+“Drive Escouade” does not give the agents `answer_permission` nor `answer_question`, which answer another agent’s request: this choice does, in three values. “Nobody” (the default, for a new installation as after an update): only you and Claude outside Escouade answer. “Only the squad lead”: the agent chosen for each project in Settings › Projects › Team › “Squad lead” (no tool of the server names it). “Every agent”, with a warning: it takes the human out of the loop. See [the MCP server](mcp).
+
 ## MCP activity
 
 “MCP activity”, in the “Advanced” of the “Agents” page, lists what the server received and answered, the most recent calls first. Each line gives the time, who called (an agent’s name, “Claude (outside Escouade)”, or, for a request refused before it is known who sent it, “Unknown client”), the tool, the result (“Done”, “Refused”, or “Error”), then what was asked and, for a refusal or an error, why. For a `set_board` that succeeded, the line also says what changed, field by field, before and after (“model: opus → sonnet · effort: (default) → medium”), or “No change”. The last 200 calls are kept in memory, not saved. The “Clear” button empties the list; with no calls, it says “No calls yet.”.

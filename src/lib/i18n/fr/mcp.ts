@@ -10,6 +10,22 @@ export default {
     enable: 'Les agents peuvent piloter Escouade',
     enableDesc:
       'Les agents d’Escouade, et chaque harness installé lancé hors d’Escouade (Claude Code, Codex, OpenCode, Copilot CLI, dans un terminal ou leur app), lisent tes projets, agents et tickets, et peuvent créer des tickets ou lancer des agents, ce qui dépense du quota, valider des tickets (tests, fusion, push, pull request) ou en supprimer. Un agent déjà lancé reçoit les outils au prochain démarrage de son process.',
+    /** ESC-423 (audit SEC-03): who among the agents answers another agent's permissions and questions. */
+    answer: 'Les agents peuvent répondre aux questions et aux permissions des autres agents',
+    answerDesc:
+      'Par answer_permission et answer_question. « Piloter Escouade » ne les donne pas : par défaut, seul toi (et Claude hors d’Escouade) réponds à la demande d’un agent.',
+    answerNobody: 'Personne',
+    answerChef: 'Seulement le chef d’escouade',
+    answerAll: 'Tous les agents',
+    answerChefDesc: 'Le chef d’escouade se choisit projet par projet, dans Réglages › Projets › Équipe.',
+    answerAllWarn:
+      'Ça retire l’humain de la boucle : un agent détourné par un texte qu’il a lu peut autoriser ce qu’un autre agent demande, sans que tu le voies.',
+    /** The project's « Chef d'escouade » (ESC-423), in Réglages › Projets › Équipe, projet par projet. */
+    chef: 'Chef d’escouade',
+    chefDesc:
+      'L’agent qui répond aux permissions et aux questions des autres agents de ce projet, quand « Les agents peuvent répondre… » vaut « Seulement le chef d’escouade » (Réglages › Agents). Aucun agent ne se désigne lui-même.',
+    chefNone: 'Aucun',
+    chefOff: 'Sans effet tant que Réglages › Agents › « Les agents peuvent répondre… » ne vaut pas « Seulement le chef d’escouade ».',
     /** The list of the declarations, under the switch: one line per account of each harness installed. */
     list: 'Déclarations dans les harness',
     working: 'Déclaration dans les harness installés…',

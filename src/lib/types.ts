@@ -10,6 +10,9 @@ export type AgentStatus = 'idle' | 'running' | 'waiting' | 'done' | 'error';
 /** « Serveurs MCP des agents »: `all`, the user's own with Escouade's; `escouade`, Escouade's alone (Claude Code only). */
 export type AgentsMcp = 'all' | 'escouade';
 
+/** Who among the agents answers another agent's permissions and questions (ESC-423). */
+export type AgentsAnswer = 'nobody' | 'chef' | 'all';
+
 export interface Settings {
   claudePath: string;
   sound: boolean;
@@ -77,6 +80,8 @@ export interface Settings {
   engineOrder?: EngineId[];
   /** « Les agents peuvent piloter Escouade »: the MCP server runs, given to the agents and declared in each active account of every harness installed. Changed by `mcp_set_enabled`, not by the settings modal's draft. */
   mcpEnabled: boolean;
+  /** « Les agents peuvent répondre aux questions et aux permissions des autres agents » (ESC-423): nobody by default. */
+  agentsAnswer?: AgentsAnswer;
   /** The port of the MCP server on 127.0.0.1 (0 until its first start): the backend's own. */
   mcpPort: number;
   /** « Les agents tiennent une liste de tâches »: Claude Code's task list tools are on for the agents that start, so their progress can be shown (`Agent.plan`). */
@@ -852,6 +857,8 @@ export interface Project {
   engine: EngineId | null;
   /** « Projet privé »: the agents of the other projects do not see it through the MCP server, and its own see it alone. */
   private: boolean;
+  /** « Chef d’escouade » (ESC-423): the agent, by id, that answers the other agents' requests when `Settings.agentsAnswer` is `chef`; set by the window alone. */
+  chef?: string | null;
   /** « Branche des docs » (ESC-256): the branch that holds `.escouade/spec`, `decisions` and `documents`; empty is the branch checked out. */
   docsBranch?: string;
   /** Its `.escouade.yml`: the keys kept on this machine, the commands trusted, the file as last read. Absent from a project of the window’s tests made before ESC-146. */
