@@ -4,6 +4,7 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
+- The Copilot CLI view no longer writes without asking you, even in “Accept edits” and “Auto”, never writes in `.git` nor in its settings, keeps a discussion read-only and does not open for an agent of a private project. On Windows, the harnesses’ hooks call escouade-hook by its whole path: a file of the same name in the agent’s folder no longer runs.
 ## [Unreleased]
 
 - A plugin now sets only the environment variables its manifest declares, shown at the install, and never those that would change the program it runs. A third-party plugin’s harness can no longer be a shell or an interpreter, and its version is read only after a first gesture of yours. “Install verified versions only” is on for a new installation.

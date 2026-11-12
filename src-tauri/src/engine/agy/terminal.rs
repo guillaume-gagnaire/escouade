@@ -64,17 +64,13 @@ pub(crate) fn onboarding_file(home: &Path) -> PathBuf {
         .join("onboarding.json")
 }
 
-/// The line its hooks run for `event`: `escouade-hook` by its path quoted for a POSIX shell, or
-/// under Windows by its name (its folder first on the `PATH`), which `cmd /c` finds.
+/// The line its hooks run for `event`: `escouade-hook` by its whole path (`hook_program`), which
+/// `agy` runs by `cmd /c` under Windows, in the folder of `hooks.json` (ESC-430).
 fn hook_line(command: &Path, event: &str) -> String {
-    if cfg!(windows) {
-        format!("escouade-hook {event}")
-    } else {
-        format!(
-            "'{}' {event}",
-            command.to_string_lossy().replace('\'', r"'\''")
-        )
-    }
+    format!(
+        "{} {event}",
+        super::super::terminal::hook_program(command, cfg!(windows))
+    )
 }
 
 /// Its `hooks.json`: `escouade-hook <event>` for each event Escouade reads.
@@ -201,14 +197,9 @@ impl TerminalView for AgyTerminal {
             if let Some(command) = l.hooks.command {
                 files.push((hooks_file(home), pretty(&hooks_json(command))));
                 if cfg!(windows) {
-                    if let Some(dir) = command.parent() {
-                        let path = std::env::var_os("PATH").unwrap_or_default();
-                        let joined = std::env::join_paths(
-                            std::iter::once(dir.to_path_buf()).chain(std::env::split_paths(&path)),
-                        )
-                        .unwrap_or(path);
-                        env.push(("PATH".into(), joined.to_string_lossy().into_owned()));
-                    }
+                    // Its folder first on the PATH, and `cmd` kept from its current folder (ESC-430).
+                    let path = std::env::var_os("PATH").unwrap_or_default();
+                    env.extend(super::super::terminal::hook_env(command, &path));
                 }
             }
         }

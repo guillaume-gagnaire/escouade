@@ -236,12 +236,15 @@ pub(crate) fn credits(snapshots: &Value, now: i64) -> Option<QuotaMeter> {
 }
 
 /// The private file of a process given Escouade's server: its entry, read by
-/// `--additional-mcp-config @<file>`, the token named and not written.
-fn grant_file(url: &str) -> Vec<u8> {
+/// `--additional-mcp-config @<file>`, with its token, as Claude Code's (ESC-430). Its interface
+/// is given the token in no variable its commands would inherit and strips that variable from
+/// them (`--secret-env-vars`), which keeps Copilot from expanding `${ESCOUADE_MCP_TOKEN}` too
+/// (tried on 1.0.98). The file goes with the process (`release_agent`).
+fn grant_file(url: &str, token: &str) -> Vec<u8> {
     let entry = json!({ "mcpServers": { mcp::SERVER: {
         "type": "http",
         "url": url,
-        "headers": { "Authorization": format!("Bearer ${{{TOKEN_VAR}}}") },
+        "headers": { "Authorization": format!("Bearer {token}") },
         "tools": ["*"],
     } } });
     serde_json::to_vec_pretty(&entry).unwrap_or_default()
@@ -513,9 +516,9 @@ impl Engine for Copilot {
         prompt::WRITER
     }
 
-    /// Its entry, the token named (`${ESCOUADE_MCP_TOKEN}`), never written.
-    fn grant_file(&self, url: &str, _token: &str) -> Option<Vec<u8>> {
-        Some(grant_file(url))
+    /// Its entry, with its token.
+    fn grant_file(&self, url: &str, token: &str) -> Option<Vec<u8>> {
+        Some(grant_file(url, token))
     }
 
     fn refusal(&self) -> Option<Value> {
@@ -818,7 +821,7 @@ mod tests {
     }
 
     #[test]
-    fn escouades_server_is_given_by_a_file_that_names_the_token_and_refused_by_its_name() {
+    fn escouades_server_is_given_by_a_file_that_holds_the_token_and_refused_by_its_name() {
         let url = "http://127.0.0.1:4321/mcp";
         let file: Value =
             serde_json::from_slice(&COPILOT.grant_file(url, "s3cr3t").unwrap()).unwrap();
@@ -826,7 +829,7 @@ mod tests {
             file,
             json!({ "mcpServers": { "escouade": {
                 "type": "http", "url": url,
-                "headers": { "Authorization": "Bearer ${ESCOUADE_MCP_TOKEN}" },
+                "headers": { "Authorization": "Bearer s3cr3t" },
                 "tools": ["*"],
             } } })
         );
@@ -843,7 +846,7 @@ mod tests {
             granted.env,
             [("ESCOUADE_MCP_TOKEN".to_string(), "s3cr3t".to_string())]
         );
-        // Never among the variables kept from its commands: Copilot would not put it in the header.
+        // Never among the variables kept from the process's commands: the 2.2 plugin gives it there.
         assert!(!args().iter().any(|a| a.contains("ESCOUADE_MCP_TOKEN")));
         let refused = COPILOT.escouade_launch(&Escouade::Denied { file: None });
         assert_eq!(refused.args, ["--disable-mcp-server", "escouade"]);

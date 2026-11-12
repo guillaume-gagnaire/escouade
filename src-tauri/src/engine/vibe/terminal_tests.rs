@@ -98,6 +98,10 @@ fn a_written_session_is_resumed_in_the_agents_mode_with_its_hooks_trust_and_no_t
         assert_eq!(command, "escouade-hook");
         let path = env_of(&t, "PATH").expect("its PATH");
         assert!(path.starts_with(r"C:\Program Files\Escouade"), "{path}");
+        assert_eq!(
+            env_of(&t, crate::engine::terminal::NO_CURRENT_DIR),
+            Some("1")
+        );
     } else {
         assert_eq!(command, format!("'{HOOK}'"));
     }

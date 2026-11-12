@@ -106,6 +106,11 @@ pub trait TerminalView: Send + Sync {
     fn escouade(&self, harness: &dyn Engine, access: &Escouade, _config_dir: &Path) -> mcp::Launch {
         harness.escouade_launch(access)
     }
+    /// Whether its interface holds a private project's fence (its settings, its rules, its
+    /// client): a view that does not is refused to a fenced agent (ESC-430).
+    fn holds_fence(&self) -> bool {
+        true
+    }
     /// The variables set over those of its environment `env` (its account's folder among them),
     /// to keep from it what the app's own environment would give it: nothing, unless its harness
     /// would take another account from it (Copilot CLI: a GitHub token, for an account of its own).
@@ -272,4 +277,83 @@ pub fn hook_command() -> Option<PathBuf> {
         .map(|d| d.join(HOOK_COMMAND))
         .find(|p| p.is_file());
     found
+}
+
+/// The variable that keeps `cmd` from looking for a program named alone in its current folder
+/// first (ESC-430): the agent's, where an `escouade-hook.cmd` would run at each hook.
+pub(crate) const NO_CURRENT_DIR: &str = "NoDefaultCurrentDirectoryInExePath";
+
+/// A path of Windows written with `/` and no quote, when a line of `cmd`, PowerShell or Git Bash
+/// holds it so (tried on Windows 11), and a program in Go passes it to `cmd` as it is (a quote
+/// becomes `\"`, which `cmd` does not read); None for a path with a space, an accent or a sign a
+/// shell reads.
+pub(crate) fn plain_windows_path(path: &str) -> Option<String> {
+    let plain = !path.is_empty()
+        && path.chars().all(|c| {
+            c.is_ascii_alphanumeric() || matches!(c, '\\' | '/' | ':' | '.' | '_' | '-' | '~')
+        });
+    plain.then(|| path.replace('\\', "/"))
+}
+
+/// How a hook's line runs `escouade-hook` (`command`): by its whole path, quoted for a POSIX
+/// shell, under Windows (`windows`) with `/` and no quote; by its name only when a line cannot
+/// hold its path so (its folder first on the `PATH`, `hook_env`).
+pub(crate) fn hook_program(command: &Path, windows: bool) -> String {
+    let path = command.to_string_lossy();
+    match windows {
+        true => plain_windows_path(&path).unwrap_or_else(|| "escouade-hook".into()),
+        false => format!("'{}'", path.replace('\'', r"'\''")),
+    }
+}
+
+/// Under Windows, the variables of an interface whose hooks run `escouade-hook` (`command`): the
+/// app's `PATH` with its folder first (`path`), for a line that calls it by its name, and
+/// `NoDefaultCurrentDirectoryInExePath`, so that `cmd` never runs one of its current folder.
+pub(crate) fn hook_env(command: &Path, path: &std::ffi::OsStr) -> Vec<(String, String)> {
+    let mut env = Vec::new();
+    if let Some(dir) = command.parent() {
+        let joined = std::env::join_paths(
+            std::iter::once(dir.to_path_buf()).chain(std::env::split_paths(path)),
+        )
+        .unwrap_or_else(|_| path.to_os_string());
+        env.push(("PATH".into(), joined.to_string_lossy().into_owned()));
+    }
+    env.push((NO_CURRENT_DIR.into(), "1".into()));
+    env
+}
+
+#[cfg(test)]
+mod hook_tests {
+    use super::*;
+
+    #[test]
+    fn a_hook_runs_escouade_hook_by_its_whole_path_and_never_one_of_its_current_folder() {
+        let plain = Path::new(r"C:\Users\ana\AppData\Local\Escouade\escouade-hook.exe");
+        assert_eq!(
+            hook_program(plain, true),
+            "C:/Users/ana/AppData/Local/Escouade/escouade-hook.exe"
+        );
+        // What a line cannot hold without quotes: by its name, its folder first on the PATH.
+        for odd in [
+            r"C:\Program Files\Escouade\escouade-hook.exe",
+            r"C:\Users\Zoé\escouade-hook.exe",
+            r"C:\a&b\escouade-hook.exe",
+            r"C:\a%PATH%\escouade-hook.exe",
+            r"C:\O'Brien\escouade-hook.exe",
+            r"C:\a(1)\escouade-hook.exe",
+        ] {
+            assert_eq!(hook_program(Path::new(odd), true), "escouade-hook", "{odd}");
+        }
+        assert_eq!(
+            hook_program(Path::new("/opt/it's/escouade-hook"), false),
+            r"'/opt/it'\''s/escouade-hook'"
+        );
+        let env = hook_env(plain, std::ffi::OsStr::new(""));
+        assert!(env.iter().any(|(k, v)| k == NO_CURRENT_DIR && v == "1"));
+        if cfg!(windows) {
+            assert!(env
+                .iter()
+                .any(|(k, v)| k == "PATH" && v.contains("Escouade")));
+        }
+    }
 }

@@ -151,6 +151,11 @@ fn a_written_conversation_is_resumed_in_its_home_with_its_model_mode_trust_hooks
     if cfg!(windows) {
         let path = env_of(&t, "PATH").expect("its PATH");
         assert!(path.starts_with(r"C:\Program Files\Escouade"), "{path}");
+        // `cmd` never runs an `escouade-hook.cmd` of its current folder (ESC-430).
+        assert_eq!(
+            env_of(&t, crate::engine::terminal::NO_CURRENT_DIR),
+            Some("1")
+        );
     }
 }
 

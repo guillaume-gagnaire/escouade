@@ -97,14 +97,10 @@ pub(crate) fn interface_of(program: &Program) -> Program {
     }
 }
 
-/// The line its hooks run: `escouade-hook` by its path quoted for a POSIX shell, or under Windows
-/// by its name (its folder first on the `PATH`), which Git Bash and PowerShell both read.
+/// The line its hooks run: `escouade-hook` by its whole path (`hook_program`), which Git Bash and
+/// PowerShell both read (ESC-430).
 fn hook_line(command: &Path) -> String {
-    if cfg!(windows) {
-        "escouade-hook".into()
-    } else {
-        format!("'{}'", command.to_string_lossy().replace('\'', r"'\''"))
-    }
+    super::super::terminal::hook_program(command, cfg!(windows))
 }
 
 /// Its `hooks.toml`: `escouade-hook` before and after each tool, and at the end of each turn.
@@ -197,14 +193,9 @@ impl TerminalView for VibeTerminal {
             if let Some(command) = l.hooks.command {
                 files.push((home.join(HOOKS), hooks_file(command).into_bytes()));
                 if cfg!(windows) {
-                    if let Some(dir) = command.parent() {
-                        let path = std::env::var_os("PATH").unwrap_or_default();
-                        let joined = std::env::join_paths(
-                            std::iter::once(dir.to_path_buf()).chain(std::env::split_paths(&path)),
-                        )
-                        .unwrap_or(path);
-                        env.push(("PATH".into(), joined.to_string_lossy().into_owned()));
-                    }
+                    // Its folder first on the PATH, and `cmd` kept from its current folder (ESC-430).
+                    let path = std::env::var_os("PATH").unwrap_or_default();
+                    env.extend(super::super::terminal::hook_env(command, &path));
                 }
             }
             if let Some(trust) = trusted_folders(&l.meta.cwd) {

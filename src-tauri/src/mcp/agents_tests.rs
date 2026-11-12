@@ -187,7 +187,12 @@ fn keeps_the_token_off_the_command_line(engine: &dyn Engine) {
     assert!(in_file || in_env, "{name}: the token reaches nothing");
     if in_file {
         let file = file.unwrap().to_string_lossy().into_owned();
-        assert!(launch.args.contains(&file), "{name}: {launch:?}");
+        // As it names it: alone, or after `@` (Copilot CLI's `--additional-mcp-config`).
+        let at = format!("@{file}");
+        assert!(
+            launch.args.iter().any(|a| *a == file || *a == at),
+            "{name}: {launch:?}"
+        );
     }
     for refused in [
         Escouade::Denied { file: None },
@@ -884,9 +889,9 @@ async fn a_copilot_agent_is_given_the_server_by_a_file_naming_its_token_or_refus
         .expect("a token")
         .to_string();
     assert!(argv.iter().all(|a| !a.contains(&token)), "{argv:?}");
+    // In the core's private file itself (ESC-430), which goes with the process.
     let file = std::fs::read_to_string(&config).unwrap();
-    assert!(!file.contains(&token), "{file}");
-    assert!(file.contains("Bearer ${ESCOUADE_MCP_TOKEN}"), "{file}");
+    assert!(file.contains(&format!("Bearer {token}")), "{file}");
     let reached = copilot_noted(&home, "mcp.jsonl").pop().unwrap();
     assert_eq!(
         (reached["name"].as_str(), reached["status"].as_u64()),

@@ -4,6 +4,7 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+- La vue Copilot CLI n’écrit plus sans te demander, même en « Édits auto » et « Auto », n’écrit jamais dans `.git` ni dans sa configuration, tient la lecture seule d’une discussion et ne s’ouvre pas pour un agent d’un projet privé. Sous Windows, les hooks des harness appellent escouade-hook par son chemin entier : un fichier du même nom dans le dossier de l’agent ne s’exécute plus.
 ## [Non publié]
 
 - Un plugin ne pose plus que les variables d’environnement que son manifeste déclare, montrées à l’installation, et jamais celles qui changeraient le programme qu’il lance. Le harness d’un plugin tiers ne peut plus être un shell ou un interpréteur, et sa version n’est lue qu’après un premier geste de ta part. « N’installer que des versions vérifiées » est allumé pour une nouvelle installation.

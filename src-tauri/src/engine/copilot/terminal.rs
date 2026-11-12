@@ -84,11 +84,22 @@ pub(crate) fn plugin_data_id(plugin: &Path) -> String {
         .collect()
 }
 
-/// The line that runs `command` for `event`, in PowerShell (Windows) or in a POSIX shell.
+/// The quotes PowerShell reads as `'` in a string between them: each is doubled there (ESC-430).
+const POWERSHELL_QUOTES: [char; 5] = ['\'', '\u{2018}', '\u{2019}', '\u{201A}', '\u{201B}'];
+
+/// The line that runs `command` for `event`, in PowerShell (Windows) or in a POSIX shell: by its
+/// whole path, never by its name.
 fn hook_line(command: &Path, event: &str, powershell: bool) -> String {
     let path = command.to_string_lossy();
     if powershell {
-        format!("& '{}' {event}", path.replace('\'', "''"))
+        let mut quoted = String::new();
+        for c in path.chars() {
+            quoted.push(c);
+            if POWERSHELL_QUOTES.contains(&c) {
+                quoted.push(c);
+            }
+        }
+        format!("& '{quoted}' {event}")
     } else {
         format!("'{}' {event}", path.replace('\'', r"'\''"))
     }
@@ -127,7 +138,7 @@ pub(crate) fn tui_args(l: &TerminalLaunch, plugin: Option<&Path>) -> Vec<String>
         "--no-auto-update".into(),
         "--disable-builtin-mcps".into(),
         "--disallow-temp-dir".into(),
-        format!("--secret-env-vars={SECRETS}"),
+        format!("--secret-env-vars={SECRETS},{}", super::TOKEN_VAR),
     ]);
     // Never `auto`, which picks a model itself.
     if !m.model.is_empty() && m.model != "auto" {
@@ -136,25 +147,58 @@ pub(crate) fn tui_args(l: &TerminalLaunch, plugin: Option<&Path>) -> Vec<String>
     if EFFORTS.contains(&m.effort.as_str()) && takes_effort(&m.model) {
         a.extend(["--reasoning-effort".into(), m.effort.clone()]);
     }
-    // As Escouade's rules answer in its view: writes in its folder in « Édits auto » and « Auto »,
-    // `git add` and `git commit` too in « Auto ».
+    // No write goes without a question in « Édits auto » nor in « Auto » (ESC-430):
+    // `--allow-tool=write` would cover the `.git` of the worktree too (a hook, `core.fsmonitor`,
+    // then a `git commit` with no question), and nothing proves a refusal by path covers the files
+    // under it. `git add` and `git commit` in « Auto », as the process.
+    let read_only = m.discussion.is_some();
     match m.mode.as_str() {
+        _ if read_only => {}
         "bypassPermissions" => a.push("--allow-all".into()),
         "plan" => a.extend(["--mode".into(), "plan".into()]),
-        "acceptEdits" => a.push("--allow-tool=write".into()),
         "auto" => a.extend([
             "--mode".into(),
             "autopilot".into(),
-            "--allow-tool=write".into(),
             "--allow-tool=shell(git add)".into(),
             "--allow-tool=shell(git commit)".into(),
         ]),
         _ => {}
     }
+    a.extend(denials(&m.cwd, read_only));
     if let Some(p) = plugin {
         a.extend(["--plugin-dir".into(), p.to_string_lossy().into_owned()]);
     }
     a
+}
+
+/// The names refused to its writes wherever they are (« by trailing path components »).
+pub(crate) const CONFIG_NAMES: [&str; 2] = [".git", ".copilot"];
+
+/// The folders of the agent's refused to its writes by their whole path: `.git`, and what Copilot
+/// reads of a repository's settings and hooks (`copilot help config`, 1.0.98).
+pub(crate) const CONFIG_DIRS: [&str; 4] = [".git", ".copilot", ".github/copilot", ".github/hooks"];
+
+/// Its refusals (ESC-430), which win over every permission, `--allow-all` included: the writes in
+/// what changes what Copilot or `git` run, in the agent's folder `cwd`; for a discussion
+/// (`read_only`), every write and every command.
+pub(crate) fn denials(cwd: &str, read_only: bool) -> Vec<String> {
+    let mut d: Vec<String> = Vec::new();
+    if read_only {
+        d.extend(["--deny-tool=write".into(), "--deny-tool=shell".into()]);
+    }
+    d.extend(
+        CONFIG_NAMES
+            .iter()
+            .map(|n| format!("--deny-tool=write({n})")),
+    );
+    if !cwd.is_empty() {
+        let dir = Path::new(cwd);
+        d.extend(CONFIG_DIRS.iter().map(|n| {
+            let path = n.split('/').fold(dir.to_path_buf(), |p, part| p.join(part));
+            format!("--deny-tool=write({})", path.to_string_lossy())
+        }));
+    }
+    d
 }
 
 /// The folder of the session `session` in Copilot's folder `config_dir`.
@@ -599,8 +643,32 @@ impl TerminalView for CopilotTerminal {
             .collect()
     }
 
+    /// Read without a question, never written: `--add-dir` opens its writes too (ESC-430).
     fn read_dir_args(&self, dir: &Path) -> Vec<String> {
-        vec![format!("--add-dir={}", dir.display())]
+        vec![
+            format!("--add-dir={}", dir.display()),
+            format!("--deny-tool=write({})", dir.display()),
+        ]
+    }
+
+    /// Escouade's server by the core's private file, which holds its token (ESC-430): the token is
+    /// in no variable its commands would inherit, and is among those it strips (`tui_args`).
+    fn escouade(
+        &self,
+        harness: &dyn super::super::Engine,
+        access: &super::super::Escouade,
+        _config_dir: &Path,
+    ) -> super::super::mcp::Launch {
+        let mut launch = harness.escouade_launch(access);
+        launch.env.retain(|(k, _)| k != super::TOKEN_VAR);
+        launch
+    }
+
+    /// Nothing holds a private project's fence in Copilot's interface (ESC-430): its rules have no
+    /// kind for a read, its hooks only look on, and `--allow-all` opens every path. A fenced
+    /// agent's view is refused.
+    fn holds_fence(&self) -> bool {
+        false
     }
 
     fn copy_first<'a>(
@@ -731,7 +799,6 @@ mod tests {
             "--no-auto-update",
             "--disable-builtin-mcps",
             "--disallow-temp-dir",
-            "--allow-tool=write",
             "--allow-tool=shell(git commit)",
         ] {
             assert!(new.args.iter().any(|a| a == flag), "{flag}: {:?}", new.args);
@@ -920,7 +987,7 @@ mod tests {
     ) {
         use crate::engine::COPILOT;
         let dir = Path::new("C:/copilot");
-        // Given: the entry's private file, the token in the environment alone (ESC-40).
+        // Given: the entry's private file, which holds the token (ESC-430): in no variable.
         let granted = COPILOT_TERMINAL.escouade(
             &COPILOT,
             &Escouade::Granted {
@@ -935,7 +1002,7 @@ mod tests {
             ["--additional-mcp-config", "@C:/data/mcp/a1.json"]
         );
         assert!(!granted.args.iter().any(|a| a.contains("s3cr3t")));
-        assert_eq!(granted.env[0].0, "ESCOUADE_MCP_TOKEN");
+        assert!(granted.env.is_empty(), "{:?}", granted.env);
         // Refused: by its name (the interface has no session to turn it off in).
         let refused = COPILOT_TERMINAL.escouade(&COPILOT, &Escouade::Denied { file: None }, dir);
         assert_eq!(refused.args, ["--disable-mcp-server", "escouade"]);
@@ -950,5 +1017,125 @@ mod tests {
             .iter()
             .all(|(k, v)| k.contains("TOKEN") && v.is_empty()));
         assert!(COPILOT_TERMINAL.masked_env(&[]).is_empty());
+    }
+
+    #[test]
+    fn no_write_goes_without_a_question_and_git_and_its_settings_are_refused_in_every_mode() {
+        for mode in [
+            "default",
+            "acceptEdits",
+            "auto",
+            "plan",
+            "bypassPermissions",
+        ] {
+            let meta = AgentMeta {
+                mode: mode.into(),
+                cwd: "/x/repo".into(),
+                ..Default::default()
+            };
+            let a = launch_of(&meta, Some("u-1"), None).args;
+            assert!(
+                !a.iter().any(|x| x.starts_with("--allow-tool=write")),
+                "{mode}: {a:?}"
+            );
+            for refused in [
+                "--deny-tool=write(.git)",
+                "--deny-tool=write(.copilot)",
+                "--deny-tool=write(/x/repo/.git)",
+                "--deny-tool=write(/x/repo/.github/hooks)",
+                "--deny-tool=write(/x/repo/.github/copilot)",
+            ] {
+                let refused = if cfg!(windows) {
+                    refused
+                        .replace("/x/repo/.github/", r"/x/repo\.github\")
+                        .replace("/x/repo/", r"/x/repo\")
+                } else {
+                    refused.to_string()
+                };
+                assert!(a.contains(&refused), "{mode}: {refused} in {a:?}");
+            }
+        }
+        let auto = AgentMeta {
+            mode: "auto".into(),
+            ..Default::default()
+        };
+        let a = launch_of(&auto, None, None).args;
+        let allowed: Vec<&String> = a.iter().filter(|x| x.starts_with("--allow")).collect();
+        assert_eq!(
+            allowed,
+            [
+                "--allow-tool=shell(git add)",
+                "--allow-tool=shell(git commit)"
+            ]
+        );
+        // The folder of the joined files: read, never written.
+        let dir = COPILOT_TERMINAL.read_dir_args(Path::new("/data/files/a1"));
+        assert_eq!(
+            dir,
+            [
+                "--add-dir=/data/files/a1",
+                "--deny-tool=write(/data/files/a1)"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_discussion_is_held_read_only_and_a_fenced_agents_view_is_refused() {
+        for mode in ["default", "acceptEdits", "auto", "bypassPermissions"] {
+            let meta = AgentMeta {
+                mode: mode.into(),
+                discussion: Some(Default::default()),
+                ..Default::default()
+            };
+            let a = launch_of(&meta, None, None).args;
+            for refused in ["--deny-tool=write", "--deny-tool=shell"] {
+                assert!(a.iter().any(|x| x == refused), "{mode}: {a:?}");
+            }
+            assert!(
+                !a.iter()
+                    .any(|x| x.starts_with("--allow") || x == "autopilot"),
+                "{mode}: {a:?}"
+            );
+        }
+        // Nothing holds the fence in its interface: the core refuses its view to a fenced agent.
+        assert!(!COPILOT_TERMINAL.holds_fence());
+        assert!(crate::engine::claude::terminal::CLAUDE_TERMINAL.holds_fence());
+    }
+
+    #[test]
+    fn its_view_gets_the_token_in_the_cores_file_alone_and_strips_its_variable() {
+        let access = Escouade::Granted {
+            url: "http://127.0.0.1:4321/mcp".into(),
+            token: "s3cr3t".into(),
+            file: Some("C:/data/mcp/a1.json".into()),
+        };
+        let l = COPILOT_TERMINAL.escouade(&super::super::COPILOT, &access, Path::new("/h"));
+        assert_eq!(l.args, ["--additional-mcp-config", "@C:/data/mcp/a1.json"]);
+        assert!(l
+            .env
+            .iter()
+            .all(|(k, v)| k != super::super::TOKEN_VAR && v != "s3cr3t"));
+        let a = launch_of(&AgentMeta::default(), None, None).args;
+        let secrets = a
+            .iter()
+            .find(|x| x.starts_with("--secret-env-vars="))
+            .unwrap();
+        assert!(
+            secrets.split([',', '=']).any(|v| v == "ESCOUADE_MCP_TOKEN"),
+            "{secrets}"
+        );
+    }
+
+    #[test]
+    fn every_quote_powershell_reads_as_one_is_doubled() {
+        for q in ['\'', '\u{2018}', '\u{2019}', '\u{201A}', '\u{201B}'] {
+            let path = format!(r"C:\Users\O{q}Brien\Escouade\escouade-hook.exe");
+            let hooks = hooks_file(Path::new(&path));
+            assert_eq!(
+                hooks["hooks"]["sessionStart"][0]["powershell"],
+                format!(r"& 'C:\Users\O{q}{q}Brien\Escouade\escouade-hook.exe' sessionStart"),
+                "{q}"
+            );
+        }
     }
 }
