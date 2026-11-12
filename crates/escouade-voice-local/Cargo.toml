@@ -22,10 +22,10 @@ escouade-plugin-kit = { path = "../escouade-plugin-kit" }
 escouade-voice = { path = "../escouade-voice" }
 anyhow = "1"
 log = "0.4"
-parking_lot = "0.12"
+parking_lot = "0.13"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sha2 = "0.10"
+sha2 = "0.11"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }
 # The microphone through cpal (WASAPI, CoreAudio, ALSA), transcribed by whisper.cpp (whisper-rs builds it, with cmake).
 cpal = "0.18"
@@ -39,13 +39,13 @@ espeak-ng = { version = "0.2", default-features = false, features = ["bundled-da
 [dev-dependencies]
 escouade-base = { path = "../escouade-base", features = ["testing"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "time"] }
-dirs = "6"
+dirs = "7"
 
 # ONNX Runtime, linked in statically on Windows and Apple Silicon (pyke's builds, downloaded by its build script). Pyke
 # builds none for Intel Macs, and its Linux one needs glibc 2.38: there Microsoft's own library (1.23.2, glibc 2.27) is
 # shipped in the bundle (scripts/onnxruntime.sh, tauri.ort-<os>.conf.json) and loaded at run time.
 [target.'cfg(any(windows, all(target_os = "macos", target_arch = "aarch64")))'.dependencies]
-ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "download-binaries", "tls-rustls", "api-22"] }
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "download-binaries", "tls-rustls", "api-22"] }
 
 [target.'cfg(any(target_os = "linux", all(target_os = "macos", target_arch = "x86_64")))'.dependencies]
 ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "load-dynamic", "api-22"] }

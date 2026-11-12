@@ -14,10 +14,10 @@ publish = false
 # ONNX Runtime as the voice links it (its `ort`), made ready by it, and the download of a model.
 escouade-voice-local = { path = "../escouade-voice-local" }
 anyhow = "1"
-parking_lot = "0.12"
+parking_lot = "0.13"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }
-sha2 = "0.10"
-rusqlite = { version = "0.37", features = ["bundled"] }
+sha2 = "0.11"
+rusqlite = { version = "0.41", features = ["bundled"] }
 # The model's own tokenizer (HF tokenizer.json), no regex engine to build (fancy-regex).
 tokenizers = { version = "0.22", default-features = false, features = ["unstable_wasm"] }
 

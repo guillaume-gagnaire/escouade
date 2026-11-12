@@ -40,15 +40,15 @@ serde_json = { version = "1", features = ["raw_value"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time", "fs", "net"] }
 anyhow = "1"
 glob = "0.3"
-parking_lot = "0.12"
+parking_lot = "0.13"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
-dirs = "6"
+dirs = "7"
 portable-pty = "0.9"
 notify = "8"
-rusqlite = { version = "0.37", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }
-base64 = "0.22"
+base64 = "0.23"
 log = "0.4"
 # The system's language, in the usage statistics (`telemetry`).
 sys-locale = "0.3"
@@ -56,9 +56,9 @@ trash = "5"
 # The system's name and version, in the usage statistics (`telemetry`).
 os_info = { version = "3", default-features = false }
 # The name of a Claude account's macOS keychain entry: Claude Code's own hash of its folder, in NFC.
-sha2 = "0.10"
+sha2 = "0.11"
 # The store's signatures of the verified plugins (docs/STORE.md §4.5), as the updater checks its own.
-minisign-verify = "0.2"
+minisign-verify = "0.3"
 # The protocol spoken to the plugins, shared with the plugins in Rust (`plugins/`, the kit).
 escouade-plugin-protocol = { path = "../crates/escouade-plugin-protocol" }
 # The ACP client (PLG-6), which the core's ACP harnesses share until they come out in process (INT-10).
@@ -97,7 +97,7 @@ escouade-voice-local = { path = "../crates/escouade-voice-local" }
 escouade-vectors = { path = "../crates/escouade-vectors" }
 # The transcription as one speaks (ESC-136): a WebSocket to the service, through the settings' proxy (HTTP CONNECT,
 # opened by hand) and TLS by rustls (ring, as reqwest), the system's roots and Mozilla's.
-tokio-tungstenite = { version = "0.28", default-features = false, features = ["handshake"] }
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
@@ -107,7 +107,7 @@ yaml-edit = "0.3"
 # The text of the documents of the drive (ESC-260), read on the machine: PDF by pdf-extract, Word (.docx) and
 # OpenDocument (.odt) by their XML inside the zip.
 pdf-extract = "0.12"
-zip = { version = "4.6", default-features = false, features = ["deflate"] }
+zip = { version = "9.5", default-features = false, features = ["deflate"] }
 quick-xml = "0.42"
 # The JS/TS plugins (`run.js`, ESC-320, docs/PLUGINS-DESIGN.md §5): their module compiled by Javy, run by wasmtime in the
 # app's process (Cranelift, WASI preview 1 alone: no folder, no socket, only the three standard streams).
@@ -116,15 +116,15 @@ wasmtime-wasi = { version = "=50.0.1", default-features = false, features = ["p1
 bytes = "1"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.60", features = ["Win32_Media_Audio", "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_ProcessStatus", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
-tauri-winrt-notification = "0.7"
+windows-sys = { version = "0.61", features = ["Win32_Media_Audio", "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_ProcessStatus", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+tauri-winrt-notification = "0.8"
 # The integrations' secrets in the Credential Manager. Its own store only: neither the fallback
 # that keeps them in memory (lost at the next start) nor Linux's secret-service.
 keyring = { version = "3.6", features = ["windows-native"] }
 # The path of a file the page hands the window (`fileorigin`): WebView2's own COM interfaces, in the
 # versions Tauri's wry already uses (`windows-core` for `Interface::cast`, which webview2-com does not re-export).
 webview2-com = "0.39"
-windows-core = "0.62"
+windows-core = "0.100"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -221,7 +221,7 @@ hound = "3.5"
 ctor = "1"
 tauri = { version = "2", features = ["test", "tray-icon", "image-png", "devtools", "unstable"] }
 # An https server with a self-signed certificate (a corporate proxy's), for the TLS settings.
-rcgen = { version = "0.13", default-features = false, features = ["crypto", "ring"] }
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "ring"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
 # A real MCP client against the app's server.

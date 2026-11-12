@@ -28,7 +28,7 @@ dunce = "1"
 
 # What the host gives of a file that is not UTF-8 (`fs/read`).
 [target.'cfg(target_family = "wasm")'.dependencies]
-base64 = "0.22"
+base64 = "0.23"
 
 # docs.rs builds the two targets a plugin compiles for.
 [package.metadata.docs.rs]
