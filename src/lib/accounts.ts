@@ -2,7 +2,7 @@
 // another harness's account (going on another harness is a handover, ESC-88).
 
 import { quotaUntil } from './board';
-import { capsOf, engineName } from './engines';
+import { BYPASS, capsOf, engineName, RECOMMENDED_MODE } from './engines';
 import { fDayMonth, fList, fPct, fTime } from './format';
 import { estimatedBy } from './spend';
 import { t, tIn } from './i18n';
@@ -95,8 +95,19 @@ export function accountDefaults(a: Account | undefined, engine: EngineId = a ? e
   return {
     model: own(a?.defaultModel) ?? (of === 'claude' ? CLAUDE_DEFAULT_MODEL : ''),
     effort: own(a?.defaultEffort) ?? 'medium',
-    mode: own(a?.defaultMode) ?? (capsOf(of)?.modes.some((m) => m.id === 'auto') === false ? 'default' : 'auto'),
+    mode: own(a?.defaultMode) ?? fallbackMode(of),
   };
+}
+
+/**
+ * The mode of a new agent of `engine` whose account says none: the one chosen at the first start (SEC-09; not answered
+ * yet, the recommended one), when its harness has it, else `auto`, else « Demander ».
+ */
+function fallbackMode(engine: EngineId): string {
+  const has = (id: string) => capsOf(engine)?.modes.some((m) => m.id === id) ?? id === 'auto';
+  const chosen = app.settings.agentMode?.trim() || RECOMMENDED_MODE;
+  if (chosen !== BYPASS && has(chosen)) return chosen;
+  return has('auto') ? 'auto' : 'default';
 }
 
 /** The defaults of the account a new agent of the project on `engine` would go to (`newAgentAccount`), else of its harness. */

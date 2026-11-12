@@ -1061,7 +1061,8 @@ async fn the_token_a_switch_to_the_cli_could_not_delete_goes_at_the_next_start()
 }
 
 #[tokio::test]
-async fn a_site_behind_a_self_signed_certificate_is_reached_once_tls_verification_is_off() {
+async fn a_site_behind_a_proxys_own_certificate_is_reached_once_its_root_is_the_file_of_authorities(
+) {
     let h = harness("ig-insecure-tls");
     // As a corporate proxy that decrypts the traffic presents it: a certificate no system trusts.
     let server = FakeServer::start_tls().await;
@@ -1083,7 +1084,11 @@ async fn a_site_behind_a_self_signed_certificate_is_reached_once_tls_verificatio
         "{refused}"
     );
     assert!(server.requests().is_empty());
-    h.core.settings.write().insecure_tls = true;
+    let dir = std::env::temp_dir().join(format!("tls-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let ca = dir.join("root.pem");
+    std::fs::write(&ca, &server.cert_pem).unwrap();
+    h.core.settings.write().extra_ca_file = ca.to_string_lossy().into_owned();
     // Jira is a module: its next call follows the network of now, as saving the settings makes it.
     h.core
         .plugin_runtime

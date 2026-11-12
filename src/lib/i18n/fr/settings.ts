@@ -5,7 +5,10 @@ export default {
   // The pages of the window: their name and what they set (under the title, in the header).
   pages: {
     general: { label: 'Général', desc: 'Thème, zoom, langue, mises à jour et ce qui te concerne' },
-    agents: { label: 'Agents', desc: 'Les nouveaux agents, les textes rédigés, le remote control et le pilotage d’Escouade' },
+    agents: {
+      label: 'Agents',
+      desc: 'Les nouveaux agents, leurs permissions, les textes rédigés, le remote control et le pilotage d’Escouade',
+    },
     accounts: {
       label: 'Comptes et harness',
       desc: 'Les harness de ce poste, leurs comptes, et ce qui se passe à la limite',
@@ -182,6 +185,27 @@ export default {
     noAccount: '{name} (aucun compte)',
     projectOff: '{name} (coupé pour ce projet)',
   },
+  /** Réglages › Agents › Permissions, and the question of the first start (SEC-09). */
+  permissions: {
+    title: 'Permissions',
+    agentMode: 'Mode par défaut des agents',
+    agentModeDesc: 'Le mode des nouveaux agents d’un compte qui n’en dit pas. Les agents et les tickets en cours gardent le leur.',
+    allowBypass: 'Autoriser le mode Bypass',
+    allowBypassDesc:
+      'En mode Bypass, le harness n’attend aucune permission : il lit, écrit et lance des commandes sans rien te montrer, y compris ce qu’un contenu piégé lui ferait faire. Éteint, aucun agent n’y passe et Claude Code ne reçoit pas --allow-dangerously-skip-permissions. À réserver à une machine ou un conteneur jetable.',
+    firstTitle: 'Comment tes agents demandent-ils ?',
+    firstBody: 'Le mode de permission des nouveaux agents. Tu le changeras agent par agent, et dans Réglages › Agents.',
+    recommended: 'Recommandé',
+    choose: 'Choisir',
+    first: {
+      acceptEdits:
+        'Les modifications dans le dossier de l’agent passent sans demander (elles restent dans son worktree, visibles dans son diff) ; chaque commande demande ton accord. Le plus prudent qui laisse un ticket avancer.',
+      default: 'Chaque action sensible demande ton accord, modifications comprises : un ticket s’arrête à chaque fichier.',
+      plan: 'L’agent analyse et propose un plan, sans rien modifier ni lancer, jusqu’à ce que tu l’approuves.',
+      auto: 'Un classifieur approuve ce qu’il juge sûr, commandes comprises, et ne demande que pour le reste.',
+    },
+  },
+
   claude: {
     /** The models of a harness that lists those of its providers (OpenCode). */
     models: {
@@ -363,10 +387,22 @@ export default {
     proxyTerminals: 'Appliquer aussi le proxy aux terminaux intégrés',
     certificates: 'Certificats',
     certificatesNote:
-      "Les intégrations, les quotas et les mises à jour font confiance aux certificats reconnus et à ceux installés sur ce système (celui d'un proxy d'entreprise, le plus souvent). Claude Code, lui, a sa propre liste.",
+      "Escouade fait confiance aux certificats reconnus, à ceux installés sur ce système et à ceux du fichier d'autorités. Les agents reçoivent ce fichier au prochain démarrage de leur processus.",
+    extraCa: 'Autorités de certification supplémentaires',
+    extraCaDesc:
+      "Avec Zscaler ou un proxy d'entreprise : choisis son certificat racine (un fichier .pem). Escouade, ses plugins et ses agents lui font confiance en plus du magasin du système.",
+    extraCaHint: 'chemin d’un fichier .pem',
+    extraCaChoose: 'Choisir…',
+    extraCaClear: 'Retirer',
+    extraCaTitle: 'Certificat racine du proxy',
+    extraCaFilter: 'Certificats PEM',
+    extraCaCount: { one: '1 certificat lu', other: '{count} certificats lus' },
     insecureTls: 'Ignorer la vérification des certificats TLS',
     insecureTlsDesc:
-      "Pour un proxy qui déchiffre le trafic avec un certificat non reconnu (erreur « UnknownIssuer »). S'applique aux intégrations, aux quotas, aux mises à jour, et aux processus Claude Code (au prochain démarrage de leur processus) avec les commandes que lancent les agents (npm, node…). À réserver à un réseau de confiance : une connexion interceptée, jetons compris, ne serait plus détectée.",
+      "Seulement pour les connexions qui passent par le proxy ci-dessus ; sans proxy, elle n'a aucun effet. Une connexion interceptée, jetons compris, ne serait plus détectée : préfère le fichier d'autorités.",
+    insecureBanner: 'Certificats TLS non vérifiés par le proxy {proxy} : une interception, jetons compris, passerait inaperçue.',
+    insecureBannerNoProxy: '« Ignorer la vérification des certificats TLS » est cochée, sans proxy : elle n’a pas d’effet.',
+    insecureBannerAction: 'Choisir le certificat racine',
   },
 
   // The « À propos » tab.
@@ -450,6 +486,9 @@ export default {
     private: 'Projet privé',
     privateDesc:
       'Les agents des autres projets ne le voient pas par le serveur MCP d’Escouade : ni dans les listes, ni par son nom, ses tickets ou ses agents. Les siens ne voient que lui. Toi, Claude hors Escouade et les vues de l’app voyez tout.',
+    /** Under « Projet privé » on Windows (SEC-08): what the fence is there, and is not. */
+    privateWindows:
+      'Sous Windows, la clôture d’un agent est une consigne donnée à son harness, pas un cloisonnement du système : une commande peut la contourner. Pour séparer deux clients, un compte Windows par client. Un plugin tiers n’y est lancé qu’une fois activé par toi pour ce projet.',
     /** Under « Projet privé »: what keeps its files from the other projects' agents, harness by harness (ESC-140). */
     fenceTitle: 'Ses fichiers',
     fenceDesc:

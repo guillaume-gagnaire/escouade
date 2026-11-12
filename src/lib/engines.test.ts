@@ -76,6 +76,10 @@ describe('the capabilities of a harness', () => {
     expect(canFork(bare)).toBe(false);
     expect(showsCost(claude)).toBe(true);
     expect(showsCost(bare)).toBe(false);
+    // « Bypass » once allowed in Réglages › Agents (SEC-09), or for the mode an agent is in already.
+    expect(modesOf(claude, MODES).map((m) => m.value)).toEqual(['auto', 'default', 'plan', 'acceptEdits']);
+    expect(modesOf(claude, MODES, 'bypassPermissions').map((m) => m.value)).toContain('bypassPermissions');
+    app.settings.allowBypass = true;
     expect(modesOf(claude, MODES).map((m) => m.value)).toEqual(['auto', 'default', 'plan', 'acceptEdits', 'bypassPermissions']);
     expect(modesOf(bare, MODES).map((m) => m.value)).toEqual(['default', 'plan']);
   });

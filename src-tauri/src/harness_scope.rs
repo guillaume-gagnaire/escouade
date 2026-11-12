@@ -226,7 +226,8 @@ impl<R: Runtime> Core<R> {
 
     /// Once, at the update that applies the switch to the harnesses: a private project with agents (not archived) on a
     /// harness has its plugin turned on for it, where the user had set nothing. The user used it there already, and
-    /// the project must not stop all at once. The others stay off by default.
+    /// the project must not stop all at once. The others stay off by default, and so does a plugin of a third party
+    /// (not `dev.escouade.*`): the user turns it on there (SEC-08).
     pub(crate) fn migrate_private_harnesses(&self) {
         let marker = self.data.root().join(MIGRATED);
         if marker.exists() {
@@ -246,7 +247,10 @@ impl<R: Runtime> Core<R> {
             if m.archived || !private.contains(&m.project_id) {
                 continue;
             }
-            if let Some(plugin) = crate::plugins::harness::plugin_of(m.engine) {
+            // A plugin of a third party is never turned on for a private project but by the user (SEC-08).
+            if let Some(plugin) = crate::plugins::harness::plugin_of(m.engine)
+                .filter(|p| crate::plugins::builtin::first_hand(p))
+            {
                 let pair = (plugin, m.project_id.clone());
                 if !wanted.contains(&pair) {
                     wanted.push(pair);

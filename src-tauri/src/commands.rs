@@ -1287,6 +1287,15 @@ pub fn read_logo(path: String) -> Res<String> {
         .map_err(err)
 }
 
+/// How many certificates the `.pem` file of « Autorités de certification supplémentaires »
+/// holds, or why it would not be read (`crate::tls`).
+#[tauri::command(async)]
+pub fn check_authorities(path: String) -> Res<usize> {
+    crate::tls::read_authorities(path.trim())
+        .map(|c| c.len())
+        .map_err(err)
+}
+
 #[tauri::command(async)]
 pub fn update_project(core: CoreState, project: Project) -> Res<()> {
     let remote_was_on = core.project(&project.id).is_ok_and(|p| p.remote_control);

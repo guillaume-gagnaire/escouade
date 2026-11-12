@@ -829,7 +829,8 @@ async fn the_check_and_the_download_say_who_the_app_is() {
 // ---------- TLS ----------
 
 #[tokio::test]
-async fn tls_verification_off_lets_the_check_and_the_probe_trust_a_self_signed_certificate() {
+async fn the_file_of_authorities_lets_the_check_trust_a_proxys_root_and_unchecked_tls_never_holds_straight(
+) {
     let server = crate::integrations::fake::FakeServer::start_tls().await;
     let url = format!("{}{LATEST}", server.url);
     server.on(
@@ -839,11 +840,17 @@ async fn tls_verification_off_lets_the_check_and_the_probe_trust_a_self_signed_c
         manifest(NEW, &format!("{}{SETUP}", server.url)),
     );
     let app = app(std::slice::from_ref(&url));
-    let checker = |insecure_tls: bool| {
+    let dir = std::env::temp_dir().join(format!("tls-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let ca = dir.join("root.pem");
+    std::fs::write(&ca, &server.cert_pem).unwrap();
+    let ca = ca.to_string_lossy().into_owned();
+    let checker = |insecure_tls: bool, extra_ca: &str| {
         Arc::new(Checker {
             app: app.handle().clone(),
             net: Network {
                 insecure_tls,
+                extra_ca: extra_ca.to_string(),
                 ..Network::default()
             },
             beta: false,
@@ -853,14 +860,21 @@ async fn tls_verification_off_lets_the_check_and_the_probe_trust_a_self_signed_c
     };
     let updates = Updates::default();
     // Verified: the certificate of the server is refused, and said so.
-    let t = trouble(within(checker(false).run(&updates, true)).await);
+    let t = trouble(within(checker(false, "").run(&updates, true)).await);
     assert!(
         t.message.starts_with("connexion impossible à 127.0.0.1"),
         "{}",
         t.message
     );
-    // Not verified: found.
-    let checked = within(checker(true).run(&updates, true)).await;
+    // « Ignorer la vérification » with no proxy: refused all the same.
+    let t = trouble(within(checker(true, "").run(&updates, true)).await);
+    assert!(
+        t.message.starts_with("connexion impossible à 127.0.0.1"),
+        "{}",
+        t.message
+    );
+    // The file of authorities: found.
+    let checked = within(checker(false, &ca).run(&updates, true)).await;
     assert!(matches!(checked, Checked::Found { .. }), "{checked:?}");
 }
 

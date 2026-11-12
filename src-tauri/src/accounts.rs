@@ -279,6 +279,18 @@ pub const CLAUDE_DEFAULT_MODEL: &str = "sonnet";
 /// Code's Sonnet, every harness's effort `medium` and mode `auto`; no model for another harness,
 /// whose own default it then runs (`Core::model_for`).
 pub fn defaults(account: Option<&Account>, engine: EngineId) -> Defaults {
+    defaults_with(account, engine, "auto")
+}
+
+/// The mode the assistant of the first start recommends (SEC-09), and the one of a new installation's agents until it
+/// is answered: edits in the agent's folder go without a question (they stay in its worktree, seen in its diff), every
+/// command asks. `default` would ask for each edit too, which stops a ticket at every file; `auto` lets a classifier
+/// run commands unasked.
+pub const RECOMMENDED_MODE: &str = "acceptEdits";
+
+/// `defaults`, the mode of the new agents chosen at the first start (`Settings::agent_mode`, SEC-09; empty, not
+/// answered yet: `RECOMMENDED_MODE`) in place of `auto` when the account says none and its harness has it.
+pub fn defaults_with(account: Option<&Account>, engine: EngineId, chosen: &str) -> Defaults {
     let engine = account.map_or(engine, |a| a.engine);
     let own = |f: fn(&Account) -> &String| {
         account
@@ -289,16 +301,23 @@ pub fn defaults(account: Option<&Account>, engine: EngineId) -> Defaults {
         .unwrap_or_else(|| crate::engine::by_id(engine).default_model().to_string());
     // A harness without the mode `auto` (Cursor CLI, Mistral Vibe, Gemini CLI…) starts its new
     // agents in « Demander », the mode they would run in anyway.
-    let auto = crate::engine::by_id(engine)
-        .caps()
-        .modes
-        .iter()
-        .any(|m| m.id == "auto");
+    let modes = &crate::engine::by_id(engine).caps().modes;
+    let has = |id: &str| modes.iter().any(|m| m.id == id);
+    let chosen = match chosen.trim() {
+        "" => RECOMMENDED_MODE,
+        c => c,
+    };
+    let fallback = if !chosen.is_empty() && chosen != crate::bypass::BYPASS && has(chosen) {
+        chosen
+    } else if has("auto") {
+        "auto"
+    } else {
+        "default"
+    };
     Defaults {
         model,
         effort: own(|a| &a.default_effort).unwrap_or_else(|| "medium".into()),
-        mode: own(|a| &a.default_mode)
-            .unwrap_or_else(|| if auto { "auto" } else { "default" }.into()),
+        mode: own(|a| &a.default_mode).unwrap_or_else(|| fallback.into()),
     }
 }
 

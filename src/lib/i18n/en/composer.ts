@@ -21,6 +21,7 @@ export default defineZone('composer', {
     missing: '{harness} has no {mode} mode.',
     missingAuto: '{harness} has no Auto mode: nothing decides for you.',
     bypassToast: 'Bypass mode: {engine} will act without any permission request.',
+    bypassNotAllowed: 'Bypass mode is off: turn it on in Settings › Agents.',
   },
 
   attachments: {

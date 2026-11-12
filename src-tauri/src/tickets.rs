@@ -1428,7 +1428,7 @@ impl<R: Runtime> Core<R> {
             .account_for_new(project_id, engine)
             .ok()
             .map(|id| accounts::get(&self.settings.read(), &id));
-        accounts::defaults(account.as_ref(), engine)
+        accounts::defaults_with(account.as_ref(), engine, &self.settings.read().agent_mode)
     }
 
     /// `accounts::pick` as the board has it: a good account (`pace`: a short window under the
@@ -2172,7 +2172,11 @@ impl<R: Runtime> Core<R> {
         self.check_harness_in(engine, &project.id)?;
         let account = self.ticket_start_account(project, t, engine)?;
         // Its ticket's own model and effort come first, then the board's; the mode is the board's.
-        let defaults = accounts::defaults(accounts::find(&settings, &account), engine);
+        let defaults = accounts::defaults_with(
+            accounts::find(&settings, &account),
+            engine,
+            &settings.agent_mode,
+        );
         let (model, effort, mode) =
             ticket_agent_options(t, s, &defaults, &|m| self.takes_auto(engine, &account, m));
         // The branch it takes up may still be in the worktree of its earlier agent, archived.

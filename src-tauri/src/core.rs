@@ -1861,7 +1861,13 @@ impl<R: Runtime> Core<R> {
         if erased > 0 {
             log::info!("erased {erased} files of the retired index (ESC-310)");
         }
+        // An installation that ran before (its settings written) keeps the mode of its new agents (SEC-09); a new one
+        // has it chosen in the assistant of the first start.
+        let existed = data.settings_file().exists();
         let mut settings = read_settings(&data.settings_file());
+        if existed && settings.allow_bypass.is_none() && settings.agent_mode.is_empty() {
+            settings.agent_mode = "auto".into();
+        }
         // First: what the backend writes from now on (the menus, its texts) is in these languages.
         let lang = i18n::configure(&settings.language, &settings.claude_language);
         log::info!("languages: {lang:?}");
@@ -2207,7 +2213,7 @@ impl<R: Runtime> Core<R> {
         // What every plugin is told at `initialize`: the language.
         core.plugin_runtime.set_lang(i18n::kit(i18n::ui()).code());
         core.plugin_runtime
-            .set_agent_env(core.settings.read().proxy_env());
+            .set_agent_env(core.settings.read().network_env());
         core.plugin_runtime
             .set_network(crate::plugins::socket::Net::of(&core.settings.read()));
         let weak = core.weak();
@@ -2226,6 +2232,8 @@ impl<R: Runtime> Core<R> {
         core.sync_harnesses();
         // Once (ESC-404): a private project's harnesses in use there turned on for it.
         core.migrate_private_harnesses();
+        // Once (SEC-09): « Autoriser le mode Bypass » on for an installation that already uses it.
+        core.settle_bypass();
         // The pinned Javy of the run.js plugins downloads through Réglages › Avancé › Réseau (ESC-320); their modules are
         // made ready in the cache, precompiled again for this version of the app when it changed.
         {
@@ -2758,7 +2766,7 @@ impl<R: Runtime> Core<R> {
         self.sync_mcp();
         // A program of a plugin gets the network of now.
         self.plugin_runtime
-            .set_agent_env(self.settings.read().proxy_env());
+            .set_agent_env(self.settings.read().network_env());
         self.plugin_runtime
             .set_network(crate::plugins::socket::Net::of(&self.settings.read()));
         // The plugins start again in the language of now: `initialize` says it.
@@ -3614,6 +3622,8 @@ impl<R: Runtime> Core<R> {
         // Its harness's plugin off for its project (ESC-404): the plugin would get all it does.
         let project_id = h.lock().meta.project_id.clone();
         self.check_harness_in(engine, &project_id)?;
+        // The mode of no question without « Autoriser le mode Bypass » (SEC-09).
+        crate::bypass::check(&h.lock().meta.mode, self.bypass_allowed())?;
         // In the Claude Code view, its interface has the session (`tui`).
         if h.lock().meta.terminal {
             bail!(tr!(
@@ -3658,6 +3668,7 @@ impl<R: Runtime> Core<R> {
             );
             spawn.account = account.id.clone();
             spawn.agents_mcp = settings.agents_mcp;
+            spawn.bypass = settings.bypass_allowed();
             spawn.takes_effort = (engine::of(&rt.meta).models_by_alias()
                 && !rt.meta.effort.is_empty())
             .then(|| self.takes_effort(rt.meta.engine, &account.id, &rt.meta.model));
@@ -4629,7 +4640,7 @@ impl<R: Runtime> Core<R> {
 
     /// The settings as they are, written to their file (a change of the backend's own, which a
     /// window's save keeps: `accounts::keep_remote_refusals`).
-    fn write_settings_file(&self) {
+    pub(crate) fn write_settings_file(&self) {
         let written = serde_json::to_vec_pretty(&*self.settings.read())
             .map_err(anyhow::Error::from)
             .and_then(|b| Ok(paths::write_atomic(&self.data.settings_file(), &b)?));
@@ -6361,6 +6372,7 @@ impl<R: Runtime> Core<R> {
         let h = self.agent(id)?;
         // A discussion of the Docs tab stays in a mode that asks before a write (ESC-261).
         if let Some(m) = mode.as_deref() {
+            crate::bypass::check(m, self.bypass_allowed())?;
             if h.lock().meta.discussion.is_some() && !crate::discussion::MODES.contains(&m) {
                 bail!(tr!(
                     "Une discussion ne modifie jamais le code : elle reste en mode « Demander » ou « Plan ».",
@@ -6589,7 +6601,11 @@ impl<R: Runtime> Core<R> {
             _ => self.account_for_new(project_id, meta.engine)?,
         };
         // Its model, effort and mode: those asked for, else its account's (ESC-128).
-        let defaults = accounts::defaults(accounts::find(&settings, &meta.account), engine);
+        let defaults = accounts::defaults_with(
+            accounts::find(&settings, &meta.account),
+            engine,
+            &settings.agent_mode,
+        );
         meta.model = self.model_for(engine, o.model.unwrap_or(defaults.model));
         meta.effort = o.effort.unwrap_or(defaults.effort);
         meta.mode = o.mode.unwrap_or_else(|| defaults.mode.clone());

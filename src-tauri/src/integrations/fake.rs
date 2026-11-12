@@ -100,8 +100,31 @@ impl Route {
 #[derive(Clone)]
 pub struct FakeServer {
     pub url: String,
+    /// Over https (`start_tls`), its self-signed certificate in PEM: a file of authorities.
+    pub cert_pem: String,
     routes: Arc<Mutex<Vec<Route>>>,
     requests: Arc<Mutex<Vec<Request>>>,
+}
+
+/// A certificate in PEM, as a `.pem` file of authorities holds it.
+pub fn pem_of(der: &[u8]) -> String {
+    use base64::Engine as _;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(der);
+    let lines: Vec<&str> = b64
+        .as_bytes()
+        .chunks(64)
+        .map(|c| std::str::from_utf8(c).unwrap())
+        .collect();
+    format!(
+        "-----BEGIN CERTIFICATE-----
+{}
+-----END CERTIFICATE-----
+",
+        lines.join(
+            "
+"
+        )
+    )
 }
 
 impl FakeServer {
@@ -122,8 +145,9 @@ impl FakeServer {
     /// own, which no system trusts).
     pub async fn start_tls() -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let server = Self::at(format!("https://{}", listener.local_addr().unwrap()));
+        let mut server = Self::at(format!("https://{}", listener.local_addr().unwrap()));
         let made = rcgen::generate_simple_self_signed(vec!["127.0.0.1".to_string()]).unwrap();
+        server.cert_pem = pem_of(made.cert.der());
         let key = rustls::pki_types::PrivateKeyDer::Pkcs8(made.key_pair.serialize_der().into());
         let config = rustls::ServerConfig::builder_with_provider(Arc::new(
             rustls::crypto::ring::default_provider(),
@@ -152,6 +176,7 @@ impl FakeServer {
     fn at(url: String) -> Self {
         Self {
             url,
+            cert_pem: String::new(),
             routes: Arc::default(),
             requests: Arc::default(),
         }

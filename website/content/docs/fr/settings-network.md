@@ -1,6 +1,6 @@
 # Réglages : le réseau (Avancé)
 
-Le groupe « Réseau » de la page « Avancé » configure le proxy HTTP(S) et la vérification des certificats TLS pour Claude Code, les quotas, les intégrations, les mises à jour et la dictée (le téléchargement de ses modèles et, en ligne, son service).
+Le groupe « Réseau » de la page « Avancé » configure le proxy HTTP(S) et les certificats TLS (un fichier d’autorités supplémentaires, la vérification) pour Claude Code, les quotas, les intégrations, les mises à jour et la dictée (le téléchargement de ses modèles et, en ligne, son service).
 
 ## Ouvrir la page
 
@@ -29,13 +29,31 @@ Sans adresse de proxy, Escouade n’ajoute aucune variable de proxy : les proces
 
 ## Certificats
 
-L’app le dit sous le titre du groupe : « Les intégrations, les quotas et les mises à jour font confiance aux certificats reconnus et à ceux installés sur ce système (celui d’un proxy d’entreprise, le plus souvent). Claude Code, lui, a sa propre liste. »
+L’app le dit sous le réglage du fichier : « Escouade fait confiance aux certificats reconnus, à ceux installés sur ce système et à ceux du fichier d’autorités. Les agents reçoivent ce fichier au prochain démarrage de leur processus. »
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
-| « Ignorer la vérification des certificats TLS » | Escouade ne vérifie plus les certificats TLS. Pour un proxy qui déchiffre le trafic avec un certificat non reconnu (l’erreur « UnknownIssuer »). | Désactivé |
+| « Autorités de certification supplémentaires » | Un fichier `.pem` (le certificat racine d’un proxy d’entreprise, celui de Zscaler par exemple) auquel Escouade fait confiance en plus du magasin du système. « Choisir… » le prend ; sous le champ, l’app dit combien de certificats elle y lit, ou pourquoi elle ne le lit pas. | Vide |
+| « Ignorer la vérification des certificats TLS » | Pour les connexions qui passent par le proxy ci-dessus seulement ; sans proxy, il n’a aucun effet. Gardé pour les installations qui l’ont : préfère le fichier d’autorités. | Désactivé |
 
-Activé, le réglage s’applique aux intégrations, aux quotas et aux mises à jour, et aux processus Claude Code (au prochain démarrage de leur processus) : ils reçoivent `NODE_TLS_REJECT_UNAUTHORIZED=0`, que les commandes lancées par les agents (npm, node…) héritent aussi. Il ne s’applique pas aux terminaux intégrés ni aux commandes de lancement.
+### Le fichier d’autorités
+
+Il sert à toutes les connexions d’Escouade : les quotas, les intégrations, les mises à jour, le store, la dictée et le réseau des plugins (leurs requêtes et leurs WebSockets). Les agents le reçoivent au prochain démarrage de leur processus : `NODE_EXTRA_CA_CERTS` pour les harness en Node (Claude Code, Copilot CLI, Cursor CLI, Gemini CLI, OpenCode) et `CODEX_CA_CERTIFICATE` pour Codex. Les commandes que lancent les agents (npm, node…) héritent de ces variables. Les certificats reconnus et ceux du système restent valables : le fichier s’y ajoute.
+
+### Ignorer la vérification
+
+Activé, le réglage ne vaut que pour les connexions qui passent par le proxy configuré : vers un hôte de « Exclusions », ou sans proxy, le certificat est vérifié. Les processus des agents reçoivent `NODE_TLS_REJECT_UNAUTHORIZED=0` seulement quand un proxy est configuré. Tant que la case est cochée, un bandeau en haut de la fenêtre le dit, et son bouton « Choisir le certificat racine » mène au fichier d’autorités.
 
 > [!WARNING]
-> À réserver à un réseau de confiance : une connexion interceptée, jetons compris, ne serait plus détectée. Si ton proxy a son propre certificat, installe-le plutôt sur le système que de désactiver la vérification : les intégrations, les quotas et les mises à jour le reconnaîtront (Claude Code, lui, a sa propre liste).
+> Une connexion interceptée, jetons compris, ne serait plus détectée. Si tu emportes ton poste sur un autre réseau avec le même proxy, ses connexions resteraient non vérifiées.
+
+### Passer de la case au fichier (Zscaler)
+
+Derrière Zscaler ou un autre proxy qui inspecte le TLS :
+
+1. Récupère le certificat racine du proxy. Sous Windows, ouvre `certmgr.msc`, « Autorités de certification racines de confiance › Certificats », trouve celui du proxy (« Zscaler Root CA »), puis clic droit, « Toutes les tâches › Exporter… », au format « Codé à base 64 X.509 (.CER) ». Sous macOS, exporte-le depuis « Trousseaux d’accès » au format `.pem`. Ton service informatique peut aussi te le donner.
+2. Dans Réglages › Avancé › Réseau, « Autorités de certification supplémentaires », « Choisir… » et prends ce fichier : l’app doit dire « 1 certificat lu ».
+3. Décoche « Ignorer la vérification des certificats TLS » : le bandeau disparaît.
+4. Redémarre les agents en cours (ou attends leur prochain démarrage) : ils prennent le fichier à ce moment-là.
+
+Si une connexion échoue encore avec « UnknownIssuer », le proxy présente un autre certificat que celui choisi : prends celui que montre le navigateur pour le même site.

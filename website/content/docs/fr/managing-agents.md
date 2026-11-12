@@ -68,7 +68,7 @@ Le mode décide de ce que Claude fait sans te demander.
 | Demander | Claude demande ton accord avant chaque action sensible. |
 | Plan | Claude analyse et propose un plan sans rien modifier. Tu l’approuves, ou tu lui demandes de continuer à planifier (voir [les questions et autorisations](chat#questions-et-autorisations)). |
 | Édits auto | Les modifications de fichiers sont acceptées sans demander. |
-| Bypass | Aucune demande de permission. À réserver aux environnements sûrs : en le choisissant, un message te rappelle que Claude agira sans aucune demande, et le menu passe en rouge tant qu’il est actif. |
+| Bypass | Aucune demande de permission, proposé seulement une fois « Autoriser le mode Bypass » allumé dans [Réglages › Agents](settings-claude-code#permissions). À réserver aux environnements sûrs : en le choisissant, un message te rappelle que Claude agira sans aucune demande, et le menu passe en rouge tant qu’il est actif. |
 
 ### Changer en cours de conversation
 

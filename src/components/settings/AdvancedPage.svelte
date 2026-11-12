@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { open } from '@tauri-apps/plugin-dialog';
   import { tildify } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
@@ -26,6 +27,36 @@
     { value: 'refuse' as const, label: t('settings.claude.attachBigTextRefuse') },
   ]);
 
+  // « Autorités de certification supplémentaires » (SEC-07): the file chosen is read as the core will, to say how many
+  // certificates it holds or why it is not read.
+  let caCount = $state<number | null>(null);
+  let caError = $state('');
+  $effect(() => {
+    const path = s.extraCaFile.trim();
+    caCount = null;
+    caError = '';
+    if (!path) return;
+    let live = true;
+    const timer = setTimeout(() => {
+      api
+        .checkAuthorities(path)
+        .then((n) => live && (caCount = n))
+        .catch((e) => live && (caError = String(e)));
+    }, 300);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  });
+  async function chooseCa() {
+    const path = await open({
+      multiple: false,
+      title: t('settings.network.extraCaTitle'),
+      filters: [{ name: t('settings.network.extraCaFilter'), extensions: ['pem', 'crt', 'cer'] }],
+    });
+    if (typeof path === 'string') s.extraCaFile = path;
+  }
+
   // The folder of Escouade's data (another one for a development build or a sandbox).
   let dataDir = $state<string | null>(null);
   $effect(() => {
@@ -50,7 +81,7 @@
   </Row>
 {/snippet}
 
-<Group title={t('settings.groups.network')} note={t('settings.network.proxyNote')}>
+<Group title={t('settings.groups.network')} note={t('settings.network.proxyNote')} anchor="network">
   {@render text(
     t('settings.network.proxyUrl'),
     t('settings.network.proxyUrlHint'),
@@ -63,9 +94,27 @@
     <Switch label={t('settings.network.proxyTerminals')} bind:on={s.proxyTerminals} />
   </Row>
   <Row
-    label={t('settings.network.insecureTls')}
-    desc={`${t('settings.network.insecureTlsDesc')} ${t('settings.network.certificatesNote')}`}
+    label={t('settings.network.extraCa')}
+    desc={`${t('settings.network.extraCaDesc')} ${t('settings.network.certificatesNote')}`}
+    error={caError}
+    errorId="extraCa-error"
   >
+    {#snippet extra()}{#if caCount !== null}<span class="more" data-testid="extra-ca-count"
+          >{t('settings.network.extraCaCount', { count: caCount })}</span
+        >{/if}{/snippet}
+    <div class="ca">
+      <input
+        class="field mono input"
+        aria-label={t('settings.network.extraCa')}
+        spellcheck="false"
+        placeholder={t('settings.network.extraCaHint')}
+        value={s.extraCaFile}
+        oninput={(e) => (s.extraCaFile = e.currentTarget.value)}
+      />
+      <button class="btn" onclick={chooseCa}>{t('settings.network.extraCaChoose')}</button>
+    </div>
+  </Row>
+  <Row label={t('settings.network.insecureTls')} desc={t('settings.network.insecureTlsDesc')}>
     <Switch label={t('settings.network.insecureTls')} bind:on={s.insecureTls} />
   </Row>
 </Group>
@@ -123,5 +172,11 @@
   }
   .data {
     color: var(--soft);
+  }
+  .ca {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    max-width: 100%;
   }
 </style>

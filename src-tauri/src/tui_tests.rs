@@ -3715,3 +3715,30 @@ async fn a_background_command_in_the_claude_code_view_with_remote_control_is_lis
 ) {
     background_command_in_the_view(true).await;
 }
+
+/// SEC-09 in 2.2 (ESC-428): the core writes the arguments of Claude Code's interface itself (`engine/claude/terminal.rs`);
+/// without « Autoriser le mode Bypass », they never open the mode of no question, and with it they do as before.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interface_opens_the_mode_of_no_question_only_with_the_setting() {
+    for allowed in [false, true] {
+        let h = harness(if allowed {
+            "tui-bypass-on"
+        } else {
+            "tui-bypass-off"
+        });
+        h.core.settings.write().allow_bypass = Some(allowed);
+        let (p, r) = h.project(false).await;
+        second_account(&h);
+        let id = agent_on(&h, &p, "pro").await.id;
+        h.core.set_agent_view(&id, true).await.unwrap();
+        open_interface(&h, &id).await;
+        let launch = interface_launches(&h, &r).pop().unwrap();
+        assert_eq!(
+            launch
+                .iter()
+                .any(|a| a == "--allow-dangerously-skip-permissions"),
+            allowed,
+            "{launch:?}"
+        );
+    }
+}

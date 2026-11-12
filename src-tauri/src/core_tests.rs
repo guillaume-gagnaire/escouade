@@ -836,24 +836,30 @@ async fn a_worktrees_folder_or_a_branch_prefix_that_cannot_be_is_refused_and_not
 }
 
 #[tokio::test]
-async fn claude_code_goes_through_the_proxy_and_skips_tls_verification_when_set() {
+async fn claude_code_goes_through_the_proxy_trusts_the_file_of_authorities_and_skips_tls_verification_when_set(
+) {
     let h = harness("network");
     let (p, r) = h.project(false).await;
-    // What the last launch of the fake CLI in the project saw: (proxy, tls).
+    // What the last launch of the fake CLI in the project saw: (proxy, tls, extra authorities).
     let seen = |h: &Harness| {
         h.launch_log(&r)
             .last()
-            .map(|v| (v["proxy"].clone(), v["tls"].clone()))
+            .map(|v| (v["proxy"].clone(), v["tls"].clone(), v["ca"].clone()))
     };
     let a = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
     h.turn(&a, "Bonjour").await;
-    assert_eq!(seen(&h), Some((Value::Null, Value::Null)));
+    assert_eq!(seen(&h), Some((Value::Null, Value::Null, Value::Null)));
+    let ca = std::env::temp_dir()
+        .join("zscaler-root.pem")
+        .to_string_lossy()
+        .into_owned();
     {
         let mut s = h.core.settings.write();
         s.proxy_url = "http://proxy.corp:3128".into();
         s.insecure_tls = true;
+        s.extra_ca_file = ca.clone();
     }
-    let set = Some((json!("http://proxy.corp:3128"), json!("0")));
+    let set = Some((json!("http://proxy.corp:3128"), json!("0"), json!(ca)));
     let b = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
     h.turn(&b, "Bonjour").await;
     assert_eq!(seen(&h), set);

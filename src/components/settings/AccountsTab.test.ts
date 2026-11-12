@@ -663,7 +663,8 @@ describe('AccountsTab', () => {
         .getAllByRole('option')
         .map((o) => o.textContent);
     expect(options('Effort')).toEqual(['The harness’s', 'Low', 'Medium', 'High', 'Very high', 'Max']);
-    expect(options('Mode')).toEqual(['The harness’s', 'Auto', 'Ask', 'Plan', 'Accept edits', 'Bypass']);
+    // « Bypass » waits for « Autoriser le mode Bypass » (SEC-09).
+    expect(options('Mode')).toEqual(['The harness’s', 'Auto', 'Ask', 'Plan', 'Accept edits']);
     expect(options('Model')[0]).toBe('The harness’s (Sonnet)');
     app.settings.accounts = [{ ...PRINCIPAL, name: 'Perso' }, PRO];
     await waitFor(() => expect(names()).toEqual(['Perso', 'Pro']));

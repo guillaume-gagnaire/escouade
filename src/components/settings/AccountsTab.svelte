@@ -421,7 +421,7 @@
       kept: a.defaultModel && !models.some((m) => m.id === a.defaultModel) ? a.defaultModel : '',
       harnessLabel: named ? t('accounts.tab.harnessDefaultNamed', { name: named }) : t('accounts.tab.harnessDefault'),
       efforts: effortsOf({ ...who, model: d.model }, EFFORTS),
-      modes: modesOf(who, MODES),
+      modes: modesOf(who, MODES, a.defaultMode),
     };
   }
 

@@ -64,6 +64,11 @@ Pour un projet privé, les agents des autres projets ne lisent ni n’écrivent 
 
 Un garde-fou est une règle du harness, qu’une commande peut contourner ; une barrière tient pour toutes ses commandes. Une vraie barrière pour tous les harness demanderait un compte système par projet : Escouade ne le propose pas, les harness et leurs comptes n’y suivraient pas. Quand tu changes « Projet privé », un agent déjà lancé prend ses nouvelles règles avant son prochain tour : son process repart, sa conversation reste. Un agent ouvert en vue terminal les prend à son prochain lancement.
 
+> [!WARNING]
+> Sous Windows, la clôture d’un agent est une consigne donnée à son harness, pas un cloisonnement du système : Claude Code n’y a pas de bac à sable, et une commande qui construit son chemin autrement lit le dossier. La page le dit sous « Projet privé ». Pour séparer deux clients, prends un compte Windows (ou un poste) par client.
+
+Un harness servi par un plugin tiers (dont l’id ne commence pas par `dev.escouade.`) n’est lancé dans un projet privé qu’une fois activé par toi pour ce projet : son premier agent y demande d’abord ton accord (« Activer »), et la mise à jour qui allume une fois les harness qu’un projet privé utilisait déjà n’allume que ceux d’Escouade.
+
 ## Workflow
 
 Escouade lit le workflow du projet dans les fichiers de tes harness : leurs commandes, skills, sous-agents et prompts, `PROMPT.md`, les fichiers d’état et les consignes, avec ce qu’ils incluent par `@`. Sur ta machine, sans coût.

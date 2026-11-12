@@ -1706,7 +1706,9 @@ impl ProcessEngineProcess {
             .call(&self.plugin, method::LAUNCH, serde_json::to_value(&params)?)
             .await
             .map_err(|e| down(self.name, e))?;
-        let launch: proto::Launch = serde_json::from_value(v)?;
+        let mut launch: proto::Launch = serde_json::from_value(v)?;
+        // Without « Autoriser le mode Bypass », nothing opens the mode of no question (SEC-09).
+        crate::bypass::hold(&mut launch.args, spawn.bypass);
         // The settings file the core wrote holds the fence: a launch that names it holds the fence too.
         let in_settings = launch.fence_applied
             && settings
@@ -1807,8 +1809,11 @@ impl ProcessEngineProcess {
         )
         .map_err(|e| anyhow!(e))?;
         check_env(self.name, &self.vars, &launch.env).map_err(|e| anyhow!(e))?;
-        write_files(launch)?;
-        self.start_program(spawn, launch, &[])
+        // Its next program no more than its first: nothing opens the mode of no question without the setting (SEC-09).
+        let mut launch = launch.clone();
+        crate::bypass::hold(&mut launch.args, spawn.bypass);
+        write_files(&launch)?;
+        self.start_program(spawn, &launch, &[])
     }
 
     /// What its plugin says of it unasked (`agent/items`) comes to it.

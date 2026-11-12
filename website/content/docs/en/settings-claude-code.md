@@ -74,6 +74,18 @@ Turned off, nothing updates Claude Code any more: run `claude update` yourself f
 
 The model, effort and mode new [agents](managing-agents) start with are set account by account, on its card in [Settings › Accounts and harnesses](settings-accounts), among its harness’s: there is no setting shared here any more. In an agent’s message field you can change them for that agent alone. Kanban tickets take the ticket’s, else the project’s [“Kanban”](settings-board) tab’s, else those of the account that takes them.
 
+### Permissions
+
+| Setting | Effect | Default |
+|---|---|---|
+| “Default mode of agents” | The mode of the new agents of an account that sets none: “Accept edits”, “Ask”, “Plan” or “Auto”. Running agents and tickets keep theirs. | Chosen at the first start (“Accept edits” recommended); “Auto” for an installation from before 2.2 |
+| “Allow Bypass mode” | Opens “Bypass” mode to the agents. Off, no agent starts in or goes into Bypass, the menus don’t offer it, and Claude Code is launched without `--allow-dangerously-skip-permissions`. | Off; on for an installation that already used Bypass |
+
+At the first start, Escouade asks for this mode before any other question. “Accept edits” is recommended: it’s the most careful choice that lets a ticket move forward. Edits in the agent’s folder go through without asking (they stay in its worktree, visible in its diff) and every command asks for your approval: a booby-trapped content would do harm through a command. “Ask” stops a ticket at every file; “Auto” lets a classifier run commands without showing them to you.
+
+> [!WARNING]
+> In Bypass mode, the harness waits for no permission: it reads, writes and runs commands without showing you anything, including what a booby-trapped content would make it do. Keep it for a throwaway machine or container.
+
 ### Effort levels
 
 | Level | Meaning |
@@ -92,7 +104,7 @@ The model, effort and mode new [agents](managing-agents) start with are set acco
 | “Ask” | Claude asks for your approval before each sensitive action |
 | “Plan” | Claude analyzes and proposes a plan without changing anything |
 | “Accept edits” | File edits are accepted without asking |
-| “Bypass” | No permission requests (only for safe environments) |
+| “Bypass” | No permission requests (only for safe environments). Offered only with “Allow Bypass mode” |
 
 Permission requests and how to answer them are described in [the conversation](chat), and “Plan” mode in [the plan](plan).
 

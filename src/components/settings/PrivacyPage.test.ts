@@ -168,9 +168,10 @@ describe('PrivacyPage: « Projet privé » (ESC-139)', () => {
     const own = screen.getByRole('switch', { name: LABEL });
     expect(own).toHaveAttribute('aria-checked', 'false');
     expect(screen.getByRole('heading', { name: 'Confidentialité' })).toBeInTheDocument();
+    // Its start: under Windows a sentence follows (PrivacyPage.windows.test.ts).
     expect(
       screen.getByText(
-        'Les agents des autres projets ne le voient pas par le serveur MCP d’Escouade : ni dans les listes, ni par son nom, ses tickets ou ses agents. Les siens ne voient que lui. Toi, Claude hors Escouade et les vues de l’app voyez tout.',
+        /^Les agents des autres projets ne le voient pas par le serveur MCP d’Escouade : ni dans les listes, ni par son nom, ses tickets ou ses agents. Les siens ne voient que lui. Toi, Claude hors Escouade et les vues de l’app voyez tout./,
       ),
     ).toBeVisible();
     await userEvent.click(own);

@@ -292,6 +292,8 @@ export const api = {
   projectLogo: (id: string) => invoke<string | null>('project_logo', { id }),
   /** The image of `path` as a logo would be taken (`data:` URL), or why it would be refused. */
   readLogo: (path: string) => invoke<string>('read_logo', { path }),
+  /** How many certificates a `.pem` file of authorities holds, or why it is not read (SEC-07). */
+  checkAuthorities: (path: string) => invoke<number>('check_authorities', { path }),
   /** « Recherche par le sens »: the vectors' model, its download (progress in `vectorsDownload`), « Annuler », « Effacer ». */
   vectorsModel: () => invoke<VectorsModelInfo>('vectors_model'),
   vectorsModelDownload: () => invoke<VectorsModelInfo>('vectors_model_download'),

@@ -68,7 +68,7 @@ The mode decides what Claude does without asking you.
 | Ask | Claude asks for your approval before each sensitive action. |
 | Plan | Claude analyzes and proposes a plan without changing anything. You approve it, or tell it to keep planning (see [questions and permissions](chat#questions-and-permissions)). |
 | Accept edits | File edits are accepted without asking. |
-| Bypass | No permission requests. Only for safe environments: when you pick it, a message reminds you that Claude will act without any permission request, and the menu turns red while it’s active. |
+| Bypass | No permission requests, offered only once “Allow Bypass mode” is on in [Settings › Agents](settings-claude-code#permissions). Only for safe environments: when you pick it, a message reminds you that Claude will act without any permission request, and the menu turns red while it’s active. |
 
 ### Changing them during a conversation
 

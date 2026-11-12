@@ -201,6 +201,8 @@ pub struct Spawn {
     pub read_only: bool,
     /// « Serveurs MCP des agents » (ESC-417): Escouade's alone, or the user's too.
     pub agents_mcp: crate::model::AgentsMcp,
+    /// « Autoriser le mode Bypass » (`crate::bypass`): off, what opens the mode of no question leaves its launch.
+    pub bypass: bool,
 }
 
 impl Spawn {
@@ -226,6 +228,7 @@ impl Spawn {
             takes_effort: None,
             read_only: meta.discussion.is_some(),
             agents_mcp: crate::model::AgentsMcp::All,
+            bypass: false,
         }
     }
 }

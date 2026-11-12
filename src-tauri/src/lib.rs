@@ -24,6 +24,7 @@ mod board;
 mod branchci;
 #[cfg(test)]
 mod branches_tests;
+mod bypass;
 mod clipboard;
 mod closed;
 #[cfg(test)]
@@ -267,6 +268,7 @@ mod ticketprs;
 mod tickets;
 #[cfg(test)]
 mod tickets_tests;
+mod tls;
 mod tui;
 #[cfg(test)]
 mod tui_tests;
@@ -788,6 +790,7 @@ pub fn run() {
                 commands::vectors_model_delete,
                 commands::project_logo,
                 commands::read_logo,
+                commands::check_authorities,
                 commands::shared_trust,
                 commands::memory_list,
                 commands::memory_forget,

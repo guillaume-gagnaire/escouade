@@ -280,3 +280,90 @@ async fn the_update_turns_on_a_harness_for_the_private_projects_that_use_it_once
     let projects = again.plugins.choices(CLAUDE_PLUGIN).unwrap().projects;
     assert_eq!(projects.get("used"), Some(&false), "{projects:?}");
 }
+
+// ---------- SEC-08: a plugin of a third party in a private project ----------
+
+const TIERS: &str = "com.exemple.tiers";
+
+fn tiers_engine() -> EngineId {
+    EngineId::new(&format!("plugin:{TIERS}:outil"))
+}
+
+/// A plugin of a third party (not `dev.escouade.*`) installed from a folder, as the user would.
+fn install_tiers(plugins: &crate::plugins::Plugins, name: &str) {
+    let src = test_dir(name).join("src");
+    std::fs::create_dir_all(src.join("themes")).unwrap();
+    std::fs::write(
+        src.join(crate::plugins::manifest::FILE),
+        json!({
+            "id": TIERS,
+            "name": "Outil tiers",
+            "version": "1.0.0",
+            "escouade": { "api": "1", "min": "2.1.0" },
+            "contributes": { "themes": [{ "id": "t" }] }
+        })
+        .to_string(),
+    )
+    .unwrap();
+    std::fs::write(src.join("themes/t.json"), "{}").unwrap();
+    plugins.install_folder(&src, crate::i18n::Lang::Fr).unwrap();
+}
+
+/// Its harness reaches a private project only once the user turned it on there (« Activer »): not before, whatever
+/// it says of its fence.
+#[tokio::test]
+async fn a_third_party_harness_is_not_launched_in_a_private_project_until_turned_on_there() {
+    let h = harness("sec08-tiers");
+    let (p, _) = h.project(false).await;
+    install_tiers(&h.core.plugins, "sec08-tiers-plugin");
+    let engine = tiers_engine();
+    assert!(!crate::plugins::builtin::first_hand(TIERS));
+    assert_eq!(h.core.harness_in(engine, &p.id), InProject::On);
+    make_private(&h, &p);
+    assert_eq!(h.core.harness_in(engine, &p.id), InProject::Asks);
+    let refused = h
+        .core
+        .check_harness_in(engine, &p.id)
+        .unwrap_err()
+        .to_string();
+    assert!(refused.contains("privé"), "{refused}");
+    h.core.enable_harness_in(&p.id, engine).unwrap();
+    assert_eq!(h.core.harness_in(engine, &p.id), InProject::On);
+    assert!(h.core.check_harness_in(engine, &p.id).is_ok());
+}
+
+/// The update that turns on, once, the harnesses a private project already uses turns on Escouade's own alone: one of
+/// a third party asks the user first.
+#[tokio::test]
+async fn the_update_never_turns_on_a_third_party_harness_for_a_private_project() {
+    let dir = test_dir("sec08-migration");
+    let data = DataDir::new(dir.join("data"));
+    data.ensure().unwrap();
+    std::fs::write(
+        data.settings_file(),
+        json!({ "claudePath": crate::core_tests::fake_cli(), "sound": false }).to_string(),
+    )
+    .unwrap();
+    install_tiers(
+        &crate::plugins::Plugins::load(data.clone(), env!("CARGO_PKG_VERSION")),
+        "sec08-migration-plugin",
+    );
+    let cwd = dir.to_string_lossy();
+    let agent = |id: &str, engine: &str| {
+        json!({ "id": id, "projectId": "client", "name": id, "model": "sonnet", "cwd": cwd, "createdAt": 2,
+                "engine": engine })
+    };
+    let state = json!({
+        "projects": [{ "id": "client", "name": "client", "path": cwd, "color": "red", "createdAt": 1, "private": true }],
+        "agents": [agent("a1", "claude"), agent("a2", tiers_engine().as_str())],
+        "tickets": []
+    });
+    std::fs::write(data.state_file(), state.to_string()).unwrap();
+    let core = load(&data);
+    assert_eq!(core.harness_in(EngineId::CLAUDE, "client"), InProject::On);
+    assert_eq!(core.harness_in(tiers_engine(), "client"), InProject::Asks);
+    assert_eq!(
+        core.plugins.choices(TIERS).unwrap().projects.get("client"),
+        None
+    );
+}

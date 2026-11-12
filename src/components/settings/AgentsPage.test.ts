@@ -537,12 +537,14 @@ describe('the page « Agents »', () => {
   it('has its groups in the order of the study, the rare folded into « Avancé »', async () => {
     backend();
     render(SettingsModal, { page: 'agents' });
-    expect(screen.getByText('Les nouveaux agents, les textes rédigés, le remote control et le pilotage d’Escouade')).toBeInTheDocument();
+    expect(
+      screen.getByText('Les nouveaux agents, leurs permissions, les textes rédigés, le remote control et le pilotage d’Escouade'),
+    ).toBeInTheDocument();
     expect(
       within(panel())
         .getAllByRole('heading')
         .map((h) => h.textContent),
-    ).toEqual(['Nouveaux agents', 'Textes rédigés', 'Remote control', 'Piloter Escouade']);
+    ).toEqual(['Nouveaux agents', 'Permissions', 'Textes rédigés', 'Remote control', 'Piloter Escouade']);
     const fold = within(panel()).getByRole('button', { name: /^Avancé/ });
     expect(fold).toHaveTextContent(IDLE + ' · Serveurs MCP des agents · Activité MCP');
     expect(within(panel()).queryByText(IDLE)).toBeNull();
@@ -714,5 +716,21 @@ describe('the page « Agents »', () => {
         'Only the harnesses that can be used are offered: program installed, plugin on and at least one account.',
       );
     });
+  });
+});
+
+describe('AgentsPage, permissions (SEC-09)', () => {
+  it('has the mode of new agents and « Autoriser le mode Bypass », off with its warning, saved when turned on', async () => {
+    resetApp();
+    const backend = fakeBackend({ save_settings: () => [] });
+    app.modal = { kind: 'settings' };
+    render(SettingsModal, { page: 'agents' });
+    const bypass = screen.getByRole('switch', { name: 'Autoriser le mode Bypass' });
+    expect(bypass).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByText(/^En mode Bypass, le harness n’attend aucune permission/)).toBeInTheDocument();
+    expect(within(screen.getByRole('group', { name: 'Mode par défaut des agents' })).getAllByRole('button')).toHaveLength(4);
+    await userEvent.click(bypass);
+    await afterGesture();
+    expect(backend.called('save_settings').at(-1)!.args.settings).toMatchObject({ allowBypass: true });
   });
 });

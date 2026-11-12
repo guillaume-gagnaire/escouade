@@ -601,7 +601,7 @@ pub(crate) async fn fetch_image(
     src: &str,
 ) -> anyhow::Result<String> {
     let url = remote_url(lang, src)?;
-    let mut b = reqwest::Client::builder()
+    let b = crate::tls::app_builder(settings)?
         .timeout(std::time::Duration::from_secs(20))
         .referer(false)
         .redirect(reqwest::redirect::Policy::custom(|attempt| {
@@ -612,14 +612,7 @@ pub(crate) async fn fetch_image(
             } else {
                 attempt.follow()
             }
-        }))
-        .danger_accept_invalid_certs(settings.insecure_tls);
-    let proxy = settings.proxy_url.trim();
-    if !proxy.is_empty() {
-        b = b.proxy(
-            reqwest::Proxy::all(proxy)?.no_proxy(reqwest::NoProxy::from_string(&settings.no_proxy)),
-        );
-    }
+        }));
     let mut res = b.build()?.get(url).send().await?.error_for_status()?;
     if res.content_length().is_some_and(|l| l > MAX_REMOTE) {
         return Err(remote_too_big(lang));

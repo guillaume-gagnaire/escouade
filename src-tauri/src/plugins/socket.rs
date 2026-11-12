@@ -3,27 +3,11 @@
 //! « certificats non vérifiés ».
 
 use base64::Engine as _;
-use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-/// The network settings a WebSocket follows, as reqwest's client does: the proxy, who goes around it, and whether a
-/// certificate is checked.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct Net {
-    pub proxy: String,
-    pub no_proxy: String,
-    pub insecure: bool,
-}
-
-impl Net {
-    pub fn of(settings: &crate::model::Settings) -> Self {
-        Self {
-            proxy: settings.proxy_url.trim().to_string(),
-            no_proxy: settings.no_proxy.clone(),
-            insecure: settings.insecure_tls,
-        }
-    }
-}
+/// The network settings a WebSocket follows, as reqwest's client does (`crate::tls`).
+pub use crate::tls::Net;
+pub(crate) use crate::tls::{proxy_for, proxy_url};
 
 fn b64(bytes: &[u8]) -> String {
     base64::engine::general_purpose::STANDARD.encode(bytes)
@@ -34,38 +18,6 @@ pub(crate) trait Io: AsyncRead + AsyncWrite + Unpin + Send {}
 impl<T: AsyncRead + AsyncWrite + Unpin + Send> Io for T {}
 
 pub(crate) type Ws = tokio_tungstenite::WebSocketStream<Box<dyn Io>>;
-
-/// The proxy `host` goes through: the settings', unless `no_proxy` names it (a host, a domain and what is under it,
-/// `*` for all).
-pub(crate) fn proxy_for(net: &Net, host: &str) -> Option<reqwest::Url> {
-    if net.proxy.is_empty() {
-        return None;
-    }
-    let host = host.trim_matches(['[', ']']).to_lowercase();
-    let around = net
-        .no_proxy
-        .split([',', ' ', ';'])
-        .map(|e| e.trim().trim_start_matches('.').to_lowercase())
-        .filter(|e| !e.is_empty())
-        .any(|e| e == "*" || host == e || host.ends_with(&format!(".{e}")));
-    if around {
-        return None;
-    }
-    proxy_url(net)
-}
-
-/// The proxy of the settings, as an address.
-pub(crate) fn proxy_url(net: &Net) -> Option<reqwest::Url> {
-    if net.proxy.is_empty() {
-        return None;
-    }
-    let raw = if net.proxy.contains("://") {
-        net.proxy.clone()
-    } else {
-        format!("http://{}", net.proxy)
-    };
-    reqwest::Url::parse(&raw).ok()
-}
 
 /// A tunnel to `host:port` through the HTTP proxy `proxy` (CONNECT), its user and password sent when it has them.
 pub(crate) async fn tunnel(
@@ -138,97 +90,6 @@ fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// rustls with ring (as reqwest), the system's roots and Mozilla's, HTTP/1.1 only (a WebSocket's upgrade);
-/// `insecure`: no certificate checked, as the settings may ask (a proxy that inspects TLS without its root installed).
-pub(crate) fn tls_config(insecure: bool) -> Arc<rustls::ClientConfig> {
-    static CHECKED: std::sync::OnceLock<Arc<rustls::ClientConfig>> = std::sync::OnceLock::new();
-    static UNCHECKED: std::sync::OnceLock<Arc<rustls::ClientConfig>> = std::sync::OnceLock::new();
-    let provider = || Arc::new(rustls::crypto::ring::default_provider());
-    if insecure {
-        return UNCHECKED
-            .get_or_init(|| {
-                let p = provider();
-                let mut c = rustls::ClientConfig::builder_with_provider(p.clone())
-                    .with_safe_default_protocol_versions()
-                    .expect("ring's protocol versions")
-                    .dangerous()
-                    .with_custom_certificate_verifier(Arc::new(NoCheck(p)))
-                    .with_no_client_auth();
-                c.alpn_protocols = vec![b"http/1.1".to_vec()];
-                Arc::new(c)
-            })
-            .clone();
-    }
-    CHECKED
-        .get_or_init(|| {
-            let mut roots = rustls::RootCertStore::empty();
-            roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-            let native = rustls_native_certs::load_native_certs();
-            for e in &native.errors {
-                log::warn!("voice: a root certificate of the system not read: {e}");
-            }
-            let (added, _) = roots.add_parsable_certificates(native.certs);
-            log::info!("voice: {added} root certificates of the system for the live streams");
-            let mut c = rustls::ClientConfig::builder_with_provider(provider())
-                .with_safe_default_protocol_versions()
-                .expect("ring's protocol versions")
-                .with_root_certificates(roots)
-                .with_no_client_auth();
-            c.alpn_protocols = vec![b"http/1.1".to_vec()];
-            Arc::new(c)
-        })
-        .clone()
-}
-
-/// No certificate checked (« certificats non vérifiés » of the settings); the signatures still are.
-#[derive(Debug)]
-struct NoCheck(Arc<rustls::crypto::CryptoProvider>);
-
-impl rustls::client::danger::ServerCertVerifier for NoCheck {
-    fn verify_server_cert(
-        &self,
-        _: &rustls::pki_types::CertificateDer<'_>,
-        _: &[rustls::pki_types::CertificateDer<'_>],
-        _: &rustls::pki_types::ServerName<'_>,
-        _: &[u8],
-        _: rustls::pki_types::UnixTime,
-    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
-        Ok(rustls::client::danger::ServerCertVerified::assertion())
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        message: &[u8],
-        cert: &rustls::pki_types::CertificateDer<'_>,
-        dss: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        rustls::crypto::verify_tls12_signature(
-            message,
-            cert,
-            dss,
-            &self.0.signature_verification_algorithms,
-        )
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        message: &[u8],
-        cert: &rustls::pki_types::CertificateDer<'_>,
-        dss: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        rustls::crypto::verify_tls13_signature(
-            message,
-            cert,
-            dss,
-            &self.0.signature_verification_algorithms,
-        )
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        self.0.signature_verification_algorithms.supported_schemes()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -238,7 +99,7 @@ mod tests {
         let net = |no: &str| Net {
             proxy: "proxy.corp:8080".into(),
             no_proxy: no.into(),
-            insecure: false,
+            ..Net::default()
         };
         assert_eq!(
             proxy_for(&net(""), "api.elevenlabs.io").unwrap().as_str(),

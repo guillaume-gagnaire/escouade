@@ -221,7 +221,7 @@ fn proxied(proxy: &str, no_proxy: &str) -> Net {
         network: Arc::new(RwLock::new(Settings {
             proxy: proxy.into(),
             no_proxy: no_proxy.into(),
-            insecure: false,
+            ..Settings::default()
         })),
         ..Net::default()
     }
@@ -308,8 +308,9 @@ async fn a_proxy_that_is_no_address_fails_and_says_where_to_look() {
     assert!(why.contains("Réglages"), "{why}");
 }
 
-/// A server of the certificate a corporate proxy would show: self-signed, for `localhost`.
-fn tls_acceptor() -> tokio_rustls::TlsAcceptor {
+/// A server of the certificate a corporate proxy would show: self-signed, for `localhost`; and
+/// that certificate in PEM, as the file of authorities the user would choose.
+fn tls_acceptor_and_pem() -> (tokio_rustls::TlsAcceptor, String) {
     use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
     let made = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
     let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(made.key_pair.serialize_der()));
@@ -321,15 +322,26 @@ fn tls_acceptor() -> tokio_rustls::TlsAcceptor {
     .with_no_client_auth()
     .with_single_cert(vec![made.cert.der().clone()], key)
     .unwrap();
-    tokio_rustls::TlsAcceptor::from(Arc::new(config))
+    (
+        tokio_rustls::TlsAcceptor::from(Arc::new(config)),
+        crate::integrations::fake::pem_of(made.cert.der()),
+    )
+}
+
+fn pem_file(pem: &str) -> String {
+    let dir = std::env::temp_dir().join(format!("tls-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("proxy-root.pem");
+    std::fs::write(&path, pem).unwrap();
+    path.to_string_lossy().into_owned()
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn the_certificates_are_checked_unless_the_settings_say_not_to() {
+async fn the_certificates_are_checked_against_the_settings_file_of_authorities_too() {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
-    let tls = tls_acceptor();
+    let (tls, pem) = tls_acceptor_and_pem();
     tokio::spawn(async move {
         while let Ok((tcp, _)) = listener.accept().await {
             let tls = tls.clone();
@@ -353,7 +365,15 @@ async fn the_certificates_are_checked_unless_the_settings_say_not_to() {
     let url = format!("https://localhost:{port}/");
     let (code, _) = f.fetch(&get(&url)).await.unwrap_err();
     assert_eq!(code, FAILED);
+    // « Ignorer la vérification » holds through a proxy alone: with none, still refused.
     settings.write().insecure = true;
+    let (code, _) = f.fetch(&get(&url)).await.unwrap_err();
+    assert_eq!(code, FAILED);
+    // The file of authorities: trusted, checked.
+    *settings.write() = Settings {
+        extra_ca: pem_file(&pem),
+        ..Settings::default()
+    };
     assert_eq!(f.fetch(&get(&url)).await.unwrap()["body"], "by");
 }
 
@@ -941,7 +961,7 @@ async fn wss_through_a_proxy_and_the_tls_of_the_settings() {
     use tokio::io::AsyncWriteExt;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
-    let tls = tls_acceptor();
+    let (tls, pem) = tls_acceptor_and_pem();
     let seen = Arc::new(Mutex::new(Vec::new()));
     let told = seen.clone();
     tokio::spawn(async move {
@@ -990,6 +1010,7 @@ async fn wss_through_a_proxy_and_the_tls_of_the_settings() {
             proxy: format!("127.0.0.1:{proxy_port}"),
             no_proxy: String::new(),
             insecure: true,
+            ..Settings::default()
         })),
         ..Net::default()
     };
@@ -1004,15 +1025,22 @@ async fn wss_through_a_proxy_and_the_tls_of_the_settings() {
         tunnels.lock().unwrap()[0],
         format!("CONNECT localhost:{port} HTTP/1.1")
     );
-    // Straight, past the proxy; the certificate checked, it is refused.
+    // Straight, past the proxy: « Ignorer la vérification » no longer holds, the certificate is
+    // checked and refused.
     settings.write().proxy = String::new();
+    let a = p.ask("ws/open", json!({ "url": url }));
+    assert_eq!(a["error"]["code"], FAILED, "{a}");
+    assert_eq!(tunnels.lock().unwrap().len(), 1);
+    // With the file of authorities, checked and trusted.
+    {
+        let mut s = settings.write();
+        s.insecure = false;
+        s.extra_ca = pem_file(&pem);
+    }
     let socket = p.ask("ws/open", json!({ "url": url }))["result"]["socket"].clone();
     assert!(socket.is_u64());
     assert_eq!(tunnels.lock().unwrap().len(), 1);
     assert_eq!(seen.lock().unwrap().len(), 2);
-    settings.write().insecure = false;
-    let a = p.ask("ws/open", json!({ "url": url }));
-    assert_eq!(a["error"]["code"], FAILED, "{a}");
     // `ws` on the host of an account stays refused.
     let a = p.ask(
         "ws/open",

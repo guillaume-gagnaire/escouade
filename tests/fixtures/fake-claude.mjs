@@ -11,9 +11,9 @@
 // "flood 90s" (60 s by default) keeps it busy for that long, as an agent hard at work: a text streamed in small deltas (one
 // every 15 ms) and a tool call with ~1.5 KB of output every ~170 ms, then the turn ends; an interrupt stops it.
 // "flood-real 90s" (60 s by default) plays a busy superpowers agent for that long, timers pacing it: a 40-task plan, then subagents, tool results of 2-30 KB.
-// Every launch appends {argv, cwd, pid, proxy, tls, configDir, todoTools, autoUpdater, artifact} (its process id, which names a
+// Every launch appends {argv, cwd, pid, proxy, tls, ca, configDir, todoTools, autoUpdater, artifact} (its process id, which names a
 // new session of it `sess-<pid>`, its HTTPS_PROXY,
-// NODE_TLS_REJECT_UNAUTHORIZED, CLAUDE_CONFIG_DIR, CLAUDE_CODE_ENABLE_TODO_TOOLS, DISABLE_AUTOUPDATER and CLAUDE_CODE_ARTIFACT, null when unset) to $FAKE_CLAUDE_LOG, by
+// NODE_TLS_REJECT_UNAUTHORIZED, NODE_EXTRA_CA_CERTS, CLAUDE_CONFIG_DIR, CLAUDE_CODE_ENABLE_TODO_TOOLS, DISABLE_AUTOUPDATER and CLAUDE_CODE_ARTIFACT, null when unset) to $FAKE_CLAUDE_LOG, by
 // default <tmp>/fake-claude-<cwd with non-alphanumerics replaced by _>.jsonl, and every user message
 // read on stdin to <log>.stdin.jsonl.
 // With CLAUDE_CONFIG_DIR (a Claude account of its own), it keeps its sessions where Claude Code
@@ -154,6 +154,7 @@ fs.appendFileSync(
     pid: process.pid,
     proxy: process.env.HTTPS_PROXY ?? null,
     tls: process.env.NODE_TLS_REJECT_UNAUTHORIZED ?? null,
+    ca: process.env.NODE_EXTRA_CA_CERTS ?? null,
     configDir: process.env.CLAUDE_CONFIG_DIR ?? null,
     todoTools: process.env.CLAUDE_CODE_ENABLE_TODO_TOOLS ?? null,
     autoUpdater: process.env.DISABLE_AUTOUPDATER ?? null,

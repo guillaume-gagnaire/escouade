@@ -1156,6 +1156,7 @@ impl<R: Runtime> Core<R> {
             (rt.meta.engine, rt.meta.project_id.clone())
         };
         self.check_harness_in(engine, &project_id)?;
+        crate::bypass::check(&h.lock().meta.mode, self.bypass_allowed())?;
         if crate::engine::of(&h.lock().meta).attaches() {
             return self.open_attached(&h, id, size, Box::new(on_data)).await;
         }
@@ -1511,6 +1512,9 @@ impl<R: Runtime> Core<R> {
         );
         let launch = view.escouade(harness, &access, &config_dir);
         args.extend(launch.args);
+        // In 2.2 the core writes the interface's arguments itself (`engine/*/terminal.rs`): without « Autoriser le mode
+        // Bypass », none of them opens the mode of no question (SEC-09, ESC-428).
+        crate::bypass::hold(&mut args, self.bypass_allowed());
         // Its hooks, and Escouade's server kept out of it when its tools are refused.
         let written = match &started_from.file {
             Some(bytes) => std::fs::write(&settings_file, bytes).map_err(anyhow::Error::from),

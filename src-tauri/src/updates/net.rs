@@ -58,8 +58,10 @@ pub struct Network {
     /// to, and the app's other requests as well). Off, nothing is: the tests of the updates never
     /// reach for the proxy of the machine they run on.
     pub system_proxy: bool,
-    /// TLS verification is off.
+    /// « Ignorer la vérification des certificats TLS »: through the proxy of the settings alone.
     pub insecure_tls: bool,
+    /// The settings' file of extra authorities (`crate::tls`); empty, none.
+    pub extra_ca: String,
 }
 
 impl Network {
@@ -80,6 +82,7 @@ impl Network {
             proxy,
             system_proxy: true,
             insecure_tls: settings.insecure_tls,
+            extra_ca: settings.extra_ca_file.trim().to_string(),
         })
     }
 
@@ -90,6 +93,22 @@ impl Network {
             (Route::Proxy, Some(proxy)) => Via::Proxy(proxy),
             (Route::Proxy, None) if self.system_proxy => Via::System,
             (Route::Proxy, None) => Via::Nothing,
+        }
+    }
+
+    /// Whom a request that goes `route` trusts: the authorities of `crate::tls`, and no
+    /// certificate checked only when it goes through the proxy of the settings and the setting
+    /// says so (never directly, nor by the system's proxy).
+    pub fn trust(&self, route: Route) -> crate::tls::Net {
+        let proxy = match self.via(route) {
+            Via::Proxy(p) => p.to_string(),
+            _ => String::new(),
+        };
+        crate::tls::Net {
+            insecure: self.insecure_tls && !proxy.is_empty(),
+            proxy,
+            no_proxy: String::new(),
+            extra_ca: self.extra_ca.clone(),
         }
     }
 }
@@ -586,11 +605,10 @@ fn proxy_label(proxy: &Url) -> String {
 /// The client that asks as the plugin does: the same proxy (or none, or the system's when the
 /// settings have none), TLS verification and name.
 fn client(net: &Network, route: Route) -> reqwest::Result<reqwest::Client> {
-    let mut builder = reqwest::Client::builder()
+    let mut builder = crate::tls::builder(&net.trust(route))
         .timeout(PROBE_TIMEOUT)
         .connect_timeout(PROBE_CONNECT)
-        .user_agent(user_agent())
-        .danger_accept_invalid_certs(net.insecure_tls);
+        .user_agent(user_agent());
     match net.via(route) {
         Via::Nothing => builder = builder.no_proxy(),
         Via::Proxy(proxy) => builder = builder.proxy(reqwest::Proxy::all(proxy.as_str())?),

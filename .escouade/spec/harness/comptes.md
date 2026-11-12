@@ -2,8 +2,8 @@
 title: "Comptes"
 subject: "Harness"
 sources: ["docs/SPEC.md","tests/fixtures/claude-usage/real-2.1.314.json","tests/fixtures/quota-pace.json","design/settings-2-2/PROPOSITION.md"]
-tickets: ["ESC-30","ESC-52","ESC-88","ESC-120","ESC-124","ESC-128","ESC-141","ESC-147","ESC-148","ESC-162","ESC-312","ESC-382"]
-decisions: [20,24,123]
+tickets: ["ESC-30","ESC-52","ESC-88","ESC-120","ESC-124","ESC-128","ESC-141","ESC-147","ESC-148","ESC-162","ESC-312","ESC-382","ESC-425","ESC-428"]
+decisions: [20,24,123,154,"les-corrections-de-l-audit-dans-la-2-2-v"]
 compared: "2026-10-31T17:26:28+01:00"
 ---
 
@@ -236,3 +236,17 @@ Complète *Réservations*. Dans Réglages › Comptes et harness, chaque pastill
 - le fond et la couleur du texte de la pastille cochée sont inchangés, et l'accessibilité aussi : l'état reste porté par la case, dans le groupe « Réservé aux projets ». L'assistant « Nouveau projet » et les réglages d'un projet privé n'ont pas ce voyant.
 
 - **Exception : « Tous les projets ».** Tant que rien n'est réservé au compte (liste vide, « Tous les projets »), le compte sert tous les projets : tous les carrés sont allumés, cases décochées comprises. Dès qu'un projet est coché, seuls les carrés des projets réservés restent allumés, les autres passent au gris. Cette exception l'emporte sur « case décochée : gris » ci-dessus.
+
+## Le mode des nouveaux agents et le mode Bypass (SEC-09, ESC-425)
+
+Ce qui suit remplace « mode `auto` » comme défaut du harness, plus haut.
+
+- **Au premier démarrage** d'une nouvelle installation, avant la question des statistiques, une fenêtre « Comment tes agents demandent-ils ? » fait choisir le mode des nouveaux agents parmi « Édits auto » (choisi, marqué « Recommandé »), « Demander », « Plan » et « Auto » ; jamais « Bypass ». Fermée sans réponse, elle revient au démarrage suivant. Le choix (`agentMode` des réglages) se change dans Réglages › Agents › Permissions, « Mode par défaut des agents ».
+- **Le mode recommandé** est `acceptEdits` : les modifications dans le dossier de l'agent passent sans demander (elles restent dans son worktree, visibles dans son diff) et chaque commande demande. `default` arrête un ticket à chaque fichier ; `auto` laisse un classifieur lancer des commandes. Tant que la question n'a pas de réponse, c'est lui qui vaut.
+- Un compte qui ne dit pas de mode prend ce choix quand son harness l'a, sinon `auto`, sinon « Demander ». Le mode Bypass n'est jamais un défaut.
+- **« Autoriser le mode Bypass »** (Réglages › Agents › Permissions), éteint par défaut, avec l'avertissement « En mode Bypass, le harness n’attend aucune permission… ». Éteint : un agent en `bypassPermissions` ne démarre pas (ni process ni vue terminal) et ne peut y passer (« Le mode Bypass n’est pas autorisé : active « Autoriser le mode Bypass » dans Réglages › Agents, ou choisis un autre mode. ») ; les menus du champ (grisé, « Le mode Bypass est coupé : à permettre dans Réglages › Agents. »), d'un compte et du Kanban ne le proposent pas, sauf pour le mode où l'on est déjà ; le cœur retire `--allow-dangerously-skip-permissions` et `--dangerously-skip-permissions` du lancement que décrit un plugin, agent comme vue terminal.
+- **Une installation existante** garde ses modes : au premier démarrage qui connaît ces réglages, `agentMode` vaut `auto` si ses réglages existaient, et « Autoriser le mode Bypass » est trouvé allumé si un compte, un Kanban ou un agent (son mode ou celui où son plan revient) utilisait déjà Bypass. Ce premier calcul est écrit tout de suite ; le choix de l'utilisateur ensuite n'est plus deviné. Aucun mode d'agent ni de ticket n'est changé.
+
+## Le mode Bypass dans la 2.2 (ESC-428)
+
+La 2.2 reprend SEC-09 d'ESC-425. Dans la 2.2, c'est encore le cœur qui écrit les arguments de la vue terminal (`engine/*/terminal.rs`), et non un plugin par `terminal/launch`. Sans « Autoriser le mode Bypass », le cœur retire donc `--allow-dangerously-skip-permissions` et `--dangerously-skip-permissions` de ces arguments aussi, en plus du lancement d'un agent que décrit un plugin. Il les retire également du programme suivant qu'un plugin lance pour le même agent (la relance). Réglage allumé, les arguments restent ceux d'avant.

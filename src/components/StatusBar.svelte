@@ -506,7 +506,7 @@
 <style>
   .bar {
     grid-column: 1 / -1;
-    grid-row: 3;
+    grid-row: 4;
     min-width: 0;
     display: flex;
     align-items: center;
