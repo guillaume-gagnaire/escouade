@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-opencode"
-version = "2.2.4"
+version = "2.2.5"
 description = "Le plugin OpenCode d'Escouade : OpenCode comme harness, par son serveur HTTP"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"

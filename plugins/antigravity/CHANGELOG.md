@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.7
+
+- Its manifest declares the environment variables its launches set (`permissions.env`: `AGY_CLI_DISABLE_AUTO_UPDATE`, `AGY_CLI_HIDE_ACCOUNT_INFO`, `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `HOME`, `USERPROFILE`, `TEMP`, `TMP`, `TMPDIR`, `PATH`), shown before it is installed: from Escouade 2.2, a plugin sets no other (ESC-424).
+
 ## 2.2.5
 
 - Its messages, README and documentation send to the settings pages of Escouade 2.2: Accounts and harnesses and a project’s Project page (ESC-387).

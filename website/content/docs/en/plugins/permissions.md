@@ -10,6 +10,7 @@ What a plugin asks for in its manifest, what each request opens to it, and what 
 | `run.command` | A native program: Escouade no longer starts it, whatever the plugin’s origin, and the store refuses it. | Nothing: the plugin does not start, and its page says why. |
 | `permissions.decide` | Allowing or denying what your agents ask for, before you. | An answer within 500 ms, else the request comes to you; a denial wins; each decision is in the journal. Never given by a project. |
 | `permissions.commands` | The programs of your computer it can run, line by line. | Nothing else runs, without a shell, and each run goes to the journal. But the program it runs has your rights. |
+| `permissions.env` | The environment variables it sets on what it runs. | No other; and never, even declared, those that would change the program run (`GIT_*`, `PYTHON*`, `*_PROXY`, `HOME`, `PATH`…). |
 | `permissions.files` | The folders it reads or writes: its own, a folder of its own, your agents’. | A closed list of roots, resolved by Escouade, links followed, never a private project. Each write goes to the journal. |
 | `limits` | More time or bytes for a call. | Capped by Escouade: 120 s, 32 MB, 4 MB for a file. |
 | `permissions.events` | The facts it receives: a ticket that changes columns, an agent waiting… | A fact outside the list is never sent to it. |

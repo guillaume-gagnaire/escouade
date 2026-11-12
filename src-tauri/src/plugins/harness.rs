@@ -457,7 +457,8 @@ pub struct ProcessEngine {
     owner: String,
     /// It is described (`acp`), served by the generic ACP plugin: the description goes with each agent.
     described: bool,
-    /// Its manifest is of Escouade's own hand (`builtin::first_hand`): its variables are not judged.
+    /// Its manifest is of Escouade's own hand (`builtin::first_hand`): its variables are held to what it declares alone
+    /// (`vars`), not to the families refused to anyone's plugin.
     first_hand: bool,
     install: Install,
     update_command: &'static str,
@@ -579,7 +580,16 @@ impl ProcessEngine {
         let first = super::builtin::first_hand(owner);
         if !first {
             decl.locate.program = None;
-            decl.locate.names.retain(|n| bare_name(n));
+            // A name, never a path, and no shell nor interpreter, which would run what its arguments say (ESC-424).
+            decl.locate.names.retain(|n| {
+                let interpreter = super::manifest::interpreter(n);
+                if interpreter {
+                    log::warn!(
+                        "plugin {owner}: its harness may not run the interpreter {n}, left aside"
+                    );
+                }
+                bare_name(n) && !interpreter
+            });
             if let Some(acp) = &mut decl.acp {
                 acp.fence_on_permissions = false;
             }
@@ -591,6 +601,27 @@ impl ProcessEngine {
         e.described = true;
         e.id = id;
         e
+    }
+
+    /// What variables its launches may set (ESC-424): what the manifest of the plugin that declares it says
+    /// (`permissions.env`, and the `acp.env` of a harness it describes), and those the core names itself.
+    pub fn vars(&self) -> Vars {
+        let described = self.decl.acp.iter().flat_map(|acp| acp.env.keys().cloned());
+        let declared = match self.rt.declared_env(&self.owner) {
+            Some(mut d) => {
+                d.extend(described);
+                Some(d)
+            }
+            None if !self.first_hand => Some(described.collect()),
+            None => None,
+        };
+        let mut given = vec![self.account_var, crate::tui::URL_VAR];
+        given.extend(self.key_var);
+        Vars {
+            first_hand: self.first_hand,
+            declared,
+            given,
+        }
     }
 
     /// The same, its launcher run as `native` says (Cursor CLI's, INT-10.1).
@@ -660,7 +691,7 @@ impl ProcessEngine {
                 .collect(),
         };
         let launch: proto::OneShotLaunch = self.call(method::ONE_SHOT, &params).await?;
-        check_env(self.name, self.first_hand, &launch.env).map_err(|e| anyhow!(e))?;
+        check_env(self.name, &self.vars(), &launch.env).map_err(|e| anyhow!(e))?;
         // Its files under the folder of the question alone.
         let home_text = home.map(|h| h.to_string_lossy().into_owned());
         for f in &launch.files {
@@ -735,7 +766,7 @@ impl ProcessEngine {
             &told.launch,
         )
         .map_err(|e| anyhow!(e))?;
-        check_env(self.name, self.first_hand, &told.launch.env).map_err(|e| anyhow!(e))?;
+        check_env(self.name, &self.vars(), &told.launch.env).map_err(|e| anyhow!(e))?;
         Ok(told)
     }
 
@@ -775,7 +806,7 @@ impl ProcessEngine {
             let Some(launch) = step.launch.take() else {
                 bail!("{}: {read}: no process to read it by", self.name);
             };
-            check_env(self.name, self.first_hand, &launch.env).map_err(|e| anyhow!(e))?;
+            check_env(self.name, &self.vars(), &launch.env).map_err(|e| anyhow!(e))?;
             for f in &launch.files {
                 check_file(self.name, Some(&dir.to_string_lossy()), &f.path)
                     .map_err(|e| anyhow!(e))?;
@@ -1081,20 +1112,49 @@ pub(crate) fn check_launch_with(
     Ok(())
 }
 
-/// The variables a launch sets, judged as `proc/*` judges those a plugin names (`procs::forbidden_var`), unless its
-/// manifest is of Escouade's own hand. Answers why it is refused.
-fn check_env(
-    name: &str,
-    first_hand: bool,
-    env: &[proto::EnvVar],
-) -> std::result::Result<(), String> {
-    match env
-        .iter()
-        .find(|v| !first_hand && super::procs::forbidden_var(&v.name))
-    {
-        Some(v) => Err(refused_var(name, &v.name)),
+/// The variables a plugin's launches may set (ESC-424): those its manifest declares (`permissions.env`, and the
+/// `acp.env` of a harness it describes, which the installation shows), those the core names itself (the agent's folder,
+/// the account's key, the hooks' address); for anyone's plugin never one of `procs::forbidden_var` nor of the families
+/// `manifest::env_refused` names, even declared.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Vars {
+    pub first_hand: bool,
+    /// None: its manifest has no `env` (for one of Escouade's own hand from before the field, its launches as they were).
+    pub declared: Option<Vec<String>>,
+    pub given: Vec<&'static str>,
+}
+
+impl Vars {
+    /// Why the variable `var` is refused, None when it passes.
+    pub(crate) fn refusal(&self, name: &str, var: &str) -> Option<String> {
+        use super::manifest::{env_allowed, env_refused, Hand};
+        let hand = if self.first_hand {
+            Hand::First
+        } else {
+            Hand::Third
+        };
+        if !self.first_hand && (super::procs::forbidden_var(var) || env_refused(var, hand)) {
+            return Some(refused_var(name, var));
+        }
+        (!self.given.contains(&var) && !env_allowed(self.declared.as_deref(), var, hand))
+            .then(|| undeclared_var(name, var))
+    }
+}
+
+/// The variables a launch sets, judged by `vars`. Answers why it is refused.
+fn check_env(name: &str, vars: &Vars, env: &[proto::EnvVar]) -> std::result::Result<(), String> {
+    match env.iter().find_map(|v| vars.refusal(name, &v.name)) {
+        Some(why) => Err(why),
         None => Ok(()),
     }
+}
+
+/// Why the variable `var` a plugin sets and does not declare is refused.
+fn undeclared_var(name: &str, var: &str) -> String {
+    tr!(
+        "Le plugin de {name} veut poser la variable {var}, que son manifeste ne déclare pas (permissions.env) : l’agent ne démarre pas.",
+        "The plugin of {name} wants to set the variable {var}, which its manifest doesn’t declare (permissions.env): the agent doesn’t start."
+    )
 }
 
 /// Why the variable `var` a plugin names is refused.
@@ -1303,6 +1363,10 @@ impl Engine for ProcessEngine {
     fn version_args(&self) -> &'static [&'static str] {
         self.version_args
     }
+    fn version_waits_gesture(&self) -> bool {
+        // Its `versionArgs` are a manifest's of anyone's: run after a gesture of the user's alone (ESC-424).
+        self.described && !self.first_hand
+    }
     fn caps(&self) -> EngineCaps {
         let mut caps = self.caps.clone();
         // The meanings in the app's language of now.
@@ -1339,7 +1403,11 @@ impl Engine for ProcessEngine {
     fn spawn(&self, spawn: Spawn, on_frame: OnFrame, on_exit: OnExit) -> Result<Process> {
         // Those the core sets itself, on its manifest's word.
         let mut named = self.decl.account_var.iter().chain(&self.decl.key_var);
-        let refused = |v: &&String| !self.first_hand && super::procs::forbidden_var(v);
+        let refused = |v: &&String| {
+            !self.first_hand
+                && (super::procs::forbidden_var(v)
+                    || super::manifest::env_refused(v, super::manifest::Hand::Third))
+        };
         if let Some(var) = named.find(refused) {
             bail!(refused_var(self.name, var));
         }
@@ -1382,7 +1450,7 @@ impl Engine for ProcessEngine {
             native: self.native,
             prepare: self.prepare,
             plugin: self.plugin.clone(),
-            first_hand: self.first_hand,
+            vars: self.vars(),
             name: self.name,
             account_var: self.account_var,
             key,
@@ -1508,8 +1576,8 @@ pub struct ProcessEngineProcess {
     /// What the core writes in the agent's folder before the launch (`ProcessEngine::with_prepare`).
     prepare: Option<Prepare>,
     plugin: String,
-    /// Its manifest is of Escouade's own hand (`ProcessEngine::first_hand`).
-    first_hand: bool,
+    /// What variables its launches may set (`ProcessEngine::vars`).
+    vars: Vars,
     name: &'static str,
     /// The variable that gives the agent its own folder (`HarnessDecl::account_var`): where its launch may write.
     account_var: &'static str,
@@ -1950,7 +2018,7 @@ impl ProcessEngineProcess {
             &launch,
         )
         .map_err(|e| anyhow!(e))?;
-        check_env(self.name, self.first_hand, &launch.env).map_err(|e| anyhow!(e))?;
+        check_env(self.name, &self.vars, &launch.env).map_err(|e| anyhow!(e))?;
         {
             let mut a = self.attach.lock();
             a.home = home.clone();
@@ -2034,7 +2102,7 @@ impl ProcessEngineProcess {
             launch,
         )
         .map_err(|e| anyhow!(e))?;
-        check_env(self.name, self.first_hand, &launch.env).map_err(|e| anyhow!(e))?;
+        check_env(self.name, &self.vars, &launch.env).map_err(|e| anyhow!(e))?;
         write_files(launch)?;
         self.start_program(spawn, launch, &[])
     }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.5
+
+- Its manifest declares the environment variables its launches set (`permissions.env`: `OPENCODE_CONFIG_CONTENT`, `OPENCODE_DISABLE_AUTOUPDATE`, `OPENCODE_ENABLE_QUESTION_TOOL`, `OPENCODE_SERVER_PASSWORD`), shown before it is installed: from Escouade 2.2, a plugin sets no other (ESC-424).
+
 ## 2.2.3
 
 - Its messages, README and documentation send to the settings pages of Escouade 2.2: Accounts and harnesses and a project’s Project page (ESC-387).

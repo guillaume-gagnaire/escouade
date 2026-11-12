@@ -1371,3 +1371,127 @@ fn a_refusal_without_a_word_starts_no_turn_of_vibe() {
     }
     assert!(escouade_acp::vibe::worded("Pas ce dossier"));
 }
+
+/// SEC-05 (ESC-424): a launch sets the variables its plugin declares (`permissions.env`, the `acp.env` of a description),
+/// those the core names itself, and nothing else; anyone's plugin never one of the families that would change the
+/// program, even declared; a plugin of Escouade's own hand from before the field keeps what it did.
+#[test]
+fn a_launch_sets_what_its_plugin_declares_and_never_a_refused_family() {
+    let third = harness::Vars {
+        first_hand: false,
+        declared: Some(vec!["OUTIL_MODE".into(), "GIT_CONFIG_COUNT".into()]),
+        given: vec!["OUTIL_HOME"],
+    };
+    assert_eq!(third.refusal("Outil", "OUTIL_MODE"), None);
+    assert_eq!(third.refusal("Outil", "OUTIL_HOME"), None);
+    let undeclared = third.refusal("Outil", "AUTRE").unwrap();
+    assert!(undeclared.contains("AUTRE"), "{undeclared}");
+    for var in [
+        "GIT_CONFIG_COUNT",
+        "PYTHONSTARTUP",
+        "HTTPS_PROXY",
+        "HOME",
+        "XDG_CONFIG_HOME",
+    ] {
+        let why = third
+            .refusal("Outil", var)
+            .unwrap_or_else(|| panic!("{var} passes"));
+        assert!(why.contains(var), "{why}");
+    }
+    let nothing = harness::Vars {
+        first_hand: false,
+        declared: None,
+        given: Vec::new(),
+    };
+    assert!(nothing.refusal("Outil", "OUTIL_MODE").is_some());
+    let own = harness::Vars {
+        first_hand: true,
+        declared: Some(vec!["HOME".into()]),
+        given: Vec::new(),
+    };
+    assert_eq!(own.refusal("Antigravity CLI", "HOME"), None);
+    assert!(own.refusal("Antigravity CLI", "AUTRE").is_some());
+    let before = harness::Vars {
+        first_hand: true,
+        declared: None,
+        given: Vec::new(),
+    };
+    assert_eq!(before.refusal("Goose", "NODE_OPTIONS"), None);
+}
+
+/// SEC-05: what a third party's description declares is what its launch may set: its `acp.env`, the variable of its
+/// account, Escouade's address of the hooks.
+#[test]
+fn the_variables_of_a_description_are_its_acp_env_and_those_the_core_names() {
+    let (rt, _, _) = runtime("tiers-vars");
+    let mut decl = fake_manifest()["contributes"]["harnesses"][0].clone();
+    decl["acp"]["env"] = json!({ "FAKE_ACP_COLOR": "bleu" });
+    let vars = described(&rt, OWNER, decl).vars();
+    assert!(!vars.first_hand);
+    assert_eq!(vars.declared, Some(vec!["FAKE_ACP_COLOR".to_string()]));
+    assert!(vars.given.contains(&"FAKE_ACP_HOME"));
+    rt.shutdown();
+}
+
+/// SEC-06 (ESC-424): a third party's harness does not run a shell nor an interpreter, whatever it names: its manifest is
+/// refused, and a description that gets here finds no program; the first hand is not judged on it.
+#[test]
+fn a_third_party_harness_on_bash_is_refused() {
+    let (rt, _, _) = runtime("tiers-bash");
+    for name in [
+        "bash",
+        "sh",
+        "powershell",
+        "pwsh.exe",
+        "cmd",
+        "python3",
+        "node",
+        "osascript",
+        "wscript",
+    ] {
+        let mut v = fake_manifest();
+        v["contributes"]["harnesses"][0]["locate"]["names"] = json!([name]);
+        v["contributes"]["harnesses"][0]["versionArgs"] = json!(["-c", "echo"]);
+        let read = crate::plugins::manifest::check(&v, crate::plugins::manifest::Hand::Third);
+        let problems = read.manifest.unwrap_err();
+        assert!(
+            problems
+                .iter()
+                .any(|p| p.path == "contributes.harnesses[0].locate.names[0]"
+                    && p.code == crate::plugins::manifest::Code::Interpreter),
+            "{name}: {problems:?}"
+        );
+        let engine = described(&rt, OWNER, v["contributes"]["harnesses"][0].clone());
+        assert!(engine.locate("", "").is_none(), "{name} was found to run");
+    }
+    rt.shutdown();
+}
+
+/// SEC-06 (ESC-424): the `versionArgs` of a third party's harness run after a gesture of the user's on it (an agent or a
+/// terminal of it started), neither once it is installed nor at a start.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_version_of_a_third_party_harness_is_asked_after_a_gesture_alone() {
+    let (rt, _, _) = runtime("tiers-geste");
+    let (_, engine) = fake("tiers-geste-moteur");
+    assert!(engine.version_waits_gesture());
+    let program = fake_acp();
+    assert_eq!(
+        crate::engine::registry::version(engine, &program).await,
+        None
+    );
+    crate::engine::registry::gesture(engine.id());
+    assert_eq!(
+        crate::engine::registry::version(engine, &program)
+            .await
+            .as_deref(),
+        Some("1.2.0")
+    );
+    // Escouade's own hand: asked as it was.
+    let first = described(
+        &rt,
+        "dev.escouade.goose",
+        fake_manifest()["contributes"]["harnesses"][0].clone(),
+    );
+    assert!(!first.version_waits_gesture());
+    rt.shutdown();
+}

@@ -240,7 +240,7 @@ pub fn project_settings(
 
 /// What a plugin may do, a word each, the strongest first (§3.4): `run` (it runs a program),
 /// `harness:<program> <args>` (what an ACP harness it describes runs: PLG-6, `described_lines`), `decide`
-/// (it decides the agents' permissions), then `commands:<c>`, `files:<root>:<access>`, `events:<e>`, `network:<host>` and
+/// (it decides the agents' permissions), then `commands:<c>`, `env:<variable>` (ESC-424, taken back with the plugin alone), `files:<root>:<access>`, `events:<e>`, `network:<host>` and
 /// `secrets:<key>`.
 pub fn asks(m: &Manifest) -> Vec<String> {
     let p = &m.permissions;
@@ -259,6 +259,7 @@ pub fn asks(m: &Manifest) -> Vec<String> {
         out.push("decide".to_string());
     }
     out.extend(p.commands.iter().map(|w| format!("commands:{w}")));
+    out.extend(p.env.iter().flatten().map(|v| format!("env:{v}")));
     out.extend(p.files.iter().map(|f| format!("files:{}", f.word())));
     for (kind, words) in [
         ("events", &p.events),
@@ -273,7 +274,7 @@ pub fn asks(m: &Manifest) -> Vec<String> {
 /// Whether the permission `word` can be taken back: all but the program itself (switched off
 /// with the plugin).
 pub fn revocable(word: &str) -> bool {
-    word != "run" && !word.starts_with("harness:")
+    word != "run" && !word.starts_with("harness:") && !word.starts_with("env:")
 }
 
 /// `m` without the permissions of `revoked`: what its process is given.

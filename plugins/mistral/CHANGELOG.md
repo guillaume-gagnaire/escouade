@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.5
+
+- Its manifest declares the environment variables its launches set (`permissions.env`: `VIBE_ENABLE_TELEMETRY`, `VIBE_ACTIVE_MODEL`, `VIBE_MCP_SERVERS`, `ESCOUADE_MCP_TOKEN`, `PATH`), shown before it is installed: from Escouade 2.2, a plugin sets no other (ESC-424).
+
 ## 2.2.3
 
 - Its messages, README and documentation send to the settings pages of Escouade 2.2: Accounts and harnesses and Advanced › Network (ESC-387).

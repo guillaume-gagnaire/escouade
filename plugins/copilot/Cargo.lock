@@ -83,7 +83,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-copilot"
-version = "2.2.4"
+version = "2.2.5"
 dependencies = [
  "chrono",
  "escouade-acp",

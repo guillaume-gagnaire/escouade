@@ -38,7 +38,7 @@ Escouade offers **the last version it can run**: a version written for a newer E
 
 The install window then says “Verified by Escouade” and “Signature: checked here, by the app”; for an unverified version, a band: “Nobody has reviewed this version. It comes from the store, its archive is the one its author published, but nothing says what its program does”, and the button “Install anyway”.
 
-**Install verified versions only**, at the top of the installed ones (off by default), refuses any version of the store without a seal, at an install as at an update.
+**Install verified versions only**, at the top of the installed ones (on for a new installation; one from before 2.2 keeps its choice), refuses any version of the store without a seal, at an install as at an update.
 
 A plugin installed from a folder or a git repository whose id is on the store says so on its page, with “Move to the store’s v…”: the same window, your choices kept.
 

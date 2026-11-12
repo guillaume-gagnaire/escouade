@@ -531,6 +531,15 @@ impl Runtime {
     /// The settings of the plugin `id` (`settings/get`): the user's, and in the project `project`
     /// those its `.escouade.yml` gives it (PLG-14), only where the plugin is on (a private project
     /// gives nothing to a plugin not turned on for it).
+    /// The variables the plugin `id` declares (`permissions.env`, ESC-424): None when its manifest has no `env`, or when
+    /// it is not installed.
+    pub fn declared_env(&self, id: &str) -> Option<Vec<String>> {
+        self.plugins
+            .get(id, Lang::En)
+            .and_then(|v| v.manifest)
+            .and_then(|m| m.permissions.env)
+    }
+
     pub fn settings_of(&self, id: &str, project: Option<&str>) -> Value {
         let Some(choices) = self.plugins.choices(id) else {
             return json!({});
@@ -1543,6 +1552,8 @@ impl Host {
         let (me, id) = (self.rt.clone(), self.id.clone());
         let procs = super::procs::Procs::new(super::procs::ProcsOf {
             commands: self.manifest.permissions.commands.clone(),
+            env: self.manifest.permissions.env.clone(),
+            first_hand: super::builtin::first_hand(&self.id),
             temp: rt.temps.join(&self.id),
             agents: self.agents.clone(),
             projects: Arc::new(move |project| {

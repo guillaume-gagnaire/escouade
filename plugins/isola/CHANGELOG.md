@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.2
+
+- Its manifest declares the environment variables its launches set (`permissions.env`: `NO_COLOR`), shown before it is installed: from Escouade 2.2, a plugin sets no other (ESC-424).
+
 ## 2.2.1
 
 - Its pages say isola does not exist for Windows (there, tickets keep their recipe on the reserved ports) and that its module comes in Escouade's installers.

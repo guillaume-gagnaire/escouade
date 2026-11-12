@@ -33,3 +33,13 @@ describe('the network a plugin asks for', () => {
     expect(shared.detail).toBe('');
   });
 });
+
+// The variables a plugin declares (ESC-424): each shown before it is installed, what Escouade applies under it.
+describe('the variables a plugin sets', () => {
+  it('names each variable, and says that no other is set', () => {
+    const ask = askOf('env:MON_OUTIL_MODE', { run: { js: 'dist/plugin.mjs' } } as never, 'fr');
+    expect(ask.text).toBe('Pose cette variable d’environnement sur ce qu’il lance');
+    expect(ask.detail).toBe('MON_OUTIL_MODE');
+    expect(ask.note).toContain('aucune autre variable');
+  });
+});

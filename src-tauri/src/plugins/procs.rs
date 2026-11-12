@@ -46,7 +46,24 @@ const WAITING_INPUT: usize = 1 << 20;
 /// How long what it left running may keep its pipes open, once it ended.
 const LINGER: Duration = Duration::from_secs(1);
 
-/// The variables a plugin may not name: Escouade's own, and those that would run another program in the one declared.
+/// Why a plugin that declares `declared` (`permissions.env`) may not set the variable `name` on a program it runs, None
+/// when it may (ESC-424): never one of [`forbidden_var`]; one it declares alone, and for anyone's plugin none of the
+/// families `manifest::env_refused` names, even declared. A plugin of Escouade's own hand from before the field keeps what
+/// it did.
+pub fn var_refused(declared: Option<&[String]>, name: &str, first_hand: bool) -> Option<String> {
+    use super::manifest::{env_allowed, env_refused, Hand};
+    let hand = if first_hand { Hand::First } else { Hand::Third };
+    if forbidden_var(name) || env_refused(name, hand) {
+        return Some(format!(
+            "the variable {name} is one Escouade refuses a plugin: it would change what the program runs"
+        ));
+    }
+    (!env_allowed(declared, name, hand))
+        .then(|| format!("the variable {name} is not in permissions.env"))
+}
+
+/// The variables no plugin names, of Escouade's own hand or not: Escouade's own, and those that would run another
+/// program in the one declared.
 pub fn forbidden_var(name: &str) -> bool {
     let upper = name.to_ascii_uppercase();
     name.is_empty()
@@ -144,6 +161,10 @@ pub type Projects = Arc<dyn Fn(&str) -> Result<PathBuf, String> + Send + Sync>;
 /// The programs of an instance of a plugin.
 pub struct Procs {
     commands: Vec<Vec<String>>,
+    /// The variables it declares (`permissions.env`, ESC-424).
+    env: Option<Vec<String>>,
+    /// Its manifest is of Escouade's own hand (`builtin::first_hand`).
+    first_hand: bool,
     temp: PathBuf,
     agents: super::files::Agents,
     projects: Projects,
@@ -159,6 +180,8 @@ pub struct Procs {
 /// What a `Procs` is made of.
 pub struct ProcsOf {
     pub commands: Vec<String>,
+    pub env: Option<Vec<String>>,
+    pub first_hand: bool,
     pub temp: PathBuf,
     pub agents: super::files::Agents,
     pub projects: Projects,
@@ -185,6 +208,8 @@ impl Procs {
                 .iter()
                 .map(|c| c.split_whitespace().map(str::to_string).collect())
                 .collect(),
+            env: of.env,
+            first_hand: of.first_hand,
             temp: of.temp,
             agents: of.agents,
             projects: of.projects,
@@ -286,8 +311,8 @@ impl Procs {
                 .as_object()
                 .ok_or_else(|| invalid("env is an object of texts"))?;
             for (k, v) in env {
-                if forbidden_var(k) {
-                    return Err((REFUSED, format!("the variable {k} is not one to name")));
+                if let Some(why) = var_refused(self.env.as_deref(), k, self.first_hand) {
+                    return Err((REFUSED, why));
                 }
                 let v = v
                     .as_str()
@@ -619,6 +644,118 @@ mod tests {
         assert!(locate("no-such-program-at-all").is_none());
     }
 
+    /// What the plugin of the bed declares (`permissions.env`): the variables of git's configuration among them, which
+    /// Escouade refuses anyone's plugin even declared.
+    const DECLARED: [&str; 7] = [
+        "GIT_AUTHOR_NAME",
+        "GIT_AUTHOR_EMAIL",
+        "MA_VAR",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_KEY_0",
+        "GIT_CONFIG_VALUE_0",
+        "HTTPS_PROXY",
+    ];
+
+    /// SEC-05 (audit 2026-11): a variable passes declared alone, and none of the families that would make the program
+    /// declared run something else, even declared; a plugin of Escouade's own hand is held to what it declares.
+    #[test]
+    fn a_variable_passes_declared_and_out_of_the_refused_families() {
+        let declared: Vec<String> = DECLARED.iter().map(|v| v.to_string()).collect();
+        let d = Some(declared.as_slice());
+        assert_eq!(var_refused(d, "MA_VAR", false), None);
+        assert_eq!(var_refused(d, "GIT_AUTHOR_NAME", false), None);
+        let not_declared = var_refused(d, "AUTRE_VAR", false).unwrap();
+        assert!(
+            not_declared.contains("not in permissions.env"),
+            "{not_declared}"
+        );
+        // Nothing declared, nothing passes.
+        assert!(var_refused(None, "MA_VAR", false).is_some());
+        assert!(var_refused(Some(&[]), "MA_VAR", false).is_some());
+        // Those of the audit, each declared: all refused.
+        let audit = [
+            "GIT_CONFIG_COUNT",
+            "GIT_CONFIG_KEY_0",
+            "GIT_CONFIG_VALUE_0",
+            "GIT_CONFIG_GLOBAL",
+            "GIT_SSH_COMMAND",
+            "GIT_EXEC_PATH",
+            "GIT_EXTERNAL_DIFF",
+            "GIT_ASKPASS",
+            "GIT_SSL_NO_VERIFY",
+            "PYTHONPATH",
+            "PYTHONSTARTUP",
+            "RUBYOPT",
+            "PERL5OPT",
+            "JAVA_TOOL_OPTIONS",
+            "_JAVA_OPTIONS",
+            "NODE_OPTIONS",
+            "NODE_PATH",
+            "NODE_EXTRA_CA_CERTS",
+            "NODE_TLS_REJECT_UNAUTHORIZED",
+            "npm_config_script_shell",
+            "LD_PRELOAD",
+            "DYLD_INSERT_LIBRARIES",
+            "HOME",
+            "USERPROFILE",
+            "APPDATA",
+            "XDG_CONFIG_HOME",
+            "HTTPS_PROXY",
+            "http_proxy",
+            "ALL_PROXY",
+            "SSL_CERT_FILE",
+            "PATH",
+            "EDITOR",
+            "PAGER",
+            "BROWSER",
+            "ESCOUADE_MCP_TOKEN",
+        ];
+        let all: Vec<String> = audit.iter().map(|v| v.to_string()).collect();
+        for v in audit {
+            let why = var_refused(Some(&all), v, false).unwrap_or_else(|| panic!("{v} passes"));
+            assert!(why.contains("refuses a plugin"), "{v}: {why}");
+        }
+        // Escouade's own hand: what it declares, no more; never the core's list.
+        let own = vec!["HOME".to_string()];
+        assert_eq!(var_refused(Some(&own), "HOME", true), None);
+        assert!(var_refused(Some(&own), "MA_VAR", true).is_some());
+        assert!(var_refused(Some(&own), "PATH", true).is_some());
+        // Of a version from before `permissions.env`: as it was.
+        assert_eq!(var_refused(None, "NO_COLOR", true), None);
+        assert!(var_refused(None, "ESCOUADE_X", true).is_some());
+    }
+
+    /// SEC-05, the audit's trial: a plugin allowed `git status` and nothing else asks git's configuration by its
+    /// variables, declared; it is refused, and git does not run.
+    #[tokio::test]
+    async fn git_status_with_a_configuration_by_variables_is_refused_even_declared() {
+        let b = bed(&["git status"]);
+        std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(b.base.join("wt"))
+            .status()
+            .unwrap();
+        let marker = b.base.join("wt").join("marker.txt");
+        b.refused(json!({
+            "command": "git", "args": ["status"], "dir": "agent", "agent": "a",
+            "env": {
+                "GIT_CONFIG_COUNT": "1",
+                "GIT_CONFIG_KEY_0": "core.fsmonitor",
+                "GIT_CONFIG_VALUE_0": "echo marker > marker.txt; false",
+            },
+        }));
+        // Not declared either.
+        b.refused(json!({ "command": "git", "args": ["status"], "env": { "AUTRE_VAR": "1" } }));
+        assert_eq!(b.procs.running(), 0);
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert!(!marker.exists());
+        let told = b.told.lock().join("\n");
+        assert!(
+            told.contains("GIT_CONFIG_COUNT") && told.contains("AUTRE_VAR"),
+            "{told}"
+        );
+    }
+
     struct Bed {
         procs: Procs,
         rx: UnboundedReceiver<Frame>,
@@ -655,6 +792,8 @@ mod tests {
         let b = base.clone();
         let procs = Procs::new(ProcsOf {
             commands: list.iter().map(|c| c.to_string()).collect(),
+            env: Some(DECLARED.iter().map(|v| v.to_string()).collect()),
+            first_hand: false,
             temp: base.join("temp"),
             agents,
             projects: Arc::new(move |p| match p {

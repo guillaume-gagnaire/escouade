@@ -3652,6 +3652,8 @@ impl<R: Runtime> Core<R> {
         accounts::key_ready(&account)?;
         let program = accounts::program(&account, &settings)
             .ok_or_else(|| anyhow!(engine::missing_line(harness.id(), i18n::ui())))?;
+        // Starting an agent is the gesture by which a harness described by anyone's plugin may be asked its version.
+        engine::registry::gesture(harness.id());
         // A version older than the tested ones is refused, with its reason.
         engine::registry::check(harness, &program).await?;
         // Read already by the check: kept with what its models say.

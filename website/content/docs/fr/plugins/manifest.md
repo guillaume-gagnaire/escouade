@@ -71,7 +71,7 @@ La ligne `$schema` donne l’autocomplétion et la vérification dans VS Code et
 | `icon` | non | Son logo : un PNG carré de son dossier, 256 px de côté au moins, 1 Mo au plus (voir plus bas). |
 | `run` | non | Son programme. Sans lui, le plugin est déclaratif : rien ne s’exécute. |
 | `activation` | non | Ce qui le démarre, par exemple `event:ticket.column`. Sans activation, son programme ne tourne pas. |
-| `permissions` | non | Ce qu’il demande : `events`, `network`, `secrets`, `files`, `commands` (des listes) et `decide` (`true` ou `false`). Voir [les capacités de l’hôte](plugins/capabilities). |
+| `permissions` | non | Ce qu’il demande : `events`, `network`, `secrets`, `files`, `commands`, `env` (des listes) et `decide` (`true` ou `false`). Voir [les capacités de l’hôte](plugins/capabilities). |
 | `limits` | non | Ce qu’il demande de plus à l’hôte : `fetchSeconds`, `fetchBytes`, `fileBytes` ([les limites](plugins/capabilities#les-limites-limits)). |
 | `contributes` | non | Ses points d’extension : ce qu’il ajoute à Escouade. |
 | `store` | non | Ce que la place de marché montre de lui : `categories`, `keywords`, `screenshots`, `docs` (le dossier de sa documentation, une page par langue sous `docs/fr/` et `docs/en/` : [la documentation, par langue](plugins/publishing#la-documentation-par-langue)). |

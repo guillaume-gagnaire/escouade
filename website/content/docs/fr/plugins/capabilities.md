@@ -162,7 +162,7 @@ Chaque écriture et chaque refus vont au journal.
 - ce qui n’est pas une entrée, mot pour mot ; la suite n’est permise que si l’entrée finit par `*` ;
 - un shell : sous Windows, ni `.cmd` ni `.bat`, donc aucun outil installé par npm ;
 - `dir` autre qu’une racine (`agent`, `project`), et un projet privé où le plugin n’est pas activé. Sans `dir`, le programme tourne dans `temp` ;
-- une variable `ESCOUADE_*`, `PATH`, `LD_*`, `DYLD_*` ou `NODE_OPTIONS` dans `env` : elle ferait tourner autre chose.
+- une variable de `env` que `permissions.env` ne déclare pas ([les variables](#les-variables-env)).
 
 Chaque programme meurt avec l’instance du plugin ou à `proc/kill`, avec ce qu’il a lancé. Quatre à la fois. Sa sortie n’est plus lue au-delà de 256 Kio qui n’ont pas atteint le module.
 
@@ -172,6 +172,24 @@ Chaque programme meurt avec l’instance du plugin ou à `proc/kill`, avec ce qu
 > Le module est isolé, le programme qu’il lance ne l’est pas : il a les droits de l’utilisateur. Une entrée en `*` sur un programme généraliste (`git *`, `docker *`) rouvre tout, par `git -c core.sshCommand=…` par exemple. C’est la capacité la plus forte : demande des lignes exactes, et attends-toi à justifier un `*` à la revue.
 
 `permissions.commands` n’est pas `contributes.commands`, qui lance une ligne de shell sur un fait, après l’accord de l’utilisateur ([les événements](plugins/events#une-commande-sur-un-fait)).
+
+## Les variables : `env`
+
+```json
+  "permissions": {
+    "commands": ["git status --short"],
+    "env": ["GIT_AUTHOR_NAME", "MON_OUTIL_MODE"]
+  }
+```
+
+**Ce qu’elle permet.** Poser ces variables sur ce que le plugin lance : `env` de `proc/spawn`, et les lancements de ses harness (`engine/launch`, `terminal/launch`, `engine/oneShot`, `account/read`). Le `acp.env` d’un harness décrit compte comme déclaré, et Escouade pose lui-même les siennes (`accountVar`, `keyVar`, l’adresse de ses hooks).
+
+**Ce qu’Escouade refuse.** Toute variable non déclarée, avec sa raison. Et, même déclarées, celles par lesquelles un programme chargerait un autre code, une autre configuration, un autre certificat ou un proxy : celles d’Escouade (`ESCOUADE_*`), `LD_*`, `DYLD_*`, `GIT_*` (sauf `GIT_AUTHOR_*` et `GIT_COMMITTER_*`), `PYTHON*`, `RUBY*`, `PERL*`, `NODE_*`, `JAVA_TOOL_OPTIONS`, `_JAVA_OPTIONS`, `npm_config_*`, `*_PROXY`, `SSL_*`, `XDG_*`, `HOME`, `USERPROFILE`, `APPDATA`, `PATH`, `SHELL`, `EDITOR`, `PAGER`… `escouade-plugin validate` et le store refusent le manifeste qui en déclare une (code `variable`).
+
+**La fenêtre** dit « Pose cette variable d’environnement sur ce qu’il lance », une ligne par variable.
+
+> [!NOTE]
+> Sans `permissions.env`, un plugin ne pose aucune variable. Une variable est toujours un nom (`A-Z`, `0-9`, `_`) : jamais un secret dans le manifeste, qui se lit.
 
 ## Les minuteurs
 

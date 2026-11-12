@@ -454,7 +454,7 @@ Le temps de revue est le vrai coût du store : la file trie par installations ; 
 
 - **Une version**, désignée par l'empreinte de son `version.json` (§3.4) : son code source au commit, son archive, ses binaires attestés.
 - **Pas le plugin entier** : la v1.3.0 d'un plugin dont la v1.2.0 est vérifiée est « non vérifiée, en revue » jusqu'à sa signature. Raison : une mise à jour est l'endroit où un plugin honnête devient dangereux (compte repris, dépendance piégée) ; un badge pour le plugin le cacherait.
-- **Une nouvelle version** demande une nouvelle revue, sur le diff ; l'app propose la mise à jour en le disant (« la v1.3.0 n'est pas encore vérifiée ; la v1.2.0 l'est ») et laisse l'utilisateur attendre la vérification (réglage « N'installer que des versions vérifiées », éteint d'office).
+- **Une nouvelle version** demande une nouvelle revue, sur le diff ; l'app propose la mise à jour en le disant (« la v1.3.0 n'est pas encore vérifiée ; la v1.2.0 l'est ») et laisse l'utilisateur attendre la vérification (réglage « N'installer que des versions vérifiées », allumé pour une nouvelle installation depuis ESC-424, une installation d'avant gardant son choix).
 - **Un exécutable sans attestation de provenance** ne peut pas être vérifié : ce qu'on lit doit être ce qui tourne.
 - **Le module d'un plugin `run.js`** est nommé par `version.json` : la signature le couvre, et ne se pose que si la revue a recompilé le bundle relu à la même empreinte (§4.2).
 

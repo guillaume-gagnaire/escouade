@@ -84,8 +84,8 @@ Le plugin Goose (`plugins/goose/` du dépôt d’Escouade), essayé avec Goose 1
 Chaque entrée de `contributes.harnesses` avec un objet `acp` est un harness décrit :
 
 - `id`, `name`, `speaker` (le nom de ses agents dans les textes), `writer` (qui rédige les textes) ;
-- `locate.names` : les noms de son programme, cherchés dans le PATH ; un plugin déclaratif ne donne jamais de chemin ;
-- `versionArgs` (par défaut `--version`) et `tested` : la version lue et les versions essayées, comme pour les harness d’Escouade ;
+- `locate.names` : les noms de son programme, cherchés dans le PATH ; un plugin déclaratif ne donne jamais de chemin, ni un shell ou un interpréteur (`sh`, `bash`, `cmd`, `powershell`, `pwsh`, `python*`, `node`, `ruby`, `perl`, `osascript`, `wscript`…) : le manifeste est refusé (code `interpreter`) ;
+- `versionArgs` (par défaut `--version`) et `tested` : la version lue et les versions essayées, comme pour les harness d’Escouade. La version d’un harness décrit par un autre qu’Escouade n’est lue qu’après un premier geste de l’utilisateur sur lui (un agent ou un terminal lancé), jamais à l’installation ni au démarrage ;
 - `caps` : ses modes, chacun par son id ou avec son sens (`meaning`, ce que dit le menu des modes), et ce qu’il sait faire (`images`, `pdf`, `readOnly`…) ; ce qui n’est pas dit, il ne le fait pas ;
 - `models` : les modèles de son menu (`id`, `label`) ;
 - `accountVar` : la variable qui donne à chaque compte son dossier de configuration ;
@@ -93,7 +93,7 @@ Chaque entrée de `contributes.harnesses` avec un objet `acp` est un harness dé
 
 ## L’objet `acp`
 
-- `args` : ses arguments (`["acp"]`) ; `env` et `removeEnv` : des variables à lui (jamais un secret : un manifeste se lit), et celles de l’app qu’il ne doit pas recevoir. Les variables qu’un programme de plugin ne peut pas nommer (`PATH`, `NODE_OPTIONS`, `LD_*`, `DYLD_*`, `ESCOUADE_*`…) sont refusées : l’agent ne démarre pas, et dit pourquoi ;
+- `args` : ses arguments (`["acp"]`) ; `env` et `removeEnv` : des variables à lui (jamais un secret : un manifeste se lit), et celles de l’app qu’il ne doit pas recevoir. elles comptent comme déclarées (la fenêtre d’installation les montre). Les familles qu’un plugin ne pose jamais ([les variables](plugins/capabilities#les-variables-env) : `PATH`, `HOME`, `GIT_*`, `NODE_*`, `*_PROXY`, `ESCOUADE_*`…) sont refusées, ici comme dans `accountVar` et `keyVar` : le manifeste ne passe pas, et l’agent ne démarre pas en disant pourquoi ;
 - `fs` : il lit et écrit les fichiers **par Escouade** (`fs/read_text_file`, `fs/write_text_file`), vrai par défaut. Mets `false` pour un agent qui les lit et écrit lui-même, comme Goose ou Cursor CLI, même quand Escouade le lui propose ;
 - `modes` : le mode ACP (`session/set_mode`) de chaque mode d’Escouade ; `readOnlyMode` : celui qui ne change rien, pour les discussions de l’onglet Docs ;
 - `modelOption` : l’option de configuration du modèle (`session/set_config_option`), sinon `session/set_model` ;
