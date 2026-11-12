@@ -3,7 +3,7 @@ title: "Process des agents"
 subject: "harness"
 sources: ["https://github.com/guillaume-gagnaire/escouade/issues/26","src-tauri/src/agentgroups.rs","src-tauri/src/core.rs","src-tauri/src/engine/claude/mod.rs"]
 tickets: ["ESC-417"]
-decisions: ["le-remote-control-ne-garde-plus-un-proce"]
+decisions: [147]
 compared: null
 ---
 

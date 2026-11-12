@@ -1,9 +1,9 @@
 ---
-number: null
+number: 147
 id: "le-remote-control-ne-garde-plus-un-proce"
 title: "Le remote control ne garde plus un process par agent"
 date: "2026-11-12"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-417"
 pages: ["fenetre/barre-laterale","fenetre/reglages","harness/process-des-agents"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/barre-laterale","added":13,"removed":6},{"page":"fenetre/reglages","added":4,"removed":4},{"page":"harness/process-des-agents","added":29,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-12T12:29:04+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
