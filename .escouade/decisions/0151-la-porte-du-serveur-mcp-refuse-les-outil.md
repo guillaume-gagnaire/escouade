@@ -1,9 +1,9 @@
 ---
-number: null
+number: 151
 id: "la-porte-du-serveur-mcp-refuse-les-outil"
 title: "La porte du serveur MCP refuse les outils inconnus et plafonne les requêtes sans pièce jointe"
 date: "2026-11-12"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-422"
 pages: ["harness/serveur-mcp"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"harness/serveur-mcp","added":6,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-12T18:08:14+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
