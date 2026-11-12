@@ -92,16 +92,16 @@
   </div>
   {#if page}
     <div class="bar">
-      <button class="ib" aria-label={t('devpage.back')} onclick={() => act(api.devpageGo(page.agentId, 'back'))}
-        ><Icon name="left" size={16} /></button
+      <button class="icon-btn" aria-label={t('devpage.back')} onclick={() => act(api.devpageGo(page.agentId, 'back'))}
+        ><Icon name="left" size={14} /></button
       >
-      <button class="ib" aria-label={t('devpage.forward')} onclick={() => act(api.devpageGo(page.agentId, 'forward'))}
-        ><Icon name="right" size={16} /></button
+      <button class="icon-btn" aria-label={t('devpage.forward')} onclick={() => act(api.devpageGo(page.agentId, 'forward'))}
+        ><Icon name="right" size={14} /></button
       >
-      <button class="ib" aria-label={t('devpage.reload')} onclick={() => act(api.devpageGo(page.agentId, 'reload'))}
-        ><Icon name="restart" size={16} /></button
+      <button class="icon-btn" aria-label={t('devpage.reload')} onclick={() => act(api.devpageGo(page.agentId, 'reload'))}
+        ><Icon name="restart" size={14} /></button
       >
-      <form class="addr" onsubmit={submit}>
+      <form class="field addr" onsubmit={submit}>
         <i class="d"></i>
         <input
           class="mono"
@@ -112,10 +112,11 @@
           onblur={() => (typed = null)}
         />
       </form>
-      <div class="modes" role="radiogroup" aria-label={t('devpage.modesLabel')}>
+      <div class="segmented small modes" role="radiogroup" aria-label={t('devpage.modesLabel')}>
         {#each PAGE_MODES as m (m)}
           <button
             role="radio"
+            class:on={mode === m}
             aria-checked={mode === m}
             aria-label={t(`devpage.modes.${m}`)}
             use:tip={t(`devpage.modes.${m}`)}
@@ -131,17 +132,20 @@
           >{fit.shrunk ? t('devpage.shrunkShort', { width: fit.width }) : t('devpage.width', { width: DEVICE_WIDTH[mode] })}</span
         >
       {/if}
-      <button class="dt" aria-label={t('devpage.devtoolsHint', { key: shortcut })} onclick={() => act(api.devpageDevtools(page.agentId))}
+      <button
+        class="btn dt"
+        aria-label={t('devpage.devtoolsHint', { key: shortcut })}
+        onclick={() => act(api.devpageDevtools(page.agentId))}
         ><Icon name="code" size={14} />{t('devpage.devtools')}<kbd>{shortcut}</kbd></button
       >
       <button
-        class="ib"
+        class="btn icon-only"
         aria-label={t('devpage.attach')}
         use:tip={t('devpage.attach')}
-        onclick={() => act(api.devpageDetach(page.agentId, false))}><Icon name="collapse" size={16} /></button
+        onclick={() => act(api.devpageDetach(page.agentId, false))}><Icon name="collapse" size={14} /></button
       >
-      <button class="ib" aria-label={t('devpage.system')} use:tip={t('devpage.system')} onclick={() => act(openUrl(page.url))}
-        ><Icon name="ext" size={16} /></button
+      <button class="btn icon-only" aria-label={t('devpage.system')} use:tip={t('devpage.system')} onclick={() => act(openUrl(page.url))}
+        ><Icon name="ext" size={14} /></button
       >
     </div>
   {/if}
@@ -193,83 +197,40 @@
     border-radius: 50%;
     background: var(--run);
   }
+  /* The bar of the agent's view « Page » (DevPage.svelte), with the app's controls (ESC-419). */
   .bar {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     height: 46px;
-    padding: 0 10px;
+    padding: 0 12px 0 10px;
     background: var(--panel);
     border-bottom: 1px solid var(--line);
   }
-  .ib {
-    display: inline-grid;
-    place-items: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 7px;
-    color: var(--muted);
-  }
-  .ib:hover,
-  .dt:hover {
-    background: var(--hover);
-    color: var(--text);
-  }
   .addr {
     flex: 1;
-    min-width: 0;
     display: flex;
     align-items: center;
     gap: 8px;
-    height: 30px;
-    margin: 0 4px;
-    padding: 0 10px;
-    border-radius: 7px;
-    background: var(--well);
-    box-shadow: inset 0 0 0 1px var(--line);
+    margin: 0 2px;
+    cursor: text;
   }
   .addr input {
     flex: 1;
     min-width: 0;
+    height: 100%;
+    padding: 0;
     border: 0;
     outline: 0;
     background: none;
     color: var(--text);
     font-size: 12.5px;
   }
-  .dt {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    height: 28px;
-    padding: 0 9px;
-    border-radius: 7px;
-    color: var(--soft);
-    font-size: 12px;
-    font-weight: 550;
-    box-shadow: inset 0 0 0 1px var(--line);
-  }
   .modes {
-    display: inline-flex;
-    gap: 2px;
-    padding: 2px;
-    border-radius: 8px;
-    background: rgba(var(--fg-rgb), 0.035);
-  }
-  .modes button {
-    display: inline-grid;
-    place-items: center;
-    width: 26px;
-    height: 24px;
-    border-radius: 6px;
-    color: var(--muted);
-  }
-  .modes button[aria-checked='true'] {
-    background: var(--sel);
-    color: var(--text);
+    flex: none;
   }
   .width {
-    margin: 0 4px;
+    flex: none;
     color: var(--muted);
     font-size: 11.5px;
     white-space: nowrap;
@@ -278,10 +239,6 @@
     color: var(--wait);
   }
   .dt kbd {
-    padding: 1px 4px;
-    border-radius: 4px;
-    color: var(--muted);
-    font-size: 10.5px;
-    box-shadow: inset 0 0 0 1px var(--line-2);
+    margin-right: -3px;
   }
 </style>

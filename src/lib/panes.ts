@@ -1,9 +1,10 @@
 // The split screen (ESC-392): the work area of a project cut into panes, side by side or one above the other, each
 // showing one content (an agent, a terminal, a launch log or the editor). A binary tree: a leaf shows a content, a
 // split cuts its place in two along `dir` at `ratio`. A content is never shown twice, so a leaf is named by its
-// content's key. Pure functions: the state (`state.svelte.ts`) keeps the tree of each project in `ui.panes`.
+// content's key. Pure functions: the state (`state.svelte.ts`) keeps the tree of each project in `ui.panes`. The page
+// of an agent's launch (ESC-419) is a content of its own, `page` named by its agent's id: beside its conversation.
 
-export type PaneItem = { kind: 'agent' | 'term' | 'launch'; id: string } | { kind: 'editor' };
+export type PaneItem = { kind: 'agent' | 'term' | 'launch' | 'page'; id: string } | { kind: 'editor' };
 
 /** `row`: side by side (a on the left); `col`: one above the other (a on top). */
 export type PaneDir = 'row' | 'col';
@@ -252,7 +253,7 @@ export function parseLayout(raw: unknown): PaneLayout | null {
       const l = o.leaf as Record<string, unknown> | null;
       if (!l || typeof l !== 'object') return null;
       if (l.kind === 'editor') return { leaf: { kind: 'editor' } };
-      if ((l.kind === 'agent' || l.kind === 'term' || l.kind === 'launch') && typeof l.id === 'string')
+      if ((l.kind === 'agent' || l.kind === 'term' || l.kind === 'launch' || l.kind === 'page') && typeof l.id === 'string')
         return { leaf: { kind: l.kind, id: l.id } };
       return null;
     }

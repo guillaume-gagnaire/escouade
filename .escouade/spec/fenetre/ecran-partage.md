@@ -2,8 +2,8 @@
 title: "Écran partagé"
 subject: "fenetre"
 sources: ["docs/SPLIT.md","design/split-view/index.html"]
-tickets: ["ESC-392","ESC-399"]
-decisions: [128,134]
+tickets: ["ESC-392","ESC-399","ESC-419"]
+decisions: [128,134,"la-page-d-un-lancement-va-dans-un-volet"]
 compared: null
 ---
 
@@ -17,14 +17,15 @@ La zone de travail d'un projet se partage en **volets**, côte à côte ou l'un 
 - Un **terminal**.
 - Le **journal d'un lancement**.
 - L'**éditeur** du projet.
+- La **page du lancement** d'un agent (ESC-419), dans un volet à elle, à côté de sa conversation (ou de celle d'un autre agent) ou en dessous : voir *La page du lancement*. Tant qu'elle est dans un volet, la conversation de son agent montre ses messages, et sa vue « Page » rend actif le volet de la page.
 - Le Kanban, les PR et les Docs n'y vont pas : les ouvrir prend toute la zone, sans défaire la disposition, qui revient quand on les quitte.
-- Un même contenu n'est jamais montré deux fois : lâché sur un autre volet, il y passe ; au milieu d'un volet, les deux volets échangent.
+- Un même contenu n'est jamais montré deux fois : lâché sur un autre volet, il y passe ; au milieu d'un volet, les deux volets échangent. La page lâchée au milieu de la conversation de son agent affichée seule redevient sa vue « Page ».
 
 ## Ouvrir à côté
 
-- **En glissant** une carte d'agent, une ligne de terminal ou de lancement depuis la barre latérale, ou le bouton « Éditeur » de la barre de titre, sur la zone de travail. Le geste commence au-delà de quelques pixels (un clic reste un clic). Sur le volet survolé (ou sur le contenu affiché seul) s'ouvre une boussole de cinq cases : haut, gauche, droite, bas (ouvrir à côté dans ce sens) et milieu (remplacer). La zone se lit à la position du pointeur dans le volet ; sa case s'allume et la place qu'il prendra se dessine, avec le nom du contenu et le sens. Une copie compacte de la carte suit le pointeur ; un bandeau rappelle les règles. Échap, ou lâcher hors de la zone de travail, annule.
+- **En glissant** une carte d'agent, une ligne de terminal ou de lancement depuis la barre latérale, le bouton « Éditeur » de la barre de titre, ou le bouton « Page » de l'en-tête d'une conversation (ou l'étiquette « worktree · processus » de la barre de la page), sur la zone de travail. Le geste commence au-delà de quelques pixels (un clic reste un clic). Sur le volet survolé (ou sur le contenu affiché seul) s'ouvre une boussole de cinq cases : haut, gauche, droite, bas (ouvrir à côté dans ce sens) et milieu (remplacer). La zone se lit à la position du pointeur dans le volet ; sa case s'allume et la place qu'il prendra se dessine, avec le nom du contenu et le sens. Une copie compacte de la carte suit le pointeur ; un bandeau rappelle les règles. Échap, ou lâcher hors de la zone de travail, annule.
 - Une case est **barrée** quand il n'y a pas la place : quatre volets déjà, ou un volet qui ne garderait pas 320 px de large (côte à côte) ou 200 px de haut (l'un sur l'autre) de chaque côté. Lâcher sur une case barrée ne fait rien ; le milieu remplace toujours.
-- **Au menu contextuel** d'une carte d'agent ou d'une ligne de terminal : « Ouvrir à côté », « Ouvrir en dessous ».
+- **Au menu contextuel** d'une carte d'agent ou d'une ligne de terminal : « Ouvrir à côté », « Ouvrir en dessous ». Le menu d'un agent dont la page est ouverte dans la fenêtre (pas encore dans un volet) offre aussi « Ouvrir la page à côté », « Ouvrir la page en dessous » ; le menu « … » de la barre de la page, « Ouvrir à côté », « Ouvrir en dessous ».
 - **Ctrl+clic** (⌘+clic) sur une carte ou une ligne : ouvrir à côté.
 - **Ctrl+\\** (la touche de code `Backslash`, `*` sur un clavier AZERTY) : sans écran partagé, met côte à côte ce qui est affiché et l'agent suivant du projet (ou, à défaut, un de ses terminaux) ; avec, revient à un seul volet, l'actif.
 - Un clic simple dans la barre latérale remplace le contenu du **volet actif**.
@@ -40,9 +41,12 @@ Un seul volet est actif : le dernier où l'on a appuyé, celui qui vient de s'ou
 - le focus du champ de saisie (seul le composer du volet actif le prend) et celui d'un terminal (seul celui du volet actif le prend à son montage) ;
 - la dictée quand aucun champ n'a le focus ;
 - les réponses au clavier aux questions et autorisations (Ctrl+Entrée, Alt+chiffre) : celles des autres volets se répondent à la souris ;
+- les raccourcis d'une page de lancement (F12, Ctrl+Maj+M) quand deux pages sont à l'écran ;
 - Ctrl+Tab, le tiroir des fichiers (par-dessus la conversation, jamais posé à côté dans un volet), la source de l'éditeur et Ctrl+S, Ctrl+Maj+F, Ctrl+P de l'éditeur quand il est le volet actif, la barre de statut.
 
-**Ctrl+Maj+W** ferme le volet actif ; le × en haut à droite d'un volet (au survol) aussi. Ces raccourcis passent aussi quand un terminal a le focus.
+Le volet d'une page rend son agent sélectionné dans la barre latérale.
+
+**Ctrl+Maj+W** ferme le volet actif ; le × en haut à droite d'un volet (au survol) aussi, et « Fermer le volet » du menu « … » de la barre d'une page dans son volet. Ces raccourcis passent aussi quand un terminal a le focus.
 
 ## Notifications et barre latérale
 
@@ -57,8 +61,8 @@ La disposition (l'arbre des volets, sens, parts, contenus, volet actif) est rete
 Un contenu qui s'en va ne défait pas la disposition (ESC-399) :
 
 - **Un agent archivé ou supprimé** — depuis son menu, le Kanban (ticket validé), le serveur MCP ou un autre écran, que son projet soit affiché ou non — : son volet prend l'agent que l'app montrerait seul à sa place, le premier agent non archivé du projet (par date de création) qui n'est pas déjà dans un volet, à la même place et avec la même part. Il devient actif si l'agent parti l'était.
-- **Sans autre agent à montrer**, ou pour **un terminal fermé** ou **un lancement retiré**, le volet se ferme : son voisin prend sa place (et le volet actif, s'il l'était). Les autres volets gardent leur place et leurs parts.
-- Le **dernier volet restant** occupe seul la zone de travail, et c'est lui qu'on voit (le terminal, par exemple), pas un écran vide ni l'agent archivé.
+- **Sans autre agent à montrer**, ou pour **un terminal fermé**, **un lancement retiré** ou **une page fermée** (son agent parti, son ticket terminé) ou **passée dans la fenêtre « Pages »**, le volet se ferme : son voisin prend sa place (et le volet actif, s'il l'était). Les autres volets gardent leur place et leurs parts.
+- Le **dernier volet restant** occupe seul la zone de travail, et c'est lui qu'on voit (le terminal, par exemple), pas un écran vide ni l'agent archivé. Une page restée seule, c'est son agent sur sa vue « Page ».
 - Seuls les contenus partis s'en vont : un terminal du projet reste quand un agent est archivé.
 
 ## Ailleurs

@@ -21,6 +21,9 @@ export default {
   attach: 'Remettre dans l’agent',
   system: 'Ouvrir dans le navigateur du système',
   more: 'Plus d’actions sur la page',
+  /** The agent's menu (ESC-419): its page in a pane of the split screen. */
+  openBeside: 'Ouvrir la page à côté',
+  openBelow: 'Ouvrir la page en dessous',
   /** `{title}`: « pagination-users · web ». */
   owner: 'Page de {title}',
   apart: 'Page à part : ni Escouade, ni tes cookies',

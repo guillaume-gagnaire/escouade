@@ -4,7 +4,7 @@ The work area splits into several panes, side by side or one above the other, to
 
 ## Open a pane
 
-What goes in a pane: an agent, a terminal, a launch log or the editor. The board, the pull requests and Docs take the whole area, as before; leave them and your panes are back.
+What goes in a pane: an agent, a terminal, a launch log, the editor or an agent’s [launch page](browser). The board, the pull requests and Docs take the whole area, as before; leave them and your panes are back.
 
 | To… | Do this |
 |---|---|

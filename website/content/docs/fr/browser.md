@@ -26,7 +26,7 @@ Il y a une page par worktree : relancer le test recharge la même page, deux wo
 | Ouvrir dans une fenêtre à part | La page passe dans la fenêtre « Pages » du projet, sans être rechargée. Le même bouton l’y reprend. |
 | Ouvrir dans le navigateur du système | La même adresse, dans ton navigateur. |
 
-Quand la vue est étroite, Avancer, les largeurs, la fenêtre à part et le navigateur du système passent dans « … ».
+« … » ouvre la page à côté de la conversation ou en dessous (voir plus bas). Quand la vue est étroite, Avancer, les largeurs, la fenêtre à part et le navigateur du système y passent aussi.
 
 Le point devant l’adresse dit l’état de la page :
 
@@ -35,6 +35,16 @@ Le point devant l’adresse dit l’état de la page :
 - **vert** : elle est chargée.
 
 Quand un menu, une liste, la palette ou une fenêtre d’Escouade passe sur la page, elle s’efface le temps qu’ils soient ouverts, puis revient.
+
+## La page à côté de la conversation
+
+La page peut aller dans un volet de l’[écran partagé](split-screen), à droite de la conversation de son agent (ou d’un autre) ou en dessous, comme un terminal :
+
+- « Ouvrir à côté » ou « Ouvrir en dessous » dans le menu « … » de la barre de la page ;
+- « Ouvrir la page à côté » ou « Ouvrir la page en dessous » dans le menu de l’agent (clic droit sur sa carte, ou « … » de l’en-tête de sa conversation) ;
+- ou en glissant le bouton « Page » de l’en-tête de la conversation (ou l’étiquette `pagination-users · web` de la barre) sur la zone de travail.
+
+Le volet se règle par sa poignée et se ferme par son ×, `Ctrl+Maj+W` ou « Fermer le volet » dans « … » ; la conversation reprend alors toute la zone. La page garde son adresse, sa largeur et ses outils de développement : elle n’est pas rechargée. Elle suit son volet quand il bouge ou change de taille, et s’efface le temps qu’on glisse un contenu sur la zone de travail. Avec deux pages à l’écran, `F12` et `Ctrl+Maj+M` vont à celle du volet actif. Une page passée dans la fenêtre « Pages » quitte son volet.
 
 ## Les outils de développement
 

@@ -1,9 +1,9 @@
 ---
 title: "La page du lancement"
 subject: "kanban"
-sources: ["design/browser/INVENTAIRE.md","design/browser/a-onglet.png","design/browser/a-tablette.png","design/browser/a-mobile.png","design/browser/a-retreci.png","design/browser/etats.png","website/content/docs/fr/browser.md"]
-tickets: ["ESC-311"]
-decisions: [26]
+sources: ["design/browser/INVENTAIRE.md","design/browser/a-onglet.png","design/browser/a-tablette.png","design/browser/a-mobile.png","design/browser/a-retreci.png","design/browser/etats.png","design/split-view/index.html","website/content/docs/fr/browser.md"]
+tickets: ["ESC-311","ESC-419"]
+decisions: [26,"la-page-d-un-lancement-va-dans-un-volet"]
 compared: "2026-10-31T19:02:21+01:00"
 gaps: [{"text":"La spec dit que la fenêtre « Pages » a « la même barre » que la vue de l'agent, avec ses états (chargement avec point ambre et filet, « Le lancement démarre… », « <hôte> ne répond pas » avec Recharger et Voir les logs, « Le lancement s'est arrêté » avec Relancer et Voir les logs). Le code de PagesWindow.svelte ne gère aucun de ces états. Il n'y a ni phase de chargement, ni délai de 20 s, ni message d'arrêt, ni bouton Relancer ou Voir les logs. Ces états n'existent que dans DevPage.svelte.","code":["src/components/PagesWindow.svelte","src/components/DevPage.svelte"]},{"text":"La spec dit qu'en vue étroite Avancer, le propriétaire, les largeurs, la fenêtre à part et le navigateur du système passent dans « … ». Seule la barre de DevPage.svelte a ce repli (container query et menu « … »). La barre de la fenêtre « Pages » n'a ni menu « … » ni repli : elle garde tous ses boutons en ligne.","code":["src/components/PagesWindow.svelte"]}]
 ---
@@ -20,16 +20,24 @@ Quand le lancement de test d'un agent est prêt, la page de l'app développée s
 
 - Réglage par projet, gardé sur la machine (jamais dans `.escouade.yml`) : « Ouvrir les pages des lancements » = « Dans l'agent » (par défaut), « Dans une fenêtre à part » ou « Dans le navigateur du système » (le comportement d'avant).
 - Dans l'agent : vue « Page » du sélecteur de vue de l'en-tête (à côté de « Escouade » et de la vue terminal), montrée aussi pour un agent de ticket dès qu'il a une page. Si l'utilisateur regardait l'agent ou sa fenêtre « Tester », Escouade ferme cette fenêtre et montre la page ; sinon la page attend.
-- Dans une fenêtre à part : fenêtre « <projet> · Pages » du projet, un onglet par page (« worktree · processus »), la même barre. Fermer la fenêtre ferme ses pages.
+- Dans une fenêtre à part : fenêtre « <projet> · Pages » du projet, un onglet par page (« worktree · processus »), la même barre. Fermer la fenêtre ferme ses pages. Elle reste possible à côté du volet : « Ouvrir dans une fenêtre à part » d'une page dans un volet la passe dans la fenêtre et ferme son volet ; « Remettre dans l'agent » la reprend dans la vue « Page » de son agent.
 - Une page par agent (worktree) : relancer recharge la même page ; deux worktrees, deux pages. La page se ferme avec son agent et quand son ticket passe « Terminé ».
 - « Rouvrir » de la fenêtre « Tester » la rouvre là où elle s'était ouverte ; la ligne dit « Ouvert dans Escouade, vue « Page » de l'agent : … », « Ouvert dans la fenêtre « Pages » du projet : … » ou « Ouvert dans le navigateur : … ».
 
+### Dans un volet (ESC-419)
+
+- La page ouverte dans la fenêtre va dans un volet de l'écran partagé, à droite de la conversation affichée (la sienne ou celle d'un autre agent) ou en dessous, par les gestes d'un terminal : « Ouvrir à côté » / « Ouvrir en dessous » du menu « … » de sa barre ; « Ouvrir la page à côté » / « Ouvrir la page en dessous » du menu de l'agent ; glisser le bouton « Page » de l'en-tête de la conversation (ou l'étiquette « worktree · processus » de la barre) sur la zone de travail, avec la boussole.
+- Elle se redimensionne par la poignée, se ferme par le ×, Ctrl+Maj+W ou « Fermer le volet » de son « … » ; sa conversation reprend alors la zone sur ses messages. Elle garde son adresse, sa largeur et ses devtools : elle n'est pas rechargée.
+- Sa conversation, tant que la page est dans un volet, montre ses messages ; sa vue « Page » rend actif le volet de la page.
+- La webview suit son volet : sa place et sa taille sont celles de la zone du volet, recalculées quand le volet, son voisin ou la zone de travail changent ; elle est masquée tant qu'un menu, une liste, un dialogue, la palette la croise ou qu'un contenu est glissé sur la zone de travail. Avec deux pages à l'écran, F12 et Ctrl+Maj+M vont à celle du volet actif.
+
 ### La barre
 
-- Retour, Avancer, Recharger, adresse modifiable (sans schéma : celui de la page), « worktree · processus », largeur (pleine, tablette, mobile), Devtools, « Ouvrir dans une fenêtre à part » / « Remettre dans l'agent » (sans recharger la page), « Ouvrir dans le navigateur du système ».
-- Vue étroite : Avancer, le propriétaire, les largeurs, la fenêtre à part et le navigateur du système passent dans « … » ; l'étiquette de largeur reste.
+- Retour, Avancer, Recharger, adresse modifiable (sans schéma : celui de la page), « worktree · processus », largeur (pleine, tablette, mobile), Devtools, « Ouvrir dans une fenêtre à part » / « Remettre dans l'agent » (sans recharger la page), « Ouvrir dans le navigateur du système », « … ».
+- Ses contrôles sont ceux du reste de l'app (ESC-419) : boutons d'icône (`icon-btn`) pour Retour, Avancer, Recharger ; boutons (`btn`, `btn icon-only`) pour Devtools, la fenêtre à part, le navigateur et « … », comme dans l'en-tête d'un terminal ou d'une conversation ; segments (`segmented small`) pour les largeurs ; le champ de l'app (`field`) pour l'adresse ; l'étiquette (chip) d'un terminal pour « worktree · processus » ; le menu de l'app pour « … ». La fenêtre « Pages » a les mêmes.
+- « … » offre toujours « Ouvrir à côté » et « Ouvrir en dessous » (« Fermer le volet » quand la page est dans son volet). La barre se replie sur sa propre largeur : quand elle est étroite, Avancer, le propriétaire, les largeurs, la fenêtre à part et le navigateur du système passent dans « … », Devtools garde son icône ; l'étiquette de largeur reste.
 - États : chargement (point ambre, filet), lancement qui redémarre (« Le lancement démarre… »), page qui ne répond pas (chargement non fini en 20 s : « <hôte> ne répond pas », Recharger, Voir les logs), lancement arrêté (« Le lancement s'est arrêté », Relancer, Voir les logs). Textes en français et en anglais.
-- La page est une webview native posée sur la fenêtre : elle se masque tant qu'un menu, une liste, un dialogue ou la palette d'Escouade la croise, et quand sa vue n'est pas affichée.
+- La page est une webview native posée sur la fenêtre : elle se masque tant qu'un menu, une liste, un dialogue ou la palette d'Escouade la croise, tant qu'un contenu est glissé sur la zone de travail, et quand sa vue n'est pas affichée.
 
 ### Devtools
 
@@ -50,4 +58,4 @@ Quand le lancement de test d'un agent est prêt, la page de l'app développée s
 
 ### Vérifié par système
 
-- `devpage_probe` (vraie webview) en CI sous Linux (Xvfb) et macOS, et à la main sous Windows et Linux (WSLg) ; l'e2e `devpage.spec.ts` sous Windows.
+- `devpage_probe` (vraie webview) en CI sous Linux (Xvfb) et macOS, et à la main sous Windows et Linux (WSLg) ; les e2e `devpage.spec.ts` et `devpage-pane.spec.ts` (la page dans un volet, à 1024 × 728) sous Windows.

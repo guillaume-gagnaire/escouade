@@ -37,7 +37,15 @@
   /** Near the window's right edge, the card goes to the left of the pointer, so that it stays in the window. */
   const flip = $derived(paneDrag.x > window.innerWidth - 300);
   const icon = $derived<IconName>(
-    !paneDrag.item ? 'folder' : paneDrag.item.kind === 'agent' ? 'agents' : paneDrag.item.kind === 'editor' ? 'code' : 'term',
+    !paneDrag.item
+      ? 'folder'
+      : paneDrag.item.kind === 'agent'
+        ? 'agents'
+        : paneDrag.item.kind === 'editor'
+          ? 'code'
+          : paneDrag.item.kind === 'page'
+            ? 'page'
+            : 'term',
   );
 </script>
 

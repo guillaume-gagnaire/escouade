@@ -4,7 +4,7 @@ La zone de travail se partage en plusieurs volets, côte à côte ou l’un au-d
 
 ## Ouvrir un volet
 
-Ce qui va dans un volet : un agent, un terminal, le journal d’un lancement ou l’éditeur. Le Kanban, les pull requests et les Docs prennent toute la zone, comme avant ; en les quittant, tu retrouves tes volets.
+Ce qui va dans un volet : un agent, un terminal, le journal d’un lancement, l’éditeur ou la [page du lancement](browser) d’un agent. Le Kanban, les pull requests et les Docs prennent toute la zone, comme avant ; en les quittant, tu retrouves tes volets.
 
 | Pour… | Fais ceci |
 |---|---|

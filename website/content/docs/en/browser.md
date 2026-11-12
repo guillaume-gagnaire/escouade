@@ -26,7 +26,7 @@ There is one page per worktree: running the test again reloads the same page, tw
 | Open in a separate window | The page moves to the project’s “Pages” window, without reloading. The same button brings it back. |
 | Open in the system browser | The same address, in your browser. |
 
-When the view is narrow, Forward, the widths, the separate window and the system browser move into “…”.
+“…” opens the page beside the conversation or below it (see below). When the view is narrow, Forward, the widths, the separate window and the system browser move there too.
 
 The dot before the address tells the page’s state:
 
@@ -35,6 +35,16 @@ The dot before the address tells the page’s state:
 - **green**: it is loaded.
 
 When a menu, a list, the palette or an Escouade window passes over the page, the page hides while they are open, then comes back.
+
+## The page beside the conversation
+
+The page can go into a pane of the [split screen](split-screen), to the right of its agent’s conversation (or another one’s) or below it, as a terminal does:
+
+- “Open beside” or “Open below” in the “…” menu of the page’s bar;
+- “Open the page beside” or “Open the page below” in the agent’s menu (right-click its card, or the “…” of its conversation’s header);
+- or drag the “Page” button of the conversation’s header (or the bar’s `pagination-users · web` label) onto the work area.
+
+The pane is sized by its handle and closed by its ×, `Ctrl+Shift+W` or “Close the pane” in “…”; the conversation then takes the whole area again. The page keeps its address, its width and its developer tools: it is not reloaded. It follows its pane when it moves or changes size, and fades away while a content is dragged over the work area. With two pages on screen, `F12` and `Ctrl+Shift+M` go to the active pane’s. A page moved to the “Pages” window leaves its pane.
 
 ## The developer tools
 

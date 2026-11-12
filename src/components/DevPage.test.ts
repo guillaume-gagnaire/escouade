@@ -3,7 +3,8 @@
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { devpages } from '../lib/devpage.svelte';
+import { closePage, detach, devpages, inPane, openPageBeside, showPage } from '../lib/devpage.svelte';
+import { menu } from '../lib/menu.svelte';
 import { MODES_KEY } from '../lib/devpage-key';
 import { setLang } from '../lib/i18n';
 import { app } from '../lib/state.svelte';
@@ -11,6 +12,7 @@ import { flows } from '../lib/test-launch.svelte';
 import type { Agent, LaunchState } from '../lib/types';
 import { agent, fakeBackend, resetApp } from '../test/ipc';
 import DevPage from './DevPage.svelte';
+import Pane from './panes/Pane.svelte';
 
 let A: Agent;
 const URL1 = 'http://localhost:41731/users?search=marie@';
@@ -93,6 +95,99 @@ describe('the bar of a launch’s page', () => {
     await fireEvent.keyDown(window, { key: 'F12' });
     await fireEvent.keyDown(window, { key: 'I', code: 'KeyI', ctrlKey: true, shiftKey: true });
     expect(b.called('devpage_devtools')).toHaveLength(2);
+  });
+});
+
+describe('the bar, drawn with the app’s controls (ESC-419)', () => {
+  it('uses the icon buttons, buttons, segments and field of the rest of the app', () => {
+    launch(true);
+    fakeBackend();
+    render(DevPage, { agent: A });
+    for (const name of ['Retour', 'Avancer', 'Recharger']) expect(screen.getByRole('button', { name }).classList).toContain('icon-btn');
+    for (const name of ['Ouvrir dans une fenêtre à part', 'Ouvrir dans le navigateur du système', 'Plus d’actions sur la page'])
+      expect([...screen.getByRole('button', { name }).classList]).toEqual(expect.arrayContaining(['btn', 'icon-only']));
+    expect(screen.getByRole('button', { name: /Outils de développement/ }).classList).toContain('btn');
+    expect(screen.getByRole('radiogroup', { name: 'Largeur de la page' }).classList).toContain('segmented');
+    expect(screen.getByRole('radio', { name: 'Pleine largeur' }).classList).toContain('on');
+    expect(screen.getByRole('textbox', { name: 'Adresse de la page' }).closest('form')?.classList).toContain('field');
+  });
+});
+
+describe('in a pane of the split screen (ESC-419)', () => {
+  beforeEach(() => {
+    app.ui.selectedAgent = { p1: 'a7' };
+    app.ui.panes = {};
+  });
+
+  it('goes beside its conversation from « … », which shows its messages again; its pane closes back to one', async () => {
+    launch(true);
+    fakeBackend();
+    render(DevPage, { agent: A });
+    await fireEvent.click(screen.getByRole('button', { name: 'Plus d’actions sur la page' }));
+    menu.open?.items.find((i) => i.label === 'Ouvrir à côté')?.onClick?.();
+    expect(app.panes?.root).toEqual({
+      dir: 'row',
+      ratio: 0.5,
+      a: { leaf: { kind: 'agent', id: 'a7' } },
+      b: { leaf: { kind: 'page', id: 'a7' } },
+    });
+    expect(app.panes?.active).toBe('page:a7');
+    expect(devpages.shown.a7).toBe(false);
+    expect(inPane('a7')).toBe(true);
+    // Its view « Page » asked again: its pane becomes the active one, nothing else moves.
+    app.activatePane('agent:a7');
+    showPage('a7', true);
+    expect(app.panes?.active).toBe('page:a7');
+    expect(devpages.shown.a7).toBe(false);
+    // Its pane closed: its conversation alone.
+    app.closePaneOf('page:a7');
+    expect(app.panes).toBeNull();
+    expect(app.agent?.id).toBe('a7');
+  });
+
+  it('goes below; dropped in the middle of its conversation, the two swap; alone, it is its view « Page »', () => {
+    fakeBackend();
+    openPageBeside('a7', 'bottom');
+    expect(app.panes?.root).toMatchObject({ dir: 'col', b: { leaf: { kind: 'page', id: 'a7' } } });
+    app.dropInPane({ kind: 'agent', id: 'a7' }, 'center', { kind: 'page', id: 'a7' });
+    expect(app.panes?.root).toMatchObject({ a: { leaf: { kind: 'page', id: 'a7' } }, b: { leaf: { kind: 'agent', id: 'a7' } } });
+    app.closePaneOf('page:a7');
+    expect(app.panes).toBeNull();
+    // Its conversation alone: the page dropped in its place is its view « Page ».
+    app.dropInPane({ kind: 'agent', id: 'a7' }, 'center', { kind: 'page', id: 'a7' });
+    expect(app.panes).toBeNull();
+    expect(devpages.shown.a7).toBe(true);
+  });
+
+  it('leaves its pane when it goes to the « Pages » window or closes', async () => {
+    fakeBackend({ devpage_detach: () => ({ detached: true, mode: null }) });
+    openPageBeside('a7', 'right');
+    expect(app.panes).not.toBeNull();
+    await detach('a7', true);
+    expect(app.panes).toBeNull();
+    expect(app.ui.panes?.p1).toBeUndefined();
+    devpages.pages.a7.detached = false;
+    openPageBeside('a7', 'right');
+    expect(app.panes).not.toBeNull();
+    closePage('a7');
+    expect(app.ui.panes?.p1).toBeUndefined();
+  });
+
+  it('names its pane, closes it from « … », and gives the keys to the active pane only', async () => {
+    launch(true);
+    const b = fakeBackend();
+    openPageBeside('a7', 'right');
+    render(Pane, { item: { kind: 'page', id: 'a7' }, project: app.projects[0] });
+    expect(screen.getByRole('region', { name: 'Volet : Page de pagination-users · web' })).toBeTruthy();
+    // « … » there closes its pane rather than opening it again.
+    await fireEvent.click(screen.getByRole('button', { name: 'Plus d’actions sur la page' }));
+    expect(menu.open?.items.map((i) => i.label)).toEqual(['Fermer le volet']);
+    await fireEvent.keyDown(window, { key: 'F12' });
+    expect(b.called('devpage_devtools')).toHaveLength(1);
+    app.activatePane('agent:a7');
+    await tick();
+    await fireEvent.keyDown(window, { key: 'F12' });
+    expect(b.called('devpage_devtools')).toHaveLength(1);
   });
 });
 
@@ -204,13 +299,31 @@ describe('its widths', () => {
     launch(true);
     const b = fakeBackend();
     render(DevPage, { agent: A });
+    // What the bar's container query folds when narrow (jsdom draws no container query).
+    for (const sel of ['.fwd', '.modes', '.detach', '.system']) (document.querySelector(sel) as HTMLElement).style.display = 'none';
     await fireEvent.click(screen.getByRole('button', { name: 'Plus d’actions sur la page' }));
-    const menu = screen.getByRole('menu', { name: 'Plus d’actions sur la page' });
-    for (const name of ['Avancer', 'Ouvrir dans une fenêtre à part', 'Ouvrir dans le navigateur du système'])
-      expect(within(menu).getByRole('menuitem', { name })).toBeTruthy();
-    await fireEvent.click(screen.getByRole('menuitemradio', { name: /Mobile/ }));
+    const labels = menu.open?.items.filter((i) => !i.separator).map((i) => i.label);
+    expect(labels).toEqual([
+      'Avancer',
+      'Pleine largeur',
+      'Tablette',
+      'Mobile',
+      'Ouvrir à côté',
+      'Ouvrir en dessous',
+      'Ouvrir dans une fenêtre à part',
+      'Ouvrir dans le navigateur du système',
+    ]);
+    expect(menu.open?.items.find((i) => i.label === 'Pleine largeur')?.checked).toBe(true);
+    menu.open?.items.find((i) => i.label === 'Mobile')?.onClick?.();
     expect(b.called('devpage_mode').at(-1)?.args).toEqual({ agentId: 'a7', mode: 'mobile' });
-    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('in « … » when wide: only what the bar does not show', async () => {
+    launch(true);
+    fakeBackend();
+    render(DevPage, { agent: A });
+    await fireEvent.click(screen.getByRole('button', { name: 'Plus d’actions sur la page' }));
+    expect(menu.open?.items.map((i) => i.label)).toEqual(['Ouvrir à côté', 'Ouvrir en dessous']);
   });
 
   it('in English too', () => {

@@ -18,6 +18,9 @@ export default {
   detach: 'Open in a separate window',
   attach: 'Put back in the agent',
   system: 'Open in the system browser',
+  /** The agent's menu (ESC-419): its page in a pane of the split screen. */
+  openBeside: 'Open the page beside',
+  openBelow: 'Open the page below',
   more: 'More actions on the page',
   owner: 'Page of {title}',
   apart: 'A page apart: neither Escouade nor your cookies',

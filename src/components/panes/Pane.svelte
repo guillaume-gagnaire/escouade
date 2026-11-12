@@ -1,7 +1,8 @@
 <script lang="ts">
   // A pane of the split screen (ESC-392): its own panel on the frame (direction B), ringed in the project's colour
   // when it is the active one. It draws its content as the work area draws it alone: an agent (its conversation, or
-  // its subagent's, or its background task's), a terminal, a launch log, the editor. A press anywhere in it makes it
+  // its subagent's, or its background task's), a terminal, a launch log, the editor; or the page of an agent's launch
+  // (ESC-419), its bar and its webview, which follows the pane. A press anywhere in it makes it
   // active; its × (on hover, and always on the active one) closes it.
   import { t } from '../../lib/i18n';
   import { setPaneCtx } from '../../lib/pane-context';
@@ -11,6 +12,8 @@
   import { tip } from '../../lib/tip';
   import type { Project } from '../../lib/types';
   import Conversation from '../Conversation.svelte';
+  import DevPage from '../DevPage.svelte';
+  import { devpages } from '../../lib/devpage.svelte';
   import EditorView from '../editor/EditorView.svelte';
   import Icon from '../Icon.svelte';
   import RunView from '../RunView.svelte';
@@ -35,7 +38,13 @@
   const agent = $derived(item.kind === 'agent' ? app.agents[item.id] : undefined);
   const term = $derived(item.kind === 'term' ? app.terminals.find((x) => x.id === item.id) : undefined);
   const cmd = $derived(item.kind === 'launch' ? app.launchOf(project, item.id) : undefined);
-  const name = $derived(agent?.name ?? term?.name ?? cmd?.name ?? t('shell.panes.editor'));
+  /** The agent whose launch's page this pane shows. */
+  const pageOf = $derived(item.kind === 'page' ? app.agents[item.id] : undefined);
+  const name = $derived(
+    pageOf
+      ? t('devpage.owner', { title: devpages.pages[pageOf.id]?.title ?? pageOf.name })
+      : (agent?.name ?? term?.name ?? cmd?.name ?? t('shell.panes.editor')),
+  );
   const closeKey = keyLabel('Ctrl+Shift+W');
 </script>
 
@@ -70,6 +79,8 @@
     <TerminalView {term} {project} />
   {:else if cmd}
     <RunView {cmd} {project} />
+  {:else if pageOf}
+    <DevPage agent={pageOf} />
   {:else if item.kind === 'editor'}
     <EditorView {project} />
   {/if}

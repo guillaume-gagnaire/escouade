@@ -188,6 +188,13 @@ describe('parseLayout', () => {
     expect(parseLayout(JSON.parse(JSON.stringify(l)))).toEqual(l);
   });
 
+  it('reads back the page of an agent’s launch beside its conversation (ESC-419)', () => {
+    const l = place(null, ag('a'), 'right', { kind: 'page', id: 'a' })!;
+    expect(l.root).toEqual({ dir: 'row', ratio: 0.5, a: { leaf: ag('a') }, b: { leaf: { kind: 'page', id: 'a' } } });
+    expect(l.active).toBe('page:a');
+    expect(parseLayout(JSON.parse(JSON.stringify(l)))).toEqual(l);
+  });
+
   it('drops what is malformed', () => {
     expect(parseLayout(null)).toBeNull();
     expect(parseLayout({ root: { leaf: ag('a') }, active: 'agent:a' })).toBeNull();

@@ -7,6 +7,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ## [Unreleased]
 
 - In an agents’ folder, the “waiting” pill goes once the waiting agent is opened, as its card stops blinking; it stays yellow on top of its folder. Thanks to @Metalzoid (#27).
+- A launch’s page opens beside the conversation, or below it, as a terminal does: from its bar’s “…” menu, the agent’s menu, or by dragging the “Page” button. It is resized and closed as a pane, keeping its address and width. Its buttons, address and menu are now those of the rest of the app.
 - Remote control for all agents no longer starts a process for each agent: only the active ones start, and a done agent can be reached from claude.ai only after its next message, which takes its session back. The remote control keeps at most 8 processes of agents that are not active (adjustable), and Escouade no longer starts anything for a harness or an account that cannot be linked. Thanks to @Chapercher (#26).
 - On macOS and Linux, agents left running after the app was killed are stopped at its next launch. A new setting, “Agents’ MCP servers: Escouade only”, spares each Claude Code agent the MCP servers of your configuration.
 - When an Anthropic safeguard refuses a Claude Code turn, the agent no longer loops on the refusal: its next message starts from the end of the turn before, the refused turn left out of its history but still shown, marked as such. A refused ticket is blocked with that reason instead of being sent again.

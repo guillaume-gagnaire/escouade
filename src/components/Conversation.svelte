@@ -45,7 +45,7 @@
   import type { Agent, ConvItem, Project } from '../lib/types';
   import AgentTerminal from './AgentTerminal.svelte';
   import DevPage from './DevPage.svelte';
-  import { devpages, showPage } from '../lib/devpage.svelte';
+  import { devpages, inPane as pageInPane, pageItem, showPage } from '../lib/devpage.svelte';
   import Composer from './Composer.svelte';
   import PlanBanner from './PlanBanner.svelte';
   import CriteriaReport from './conv/CriteriaReport.svelte';
@@ -66,6 +66,7 @@
   import EngineMark from './EngineMark.svelte';
   import Icon from './Icon.svelte';
   import { tip } from '../lib/tip';
+  import { paneDrag } from '../lib/pane-drag.svelte';
 
   let { agent, project }: { agent: Agent; project: Project } = $props();
   /** Its pane of the split screen (ESC-392), if it is in one: the files open over it there, never docked beside. */
@@ -535,9 +536,9 @@
   const working = $derived(atWork || inBackground);
   /** Shown in its harness's own interface, which takes its process's place or joins it (OpenCode). */
   const harnessView = $derived(inHarnessView(agent));
-  /** Its launch's page is open in Escouade (ESC-311), and its view shows it. */
+  /** Its launch's page is open in Escouade (ESC-311), and its view shows it: not when it is in a pane of its own (ESC-419). */
   const hasPage = $derived(!!devpages.pages[agent.id]);
-  const pageView = $derived(hasPage && !!devpages.shown[agent.id]);
+  const pageView = $derived(hasPage && !!devpages.shown[agent.id] && !pageInPane(agent.id));
   /** What is said of the wait: a turn ends by itself; what goes on in the background needs to be stopped first. */
   const waits = $derived(atWork ? t('conv.escouadeNext.busy') : inBackground ? t('conv.escouadeNext.busyBackground') : '');
 
@@ -791,7 +792,13 @@
               aria-pressed={pageView}
               aria-label={t('devpage.viewHint')}
               use:tip={pageView ? undefined : t('devpage.viewHint')}
-              onclick={() => showPage(agent.id, true)}><Icon name="page" size={14} /><span class="lbl">{t('devpage.view')}</span></button
+              onclick={() => showPage(agent.id, true)}
+              onpointerdown={(e) => {
+                // Dragged onto the work area, the page goes into a pane, as a terminal's row (ESC-419).
+                const p = devpages.pages[agent.id];
+                if (p && !p.detached && !pageInPane(agent.id))
+                  paneDrag.press(e, pageItem(agent.id), t('devpage.owner', { title: p.title }));
+              }}><Icon name="page" size={14} /><span class="lbl">{t('devpage.view')}</span></button
             >
           {/if}
         </div>

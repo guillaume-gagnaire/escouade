@@ -10,6 +10,7 @@ import { openUrl } from './opener';
 import { app } from './state.svelte';
 import type { Agent, PageBounds, PageEvent, PagesOpen, Project } from './types';
 import { loadModes, nextMode, saveMode, type PageMode } from './devpage-key';
+import { has, type PaneItem } from './panes';
 
 /** A page that started loading and has not finished after this long does not answer. */
 export const STALLED_MS = 20_000;
@@ -114,10 +115,24 @@ export function setMode(agentId: string, mode: PageMode) {
 /** The next width (its shortcut). */
 export const cycleMode = (agentId: string) => setMode(agentId, nextMode(modeOf(agentId)));
 
-/** Its agent's view shows the page, or the conversation. */
+/** The page of `agentId` as a content of the split screen (ESC-419). */
+export const pageItem = (agentId: string): PaneItem => ({ kind: 'page', id: agentId });
+
+/** The page of `agentId` is in a pane of the split screen on screen. */
+export const inPane = (agentId: string): boolean => app.panesOn && has(app.panes, pageItem(agentId));
+
+/** Its agent's view shows the page, or the conversation. The page in a pane: that pane becomes the active one. */
 export function showPage(agentId: string, on: boolean) {
   if (on && !devpages.pages[agentId]) return;
+  if (on && inPane(agentId)) return app.activatePane(`page:${agentId}`);
   devpages.shown[agentId] = on;
+}
+
+/** The page of `agentId` in a pane beside what is on screen (`right`) or under it (`bottom`), as a terminal goes. */
+export function openPageBeside(agentId: string, zone: 'right' | 'bottom' = 'right') {
+  const page = devpages.pages[agentId];
+  if (!page || page.detached) return;
+  app.openBeside(pageItem(agentId), zone);
 }
 
 /** Back, forward, reload, or an address typed in its bar. */
@@ -141,6 +156,8 @@ export async function detach(agentId: string, detached: boolean) {
     else devpages.modes[page.title] = view.mode;
   }
   if (view) devpages.shown[agentId] = !view.detached;
+  // To its window: its pane, if it had one, closes (its neighbour takes its place).
+  if (view?.detached) app.settlePanes();
 }
 
 /** Where the page goes in the window (its view's room, in CSS pixels, times the zoom), or hidden (null). */
@@ -157,6 +174,8 @@ export function closePage(agentId: string) {
   clearTimeout(stalls.get(agentId));
   stalls.delete(agentId);
   api.devpageClose(agentId).catch(() => {});
+  // Its pane, if it had one, closes.
+  app.settlePanes();
 }
 
 /** What the backend says of a page. */
@@ -196,6 +215,13 @@ export function onPageEvent(e: PageEvent) {
 }
 
 app.onDevPage(onPageEvent);
+app.pages = {
+  open: (agentId) => !!devpages.pages[agentId] && !devpages.pages[agentId].detached,
+  view: (agentId, on) => {
+    if (on && !devpages.pages[agentId]) return;
+    devpages.shown[agentId] = on;
+  },
+};
 app.onAgentRemoved(closePage);
 app.onTicketDone(closePage);
 

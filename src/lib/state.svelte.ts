@@ -428,6 +428,15 @@ class AppState {
   focusComposer = $state(0);
   /** Counts the asks to give the focus to the active pane when it is no agent (a terminal, a launch log, the editor). */
   paneFocus = $state(0);
+  /**
+   * The page of an agent's launch (ESC-311), as `devpage.svelte.ts` (which imports this module) tells it: `open`, in
+   * the window and not in the « Pages » one (it can then go into a pane, ESC-419); `view`, its agent's view switched to
+   * its page or back to its conversation.
+   */
+  pages: { open: (agentId: string) => boolean; view: (agentId: string, on: boolean) => void } = {
+    open: () => false,
+    view: () => {},
+  };
   /** The card of the agents' list to give the focus to (Ctrl+J), `n` counting the asks: the sidebar focuses it. */
   cardFocus = $state<{ id: string; n: number }>({ id: '', n: 0 });
   /** Ctrl+Shift+N: the menu « Harness » of « Nouvel agent » opens (the sidebar watches it). */
@@ -1320,6 +1329,7 @@ class AppState {
   paneExists(p: Project, x: PaneItem): boolean {
     if (x.kind === 'editor') return true;
     if (x.kind === 'agent') return this.agents[x.id]?.projectId === p.id && !this.agents[x.id].archived;
+    if (x.kind === 'page') return this.agents[x.id]?.projectId === p.id && !this.agents[x.id].archived && this.pages.open(x.id);
     if (x.kind === 'term') return this.terminals.some((t) => t.id === x.id && t.projectId === p.id);
     return !!this.launchOf(p, x.id);
   }
@@ -1361,7 +1371,9 @@ class AppState {
   private selectIn(projectId: string, item: PaneItem) {
     this.selectedTerm[projectId] = item.kind === 'term' ? item.id : null;
     this.selectedLaunch[projectId] = item.kind === 'launch' ? item.id : null;
-    if (item.kind === 'agent') this.ui.selectedAgent[projectId] = item.id;
+    if (item.kind === 'agent' || item.kind === 'page') this.ui.selectedAgent[projectId] = item.id;
+    // A page left alone: its agent, on its view « Page ».
+    if (item.kind === 'page' && !this.ui.panes?.[projectId]) this.pages.view(item.id, true);
     if (item.kind === 'editor') {
       this.editorReady(projectId);
       if (!this.ui.panes?.[projectId]) this.editor[projectId].on = true;
@@ -1404,7 +1416,11 @@ class AppState {
     }
     this.closeEditor(p.id);
     if (item.kind === 'agent') this.selectAgent(item.id);
-    else if (item.kind === 'term') this.selectTerm(item.id);
+    else if (item.kind === 'page') {
+      // Its agent, on its view « Page ».
+      this.selectAgent(item.id);
+      this.pages.view(item.id, true);
+    } else if (item.kind === 'term') this.selectTerm(item.id);
     else this.selectLaunch(item.id);
   }
 
@@ -1415,8 +1431,8 @@ class AppState {
     if (!p || !l) return;
     const item = leaves(l.root).find((x) => itemKey(x) === key);
     if (!item) return;
-    if (item.kind === 'agent') {
-      // Not `selectAgent`: a click in a conversation must not take the focus to its composer.
+    if (item.kind === 'agent' || item.kind === 'page') {
+      // Not `selectAgent`: a click in a conversation must not take the focus to its composer. A page's: its agent's.
       this.ui.selectedAgent[p.id] = item.id;
       this.selectedTerm[p.id] = null;
       this.selectedLaunch[p.id] = null;
@@ -1442,6 +1458,8 @@ class AppState {
     this.setPanes(p.id, next);
     if (!next) return this.showAlone(item);
     if (item.kind === 'editor') this.editorReady(p.id);
+    // The page in a pane of its own: its agent's view shows its conversation again.
+    if (item.kind === 'page') this.pages.view(item.id, false);
     this.activatePane(itemKey(item));
     if (item.kind === 'agent') this.focusComposer++;
     else this.paneFocus++;

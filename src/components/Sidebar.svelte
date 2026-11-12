@@ -6,6 +6,7 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte';
   import { paneDrag } from '../lib/pane-drag.svelte';
+  import { devpages, inPane as pageInPane, openPageBeside } from '../lib/devpage.svelte';
   import { itemKey, leaves, type PaneItem } from '../lib/panes';
   import { keyLabel } from '../lib/platform';
   import { SIDE_MIN, sideWidth } from '../lib/side-width.svelte';
@@ -631,6 +632,13 @@
           ]
         : []),
       ...(a.archived ? [] : besideItems({ kind: 'agent', id: a.id })),
+      // Its launch's page, in the window and not yet in a pane (ESC-419): beside, as a terminal.
+      ...(a.archived || !devpages.pages[a.id] || devpages.pages[a.id].detached || pageInPane(a.id)
+        ? []
+        : [
+            { label: t('devpage.openBeside'), onClick: () => openPageBeside(a.id, 'right') },
+            { label: t('devpage.openBelow'), onClick: () => openPageBeside(a.id, 'bottom') },
+          ]),
       ...foldedItems(folded),
       ...handoverItems(a),
       ...remoteItems(a),
