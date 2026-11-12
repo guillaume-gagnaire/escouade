@@ -191,6 +191,53 @@ async fn the_remote_control_keeps_no_more_processes_than_its_cap() {
     assert!(!h.alive(&newest));
 }
 
+/// ESC-431: at the launch, the places under the cap go to the most recently active, however long
+/// each took to get its settings applied: the newest, slower to get there, still has the only one,
+/// whether it held its Remote Control from the last run or comes in with the setting.
+#[tokio::test]
+async fn the_places_under_the_cap_go_to_the_most_recently_active_whatever_their_speed() {
+    let h = harness("esc431-order");
+    let (p, _) = h.project(false).await;
+    h.core.settings.write().remote_keep_max = 1;
+    for held in [true, false] {
+        let mut ids = Vec::new();
+        for _ in 0..3 {
+            let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+            h.cold(&id).await;
+            ids.push(id);
+        }
+        let [oldest, middle, newest] = ids.clone().try_into().unwrap();
+        for (id, ago) in [(&oldest, 30_000), (&middle, 20_000), (&newest, 10_000)] {
+            h.left_linked(id, AgentStatus::Idle, ago);
+            if !held {
+                let a = h.core.agent(id).unwrap();
+                let mut rt = a.lock();
+                rt.meta.remote_control = false;
+                rt.meta.remote_source = None;
+            }
+        }
+        h.core
+            .remote_apply_delay
+            .lock()
+            .insert(newest.clone(), Duration::from_millis(600));
+        h.core.settings.write().remote_control_all = true;
+        for t in h.core.start_remote(ids.clone()) {
+            t.await.unwrap();
+        }
+        assert!(h.alive(&newest), "held {held}: the newest started");
+        assert!(
+            !h.alive(&middle) && !h.alive(&oldest),
+            "held {held}: none other"
+        );
+        for id in &ids {
+            if let Some(p) = h.core.agent(id).unwrap().lock().detach() {
+                p.close_input();
+            }
+            h.core.agent(id).unwrap().lock().meta.status = AgentStatus::Done;
+        }
+    }
+}
+
 /// Criterion 3: a harness that cannot be linked to claude.ai starts no process for the Remote
 /// Control (issue #26: `codex app-server` started to fail with « Codex ne le permet pas »).
 #[tokio::test]
