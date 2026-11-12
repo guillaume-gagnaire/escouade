@@ -25,16 +25,13 @@ use super::registry::{
 };
 use super::userconfig::{Format, UserConfig};
 use super::{
-    mcp, BoxFuture, Engine, Escouade, Message, OneShot, Process, Program, Room, Spawn, StartLost,
-    Weight,
+    BoxFuture, Engine, Message, OneShot, Process, Program, Room, Spawn, StartLost, Weight,
 };
 use crate::agent::{AgentRt, Effects};
 use crate::core::{size_label, Attachment, MAX_IMAGE, MAX_TOTAL};
 use crate::i18n::{self, Lang};
 use crate::model::EngineId;
 use anyhow::{bail, Result};
-pub(crate) mod rules;
-use rules::{listed, split_model};
 use serde_json::{json, Value};
 
 /// OpenCode.
@@ -57,28 +54,6 @@ const INSTALL: Install = Install {
 
 /// The efforts Escouade's menu has, in its order: a model's `variants` are offered among them.
 const EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
-
-/// The models OpenCode lists, as the core keeps them.
-fn told(models: Vec<rules::Told>) -> Vec<ToldModel> {
-    models
-        .into_iter()
-        .map(|m| ToldModel {
-            id: m.id,
-            label: m.label,
-            efforts: m.efforts,
-            default_effort: m.default_effort,
-            images: m.images,
-            default: m.default,
-            provider: m.provider,
-            multiplier: None,
-            price: None,
-            from_config: false,
-        })
-        .collect()
-}
-
-/// How long `opencode models` may take (3 s on 1.19.3, tried).
-const LIST_LIMIT: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// What a mode means in OpenCode, as the menu says it: no sandbox, only its rules.
 fn meaning(lang: Lang, mode: &str) -> String {
@@ -353,16 +328,7 @@ impl Engine for Opencode {
         &EFFORTS
     }
 
-    fn supports_effort(&self, _model: &str) -> bool {
-        true
-    }
-
-    fn supports_auto(&self, _model: &str) -> bool {
-        false
-    }
-
-    /// `opencode models --verbose`: the models of the providers connected to OpenCode, without a
-    /// server (no model is asked anything).
+    /// Its plugin reads them (`account/read` of `models`), by a process of the account the core starts.
     fn list_models<'a>(
         &'a self,
         program: Program,
@@ -370,17 +336,18 @@ impl Engine for Opencode {
         dir: &'a std::path::Path,
     ) -> BoxFuture<'a, Result<Option<Vec<ToldModel>>>> {
         Box::pin(async move {
-            let args: Vec<String> = ["models", "--verbose"].map(String::from).to_vec();
-            let launch = program.launch(&dir.to_string_lossy(), &args, &env)?;
-            let mut cmd = tokio::process::Command::new(&launch.program);
-            cmd.args(&launch.args).envs(launch.env).current_dir(dir);
-            #[cfg(windows)]
-            cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
-            crate::proc::no_inherited_fds(&mut cmd);
-            let out = crate::proc::output_within(cmd, LIST_LIMIT).await?;
-            let models = told(listed(&String::from_utf8_lossy(&out.stdout)).models);
-            Ok(Some(models).filter(|m| !m.is_empty()))
+            crate::plugins::harness::plugged_for(self.id(), self.name(), false)?
+                .account_models(&program, &env, dir)
+                .await
         })
+    }
+
+    fn supports_effort(&self, _model: &str) -> bool {
+        true
+    }
+
+    fn supports_auto(&self, _model: &str) -> bool {
+        false
     }
 
     fn spawn(
@@ -393,7 +360,7 @@ impl Engine for Opencode {
         // for what it does on its own (a title, a name; OpenCode Zen without an account, seen at
         // the real run of ESC-25), for every agent the server serves afterwards.
         if split_model(&spawn.model).is_none() {
-            bail!(rules::no_model(i18n::ui().tag()));
+            bail!(no_model(i18n::ui().tag()));
         }
         crate::plugins::harness::spawn_plugged(
             crate::plugins::builtin::OPENCODE,
@@ -445,12 +412,6 @@ impl Engine for Opencode {
         None
     }
 
-    /// Nothing at the launch of a server shared by agents: each agent's folder is given its entry,
-    /// with its own token, by the API (its plugin).
-    fn escouade_launch(&self, _escouade: &Escouade) -> mcp::Launch {
-        mcp::Launch::default()
-    }
-
     fn user_config(&self) -> Option<&'static UserConfig> {
         Some(&USER_CONFIG)
     }
@@ -461,47 +422,24 @@ impl Engine for Opencode {
     }
 }
 
+/// The provider and the model of `<provider>/<model>` (a model's id may hold more slashes): what its texts and its
+/// agents are sent with.
+pub(crate) fn split_model(model: &str) -> Option<(&str, &str)> {
+    let (p, m) = model.split_once('/')?;
+    (!p.is_empty() && !m.is_empty()).then_some((p, m))
+}
+
+/// No model of a connected provider to send a message with, in `lang`.
+pub(crate) fn no_model(lang: &str) -> String {
+    match lang {
+        "en" => "No OpenCode model to use: connect a provider to OpenCode (opencode auth login) or declare one in its config, then pick its model.".into(),
+        _ => "Aucun modèle d’OpenCode à utiliser : connecte un fournisseur à OpenCode (opencode auth login) ou déclare-en un dans sa config, puis choisis son modèle.".into(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::rules::catalog;
     use super::*;
-
-    fn recorded(file: &str) -> Vec<Value> {
-        bench::recorded(file)
-    }
-
-    #[test]
-    fn the_models_come_from_the_connected_providers_with_their_variants() {
-        let answer = recorded("models.jsonl")
-            .into_iter()
-            .find(|m| m["path"] == "/config/providers")
-            .expect("the answer to /config/providers");
-        let c = catalog(&answer["body"], &Value::Null);
-        let gpt = c
-            .models
-            .iter()
-            .find(|m| m.id == "ollama/gpt-oss:20b-32k")
-            .unwrap();
-        assert_eq!(gpt.label, "gpt-oss 20b (32k)");
-        assert_eq!(gpt.efforts, ["low", "medium", "high"]);
-        assert_eq!(gpt.provider.as_deref(), Some("Ollama (local)"));
-        let qwen = c
-            .models
-            .iter()
-            .find(|m| m.id == "ollama/qwen3-coder:30b-32k")
-            .unwrap();
-        assert!(qwen.efforts.is_empty() && !qwen.images);
-        assert_eq!(c.models.iter().filter(|m| m.default).count(), 1);
-        // The user's own default model, when it is one of them.
-        let c = catalog(
-            &answer["body"],
-            &json!({ "model": "ollama/gpt-oss:20b-32k" }),
-        );
-        assert!(c.models.iter().find(|m| m.default).unwrap().id == "ollama/gpt-oss:20b-32k");
-        assert!(catalog(&json!({ "providers": [] }), &Value::Null)
-            .models
-            .is_empty());
-    }
 
     #[test]
     fn a_message_takes_its_images_and_text_files_and_refuses_a_pdf() {

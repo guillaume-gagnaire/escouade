@@ -11,6 +11,7 @@
 //! What it does as Escouade drives it comes from the real runs of OpenCode 1.19.3 with local models (ESC-25), whose
 //! streams are in `tests/fixtures/opencode/` and whose schema is `tests/fixtures/engines/opencode-1.19.3.openapi.json`.
 
+pub mod account;
 pub mod rules;
 mod server;
 mod session;
@@ -21,9 +22,9 @@ pub use translate::{absolute, patch_file, Translator};
 
 use escouade_plugin_kit::host::Host;
 use escouade_plugin_protocol::engine::{
-    method, AgentRef, AnswerPermission, AnswerQuestion, Attach, Close, Compact, Compacted, Control,
-    EnvVar, Frames, Interrupt, Items, Launch, LaunchParams, Open, SendMessage, SetValue,
-    SharedLaunch, SharedRef, Usage, Writes,
+    method, AccountLines, AccountRead, AgentRef, AnswerPermission, AnswerQuestion, Attach, Close,
+    Compact, Compacted, Control, EnvVar, Frames, Interrupt, Items, Launch, LaunchParams, Open,
+    SendMessage, SetValue, SharedLaunch, SharedRef, Usage, Writes,
 };
 use escouade_plugin_protocol::{
     answer, code, greeted, initialized, method as handshake, Refusal, Request,
@@ -303,6 +304,10 @@ impl Plugin {
                         ..Compacted::default()
                     })
                 }
+                method::ACCOUNT_READ => give(account::read(&read::<AccountRead>(params.clone())?)),
+                method::ACCOUNT_LINES => {
+                    give(account::lines(&read::<AccountLines>(params.clone())?))
+                }
                 other => Err(Refusal::not_found(other)),
             }
         };
@@ -411,3 +416,6 @@ fn launch(p: &LaunchParams) -> Launch {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod catalog_tests;

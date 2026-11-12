@@ -18,24 +18,21 @@
 pub(crate) mod bench;
 mod locate;
 pub(crate) mod terminal;
-mod words;
 
 use super::registry::{
     CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
     ToldModel,
 };
 use super::{
-    mcp, BoxFuture, Engine, Escouade, Message, OneShot, Process, Program, Room, Spawn, StartLost,
-    Weight,
+    BoxFuture, Engine, Message, OneShot, Process, Program, Room, Spawn, StartLost, Weight,
 };
 use crate::agent::{AgentRt, Effects};
 use crate::core::Attachment;
 use crate::i18n::{self, Lang};
 use crate::model::EngineId;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
-pub(crate) use words::*;
 
 /// Antigravity CLI.
 pub struct Agy;
@@ -61,15 +58,7 @@ const MODELS: [(&str, &str); 1] = [(DEFAULT, "Gemini 3.8 Flash")];
 pub(crate) const USAGE_PAGE: &str = "https://antigravity.google/docs/plans";
 
 #[cfg(test)]
-pub(crate) use escouade_acp::limits::limit_of;
-#[cfg(test)]
-pub(crate) use escouade_acp::limits::{CAPACITY_RESUME_MS, QUOTA_RESUME_MS};
-
-/// What the card of a turn stopped by its limit says (`said`: `agy`'s own words).
-#[cfg(test)]
-pub(crate) fn limited_error(lang: Lang, said: &str) -> String {
-    words::limited_error(lang.tag(), said)
-}
+pub(crate) use escouade_acp::limits::QUOTA_RESUME_MS;
 
 /// The modes Escouade gives Antigravity, in the menu's order (its `auto` is not offered: « not
 /// available for this account » in the real run).
@@ -138,158 +127,107 @@ pub fn caps() -> EngineCaps {
     }
 }
 
-/// The models `agy models` lists (`<id>\t<name>` a line): a Gemini model whose efforts are part of
-/// its ids once, with its efforts; any other as it is.
-pub(crate) fn models_of(listed: &str) -> Vec<ToldModel> {
-    let mut out: Vec<ToldModel> = Vec::new();
-    for line in listed.lines() {
-        let Some((id, label)) = line.split_once('\t') else {
-            continue;
-        };
-        let (id, label) = (id.trim(), label.trim());
-        if id.is_empty() {
-            continue;
-        }
-        let model = |id: &str, label: &str| ToldModel {
-            id: id.to_string(),
-            label: label.to_string(),
-            efforts: Vec::new(),
-            default_effort: None,
-            images: false,
-            default: false,
-            provider: None,
-            multiplier: None,
-            price: None,
-            from_config: false,
-        };
-        match effort_of(id).filter(|(base, _)| base.starts_with("gemini-")) {
-            Some((base, effort)) => {
-                let name = label
-                    .rsplit_once(" (")
-                    .map(|(n, _)| n)
-                    .unwrap_or(label)
-                    .to_string();
-                let at = match out.iter().position(|m| m.id == base) {
-                    Some(at) => at,
-                    None => {
-                        out.push(model(base, &name));
-                        out.len() - 1
-                    }
-                };
-                out[at].efforts.push(effort.to_string());
-            }
-            None => out.push(model(id, label)),
-        }
-    }
-    for m in out.iter_mut() {
-        m.efforts
-            .sort_by_key(|e| EFFORTS.iter().position(|x| x == e).unwrap_or(9));
-        if !m.efforts.is_empty() {
-            m.default_effort = Some(if m.efforts.iter().any(|e| e == "medium") {
-                "medium".into()
-            } else {
-                m.efforts[0].clone()
-            });
-        }
-    }
-    let first = out
-        .iter()
-        .position(|m| m.id == DEFAULT)
-        .or((!out.is_empty()).then_some(0));
-    if let Some(i) = first {
-        out[i].default = true;
-    }
-    out
-}
-
-/// The composer's menu of the models `told`, else Antigravity's default one.
-pub(crate) fn catalog(told: &[ToldModel]) -> Vec<ToldModel> {
-    if !told.is_empty() {
-        return told.to_vec();
-    }
-    models_of(&format!(
-        "{DEFAULT}-high\tGemini 3.8 Flash (High)\n{DEFAULT}-medium\tGemini 3.8 Flash (Medium)\n{DEFAULT}-low\tGemini 3.8 Flash (Low)"
-    ))
-}
-
-/// The agent's `settings.json`: its `permissions` as Escouade sets them (its mode's rules, what the
-/// user allowed, its refusals: `deny` before all, `agy`'s rule); the rest of the file kept.
-#[cfg(test)]
-pub(crate) fn write_settings(
-    home: &Path,
-    rules: &AgyRules,
-    mode: &str,
-    allowed: &[String],
-) -> Result<()> {
-    let file = settings_file(home);
-    let before = std::fs::read_to_string(&file).unwrap_or_default();
-    let doc = settings_doc(&before, rules, mode, allowed);
-    if let Some(parent) = file.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(&file, serde_json::to_string_pretty(&doc)?)?;
-    Ok(())
-}
-
-/// Escouade's server in the agent's MCP config, its token in the file (`agy` expands no variable
-/// there, ESC-269), never on a command line; none when it is refused.
-pub(crate) fn write_grant(home: &Path, escouade: Option<(&str, &str)>) -> Result<()> {
-    let file = mcp_file(home);
-    let before = std::fs::read_to_string(&file).unwrap_or_default();
-    let doc = grant_doc(&before, escouade);
-    if let Some(parent) = file.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(&file, serde_json::to_string_pretty(&doc)?)?;
-    Ok(())
-}
-
-/// The provider of its models in the settings of `home` (`set_provider`), the rest of the file kept.
-pub(crate) fn write_provider(home: &Path, by_key: bool) -> Result<()> {
-    let file = settings_file(home);
-    let mut doc: Value = std::fs::read_to_string(&file)
-        .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
-        .filter(Value::is_object)
-        .unwrap_or_else(|| json!({}));
-    set_provider(&mut doc, by_key);
-    if let Some(parent) = file.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(&file, serde_json::to_string_pretty(&doc)?)?;
-    Ok(())
-}
-
-/// Whether `env` gives `agy` a Gemini API key of its own (an account added by its key): its
-/// Principal's is given empty.
-pub(crate) fn by_key(env: &[(String, String)]) -> bool {
-    env.iter()
-        .any(|(k, v)| k == KEY_VARS[0] && !v.trim().is_empty())
-}
-
-/// The settings of a process that writes a text: every tool refused (`deny` before all), its
-/// provider as its account's.
-pub(crate) fn write_no_tools(home: &Path, by_key: bool) -> Result<()> {
-    write_provider(home, by_key)?;
-    let file = settings_file(home);
-    let mut doc: Value = serde_json::from_str(&std::fs::read_to_string(&file)?)?;
-    doc["permissions"] = json!({
-        "allow": [],
-        "deny": ["command(*)", "write_file(*)", "read_file(*)", "mcp(*)", "read_url(*)", "execute_url(*)"],
-        "ask": [],
-    });
-    std::fs::write(&file, serde_json::to_string_pretty(&doc)?)?;
-    Ok(())
-}
-
-/// Escouade's server taken out of the agent's MCP config once its process is over: its token goes
-/// with it.
+/// Escouade's server taken out of the agent's MCP config once its process is over (its plugin's launch wrote it there,
+/// the token in the file: `agy` expands no variable): the token goes with its process, whatever the plugin does after.
+/// The rest of the file is kept.
 pub(crate) fn remove_grant(home: &Path) {
-    if mcp_file(home).is_file() {
-        if let Err(e) = write_grant(home, None) {
-            log::warn!("agy: Escouade's server not taken out of its MCP config: {e:#}");
-        }
+    let file = mcp_file(home);
+    let Ok(text) = std::fs::read_to_string(&file) else {
+        return;
+    };
+    let Ok(Value::Object(mut doc)) = serde_json::from_str::<Value>(&text) else {
+        return;
+    };
+    doc.insert("mcpServers".into(), json!({}));
+    let written = serde_json::to_string_pretty(&Value::Object(doc))
+        .map_err(anyhow::Error::from)
+        .and_then(|t| std::fs::write(&file, t).map_err(anyhow::Error::from));
+    if let Err(e) = written {
+        log::warn!("agy: Escouade's server not taken out of its MCP config: {e:#}");
     }
+}
+
+// What the core keeps of Antigravity CLI for itself: the variables of its accounts, the menu of its models before an
+// account lists them, the files it reads (the transcript of its view) and takes away (Escouade's server after a process,
+// what the 2.2.0 kept of « Toujours ») in the agent's home, the home of the user's tools. Its words are its plugin's.
+
+/// The variable the core gives each agent's own home in: its plugin gives it to `agy` as `USERPROFILE` and `HOME`.
+pub(crate) const HOME_VAR: &str = "ESCOUADE_AGY_HOME";
+
+/// The keys of the machine that would take the place of its Google account: the first, an account added by its key goes
+/// by (`modelProvider: gemini`, ESC-271).
+pub(crate) const KEY_VARS: [&str; 2] = ["GEMINI_API_KEY", "GOOGLE_API_KEY"];
+
+/// What keeps `agy` from updating itself (a string of its program, ESC-269): stopped with its tree, an update it began would
+/// leave no `agy` behind (ESC-133). In every launch, by `home_env`.
+pub(crate) const NO_SELF_UPDATE: (&str, &str) = ("AGY_CLI_DISABLE_AUTO_UPDATE", "1");
+
+/// Its default model: Gemini Flash, its effort apart.
+pub(crate) const DEFAULT: &str = "gemini-3.8-flash";
+
+/// The efforts of a Gemini model: part of its id in `agy models` (`gemini-3.8-flash-low`), its `--effort` beside its id
+/// without them (`xhigh` and `max` refused by Flash, tried).
+pub(crate) const EFFORTS: [&str; 3] = ["low", "medium", "high"];
+
+/// The efforts in which `id` (`gemini-3.8-flash-low`) ends, and its id without it.
+pub(crate) fn effort_of(id: &str) -> Option<(&str, &'static str)> {
+    EFFORTS
+        .iter()
+        .find_map(|e| id.strip_suffix(&format!("-{e}")).map(|base| (base, *e)))
+}
+
+/// Its folder of config in the agent's home.
+pub(crate) fn gemini_dir(home: &Path) -> PathBuf {
+    home.join(".gemini")
+}
+
+/// Its MCP config in the agent's home (`agy mcp add` writes the same file).
+pub(crate) fn mcp_file(home: &Path) -> PathBuf {
+    gemini_dir(home).join("config").join("mcp_config.json")
+}
+
+/// What the 2.2.0 kept of « Toujours », beside its home's `.gemini`: no longer read, and erased (ESC-376): what the agent
+/// could have planted there would hold.
+pub(crate) fn always_file(home: &Path) -> PathBuf {
+    home.join("escouade-always.json")
+}
+
+/// The transcript of the conversation `id`, step by step, as `agy` writes it.
+pub(crate) fn transcript(home: &Path, id: &str) -> PathBuf {
+    gemini_dir(home)
+        .join("antigravity-cli")
+        .join("brain")
+        .join(id)
+        .join(".system_generated")
+        .join("logs")
+        .join("transcript_full.jsonl")
+}
+
+/// Where the home of the user's tools stays (its git config, Rust's), which the commands of `agy` would no longer find
+/// in the agent's home; what `env` and the machine say already left out. A module knows neither that home nor the machine's
+/// variables: the core adds them to what its plugin's launch says (`Agy::spawn`).
+#[cfg(not(target_family = "wasm"))]
+pub(crate) fn tools_env(env: &[(String, String)]) -> Vec<(String, String)> {
+    let Some(real) = dirs::home_dir() else {
+        return Vec::new();
+    };
+    [
+        ("GIT_CONFIG_GLOBAL", ".gitconfig"),
+        ("CARGO_HOME", ".cargo"),
+        ("RUSTUP_HOME", ".rustup"),
+    ]
+    .into_iter()
+    .filter(|(var, _)| !env.iter().any(|(e, _)| e == var) && std::env::var_os(var).is_none())
+    .map(|(var, name)| (var, real.join(name)))
+    .filter(|(_, path)| path.exists())
+    .map(|(var, path)| (var.to_string(), path.to_string_lossy().into_owned()))
+    .collect()
+}
+
+/// See the native `tools_env`.
+#[cfg(target_family = "wasm")]
+pub(crate) fn tools_env(_env: &[(String, String)]) -> Vec<(String, String)> {
+    Vec::new()
 }
 
 /// A message to `agy`: its text, the text files joined to it as text. An image or a PDF is
@@ -315,102 +253,6 @@ fn throwaway_home() -> Result<PathBuf> {
     let home = std::env::temp_dir().join(format!("escouade-agy-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&home)?;
     Ok(home)
-}
-
-/// What `agy` answered in stream-json (its `result`).
-fn result_of(out: &[u8]) -> Result<String> {
-    let text = String::from_utf8_lossy(out);
-    let result = text
-        .lines()
-        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
-        .find(|v| v["event"] == "result")
-        .ok_or_else(|| {
-            anyhow!(tr!(
-                "Antigravity CLI n’a rien répondu",
-                "Antigravity CLI gave no answer"
-            ))
-        })?;
-    let r = &result["result"];
-    if r["status"] == "ERROR" {
-        bail!("{}", r["error"].as_str().unwrap_or("error"));
-    }
-    Ok(r["response"]
-        .as_str()
-        .unwrap_or_default()
-        .trim()
-        .to_string())
-}
-
-/// The model of a text of `weight`: every tool is refused whatever it is (`write_no_tools`).
-pub(crate) fn text_model(weight: Weight) -> String {
-    match weight {
-        Weight::Light => format!("{DEFAULT}-low"),
-        Weight::Reading | Weight::Given => format!("{DEFAULT}-medium"),
-    }
-}
-
-/// One question to `agy -p`, in a home of its own removed once answered, on its fastest Gemini,
-/// every tool refused (ESC-271); its time bounded by `oneshot::LIMIT`.
-async fn one_shot(ask: OneShot<'_>) -> Result<String> {
-    let home = throwaway_home()?;
-    if let Err(e) = write_no_tools(&home, by_key(&ask.env)) {
-        let _ = std::fs::remove_dir_all(&home);
-        bail!("agy: its tools not refused for a text: {e:#}");
-    }
-    let env = home_env(&ask.env, &home);
-    let model = text_model(ask.weight);
-    let mut args = launch_args(&Settings::default(), None);
-    args.extend(["--model".to_string(), model]);
-    let question = if ask.system.trim().is_empty() {
-        ask.prompt.to_string()
-    } else {
-        format!(
-            "<instructions>\n{}\n</instructions>\n\n{}",
-            ask.system, ask.prompt
-        )
-    };
-    let input = format!(
-        "{}\n",
-        json!({ "event": "user", "message": { "content": question } })
-    );
-    let out = super::oneshot::run(
-        &ask.program,
-        ask.cwd,
-        &args,
-        &env,
-        &input,
-        "Antigravity CLI",
-    )
-    .await;
-    let _ = std::fs::remove_dir_all(&home);
-    result_of(&out?)
-}
-
-/// The models of the account (`agy models`), in a home of its own removed after.
-async fn read_models(
-    program: Program,
-    env: Vec<(String, String)>,
-    cwd: &Path,
-) -> Result<Vec<ToldModel>> {
-    let home = throwaway_home()?;
-    // An account by its key lists the Gemini API's models.
-    write_provider(&home, by_key(&env))?;
-    let env = home_env(&env, &home);
-    let out = super::oneshot::run(
-        &program,
-        cwd,
-        &["models".to_string()],
-        &env,
-        "",
-        "Antigravity CLI",
-    )
-    .await;
-    let _ = std::fs::remove_dir_all(&home);
-    let told = models_of(&String::from_utf8_lossy(&out?));
-    if told.is_empty() {
-        bail!("agy models: no model listed");
-    }
-    Ok(told)
 }
 
 /// For what does not go by `home_env`: its version asked.
@@ -591,16 +433,28 @@ impl Engine for Agy {
         &EFFORTS
     }
 
+    /// A Gemini model named without its effort (`gemini-3.8-flash`): `--effort` beside it.
+    /// Its plugin reads them (`account/read` of `models`), by a process of the account the core starts.
     fn list_models<'a>(
         &'a self,
         program: Program,
         env: Vec<(String, String)>,
-        dir: &'a Path,
+        _dir: &'a std::path::Path,
     ) -> BoxFuture<'a, Result<Option<Vec<ToldModel>>>> {
-        Box::pin(async move { Ok(Some(catalog(&read_models(program, env, dir).await?))) })
+        // In a home of its own for the read, which the core makes and takes away (the account's settings untouched).
+        Box::pin(async move {
+            let home = throwaway_home()?;
+            let read = async {
+                crate::plugins::harness::plugged_for(self.id(), self.name(), false)?
+                    .account_models(&program, &env, &home)
+                    .await
+            }
+            .await;
+            let _ = std::fs::remove_dir_all(&home);
+            read
+        })
     }
 
-    /// A Gemini model named without its effort (`gemini-3.8-flash`): `--effort` beside it.
     fn supports_effort(&self, model: &str) -> bool {
         model.starts_with("gemini-") && effort_of(model).is_none()
     }
@@ -666,7 +520,18 @@ impl Engine for Agy {
     }
 
     fn one_shot<'a>(&'a self, ask: OneShot<'a>) -> BoxFuture<'a, Result<String>> {
-        Box::pin(one_shot(ask))
+        // By its plugin (`engine/oneShot`), in a home of its own the core makes and takes away.
+        Box::pin(async move {
+            let home = throwaway_home()?;
+            let answer = async {
+                crate::plugins::harness::plugged_for(self.id(), self.name(), false)?
+                    .one_shot_in(ask, Some(&home))
+                    .await
+            }
+            .await;
+            let _ = std::fs::remove_dir_all(&home);
+            answer
+        })
     }
 
     fn answers_without_tools(&self) -> bool {
@@ -684,13 +549,6 @@ impl Engine for Agy {
 
     fn refusal(&self) -> Option<Value> {
         None
-    }
-
-    fn escouade_launch(&self, _escouade: &Escouade) -> mcp::Launch {
-        mcp::Launch {
-            args: Vec::new(),
-            env: Vec::new(),
-        }
     }
 }
 

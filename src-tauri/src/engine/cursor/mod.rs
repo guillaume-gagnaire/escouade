@@ -29,8 +29,8 @@ use super::registry::{
     ToldModel,
 };
 use super::{
-    mcp, BoxFuture, Engine, EngineProcess, Escouade, Message, OneShot, PermissionAnswer, Process,
-    Program, Room, Spawn, StartLost, Weight,
+    BoxFuture, Engine, EngineProcess, Message, OneShot, PermissionAnswer, Process, Program, Room,
+    Spawn, StartLost, Weight,
 };
 use crate::agent::{AgentRt, Effects};
 use crate::core::{size_label, Attachment, MAX_IMAGE, MAX_TOTAL};
@@ -828,13 +828,6 @@ impl Engine for Cursor {
         None
     }
 
-    fn escouade_launch(&self, _escouade: &Escouade) -> mcp::Launch {
-        mcp::Launch {
-            args: Vec::new(),
-            env: Vec::new(),
-        }
-    }
-
     /// Its ACP reads no `/compact` (its prompt's `/` commands are `/copy-request-id` and the
     /// user's own, read in 2026.10.22): its interface's `/summarize` alone compacts (ESC-205).
     fn compaction(&self) -> super::Compaction {
@@ -960,12 +953,6 @@ mod tests {
 
     #[test]
     fn escouades_server_goes_by_the_session_never_the_command_line() {
-        let granted = CURSOR.escouade_launch(&Escouade::Granted {
-            url: "http://127.0.0.1:1/mcp".into(),
-            token: "s3cr3t".into(),
-            file: None,
-        });
-        assert!(granted.args.is_empty() && granted.env.is_empty());
         assert!(CURSOR.grant_file("http://x", "s3cr3t").is_none());
         // Its session takes it, named `escouade`, the token in its header.
         let given = mcp_servers(Some(&("http://127.0.0.1:1/mcp".into(), "s3cr3t".into())));

@@ -431,7 +431,7 @@ fn each_call_tells_the_months_credits_and_its_cost_comes_from_its_nano_aiu() {
     assert_eq!(last[0].minutes, None, "the month's credits");
     assert!(last[0].pct > 0.0 && last[0].pct < 5.0, "{:?}", last[0]);
     // The run was recorded in October: the date it tells is kept while it is ahead, else the
-    // first of the month after now takes its place (`engine::copilot::credits`).
+    // first of the month after now takes its place (its plugin's `credits`).
     let told = chrono::DateTime::parse_from_rfc3339("2026-11-01T00:00:00Z")
         .unwrap()
         .timestamp_millis();
@@ -439,7 +439,19 @@ fn each_call_tells_the_months_credits_and_its_cost_comes_from_its_nano_aiu() {
     let expected = if told > now + 60_000 {
         told
     } else {
-        crate::engine::copilot::next_month(now)
+        // The first of the month after now, at midnight UTC (its plugin's `next_month`).
+        {
+            use chrono::{Datelike, TimeZone};
+            let d = chrono::Utc.timestamp_millis_opt(now).unwrap();
+            let (y, m) = match d.month() {
+                12 => (d.year() + 1, 1),
+                m => (d.year(), m + 1),
+            };
+            chrono::Utc
+                .with_ymd_and_hms(y, m, 1, 0, 0, 0)
+                .unwrap()
+                .timestamp_millis()
+        }
     };
     assert_eq!(last[0].resets_at, Some(expected));
     // The cost of its turns: its nano-AIU, a credit (10⁹) for a cent.
@@ -496,7 +508,7 @@ fn credits_spent_stop_the_turn_until_they_are_given_again() {
     let mut fx = Effects::default();
     rt.push_user("u1", "x", 0, &[], &mut fx);
     // A reset ahead of any run of this test: one already past would be replaced by the first
-    // of next month (`engine::copilot::credits`).
+    // of next month (its plugin's `credits`).
     let reset = "2099-11-01T00:00:00Z";
     let fxs = feed(
         &mut rt,
@@ -571,21 +583,7 @@ fn the_sessions_ceiling_of_credits_is_a_card_whose_choices_answer_copilot() {
         .collect();
     assert_eq!(labels.len(), 3);
     assert_eq!(rt.meta.status, AgentStatus::Waiting);
-    // Each choice gives Copilot its action, in either language.
-    for (label, action) in labels.iter().zip(["add", "unset", "cancel"]) {
-        assert_eq!(
-            crate::engine::copilot_limit_answer(&data, label)["action"],
-            action
-        );
-    }
-    assert_eq!(
-        crate::engine::copilot_limit_answer(&data, labels[0])["additionalAiCredits"],
-        5.0
-    );
-    assert_eq!(
-        crate::engine::copilot_limit_answer(&data, "autre chose")["action"],
-        "cancel"
-    );
+    // Each choice's answer to Copilot is its plugin's (`limit_answer`, its tests).
 }
 
 #[test]

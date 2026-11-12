@@ -18,17 +18,15 @@ use super::registry::{
     ToldModel,
 };
 use super::Program;
-use super::{BoxFuture, Engine, Escouade, Message, OneShot, Process, Spawn, StartLost, Weight};
+use super::{BoxFuture, Engine, Message, OneShot, Process, Spawn, StartLost, Weight};
 use crate::agent::{AgentRt, Effects};
 use crate::core::{size_label, Attachment, MAX_IMAGE, MAX_TOTAL, MB};
 use crate::i18n::{self, Lang};
 use crate::mcp::install::{Entry, Standing, Target};
 #[cfg(test)]
 use crate::model::AgentMeta;
-use anyhow::{anyhow, bail, Context, Result};
-pub(crate) mod client;
+use anyhow::{bail, Result};
 use serde_json::{json, Value};
-use std::time::Duration;
 
 /// Claude Code.
 pub struct Claude;
@@ -241,8 +239,10 @@ pub(crate) fn escaped_len(s: &str) -> usize {
         .sum()
 }
 
+/// Whether a model takes an effort, before its account's `claude` has told (`told_effort`): every one but a Haiku. Its
+/// plugin's launch is told so (`LaunchParams::takes_effort`).
 pub fn supports_effort(model: &str) -> bool {
-    client::supports_effort(model)
+    !model.to_lowercase().contains("haiku")
 }
 
 /// Whether a model takes the permission mode `auto`, before its account's `claude` has told
@@ -356,85 +356,6 @@ pub fn catalog(told: &[crate::model::ModelInfo]) -> Vec<ToldModel> {
         }
     }
     out
-}
-
-/// What the `claude` of `program` (with `env`, in `dir`) tells of its models, read by a
-/// process of its own that is given no turn: `initialize` alone, which asks nothing of the API
-/// (ESC-121, ESC-124), then it is stopped. No session is written, no MCP server started.
-pub async fn read_models(
-    program: super::Program,
-    env: Vec<(String, String)>,
-    dir: &std::path::Path,
-) -> Result<Value> {
-    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-    let mut args: Vec<String> = client::BASE_ARGS.iter().map(|s| s.to_string()).collect();
-    args.extend(
-        ["--no-session-persistence", "--strict-mcp-config"]
-            .iter()
-            .map(|s| s.to_string()),
-    );
-    let cwd = dir.to_string_lossy();
-    let mut child = crate::plugins::harness::command_of(&program, &cwd, &args, &env, &[])?
-        .spawn()
-        .with_context(|| {
-            let program = program.describe();
-            tr!("impossible de lancer {program}", "can’t start {program}")
-        })?;
-    let job = crate::job::Job::for_child(&child);
-    const ID: &str = "ccm_1";
-    let (Some(mut stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
-        bail!("no input or output to read its models from");
-    };
-    let line = client::initialize_line(ID) + "\n";
-    let told = tokio::time::timeout(Duration::from_secs(60), async move {
-        stdin.write_all(line.as_bytes()).await?;
-        stdin.flush().await?;
-        let mut lines = BufReader::new(stdout).split(b'\n');
-        while let Some(line) = lines.next_segment().await? {
-            let line = String::from_utf8_lossy(&line).replace('\0', "");
-            let Ok(frame) = crate::text::json_line(line.trim()) else {
-                continue;
-            };
-            if let Some(answer) = client::initialized(&frame, ID) {
-                drop(stdin);
-                return answer.map_err(|e| anyhow!(e));
-            }
-        }
-        bail!("process exited")
-    })
-    .await;
-    let _ = child.start_kill();
-    if let Some(job) = &job {
-        job.terminate();
-    }
-    let _ = child.wait().await;
-    let told = told.map_err(|_| anyhow!("control request timed out"))??;
-    Ok(told["models"].clone())
-}
-
-/// The arguments of the conversation of `s`: its model, effort and mode, its added instructions,
-/// and where it starts from (the plugin's launch, as the tests read it).
-#[cfg(test)]
-fn conversation_args(s: &Spawn) -> Vec<String> {
-    client::conversation_args(&client::Conversation {
-        model: &s.model,
-        effort: &s.effort,
-        takes_effort: s.takes_effort,
-        mode: &s.mode,
-        read_only: s.read_only,
-        append_prompt: s.append_prompt.as_deref(),
-        start: &crate::plugins::harness::start_at(&s.start),
-    })
-}
-
-/// The arguments of the conversation of the agent of `m` (the tests').
-#[cfg(test)]
-pub(crate) fn claude_args(m: &AgentMeta) -> Vec<String> {
-    conversation_args(&Spawn::of(
-        m,
-        Program::Native(std::path::PathBuf::new()),
-        Vec::new(),
-    ))
 }
 
 /// The JSON answer of `claude -p --output-format json`: the whole output, or its last line that
@@ -745,7 +666,12 @@ impl Engine for Claude {
         env: Vec<(String, String)>,
         dir: &'a std::path::Path,
     ) -> BoxFuture<'a, Result<Value>> {
-        Box::pin(read_models(program, env, dir))
+        // Its plugin reads them (`account/read` of `models`): what `initialize` tells, by a process of the account.
+        Box::pin(async move {
+            crate::plugins::harness::plugged_for(self.id(), self.name(), false)?
+                .account_read("models", Value::Null, &program, &env, dir, None)
+                .await
+        })
     }
 
     fn missing_repair(&self, lang: Lang) -> Option<String> {
@@ -803,10 +729,6 @@ impl Engine for Claude {
 
     fn refusal(&self) -> Option<Value> {
         Some(mcp::refusal())
-    }
-
-    fn escouade_launch(&self, escouade: &Escouade) -> super::mcp::Launch {
-        mcp::launch(escouade)
     }
 
     fn fence_settings(
@@ -1062,6 +984,85 @@ mod tests {
     }
 
     #[test]
+    fn a_copy_forks_the_session_of_its_original_until_it_has_its_own() {
+        // Where its plugin's launch starts it from (`engine/launch`, its `start`): the arguments are its plugin's.
+        let start = |m: &AgentMeta| {
+            crate::plugins::harness::start_at(
+                &Spawn::of(m, Program::Native(std::path::PathBuf::new()), Vec::new()).start,
+            )
+        };
+        let copy = AgentMeta {
+            fork_of: Some("s1".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            start(&copy),
+            escouade_plugin_protocol::engine::StartAt::Fork {
+                of: "s1".into(),
+                at: None
+            }
+        );
+        // Where it was copied: the turns the original ran since are left out.
+        let pinned = AgentMeta {
+            fork_at: Some("e1".into()),
+            ..copy
+        };
+        assert_eq!(
+            start(&pinned),
+            escouade_plugin_protocol::engine::StartAt::Fork {
+                of: "s1".into(),
+                at: Some("e1".into())
+            }
+        );
+        // Its own session once a turn gave it one: the original's is read no more.
+        let own = AgentMeta {
+            session_id: Some("s2".into()),
+            ..pinned
+        };
+        assert_eq!(
+            start(&own),
+            escouade_plugin_protocol::engine::StartAt::Resume {
+                session: "s2".into()
+            }
+        );
+    }
+
+    #[test]
+    fn the_log_line_of_a_start_does_not_copy_the_protocol() {
+        let args: Vec<String> = [
+            "--model",
+            "opus",
+            "--effort",
+            "max",
+            "--permission-mode",
+            "plan",
+            "--append-system-prompt",
+            "Protocole « secret » du ticket ATL-42",
+            "--resume=s1",
+        ]
+        .map(String::from)
+        .to_vec();
+        let line = args_for_log(&args);
+        assert!(
+            !line.contains("secret") && !line.contains("ATL-42"),
+            "{line}"
+        );
+        // The flag stays, its value is only counted; the arguments around it are untouched.
+        assert!(
+            line.contains("--append-system-prompt <37 chars> --resume=s1"),
+            "{line}"
+        );
+        assert!(line.contains("--model opus --effort max --permission-mode plan"));
+        let plain = ["--model", "opus"].map(String::from).to_vec();
+        assert_eq!(args_for_log(&plain), plain.join(" "));
+        // A flag ending the list has no value to elide.
+        assert_eq!(
+            args_for_log(&["--append-system-prompt".to_string()]),
+            "--append-system-prompt"
+        );
+    }
+
+    #[test]
     fn the_effort_follows_what_the_claude_of_the_account_told_of_its_models() {
         let list = told_2_1_302();
         assert_eq!(told_effort(&list, "haiku"), Some(true));
@@ -1081,15 +1082,9 @@ mod tests {
             mode: "auto".into(),
             ..Default::default()
         };
-        let mut s = Spawn::of(&m, Program::Native(std::path::PathBuf::new()), Vec::new());
-        assert!(!conversation_args(&s).contains(&"--effort".to_string()));
-        s.takes_effort = Some(true);
-        let a = conversation_args(&s);
-        let at = a.iter().position(|x| x == "--effort").unwrap();
-        assert_eq!(a[at + 1], "high");
-        s.model = "mythos-sans-effort".into();
-        s.takes_effort = Some(false);
-        assert!(!conversation_args(&s).contains(&"--effort".to_string()));
+        // Its plugin's launch is told whether it takes one (`takes_effort`), its arguments are the plugin's.
+        let s = Spawn::of(&m, Program::Native(std::path::PathBuf::new()), Vec::new());
+        assert_eq!(s.effort, "high");
     }
 
     #[test]
@@ -1139,174 +1134,6 @@ mod tests {
         assert!(json_answer(b"").is_err());
     }
 
-    #[test]
-    fn args_for_haiku_skip_effort() {
-        let m = AgentMeta {
-            model: "haiku".into(),
-            effort: "high".into(),
-            mode: "auto".into(),
-            session_id: Some("s1".into()),
-            ..Default::default()
-        };
-        let a = claude_args(&m);
-        assert!(!a.contains(&"--effort".to_string()));
-        assert!(a.contains(&"--resume=s1".to_string()));
-        let m = AgentMeta {
-            model: "opus".into(),
-            effort: "max".into(),
-            mode: "plan".into(),
-            ..Default::default()
-        };
-        let a = claude_args(&m);
-        assert!(a.windows(2).any(|w| w == ["--effort", "max"]));
-    }
-
-    #[test]
-    fn a_copy_forks_the_session_of_its_original_until_it_has_its_own() {
-        let copy = AgentMeta {
-            model: "opus".into(),
-            effort: "high".into(),
-            mode: "auto".into(),
-            fork_of: Some("s1".into()),
-            ..Default::default()
-        };
-        let a = claude_args(&copy);
-        assert!(
-            a.windows(2).any(|w| w == ["--resume=s1", "--fork-session"]),
-            "{a:?}"
-        );
-        // An original that ran no turn since it was recorded: its session as it is.
-        assert!(!a.iter().any(|x| x.starts_with("--resume-session-at")));
-        // Where it was copied: the turns the original ran since are left out.
-        let pinned = AgentMeta {
-            fork_at: Some("e1".into()),
-            ..copy
-        };
-        let a = claude_args(&pinned);
-        assert!(
-            a.windows(3)
-                .any(|w| w == ["--resume=s1", "--fork-session", "--resume-session-at=e1"]),
-            "{a:?}"
-        );
-        // Its own session once a turn gave it one: the original's is read no more.
-        let own = AgentMeta {
-            session_id: Some("s2".into()),
-            ..pinned
-        };
-        let a = claude_args(&own);
-        assert!(a.contains(&"--resume=s2".to_string()), "{a:?}");
-        assert!(
-            !a.iter().any(|x| x == "--fork-session"
-                || x == "--resume=s1"
-                || x.starts_with("--resume-session-at")),
-            "{a:?}"
-        );
-    }
-
-    #[test]
-    fn claude_codes_agents_are_claude_and_its_added_instructions_go_on_its_command_line() {
-        use crate::engine::Engine;
-        // « Claude attend ta réponse », as before the other harnesses.
-        assert_eq!(CLAUDE.speaker(), "Claude");
-        // Its room: a `.cmd` argument's, weighed as cmd.exe escapes it.
-        let room = CLAUDE.instructions_room().unwrap();
-        assert_eq!(room.max, PROTOCOL_BUDGET);
-        assert_eq!((room.weigh)("a%\"\\é"), 1 + 8 + 2 + 2 + 2);
-        // The instructions of a spawn reach the process as `--append-system-prompt`.
-        let spawn = Spawn::of(
-            &AgentMeta {
-                append_prompt: Some("Protocole du ticket".into()),
-                ..Default::default()
-            },
-            Program::Native(std::path::PathBuf::new()),
-            Vec::new(),
-        );
-        let args = conversation_args(&spawn);
-        let at = args
-            .iter()
-            .position(|a| a == "--append-system-prompt")
-            .unwrap();
-        assert_eq!(args[at + 1], "Protocole du ticket");
-    }
-
-    #[test]
-    fn the_protocol_is_appended_to_the_system_prompt_on_one_line() {
-        let m = AgentMeta {
-            model: "sonnet".into(),
-            effort: "high".into(),
-            mode: "auto".into(),
-            append_prompt: Some("Ligne 1\nLigne 2 « % & \" »".into()),
-            ..Default::default()
-        };
-        let a = claude_args(&m);
-        let i = a
-            .iter()
-            .position(|x| x == "--append-system-prompt")
-            .unwrap();
-        assert_eq!(a[i + 1], "Ligne 1 Ligne 2 « % & \" »");
-        assert!(!claude_args(&AgentMeta::default()).contains(&"--append-system-prompt".to_string()));
-        // Blank: nothing to append.
-        let blank = AgentMeta {
-            append_prompt: Some(" \n ".into()),
-            ..Default::default()
-        };
-        assert!(!claude_args(&blank).contains(&"--append-system-prompt".to_string()));
-    }
-
-    #[test]
-    fn a_discussion_has_its_tools_that_write_taken_away_in_every_mode() {
-        let refused =
-            "--disallowedTools=Edit,Write,MultiEdit,NotebookEdit,Bash,PowerShell,Monitor,EnterWorktree".to_string();
-        for mode in ["default", "plan", "acceptEdits", "bypassPermissions"] {
-            let m = AgentMeta {
-                mode: mode.into(),
-                append_prompt: Some("Tu es l’agent rédacteur de spec.".into()),
-                discussion: Some(Default::default()),
-                ..Default::default()
-            };
-            let a = claude_args(&m);
-            assert!(a.contains(&refused), "{mode}: {a:?}");
-            // Before the instructions, which are not read as a tool.
-            let at = |x: &str| a.iter().position(|y| y == x).unwrap();
-            assert!(at(&refused) < at("--append-system-prompt"));
-        }
-        // Another agent keeps them.
-        assert!(!claude_args(&AgentMeta::default())
-            .iter()
-            .any(|x| x.starts_with("--disallowedTools")));
-    }
-
-    #[test]
-    fn the_log_line_of_a_start_does_not_copy_the_protocol() {
-        let m = AgentMeta {
-            model: "opus".into(),
-            effort: "max".into(),
-            mode: "plan".into(),
-            session_id: Some("s1".into()),
-            append_prompt: Some("Protocole « secret » du ticket ATL-42".into()),
-            ..Default::default()
-        };
-        let line = args_for_log(&claude_args(&m));
-        assert!(
-            !line.contains("secret") && !line.contains("ATL-42"),
-            "{line}"
-        );
-        // The flag stays, its value is only counted; the arguments around it are untouched.
-        assert!(
-            line.contains("--append-system-prompt <37 chars> --resume=s1"),
-            "{line}"
-        );
-        assert!(line.contains("--model opus --effort max --permission-mode plan"));
-        // Without a protocol, the line is the arguments as they are.
-        let plain = claude_args(&AgentMeta::default());
-        assert_eq!(args_for_log(&plain), plain.join(" "));
-        // A flag ending the list has no value to elide.
-        assert_eq!(
-            args_for_log(&["--append-system-prompt".to_string()]),
-            "--append-system-prompt"
-        );
-    }
-
     /// The command line of a `.cmd` launcher (npm's claude.cmd) is cmd.exe's, which takes 8191
     /// characters in all: every argument counts as Rust escapes it (`escaped_len`) between
     /// its quotes, with a space before it, behind the launcher's path and cmd.exe's own prefix.
@@ -1348,7 +1175,37 @@ mod tests {
                 append_prompt: Some(crate::board::protocol_prompt(&t, ports)),
                 ..Default::default()
             };
-            let args = claude_args(&m);
+            // Its arguments as its plugin gives them (`plugins/claude`, `conversation_args`): the stream's, then the
+            // agent's, the protocol on one line.
+            let mut args: Vec<String> = [
+                "--output-format",
+                "stream-json",
+                "--verbose",
+                "--input-format",
+                "stream-json",
+                "--permission-prompt-tool",
+                "stdio",
+                "--include-partial-messages",
+                "--replay-user-messages",
+                "--thinking-display",
+                "summarized",
+                "--allow-dangerously-skip-permissions",
+                "--model",
+                &m.model,
+                "--effort",
+                &m.effort,
+                "--permission-mode",
+                &m.mode,
+                "--append-system-prompt",
+            ]
+            .map(String::from)
+            .to_vec();
+            let one_line = m.append_prompt.as_deref().unwrap_or_default();
+            args.push(one_line.split_whitespace().collect::<Vec<_>>().join(" "));
+            args.push(format!(
+                "--resume={}",
+                m.session_id.as_deref().unwrap_or_default()
+            ));
             assert!(
                 args.contains(&"--append-system-prompt".to_string()),
                 "{ports:?}"

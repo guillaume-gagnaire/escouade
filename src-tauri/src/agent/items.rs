@@ -208,9 +208,10 @@ impl AgentRt {
                 origin,
                 from,
                 synthetic,
+                local,
                 images,
                 files,
-            } => self.on_replay(id, text, origin, from, synthetic, images, files, fx),
+            } => self.on_replay(id, text, origin, from, synthetic, local, images, files, fx),
             Item::Ask {
                 request,
                 call,

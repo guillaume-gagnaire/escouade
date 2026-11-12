@@ -37,8 +37,7 @@ use super::registry::{
     ToldModel,
 };
 use super::{
-    mcp, BoxFuture, Engine, Escouade, Message, OneShot, Process, Program, Room, Spawn, StartLost,
-    Weight,
+    BoxFuture, Engine, Message, OneShot, Process, Program, Room, Spawn, StartLost, Weight,
 };
 use crate::agent::{AgentRt, Effects};
 use crate::core::{size_label, Attachment, MAX_IMAGE, MAX_TOTAL};
@@ -1040,13 +1039,6 @@ impl Engine for Gemini {
 
     fn refusal(&self) -> Option<Value> {
         None
-    }
-
-    fn escouade_launch(&self, _escouade: &Escouade) -> mcp::Launch {
-        mcp::Launch {
-            args: Vec::new(),
-            env: Vec::new(),
-        }
     }
 
     /// Its `/compress` is a command of its interface (« Vue Gemini »).

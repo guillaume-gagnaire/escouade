@@ -10,7 +10,7 @@ use crate::view::View;
 use crate::Agent;
 use escouade_plugin_protocol::engine::{
     method, AgentRef, AnswerPermission, AnswerQuestion, Attach, Frames, HarnessDecl, Items,
-    LaunchParams, SendMessage, SetValue, Usage, ViewParams, Writes,
+    LaunchParams, SendMessage, SetValue, TerminalParams, Usage, ViewParams, Writes,
 };
 use escouade_plugin_protocol::{greeting, turn, Refusal};
 use serde::de::DeserializeOwned;
@@ -206,6 +206,15 @@ impl Plugin {
             }
             // ACP tells no quota.
             method::READ_USAGE => give(Usage::default()),
+            method::TERMINAL_LAUNCH => {
+                let p: TerminalParams = read(params)?;
+                let launch = self
+                    .own
+                    .as_ref()
+                    .and_then(|own| crate::terminal::launch(own, &p))
+                    .ok_or_else(|| Refusal::not_found(m))?;
+                give(launch)
+            }
             method::VIEW_TRANSLATE => {
                 let p: ViewParams = read(params)?;
                 if let Some(gone) = &p.gone {

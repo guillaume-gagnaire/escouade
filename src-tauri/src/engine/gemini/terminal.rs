@@ -19,30 +19,17 @@
 //!   discussion are its `--policy`, as for its `--acp` process. Its account's sign-in is given as
 //!   for that process (`accounts::launch_env`).
 
-use super::super::terminal::{bracketed, TerminalArgs, TerminalLaunch, TerminalView};
-use super::super::{mcp, Engine, Escouade};
-use super::{forget_sign_in, policy, POLICY_FILE, TRUST};
+use super::super::terminal::{bracketed, TerminalView};
 use crate::agent::{AgentRt, Effects, HookOutcome};
 use crate::tui::Registered;
 use anyhow::Result;
-use serde_json::{json, Value};
+#[cfg(test)]
+use serde_json::json;
+use serde_json::Value;
 use std::path::{Path, PathBuf};
 
 /// Its interface's name.
 const INTERFACE: &str = "gemini";
-
-/// How long a hook may run, in milliseconds (its unit).
-const HOOK_LIMIT_MS: u64 = 10_000;
-
-/// The events its hooks tell Escouade.
-pub(crate) const EVENTS: [&str; 6] = [
-    "SessionStart",
-    "BeforeAgent",
-    "BeforeTool",
-    "AfterTool",
-    "Notification",
-    "AfterAgent",
-];
 
 /// What its interface says, and quits, of a session it does not find.
 const NOT_FOUND: &str = "Error resuming session";
@@ -51,11 +38,6 @@ const NOT_FOUND: &str = "Error resuming session";
 pub struct GeminiTerminal;
 
 pub static GEMINI_TERMINAL: GeminiTerminal = GeminiTerminal;
-
-/// Its settings in the agent's home.
-pub(crate) fn settings_file(home: &Path) -> PathBuf {
-    home.join(".gemini").join("settings.json")
-}
 
 /// The file of the session `id` in the agent's home: `session-<time>-<id8>.jsonl` (`.json` before
 /// 0.66) in one of its projects' `chats`, or `<id>.json`. None when it has none (yet).
@@ -79,78 +61,6 @@ pub(crate) fn session_file(home: &Path, id: &str) -> Option<PathBuf> {
         })
 }
 
-/// The line its hooks run for `event`: `escouade-hook` by its path quoted for a POSIX shell, or
-/// under Windows by its name (its folder first on the `PATH`), which PowerShell finds.
-fn hook_line(command: &Path, event: &str) -> String {
-    if cfg!(windows) {
-        format!("escouade-hook {event}")
-    } else {
-        format!(
-            "'{}' {event}",
-            command.to_string_lossy().replace('\'', r"'\''")
-        )
-    }
-}
-
-/// Its settings `before` with what its interface needs of Escouade: its hooks (`command`, none
-/// without it), Escouade's server (`escouade`: its address and token) or none, the variables of its
-/// hooks kept from its redaction.
-pub(crate) fn view_settings(
-    before: &str,
-    command: Option<&Path>,
-    escouade: Option<(&str, &str)>,
-    hook_vars: &[&str],
-) -> Value {
-    let mut doc: Value = serde_json::from_str(before)
-        .ok()
-        .filter(Value::is_object)
-        .unwrap_or_else(|| json!({}));
-    if let Some(command) = command {
-        let mut hooks = json!({});
-        for event in EVENTS {
-            hooks[event] = json!([{ "hooks": [{
-                "name": "escouade", "type": "command", "command": hook_line(command, event),
-                "timeout": HOOK_LIMIT_MS,
-            }] }]);
-        }
-        doc["hooks"] = hooks;
-        doc["hooksConfig"] = json!({ "enabled": true });
-        if !doc["security"].is_object() {
-            doc["security"] = json!({});
-        }
-        let mut allowed: Vec<Value> = doc["security"]["environmentVariableRedaction"]["allowed"]
-            .as_array()
-            .cloned()
-            .unwrap_or_default();
-        for v in hook_vars {
-            if !allowed.iter().any(|a| a == v) {
-                allowed.push(json!(v));
-            }
-        }
-        if !doc["security"]["environmentVariableRedaction"].is_object() {
-            doc["security"]["environmentVariableRedaction"] = json!({});
-        }
-        doc["security"]["environmentVariableRedaction"]["allowed"] = json!(allowed);
-    }
-    if !doc["mcpServers"].is_object() {
-        doc["mcpServers"] = json!({});
-    }
-    match escouade {
-        Some((url, token)) => {
-            doc["mcpServers"]["escouade"] = json!({
-                "httpUrl": url, "headers": { "Authorization": format!("Bearer {token}") },
-                "trust": false,
-            });
-        }
-        None => {
-            if let Some(o) = doc["mcpServers"].as_object_mut() {
-                o.remove("escouade");
-            }
-        }
-    }
-    doc
-}
-
 /// What its interface's view left in the agent's settings (`doc`) taken away, its `--acp` process
 /// about to start: its hooks would run there too, for nothing, and its session is given the server.
 pub(crate) fn forget_view(doc: &mut Value) {
@@ -170,123 +80,19 @@ pub(crate) fn forget_view(doc: &mut Value) {
     }
 }
 
-/// Its `--approval-mode` for Escouade's mode.
-fn approval_mode(mode: &str) -> &'static str {
-    match mode {
-        "plan" => "plan",
-        "acceptEdits" => "auto_edit",
-        "bypassPermissions" => "yolo",
-        _ => "default",
-    }
-}
-
-/// The arguments of an agent's interface: its session (resumed when its store has it, else started
-/// under its id), its model, its mode, its rules.
-pub(crate) fn tui_args(
-    session: Option<&str>,
-    resumable: bool,
-    model: &str,
-    mode: &str,
-    policy: Option<&Path>,
-) -> Vec<String> {
-    let mut a: Vec<String> = Vec::new();
-    if let Some(s) = session {
-        let flag = if resumable {
-            "--resume"
-        } else {
-            "--session-id"
-        };
-        a.extend([flag.into(), s.to_string()]);
-    }
-    let model = model.trim();
-    if !model.is_empty() && model != super::DEFAULT && !model.contains(char::is_whitespace) {
-        a.extend(["--model".into(), model.to_string()]);
-    }
-    a.extend(["--approval-mode".into(), approval_mode(mode).into()]);
-    if let Some(p) = policy {
-        a.extend(["--policy".into(), p.to_string_lossy().into_owned()]);
-    }
-    a
-}
-
 impl TerminalView for GeminiTerminal {
     fn shell(&self) -> &'static str {
         INTERFACE
     }
 
-    /// Its settings (hooks, Escouade's server) and rules in the agent's home.
-    fn launch(&self, l: &TerminalLaunch) -> TerminalArgs {
-        let session = l.meta.session_id.as_deref().or(l.session);
-        let mut files = Vec::new();
-        let mut env = vec![
-            (TRUST.0.to_string(), TRUST.1.to_string()),
-            (l.hooks.url_var.to_string(), l.hooks.url.to_string()),
-        ];
-        let mut policy_file = None;
-        let mut resumable = false;
-        if let Some(home) = l.home {
-            resumable = session.is_some_and(|s| session_file(home, s).is_some());
-            // Its account's sign-in, not one refreshed here before.
-            forget_sign_in(home);
-            let escouade = match l.access {
-                Escouade::Granted { url, token, .. } => Some((url.as_str(), token.as_str())),
-                Escouade::Denied { .. } => None,
-            };
-            let file = settings_file(home);
-            let before = std::fs::read_to_string(&file).unwrap_or_default();
-            let doc = view_settings(
-                &before,
-                l.hooks.command,
-                escouade,
-                &[l.hooks.url_var, l.hooks.token_var],
-            );
-            files.push((
-                file,
-                serde_json::to_string_pretty(&doc)
-                    .unwrap_or_default()
-                    .into_bytes(),
-            ));
-            let fence = crate::fence::spelled(l.fence, l.program);
-            if let Some(rules) = policy(&fence, l.meta.discussion.is_some()) {
-                let path = home.join(POLICY_FILE);
-                files.push((path.clone(), rules.into_bytes()));
-                policy_file = Some(path);
-            }
-            if let (Some(command), true) = (l.hooks.command, cfg!(windows)) {
-                if let Some(dir) = command.parent() {
-                    let path = std::env::var_os("PATH").unwrap_or_default();
-                    let joined = std::env::join_paths(
-                        std::iter::once(dir.to_path_buf()).chain(std::env::split_paths(&path)),
-                    )
-                    .unwrap_or(path);
-                    env.push(("PATH".into(), joined.to_string_lossy().into_owned()));
-                }
-            }
-        }
-        TerminalArgs {
-            args: tui_args(
-                session,
-                resumable,
-                &l.meta.model,
-                &l.meta.mode,
-                policy_file.as_deref(),
-            ),
-            file: None,
-            files,
-            env,
-        }
+    /// Its rules (`--policy`) are written by the core (`prepare`).
+    fn fence_by_core(&self) -> bool {
+        true
     }
 
-    /// In its home's settings (`launch`): nothing on its command line nor in its variables.
-    fn escouade(&self, _harness: &dyn Engine, _access: &Escouade, _: &Path) -> mcp::Launch {
-        mcp::Launch {
-            args: Vec::new(),
-            env: Vec::new(),
-        }
-    }
-
-    fn read_dir_args(&self, dir: &Path) -> Vec<String> {
-        vec!["--include-directories".into(), dir.display().to_string()]
+    /// Its log is not read, but its session's file says whether it may resume it.
+    fn can_resume(&self, home: &Path, session: &str) -> bool {
+        session_file(home, session).is_some()
     }
 
     /// Escouade names it (`--session-id`): its hooks tell it all the same.

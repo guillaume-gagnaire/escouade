@@ -13,8 +13,8 @@ use super::registry::{
     CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
 };
 use super::{
-    mcp, BoxFuture, Engine, EngineProcess, Escouade, Message, OneShot, PermissionAnswer, Process,
-    Program, Ready, Remote, Room, Spawn, Start, StartLost,
+    BoxFuture, Engine, EngineProcess, Message, OneShot, PermissionAnswer, Process, Program, Ready,
+    Remote, Room, Spawn, Start, StartLost,
 };
 use crate::agent::{AgentRt, Effects};
 use crate::core::Attachment;
@@ -192,9 +192,6 @@ impl Engine for Minimal {
     }
     fn refusal(&self) -> Option<Value> {
         None
-    }
-    fn escouade_launch(&self, _: &Escouade) -> mcp::Launch {
-        unreachable!("not on the bench")
     }
     fn declared(&self, _: &Path) -> Standing {
         unreachable!("not on the bench")

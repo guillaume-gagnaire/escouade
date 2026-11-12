@@ -35,7 +35,7 @@ use crate::engine::registry::{
     Tested, ToldModel,
 };
 use crate::engine::{
-    mcp, terminal, BoxFuture, Engine, EngineProcess, Escouade, Message, OnExit, OnFrame, OneShot,
+    terminal, BoxFuture, Engine, EngineProcess, Escouade, Message, OnExit, OnFrame, OneShot,
     PermissionAnswer, Process, Program, Ready, Remote, Room, Spawn, Start, StartLost, Weight,
 };
 use crate::job::{Job, JobUsage};
@@ -297,6 +297,16 @@ pub const BUILTIN_HARNESSES: &[BuiltinHarness] = &[
     },
 ];
 
+/// What the core writes in the agent's home before the harness of `engine` is launched (`BuiltinHarness::prepare`): for
+/// its agents' processes, and for its interface in a terminal.
+pub fn prepare_of(engine: EngineId) -> Option<Prepare> {
+    let plugin = plugin_of_engine(engine)?;
+    BUILTIN_HARNESSES
+        .iter()
+        .find(|h| h.plugin == plugin)
+        .and_then(|h| h.prepare)
+}
+
 /// The plugin of the app that a harness of the core goes through (INT-10), None for one a plugin describes (it is in the
 /// registry only while its plugin is on).
 pub fn plugin_of_engine(engine: EngineId) -> Option<&'static str> {
@@ -389,24 +399,51 @@ pub fn spawn_plugged(
     on_frame: OnFrame,
     on_exit: OnExit,
 ) -> Result<Process> {
-    let Some(engine) = plugged(plugin) else {
-        // The plugin may be called otherwise than its harness: Mistral, for Mistral Vibe.
-        let called = super::builtin::manifest_text(plugin, "")
-            .and_then(|m| serde_json::from_str::<Value>(&m).ok())
-            .and_then(|m| m["name"].as_str().map(str::to_string))
-            .unwrap_or_else(|| name.to_string());
-        if UNINSTALLED.lock().contains(&plugin) {
-            bail!(tr!(
-                "Le plugin {called} ({plugin}) n’est plus installé : la vue Plugins propose de l’installer, pour lancer un agent de {name}.",
-                "The {called} plugin ({plugin}) is no longer installed: the Plugins view offers to install it, to start a {name} agent."
-            ));
-        }
-        bail!(tr!(
+    plugged_or_said(plugin, name, false)?.spawn(spawn, on_frame, on_exit)
+}
+
+/// The harness of the plugin `plugin` (of the engine `name`), else why it is not there: switched off, not loaded or
+/// uninstalled, for an agent to start or (`view`) the interface of « Vue <harness> » to open.
+fn plugged_or_said(plugin: &str, name: &str, view: bool) -> Result<&'static ProcessEngine> {
+    if let Some(engine) = plugged(plugin) {
+        return Ok(engine);
+    }
+    // The plugin may be called otherwise than its harness: Mistral, for Mistral Vibe.
+    let called = super::builtin::manifest_text(plugin, "")
+        .and_then(|m| serde_json::from_str::<Value>(&m).ok())
+        .and_then(|m| m["name"].as_str().map(str::to_string))
+        .unwrap_or_else(|| name.to_string());
+    let uninstalled = UNINSTALLED.lock().contains(&plugin);
+    Err(anyhow!(match (uninstalled, view) {
+        (true, false) => tr!(
+            "Le plugin {called} ({plugin}) n’est plus installé : la vue Plugins propose de l’installer, pour lancer un agent de {name}.",
+            "The {called} plugin ({plugin}) is no longer installed: the Plugins view offers to install it, to start a {name} agent."
+        ),
+        (false, false) => tr!(
             "Le plugin {called} ({plugin}) est coupé ou n’est pas chargé : rallume-le dans la vue Plugins pour lancer un agent de {name}.",
             "The {called} plugin ({plugin}) is switched off or not loaded: turn it back on in the Plugins view to start a {name} agent."
+        ),
+        (true, true) => tr!(
+            "Le plugin {called} ({plugin}) n’est plus installé : la vue Plugins propose de l’installer, pour ouvrir l’interface de {name} dans un terminal.",
+            "The {called} plugin ({plugin}) is no longer installed: the Plugins view offers to install it, to open {name}’s interface in a terminal."
+        ),
+        (false, true) => tr!(
+            "Le plugin {called} ({plugin}) est coupé ou n’est pas chargé : rallume-le dans la vue Plugins pour ouvrir l’interface de {name} dans un terminal.",
+            "The {called} plugin ({plugin}) is switched off or not loaded: turn it back on in the Plugins view to open {name}’s interface in a terminal."
+        ),
+    }))
+}
+
+/// The harness that serves the engine `engine` (called `name`), for an agent (`view` false) or its interface in a
+/// terminal: its plugin's, or why it is not there.
+pub fn plugged_for(engine: EngineId, name: &str, view: bool) -> Result<&'static ProcessEngine> {
+    let Some(plugin) = plugin_of_engine(engine) else {
+        bail!(tr!(
+            "{name} n’est servi par aucun plugin de l’app.",
+            "{name} is served by none of the app’s plugins."
         ));
     };
-    engine.spawn(spawn, on_frame, on_exit)
+    plugged_or_said(plugin, name, view)
 }
 
 /// A harness whose plugin runs in its own process.
@@ -595,26 +632,284 @@ impl ProcessEngine {
         serde_json::from_value(v).map_err(|e| anyhow!("{}: {method}: {e}", self.name))
     }
 
+    /// One question to its harness (`engine/oneShot`), its process in `home` when the core made a folder of its own for
+    /// it (where the plugin's launch writes its files), then its answer (`engine/oneShotRead`).
+    pub async fn one_shot_in(&self, ask: OneShot<'_>, home: Option<&Path>) -> Result<String> {
+        let cwd = ask.cwd.to_string_lossy().into_owned();
+        let params = proto::OneShotParams {
+            weight: match ask.weight {
+                // `Given` reaches a plugin only when its engine says `answers_without_tools` (Antigravity's
+                // façade): `oneshot::ask` refuses it to the others.
+                Weight::Light => "light",
+                Weight::Given => "given",
+                Weight::Reading => "reading",
+            }
+            .into(),
+            cwd: cwd.clone(),
+            system: ask.system.into(),
+            prompt: ask.prompt.into(),
+            model: ask.model.clone(),
+            home: home.map(|h| h.to_string_lossy().into_owned()),
+            env_names: ask
+                .env
+                .iter()
+                .filter(|(_, v)| !v.is_empty())
+                .map(|(k, _)| k.clone())
+                .collect(),
+        };
+        let launch: proto::OneShotLaunch = self.call(method::ONE_SHOT, &params).await?;
+        check_env(self.name, self.first_hand, &launch.env).map_err(|e| anyhow!(e))?;
+        // Its files under the folder of the question alone.
+        let home_text = home.map(|h| h.to_string_lossy().into_owned());
+        for f in &launch.files {
+            check_file(self.name, home_text.as_deref(), &f.path).map_err(|e| anyhow!(e))?;
+        }
+        write_files(&proto::Launch {
+            files: launch.files.clone(),
+            ..proto::Launch::default()
+        })?;
+        let env = merged(&ask.env, &launch.env);
+        let mut cmd = command_of(&ask.program, &cwd, &launch.args, &env, &launch.remove_env)?;
+        if launch.input.is_none() {
+            cmd.stdin(Stdio::null());
+        }
+        let mut child = cmd
+            .spawn()
+            .with_context(|| format!("{}: {}", self.name, ask.program.describe()))?;
+        let _job = Job::for_child(&child);
+        if let (Some(input), Some(mut stdin)) = (launch.input, child.stdin.take()) {
+            stdin.write_all(input.as_bytes()).await?;
+        }
+        let out = tokio::time::timeout(ask.limit, crate::proc::wait_output(child))
+            .await
+            .map_err(|_| {
+                anyhow!(
+                    "{}: still not done after {} s",
+                    self.name,
+                    ask.limit.as_secs()
+                )
+            })??;
+        let read = proto::OneShotOutput {
+            stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+            code: out.status.code(),
+        };
+        let text: proto::OneShotText = self.call(method::ONE_SHOT_READ, &read).await?;
+        Ok(text.text)
+    }
+
     /// An instance of its module for its views (`plugins/view.rs`).
     pub fn view_instance(&self) -> Result<super::wasm::Instance> {
         self.rt.view_instance(&self.plugin).map_err(|e| anyhow!(e))
     }
 
-    /// The launch of its interface in a terminal (`terminal/launch`), checked as an agent's launch is.
-    pub async fn terminal_launch(&self, params: proto::TerminalParams) -> Result<proto::Launch> {
-        let launch: proto::Launch = self.call(method::TERMINAL_LAUNCH, &params).await?;
-        check_launch(
+    /// The launch of its interface in a terminal (`terminal/launch`), checked as an agent's launch is: its files under
+    /// its home or beside its private file (`TerminalParams::private_file`). `place` is where its `fs/*` reach, under the
+    /// agent's key; `fence_by_core`: the core writes the fence itself in the private file (Claude Code's settings).
+    pub async fn terminal_launch(
+        &self,
+        params: proto::TerminalParams,
+        place: super::files::AgentPlace,
+        fence_by_core: bool,
+    ) -> Result<proto::TerminalLaunch> {
+        // Where its `fs/*` reach for the time of the call: no agent is attached, the interface is not the plugin's.
+        let _ = self.rt.place_agent(&self.plugin, &params.agent, place);
+        let told = self.call(method::TERMINAL_LAUNCH, &params).await;
+        self.rt.detach(&self.plugin, &params.agent);
+        let told: proto::TerminalLaunch = told?;
+        // Its own files: beside its private file, or under its home.
+        let private = Path::new(&params.private_file);
+        let home = params.home.as_deref();
+        check_launch_with(
             self.name,
             super::builtin::first_hand(&self.plugin),
             params.escouade.as_ref().map(|g| g.token.as_str()),
-            &params.fence,
+            if fence_by_core { &[] } else { &params.fence },
             params.read_only,
-            params.home.as_deref(),
-            &launch,
+            &|f: &str| match beside(private, f) {
+                true => Ok(()),
+                false => check_file(self.name, home, f),
+            },
+            &told.launch,
         )
         .map_err(|e| anyhow!(e))?;
-        check_env(self.name, self.first_hand, &launch.env).map_err(|e| anyhow!(e))?;
-        Ok(launch)
+        check_env(self.name, self.first_hand, &told.launch.env).map_err(|e| anyhow!(e))?;
+        Ok(told)
+    }
+
+    /// What its account tells by a process of its own (`account/read`): its models, its quota, what its interface needs
+    /// read before it starts. The process is the plugin's description, checked as an agent's (its variables judged, its
+    /// files under the account's folder `dir`), started by the core from `program` with the account's `env`, in `cwd`
+    /// (a folder of the system's when None); what it writes goes to the plugin until it says it is done.
+    pub async fn account_read(
+        &self,
+        read: &str,
+        input: Value,
+        program: &Program,
+        env: &[(String, String)],
+        dir: &Path,
+        cwd: Option<&str>,
+    ) -> Result<Value> {
+        let ask = proto::AccountRead {
+            read: read.to_string(),
+            input,
+            home: Some(dir.to_string_lossy().into_owned()),
+            env_names: env
+                .iter()
+                .filter(|(_, v)| !v.is_empty())
+                .map(|(k, _)| k.clone())
+                .collect(),
+            lang: crate::i18n::ui().tag().to_string(),
+        };
+        let step: proto::AccountStep = self.call(method::ACCOUNT_READ, &ask).await?;
+        let reading = async {
+            let mut step = step;
+            if let Some(e) = step.error.take() {
+                bail!("{}: {read}: {e}", self.name);
+            }
+            if let Some(done) = step.done.take() {
+                return Ok(done);
+            }
+            let Some(launch) = step.launch.take() else {
+                bail!("{}: {read}: no process to read it by", self.name);
+            };
+            check_env(self.name, self.first_hand, &launch.env).map_err(|e| anyhow!(e))?;
+            for f in &launch.files {
+                check_file(self.name, Some(&dir.to_string_lossy()), &f.path)
+                    .map_err(|e| anyhow!(e))?;
+            }
+            write_files(&launch)?;
+            let env = merged(env, &launch.env);
+            let (program, args) = match self.native.and_then(|n| n(program)) {
+                Some((p, mut first)) => {
+                    first.extend(launch.args.iter().cloned());
+                    (Program::Native(p), first)
+                }
+                None => (program.clone(), launch.args.clone()),
+            };
+            let temp = std::env::temp_dir().to_string_lossy().into_owned();
+            let cwd = cwd.unwrap_or(&temp);
+            let mut cmd = command_of(&program, cwd, &args, &env, &launch.remove_env)?;
+            cmd.stderr(Stdio::null());
+            let mut child = cmd.spawn().with_context(|| {
+                let program = program.describe();
+                tr!("impossible de lancer {program}", "can’t start {program}")
+            })?;
+            let job = Job::for_child(&child);
+            let (Some(input), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
+                bail!("no input or output to read by");
+            };
+            // A read that writes nothing at first is a command that reads no input: it is closed, as a command's is
+            // (`opencode models` waits for its end).
+            let mut stdin = (!step.writes.is_empty()).then_some(input);
+            let framed_io = self.decl.framing.as_deref() == Some("contentLength");
+            let line_of = |w: &str| match framed_io {
+                true => framed(w.as_bytes()),
+                false => format!("{w}\n").into_bytes(),
+            };
+            let mut out = BufReader::new(stdout);
+            let mut state = step.state;
+            let mut writes = step.writes;
+            let answer = loop {
+                if let Some(stdin) = stdin.as_mut() {
+                    for w in writes.drain(..) {
+                        stdin.write_all(&line_of(&w)).await?;
+                    }
+                    stdin.flush().await?;
+                } else if !writes.is_empty() {
+                    break Err(anyhow!("{}: {read}: its input is closed", self.name));
+                }
+                let line = match framed_io {
+                    true => read_frame(&mut out)
+                        .await?
+                        .map(|b| String::from_utf8_lossy(&b).into_owned()),
+                    false => {
+                        let mut buf = Vec::new();
+                        match out.read_until(b'\n', &mut buf).await? {
+                            0 => None,
+                            _ => Some(String::from_utf8_lossy(&buf).trim_end().to_string()),
+                        }
+                    }
+                };
+                let ended = line.is_none();
+                let code = match ended {
+                    true => child.wait().await.ok().and_then(|s| s.code()),
+                    false => None,
+                };
+                let lines = proto::AccountLines {
+                    read: read.to_string(),
+                    state: std::mem::take(&mut state),
+                    lines: line.into_iter().filter(|l| !l.is_empty()).collect(),
+                    ended,
+                    code,
+                };
+                if lines.lines.is_empty() && !ended {
+                    state = lines.state;
+                    continue;
+                }
+                let mut next: proto::AccountStep = self.call(method::ACCOUNT_LINES, &lines).await?;
+                if let Some(e) = next.error.take() {
+                    break Err(anyhow!("{}: {read}: {e}", self.name));
+                }
+                if let Some(done) = next.done.take() {
+                    break Ok(done);
+                }
+                if ended {
+                    break Err(anyhow!("{}: {read}: process exited", self.name));
+                }
+                state = next.state;
+                writes = next.writes;
+            };
+            drop(stdin);
+            let _ = child.start_kill();
+            if let Some(job) = &job {
+                job.terminate();
+            }
+            let _ = child.wait().await;
+            answer
+        };
+        tokio::time::timeout(USAGE_WITHIN, reading)
+            .await
+            .map_err(|_| anyhow!("{}: {read}: no answer in time", self.name))?
+    }
+
+    /// The models of an account, read by its plugin (`account/read` of `models`): None when it lists none.
+    pub async fn account_models(
+        &self,
+        program: &Program,
+        env: &[(String, String)],
+        dir: &Path,
+    ) -> Result<Option<Vec<ToldModel>>> {
+        let v = self
+            .account_read("models", Value::Null, program, env, dir, None)
+            .await?;
+        if v.is_null() {
+            return Ok(None);
+        }
+        let models: Vec<ToldModel> = serde_json::from_value(v)?;
+        Ok(Some(models).filter(|m| !m.is_empty()))
+    }
+
+    /// The quota of an account, read by its plugin (`account/read` of `quota`).
+    pub async fn account_quota(
+        &self,
+        program: &Program,
+        env: &[(String, String)],
+        dir: &Path,
+    ) -> Result<Option<crate::usage::Reading>> {
+        let v = self
+            .account_read("quota", Value::Null, program, env, dir, None)
+            .await?;
+        if v.is_null() {
+            return Ok(None);
+        }
+        let q: proto::Quota = serde_json::from_value(v)?;
+        if q.not_signed_in {
+            return Ok(Some(crate::usage::Reading::NotSignedIn));
+        }
+        Ok(Some(crate::usage::Reading::Windows(
+            serde_json::from_value(q.meters).unwrap_or_default(),
+        )))
     }
 
     /// One of its interface's hooks, with what the core answers it (`reply`): the items for the agent, and the answer
@@ -722,6 +1017,27 @@ pub fn check_launch(
     home: Option<&str>,
     launch: &proto::Launch,
 ) -> std::result::Result<(), String> {
+    check_launch_with(
+        name,
+        first_hand,
+        token,
+        fence,
+        read_only,
+        &|f: &str| check_file(name, home, f),
+        launch,
+    )
+}
+
+/// `check_launch`, each file judged by `file_ok`.
+pub(crate) fn check_launch_with(
+    name: &str,
+    first_hand: bool,
+    token: Option<&str>,
+    fence: &[String],
+    read_only: bool,
+    file_ok: &dyn Fn(&str) -> std::result::Result<(), String>,
+    launch: &proto::Launch,
+) -> std::result::Result<(), String> {
     if let Some(token) = token.filter(|t| !t.is_empty()) {
         if launch.args.iter().any(|a| a.contains(token)) {
             return Err(tr!(
@@ -758,7 +1074,7 @@ pub fn check_launch(
         ));
     }
     for f in &launch.files {
-        check_file(name, home, &f.path)?;
+        file_ok(&f.path)?;
     }
     Ok(())
 }
@@ -804,8 +1120,40 @@ fn check_file(name: &str, home: Option<&str>, file: &str) -> std::result::Result
     ))
 }
 
+/// Whether `file` is the private file `private` of an interface, or beside it under a name that starts with its own
+/// (`<file>.<anything>`, `<stem>.<anything>`): what its plugin may write of its own (`terminal/launch`).
+pub(crate) fn beside(private: &Path, file: &str) -> bool {
+    let path = Path::new(file);
+    let (Some(dir), Some(name), Some(stem)) = (
+        private.parent(),
+        private.file_name().and_then(|n| n.to_str()),
+        private.file_stem().and_then(|n| n.to_str()),
+    ) else {
+        return false;
+    };
+    if name.is_empty()
+        || !path.is_absolute()
+        || path.components().any(|c| matches!(c, Component::ParentDir))
+    {
+        return false;
+    }
+    let Ok(rest) = path.strip_prefix(dir) else {
+        return false;
+    };
+    let Some(first) = rest
+        .components()
+        .next()
+        .and_then(|c| c.as_os_str().to_str())
+    else {
+        return false;
+    };
+    first == name
+        || first.starts_with(&format!("{name}."))
+        || first.starts_with(&format!("{stem}."))
+}
+
 /// The files of a launch, written.
-fn write_files(launch: &proto::Launch) -> Result<()> {
+pub(crate) fn write_files(launch: &proto::Launch) -> Result<()> {
     for f in &launch.files {
         let path = Path::new(&f.path);
         if let Some(dir) = path.parent() {
@@ -1085,52 +1433,7 @@ impl Engine for ProcessEngine {
     }
 
     fn one_shot<'a>(&'a self, ask: OneShot<'a>) -> BoxFuture<'a, Result<String>> {
-        Box::pin(async move {
-            let cwd = ask.cwd.to_string_lossy().into_owned();
-            let params = proto::OneShotParams {
-                weight: match ask.weight {
-                    // A plugin's harness does not say `answers_without_tools`: `Given` stops at
-                    // `oneshot::ask`, and would go as the only weight the protocol says has no tool.
-                    Weight::Light | Weight::Given => "light",
-                    Weight::Reading => "reading",
-                }
-                .into(),
-                cwd: cwd.clone(),
-                system: ask.system.into(),
-                prompt: ask.prompt.into(),
-                model: ask.model.clone(),
-            };
-            let launch: proto::OneShotLaunch = self.call(method::ONE_SHOT, &params).await?;
-            check_env(self.name, self.first_hand, &launch.env).map_err(|e| anyhow!(e))?;
-            let env = merged(&ask.env, &launch.env);
-            let mut cmd = command_of(&ask.program, &cwd, &launch.args, &env, &launch.remove_env)?;
-            if launch.input.is_none() {
-                cmd.stdin(Stdio::null());
-            }
-            let mut child = cmd
-                .spawn()
-                .with_context(|| format!("{}: {}", self.name, ask.program.describe()))?;
-            let _job = Job::for_child(&child);
-            if let (Some(input), Some(mut stdin)) = (launch.input, child.stdin.take()) {
-                stdin.write_all(input.as_bytes()).await?;
-            }
-            let out = tokio::time::timeout(ask.limit, crate::proc::wait_output(child))
-                .await
-                .map_err(|_| {
-                    anyhow!(
-                        "{}: still not done after {} s",
-                        self.name,
-                        ask.limit.as_secs()
-                    )
-                })??;
-            let read = proto::OneShotOutput {
-                stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
-                stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
-                code: out.status.code(),
-            };
-            let text: proto::OneShotText = self.call(method::ONE_SHOT_READ, &read).await?;
-            Ok(text.text)
-        })
+        Box::pin(self.one_shot_in(ask, None))
     }
 
     fn writer(&self, _: Weight) -> &'static str {
@@ -1141,13 +1444,6 @@ impl Engine for ProcessEngine {
     }
     fn refusal(&self) -> Option<Value> {
         None
-    }
-    /// The description of its launch carries Escouade's server (`engine/launch`).
-    fn escouade_launch(&self, _: &Escouade) -> mcp::Launch {
-        mcp::Launch {
-            args: Vec::new(),
-            env: Vec::new(),
-        }
     }
     fn memory_dir(&self, config_dir: &Path, project_path: &str) -> Option<PathBuf> {
         let dir = &self.decl.memory.as_ref()?.dir;

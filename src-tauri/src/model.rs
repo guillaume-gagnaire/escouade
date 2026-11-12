@@ -2598,7 +2598,8 @@ impl QuotaMeter {
         }
     }
 
-    /// The month's credits as `w` reads them (Copilot CLI).
+    /// The month's credits as `w` reads them (Copilot CLI: its plugin reads them now, the tests build them).
+    #[cfg(test)]
     pub fn credits(w: RateWindow) -> Self {
         Self {
             minutes: None,

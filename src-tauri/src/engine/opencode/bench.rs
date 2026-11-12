@@ -27,17 +27,6 @@ pub(crate) fn fake_opencode() -> String {
     fixtures().join(name).to_string_lossy().into_owned()
 }
 
-/// What OpenCode said (`s2c`) in the recorded stream `file` of tests/fixtures/opencode/.
-pub(crate) fn recorded(file: &str) -> Vec<Value> {
-    let text = std::fs::read_to_string(fixtures().join("opencode").join(file)).unwrap();
-    text.lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| serde_json::from_str::<Value>(l).unwrap())
-        .filter(|l| l["dir"] == "s2c")
-        .map(|l| l["msg"].clone())
-        .collect()
-}
-
 /// The translation of its module: a frame of OpenCode's, its items applied to the agent.
 #[derive(Default)]
 pub(crate) struct Through(Option<String>);

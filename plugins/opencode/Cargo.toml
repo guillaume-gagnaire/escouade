@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-opencode"
-version = "2.2.3"
+version = "2.2.4"
 description = "Le plugin OpenCode d'Escouade : OpenCode comme harness, par son serveur HTTP"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"
@@ -14,7 +14,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 escouade-plugin-kit = "0.1.1"
-escouade-plugin-protocol = "0.1.0"
+escouade-plugin-protocol = "0.1.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"

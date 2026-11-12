@@ -8,14 +8,16 @@
 
 pub mod client;
 pub mod localcmd;
+pub mod terminal;
 pub mod translate;
 pub mod view;
 pub mod words;
 
 use client::Agent;
 use escouade_plugin_protocol::engine::{
-    method, AgentRef, AnswerPermission, AnswerQuestion, Asked, Attach, Control, Frames, Interrupt,
-    Items, LaunchParams, RemoteLink, SendMessage, SetValue, Task, UsageAsked, ViewParams, Writes,
+    method, AccountLines, AccountRead, AgentRef, AnswerPermission, AnswerQuestion, Asked, Attach,
+    Control, Frames, Interrupt, Items, LaunchParams, RemoteLink, SendMessage, SetValue, Task,
+    TerminalParams, UsageAsked, ViewParams, Writes,
 };
 use escouade_plugin_protocol::{turn, Refusal};
 use serde_json::{json, Value};
@@ -158,6 +160,18 @@ impl Plugin {
             method::CONTROL => {
                 let c: Control = read(params)?;
                 asked(self.agent(&c.agent)?.ask(c.request))
+            }
+            method::TERMINAL_LAUNCH => {
+                let p: TerminalParams = read(params)?;
+                give(terminal::launch(&p))
+            }
+            method::ACCOUNT_READ => {
+                let r: AccountRead = read(params)?;
+                give(terminal::read(&r))
+            }
+            method::ACCOUNT_LINES => {
+                let l: AccountLines = read(params)?;
+                give(terminal::lines(&l))
             }
             method::VIEW_TRANSLATE => {
                 let p: ViewParams = read(params)?;

@@ -22,8 +22,7 @@
 //!   `~/.cursor/projects`, each root of the workspace its own): Escouade never answers for the
 //!   user, and pastes no message until it is past the question (`paste_refusal`).
 
-use super::super::terminal::{bracketed, TerminalArgs, TerminalLaunch, TerminalView};
-use super::{base_of, AUTO};
+use super::super::terminal::{bracketed, TerminalView};
 use crate::agent::{AgentRt, Effects, HookOutcome};
 use crate::tui::Registered;
 use anyhow::Result;
@@ -97,68 +96,18 @@ pub(crate) fn asks_trust(projects: &Path, cwd: &str) -> bool {
     !projects.join(project_key(cwd)).join(TRUSTED).is_file()
 }
 
-/// The model its `--model` takes for Escouade's `model`: Auto by its name, another by its id
-/// without its options (Cursor gives it those of the account).
-fn model_arg(model: &str) -> Option<String> {
-    match model {
-        "" => None,
-        AUTO => Some("auto".into()),
-        m => Some(base_of(m).to_string()),
-    }
-}
-
-/// The arguments of an agent's interface: no update looked for, its session (the agent's own, or
-/// the one Escouade names), its model and its mode.
-pub(crate) fn tui_args(l: &TerminalLaunch) -> Vec<String> {
-    let m = l.meta;
-    let mut a: Vec<String> = vec!["--disable-auto-update".into()];
-    if let Some(s) = m.session_id.as_deref().or(l.session) {
-        a.extend(["--resume".into(), s.to_string()]);
-    }
-    if let Some(model) = model_arg(&m.model) {
-        a.extend(["--model".into(), model]);
-    }
-    // Its own modes: Plan, and « Run Everything » for « Tout accepter »; the others ask, as in
-    // Escouade's view where its writes never ask.
-    match m.mode.as_str() {
-        "plan" => a.extend(["--mode".into(), "plan".into()]),
-        "bypassPermissions" => a.push("--force".into()),
-        _ => {}
-    }
-    a
-}
-
 impl TerminalView for CursorTerminal {
     fn shell(&self) -> &'static str {
         "agent"
     }
 
-    /// Its folder of the workspaces given too, which Cursor does not read: the fake `agent` of the
-    /// tests writes there, a pseudo-console under Windows not passing the app's own variables.
-    fn launch(&self, l: &TerminalLaunch) -> TerminalArgs {
-        TerminalArgs {
-            args: tui_args(l),
-            env: vec![(
-                PROJECTS_VAR.to_string(),
-                projects_dir().to_string_lossy().into_owned(),
-            )],
-            ..Default::default()
-        }
-    }
-
-    /// Its shell PowerShell, never Git Bash (Escouade started from Git Bash): `MSYSTEM` empty is
-    /// none for Cursor (`if (!process.env.MSYSTEM)`, read in 2026.10.22).
-    fn masked_env(&self, _env: &[(String, String)]) -> Vec<(String, String)> {
-        super::process::GIT_BASH_VARS
-            .iter()
-            .map(|v| (v.to_string(), String::new()))
-            .collect()
-    }
-
-    /// None: each root of a workspace is asked about apart (tried with `--add-dir`), and Cursor
-    /// reads the files joined to a message without being given their folder.
-    fn read_dir_args(&self, _dir: &Path) -> Vec<String> {
-        Vec::new()
+    /// Its folder of the workspaces given too, which Cursor does not read: the fake `agent` of the tests writes there,
+    /// a pseudo-console under Windows not passing the app's own variables.
+    fn core_env(&self) -> Vec<(String, String)> {
+        vec![(
+            PROJECTS_VAR.to_string(),
+            projects_dir().to_string_lossy().into_owned(),
+        )]
     }
 
     fn names_its_session(&self) -> bool {

@@ -26,6 +26,7 @@ pub mod limits;
 pub mod paths;
 pub mod plugin;
 pub mod questions;
+pub mod terminal;
 mod texts;
 pub mod tools;
 pub mod vibe;

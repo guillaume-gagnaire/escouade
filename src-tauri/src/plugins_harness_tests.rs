@@ -540,7 +540,11 @@ async fn a_terminal_view_is_launched_from_the_plugin_s_description_and_its_hooks
         }),
         ..proto::TerminalParams::default()
     };
-    let l = engine.terminal_launch(params).await.unwrap();
+    let l = engine
+        .terminal_launch(params, Default::default(), false)
+        .await
+        .unwrap()
+        .launch;
     assert_eq!(
         l.args[..4],
         ["minimal-harness", "--tui", "--session", "min-1"]
@@ -745,4 +749,35 @@ fn an_agent_on_the_default_account_has_the_folder_its_harness_looks_in() {
         crate::plugins::harness::default_home_in("AUTRE", home),
         None
     );
+}
+
+/// What the plugin of an interface writes of its own (`terminal/launch`): its private file, and beside it what starts
+/// with its name; nothing else outside the agent's home (ESC-359).
+#[test]
+fn an_interface_writes_its_private_file_and_what_is_beside_it_by_its_name_alone() {
+    let private = if cfg!(windows) {
+        Path::new(r"C:\data\tui\a1.json")
+    } else {
+        Path::new("/data/tui/a1.json")
+    };
+    let at = |rel: &str| {
+        private
+            .parent()
+            .unwrap()
+            .join(rel)
+            .to_string_lossy()
+            .into_owned()
+    };
+    assert!(harness::beside(private, &at("a1.json")));
+    assert!(harness::beside(
+        private,
+        &at("a1.copilot-plugin/hooks/hooks.json")
+    ));
+    assert!(!harness::beside(private, &at("a2.json")));
+    assert!(!harness::beside(private, &at("a1-x.json")));
+    assert!(!harness::beside(
+        private,
+        &at("a1.copilot-plugin/../../escape")
+    ));
+    assert!(!harness::beside(private, "a1.json"));
 }

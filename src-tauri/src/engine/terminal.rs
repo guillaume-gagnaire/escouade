@@ -14,67 +14,11 @@
 //! (`src/bin/escouade-hook.rs`), which posts what it reads on its input to the same server.
 
 use crate::agent::{AgentRt, Effects, HookOutcome};
-use crate::model::AgentMeta;
 use anyhow::Result;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
-use super::{mcp, BoxFuture, Engine, Escouade, Program};
-
-/// Escouade's hooks' server, as an interface's hooks reach it. `url_var` and `command` are for
-/// the harnesses that run their hooks as commands (`escouade-hook`): Claude Code calls them over
-/// HTTP.
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub struct HookServer<'a> {
-    /// Where they post what they tell (`http://127.0.0.1:<port>/hook`).
-    pub url: &'a str,
-    /// The variable of the interface's environment that holds its token: what the hooks send as
-    /// `Authorization: Bearer <token>`.
-    pub token_var: &'static str,
-    /// The variable that gives `escouade-hook` the server's address (`url`).
-    pub url_var: &'static str,
-    /// `escouade-hook`, for a harness that runs its hooks as commands; None when it was not found
-    /// beside the app.
-    pub command: Option<&'a Path>,
-}
-
-/// What an interface is started from (`TerminalView::launch`).
-pub struct TerminalLaunch<'a> {
-    /// The agent: its model, effort, mode, added instructions, and the session it resumes or
-    /// copies.
-    pub meta: &'a AgentMeta,
-    /// The session it starts (or copies into), named by Escouade, when it resumes none and its
-    /// harness takes a name for it (`TerminalView::names_its_session`).
-    pub session: Option<&'a str>,
-    /// The name of its session on claude.ai, when it starts with Remote Control.
-    pub remote: Option<&'a str>,
-    /// The private file of the interface, which the core writes `TerminalArgs::file` to before it
-    /// starts (and that stays its, the agent's own, from one start to the next).
-    pub private_file: &'a Path,
-    /// The configuration folder of the agent's own (`Engine::agent_home_var`), when its harness
-    /// has one: where its interface keeps its sessions and reads its hooks (Mistral Vibe).
-    pub home: Option<&'a Path>,
-    pub hooks: HookServer<'a>,
-    /// Escouade's MCP server given to it, or refused.
-    pub access: &'a Escouade,
-    /// The paths its tools are refused (« Projet privé »), and its program, which spells them.
-    pub fence: &'a crate::fence::Fence,
-    pub program: &'a Program,
-}
-
-/// How an interface is started.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct TerminalArgs {
-    pub args: Vec<String>,
-    /// What its private file (`TerminalLaunch::private_file`) holds; None: no file.
-    pub file: Option<Vec<u8>>,
-    /// Other files of its own the core writes before it starts (their folders made): paths beside
-    /// its private file, and what each holds.
-    pub files: Vec<(PathBuf, Vec<u8>)>,
-    /// The variables it gets besides its account's, the token's and the MCP server's.
-    pub env: Vec<(String, String)>,
-}
+use super::Program;
 
 /// How an interface joins the process of its agent (`EngineProcess::attach`).
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -97,60 +41,29 @@ pub trait TerminalView: Send + Sync {
     fn program(&self, program: &Program) -> Program {
         program.clone()
     }
-    /// The arguments, private file and variables of its interface.
-    fn launch(&self, l: &TerminalLaunch) -> TerminalArgs;
-    /// The arguments that let it read the folder `dir` without a question.
-    fn read_dir_args(&self, dir: &Path) -> Vec<String>;
-    /// Escouade's MCP server for it (`Engine::escouade_launch` of its harness), the account's
-    /// configuration folder `config_dir` at hand.
-    fn escouade(&self, harness: &dyn Engine, access: &Escouade, _config_dir: &Path) -> mcp::Launch {
-        harness.escouade_launch(access)
-    }
-    /// The variables set over those of its environment `env` (its account's folder among them),
-    /// to keep from it what the app's own environment would give it: nothing, unless its harness
-    /// would take another account from it (Copilot CLI: a GitHub token, for an account of its own).
-    fn masked_env(&self, _env: &[(String, String)]) -> Vec<(String, String)> {
+    /// Variables of the core's own it gives its interface (Cursor CLI: where the core reads its workspaces, for the
+    /// tests' fake), beside those of its plugin's launch (`terminal/launch`).
+    fn core_env(&self) -> Vec<(String, String)> {
         Vec::new()
     }
-    /// What is added to its arguments once they are known (`args`, with its environment `env`),
-    /// just before it starts: nothing, unless its harness has to be asked first.
-    fn prepare<'a>(
-        &'a self,
-        _program: &'a Program,
-        _cwd: &'a str,
-        _args: &'a [String],
-        _env: &'a [(String, String)],
-    ) -> BoxFuture<'a, Result<Vec<String>>> {
-        Box::pin(async { Ok(Vec::new()) })
-    }
-    /// Its arguments `args` (with its environment `env`) once those its account would refuse are
-    /// changed, just before it starts: as they are, unless its harness checks some first (Copilot
-    /// CLI: a model its account does not list).
-    fn for_account<'a>(
-        &'a self,
-        _program: &'a Program,
-        _cwd: &'a str,
-        args: Vec<String>,
-        _env: &'a [(String, String)],
-    ) -> BoxFuture<'a, Vec<String>> {
-        Box::pin(async { args })
-    }
-    /// What its interface left of the agent once the agent is deleted: beside its private file
-    /// `private_file`, and in the folder `config_dir` of its account. Nothing, unless its harness
-    /// keeps something there.
+    /// What its interface left of the agent once the agent is deleted, in the folder `config_dir` of its account,
+    /// beside the files of its own its plugin wrote next to its private file `private_file` (which the core takes away
+    /// itself). Nothing, unless its harness keeps something there.
     fn forget(&self, _private_file: &Path, _config_dir: &Path) {}
-    /// The copy of the session `of` (up to its entry `at`, all of it with none) made before the
-    /// interface starts, in `cwd` with `env`, when it cannot copy one itself: the copy's id. None:
-    /// it copies a session itself (`TerminalView::launch`, from `AgentMeta::fork_of`).
-    fn copy_first<'a>(
-        &'a self,
-        _program: &'a Program,
-        _cwd: &'a str,
-        _env: &'a [(String, String)],
-        _of: &'a str,
-        _at: Option<&'a str>,
-    ) -> Option<BoxFuture<'a, Result<String>>> {
-        None
+    /// Its interface cannot copy a session itself: the copy is made before it starts, by its plugin (`account/read`
+    /// of `fork`, its answer `{ "session": <the copy's id> }`), and resumed then. False: it copies one itself.
+    fn copies_first(&self) -> bool {
+        false
+    }
+    /// The core writes the fence of a private project for its interface itself, in the agent's home, as for its agents
+    /// (Mistral Vibe's `config.toml`, Gemini CLI's rules: `BuiltinHarness::prepare`): its plugin's launch need not spell
+    /// it.
+    fn fence_by_core(&self) -> bool {
+        false
+    }
+    /// Its interface may resume `session`, from the folder `config_dir`: its log is there, by default.
+    fn can_resume(&self, config_dir: &Path, session: &str) -> bool {
+        self.find_log(config_dir, session).is_some()
     }
     /// Escouade names a new session before the interface starts (its log is then known before any
     /// hook); false: the interface names its own, which its first hook tells.

@@ -42,13 +42,11 @@ pub use claude::{
     catalog as claude_catalog, missing_line as claude_missing_line,
     told_model as claude_told_model, CLAUDE,
 };
+#[cfg(test)]
+pub(crate) use codex::fake_codex;
 pub use codex::CODEX;
 #[cfg(test)]
-pub(crate) use codex::{fake_codex, is_plan_approval as codex_is_plan_approval};
-#[cfg(test)]
 pub(crate) use copilot::fake_copilot;
-#[cfg(test)]
-pub(crate) use copilot::limit_answer as copilot_limit_answer;
 pub use copilot::COPILOT;
 #[cfg(test)]
 pub(crate) use cursor::fake_cursor;
@@ -532,14 +530,11 @@ pub trait Engine: Send + Sync {
 
     /// What the private file of a process given Escouade's server at `url` with `token` holds
     /// (written before the process starts, gone when it stops); None: the engine passes the
-    /// server otherwise (`escouade_launch`), and no file is written.
+    /// server otherwise (its plugin's launch), and no file is written.
     fn grant_file(&self, url: &str, token: &str) -> Option<Vec<u8>>;
     /// What a process refused the server reads from a file, the same for every agent; None: its
     /// arguments alone keep the server out.
     fn refusal(&self) -> Option<Value>;
-    /// The arguments and variables of a process given or refused the server, as `escouade` says.
-    /// Never the token among the arguments: a file or a variable holds it.
-    fn escouade_launch(&self, escouade: &Escouade) -> mcp::Launch;
 
     /// The settings that tell its process the paths of `fence` refused, as `program` names them,
     /// with its refusal of Escouade's server when `refused` (`refusal`): written in a file of the

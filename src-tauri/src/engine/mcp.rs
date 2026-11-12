@@ -4,7 +4,7 @@
 //! The core decides (`Core::agent_access`): the server as the agent itself, with a token of its
 //! own, or refused. The engine says how: what a private file holds (`Engine::grant_file`), what a
 //! refused process reads (`Engine::refusal`), and the arguments and variables of its process
-//! (`Engine::escouade_launch`). The token is never one of the arguments: a process's command line
+//! (their plugin's launch, `engine/launch`). The token is never one of the arguments: a process's command line
 //! is seen by every process of the user, and the app's log writes it.
 
 use std::path::PathBuf;
@@ -17,6 +17,7 @@ pub const SERVER: &str = "escouade";
 /// whatever the harness: Claude Code's, which `tools.ts`, the permission card, the activity line
 /// and `convsearch.rs` read. Every adapter names an MCP call with it (docs/TODO-1.8.md, « Un
 /// moteur par agent », table of the tools).
+#[cfg(test)]
 pub fn tool_name(server: &str, tool: &str) -> String {
     format!("mcp__{server}__{tool}")
 }
@@ -59,25 +60,5 @@ impl std::fmt::Debug for Escouade {
                 .finish(),
             Escouade::Denied { file } => f.debug_struct("Denied").field("file", file).finish(),
         }
-    }
-}
-
-/// What a process is started with of Escouade's server (`Engine::escouade_launch`).
-#[derive(Clone, Default, PartialEq, Eq)]
-pub struct Launch {
-    /// Its arguments, given after all the others (some options take every value that follows).
-    pub args: Vec<String>,
-    /// The variables it gets on top of the others: where an engine passes the token.
-    pub env: Vec<(String, String)>,
-}
-
-/// By hand too: `env` may hold the token.
-impl std::fmt::Debug for Launch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let names: Vec<&str> = self.env.iter().map(|(k, _)| k.as_str()).collect();
-        f.debug_struct("Launch")
-            .field("args", &self.args)
-            .field("env", &names)
-            .finish()
     }
 }

@@ -7,14 +7,16 @@
 
 pub mod client;
 pub mod prices;
+pub mod terminal;
 pub mod translate;
 pub mod view;
 pub mod words;
 
 use client::Agent;
 use escouade_plugin_protocol::engine::{
-    method, AgentRef, AnswerPermission, AnswerQuestion, Attach, Compact, Compacted, Frames, Items,
-    LaunchParams, SendMessage, SetValue, UsageAsked, ViewParams, Writes,
+    method, AccountLines, AccountRead, AgentRef, AnswerPermission, AnswerQuestion, Attach, Compact,
+    Compacted, Frames, Items, LaunchParams, SendMessage, SetValue, TerminalParams, UsageAsked,
+    ViewParams, Writes,
 };
 use escouade_plugin_protocol::{turn, Refusal};
 use serde_json::{json, Value};
@@ -153,6 +155,18 @@ impl Plugin {
                 let v: SetValue = read(params)?;
                 writes(self.agent(&v.agent)?.rename(&v.value))
             }
+            method::TERMINAL_LAUNCH => {
+                let p: TerminalParams = read(params)?;
+                give(terminal::launch(&p))
+            }
+            method::ACCOUNT_READ => {
+                let r: AccountRead = read(params)?;
+                give(terminal::read(&r))
+            }
+            method::ACCOUNT_LINES => {
+                let l: AccountLines = read(params)?;
+                give(terminal::lines(&l))
+            }
             method::VIEW_TRANSLATE => {
                 let p: ViewParams = read(params)?;
                 if let Some(gone) = &p.gone {
@@ -175,3 +189,6 @@ impl Plugin {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod words_tests;

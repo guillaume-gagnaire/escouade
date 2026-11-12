@@ -32,7 +32,6 @@ mod gemini;
 mod gemini_tui;
 // The items of a harness's plugin in process (INT-9).
 mod items;
-mod localcmd;
 #[cfg(test)]
 mod minimal;
 mod opencode;
@@ -41,11 +40,9 @@ mod transcript;
 mod vibe;
 mod vibe_tui;
 mod view;
-mod words;
 
+pub use crate::text::strip_ansi;
 pub use transcript::HookOutcome;
-pub use words::strip_ansi;
-use words::tool_result_text;
 
 pub type AgentHandle = Arc<parking_lot::Mutex<AgentRt>>;
 

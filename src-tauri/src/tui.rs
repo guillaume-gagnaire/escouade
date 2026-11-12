@@ -16,14 +16,10 @@ use crate::accounts;
 use crate::agent::{AgentHandle, Effects, TuiRun};
 use crate::core::Core;
 pub use crate::engine::claude_terminal::find_transcript;
-#[cfg(test)]
-pub use crate::engine::claude_terminal::tui_args;
-#[cfg(test)]
-use crate::engine::claude_terminal::EVENTS;
-use crate::engine::terminal::{HookServer, TerminalLaunch};
+use crate::engine::Escouade;
 use crate::engine::TerminalView;
 #[cfg(test)]
-use crate::engine::{claude_terminal, Engine, Escouade};
+use crate::engine::{claude_terminal, Engine};
 use crate::handover::{self, Relay};
 use crate::model::*;
 use crate::pty::{PtyManager, TermInfo};
@@ -35,7 +31,6 @@ use hyper::service::service_fn;
 use hyper::{header, Method, Request, Response, StatusCode};
 use hyper_util::rt::{TokioIo, TokioTimer};
 use parking_lot::Mutex;
-#[cfg(test)]
 use serde_json::json;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -479,12 +474,21 @@ pub(crate) async fn quit_interface(pty: &PtyManager, term: &str, key: &'static [
     let _ = tokio::task::spawn_blocking(move || pty.kill(&term)).await;
 }
 
-/// Claude Code's settings for an interface whose hooks call `port` (`claude_terminal::settings`),
-/// Escouade's server kept out of it when its tools are refused (`access`).
-#[cfg(test)]
-pub fn tui_settings(port: u16, engine: &dyn Engine, access: &Escouade) -> Value {
-    debug_assert_eq!(engine.id(), EngineId::CLAUDE);
-    claude_terminal::settings(&hook_url(port), TOKEN_VAR, access)
+/// The settings `text` an interface's plugin wrote in its private file (JSON), with what the core writes there itself
+/// (`Engine::fence_settings`, Claude Code's: it reads the last `--settings` only): the refusal of Escouade's server, and
+/// the fence of a private project when there is one (`fenced`). None when `text` is no JSON object.
+pub(crate) fn with_core_settings(text: &str, core: &Value, fenced: bool) -> Option<String> {
+    let Ok(Value::Object(mut doc)) = serde_json::from_str::<Value>(text) else {
+        return None;
+    };
+    let Value::Object(mut more) = core.clone() else {
+        return None;
+    };
+    if !fenced {
+        more.retain(|k, _| k != "permissions" && k != "sandbox");
+    }
+    doc.extend(more);
+    serde_json::to_string_pretty(&Value::Object(doc)).ok()
 }
 
 /// The key of a hook's payload that holds the event its command named (`escouade-hook <event>`,
@@ -528,7 +532,7 @@ pub enum SessionCheck {
 }
 
 /// The session whose transcript Claude Code must find to start the interface: the agent's own,
-/// else the original's of a copy that has not started its own yet (`tui_args`).
+/// else the original's of a copy that has not started its own yet (its plugin's `terminal/launch`).
 fn session_to_resume(m: &AgentMeta) -> Option<&str> {
     m.session_id.as_deref().or(m.fork_of.as_deref())
 }
@@ -1483,56 +1487,16 @@ impl<R: Runtime> Core<R> {
         let fence = self.agent_fence(id);
         let (url, command) = (hook_url(port), crate::engine::terminal::hook_command());
         let home = harness.agent_home_var().map(|_| self.data.agent_home(id));
-        let started_from = view.launch(&TerminalLaunch {
-            meta: &meta,
-            session: new_session.as_deref(),
-            remote: remote.as_deref(),
-            private_file: &settings_file,
-            home: home.as_deref(),
-            hooks: HookServer {
-                url: &url,
-                token_var: TOKEN_VAR,
-                url_var: URL_VAR,
-                command: command.as_deref(),
-            },
-            access: &access,
-            fence: &fence,
-            program: &program,
-        });
-        let mut args = started_from.args;
-        // The folder of the files joined to its messages, read without a question: the window
-        // copies a file dropped on its terminal there (`attachfiles`) and types its path.
-        args.extend(
-            self.agent_read_dir(id)
-                .into_iter()
-                .flat_map(|d| view.read_dir_args(&d)),
-        );
-        let launch = view.escouade(harness, &access, &config_dir);
-        args.extend(launch.args);
-        // Its hooks, and Escouade's server kept out of it when its tools are refused.
-        let written = match &started_from.file {
-            Some(bytes) => std::fs::write(&settings_file, bytes).map_err(anyhow::Error::from),
-            None => Ok(()),
-        }
-        .and_then(|()| {
-            for (path, bytes) in &started_from.files {
-                if let Some(dir) = path.parent() {
-                    std::fs::create_dir_all(dir)?;
-                }
-                std::fs::write(path, bytes)?;
-            }
-            Ok(())
-        });
-        if let Err(e) = written {
-            if let Some(t) = access.token() {
-                self.mcp.release_agent(id, t);
-            }
-            return Err(e);
-        }
-        // Cursor: the conversation so far, where its interface reads it.
-        self.relay_to_interface(view, h).await;
+        // Its plugin describes the launch (`terminal/launch`), which the core checks; switched off or uninstalled, the
+        // interface does not start, and the window says why.
+        let plugin = crate::plugins::harness::plugged_for(harness.id(), harness_name, true)?;
         let token = self.hooks.grant(id);
         let mut env = [settings.agent_env(), accounts::launch_env(&account)].concat();
+        let env_names: Vec<String> = env
+            .iter()
+            .filter(|(_, v)| !v.is_empty())
+            .map(|(k, _)| k.clone())
+            .collect();
         // A configuration folder of the agent's own, the one of its process (Cursor: what its
         // « Toujours » keeps, and its model).
         if let Some(var) = harness.agent_home_var() {
@@ -1544,30 +1508,181 @@ impl<R: Runtime> Core<R> {
             env.push((var.to_string(), home.to_string_lossy().into_owned()));
         }
         env.push((TOKEN_VAR.into(), token));
-        env.extend(started_from.env);
-        env.extend(launch.env);
-        let masked = view.masked_env(&env);
-        env.extend(masked);
-        no_proxy(&mut env);
-        // What its harness has to be asked before it starts (Codex: the trust of its hooks).
-        match view.prepare(&program, &cwd, &args, &env).await {
-            Ok(more) => args.extend(more),
+        env.extend(view.core_env());
+        let spelled = crate::fence::spelled(&fence, &program);
+        let refused = matches!(access, Escouade::Denied { .. });
+        // Claude Code's: the fence is a settings file the core writes, in its interface's private file here.
+        let by_core = (!spelled.is_empty() || refused)
+            .then(|| harness.fence_settings(refused, &fence, &program))
+            .flatten();
+        // What the core writes in the agent's home for its agents (Vibe's trust and fence, Gemini's settings and rules,
+        // Antigravity's hooks of before taken away), written for its interface too, before its plugin reads it.
+        let prepared = match crate::plugins::harness::prepare_of(harness.id()) {
+            Some(prepare) => {
+                let prepared = prepare(&crate::plugins::harness::Preparing {
+                    home: home.as_deref(),
+                    cwd: &cwd,
+                    fence: &spelled,
+                    read_only: meta.discussion.is_some(),
+                    env: &env,
+                });
+                match prepared {
+                    Ok(more) => more,
+                    Err(e) => {
+                        self.hooks.revoke(id);
+                        if let Some(t) = access.token() {
+                            self.mcp.release_agent(id, t);
+                        }
+                        return Err(e);
+                    }
+                }
+            }
+            None => Vec::new(),
+        };
+        let params = escouade_plugin_protocol::engine::TerminalParams {
+            agent: format!("tui-{id}"),
+            cwd: cwd.clone(),
+            session: meta.session_id.clone(),
+            model: meta.model.clone(),
+            mode: meta.mode.clone(),
+            effort: meta.effort.clone(),
+            append_prompt: meta.append_prompt.clone(),
+            new_session: new_session.clone(),
+            fork_of: meta.fork_of.clone(),
+            fork_at: meta.fork_at.clone(),
+            resumes: meta
+                .session_id
+                .as_deref()
+                .is_some_and(|s| view.can_resume(&config_dir, s)),
+            remote: remote.clone(),
+            home: home.as_ref().map(|h| h.to_string_lossy().into_owned()),
+            hook_url: url.clone(),
+            hook_token_var: TOKEN_VAR.into(),
+            hook_command: command.as_ref().map(|c| c.to_string_lossy().into_owned()),
+            hook_url_var: URL_VAR.into(),
+            escouade: match &access {
+                Escouade::Granted { url, token, .. } => {
+                    Some(escouade_plugin_protocol::engine::Grant {
+                        url: url.clone(),
+                        token: token.clone(),
+                    })
+                }
+                Escouade::Denied { .. } => None,
+            },
+            escouade_file: match &access {
+                Escouade::Granted { file, .. } => {
+                    file.as_ref().map(|f| f.to_string_lossy().into_owned())
+                }
+                Escouade::Denied { .. } => None,
+            },
+            fence: spelled.clone(),
+            read_only: meta.discussion.is_some(),
+            private_file: settings_file.to_string_lossy().into_owned(),
+            read_dirs: self
+                .agent_read_dir(id)
+                .into_iter()
+                .map(|d| d.to_string_lossy().into_owned())
+                .collect(),
+            config_dir: Some(config_dir.to_string_lossy().into_owned()),
+            env_names,
+            path: std::env::var_os("PATH").map(|p| p.to_string_lossy().into_owned()),
+            lang: crate::i18n::ui().tag().to_string(),
+        };
+        let place = crate::plugins::files::AgentPlace {
+            cwd: PathBuf::from(&cwd),
+            repo: crate::plugins::files::repo_of(Path::new(&cwd)),
+            home: home.clone().or_else(|| Some(config_dir.clone())),
+            fence: fence.clone(),
+            project: meta.project_id.clone(),
+        };
+        let told = match plugin
+            .terminal_launch(params, place, by_core.is_some() || view.fence_by_core())
+            .await
+        {
+            Ok(t) => t,
             Err(e) => {
-                log::warn!("agent {id}: {harness_name}'s interface not prepared: {e:#}");
-                let text = tr!(
-                    "Escouade ne suivra pas l’état de cet agent dans son terminal : {harness} n’a pas dit comment approuver ses hooks ({error}).",
-                    "Escouade won’t follow this agent’s state in its terminal: {harness} did not tell how to trust its hooks ({error}).",
-                    harness = harness_name,
-                    error = format!("{e:#}")
-                );
+                self.hooks.revoke(id);
+                if let Some(t) = access.token() {
+                    self.mcp.release_agent(id, t);
+                }
+                return Err(e);
+            }
+        };
+        let mut launch = told.launch;
+        if let Some(core) = &by_core {
+            let private = settings_file.to_string_lossy();
+            for f in launch.files.iter_mut().filter(|f| f.path == private) {
+                if let Some(text) = with_core_settings(&f.text, core, !spelled.is_empty()) {
+                    f.text = text;
+                }
+            }
+        }
+        if let Err(e) = crate::plugins::harness::write_files(&launch) {
+            self.hooks.revoke(id);
+            if let Some(t) = access.token() {
+                self.mcp.release_agent(id, t);
+            }
+            return Err(e);
+        }
+        // Cursor: the conversation so far, where its interface reads it.
+        self.relay_to_interface(view, h).await;
+        env.extend(launch.env.drain(..).map(|v| (v.name, v.value)));
+        env.extend(launch.remove_env.drain(..).map(|k| (k, String::new())));
+        no_proxy(&mut env);
+        if let Some(text) = told.warn {
+            log::warn!("agent {id}: {harness_name}'s interface: {text}");
+            let _ = self.with_agent(id, |rt, fx| {
+                rt.notice("warn", text, fx);
+                Ok(())
+            });
+        }
+        let mut args = launch.args;
+        args.extend(prepared);
+        // What its harness has to be asked before it starts (Codex: the trust of its hooks; Copilot CLI: a model its
+        // account does not list), by a process of its account.
+        if let Some(before) = told.before {
+            let mut input = before.input.clone();
+            if !input.is_object() {
+                input = json!({});
+            }
+            input["args"] = json!(args);
+            let read = plugin
+                .account_read(
+                    &before.read,
+                    input.clone(),
+                    &program,
+                    &env,
+                    &config_dir,
+                    Some(&cwd),
+                )
+                .await;
+            let said = match read {
+                Ok(v) => {
+                    if let Some(given) = v["args"].as_array() {
+                        args = given
+                            .iter()
+                            .filter_map(|a| a.as_str().map(str::to_string))
+                            .collect();
+                    }
+                    v["warn"].as_str().map(str::to_string)
+                }
+                Err(e) => {
+                    log::warn!(
+                        "agent {id}: {harness_name}'s interface: {}: {e:#}",
+                        before.read
+                    );
+                    input["failed"]
+                        .as_str()
+                        .map(|t| t.replace("{error}", &format!("{e:#}")))
+                }
+            };
+            if let Some(text) = said {
                 let _ = self.with_agent(id, |rt, fx| {
                     rt.notice("warn", text, fx);
                     Ok(())
                 });
             }
         }
-        // What its account would refuse (Copilot CLI: a model a Free account does not list).
-        let args = view.for_account(&program, &cwd, args, &env).await;
         let info = TermInfo {
             id: new_id(),
             // No project's: the window lists it with no project's terminals.
@@ -1758,8 +1873,21 @@ impl<R: Runtime> Core<R> {
         let Ok((view, _)) = view_of(m) else { return };
         let settings = self.settings.read().clone();
         let account = accounts::get(&settings, &m.account);
-        let file = self.data.root().join("tui").join(format!("{}.json", m.id));
+        let dir = self.data.root().join("tui");
+        let file = dir.join(format!("{}.json", m.id));
         view.forget(&file, &accounts::config_dir(&account, &settings));
+        // What its plugin wrote beside its private file (`terminal/launch`): `<id>.<anything>`.
+        let own = format!("{}.", m.id);
+        for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if !entry.file_name().to_string_lossy().starts_with(&own) || path == file {
+                continue;
+            }
+            let _ = match path.is_dir() {
+                true => std::fs::remove_dir_all(&path),
+                false => std::fs::remove_file(&path),
+            };
+        }
     }
 
     /// Removes the images pasted in the interface of the agent `id`, which is deleted.
@@ -2336,14 +2464,32 @@ impl<R: Runtime> Core<R> {
                 _ => return,
             }
         };
-        let mut env = [settings.agent_env(), accounts::launch_env(account)].concat();
-        let masked = view.masked_env(&env);
-        env.extend(masked);
-        no_proxy(&mut env);
-        let Some(copy) = view.copy_first(program, &cwd, &env, &of, at.as_deref()) else {
+        if !view.copies_first() {
             return;
-        };
-        let copied = copy.await;
+        }
+        let harness = crate::engine::of(&h.lock().meta);
+        let mut env = [settings.agent_env(), accounts::launch_env(account)].concat();
+        no_proxy(&mut env);
+        let config_dir = accounts::config_dir(account, settings);
+        // By its plugin, a process of the account (`account/read` of `fork`): its answer is the copy's id.
+        let copied = async {
+            let plugin = crate::plugins::harness::plugged_for(harness.id(), harness.name(), true)?;
+            let v = plugin
+                .account_read(
+                    "fork",
+                    json!({ "of": of, "at": at }),
+                    program,
+                    &env,
+                    &config_dir,
+                    Some(&cwd),
+                )
+                .await?;
+            v["session"]
+                .as_str()
+                .map(str::to_string)
+                .ok_or_else(|| anyhow!("{}: fork: no session", harness.name()))
+        }
+        .await;
         let _ = self.with_agent(id, |rt, fx| {
             match copied {
                 Ok(session) => {
@@ -2686,65 +2832,6 @@ mod tests {
             mode: "default".into(),
             ..Default::default()
         }
-    }
-
-    #[test]
-    fn a_new_agent_starts_a_session_of_its_own_and_a_known_one_is_resumed() {
-        let f = Path::new("/data/tui/a1.json");
-        let a = tui_args(&meta(), Some("s-new"), None, f);
-        assert!(a.contains(&"--session-id=s-new".to_string()));
-        assert!(a
-            .windows(2)
-            .any(|w| w == ["--settings", "/data/tui/a1.json"]));
-        assert!(a.windows(2).any(|w| w == ["--permission-mode", "default"]));
-        // Nothing of the stream's.
-        assert!(!a.iter().any(|x| x.contains("stream-json") || x == "-p"));
-        let resumed = AgentMeta {
-            session_id: Some("s1".into()),
-            ..meta()
-        };
-        let a = tui_args(&resumed, None, None, f);
-        assert!(a.contains(&"--resume=s1".to_string()));
-        assert!(!a.iter().any(|x| x.starts_with("--session-id")));
-        // A copy forks its original's into its own.
-        let copy = AgentMeta {
-            fork_of: Some("s0".into()),
-            fork_at: Some("e1".into()),
-            ..meta()
-        };
-        let a = tui_args(&copy, Some("s2"), None, f);
-        for x in [
-            "--resume=s0",
-            "--fork-session",
-            "--resume-session-at=e1",
-            "--session-id=s2",
-        ] {
-            assert!(a.contains(&x.to_string()), "{x} in {a:?}");
-        }
-    }
-
-    #[test]
-    fn an_interface_with_remote_control_starts_with_its_name_in_claude_ai() {
-        let f = Path::new("/data/tui/a1.json");
-        let a = tui_args(&meta(), Some("s-new"), Some("demo · agent-1"), f);
-        // One argument, the name glued to the flag: a name is never taken for an option of its own.
-        assert!(
-            a.contains(&"--remote-control=demo · agent-1".to_string()),
-            "{a:?}"
-        );
-        assert!(!a.iter().any(|x| x == "--remote-control"), "{a:?}");
-        // Not even one that starts with « - ».
-        let a = tui_args(&meta(), Some("s-new"), Some("-demo · agent-1"), f);
-        assert!(
-            a.contains(&"--remote-control=-demo · agent-1".to_string()),
-            "{a:?}"
-        );
-        assert!(!a.contains(&"-demo · agent-1".to_string()), "{a:?}");
-        let a = tui_args(&meta(), Some("s-new"), None, f);
-        assert!(
-            !a.iter().any(|x| x.starts_with("--remote-control")),
-            "{a:?}"
-        );
     }
 
     fn collecting() -> (Arc<Mutex<Vec<u8>>>, Forward) {
@@ -3112,42 +3199,37 @@ mod tests {
     }
 
     #[test]
-    fn the_hooks_call_the_server_with_the_token_of_the_environment() {
-        let granted = Escouade::Granted {
-            url: "http://127.0.0.1:4321/mcp".into(),
-            token: "t".into(),
-            file: Some(PathBuf::from("/data/mcp/a1.json")),
-        };
-        let s = tui_settings(4321, &crate::engine::CLAUDE, &granted);
-        let h = &s["hooks"]["PermissionRequest"][0]["hooks"][0];
-        assert_eq!(h["type"], "http");
-        assert_eq!(h["url"], "http://127.0.0.1:4321/hook");
-        assert_eq!(h["headers"]["Authorization"], "Bearer $ESCOUADE_HOOK_TOKEN");
-        assert_eq!(h["allowedEnvVars"][0], TOKEN_VAR);
-        for e in EVENTS {
-            assert!(s["hooks"][e].is_array(), "{e}");
-        }
-        // Claude Code skips its HTTP hooks for SessionStart ("HTTP hooks are not supported for
-        // SessionStart"): none is asked for there, the registry of its sessions says it is up.
-        assert!(!EVENTS.contains(&"SessionStart"));
-        assert!(s["hooks"].get("SessionStart").is_none(), "{s}");
-        assert!(s.get("deniedMcpServers").is_none(), "{s}");
-    }
-
-    #[test]
     fn an_interface_refused_escouades_tools_is_kept_from_its_server_by_the_same_settings() {
-        // Claude Code reads the last `--settings` only: the refusal goes into the hooks' file.
-        let s = tui_settings(
-            4321,
-            &crate::engine::CLAUDE,
-            &Escouade::Denied { file: None },
-        );
-        assert!(s["hooks"]["PermissionRequest"].is_array(), "{s}");
+        // Claude Code reads the last `--settings` only: the refusal goes into the file of its hooks, its plugin's.
+        let hooks = json!({ "hooks": { "PermissionRequest": [] } }).to_string();
+        let fence = crate::fence::Fence::new(vec![PathBuf::from("/secret")]);
+        let program = crate::engine::Program::Native(PathBuf::new());
+        let core = crate::engine::CLAUDE
+            .fence_settings(true, &fence, &program)
+            .unwrap();
+        let fenced: Value =
+            serde_json::from_str(&with_core_settings(&hooks, &core, true).unwrap()).unwrap();
+        assert!(fenced["hooks"]["PermissionRequest"].is_array(), "{fenced}");
         assert_eq!(
-            s["deniedMcpServers"],
-            json!([{ "serverName": "escouade" }]),
-            "{s}"
+            fenced["deniedMcpServers"],
+            json!([{ "serverName": "escouade" }])
         );
+        assert!(
+            fenced["permissions"]["deny"].to_string().contains("secret"),
+            "{fenced}"
+        );
+        // No private project: the refusal alone, no rule of a fence.
+        let plain: Value =
+            serde_json::from_str(&with_core_settings(&hooks, &core, false).unwrap()).unwrap();
+        assert_eq!(
+            plain["deniedMcpServers"],
+            json!([{ "serverName": "escouade" }])
+        );
+        assert!(
+            plain.get("permissions").is_none() && plain.get("sandbox").is_none(),
+            "{plain}"
+        );
+        assert!(with_core_settings("pas du JSON", &core, true).is_none());
     }
 
     #[test]
@@ -3430,7 +3512,7 @@ mod tests {
 
     #[test]
     fn a_session_given_up_is_replaced_by_a_new_one_in_the_arguments() {
-        let f = Path::new("/data/tui/a1.json");
+        let _f = Path::new("/data/tui/a1.json");
         for lost in [
             AgentMeta {
                 session_id: Some("s1".into()),
@@ -3447,13 +3529,8 @@ mod tests {
             let dir = std::env::temp_dir().join(format!("escouade-tui-forget-{}", new_id()));
             let mut rt = crate::agent::AgentRt::new(lost, &dir);
             rt.forget_session();
-            let a = tui_args(&rt.meta, Some("s-new"), None, f);
-            assert!(a.contains(&"--session-id=s-new".to_string()), "{a:?}");
-            assert!(
-                !a.iter()
-                    .any(|x| x.starts_with("--resume") || x == "--fork-session"),
-                "{a:?}"
-            );
+            // Nothing left to resume nor to copy: its interface starts a session of its own (`terminal/launch`).
+            assert_eq!(session_to_resume(&rt.meta), None);
             assert_eq!(
                 (
                     &rt.meta.session_id,

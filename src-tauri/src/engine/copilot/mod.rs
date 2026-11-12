@@ -16,16 +16,9 @@ mod prompt;
 #[cfg(test)]
 mod schema_tests;
 pub(crate) mod terminal;
-mod words;
 
 #[cfg(test)]
 pub(crate) use bench::fake_copilot;
-#[cfg(test)]
-pub(crate) use words::{
-    agent_mode, call_nano, form_content, limit_answer, next_month, permission_mode, prices,
-    session_approval,
-};
-pub(crate) use words::{takes_effort, SECRETS, TOKEN_VAR};
 
 use super::registry::{
     CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
@@ -33,18 +26,14 @@ use super::registry::{
 };
 use super::userconfig::{Format, UserConfig};
 use super::{
-    mcp, BoxFuture, Engine, Escouade, Message, OneShot, Process, Program, Room, Spawn, StartLost,
-    Weight,
+    mcp, BoxFuture, Engine, Message, OneShot, Process, Program, Room, Spawn, StartLost, Weight,
 };
 use crate::agent::{AgentRt, Effects};
 use crate::core::{size_label, Attachment, MAX_IMAGE, MAX_TOTAL};
 use crate::i18n::{self, Lang};
 use crate::model::EngineId;
-use crate::model::QuotaMeter;
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
-#[cfg(test)]
-use std::collections::HashMap;
 
 /// GitHub Copilot CLI.
 pub struct Copilot;
@@ -65,7 +54,23 @@ const INSTALL: Install = Install {
 };
 
 /// The models of its menu until a process of the account has listed them.
-const MODELS: [(&str, &str); 2] = words::MODELS;
+/// The models of its menu until a process of the account has listed them: those its real run on a Free account ran
+/// (`gpt-6-luna` chosen by `auto`, `gpt-5-mini` taken by `session.model.switchTo`). Never `auto`, which picks a model
+/// itself.
+const MODELS: [(&str, &str); 2] = [("gpt-6-luna", "GPT-6 Luna"), ("gpt-5-mini", "GPT-5 mini")];
+
+/// The variables a token of GitHub reaches Copilot in, taken before its own sign-in: kept from the processes of an
+/// account of its own (`COPILOT_HOME`), the core's to give.
+pub(crate) const INHERITED_TOKENS: [&str; 3] = ["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"];
+
+/// The variable the token of Escouade's server reaches Copilot in: the entry of the file the core writes names it
+/// (`${ESCOUADE_MCP_TOKEN}`), so that neither its file nor its command line holds the token.
+pub(crate) const TOKEN_VAR: &str = "ESCOUADE_MCP_TOKEN";
+
+/// Whether `model` takes a reasoning effort, for the menu: never « auto », which picks the model itself.
+pub(crate) fn takes_effort(model: &str) -> bool {
+    !model.eq_ignore_ascii_case("auto")
+}
 
 /// The efforts Escouade's menu has, in its order: a model's `supportedReasoningEfforts` among them.
 const EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
@@ -149,28 +154,6 @@ pub fn caps() -> EngineCaps {
     }
 }
 
-/// The arguments of its server.
-fn args() -> Vec<String> {
-    words::server_args()
-}
-
-/// The models of the account, as `words::catalog` says them.
-pub(crate) fn catalog(
-    listed: Option<&Value>,
-    of_session: Option<&Value>,
-) -> Option<Vec<ToldModel>> {
-    serde_json::from_value(Value::Array(words::catalog(listed, of_session))).ok()
-}
-
-#[cfg(test)]
-use words::fenced;
-
-/// What the agent is told of a permission `fenced` refused, in `lang`.
-#[cfg(test)]
-fn fence_refusal(lang: Lang) -> String {
-    words::fence_refusal(lang.tag())
-}
-
 /// A message to Copilot: its text, the images joined to it (`blob`), the text files joined to it as
 /// text. A PDF is refused.
 fn message(text: &str, attachments: &[Attachment]) -> Result<Value> {
@@ -225,16 +208,6 @@ fn message(text: &str, attachments: &[Attachment]) -> Result<Value> {
     Ok(m)
 }
 
-/// The month's credits as Copilot's quota says them, as a meter.
-pub(crate) fn credits(snapshots: &Value, now: i64) -> Option<QuotaMeter> {
-    words::credits(snapshots, now).map(|c| {
-        QuotaMeter::credits(crate::model::RateWindow {
-            pct: c.pct,
-            resets_at: Some(c.resets_at),
-        })
-    })
-}
-
 /// The private file of a process given Escouade's server: its entry, read by
 /// `--additional-mcp-config @<file>`, the token named and not written.
 fn grant_file(url: &str) -> Vec<u8> {
@@ -245,30 +218,6 @@ fn grant_file(url: &str) -> Vec<u8> {
         "tools": ["*"],
     } } });
     serde_json::to_vec_pretty(&entry).unwrap_or_default()
-}
-
-/// What a process is started with of Escouade's server: given, its entry's file and the token in
-/// the environment; refused, `--disable-mcp-server escouade`, which does nothing in the server mode
-/// (tried): the process also turns an entry of the user's off for its session
-/// (`session.mcp.disable`).
-fn escouade_launch(escouade: &Escouade) -> mcp::Launch {
-    match escouade {
-        Escouade::Granted {
-            token,
-            file: Some(file),
-            ..
-        } => mcp::Launch {
-            args: vec![
-                "--additional-mcp-config".into(),
-                format!("@{}", file.to_string_lossy()),
-            ],
-            env: vec![(TOKEN_VAR.into(), token.clone())],
-        },
-        _ => mcp::Launch {
-            args: vec!["--disable-mcp-server".into(), mcp::SERVER.into()],
-            env: Vec::new(),
-        },
-    }
 }
 
 /// « Les agents peuvent piloter Escouade »: the entry in each account's `mcp-config.json`, as
@@ -398,20 +347,6 @@ impl Engine for Copilot {
         INSTALL
     }
 
-    /// `models.list` of a server of its own (`terminal::models_list`, ESC-186), as `catalog` makes
-    /// the menu of it: a Free account's lists none, and keeps the declared models.
-    fn list_models<'a>(
-        &'a self,
-        program: Program,
-        env: Vec<(String, String)>,
-        dir: &'a std::path::Path,
-    ) -> BoxFuture<'a, Result<Option<Vec<ToldModel>>>> {
-        Box::pin(async move {
-            let listed = terminal::models_list(&program, &dir.to_string_lossy(), &env).await?;
-            Ok(catalog(Some(&listed), None))
-        })
-    }
-
     fn models(&self) -> Vec<ModelDecl> {
         MODELS
             .iter()
@@ -428,23 +363,31 @@ impl Engine for Copilot {
         &EFFORTS
     }
 
-    /// `account.getQuota` of a server of the account's own, started then stopped (no session, no
-    /// model asked): not signed in as the account, said so.
+    /// Its plugin reads them (`account/read` of `models`), by a process of the account the core starts.
+    fn list_models<'a>(
+        &'a self,
+        program: Program,
+        env: Vec<(String, String)>,
+        dir: &'a std::path::Path,
+    ) -> BoxFuture<'a, Result<Option<Vec<ToldModel>>>> {
+        Box::pin(async move {
+            crate::plugins::harness::plugged_for(self.id(), self.name(), false)?
+                .account_models(&program, &env, dir)
+                .await
+        })
+    }
+
+    /// Its plugin reads it (`account/read` of `quota`), by a process of the account the core starts.
     fn read_quota<'a>(
         &'a self,
         program: Program,
         env: Vec<(String, String)>,
-        _dir: &'a std::path::Path,
+        dir: &'a std::path::Path,
     ) -> BoxFuture<'a, Result<Option<crate::usage::Reading>>> {
         Box::pin(async move {
-            let cwd = std::env::temp_dir().to_string_lossy().into_owned();
-            let refused = escouade_launch(&Escouade::Denied { file: None }).args;
-            let Some(snapshots) = terminal::read_quota(&program, &cwd, &env, &refused).await?
-            else {
-                return Ok(Some(crate::usage::Reading::NotSignedIn));
-            };
-            let now = chrono::Utc::now().timestamp_millis();
-            Ok(credits(&snapshots, now).map(|m| crate::usage::Reading::Windows(vec![m])))
+            crate::plugins::harness::plugged_for(self.id(), self.name(), false)?
+                .account_quota(&program, &env, dir)
+                .await
         })
     }
 
@@ -522,10 +465,6 @@ impl Engine for Copilot {
         None
     }
 
-    fn escouade_launch(&self, escouade: &Escouade) -> mcp::Launch {
-        escouade_launch(escouade)
-    }
-
     fn user_config(&self) -> Option<&'static UserConfig> {
         Some(&USER_CONFIG)
     }
@@ -539,162 +478,6 @@ impl Engine for Copilot {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn recorded(file: &str) -> Vec<Value> {
-        bench::recorded(file)
-    }
-
-    #[test]
-    fn each_mode_of_escouade_has_its_permissions_and_agent_mode_in_copilot() {
-        assert_eq!(permission_mode("bypassPermissions"), "allow-all");
-        for mode in ["default", "plan", "acceptEdits", "auto"] {
-            assert_eq!(permission_mode(mode), "manual", "{mode}");
-        }
-        assert_eq!(agent_mode("plan"), "plan");
-        assert_eq!(agent_mode("auto"), "autopilot");
-        assert_eq!(agent_mode("acceptEdits"), "interactive");
-        assert_eq!(agent_mode("default"), "interactive");
-        for mode in MODES {
-            let (fr, en) = (meaning(Lang::Fr, mode), meaning(Lang::En, mode));
-            assert!(!fr.is_empty() && !en.is_empty() && fr != en, "{mode}");
-            assert!(
-                fr.contains("bac à sable") && en.contains("sandbox"),
-                "{mode}"
-            );
-        }
-        assert_eq!(caps().modes.len(), 5);
-    }
-
-    #[test]
-    fn the_server_has_no_builtin_mcp_nor_temporary_folder_and_hides_the_tokens() {
-        let a = args();
-        for flag in [
-            "--server",
-            "--stdio",
-            "--no-auto-update",
-            "--disable-builtin-mcps",
-            "--disallow-temp-dir",
-        ] {
-            assert!(a.iter().any(|x| x == flag), "{flag}");
-        }
-        assert!(a
-            .iter()
-            .any(|x| x.starts_with("--secret-env-vars=") && x.contains("GH_TOKEN")));
-        assert!(!a.iter().any(|x| x == "--experimental"), "no assisted mode");
-    }
-
-    #[test]
-    fn a_free_account_lists_no_model_and_the_menu_keeps_its_own_with_their_price() {
-        let list = recorded("first-turn.jsonl")
-            .into_iter()
-            .find(|m| m["result"]["modelPriceCategories"].is_array())
-            .expect("the answer to session.model.list");
-        let models = catalog(Some(&json!({ "models": [] })), Some(&list["result"])).unwrap();
-        let ids: Vec<&str> = models.iter().map(|m| m.id.as_str()).collect();
-        assert_eq!(ids, ["gpt-6-luna", "gpt-5-mini"]);
-        assert_eq!(models[0].price.as_deref(), Some("low"));
-        assert!(models[0].default && !models[1].default);
-        assert!(models.iter().all(|m| m.id != "auto"));
-    }
-
-    #[test]
-    fn a_listed_model_says_its_multiplier_efforts_and_images() {
-        let listed = json!({ "models": [
-            { "id": "claude-sonnet-4.5", "name": "Claude Sonnet 4.5",
-              "capabilities": { "supports": { "vision": true } },
-              "billing": { "multiplier": 3 },
-              "supportedReasoningEfforts": ["low", "medium", "high"], "defaultReasoningEffort": "medium" },
-            { "id": "gpt-5-mini", "name": "GPT-5 mini", "billing": { "multiplier": 0.33 } },
-            { "id": "o9", "name": "O9", "policy": { "state": "disabled" } },
-        ] });
-        let models = catalog(Some(&listed), None).unwrap();
-        assert_eq!(models.len(), 2, "the disabled one left out");
-        let sonnet = &models[0];
-        assert_eq!(sonnet.multiplier.as_deref(), Some("3"));
-        assert_eq!(sonnet.efforts, ["low", "medium", "high"]);
-        assert_eq!(sonnet.default_effort.as_deref(), Some("medium"));
-        assert!(sonnet.images && sonnet.default);
-        assert_eq!(models[1].multiplier.as_deref(), Some("0.33"));
-    }
-
-    #[test]
-    fn a_permission_that_names_a_path_of_the_fence_is_refused_by_escouade() {
-        let fence = vec![r"C:\Code\Secret".to_string()];
-        // Read, written, in a command, among the paths a command may touch.
-        for r in [
-            json!({ "kind": "read", "path": "C:/code/secret/a.txt" }),
-            json!({ "kind": "write", "fileName": r"C:\Code\Secret\b.rs" }),
-            json!({ "kind": "shell", "fullCommandText": r"Get-Content C:\Code\Secret\a.txt" }),
-            json!({ "kind": "shell", "fullCommandText": "x", "possiblePaths": [r"C:\Code\Secret"] }),
-        ] {
-            assert_eq!(
-                fenced(&r, &fence),
-                cfg!(windows) || r["kind"] != "read",
-                "{r}"
-            );
-        }
-        assert!(!fenced(
-            &json!({ "kind": "read", "path": r"C:\Code\Other\a.txt" }),
-            &fence
-        ));
-        assert!(!fenced(
-            &json!({ "kind": "url", "url": "https://x" }),
-            &fence
-        ));
-        // No fence, nothing refused.
-        assert!(!fenced(
-            &json!({ "kind": "read", "path": r"C:\Code\Secret\a.txt" }),
-            &[]
-        ));
-        assert_ne!(fence_refusal(Lang::Fr), fence_refusal(Lang::En));
-    }
-
-    #[test]
-    fn for_this_session_remembers_each_kind_and_never_writes_a_rule_of_copilots() {
-        let of = |r: Value| session_approval(&json!({ "permissionRequest": r }));
-        let shell = of(json!({ "kind": "shell", "commands": [{ "identifier": "npm test" }] }));
-        assert_eq!(shell["kind"], "approve-for-session");
-        assert_eq!(shell["approval"]["commandIdentifiers"], json!(["npm test"]));
-        assert_eq!(of(json!({ "kind": "write" }))["approval"]["kind"], "write");
-        assert_eq!(of(json!({ "kind": "read" }))["approval"]["kind"], "read");
-        let mcp = of(json!({ "kind": "mcp", "serverName": "essai", "toolName": "ping" }));
-        assert_eq!(mcp["approval"]["serverName"], "essai");
-        assert_eq!(
-            of(json!({ "kind": "url", "url": "https://example.com/a" }))["domain"],
-            "example.com"
-        );
-        for kind in ["shell", "write", "read", "mcp", "url", "memory"] {
-            let a = of(json!({ "kind": kind, "url": "https://x.y" }));
-            let s = a.to_string();
-            assert!(
-                !s.contains("approve-permanently") && !s.contains("approve-for-location"),
-                "{s}"
-            );
-        }
-    }
-
-    #[test]
-    fn a_forms_answers_are_typed_as_its_schema_says() {
-        let schema = json!({ "type": "object", "properties": {
-            "prenom": { "type": "string", "title": "Prénom" },
-            "age": { "type": "number", "title": "Âge" },
-            "n": { "type": "integer" },
-            "ok": { "type": "boolean" },
-            "vide": { "type": "string" },
-        } });
-        let input = json!({
-            "questions": [
-                { "id": "prenom", "question": "Prénom" }, { "id": "age", "question": "Âge" },
-                { "id": "n", "question": "n" }, { "id": "ok", "question": "ok" },
-                { "id": "vide", "question": "vide" },
-            ],
-            "answers": { "Prénom": "Camille", "Âge": "30,5", "n": "4", "ok": "Oui", "vide": "" },
-        });
-        assert_eq!(
-            form_content(&schema, &input),
-            json!({ "prenom": "Camille", "age": 30.5, "n": 4, "ok": true })
-        );
-    }
 
     #[test]
     fn a_message_takes_its_images_and_text_files_and_refuses_a_pdf() {
@@ -719,134 +502,5 @@ mod tests {
             message("bonjour", &[]).unwrap(),
             json!({ "prompt": "bonjour" })
         );
-    }
-
-    #[test]
-    fn the_months_credits_come_from_chat_and_a_reading_without_its_end_ends_next_month() {
-        let at = |d: &str| {
-            chrono::DateTime::parse_from_rfc3339(d)
-                .unwrap()
-                .timestamp_millis()
-        };
-        let now = at("2026-10-18T10:00:00Z");
-        // A call's snapshot (`assistant.usage`): its own end.
-        let call = json!({ "chat": { "entitlementRequests": 200, "usedRequests": 1,
-            "remainingPercentage": 99.3, "resetDate": "2026-11-01T00:00:00Z" } });
-        let m = credits(&call, now).unwrap();
-        assert_eq!((m.minutes, m.pct), (None, 0.7));
-        assert_eq!(m.resets_at, Some(at("2026-11-01T00:00:00Z")));
-        // `account.getQuota` says the time of its reading: the first of next month instead.
-        let read = json!({ "chat": { "entitlementRequests": 200, "remainingPercentage": 80,
-            "resetDate": "2026-10-18T09:59:59Z" } });
-        let m = credits(&read, now).unwrap();
-        assert_eq!(m.pct, 20.0);
-        assert_eq!(m.resets_at, Some(at("2026-11-01T00:00:00Z")));
-        // `session.quota.get`: in epoch ms; December goes to January.
-        let dec = at("2026-12-30T10:00:00Z");
-        let m = credits(
-            &json!({ "chat": { "entitlementRequests": 200, "remainingPercentage": 0 } }),
-            dec,
-        )
-        .unwrap();
-        assert_eq!(m.pct, 100.0);
-        assert_eq!(m.resets_at, Some(at("2027-01-01T00:00:00Z")));
-        // A plan without a limit, or nothing told: no meter. Premium requests when chat has none.
-        let unlimited = json!({ "chat": { "isUnlimitedEntitlement": true,
-            "entitlementRequests": -1, "remainingPercentage": 100 } });
-        assert_eq!(credits(&unlimited, now), None);
-        assert_eq!(credits(&json!({}), now), None);
-        let premium = json!({
-            "chat": { "entitlementRequests": 0, "remainingPercentage": 0 },
-            "premium_interactions": { "entitlementRequests": 300, "remainingPercentage": 75 },
-        });
-        assert_eq!(credits(&premium, now).unwrap().pct, 25.0);
-        // As the real run read them out of a session (ESC-23).
-        let got = recorded("first-turn.jsonl")
-            .into_iter()
-            .filter_map(|m| m["result"]["snapshots"]["chat"]["resetDateEpochMs"].as_i64())
-            .next()
-            .unwrap();
-        assert_eq!(got, at("2026-11-01T00:00:00Z"));
-    }
-
-    #[test]
-    fn a_calls_cost_is_its_nano_aiu_else_its_details_else_its_models_prices() {
-        // Every call of the real runs: their details make their total, to the nano-AIU.
-        let mut checked = 0;
-        for file in [
-            "first-turn.jsonl",
-            "assisted-autopilot.jsonl",
-            "full-turn.jsonl",
-        ] {
-            for m in recorded(file) {
-                let d = &m["params"]["event"]["data"];
-                if m["params"]["event"]["type"] != "assistant.usage" {
-                    continue;
-                }
-                let Some(total) = d["copilotUsage"]["totalNanoAiu"].as_u64() else {
-                    continue;
-                };
-                assert_eq!(call_nano(d, &HashMap::new()), total);
-                let mut untold = d.clone();
-                untold["copilotUsage"]
-                    .as_object_mut()
-                    .unwrap()
-                    .remove("totalNanoAiu");
-                let by_details = call_nano(&untold, &HashMap::new()) as i64;
-                assert!((by_details - total as i64).abs() <= 1, "{file}");
-                checked += 1;
-            }
-        }
-        assert!(checked >= 3, "{checked}");
-        // Neither: the prices of its model, from `models.list`.
-        let listed = json!({ "models": [
-            { "id": "gpt-6-luna", "billing": { "multiplier": 1, "tokenPrices": {
-                "inputPrice": 10, "cacheReadPrice": 1, "cacheWritePrice": 12.5,
-                "outputPrice": 50, "batchSize": 1_000_000 } } },
-            { "id": "gpt-5-mini", "billing": { "multiplier": 0.33 } },
-        ] });
-        let prices = prices(&listed);
-        assert_eq!(prices.len(), 1);
-        let usage = json!({ "model": "gpt-6-luna", "inputTokens": 12 + 40_145 + 13_657,
-            "cacheReadTokens": 40_145, "cacheWriteTokens": 13_657, "outputTokens": 325 });
-        assert_eq!(call_nano(&usage, &prices), 227_227_500);
-        // An unknown model: nothing to count.
-        assert_eq!(
-            call_nano(&json!({ "model": "x", "inputTokens": 5 }), &prices),
-            0
-        );
-    }
-
-    #[test]
-    fn escouades_server_is_given_by_a_file_that_names_the_token_and_refused_by_its_name() {
-        let url = "http://127.0.0.1:4321/mcp";
-        let file: Value =
-            serde_json::from_slice(&COPILOT.grant_file(url, "s3cr3t").unwrap()).unwrap();
-        assert_eq!(
-            file,
-            json!({ "mcpServers": { "escouade": {
-                "type": "http", "url": url,
-                "headers": { "Authorization": "Bearer ${ESCOUADE_MCP_TOKEN}" },
-                "tools": ["*"],
-            } } })
-        );
-        let granted = COPILOT.escouade_launch(&Escouade::Granted {
-            url: url.into(),
-            token: "s3cr3t".into(),
-            file: Some("C:/data/mcp/a1.json".into()),
-        });
-        assert_eq!(
-            granted.args,
-            ["--additional-mcp-config", "@C:/data/mcp/a1.json"]
-        );
-        assert_eq!(
-            granted.env,
-            [("ESCOUADE_MCP_TOKEN".to_string(), "s3cr3t".to_string())]
-        );
-        // Never among the variables kept from its commands: Copilot would not put it in the header.
-        assert!(!args().iter().any(|a| a.contains("ESCOUADE_MCP_TOKEN")));
-        let refused = COPILOT.escouade_launch(&Escouade::Denied { file: None });
-        assert_eq!(refused.args, ["--disable-mcp-server", "escouade"]);
-        assert!(refused.env.is_empty());
     }
 }

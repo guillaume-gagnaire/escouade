@@ -13,21 +13,13 @@
 mod bench;
 mod exec;
 mod locate;
-pub(crate) mod prices;
 mod process;
 #[cfg(test)]
 mod schema_tests;
 pub(crate) mod terminal;
-mod words;
 
 #[cfg(test)]
 pub(crate) use bench::fake_codex;
-#[cfg(test)]
-pub(crate) use words::{
-    answers, is_plan_approval, mode_of, mode_params, Settings, FENCE_PLAN_PROFILE, FENCE_PROFILE,
-};
-use words::{declares_escouade, TOKEN_VAR};
-pub(crate) use words::{fence_args, fence_profile, sandbox_mode, sandboxed};
 
 use super::registry::{
     CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
@@ -35,13 +27,13 @@ use super::registry::{
 };
 use super::userconfig::{Format, UserConfig};
 use super::{
-    mcp, BoxFuture, Compaction, Engine, Escouade, Message, OneShot, Process, Program, Room, Spawn,
-    StartLost, Weight,
+    BoxFuture, Compaction, Engine, Message, OneShot, Process, Program, Room, Spawn, StartLost,
+    Weight,
 };
 use crate::agent::{AgentRt, Effects};
 use crate::core::{size_label, Attachment, MAX_IMAGE, MAX_TOTAL};
 use crate::i18n::{self, Lang};
-use crate::model::{EngineId, QuotaMeter};
+use crate::model::EngineId;
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
 use std::path::Path;
@@ -106,16 +98,6 @@ pub(crate) fn with_config_model(mut listed: Vec<ToldModel>, home: &Path) -> Vec<
         price: None,
     });
     listed
-}
-
-/// The models of `model/list`, as the composer's menu offers them.
-pub(crate) fn catalog(list: &Value) -> Option<Vec<ToldModel>> {
-    serde_json::from_value(words::catalog(list)?).ok()
-}
-
-/// The windows of a quota of Codex (`rateLimits` of `account/rateLimits/*`), as meters.
-pub(crate) fn meters(limits: &Value) -> Vec<QuotaMeter> {
-    process::meters_of(limits)
 }
 
 /// What a mode means in Codex, as the menu says it.
@@ -189,21 +171,6 @@ pub fn caps() -> EngineCaps {
         usage_page: None,
         accounts_by_key: false,
         read_only: true,
-    }
-}
-
-/// Escouade's server for its interface: its address and the variable of its token, by `-c` alone; refused, an entry of
-/// that name turned off, the user's own included. The token is in the process's environment.
-fn escouade_launch(escouade: &Escouade) -> mcp::Launch {
-    match escouade {
-        Escouade::Granted { url, token, .. } => mcp::Launch {
-            args: words::granted_args(url),
-            env: vec![(TOKEN_VAR.into(), token.clone())],
-        },
-        Escouade::Denied { .. } => mcp::Launch {
-            args: words::denied_args(),
-            env: Vec::new(),
-        },
     }
 }
 
@@ -424,35 +391,35 @@ impl Engine for Codex {
         &EFFORTS
     }
 
-    /// Not signed in (no `auth.json`): said so, no process started. Else `account/rateLimits/read`
-    /// of an app-server of its own (`process::read_limits`).
-    fn read_quota<'a>(
-        &'a self,
-        program: Program,
-        env: Vec<(String, String)>,
-        dir: &'a Path,
-    ) -> BoxFuture<'a, Result<Option<crate::usage::Reading>>> {
-        Box::pin(async move {
-            if crate::accounts::codex_sign_in(dir).is_none() {
-                return Ok(Some(crate::usage::Reading::NotSignedIn));
-            }
-            let cwd = std::env::temp_dir().to_string_lossy().into_owned();
-            let limits = process::read_limits(program, env, cwd).await?;
-            Ok(Some(crate::usage::Reading::Windows(meters(&limits))))
-        })
-    }
-
-    /// Every page of `model/list`, by an app-server of its own (`process::read_models`, ESC-186).
+    /// Its plugin reads them (`account/read` of `models`), by a process of the account the core starts.
     fn list_models<'a>(
         &'a self,
         program: Program,
         env: Vec<(String, String)>,
-        dir: &'a Path,
+        dir: &'a std::path::Path,
     ) -> BoxFuture<'a, Result<Option<Vec<ToldModel>>>> {
         Box::pin(async move {
-            let list =
-                process::read_models(program, env, dir.to_string_lossy().into_owned()).await?;
-            Ok(catalog(&list))
+            crate::plugins::harness::plugged_for(self.id(), self.name(), false)?
+                .account_models(&program, &env, dir)
+                .await
+        })
+    }
+
+    /// Its plugin reads it (`account/read` of `quota`), by a process of the account the core starts.
+    fn read_quota<'a>(
+        &'a self,
+        program: Program,
+        env: Vec<(String, String)>,
+        dir: &'a std::path::Path,
+    ) -> BoxFuture<'a, Result<Option<crate::usage::Reading>>> {
+        Box::pin(async move {
+            // Its sign-in is the core's to know (its accounts).
+            if crate::accounts::codex_sign_in(dir).is_none() {
+                return Ok(Some(crate::usage::Reading::NotSignedIn));
+            }
+            crate::plugins::harness::plugged_for(self.id(), self.name(), false)?
+                .account_quota(&program, &env, dir)
+                .await
         })
     }
 
@@ -529,10 +496,6 @@ impl Engine for Codex {
         None
     }
 
-    fn escouade_launch(&self, escouade: &Escouade) -> mcp::Launch {
-        escouade_launch(escouade)
-    }
-
     fn user_config(&self) -> Option<&'static UserConfig> {
         Some(&USER_CONFIG)
     }
@@ -546,140 +509,6 @@ impl Engine for Codex {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_fenced_agent_runs_in_escouades_profile_of_its_mode_with_the_paths_refused() {
-        let of = |mode: &str| {
-            mode_params(
-                &Settings {
-                    mode: mode.into(),
-                    fence: vec!["C:/code/secret".into()],
-                    ..Default::default()
-                },
-                "C:/p",
-            )
-        };
-        // In place of a sandbox policy: Codex takes one or the other.
-        for (mode, profile) in [
-            ("default", FENCE_PROFILE),
-            ("acceptEdits", FENCE_PROFILE),
-            ("auto", FENCE_PROFILE),
-            ("plan", FENCE_PLAN_PROFILE),
-        ] {
-            let p = of(mode);
-            assert_eq!(p["permissions"], profile, "{mode}");
-            assert!(p.get("sandboxPolicy").is_none(), "{mode}");
-        }
-        // « Sans permissions » has no sandbox to refuse anything.
-        let bypass = of("bypassPermissions");
-        assert!(bypass.get("permissions").is_none());
-        assert_eq!(bypass["sandboxPolicy"]["type"], "dangerFullAccess");
-        // Declared for its process: the paths once, in the plan's, which the other extends.
-        let args = fence_args(
-            &[r"C:\code\secret".into(), "/home/me/x".into()],
-            FENCE_PLAN_PROFILE,
-        );
-        assert_eq!(
-            args,
-            [
-                "-c",
-                "default_permissions=\"escouade-fence-plan\"",
-                "-c",
-                "permissions.escouade-fence-plan={extends=\":read-only\", filesystem={\"C:/code/secret\"=\"deny\", \"/home/me/x\"=\"deny\"}}",
-                "-c",
-                "permissions.escouade-fence={extends=\"escouade-fence-plan\", filesystem={\":workspace_roots\"=\"write\", \":tmpdir\"=\"write\"}}",
-            ]
-        );
-    }
-
-    #[test]
-    fn a_discussion_is_read_only_in_every_mode_its_collaboration_its_own() {
-        let of = |mode: &str, fence: Vec<String>| {
-            mode_params(
-                &Settings {
-                    mode: mode.into(),
-                    fence,
-                    read_only: true,
-                    ..Default::default()
-                },
-                "C:/p",
-            )
-        };
-        for mode in ["default", "acceptEdits", "auto", "bypassPermissions"] {
-            let p = of(mode, Vec::new());
-            assert_eq!(p["sandboxPolicy"]["type"], "readOnly", "{mode}");
-            assert_eq!(p["approvalPolicy"], "on-request", "{mode}");
-            assert_eq!(p["approvalsReviewer"], "user", "{mode}");
-            // Not made to plan: it answers.
-            assert_eq!(p["collaborationMode"]["mode"], "default", "{mode}");
-            // Fenced: the read only profile.
-            let p = of(mode, vec!["C:/code/secret".into()]);
-            assert_eq!(p["permissions"], FENCE_PLAN_PROFILE, "{mode}");
-        }
-        let s = Settings {
-            mode: "default".into(),
-            read_only: true,
-            ..Default::default()
-        };
-        assert_eq!(sandbox_mode(s.sandboxed()), "read-only");
-        assert_eq!(sandboxed("acceptEdits", false), "acceptEdits");
-    }
-
-    #[test]
-    fn each_mode_of_escouade_has_its_policy_and_sandbox_in_codex() {
-        let of = |mode: &str| {
-            mode_params(
-                &Settings {
-                    model: "gpt-6-luna".into(),
-                    effort: "low".into(),
-                    mode: mode.into(),
-                    ..Default::default()
-                },
-                "C:/p",
-            )
-        };
-        let plan = of("plan");
-        assert_eq!(plan["collaborationMode"]["mode"], "plan");
-        assert_eq!(plan["sandboxPolicy"]["type"], "readOnly");
-        assert_eq!(
-            plan["collaborationMode"]["settings"]["reasoning_effort"],
-            "low"
-        );
-        let ask = of("default");
-        assert_eq!(
-            (
-                ask["approvalPolicy"].as_str(),
-                ask["sandboxPolicy"]["type"].as_str()
-            ),
-            (Some("on-request"), Some("workspaceWrite"))
-        );
-        assert_eq!(ask["collaborationMode"]["mode"], "default");
-        assert_eq!(ask["sandboxPolicy"]["networkAccess"], false);
-        assert_eq!(of("acceptEdits")["sandboxPolicy"], ask["sandboxPolicy"]);
-        assert_eq!(of("auto")["approvalsReviewer"], "auto_review");
-        let bypass = of("bypassPermissions");
-        assert_eq!(
-            (
-                bypass["approvalPolicy"].as_str(),
-                bypass["sandboxPolicy"]["type"].as_str()
-            ),
-            (Some("never"), Some("dangerFullAccess"))
-        );
-        assert_eq!(sandbox_mode("plan"), "read-only");
-        assert_eq!(sandbox_mode("acceptEdits"), "workspace-write");
-        assert_eq!(sandbox_mode("bypassPermissions"), "danger-full-access");
-        // And back, from what a thread's settings say.
-        for mode in [
-            "plan",
-            "default",
-            "acceptEdits",
-            "auto",
-            "bypassPermissions",
-        ] {
-            assert_eq!(mode_of(&of(mode), mode), Some(mode), "{mode}");
-        }
-        assert_eq!(mode_of(&of("default"), "plan"), Some("default"));
-    }
 
     #[test]
     fn every_mode_tells_what_it_means_in_codex_in_both_languages() {
@@ -698,52 +527,6 @@ mod tests {
         let caps = caps();
         assert_eq!(caps.modes.len(), 5);
         assert!(caps.modes.iter().all(|m| m.meaning.is_some()));
-    }
-
-    #[test]
-    fn the_models_and_their_efforts_come_from_model_list() {
-        let list = crate::engine::codex::bench::recorded("account.jsonl")
-            .into_iter()
-            .find(|m| m["result"]["data"].is_array())
-            .expect("the answer to model/list");
-        let models = catalog(&list["result"]).unwrap();
-        let luna = models.iter().find(|m| m.id == "gpt-6-luna").unwrap();
-        assert_eq!(luna.label, "GPT-6-Luna");
-        assert!(luna.default && luna.images);
-        assert_eq!(luna.efforts, ["low", "medium", "high", "xhigh", "max"]);
-        assert_eq!(luna.default_effort.as_deref(), Some("medium"));
-        assert!(models.iter().filter(|m| m.default).count() == 1);
-        assert!(catalog(&json!({ "data": [] })).is_none());
-    }
-
-    #[test]
-    fn a_quota_window_is_labelled_by_its_length() {
-        let m = meters(&json!({
-            "primary": { "usedPercent": 2, "windowDurationMins": 43200, "resetsAt": 1794772340 },
-            "secondary": null,
-        }));
-        assert_eq!(m.len(), 1);
-        assert_eq!(m[0].minutes, Some(43_200));
-        assert_eq!(m[0].resets_at, Some(1_794_772_340_000));
-        assert_eq!(m[0].pct, 2.0);
-    }
-
-    #[test]
-    fn the_answers_of_a_card_go_back_by_the_ids_of_codexs_questions() {
-        let input = json!({
-            "questions": [
-                { "id": "language", "question": "Quel langage ?", "options": [] },
-                { "id": "os", "question": "Quel système ?", "options": [] },
-            ],
-            "answers": { "Quel langage ?": "Python (Recommended)", "Quel système ?": ["Linux", "macOS"] },
-        });
-        assert_eq!(
-            answers(&input),
-            json!({
-                "language": { "answers": ["Python (Recommended)"] },
-                "os": { "answers": ["Linux", "macOS"] },
-            })
-        );
     }
 
     #[test]
@@ -770,54 +553,5 @@ mod tests {
             user_input("bonjour", &[]).unwrap(),
             json!([{ "type": "text", "text": "bonjour" }])
         );
-    }
-
-    #[test]
-    fn a_refusal_turns_off_only_an_entry_the_user_declares() {
-        assert!(declares_escouade(
-            "[mcp_servers.escouade]
-url = \"http://x\"
-"
-        ));
-        assert!(declares_escouade(
-            "[mcp_servers.\"escouade\".env]
-A = \"1\"
-"
-        ));
-        assert!(declares_escouade(
-            "[mcp_servers]
-escouade = { url = \"http://x\" }
-"
-        ));
-        assert!(!declares_escouade(
-            "[mcp_servers.autre]
-url = \"escouade\"
-"
-        ));
-        assert!(!declares_escouade(
-            "model = \"gpt-6-luna\"
-[projects.'C:/escouade']
-trust_level = \"trusted\"
-"
-        ));
-    }
-
-    #[test]
-    fn escouades_server_is_given_by_options_and_its_token_by_the_environment() {
-        let granted = escouade_launch(&Escouade::Granted {
-            url: "http://127.0.0.1:4100/mcp".into(),
-            token: "secret".into(),
-            file: None,
-        });
-        assert!(granted.args.iter().all(|a| !a.contains("secret")));
-        assert!(granted
-            .args
-            .contains(&"mcp_servers.escouade.url=http://127.0.0.1:4100/mcp".to_string()));
-        assert_eq!(
-            granted.env,
-            [("ESCOUADE_MCP_TOKEN".to_string(), "secret".to_string())]
-        );
-        let denied = escouade_launch(&Escouade::Denied { file: None });
-        assert_eq!(denied.args, ["-c", "mcp_servers.escouade.enabled=false"]);
     }
 }

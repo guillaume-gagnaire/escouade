@@ -318,9 +318,8 @@ fn the_plan_of_the_mode_plan_waits_for_its_approval_before_the_turn_ends() {
     let card = last(&mut a, "permission");
     assert_eq!(card["toolName"], "ExitPlanMode");
     assert_eq!(card["input"]["plan"], "## Le plan\n- Faire");
-    assert!(crate::engine::codex_is_plan_approval(
-        card["id"].as_str().unwrap()
-    ));
+    // The card of its plan, as its plugin names it (`plan:<turn>`).
+    assert!(card["id"].as_str().unwrap().starts_with("plan:"));
     assert_eq!(a.waiting().len(), 1);
     // Its work is the turn's next part, which ends it.
     started(&mut a, "t2");

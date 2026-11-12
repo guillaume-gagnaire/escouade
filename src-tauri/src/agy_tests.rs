@@ -293,8 +293,10 @@ async fn an_antigravity_agent_goes_on_on_another_account_with_its_conversation()
 /// The texts written can go to Antigravity (« Modèle des textes rédigés »): one `agy -p`, its
 /// question on its input, every tool refused by its settings, in a home of its own removed once
 /// answered, on the account's key; a key refused is an error, never an empty name.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn the_texts_written_go_to_agy_p_without_a_tool() {
+    // By its plugin (`engine/oneShot`, ESC-359): the harness plugs it.
+    let h = harness("esc271-writer-plugin");
     let dir = crate::paths::test_dir("esc271-writer");
     std::fs::create_dir_all(&dir).unwrap();
     let log = dir.join("fake-agy.jsonl");
@@ -361,6 +363,7 @@ async fn the_texts_written_go_to_agy_p_without_a_tool() {
     )
     .await;
     assert!(refused.is_err());
+    h.core.stop_for_good();
 }
 
 /// INT-10.8: Antigravity's conversation goes through its plugin (`dev.escouade.antigravity-cli`). Switched off, an agent's start
@@ -500,19 +503,4 @@ async fn real_agy_writes_a_text() {
     .unwrap();
     println!("answer in {:?}: {answer}", started.elapsed());
     assert!(!answer.trim().is_empty() && answer.len() < 200, "{answer}");
-}
-
-/// A text given (ESC-66): the model of a reading; `one_shot` refuses every tool whatever the weight.
-#[test]
-fn a_text_given_has_the_model_of_a_reading() {
-    use crate::engine::{agy, Engine, Weight};
-    assert_eq!(
-        agy::text_model(Weight::Given),
-        agy::text_model(Weight::Reading)
-    );
-    assert_ne!(
-        agy::text_model(Weight::Given),
-        agy::text_model(Weight::Light)
-    );
-    assert!(crate::engine::AGY.answers_without_tools());
 }

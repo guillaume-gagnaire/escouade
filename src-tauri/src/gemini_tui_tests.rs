@@ -174,7 +174,7 @@ async fn geminis_view_resumes_the_agents_session_follows_its_turns_by_its_hooks_
     assert!(!token.is_empty());
     assert!(!argv.iter().any(|a| a.contains(token)), "{argv:?}");
     assert_eq!(settings["hooksConfig"]["enabled"], true);
-    for event in crate::engine::gemini::terminal::EVENTS {
+    for event in escouade_acp::terminal::GEMINI_EVENTS {
         assert!(settings["hooks"][event].is_array(), "{event}");
     }
     let allowed = settings["security"]["environmentVariableRedaction"]["allowed"].clone();

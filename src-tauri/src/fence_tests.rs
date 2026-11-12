@@ -4,7 +4,6 @@
 
 use crate::core::AgentOptions;
 use crate::core_tests::{harness, repo, Harness};
-use crate::engine::codex::{FENCE_PLAN_PROFILE, FENCE_PROFILE};
 use crate::model::*;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -259,52 +258,6 @@ async fn agent_of(h: &Harness, project: &str, engine: EngineId) -> String {
         .unwrap()
         .meta
         .id
-}
-
-#[tokio::test]
-async fn codex_runs_in_escouades_profile_with_the_private_projects_folder_refused() {
-    let h = harness("esc140-codex");
-    let ((open, open_dir), (_, vault_dir)) = two_projects(&h).await;
-    let work = work_account(&h, EngineId::CODEX, crate::engine::fake_codex());
-    let id = agent_of(&h, &open.id, EngineId::CODEX).await;
-    h.turn(&id, "bonjour").await;
-    let sent: Vec<Value> = lines(&work.join("requests.jsonl"))
-        .into_iter()
-        .map(|l| l["in"].clone())
-        .collect();
-    let of = |method: &str| {
-        sent.iter()
-            .find(|m| m["method"] == method)
-            .unwrap_or_else(|| panic!("no {method}: {sent:#?}"))["params"]
-            .clone()
-    };
-    let start = of("thread/start");
-    // The sandbox of its mode in Escouade's profile, in place of `sandbox`.
-    assert_eq!(start["permissions"], FENCE_PROFILE, "{start:#}");
-    assert!(start.get("sandbox").is_none(), "{start:#}");
-    // Its profiles, declared by the options of its process: the private project's folder refused.
-    let launch: Vec<String> = lines(&work.join("requests.jsonl"))
-        .into_iter()
-        .find_map(|l| l["launch"]["argv"].as_array().cloned())
-        .expect("a launch")
-        .iter()
-        .map(|a| a.as_str().unwrap().to_string())
-        .collect();
-    let plan = launch
-        .iter()
-        .find(|a| a.starts_with(&format!("permissions.{FENCE_PLAN_PROFILE}=")))
-        .unwrap_or_else(|| panic!("no profile: {launch:?}"));
-    let slashed = |p: &Path| p.to_string_lossy().replace('\\', "/");
-    assert!(
-        plan.contains(&format!("\"{}\"=\"deny\"", slashed(&vault_dir))),
-        "{plan}"
-    );
-    assert!(!plan.contains(&slashed(&open_dir)), "{plan}");
-    assert!(launch.contains(&format!("default_permissions=\"{FENCE_PROFILE}\"")));
-    let turn = of("turn/start");
-    assert_eq!(turn["permissions"], FENCE_PROFILE, "{turn:#}");
-    assert!(turn.get("sandboxPolicy").is_none(), "{turn:#}");
-    h.core.stop_for_good();
 }
 
 #[tokio::test]

@@ -618,6 +618,7 @@ fn a_replay_says_who_it_comes_from_and_a_local_command_its_output() {
             origin: Some("peer".into()),
             from: Some("a2".into()),
             synthetic: false,
+            local: None,
             images: 1,
             files: vec!["a.pdf".into()],
         }]

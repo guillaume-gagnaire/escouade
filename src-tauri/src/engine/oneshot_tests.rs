@@ -126,9 +126,6 @@ impl Engine for Fake {
     fn refusal(&self) -> Option<Value> {
         None
     }
-    fn escouade_launch(&self, _: &Escouade) -> mcp::Launch {
-        unimplemented!()
-    }
     fn declared(&self, _: &Path) -> Standing {
         unimplemented!()
     }

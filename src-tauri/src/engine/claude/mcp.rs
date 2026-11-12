@@ -4,13 +4,16 @@
 //! in each account's `.claude.json` (docs/PROTOCOL.md, « Déclaration dans Claude Code » and « Les
 //! agents d'Escouade »).
 
-use crate::engine::mcp::{tool_name, Escouade, Launch, SERVER};
+#[cfg(test)]
+use crate::engine::mcp::tool_name;
+use crate::engine::mcp::SERVER;
 use crate::mcp::install::{run, Entry, Standing, Target};
 use serde_json::{json, Value};
 use std::path::Path;
 
 /// What `--disallowedTools` is given to refuse an agent every tool of Escouade's server, whatever
 /// config declares it: the start of their names (`mcp__escouade__<tool>`).
+#[cfg(test)]
 pub(crate) fn all_tools() -> String {
     tool_name(SERVER, "").trim_end_matches('_').to_string()
 }
@@ -34,31 +37,6 @@ pub(super) fn grant_file(url: &str, token: &str) -> Vec<u8> {
 /// 2.1.300: `deniedMcpServers` leaves the server unconnected, never asked).
 pub(super) fn refusal() -> Value {
     json!({ "deniedMcpServers": [{ "serverName": SERVER }] })
-}
-
-/// Its arguments: never the token, only the path of the file that holds it (a `.cmd` launcher
-/// takes 8,191 characters at most, and the app's log writes the arguments). `--disallowedTools`
-/// and `--mcp-config` take several values: given last, nothing after them is read as one. A
-/// refusal with no file (the terminal view puts it in its own settings) is its tools refused.
-pub(super) fn launch(escouade: &Escouade) -> Launch {
-    let mut args = Vec::new();
-    match escouade {
-        Escouade::Denied { file } => {
-            if let Some(file) = file {
-                args.extend(["--settings".into(), file.to_string_lossy().into_owned()]);
-            }
-            args.extend(["--disallowedTools".into(), all_tools()]);
-        }
-        Escouade::Granted { file, .. } => {
-            if let Some(file) = file {
-                args.extend(["--mcp-config".into(), file.to_string_lossy().into_owned()]);
-            }
-        }
-    }
-    Launch {
-        args,
-        env: Vec::new(),
-    }
 }
 
 /// What `.claude.json` (`config`) says of the server: its entry `mcpServers.escouade`, `{ "type":

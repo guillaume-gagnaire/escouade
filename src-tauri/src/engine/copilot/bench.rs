@@ -34,15 +34,6 @@ pub(crate) fn stream(file: &str) -> Vec<Value> {
         .collect()
 }
 
-/// What Copilot said (`s2c`) in the recorded stream `file`.
-pub(crate) fn recorded(file: &str) -> Vec<Value> {
-    stream(file)
-        .into_iter()
-        .filter(|l| l["dir"] == "s2c")
-        .map(|l| l["msg"].clone())
-        .collect()
-}
-
 pub(crate) struct OnBench;
 
 impl Target for OnBench {

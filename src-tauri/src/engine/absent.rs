@@ -6,9 +6,7 @@
 use super::registry::{
     AccountStore, CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModelDecl, QuotaKind, Tested,
 };
-use super::{
-    mcp, BoxFuture, Engine, Escouade, Message, OneShot, Process, Program, Room, Spawn, StartLost,
-};
+use super::{BoxFuture, Engine, Message, OneShot, Process, Program, Room, Spawn, StartLost};
 use crate::agent::{AgentRt, Effects};
 use crate::core::Attachment;
 use crate::i18n::Lang;
@@ -156,12 +154,6 @@ impl Engine for Absent {
     }
     fn refusal(&self) -> Option<Value> {
         None
-    }
-    fn escouade_launch(&self, _: &Escouade) -> mcp::Launch {
-        mcp::Launch {
-            args: Vec::new(),
-            env: Vec::new(),
-        }
     }
     fn declared(&self, _: &Path) -> Standing {
         Standing::NoFile

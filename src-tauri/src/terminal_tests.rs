@@ -3,8 +3,8 @@
 //! Escouade's own hooks' server.
 
 use crate::core_tests::{agent_on, harness, plain_text, second_account, Harness};
-use crate::engine::terminal::{bracketed, hook_command, HookServer, TerminalLaunch};
-use crate::engine::{self, Engine, Escouade};
+use crate::engine::terminal::{bracketed, hook_command};
+use crate::engine::{self, Engine};
 use crate::model::*;
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -50,50 +50,6 @@ fn claude_codes_view_pastes_sends_and_interrupts_as_before() {
     assert!(view.names_its_session());
     assert!(view.says_session_lost(b"No conversation found with session ID: s1"));
     assert!(!view.says_session_lost(b"Welcome to Claude Code"));
-    assert_eq!(
-        view.read_dir_args(std::path::Path::new("/d")),
-        vec!["--add-dir=/d"]
-    );
-}
-
-#[test]
-fn claude_codes_launch_is_its_arguments_and_its_settings_file() {
-    let view = engine::by_id(EngineId::CLAUDE).terminal().unwrap();
-    let meta = AgentMeta {
-        model: "sonnet".into(),
-        effort: "high".into(),
-        mode: "default".into(),
-        ..Default::default()
-    };
-    let file = std::path::Path::new("/data/tui/a1.json");
-    let access = Escouade::Denied { file: None };
-    let launch = view.launch(&TerminalLaunch {
-        meta: &meta,
-        session: Some("s-new"),
-        remote: None,
-        private_file: file,
-        home: None,
-        hooks: HookServer {
-            url: "http://127.0.0.1:4120/hook",
-            token_var: "ESCOUADE_HOOK_TOKEN",
-            url_var: "ESCOUADE_HOOK_URL",
-            command: None,
-        },
-        access: &access,
-        fence: &crate::fence::Fence::default(),
-        program: &engine::Program::Native(std::path::PathBuf::new()),
-    });
-    assert_eq!(
-        launch.args,
-        crate::tui::tui_args(&meta, Some("s-new"), None, file)
-    );
-    let settings: serde_json::Value = serde_json::from_slice(&launch.file.unwrap()).unwrap();
-    assert_eq!(
-        settings,
-        crate::tui::tui_settings(4120, engine::by_id(EngineId::CLAUDE), &access)
-    );
-    // Its hooks are HTTP calls: nothing in its environment for a command.
-    assert!(launch.env.is_empty());
 }
 
 /// An agent on a Claude account of its own, in the Claude Code view, its interface up.
@@ -233,16 +189,9 @@ async fn the_hook_says_nothing_of_a_search_for_a_symbol_since_the_index_is_gone(
     ] {
         assert_eq!(search(tool, input), ("HTTP/1.1 200 OK".into(), "{}".into()));
     }
-    let settings = crate::tui::tui_settings(
-        port,
-        &crate::engine::CLAUDE,
-        &Escouade::Granted {
-            url: "http://127.0.0.1:1/mcp".into(),
-            token: "t".into(),
-            file: None,
-        },
-    )
-    .to_string();
+    // The settings its plugin wrote in its private file at its start (`terminal/launch`).
+    let file = h.core.data.root().join("tui").join(format!("{id}.json"));
+    let settings = std::fs::read_to_string(&file).unwrap();
     assert!(settings.contains("PreToolUse"), "{settings}");
     assert!(!settings.contains("index"), "{settings}");
 }

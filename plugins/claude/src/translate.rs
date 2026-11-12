@@ -6,7 +6,7 @@
 
 use crate::localcmd::{self, Part};
 use crate::words::{rate_meters, said, strip_tags, tool_result_text};
-use escouade_plugin_protocol::engine::{Item, ModelTurn};
+use escouade_plugin_protocol::engine::{Item, LocalPart, ModelTurn};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 
@@ -562,8 +562,10 @@ fn replay(f: &Value, out: &mut Vec<Item>) {
             .collect::<Vec<_>>()
             .join("\n"),
     };
+    let local = localcmd::parse(&text).map(|parts| parts.into_iter().map(local_part).collect());
     out.push(Item::Replayed {
         id: f["uuid"].as_str().map(str::to_string),
+        local,
         text,
         origin: f["origin"]["kind"].as_str().map(str::to_string),
         from: f["origin"]["from"].as_str().map(str::to_string),
@@ -623,5 +625,14 @@ fn control_request(f: &Value, out: &mut Vec<Item>) {
         other => out.push(Item::Write {
             line: crate::client::respond_error(rid, &format!("unsupported request: {other}")),
         }),
+    }
+}
+
+/// A part of a local command, as the core takes it.
+fn local_part(p: Part) -> LocalPart {
+    match p {
+        Part::Typed(t) => LocalPart::Typed(t),
+        Part::Output(t) => LocalPart::Output(t),
+        Part::Error(t) => LocalPart::Error(t),
     }
 }

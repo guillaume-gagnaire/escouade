@@ -117,12 +117,6 @@ fn the_agents_settings_are_written_in_its_own_home_keeping_what_gemini_wrote() {
 
 #[test]
 fn escouades_server_goes_by_the_session_never_the_command_line() {
-    let granted = GEMINI.escouade_launch(&Escouade::Granted {
-        url: "http://127.0.0.1:1/mcp".into(),
-        token: "s3cr3t".into(),
-        file: None,
-    });
-    assert!(granted.args.is_empty() && granted.env.is_empty());
     assert!(GEMINI.grant_file("http://x", "s3cr3t").is_none());
     assert_eq!(GEMINI.agent_home_var(), Some("GEMINI_CLI_HOME"));
     // Neither `fs` nor `terminal`: Gemini reads and writes by itself.

@@ -12,14 +12,15 @@
 
 pub mod client;
 mod host;
+pub mod terminal;
 pub mod translate;
 pub mod view;
 pub mod words;
 
 use client::Client;
 use escouade_plugin_protocol::engine::{
-    method, AgentRef, AnswerPermission, AnswerQuestion, Attach, Frames, Gone, Interrupt, Item,
-    Items, LaunchParams, SendMessage, SetValue, ViewParams,
+    method, AccountLines, AccountRead, AgentRef, AnswerPermission, AnswerQuestion, Attach, Frames,
+    Gone, Interrupt, Item, Items, LaunchParams, SendMessage, SetValue, TerminalParams, ViewParams,
 };
 use escouade_plugin_protocol::{turn, Refusal};
 use serde_json::{json, Value};
@@ -178,6 +179,29 @@ impl Plugin {
             }
             // `agy -p` tells no quota (its `/usage` is its interface's alone).
             method::READ_USAGE => Ok(json!({})),
+            method::ONE_SHOT => {
+                let p: escouade_plugin_protocol::engine::OneShotParams = read(params)?;
+                give(terminal::one_shot(&p).map_err(refused)?)
+            }
+            method::ONE_SHOT_READ => {
+                let o: escouade_plugin_protocol::engine::OneShotOutput = read(params)?;
+                let lang = escouade_plugin_protocol::greeting()
+                    .and_then(|g| g.lang.clone())
+                    .unwrap_or_default();
+                give(terminal::one_shot_read(&o, &lang).map_err(refused)?)
+            }
+            method::TERMINAL_LAUNCH => {
+                let p: TerminalParams = read(params)?;
+                give(terminal::launch(&p))
+            }
+            method::ACCOUNT_READ => {
+                let r: AccountRead = read(params)?;
+                give(terminal::read(&r))
+            }
+            method::ACCOUNT_LINES => {
+                let l: AccountLines = read(params)?;
+                give(terminal::lines(&l))
+            }
             method::VIEW_TRANSLATE => {
                 let p: ViewParams = read(params)?;
                 if let Some(gone) = &p.gone {

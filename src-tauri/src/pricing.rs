@@ -1,6 +1,8 @@
 //! Public list prices of Claude models, to estimate what a turn costs while it runs (the CLI
-//! reports the exact cost only once the turn ends). OpenAI's left with Codex, in its plugin
-//! (`engine::codex::prices`, INT-10.4).
+//! reports the exact cost only once the turn ends), and OpenAI's (`openai`): the cost is the core's to compute, its plugin
+//! estimates a turn of Codex with the same grid (`plugins/codex/src/prices.rs`).
+
+mod openai;
 
 use serde_json::Value;
 
@@ -67,9 +69,9 @@ const fn p(input: f64, output: f64, read: f64) -> Price {
     }
 }
 
-/// The price of OpenAI's model `model`, from the grid of its plugin. Cache writes cost what input does.
+/// The price of OpenAI's model `model`, from its public grid (`openai`). Cache writes cost what input does.
 fn openai(model: &str) -> Option<Price> {
-    let p = crate::engine::codex::prices::price(model)?;
+    let p = openai::price(model)?;
     Some(Price {
         input: p.input,
         output: p.output,

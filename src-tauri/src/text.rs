@@ -14,6 +14,42 @@ pub fn truncate(s: &str, max: usize) -> String {
 
 pub use escouade_plugin_protocol::json_line;
 
+/// `s` without its ANSI codes: CSI sequences (colours, cursor) and OSC ones (a link, a title), as a terminal prints them.
+pub fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\u{1b}' {
+            match chars.peek() {
+                Some(&'[') => {
+                    chars.next();
+                    for n in chars.by_ref() {
+                        if n.is_ascii_alphabetic() {
+                            break;
+                        }
+                    }
+                }
+                // An OSC (a link, a title): to its BEL or its ST (ESC \).
+                Some(&']') => {
+                    while let Some(n) = chars.next() {
+                        if n == '\u{7}' {
+                            break;
+                        }
+                        if n == '\u{1b}' && chars.peek() == Some(&'\\') {
+                            chars.next();
+                            break;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

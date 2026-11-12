@@ -40,10 +40,18 @@ pub mod method {
     pub const ANSWER_QUESTION: &str = "agent/answerQuestion";
     /// The quota of the agent's account, as its process reads it (`AgentRef` → `Usage`).
     pub const READ_USAGE: &str = "agent/readUsage";
-    /// The launch of the harness's own interface in a terminal (`TerminalParams` → `Launch`).
+    /// The launch of the harness's own interface in a terminal (`TerminalParams` → `TerminalLaunch`).
     pub const TERMINAL_LAUNCH: &str = "terminal/launch";
     /// One of its hooks, with what the core answers it (`Hook` → `HookAnswer`).
     pub const TERMINAL_HOOK: &str = "terminal/hook";
+    /// Stateless: what an account tells by a process of its own, outside any agent (`AccountRead` → `AccountStep`):
+    /// its models, its quota, what its interface needs read before it starts. The core starts the process the step
+    /// describes as it starts an agent's (the program it found, the account's variables, its Job object), and hands on
+    /// what it writes (`account/lines`) until the plugin says it is done.
+    pub const ACCOUNT_READ: &str = "account/read";
+    /// Stateless: the lines the process of `account/read` wrote, with the state the last step gave
+    /// (`AccountLines` → `AccountStep`).
+    pub const ACCOUNT_LINES: &str = "account/lines";
     /// The lines the core read of what the harness's own interface writes, and its notes (`ViewParams` → `Items`).
     pub const VIEW_TRANSLATE: &str = "view/translate";
     /// A harness shared by agents (`Launch::shared`): the agent's session opened on it (`Open` → `Opened`).
@@ -578,6 +586,16 @@ pub struct TurnUsage {
     pub cost: f64,
 }
 
+/// A part of a local command (`Item::Replayed::local`): what was typed (`/model opus`, `! ls`), what it printed, what it
+/// printed as an error, its lines kept and its ANSI codes taken out.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LocalPart {
+    Typed(String),
+    Output(String),
+    Error(String),
+}
+
 /// A normalized item or an effect, which the core applies to the agent: the same as the conversation's (`user`,
 /// `text`, `thinking`, `tool`, `question`, `permission`, `turn`, `notice`) and the effects (`Effects` of
 /// `agent.rs`).
@@ -981,6 +999,10 @@ pub enum Item {
         from: Option<String>,
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         synthetic: bool,
+        /// A local command the harness ran itself, not its model (`/compact`, `! ls`), as its plugin read `text`: what
+        /// was typed, then what it printed. None for any other message.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        local: Option<Vec<LocalPart>>,
         #[serde(default)]
         images: u32,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -1135,13 +1157,21 @@ pub struct Diff {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OneShotParams {
-    /// `light` (a short text, no tool) or `reading` (after reading its folder, tools that only read).
+    /// `light` (a short text, no tool), `reading` (after reading its folder, tools that only read) or `given` (a text
+    /// given whole, its answer of a reading's length: no tool at all, reading included).
     pub weight: String,
     pub cwd: String,
     pub system: String,
     pub prompt: String,
     #[serde(default)]
     pub model: String,
+    /// A folder of the core's own for this question, removed once it is answered: its process's home, where the
+    /// launch may write its files (`OneShotLaunch::files`). None: it has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub home: Option<String>,
+    /// The names of the variables its account gives its process (never their values).
+    #[serde(default)]
+    pub env_names: Vec<String>,
 }
 
 /// How the core runs it: the arguments, the variables, and what goes on its input.
@@ -1156,6 +1186,9 @@ pub struct OneShotLaunch {
     pub remove_env: Vec<String>,
     #[serde(default)]
     pub input: Option<String>,
+    /// Files written before it starts, under `OneShotParams::home` alone.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<FileToWrite>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1197,6 +1230,167 @@ pub struct TerminalParams {
     pub fence: Vec<String>,
     #[serde(default)]
     pub read_only: bool,
+    /// The file of the agent's own that holds `escouade` (its token), when the core wrote one
+    /// (`Engine::grant_file`): what its harness reads the server from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub escouade_file: Option<String>,
+    /// The agent's effort, and the instructions added to it (a ticket's protocol), as its process has them.
+    #[serde(default)]
+    pub effort: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub append_prompt: Option<String>,
+    /// The session Escouade names for it when it resumes none and its interface takes a name (`session`, the one it
+    /// resumes, is then None).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub new_session: Option<String>,
+    /// The session it copies, up to its entry `fork_at`, when it starts as a copy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fork_of: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fork_at: Option<String>,
+    /// The log of `session` is where its interface looks for it: it may resume it.
+    #[serde(default)]
+    pub resumes: bool,
+    /// The name of its session on its vendor's site, when it starts linked to it (Claude Code's Remote Control).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote: Option<String>,
+    /// Its private file, kept by the core from one start to the next: the plugin may write it, and the files and
+    /// folders beside it whose name starts with its own (`<file>.<anything>`), as it may write under `home`.
+    #[serde(default)]
+    pub private_file: String,
+    /// The variable that gives `escouade-hook` the address of the hooks' server (`hook_url`).
+    #[serde(default)]
+    pub hook_url_var: String,
+    /// The folders it reads without a question (the files joined to its messages).
+    #[serde(default)]
+    pub read_dirs: Vec<String>,
+    /// The folder of its account (its `CODEX_HOME`, its `COPILOT_HOME`…), which `fs/read` reaches by `agentHome`
+    /// when the agent has no home of its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config_dir: Option<String>,
+    /// The names of the variables its account gives it (never their values).
+    #[serde(default)]
+    pub env_names: Vec<String>,
+    /// The PATH of the app, for a plugin that puts `escouade-hook`'s folder first in it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    /// The language of the app (`fr`, `en`).
+    #[serde(default)]
+    pub lang: String,
+}
+
+/// What `terminal/launch` answers: the launch, and what the core reads by a process of the account before it starts
+/// (`before`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalLaunch {
+    #[serde(flatten)]
+    pub launch: Launch,
+    /// A read of `account/read` whose answer is `{ "args": [...] }`, the arguments the interface starts with, or
+    /// `{ "warn": "..." }`, said in the conversation (it then starts with those of `launch`). Its `input` gets the
+    /// arguments of `launch` as `args`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before: Option<AccountRead>,
+    /// What the conversation says as it starts (in the app's language): what its interface will not do, and why.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub warn: Option<String>,
+}
+
+/// What `account/read` is told: what to read, of which account.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountRead {
+    /// `models` (answered as `ToldModel`s, null when it lists none), `quota` (answered as `Quota`), or a read of the
+    /// plugin's own that one of its answers named (`TerminalLaunch::before`).
+    pub read: String,
+    #[serde(default)]
+    pub input: Value,
+    /// The folder of the account.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub home: Option<String>,
+    /// The names of the variables the account gives its process (never their values).
+    #[serde(default)]
+    pub env_names: Vec<String>,
+    #[serde(default)]
+    pub lang: String,
+}
+
+/// The lines the process of a read wrote since the last step.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountLines {
+    pub read: String,
+    #[serde(default)]
+    pub state: Value,
+    #[serde(default)]
+    pub lines: Vec<String>,
+    /// Its process ended (its code, when it has one): these are its last lines.
+    #[serde(default)]
+    pub ended: bool,
+    #[serde(default)]
+    pub code: Option<i32>,
+}
+
+/// A step of a read: the process to start (the first step alone), what to write to it, the state to give back with
+/// its next lines, and its end (`done`, or `error`). A first step with `done` and no `launch` answers without a process.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountStep {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub launch: Option<Launch>,
+    #[serde(default)]
+    pub writes: Vec<String>,
+    #[serde(default)]
+    pub state: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub done: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+impl AccountStep {
+    /// The read is over, with `value`.
+    pub fn done(value: Value) -> Self {
+        Self {
+            done: Some(value),
+            ..Self::default()
+        }
+    }
+    /// The read failed, for `why`.
+    pub fn failed(why: impl Into<String>) -> Self {
+        Self {
+            error: Some(why.into()),
+            ..Self::default()
+        }
+    }
+    /// The process `launch` to start, `writes` written to it once started, `state` given back with its lines.
+    pub fn start(launch: Launch, writes: Vec<String>, state: Value) -> Self {
+        Self {
+            launch: Some(launch),
+            writes,
+            state,
+            ..Self::default()
+        }
+    }
+    /// What to write to it, and the state to give back.
+    pub fn more(writes: Vec<String>, state: Value) -> Self {
+        Self {
+            writes,
+            state,
+            ..Self::default()
+        }
+    }
+}
+
+/// The quota of an account, as `account/read` answers `quota`: not signed in, or its windows (`meters`, the core's
+/// `Meter`s in JSON).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Quota {
+    #[serde(default)]
+    pub not_signed_in: bool,
+    #[serde(default)]
+    pub meters: Value,
 }
 
 /// One of its hooks, and what the core has to answer it: the hook goes both ways (what Escouade adds for the model, a call it refuses).

@@ -379,43 +379,12 @@ async fn escouades_hooks_touch_no_codex_session_started_outside_escouade() {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore]
 async fn real_codex_view() {
-    use crate::engine::codex::terminal::{hook_args, list_hooks, CODEX_TERMINAL};
-    use crate::engine::TerminalView;
     let program = std::env::var("ESCOUADE_REAL_CODEX").expect("ESCOUADE_REAL_CODEX");
     let h = harness("tui-codex-real");
-    let (p, repo) = h.project(false).await;
+    let (p, _repo) = h.project(false).await;
     let home = dirs::home_dir().unwrap().join(".codex");
 
-    // The trust Escouade gives its hooks is the one Codex wants: with it, its `hooks/list` says
-    // each of them trusted.
-    let real = crate::engine::Program::Native(PathBuf::from(&program));
-    let hooks = hook_args(&crate::engine::terminal::hook_command().expect("escouade-hook"));
-    let env = vec![(
-        "CODEX_HOME".to_string(),
-        home.to_string_lossy().into_owned(),
-    )];
-    let cwd = repo.to_string_lossy().into_owned();
-    let trust = CODEX_TERMINAL
-        .prepare(&real, &cwd, &hooks, &env)
-        .await
-        .unwrap();
-    let listed = list_hooks(&real, &cwd, &[hooks, trust].concat(), &env)
-        .await
-        .unwrap();
-    let ours: Vec<&Value> = listed["data"][0]["hooks"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|x| x["source"] == "sessionFlags")
-        .collect();
-    println!(
-        "Escouade's hooks: {:?}",
-        ours.iter()
-            .map(|x| (&x["eventName"], &x["trustStatus"]))
-            .collect::<Vec<_>>()
-    );
-    assert_eq!(ours.len(), crate::engine::codex::terminal::EVENTS.len());
-    assert!(ours.iter().all(|x| x["trustStatus"] == "trusted"));
+    // The trust Escouade gives its hooks is its plugin's (`account/read` of `hooks`), played by its own tests.
 
     let mut s = h.core.settings.read().clone();
     s.accounts.push(Account {

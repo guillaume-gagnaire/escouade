@@ -44,7 +44,15 @@ fn played(p: &mut dyn Plugin, id: &mut u64, agent: &str, lines: &[String]) -> Va
             .flatten()
             .map(|i| i["op"].as_str().unwrap_or("?"))
             .collect();
-        let digest = Sha256::digest(v["result"].to_string().as_bytes());
+        // What the natives said: the parts of a local command a replay carries (`local`, ESC-359) came after them, read
+        // by the plugin where the core read them before; the plugin's tests and the core's play them.
+        let mut said = v["result"].clone();
+        for item in said["items"].as_array_mut().into_iter().flatten() {
+            if let Some(o) = item.as_object_mut() {
+                o.remove("local");
+            }
+        }
+        let digest = Sha256::digest(said.to_string().as_bytes());
         let digest: String = digest.iter().take(8).map(|b| format!("{b:02x}")).collect();
         out.push(json!({ "kinds": kinds, "digest": digest }));
     }

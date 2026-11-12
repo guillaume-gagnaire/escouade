@@ -1,9 +1,9 @@
 ---
 title: "Le contrat des harness en process"
 subject: "plugins"
-sources: ["docs/PLUGINS-DESIGN.md §4.5 et §4.6","docs/PLUGINS-DESIGN.md §8.29 (ESC-352)","docs/TODO-2.2.md (INT-9)","crates/escouade-plugin-protocol/src/engine.rs","src-tauri/src/plugins/harness.rs","src-tauri/src/plugins/shared.rs","src-tauri/src/plugins/view.rs"]
-tickets: ["ESC-221","ESC-223","ESC-225","ESC-224","ESC-283","ESC-226","ESC-352","ESC-362"]
-decisions: [34,68,101]
+sources: ["docs/PLUGINS-DESIGN.md §4.5 et §4.6","docs/PLUGINS-DESIGN.md §8.29 (ESC-352)","docs/PLUGINS-DESIGN.md §8.34 (ESC-359)","docs/PLUGINS.md §2.2 et §8","docs/TODO-2.2.md (INT-9)","crates/escouade-plugin-protocol/src/engine.rs","crates/escouade-acp/src/terminal.rs","src-tauri/src/plugins/harness.rs","src-tauri/src/plugins/shared.rs","src-tauri/src/plugins/view.rs","src-tauri/src/tui.rs"]
+tickets: ["ESC-221","ESC-223","ESC-225","ESC-224","ESC-283","ESC-226","ESC-352","ESC-362","ESC-359"]
+decisions: [34,68,101,"l-interface-d-un-harness-et-la-lecture-d"]
 compared: null
 ---
 
@@ -97,7 +97,7 @@ Le cœur ne lie plus aucune crate de plugin : `src-tauri/Cargo.toml` ne dépend 
 - **Une instance à part.** Les vues d'un plugin tournent dans une instance du même module, à côté de celle de ses agents, sur un fil à elle et sans `escouade.call` : une vue ne demande rien à la machine. Le cœur attend sa réponse, par le même tour que le reste, dans le temps d'un tour du plugin.
 - **Une instance en faute** est remplacée à l'appel suivant : les vues repartent de zéro, le cœur leur disant ce que la conversation contient déjà, et rien n'est montré deux fois. Un plugin arrêté ou changé perd son instance de vues.
 - **Plugin coupé ou absent.** Le terminal marche encore, mais la conversation ne le suit plus, et elle le dit une fois : « Le plugin de <harness> n'a pas lu ce que sa vue a écrit (…). ». Avant, la vue marchait plugin coupé, sa traduction étant liée au cœur.
-- **Ce que le cœur garde de copié.** Le lancement de l'interface n'est pas encore passé par `terminal/launch` : le cœur garde sa propre copie des mots qu'il lui faut (arguments, clôture, modèles d'un compte, prix d'OpenAI), dans `engine/<harness>/`.
+- **Le lancement de l'interface** passe aussi par le plugin depuis ESC-359 (plus bas) : le cœur ne garde plus de copie de ses mots.
 
 - **Un module qui ne répond plus** n'est pas rappelé à chaque ligne, le cœur lisant sous le verrou de l'agent : le problème dit, les lignes passent sans lui 30 s, puis un seul essai, et ainsi de suite. Ces lignes ne sont pas relues. Un tour en cours se ferme quand même, sans son plugin.
 
@@ -109,3 +109,19 @@ Un plugin redémarre sans que son harness s'arrête. Ce qu'il tient lui-même de
 - **Codex** la redit à chaque tour (`turn/start`, son profil de clôture ou sa lecture seule).
 - **OpenCode** la tient par les règles de sa session, et **Antigravity CLI** par ses règles : leurs plugins la reprenaient déjà.
 - **Claude Code** n'a rien à reprendre : son process garde ses arguments et le fichier de réglages du cœur.
+
+## L'interface lancée par son plugin, un compte lu par son plugin (ESC-359)
+
+Le cœur ne garde plus de copie des mots des plugins de harness : il lance l'interface d'une « Vue X » et lit ce que dit un compte sur la description du plugin. Une règle de lancement corrigée au store corrige donc aussi l'interface, sans version de l'app.
+
+- **`terminal/launch`.** Chaque plugin de harness décrit le lancement de son interface : Claude Code, Codex, Copilot CLI et Antigravity CLI dans leurs plugins ; Cursor CLI, Mistral Vibe et Gemini CLI par leur client ACP commun. Le cœur lui dit l'agent (modèle, effort, mode, consignes, session à reprendre, à nommer ou à copier, dossiers lus, serveur d'Escouade, clôture, lecture seule, hooks, noms des variables de son compte, jamais leurs valeurs) et vérifie la description comme celle d'un agent : jeton hors des arguments, clôture d'un projet privé, lecture seule d'une discussion, variables d'un tiers.
+- **Les fichiers d'une interface** s'écrivent dans le dossier de l'agent, ou à côté de son fichier privé sous un nom qui commence par le sien ; le cœur les retire à la suppression de l'agent. Ce que le cœur écrit pour les agents d'un harness (la confiance et la clôture de Vibe, les réglages et les règles de Gemini, les hooks d'avant d'Antigravity retirés), il l'écrit d'abord pour son interface. La clôture de Claude Code et le refus du serveur d'Escouade restent le fichier de réglages du cœur.
+- **Ce qui se lit avant que l'interface parte** passe par un process du compte : la confiance des hooks de Codex, les modèles que liste un compte de Copilot CLI (un modèle qu'il n'a pas part en « auto »), la copie d'une session de Copilot CLI. Une lecture qui échoue est dite dans la conversation quand elle empêche de suivre l'interface.
+- **OpenCode** n'a pas de lancement à lui : son interface rejoint le serveur de l'agent.
+- **Plugin coupé ou désinstallé** : l'interface ne s'ouvre pas, et la fenêtre dit pourquoi et que la vue Plugins le rallume ou l'installe. Une vue déjà ouverte garde son terminal ; la conversation dit qu'elle ne la suit plus (ESC-352).
+
+### Un compte, par un process à lui
+
+Les modèles et le quota d'un compte dont aucun agent ne tourne passent par son plugin (`account/read`) : le plugin décrit le process et ce qu'il lui écrit, le cœur le lance comme un agent (le programme qu'il a trouvé, les variables du compte, son Job object, une minute au plus) et lui passe ce qu'il répond, jusqu'à la réponse. Claude Code, Codex, Copilot CLI, OpenCode et Antigravity CLI y passent ; le texte rédigé d'Antigravity CLI aussi, dans un dossier que le cœur fait pour lui et retire.
+
+**Restent au cœur, et pourquoi** : la connexion d'un compte de Codex (les comptes sont au cœur) ; le menu des modèles de Cursor CLI, Mistral Vibe et Gemini CLI, que le cœur fait aussi pour leurs agents qui tournent, à partir de ce que dit leur client ACP, et qui passera par le plugin quand ce client rendra ce menu lui-même ; la grille de prix d'OpenAI, avec celle d'Anthropic, le coût d'un tour restant calculé par le cœur ; les textes rédigés de Claude Code, Codex, Copilot CLI et OpenCode.

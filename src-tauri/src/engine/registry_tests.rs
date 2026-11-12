@@ -568,9 +568,6 @@ impl Engine for Added {
     fn refusal(&self) -> Option<serde_json::Value> {
         CLAUDE.refusal()
     }
-    fn escouade_launch(&self, escouade: &crate::engine::Escouade) -> crate::engine::mcp::Launch {
-        CLAUDE.escouade_launch(escouade)
-    }
 }
 
 static ADDED_ONE: Added = Added;

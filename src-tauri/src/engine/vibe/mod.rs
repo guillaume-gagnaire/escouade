@@ -34,8 +34,8 @@ use super::registry::{
     ToldModel,
 };
 use super::{
-    mcp, BoxFuture, Engine, EngineProcess, Escouade, Message, OneShot, Process, Program, Room,
-    Spawn, StartLost, Weight,
+    BoxFuture, Engine, EngineProcess, Message, OneShot, Process, Program, Room, Spawn, StartLost,
+    Weight,
 };
 use crate::agent::{AgentRt, Effects};
 use crate::core::{size_label, Attachment, MAX_IMAGE, MAX_TOTAL};
@@ -956,13 +956,6 @@ impl Engine for Vibe {
         None
     }
 
-    fn escouade_launch(&self, _escouade: &Escouade) -> mcp::Launch {
-        mcp::Launch {
-            args: Vec::new(),
-            env: Vec::new(),
-        }
-    }
-
     /// `/compact` is one of the commands its ACP reads in a prompt (`available_commands_update`).
     fn compaction(&self) -> super::Compaction {
         super::Compaction::Message
@@ -1052,12 +1045,6 @@ mod tests {
 
     #[test]
     fn escouades_server_goes_by_the_session_never_the_command_line() {
-        let granted = VIBE.escouade_launch(&Escouade::Granted {
-            url: "http://127.0.0.1:1/mcp".into(),
-            token: "s3cr3t".into(),
-            file: None,
-        });
-        assert!(granted.args.is_empty() && granted.env.is_empty());
         assert!(VIBE.grant_file("http://x", "s3cr3t").is_none());
         assert_eq!(VIBE.agent_home_var(), Some("VIBE_HOME"));
         // The questions asked for.

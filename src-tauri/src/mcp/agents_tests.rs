@@ -107,113 +107,6 @@ async fn admitted(port: u16, token: &str) -> bool {
     status == 200
 }
 
-#[test]
-fn what_claude_codes_process_is_given_of_escouade_is_as_before() {
-    let claude: &dyn Engine = &crate::engine::CLAUDE;
-    let denied = |file: Option<&str>| Escouade::Denied {
-        file: file.map(PathBuf::from),
-    };
-    assert_eq!(
-        claude.escouade_launch(&denied(None)).args,
-        ["--disallowedTools", "mcp__escouade"]
-    );
-    assert_eq!(
-        claude
-            .escouade_launch(&denied(Some("C:/data/mcp-refused.json")))
-            .args,
-        [
-            "--settings",
-            "C:/data/mcp-refused.json",
-            "--disallowedTools",
-            "mcp__escouade"
-        ]
-    );
-    let granted = Escouade::Granted {
-        url: "http://127.0.0.1:4321/mcp".into(),
-        token: "s3cr3t".into(),
-        file: Some(PathBuf::from("C:/data/mcp/a1.json")),
-    };
-    // A path, not the JSON itself: a `.cmd` launcher takes 8,191 characters at most.
-    let launch = claude.escouade_launch(&granted);
-    assert_eq!(launch.args, ["--mcp-config", "C:/data/mcp/a1.json"]);
-    assert!(launch.env.is_empty());
-    // The file names the server as `claude mcp add --transport http` would, with the token.
-    let file: Value = serde_json::from_slice(
-        &claude
-            .grant_file("http://127.0.0.1:4321/mcp", "s3cr3t")
-            .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(
-        file,
-        json!({ "mcpServers": { "escouade": {
-            "type": "http",
-            "url": "http://127.0.0.1:4321/mcp",
-            "headers": { "Authorization": "Bearer s3cr3t" },
-        } } })
-    );
-    // Refused, the server itself is kept out too, by the settings it is started with: its tools
-    // refused alone, Claude Code still connects it and gives the agent its instructions.
-    assert_eq!(
-        claude.refusal(),
-        Some(json!({ "deniedMcpServers": [{ "serverName": "escouade" }] }))
-    );
-}
-
-/// What every engine must keep: the token of a process given Escouade's server is never on its
-/// command line (seen by every process of the user, and written by the app's log), only in the
-/// private file it is given or in its environment; and a refused process gets no token at all.
-fn keeps_the_token_off_the_command_line(engine: &dyn Engine) {
-    let (url, token) = ("http://127.0.0.1:4321/mcp", "t0k3n-0f-th3-ag3nt");
-    let file = engine
-        .grant_file(url, token)
-        .map(|_| PathBuf::from("C:/data/mcp/a1.json"));
-    let granted = Escouade::Granted {
-        url: url.into(),
-        token: token.into(),
-        file: file.clone(),
-    };
-    let launch = engine.escouade_launch(&granted);
-    let name = engine.name();
-    assert!(
-        !launch.args.iter().any(|a| a.contains(token)),
-        "{name}: {launch:?}"
-    );
-    // Somewhere it reaches all the same: its file, or a variable.
-    let in_file = engine
-        .grant_file(url, token)
-        .is_some_and(|b| String::from_utf8_lossy(&b).contains(token));
-    let in_env = launch.env.iter().any(|(_, v)| v.contains(token));
-    assert!(in_file || in_env, "{name}: the token reaches nothing");
-    if in_file {
-        let file = file.unwrap().to_string_lossy().into_owned();
-        assert!(launch.args.contains(&file), "{name}: {launch:?}");
-    }
-    for refused in [
-        Escouade::Denied { file: None },
-        Escouade::Denied {
-            file: Some(PathBuf::from("C:/data/mcp-refused.json")),
-        },
-    ] {
-        let launch = engine.escouade_launch(&refused);
-        assert!(
-            !launch
-                .args
-                .iter()
-                .chain(launch.env.iter().map(|(_, v)| v))
-                .any(|a| a.contains(token)),
-            "{name}: {launch:?}"
-        );
-    }
-}
-
-#[test]
-fn no_engine_puts_the_token_on_the_command_line() {
-    for engine in gives_the_server() {
-        keeps_the_token_off_the_command_line(engine);
-    }
-}
-
 /// The engines that give their agents Escouade's server at the launch of their process: all but
 /// OpenCode, whose server is shared by the agents of an account and gives each agent's folder its
 /// entry by its API (`engine/opencode/process.rs`, `give_escouade`; tested in `opencode_tests`),
@@ -254,16 +147,6 @@ fn an_agents_access_never_prints_its_token() {
         format!("{:?}", Escouade::Denied { file: None }),
         "Denied { file: None }"
     );
-    // Nor what a process is started with, where an engine may pass the token in a variable.
-    let launch = crate::engine::mcp::Launch {
-        args: vec!["--x".into()],
-        env: vec![("ESCOUADE_MCP_TOKEN".into(), "s3cr3t".into())],
-    };
-    let shown = format!("{launch:?}");
-    assert!(
-        !shown.contains("s3cr3t") && shown.contains("ESCOUADE_MCP_TOKEN"),
-        "{shown}"
-    );
 }
 
 #[test]
@@ -282,15 +165,11 @@ fn escouades_tools_are_named_mcp_escouade_tool_whatever_the_engine() {
     for engine in gives_the_server() {
         // Every engine names the server `escouade` where it gives it: its tools then take the
         // names the window reads (the permission card, the labels, the search).
-        let file = engine.grant_file("http://127.0.0.1:1/mcp", "t");
-        let launch = engine.escouade_launch(&Escouade::Granted {
-            url: "http://127.0.0.1:1/mcp".into(),
-            token: "t".into(),
-            file: None,
-        });
-        let named = file.is_some_and(|b| String::from_utf8_lossy(&b).contains("\"escouade\""))
-            || launch.args.iter().any(|a| a.contains("escouade"));
-        assert!(named, "{}", engine.name());
+        // (The others name it in their plugin's launch: `plugins/<harness>`, its tests.)
+        if let Some(file) = engine.grant_file("http://127.0.0.1:1/mcp", "t") {
+            let named = String::from_utf8_lossy(&file).contains("\"escouade\"");
+            assert!(named, "{}", engine.name());
+        }
     }
 }
 

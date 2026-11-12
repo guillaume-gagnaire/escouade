@@ -5,7 +5,7 @@
 //! file sent to the user.
 
 use super::*;
-use escouade_plugin_protocol::engine::ModelTurn;
+use escouade_plugin_protocol::engine::{LocalPart, ModelTurn};
 
 impl AgentRt {
     /// One frame of Claude Code, in a test: its items applied at once, the next frame reads what they made.
@@ -242,6 +242,7 @@ impl AgentRt {
         kind: Option<String>,
         from: Option<String>,
         synthetic: bool,
+        local: Option<Vec<LocalPart>>,
         images: u32,
         files: Vec<String>,
         fx: &mut Effects,
@@ -252,13 +253,14 @@ impl AgentRt {
         }
         let kind = kind.as_deref();
         let human = kind.is_none_or(|k| k == "human") && !synthetic;
-        let parts = localcmd::parse(&text);
+        // A local command, as its plugin read it.
+        let parts = local;
         // The wake-up of a loop (`ScheduleWakeup`) runs its prompt again, as a message of no
         // origin (a human's, `<command-name>/loop</command-name>…` for `/loop`): a wake-up, not a
         // message of the user's (ESC-154).
         if human && self.loop_wake_due() {
             let typed = parts.iter().flatten().find_map(|p| match p {
-                localcmd::Part::Typed(t) => Some(t.clone()),
+                LocalPart::Typed(t) => Some(t.clone()),
                 _ => None,
             });
             if let Some(text) = typed.or_else(|| parts.is_none().then(|| text.clone())) {
@@ -279,7 +281,7 @@ impl AgentRt {
         // sent is listed already, as typed (the replay has its uuid).
         if let Some(parts) = parts {
             for part in &parts {
-                if let localcmd::Part::Typed(typed) = part {
+                if let LocalPart::Typed(typed) = part {
                     self.push_user_from(&id, typed, 0, &[], Some("remote"), fx);
                 }
             }
@@ -342,20 +344,15 @@ impl AgentRt {
         })
     }
 
-    /// What a local command printed (`parts`, as `localcmd` read them), under the command: its
+    /// What a local command printed (`parts`, as its plugin read them), under the command: its
     /// output as an output, its error as an error (ESC-154). Given the id of its entry (`id`),
     /// one read again is listed once.
-    pub(super) fn local_output(
-        &mut self,
-        id: Option<&str>,
-        parts: &[localcmd::Part],
-        fx: &mut Effects,
-    ) {
+    pub(super) fn local_output(&mut self, id: Option<&str>, parts: &[LocalPart], fx: &mut Effects) {
         for (k, part) in parts.iter().enumerate() {
             let (level, text) = match part {
-                localcmd::Part::Output(t) => ("output", t),
-                localcmd::Part::Error(t) => ("error", t),
-                localcmd::Part::Typed(_) => continue,
+                LocalPart::Output(t) => ("output", t),
+                LocalPart::Error(t) => ("error", t),
+                LocalPart::Typed(_) => continue,
             };
             let item_id = id.map_or_else(new_id, |id| format!("{id}:out{k}"));
             if self.conv.contains(&item_id) {
