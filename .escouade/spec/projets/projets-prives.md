@@ -3,7 +3,7 @@ title: "Projets privés"
 subject: "Projets"
 sources: ["docs/SPEC.md"]
 tickets: ["ESC-139","ESC-140","ESC-142","ESC-364","ESC-371","ESC-425"]
-decisions: ["certificats-par-un-fichier-d-autorites-p"]
+decisions: [154]
 compared: null
 ---
 

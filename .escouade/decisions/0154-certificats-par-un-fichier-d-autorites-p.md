@@ -1,9 +1,9 @@
 ---
-number: null
+number: 154
 id: "certificats-par-un-fichier-d-autorites-p"
 title: "Certificats par un fichier d'autorités, projet privé dit tel qu'il est, mode choisi au premier démarrage"
 date: "2026-11-12"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-425"
 pages: ["fenetre/reseau","projets/projets-prives","harness/comptes"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/reseau","added":15,"removed":0},{"page":"projets/projets-prives","added":3,"removed":0},{"page":"harness/comptes","added":7,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-12T20:50:01+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

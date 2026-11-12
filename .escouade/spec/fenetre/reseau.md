@@ -3,7 +3,7 @@ title: "Réseau : proxy et certificats"
 subject: "fenetre"
 sources: ["docs/security/audit-2026-11/rapport.md (branche ticket/esc-418), fiche SEC-07","website/content/docs/fr/settings-network.md"]
 tickets: ["ESC-425"]
-decisions: ["certificats-par-un-fichier-d-autorites-p"]
+decisions: [154]
 compared: null
 ---
 
