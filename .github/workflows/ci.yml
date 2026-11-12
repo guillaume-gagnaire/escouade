@@ -682,6 +682,13 @@ jobs:
           ESCOUADE_PLUGIN_BIN: src-tauri/target/debug/escouade-plugin
         run: node sdk/scripts/template-ci.mjs
 
+      # The plugins whose crates wait for crates.io (AWAITING_PUBLICATION, plugins/ci-lib.mjs) are played by the bench
+      # from the repository's modules, built here as the tests' jobs build theirs.
+      - name: The modules of the plugins that wait for their crates
+        run: |
+          waiting=$(node --input-type=module -e "import('./plugins/ci-lib.mjs').then((m) => console.log(Object.keys(m.AWAITING_PUBLICATION).join(' ')))")
+          if [ -n "$waiting" ]; then sh scripts/plugins-wasm.sh $waiting; fi
+
       # Escouade's own plugins (plugins/<id>/, PLG-10's examples, ESC-182, ESC-314 and ESC-340), as their author checks them
       # before a tag: LICENSE and CHANGELOG, their tests (cargo test for the crates), the TypeScript ones' dist/ rebuilt
       # and compared, a crate's version against its manifest, then validate, and the bench for all but those the app still
