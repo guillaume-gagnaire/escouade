@@ -82,6 +82,15 @@ export function foldedCards(item: Extract<SidebarItem, { kind: 'folder' }>, sele
   return [...(item.principal ? [item.principal] : []), ...item.agents].filter((a) => a.status === 'waiting' || a.id === selectedId);
 }
 
+/**
+ * What the amber pill of a folder's header counts: its agents, its principal included, that wait for an answer and were not
+ * seen yet (`attention`, what makes a card blink). Opened, an agent leaves the count, as its card stops blinking; it still
+ * waits on top of its folder, and a folded folder still shows it (`foldedCards`).
+ */
+export function folderAsks(item: Extract<SidebarItem, { kind: 'folder' }>, attention: Record<string, true>): number {
+  return [...(item.principal ? [item.principal] : []), ...item.agents].filter((a) => a.status === 'waiting' && attention[a.id]).length;
+}
+
 /** The line of a card under its model: what the agent does during a turn, or what its last turns changed. */
 export type CardActivity =
   { kind: 'doing'; verb: string; what: string } | { kind: 'thinking' } | { kind: 'result'; files: number } | { kind: 'over'; goes: string };
