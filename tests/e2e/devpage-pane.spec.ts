@@ -118,19 +118,27 @@ require('node:http').createServer((req, res) => {
   const placed = await watchPlace(page);
   const scale = await windowScale(page);
 
-  // Its bar, as the window's size draws it, then wide.
-  const size = page.viewportSize()!;
-  await shots(page, `devpage-${size.width}`);
-  if (size.width < 1400) {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await shots(page, 'devpage-1440');
-    await page.setViewportSize(size);
+  // Its bar, as the window's size draws it, then wide: only for the captures. Without ESCOUADE_E2E_VIEWPORT (the CI)
+  // the window has no viewport of Playwright's, and its size is not to be changed.
+  const size = page.viewportSize();
+  if (SHOTS && size) {
+    await shots(page, `devpage-${size.width}`);
+    if (size.width < 1400) {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await shots(page, 'devpage-1440');
+      await page.setViewportSize(size);
+    }
   }
 
   // A tablet's width, kept when it goes into its pane.
   const more = page.getByRole('button', { name: 'Plus d’actions sur la page' });
-  await more.click();
-  await page.getByRole('menuitemradio', { name: /^Tablette/ }).click();
+  // In its bar when the window is wide (the CI's, without ESCOUADE_E2E_VIEWPORT), else in its « … ».
+  const inBar = page.getByRole('radiogroup', { name: 'Largeur de la page' }).getByRole('radio', { name: 'Tablette' });
+  if (await inBar.isVisible()) await inBar.click();
+  else {
+    await more.click();
+    await page.getByRole('menuitemradio', { name: /^Tablette/ }).click();
+  }
   // Its menu over it: the page hides, and comes back once it closes.
   await more.click();
   await expect(page.getByRole('menu')).toBeVisible();
