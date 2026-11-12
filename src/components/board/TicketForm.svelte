@@ -719,8 +719,7 @@
         id="{uid}-description"
         class="field description"
         placeholder={t('board.form.descriptionPlaceholder')}
-        bind:value={description}
-      ></textarea>
+        bind:value={description}></textarea>
       <input
         bind:this={fileInput}
         type="file"
@@ -790,8 +789,7 @@
         class="field"
         rows={short ? 5 : 6}
         placeholder={t('board.form.criteriaPlaceholder')}
-        bind:value={criteria}
-      ></textarea>
+        bind:value={criteria}></textarea>
     </div>
     <div class="fgrid">
       {#if choosesEngine(engine, projectId)}

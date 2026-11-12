@@ -313,7 +313,7 @@ async fn a_proxy_that_is_no_address_fails_and_says_where_to_look() {
 fn tls_acceptor_and_pem() -> (tokio_rustls::TlsAcceptor, String) {
     use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
     let made = rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
-    let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(made.key_pair.serialize_der()));
+    let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(made.signing_key.serialize_der()));
     let config = rustls::ServerConfig::builder_with_provider(Arc::new(
         rustls::crypto::ring::default_provider(),
     ))

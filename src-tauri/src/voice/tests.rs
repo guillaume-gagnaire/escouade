@@ -454,7 +454,13 @@ fn info_for(body: &[u8]) -> ModelInfo {
     ModelInfo {
         id: "tiny",
         size: body.len() as u64,
-        sha256: Box::leak(format!("{:x}", Sha256::digest(body)).into_boxed_str()),
+        sha256: Box::leak(
+            Sha256::digest(body)
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<String>()
+                .into_boxed_str(),
+        ),
         speed: 5,
         quality: 1,
     }

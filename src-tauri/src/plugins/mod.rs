@@ -2434,7 +2434,10 @@ fn stamp(dir: &Path) -> std::io::Result<String> {
         h.update(meta.len().to_le_bytes());
         h.update(changed.to_le_bytes());
     }
-    Ok(format!("{:x}", h.finalize()))
+    Ok(h.finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>())
 }
 
 /// The SHA-256 of a folder's files: their paths and their contents, in the order of their paths.
@@ -2450,5 +2453,8 @@ pub fn digest(dir: &Path) -> std::io::Result<String> {
         h.update((bytes.len() as u64).to_le_bytes());
         h.update(&bytes);
     }
-    Ok(format!("{:x}", h.finalize()))
+    Ok(h.finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>())
 }

@@ -187,7 +187,11 @@ fn sha_of(path: &Path) -> Result<String> {
         }
         hash.update(&buf[..n]);
     }
-    Ok(format!("{:x}", hash.finalize()))
+    Ok(hash
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>())
 }
 
 async fn fetch(
@@ -268,7 +272,13 @@ async fn fetch(
         // The connection closed early without an error: the next call goes on from here.
         bail!("{done} bytes received, {} expected", f.size);
     }
-    if format!("{:x}", hash.finalize()) != f.sha256 {
+    if hash
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>()
+        != f.sha256
+    {
         let _ = std::fs::remove_file(part);
         bail!(ChecksumMismatch);
     }

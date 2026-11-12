@@ -148,7 +148,7 @@ impl FakeServer {
         let mut server = Self::at(format!("https://{}", listener.local_addr().unwrap()));
         let made = rcgen::generate_simple_self_signed(vec!["127.0.0.1".to_string()]).unwrap();
         server.cert_pem = pem_of(made.cert.der());
-        let key = rustls::pki_types::PrivateKeyDer::Pkcs8(made.key_pair.serialize_der().into());
+        let key = rustls::pki_types::PrivateKeyDer::Pkcs8(made.signing_key.serialize_der().into());
         let config = rustls::ServerConfig::builder_with_provider(Arc::new(
             rustls::crypto::ring::default_provider(),
         ))

@@ -127,8 +127,7 @@
             aria-label={t('git.commit.message') + ' · ' + repoLabel(g.repo)}
             disabled={!!d.done}
             bind:value={d.message}
-            oninput={() => (d.typed = true)}
-          ></textarea>
+            oninput={() => (d.typed = true)}></textarea>
           {#if d.noProposal}<p class="note">{t('git.commit.noProposal', { reason: d.noProposal })}</p>{/if}
           {#if d.refused}<p class="error" role="alert">{d.refused}</p>{/if}
         </section>

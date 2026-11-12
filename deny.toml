@@ -18,9 +18,6 @@ ignore = [
     { id = "RUSTSEC-2026-0368", reason = "zip: only ZipArchive::extract is concerned, which the app never calls (docsextract.rs reads entries in memory); fixed in zip 9, a major bump" },
     { id = "RUSTSEC-2026-0369", reason = "zip: only extract() is concerned, which the app never calls (docsextract.rs reads entries in memory); fixed in zip 9, a major bump" },
     { id = "RUSTSEC-2026-0429", reason = "zip: only ZipArchive::extract is concerned, which the app never calls (docsextract.rs reads entries in memory); fixed in zip 9, a major bump" },
-    # libsqlite3-sys 0.35 (rusqlite): a crafted `-wal` file next to a database. The app opens its own databases, in its
-    # own data folder. The fix is libsqlite3-sys 0.39, which comes with a new major of rusqlite.
-    { id = "RUSTSEC-2026-0459", reason = "SQLite reads uninitialised memory with a crafted -wal file; the app only opens its own databases in its data folder; fixed in libsqlite3-sys 0.39 (new rusqlite major)" },
     # Crates no longer maintained, pulled by Tauri, GTK and zbus (Linux): no fixed version exists; they follow the
     # dependencies that bring them.
     { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained (pulled by wgpu, tauri); no fixed version, no known flaw" },

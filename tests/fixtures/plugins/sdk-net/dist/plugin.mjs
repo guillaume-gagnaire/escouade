@@ -32,6 +32,7 @@ var Pipe = class {
   }) {
     this.taken = taken;
   }
+  taken;
   pieces = [];
   wake;
   done = false;
@@ -144,6 +145,8 @@ var RpcError = class extends Error {
     this.data = data;
     this.name = "RpcError";
   }
+  code;
+  data;
 };
 function wasmHost() {
   const g = globalThis;
@@ -155,6 +158,7 @@ var Plugin = class {
   constructor(options = {}) {
     this.options = options;
   }
+  options;
   /** What Escouade said at `initialize`: its version, the plugin's id and version, its capabilities. */
   escouade;
   facts = [];

@@ -203,7 +203,11 @@ pub async fn fetch_checked(
         if done != size {
             bail!("{done} bytes received, {} expected", size);
         }
-        let got = format!("{:x}", hash.finalize());
+        let got = hash
+            .finalize()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>();
         if got != sha256 {
             bail!(ChecksumMismatch);
         }

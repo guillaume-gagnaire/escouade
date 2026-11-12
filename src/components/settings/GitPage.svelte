@@ -163,8 +163,7 @@
       placeholder=".env*"
       aria-label={t('settings.project.copy')}
       aria-describedby="copy-desc"
-      bind:value={draft.copy}
-    ></textarea>
+      bind:value={draft.copy}></textarea>
   </Row>
   <Row label={t('settings.project.commit')} desc={t('settings.project.commitDesc')} shared="git.commit_mode">
     <Chips label={t('settings.project.commit')} options={COMMIT_MODES} bind:value={draft.commitMode} />

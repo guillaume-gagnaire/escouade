@@ -373,8 +373,7 @@
               e.preventDefault();
               send();
             }
-          }}
-        ></textarea>
+          }}></textarea>
         <div class="wrow">
           <span class="hint">{canWrite ? t('subagents.writeHint', { name: agent.name }) : t('subagents.writeEnded')}</span>
           <button class="btn primary send" type="submit" disabled={!canWrite || !message.trim() || sending}

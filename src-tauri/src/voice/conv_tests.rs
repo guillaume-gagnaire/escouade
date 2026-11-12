@@ -274,7 +274,7 @@ fn a_voice_is_downloaded_with_its_size_and_checksum_checked() {
     let json = b"{}".to_vec();
     let sha = |b: &[u8]| {
         use sha2::Digest;
-        format!("{:x}", sha2::Sha256::digest(b))
+        sha2::Sha256::digest(b).iter().map(|b| format!("{b:02x}")).collect::<String>()
     };
     let mut info = speech::catalog::find("fr_FR-siwis-medium").unwrap().clone();
     info.onnx_size = body.len() as u64;

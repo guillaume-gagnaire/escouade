@@ -69,24 +69,21 @@
         class="field"
         rows="3"
         bind:value={context}
-        placeholder={t('docs.decisions.form.contextHint')}
-      ></textarea></label
+        placeholder={t('docs.decisions.form.contextHint')}></textarea></label
     >
     <label
       ><span>{t('docs.decisions.form.decision')}</span><textarea
         class="field"
         rows="3"
         bind:value={decision}
-        placeholder={t('docs.decisions.form.decisionHint')}
-      ></textarea></label
+        placeholder={t('docs.decisions.form.decisionHint')}></textarea></label
     >
     <label
       ><span>{t('docs.decisions.form.consequences')}</span><textarea
         class="field"
         rows="3"
         bind:value={consequences}
-        placeholder={t('docs.decisions.form.consequencesHint')}
-      ></textarea></label
+        placeholder={t('docs.decisions.form.consequencesHint')}></textarea></label
     >
     {#if accepted.length}
       <label

@@ -31,8 +31,7 @@
     onkeydown={(e) => {
       e.stopPropagation();
       if (e.key === 'Escape') oncancel();
-    }}
-  ></textarea>
+    }}></textarea>
   <div class="row">
     <button class="btn ghost" onclick={oncancel}>{t('common.cancel')}</button>
     <button class="btn primary" disabled={!comment.trim() || busy} onclick={submit}>{t('board.reject.submit')}</button>

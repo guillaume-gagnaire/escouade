@@ -841,8 +841,7 @@
       onkeydown={onKeydown}
       onclick={refreshSuggestions}
       onpaste={onPaste}
-      onblur={() => setTimeout(() => (suggestions = []), 120)}
-    ></textarea>
+      onblur={() => setTimeout(() => (suggestions = []), 120)}></textarea>
     <div class="bar" use:observeWidth={(w) => (width = w)}>
       <Dropdown
         caption={t('common.model')}

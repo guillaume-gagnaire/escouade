@@ -22,6 +22,13 @@ concurrency:
 # its bundle, Clippy and the webview probe; Linux the same, in 2 parts, beside Clippy, its packages and its plugins. A
 # public repository's runners cost nothing. On 2026-11-10 the run took 42 to 60 min, the macOS tests on one runner its
 # longest job (ESC-406's push).
+# The pull requests of Dependabot (dependabot.yml) run only the light jobs (ESC-427): the frontend, the store, escouade-js, the
+# plugin kit, Clippy (Linux, and Windows's with its format) and the Linux build and tests. No macOS job and no Windows
+# build, test or end-to-end job (the macOS ones took up to 45 min), which the dependency updates held for
+# hours (2026-11-12: six pull requests at once starved the runners main needs). The rule: `if: github.actor != 'dependabot[bot]'`
+# on the three heavy roots (windows-build, macos-build, macos-bundle); the jobs that need them are skipped with them. A
+# human who has read the pull request runs the whole CI by pushing its branch under their name or with « Run workflow »
+# (workflow_dispatch), whose actor is the human.
 jobs:
   front:
     name: Frontend (format, types, Vitest)
@@ -65,7 +72,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
           filters: |
@@ -161,7 +168,7 @@ jobs:
       # Its compiler answers, a run.js plugin compiles in it twice to the same bytes, with the escouade-js the app embeds,
       # and the store starts and says the isolation it got (ESC-328).
       - name: Download escouade-js
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: escouade-js
           path: src-tauri/escouade-js/target
@@ -288,6 +295,8 @@ jobs:
 
   windows-build:
     name: Windows (build)
+    # Not for Dependabot's pull requests (see the rule above `jobs:`).
+    if: github.actor != 'dependabot[bot]'
     needs: escouade-js
     runs-on: windows-latest
     timeout-minutes: 40
@@ -296,7 +305,7 @@ jobs:
 
       # escouade-js, embedded in the app (src-tauri/build.rs).
       - name: Download escouade-js
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: escouade-js
           path: src-tauri/escouade-js/target
@@ -394,7 +403,7 @@ jobs:
           tool: cargo-nextest
 
       - name: Download the Rust tests
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: nextest-windows
 
@@ -439,7 +448,7 @@ jobs:
 
       # src-tauri/target: the artifact holds debug/ and plugins-wasm/.
       - name: Download the app
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: app-windows
           path: src-tauri/target
@@ -495,7 +504,7 @@ jobs:
 
       # escouade-js, embedded in the app (src-tauri/build.rs).
       - name: Download escouade-js
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: escouade-js
           path: src-tauri/escouade-js/target
@@ -579,7 +588,7 @@ jobs:
           tool: cargo-nextest
 
       - name: Download the Rust tests
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: nextest-linux
 
@@ -623,7 +632,7 @@ jobs:
 
       # escouade-js, embedded in the app (src-tauri/build.rs).
       - name: Download escouade-js
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: escouade-js
           path: src-tauri/escouade-js/target
@@ -720,6 +729,8 @@ jobs:
   # The Rust tests built once, as on Windows: compiling them took 12 min and running them 16 on one runner of 3 vCPUs.
   macos-build:
     name: macOS (build)
+    # Not for Dependabot's pull requests (see the rule above `jobs:`).
+    if: github.actor != 'dependabot[bot]'
     needs: escouade-js
     runs-on: macos-latest
     timeout-minutes: 45
@@ -728,7 +739,7 @@ jobs:
 
       # escouade-js, embedded in the app (src-tauri/build.rs).
       - name: Download escouade-js
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: escouade-js
           path: src-tauri/escouade-js/target
@@ -814,7 +825,7 @@ jobs:
           tool: cargo-nextest
 
       - name: Download the Rust tests
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: nextest-macos
 
@@ -840,6 +851,8 @@ jobs:
   # Beside the tests, off their way: the bundle, Clippy (6 min) and the webview probe (4 min).
   macos-bundle:
     name: macOS (app bundle, Clippy and webview)
+    # Not for Dependabot's pull requests (see the rule above `jobs:`).
+    if: github.actor != 'dependabot[bot]'
     needs: escouade-js
     runs-on: macos-latest
     timeout-minutes: 45
@@ -848,7 +861,7 @@ jobs:
 
       # escouade-js, embedded in the app (src-tauri/build.rs).
       - name: Download escouade-js
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: escouade-js
           path: src-tauri/escouade-js/target

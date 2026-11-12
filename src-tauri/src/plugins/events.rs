@@ -145,7 +145,10 @@ pub fn commands_fingerprint(m: &Manifest) -> String {
         h.update(Value::Object(c.when.clone()).to_string().as_bytes());
         h.update([1]);
     }
-    format!("{:x}", h.finalize())
+    h.finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>()
 }
 
 /// The value at `path` (`ticket.key`, `data.to`) of `v`.

@@ -1148,7 +1148,10 @@ async fn bounded(mut res: reqwest::Response, max: u64) -> Result<Vec<u8>, String
 }
 
 pub fn sha256(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>()
 }
 
 fn now() -> String {

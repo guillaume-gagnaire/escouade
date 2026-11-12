@@ -1,59 +1,87 @@
-# The updates of the dependencies, proposed once a week, grouped (SEC-02 of the security audit of 2026-11, ESC-422). The
-# advisories themselves are told by .github/workflows/advisories.yml. The third-party actions of the workflows are pinned by
-# commit (uses: owner/action@<sha> # vX.Y.Z): Dependabot proposes the new commit and its version in the comment (SEC-10).
+# The updates of the dependencies (SEC-02 of the security audit of 2026-11, ESC-422; calmed by ESC-427). Monthly, two pull requests
+# open at most per ecosystem: one for the minor and patch updates, grouped, and one for the major updates, grouped apart (a
+# major one breaks something more often, it is read on its own). The advisories themselves are told by
+# .github/workflows/advisories.yml. The CI of such a pull request runs only the light jobs (see ci.yml). The third-party
+# actions of the workflows are pinned by commit (uses: owner/action@<sha> # vX.Y.Z): Dependabot proposes the new commit and
+# its version in the comment (SEC-10).
 version: 2
 updates:
   - package-ecosystem: cargo
     directory: /src-tauri
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       cargo-app:
+        update-types: [minor, patch]
         patterns: ['*']
-    open-pull-requests-limit: 5
+      cargo-app-major:
+        update-types: [major]
+        patterns: ['*']
+    open-pull-requests-limit: 2
 
   - package-ecosystem: cargo
     directory: /plugins
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       cargo-plugins:
+        update-types: [minor, patch]
         patterns: ['*']
-    open-pull-requests-limit: 5
+      cargo-plugins-major:
+        update-types: [major]
+        patterns: ['*']
+    open-pull-requests-limit: 2
 
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       npm-app:
+        update-types: [minor, patch]
         patterns: ['*']
-    open-pull-requests-limit: 5
+      npm-app-major:
+        update-types: [major]
+        patterns: ['*']
+    open-pull-requests-limit: 2
 
   - package-ecosystem: npm
     directory: /store
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       npm-store:
+        update-types: [minor, patch]
         patterns: ['*']
-    open-pull-requests-limit: 5
+      npm-store-major:
+        update-types: [major]
+        patterns: ['*']
+    open-pull-requests-limit: 2
 
   - package-ecosystem: npm
     directory: /website
     schedule:
-      interval: weekly
+      interval: monthly
     groups:
       npm-website:
+        update-types: [minor, patch]
         patterns: ['*']
-    open-pull-requests-limit: 5
+      npm-website-major:
+        update-types: [major]
+        patterns: ['*']
+    open-pull-requests-limit: 2
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     commit-message:
       prefix: 'chore(ci)'
     groups:
       github-actions:
+        update-types: [minor, patch]
         patterns: ['*']
+      github-actions-major:
+        update-types: [major]
+        patterns: ['*']
+    open-pull-requests-limit: 2

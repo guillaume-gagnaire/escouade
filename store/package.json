@@ -25,17 +25,17 @@
     "@modelcontextprotocol/sdk": "1.32.2",
     "drizzle-orm": "^0.45.4",
     "markdown-it": "^15.0.3",
-    "nodemailer": "^10.3.0",
-    "nuxt": "^4.5.2",
+    "nodemailer": "^10.4.0",
+    "nuxt": "^4.6.4",
     "pg": "^8.23.1",
-    "pg-boss": "^12.38.0",
+    "pg-boss": "^12.38.1",
     "sanitize-html": "^2.18.1",
-    "sharp": "^0.34.5",
-    "vue": "^3.5.44",
+    "sharp": "^0.35.5",
+    "vue": "^3.5.45",
     "zod": "4.6.7"
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.1",
+    "@playwright/test": "^1.65.0",
     "@types/markdown-it": "^14.2.0",
     "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.23.1",
@@ -43,10 +43,10 @@
     "@types/smtp-server": "^3.5.13",
     "drizzle-kit": "^0.31.11",
     "prettier": "^3.9.10",
-    "smtp-server": "^3.21.1",
+    "smtp-server": "^3.21.3",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3",
-    "vitest": "^3.2.7",
-    "vue-tsc": "^3.3.13"
+    "vitest": "^5.1.0",
+    "vue-tsc": "^3.3.14"
   }
 }

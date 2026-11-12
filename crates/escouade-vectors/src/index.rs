@@ -77,7 +77,10 @@ pub struct Index {
 }
 
 fn hash(s: &str) -> String {
-    format!("{:x}", Sha256::digest(s.as_bytes()))
+    Sha256::digest(s.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>()
 }
 
 fn blob(v: &[f32]) -> Vec<u8> {
@@ -145,7 +148,9 @@ impl Index {
         let n = |t: &str| -> Result<usize> {
             Ok(self
                 .conn
-                .query_row(&format!("SELECT COUNT(*) FROM {t}"), [], |r| r.get(0))?)
+                .query_row(&format!("SELECT COUNT(*) FROM {t}"), [], |r| {
+                    r.get::<_, i64>(0)
+                })? as usize)
         };
         Ok(Stats {
             documents: n("docs")?,
@@ -167,11 +172,11 @@ impl Index {
             .ok();
         if let Some((id, h)) = &known {
             if *h == doc_hash {
-                let n: usize = self.conn.query_row(
+                let n = self.conn.query_row(
                     "SELECT COUNT(*) FROM chunks WHERE doc = ?1",
                     [id],
-                    |r| r.get(0),
-                )?;
+                    |r| r.get::<_, i64>(0),
+                )? as usize;
                 return Ok(Put {
                     unchanged: true,
                     chunks: n,

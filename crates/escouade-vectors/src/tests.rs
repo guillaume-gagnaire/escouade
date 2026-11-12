@@ -299,7 +299,10 @@ mod download {
         let sha = if bad_hash {
             "0".repeat(64)
         } else {
-            format!("{:x}", Sha256::digest(body))
+            Sha256::digest(body)
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<String>()
         };
         let files: &'static [File] = Box::leak(Box::new([File {
             name: "m.bin",
