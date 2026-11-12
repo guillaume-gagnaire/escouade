@@ -597,6 +597,8 @@ export function makeDemo(root: string, lang: Language, ports: number, hosts?: { 
       tileLetters: 'API',
       tileLabel: true,
       createdAt: now - 20 * DAY,
+      // The page « Tester » opens goes to the system's browser (held by the shots): the test's window stays in the picture.
+      pagesOpen: 'system',
       runCommands: [run('r-web', 'Front', 'web'), run('r-api', 'API', 'api'), run('r-worker', 'Worker', 'worker')],
       board: {
         autopilot: false,

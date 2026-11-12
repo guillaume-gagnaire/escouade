@@ -134,7 +134,13 @@ export const FEATURES = [
   { id: 'proxy', label: 'Proxy réseau', said: 'proxy' },
   { id: 'shortcuts', label: 'Raccourcis clavier', said: 'raccourcis clavier' },
   { id: 'updates', label: 'Mises à jour automatiques', said: 'mises à jour automatiques' },
-  { id: 'platforms', label: 'Windows et macOS', said: 'Windows et sur macOS' },
+  // Workflows and plugins (2.2)
+  { id: 'workflow-diagram', label: 'Diagramme du workflow du dépôt, le chemin de l’agent tracé', said: 'Escouade le dessine' },
+  { id: 'harness-choice', label: 'Un harness par agent : Claude Code, Codex, Cursor, OpenCode, Copilot', said: 'le harness de ton choix' },
+  { id: 'plugins', label: 'Harness, voix, Kanban et hébergeurs en plugins', said: 'tout est plugin' },
+  { id: 'store', label: 'Store de plugins, vérifiés et signés', said: 'le store les vérifie et les signe' },
+  { id: 'platforms', label: 'Windows, macOS et Linux', said: 'Windows, macOS et Linux' },
+  { id: 'cache-heat', label: 'La température du cache de chaque agent', said: 'la température de son cache' },
   { id: 'open-source', label: 'Gratuit et open source', said: 'open source' },
 ] as const satisfies readonly Feature[];
 

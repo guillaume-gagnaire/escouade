@@ -210,6 +210,7 @@ export const GitScene: FC = () => {
               <Composer
                 placeholder={tr('Envoyer un message à pagination-users…', 'Send a message to pagination-users…')}
                 model="Opus 5.5"
+                narrow={frame >= split}
                 busy={!merged && frame < writing + 20}
               />
             </div>

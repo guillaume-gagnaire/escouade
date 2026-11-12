@@ -16,6 +16,7 @@ export type SceneId =
   | 'editor'
   | 'board'
   | 'loop'
+  | 'workflow'
   | 'test'
   | 'validate'
   | 'integrations'
@@ -23,6 +24,7 @@ export type SceneId =
   | 'terminals'
   | 'stats'
   | 'remote'
+  | 'plugins'
   | 'more'
   | 'outro';
 
@@ -55,16 +57,16 @@ export interface SceneScript {
 export const SCRIPT: SceneScript[] = [
   {
     id: 'intro',
-    title: 'Tous tes Claude Code, dans une seule fenêtre.',
-    titleEn: 'All your Claude Code agents, in one window.',
+    title: 'Tous tes agents, dans une seule fenêtre.',
+    titleEn: 'All your agents, in one window.',
     shows: [],
     lead: 1,
     tail: 1.2,
     lines: [
       {
         id: 'hello',
-        text: 'Voici Escouade : le poste de pilotage de tous tes agents Claude Code.',
-        en: 'Meet Escouade: the cockpit for all your Claude Code agents.',
+        text: 'Voici Escouade : l’environnement de développement pensé pour tes agents.',
+        en: 'Meet Escouade: the development environment built for your agents.',
       },
     ],
   },
@@ -122,7 +124,7 @@ export const SCRIPT: SceneScript[] = [
     id: 'agents',
     title: 'Autant d’agents que tu veux.',
     titleEn: 'As many agents as you want.',
-    shows: ['parallel-agents', 'agent-card', 'auto-name', 'archive', 'agent-manage'],
+    shows: ['parallel-agents', 'agent-card', 'cache-heat', 'auto-name', 'archive', 'agent-manage'],
     lines: [
       {
         id: 'many',
@@ -131,8 +133,8 @@ export const SCRIPT: SceneScript[] = [
       },
       {
         id: 'card',
-        text: 'Sa carte dit tout : statut, modèle, temps de travail, tokens, coût, fichiers modifiés.',
-        en: 'Its card says it all: status, model, working time, tokens, cost, modified files.',
+        text: 'Sa carte dit tout : statut, modèle, coût… et la température de son cache. Chaud, le prochain tour coûte moins.',
+        en: 'Its card says it all: status, model, cost… and how warm its cache is. Hot, the next turn costs less.',
       },
       { id: 'name', text: 'Ta première demande ? Haiku lui trouve un nom.', en: 'Your first request? Haiku names it.', hold: 0.4 },
       {
@@ -392,6 +394,20 @@ export const SCRIPT: SceneScript[] = [
     ],
   },
   {
+    id: 'workflow',
+    title: 'Ton workflow, dessiné.',
+    titleEn: 'Your workflow, drawn.',
+    shows: ['workflow-diagram'],
+    lines: [
+      {
+        id: 'draw',
+        text: 'Ton workflow est dans le dépôt ? Escouade le dessine : chaque étape, chaque agent, et le chemin parcouru.',
+        en: 'Your workflow lives in the repo? Escouade draws it: every step, every agent, and the path taken.',
+        hold: 0.5,
+      },
+    ],
+  },
+  {
     id: 'test',
     title: 'Teste la fonctionnalité en un clic.',
     titleEn: 'Test the feature in one click.',
@@ -606,6 +622,25 @@ export const SCRIPT: SceneScript[] = [
     ],
   },
   {
+    id: 'plugins',
+    title: 'Tout est plugin.',
+    titleEn: 'Everything is a plugin.',
+    shows: ['harness-choice', 'plugins', 'store'],
+    lines: [
+      {
+        id: 'harness',
+        text: 'Claude Code, Codex, Cursor, OpenCode, Copilot : chaque agent tourne sur le harness de ton choix.',
+        en: 'Claude Code, Codex, Cursor, OpenCode, Copilot: each agent runs on the harness you pick.',
+      },
+      {
+        id: 'store',
+        text: 'Harness, voix, Kanban, hébergeurs : tout est plugin. Et le store les vérifie et les signe.',
+        en: 'Harnesses, voice, Kanban, code hosts: everything is a plugin. And the store checks and signs them.',
+      },
+      { id: 'install', text: 'Un clic, et c’est installé.', en: 'One click, and it’s installed.', hold: 0.5 },
+    ],
+  },
+  {
     id: 'more',
     title: 'Et tout le reste.',
     titleEn: 'And everything else.',
@@ -617,20 +652,20 @@ export const SCRIPT: SceneScript[] = [
         en: 'And more: settings for everything, down to stopping idle agents, a network proxy, keyboard shortcuts, and automatic updates.',
         hold: 0.3,
       },
-      { id: 'os', text: 'Escouade tourne sur Windows et sur macOS.', en: 'Escouade runs on Windows and macOS.', hold: 0.4 },
+      { id: 'os', text: 'Escouade tourne sur Windows, macOS et Linux.', en: 'Escouade runs on Windows, macOS and Linux.', hold: 0.4 },
     ],
   },
   {
     id: 'outro',
-    title: 'Gratuit, open source, pour Windows et macOS.',
-    titleEn: 'Free, open source, for Windows and macOS.',
+    title: 'Gratuit, open source, pour Windows, macOS et Linux.',
+    titleEn: 'Free, open source, for Windows, macOS and Linux.',
     shows: ['open-source'],
     tail: 3,
     lines: [
       {
         id: 'bye',
-        text: 'Escouade est gratuit et open source. Télécharge-le sur GitHub, et donne une escouade à Claude !',
-        en: 'Escouade is free and open source. Download it on GitHub, and give Claude a squad!',
+        text: 'Escouade est gratuit et open source. Télécharge-le sur escouade.dev, et donne une escouade à tes agents !',
+        en: 'Escouade is free and open source. Download it at escouade.dev, and give your agents a squad!',
       },
     ],
   },
@@ -652,6 +687,7 @@ const SAY: [RegExp, string | ((m: string) => string)][] = [
   [/\bgh\b/g, 'G H'],
   [/\bJira\b/g, 'Djira'],
   [/\bmacOS\b/g, 'Mac'],
+  [/\bescouade\.dev\b/g, 'escouade point dev'],
 ];
 
 /** What the voice says for a line. */

@@ -1,10 +1,9 @@
 ## intro
 Escouade
-Le poste de pilotage de tes agents Claude Code
+L’environnement de développement pensé pour tes agents
 Tous
 tes
-Claude
-Code,
+agents,
 dans
 une
 seule
@@ -31,24 +30,21 @@ agents.
 30
 terminaux
 ?
-+
-</>
+demo-api
+Δ 7
+Rechercher
+Ctrl K
 Éditeur
-Stats
-—
-☐
-✕
-0 actif
-0 en attente
-✓
-0 terminé
-Session 5 h
+0
+actif
+en attente
+terminé
+Claude
+5 h
 0 %
-Hebdo
+7 j
 Aujourd'hui
 0,00 $
-♪ On
-⚙
 
 ## projects
 Un
@@ -57,66 +53,73 @@ par
 projet.
 demo-api
 Δ 7
-studio-web
-Δ 3
-mobile-app
-Δ 12
-infra
-+
-</>
+Rechercher
+Ctrl K
 Éditeur
-Stats
-—
-☐
-✕
+API
+S
+Studio
+MA
+Mobile
+IN
+infra
 Agents
-Kanban
 5
-+ Nouvel agent
+Kanban
+PR
+Docs
+Nouvel agent
+Ctrl N
 refacto-auth
 En cours
+Claude
 Opus 5.5
 ·
 12m 40s
-184 k tok
-2,41 $
+82 °C
 6 fich.
+184 k
+2,41 $
 tests-e2e
-Sonnet 5.5
+Codex
+GPT-5.6 Terra
 8m 02s
-96 k tok
-0,73 $
+64 °C
 3 fich.
+96 k
+0,73 $
 pagination-users
+Sonnet 5.5
 3m 15s
-⎇ pagination-users
-41 k tok
+91 °C
+41 k
 0,32 $
 docs-api
 Terminé
-Haiku 4.5
+Cursor
+Composer 2.5
 1m 50s
-12 k tok
-0,02 $
+18 °C
 1 fich.
+12 k
+0,02 $
 fix-login
 Prêt
 Fable 5.1
 0m 00s
-0 tok
-0,00 $
 0 fich.
+0
+0,00 $
 ~/dev/demo-api
 main
-Parcourir
-~5 modifiés
-+2 ajoutés
-−0 supprimés
-demo-api / main
+~5
++2
+−0
+Claude Code
+/
 Refactore l'auth pour passer aux tokens JWT, sans casser les sessions existantes.
-C
+✳
 D'accord. Je cartographie l'existant : middleware, routes et stockage des sessions.
-▸
 Read
 src/auth/middleware.ts
 ✓
@@ -126,37 +129,36 @@ session
 Edit
 src/auth/jwt.ts
 +58
-−0
 Je remplace le middleware de session par une vérification du JWT, avec une période de transition.
 Envoyer un message à refacto-auth…
 Modèle
-▾
 Effort
 Élevé
 Mode
 Auto
-■ Stop
-Envoyer ↵
-3 actifs
-0 en attente
-1 terminé
-4 Claude ·
+■
+Stop
+Échap
+Envoyer
+↵
+3
+actifs
+en attente
+1
+terminé
+4 agents ·
 1,2 Go
 6 %
 CPU
-Session 5 h
+5 h
 22 %
-reset 2 h 14
-Hebdo
+↻ 2 h 14
+7 j
 36 %
-reset 3 j
 Aujourd'hui
 3,48 $
-⎇ main
 ↓3
 ↑1
-♪ On
-⚙
 Renommer…
 Couleur
 Désactiver le worktree par agent
@@ -165,6 +167,7 @@ Commandes de lancement…
 Ouvrir le dossier
 Fermer le projet…
 Nouveau projet
+✕
 Dossier
 C:\dev\boutique
 Parcourir…
@@ -183,11 +186,10 @@ Fable
 Opus
 Sonnet
 Haiku
-1
+B
 agent-1
-~0 modifiés
-+0 ajoutés
-boutique / main
+~0
++0
 Agent prêt
 Décris la tâche à confier à Claude. L'agent travaille dans
 .
@@ -203,67 +205,73 @@ tu
 veux.
 demo-api
 Δ 7
-studio-web
-Δ 3
-mobile-app
-Δ 12
-infra
-+
-</>
+Rechercher
+Ctrl K
 Éditeur
-Stats
-—
-☐
-✕
+API
+S
+Studio
+MA
+Mobile
+IN
+infra
 Agents
-Kanban
 5
-+ Nouvel agent
+Kanban
+PR
+Docs
+Nouvel agent
+Ctrl N
 refacto-auth
 En cours
+Claude
 Opus 5.5
 ·
 12m 40s
-184 k tok
-2,41 $
+82 °C
 6 fich.
+184 k
+2,41 $
 tests-e2e
-Sonnet 5.5
+Codex
+GPT-5.6 Terra
 8m 02s
-96 k tok
-0,73 $
+64 °C
 3 fich.
+96 k
+0,73 $
 pagination-users
+Sonnet 5.5
 3m 15s
-⎇ pagination-users
-41 k tok
+91 °C
+41 k
 0,32 $
 docs-api
 Terminé
-Haiku 4.5
+Cursor
+Composer 2.5
 1m 50s
-12 k tok
-0,02 $
+18 °C
 1 fich.
+12 k
+0,02 $
 fix-login
 Prêt
 Fable 5.1
 0m 00s
-⎇ fix-login
-0 tok
-0,00 $
 0 fich.
+0
+0,00 $
 ~/dev/demo-api
 main
-Parcourir
-~5 modifiés
-+2 ajoutés
-−0 supprimés
-demo-api / main
+~5
++2
+−0
+Claude Code
+/
 Refactore l'auth pour passer aux tokens JWT, sans casser les sessions existantes.
-C
+✳
 D'accord. Je cartographie l'existant : middleware, routes et stockage des sessions.
-▸
 Read
 src/auth/middleware.ts
 ✓
@@ -273,54 +281,53 @@ session
 Edit
 src/auth/jwt.ts
 +58
-−0
 Je remplace le middleware de session par une vérification du JWT, avec une période de transition.
 Claude travaille…
 Envoyer un message à refacto-auth…
 Modèle
-▾
 Effort
 Élevé
 Mode
 Auto
-■ Stop
-Envoyer ↵
-3 actifs
-0 en attente
-1 terminé
-4 Claude ·
+■
+Stop
+Échap
+Envoyer
+↵
+3
+actifs
+en attente
+1
+terminé
+4 agents ·
 1,2 Go
 6 %
 CPU
-Session 5 h
+5 h
 22 %
-reset 2 h 14
-Hebdo
+↻ 2 h 14
+7 j
 36 %
-reset 3 j
 Aujourd'hui
 3,48 $
-⎇ main
 ↓3
 ↑1
-♪ On
-⚙
 6
 export-csv-factures
 0m 04s
-3 k tok
+3 k
 ≈ 0,04 $
 Ajoute un export CSV des factures, avec les filtres de la liste.
 Décris la tâche à confier à Claude…
-4 actifs
+4
 ▸ Archivés (1)
 fix-login-oauth
 Supprimer l'agent « fix-login-oauth » ?
+✕
 Le processus Claude est arrêté et la conversation est retirée de l’application (la session Claude Code reste sur le disque).
 Supprimer aussi le worktree et la branche escouade/fix-login
 Annuler
 Supprimer
-4
 
 ## chat
 Un
@@ -331,78 +338,86 @@ un
 terminal.
 demo-api
 Δ 7
-studio-web
-Δ 3
-mobile-app
-Δ 12
-infra
-+
-</>
+Rechercher
+Ctrl K
 Éditeur
-Stats
-—
-☐
-✕
+API
+S
+Studio
+MA
+Mobile
+IN
+infra
 Agents
-Kanban
 5
-+ Nouvel agent
+Kanban
+PR
+Docs
+Nouvel agent
+Ctrl N
 refacto-auth
 En cours
+Claude
 Opus 5.5
 ·
 12m 40s
-184 k tok
-2,41 $
+82 °C
 6 fich.
+184 k
+2,41 $
 tests-e2e
-Sonnet 5.5
+Codex
+GPT-5.6 Terra
 8m 02s
-96 k tok
-0,73 $
+64 °C
 3 fich.
+96 k
+0,73 $
 pagination-users
+Sonnet 5.5
 3m 15s
-⎇ pagination-users
-12,4 k tok
+91 °C
+12,4 k
 0,14 $
 docs-api
 Terminé
-Haiku 4.5
+Cursor
+Composer 2.5
 1m 50s
-12 k tok
-0,02 $
+18 °C
 1 fich.
+12 k
+0,02 $
 fix-login
 Prêt
 Fable 5.1
 0m 00s
-0 tok
-0,00 $
 0 fich.
+0
+0,00 $
 ~/dev/demo-api
 main
-Parcourir
-~5 modifiés
-+2 ajoutés
-−0 supprimés
-demo-api / escouade/pagination-users
-▷
-Préparer le lancement
+~5
++2
+−0
+Claude Code
+/
+escouade/pagination-users
 Contexte
-76,2 k / 200 k
+76,2 k
 Tokens
-12,4 k
 Coût
+Cache
 Fichiers ▸
 3
 Durée
+Escouade
 Ajoute la pagination à l'endpoint
 /users
 , avec un curseur.
 ▸
 Réflexion
-C
+✳
 Voici le plan :
 une limite par défaut
 , un curseur opaque, et des tests pour chaque cas.
@@ -433,12 +448,12 @@ await
 .
 after
 take
++
 1
 ;
 return
 items
 slice
-0
 next
 [
 ]
@@ -455,46 +470,42 @@ npm test
 42 tests
 Envoyer un message à pagination-users…
 Modèle
-▾
 Effort
 Élevé
 Mode
 Auto
-Envoyer ↵
-3 actifs
-0 en attente
-1 terminé
-4 Claude ·
+Envoyer
+↵
+actifs
+en attente
+terminé
+4 agents ·
 1,2 Go
 6 %
 CPU
-Session 5 h
+5 h
 22 %
-reset 2 h 14
-Hebdo
+↻ 2 h 14
+7 j
 36 %
-reset 3 j
 Aujourd'hui
 3,48 $
-⎇ main
 ↓3
 ↑1
-♪ On
-⚙
 > vitest run
 ✓ tests/users.test.ts (12 tests)
 ✓ tests/paginate.test.ts (6 tests)
 Tests  42 passed (42)
-18,4 k tok
-≈ 0,21 $
 18,4 k
+≈ 0,21 $
 Les tests passent. J'ajoute le cas de la dernière page, sans curseur suivant.
 tests/users.test.ts
 +18
-−0
 npm test -- users
 Claude travaille…
-■ Stop
+■
+Stop
+Échap
 ≈ 3,55 $
 Question
 0,21 $
@@ -516,7 +527,6 @@ docs/api.md
 Et ajoute un test pour la dernière page.
 transmis pendant le tour
 Interrompu · 18,4 k tokens · 0,21 $
-Échap
 
 ## composer
 Modèle,
@@ -528,76 +538,84 @@ tu
 veux.
 demo-api
 Δ 7
-studio-web
-Δ 3
-mobile-app
-Δ 12
-infra
-+
-</>
+Rechercher
+Ctrl K
 Éditeur
-Stats
-—
-☐
-✕
+API
+S
+Studio
+MA
+Mobile
+IN
+infra
 Agents
-Kanban
 5
-+ Nouvel agent
+Kanban
+PR
+Docs
+Nouvel agent
+Ctrl N
 refacto-auth
 En cours
+Claude
 Opus 5.5
 ·
 12m 40s
-184 k tok
-2,41 $
+82 °C
 6 fich.
+184 k
+2,41 $
 tests-e2e
-Sonnet 5.5
+Codex
+GPT-5.6 Terra
 8m 02s
-96 k tok
-0,73 $
+64 °C
 3 fich.
+96 k
+0,73 $
 pagination-users
+Sonnet 5.5
 3m 15s
-⎇ pagination-users
-41 k tok
+91 °C
+41 k
 0,32 $
 docs-api
 Terminé
-Haiku 4.5
+Cursor
+Composer 2.5
 1m 50s
-12 k tok
-0,02 $
+18 °C
 1 fich.
+12 k
+0,02 $
 fix-login
 Prêt
 Fable 5.1
 0m 00s
-0 tok
-0,00 $
 0 fich.
+0
+0,00 $
 ~/dev/demo-api
 main
-Parcourir
-~5 modifiés
-+2 ajoutés
-−0 supprimés
-demo-api / escouade/pagination-users
-▷
-Préparer le lancement
+~5
++2
+−0
+Claude Code
+/
+escouade/pagination-users
 Contexte
-76,2 k / 200 k
+76,2 k
 Tokens
 24,8 k
 Coût
 0,27 $
+Cache
 Fichiers ▸
 3
 Durée
 4m 02s
+Escouade
 Et ajoute un test pour la dernière page.
-▸
 Edit
 tests/users.test.ts
 +37
@@ -605,43 +623,41 @@ tests/users.test.ts
 Bash
 npm test
 43 tests
-C
+✳
 C'est fait : la pagination de
 /users
 est en place, avec ses tests, et la doc de l'API est à jour.
 Envoyer un message à pagination-users…
 Modèle
-▾
 le plus capable
 raisonnement profond
 ✓
 rapide et précis
+Haiku 4.5
 le plus rapide
 Effort
 Élevé
 Mode
 Auto
-Envoyer ↵
-3 actifs
-0 en attente
-1 terminé
-4 Claude ·
+Envoyer
+↵
+actifs
+en attente
+1
+terminé
+4 agents ·
 1,2 Go
 6 %
 CPU
-Session 5 h
+5 h
 22 %
-reset 2 h 14
-Hebdo
+↻ 2 h 14
+7 j
 36 %
-reset 3 j
 Aujourd'hui
 3,48 $
-⎇ main
 ↓3
 ↑1
-♪ On
-⚙
 /review
 Relit les changements de la branche
 /compact
@@ -664,7 +680,6 @@ src/routes/users.ts
 −3
 src/db/paginate.ts
 +41
-−0
 Revoir les fichiers
 Commit…
 
@@ -680,76 +695,83 @@ de
 suite.
 demo-api
 Δ 7
-1
-studio-web
-Δ 3
-mobile-app
-Δ 12
-infra
-+
-</>
+Rechercher
+Ctrl K
 Éditeur
-Stats
-—
-☐
-✕
+API
+1
+S
+Studio
+MA
+Mobile
+IN
+infra
 Agents
-Kanban
 5
-+ Nouvel agent
+Kanban
+PR
+Docs
+Nouvel agent
+Ctrl N
 refacto-auth
 En cours
+Claude
 Opus 5.5
 ·
 12m 40s
-184 k tok
-2,41 $
+82 °C
 6 fich.
+184 k
+2,41 $
 tests-e2e
 Question
-Sonnet 5.5
+Codex
+GPT-5.6 Terra
 8m 02s
-96 k tok
-0,73 $
+64 °C
 3 fich.
+96 k
+0,73 $
 pagination-users
 3m 15s
-⎇ pagination-users
-41 k tok
+91 °C
+41 k
 0,32 $
 docs-api
 Terminé
-Haiku 4.5
+Cursor
+Composer 2.5
 1m 50s
-12 k tok
-0,02 $
+18 °C
 1 fich.
+12 k
+0,02 $
 fix-login
 Prêt
 Fable 5.1
 0m 00s
-0 tok
-0,00 $
 0 fich.
+0
+0,00 $
 ~/dev/demo-api
 main
-Parcourir
-~5 modifiés
-+2 ajoutés
-−0 supprimés
-demo-api / main
+~5
++2
+−0
+Claude Code
+/
 Contexte
-76,2 k / 200 k
+76,2 k
 Tokens
-184 k
 Coût
+Cache
 Fichiers ▸
 6
 Durée
+Escouade
 Refactore l'auth pour passer aux tokens JWT, sans casser les sessions existantes.
-C
+✳
 D'accord. Je cartographie l'existant : middleware, routes et stockage des sessions.
-▸
 Read
 src/auth/middleware.ts
 ✓
@@ -759,59 +781,56 @@ session
 Edit
 src/auth/jwt.ts
 +58
-−0
 Je remplace le middleware de session par une vérification du JWT, avec une période de transition.
 Claude travaille…
 Envoyer un message à refacto-auth…
 Modèle
-▾
 Effort
 Élevé
 Mode
 Auto
-■ Stop
-Envoyer ↵
-2 actifs
-1 en attente
-1 terminé
-4 Claude ·
+■
+Stop
+Échap
+Envoyer
+↵
+2
+actifs
+en attente
+Ctrl J
+terminé
+4 agents ·
 1,2 Go
 6 %
 CPU
-Session 5 h
+5 h
 22 %
-reset 2 h 14
-Hebdo
+↻ 2 h 14
+7 j
 36 %
-reset 3 j
 Aujourd'hui
 3,48 $
-⎇ main
 ↓3
 ↑1
-♪ On
-⚙
 Spécifications — v2
 FR
 14:32
 04/10/2026
-Escouade
 demo-api · tests-e2e
 Claude attend ta réponse
 Ctrl
++
 J
-96 k
 3
 Les 18 scénarios passent sur Chrome.
 Je lance aussi les tests sur Firefox ?
 Oui
 Non, Chrome suffit
 Réponds à la question ou écris une réponse libre…
+Sonnet 5.5
 → Oui
 Je lance les 18 scénarios sur Firefox.
 Envoyer un message à tests-e2e…
-3 actifs
-0 en attente
 
 ## git
 Chaque
@@ -823,87 +842,89 @@ tes
 yeux.
 demo-api
 Δ 7
-studio-web
-Δ 3
-mobile-app
-Δ 12
-infra
-+
-</>
+Rechercher
+Ctrl K
 Éditeur
-Stats
-—
-☐
-✕
+API
+S
+Studio
+MA
+Mobile
+IN
+infra
 Agents
-Kanban
 5
-+ Nouvel agent
+Kanban
+PR
+Docs
+Nouvel agent
+Ctrl N
 refacto-auth
 En cours
+Claude
 Opus 5.5
 ·
 12m 40s
-184 k tok
-2,41 $
+82 °C
 6 fich.
+184 k
+2,41 $
 tests-e2e
-Sonnet 5.5
+Codex
+GPT-5.6 Terra
 8m 02s
-96 k tok
-0,73 $
+64 °C
 3 fich.
+96 k
+0,73 $
 pagination-users
 3m 15s
-⎇ pagination-users
-41 k tok
+91 °C
+41 k
 0,32 $
 docs-api
 Terminé
-Haiku 4.5
+Cursor
+Composer 2.5
 1m 50s
-12 k tok
-0,02 $
+18 °C
 1 fich.
+12 k
+0,02 $
 fix-login
 Prêt
 Fable 5.1
 0m 00s
-0 tok
-0,00 $
 0 fich.
+0
+0,00 $
 ~/dev/demo-api
 main
-Parcourir
-~5 modifiés
-+2 ajoutés
-−0 supprimés
-demo-api / escouade/pagination-users
-▷
+~5
++2
+−0
+Claude Code
+/
+escouade/pagination-users
 Coût
 0,27 $
 Fichiers
 3
-C
+✳
 La pagination est en place, avec ses tests.
-▸
 Edit
 src/db/paginate.ts
 +41
-−0
 Bash
 npm test
 43 tests
 src/routes/users.ts
 +5
 Envoyer un message à pagination-users…
-Modèle
-▾
-Effort
 Élevé
-Mode
 Auto
-Envoyer ↵
+Envoyer
+↵
 Non commités
 Historique
 Cet agent
@@ -941,27 +962,23 @@ return { users: page.items, next: page.next };
 Voir le diff
 Commit…
 Merger escouade/pagination-users → main…
-3 actifs
-0 en attente
-✓
-1 terminé
-4 Claude ·
+actifs
+en attente
+1
+terminé
+4 agents ·
 1,2 Go
 6 %
 CPU
-Session 5 h
+5 h
 22 %
-reset 2 h 14
-Hebdo
+↻ 2 h 14
+7 j
 36 %
-reset 3 j
 Aujourd'hui
 3,48 $
-⎇ main
 ↓3
 ↑0
-♪ On
-⚙
 6
 Toutes les modifications non commitées du projet
 middleware.ts
@@ -974,6 +991,7 @@ e2e
 +12
 −4
 -
++
 const page = await paginate(db.users, { limit, cursor });
 Commit tout…
 Modifications de demo-api
@@ -1019,7 +1037,9 @@ expect(next.users[0].id).not.toBe(first.users[0].id);
 47
 it.todo('pagination');
 Merger escouade/pagination-users dans main ?
+✕
 Les commits de l'agent « pagination-users » sont intégrés dans la branche courante du projet.
+✓
 Squash (un seul commit)
 Annuler
 Merger
@@ -1037,61 +1057,67 @@ quitter
 l’app.
 demo-api
 Δ 7
-studio-web
-Δ 3
-mobile-app
-Δ 12
-infra
-+
-</>
+Rechercher
+Ctrl K
 Éditeur
-Stats
-—
-☐
-✕
+API
+S
+Studio
+MA
+Mobile
+IN
+infra
 Agents
-Kanban
 5
-+ Nouvel agent
+Kanban
+PR
+Docs
+Nouvel agent
+Ctrl N
 refacto-auth
 En cours
+Claude
 Opus 5.5
 ·
 12m 40s
-184 k tok
-2,41 $
+82 °C
 6 fich.
+184 k
+2,41 $
 tests-e2e
-Sonnet 5.5
+Codex
+GPT-5.6 Terra
 8m 02s
-96 k tok
-0,73 $
+64 °C
 3 fich.
+96 k
+0,73 $
 pagination-users
 Terminé
 3m 15s
-⎇ pagination-users
-41 k tok
+91 °C
+41 k
 0,32 $
 docs-api
-Haiku 4.5
+Cursor
+Composer 2.5
 1m 50s
-12 k tok
-0,02 $
+18 °C
 1 fich.
+12 k
+0,02 $
 fix-login
 Prêt
 Fable 5.1
 0m 00s
-0 tok
-0,00 $
 0 fich.
+0
+0,00 $
 ~/dev/demo-api
 main
-Parcourir
-~5 modifiés
-+2 ajoutés
-−0 supprimés
+~5
++2
+−0
 ← Conversation
 worktree
 ▾
@@ -1177,32 +1203,27 @@ UTF-8
 LF
 Espaces : 2
 worktree · pagination-users
-3 actifs
-0 en attente
-✓
-1 terminé
-4 Claude ·
+actifs
+en attente
+terminé
+4 agents ·
 1,2 Go
 6 %
 CPU
-Session 5 h
+5 h
 22 %
-reset 2 h 14
-Hebdo
+↻ 2 h 14
+7 j
 36 %
-reset 3 j
 Aujourd'hui
 3,48 $
-⎇ main
 ↓3
 ↑1
-♪ On
-⚙
 ● Non enregistré · Ctrl+S
 ●
 20
 Ctrl
-S
++
 Ce fichier a changé sur le disque.
 Recharger
 Garder ma version
@@ -1218,42 +1239,46 @@ prennent
 seuls.
 demo-api
 Δ 7
-studio-web
-Δ 3
-mobile-app
-Δ 12
-infra
-+
-</>
+Rechercher
+Ctrl K
 Éditeur
-Stats
-—
-☐
-✕
+API
+S
+Studio
+MA
+Mobile
+IN
+infra
 Agents
-Kanban
 2
-+ Nouvel agent
+Kanban
+PR
+Docs
+Nouvel agent
+Ctrl N
 refacto-auth
 En cours
+Claude
 Opus 5.5
 ·
 12m 40s
-184 k tok
-2,41 $
+82 °C
 6 fich.
+184 k
+2,41 $
 tests-e2e
-Sonnet 5.5
+Codex
+GPT-5.6 Terra
 8m 02s
-96 k tok
-0,73 $
+64 °C
 3 fich.
+96 k
+0,73 $
 ~/dev/demo-api
 main
-Parcourir
-~5 modifiés
-+2 ajoutés
-−0 supprimés
+~5
++2
+−0
 demo-api · 4 tickets · 0 en boucle
 2 places libres
 ⤓
@@ -1264,6 +1289,7 @@ merge squash → main
 Pilote auto · off
 À faire
 1
++
 DEM-5
 Export CSV des factures
 3 critères · max 5 boucles
@@ -1288,26 +1314,22 @@ Réinitialisation du mot de passe
 ⤵ Mergé dans main · squash
 dem-1-reinitialisation-du-mot-de-passe
 1 boucle · 0,48 $
-3 actifs
-0 en attente
-✓
-1 terminé
-4 Claude ·
+actifs
+en attente
+terminé
+4 agents ·
 1,2 Go
 6 %
 CPU
-Session 5 h
+5 h
 22 %
-reset 2 h 14
-Hebdo
+↻ 2 h 14
+7 j
 36 %
-reset 3 j
 Aujourd'hui
 3,48 $
-⎇ main
 ↓3
 ↑1
-♪ On
 Limiter les tentatives de connexion
 Bloquer les attaques par force brute sur /login, sans gêner les vrais utilisateurs.
 Au-delà de 5 échecs en 15 min, la connexion est refusée
@@ -1325,15 +1347,13 @@ Passer en tête
 Supprimer
 4
 dem-5-export-csv-des-factures
+DEM-5 · boucle 1/5
 2m 10s
-⎇ ticket/dem-5
-38 k tok
-≈ 0,41 $
 4 fich.
-▸ DEM-5 · boucle 1/5
+38 k
+≈ 0,41 $
 dem-6-limiter-les-tentatives-de
-⎇ ticket/dem-6
-▸ DEM-6 · boucle 1/5
+DEM-6 · boucle 1/5
 demo-api · 5 tickets · 2 en boucle
 Toutes les places sont prises
 Pilote auto
@@ -1343,7 +1363,6 @@ Le CSV reprend les filtres de la liste
 Montants au format français
 Lit src/billing/invoices.ts
 Réfléchit
-5 actifs
 
 ## loop
 Chaque
@@ -1353,52 +1372,54 @@ jusqu’au
 but.
 demo-api
 Δ 7
-studio-web
-Δ 3
-mobile-app
-Δ 12
-infra
-+
-</>
+Rechercher
+Ctrl K
 Éditeur
-Stats
-—
-☐
-✕
+API
+S
+Studio
+MA
+Mobile
+IN
+infra
 Agents
-Kanban
 4
-+ Nouvel agent
+Kanban
+PR
+Docs
+Nouvel agent
+Ctrl N
 refacto-auth
 En cours
+Claude
 Opus 5.5
 ·
 12m 40s
-184 k tok
-2,41 $
+82 °C
 6 fich.
+184 k
+2,41 $
 tests-e2e
-Sonnet 5.5
+Codex
+GPT-5.6 Terra
 8m 02s
-96 k tok
-0,73 $
+64 °C
 3 fich.
+96 k
+0,73 $
 dem-5-export-csv-des-factures
+DEM-5 · boucle 1/5
 2m 10s
-⎇ ticket/dem-5
-38 k tok
-≈ 0,41 $
 4 fich.
-▸ DEM-5 · boucle 1/5
+38 k
+≈ 0,41 $
 dem-6-limiter-les-tentatives-de
-⎇ ticket/dem-6
-▸ DEM-6 · boucle 1/5
+DEM-6 · boucle 1/5
 ~/dev/demo-api
 main
-Parcourir
-~5 modifiés
-+2 ajoutés
-−0 supprimés
+~5
++2
+−0
 demo-api · 5 tickets · 2 en boucle
 Toutes les places sont prises
 ⤓
@@ -1409,6 +1430,7 @@ merge squash → main
 Pilote auto
 À faire
 0
++
 2
 DEM-5
 Boucle 1/5
@@ -1444,25 +1466,24 @@ Réinitialisation du mot de passe
 ⤵ Mergé dans main · squash
 dem-1-reinitialisation-du-mot-de-passe
 1 boucle · 0,48 $
-5 actifs
-0 en attente
-1 terminé
-4 Claude ·
+5
+actifs
+en attente
+1
+terminé
+4 agents ·
 1,2 Go
 6 %
 CPU
-Session 5 h
+5 h
 22 %
-reset 2 h 14
-Hebdo
+↻ 2 h 14
+7 j
 36 %
-reset 3 j
 Aujourd'hui
 3,48 $
-⎇ main
 ↓3
 ↑1
-♪ On
 branche
 ticket/dem-6
 worktree
@@ -1471,7 +1492,7 @@ copiés
 .env  .env.local
 ports
 4100 → 4109
-▸ DEM-6 · boucle 2/5
+DEM-6 · boucle 2/5
 Boucle 2/5
 Limiteur branché sur /login
 Modifie src/auth/limiter.ts
@@ -1482,26 +1503,26 @@ Lance npm test -- limiter
 Lance npm test
 Escouade
 DEM-5 bloqué : Erreur : Claude Code s'est arrêté (code 1)
-▸ DEM-6 · boucle 3/5
-demo-api / ticket/dem-6
+DEM-6 · boucle 3/5
+Claude Code
+/
 Contexte
-76,2 k / 200 k
+76,2 k
 Tokens
 61 k
 Coût
 ≈ 0,84 $
+Cache
 Fichiers ▸
 Durée
 6m 12s
-▸
 Edit
 src/auth/limiter.ts
 +64
-−0
 Bash
 npm test -- limiter
 9 tests
-C
+✳
 Le limiteur bloque bien au sixième essai, avec un message qui dit quand réessayer.
 Bilan des critères
 2/3
@@ -1513,13 +1534,128 @@ Boucle 3/5. Critères non atteints : 3 (un test d'intégration échoue encore). 
 Claude travaille…
 Envoyer un message à dem-6-limiter-les-tentatives-de…
 Modèle
-▾
 Effort
 Élevé
 Mode
 Auto
-■ Stop
-Envoyer ↵
+■
+Stop
+Échap
+Envoyer
+↵
+
+## workflow
+Ton
+workflow,
+dessiné.
+demo-api
+Δ 7
+Rechercher
+Ctrl K
+Éditeur
+API
+S
+Studio
+MA
+Mobile
+IN
+infra
+Agents
+5
+Kanban
+PR
+Docs
+Nouvel agent
+Ctrl N
+refacto-auth
+En cours
+Claude
+Opus 5.5
+·
+12m 40s
+82 °C
+6 fich.
+184 k
+2,41 $
+tests-e2e
+Codex
+GPT-5.6 Terra
+8m 02s
+64 °C
+3 fich.
+96 k
+0,73 $
+pagination-users
+Sonnet 5.5
+3m 15s
+91 °C
+41 k
+0,32 $
+docs-api
+Terminé
+Cursor
+Composer 2.5
+1m 50s
+18 °C
+1 fich.
+12 k
+0,02 $
+fix-login
+Prêt
+Fable 5.1
+0m 00s
+0 fich.
+0
+0,00 $
+~/dev/demo-api
+main
+~5
++2
+−0
+GSD
+· entré par
+/gsd:plan-phase
+· refacto-auth, 6 passages
+− 100 % +
+Ajuster
+Copier en Mermaid
+✕
+Entrée
+/gsd:plan
+Planifier
+1
+2
+onboarding
+Exécuter
+3
+6
+/gsd:execute-phase
+en cours
+Vérifier
+4
+/gsd:verify-work
+prochaine
+◎ Fini
+↩ écarts : 2 tests rouges dans checkout.spec.ts
+pris par l'agent
+possible
+retour pris
+actifs
+en attente
+terminé
+4 agents ·
+1,2 Go
+6 %
+CPU
+5 h
+22 %
+↻ 2 h 14
+7 j
+36 %
+Aujourd'hui
+3,48 $
+↓3
+↑1
 
 ## test
 Teste
@@ -1530,48 +1666,51 @@ un
 clic.
 demo-api
 Δ 7
-studio-web
-Δ 3
-mobile-app
-Δ 12
-infra
-+
-</>
+Rechercher
+Ctrl K
 Éditeur
-Stats
-—
-☐
-✕
+API
+S
+Studio
+MA
+Mobile
+IN
+infra
 Agents
+4
 Kanban
 1
-4
-+ Nouvel agent
+PR
+Docs
+Nouvel agent
+Ctrl N
 refacto-auth
 En cours
+Claude
 Opus 5.5
 ·
 12m 40s
-184 k tok
-2,41 $
+82 °C
 6 fich.
+184 k
+2,41 $
 tests-e2e
-Sonnet 5.5
+Codex
+GPT-5.6 Terra
 8m 02s
-96 k tok
-0,73 $
+64 °C
 3 fich.
+96 k
+0,73 $
 dem-5-export-csv-des-factures
+DEM-5 · boucle 2/5
 2m 10s
-⎇ ticket/dem-5
-38 k tok
-≈ 0,41 $
 4 fich.
-▸ DEM-5 · boucle 2/5
+38 k
+≈ 0,41 $
 dem-6-limiter-les-tentatives-de
 Terminé
-⎇ ticket/dem-6
-▸ DEM-6 · à tester
+DEM-6 · à tester
 Lancement
 0/2
 Tout lancer
@@ -1579,7 +1718,6 @@ Tout lancer
 Front
 prêt
 ▶
-API
 demo-api · 6 tickets · 1 en boucle
 1 place libre
 ⤓
@@ -1589,6 +1727,7 @@ merge squash → main
 Pilote auto
 À faire
 0
++
 DEM-5
 Boucle 2/5
 Export CSV des factures
@@ -1641,25 +1780,23 @@ Réinitialisation du mot de passe
 ⤵ Mergé dans main · squash
 dem-1-reinitialisation-du-mot-de-passe
 1 boucle · 0,48 $
-3 actifs
-0 en attente
-1 terminé
-4 Claude ·
+actifs
+en attente
+terminé
+4 agents ·
 1,2 Go
 6 %
 CPU
-Session 5 h
+5 h
 22 %
-reset 2 h 14
-Hebdo
+↻ 2 h 14
+7 j
 36 %
-reset 3 j
 Aujourd'hui
 3,48 $
-⎇ main
+main
 ↓3
 ↑1
-♪ On
 localhost:4101/login
 Connexion
 lea@exemple.fr
@@ -1669,7 +1806,6 @@ Se connecter
 Escouade
 DEM-6 prêt à tester
 Préparation 1
-terminé
 api
 en cours
 ⟳
@@ -1678,6 +1814,7 @@ web
 ■ Arrêter
 Ouvrir
 Tester DEM-6
+✕
 Préparation : npm install
 terminée
 prêt · 2,4 s
@@ -1691,33 +1828,36 @@ Rouvrir
 Trop de tentatives. Réessaie dans 15 min.
 pagination-users
 3m 15s
-⎇ pagination-users
-41 k tok
+91 °C
+41 k
 0,32 $
 Prêt
-demo-api / escouade/pagination-users
-▷
+Claude Code
+/
+escouade/pagination-users
 Préparer le lancement
 Contexte
-76,2 k / 200 k
+76,2 k
 Tokens
 24,8 k
 Coût
 0,27 $
+Cache
 Fichiers ▸
 Durée
 4m 02s
 Envoyer un message à pagination-users…
 Modèle
-▾
 Effort
 Élevé
 Mode
 Auto
-Envoyer ↵
+Envoyer
+↵
 Prépare le lancement de test de ce worktree. Ports réservés : 4110 à 4119 (ESCOUADE_PORT_BASE et ESCOUADE_PORT_END dans le lancement)…
 Claude travaille…
-■ Stop
+Stop
+Échap
 
 ## validate
 Valide,
@@ -1725,55 +1865,57 @@ ou
 renvoie.
 demo-api
 Δ 7
-studio-web
-Δ 3
-mobile-app
-Δ 12
-infra
-+
-</>
+Rechercher
+Ctrl K
 Éditeur
-Stats
-—
-☐
-✕
+API
+S
+Studio
+MA
+Mobile
+IN
+infra
 Agents
+4
 Kanban
 1
-4
-+ Nouvel agent
+PR
+Docs
+Nouvel agent
+Ctrl N
 refacto-auth
 En cours
+Claude
 Opus 5.5
 ·
 12m 40s
-184 k tok
-2,41 $
+82 °C
 6 fich.
+184 k
+2,41 $
 tests-e2e
-Sonnet 5.5
+Codex
+GPT-5.6 Terra
 8m 02s
-96 k tok
-0,73 $
+64 °C
 3 fich.
+96 k
+0,73 $
 dem-5-export-csv-des-factures
+DEM-5 · boucle 2/5
 2m 10s
-⎇ ticket/dem-5
-38 k tok
-≈ 0,41 $
 4 fich.
-▸ DEM-5 · boucle 2/5
+38 k
+≈ 0,41 $
 dem-4-recherche-plein-texte-des-clients
 Terminé
-⎇ ticket/dem-4
-▸ DEM-4 · à tester
+DEM-4 · à tester
 ▸ Archivés (1)
 ~/dev/demo-api
 main
-Parcourir
-~5 modifiés
-+2 ajoutés
-−0 supprimés
+~5
++2
+−0
 demo-api · 6 tickets · 1 en boucle
 1 place libre
 ⤓
@@ -1784,6 +1926,7 @@ merge squash → main
 Pilote auto
 À faire
 0
++
 DEM-5
 Boucle 2/5
 Export CSV des factures
@@ -1827,50 +1970,49 @@ DEM-1
 Réinitialisation du mot de passe
 dem-1-reinitialisation-du-mot-de-passe
 1 boucle · 0,48 $
-3 actifs
-0 en attente
-1 terminé
-4 Claude ·
+3
+actifs
+en attente
+terminé
+4 agents ·
 1,2 Go
 6 %
 CPU
-Session 5 h
+5 h
 22 %
-reset 2 h 14
-Hebdo
+↻ 2 h 14
+7 j
 36 %
-reset 3 j
 Aujourd'hui
 3,48 $
-⎇ main
 ↓3
 ↑1
-♪ On
 2
-▸ DEM-5 · à tester
+DEM-5 · à tester
 demo-api · 6 tickets · 0 en boucle
 3 places libres
 Filtres de la liste repris
 3/3 critères
-Réglages
-✳
-Claude Code
-♪
+Rechercher un réglage
+Ctrl+F
+Escouade
+Général
+Comptes et harness
+Services connectés
+Voix
 Notifications
-▤
-Projets
-▦
-⧉
-Intégrations
-$_
-Terminaux
-⇄
-Réseau
-ⓘ
-À propos
-Escouade 1.4.0
-Pilote auto et tickets validés
+Plugins
+Avancé
 Projet
+Git et worktrees
+Lancement
+Tickets importés
+Équipe
+À propos · 2.2
+Les tickets validés, le pilote auto, les agents des tickets et le workflow
+✕
+studio-web
+mobile-app
 Quand je valide un ticket « À tester »
 Merger dans une branche
 Fusionne le worktree de l'agent dans la branche cible, puis libère l'agent.
@@ -1881,6 +2023,7 @@ Commit et push sur ticket/<clé>, sans merge ni PR.
 Laisser en l'état
 Les modifications restent non commitées dans le worktree.
 Branche cible
+⎇ main
 ⎇ develop
 Stratégie
 Merge commit
@@ -1899,7 +2042,6 @@ Me demander
 L'agent résout
 Annuler
 En parallèle
-3
 5
 6
 Modèle
@@ -1908,8 +2050,8 @@ Effort
 Comme les réglages
 Mode
 Enregistrer
-▸ DEM-5 · boucle 1/5
-▸ DEM-4 · boucle 1/5
+DEM-5 · boucle 1/5
+DEM-4 · boucle 1/5
 demo-api · 6 tickets · 2 en boucle
 Boucle 1/5
 Réfléchit
@@ -1924,53 +2066,55 @@ et
 synchronisés.
 demo-api
 Δ 7
-studio-web
-Δ 3
-mobile-app
-Δ 12
-infra
-+
-</>
+Rechercher
+Ctrl K
 Éditeur
-Stats
-—
-☐
-✕
+API
+S
+Studio
+MA
+Mobile
+IN
+infra
 Agents
-Kanban
 4
-+ Nouvel agent
+Kanban
+PR
+Docs
+Nouvel agent
+Ctrl N
 refacto-auth
 En cours
+Claude
 Opus 5.5
 ·
 12m 40s
-184 k tok
-2,41 $
+82 °C
 6 fich.
+184 k
+2,41 $
 tests-e2e
-Sonnet 5.5
+Codex
+GPT-5.6 Terra
 8m 02s
-96 k tok
-0,73 $
+64 °C
 3 fich.
+96 k
+0,73 $
 dem-5-export-csv-des-factures
+DEM-5 · boucle 1/5
 2m 10s
-⎇ ticket/dem-5
-38 k tok
-≈ 0,41 $
 4 fich.
-▸ DEM-5 · boucle 1/5
+38 k
+≈ 0,41 $
 dem-4-recherche-plein-texte-des-clients
-⎇ ticket/dem-4
-▸ DEM-4 · boucle 1/5
+DEM-4 · boucle 1/5
 ▸ Archivés (1)
 ~/dev/demo-api
 main
-Parcourir
-~5 modifiés
-+2 ajoutés
-−0 supprimés
+~5
++2
+−0
 demo-api · 6 tickets · 2 en boucle
 1 place libre
 ⤓
@@ -1981,6 +2125,7 @@ merge squash → main
 Pilote auto
 À faire
 0
++
 2
 DEM-5
 Boucle 1/5
@@ -2022,44 +2167,43 @@ DEM-1
 Réinitialisation du mot de passe
 dem-1-reinitialisation-du-mot-de-passe
 1 boucle · 0,48 $
-4 actifs
-0 en attente
-1 terminé
-4 Claude ·
+actifs
+en attente
+1
+terminé
+4 agents ·
 1,2 Go
 6 %
 CPU
-Session 5 h
+5 h
 22 %
-reset 2 h 14
-Hebdo
+↻ 2 h 14
+7 j
 36 %
-reset 3 j
 Aujourd'hui
 3,48 $
-⎇ main
 ↓3
 ↑1
-♪ On
-Réglages
-✳
-Claude Code
-♪
+Rechercher un réglage
+Ctrl+F
+Escouade
+Général
+Comptes et harness
+Services connectés
+Voix
 Notifications
-▤
-Projets
-▦
-⧉
-Intégrations
-$_
-Terminaux
-⇄
-Réseau
-ⓘ
-À propos
-Escouade 1.4.0
-Jira, Trello et GitHub Issues
+Plugins
+Avancé
 Projet
+Git et worktrees
+Lancement
+Tickets importés
+Équipe
+À propos · 2.2
+Les sources liées à ce projet et la correspondance de leurs statuts
+✕
+studio-web
+mobile-app
 Comptes connectés
 Les jetons restent sur cette machine, à part des réglages, et ne servent qu'aux appels de ces services.
 J
@@ -2117,8 +2261,7 @@ Boucles max
 8
 Importer 3 tickets
 dem-7-arrondi-faux-sur-les-factures-en
-⎇ ticket/dem-7
-▸ DEM-7 · boucle 1/5
+DEM-7 · boucle 1/5
 demo-api · 9 tickets · 3 en boucle
 Toutes les places sont prises
 DEM-8
@@ -2129,12 +2272,9 @@ En attente d'une place (3/3)
 DEM-7
 Montants arrondis au centime, devise par devise
 Lit src/billing/currency.ts
-5 actifs
 dem-8-relancer-les-factures-impayees-par
-⎇ ticket/dem-8
-▸ DEM-8 · boucle 1/5
+DEM-8 · boucle 1/5
 ▸ Archivés (2)
-1
 Relance à J+7, puis à J+15
 Lien de paiement dans l’e-mail
 Réfléchit
@@ -2168,40 +2308,45 @@ d’un
 clic.
 demo-api
 Δ 7
-studio-web
-Δ 3
-mobile-app
-Δ 12
-infra
-+
-</>
+Rechercher
+Ctrl K
 Éditeur
-Stats
-—
-☐
-✕
+API
+S
+Studio
+MA
+Mobile
+IN
+infra
 Agents
-Kanban
 3
-+ Nouvel agent
+Kanban
+PR
+Docs
+Nouvel agent
+Ctrl N
 refacto-auth
 En cours
+Claude
 Opus 5.5
 ·
 12m 40s
-184 k tok
-2,41 $
+82 °C
 6 fich.
+184 k
+2,41 $
 tests-e2e
-Sonnet 5.5
+Codex
+GPT-5.6 Terra
 8m 02s
-96 k tok
-0,73 $
+64 °C
 3 fich.
+96 k
+0,73 $
 pagination-users
 3m 15s
-⎇ pagination-users
-41 k tok
+91 °C
+41 k
 0,32 $
 Lancement
 0/3
@@ -2210,7 +2355,6 @@ Tout lancer
 Front
 prêt
 ▶
-API
 Worker
 PowerShell
 npm run dev
@@ -2219,27 +2363,27 @@ npm run dev
 Effacer
 ▶ Lancer
 Pas encore lancée.
-3 actifs
-0 en attente
-✓
-1 terminé
-4 Claude ·
+actifs
+0
+en attente
+1
+terminé
+4 agents ·
 1,2 Go
 6 %
 CPU
-Session 5 h
+5 h
 22 %
-reset 2 h 14
-Hebdo
+↻ 2 h 14
+7 j
 36 %
-reset 3 j
 Aujourd'hui
 3,48 $
-⎇ main
+main
 ↓3
 ↑1
-♪ On
 Commandes de lancement · demo-api
+✕
 PowerShell 7
 ▾
 ×
@@ -2284,40 +2428,45 @@ vrais
 terminaux.
 demo-api
 Δ 7
-studio-web
-Δ 3
-mobile-app
-Δ 12
-infra
-+
-</>
+Rechercher
+Ctrl K
 Éditeur
-Stats
-—
-☐
-✕
+API
+S
+Studio
+MA
+Mobile
+IN
+infra
 Agents
-Kanban
 3
-+ Nouvel agent
+Kanban
+PR
+Docs
+Nouvel agent
+Ctrl N
 refacto-auth
 En cours
+Claude
 Opus 5.5
 ·
 12m 40s
-184 k tok
-2,41 $
+82 °C
 6 fich.
+184 k
+2,41 $
 tests-e2e
-Sonnet 5.5
+Codex
+GPT-5.6 Terra
 8m 02s
-96 k tok
-0,73 $
+64 °C
 3 fich.
+96 k
+0,73 $
 pagination-users
 3m 15s
-⎇ pagination-users
-41 k tok
+91 °C
+41 k
 0,32 $
 Terminaux
 PS
@@ -2351,27 +2500,23 @@ PID USER      CPU% MEM%   TIME+  Command
 1188 lea        3.2  1.2  0:12.04 npm run dev
 1290 lea        0.7  0.4  0:01.92 bash
 F1Aide F2Config F3Chercher F9Tuer F10Quitter
-3 actifs
-0 en attente
-✓
-1 terminé
-4 Claude ·
+actifs
+en attente
+terminé
+4 agents ·
 1,2 Go
 6 %
 CPU
-Session 5 h
+5 h
 22 %
-reset 2 h 14
-Hebdo
+↻ 2 h 14
+7 j
 36 %
-reset 3 j
 Aujourd'hui
 3,48 $
-⎇ main
+main
 ↓3
 ↑1
-♪ On
-⚙
 ||||||||||
 29.0%
 ||||||||||||
@@ -2386,74 +2531,81 @@ en
 direct.
 demo-api
 Δ 7
-studio-web
-Δ 3
-mobile-app
-Δ 12
-infra
-+
-</>
+Rechercher
+Ctrl K
 Éditeur
-Stats
-—
-☐
-✕
+API
+S
+Studio
+MA
+Mobile
+IN
+infra
 Agents
-Kanban
 5
-+ Nouvel agent
+Kanban
+PR
+Docs
+Nouvel agent
+Ctrl N
 refacto-auth
 En cours
+Claude
 Opus 5.5
 ·
 12m 40s
-184 k tok
-2,41 $
+82 °C
 6 fich.
+184 k
+2,41 $
 tests-e2e
-Sonnet 5.5
+Codex
+GPT-5.6 Terra
 8m 02s
-96 k tok
-0,73 $
+64 °C
 3 fich.
+96 k
+0,73 $
 pagination-users
 3m 15s
-⎇ pagination-users
-41 k tok
+91 °C
+41 k
 0,32 $
 docs-api
 Terminé
-Haiku 4.5
+Cursor
+Composer 2.5
 1m 50s
-12 k tok
-0,02 $
+18 °C
 1 fich.
+12 k
+0,02 $
 fix-login
 Prêt
 Fable 5.1
 0m 00s
-0 tok
-0,00 $
 0 fich.
+0
+0,00 $
 ~/dev/demo-api
 main
-Parcourir
-~5 modifiés
-+2 ajoutés
-−0 supprimés
-demo-api / main
+~5
++2
+−0
+Claude Code
+/
 Contexte
-76,2 k / 200 k
+76,2 k
 Tokens
-184 k
 Coût
+Cache
 Fichiers ▸
 6
 Durée
+Escouade
 Refactore l'auth pour passer aux tokens JWT, sans casser les sessions existantes.
-C
+✳
 D'accord. Je cartographie l'existant : middleware, routes et stockage des sessions.
-▸
 Read
 src/auth/middleware.ts
 ✓
@@ -2463,38 +2615,37 @@ session
 Edit
 src/auth/jwt.ts
 +58
-−0
 Je remplace le middleware de session par une vérification du JWT, avec une période de transition.
 Claude travaille…
 Envoyer un message à refacto-auth…
 Modèle
-▾
 Effort
 Élevé
 Mode
 Auto
-■ Stop
-Envoyer ↵
-3 actifs
-0 en attente
-1 terminé
-4 Claude ·
+■
+Stop
+Échap
+Envoyer
+↵
+3
+actifs
+en attente
+1
+terminé
+4 agents ·
 1,2 Go
 6 %
 CPU
-Session 5 h
+5 h
 71 %
-reset 2 h 14
-Hebdo
+↻ 2 h 14
+7 j
 38 %
-reset 3 j
 Aujourd'hui
 3,48 $
-⎇ main
 ↓3
 ↑1
-♪ On
-⚙
 ≈ 4,06 $
 Le tour s'est terminé en erreur
 Limite d'usage atteinte · réinitialisation à 14:05
@@ -2519,7 +2670,6 @@ Prompts
 104 par mois en moyenne
 Tokens par mois
 Entrée
-Cache
 Sortie
 nov.
 déc.
@@ -2535,13 +2685,17 @@ sept.
 oct.
 Par projet
 196,88 $
+mobile-app
 103,04 $
+studio-web
 63,48 $
 23,92 $
 Par modèle
 241,96 $
+Sonnet 5.5
 109,48 $
 28,52 $
+Haiku 4.5
 7,36 $
 
 ## remote
@@ -2551,97 +2705,104 @@ ton
 téléphone.
 demo-api
 Δ 7
-studio-web
-Δ 3
-mobile-app
-Δ 12
-infra
-+
-</>
+Rechercher
+Ctrl K
 Éditeur
-Stats
-—
-☐
-✕
+API
+S
+Studio
+MA
+Mobile
+IN
+infra
 Agents
-Kanban
 4
-+ Nouvel agent
+Kanban
+PR
+Docs
+Nouvel agent
+Ctrl N
 refacto-auth
 Terminé
+Claude
 Opus 5.5
 ·
 12m 40s
-184 k tok
-2,41 $
+82 °C
 6 fich.
+184 k
+2,41 $
 tests-e2e
 En cours
-Sonnet 5.5
+Codex
+GPT-5.6 Terra
 8m 02s
-96 k tok
-0,73 $
+64 °C
 3 fich.
+96 k
+0,73 $
 pagination-users
 3m 15s
-⎇ pagination-users
-41 k tok
+91 °C
+41 k
 0,32 $
 docs-api
-Haiku 4.5
+Cursor
+Composer 2.5
 1m 50s
-12 k tok
-0,02 $
+18 °C
 1 fich.
+12 k
+0,02 $
 ~/dev/demo-api
 main
-Parcourir
-~5 modifiés
-+2 ajoutés
-−0 supprimés
-demo-api / main
+~5
++2
+−0
+Claude Code
+/
 Contexte
-76,2 k / 200 k
+76,2 k
 Tokens
 214 k
 Coût
 2,86 $
+Cache
 Fichiers ▸
 6
 Durée
 15m 02s
-C
+Escouade
+✳
 La refacto est terminée : JWT en place, période de transition pour les sessions existantes.
 J'ai fini la refacto de l'auth. Je lance les tests ?
 Envoyer un message à refacto-auth…
 Modèle
-▾
 Effort
 Élevé
 Mode
 Auto
-Envoyer ↵
-3 actifs
-0 en attente
-✓
-1 terminé
-4 Claude ·
+Envoyer
+↵
+3
+actifs
+0
+en attente
+1
+terminé
+4 agents ·
 1,2 Go
 6 %
 CPU
-Session 5 h
+5 h
 22 %
-reset 2 h 14
-Hebdo
+↻ 2 h 14
+7 j
 36 %
-reset 3 j
 Aujourd'hui
 3,48 $
-⎇ main
 ↓3
 ↑1
-♪ On
-⚙
 claude.ai
 demo-api · refacto-auth
 Oui, et ajoute
@@ -2649,8 +2810,131 @@ Oui, et ajoute
 Oui, et ajoute les tests Firefox
 depuis claude.ai
 Claude travaille…
-■ Stop
+■
+Stop
+Échap
 Répondre…
+
+## plugins
+Tout
+est
+plugin.
+Plugins
+Rechercher
+Ctrl K
+Éditeur
+API
+demo-api
+S
+Studio
+MA
+Mobile
+IN
+infra
+PLUGINS
+Store
+47
+Installés
+14
+Mises à jour
+1
+CATÉGORIES
+Harness
+6
+Sources du Kanban
+9
+Hébergeurs de code
+5
+Voix
+4
+Thèmes
+Notifications
+11
+Outils
+7
+6 plugins · un harness par agent, au choix
+Chercher dans 47 plugins
+Ctrl F
+Tous
+Kanban
+Hébergeurs
+Tout voir
+CC
+Claude Code
+Vérifié
+v2.2.1
+escouade
+Les agents Claude Code : chat, plan, permissions, sous-agents.
+Lance un programme
+Installé
+Cx
+Codex
+v2.2.0
+Codex d’OpenAI, ses comptes et ses quotas.
+Cu
+Cursor CLI
+Cursor en ligne de commande, ses modèles au choix.
+OC
+OpenCode
+OpenCode et tous ses fournisseurs de modèles.
+Installer
+Co
+Copilot CLI
+GitHub Copilot en ligne de commande.
+3
+actifs
+0
+en attente
+terminé
+4 agents ·
+1,2 Go
+·
+6 %
+CPU
+Claude
+5 h
+22 %
+↻ 2 h 14
+7 j
+36 %
+Aujourd'hui
+3,48 $
+main
+↓3
+↑1
+store.escouade.dev · chaque version vérifiée et signée
+Vérifiés par Escouade
+Li
+Linear
+v1.0.0
+escouade · 512
+Les tickets de Linear dans le Kanban, synchronisés dans les deux sens.
+api.linear.app
+EL
+ElevenLabs
+v1.1.0
+escouade · 1 204
+Parle à tes agents, à voix haute, et écoute-les répondre.
+api.elevenlabs.io
+GL
+GitLab
+v2.1.0
+escouade · 1 870
+Les MR des tickets, la CI et les issues de gitlab.com.
+gitlab.com
+Ji
+Jira
+v2.4.0
+escouade · 2 310
+Les tickets de Jira importés, leur statut tenu à jour.
+*.atlassian.net
+No
+Nord
+v2.0.0
+amoreau · 1 120
+La palette Nord, en clair et en sombre.
+Sans programme
+Linear est installé, vérifié et signé.
 
 ## more
 Et
@@ -2658,59 +2942,129 @@ tout
 le
 reste.
 Réglages
-Chemin de claude
-C:\Users\lea\.local\bin\claude.exe
-Modèle, effort, mode
-Opus · Élevé · Auto
-Notifications Windows
-Arrêt des agents inactifs
-après 30 min
-Proxy réseau
-Proxy HTTP(S)
-http://proxy.entreprise.fr:8080
-Exclusions (NO_PROXY)
-localhost, *.interne
-Aussi dans les terminaux
-Pour Claude, les quotas, les mises à jour et, si tu veux, les terminaux.
-Raccourcis clavier
-Ctrl
-1…9
-projet n
-Tab
-agent suivant
-N
-nouvel agent
-T
-nouveau terminal
-J
-agent qui attend
-Maj
-B
-fichiers
-L
-disposition
-,
-réglages
-Échap
-interrompre
-↑
-dernier message
-Mises à jour automatiques
-Mise à jour 1.4.1 disponible → installer
-L'app cherche une nouvelle version toutes les cinq minutes. Les versions sont signées, et leurs notes viennent du journal des versions.
+Rechercher
+Ctrl K
+Éditeur
+API
+demo-api
+S
+Studio
+MA
+Mobile
+IN
+infra
+Agents
+5
+Kanban
+PR
+Docs
+Nouvel agent
+Ctrl N
+refacto-auth
+En cours
+Claude
+Opus 5.5
+·
+12m 40s
+82 °C
+6 fich.
+184 k
+2,41 $
+tests-e2e
+Codex
+GPT-5.6 Terra
+8m 02s
+64 °C
+3 fich.
+96 k
+0,73 $
+pagination-users
+Sonnet 5.5
+3m 15s
+91 °C
+41 k
+0,32 $
+docs-api
+Terminé
+Cursor
+Composer 2.5
+1m 50s
+18 °C
+1 fich.
+12 k
+0,02 $
+fix-login
+Prêt
+Fable 5.1
+0m 00s
+0 fich.
+0
+0,00 $
+~/dev/demo-api
+main
+~5
++2
+−0
+3
+actifs
+en attente
+1
+terminé
+4 agents ·
+1,2 Go
+6 %
+CPU
+5 h
+22 %
+↻ 2 h 14
+7 j
+36 %
+Aujourd'hui
+3,48 $
+↓3
+↑1
+Rechercher un réglage
+Ctrl+F
+Escouade
+Général
+Comptes et harness
+Services connectés
+Voix
+Notifications
+Plugins
+Avancé
+Projets
+studio-web
+mobile-app
+À propos
+Thème, zoom, langue, mises à jour et ce qui te concerne
+✕
+Apparence
+Thème
+Sombre
+Langue de l’interface
+Français
+Mises à jour
+Installer les mises à jour automatiquement
+Escouade redémarre d’elle-même quand aucun agent ne travaille et que tout est enregistré.
+Recevoir les versions bêta
+Les bêtas arrivent avant tout le monde.
 Windows
 10 et 11 · installeur .exe
 macOS
 11 et plus · .dmg universel
+Linux
+AppImage et .deb · x86-64
 
 ## outro
 Escouade
-Le poste de pilotage de tes agents Claude Code
+L’environnement de développement pensé pour tes agents
 Gratuit,
 open
 source,
 pour
-Windows
+Windows,
+macOS
 et
-macOS.
-github.com/guillaume-gagnaire/escouade
+Linux.
+escouade.dev

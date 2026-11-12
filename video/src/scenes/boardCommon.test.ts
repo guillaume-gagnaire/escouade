@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // The board's data, outside Remotion: its fonts are not loaded.
-vi.mock('@remotion/google-fonts/HankenGrotesk', () => ({ loadFont: () => ({ fontFamily: 'Hanken Grotesk' }) }));
+vi.mock('@remotion/google-fonts/Inter', () => ({ loadFont: () => ({ fontFamily: 'Inter' }) }));
 vi.mock('@remotion/google-fonts/JetBrainsMono', () => ({ loadFont: () => ({ fontFamily: 'JetBrains Mono' }) }));
 
 const { boardOf, placesText, ticketAgent } = await import('./boardCommon');

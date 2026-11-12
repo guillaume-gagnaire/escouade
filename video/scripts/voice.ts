@@ -82,10 +82,10 @@ async function run(job: (typeof jobs)[number]) {
   save();
 }
 
-// A few requests at a time.
+// A few requests at a time: the subscription takes 3 at once, and another session may be using one.
 const queue = [...jobs];
 await Promise.all(
-  Array.from({ length: 4 }, async () => {
+  Array.from({ length: 2 }, async () => {
     for (let job = queue.shift(); job; job = queue.shift()) await run(job);
   }),
 );

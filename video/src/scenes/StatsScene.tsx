@@ -29,7 +29,7 @@ export const StatsScene: FC = () => {
   const p = (w: string) => c.word('page', w);
   const cam = camPath(frame, [
     [4, 26, { x: 500, y: 572, zoom: 1.55 }],
-    [q('session') - 12, 22, { x: 765, y: 580, zoom: 1.6 }],
+    [q('session') - 12, 22, { x: 820, y: 600, zoom: 1.35 }],
     [c.end('cost') + 4, 22, { x: 750, y: 422, zoom: 1 }],
   ]);
   const spot = (from: number, to: number) => ramp(frame, from - 4, 8) - ramp(frame, to - 4, 8);
@@ -61,21 +61,21 @@ export const StatsScene: FC = () => {
           }
           overlay={
             <>
-              <Spotlight x={8} y={812} w={pick(304, 256)} h={30} on={spot(q('actifs'), q('quotas'))} />
-              <Spotlight x={pick(540, 490)} y={812} w={pick(292, 256)} h={30} on={spot(q('session'), q('semaine'))} />
-              <Spotlight x={pick(540, 490)} y={812} w={pick(512, 469)} h={30} on={spot(q('semaine'), c.at('cost'))} />
+              <Spotlight x={6} y={813} w={pick(264, 232)} h={30} on={spot(q('actifs'), q('quotas'))} />
+              <Spotlight x={pick(862, 880)} y={813} w={pick(232, 214)} h={30} on={spot(q('session'), q('semaine'))} />
+              <Spotlight x={pick(862, 880)} y={813} w={pick(340, 316)} h={30} on={spot(q('semaine'), c.at('cost'))} />
               <Spotlight
-                x={pick(1070, 974)}
-                y={812}
-                w={pick(142, 96)}
+                x={pick(1216, 1214)}
+                y={813}
+                w={pick(132, 100)}
                 h={30}
                 on={spot(c.word('cost', 'coût'), c.word('cost', 'mémoire'))}
               />
-              <Spotlight x={pick(318, 275)} y={812} w={pick(206, 198)} h={30} on={spot(c.word('cost', 'mémoire'), c.end('cost') + 4)} />
+              <Spotlight x={pick(270, 238)} y={813} w={pick(182, 180)} h={30} on={spot(c.word('cost', 'mémoire'), c.end('cost') + 4)} />
               <PointerPath
                 keys={[
-                  [statsClick - 22, 1200, 300],
-                  [statsClick, 1290, 28, true],
+                  [statsClick - 22, 300, 500],
+                  [statsClick, 35, 686, true],
                 ]}
               />
             </>

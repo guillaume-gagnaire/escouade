@@ -58,20 +58,27 @@ export const Projects: FC = () => {
           overlay={
             <>
               <Spotlight
-                x={50}
-                y={8}
-                w={190}
-                h={42}
-                on={ramp(frame, c.word('tabs', 'point') - 6, 10) - ramp(frame, c.at('menu') - 10, 10)}
+                x={6}
+                y={104}
+                w={58}
+                h={64}
+                on={ramp(frame, c.word('tabs', 'point') - 6, 10) - ramp(frame, c.word('tabs', 'chiffre') - 6, 8)}
+              />
+              <Spotlight
+                x={78}
+                y={7}
+                w={160}
+                h={30}
+                on={ramp(frame, c.word('tabs', 'chiffre') - 4, 8) - ramp(frame, c.at('menu') - 10, 10)}
               />
               {frame >= dragFrom + 8 && frame < drop ? (
                 <span
                   style={{
                     position: 'absolute',
-                    left: 236,
-                    top: 10,
-                    width: 3,
-                    height: 38,
+                    left: 14,
+                    top: 163,
+                    width: 42,
+                    height: 3,
                     borderRadius: 2,
                     background: C.spark,
                     zIndex: 50,
@@ -79,8 +86,8 @@ export const Projects: FC = () => {
                 />
               ) : null}
               <ContextMenu
-                x={70}
-                y={48}
+                x={60}
+                y={120}
                 enter={frame >= menuAt + 2 && frame < c.end('menu') + 8 ? pop(frame, fps, menuAt + 2, 20) : 0}
                 hover={frame >= w('ferme') - 4 ? 7 : frame >= w('recolore') - 4 ? 1 : frame >= w('renomme') - 4 ? 0 : undefined}
                 items={[
@@ -109,16 +116,16 @@ export const Projects: FC = () => {
               />
               <PointerPath
                 keys={[
-                  [dragFrom - 16, 640, 150],
-                  [dragFrom, 650, 28],
-                  [drop, 238, 28, true],
-                  [menuAt - 12, 200, 60],
-                  [menuAt, 140, 28, true],
-                  [w('renomme') - 4, 160, 72],
-                  [w('recolore') - 4, 160, 112],
-                  [w('ferme') - 4, 170, 322],
-                  [open - 26, 640, 300],
-                  [open, 742, 28, true],
+                  [dragFrom - 16, 300, 420],
+                  [dragFrom, 35, 334],
+                  [drop, 35, 166, true],
+                  [menuAt - 12, 140, 220],
+                  [menuAt, 35, 130, true],
+                  [w('renomme') - 4, 150, 144],
+                  [w('recolore') - 4, 150, 184],
+                  [w('ferme') - 4, 160, 394],
+                  [open - 26, 300, 460],
+                  [open, 35, 401, true],
                   [c.word('options', 'couleur') - 14, 830, 380],
                   [c.word('options', 'couleur'), 925, 433, true],
                   [c.word('options', 'premier'), 1050, 560, true],

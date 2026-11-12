@@ -1,49 +1,52 @@
-// The settings, in tabs (SettingsModal.svelte of the app).
+// The settings of the 2.2 (src/components/settings/*): Escouade's pages, then each project's, on the left; a page on the right.
 
 import type { FC, ReactNode } from 'react';
 import { TABS as PROJECTS } from '../data';
 import { useFmt, type Tr } from '../lang';
-import { C, hue, MONO } from '../theme';
+import { C, hue } from '../theme';
+import { Icon, type IconName } from './icons';
+import { Kbd } from './Shell';
 import { Button } from './Sidebar';
 
-const TAB_IDS = ['claude', 'notifications', 'projects', 'board', 'integrations', 'terminals', 'network', 'about'] as const;
-export type SettingsTabId = (typeof TAB_IDS)[number];
+export type SettingsTabId = 'board' | 'integrations';
 
-const tabsOf = (tr: Tr): { id: SettingsTabId; label: string; icon: string; desc: string }[] => [
+/** The pages of the 2.2: Escouade's, then those of the project in front. */
+const appPagesOf = (tr: Tr): { label: string; icon: IconName }[] => [
+  { label: tr('Général', 'General'), icon: 'sliders' },
+  { label: 'Agents', icon: 'chat' },
+  { label: tr('Comptes et harness', 'Accounts and harnesses'), icon: 'user' },
+  { label: tr('Services connectés', 'Connected services'), icon: 'globe' },
+  { label: tr('Voix', 'Voice'), icon: 'mic' },
+  { label: 'Notifications', icon: 'bell' },
+  { label: 'Plugins', icon: 'puzzle' },
+  { label: tr('Avancé', 'Advanced'), icon: 'keyboard' },
+];
+const projectPagesOf = (tr: Tr): { id?: SettingsTabId; label: string; icon: IconName; desc?: string }[] => [
+  { label: tr('Projet', 'Project'), icon: 'doc' },
+  { label: tr('Git et worktrees', 'Git and worktrees'), icon: 'branch' },
+  { label: tr('Lancement', 'Launch'), icon: 'code' },
   {
-    id: 'claude',
-    label: 'Claude Code',
-    icon: '✳',
-    desc: tr('Exécutable, modèle et permissions par défaut', 'Executable, model and default permissions'),
+    id: 'board',
+    label: 'Kanban',
+    icon: 'kanban',
+    desc: tr(
+      'Les tickets validés, le pilote auto, les agents des tickets et le workflow',
+      'Approved tickets, autopilot, ticket agents and the workflow',
+    ),
   },
-  { id: 'notifications', label: 'Notifications', icon: '♪', desc: tr('Alertes visuelles et sonores', 'Visual and sound alerts') },
-  {
-    id: 'projects',
-    label: tr('Projets', 'Projects'),
-    icon: '▤',
-    desc: tr('Réglages propres à chaque projet', 'Settings specific to each project'),
-  },
-  { id: 'board', label: 'Kanban', icon: '▦', desc: tr('Pilote auto et tickets validés', 'Autopilot and approved tickets') },
   {
     id: 'integrations',
-    label: tr('Intégrations', 'Integrations'),
-    icon: '⧉',
-    desc: tr('Jira, Trello et GitHub Issues', 'Jira, Trello and GitHub Issues'),
+    label: tr('Tickets importés', 'Imported tickets'),
+    icon: 'download',
+    desc: tr(
+      'Les sources liées à ce projet et la correspondance de leurs statuts',
+      'The sources linked to this project and how their statuses map',
+    ),
   },
-  {
-    id: 'terminals',
-    label: tr('Terminaux', 'Terminals'),
-    icon: '$_',
-    desc: tr('Shells disponibles dans les terminaux intégrés', 'Shells available in the built-in terminals'),
-  },
-  {
-    id: 'network',
-    label: tr('Réseau', 'Network'),
-    icon: '⇄',
-    desc: tr('Proxy HTTP(S) pour Claude Code et les mises à jour', 'HTTP(S) proxy for Claude Code and updates'),
-  },
-  { id: 'about', label: tr('À propos', 'About'), icon: 'ⓘ', desc: tr('Version et données locales', 'Version and local data') },
+  { label: tr('Équipe', 'Team'), icon: 'user' },
 ];
+
+const tabsOf = (tr: Tr) => projectPagesOf(tr).filter((p) => p.id) as { id: SettingsTabId; label: string; icon: IconName; desc: string }[];
 
 /** The settings: their tabs on the left, one tab at a time; `enter` (0 to 1) brings them in, `scroll` moves the tab's body up. */
 export const SettingsShell: FC<{
@@ -66,7 +69,7 @@ export const SettingsShell: FC<{
       style={{
         position: 'absolute',
         inset: 0,
-        background: `rgba(10, 9, 8, ${0.55 * e})`,
+        background: `rgba(3, 4, 5, ${0.62 * e})`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -78,9 +81,8 @@ export const SettingsShell: FC<{
           width: 980,
           height,
           borderRadius: 14,
-          background: C.panel,
-          border: `1px solid ${C.line2}`,
-          boxShadow: '0 30px 90px rgba(0, 0, 0, 0.6)',
+          background: C.bg,
+          boxShadow: `inset 0 0 0 1px ${C.line2}, 0 30px 90px rgba(0, 0, 0, 0.6)`,
           opacity: e,
           transform: `translateY(${(1 - e) * 30}px) scale(${0.96 + 0.04 * e})`,
           display: 'flex',
@@ -93,44 +95,87 @@ export const SettingsShell: FC<{
             flex: 'none',
             display: 'flex',
             flexDirection: 'column',
-            padding: '22px 11px 18px',
-            background: C.bg,
-            borderRight: `1px solid ${C.line}`,
+            gap: 1,
+            padding: '12px 10px 12px',
+            background: C.panel,
           }}
         >
-          <span style={{ padding: '0 11px 15px', fontSize: 18.5, fontWeight: 700 }}>{tr('Réglages', 'Settings')}</span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {TABS.map((t) => {
-              const on = t.id === tab;
-              return (
-                <span
-                  key={t.id}
-                  style={{
-                    height: 37,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 11,
-                    padding: '0 11px',
-                    borderRadius: 6,
-                    background: on ? C.elev2 : 'transparent',
-                    color: on ? C.text : C.muted,
-                    fontSize: 14,
-                    fontWeight: 600,
-                  }}
-                >
-                  <span style={{ width: 20, textAlign: 'center', fontFamily: MONO, fontSize: 13, color: on ? C.spark : C.dim }}>
-                    {t.icon}
-                  </span>
-                  {t.label}
-                  {changed.includes(t.id) ? (
-                    <span style={{ width: 7, height: 7, marginLeft: 'auto', borderRadius: '50%', background: C.spark }} />
-                  ) : null}
-                </span>
-              );
-            })}
+          <div
+            style={{
+              height: 30,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 7,
+              padding: '0 5px 0 9px',
+              marginBottom: 8,
+              borderRadius: 7,
+              boxShadow: `inset 0 0 0 1px ${C.line2}`,
+              color: C.muted,
+              fontSize: 12.5,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <Icon name="search" size={12} />
+            <span style={{ flex: 1 }}>{tr('Rechercher un réglage', 'Search settings')}</span>
+            <Kbd>Ctrl+F</Kbd>
           </div>
+          <span style={{ padding: '2px 9px 4px', fontSize: 11.5, fontWeight: 600, color: C.muted }}>Escouade</span>
+          {appPagesOf(tr).map((t) => (
+            <span
+              key={t.label}
+              style={{ height: 27, display: 'flex', alignItems: 'center', gap: 9, padding: '0 9px', color: C.soft, fontSize: 13 }}
+            >
+              <span style={{ color: C.muted }}>
+                <Icon name={t.icon} size={13} />
+              </span>
+              {t.label}
+            </span>
+          ))}
+          <span
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 7,
+              padding: '12px 9px 4px',
+              fontSize: 11.5,
+              fontWeight: 600,
+              color: C.muted,
+            }}
+          >
+            <span style={{ width: 8, height: 8, borderRadius: 2.5, background: hue(PROJECTS[0].hue) }} />
+            {PROJECTS[0].name}
+          </span>
+          {projectPagesOf(tr).map((t) => {
+            const on = t.id === tab;
+            return (
+              <span
+                key={t.label}
+                style={{
+                  height: 28,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 9,
+                  padding: '0 9px',
+                  borderRadius: 7,
+                  background: on ? 'rgba(255, 255, 255, 0.07)' : 'transparent',
+                  boxShadow: on ? `inset 0 0 0 1px ${C.line2}` : 'none',
+                  color: on ? C.text : C.soft,
+                  fontSize: 13,
+                  fontWeight: on ? 600 : 400,
+                }}
+              >
+                <span style={{ color: on ? C.text : C.muted }}>
+                  <Icon name={t.icon} size={13} />
+                </span>
+                {t.label}
+                {t.id && changed.includes(t.id) ? (
+                  <span style={{ width: 7, height: 7, marginLeft: 'auto', borderRadius: '50%', background: C.pInk }} />
+                ) : null}
+              </span>
+            );
+          })}
           <div style={{ flex: 1 }} />
-          <span style={{ padding: '0 11px', fontFamily: MONO, fontSize: 11.5, color: C.dim }}>Escouade 1.4.0</span>
+          <span style={{ padding: '0 9px', fontSize: 12, color: C.muted }}>{tr('À propos', 'About')} · 2.2</span>
         </nav>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <div

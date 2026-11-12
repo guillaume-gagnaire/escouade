@@ -1,6 +1,8 @@
 import type { FC, ReactNode } from 'react';
 import { useFmt, type Tr } from '../lang';
 import { C, MONO, soft } from '../theme';
+import { Icon } from './icons';
+import { Kbd } from './Shell';
 
 export interface MenuOption {
   label: string;
@@ -19,23 +21,23 @@ const Dropdown: FC<{ caption: string; value: string; options?: MenuOption[]; pic
   <div style={{ position: 'relative' }}>
     <span
       style={{
-        height: 34,
+        height: 30,
         display: 'flex',
         alignItems: 'center',
-        gap: 7,
-        padding: '0 10px',
-        borderRadius: 6,
-        border: `1px solid ${options || flash ? C.spark : C.line}`,
-        background: flash ? soft(C.spark, 20 * flash) : C.panel,
-        fontFamily: MONO,
-        fontSize: 13,
+        gap: 6,
+        padding: '0 9px',
+        borderRadius: 7,
+        background: options ? 'rgba(255, 255, 255, 0.07)' : flash ? soft(C.spark, 22 * flash) : 'transparent',
+        fontSize: 13.5,
         fontWeight: 600,
         whiteSpace: 'nowrap',
       }}
     >
       <span style={{ fontFamily: 'inherit', color: C.dim, fontWeight: 500 }}>{caption}</span>
       {value}
-      <span style={{ color: C.dim, fontSize: 10 }}>▾</span>
+      <span style={{ color: C.muted }}>
+        <Icon name="chevron" size={12} />
+      </span>
     </span>
     {options ? (
       <div
@@ -48,9 +50,8 @@ const Dropdown: FC<{ caption: string; value: string; options?: MenuOption[]; pic
           flexDirection: 'column',
           padding: 5,
           borderRadius: 10,
-          background: C.elev,
-          border: `1px solid ${C.line2}`,
-          boxShadow: '0 18px 50px rgba(0, 0, 0, 0.55)',
+          background: C.elev2,
+          boxShadow: `inset 0 0 0 1px ${C.line2}, 0 18px 50px rgba(0, 0, 0, 0.55)`,
           zIndex: 30,
         }}
       >
@@ -63,12 +64,12 @@ const Dropdown: FC<{ caption: string; value: string; options?: MenuOption[]; pic
               gap: 10,
               padding: '8px 10px',
               borderRadius: 6,
-              background: i === pick ? C.elev2 : 'transparent',
+              background: i === pick ? 'rgba(255, 255, 255, 0.07)' : 'transparent',
               fontSize: 14,
               whiteSpace: 'nowrap',
             }}
           >
-            <span style={{ width: 12, color: C.spark }}>{i === current ? '✓' : ''}</span>
+            <span style={{ width: 12, color: C.text }}>{i === current ? '✓' : ''}</span>
             <span style={{ fontWeight: 600 }}>{o.label}</span>
             {o.detail ? <span style={{ fontSize: 12.5, color: C.dim }}>{o.detail}</span> : null}
           </span>
@@ -156,6 +157,8 @@ export const Composer: FC<{
   attachments?: Attachment[];
   suggestions?: ReactNode;
   busy?: boolean;
+  /** Half a panel wide (the split view): the pickers without their captions, no attach, dictation or voice. */
+  narrow?: boolean;
   waiting?: boolean;
 }> = ({
   text = '',
@@ -168,6 +171,7 @@ export const Composer: FC<{
   attachments = [],
   suggestions,
   busy,
+  narrow,
   waiting,
 }) => {
   const { tr } = useFmt();
@@ -177,9 +181,9 @@ export const Composer: FC<{
         style={{
           position: 'relative',
           borderRadius: 12,
-          border: `1px solid ${waiting ? C.wait : C.line2}`,
+          boxShadow: `inset 0 0 0 1px ${waiting ? C.wait : text ? C.pInk : C.line2}`,
           background: C.elev,
-          padding: '12px 14px 10px',
+          padding: '12px 10px 8px 14px',
           display: 'flex',
           flexDirection: 'column',
           gap: 10,
@@ -249,7 +253,7 @@ export const Composer: FC<{
             )}
           </div>
         ) : null}
-        <div style={{ minHeight: 26, fontSize: 16.5, lineHeight: 1.5, color: text ? C.text : C.dim }}>
+        <div style={{ minHeight: 26, fontSize: 16, lineHeight: 1.5, color: text ? C.text : C.muted }}>
           {text ? <TextWithMentions text={text} /> : (placeholder ?? tr('Envoyer un message…', 'Send a message…'))}
           {text ? (
             <span style={{ display: 'inline-block', width: 2, height: 19, background: C.text, marginLeft: 1, verticalAlign: -3 }} />
@@ -257,63 +261,69 @@ export const Composer: FC<{
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Dropdown
-            caption={tr('Modèle', 'Model')}
+            caption={narrow ? '' : tr('Modèle', 'Model')}
             value={model}
             flash={flash.model}
             {...(menu?.which === 'model' ? { options: modelsOf(tr), pick: menu.pick, current: menu.current } : {})}
           />
           <Dropdown
-            caption="Effort"
+            caption={narrow ? '' : 'Effort'}
             value={effort ?? tr('Élevé', 'High')}
             flash={flash.effort}
             {...(menu?.which === 'effort' ? { options: effortsOf(tr), pick: menu.pick, current: menu.current } : {})}
           />
           <Dropdown
-            caption="Mode"
+            caption={narrow ? '' : 'Mode'}
             value={mode}
             flash={flash.mode}
             {...(menu?.which === 'mode' ? { options: modesOf(tr), pick: menu.pick, current: menu.current } : {})}
           />
-          <span style={{ width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round">
-              <path d="M21 11.5 12.5 20a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8" />
-            </svg>
-          </span>
           <div style={{ flex: 1 }} />
+          {narrow ? null : (
+            <span style={{ display: 'flex', gap: 16, padding: '0 8px', color: C.muted }}>
+              <Icon name="clip" size={15} />
+              <Icon name="mic" size={15} />
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <path d="M2 7v2M5 5v6M8 3v10M11 5v6M14 7v2" />
+              </svg>
+            </span>
+          )}
+          {narrow ? null : <span style={{ width: 1, height: 20, background: C.line2 }} />}
           {busy ? (
             <span
               style={{
-                height: 34,
-                padding: '0 14px',
+                height: 32,
+                padding: '0 8px 0 12px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 7,
-                borderRadius: 6,
-                border: `1px solid ${C.line2}`,
+                gap: 8,
+                borderRadius: 8,
+                boxShadow: `inset 0 0 0 1px ${C.line2}`,
                 fontSize: 14,
                 fontWeight: 600,
               }}
             >
-              ■ Stop
+              <span style={{ fontSize: 9 }}>■</span> Stop <Kbd>{tr('Échap', 'Esc')}</Kbd>
             </span>
           ) : null}
           <span
             style={{
-              height: 34,
-              padding: '0 16px',
+              height: 32,
+              padding: '0 8px 0 13px',
               display: 'flex',
               alignItems: 'center',
-              gap: 7,
+              gap: 8,
               whiteSpace: 'nowrap',
-              borderRadius: 6,
-              background: C.spark,
-              color: '#1b1512',
+              borderRadius: 8,
+              background: C.primary,
+              color: C.onPrimary,
               fontSize: 14,
-              fontWeight: 700,
-              opacity: text ? 1 : 0.5,
+              fontWeight: 600,
+              opacity: text ? 1 : 0.55,
             }}
           >
-            {tr('Envoyer ↵', 'Send ↵')}
+            {tr('Envoyer', 'Send')}
+            <Kbd style={{ color: '#4a4e55', boxShadow: 'inset 0 0 0 1px rgba(0, 0, 0, 0.18)' }}>↵</Kbd>
           </span>
         </div>
       </div>

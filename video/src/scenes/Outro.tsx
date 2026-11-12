@@ -35,7 +35,7 @@ export const Outro: FC = () => {
           <Logo size={210} tile={e} chevron={e} spark={e} spin={frame * 0.5} />
           <div style={{ fontSize: 130, fontWeight: 800, letterSpacing: -5, lineHeight: 1, opacity: Math.min(1, name) }}>Escouade</div>
           <div style={{ fontSize: 42, fontWeight: 500, color: C.muted, opacity: Math.min(1, name) }}>
-            {tr('Le poste de pilotage de tes agents Claude Code', 'The cockpit for your Claude Code agents')}
+            {tr('L’environnement de développement pensé pour tes agents', 'The development environment built for your agents')}
           </div>
         </div>
         <Caption text={caption} delay={c.word('bye', 'gratuit') - 4} top={760} />
@@ -53,7 +53,7 @@ export const Outro: FC = () => {
             transform: `translateY(${(1 - link) * 20}px)`,
           }}
         >
-          github.com/guillaume-gagnaire/escouade
+          escouade.dev
         </div>
       </div>
     </Stage>

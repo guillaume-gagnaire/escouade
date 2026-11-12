@@ -1,4 +1,4 @@
-// Stills of scenes, to check them: `npm run stills -- <scene ids> [--every=<seconds>] [--lang=en]`.
+// Stills of scenes, to check them: `npm run stills -- <scene ids> [--every=<seconds>] [--at=<frames>] [--lang=en]`.
 // By default, one at each line's start, middle and end; one bundle for them all. `--lang=en` draws the English interface.
 
 import { mkdirSync } from 'node:fs';
@@ -12,6 +12,8 @@ const args = process.argv.slice(2);
 // At least a frame apart: a step of 0 would never end.
 const every = Math.max(0, Number(args.find((a) => a.startsWith('--every='))?.slice(8) ?? 0));
 const only = args.filter((a) => !a.startsWith('--'));
+// `--at=120,300`: those frames of each scene only, from its start.
+const at = (args.find((a) => a.startsWith('--at='))?.slice(5) ?? '').split(',').filter(Boolean).map(Number);
 const lang = args.find((a) => a.startsWith('--lang='))?.slice(7) ?? 'fr';
 if (!LANGS.some((l) => l === lang)) throw new Error(`Langue inconnue : ${lang}`);
 const scenes = TIMELINE.filter((s) => !only.length || only.includes(s.id));
@@ -22,13 +24,14 @@ const composition = await selectComposition({ serveUrl, id: 'Presentation', inpu
 mkdirSync('out/stills', { recursive: true });
 for (const s of scenes) {
   const frames = new Set<number>();
-  if (every) for (let f = 0; f < s.durationInFrames; f += Math.max(1, Math.round(every * FPS))) frames.add(f);
+  if (at.length) at.forEach((f) => frames.add(Math.min(f, s.durationInFrames - 1)));
+  else if (every) for (let f = 0; f < s.durationInFrames; f += Math.max(1, Math.round(every * FPS))) frames.add(f);
   else
     for (const l of s.lines) {
       const at = l.from - s.from;
       [at + 10, at + Math.round(l.durationInFrames / 2), at + l.durationInFrames - 2].forEach((f) => frames.add(f));
     }
-  frames.add(s.durationInFrames - 2);
+  if (!at.length) frames.add(s.durationInFrames - 2);
   for (const f of [...frames].sort((a, b) => a - b)) {
     const output = `out/stills/${lang === 'fr' ? '' : `${lang}-`}${s.id}-${String(f).padStart(4, '0')}.jpg`;
     await renderStill({ composition, serveUrl, output, frame: s.from + f, inputProps, imageFormat: 'jpeg', jpegQuality: 80 });

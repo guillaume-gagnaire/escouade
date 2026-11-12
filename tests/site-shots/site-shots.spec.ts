@@ -1,10 +1,11 @@
-// The website's screenshots (`npm run site-shots`, README.md here): the real app 2.0, on the made-up demo of demo.ts, in the
+// The website's screenshots (`npm run site-shots`, README.md here): the real app 2.2, on the made-up demo of demo.ts, in the
 // language of each project of the config (fr, en). Each picture is the app's window at 1500 × 844 on the backdrop the site
 // crops it from (website/app/data/shots.ts: WINDOW), 1920 × 960, JPEG quality 85, under the name the site reads
 // (website/app/data/site.ts: FEATURE_SHOTS).
 
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
 import { chromium, type Page } from '@playwright/test';
@@ -51,14 +52,23 @@ const test = base.extend<{ trackersUp: void; hostsDemo: boolean }>({
   // Off: the demo of the 11 shots, no ticket « En revue » in it.
   hostsDemo: [false, { option: true }],
   // The fake harnesses of the three the demo runs on, and the turns the fake `claude` plays.
+  // No update to offer (2.2): a latest.json of an old version, served here, in the place of GitHub's, so that no banner
+  // « Mise à jour prête » comes into the pictures.
   appEnv: async ({ language }, use) => {
+    const updates = http.createServer((_, res) =>
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ version: '0.0.1', notes: '', platforms: {} })),
+    );
+    await new Promise<void>((resolve) => updates.listen(0, '127.0.0.1', resolve));
+    const { port } = updates.address() as net.AddressInfo;
     await use({
+      ESCOUADE_UPDATE_ENDPOINT: `http://127.0.0.1:${port}/latest.json`,
       ESCOUADE_CODEX: FAKE_CODEX,
       ESCOUADE_CURSOR: FAKE_CURSOR,
       FAKE_CLAUDE_DEMO: path.join(process.env.ESCOUADE_E2E_ROOT!, 'demo-turns.json'),
       FAKE_CLAUDE_REMOTE_MESSAGE: textOf(language).remote,
       FAKE_CLAUDE_REVIEW: path.join(process.env.ESCOUADE_E2E_ROOT!, 'demo-review.json'),
     });
+    await new Promise((resolve) => updates.close(resolve));
   },
   preStart: async ({ language, hostsDemo }, use) => {
     await use({
@@ -295,6 +305,8 @@ test('the website’s screenshots', async ({ app, language }) => {
     tester
       .locator('.opened.done')
       .or(page.getByText('http://localhost', { exact: false }).first())
+      // 2.2: the page opens in Escouade's own view, its address in a field, and the window may close before it is seen.
+      .or(page.locator('section.devpage'))
       .first(),
   ).toBeVisible({
     timeout: 60_000,
@@ -381,6 +393,10 @@ test.describe('the code hosts', () => {
       path.join(process.env.ESCOUADE_E2E_ROOT!, 'demo-review.json'),
       JSON.stringify({ summary: H.review.summary, comments: H.review.comments.map((c) => ({ ...c, path: REVIEWED.path })) }),
     );
+    // The app reads a project's code host when it opens it (2.2): opened again, demo-api is on github.com.
+    await page.reload();
+    await expect(page.locator('nav.rail')).toBeVisible();
+    await keepInside(page);
 
     // Six pull requests, in the states the list tells apart; the fifth (`TICKET_PR`) is the ticket's, approved and green.
     const hour = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();

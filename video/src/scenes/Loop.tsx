@@ -144,10 +144,10 @@ export const Loop: FC = () => {
                 </div>
               ) : null}
               <Spotlight
-                x={12}
-                y={466}
-                w={278}
-                h={118}
+                x={72}
+                y={368}
+                w={264}
+                h={84}
                 on={ramp(frame, c.word('report', 'latérale') - 6, 8) - ramp(frame, c.end('report') + 14, 8)}
               />
               <PointerPath

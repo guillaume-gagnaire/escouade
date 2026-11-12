@@ -451,9 +451,11 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
     }
     // The voice over is French; the French subtitles say it, the English ones translate it.
     expect(readFileSync(new URL('escouade.vtt', OUT), 'utf8')).toContain(
-      'Voici Escouade : le poste de pilotage de tous tes agents Claude Code.',
+      'Voici Escouade : l’environnement de développement pensé pour tes agents.',
     );
-    expect(readFileSync(new URL('escouade.en.vtt', OUT), 'utf8')).toContain('Meet Escouade: the cockpit for all your Claude Code agents.');
+    expect(readFileSync(new URL('escouade.en.vtt', OUT), 'utf8')).toContain(
+      'Meet Escouade: the development environment built for your agents.',
+    );
   });
 
   it('presents the board, the test launch and the editor among the features', () => {

@@ -57,7 +57,7 @@ export const Remote: FC = () => {
             <>
               <ContextMenu
                 x={170}
-                y={200}
+                y={170}
                 enter={frame >= menuAt && frame < enabled ? 1 : 0}
                 hover={frame >= enabled - 14 ? 4 : undefined}
                 items={agentMenu(tr)}
@@ -73,9 +73,9 @@ export const Remote: FC = () => {
               <PointerPath
                 keys={[
                   [menuAt - 18, 400, 300],
-                  [menuAt, 150, 190, true],
-                  [enabled - 14, 260, 360],
-                  [enabled - 4, 262, 362, true],
+                  [menuAt, 150, 160, true],
+                  [enabled - 14, 260, 330],
+                  [enabled - 4, 262, 332, true],
                 ]}
               />
             </>

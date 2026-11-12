@@ -15,7 +15,7 @@ export const Intro: FC = () => {
   const { tr } = useFmt();
   const caption = useTitle();
   const title = pop(frame, fps, c.word('hello', 'escouade') - 4, 16);
-  const sub = pop(frame, fps, c.word('hello', 'poste'), 16);
+  const sub = pop(frame, fps, c.word('hello', 'environnement'), 16);
   return (
     <Stage>
       <div
@@ -46,10 +46,10 @@ export const Intro: FC = () => {
         <div
           style={{ fontSize: 46, fontWeight: 500, color: C.muted, opacity: Math.min(1, sub), transform: `translateY(${(1 - sub) * 30}px)` }}
         >
-          {tr('Le poste de pilotage de tes agents Claude Code', 'The cockpit for your Claude Code agents')}
+          {tr('L’environnement de développement pensé pour tes agents', 'The development environment built for your agents')}
         </div>
       </div>
-      <Caption text={caption} delay={c.word('hello', 'tous')} top={860} />
+      <Caption text={caption} delay={c.word('hello', 'agents')} top={860} />
     </Stage>
   );
 };

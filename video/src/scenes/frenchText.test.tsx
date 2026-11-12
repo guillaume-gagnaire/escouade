@@ -11,7 +11,7 @@ vi.mock('remotion', async (original) => ({
   Sequence: ({ children }: { children?: unknown }) => children ?? null,
   Html5Audio: () => null,
 }));
-vi.mock('@remotion/google-fonts/HankenGrotesk', () => ({ loadFont: () => ({ fontFamily: 'Hanken Grotesk' }) }));
+vi.mock('@remotion/google-fonts/Inter', () => ({ loadFont: () => ({ fontFamily: 'Inter' }) }));
 vi.mock('@remotion/google-fonts/JetBrainsMono', () => ({ loadFont: () => ({ fontFamily: 'JetBrains Mono' }) }));
 
 const { SCENES } = await import('./index');

@@ -49,7 +49,7 @@ export const Presentation: FC<{ lang?: Lang }> = ({ lang = 'fr' }) => (
           <Html5Audio src={staticFile('sfx/whoosh.wav')} volume={0.55} />
         </Sequence>
       ))}
-      {LINES.map((l) => (
+      {LINES.filter((l) => !l.draft).map((l) => (
         <Sequence key={l.key} name={`voix ${l.key}`} from={l.from} durationInFrames={l.durationInFrames} layout="none">
           <Html5Audio src={staticFile(`voice/${l.key}.mp3`)} />
         </Sequence>

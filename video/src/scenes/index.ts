@@ -20,6 +20,8 @@ import { StatsScene } from './StatsScene';
 import { Remote } from './Remote';
 import { More } from './More';
 import { Outro } from './Outro';
+import { PluginsScene } from './PluginsScene';
+import { WorkflowScene } from './WorkflowScene';
 
 export const SCENES: Record<SceneId, FC> = {
   intro: Intro,
@@ -33,6 +35,7 @@ export const SCENES: Record<SceneId, FC> = {
   editor: EditorScene,
   board: BoardScene,
   loop: Loop,
+  workflow: WorkflowScene,
   test: TestScene,
   validate: Validate,
   integrations: IntegrationsScene,
@@ -40,6 +43,7 @@ export const SCENES: Record<SceneId, FC> = {
   terminals: Terminals,
   stats: StatsScene,
   remote: Remote,
+  plugins: PluginsScene,
   more: More,
   outro: Outro,
 };

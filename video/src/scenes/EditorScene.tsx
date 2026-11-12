@@ -83,8 +83,8 @@ export const EditorScene: FC = () => {
           }
           overlay={
             <>
-              <Spotlight x={302} y={146} w={266} h={330} on={spot('arborescence', 'onglets')} />
-              <Spotlight x={572} y={105} w={400} h={40} on={spot('onglets', 'coloration')} />
+              <Spotlight x={342} y={146} w={262} h={330} on={spot('arborescence', 'onglets')} />
+              <Spotlight x={608} y={104} w={400} h={40} on={spot('onglets', 'coloration')} />
               <Spotlight
                 x={566}
                 y={186}
@@ -94,8 +94,8 @@ export const EditorScene: FC = () => {
               />
               <PointerPath
                 keys={[
-                  [open - 26, 760, 300],
-                  [open - 2, 667, 81, true],
+                  [open - 26, 1100, 300],
+                  [open - 2, 1302, 22, true],
                 ]}
               />
             </>
@@ -126,7 +126,6 @@ export const EditorScene: FC = () => {
                 sub="demo-api / escouade/pagination-users"
                 test="prepare"
                 metrics={{ model: 'Opus 5.5', tokens: tok(24.8, 1), cost: usd(0.27), files: 3, duration: '4m 02s' }}
-                pressed={{ editor: ramp(frame, open - 4, 3) - ramp(frame, open + 2, 4) }}
               />
               <Conversation>
                 <AssistantMsg text={tr('La pagination est en place, avec ses tests.', 'Pagination is in place, with its tests.')} />

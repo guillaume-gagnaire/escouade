@@ -51,6 +51,8 @@ export interface Agent {
   cost: number;
   /** Active time. */
   ms: number;
+  /** The temperature of its prompt cache, in °C, as the 2.2 shows it at the end of its card: hot, its next turn costs less. */
+  heat: number;
 }
 
 export interface Project {
@@ -125,6 +127,7 @@ interface Slot {
   model: Model;
   tokens: number;
   ms: number;
+  heat: number;
   steps: Step[];
 }
 
@@ -135,6 +138,7 @@ const SLOTS: Slot[] = [
     model: 'Opus 5.5',
     tokens: 184_000,
     ms: 760_000,
+    heat: 88,
     steps: [
       run(0, 'Read', 'src/auth/middleware.ts'),
       run(3, 'Grep', 'session'),
@@ -151,6 +155,7 @@ const SLOTS: Slot[] = [
     model: 'Sonnet 5.5',
     tokens: 96_000,
     ms: 482_000,
+    heat: 74,
     // Its question and what follows the answer: see ASK and AFTER.
     steps: [run(0, 'Bash', 'npx playwright test --list')],
   },
@@ -160,6 +165,7 @@ const SLOTS: Slot[] = [
     model: 'GPT-5.5',
     tokens: 41_000,
     ms: 195_000,
+    heat: 63,
     steps: [
       onTicket(0, 'Read', 0, 1, [false, false]),
       onTicket(3, 'Edit', 1, 1, [false, false], [34, 6]),
@@ -175,6 +181,7 @@ const SLOTS: Slot[] = [
     model: 'Haiku 5.5',
     tokens: 12_000,
     ms: 110_000,
+    heat: 21,
     steps: [
       { at: 0, status: 'done', result: { kind: 'files', count: 2 } },
       run(8, 'Write', 'docs/api/auth.md'),
@@ -188,6 +195,7 @@ const SLOTS: Slot[] = [
     model: 'Composer 2.5',
     tokens: 22_000,
     ms: 125_000,
+    heat: 81,
     steps: [
       run(0, 'Read', 'src/ui/LoginForm.svelte'),
       run(5, 'Edit', 'src/ui/LoginForm.svelte', [9, 3]),
@@ -370,6 +378,7 @@ export function squadAt(t: number, answers: Answer[] = [], lang: Lang = 'fr'): S
       tokens,
       cost: (tokens * rate.usd) / 1e6,
       ms: Math.round(base.ms + beats * BEAT_MS),
+      heat: slot.heat,
     };
   });
 

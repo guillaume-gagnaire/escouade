@@ -2,8 +2,8 @@
 import { fmt, plural } from '~/data/catalog';
 import { fDur, fTok, fUsd, type Agent } from '~/data/squad';
 
-// An agent's card as the app's sidebar draws it (2.0): its name and state, its harness, model and time (or its ticket and
-// loop), then what it does now, with what it spent. A question turns the card amber, its answers numbered as in the app.
+// An agent's card as the app's sidebar draws it (2.2): its name and state, its harness, model and time (or its ticket and
+// loop) and the temperature of its cache, then what it does now, with what it spent. A question turns the card amber, its answers numbered as in the app.
 defineProps<{ agent: Agent }>();
 const { lang, text } = useLang();
 const emit = defineEmits<{ answer: [option: number] }>();
@@ -41,6 +41,7 @@ function answer(option: number, e: MouseEvent) {
         <span class="sep">·</span>
         <span class="num">{{ fDur(agent.ms) }}</span>
       </template>
+      <span class="heat" :class="agent.heat >= 67 ? 'hot' : agent.heat >= 34 ? 'mid' : 'cool'">{{ agent.heat }} °C</span>
     </div>
     <Transition name="swap" mode="out-in">
       <div v-if="agent.question" key="ask" class="ask">
@@ -68,6 +69,25 @@ function answer(option: number, e: MouseEvent) {
 </template>
 
 <style scoped>
+/* The temperature of its cache (the app's HeatFigure.svelte): red-orange when hot, amber half way, blue cooling. */
+.heat {
+  margin-left: auto;
+  flex: none;
+  padding-left: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.heat.hot {
+  color: oklch(0.72 0.17 38);
+}
+.heat.mid {
+  color: oklch(0.82 0.13 75);
+}
+.heat.cool {
+  color: oklch(0.78 0.11 235);
+}
 /* The values of the app's sidebar (src/components/Sidebar.svelte, EngineMark.svelte). */
 .agent {
   --tone: var(--run);

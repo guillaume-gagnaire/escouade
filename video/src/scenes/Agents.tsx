@@ -56,7 +56,7 @@ export const Agents: FC = () => {
   ];
   const flash = ramp(frame, named, 6) - ramp(frame, named + 24, 12);
   const cam = camPath(frame, [
-    [c.word('card', 'carte') - 10, 24, { x: 330, y: 250, zoom: 2 }],
+    [c.word('card', 'carte') - 10, 24, { x: 380, y: 200, zoom: 2 }],
     [c.end('card') + 4, 22, { x: 750, y: 422, zoom: 1 }],
   ]);
   return (
@@ -109,17 +109,17 @@ export const Agents: FC = () => {
           }
           overlay={
             <>
-              <Spotlight x={12} y={158} w={278} h={90} on={ramp(frame, c.word('card', 'carte'), 10) - ramp(frame, c.end('card'), 10)} />
+              <Spotlight x={72} y={120} w={266} h={76} on={ramp(frame, c.word('card', 'carte'), 10) - ramp(frame, c.end('card'), 10)} />
               <ContextMenu
                 x={170}
-                y={500}
+                y={408}
                 enter={frame >= menuAt && frame < archived ? pop(frame, fps, menuAt, 20) : 0}
                 hover={frame >= c.word('archive', 'archive-le') - 8 ? 1 : undefined}
                 items={agentMenu(tr)}
               />
               <ContextMenu
                 x={170}
-                y={470}
+                y={388}
                 enter={frame >= delMenu && frame < confirmAt ? pop(frame, fps, delMenu, 20) : 0}
                 hover={frame >= delMenu + 8 ? 6 : undefined}
                 items={agentMenu(tr)}
@@ -145,15 +145,15 @@ export const Agents: FC = () => {
               <PointerPath
                 keys={[
                   [newAt - 24, 330, 300],
-                  [newAt - 3, 225, 130, true],
-                  [menuAt - 16, 200, 400],
-                  [menuAt, 150, 492, true],
-                  [c.word('archive', 'archive-le') - 8, 230, 553],
-                  [archived - 2, 232, 553, true],
-                  [dbl - 14, 220, 520],
-                  [dbl, 200, 460, true],
-                  [delMenu - 8, 190, 470],
-                  [delMenu, 180, 462, true],
+                  [newAt - 3, 160, 100, true],
+                  [menuAt - 16, 260, 330],
+                  [menuAt, 150, 400, true],
+                  [c.word('archive', 'archive-le') - 8, 230, 461],
+                  [archived - 2, 232, 461, true],
+                  [dbl - 14, 220, 430],
+                  [dbl, 140, 372, true],
+                  [delMenu - 8, 190, 390],
+                  [delMenu, 180, 380, true],
                   [confirmAt - 6, 250, 663],
                   [confirmAt - 1, 252, 663, true],
                   [deleted - 20, 900, 540],

@@ -2,13 +2,14 @@ import { createContext, useContext, type FC, type ReactNode } from 'react';
 import { AbsoluteFill, Html5Audio, interpolate, Sequence, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
 import { pop } from '../anim';
 import { useTitle } from '../cues';
-import { C, UI } from '../theme';
+import { C, P0, soft, UI } from '../theme';
 
-/** The backdrop of every scene: dark, with a warm glow. */
+/** The backdrop of every scene: almost black, with a glow of the project's colour (`--p`, demo-api's by default). */
 export const Stage: FC<{ children?: ReactNode }> = ({ children }) => (
   <AbsoluteFill
     style={{
-      background: `radial-gradient(1300px 760px at 50% 62%, color-mix(in oklch, ${C.spark} 13%, ${C.bg}), ${C.bg} 72%)`,
+      ['--p' as string]: P0,
+      background: `radial-gradient(1300px 760px at 50% 62%, color-mix(in oklch, ${C.spark} 11%, #08090a), #08090a 72%)`,
       fontFamily: UI,
       color: C.text,
       overflow: 'hidden',
@@ -173,7 +174,7 @@ export const Spotlight: FC<{ x: number; y: number; w: number; h: number; on: num
         width: w,
         height: h,
         borderRadius: radius,
-        boxShadow: `0 0 0 3000px rgba(10, 9, 8, ${0.55 * on}), 0 0 0 2px rgba(217, 119, 87, ${on}), 0 0 30px rgba(217, 119, 87, ${0.4 * on})`,
+        boxShadow: `0 0 0 3000px rgba(5, 6, 7, ${0.6 * on}), 0 0 0 2px ${soft(C.pInk, 100 * on)}, 0 0 30px ${soft(C.spark, 40 * on)}`,
         pointerEvents: 'none',
         zIndex: 20,
       }}

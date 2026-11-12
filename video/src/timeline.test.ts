@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SceneScript } from './script';
-import { buildTimeline, FPS, GAP, LEAD, TAIL, TIMELINE, TOTAL_FRAMES } from './timeline';
+import { buildTimeline, draftClip, FPS, GAP, LEAD, TAIL, TIMELINE, TOTAL_FRAMES } from './timeline';
 import VOICE from './voice.json';
 
 const script = [
@@ -62,5 +62,30 @@ describe('the video', () => {
         expect(l.from + l.durationInFrames, l.key).toBeLessThanOrEqual(next ? next.from : s.from + s.durationInFrames);
       });
     }
+  });
+});
+
+describe('a line without its voice yet', () => {
+  it('is given a length from its words when drafting, silent and marked', () => {
+    const t = buildTimeline(script, { 'intro.a': voice['intro.a'] }, { draft: true });
+    const x = t[1].lines[0];
+    expect(x.draft).toBe(true);
+    expect(x.words.map((w) => w.word)).toEqual(['x']);
+    expect(x.durationInFrames).toBe(Math.ceil(draftClip('x').duration * FPS));
+    expect(t[0].lines[0].draft).toBeUndefined();
+  });
+
+  it('is never left in the video: every line of the script has its voice before a render', () => {
+    expect(TIMELINE.flatMap((s) => s.lines.filter((l) => l.draft).map((l) => l.key))).toEqual([]);
+  });
+});
+
+describe('a line whose text changed since its voice', () => {
+  it('is refused, or drafted again from its new text', () => {
+    const stale = { ...voice, 'intro.a': { ...voice['intro.a'], text: 'an older a' } };
+    expect(() => buildTimeline(script, stale)).toThrow(/intro\.a/);
+    const t = buildTimeline(script, stale, { draft: true });
+    expect(t[0].lines[0].draft).toBe(true);
+    expect(buildTimeline(script, { ...voice, 'intro.a': { ...voice['intro.a'], text: 'a' } })[0].lines[0].draft).toBeUndefined();
   });
 });

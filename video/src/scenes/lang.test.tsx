@@ -10,7 +10,7 @@ vi.mock('remotion', async (original) => ({
   Sequence: ({ children }: { children?: unknown }) => children ?? null,
   Html5Audio: () => null,
 }));
-vi.mock('@remotion/google-fonts/HankenGrotesk', () => ({ loadFont: () => ({ fontFamily: 'Hanken Grotesk' }) }));
+vi.mock('@remotion/google-fonts/Inter', () => ({ loadFont: () => ({ fontFamily: 'Inter' }) }));
 vi.mock('@remotion/google-fonts/JetBrainsMono', () => ({ loadFont: () => ({ fontFamily: 'JetBrains Mono' }) }));
 
 const { SCENES } = await import('./index');
@@ -130,6 +130,36 @@ const NEUTRAL = new Set([
   'Pull…',
   // The start of a typed text can be the same in both languages: « Limit… » / « Limiter… ».
   'Limit',
+  // The 2.2: its shortcuts, the projects' labels, the sidebar's views, the harnesses, the plugins and the OS.
+  'Ctrl K',
+  'Ctrl N',
+  'Ctrl J',
+  'Ctrl F',
+  'Ctrl+F',
+  'Studio',
+  'Mobile',
+  'Docs',
+  'PR',
+  'Codex',
+  'Cursor',
+  'Cursor CLI',
+  'OpenCode',
+  'Copilot CLI',
+  'Composer',
+  'Store',
+  'Plugins',
+  'PLUGINS',
+  'Harness',
+  'Linear',
+  'GitLab',
+  'Nord',
+  'ElevenLabs',
+  'Linux',
+  'GSD',
+  'Escouade',
+  'Remote control',
+  'Proxy',
+  'Exclusions',
 ]);
 
 /** French words that no English text of the interface says. */

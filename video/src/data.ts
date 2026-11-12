@@ -5,10 +5,10 @@ import type { AgentInfo } from './ui/Sidebar';
 import type { Status, Tab } from './ui/Shell';
 
 export const TABS: Tab[] = [
-  { name: 'demo-api', hue: 48, delta: 7, running: true },
-  { name: 'studio-web', hue: 300, delta: 3 },
-  { name: 'mobile-app', hue: 200, delta: 12, running: true },
-  { name: 'infra', hue: 150 },
+  { name: 'demo-api', hue: 48, letters: 'API', delta: 7, running: true },
+  { name: 'studio-web', hue: 300, letters: 'S', label: 'Studio', delta: 3 },
+  { name: 'mobile-app', hue: 200, letters: 'MA', label: 'Mobile', delta: 12, running: true },
+  { name: 'infra', hue: 150, letters: 'IN' },
 ];
 
 /** Agents named from a prompt, so named in its language: the auth refactor that opens most scenes, and the one Haiku names. */
@@ -20,8 +20,27 @@ const NAMES = {
 export function agentsOf(lang: Lang): AgentInfo[] {
   const { tok, usd } = fmtOf(lang);
   return [
-    { name: NAMES.refactor[lang], status: 'running', model: 'Opus 5.5', time: '12m 40s', tokens: tok(184), cost: usd(2.41), files: 6 },
-    { name: 'tests-e2e', status: 'running', model: 'Sonnet 5.5', time: '8m 02s', tokens: tok(96), cost: usd(0.73), files: 3 },
+    {
+      name: NAMES.refactor[lang],
+      status: 'running',
+      model: 'Opus 5.5',
+      time: '12m 40s',
+      tokens: tok(184),
+      cost: usd(2.41),
+      files: 6,
+      heat: 82,
+    },
+    {
+      name: 'tests-e2e',
+      status: 'running',
+      model: 'GPT-5.6 Terra',
+      harness: 'Codex',
+      time: '8m 02s',
+      tokens: tok(96),
+      cost: usd(0.73),
+      files: 3,
+      heat: 64,
+    },
     {
       name: 'pagination-users',
       status: 'running',
@@ -31,8 +50,19 @@ export function agentsOf(lang: Lang): AgentInfo[] {
       cost: usd(0.32),
       files: 3,
       branch: 'pagination-users',
+      heat: 91,
     },
-    { name: 'docs-api', status: 'done', model: 'Haiku 4.5', time: '1m 50s', tokens: tok(12), cost: usd(0.02), files: 1 },
+    {
+      name: 'docs-api',
+      status: 'done',
+      model: 'Composer 2.5',
+      harness: 'Cursor',
+      time: '1m 50s',
+      tokens: tok(12),
+      cost: usd(0.02),
+      files: 1,
+      heat: 18,
+    },
     { name: 'fix-login', status: 'idle', model: 'Fable 5.1', time: '0m 00s', tokens: '0', cost: usd(0), files: 0 },
   ];
 }

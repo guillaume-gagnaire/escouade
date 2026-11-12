@@ -8,7 +8,7 @@ vi.mock('remotion', async (original) => ({
   useCurrentFrame: () => frame,
   useVideoConfig: () => ({ fps: 30, width: 1920, height: 1080, durationInFrames: 99999, id: 'Presentation' }),
 }));
-vi.mock('@remotion/google-fonts/HankenGrotesk', () => ({ loadFont: () => ({ fontFamily: 'Hanken Grotesk' }) }));
+vi.mock('@remotion/google-fonts/Inter', () => ({ loadFont: () => ({ fontFamily: 'Inter' }) }));
 vi.mock('@remotion/google-fonts/JetBrainsMono', () => ({ loadFont: () => ({ fontFamily: 'JetBrains Mono' }) }));
 
 const { SCENES } = await import('./index');

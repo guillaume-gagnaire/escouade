@@ -82,7 +82,7 @@ export const BoardHeader: FC<{
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         <span style={{ fontSize: 17, fontWeight: 700 }}>Kanban</span>
-        <span style={{ fontFamily: MONO, fontSize: 12, color: C.dim }}>
+        <span style={{ fontSize: 12, color: C.dim }}>
           {trx(
             <>
               {project} · {count} tickets · {looping} en boucle
@@ -165,16 +165,16 @@ export const BoardColumn: FC<{ column: Column; count: number; children?: ReactNo
         display: 'flex',
         flexDirection: 'column',
         borderRadius: 10,
-        background: C.panel,
-        border: `1px solid ${glow ? soft(c.color, 40 + 60 * glow) : C.line}`,
+        background: glow ? soft(c.color, 6 * glow) : 'transparent',
+        border: `1px solid ${glow ? soft(c.color, 40 + 60 * glow) : 'transparent'}`,
         boxShadow: glow ? `0 0 30px ${soft(c.color, 30 * glow)}` : 'none',
         overflow: 'hidden',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 10px 10px 14px' }}>
         <span style={{ width: 9, height: 9, borderRadius: '50%', background: c.color }} />
-        <span style={{ fontSize: 14.5, fontWeight: 700 }}>{c.label}</span>
-        <span style={{ fontFamily: MONO, fontSize: 12, color: C.dim }}>{count}</span>
+        <span style={{ fontSize: 14.5, fontWeight: 650 }}>{c.label}</span>
+        <span style={{ fontSize: 12, color: C.dim }}>{count}</span>
         <div style={{ flex: 1 }} />
         {column === 'todo' ? (
           <span
@@ -299,15 +299,15 @@ export const TicketCard: FC<{ t: Ticket }> = ({ t }) => {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {t.external ? (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: MONO, fontSize: 11.5, color: C.muted }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: C.muted }}>
             <ServiceBadge service={t.external.service} size={17} />
             {t.external.key}
           </span>
         ) : null}
-        <span style={{ fontFamily: MONO, fontSize: 11.5, color: C.dim }}>{t.key}</span>
+        <span style={{ fontSize: 11.5, color: C.dim }}>{t.key}</span>
         <div style={{ flex: 1 }} />
         {t.column === 'doing' && t.loop ? (
-          <span style={{ fontFamily: MONO, fontSize: 11.5, fontWeight: 600, color: C.spark }}>
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: C.spark }}>
             {trx(
               <>
                 Boucle {t.loop[0]}/{t.loop[1]}
@@ -364,7 +364,7 @@ export const TicketCard: FC<{ t: Ticket }> = ({ t }) => {
           {steps.length ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {list(steps)}
-              {hidden > 0 ? <span style={{ fontFamily: MONO, fontSize: 11.5, color: C.dim }}>+{hidden}</span> : null}
+              {hidden > 0 ? <span style={{ fontSize: 11.5, color: C.dim }}>+{hidden}</span> : null}
             </div>
           ) : null}
           {!t.blocked && t.waiting ? (
@@ -439,7 +439,7 @@ export const TicketCard: FC<{ t: Ticket }> = ({ t }) => {
           ) : null}
           <div style={{ flex: 1 }} />
           {t.column === 'review' ? (
-            <span style={{ fontFamily: MONO, fontSize: 11.5, color: C.dim }}>
+            <span style={{ fontSize: 11.5, color: C.dim }}>
               {trx(
                 <>
                   {met}/{total} critères
@@ -448,7 +448,7 @@ export const TicketCard: FC<{ t: Ticket }> = ({ t }) => {
               )}
             </span>
           ) : null}
-          {t.column === 'done' && t.doneMeta ? <span style={{ fontFamily: MONO, fontSize: 11.5, color: C.dim }}>{t.doneMeta}</span> : null}
+          {t.column === 'done' && t.doneMeta ? <span style={{ fontSize: 11.5, color: C.dim }}>{t.doneMeta}</span> : null}
         </div>
       ) : null}
       {t.column === 'review' && !t.step ? (
@@ -725,7 +725,7 @@ export const BoardSettings: FC<{
               <Switch on={Boolean(on)} />
             </div>
           ))}
-          <span style={{ fontFamily: MONO, fontSize: 12.5, color: C.dim }}>
+          <span style={{ fontSize: 12.5, color: C.dim }}>
             {tr('feat: limiter les tentatives de connexion [DEM-42]', 'feat: limit login attempts [DEM-42]')}
           </span>
           <div

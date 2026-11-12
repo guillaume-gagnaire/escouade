@@ -238,8 +238,8 @@ describe('what the two pages share', () => {
     const en = cues('escouade.en.vtt');
     expect(fr.length).toBeGreaterThan(100);
     expect(en.map((c) => [c.id, c.time])).toEqual(fr.map((c) => [c.id, c.time]));
-    expect(en[0].text).toBe('Meet Escouade: the cockpit for all your Claude Code agents.');
-    expect(en.at(-1)!.text).toBe('and give Claude a squad!');
+    expect(en[0].text).toBe('Meet Escouade: the development environment built for your agents.');
+    expect(en.at(-1)!.text).toBe('and give your agents a squad!');
     // Not a copy of the French.
     for (const [i, c] of en.entries()) expect(c.text, `cue ${i + 1}`).not.toBe(fr[i].text);
     expect(en.map((c) => c.text).join(' ')).not.toMatch(/[àâçéèêîôùû«»]/);

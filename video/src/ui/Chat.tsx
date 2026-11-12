@@ -3,8 +3,9 @@ import { useCurrentFrame } from 'remotion';
 import { useFmt } from '../lang';
 import { C, MONO, soft } from '../theme';
 import { Cursor } from './Cursor';
+import { Icon } from './icons';
 import { Dot } from './Shell';
-import { Button } from './Sidebar';
+import { Button, HarnessChip, heatColor, type Harness } from './Sidebar';
 
 /** Text with `inline code` and **bold**. */
 export const Rich: FC<{ text: string }> = ({ text }) => (
@@ -23,20 +24,20 @@ export const Rich: FC<{ text: string }> = ({ text }) => (
   </>
 );
 
-const Metric: FC<{ k: string; v: ReactNode; box?: boolean }> = ({ k, v, box }) => (
+const Metric: FC<{ k: string; v: ReactNode; box?: boolean; color?: string }> = ({ k, v, box, color }) => (
   <div
     style={{
       display: 'flex',
       flexDirection: 'column',
-      gap: 2,
+      gap: 1,
       padding: box ? '3px 8px' : 0,
       margin: box ? '-3px -8px' : 0,
       borderRadius: 6,
-      border: box ? `1px solid ${C.line2}` : 'none',
+      boxShadow: box ? `inset 0 0 0 1px ${C.line2}` : 'none',
     }}
   >
-    <span style={{ fontSize: 11.5, color: C.dim }}>{k}</span>
-    <span style={{ fontFamily: MONO, fontSize: 13.5 }}>{v}</span>
+    <span style={{ fontSize: 12, color: C.muted, fontWeight: 500 }}>{k}</span>
+    <span style={{ fontSize: 13.5, fontWeight: 600, color: color ?? C.text, fontVariantNumeric: 'tabular-nums' }}>{v}</span>
   </div>
 );
 
@@ -47,109 +48,153 @@ export interface HeadMetrics {
   cost: string;
   files: number;
   duration: string;
+  /** The temperature of its cache, in °C. */
+  heat?: number;
 }
 
+const IconButton: FC<{ children: ReactNode; on?: boolean }> = ({ children, on }) => (
+  <span
+    style={{
+      width: 28,
+      height: 28,
+      display: 'grid',
+      placeItems: 'center',
+      borderRadius: 7,
+      background: on ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
+      color: on ? C.text : C.muted,
+    }}
+  >
+    {children}
+  </span>
+);
+
 const Layout: FC<{ split: boolean }> = ({ split }) => (
-  <div style={{ display: 'flex', gap: 2, padding: 2, borderRadius: 6, background: C.bg, border: `1px solid ${C.line}` }}>
+  <div style={{ display: 'flex', gap: 2, padding: 2, borderRadius: 8, boxShadow: `inset 0 0 0 1px ${C.line}` }}>
     {[false, true].map((s) => (
-      <span
-        key={String(s)}
-        style={{
-          width: 30,
-          height: 24,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderRadius: 4,
-          background: s === split ? C.elev2 : 'transparent',
-        }}
-      >
-        <svg width="16" height="12" viewBox="0 0 16 12">
-          <rect x="0.5" y="0.5" width="15" height="11" rx="1.5" fill="none" stroke={s === split ? C.text : C.dim} />
-          <rect x={s ? 8 : 11} y="1" width={s ? 7 : 4} height="10" fill={s === split ? C.text : C.dim} opacity="0.45" />
+      <IconButton key={String(s)} on={s === split}>
+        <svg width="15" height="12" viewBox="0 0 16 12" fill="none" stroke="currentColor" strokeWidth="1.4">
+          <rect x="0.7" y="0.7" width="14.6" height="10.6" rx="2" />
+          {s ? <path d="M8 1v10" /> : <path d="M5 1v10" opacity="0" />}
         </svg>
-      </span>
+      </IconButton>
     ))}
   </div>
 );
+
+/** The state of an agent, as the header's pill says it. */
+const StatePill: FC<{ status: 'running' | 'waiting' | 'done' | 'idle' }> = ({ status }) => {
+  const { tr } = useFmt();
+  const color = status === 'waiting' ? C.wait : status === 'running' ? C.ok : C.muted;
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        height: 20,
+        padding: '0 8px',
+        borderRadius: 10,
+        background: soft(color, 13),
+        color,
+        fontSize: 12.5,
+        fontWeight: 600,
+      }}
+    >
+      <Dot color={color} size={6} pulse={status === 'running' || status === 'waiting'} />
+      {status === 'running'
+        ? tr('En cours', 'Running')
+        : status === 'waiting'
+          ? 'Question'
+          : status === 'idle'
+            ? tr('Prêt', 'Ready')
+            : tr('Terminé', 'Done')}
+    </span>
+  );
+};
 
 export const ConvHeader: FC<{
   name: string;
   status: 'running' | 'waiting' | 'done' | 'idle';
   sub: string;
   metrics?: HeadMetrics;
+  harness?: Harness;
   test?: 'test' | 'prepare';
   split?: boolean;
   compact?: boolean;
   pressed?: { editor?: number; test?: number };
-}> = ({ name, status, sub, metrics, test, split = false, compact, pressed }) => {
+}> = ({ name, status, sub, metrics, harness = 'Claude', test, split = false, compact, pressed }) => {
   const { tr, tok } = useFmt();
+  const [project, ...rest] = sub.split(' / ');
   return (
     <div
       style={{
-        height: 64,
+        height: 62,
         flex: 'none',
         display: 'flex',
         alignItems: 'center',
-        gap: 16,
-        padding: '0 24px',
+        gap: 18,
+        padding: '0 14px 0 22px',
         borderBottom: `1px solid ${C.line}`,
         whiteSpace: 'nowrap',
       }}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, flexShrink: 1, overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 17, fontWeight: 700 }}>{name}</span>
-          <span
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              fontSize: 13,
-              color: status === 'waiting' ? C.wait : status === 'idle' ? C.dim : C.ok,
-            }}
-          >
-            <Dot
-              color={status === 'waiting' ? C.wait : status === 'idle' ? C.dim : C.ok}
-              size={7}
-              pulse={status === 'running' || status === 'waiting'}
-            />
-            {status === 'running'
-              ? tr('En cours', 'Running')
-              : status === 'waiting'
-                ? 'Question'
-                : status === 'idle'
-                  ? tr('Prêt', 'Ready')
-                  : tr('Terminé', 'Done')}
-          </span>
+          <span style={{ fontSize: 16, fontWeight: 650, letterSpacing: '-0.01em' }}>{name}</span>
+          <StatePill status={status} />
         </div>
-        <span style={{ fontFamily: MONO, fontSize: 12, color: C.dim }}>{sub}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: C.muted }}>
+          <HarnessChip name={harness === 'Claude' ? 'Claude Code' : harness} />
+          {project}
+          {rest.length ? (
+            <>
+              <span style={{ color: '#4a4e55' }}>/</span>
+              <span style={{ fontFamily: MONO, fontSize: 12 }}>{rest.join(' / ')}</span>
+            </>
+          ) : null}
+        </span>
       </div>
       <div style={{ flex: 1 }} />
       {metrics ? (
         <>
-          <Button pressed={pressed?.editor}>
-            <span style={{ fontFamily: MONO, fontSize: 12, color: C.spark }}>{'</>'}</span>
-            {compact ? null : tr('Éditeur', 'Editor')}
-          </Button>
-          {test ? (
-            <Button pressed={pressed?.test}>
-              <span style={{ fontSize: 11, color: C.spark }}>{test === 'test' ? '▶' : '▷'}</span>
+          {pressed?.editor !== undefined ? (
+            <Button pressed={pressed.editor}>
+              <Icon name="code" size={14} />
+              {compact ? null : tr('Éditeur', 'Editor')}
+            </Button>
+          ) : null}
+          {test === 'test' || pressed?.test !== undefined ? (
+            <Button pressed={pressed?.test} primary={test === 'test' ? C.spark : undefined}>
+              <span style={{ fontSize: 10 }}>▶</span>
               {compact ? null : test === 'test' ? tr('Tester', 'Test') : tr('Préparer le lancement', 'Prepare launch')}
             </Button>
           ) : null}
-          <span style={{ fontFamily: MONO, fontSize: 12, padding: '4px 8px', borderRadius: 6, border: `1px solid ${C.line2}` }}>
-            {metrics.model}
-          </span>
-          {compact ? null : (
-            <>
-              <Metric k={tr('Contexte', 'Context')} v={metrics.context ?? `${tok(76.2, 1)} / ${tok(200)}`} />
-              <Metric k="Tokens" v={metrics.tokens} />
-            </>
-          )}
+          {compact ? null : <Metric k={tr('Contexte', 'Context')} v={metrics.context ?? `${tok(76.2, 1)}`} />}
+          {compact ? null : <Metric k="Tokens" v={metrics.tokens} />}
           <Metric k={tr('Coût', 'Cost')} v={metrics.cost} />
+          {compact ? null : <Metric k="Cache" v={`${metrics.heat ?? 82} °C`} color={heatColor(metrics.heat ?? 82)} />}
           <Metric k={split ? tr('Fichiers', 'Files') : tr('Fichiers ▸', 'Files ▸')} v={metrics.files} />
           {compact ? null : <Metric k={tr('Durée', 'Duration')} v={metrics.duration} />}
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 7,
+              height: 30,
+              padding: '0 11px',
+              borderRadius: 8,
+              background: 'rgba(255, 255, 255, 0.06)',
+              boxShadow: `inset 0 0 0 1px ${C.line2}`,
+              fontSize: 13,
+              fontWeight: 600,
+            }}
+          >
+            <Icon name="chat" size={14} />
+            {compact ? null : 'Escouade'}
+          </span>
+          <IconButton>
+            <Icon name="more" size={16} width={2.2} />
+          </IconButton>
           <Layout split={split} />
         </>
       ) : null}
@@ -193,7 +238,16 @@ export const UserMsg: FC<{ text: string; tag?: string; enter?: number; children?
       }}
     >
       {children}
-      <div style={{ background: C.user, borderRadius: 14, padding: '11px 16px', fontSize: 17, lineHeight: 1.45 }}>
+      <div
+        style={{
+          background: C.user,
+          boxShadow: `inset 0 0 0 1px ${C.line}`,
+          borderRadius: 12,
+          padding: '10px 15px',
+          fontSize: 16,
+          lineHeight: 1.5,
+        }}
+      >
         <Rich text={text} />
       </div>
       {tag ? <span style={{ fontSize: 12.5, color: C.info }}>{tag}</span> : null}
@@ -215,21 +269,28 @@ export const AssistantMsg: FC<{ text?: string; avatar?: boolean; enter?: number;
           height: 24,
           flex: 'none',
           marginTop: 2,
-          borderRadius: 6,
-          background: avatar ? C.spark : 'transparent',
-          color: '#1b1512',
-          fontFamily: MONO,
-          fontSize: 12,
+          color: C.claude,
+          fontSize: 20,
           fontWeight: 700,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        {avatar ? 'C' : ''}
+        {avatar ? '✳' : ''}
       </span>
       <div
-        style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10, fontSize: 17, lineHeight: 1.55, maxWidth: 820 }}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+          fontSize: 16,
+          lineHeight: 1.6,
+          maxWidth: 820,
+          color: '#e9ebee',
+        }}
       >
         {text ? (
           <div>
@@ -279,20 +340,36 @@ export const ToolCall: FC<{
       style={{
         marginLeft: 36,
         borderRadius: 8,
-        border: `1px solid ${C.line}`,
-        background: soft(C.elev, 60),
+        boxShadow: detail ? `inset 0 0 0 1px ${C.line}` : 'none',
+        background: detail ? 'rgba(255, 255, 255, 0.02)' : 'transparent',
         overflow: 'hidden',
         ...enterStyle(enter),
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 40, padding: '0 14px', fontSize: 14 }}>
-        <span style={{ fontFamily: MONO, color: C.dim, width: 10 }}>{detail ? '▾' : '▸'}</span>
-        <span style={{ padding: '2px 7px', borderRadius: 4, background: C.elev2, fontWeight: 600, fontSize: 12.5 }}>{tool}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 36, padding: '0 10px', fontSize: 14 }}>
+        <span
+          style={{
+            width: 22,
+            height: 22,
+            flex: 'none',
+            display: 'grid',
+            placeItems: 'center',
+            borderRadius: 6,
+            boxShadow: `inset 0 0 0 1px ${C.line2}`,
+            color: C.muted,
+          }}
+        >
+          <Icon name={tool === 'Bash' ? 'code' : tool === 'Edit' || tool === 'Write' ? 'doc' : 'search'} size={12} />
+        </span>
+        <span style={{ fontWeight: 600, fontSize: 13.5 }}>{tool}</span>
         <span style={{ fontFamily: MONO, fontSize: 13, color: link ? C.spark : C.muted, textDecoration: link ? 'underline' : 'none' }}>
           {target}
         </span>
         <div style={{ flex: 1 }} />
         {running ? <Spinner /> : meta}
+        <span style={{ color: C.dim, transform: detail ? 'rotate(90deg)' : 'none' }}>
+          <Icon name="right" size={13} />
+        </span>
       </div>
       {detail ? <div style={{ borderTop: `1px solid ${C.line}` }}>{detail}</div> : null}
     </div>
