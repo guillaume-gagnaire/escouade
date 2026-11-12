@@ -2,8 +2,8 @@
 title: "Réglages"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/index.html","design/settings-2-2/captures/a-plugins.png","design/settings-2-2/captures/a-projet.png","design/settings-2-2/captures/a-comptes.png"]
-tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407"]
-decisions: [118,119,120,121,123,124,126,145]
+tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417"]
+decisions: [118,119,120,121,123,124,126,145,"le-remote-control-ne-garde-plus-un-proce"]
 compared: null
 ---
 
@@ -85,9 +85,9 @@ Les réglages ne listent que ce qu'apporte un plugin installé : un harness, une
   - une commande de lancement sans nom ou sans ligne de commande : les commandes enregistrées restent celles d'avant tant qu'il en manque ;
   - un dossier des worktrees ou un préfixe de branche refusé, avec la raison sous le champ (voir *Git & fichiers*) ;
   - un nombre vidé ou sous 0, par exemple « Un nombre entier, 0 ou plus : 15 reste enregistré. » ; un nombre à virgule est arrondi à l'entier du dessous ; une taille de texte hors de ses bornes est ramenée dedans.
-- Ce qui coûte le dit sur sa rangée, comme avant : le proxy et les certificats ne valent pour un agent qu'au prochain démarrage de son process, le remote control lance aussitôt le process `claude` de chaque agent concerné.
+- Ce qui coûte le dit sur sa rangée, comme avant : le proxy et les certificats ne valent pour un agent qu'au prochain démarrage de son process, le remote control lance aussitôt le process `claude` de chaque agent actif concerné (voir *Process des agents*).
 - Certaines rangées passent par leur propre appel au backend, comme avant : l'apparence (voir *Fenêtre*), « Recevoir les versions bêta » (enregistré, puis une recherche de mise à jour), les comptes des harness et leur « Projection des quotas » (voir *Barre de statut*), les comptes des intégrations (voir *Intégrations*), l'interrupteur « Les agents peuvent piloter Escouade » (voir *Serveur MCP*), les modèles de la voix, téléchargés ou effacés sur leur ligne, sur la page Plugins l'interrupteur d'un plugin et « Installer » d'un plugin proposé, et sur la page Confidentialité l'interrupteur d'un plugin dans le projet.
-- Rien ne se perd au redémarrage : ce qui est enregistré est dans `settings.json` et les fichiers des projets, dont aucune clé ne change.
+- Rien ne se perd au redémarrage : ce qui est enregistré est dans `settings.json` et les fichiers des projets, dont aucune clé ne change. Le refus du remote control qu'un compte a reçu pour de bon y est gardé avec le compte ; un enregistrement de la fenêtre le garde tant que les réglages du compte ne changent pas (voir *Barre latérale*, « Remote control »).
 
 ### Les pages
 
@@ -102,9 +102,9 @@ Chaque réglage a sa page dans le registre de la fenêtre, et chaque page son co
 - **Agents** :
   - « Nouveaux agents » : « Vue des nouveaux agents », « Les agents tiennent une liste de tâches », activé par défaut (voir *Avancée d'un plan*), « Délai avant l'envoi pendant un tour » ; les deux premiers seulement quand un harness installé les a ;
   - « Textes rédigés » : « Modèle des textes rédigés », et son modèle pour un harness qui le prend (voir *Langues*) ; absent sans harness installé ;
-  - « Remote control » : « Remote control pour tous les agents », qui dit quels harness l'ont (voir *Barre latérale*) ; absent sans harness installé qui l'a ;
+  - « Remote control » : « Remote control pour tous les agents », qui dit quels harness l'ont (voir *Barre latérale*), puis « Process gardés au plus », 8 par défaut (voir *Process des agents*) ; absent sans harness installé qui l'a ;
   - « Piloter Escouade » : « Les agents peuvent piloter Escouade » et ses déclarations (voir *Serveur MCP*) ;
-  - Avancé : arrêt des process inactifs, « Activité MCP ».
+  - Avancé : arrêt des process inactifs, « Serveurs MCP des agents » (« Tous les miens » ou « Seulement Escouade », avec Claude Code installé, voir *Process des agents*), « Activité MCP ».
 - **Comptes et harness** (voir *Comptes*, « Réglages › Comptes et harness ») : un groupe par harness dont le plugin est installé, son état et sa version en pastille (« Prêt · 2.1.301 », « Aucun compte », « Introuvable »), « Ajouter un compte <harness>… » et ses comptes ; un harness introuvable donne sa commande d'installation à la place ; pour OpenCode, ses « Modèles » favoris ; le coût estimé d'un harness qui ne le donne pas. Aucun harness de l'amorce non installé n'y est proposé. Puis « Quand un quota est épuisé » : « Changer de compte à », « Pause du pilote auto au-delà du quota » (« pour tous les projets »), « Reprendre sur un autre compte un agent de ticket arrêté par la limite », « Reprise automatique après la limite d’usage », « Continuer sur le harness suivant… ». Avancé : « Ordre des harness », « Modèle de passation », le chemin de `claude` et où il est (voir *Claude Code dans WSL*), « Mettre à jour Claude Code automatiquement » (avec le plugin de Claude Code), « Projection des quotas » (voir *Barre de statut*).
 - **Services connectés** : « Hébergeurs de code » (les instances et leurs jetons, des hébergeurs installés), puis « Sources de tickets » : les comptes des sources installées (« servi par » un plugin), « Synchronisation » et « Import automatique », pour tous les projets (voir *Intégrations*, *Hébergeurs de code*). Elle ne demande aucun projet.
 - **Voix** : « Micro utilisé », « Modèle », « Langue parlée », « Raccourci » (voir *Dictée*) ; « Conversation » (voir *Conversation vocale*). En ligne, les services installés et actifs seulement.

@@ -6,6 +6,8 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Remote control for all agents no longer starts a process for each agent: only the active ones start, and a done agent can be reached from claude.ai only after its next message, which takes its session back. The remote control keeps at most 8 processes of agents that are not active (adjustable), and Escouade no longer starts anything for a harness or an account that cannot be linked. Thanks to @Chapercher (#26).
+- On macOS and Linux, agents left running after the app was killed are stopped at its next launch. A new setting, “Agents’ MCP servers: Escouade only”, spares each Claude Code agent the MCP servers of your configuration.
 - The settings now show only what your installed plugins bring: harnesses, ticket sources, code hosts and voice services. No more “Not installed” offers in the middle of the pages: plugins install in Settings › Plugins or from the home screen, and what an uninstalled plugin had set comes back with it.
 - The image viewer fits in the window, even with a large photo, and follows its size. It zooms with a click on the image, a pinch, Ctrl or ⌘ + wheel, its buttons or + − 0, and a zoomed image moves by hand. It goes from one image to the next across the whole conversation, with a strip of thumbnails, and copies, saves, opens the image or shows it in its folder. Thanks to @Metalzoid (#25).
 - Menus no longer give way to another one: “Run” and “Continue on another harness” in an agent’s menu, and “In an agent’s worktree” in the terminals’ “+” menu, open their list beside them, on hover or on a click. A menu taller than the window stops before its edge and scrolls, a chevron telling there is more to see. Thanks to @Metalzoid (#24).

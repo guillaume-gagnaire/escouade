@@ -34,7 +34,7 @@ Les comptes sont décrits dans [les comptes](accounts) et réglés dans la page 
 
 | Réglage | Effet | Par défaut |
 |---|---|---|
-| « Remote control pour les agents de ce projet » | Chaque agent de ce projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance tout de suite le processus `claude` de chacun, au plus 3 à la fois, et il reste lancé. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. | Désactivé |
+| « Remote control pour les agents de ce projet » | Chaque agent de ce projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance le processus `claude` des agents actifs, au plus 3 à la fois ; un agent terminé ou inactif garde sa session distante, qu’il retrouve à son prochain message. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. | Désactivé |
 
 Pour mettre un agent à part, fais un clic droit sur sa carte, puis « Désactiver le remote control ». Éteint, le réglage retire le remote control aux agents qui le tenaient de lui, sans toucher à ceux que tu as activés à la main ni à ceux que le réglage global couvre encore.
 

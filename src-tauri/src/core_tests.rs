@@ -451,7 +451,7 @@ impl Harness {
     }
 
     /// Remote Control requests received by the fake CLI started in `cwd`.
-    fn remote_requests(&self, cwd: &Path) -> Vec<Value> {
+    pub(crate) fn remote_requests(&self, cwd: &Path) -> Vec<Value> {
         self.fake_log(cwd, "control")
     }
 
@@ -5513,20 +5513,38 @@ async fn a_remote_agent_gets_its_remote_session_back_after_a_restart() {
     );
 }
 
+/// ESC-417 (issue #26): a process kept for good by each linked agent filled the memory. Idle, a
+/// linked agent stops as the others do; its next process takes the same remote session back.
 #[tokio::test]
-async fn remote_agents_stay_reachable_instead_of_being_idle_stopped() {
+async fn a_linked_agent_idle_is_stopped_and_its_next_process_takes_its_remote_session_back() {
     let h = harness("remote-idle");
-    let (p, _) = h.project(false).await;
+    let (p, r) = h.project(false).await;
     let remote = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
     let local = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
     h.core.set_remote_control(&remote, true).await.unwrap();
+    let session = h.agent(&remote).remote_session.unwrap();
     h.core.ensure_process(&local).await.unwrap();
     for id in [&remote, &local] {
         h.core.agent(id).unwrap().lock().meta.last_activity = 0;
     }
     h.core.stop_idle_processes();
-    assert!(h.alive(&remote));
+    assert!(!h.alive(&remote));
     assert!(!h.alive(&local));
+    // Its Remote Control and its remote session stay, with no process.
+    let m = h.agent(&remote);
+    assert!(m.remote_control);
+    assert_eq!(m.remote_session.as_deref(), Some(session.as_str()));
+    assert!(h.fake_log(&r, "archived").is_empty());
+
+    h.core.ensure_process(&remote).await.unwrap();
+    let req = h.remote_requests(&r).pop().unwrap();
+    assert_eq!(req["enabled"], true);
+    assert_eq!(req["reattach_session_id"], session.as_str());
+    assert!(h.core.agent(&remote).unwrap().lock().remote_linked);
+    assert_eq!(
+        h.agent(&remote).remote_session.as_deref(),
+        Some(session.as_str())
+    );
 }
 
 #[tokio::test]

@@ -81,6 +81,13 @@ mod imp {
             }
         }
 
+        /// `for_child`, of an agent's process. Nothing to note (`agentgroups`, ESC-417): the Job's
+        /// KILL_ON_JOB_CLOSE ends the agent's tree with the app, however the app ends (killed,
+        /// crashed), as the system closes the Job's last handle.
+        pub fn for_agent(child: &tokio::process::Child) -> Option<Self> {
+            Self::for_child(child)
+        }
+
         /// A job holding `child` (started by tokio) and what it starts.
         ///
         /// What `child` started before it joined the job (a `.cmd` shim's `cmd` starts its program
@@ -455,19 +462,27 @@ mod imp {
     use super::JobUsage;
     use std::time::Duration;
 
-    /// A process group, by the id of its leader.
-    pub struct Job(i32);
+    /// A process group, by the id of its leader; noted (`agentgroups`) when it is an agent's.
+    pub struct Job(i32, bool);
 
     impl Job {
         /// A job holding `child`, started by tokio after `isolate`, and what it starts.
         pub fn for_child(child: &tokio::process::Child) -> Option<Self> {
-            Some(Job(child.id()?.try_into().ok()?))
+            Some(Job(child.id()?.try_into().ok()?, false))
+        }
+
+        /// `for_child`, of an agent's process: its group is noted, so that a launch after an app
+        /// killed stops it (`agentgroups`, ESC-417).
+        pub fn for_agent(child: &tokio::process::Child) -> Option<Self> {
+            let pid: i32 = child.id()?.try_into().ok()?;
+            crate::agentgroups::note(pid);
+            Some(Job(pid, true))
         }
 
         /// A job holding `child`, started in a pseudo-console: the session it leads is also its
         /// process group.
         pub fn for_pty(child: &dyn portable_pty::Child) -> Option<Self> {
-            Some(Job(child.process_id()?.try_into().ok()?))
+            Some(Job(child.process_id()?.try_into().ok()?, false))
         }
 
         /// Kills every process of the group.
@@ -517,6 +532,9 @@ mod imp {
         fn drop(&mut self) {
             // Like KILL_ON_JOB_CLOSE: whatever the leader left running goes with it.
             self.terminate();
+            if self.1 {
+                crate::agentgroups::forget(self.0);
+            }
         }
     }
 
@@ -571,6 +589,9 @@ mod imp {
 
     impl Job {
         pub fn for_child(_child: &tokio::process::Child) -> Option<Self> {
+            None
+        }
+        pub fn for_agent(_child: &tokio::process::Child) -> Option<Self> {
             None
         }
         pub fn for_pty(_child: &dyn portable_pty::Child) -> Option<Self> {

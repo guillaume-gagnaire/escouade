@@ -7,6 +7,9 @@ import type { PrSeen } from './prnew';
 
 export type AgentStatus = 'idle' | 'running' | 'waiting' | 'done' | 'error';
 
+/** « Serveurs MCP des agents »: `all`, the user's own with Escouade's; `escouade`, Escouade's alone (Claude Code only). */
+export type AgentsMcp = 'all' | 'escouade';
+
 export interface Settings {
   claudePath: string;
   sound: boolean;
@@ -84,6 +87,10 @@ export interface Settings {
   terminalView: boolean;
   /** « Remote control pour tous les agents »: every agent of every project is reachable from claude.ai and the Claude app, unless set apart by hand (`Agent.remoteOff`). */
   remoteControlAll: boolean;
+  /** « Process gardés au plus » (ESC-417): how many live processes of agents that are not active the remote control keeps; beyond, the least recently active stop, their remote session kept. 8 by default. */
+  remoteKeepMax: number;
+  /** « Serveurs MCP des agents » (ESC-417): all of the user's (by default), or Escouade's alone, which Claude Code is told by `--strict-mcp-config`. */
+  agentsMcp: AgentsMcp;
   /** « Nouveaux projets privés »: a project added is private (`Project.private`) from the start. */
   privateProjects: boolean;
   /** « Thème »: Système (the system's, and its changes), Clair or Sombre; applied at once, the window with it (lib/appearance.ts). */

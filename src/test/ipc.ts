@@ -140,6 +140,8 @@ export const SETTINGS: Settings = {
   claudeSelfUpdate: true,
   terminalView: false,
   remoteControlAll: false,
+  remoteKeepMax: 8,
+  agentsMcp: 'all',
   privateProjects: false,
   theme: 'system',
   uiZoom: 100,

@@ -108,7 +108,8 @@ New agents’ model, effort and mode are set account by account, on the [“Acco
 | “Auto-resume after the usage limit” | “continue” is sent to the agent once the quota has reset. | On |
 | “New agents’ view” | “Escouade”: a new agent runs in Escouade’s conversation. “Harness terminal”: it runs in its harness’s own interface, in a terminal (the Claude Code view). Shown while a harness has a terminal view; the agents of a harness with none stay in Escouade’s view. | Escouade |
 | “Agents keep a task list” | Agents get Claude Code’s task list tool. | On |
-| “Stop idle agent processes after” (minutes, 0 = never) | The Claude process of an idle agent is stopped after this delay. | 30 |
+| “Stop idle agent processes after” (minutes, 0 = never) | The Claude process of an idle agent is stopped after this delay, remote control included. | 30 |
+| “Agents’ MCP servers” | “Escouade only”: Claude Code loads Escouade’s server alone (`--strict-mcp-config`), not those of your configuration, nor the project’s `.mcp.json`. | All of mine |
 
 ### Auto-resume
 
@@ -150,7 +151,7 @@ This setting, in Claude Code’s group (“Claude Code only: the other harnesses
 
 ### Remote control for all agents
 
-The switch is off by default. When on, every agent of every project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts each one’s `claude` process right away, at most 3 at a time, and it stays running: it starts with the app and is never stopped for inactivity. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. To set an agent apart, right-click its card, then “Turn off remote control”.
+The switch is off by default. When on, every agent of every project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts the `claude` process of the active agents, at most 3 at a time; a done or idle agent keeps its remote session, which it gets back with its next message. “Processes kept at most” (8 by default) caps the processes of agents that are not active the remote control keeps running. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. To set an agent apart, right-click its card, then “Turn off remote control”.
 
 The setting saves as you set it, like the others. When off, it takes remote control away from the agents that had it from this setting, without touching those you turned on by hand or those their project’s setting still covers.
 

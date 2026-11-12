@@ -108,7 +108,8 @@ Le modèle, l’effort et le mode des nouveaux agents se règlent compte par com
 | « Reprise automatique après la limite d’usage » | « continue » est envoyé à l’agent une fois le quota réinitialisé. | Activé |
 | « Vue des nouveaux agents » | « Escouade » : un nouvel agent tourne dans la conversation d’Escouade. « Terminal du harness » : il tourne dans l’interface de son harness elle-même, dans un terminal (la vue Claude Code). Affiché tant qu’un harness a une vue terminal ; les agents d’un harness qui n’en a pas restent dans la vue d’Escouade. | Escouade |
 | « Les agents tiennent une liste de tâches » | Les agents reçoivent l’outil de liste de tâches de Claude Code. | Activé |
-| « Arrêter les processus des agents inactifs après » (minutes, 0 = jamais) | Le processus Claude d’un agent inactif est arrêté après ce délai. | 30 |
+| « Arrêter les processus des agents inactifs après » (minutes, 0 = jamais) | Le processus Claude d’un agent inactif est arrêté après ce délai, remote control compris. | 30 |
+| « Serveurs MCP des agents » | « Seulement Escouade » : Claude Code ne charge que le serveur d’Escouade (`--strict-mcp-config`), ni ceux de ta configuration, ni le `.mcp.json` du projet. | Tous les miens |
 
 ### Reprise automatique
 
@@ -150,7 +151,7 @@ Ce réglage, dans le groupe de Claude Code (« Claude Code seulement : les aut
 
 ### Remote control pour tous les agents
 
-L’interrupteur est désactivé par défaut. Allumé, chaque agent de chaque projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance tout de suite le processus `claude` de chacun, au plus 3 à la fois, et il reste lancé : il démarre avec l’app et n’est jamais arrêté pour inactivité. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. Pour mettre un agent à part, fais un clic droit sur sa carte, puis « Désactiver le remote control ».
+L’interrupteur est désactivé par défaut. Allumé, chaque agent de chaque projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance le processus `claude` des agents actifs, au plus 3 à la fois ; un agent terminé ou inactif garde sa session distante, qu’il retrouve à son prochain message. « Process gardés au plus » (8 par défaut) borne les processus d’agents non actifs que le remote control garde lancés. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. Pour mettre un agent à part, fais un clic droit sur sa carte, puis « Désactiver le remote control ».
 
 Le réglage s’enregistre au geste, comme les autres. Éteint, il retire le remote control aux agents qui le tenaient de lui, sans toucher à ceux que tu as activés à la main ni à ceux que le réglage de leur projet couvre encore.
 

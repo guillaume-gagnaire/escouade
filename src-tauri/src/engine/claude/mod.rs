@@ -105,6 +105,18 @@ const MODELS: [(&str, &str); 4] = [
 /// The efforts it takes (`--effort`).
 const EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
 
+/// What the core adds to the launch its plugin describes, of an agent and of its interface (ESC-417):
+/// with « Serveurs MCP des agents : seulement Escouade », `--strict-mcp-config`, so that it loads the
+/// servers of `--mcp-config` alone (Escouade's), not those of the user's configuration, of the
+/// project's `.mcp.json` nor of the claude.ai account. Added after the plugin's arguments:
+/// `--mcp-config` takes several values, and stops at an option.
+pub fn prepare(p: &crate::plugins::harness::Preparing) -> anyhow::Result<Vec<String>> {
+    Ok(match p.agents_mcp {
+        crate::model::AgentsMcp::Escouade => vec!["--strict-mcp-config".to_string()],
+        crate::model::AgentsMcp::All => Vec::new(),
+    })
+}
+
 /// What Claude Code does, as Escouade drives it today.
 pub fn caps() -> EngineCaps {
     let mode = |id| ModeCap { id, meaning: None };

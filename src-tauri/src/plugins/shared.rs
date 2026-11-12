@@ -199,7 +199,7 @@ impl Shared {
             let program = s.program.describe();
             tr!("impossible de lancer {program}", "can’t start {program}")
         })?;
-        let job = Job::for_child(&child).map(Arc::new);
+        let job = Job::for_agent(&child).map(Arc::new);
         if job.is_none() {
             log::warn!(
                 "{} (pid {:?}) is not in a job: its tree is not killed as a whole",

@@ -187,7 +187,11 @@ Au redémarrage, chaque agent retrouve sa conversation, et aucun processus Claud
 
 ### Les processus inactifs
 
-Un processus Claude occupe de la mémoire. Quand un agent n’a rien fait depuis un certain temps, Escouade arrête donc son processus, conversation et session intactes. Le délai, 30 minutes par défaut, se règle dans Réglages › Comptes et harness : « Arrêter les processus des agents inactifs après (minutes) » ; `0` désactive l’arrêt. Cela ne concerne ni un agent qui travaille ou qui attend une réponse, ni un agent dont le remote control est activé, ni un agent qui a encore en arrière-plan une commande, une surveillance, un sous-agent ou un workflow (ils vivent dans son processus, que l’arrêt tuerait). La prochaine action sur l’agent relance son processus sur sa session.
+Un processus Claude occupe de la mémoire. Quand un agent n’a rien fait depuis un certain temps, Escouade arrête donc son processus, conversation et session intactes. Le délai, 30 minutes par défaut, se règle dans Réglages › Comptes et harness : « Arrêter les processus des agents inactifs après (minutes) » ; `0` désactive l’arrêt. Cela vaut aussi pour un agent dont le remote control est activé : sa session distante reste, et son prochain message la rattache. Cela ne concerne ni un agent qui travaille ou qui attend une réponse, ni un agent qui a encore en arrière-plan une commande, une surveillance, un sous-agent ou un workflow (ils vivent dans son processus, que l’arrêt tuerait). La prochaine action sur l’agent relance son processus sur sa session.
+
+Sous macOS et Linux, si l’app est tuée (manque de mémoire, plantage, arrêt forcé), les processus de ses agents qui tournent encore sont arrêtés à son lancement suivant. Escouade les reconnaît à leur numéro, leur heure de début et leur programme : un autre programme qui aurait repris le même numéro n’est jamais touché. Sous Windows, ils s’arrêtent avec l’app.
+
+Chaque agent Claude Code charge aussi les serveurs MCP de ta configuration. « Serveurs MCP des agents » (Réglages › Agents › Avancé) sur « Seulement Escouade » ne lui donne que celui d’Escouade (`--strict-mcp-config`) : ni ceux de ta configuration, ni le `.mcp.json` du projet, ni les connecteurs de ton compte claude.ai. Chaque agent pèse moins, mais n’a plus ces outils. Les autres harness gardent leur configuration.
 
 ### Si un agent s’arrête
 

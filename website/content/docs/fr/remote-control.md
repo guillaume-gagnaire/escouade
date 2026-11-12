@@ -39,7 +39,7 @@ Allumé, un réglage vaut pour :
 - chaque agent du projet (ou de tous les projets) qui existe déjà et n’est pas archivé ;
 - chaque nouvel agent, ceux des tickets du Kanban et les copies de « Dupliquer la conversation » compris.
 
-Escouade lance tout de suite le processus de chaque agent, au plus 3 à la fois, et il reste lancé : il démarre avec l’app et n’est jamais arrêté pour inactivité. Cela garde un processus `claude` en mémoire pour chaque agent, ce que dit la description du réglage.
+Escouade lance le processus des agents actifs (un tour en cours, une question qui attend) ou actifs depuis moins que le délai d’arrêt des inactifs, au plus 3 à la fois, les plus récemment actifs d’abord. Un agent terminé, ou inactif depuis plus longtemps, garde son remote control et sa session distante, sans processus : il n’est joignable depuis claude.ai qu’après son prochain message, qui rattache la même session, avec le même lien. Rien n’est lancé pour un harness qui ne sait pas se relier à claude.ai (Codex, par exemple), ni pour un compte que Claude Code refuse faute d’abonnement claude.ai : ce refus est retenu pour le compte jusqu’à ce que ses réglages changent ou qu’il se reconnecte.
 
 Éteint, un réglage retire le remote control aux agents qui le tenaient de lui, et leur session distante est fermée. Il ne touche ni aux agents dont tu as activé le remote control à la main, ni à ceux qu’un autre réglage couvre encore : si tu éteins le réglage global mais que celui d’un projet est allumé, les agents de ce projet gardent le leur, grâce au projet.
 
@@ -81,12 +81,13 @@ Claude, hors d’Escouade ou dans un agent, peut lire cet état par le [serveur 
 ## Combien de temps l’agent reste joignable
 
 - **Tant qu’Escouade tourne.** L’agent reste joignable quand tu fermes la fenêtre : elle se cache et l’app continue dans la zone de notification (voir [les agents](managing-agents#fermer-la-fenetre-quitter-et-redemarrer)). Si tu quittes l’app avec « Quitter », les agents s’arrêtent et ne sont plus joignables.
-- **Sans arrêt pour inactivité.** Escouade arrête normalement le processus d’un agent inactif au bout d’un délai (30 minutes par défaut) ; un agent dont le remote control est activé garde le sien, pour rester joignable.
-- **Après un redémarrage.** Escouade relance les agents dont le remote control est activé, à la main ou par un réglage, en même temps que l’app et rattache leur session à distance précédente : le lien que tu avais ouvert sur ton téléphone reste valide, et la session garde son nom `projet · agent`. Si cette session a disparu entre-temps, une nouvelle est ouverte, avec un nouveau lien. Si la liaison échoue au démarrage, un avis « Remote control indisponible : » suivi de la cause s’affiche dans la conversation de l’agent. Cet avis n’est dit qu’une fois par agent et par lancement d’Escouade, jusqu’à ce qu’un lien réussisse ou que tu rallumes le remote control à la main.
+- **Jusqu’à son arrêt pour inactivité.** Le processus d’un agent relié s’arrête comme celui d’un autre au bout du délai des inactifs (30 minutes par défaut), sauf s’il tient un travail de fond. Sa session distante reste : son prochain message la rattache.
+- **Dans la limite des processus gardés.** Le remote control garde au plus « Process gardés au plus » processus d’agents non actifs (Réglages › Agents, 8 par défaut) ; au-delà, les moins récemment actifs s’arrêtent d’abord, leur session gardée.
+- **Après un redémarrage.** Escouade relance, en même temps que l’app, les agents actifs dont le remote control est activé, à la main ou par un réglage, et rattache leur session à distance précédente : le lien que tu avais ouvert sur ton téléphone reste valide, et la session garde son nom `projet · agent`. Si cette session a disparu entre-temps, une nouvelle est ouverte, avec un nouveau lien. Si la liaison échoue au démarrage, un avis « Remote control indisponible : » suivi de la cause s’affiche dans la conversation de l’agent. Cet avis n’est dit qu’une fois par agent et par lancement d’Escouade, jusqu’à ce qu’un lien réussisse ou que tu rallumes le remote control à la main.
 
 ## Désactiver le remote control
 
-Fais un clic droit sur la carte de l’agent, puis « Désactiver le remote control ». Escouade ferme la session à distance, l’icône disparaît, et l’agent redevient un agent ordinaire (que l’arrêt pour inactivité peut de nouveau arrêter), mis à part (voir ci-dessous). Archiver un agent ou le supprimer coupe aussi son remote control ; restaurer un agent archivé le lui rend si un réglage le couvre (pas s’il l’avait activé à la main).
+Fais un clic droit sur la carte de l’agent, puis « Désactiver le remote control ». Escouade ferme la session à distance, l’icône disparaît, et l’agent redevient un agent ordinaire, mis à part (voir ci-dessous). Archiver un agent ou le supprimer coupe aussi son remote control ; restaurer un agent archivé le lui rend si un réglage le couvre (pas s’il l’avait activé à la main).
 
 Couper le remote control, par le clic droit, en éteignant un réglage, en archivant l’agent ou en le supprimant, ferme la session à distance : elle est archivée sur claude.ai.
 
