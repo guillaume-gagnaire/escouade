@@ -546,7 +546,11 @@ test('the agent’s menu reads as the preview’s', async ({ app }) => {
   await expect(menu).toBeVisible();
   await compare(page, 'agent-menu', async (preview, where) => {
     const pv = preview.locator('#agent-menu');
-    expect.soft(await lookBut(menu, 'width', 'height'), `the menu, ${where}`).toEqual(await lookBut(pv, 'width', 'height'));
+    expect
+      .soft(await lookBut(menu, 'width', 'height', 'padding'), `the menu, ${where}`)
+      .toEqual(await lookBut(pv, 'width', 'height', 'padding'));
+    // Its padding is its list's, which scrolls inside it (#24): the preview's menu has it itself.
+    expect.soft((await look(menu.locator('.items').first())).padding, `the menu's padding, ${where}`).toBe((await look(pv)).padding);
     const item = menu.getByRole('menuitem', { name: /^Renommer/ });
     const pitem = pv.locator('.mi').first();
     expect.soft(await lookBut(item, 'width'), `an entry, ${where}`).toEqual(await lookBut(pitem, 'width'));

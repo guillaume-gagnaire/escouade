@@ -9,6 +9,7 @@ Demande de l'utilisateur (2026-11-11) : « découpe le crate de l'app ». La com
 - **Fait dans ce ticket** : quatre crates du workspace, sans changement de comportement : `escouade-base` (les langues du moment, les gardes de chemin, la ligne visible), `escouade-voice-local` (micro, whisper.cpp, VAD, Piper, eSpeak NG, ONNX Runtime), `escouade-vectors` (découpe, embeddings, index SQLite), `escouade-plan` (l'avancée d'un agent et ses fichiers de plan). 13 600 lignes sortent du crate (4 %).
 - **Le gain est à la mesure des lignes sorties** : − 3 % sur « lib (test) » (128 → 124 s) et − 6 % sur la lib (58 → 55 s) sur le poste ; pic mémoire de « lib (test) » de 9,0 à 8,8 Go (§ 3) ; nul à 3 jobs, où le travail total ne baisse pas. Une recompilation après un changement local ne change pas (≈ 30 s) : un changement dans une crate sortie recompile aussi l'app.
 - **La suite** : les gros morceaux (hôte des plugins, serveur MCP, harness) sont pris dans le cycle `core` ↔ `model` ↔ le reste. Il faut d'abord sortir les types de données (`escouade-model`), puis l'hôte des plugins (≈ 40 000 lignes avec ses tests, le meilleur rapport), puis le serveur MCP. Chaque morceau a son ticket (§ 5). Deux leviers plus simples, à mesurer sur la CI, réduisent le travail ou la mémoire tout de suite (§ 6).
+- **Les leviers de la CI (ESC-409, § 8)** : gardés, les tests sans informations de débogage (les trois OS : Linux − 14 % sur l'archive, le Mac − 4 %, Windows =) et la lib du Mac compilée avant ses tests (son archive de 13 min 11 à 11 min 52, son job de 16 min 01 à 14 min 13 : un seul run, à confirmer par ceux de `main`). Écarté : l'archive du Mac compilée sur un Mac Intel pour Apple Silicon (job de 24 min 26, cache chaud : les runners Intel sont lents).
 
 ## 1. Les mesures avant
 
@@ -119,6 +120,8 @@ Ils réduisent le travail total ou la mémoire, ce que le découpage ne fait pas
 1. **Les tests sans informations de débogage** (`CARGO_PROFILE_DEV_DEBUG=0` sur l'étape de l'archive) : à 3 jobs, 136 → 124 s (− 9 %), pic mémoire de « lib (test) » de 8,8 à 8,1 Go. Un échec garde son fichier et sa ligne (le message de panique les porte) ; une trace d'appels les perd.
 2. **Le Mac sans les deux grosses compilations à la fois** : la lib (≈ 4,3 Go) et « lib (test) » (≈ 8,8 Go) compilent en même temps sur 7 Go. Les compiler l'une après l'autre (`cargo build --lib` puis l'archive) ou sans la lib (`--lib` seul pour `escouade`, si les binaires qu'il faut à côté des tests, `escouade-hook` et `fake_codex`, sortent dans une crate à eux : à 3 jobs, 136 → 130 s ici) évite la pagination. C'est le seul levier qui vise directement les 12 à 27 min du Mac.
 
+ESC-409 les a préparés, avec un troisième (l'archive du Mac compilée sur un Mac Intel) : § 8.
+
 ## 7. Pour découper un morceau
 
 - Une crate dans `crates/`, `workspace = "../../src-tauri"`, `publish = false`, ajoutée à `members` **et** à `default-members` de `src-tauri/Cargo.toml` (l'archive nextest, clippy et `cargo build --tests` ne prennent que les seconds).
@@ -129,3 +132,77 @@ Ils réduisent le travail total ou la mémoire, ce que le découpage ne fait pas
 - Les tests suivent leur code ; ceux qui démarrent un `core` restent dans l'app.
 - Les deux verrous : `cargo metadata --locked` dans `src-tauri` **et** dans `plugins`.
 - Mesurer dos à dos, même charge (`git checkout` de la base, `cargo clean -p` des crates du workspace, `--timings`), jamais contre une mesure d'un autre moment : le poste varie de ± 10 %.
+
+## 8. Les leviers de la CI (ESC-409)
+
+Trois leviers, un commit chacun, poussés et mesurés un à la fois sur la CI (deux CI à la fois se gênent). Gardés : 1 et 2. Écarté : 3 (§ 8.3), que la branche retire.
+
+| Ordre | Commit | Levier | OS touchés |
+|---|---|---|---|
+| 1 | `ci(tests): l'archive nextest sans informations de débogage…` | `CARGO_PROFILE_DEV_DEBUG=0` sur l'étape de l'archive | les trois |
+| 2 | `ci(macos): la lib de l'app compilée seule, avant ses tests` | `cargo test --no-run --bins` avant l'archive, sur le Mac | macOS |
+| 3 (écarté) | `ci(macos): l'archive des tests compilée sur un Mac Intel…` | `macos-build` sur `macos-15-intel`, `--target aarch64-apple-darwin` ; retire l'étape du levier 2 | macOS |
+
+### 8.1 Les mesures locales
+
+Sur le poste (Windows, 32 cœurs, d'autres worktrees qui compilent à côté), à 3 jobs (`CARGO_BUILD_JOBS=3`, comme un runner macOS), `CARGO_INCREMENTAL=0`, dépendances en cache, les crates du workspace à froid (`cargo clean -p`), `cargo nextest archive --profile ci`. Deux passes par cas, en alternance. La mémoire est le pic de l'ensemble de travail des `rustc` de ce worktree, échantillonné toutes les 0,5 s.
+
+| Cas | Passe 1 | Passe 2 | Moyenne | Pic de « lib (test) » | Pic des `rustc` ensemble |
+|---|---|---|---|---|---|
+| avant (`line-tables-only`) | 170 s | 155 s | 162 s | 8,4 à 8,6 Go | 9,1 Go |
+| levier 1 (`DEBUG=0`) | 148 s | 138 s | **143 s (− 12 %)** | 7,9 à 8,2 Go | 8,7 Go |
+| levier 2 (la lib d'abord, `line-tables-only`) | 66 + 133 s | 66 + 143 s | 205 s (+ 26 %) | 8,6 Go | 8,6 Go |
+| leviers 1 et 2 | 61 + 123 s | 62 + 130 s | 188 s (+ 31 % sur le levier 1 seul) | 7,9 à 8,1 Go | 7,9 à 8,1 Go |
+
+Ce qu'elles disent :
+
+- **Le levier 1 gagne partout** : − 12 % de temps et ≈ − 0,5 Go, sans rien changer d'autre. Les dépendances gardent leurs tables de lignes (`[profile.dev.package."*"]`), donc rien ne se recompile hors du workspace.
+- **Le levier 2 gagne peu de mémoire** : la lib finit pendant le front-end de « lib (test) », avant son pic. Les deux ensemble montent à 9,1 Go, à peine plus que « lib (test) » seule (8,6 Go). En série, il perd ≈ 40 s ici (sur 32 cœurs, sans pagination). Sur le Mac il retire ≈ 0,5 Go à une compilation qui dépasse 7 Go de toute façon : il ne gagnera que si ce demi-giga fait la différence entre paginer un peu et paginer beaucoup. À mesurer, sans trop en attendre.
+- **Le seul levier qui fait tenir la mémoire est le 3** : « lib (test) » seule, même sans débogage, prend 7,9 à 8,2 Go, au-delà des 7 Go d'un runner macOS arm64. Le levier 3 ne se mesure pas ici (il faut un Mac) ; sur la CI, la lenteur des runners Intel l'emporte sur la mémoire gagnée (§ 8.3).
+
+`cargo build --lib` ne convient pas pour le levier 2 : l'archive recompile alors la lib (vu ici), parce qu'elle la veut au profil `test` et avec les fonctionnalités que les dev-dependencies ajoutent. `cargo test --no-run --bins`, sur les mêmes paquets que l'archive, construit exactement la lib qu'elle prend (vérifié : l'archive ne recompile ensuite que « lib (test) » et les binaires).
+
+### 8.2 Les mesures avant, sur la CI
+
+Les cinq derniers runs de `main` (11 et 12 novembre), le temps de l'étape `Rust tests, built once (nextest archive)` et celui du job `… (build)` :
+
+| Run (commit) | macOS, archive / job | Windows, archive / job | Linux, archive / job |
+|---|---|---|---|
+| 5f4f97b3 | 11 min 50 / 14 min 18 | 6 min 49 / 14 min 53 | 3 min 32 / 6 min 38 |
+| af64aa78 | 20 min 45 / 24 min 27 | 6 min 47 / 15 min 03 | 3 min 12 / 6 min 37 |
+| a9326dfd | 14 min 21 / 18 min 05 | 5 min 40 / 13 min 07 | 2 min 41 / 5 min 48 |
+| 449064f6 (ESC-408) | 16 min 00 / 20 min 29 | 7 min 14 / 19 min 56 | 3 min 22 / 6 min 57 |
+| a182e670 (la base des leviers) | 13 min 43 / 17 min 04 | 6 min 32 / 14 min 55 | 2 min 56 / 6 min 19 |
+
+Le Mac varie du simple au double d'un run à l'autre (12 à 21 min pour le même travail) : c'est la signature de la pagination. Sous Windows et Linux, l'archive est stable à ± 15 %.
+
+### 8.3 Les mesures après, sur la CI
+
+Un run à la fois, depuis la base a182e670 (poussés et lancés par le chef) :
+
+| Run (commit) | macOS, archive / job | Windows, archive / job | Linux, archive / job | Gardé ? |
+|---|---|---|---|---|
+| levier 1 (c6cccb32, run 43158121992, vert) | 13 min 11 / 16 min 01 (− 4 % / − 6 %) | 6 min 32 / 14 min 51 (=) | 2 min 32 / 5 min 51 (− 14 % / − 7 %) | oui : il ne perd nulle part |
+| leviers 1 et 2 (63b812b4, run 43161522265, vert) | 1 min 41 (la lib) + 10 min 11 = 11 min 52 / 14 min 13 (− 10 % / − 11 % sur le levier 1) | 4 min 21 / 11 min 16 (levier 2 sans effet ici : du bruit) | 3 min 09 / 6 min 14 (idem) | **oui** |
+| leviers 1 et 3, 1er essai (b1822ac2, run 43164641510, annulé) | 24 min 00 / 31 min 59, **cache froid** (clé `macos-intel` neuve : toutes les dépendances compilées, 3 min 24 pour sauver le cache) ; tests Apple Silicon : 292 échecs, délai de 40 min dépassé | 6 min 26 / 15 min 23 | 2 min 35 / 5 min 48 | refait avec 64444fcc |
+| leviers 1 et 3, 2e essai (64444fcc, run 43173620742, cache chaud, annulé pendant les tests du Mac) | 15 min 04 / 24 min 26 (restauration du cache 2 min 24, modules des plugins 5 min 20, contre 1 min 08 sur Apple Silicon) | 5 min 11 / 13 min 03 | 2 min 33 / 6 min 09 | **non** : + 10 min sur le job du Mac |
+
+Le levier 1 gagne sous Linux ce qu'il gagnait ici ; sous Windows rien ; sur le Mac 30 s, dans le bruit d'un Mac qui varie de 12 à 21 min : la pagination, que la mémoire gagnée (≈ 0,5 Go) ne suffit pas à éviter, domine toujours.
+
+Le levier 2 gagne sur le Mac plus que les mesures d'ici ne le laissaient attendre (un run seul : à confirmer par les suivants de `main`) : sans la lib en même temps, « lib (test) » pagine moins. Sous Windows et Linux, qu'il ne touche pas, les écarts d'un run à l'autre (± 2 min sous Windows) disent le bruit.
+
+Le premier essai du levier 3 a montré deux choses. L'archive se compile sur l'Intel pour Apple Silicon, et ses binaires tournent sur les runners arm64 (927 tests passés avant le délai). Mais avec `--target`, les tests sont dans `target/aarch64-apple-darwin/debug` et cherchent les modules des plugins un niveau au-dessus (`app_dir/../plugins-wasm`, `plugins/builtin.rs`) : ils n'y étaient pas, le faux Claude ne démarrait pas, et chaque échec retenté deux fois a fait dépasser les 40 min. 64444fcc (le chef ; 9022e358 ici, équivalent) les copie là et les met dans l'archive (`.config/nextest.toml`) ; la même disposition, simulée sous Windows avec `--target x86_64-pc-windows-msvc`, passe ses 4 554 tests. Le 2e essai doit partir **sur la même branche** (`ci/esc-409-levier-3`) : GitHub ne donne à une branche que ses caches et ceux de `main`, et le cache `macos-intel` n'existe que là.
+
+Le second essai du levier 3, cache chaud, perd : le runner Intel n'a pas attendu (parti avec les autres jobs), mais tout y est plus lent. L'archive y prend 15 min 04 (11 min 52 lib comprise sur Apple Silicon), les modules des plugins 5 min 20 (1 min 08), la restauration du cache 2 min 24 ; le job 24 min 26 contre 14 min 13. La mémoire gagnée ne rattrape pas des cœurs Intel plus lents. Le run a été annulé pendant les tests du Mac pour libérer les runners : on ne sait pas si l'archive croisée passe tous ses tests (au 1er essai, 927 étaient passés avant le délai). Le levier est écarté ; la branche revient à `macos-latest`, sans `--target`, sans la copie des modules ni la ligne `aarch64-apple-darwin/plugins-wasm` de `.config/nextest.toml`.
+
+Un seul run par levier : les prochains runs de `main` diront si le levier 2 tient, le Mac variant de 12 à 21 min d'un run à l'autre.
+
+### 8.4 Ce que chaque levier change à ce qu'un échec montre
+
+- **Levier 1.** Un test qui échoue montre son message de panique avec son fichier, sa ligne et sa colonne (`panicked at src/x.rs:12:5`) : ils viennent de `Location`, compilé dans le binaire, pas des informations de débogage. La sortie de nextest et les annotations (`scripts/nextest-annotations.mjs`) ne changent donc pas. Ce qui se perd : les fichiers et lignes d'une trace d'appels (`RUST_BACKTRACE=1`). Sans informations de débogage, cargo retire aussi celles des dépendances au lien (`strip = "debuginfo"` par défaut) : sous Linux et macOS une trace garde les noms des fonctions, sous Windows (pas de PDB) elle n'en a plus. La CI ne demande jamais de trace (aucun `RUST_BACKTRACE` dans les workflows ni dans `.config/nextest.toml`) : ce qu'un échec y montre ne change pas, d'où le levier sans question à l'utilisateur. Pour une trace, on relance le test en local, avec le profil de développement.
+- **Levier 2.** Rien : mêmes binaires.
+- **Levier 3 (écarté).** Rien de ce que vérifient les tests : les mêmes binaires pour Apple Silicon (`aarch64-apple-darwin`), exécutés sur les mêmes runners Apple Silicon (`macos-rust`). Ce qui change : les scripts de build et les macros procédurales tournent sur Intel (whisper.cpp et ggml compilés par cmake pour arm64 depuis un Intel, `GGML_NATIVE=OFF` de `.cargo/config.toml` les garde du processeur de la machine ; ONNX Runtime téléchargé pour la cible) ; le cache Rust de ce job est à lui (`macos-intel`), le bundle garde `macos`. Ce que la CI y perd : la dépendance à une image que GitHub retire (`macos-15-intel`, sa dernière image Intel, jusqu'à l'automne 2027, août selon certaines sources) et des runners Intel moins nombreux (une attente possible). Tout faire sur l'Intel, tests compris, perdrait davantage : les tests ne tourneraient plus sur Apple Silicon, la machine des utilisateurs (ggml en NEON et Metal, ONNX Runtime lié en statique, que l'Intel ne prend pas : il charge la bibliothèque de Microsoft) ; écarté.
+
+### 8.5 Écarté : l'archive sans la lib non-test
+
+Sortir `escouade-hook` et `examples/fake_codex` dans une crate à eux (et `test = false` sur les autres binaires et exemples de l'app) retirerait la lib de l'archive. Mais Tauri ne met dans le paquet que les binaires du paquet de l'app : `escouade-hook` deviendrait un `externalBin` (nommé par cible, `scripts/universal-hook.sh` et `scripts/windows-signing.mjs` à revoir, le Release à refaire). Pour un gain que les mesures du § 8.1 bornent : la lib ne coûte que ≈ 0,5 Go au pic, et ≈ 60 s de CPU sur 3 cœurs. Le levier 2, qui compile la lib à part, en prend déjà l'essentiel sur le Mac, sans toucher au paquet.

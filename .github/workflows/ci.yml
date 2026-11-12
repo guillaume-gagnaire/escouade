@@ -331,10 +331,11 @@ jobs:
       # the two windows-rust runners.
       - name: Rust tests, built once (nextest archive)
         working-directory: src-tauri
-        # The app's own crates with line tables only, as their dependencies (src-tauri/Cargo.toml): a failure keeps its
-        # file and line. Their full debug information was much of the 12 to 18 min the tests took to compile.
+        # The app's own crates without debug information (ESC-409, docs/CRATES.md § 8): less work and ≈ 0.5 GB less memory
+        # for the tests' compilation. A failure keeps its file and line (the panic's message carries them, not the debug
+        # information); only a backtrace, which the CI never asks for (no RUST_BACKTRACE), would lose its files and lines.
         env:
-          CARGO_PROFILE_DEV_DEBUG: line-tables-only
+          CARGO_PROFILE_DEV_DEBUG: 0
         run: cargo nextest archive --profile ci --archive-file ../nextest-windows.tar.zst
 
       - name: Build the app for end-to-end tests
@@ -525,10 +526,11 @@ jobs:
       # the two linux-rust runners.
       - name: Rust tests, built once (nextest archive)
         working-directory: src-tauri
-        # The app's own crates with line tables only, as their dependencies (src-tauri/Cargo.toml): a failure keeps its
-        # file and line.
+        # The app's own crates without debug information (ESC-409, docs/CRATES.md § 8): less work and ≈ 0.5 GB less memory
+        # for the tests' compilation. A failure keeps its file and line (the panic's message carries them, not the debug
+        # information); only a backtrace, which the CI never asks for (no RUST_BACKTRACE), would lose its files and lines.
         env:
-          CARGO_PROFILE_DEV_DEBUG: line-tables-only
+          CARGO_PROFILE_DEV_DEBUG: 0
         run: cargo nextest archive --profile ci --archive-file ../nextest-linux.tar.zst
 
       - name: Upload the Rust tests
@@ -750,14 +752,25 @@ jobs:
       - name: The modules of the plugins, which the tests play
         run: sh scripts/plugins-wasm.sh
 
+      # The app's library (≈ 4 GB to compile) before its tests (≈ 8 GB), not beside them: the tests alone go past the
+      # runner's 7 GB, the library beside them made it page more (ESC-409, docs/CRATES.md § 8: the archive went from
+      # 13 min 11 to 1 min 41 + 10 min 11 on one run). `cargo test --no-run --bins` builds the library
+      # as the archive needs it (the test profile, the dev-dependencies' features): the archive then takes it as built.
+      - name: The app's library first, alone (its tests' compilation then has the memory)
+        working-directory: src-tauri
+        env:
+          CARGO_PROFILE_DEV_DEBUG: 0
+        run: cargo test --no-run --bins
+
       # The test binaries, with what they run beside them (escouade-hook, examples/fake_codex): built once, run by
       # the three macos-rust runners (two took 11 to 12 min each).
       - name: Rust tests, built once (nextest archive)
         working-directory: src-tauri
-        # The app's own crates with line tables only, as their dependencies (src-tauri/Cargo.toml): a failure keeps its
-        # file and line. Their full debug information was much of the 12 to 18 min the tests took to compile.
+        # The app's own crates without debug information (ESC-409, docs/CRATES.md § 8): less work and ≈ 0.5 GB less memory
+        # for the tests' compilation. A failure keeps its file and line (the panic's message carries them, not the debug
+        # information); only a backtrace, which the CI never asks for (no RUST_BACKTRACE), would lose its files and lines.
         env:
-          CARGO_PROFILE_DEV_DEBUG: line-tables-only
+          CARGO_PROFILE_DEV_DEBUG: 0
         run: cargo nextest archive --profile ci --archive-file ../nextest-macos.tar.zst
 
       - name: Upload the Rust tests
