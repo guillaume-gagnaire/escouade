@@ -143,9 +143,9 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-kit"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a35c6c15ec7f906450439f1a7f8c9c71a6a83fd4fe0cf7f763cb3293b4001eb6"
+checksum = "31c10ddf1bd942df9f3d4a2aff16bda11096ae939ab338b551eae463be658d5b"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -160,7 +160,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-opencode"
-version = "2.2.3"
+version = "2.2.4"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -174,9 +174,9 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-protocol"
-version = "0.1.0"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f13740d119142f6f9a8ff54c8932bc96b40e8b67cb907ef191c4e8c35b1fdd7"
+checksum = "231d0e1e9409841e4d47285f2624e50dafea15403cca1f5ed7f444ba890e2fff"
 dependencies = [
  "serde",
  "serde_json",

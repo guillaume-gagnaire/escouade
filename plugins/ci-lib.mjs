@@ -9,20 +9,10 @@ export const MANIFEST = 'escouade-plugin.json';
  * The plugins in `run.wasm` that stand on a version of a crate not on crates.io yet, and that version. Without it they
  * cannot have their Cargo.lock, so neither `escouade-plugin validate` nor `build` takes them: `ci.mjs` skips both and plays
  * the module of `scripts/plugins-wasm.sh`, compiled against `crates/`. Out of this list once the crate is published, their
- * Cargo.lock written again (`sh scripts/plugin-lock.sh <name>`). ESC-359: `terminal/launch`, `account/*` and the
- * interfaces of ACP's harnesses.
+ * Cargo.lock written again (`sh scripts/plugin-lock.sh <name>`). Empty since escouade-plugin-protocol 0.1.2 and
+ * escouade-acp 0.1.4 (ESC-359, ESC-416) went to crates.io on 2026-11-12.
  */
-export const AWAITING_PUBLICATION = {
-  acp: 'escouade-acp 0.1.4',
-  antigravity: 'escouade-plugin-protocol 0.1.2',
-  claude: 'escouade-plugin-protocol 0.1.2',
-  codex: 'escouade-plugin-protocol 0.1.2',
-  copilot: 'escouade-plugin-protocol 0.1.2',
-  cursor: 'escouade-acp 0.1.4',
-  gemini: 'escouade-acp 0.1.4',
-  mistral: 'escouade-acp 0.1.4',
-  opencode: 'escouade-plugin-protocol 0.1.2',
-};
+export const AWAITING_PUBLICATION = {};
 
 /**
  * What judges or builds every plugin: a change there runs them all. `crates/` is the kit and the bench's library, the
