@@ -3,7 +3,7 @@ title: "Barre latérale"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","src-tauri/src/core.rs","src-tauri/src/engine/claude/mod.rs","src-tauri/src/worktrees.rs","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","https://github.com/guillaume-gagnaire/escouade/issues/26"]
 tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390","ESC-396","ESC-398","ESC-403","ESC-417"]
-decisions: [129,133,"le-remote-control-ne-garde-plus-un-proce"]
+decisions: [129,133,147]
 compared: null
 ---
 
