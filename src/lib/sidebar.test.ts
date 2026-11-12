@@ -10,6 +10,7 @@ import {
   listStep,
   listTarget,
   foldedCards,
+  folderAsks,
   shownAgents,
   sidebarItems,
 } from './sidebar';
@@ -83,6 +84,21 @@ describe('the order of the sidebar', () => {
       },
     );
     expect([f.running, f.waiting]).toEqual([2, 1]);
+  });
+
+  it('the asks of a folder are its agents that wait and were not seen, its principal included', () => {
+    const f = folderItem(
+      [
+        agent({ id: 'p', status: 'waiting' }),
+        agent({ id: 'seen', status: 'waiting' }),
+        agent({ id: 'done', status: 'done' }),
+        agent({ id: 'new', status: 'waiting' }),
+      ],
+      { principal: 'p' },
+    );
+    // `seen` was opened (its look taken back), `done` needs a look but asks nothing.
+    expect(folderAsks(f, { p: true, done: true, new: true })).toBe(2);
+    expect(folderAsks(f, {})).toBe(0);
   });
 });
 
