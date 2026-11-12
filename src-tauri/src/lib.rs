@@ -147,8 +147,6 @@ mod plan_tests;
 mod planfiles;
 #[cfg(test)]
 mod planfiles_tests;
-#[cfg(test)]
-mod remote_tests;
 mod plugins;
 #[cfg(test)]
 mod plugins_accounts_tests;
@@ -229,6 +227,8 @@ mod prview;
 #[cfg(test)]
 mod prview_tests;
 mod pty;
+#[cfg(test)]
+mod remote_tests;
 mod repos;
 #[cfg(test)]
 mod repos_tests;
