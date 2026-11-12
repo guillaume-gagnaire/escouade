@@ -1,0 +1,13 @@
+# The third-party actions of the workflows are pinned by commit (uses: owner/action@<sha> # vX.Y.Z): Dependabot proposes
+# the new commit and its version in the comment (audit SEC-10).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: 'chore(ci)'
+    groups:
+      github-actions:
+        patterns: ['*']
