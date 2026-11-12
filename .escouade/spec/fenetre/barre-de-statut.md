@@ -2,8 +2,8 @@
 title: "Barre de statut"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-312","ESC-382","ESC-398"]
-decisions: [20,24]
+tickets: ["ESC-312","ESC-382","ESC-398","ESC-421"]
+decisions: [20,24,"les-economies-du-cache-dans-la-barre-d-e"]
 compared: "2026-10-31T17:25:36+01:00"
 gaps: [{"text":"La spec dit que la barre de statut écrit « 5h <barre> reset 3h01 → 64 % » et que le pourcentage n'y est pas écrit, car il est dans l'infobulle. Le code écrit le pourcentage à côté de chaque jauge (`.v.pct`) et n'y écrit ni « reset » ni le temps restant. La remise à zéro n'apparaît que dans l'infobulle.","code":["src/components/QuotaMeter.svelte"]},{"text":"La spec dit que le nom du compte en cours précède les quotas (« Pro · 5h … »), coupé à 160 px, et que le groupe est un bouton seulement s'il y a plusieurs comptes. Le code écrit devant les jauges le nom court du harness (`g.short`), pas celui du compte. Le groupe est toujours un bouton, même avec un seul compte, et le libellé « Quotas par compte (compte en cours : …) » ne dépend du nombre de comptes que par le nom.","code":["src/components/StatusBar.svelte"]},{"text":"La spec dit que l'infobulle du groupe des quotas ne s'affiche qu'au focus clavier et que Échap la retire. Le code la lie au bouton avec `use:tip`, toujours active sauf panneau ouvert, et ne la restreint pas au focus clavier.","code":["src/components/StatusBar.svelte"]},{"text":"La spec dit que la barre de statut contient aussi ⚙ pour ouvrir les réglages, après ♪. Le code n'a que le bouton du son à cet endroit. Un commentaire indique que les réglages sont en bas de la barre des projets.","code":["src/components/StatusBar.svelte"]},{"text":"La spec place la mise à jour après la branche (… │ coût du jour │ branche │ mise à jour │ ♪). Le code l'affiche avant les quotas, au début du groupe de droite.","code":["src/components/StatusBar.svelte"]},{"text":"La spec dit que ↓ prend la couleur d'attente quand il y a des commits à tirer. Le code donne à ↑ et à ↓ la même classe `.ahead.some`, de couleur --soft, sans couleur d'attente pour ↓.","code":["src/components/StatusBar.svelte"]}]
 ---
@@ -83,12 +83,14 @@ De gauche à droite : actifs · en attente · terminés │ quotas │ coût du 
 ## Réglages
 
 - Réglages › Comptes et harness › Avancé › « Projection des quotas » : « Au-delà de 80 % » (défaut), « Toujours », « Jamais ». Enregistré tout de suite, comme tout réglage.
+- Réglages › Comptes et harness › Avancé › « Économies du cache dans la barre d'état » (ESC-421) : un interrupteur, **éteint par défaut**, y compris pour une installation d'avant ce réglage. Allumé, la barre écrit l'économie du cache du jour (ci-dessous). Enregistré tout de suite ; la recherche des réglages le trouve (« cache », « barre d'état »).
 - Les seuils « Pause du pilote auto au-delà du quota » et « Changer de compte à », côte à côte dans Réglages › Comptes et harness › « Quand un quota est épuisé » : voir *Comptes*.
 
 ## Limites
 
 - Les harness sans quota lisible (Cursor CLI, Mistral Vibe, Antigravity CLI, Gemini CLI) n'ont pas de jauge (voir *Harness*).
 
-### Économie du cache (ESC-398)
+### Économie du cache (ESC-398, ESC-421)
 
-- Après le coût du jour, « Cache aujourd'hui : ≈ 3,10 $ économisés » : ce que le cache de tous les agents a fait économiser depuis minuit, heure locale (voir *Température du cache*). Sous 1240 px, « Cache ≈ 3,10 $ », la phrase en infobulle. Absente tant que le cache n'a rien économisé.
+- Seulement si « Économies du cache dans la barre d'état » est allumé (éteint par défaut) : après le coût du jour, « Cache aujourd'hui : ≈ 3,10 $ économisés » : ce que le cache de tous les agents a fait économiser depuis minuit, heure locale (voir *Température du cache*). Sous 1240 px, « Cache ≈ 3,10 $ », la phrase en infobulle. Absente tant que le cache n'a rien économisé.
+- Le réglage ne touche que la barre : la température du cache sur les cartes et dans l'en-tête, et « Économisé sur ce tour » dans le détail d'un tour, restent.

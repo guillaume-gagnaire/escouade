@@ -14,7 +14,7 @@ The bar sits at the bottom of the window. From left to right:
 | “4 Claude · 1.2 GB · 6% CPU” | The running Claude processes, with the memory and processor they take. Missing when none runs. The tooltip lists each agent, the one using the most memory first. |
 | Quotas | The two quota windows of the current account: see the next section. |
 | “Today $4.12” | What the agents have cost since midnight: see the “Cost” section. |
-| “Cache today: ≈ $3.10 saved” | What the agents’ cache saved since midnight: see the “Cache temperature” section. Missing while it saved nothing. |
+| “Cache today: ≈ $3.10 saved” | What the agents’ cache saved since midnight: see the “Cache temperature” section. Hidden by default: Settings › Accounts and harnesses › Advanced › “Cache savings in the status bar” shows it. Missing while it saved nothing. |
 | “⎇ main ↑1 ↓3” | The branch of the project on screen, when it is a git repository. A click opens the branch picker ([branches](branches)). |
 | On the right | The state of an [update](updates), “♪ On” or “♪ Off” for the sound of [notifications](notifications), and ⚙ for the settings (`Ctrl+,`). |
 

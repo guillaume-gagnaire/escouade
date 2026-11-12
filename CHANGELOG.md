@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- La barre d’état ne montre plus par défaut ce que le cache a fait économiser dans la journée : le réglage « Économies du cache dans la barre d’état », dans Comptes et harness › Avancé, le remet. La température du cache des agents reste affichée.
 - Dans un dossier d’agents, la pastille « en attente » s’efface quand on ouvre l’agent qui attend, comme sa carte cesse de clignoter ; il reste jaune en tête de son dossier. Merci à @Metalzoid (#27).
 - La page d’un lancement s’ouvre à côté de la conversation, ou en dessous, comme un terminal : par le menu « … » de sa barre, le menu de l’agent ou en glissant le bouton « Page ». Elle se redimensionne et se ferme comme un volet, sans perdre son adresse ni sa largeur. Ses boutons, son adresse et son menu sont désormais ceux du reste de l’app.
 - Le remote control pour tous les agents ne lance plus un process par agent : seuls les agents actifs démarrent, et un agent terminé n’est joignable depuis claude.ai qu’après son prochain message, qui retrouve sa session. Le remote control garde au plus 8 process d’agents non actifs (réglable), et Escouade ne lance plus rien pour un harness ou un compte qui ne peut pas s’y relier. Merci à @Chapercher (#26).

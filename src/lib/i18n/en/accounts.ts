@@ -295,6 +295,9 @@ export default defineZone('accounts', {
     projectionAlert: 'Past 80%',
     projectionAlways: 'Always',
     projectionOff: 'Never',
+    cacheSavings: 'Cache savings in the status bar',
+    cacheSavingsDesc:
+      'After the day’s cost, what the agents’ cache saved since midnight. The cache temperature on the cards and the savings of each turn stay shown.',
   },
 
   engineOrder: {

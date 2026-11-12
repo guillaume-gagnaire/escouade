@@ -109,6 +109,8 @@ export interface Settings {
    * 2.0.2 (a boolean) too.
    */
   quotaProjection: QuotaProjection;
+  /** « Économies du cache dans la barre d’état » (ESC-421): what the agents' cache saved today, after the day's cost; off by default. */
+  cacheSavingsInBar: boolean;
   /** « Taille du texte de l’éditeur », in CSS pixels before the zoom. */
   editorFontSize: number;
   /** The width of the projects’ rail chosen by its edge (ESC-168), in CSS pixels; 0 (or absent) is its usual width. */

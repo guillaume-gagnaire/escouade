@@ -181,6 +181,10 @@ pub struct Settings {
     /// and the day's cost where it would end the day, in the status bar past 80 % or always, or
     /// nowhere (`QuotaProjection`).
     pub quota_projection: QuotaProjection,
+    /// « Économies du cache dans la barre d’état » (Réglages › Comptes et harness › Avancé,
+    /// ESC-421): what the agents' cache saved today, after the day's cost. Off by default, settings
+    /// saved before it too.
+    pub cache_savings_in_bar: bool,
     /// « Voix »: the dictation (`voice`).
     pub voice: VoiceSettings,
     /// « Ton nom » (Réglages › Général › Toi, ESC-190): written in the tickets shared with
@@ -730,6 +734,7 @@ impl Default for Settings {
             rail_width: 0,
             side_width: 0,
             quota_projection: QuotaProjection::Alert,
+            cache_savings_in_bar: false,
             voice: VoiceSettings::default(),
             user_name: String::new(),
             user_id: String::new(),
@@ -3534,6 +3539,20 @@ mod tests {
         })
         .unwrap();
         assert_eq!(v["switchAt"], json!(95));
+    }
+
+    #[test]
+    fn the_cache_savings_stay_out_of_the_status_bar_unless_switched_on() {
+        let missing: Settings =
+            serde_json::from_value(json!({ "quotaProjection": "always" })).unwrap();
+        assert!(!missing.cache_savings_in_bar);
+        assert!(!Settings::default().cache_savings_in_bar);
+        let on: Settings = serde_json::from_value(json!({ "cacheSavingsInBar": true })).unwrap();
+        assert!(on.cache_savings_in_bar);
+        assert_eq!(
+            serde_json::to_value(&on).unwrap()["cacheSavingsInBar"],
+            json!(true)
+        );
     }
 
     #[test]

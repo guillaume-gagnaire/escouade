@@ -848,6 +848,10 @@
   <Row label={t('accounts.quotas.projection')} desc={t('accounts.quotas.projectionDesc')}>
     <Chips label={t('accounts.quotas.projection')} options={projectionChoices} bind:value={projectionMode, setProjection} />
   </Row>
+  <!-- What the cache saved today in the status bar (ESC-421): off by default. -->
+  <Row label={t('accounts.quotas.cacheSavings')} desc={t('accounts.quotas.cacheSavingsDesc')}>
+    <Switch label={t('accounts.quotas.cacheSavings')} bind:on={draft.cacheSavingsInBar} />
+  </Row>
 </Group>
 
 <style>

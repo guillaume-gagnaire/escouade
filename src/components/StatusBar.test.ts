@@ -1003,10 +1003,11 @@ describe('StatusBar at the first start', () => {
 });
 
 describe('StatusBar and the cache', () => {
-  it('says what the agents’ cache saved today, and nothing when it saved nothing', async () => {
+  it('says what the agents’ cache saved today with its setting on, and nothing when it saved nothing', async () => {
     const { localDay } = await import('../lib/heat.svelte');
     const { heat } = await import('../test/heat');
     resetApp({ agents: [agent({ id: 'a1' })] });
+    app.settings.cacheSavingsInBar = true;
     fakeBackend();
     const { unmount } = render(StatusBar);
     expect(document.querySelector('[data-heat-today]')).toBeNull();
@@ -1019,7 +1020,26 @@ describe('StatusBar and the cache', () => {
         { ...agent({ id: 'a3' }), heat: heat({ day: '2020-01-01', savedToday: 50 }) },
       ],
     });
+    app.settings.cacheSavingsInBar = true;
     render(StatusBar);
     expect(document.querySelector('[data-heat-today] .ht-long')).toHaveTextContent('Cache aujourd’hui : ≈ 3,10 $ économisés');
+  });
+
+  it('hides what the cache saved by default (ESC-421), and shows it as soon as its setting is on', async () => {
+    const { localDay } = await import('../lib/heat.svelte');
+    const { heat } = await import('../test/heat');
+    resetApp({ agents: [{ ...agent({ id: 'a1' }), heat: heat({ day: localDay(Date.now()), savedToday: 2 }) }] });
+    // A settings file of before ESC-421 has no such key: off too.
+    delete (app.settings as Partial<typeof app.settings>).cacheSavingsInBar;
+    fakeBackend();
+    render(StatusBar);
+    expect(document.querySelector('[data-heat-today]')).toBeNull();
+    expect(document.querySelector('footer')).toHaveTextContent(/Aujourd.hui/);
+    app.settings.cacheSavingsInBar = true;
+    await tick();
+    expect(document.querySelector('[data-heat-today] .ht-long')).toHaveTextContent('Cache aujourd’hui : ≈ 2,00 $ économisés');
+    app.settings.cacheSavingsInBar = false;
+    await tick();
+    expect(document.querySelector('[data-heat-today]')).toBeNull();
   });
 });

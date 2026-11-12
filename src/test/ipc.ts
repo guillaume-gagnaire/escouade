@@ -146,6 +146,7 @@ export const SETTINGS: Settings = {
   theme: 'system',
   uiZoom: 100,
   quotaProjection: 'alert',
+  cacheSavingsInBar: false,
   terminalFontSize: 12.5,
   editorFontSize: 12.5,
   railWidth: 0,

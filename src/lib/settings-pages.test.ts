@@ -75,6 +75,7 @@ const SETTINGS_KEYS: Record<keyof Settings, true> = {
   uiZoom: true,
   terminalFontSize: true,
   quotaProjection: true,
+  cacheSavingsInBar: true,
   editorFontSize: true,
   railWidth: true,
   sideWidth: true,

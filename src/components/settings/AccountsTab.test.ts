@@ -76,6 +76,18 @@ describe('AccountsTab', () => {
     expect(b.called('save_settings')[1].args.settings).toMatchObject({ quotaProjection: 'off' });
   });
 
+  it('has « Économies du cache dans la barre d’état » off by default in Avancé, and saves it at once (ESC-421)', async () => {
+    const b = backend();
+    render(SettingsModal, { page: 'accounts' });
+    await userEvent.click(within(document.getElementById('settings-panel')!).getByRole('button', { name: /^(Avancé|Advanced)/ }));
+    const on = screen.getByRole('switch', { name: 'Économies du cache dans la barre d’état' });
+    expect(on).not.toBeChecked();
+    expect(screen.getByText(/ce que le cache des agents a fait économiser depuis minuit/)).toBeInTheDocument();
+    await userEvent.click(on);
+    expect(on).toBeChecked();
+    await waitFor(() => expect(b.called('save_settings').at(-1)?.args.settings).toMatchObject({ cacheSavingsInBar: true }));
+  });
+
   it('reads « Projection des quotas » saved before 2.0.2 as a switch: off is « Jamais »', async () => {
     backend();
     (app.settings as { quotaProjection: unknown }).quotaProjection = false;
