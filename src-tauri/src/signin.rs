@@ -319,6 +319,8 @@ impl<R: Runtime> Core<R> {
     pub async fn agent_signed_in(self: &Arc<Self>, id: &str) -> anyhow::Result<()> {
         let h = self.agent(id)?;
         let account = self.agent_account(&h)?;
+        // Its sign-in changed: what it refused of the Remote Control is asked again (ESC-417).
+        self.forget_remote_refusal(&account.id);
         let lang = i18n::ui();
         let name = accounts::name_in(lang, &account);
         let waited = self.with_agent(id, |rt, fx| {

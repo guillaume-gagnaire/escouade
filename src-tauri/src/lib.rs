@@ -8,6 +8,7 @@ mod agent;
 mod agentbranch;
 #[cfg(test)]
 mod agentbranch_tests;
+mod agentgroups;
 mod agentprs;
 #[cfg(test)]
 mod agentprs_tests;
@@ -138,6 +139,8 @@ mod outside;
 mod pace;
 mod pagecrash;
 mod paths;
+#[cfg(test)]
+mod remote_tests;
 // What an agent is getting through, and the plan files it follows: the crate `escouade-plan`.
 use escouade_plan::{plan, planfiles};
 mod plugins;
@@ -526,6 +529,13 @@ pub fn run() {
             app.manage(deeplink::Inbox::default());
             // The pages of the launches (ESC-311).
             app.manage(Arc::new(devpage::Pages::default()));
+            // The process groups of agents a killed launch left behind (macOS, Linux: ESC-417),
+            // stopped before any agent starts; this launch's are noted from now on.
+            agentgroups::start(
+                paths::DataDir::new(paths::default_data_dir())
+                    .root()
+                    .join("agent-groups.json"),
+            );
             let (core, git_rx) = Core::load(
                 app.handle().clone(),
                 paths::DataDir::new(paths::default_data_dir()),

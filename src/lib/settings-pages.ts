@@ -166,9 +166,11 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('writer', 'agents', 'settings.app.writer', s('writerEngine')),
   row('writerModel', 'agents', 'settings.app.writerModel', s('writerModel')),
   row('remoteAll', 'agents', 'settings.claude.remoteAll', s('remoteControlAll')),
+  row('remoteKeepMax', 'agents', 'settings.claude.remoteKeepMax', s('remoteKeepMax')),
   row('mcp', 'agents', 'mcp.section.enable', s('mcpEnabled')),
   row('mcpDeclared', 'agents', 'mcp.section.list'),
   row('idleStop', 'agents', 'settings.claude.idleStop', { advanced: true, ...s('idleStopMinutes') }),
+  row('agentsMcp', 'agents', 'settings.claude.agentsMcp', { advanced: true, ...s('agentsMcp') }),
   row('mcpActivity', 'agents', 'mcp.activity.title', { advanced: true }),
 
   // Comptes et harness › each harness, Quand un quota est épuisé; Avancé.

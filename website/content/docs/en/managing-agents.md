@@ -187,7 +187,11 @@ On restart, each agent gets its conversation back, and no Claude process is star
 
 ### Idle processes
 
-A Claude process takes up memory. When an agent hasn’t done anything for a while, Escouade therefore stops its process, conversation and session intact. The delay, 30 minutes by default, is set in Settings › Agents › Advanced: “Stop idle agent processes after (minutes)”; `0` turns the stopping off. It doesn’t apply to an agent that is working or waiting for an answer, nor to an agent whose remote control is on, nor to an agent that still has a command, a monitor, a subagent or a workflow running in the background (they live in its process, which stopping would kill). The next action on the agent restarts its process on its session.
+A Claude process takes up memory. When an agent hasn’t done anything for a while, Escouade therefore stops its process, conversation and session intact. The delay, 30 minutes by default, is set in Settings › Agents › Advanced: “Stop idle agent processes after (minutes)”; `0` turns the stopping off. It applies to an agent whose remote control is on too: its remote session stays, and its next message reattaches it. It doesn’t apply to an agent that is working or waiting for an answer, nor to an agent that still has a command, a monitor, a subagent or a workflow running in the background (they live in its process, which stopping would kill). The next action on the agent restarts its process on its session.
+
+On macOS and Linux, if the app is killed (out of memory, a crash, a forced quit), its agents’ processes still running are stopped at its next launch. Escouade recognizes them by their number, their start time and their program: another program that took the same number since is never touched. On Windows, they end with the app.
+
+Each Claude Code agent also loads the MCP servers of your configuration. “Agents’ MCP servers” (Settings › Agents › Advanced) set to “Escouade only” gives it Escouade’s alone (`--strict-mcp-config`): not those of your configuration, nor the project’s `.mcp.json`, nor your claude.ai account’s connectors. Each agent weighs less, but no longer has those tools. The other harnesses keep their configuration.
 
 ### If an agent stops
 

@@ -34,7 +34,7 @@ Accounts are described in [accounts](accounts) and set on the [“Accounts and h
 
 | Setting | Effect | Default |
 |---|---|---|
-| “Remote control for this project’s agents” | Every agent of this project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts each one’s `claude` process right away, at most 3 at a time, and it stays running. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. | Off |
+| “Remote control for this project’s agents” | Every agent of this project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts the `claude` process of the active agents, at most 3 at a time; a done or idle agent keeps its remote session, which it gets back with its next message. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. | Off |
 
 To set an agent apart, right-click its card, then “Turn off remote control”. When off, the setting takes remote control away from the agents that had it from this setting, without touching those you turned on by hand or those the global setting still covers.
 

@@ -198,6 +198,11 @@ export default defineZone('settings', {
     idleStop: 'Stop idle agent processes after',
     idleStopHint: 'minutes, 0 = never',
     idleStopLabel: 'Stop idle agent processes after (minutes)',
+    agentsMcp: 'Agents’ MCP servers',
+    agentsMcpDesc:
+      'Escouade only: Claude Code loads Escouade’s server alone (--strict-mcp-config), not those of your configuration, nor the project’s .mcp.json, nor your claude.ai account’s connectors. Each agent weighs less. The other harnesses keep their configuration. Applies at each agent’s next launch.',
+    agentsMcpAll: 'All of mine',
+    agentsMcpEscouade: 'Escouade only',
     midTurnDelay: 'Delay before sending during a turn',
     midTurnDelayDesc:
       'A message sent while an agent works waits this long: you can edit or cancel it until then. Cursor and OpenCode keep it until the end of the turn, whatever this setting.',
@@ -252,8 +257,13 @@ export default defineZone('settings', {
     costNoBackground: 'no background tasks',
     remoteTitle: 'Remote control',
     remoteAll: 'Remote control for all agents',
+    remoteKeepMax: 'Processes kept at most',
+    remoteKeepMaxDesc:
+      'Processes of agents that are not active the remote control keeps running. Beyond, the least recently active stop: their remote session stays, and comes back with their next message.',
+    remoteKeepMaxLabel: 'Processes kept at most by the remote control',
+    remoteKeepMaxHint: 'processes',
     remoteAllDesc:
-      'Every agent of every project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts each one’s claude process right away, and it stays running. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. To set an agent apart: right-click, “Turn off remote control”.',
+      'Every agent of every project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts the claude process of the active agents; a done or idle agent keeps its remote session, which it gets back with its next message. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. To set an agent apart: right-click, “Turn off remote control”.',
   },
 
   notifications: {
@@ -379,7 +389,7 @@ export default defineZone('settings', {
     remoteTitle: 'Remote control',
     remote: 'Remote control for this project’s agents',
     remoteDesc:
-      'Every agent of this project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts each one’s claude process right away, and it stays running. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. To set an agent apart: right-click, “Turn off remote control”.',
+      'Every agent of this project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts the claude process of the active agents; a done or idle agent keeps its remote session, which it gets back with its next message. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. To set an agent apart: right-click, “Turn off remote control”.',
     remoteGlobal: 'On for all projects in Settings › Agents',
     private: 'Private project',
     privateDesc:

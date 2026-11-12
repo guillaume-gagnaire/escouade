@@ -66,6 +66,8 @@ const SETTINGS_KEYS: Record<keyof Settings, true> = {
   claudeSelfUpdate: true,
   terminalView: true,
   remoteControlAll: true,
+  remoteKeepMax: true,
+  agentsMcp: true,
   privateProjects: true,
   theme: true,
   pluginTheme: true,

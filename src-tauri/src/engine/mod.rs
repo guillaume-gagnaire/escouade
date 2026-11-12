@@ -197,6 +197,8 @@ pub struct Spawn {
     /// A discussion of the Docs tab (ESC-261): it changes no file and runs no command, in any mode,
     /// held by its harness itself (`crate::discussion`).
     pub read_only: bool,
+    /// « Serveurs MCP des agents » (ESC-417): Escouade's alone, or the user's too.
+    pub agents_mcp: crate::model::AgentsMcp,
 }
 
 impl Spawn {
@@ -221,6 +223,7 @@ impl Spawn {
             account: meta.account.clone(),
             takes_effort: None,
             read_only: meta.discussion.is_some(),
+            agents_mcp: crate::model::AgentsMcp::All,
         }
     }
 }

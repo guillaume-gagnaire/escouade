@@ -233,6 +233,11 @@ export default {
     idleStop: 'Arrêter les processus des agents inactifs après',
     idleStopHint: 'minutes, 0 = jamais',
     idleStopLabel: 'Arrêter les processus des agents inactifs après (minutes)',
+    agentsMcp: 'Serveurs MCP des agents',
+    agentsMcpDesc:
+      'Seulement Escouade : Claude Code ne charge que le serveur d’Escouade (--strict-mcp-config), ni ceux de ta configuration, ni le .mcp.json du projet, ni les connecteurs de ton compte claude.ai. Chaque agent pèse moins. Les autres harness gardent leur configuration. Vaut au prochain lancement de chaque agent.',
+    agentsMcpAll: 'Tous les miens',
+    agentsMcpEscouade: 'Seulement Escouade',
     midTurnDelay: 'Délai avant l’envoi pendant un tour',
     midTurnDelayDesc:
       'Un message envoyé pendant qu’un agent travaille attend ce délai : tu peux le modifier ou l’annuler d’ici là. Cursor et OpenCode le gardent jusqu’à la fin du tour, quel que soit ce réglage.',
@@ -290,8 +295,13 @@ export default {
     /** The group of the remote control of every agent, after the MCP server’s. */
     remoteTitle: 'Remote control',
     remoteAll: 'Remote control pour tous les agents',
+    remoteKeepMax: 'Process gardés au plus',
+    remoteKeepMaxDesc:
+      'Process d’agents non actifs que le remote control garde lancés. Au-delà, les moins récemment actifs s’arrêtent : leur session distante reste, et revient à leur prochain message.',
+    remoteKeepMaxLabel: 'Process gardés au plus par le remote control',
+    remoteKeepMaxHint: 'process',
     remoteAllDesc:
-      'Chaque agent de chaque projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance tout de suite le process claude de chacun, qui reste lancé. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. Pour mettre un agent à part : clic droit, « Désactiver le remote control ».',
+      'Chaque agent de chaque projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance le process claude des agents actifs ; un agent terminé ou inactif garde sa session distante, qu’il retrouve à son prochain message. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. Pour mettre un agent à part : clic droit, « Désactiver le remote control ».',
   },
 
   // The « Notifications » tab.
@@ -434,7 +444,7 @@ export default {
     remoteTitle: 'Remote control',
     remote: 'Remote control pour les agents de ce projet',
     remoteDesc:
-      'Chaque agent de ce projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance tout de suite le process claude de chacun, qui reste lancé. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. Pour mettre un agent à part : clic droit, « Désactiver le remote control ».',
+      'Chaque agent de ce projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance le process claude des agents actifs ; un agent terminé ou inactif garde sa session distante, qu’il retrouve à son prochain message. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. Pour mettre un agent à part : clic droit, « Désactiver le remote control ».',
     /** Under the switch, shown on and disabled: the setting for all agents covers the project already. */
     remoteGlobal: 'Activé pour tous les projets dans Réglages › Agents',
     private: 'Projet privé',

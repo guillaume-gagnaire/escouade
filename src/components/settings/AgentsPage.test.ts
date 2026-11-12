@@ -544,7 +544,7 @@ describe('the page « Agents »', () => {
         .map((h) => h.textContent),
     ).toEqual(['Nouveaux agents', 'Textes rédigés', 'Remote control', 'Piloter Escouade']);
     const fold = within(panel()).getByRole('button', { name: /^Avancé/ });
-    expect(fold).toHaveTextContent(IDLE + ' · Activité MCP');
+    expect(fold).toHaveTextContent(IDLE + ' · Serveurs MCP des agents · Activité MCP');
     expect(within(panel()).queryByText(IDLE)).toBeNull();
     await userEvent.click(fold);
     expect(within(panel()).getByText(IDLE)).toBeInTheDocument();
@@ -572,6 +572,29 @@ describe('the page « Agents »', () => {
     await userEvent.type(field, '45');
     await afterGesture();
     expect(be.called('save_settings').at(-1)!.args.settings).toMatchObject({ idleStopMinutes: 45 });
+  });
+
+  it('saves the cap of the processes the remote control keeps, 8 by default (ESC-417)', async () => {
+    const be = backend({ save_settings: () => [] });
+    render(SettingsModal, { page: 'agents' });
+    const field = within(panel()).getByRole('spinbutton', { name: 'Process gardés au plus par le remote control' });
+    expect(field).toHaveValue(8);
+    expect(panel()).toHaveTextContent('les moins récemment actifs s’arrêtent');
+    await userEvent.clear(field);
+    await userEvent.type(field, '3');
+    await afterGesture();
+    expect(be.called('save_settings').at(-1)!.args.settings).toMatchObject({ remoteKeepMax: 3 });
+  });
+
+  it('saves « Serveurs MCP des agents : seulement Escouade », from « Avancé » (ESC-417)', async () => {
+    const be = backend({ save_settings: () => [] });
+    render(SettingsModal, { page: 'agents' });
+    await userEvent.click(within(panel()).getByRole('button', { name: /^Avancé/ }));
+    expect(choice('Serveurs MCP des agents', 'Tous les miens')).toHaveAttribute('aria-pressed', 'true');
+    expect(panel()).toHaveTextContent('--strict-mcp-config');
+    await userEvent.click(choice('Serveurs MCP des agents', 'Seulement Escouade'));
+    await afterGesture();
+    expect(be.called('save_settings').at(-1)!.args.settings).toMatchObject({ agentsMcp: 'escouade' });
   });
 
   describe('« Modèle des textes rédigés »', () => {

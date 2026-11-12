@@ -231,7 +231,7 @@ export function worktreesProblems(path: string, d: Pick<ProjectDraft, 'worktreeD
 export const SAVE_PAUSE_MS = 700;
 
 /** The numbers of the app's settings typed in a field: a whole number of 0 or more each. */
-const NUMBERS = ['idleStopMinutes', 'attachMaxMb', 'attachWarnMb', 'attachKeepDays'] as const;
+const NUMBERS = ['idleStopMinutes', 'remoteKeepMax', 'attachMaxMb', 'attachWarnMb', 'attachKeepDays'] as const;
 export type NumberSetting = (typeof NUMBERS)[number];
 
 /** A number typed that cannot be saved: emptied (null), not a number, or below 0. */
@@ -298,6 +298,7 @@ function settingsOf(s: Settings): Settings {
   return {
     ...s,
     idleStopMinutes: count(s.idleStopMinutes),
+    remoteKeepMax: count(s.remoteKeepMax),
     attachMaxMb: count(s.attachMaxMb),
     attachWarnMb: count(s.attachWarnMb),
     attachKeepDays: count(s.attachKeepDays),

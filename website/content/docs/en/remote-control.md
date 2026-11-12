@@ -39,7 +39,7 @@ Once on, a setting applies to:
 - every agent of the project (or of all projects) that already exists and isn’t archived;
 - every new agent, Kanban ticket agents and copies made with “Duplicate the conversation” included.
 
-Escouade starts each agent’s process right away, at most 3 at a time, and it stays running: it starts with the app and is never stopped for inactivity. That keeps one `claude` process in memory for each agent, which the setting’s description says.
+Escouade starts the process of the active agents (a turn under way, a question waiting) or of those active more recently than the delay of the idle ones, at most 3 at a time, the most recently active first. A done agent, or one idle for longer, keeps its remote control and its remote session, with no process: it can be reached from claude.ai only after its next message, which reattaches the same session, with the same link. Nothing is started for a harness that cannot link to claude.ai (Codex, for instance), nor for an account Claude Code refuses for lack of a claude.ai subscription: that refusal is kept for the account until its settings change or it signs in again.
 
 Once off, a setting takes remote control away from the agents that had it from that setting, and their remote session is closed. It touches neither the agents whose remote control you turned on by hand, nor those another setting still covers: if you turn off the global setting but a project’s is on, that project’s agents keep theirs, through the project.
 
@@ -81,12 +81,13 @@ Claude, outside Escouade or inside an agent, can read this state through the [MC
 ## How long the agent stays reachable
 
 - **As long as Escouade runs.** The agent stays reachable when you close the window: it hides and the app goes on in the notification area (see [agents](managing-agents#closing-the-window-quitting-and-restarting)). If you quit the app with “Quit”, the agents stop and are no longer reachable.
-- **No stop for inactivity.** Escouade normally stops an idle agent’s process after a delay (30 minutes by default); an agent whose remote control is on keeps its process, to stay reachable.
-- **After a restart.** Escouade restarts the agents whose remote control is on, by hand or from a setting, along with the app and reattaches their previous remote session: the link you had opened on your phone stays valid, and the session keeps its `project · agent` name. If that session is gone in the meantime, a new one is opened, with a new link. If the link fails at startup, a “Remote control unavailable:” notice followed by the cause appears in the agent’s conversation. That notice is only told once per agent and per launch of Escouade, until a link succeeds or you turn remote control back on by hand.
+- **Until it is stopped as idle.** A linked agent’s process stops like any other after the delay of the idle ones (30 minutes by default), unless it holds background work. Its remote session stays: its next message reattaches it.
+- **Within the processes kept.** The remote control keeps at most “Processes kept at most” processes of agents that are not active (Settings › Agents, 8 by default); beyond, the least recently active stop first, their session kept.
+- **After a restart.** Escouade restarts, along with the app, the active agents whose remote control is on, by hand or from a setting, and reattaches their previous remote session: the link you had opened on your phone stays valid, and the session keeps its `project · agent` name. If that session is gone in the meantime, a new one is opened, with a new link. If the link fails at startup, a “Remote control unavailable:” notice followed by the cause appears in the agent’s conversation. That notice is only told once per agent and per launch of Escouade, until a link succeeds or you turn remote control back on by hand.
 
 ## Turning off remote control
 
-Right-click the agent’s card, then “Turn off remote control”. Escouade closes the remote session, the icon goes away, and the agent becomes an ordinary agent again (which the idle stop can stop again), set apart (see below). Archiving or deleting an agent also turns off its remote control; restoring an archived agent gives it back if a setting covers it (not if you had turned it on by hand).
+Right-click the agent’s card, then “Turn off remote control”. Escouade closes the remote session, the icon goes away, and the agent becomes an ordinary agent again, set apart (see below). Archiving or deleting an agent also turns off its remote control; restoring an archived agent gives it back if a setting covers it (not if you had turned it on by hand).
 
 Turning off remote control, with the right-click, by turning off a setting, by archiving the agent or by deleting it, closes the remote session: it is archived on claude.ai.
 

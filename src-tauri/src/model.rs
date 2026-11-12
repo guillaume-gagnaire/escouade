@@ -143,6 +143,13 @@ pub struct Settings {
     /// « Remote control pour tous les agents »: every agent, those of tickets too, is reachable
     /// from claude.ai (`AgentMeta::remote_control`, `RemoteSource::Global`).
     pub remote_control_all: bool,
+    /// « Process gardés au plus » (Réglages › Agents › Remote control, ESC-417): how many live
+    /// processes of agents that are not active the Remote Control keeps (`Core::trim_remote`);
+    /// beyond, the least recently active stop first, their remote session kept to be reattached.
+    pub remote_keep_max: u32,
+    /// « Serveurs MCP des agents » (ESC-417): all of the user's (as before), or Escouade's alone,
+    /// which Claude Code is told by `--strict-mcp-config`.
+    pub agents_mcp: AgentsMcp,
     /// « Nouveaux projets privés » (Réglages › Tous les projets): a project added is private
     /// (`Project::private`) from the start. Off by default.
     pub private_projects: bool,
@@ -239,6 +246,23 @@ pub const MIN_ROOM: (f64, f64) = (1000.0, 600.0);
 /// The zoom `zoom` as a window of `width` × `height` logical pixels can show it: the biggest
 /// step up to it that leaves the interface its `MIN_ROOM`, never under 100 % (as the window's
 /// `fitZoom`).
+/// How many processes the Remote Control keeps by default (`Settings::remote_keep_max`).
+pub const DEFAULT_REMOTE_KEEP_MAX: u32 = 8;
+
+/// « Serveurs MCP des agents » (ESC-417): what MCP servers an agent's process loads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AgentsMcp {
+    /// « Seulement Escouade »: Escouade's server alone. Only Claude Code has a way to say it
+    /// (`--strict-mcp-config`); the other harnesses keep their own configuration.
+    Escouade,
+    /// « Tous les miens »: the user's own configuration (and the project's `.mcp.json`), with
+    /// Escouade's server added. What a later version may write is this one.
+    #[default]
+    #[serde(other)]
+    All,
+}
+
 /// « Thème »: the system's (and its changes, at once), light or dark. What a later version may
 /// write, or a hand, is the system's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -304,6 +328,11 @@ pub struct Account {
     /// d’API »), not by the Google sign-in made by `gemini` in its folder.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub api_key: bool,
+    /// Why its harness refused the Remote Control for good (ESC-417: « Remote Control requires a
+    /// claude.ai subscription »): nothing is started nor linked for it again until its settings
+    /// or its sign-in change (`accounts::keep_remote_refusals`, `Core::forget_remote_refusal`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remote_refused: Option<String>,
 }
 
 /// The dictation's settings.
@@ -423,6 +452,7 @@ impl Default for Account {
             default_effort: String::new(),
             default_mode: String::new(),
             api_key: false,
+            remote_refused: None,
         }
     }
 }
@@ -688,6 +718,8 @@ impl Default for Settings {
             attach_keep_days: 0,
             mid_turn_delay_secs: DEFAULT_MID_TURN_DELAY,
             remote_control_all: false,
+            remote_keep_max: DEFAULT_REMOTE_KEEP_MAX,
+            agents_mcp: AgentsMcp::All,
             private_projects: false,
             theme: ThemeChoice::System,
             plugin_theme: String::new(),

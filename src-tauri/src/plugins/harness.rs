@@ -225,6 +225,8 @@ pub struct Preparing<'a> {
     pub read_only: bool,
     /// The variables its process is given by the core (its account's).
     pub env: &'a [(String, String)],
+    /// « Serveurs MCP des agents » (ESC-417).
+    pub agents_mcp: crate::model::AgentsMcp,
 }
 
 /// What the core writes in the agent's own folder before its harness is launched, and the arguments that adds to the
@@ -288,12 +290,12 @@ pub const BUILTIN_HARNESSES: &[BuiltinHarness] = &[
         native: None,
         prepare: Some(crate::engine::agy::prepare),
     },
-    // Claude Code (INT-10.5): nothing to prepare; its plugin asks its first request (`opens`), and its fence is a settings
-    // file the core writes.
+    // Claude Code (INT-10.5): its plugin asks its first request (`opens`), and its fence is a settings file the core
+    // writes; `--strict-mcp-config` added to its launch when its agents take Escouade's MCP server alone (ESC-417).
     BuiltinHarness {
         plugin: super::builtin::CLAUDE,
         native: None,
-        prepare: None,
+        prepare: Some(crate::engine::claude::prepare),
     },
 ];
 
@@ -1965,6 +1967,7 @@ impl ProcessEngineProcess {
                 fence: &fence,
                 read_only: spawn.read_only,
                 env: &spawn.env,
+                agents_mcp: spawn.agents_mcp,
             })?,
             None => Vec::new(),
         };
@@ -2009,7 +2012,7 @@ impl ProcessEngineProcess {
             let program = spawn.program.describe();
             tr!("impossible de lancer {program}", "can’t start {program}")
         })?;
-        let job = Job::for_child(&child).map(Arc::new);
+        let job = Job::for_agent(&child).map(Arc::new);
         Ok((child, job))
     }
 

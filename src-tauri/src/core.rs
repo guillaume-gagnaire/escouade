@@ -108,6 +108,46 @@ pub(crate) fn remote_wanted(meta: &AgentMeta, global: bool, project: bool) -> Op
     }
 }
 
+/// Whether the Remote Control of the agent of `meta` wants its process to live now, at `now` (ms),
+/// with « Arrêter les agents inactifs après » `idle_minutes` (ESC-417): an active agent (a turn
+/// under way, a question waiting) does, and one active more recently than that delay; one that
+/// is done (or stopped on an error) does not, nor one idle for longer. Those keep their Remote
+/// Control and the id of their remote session, with no process: the next one (a message here, a
+/// ticket, a resume) links them, and takes the same session back.
+pub(crate) fn remote_wants_process(meta: &AgentMeta, now: i64, idle_minutes: u32) -> bool {
+    if meta.status.is_active() {
+        return true;
+    }
+    if matches!(meta.status, AgentStatus::Done | AgentStatus::Error) {
+        return false;
+    }
+    idle_minutes == 0 || meta.last_activity >= now - i64::from(idle_minutes) * 60_000
+}
+
+/// A start of the Remote Control under way, counted against its cap until it is over
+/// (`Core::remote_may_start`).
+pub(crate) struct RemoteClaim(Arc<parking_lot::Mutex<usize>>);
+
+impl Drop for RemoteClaim {
+    fn drop(&mut self) {
+        *self.0.lock() -= 1;
+    }
+}
+
+/// Whether a refusal of Remote Control by Claude Code holds for its account, whatever its next
+/// process does (ESC-417): one with no claude.ai subscription. A network or a timeout is not one.
+pub(crate) fn remote_refusal_is_final(text: &str) -> bool {
+    text.to_lowercase().contains("claude.ai subscription")
+}
+
+/// Of the processes the Remote Control keeps (`kept`: the last activity of each agent and what
+/// stands for it), those that go over `max`: the least recently active first (ESC-417).
+pub(crate) fn over_remote_cap<T>(mut kept: Vec<(i64, T)>, max: u32) -> Vec<T> {
+    let over = kept.len().saturating_sub(max as usize);
+    kept.sort_by_key(|(last, _)| *last);
+    kept.into_iter().take(over).map(|(_, t)| t).collect()
+}
+
 /// Closes the remote session `bridge` of the agent `id` for good, through its process linked to
 /// claude.ai. Turning Remote Control off alone leaves a session opened to be kept
 /// (`keep_session_on_exit`, which a restart needs to reattach it) on claude.ai, orphan: it is
@@ -1007,6 +1047,9 @@ pub struct Core<R: Runtime = Wry> {
     /// app's start) starts at once: `REMOTE_STARTS`. A message or a window opening starts its own
     /// at once, with no permit.
     pub(crate) remote_starts: tokio::sync::Semaphore,
+    /// How many of those starts are under way (`RemoteClaim`), counted with the processes the
+    /// Remote Control keeps against its cap (ESC-417): three at a time would pass it at once.
+    pub(crate) remote_claims: Arc<parking_lot::Mutex<usize>>,
     /// Held by `apply_remote` from its reading of the settings to what it decides on the agent:
     /// an application that started on settings older than another's never undoes it.
     remote_decisions: tokio::sync::Mutex<()>,
@@ -2109,6 +2152,7 @@ impl<R: Runtime> Core<R> {
             file_origins,
             origin_files: Default::default(),
             remote_starts: tokio::sync::Semaphore::new(REMOTE_STARTS),
+            remote_claims: Default::default(),
             remote_decisions: Default::default(),
             #[cfg(test)]
             remote_read_pause: Default::default(),
@@ -2505,7 +2549,7 @@ impl<R: Runtime> Core<R> {
         });
         // The MCP server first: the agents started below reach it.
         self.start_mcp();
-        self.start_remote_agents();
+        let _ = self.start_remote_agents();
         // The syncs the app's last run left waiting go again now, before those of the tickets
         // that go on.
         self.retry_all_syncs();
@@ -2637,6 +2681,7 @@ impl<R: Runtime> Core<R> {
         s.normalize_display();
         accounts::normalize(&mut s);
         accounts::check(&s)?;
+        accounts::keep_remote_refusals(&self.settings.read().accounts, &mut s.accounts);
         let bytes = serde_json::to_vec_pretty(&s)?;
         paths::write_atomic(&self.data.settings_file(), &bytes)?;
         let auto_resume = s.auto_resume;
@@ -3609,6 +3654,7 @@ impl<R: Runtime> Core<R> {
                 [settings.agent_env(), accounts::launch_env(&account)].concat(),
             );
             spawn.account = account.id.clone();
+            spawn.agents_mcp = settings.agents_mcp;
             spawn.takes_effort = (engine::of(&rt.meta).models_by_alias()
                 && !rt.meta.effort.is_empty())
             .then(|| self.takes_effort(rt.meta.engine, &account.id, &rt.meta.model));
@@ -3733,7 +3779,11 @@ impl<R: Runtime> Core<R> {
                     }
                 }
                 if h.lock().meta.remote_control {
-                    if let Err(e) = self.link_remote(h, &proc).await {
+                    // Its harness cannot be linked, or its account refused it for good: nothing
+                    // is asked (ESC-417).
+                    if !self.remote_can_link(h) {
+                        log::info!("agent {id}: remote control not asked (its harness or its account cannot)");
+                    } else if let Err(e) = self.link_remote(h, &proc).await {
                         self.remote_unavailable(id, &e, true);
                     }
                 } else {
@@ -4469,12 +4519,29 @@ impl<R: Runtime> Core<R> {
             .remote_control(request(reattach.clone()), timeout)
             .await
         {
-            Ok(r) => r,
+            Ok(r) => Ok(r),
+            // Refused for its account: a new session would be too.
+            Err(e) if remote_refusal_is_final(&format!("{e:#}")) => Err(e),
             // The previous remote session is gone: open a new one.
             Err(_) if reattach.is_some() && proc.is_alive() => {
-                proc.remote_control(request(None), timeout).await?
+                proc.remote_control(request(None), timeout).await
             }
-            Err(e) => return Err(e),
+            Err(e) => Err(e),
+        };
+        let account = self.account_of(&id);
+        let resp = match resp {
+            Ok(r) => {
+                // It works on this account: what it refused before is over.
+                self.forget_remote_refusal(&account);
+                r
+            }
+            Err(e) => {
+                let text = format!("{e:#}");
+                if remote_refusal_is_final(&text) {
+                    self.refuse_remote(&account, text);
+                }
+                return Err(e);
+            }
         };
         let in_force = {
             let mut rt = h.lock();
@@ -4502,6 +4569,137 @@ impl<R: Runtime> Core<R> {
         self.request_save();
         self.emit_agent(h);
         Ok(())
+    }
+
+    /// Whether the agent's process can be linked to claude.ai (ESC-417): its harness knows how
+    /// (`EngineCaps::remote_control`: its plugin's, or the core's engine), and its account has not
+    /// refused it for good (`Account::remote_refused`). Else nothing is started nor asked for it.
+    pub(crate) fn remote_can_link(&self, h: &AgentHandle) -> bool {
+        let (id, capable) = {
+            let rt = h.lock();
+            (
+                rt.meta.id.clone(),
+                engine::of(&rt.meta).caps().remote_control,
+            )
+        };
+        if !capable {
+            return false;
+        }
+        let account = self.account_of(&id);
+        let settings = self.settings.read();
+        !accounts::find(&settings, &account).is_some_and(|a| a.remote_refused.is_some())
+    }
+
+    /// The account `account` refused the Remote Control for good (`remote_refusal_is_final`): it
+    /// is kept in its settings, so that no later start, of this run or the next, asks again.
+    pub(crate) fn refuse_remote(&self, account: &str, why: String) {
+        let changed = {
+            let mut s = self.settings.write();
+            match s.accounts.iter_mut().find(|a| a.id == account) {
+                Some(a) if a.remote_refused.is_none() => {
+                    a.remote_refused = Some(why);
+                    true
+                }
+                _ => false,
+            }
+        };
+        if changed {
+            log::warn!("account {account}: remote control refused, not asked again until its settings or its sign-in change");
+            self.write_settings_file();
+        }
+    }
+
+    /// What the account `account` refused of the Remote Control is over: signed in again, or a
+    /// link that worked. Its next start asks again.
+    pub(crate) fn forget_remote_refusal(&self, account: &str) {
+        let changed = {
+            let mut s = self.settings.write();
+            s.accounts
+                .iter_mut()
+                .find(|a| a.id == account)
+                .is_some_and(|a| a.remote_refused.take().is_some())
+        };
+        if changed {
+            self.write_settings_file();
+        }
+    }
+
+    /// The settings as they are, written to their file (a change of the backend's own, which a
+    /// window's save keeps: `accounts::keep_remote_refusals`).
+    fn write_settings_file(&self) {
+        let written = serde_json::to_vec_pretty(&*self.settings.read())
+            .map_err(anyhow::Error::from)
+            .and_then(|b| Ok(paths::write_atomic(&self.data.settings_file(), &b)?));
+        if let Err(e) = written {
+            log::warn!("settings not written: {e:#}");
+        }
+    }
+
+    /// The agents whose live process the Remote Control keeps (ESC-417), with their last
+    /// activity: linked, not active, holding no work of the background. An active one is not
+    /// counted: it would be kept anyway.
+    fn remote_kept(&self) -> Vec<(i64, AgentHandle)> {
+        let now = now_ms();
+        self.agents
+            .read()
+            .values()
+            .filter_map(|h| {
+                let rt = h.lock();
+                let kept = rt.proc.as_ref().is_some_and(|p| p.is_alive())
+                    && rt.meta.remote_control
+                    && !rt.meta.status.is_active()
+                    && !rt.meta.plan.as_ref().is_some_and(|p| p.holds_process(now));
+                kept.then(|| (rt.meta.last_activity, h.clone()))
+            })
+            .collect()
+    }
+
+    /// Whether the Remote Control may start the agent's process now (ESC-417), and its place
+    /// until it has: it can be linked (`remote_can_link`), it wants to live
+    /// (`remote_wants_process`), and, unless it is active, the processes the Remote Control keeps
+    /// and those it starts are under the cap (`Settings::remote_keep_max`).
+    pub(crate) fn remote_may_start(&self, h: &AgentHandle) -> Option<RemoteClaim> {
+        if !self.remote_can_link(h) {
+            return None;
+        }
+        let (idle, max) = {
+            let s = self.settings.read();
+            (s.idle_stop_minutes, s.remote_keep_max)
+        };
+        let (wants, active) = {
+            let rt = h.lock();
+            (
+                remote_wants_process(&rt.meta, now_ms(), idle),
+                rt.meta.status.is_active(),
+            )
+        };
+        if !wants {
+            return None;
+        }
+        let mut claims = self.remote_claims.lock();
+        if !active && self.remote_kept().len() + *claims >= max as usize {
+            return None;
+        }
+        *claims += 1;
+        Some(RemoteClaim(self.remote_claims.clone()))
+    }
+
+    /// Over the cap of the processes the Remote Control keeps (`Settings::remote_keep_max`), the
+    /// least recently active stop (ESC-417): their Remote Control and their remote session stay,
+    /// which their next process reattaches.
+    pub(crate) fn trim_remote(&self) {
+        let max = self.settings.read().remote_keep_max;
+        for h in over_remote_cap(self.remote_kept(), max) {
+            let stopped = h.lock().detach();
+            if let Some(p) = stopped {
+                log::info!(
+                    "agent {}: stopped, over the {max} processes the remote control keeps",
+                    h.lock().meta.id
+                );
+                p.close_input();
+                self.emit_agent(&h);
+            }
+        }
     }
 
     /// Tells the agent that its Remote Control could not be linked (the setting stays in force:
@@ -4742,10 +4940,15 @@ impl<R: Runtime> Core<R> {
                 }
                 // Not all at once: a setting turned on for every agent starts three at a time.
                 let _start = self.remote_starts.acquire().await;
-                // The setting went off while it waited for its turn: nothing to start.
+                // The setting went off while it waited for its turn: nothing to start. Nor for an
+                // agent done or idle, one that cannot be linked, or over the cap (ESC-417): its
+                // next process links it.
                 if !h.lock().meta.remote_control {
                     return;
                 }
+                let Some(_claim) = self.remote_may_start(&h) else {
+                    return;
+                };
                 // Its interface holds the session in the Claude Code view: started with it.
                 if terminal {
                     if let Err(e) = self.start_interface(id).await {
@@ -4777,6 +4980,7 @@ impl<R: Runtime> Core<R> {
                 if let Err(e) = linked {
                     self.remote_unavailable(id, &e, true);
                 }
+                self.trim_remote();
             }
         }
     }
@@ -4811,26 +5015,39 @@ impl<R: Runtime> Core<R> {
     }
 
     /// With the app: the settings are applied to every agent (`start_remote`).
-    pub fn start_remote_agents(self: &Arc<Self>) {
+    /// The tasks are for whoever waits for them (tests).
+    pub fn start_remote_agents(self: &Arc<Self>) -> Vec<tauri::async_runtime::JoinHandle<()>> {
         let ids: Vec<String> = self.agents.read().keys().cloned().collect();
-        self.start_remote(ids);
+        self.start_remote(ids)
     }
 
     /// The settings applied to the agents `ids` (all of them when the app starts, those of a
     /// project opened again): the ones left in force without a setting that covers them go,
     /// the ones a setting covers come in, and those that hold Remote Control start their process
     /// (their interface, in the Claude Code view), so they are reachable from claude.ai.
-    pub(crate) fn start_remote(self: &Arc<Self>, ids: Vec<String>) {
-        let held: Vec<(String, bool)> = ids
+    ///
+    /// Only those that want their process now start (`remote_may_start`, ESC-417): active, or
+    /// active more recently than the delay of the idle ones, the most recently active first, up
+    /// to the cap. The others keep their Remote Control and their remote session, with no process.
+    pub(crate) fn start_remote(
+        self: &Arc<Self>,
+        ids: Vec<String>,
+    ) -> Vec<tauri::async_runtime::JoinHandle<()>> {
+        let mut held: Vec<(String, bool, i64)> = ids
             .into_iter()
             .filter_map(|id| {
-                let held = self.agent(&id).ok()?.lock().meta.remote_control;
-                Some((id, held))
+                let h = self.agent(&id).ok()?;
+                let rt = h.lock();
+                Some((id, rt.meta.remote_control, rt.meta.last_activity))
             })
             .collect();
+        // Their turns come in this order (`remote_starts` is fair).
+        held.sort_by_key(|(_, _, last)| std::cmp::Reverse(*last));
+        let held: Vec<(String, bool)> = held.into_iter().map(|(id, h, _)| (id, h)).collect();
+        let mut tasks = Vec::new();
         for (id, held) in held {
             let c = self.clone();
-            tauri::async_runtime::spawn(async move {
+            tasks.push(tauri::async_runtime::spawn(async move {
                 // One that comes in starts its process on its own.
                 c.apply_remote(&id).await;
                 if !held {
@@ -4849,6 +5066,10 @@ impl<R: Runtime> Core<R> {
                 }
                 // Not all at once: the agents of the last run start three at a time.
                 let _start = c.remote_starts.acquire().await;
+                // Done, idle, not to be linked or over the cap: no process (ESC-417).
+                let Some(claim) = c.remote_may_start(&h) else {
+                    return;
+                };
                 // The interface, in the Claude Code view, runs with no window until one asks.
                 let started = if terminal {
                     c.start_interface(&id).await
@@ -4858,6 +5079,8 @@ impl<R: Runtime> Core<R> {
                 if let Err(e) = started {
                     log::warn!("agent {id}: remote control start failed: {e:#}");
                 }
+                drop(claim);
+                c.trim_remote();
                 if terminal {
                     // Its place is kept until the interface is up: it has launched, it has not
                     // started.
@@ -4865,8 +5088,9 @@ impl<R: Runtime> Core<R> {
                     // Cut while its interface started: it has no reason to run.
                     c.stop_unseen_interface(&h);
                 }
-            });
+            }));
         }
+        tasks
     }
 
     /// Stopped by the usage limit: plans to send the agent "continue" once the limit resets (as
@@ -4995,9 +5219,12 @@ impl<R: Runtime> Core<R> {
         self.resources.lock().sample(Instant::now(), cores, usages)
     }
 
-    /// Stops the processes of agents idle for longer than the configured delay. The session
-    /// and the conversation stay: the next action on the agent resumes it (--resume).
+    /// Stops the processes of agents idle for longer than the configured delay, those linked to
+    /// claude.ai too (ESC-417), then those the Remote Control keeps over its cap (`trim_remote`).
+    /// The session and the conversation stay, and the remote session: the next action on the
+    /// agent resumes it (--resume) and reattaches it.
     pub(crate) fn stop_idle_processes(&self) {
+        self.trim_remote();
         let minutes = self.settings.read().idle_stop_minutes;
         if minutes == 0 {
             return;
@@ -5007,12 +5234,12 @@ impl<R: Runtime> Core<R> {
         for h in agents {
             let stopped = {
                 let mut rt = h.lock();
-                // A Remote Control agent must stay reachable from claude.ai. One with a command, a
-                // monitor, a subagent or a workflow running in the background is not idle: they
-                // live in its process, which stopping would kill. Nor one waiting for a job of its
-                // session or the wake-up of a loop: they fire only in that process.
+                // One linked to claude.ai stops too (ESC-417): a process kept for each agent, for
+                // good, filled the memory (issue #26); its next one takes its remote session back.
+                // One with a command, a monitor, a subagent or a workflow running in the background
+                // is not idle: they live in its process, which stopping would kill. Nor one waiting
+                // for a job of its session or the wake-up of a loop: they fire only in that process.
                 let idle = rt.proc.is_some()
-                    && !rt.meta.remote_control
                     && !rt.meta.status.is_active()
                     && !rt
                         .meta
@@ -8621,7 +8848,7 @@ impl<R: Runtime> Core<R> {
             // reachable again as they are when the app starts.
             self.schedule();
             self.update_tray();
-            self.start_remote(remote);
+            let _ = self.start_remote(remote);
             // The syncs its tickets left waiting while it was closed go again.
             self.retry_syncs_of(&ticket_ids);
         }

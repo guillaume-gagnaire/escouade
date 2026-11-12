@@ -6,6 +6,8 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Remote control for all agents no longer starts a process for each agent: only the active ones start, and a done agent can be reached from claude.ai only after its next message, which takes its session back. The remote control keeps at most 8 processes of agents that are not active (adjustable), and Escouade no longer starts anything for a harness or an account that cannot be linked. Thanks to @Chapercher (#26).
+- On macOS and Linux, agents left running after the app was killed are stopped at its next launch. A new setting, “Agents’ MCP servers: Escouade only”, spares each Claude Code agent the MCP servers of your configuration.
 - Each harness’s terminal view is launched by its plugin: a fix to its launch published on the store is enough, with no new Escouade version. If the plugin is off or uninstalled, the interface doesn’t open and the window says why.
 - The presentation video and the website’s screenshots show the 2.2 app: the projects’ rail, the agent card and its cache temperature, a workflow’s diagram, the plugins and their store, the settings. The website’s demo also shows each agent’s cache temperature.
 - The settings now show only what your installed plugins bring: harnesses, ticket sources, code hosts and voice services. No more “Not installed” offers in the middle of the pages: plugins install in Settings › Plugins or from the home screen, and what an uninstalled plugin had set comes back with it.

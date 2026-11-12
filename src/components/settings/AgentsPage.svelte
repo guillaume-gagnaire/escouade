@@ -112,6 +112,14 @@
       {/snippet}
       <Switch label={t('settings.claude.remoteAll')} bind:on={s.remoteControlAll} />
     </Row>
+    <Row
+      label={t('settings.claude.remoteKeepMax')}
+      desc={t('settings.claude.remoteKeepMaxDesc')}
+      error={numberError('remoteKeepMax')}
+      errorId="remoteKeepMax-error"
+    >
+      <NumberField key="remoteKeepMax" label={t('settings.claude.remoteKeepMaxLabel')} hint={t('settings.claude.remoteKeepMaxHint')} />
+    </Row>
   </Group>
 {/if}
 
@@ -121,6 +129,19 @@
   <Row label={t('settings.claude.idleStop')} error={numberError('idleStopMinutes')} errorId="idleStopMinutes-error">
     <NumberField key="idleStopMinutes" label={t('settings.claude.idleStopLabel')} hint={t('settings.claude.idleStopHint')} />
   </Row>
+  <!-- Only Claude Code has a way to load Escouade's server alone (--strict-mcp-config, ESC-417). -->
+  {#if installedEngines().some((e) => e.id === 'claude')}
+    <Row label={t('settings.claude.agentsMcp')} desc={t('settings.claude.agentsMcpDesc')}>
+      <Chips
+        label={t('settings.claude.agentsMcp')}
+        options={[
+          { value: 'all', label: t('settings.claude.agentsMcpAll') },
+          { value: 'escouade', label: t('settings.claude.agentsMcpEscouade') },
+        ]}
+        bind:value={s.agentsMcp}
+      />
+    </Row>
+  {/if}
   <McpActivity />
 </Group>
 

@@ -3246,6 +3246,13 @@ function startSession() {
       ok(id);
       return out({ type: 'system', subtype: 'bridge_state', state: 'disconnected', session_id: sessionId });
     }
+    // While <log>.remote-refused is there, refused as Claude Code refuses an account with no claude.ai subscription.
+    if (fs.existsSync(logFile.replace(/\.jsonl$/, '') + '.remote-refused')) {
+      return out({
+        type: 'control_response',
+        response: { subtype: 'error', request_id: id, error: 'Remote Control requires a claude.ai subscription' },
+      });
+    }
     const bridge = r.reattach_session_id ?? `cse_fake_${process.pid}`;
     if (!remoteOn) remoteOn = { bridge, keep: r.keep_session_on_exit !== false };
     later('remote', () => {

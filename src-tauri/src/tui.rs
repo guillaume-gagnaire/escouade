@@ -1525,6 +1525,7 @@ impl<R: Runtime> Core<R> {
                     fence: &spelled,
                     read_only: meta.discussion.is_some(),
                     env: &env,
+                    agents_mcp: self.settings.read().agents_mcp,
                 });
                 match prepared {
                     Ok(more) => more,

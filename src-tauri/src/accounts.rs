@@ -315,6 +315,21 @@ fn unique(base: &str, taken: &HashSet<String>) -> String {
 
 /// The account `id` names, if the settings have it: an id they do not know (an account removed,
 /// a state saved by a later version) is none, never another account (ESC-128).
+/// What the accounts `before` refused of the Remote Control for good (`Account::remote_refused`,
+/// ESC-417) goes on in `after`, the settings a window saves: for each account whose settings are
+/// the same, whatever the window's copy says of it. One whose settings changed is asked again.
+pub fn keep_remote_refusals(before: &[Account], after: &mut [Account]) {
+    for a in after.iter_mut() {
+        let old = before.iter().find(|b| b.id == a.id);
+        let same = old.is_some_and(|b| {
+            let (mut b, mut a) = (b.clone(), a.clone());
+            (b.remote_refused, a.remote_refused) = (None, None);
+            a == b
+        });
+        a.remote_refused = old.filter(|_| same).and_then(|b| b.remote_refused.clone());
+    }
+}
+
 pub fn find<'a>(settings: &'a Settings, id: &str) -> Option<&'a Account> {
     settings.accounts.iter().find(|a| a.id == id)
 }
@@ -2614,6 +2629,8 @@ impl<R: Runtime> Core<R> {
         on_data: impl Fn(Vec<u8>) + Send + 'static,
     ) -> Result<TermInfo> {
         let account = self.claude_account(id)?;
+        // Its sign-in changes: what it refused of the Remote Control is asked again (ESC-417).
+        self.forget_remote_refusal(&account.id);
         let settings = self.settings.read().clone();
         let program = program(&account, &settings).ok_or_else(|| {
             anyhow::anyhow!(engine::missing_line(account.engine, crate::i18n::ui()))

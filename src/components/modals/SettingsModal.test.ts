@@ -519,7 +519,7 @@ describe('SettingsModal', () => {
     expect(remote.getByText('Claude Code seulement : les autres harness n’ont pas de remote control.')).toBeInTheDocument();
     expect(all).toHaveAttribute('aria-checked', 'false');
     expect(remote.getByText(/^Chaque agent de chaque projet, existant ou nouveau \(agents des tickets compris\)/)).toHaveTextContent(
-      'Chaque agent de chaque projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance tout de suite le process claude de chacun, qui reste lancé. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. Pour mettre un agent à part : clic droit, « Désactiver le remote control ».',
+      'Chaque agent de chaque projet, existant ou nouveau (agents des tickets compris), est accessible depuis claude.ai et l’app Claude. Escouade lance le process claude des agents actifs ; un agent terminé ou inactif garde sa session distante, qu’il retrouve à son prochain message. La session apparaît sur claude.ai sous le nom « projet · agent » (pour un agent de ticket, son nom vient du ticket). En vue Claude Code, une interface déjà ouverte ne le prend qu’à son prochain lancement. Pour mettre un agent à part : clic droit, « Désactiver le remote control ».',
     );
     // On the page of « Piloter Escouade », its group after.
     expect(within(panel()).getByRole('heading', { name: 'Piloter Escouade' })).toBeInTheDocument();
@@ -1589,7 +1589,7 @@ describe('SettingsModal in English', () => {
     expect(remote.getByText('Claude Code only: the other harnesses have no remote control.')).toBeInTheDocument();
     expect(all).toHaveAttribute('aria-checked', 'false');
     expect(remote.getByText(/^Every agent of every project/)).toHaveTextContent(
-      'Every agent of every project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts each one’s claude process right away, and it stays running. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. To set an agent apart: right-click, “Turn off remote control”.',
+      'Every agent of every project, existing or new (ticket agents included), is reachable from claude.ai and the Claude app. Escouade starts the claude process of the active agents; a done or idle agent keeps its remote session, which it gets back with its next message. The session appears on claude.ai as “project · agent” (for a ticket agent, the name comes from the ticket). In Claude Code view, an interface that is already open only picks it up at its next launch. To set an agent apart: right-click, “Turn off remote control”.',
     );
     await userEvent.click(all);
     await afterGesture();
