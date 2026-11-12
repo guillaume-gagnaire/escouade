@@ -16,6 +16,12 @@ on:
       lang:
         type: string
         default: both
+    # The two webhooks and nothing else: the Release passes them one by one, not `secrets: inherit`.
+    secrets:
+      DISCORD_WEBHOOK_URL:
+        required: false
+      DISCORD_WEBHOOK_URL_EN:
+        required: false
   workflow_dispatch:
     inputs:
       tag:
@@ -45,9 +51,9 @@ jobs:
           - lang: en
             secret: DISCORD_WEBHOOK_URL_EN
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
 

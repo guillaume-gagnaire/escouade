@@ -7,6 +7,10 @@ on:
   # Run again on demand, to measure how unstable the tests are (scripts/ci-flakes.mjs reads the runs).
   workflow_dispatch:
 
+# A read-only token for every job; only the one that reads a pull request's file list (paths-filter) asks for more.
+permissions:
+  contents: read
+
 concurrency:
   # A run started by hand has a group of its own: neither a push nor another run replaces it.
   group: ci-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
@@ -24,9 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -52,13 +56,16 @@ jobs:
   store-changes:
     name: Store (what changed)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     timeout-minutes: 5
     outputs:
       store: ${{ steps.filter.outputs.store }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3.0.4
         id: filter
         with:
           filters: |
@@ -103,9 +110,9 @@ jobs:
       run:
         working-directory: store
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
@@ -140,7 +147,7 @@ jobs:
 
       - name: Upload the Playwright report
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: store-playwright-report
           path: store/playwright-report
@@ -154,7 +161,7 @@ jobs:
       # Its compiler answers, a run.js plugin compiles in it twice to the same bytes, with the escouade-js the app embeds,
       # and the store starts and says the isolation it got (ESC-328).
       - name: Download escouade-js
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: escouade-js
           path: src-tauri/escouade-js/target
@@ -177,7 +184,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Rust toolchain (pinned in src-tauri/escouade-js/rust-toolchain.toml) and wasm32-wasip1
         working-directory: src-tauri/escouade-js
@@ -185,7 +192,7 @@ jobs:
           rustup toolchain install
           rustup target add wasm32-wasip1
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri/escouade-js
           # The script decides what rustc is given (its wrapper is no input cargo sees): a cache made by another one would hand
@@ -197,7 +204,7 @@ jobs:
           sh scripts/escouade-js.sh
           echo "escouade-js.wasm: $(wc -c < src-tauri/escouade-js/target/escouade-js.wasm) bytes, SHA-256 $(cat src-tauri/escouade-js/target/escouade-js.wasm.sha256)" >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: escouade-js
           path: |
@@ -213,13 +220,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Rust toolchain (pinned in src-tauri/rust-toolchain.toml)
         working-directory: src-tauri
         run: rustup toolchain install
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri
 
@@ -256,7 +263,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Rust toolchain (pinned in src-tauri/rust-toolchain.toml)
         working-directory: src-tauri
@@ -267,7 +274,7 @@ jobs:
         shell: bash
         run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> "$GITHUB_ENV"
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri
 
@@ -285,16 +292,16 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # escouade-js, embedded in the app (src-tauri/build.rs).
       - name: Download escouade-js
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: escouade-js
           path: src-tauri/escouade-js/target
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -309,7 +316,7 @@ jobs:
         run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> "$GITHUB_ENV"
 
       # The cache of the one Windows job there was (named `test`): its dependencies are those of these builds.
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri
           shared-key: test
@@ -317,7 +324,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: cargo-nextest
 
@@ -341,7 +348,7 @@ jobs:
         run: npx tauri build --debug --no-bundle
 
       - name: Upload the Rust tests
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nextest-windows
           path: nextest-windows.tar.zst
@@ -351,7 +358,7 @@ jobs:
       # The app, its hook (looked for beside it) and the workspace's modules: what the end-to-end tests drive. Without
       # plugins-wasm/, a build of development has no plugin of the first hand (GitHub, isola, the voice…) to run.
       - name: Upload the app
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: app-windows
           path: |
@@ -370,10 +377,10 @@ jobs:
       matrix:
         part: [1, 2]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # The fake harnesses of the tests (tests/fixtures) are Node scripts, with Node's own modules only.
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
 
@@ -381,12 +388,12 @@ jobs:
         working-directory: src-tauri
         run: rustup toolchain install
 
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: cargo-nextest
 
       - name: Download the Rust tests
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: nextest-windows
 
@@ -419,9 +426,9 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4, 5]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -431,7 +438,7 @@ jobs:
 
       # src-tauri/target: the artifact holds debug/ and plugins-wasm/.
       - name: Download the app
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: app-windows
           path: src-tauri/target
@@ -468,7 +475,7 @@ jobs:
       # The traces of the tests that failed, or that ran again (there is none when all passed first time).
       - name: Upload Playwright traces
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-traces-${{ matrix.shard }}
           path: test-results/
@@ -483,16 +490,16 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # escouade-js, embedded in the app (src-tauri/build.rs).
       - name: Download escouade-js
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: escouade-js
           path: src-tauri/escouade-js/target
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -506,14 +513,14 @@ jobs:
         working-directory: src-tauri
         run: rustup toolchain install
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri
 
       - name: Install dependencies
         run: npm ci
 
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: cargo-nextest
 
@@ -532,7 +539,7 @@ jobs:
         run: cargo nextest archive --profile ci --archive-file ../nextest-linux.tar.zst
 
       - name: Upload the Rust tests
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nextest-linux
           path: nextest-linux.tar.zst
@@ -549,10 +556,10 @@ jobs:
       matrix:
         part: [1, 2]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # The fake harnesses of the tests (tests/fixtures) are Node scripts, with Node's own modules only.
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
 
@@ -565,12 +572,12 @@ jobs:
         working-directory: src-tauri
         run: rustup toolchain install
 
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: cargo-nextest
 
       - name: Download the Rust tests
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: nextest-linux
 
@@ -608,18 +615,18 @@ jobs:
     timeout-minutes: 45
     steps:
       # Two commits: on a pull request, the merge and its base, which `plugins/ci.mjs --changed` compares.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 2
 
       # escouade-js, embedded in the app (src-tauri/build.rs).
       - name: Download escouade-js
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: escouade-js
           path: src-tauri/escouade-js/target
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -634,7 +641,7 @@ jobs:
         run: rustup toolchain install
 
       # The cache of the tests' job (named `linux`): the dependencies built there serve the packages too.
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri
           shared-key: linux
@@ -693,7 +700,7 @@ jobs:
         run: node plugins/ci.mjs ${{ github.event_name == 'pull_request' && '--changed HEAD^1' || '' }}
 
       - name: Upload the packages
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: escouade-linux-debug
           path: |
@@ -708,16 +715,16 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # escouade-js, embedded in the app (src-tauri/build.rs).
       - name: Download escouade-js
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: escouade-js
           path: src-tauri/escouade-js/target
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -727,7 +734,7 @@ jobs:
         run: rustup toolchain install
 
       # The cache the macOS tests had (their job was named `macos`), which the bundle shares.
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri
           shared-key: macos
@@ -735,7 +742,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: cargo-nextest
 
@@ -754,7 +761,7 @@ jobs:
         run: cargo nextest archive --profile ci --archive-file ../nextest-macos.tar.zst
 
       - name: Upload the Rust tests
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nextest-macos
           path: nextest-macos.tar.zst
@@ -771,10 +778,10 @@ jobs:
       matrix:
         part: [1, 2, 3]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # The fake harnesses of the tests (tests/fixtures) are Node scripts, with Node's own modules only.
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
 
@@ -782,12 +789,12 @@ jobs:
         working-directory: src-tauri
         run: rustup toolchain install
 
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: cargo-nextest
 
       - name: Download the Rust tests
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: nextest-macos
 
@@ -817,16 +824,16 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # escouade-js, embedded in the app (src-tauri/build.rs).
       - name: Download escouade-js
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: escouade-js
           path: src-tauri/escouade-js/target
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -836,7 +843,7 @@ jobs:
         run: rustup toolchain install
 
       # The cache of the macOS job: the dependencies built there serve the bundle too.
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri
           shared-key: macos
@@ -879,7 +886,7 @@ jobs:
           done
 
       - name: Upload the disk image
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: escouade-macos-debug
           path: src-tauri/target/debug/bundle/dmg/*.dmg
