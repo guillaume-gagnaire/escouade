@@ -187,6 +187,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('claudePath', 'accounts', 'settings.claude.path', { advanced: true, ...s('claudePath') }),
   row('selfUpdate', 'accounts', 'settings.claude.selfUpdate', { advanced: true, ...s('claudeSelfUpdate') }),
   row('quotaProjection', 'accounts', 'accounts.quotas.projection', { advanced: true, ...s('quotaProjection') }),
+  row('cacheSavingsInBar', 'accounts', 'accounts.quotas.cacheSavings', { advanced: true, ...s('cacheSavingsInBar') }),
 
   // Services connectés › Hébergeurs de code, Sources de tickets, Synchronisation, Import automatique.
   row('forges', 'services', 'integrations.forges.title'),

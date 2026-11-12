@@ -93,6 +93,14 @@ describe('the search of the settings', () => {
     expect(hits[0]?.row?.id).toBe('noProxy');
   });
 
+  it('finds « Économies du cache dans la barre d’état » in Comptes et harness › Avancé by « cache » and « status bar » (ESC-421)', () => {
+    for (const query of ['economies du cache', 'barre d’état', 'cache savings']) {
+      const hit = searchSettings(query, PROJECTS).find((h) => h.row?.id === 'cacheSavingsInBar');
+      expect(hit?.page, query).toBe('accounts');
+      expect(hit?.row?.advanced).toBe(true);
+    }
+  });
+
   it('names the rows folded into « Avancé »', () => {
     const hit = searchSettings('identifiant', PROJECTS).find((h) => h.row?.id === 'userId');
     expect(hit?.row?.advanced).toBe(true);

@@ -2,8 +2,8 @@
 title: "Température du cache"
 subject: "conversation"
 sources: ["docs/FEATURES.md §3 (conception du 2026-10-28)","design/features/temperature.png","design/features/temperature-echelle.png","design/features/maquettes-temperature.html","tests/fixtures/claude/long-turn.jsonl","tests/fixtures/codex/full-turn.jsonl","tests/fixtures/copilot/full-turn.jsonl"]
-tickets: ["ESC-398"]
-decisions: [140]
+tickets: ["ESC-398","ESC-421"]
+decisions: [140,150]
 compared: null
 ---
 
@@ -23,7 +23,7 @@ Sur chaque agent, quel que soit son harness, un chiffre en degrés dit combien d
 
 - **Carte de l'agent** (barre latérale) : au bout de la ligne de son modèle, à droite ; son libellé en infobulle.
 - **En-tête de la conversation** : une figure « Cache » parmi Contexte, Tokens et Coût, qui part avec elles quand la conversation est trop étroite. Au survol ou au focus (Échap la referme), le détail du dernier tour : le temps qui reste et la durée de vie du cache de ce harness, une barre lus / mis en cache / plein tarif, les tokens lus depuis le cache, mis en cache et nouveaux au plein tarif (lus et mis en cache en une ligne quand le harness ne les dit qu'ensemble), ce que le cache a fait économiser sur ce tour (tokens lus × (prix d'entrée − prix d'une lecture), quand le prix est connu), et ce que coûterait le prochain message s'il partait à froid (le contexte au plein tarif, réécrit en cache pour sa durée chez Anthropic) au lieu du coût au chaud.
-- **Barre d'état** : « Cache aujourd'hui : ≈ 3,10 $ économisés », tous agents confondus, depuis minuit (heure locale) ; « Cache ≈ 3,10 $ » sous 1240 px ; absente tant que le cache n'a rien économisé.
+- **Barre d'état**, seulement si « Économies du cache dans la barre d'état » est allumé (Réglages › Comptes et harness › Avancé ; éteint par défaut, ESC-421) : « Cache aujourd'hui : ≈ 3,10 $ économisés », tous agents confondus, depuis minuit (heure locale) ; « Cache ≈ 3,10 $ » sous 1240 px ; absente tant que le cache n'a rien économisé. Ce réglage ne touche ni la carte ni l'en-tête.
 
 ## Durée de vie, harness par harness
 
@@ -40,4 +40,4 @@ Sur chaque agent, quel que soit son harness, un chiffre en degrés dit combien d
 - L'état du cache est enregistré avec l'agent (heure de la dernière requête, durée, chiffres du dernier tour, économie du jour) : le cache vit chez le fournisseur, un redémarrage de l'app ne le refroidit pas.
 - **Un seul minuteur** pour tous les chiffres : il bat chaque seconde tant qu'un cache est chaud et s'arrête à l'expiration du dernier ; rien ne tourne quand aucun agent n'est chaud.
 - Le thermomètre montre, il n'agit pas : Escouade n'envoie jamais de message pour garder un cache chaud (ce serait un tour payé).
-- La fonctionnalité « Coût » n'a pas encore d'interrupteur et aucun réglage ne cache le coût : la température s'affiche toujours. Elle partira avec « Coût » quand celle-ci se coupera.
+- La fonctionnalité « Coût » n'a pas encore d'interrupteur : la température s'affiche toujours sur la carte et dans l'en-tête. Seule l'économie du jour dans la barre d'état a son réglage (ESC-421). Elle partira avec « Coût » quand celle-ci se coupera.

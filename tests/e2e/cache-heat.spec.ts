@@ -1,4 +1,4 @@
-import { addProject, expect, send, test } from './fixture';
+import { addProject, closeSettings, expect, openAdvanced, openSettingsPage, send, test } from './fixture';
 
 // The temperature of an agent's cache (ESC-398): on its card beside its model, in its conversation's header with the
 // detail of its last turn on hover, what the cache saved today in the status bar; kept across a restart of the app.
@@ -45,7 +45,18 @@ test('an agent shows the temperature of its cache, its detail on hover, and keep
   await page.mouse.move(5, view.height / 2);
   await expect(pop).toBeHidden();
 
-  // The status bar: what the cache saved today.
+  // The status bar: what the cache saved today, hidden until « Économies du cache dans la barre d’état » is on (ESC-421).
+  await expect(page.locator('footer')).toContainText('Aujourd');
+  await expect(page.locator('footer [data-heat-today]')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Réglages' });
+  await openSettingsPage(dialog, 'Comptes et harness');
+  await openAdvanced(dialog);
+  const savings = dialog.getByRole('switch', { name: 'Économies du cache dans la barre d’état' });
+  await expect(savings).toHaveAttribute('aria-checked', 'false');
+  await savings.click();
+  await expect(savings).toHaveAttribute('aria-checked', 'true');
+  await closeSettings(dialog);
   await expect(page.locator('footer [data-heat-today]')).toBeVisible();
   await expect(page.locator('footer [data-heat-today]')).toContainText(/≈\s*0,0\d+\s*\$/);
 

@@ -397,8 +397,9 @@
       {/if}
       <span class="it" use:tip={today.estimated ? estimateHint(today) : undefined}>{t('shell.status.today')} <b>{fSpentUsd(today)}</b></span
       >
-      {#if cacheSaved > 0}
-        <!-- What the agents' cache saved today (ESC-398); the word alone under 1240 pixels, the sentence in its tooltip. -->
+      {#if app.settings.cacheSavingsInBar && cacheSaved > 0}
+        <!-- What the agents' cache saved today (ESC-398), when « Économies du cache dans la barre d’état » is on (ESC-421,
+             off by default); the word alone under 1240 pixels, the sentence in its tooltip. -->
         <span class="it heat-today" data-heat-today use:tip={t('heat.todayHint')}
           ><span class="ht-long">{t('heat.today', { amount: fUsd(cacheSaved) })}</span><span class="ht-short"
             >{t('heat.label')} <b>≈&nbsp;{fUsd(cacheSaved)}</b></span

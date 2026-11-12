@@ -370,6 +370,10 @@ export default {
     projectionAlert: 'Au-delà de 80 %',
     projectionAlways: 'Toujours',
     projectionOff: 'Jamais',
+    /** ESC-421: what the cache saved today, after the day's cost; off by default. */
+    cacheSavings: 'Économies du cache dans la barre d’état',
+    cacheSavingsDesc:
+      'Après le coût du jour, ce que le cache des agents a fait économiser depuis minuit. La température du cache sur les cartes et l’économie de chaque tour restent affichées.',
   },
 
   // « Ordre des harness », in the « Comptes » tab once there are two harnesses.

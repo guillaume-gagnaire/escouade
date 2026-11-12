@@ -14,7 +14,7 @@ La barre occupe le bas de la fenêtre. De gauche à droite :
 | « 4 Claude · 1,2 Go · 6 % CPU » | Les processus Claude en cours, avec la mémoire et le processeur qu’ils prennent. Absent quand aucun ne tourne. L’infobulle liste chaque agent, le plus gourmand en mémoire d’abord. |
 | Quotas | Les deux fenêtres de quota du compte en cours : voir la section suivante. |
 | « Aujourd’hui 4,12 $ » | Ce que les agents ont coûté depuis minuit : voir la section « Le coût ». |
-| « Cache aujourd’hui : ≈ 3,10 $ économisés » | Ce que le cache des agents a fait économiser depuis minuit : voir la section « La température du cache ». Absent tant qu’il n’a rien économisé. |
+| « Cache aujourd’hui : ≈ 3,10 $ économisés » | Ce que le cache des agents a fait économiser depuis minuit : voir la section « La température du cache ». Caché par défaut : Réglages › Comptes et harness › Avancé › « Économies du cache dans la barre d’état » l’affiche. Absent tant qu’il n’a rien économisé. |
 | « ⎇ main ↑1 ↓3 » | La branche du projet affiché, quand c’est un dépôt git. Un clic ouvre le sélecteur de branches ([les branches](branches)). |
 | À droite | L’état d’une [mise à jour](updates), « ♪ On » ou « ♪ Off » pour le son des [notifications](notifications), et ⚙ pour les réglages (`Ctrl+,`). |
 

@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- La barre d’état ne montre plus par défaut ce que le cache a fait économiser dans la journée : le réglage « Économies du cache dans la barre d’état », dans Comptes et harness › Avancé, le remet. La température du cache des agents reste affichée.
 - Dans un dossier d’agents, la pastille « en attente » s’efface quand on ouvre l’agent qui attend, comme sa carte cesse de clignoter ; il reste jaune en tête de son dossier. Merci à @Metalzoid (#27).
 - Le remote control pour tous les agents ne lance plus un process par agent : seuls les agents actifs démarrent, et un agent terminé n’est joignable depuis claude.ai qu’après son prochain message, qui retrouve sa session. Le remote control garde au plus 8 process d’agents non actifs (réglable), et Escouade ne lance plus rien pour un harness ou un compte qui ne peut pas s’y relier. Merci à @Chapercher (#26).
 - Sous macOS et Linux, les agents restés en route après un arrêt brutal de l’app sont arrêtés à son lancement suivant. Un nouveau réglage, « Serveurs MCP des agents : seulement Escouade », allège chaque agent Claude Code des serveurs MCP de ta configuration.
