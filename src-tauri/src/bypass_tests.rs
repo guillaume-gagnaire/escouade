@@ -173,3 +173,68 @@ async fn the_mode_of_no_question_is_refused_without_the_setting() {
     h.turn(&b, "Bonjour").await;
     assert!(h.launches(&r).last().unwrap().contains(&flag));
 }
+
+/// ESC-429: every harness's way into the mode of no question, from the plugins of `plugins/` and `escouade-acp`.
+#[test]
+fn every_known_harness_flag_of_bypass_is_held_off_and_kept_on() {
+    let s = |v: &[&str]| v.iter().map(|a| a.to_string()).collect::<Vec<_>>();
+    let cases: [(&str, Vec<String>, Vec<String>); 14] = [
+        ("claude", s(&["--dangerously-skip-permissions"]), s(&[])),
+        (
+            "claude",
+            s(&["--allow-dangerously-skip-permissions"]),
+            s(&[]),
+        ),
+        (
+            "claude",
+            s(&["--permission-mode", "bypassPermissions"]),
+            s(&[]),
+        ),
+        (
+            "codex",
+            s(&["--dangerously-bypass-approvals-and-sandbox"]),
+            s(&[]),
+        ),
+        ("copilot", s(&["--allow-all"]), s(&[])),
+        ("copilot", s(&["--allow-all-tools"]), s(&[])),
+        ("gemini", s(&["--approval-mode", "yolo"]), s(&[])),
+        ("gemini", s(&["--approval-mode=yolo"]), s(&[])),
+        ("gemini", s(&["--yolo"]), s(&[])),
+        ("antigravity", s(&["--mode", "yolo"]), s(&[])),
+        ("antigravity", s(&["--mode=yolo"]), s(&[])),
+        ("cursor", s(&["--force"]), s(&[])),
+        ("vibe", s(&["--agent", "auto-approve"]), s(&[])),
+        ("vibe", s(&["--agent=auto-approve"]), s(&[])),
+    ];
+    for (harness, flag, _) in cases {
+        let around = |extra: &[String]| {
+            let mut v = s(&["--model", "m"]);
+            v.extend(extra.iter().cloned());
+            v.extend(s(&["--resume", "x"]));
+            v
+        };
+        let mut off = around(&flag);
+        hold(&mut off, false);
+        assert_eq!(
+            off,
+            s(&["--model", "m", "--resume", "x"]),
+            "{harness} {flag:?}"
+        );
+        let mut on = around(&flag);
+        hold(&mut on, true);
+        assert_eq!(on, around(&flag), "{harness} {flag:?}");
+    }
+    // What is not Bypass stays: the same options with another value, a value alone.
+    let mut safe = s(&[
+        "--approval-mode",
+        "plan",
+        "--agent",
+        "ask",
+        "--mode",
+        "plan",
+        "yolo",
+    ]);
+    let before = safe.clone();
+    hold(&mut safe, false);
+    assert_eq!(safe, before);
+}
