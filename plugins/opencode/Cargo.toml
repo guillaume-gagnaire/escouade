@@ -18,8 +18,8 @@ escouade-plugin-protocol = "0.1.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
-parking_lot = "0.12"
-base64 = "0.22"
+parking_lot = "0.13"
+base64 = "0.23"
 
 # In a module, WASI's random numbers.
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
