@@ -165,8 +165,10 @@ pub struct Settings {
     /// (src/lib/plugin-themes.ts); a plugin switched off or gone leaves Escouade's colours, the choice kept.
     pub plugin_theme: String,
     /// « N'installer que des versions vérifiées » (la vue Plugins, STORE-9): a version from the store
-    /// without the seal « Vérifié par Escouade » is refused, at an install as at an update. Off by
-    /// default (docs/STORE.md §4.4).
+    /// without the seal « Vérifié par Escouade » is refused, at an install as at an update. On for a
+    /// new installation (`Settings::default`, ESC-424); settings saved before without it keep it off,
+    /// as it was (the field's own default), and the user's choice stays.
+    #[serde(default)]
     pub plugins_verified_only: bool,
     /// « Zoom de l’interface », in percent (`ZOOM_LEVELS`): the whole window's, as the WebView's
     /// zoom (text, spacing and icons together); Ctrl+= / Ctrl+- / Ctrl+0 change it too.
@@ -733,7 +735,7 @@ impl Default for Settings {
             private_projects: false,
             theme: ThemeChoice::System,
             plugin_theme: String::new(),
-            plugins_verified_only: false,
+            plugins_verified_only: true,
             ui_zoom: 100,
             terminal_font_size: DEFAULT_FONT_SIZE,
             editor_font_size: DEFAULT_FONT_SIZE,
@@ -3477,6 +3479,22 @@ mod tests {
         }
         let v = serde_json::to_value(Settings::default()).unwrap();
         assert_eq!(v["telemetry"], Value::Null);
+    }
+
+    #[test]
+    fn only_verified_plugins_for_a_new_installation_and_an_existing_one_keeps_its_choice() {
+        // A new installation: no settings saved.
+        assert!(Settings::default().plugins_verified_only);
+        // Settings saved before the default changed, without it: off, as they had it.
+        let s: Settings = serde_json::from_value(json!({ "sound": false })).unwrap();
+        assert!(!s.plugins_verified_only);
+        for choice in [true, false] {
+            let s: Settings =
+                serde_json::from_value(json!({ "pluginsVerifiedOnly": choice })).unwrap();
+            assert_eq!(s.plugins_verified_only, choice);
+            let v = serde_json::to_value(&s).unwrap();
+            assert_eq!(v["pluginsVerifiedOnly"], json!(choice));
+        }
     }
 
     #[test]

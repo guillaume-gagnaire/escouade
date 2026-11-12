@@ -1402,6 +1402,8 @@ impl<R: Runtime> Core<R> {
                 crate::i18n::ui()
             ))
         })?;
+        // The gesture by which a harness described by anyone's plugin may be asked its version.
+        crate::engine::registry::gesture(harness.id());
         // A version older than the tested ones is refused, with its reason.
         crate::engine::registry::check(harness, &program).await?;
         let port = self.hook_port()?;

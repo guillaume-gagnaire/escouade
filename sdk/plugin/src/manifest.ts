@@ -116,6 +116,8 @@ export interface Manifest {
     /** The programs it may run (`proc/spawn`): a program's name, never a path, then its arguments, word for word. A last word `*` lets any more follow. */
     commands?: string[];
     decide?: boolean;
+    /** The variables it may set on what it runs (`proc/spawn`, the launches of its harnesses), shown before it is installed; any other is refused. Never Escouade's own nor `LD_*`, `DYLD_*`, `GIT_*` (but `GIT_AUTHOR_*`, `GIT_COMMITTER_*`), `PYTHON*`, `RUBY*`, `PERL*`, `NODE_*`, `JAVA_TOOL_OPTIONS`, `npm_config_*`, `*_PROXY`, `SSL_*`, `XDG_*`, `HOME`, `USERPROFILE`, `APPDATA`, `PATH`. */
+    env?: string[];
     events?: string[];
     /** The folders it may read or write (`fs/*`): a root of the closed list, which the host resolves; no path of its own. `plugin` is read only. */
     files?: Array<{

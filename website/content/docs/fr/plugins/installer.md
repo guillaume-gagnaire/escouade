@@ -38,7 +38,7 @@ Escouade propose **la dernière version qu’il peut faire tourner** : une versi
 
 La fenêtre d’installation dit alors « Vérifié par Escouade » et « Signature : vérifiée ici, par l’app » ; pour une version non vérifiée, une bande : « Personne n’a relu cette version. Elle vient du store, son archive est bien celle que l’auteur a publiée, mais rien ne dit ce que fait son programme », et le bouton « Installer quand même ».
 
-**N’installer que des versions vérifiées**, en tête des installés (éteint d’office), refuse toute version du store sans sceau, à l’installation comme à la mise à jour.
+**N’installer que des versions vérifiées**, en tête des installés (allumé pour une nouvelle installation ; une installation d’avant la 2.2 garde son choix), refuse toute version du store sans sceau, à l’installation comme à la mise à jour.
 
 Un plugin installé depuis un dossier ou un dépôt git dont l’id est au store le dit sur sa page, avec « Passer à la v… du store » : la même fenêtre, tes choix gardés.
 

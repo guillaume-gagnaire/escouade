@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Un plugin ne pose plus que les variables d’environnement que son manifeste déclare, montrées à l’installation, et jamais celles qui changeraient le programme qu’il lance. Le harness d’un plugin tiers ne peut plus être un shell ou un interpréteur, et sa version n’est lue qu’après un premier geste de ta part. « N’installer que des versions vérifiées » est allumé pour une nouvelle installation.
 - Sécurité : un agent ne répond plus aux permissions ni aux questions d’un autre agent, même avec « Les agents peuvent piloter Escouade ». Réglages › Agents dit qui le peut : personne (par défaut), le chef d’escouade que tu choisis pour chaque projet dans Réglages › Projets › Équipe, ou tous les agents.
 - La barre d’état ne montre plus par défaut ce que le cache a fait économiser dans la journée : le réglage « Économies du cache dans la barre d’état », dans Comptes et harness › Avancé, le remet. La température du cache des agents reste affichée.
 - Dans un dossier d’agents, la pastille « en attente » s’efface quand on ouvre l’agent qui attend, comme sa carte cesse de clignoter ; il reste jaune en tête de son dossier. Merci à @Metalzoid (#27).

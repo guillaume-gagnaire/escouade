@@ -61,6 +61,8 @@ fn capabilities(
         } else {
             manifest.permissions.commands.clone()
         },
+        env: manifest.permissions.env.clone(),
+        first_hand: crate::plugins::builtin::first_hand(&manifest.id),
         temp: scratch.join("temp"),
         agents: agents.clone(),
         projects: Arc::new(move |_| Ok(project.clone())),

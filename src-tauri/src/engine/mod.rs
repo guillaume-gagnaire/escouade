@@ -417,6 +417,11 @@ pub trait Engine: Send + Sync {
     fn update_command(&self) -> &'static str;
     /// The arguments that make its program print its version.
     fn version_args(&self) -> &'static [&'static str];
+    /// Whether its version is asked only once the user acted on it (`registry::gesture`): a harness a plugin of anyone's
+    /// describes, whose `versionArgs` the user did not write (ESC-424).
+    fn version_waits_gesture(&self) -> bool {
+        false
+    }
     /// What it can do, as the interface reads it (`registry::EngineCaps`).
     fn caps(&self) -> registry::EngineCaps;
     /// What tells its accounts apart (`registry::AccountStore`): for Claude Code, a configuration

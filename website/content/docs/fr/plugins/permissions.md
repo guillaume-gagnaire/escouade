@@ -10,6 +10,7 @@ Ce qu’un plugin demande dans son manifeste, ce que chaque demande lui ouvre, e
 | `run.command` | Un programme natif : Escouade ne le lance plus, quelle que soit l’origine du plugin, et le store le refuse. | Rien : le plugin ne démarre pas, et sa page dit pourquoi. |
 | `permissions.decide` | Autoriser ou refuser ce que tes agents demandent, avant toi. | Une réponse en 500 ms, sinon la demande vient à toi ; un refus l’emporte ; chaque décision est au journal. Jamais donnée par un projet. |
 | `permissions.commands` | Les programmes de ton ordinateur qu’il peut lancer, ligne par ligne. | Rien d’autre ne se lance, sans shell, et le lancement va au journal. Mais le programme lancé a tes droits. |
+| `permissions.env` | Les variables d’environnement qu’il pose sur ce qu’il lance. | Aucune autre ; et jamais, même déclarées, celles qui changeraient le programme lancé (`GIT_*`, `PYTHON*`, `*_PROXY`, `HOME`, `PATH`…). |
 | `permissions.files` | Les dossiers qu’il lit ou écrit : le sien, un dossier à lui, ceux de tes agents. | Une liste fermée de racines, résolues par Escouade, liens suivis, jamais un projet privé. Chaque écriture va au journal. |
 | `limits` | Plus de temps ou d’octets pour un appel. | Plafonnées par Escouade : 120 s, 32 Mo, 4 Mo pour un fichier. |
 | `permissions.events` | Les faits qu’il reçoit : un ticket qui change de colonne, un agent qui attend… | Un fait hors de la liste ne lui est jamais envoyé. |

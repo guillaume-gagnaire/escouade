@@ -169,6 +169,10 @@ pub enum Code {
     Command,
     /// Writing in the plugin's own folder: what the store signed stays as it was (ESC-333).
     ReadOnly,
+    /// A variable that is no name, or one Escouade refuses a plugin even declared (`env_refused`, ESC-424).
+    Variable,
+    /// A harness of anyone's that names a shell or an interpreter as its program (`interpreter`, ESC-424).
+    Interpreter,
 }
 
 /// A field that is wrong, by its path (`contributes.settings[0].key`; empty for the whole file).
@@ -271,6 +275,16 @@ impl Problem {
                 lang,
                 "doit commencer par le nom d'un programme, jamais un chemin, et `*` n'y vient qu'en dernier mot.",
                 "must start with a program's name, never a path, and `*` comes only as its last word."
+            ),
+            Code::Variable => tr_in!(
+                lang,
+                "n'est pas une variable qu'un plugin peut poser : un nom (lettres, chiffres, `_`), hors des variables d'Escouade et des familles qui changeraient ce que lance le programme (`LD_*`, `GIT_*`, `PYTHON*`, `*_PROXY`, `HOME`, `PATH`…).",
+                "is no variable a plugin may set: a name (letters, digits, `_`), out of Escouade's own and of the families that would change what the program runs (`LD_*`, `GIT_*`, `PYTHON*`, `*_PROXY`, `HOME`, `PATH`…)."
+            ),
+            Code::Interpreter => tr_in!(
+                lang,
+                "nomme un shell ou un interpréteur (`bash`, `powershell`, `python`, `node`…) : le harness d'un tiers lance un programme à lui.",
+                "names a shell or an interpreter (`bash`, `powershell`, `python`, `node`…): the harness of anyone's runs a program of its own."
             ),
             Code::ReadOnly => tr_in!(
                 lang,
@@ -416,9 +430,142 @@ pub struct Permissions {
     pub network: Vec<String>,
     pub secrets: Vec<String>,
     pub commands: Vec<String>,
+    /// The variables it may set on what it runs (`proc/spawn`, the launches of its harnesses), shown before it is
+    /// installed (ESC-424). None when its manifest has no `env`: nothing for anyone's plugin; for one of Escouade's own
+    /// hand, of a version from before the field, its launches as they were.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub env: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub files: Vec<FileAccess>,
     pub decide: bool,
+}
+
+impl Permissions {
+    /// Whether the plugin may set the variable `name` (as written, its case kept): one of `permissions.env`, never one
+    /// of `env_refused` for anyone's plugin. A plugin of Escouade's own hand without `env` keeps what it did.
+    pub fn env_allowed(&self, name: &str, hand: Hand) -> bool {
+        env_allowed(self.env.as_deref(), name, hand)
+    }
+}
+
+/// Whether a plugin of `hand` that declares `declared` (`permissions.env`) may set the variable `name`.
+pub fn env_allowed(declared: Option<&[String]>, name: &str, hand: Hand) -> bool {
+    match declared {
+        Some(declared) => declared.iter().any(|d| d == name) && !env_refused(name, hand),
+        None => hand == Hand::First && is_var_name(name),
+    }
+}
+
+/// A name of variable: a letter or `_`, then letters, digits and `_`.
+pub fn is_var_name(name: &str) -> bool {
+    let mut bytes = name.bytes();
+    bytes
+        .next()
+        .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_')
+        && bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_')
+}
+
+/// The variables of `GIT_*` a plugin may set: who writes a commit, which loads nothing.
+const GIT_SAFE: [&str; 2] = ["GIT_AUTHOR_", "GIT_COMMITTER_"];
+
+/// Whether Escouade refuses the variable `name` to a plugin of `hand`, even declared (ESC-424): no name; for anyone's
+/// plugin, Escouade's own (`ESCOUADE_*`) and the families by which a program loads other code, another configuration,
+/// another certificate or proxy, or finds its programs and its home elsewhere. The core itself sets what a harness needs
+/// of them. A plugin of Escouade's own hand is held to what it declares alone.
+pub fn env_refused(name: &str, hand: Hand) -> bool {
+    if !is_var_name(name) {
+        return true;
+    }
+    if hand == Hand::First {
+        return false;
+    }
+    let u = name.to_ascii_uppercase();
+    let starts = |p: &str| u.starts_with(p);
+    starts("ESCOUADE_")
+        || starts("LD_")
+        || starts("DYLD_")
+        || (starts("GIT_") && !GIT_SAFE.iter().any(|p| starts(p)))
+        || starts("PYTHON")
+        || starts("RUBY")
+        || starts("PERL")
+        || starts("NODE_")
+        || starts("NPM_CONFIG_")
+        || starts("SSL_")
+        || starts("XDG_")
+        || u.ends_with("_PROXY")
+        || matches!(
+            u.as_str(),
+            "JAVA_TOOL_OPTIONS"
+                | "_JAVA_OPTIONS"
+                | "JDK_JAVA_OPTIONS"
+                | "HOME"
+                | "USERPROFILE"
+                | "APPDATA"
+                | "LOCALAPPDATA"
+                | "PATH"
+                | "PATHEXT"
+                | "COMSPEC"
+                | "SHELL"
+                | "BASH_ENV"
+                | "ENV"
+                | "ZDOTDIR"
+                | "IFS"
+                | "PROMPT_COMMAND"
+                | "EDITOR"
+                | "VISUAL"
+                | "PAGER"
+                | "BROWSER"
+                | "CURL_CA_BUNDLE"
+                | "REQUESTS_CA_BUNDLE"
+        )
+}
+
+/// The shells and interpreters a harness of anyone's may not name as its program (ESC-424): each would run what its
+/// arguments say. Compared without case nor `.exe`, and with what follows `python`, `pwsh`… (`python3.12`).
+pub fn interpreter(program: &str) -> bool {
+    let p = program.to_ascii_lowercase();
+    let p = p
+        .strip_suffix(".exe")
+        .or_else(|| p.strip_suffix(".com"))
+        .unwrap_or(&p);
+    const EXACT: [&str; 28] = [
+        "sh",
+        "bash",
+        "zsh",
+        "dash",
+        "ksh",
+        "csh",
+        "tcsh",
+        "fish",
+        "ash",
+        "busybox",
+        "cmd",
+        "powershell",
+        "pwsh",
+        "node",
+        "nodejs",
+        "deno",
+        "bun",
+        "ruby",
+        "perl",
+        "php",
+        "lua",
+        "osascript",
+        "wscript",
+        "cscript",
+        "mshta",
+        "rundll32",
+        "env",
+        "wsl",
+    ];
+    const FAMILIES: [&str; 6] = ["python", "pypy", "perl", "ruby", "pwsh", "powershell"];
+    EXACT.contains(&p)
+        || FAMILIES.iter().any(|f| {
+            p.strip_prefix(f).is_some_and(|rest| {
+                rest.bytes()
+                    .all(|b| b.is_ascii_digit() || b == b'.' || b == b'-')
+            })
+        })
 }
 
 /// What it asks for beyond the host's defaults (`limits`): the host holds them to its own ceilings.
@@ -603,6 +750,7 @@ pub fn check_with(v: &Value, hand: Hand, file: Option<FileOf>) -> Read {
 struct Checker {
     problems: Vec<Problem>,
     ignored: Vec<String>,
+    hand: Hand,
 }
 
 fn join(path: &str, key: &str) -> String {
@@ -897,6 +1045,7 @@ impl Checker {
     }
 
     fn manifest(&mut self, v: &Value, hand: Hand, file: Option<FileOf>) -> Option<Manifest> {
+        self.hand = hand;
         let o = self.object(v, "")?;
         self.ignore_others(
             o,
@@ -1223,7 +1372,7 @@ impl Checker {
             o,
             "permissions",
             &[
-                "events", "network", "secrets", "commands", "files", "decide",
+                "events", "network", "secrets", "commands", "env", "files", "decide",
             ],
         );
         for (key, list) in [
@@ -1240,6 +1389,15 @@ impl Checker {
             if !command_holds(command) {
                 self.problem(&format!("permissions.commands[{i}]"), Code::Command);
             }
+        }
+        if let Some(v) = o.get("env") {
+            let names = self.words(v, "permissions.env");
+            for (i, name) in names.iter().enumerate() {
+                if env_refused(name, self.hand) {
+                    self.problem(&format!("permissions.env[{i}]"), Code::Variable);
+                }
+            }
+            p.env = Some(names);
         }
         if let Some(v) = o.get("files") {
             p.files = self.files(v);
@@ -1301,6 +1459,53 @@ impl Checker {
     }
 
     /// The objects of the list of an extension point.
+    /// A harness of anyone's (ESC-424): its program (`locate.names`, else its id) no shell nor interpreter, and the
+    /// variables it sets (`acp.env`, `accountVar`, `keyVar`) none that Escouade refuses a plugin.
+    fn harness_of_anyone(&mut self, at: &str, item: &Map<String, Value>) {
+        let names = item
+            .get("locate")
+            .and_then(|l| l.get("names"))
+            .and_then(Value::as_array);
+        match names {
+            Some(names) if !names.is_empty() => {
+                for (i, n) in names.iter().enumerate() {
+                    if n.as_str().is_some_and(interpreter) {
+                        self.problem(&format!("{at}.locate.names[{i}]"), Code::Interpreter);
+                    }
+                }
+            }
+            _ => {
+                if item
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .is_some_and(interpreter)
+                {
+                    self.problem(&join(at, "id"), Code::Interpreter);
+                }
+            }
+        }
+        if let Some(env) = item
+            .get("acp")
+            .and_then(|a| a.get("env"))
+            .and_then(Value::as_object)
+        {
+            for k in env.keys() {
+                if env_refused(k, Hand::Third) {
+                    self.problem(&join(&join(at, "acp.env"), k), Code::Variable);
+                }
+            }
+        }
+        for key in ["accountVar", "keyVar"] {
+            if item
+                .get(key)
+                .and_then(Value::as_str)
+                .is_some_and(|v| env_refused(v, Hand::Third))
+            {
+                self.problem(&join(at, key), Code::Variable);
+            }
+        }
+    }
+
     fn items<'a>(&mut self, v: &'a Value, path: &str) -> Vec<(String, &'a Map<String, Value>)> {
         let Some(items) = v.as_array() else {
             self.wrong_type(path, "array");
@@ -1430,6 +1635,11 @@ impl Checker {
                             self.problem(&p, Code::Account);
                         }
                     }
+                }
+            }
+            if point == "harnesses" && self.hand == Hand::Third {
+                for (at, item) in &items {
+                    self.harness_of_anyone(at, item);
                 }
             }
         }
@@ -1565,6 +1775,11 @@ pub fn schema() -> Value {
             "network": words,
             "secrets": words,
             "commands": commands,
+            "env": {
+                "type": "array",
+                "description": "The variables it may set on what it runs (`proc/spawn`, the launches of its harnesses), shown before it is installed; any other is refused. Never Escouade's own nor `LD_*`, `DYLD_*`, `GIT_*` (but `GIT_AUTHOR_*`, `GIT_COMMITTER_*`), `PYTHON*`, `RUBY*`, `PERL*`, `NODE_*`, `JAVA_TOOL_OPTIONS`, `npm_config_*`, `*_PROXY`, `SSL_*`, `XDG_*`, `HOME`, `USERPROFILE`, `APPDATA`, `PATH`.",
+                "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+            },
             "files": files,
             "decide": { "type": "boolean" },
         },

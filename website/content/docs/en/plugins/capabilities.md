@@ -162,7 +162,7 @@ Each write and each refusal go to the journal.
 - what is not an entry, word for word; more words are allowed only when the entry ends in `*`;
 - a shell: under Windows, neither `.cmd` nor `.bat`, so no tool installed by npm;
 - a `dir` other than a root (`agent`, `project`), and a private project where the plugin is not on. Without `dir`, the program runs in `temp`;
-- an `ESCOUADE_*`, `PATH`, `LD_*`, `DYLD_*` or `NODE_OPTIONS` variable in `env`: it would run something else.
+- a variable of `env` that `permissions.env` does not declare ([the variables](#the-variables-env)).
 
 Each program dies with the plugin’s instance or at `proc/kill`, with what it started. Four at once. Its output is no longer read past 256 KiB that have not reached the module.
 
@@ -172,6 +172,24 @@ Each program dies with the plugin’s instance or at `proc/kill`, with what it s
 > The module is isolated, the program it runs is not: it has the user’s rights. An entry in `*` on a general program (`git *`, `docker *`) opens everything again, through `git -c core.sshCommand=…` for example. This is the strongest capability: ask for exact lines, and expect to justify a `*` at the review.
 
 `permissions.commands` is not `contributes.commands`, which runs a shell line on a fact, after the user’s agreement ([the events](plugins/events#a-command-on-a-fact)).
+
+## The variables: `env`
+
+```json
+  "permissions": {
+    "commands": ["git status --short"],
+    "env": ["GIT_AUTHOR_NAME", "MY_TOOL_MODE"]
+  }
+```
+
+**What it allows.** Setting these variables on what the plugin runs: the `env` of `proc/spawn`, and the launches of its harnesses (`engine/launch`, `terminal/launch`, `engine/oneShot`, `agent/open`). The `acp.env` of a described harness counts as declared, and Escouade sets its own itself (`accountVar`, `keyVar`, the address of its hooks).
+
+**What Escouade refuses.** Any variable not declared, with its reason. And, even declared, those by which a program would load other code, another configuration, another certificate or a proxy: Escouade’s own (`ESCOUADE_*`), `LD_*`, `DYLD_*`, `GIT_*` (but `GIT_AUTHOR_*` and `GIT_COMMITTER_*`), `PYTHON*`, `RUBY*`, `PERL*`, `NODE_*`, `JAVA_TOOL_OPTIONS`, `_JAVA_OPTIONS`, `npm_config_*`, `*_PROXY`, `SSL_*`, `XDG_*`, `HOME`, `USERPROFILE`, `APPDATA`, `PATH`, `SHELL`, `EDITOR`, `PAGER`… `escouade-plugin validate` and the store refuse a manifest that declares one (code `variable`).
+
+**The window** says “Sets this environment variable on what it runs”, one line a variable.
+
+> [!NOTE]
+> Without `permissions.env`, a plugin sets no variable. A variable is always a name (`A-Z`, `0-9`, `_`): never a secret in the manifest, which anyone reads.
 
 ## The timers
 

@@ -1383,6 +1383,177 @@
       },
       "errors": ["limits.fileBytes type"],
       "ignored": []
+    },
+    {
+      "name": "the variables it declares, a name each (ESC-424)",
+      "manifest": {
+        "id": "dev.exemple.outil",
+        "name": "Outil",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "permissions": {
+          "commands": ["git status"],
+          "env": ["GIT_AUTHOR_NAME", "MON_OUTIL_TOKEN", "_X1"]
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "x\n"
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "a variable of a refused family is refused to anyone, even declared (ESC-424)",
+      "manifest": {
+        "id": "dev.exemple.outil",
+        "name": "Outil",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "permissions": {
+          "commands": ["git status"],
+          "env": [
+            "GIT_CONFIG_COUNT",
+            "GIT_SSH_COMMAND",
+            "LD_PRELOAD",
+            "DYLD_INSERT_LIBRARIES",
+            "node_options",
+            "PYTHONSTARTUP",
+            "RUBYOPT",
+            "PERL5OPT",
+            "JAVA_TOOL_OPTIONS",
+            "_JAVA_OPTIONS",
+            "npm_config_script_shell",
+            "HTTPS_PROXY",
+            "all_proxy",
+            "SSL_CERT_FILE",
+            "HOME",
+            "USERPROFILE",
+            "APPDATA",
+            "XDG_CONFIG_HOME",
+            "PATH",
+            "ESCOUADE_MCP_TOKEN",
+            "A=B",
+            "1X"
+          ]
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "x\n"
+        }
+      },
+      "errors": [
+        "permissions.env[0] variable",
+        "permissions.env[1] variable",
+        "permissions.env[2] variable",
+        "permissions.env[3] variable",
+        "permissions.env[4] variable",
+        "permissions.env[5] variable",
+        "permissions.env[6] variable",
+        "permissions.env[7] variable",
+        "permissions.env[8] variable",
+        "permissions.env[9] variable",
+        "permissions.env[10] variable",
+        "permissions.env[11] variable",
+        "permissions.env[12] variable",
+        "permissions.env[13] variable",
+        "permissions.env[14] variable",
+        "permissions.env[15] variable",
+        "permissions.env[16] variable",
+        "permissions.env[17] variable",
+        "permissions.env[18] variable",
+        "permissions.env[19] variable",
+        "permissions.env[20] variable",
+        "permissions.env[21] variable"
+      ],
+      "ignored": []
+    },
+    {
+      "name": "a plugin of Escouade's own hand declares what its harness needs (ESC-424)",
+      "firstParty": true,
+      "manifest": {
+        "id": "dev.escouade.outil",
+        "name": "Outil",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "run": {
+          "js": "dist/plugin.mjs"
+        },
+        "permissions": {
+          "env": ["HOME", "USERPROFILE", "ESCOUADE_MCP_TOKEN"]
+        }
+      },
+      "files": {
+        "dist/plugin.mjs": {
+          "text": "x\n"
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "a harness of anyone runs no shell nor interpreter, and sets no refused variable (ESC-424)",
+      "manifest": {
+        "id": "dev.exemple.outil",
+        "name": "Outil",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.0"
+        },
+        "contributes": {
+          "harnesses": [
+            {
+              "id": "outil",
+              "name": "Outil",
+              "locate": {
+                "names": ["outil", "bash", "PowerShell.exe", "python3.12"]
+              },
+              "acp": {
+                "args": ["--acp"],
+                "env": {
+                  "OUTIL_MODE": "acp",
+                  "GIT_SSH_COMMAND": "x"
+                }
+              },
+              "accountVar": "HOME"
+            },
+            {
+              "id": "pwsh",
+              "name": "Pwsh",
+              "acp": {
+                "args": []
+              }
+            }
+          ]
+        }
+      },
+      "errors": [
+        "contributes.harnesses[0].locate.names[1] interpreter",
+        "contributes.harnesses[0].locate.names[2] interpreter",
+        "contributes.harnesses[0].locate.names[3] interpreter",
+        "contributes.harnesses[0].acp.env.GIT_SSH_COMMAND variable",
+        "contributes.harnesses[0].accountVar variable",
+        "contributes.harnesses[1].id interpreter"
+      ],
+      "ignored": []
     }
   ],
   "hosts": {

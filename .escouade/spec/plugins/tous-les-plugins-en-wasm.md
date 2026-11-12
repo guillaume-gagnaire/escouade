@@ -2,8 +2,8 @@
 title: "Tous les plugins en WASM (la cible de la 2.2)"
 subject: "plugins"
 sources: ["docs/PLUGINS-DESIGN.md §8 (ESC-330)","docs/PLUGINS-DESIGN.md §8.16 (ESC-341)","docs/PLUGINS-DESIGN.md §8.17 (ESC-335)","docs/PLUGINS-DESIGN.md §8.18 (ESC-336)","docs/PLUGINS-DESIGN.md §8.19 (ESC-344)","docs/PLUGINS-DESIGN.md §8.20 (ESC-337)","docs/PLUGINS-DESIGN.md §8.22 (ESC-351)","docs/PLUGINS-DESIGN.md §8.23 (ESC-349)","prototypes/wasm-all/","Décision de l'utilisateur du 2026-11-04 : « en 2.2, tous les plugins, rust ou TS, seront compilés en WASM, c'est acté »","Précision de l'utilisateur du 2026-11-04 : « tous les plugins builtins soient dans /plugins/*, tous publiés sur le store, vérifiés et signés »","Choix de l'utilisateur du 2026-11-05 (ESC-341) : MIT pour les trois crates, avec l'accord de Florian Gagnaire","docs/PLUGINS-DESIGN.md §8.24 (ESC-348)","docs/PLUGINS-DESIGN.md §8.25 (ESC-345)","docs/PLUGINS-DESIGN.md §8.27 (ESC-347)","docs/PLUGINS-DESIGN.md §8.28 (ESC-350)","docs/PLUGINS-DESIGN.md §8.29 (ESC-358)","Accord de l'utilisateur du 2026-11-06 : publication et MIT d'escouade-voice"]
-tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-352","ESC-349","ESC-348","ESC-345","ESC-346","ESC-347","ESC-350","ESC-358","ESC-353"]
-decisions: [73,71,70,72,75,80,84,86,89,92,93,96,99,103]
+tickets: ["ESC-330","ESC-331","ESC-332","ESC-333","ESC-334","ESC-338","ESC-341","ESC-335","ESC-336","ESC-344","ESC-337","ESC-342","ESC-351","ESC-352","ESC-349","ESC-348","ESC-345","ESC-346","ESC-347","ESC-350","ESC-358","ESC-353","ESC-424","ESC-428"]
+decisions: [73,71,70,72,75,80,84,86,89,92,93,96,99,103,152,"les-corrections-de-l-audit-dans-la-2-2-v"]
 compared: null
 ---
 
@@ -253,3 +253,12 @@ Le contrat a grandi : `escouade-plugin-protocol` 0.1.1 et `escouade-acp` 0.1.2, 
 
 - **Une exception à la phrase précédente** : Cursor CLI, Gemini CLI et Mistral lisent leur manifeste depuis leur module, qui l'embarque. Une clé `store` y changerait leur empreinte : leurs catégories restent dans la commande jusqu'à leur prochaine version. Les 21 autres modules, et Goose, les déclarent à leur manifeste, sans effet sur leur empreinte.
 - **Ce qui est déjà au store ne repart pas.** La commande passe par les 23 modules et par `slack`, `team-rules`, `discord`, `high-contrast` et `goose`. Une version signée au catalogue n'est pas touchée. Une version publiée mais non signée va à sa revue, sans nouvelle soumission. Seul le numéro de version compte : un dossier changé sans nouvelle version ne repart pas.
+
+## Les variables d'un programme déclarées (ESC-424)
+
+Ceci remplace, dans « Les programmes », la phrase « plus celles que le plugin nomme ».
+
+- Un plugin déclare `permissions.env` : les noms des variables qu'il pose sur ce qu'il lance. `proc/spawn` refuse toute autre variable de `env` (« the variable X is not in permissions.env »), et sans `permissions.env` aucune ne passe.
+- Même déclarées, un tiers ne pose aucune des familles par lesquelles un programme chargerait un autre code, une autre configuration, un autre certificat ou un proxy, ou trouverait ailleurs ses programmes et son dossier (la liste est à *Les harness ACP décrits*, ajouts d'ESC-424) ; ni personne `ESCOUADE_*`, `PATH`, `LD_*`, `DYLD_*`, `NODE_OPTIONS`, `BASH_ENV`, `ENV`, `IFS`. L'essai de l'audit, `git status` avec la configuration de git en variables, est refusé : git ne tourne pas.
+- La fenêtre d'installation dit « Pose cette variable d'environnement sur ce qu'il lance », une ligne par variable, avec « appliqué par Escouade : aucune autre variable, et jamais celles qui changeraient le programme lancé ».
+- Dans la 2.2 (ESC-428), les plugins de la première main que l'app embarque (`plugins/seed.json`) sont d'une version d'avant `permissions.env` : sans ce champ, un plugin `dev.escouade.*` garde ses lancements comme avant (seules les variables d'Escouade et celles qui lanceraient un autre programme lui sont refusées). Le chef publie au store leurs versions qui déclarent leurs variables, puis met à jour le seed de la 2.2 : dès lors chacun est tenu à ce qu'il déclare. Aucune liste à retirer : la règle tient au champ.

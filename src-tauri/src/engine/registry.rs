@@ -422,9 +422,24 @@ pub fn forget() {
     *VERSIONS.lock() = None;
 }
 
+/// The harnesses the user acted on since the app started (`gesture`): a harness of `Engine::version_waits_gesture` has
+/// its version asked once it is here (ESC-424).
+static GESTURES: Mutex<Vec<EngineId>> = Mutex::new(Vec::new());
+
+/// The user acts on the harness `id`: starts an agent or a terminal of it. Its version may be asked from now on.
+pub fn gesture(id: EngineId) {
+    let mut g = GESTURES.lock();
+    if !g.contains(&id) {
+        g.push(id);
+    }
+}
+
 /// The version of `program`, as `engine` reads it: from what it already said while its file is
 /// the same. None when it says none.
 pub async fn version(engine: &dyn Engine, program: &Program) -> Option<String> {
+    if engine.version_waits_gesture() && !GESTURES.lock().contains(&engine.id()) {
+        return None;
+    }
     let key = program.describe();
     let stamp = modified(program);
     if let Some((at, v)) = VERSIONS.lock().as_ref().and_then(|m| m.get(&key)) {

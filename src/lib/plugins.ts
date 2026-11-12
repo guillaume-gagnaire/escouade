@@ -72,6 +72,8 @@ export interface Manifest {
     network: string[];
     secrets: string[];
     commands: string[];
+    /** The variables it may set on what it runs (ESC-424). */
+    env?: string[];
     files?: { root: string; access: string }[];
     decide: boolean;
   };
@@ -295,6 +297,17 @@ export function askOf(word: string, m: Manifest | null, lang: string): Ask {
         red: true,
         // A program of a plugin in WASM goes through Escouade (`proc/spawn`); a process runs what it likes.
         note: t(m?.run?.js || m?.run?.wasm ? 'plugins.perms.commandsApplied' : 'plugins.perms.commandsNote'),
+      };
+    case 'env':
+      // A variable it sets on what it runs (ESC-424): any other is refused, and the families that would change the program too.
+      return {
+        word,
+        icon: 'bash',
+        text: t('plugins.ask.env'),
+        detail: what,
+        strong: false,
+        red: false,
+        note: t('plugins.perms.envApplied'),
       };
     case 'files':
       return askOfFiles(word, rest[0] ?? '', rest[1] === 'write');

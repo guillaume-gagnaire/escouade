@@ -1,9 +1,9 @@
 ---
 title: "Les harness ACP décrits"
 subject: "plugins"
-sources: ["docs/PLUGINS-DESIGN.md §1.1, §4.4, §4.12, §8.27, §8.31","docs/TODO-2.2.md, PLG-6","Essai réel de Goose 1.57.0 sur Ollama, 2026-11-01 (ESC-178)"]
-tickets: ["ESC-178","ESC-222","ESC-281","ESC-282","ESC-347","ESC-361","ESC-362"]
-decisions: []
+sources: ["docs/PLUGINS-DESIGN.md §1.1, §4.4, §4.12, §8.27, §8.31","docs/TODO-2.2.md, PLG-6","Essai réel de Goose 1.57.0 sur Ollama, 2026-11-01 (ESC-178)","Audit de sécurité 2026-11 (ESC-418), fiches SEC-05 et SEC-06 : docs/security/audit-2026-11/rapport.md","docs/PLUGINS.md §1.3, §2.2"]
+tickets: ["ESC-178","ESC-222","ESC-281","ESC-282","ESC-347","ESC-361","ESC-362","ESC-424","ESC-428"]
+decisions: [152,"les-corrections-de-l-audit-dans-la-2-2-v"]
 compared: null
 ---
 
@@ -77,3 +77,14 @@ Un harness décrit est servi par `dev.escouade.acp`, mais c'est son auteur qui e
 - **La clôture et la lecture seule** reviennent par `agent/attach`, sur un agent créé comme sur un agent déjà là : elles tiennent à travers un redémarrage du plugin, sur les permissions comme sur `fs/*`, et le cœur l'emporte, une clôture retirée se retire. Voir *Le contrat des harness en process*.
 - **Une écriture dans `.git`** a sa carte, même en « Édits auto » et, pour Gemini et Vibe, en « Demander » : elle n'est plus prise pour une écriture dans le dossier de l'agent. Seul « Bypass » la laisse passer.
 - **Un agent recréé garde sa session.** Seul un lancement ouvre une session, et le harness tourne encore : le plugin reprend du cœur la session, le tour en cours et les permissions en attente. Ses messages repartent sur cette session, ce que dit le harness est lu, et la clôture tient sur le reste du tour pour Cursor, Gemini et Mistral Vibe, qui n'ont qu'elle (`fenceOnPermissions`). Le tour en cours finit par sa réponse, que le plugin reconnaît à son `stopReason` ou à son erreur. Une permission en attente se répond par son id, avec les options par défaut d'ACP : ce qu'elle proposait est perdu. Un plan ou une question tenus par le client ne se reprennent pas.
+
+## Ajouts d'ESC-424 (audit de sécurité, SEC-05 et SEC-06)
+
+Ceci remplace, dans « La confiance d'un harness décrit », les phrases sur les variables et sur `versionArgs`.
+
+- **Les variables déclarées.** Un lancement (`engine/launch`, `terminal/launch`, `engine/oneShot`, `agent/open`, la relance) ne pose que les variables que le plugin qui décrit le harness déclare (`permissions.env`), celles de son `acp.env` (que l'installation montre déjà) et celles que le cœur pose lui-même (`accountVar`, `keyVar`, `ESCOUADE_HOOK_URL`). Toute autre est refusée : l'agent ne démarre pas, et la variable est nommée.
+- **Les familles refusées à un tiers, même déclarées** : `ESCOUADE_*`, `LD_*`, `DYLD_*`, `GIT_*` sauf `GIT_AUTHOR_*` et `GIT_COMMITTER_*`, `PYTHON*`, `RUBY*`, `PERL*`, `NODE_*`, `JAVA_TOOL_OPTIONS`, `_JAVA_OPTIONS`, `JDK_JAVA_OPTIONS`, `npm_config_*`, `*_PROXY`, `SSL_*`, `CURL_CA_BUNDLE`, `REQUESTS_CA_BUNDLE`, `HOME`, `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `XDG_*`, `PATH`, `PATHEXT`, `COMSPEC`, `SHELL`, `BASH_ENV`, `ENV`, `ZDOTDIR`, `IFS`, `PROMPT_COMMAND`, `EDITOR`, `VISUAL`, `PAGER`, `BROWSER`, quelle que soit la casse. Cela vaut pour `acp.env`, `accountVar` et `keyVar`. Le lecteur du manifeste refuse déjà un manifeste tiers qui en nomme une (code `variable`), dans l'app, dans `escouade-plugin validate` et au store.
+- **La première main** est tenue à ce qu'elle déclare, sans la liste des familles : Antigravity CLI pose `HOME`, `USERPROFILE` et ses dossiers temporaires sur le dossier de son agent. Une version de la première main d'avant `permissions.env` garde ses lancements comme avant.
+- **Pas de shell ni d'interpréteur.** Un harness d'un tiers ne nomme comme programme ni `sh`, `bash`, `zsh`, `dash`, `ksh`, `fish`, `cmd`, `powershell`, `pwsh`, `python*`, `node`, `deno`, `bun`, `ruby`, `perl`, `php`, `lua`, `osascript`, `wscript`, `cscript`, `mshta`, `rundll32`, `env`, `wsl`… (sans casse, `.exe` compris). Le manifeste est refusé (code `interpreter`), et un nom de ce genre est retiré de `locate.names` : le programme n'est pas trouvé.
+- **`versionArgs` attend un geste.** La version d'un harness décrit par un tiers n'est lue qu'après un geste de l'utilisateur sur ce harness dans la session de l'app : un agent ou un terminal de lui lancé. Ni l'installation, ni le démarrage, ni la liste des harness ne la lancent ; d'ici là, sa version est inconnue. La première main la lit comme avant.
+- **L'installation** montre aussi une ligne `env:<variable>` par variable déclarée, non révocable, et une mise à jour qui en ajoute une redemande l'accord.

@@ -71,7 +71,7 @@ The `$schema` line gives completion and checks in VS Code and the editors that r
 | `icon` | no | Its logo: a square PNG of its folder, 256 px a side at least, 1 MB at most (see below). |
 | `run` | no | Its program. Without one, the plugin is declarative: nothing runs. |
 | `activation` | no | What starts it, for example `event:ticket.column`. Without an activation, its program does not run. |
-| `permissions` | no | What it asks for: `events`, `network`, `secrets`, `files`, `commands` (lists) and `decide` (`true` or `false`). See [the host’s capabilities](plugins/capabilities). |
+| `permissions` | no | What it asks for: `events`, `network`, `secrets`, `files`, `commands`, `env` (lists) and `decide` (`true` or `false`). See [the host’s capabilities](plugins/capabilities). |
 | `limits` | no | What more it asks of the host: `fetchSeconds`, `fetchBytes`, `fileBytes` ([the limits](plugins/capabilities#the-limits-limits)). |
 | `contributes` | no | Its extension points: what it adds to Escouade. |
 | `store` | no | What the marketplace shows of it: `categories`, `keywords`, `screenshots`, `docs` (the folder of its documentation, a page per language under `docs/fr/` and `docs/en/`: [the documentation, by language](plugins/publishing#the-documentation-by-language)). |

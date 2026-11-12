@@ -105,6 +105,88 @@ export function commandHolds(command) {
   return !/[/\\:*~]/.test(first) && !first.startsWith('.') && !words.slice(1, -1).includes('*');
 }
 
+/** A name of variable: a letter or `_`, then letters, digits and `_`. */
+export const isVarName = (name) => typeof name === 'string' && /^[A-Za-z_][A-Za-z0-9_]*$/.test(name);
+
+const ENV_EXACT = [
+  'JAVA_TOOL_OPTIONS',
+  '_JAVA_OPTIONS',
+  'JDK_JAVA_OPTIONS',
+  'HOME',
+  'USERPROFILE',
+  'APPDATA',
+  'LOCALAPPDATA',
+  'PATH',
+  'PATHEXT',
+  'COMSPEC',
+  'SHELL',
+  'BASH_ENV',
+  'ENV',
+  'ZDOTDIR',
+  'IFS',
+  'PROMPT_COMMAND',
+  'EDITOR',
+  'VISUAL',
+  'PAGER',
+  'BROWSER',
+  'CURL_CA_BUNDLE',
+  'REQUESTS_CA_BUNDLE',
+];
+const ENV_PREFIXES = ['ESCOUADE_', 'LD_', 'DYLD_', 'PYTHON', 'RUBY', 'PERL', 'NODE_', 'NPM_CONFIG_', 'SSL_', 'XDG_'];
+
+/**
+ * Whether Escouade refuses the variable `name` to a plugin, even declared (ESC-424): no name; for anyone's plugin
+ * (`firstParty` false), Escouade's own and the families by which a program loads other code, another configuration,
+ * certificate or proxy, or finds its programs and its home elsewhere. The app's own `env_refused`.
+ */
+export function envRefused(name, firstParty = false) {
+  if (!isVarName(name)) return true;
+  if (firstParty) return false;
+  const u = name.toUpperCase();
+  if (u.startsWith('GIT_')) return !u.startsWith('GIT_AUTHOR_') && !u.startsWith('GIT_COMMITTER_');
+  return ENV_PREFIXES.some((p) => u.startsWith(p)) || u.endsWith('_PROXY') || ENV_EXACT.includes(u);
+}
+
+const INTERPRETERS = [
+  'sh',
+  'bash',
+  'zsh',
+  'dash',
+  'ksh',
+  'csh',
+  'tcsh',
+  'fish',
+  'ash',
+  'busybox',
+  'cmd',
+  'powershell',
+  'pwsh',
+  'node',
+  'nodejs',
+  'deno',
+  'bun',
+  'ruby',
+  'perl',
+  'php',
+  'lua',
+  'osascript',
+  'wscript',
+  'cscript',
+  'mshta',
+  'rundll32',
+  'env',
+  'wsl',
+];
+const INTERPRETER_FAMILIES = ['python', 'pypy', 'perl', 'ruby', 'pwsh', 'powershell'];
+
+/** Whether a harness of anyone's would run a shell or an interpreter (ESC-424): the app's own `interpreter`. */
+export function interpreter(program) {
+  const p = String(program)
+    .toLowerCase()
+    .replace(/\.(exe|com)$/, '');
+  return INTERPRETERS.includes(p) || INTERPRETER_FAMILIES.some((f) => p.startsWith(f) && /^[0-9.-]*$/.test(p.slice(f.length)));
+}
+
 /**
  * Whether `permissions.network` covers `host`, without regard to case: a host written alone covers itself; `*.exemple.dev`
  * covers its subdomains at any depth, not `exemple.dev` itself (as a TLS certificate's); nothing else covers anything.
@@ -279,8 +361,12 @@ export function validate(manifest, options = {}) {
   if ('permissions' in o) {
     const p = object(o.permissions, 'permissions');
     if (p) {
-      ignoreOthers(p, 'permissions', ['events', 'network', 'secrets', 'commands', 'files', 'decide']);
-      for (const key of ['events', 'network', 'secrets', 'commands']) if (key in p) words(p[key], `permissions.${key}`);
+      ignoreOthers(p, 'permissions', ['events', 'network', 'secrets', 'commands', 'env', 'files', 'decide']);
+      for (const key of ['events', 'network', 'secrets', 'commands', 'env']) if (key in p) words(p[key], `permissions.${key}`);
+      if (Array.isArray(p.env))
+        p.env.forEach((v, i) => {
+          if (typeof v === 'string' && v && envRefused(v, firstParty)) problem(`permissions.env[${i}]`, 'variable');
+        });
       if (Array.isArray(p.commands))
         p.commands.forEach((c, i) => {
           if (typeof c === 'string' && c.trim() && !commandHolds(c)) problem(`permissions.commands[${i}]`, 'command');
@@ -384,6 +470,21 @@ export function validate(manifest, options = {}) {
           const a = string(it.account, p);
           if (a !== null && !accounts.includes(a)) problem(p, 'account');
         }
+        // A harness of anyone's (ESC-424): no shell nor interpreter as its program, no variable Escouade refuses.
+        if (point === 'harnesses' && !firstParty) {
+          for (const [at, it] of list) {
+            const names = isObject(it.locate) && Array.isArray(it.locate.names) ? it.locate.names : [];
+            if (names.length)
+              names.forEach((n, i) => {
+                if (typeof n === 'string' && interpreter(n)) problem(`${at}.locate.names[${i}]`, 'interpreter');
+              });
+            else if (typeof it.id === 'string' && interpreter(it.id)) problem(join(at, 'id'), 'interpreter');
+            if (isObject(it.acp) && isObject(it.acp.env))
+              for (const k of Object.keys(it.acp.env)) if (envRefused(k)) problem(join(join(at, 'acp.env'), k), 'variable');
+            for (const key of ['accountVar', 'keyVar'])
+              if (typeof it[key] === 'string' && envRefused(it[key])) problem(join(at, key), 'variable');
+          }
+        }
       }
       for (const point of OPEN_POINTS) {
         if (!(point in c)) continue;
@@ -478,6 +579,10 @@ const WHAT = {
     cargo: () => 'doit nommer le `Cargo.toml` du plugin, jamais un binaire.',
     command: () => "doit commencer par le nom d'un programme, jamais un chemin, et `*` n'y vient qu'en dernier mot.",
     readOnly: () => 'ne peut pas être en écriture : le dossier du plugin ne change pas.',
+    variable: () =>
+      "n'est pas une variable qu'un plugin peut poser : un nom (lettres, chiffres, `_`), hors des variables d'Escouade et des familles qui changeraient ce que lance le programme (`LD_*`, `GIT_*`, `PYTHON*`, `*_PROXY`, `HOME`, `PATH`…).",
+    interpreter: () =>
+      "nomme un shell ou un interpréteur (`bash`, `powershell`, `python`, `node`…) : le harness d'un tiers lance un programme à lui.",
     square: () => "n'est pas carrée (un PNG carré de 256 px au moins, 512 conseillé).",
     small: () => 'fait moins de 256 px de côté (512 conseillé).',
   },
@@ -505,6 +610,10 @@ const WHAT = {
     cargo: () => "must name the plugin's `Cargo.toml`, never a binary.",
     command: () => "must start with a program's name, never a path, and `*` comes only as its last word.",
     readOnly: () => "cannot be written: the plugin's folder does not change.",
+    variable: () =>
+      "is no variable a plugin may set: a name (letters, digits, `_`), out of Escouade's own and of the families that would change what the program runs (`LD_*`, `GIT_*`, `PYTHON*`, `*_PROXY`, `HOME`, `PATH`…).",
+    interpreter: () =>
+      "names a shell or an interpreter (`bash`, `powershell`, `python`, `node`…): the harness of anyone's runs a program of its own.",
     square: () => 'is not square (a square PNG of 256 px at least, 512 advised).',
     small: () => 'is under 256 px a side (512 advised).',
   },

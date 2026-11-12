@@ -2,8 +2,8 @@
 title: "Le store dans l'app"
 subject: "store"
 sources: ["docs/STORE.md","docs/PLUGINS-DESIGN.md §8.33","design/plugins/maquettes-b.html","design/app-redesign/UX-NOTES.md","website/content/docs/fr/plugins/installer.md","src-tauri/src/plugins/store.rs","src-tauri/src/plugins_seed_tests.rs","src-tauri/src/plugins_store_tests.rs"]
-tickets: ["ESC-236","ESC-287","ESC-313","ESC-314","ESC-184","ESC-394","ESC-405","ESC-355"]
-decisions: [21,25,67,132]
+tickets: ["ESC-236","ESC-287","ESC-313","ESC-314","ESC-184","ESC-394","ESC-405","ESC-355","ESC-424"]
+decisions: [21,25,67,132,152]
 compared: "2026-10-31T19:50:53+01:00"
 gaps: [{"text":"La spec dit que le schéma `escouade` est enregistré par les installeurs NSIS et MSI sous Windows. Le code ne produit que l'installeur NSIS (`bundle.targets` vaut [\"nsis\"] et rien ne construit de MSI), donc aucun MSI n'enregistre le schéma.","code":["src-tauri/tauri.conf.json"]},{"text":"La spec dit que le `.deb` et le `.rpm` déclarent `x-scheme-handler/escouade`. Sous Linux, la config ne construit que `appimage` et `deb` (`targets: [\"appimage\", \"deb\"]`). Le gabarit de bureau est prévu pour le rpm, mais aucun `.rpm` n'est produit, donc aucun rpm ne déclare le schéma.","code":["src-tauri/tauri.linux.conf.json"]}]
 ---
@@ -73,3 +73,7 @@ Référence : `docs/STORE.md` §5 et §7 (il fait foi) ; aperçu `#b1` à `#b4` 
 - Un envoi qui échoue (hors ligne, erreur du store, 408, 429) reste en attente. Il repart au démarrage suivant, à chaque relecture du store (toutes les 6 heures, ou « Relire maintenant ») et au prochain geste, un essai à la fois. Un autre refus du store (une version qu'il ne publie pas) le règle.
 - Un plugin installé par l'amorce d'une 2.2.0-beta et jamais compté se compte une fois, avec sa version installée, au premier démarrage qui sait compter.
 - Rien ne compte d'un module du dépôt d'une build de développement (origine `workspace`), d'un dossier en développement, d'une mise à jour du store (déjà comptée en `update`), ni de l'amorce d'un build de développement (`scripts/seed-dev.sh`, les e2e).
+
+## Les versions vérifiées par défaut (ESC-424)
+
+Ceci remplace « éteint d'office » dans *L'installation* : « N'installer que des versions vérifiées » est **allumé pour une nouvelle installation**, sans fichier de réglages. Une installation d'avant garde son choix : des réglages écrits sans la clé la gardent éteinte, comme elle l'avait. La fiche SEC-06 de l'audit de 2026-11 le recommandait : un plugin tiers s'installait par défaut sans revue.

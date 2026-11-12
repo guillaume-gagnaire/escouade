@@ -27,7 +27,9 @@ export interface ManifestError {
     | 'exclusive'
     | 'cargo'
     | 'command'
-    | 'readOnly';
+    | 'readOnly'
+    | 'variable'
+    | 'interpreter';
   /** The type, or the values, the field takes, for `type` and `enum`. */
   expected?: string;
 }
@@ -39,6 +41,12 @@ export function hostCovered(host: string, network: string[]): boolean;
 export const FILE_ROOTS: string[];
 export const FILE_ACCESS: string[];
 export function commandHolds(command: string): boolean;
+/** A name of variable: a letter or `_`, then letters, digits and `_`. */
+export function isVarName(name: unknown): boolean;
+/** Whether Escouade refuses the variable `name` to a plugin even declared (ESC-424); `firstParty`: of Escouade's own hand. */
+export function envRefused(name: string, firstParty?: boolean): boolean;
+/** Whether a harness of anyone's would run a shell or an interpreter (ESC-424). */
+export function interpreter(program: string): boolean;
 
 export interface Validation {
   ok: boolean;

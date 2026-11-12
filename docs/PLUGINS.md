@@ -81,7 +81,8 @@ Un fichier `escouade-plugin.json` à la racine ; `schemas/plugin-1.json` en est 
 - `icon` : un PNG carré de 256 px au moins, 1 Mo au plus, relatif au dossier ; le store le réencode sans métadonnées.
 - `run` : facultatif (sans lui, le plugin est déclaratif). `js` ou `wasm`, jamais les deux ; `command` est refusé (§1.1).
 - `activation` : ce qui démarre l'instance (un fait, une commande, un compte) ; sans activation, rien ne tourne.
-- `permissions` : `events`, `network`, `secrets`, `commands`, `files`, `decide`. Une permission inconnue n'est pas donnée.
+- `permissions` : `events`, `network`, `secrets`, `commands`, `env`, `files`, `decide`. Une permission inconnue n'est pas donnée.
+- `permissions.env` (ESC-424) : les variables d'environnement que le plugin pose sur ce qu'il lance (`proc/spawn`, les lancements de ses harness : `engine/launch`, `terminal/launch`, `engine/oneShot`, `agent/open`), un nom chacune, montrées à l'installation (« Pose cette variable d'environnement sur ce qu'il lance ») ; toute autre est refusée, la raison dite. Le `acp.env` d'un harness décrit compte comme déclaré (l'installation le montre déjà), et le cœur pose lui-même les siennes (`accountVar`, `keyVar`, `ESCOUADE_HOOK_URL`). **Refusées à un tiers même déclarées**, par le lecteur du manifeste (code `variable`, `escouade-plugin validate` et le store) comme par l'hôte : celles d'Escouade (`ESCOUADE_*`), `LD_*`, `DYLD_*`, `GIT_*` sauf `GIT_AUTHOR_*` et `GIT_COMMITTER_*`, `PYTHON*`, `RUBY*`, `PERL*`, `NODE_*`, `JAVA_TOOL_OPTIONS`, `_JAVA_OPTIONS`, `JDK_JAVA_OPTIONS`, `npm_config_*`, `*_PROXY`, `SSL_*`, `CURL_CA_BUNDLE`, `REQUESTS_CA_BUNDLE`, `HOME`, `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `XDG_*`, `PATH`, `PATHEXT`, `COMSPEC`, `SHELL`, `BASH_ENV`, `ENV`, `ZDOTDIR`, `IFS`, `PROMPT_COMMAND`, `EDITOR`, `VISUAL`, `PAGER`, `BROWSER` (`manifest::env_refused`, `envRefused` du store). La première main est tenue à ce qu'elle déclare, sans la liste des familles (Antigravity CLI pose `HOME` du dossier de son agent) ; une version de la première main d'avant le champ garde ses lancements comme avant.
 - `limits` : `fetchSeconds`, `fetchBytes`, `fileBytes`, `memoryBytes`, `turnSeconds`, jusqu'aux plafonds de l'hôte (§3.5).
 - `contributes` : les points d'extension (§1.4). `store` : ce que sa page du store en dit.
 
@@ -146,7 +147,7 @@ Trois façons, de la plus simple à la plus complète :
 
 **Un plugin qui plante** : le harness continue (le cœur le lance), les lots restés sans réponse sont redonnés après la relance, et après le dernier plantage permis l'agent s'arrête en le disant, sa session gardée. Un plugin coupé : l'agent le dit au lancement.
 
-**La confiance d'un harness décrit** (ESC-361) : `check_env` juge chaque variable d'un lancement par `procs::forbidden_var` pour tout plugin qui n'est pas de première main ; l'installation dit chaque programme et chaque variable (`harness:`), et une mise à jour qui en change redemande l'accord. `fenceByClient` est la parole du client ACP, qui tient les `fs/*`.
+**La confiance d'un harness décrit** (ESC-361, ESC-424) : `check_env` juge chaque variable d'un lancement par `harness::Vars` (`ProcessEngine::vars`) : déclarée (`permissions.env`, `acp.env`) ou posée par le cœur, et jamais, pour un tiers, une de `procs::forbidden_var` ni des familles de `manifest::env_refused`. Un harness d'un tiers ne nomme comme programme ni un shell ni un interpréteur (`manifest::interpreter` : `sh`, `bash`, `zsh`, `cmd`, `powershell`, `pwsh`, `python*`, `node`, `ruby`, `perl`, `osascript`, `wscript`, `cscript`, `env`, `wsl`…) : le manifeste est refusé (code `interpreter`) et `ProcessEngine::described` retire ces noms. Son `versionArgs` ne tourne qu'après un geste de l'utilisateur sur ce harness (un agent ou un terminal lancé, `registry::gesture`), ni à l'installation ni au démarrage (`Engine::version_waits_gesture`). L'installation dit chaque programme et chaque variable (`harness:`, `env:`), et une mise à jour qui en change redemande l'accord. `fenceByClient` est la parole du client ACP, qui tient les `fs/*`.
 
 ### 2.3 Les sources de tickets
 
@@ -196,13 +197,13 @@ Le bus est `src-tauri/src/facts.rs` : un `Body` typé par fait, **trente-neuf fa
 | `timer/set`, `timer/cancel`, `timer/fired` | aucune (un droit de base) | 10 ms au moins, 64 minuteurs |
 | `fs/read`, `fs/write`, `fs/stat`, `fs/list`, `fs/canon` | `files: [{ root, access }]` | les racines sont une liste fermée : `plugin`, `agent`, `agentRepo`, `agentHome`, `temp` ; le chemin résolu, liens compris, doit être sous une racine de cet agent-là ; la clôture d'un projet privé est appliquée **ici, par l'hôte** ; 256 Kio en lecture par défaut (`limits.fileBytes`, 4 Mio au plus) |
 | `fs/gitProtected`, `fs/fileOnly` | `files` | pour un harness : si git ne peut rien lancer de l'agent dans son dossier, et si l'écriture d'un chemin n'atteint qu'un fichier |
-| `proc/spawn`, `proc/write`, `proc/kill`, `proc/out`, `proc/exit` | `commands` | la commande et ses arguments commencent par une entrée déclarée, mot pour mot (`*` en fin d'entrée) ; `dir` est une racine, jamais un chemin libre ; l'environnement d'un agent sans les secrets d'Escouade ; 4 à la fois ; pas de shell, pas de `.cmd` ni de `.bat` ; le programme meurt avec l'instance |
+| `proc/spawn`, `proc/write`, `proc/kill`, `proc/out`, `proc/exit` | `commands`, `env` | la commande et ses arguments commencent par une entrée déclarée, mot pour mot (`*` en fin d'entrée) ; `dir` est une racine, jamais un chemin libre ; l'environnement d'un agent sans les secrets d'Escouade, plus les variables de `permissions.env` seules, jamais une des familles refusées (§1.3, `procs::var_refused`) ; 4 à la fois ; pas de shell, pas de `.cmd` ni de `.bat` ; le programme meurt avec l'instance |
 
 `proc/*` est la surface la plus forte : le module est isolé, le programme qu'il lance ne l'est pas. Le store refuse `*` sur un programme généraliste pour un tiers, sauf justification relue. `files` demande aussi une justification à la revue (`agentHome` contient les identifiants d'un harness).
 
 ### 3.4 Le texte de la fenêtre d'installation
 
-Un plugin sans programme : ses permissions, sans programme. Un module : « Tourne dans Escouade, isolé », puis une ligne par capacité (« Se connecte à », « Lit les fichiers de tes agents », « Écrit dans les dossiers de tes agents » en orange, « Lance cette commande sur ton ordinateur » en rouge, « Décide des autorisations de tes agents » en rouge, « Reçoit ces événements », « Garde un secret »). L'utilisateur peut retirer chaque permission.
+Un plugin sans programme : ses permissions, sans programme. Un module : « Tourne dans Escouade, isolé », puis une ligne par capacité (« Se connecte à », « Lit les fichiers de tes agents », « Écrit dans les dossiers de tes agents » en orange, « Lance cette commande sur ton ordinateur » en rouge, « Pose cette variable d'environnement sur ce qu'il lance », « Décide des autorisations de tes agents » en rouge, « Reçoit ces événements », « Garde un secret »). L'utilisateur peut retirer chaque permission.
 
 ### 3.5 Les limites
 
@@ -257,6 +258,7 @@ Ce qui ne se lit pas sûrement s'installe : une mise à jour ne fait jamais perd
 - **`dev.escouade.*` est réservé** : le store ne l'accepte que d'une soumission du dépôt de l'app (`STORE_FIRST_PARTY_REPO`, comparé par son id GitHub) ; l'app ne le prend que d'une version signée du store ou d'un dossier en développement, jamais d'un dossier copié ni d'un dépôt cloné (`Hand::First`) ; le banc et `escouade-plugin` le prennent avec `--first-party`.
 - **La compilation est au store** : il compile un `run.js` (Javy) et un `run.wasm` (cargo, `wasm32-wasip1`, chaîne d'outils épinglée) dans un conteneur sans réseau, et compare ce que la revue locale recompile. Les onze contrôles de la soumission refusent `run.command` (n° 10) ; `docs/STORE.md` les dit.
 - **Publier un plugin de première main** : l'étiquette `plugins/<dossier>/vX.Y.Z`, `submit_version`, les contrôles, `publish_version` (non vérifié, en demandant la revue), la revue locale, la signature. `npm run plugins:publish -- --changed` enchaîne tout cela ; **le chef seul le lance**, un agent de ticket jamais.
+- **N'installer que des versions vérifiées** (ESC-424) : allumé pour une nouvelle installation (`Settings::default`) ; une installation d'avant garde son choix, éteint si elle ne l'avait jamais touché.
 - **La mise à jour** : jamais en silence ; l'accord est redemandé si le plugin demande plus ; une version refusée laisse la précédente.
 - **La télémétrie** : l'événement `plugin_installed` part avec `from_store` oui ou non, sans le nom du plugin, si l'utilisateur a accepté les statistiques. Un plugin n'a pas accès à la télémétrie d'Escouade.
 
@@ -273,7 +275,7 @@ Restent au cœur, hors de tout plugin : les agents et leur état (`agent.rs`, `c
 
 ### 8.1 Écarts connus entre le code et ce que la doc voudrait (à ne pas corriger ici)
 
-- `readOnlyMode` d'un harness décrit reste cru d'un tiers en `"fs": false` : le client refuse les écritures qu'il voit, pas celles que l'agent fait seul. `forbidden_var` est une liste courte (`PYTHONPATH`, `RUBYOPT` passent) et `escouade-plugin check` ne dit pas encore le refus d'une variable.
+- `readOnlyMode` d'un harness décrit reste cru d'un tiers en `"fs": false` : le client refuse les écritures qu'il voit, pas celles que l'agent fait seul. Un programme de première main peut lire d'autres variables de l'environnement d'un agent que celles qu'il pose : `permissions.env` borne ce qu'un plugin ajoute, pas ce qu'il hérite.
 - Dans le code, des commentaires renvoient à l'ancienne numérotation de ce document (« §8.x », « §4.x », « §5.x »), qui n'existe plus ici : ils se lisent dans le texte de l'étude (voir l'annexe).
 
 ## Annexe : l'historique
