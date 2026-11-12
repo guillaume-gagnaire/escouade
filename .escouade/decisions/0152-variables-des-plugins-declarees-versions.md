@@ -1,9 +1,9 @@
 ---
-number: null
+number: 152
 id: "variables-des-plugins-declarees-versions"
 title: "Variables des plugins déclarées, versions vérifiées par défaut, harness tiers bornés"
 date: "2026-11-12"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-424"
 pages: ["plugins/harness-acp-decrits","plugins/tous-les-plugins-en-wasm","store/store-dans-l-app"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/harness-acp-decrits","added":8,"removed":0},{"page":"plugins/tous-les-plugins-en-wasm","added":6,"removed":0},{"page":"store/store-dans-l-app","added":2,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-12T20:03:22+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
