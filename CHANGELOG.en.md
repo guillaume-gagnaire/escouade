@@ -7,6 +7,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ## [Unreleased]
 
 - Security: a plugin loaded in development, from a folder or from a repository never has the rights of Escouade’s own plugins, whatever its id. The “Skip verification” box now holds only for a connection that really goes through the proxy, even when its exclusions are written as a range of addresses.
+- Plugins: “Update all” is on the updates page too, and an update leaves you on the page you were on. Those that ask for nothing more are confirmed together in one window; the others keep their own, with what they add marked.
 - The Copilot CLI view no longer writes without asking you, even in “Accept edits” and “Auto”, never writes in `.git` nor in its settings, keeps a discussion read-only and does not open for an agent of a private project. On Windows, the harnesses’ hooks call escouade-hook by its whole path: a file of the same name in the agent’s folder no longer runs.
 - At launch, the Remote Control’s places under its cap always go to the most recently active agents: the newest is no longer sometimes left out in favour of an older one.
 - A plugin now sets only the environment variables its manifest declares, shown at the install, and never those that would change the program it runs. A third-party plugin’s harness can no longer be a shell or an interpreter, and its version is read only after a first gesture of yours. “Install verified versions only” is on for a new installation.

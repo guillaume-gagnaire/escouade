@@ -1321,9 +1321,15 @@ impl Plugins {
             unverified,
         };
         let mut staged = self.staged.lock();
-        // What was set aside and never answered goes: one inspection at a time is enough.
-        for (_, old) in staged.drain() {
-            if let Some(d) = old.dir {
+        // What was set aside for this plugin and never answered goes: one inspection per plugin at a time is enough.
+        // Those of other plugins stay, so that « Tout mettre à jour » reads every update before asking (ESC-436).
+        let old: Vec<String> = staged
+            .iter()
+            .filter(|(_, s)| s.installed.id == preview.id)
+            .map(|(t, _)| t.clone())
+            .collect();
+        for t in old {
+            if let Some(d) = staged.remove(&t).and_then(|s| s.dir) {
                 remove_dir(&d);
             }
         }

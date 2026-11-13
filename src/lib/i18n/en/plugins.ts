@@ -121,7 +121,6 @@ export default defineZone('plugins', {
     chipOn: '{project}: on',
     chipOff: '{project}: off',
     nowhere: 'no project',
-    updateAll: { one: 'Update all · {count}', other: 'Update all · {count}' },
     category: 'Category: {name}',
     categoryEmpty: 'No plugin installed in this category.',
     verifiedOnly: 'Install verified versions only',
@@ -142,6 +141,12 @@ export default defineZone('plugins', {
     unreachableNone: 'Store unreachable: no offer read yet',
     row: 'v{from} → v{to}',
     update: 'Update',
+    all: { one: 'Update all · {count}', other: 'Update all · {count}' },
+    reading: 'Reading the new version…',
+    waiting: 'Waiting for your word',
+    installing: 'Updating…',
+    done: 'Up to date at v{version}',
+    failedOf: '{name}: {message}',
   },
 
   dev: {
@@ -370,6 +375,15 @@ export default defineZone('plugins', {
     read: 'Read the plugin',
     reading: 'Reading…',
     failed: 'Nothing was installed.',
+    batchTitle: { one: 'Update {count} plugin?', other: 'Update {count} plugins?' },
+    batchBody:
+      'None of these versions asks for more than the one installed: no new permission, no new contribution. Your choices are kept.',
+    batchNext: {
+      one: 'Then {count} update that asks for more: it gets its own window.',
+      other: 'Then {count} updates that ask for more: each gets its own window.',
+    },
+    batchConfirm: { one: 'Update', other: 'Update all · {count}' },
+    newAdd: 'What it adds anew is marked.',
   },
 
   uninstall: {
