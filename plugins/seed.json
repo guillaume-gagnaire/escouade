@@ -8,8 +8,8 @@
     },
     {
       "id": "dev.escouade.antigravity-cli",
-      "version": "2.2.8",
-      "sha256": "3923c86ed4a2d3ed5129079b2f8664a8ab4e8718baea644c2aae8311b537d6d7"
+      "version": "2.2.9",
+      "sha256": "03f935f6ef307eac4634b95c8009a353379893ad04dc6b72196f545318f6923e"
     },
     {
       "id": "dev.escouade.azure-devops",
@@ -38,8 +38,8 @@
     },
     {
       "id": "dev.escouade.copilot-cli",
-      "version": "2.2.7",
-      "sha256": "cfeb974231890afaf230204980812474275b368f69c0494808018acfab28bc46"
+      "version": "2.2.8",
+      "sha256": "a9c9b5ea36a221a31800cd2d2c7839f9b663ac9e09800e1aed4f5bf69d4e146e"
     },
     {
       "id": "dev.escouade.cursor-cli",
@@ -63,8 +63,8 @@
     },
     {
       "id": "dev.escouade.gemini-cli",
-      "version": "2.2.6",
-      "sha256": "06aa8f50333bb9ada4ba41f700aeabc5c2bf17f41a9946c61bfc6f44ff82e40f"
+      "version": "2.2.7",
+      "sha256": "6ab669cc52c85824f48ae1abf47ae3b1db932f68162619f6226e3e5f564f618e"
     },
     {
       "id": "dev.escouade.gitea",
@@ -113,8 +113,8 @@
     },
     {
       "id": "dev.escouade.mistral",
-      "version": "2.2.6",
-      "sha256": "9f49710fe2fadc74bf782e8bd508289cddb9d0a77e4c8246bdc243e89cfb12cd"
+      "version": "2.2.7",
+      "sha256": "ab2f265770729cadacc96162abb6757de80b975a79765ed5d3912cf4f79ff85c"
     },
     {
       "id": "dev.escouade.openai",
