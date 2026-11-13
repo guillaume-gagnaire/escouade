@@ -27,7 +27,7 @@ Une carte de Copilot a « Autoriser », « Pour cette session » et « Refuser �
 La « Vue Copilot CLI » fait tourner l’agent dans l’interface de Copilot, dans un terminal de la fenêtre, sur la même session. Ses hooks passent par un plugin propre à l’agent, donné à cette seule interface : rien n’est écrit dans ton dossier de Copilot. Dans cette vue, ses demandes se répondent dans l’interface de Copilot, où tu les vois : les règles du plugin n’y répondent pas. Pour que rien n’y passe sans toi :
 
 - en Édits auto et en Auto, chaque écriture demande : Copilot ne sait pas permettre les écritures du dossier sans celles de son `.git` (un hook, `core.fsmonitor`, puis un `git commit` sans question), et rien ne prouve qu’un refus par chemin couvre les fichiers sous `.git`. En Auto, seuls `git add` et `git commit` passent sans question ;
-- une écriture dans `.git`, `.copilot`, `.github/copilot`, `.github/hooks` ou dans le dossier des fichiers joints est refusée dans tous les modes, Bypass compris (`--deny-tool`, qui l’emporte sur toute permission) ;
+- l’outil d’écriture de Copilot est refusé dans `.git`, `.copilot`, `.github/copilot`, `.github/hooks` et dans le dossier des fichiers joints, dans tous les modes (`--deny-tool=write(…)`). Ce refus ne vise que cet outil : en Bypass, une commande (`--allow-all`) peut encore écrire dans ces dossiers ;
 - une discussion y est tenue en lecture seule : ses écritures et ses commandes sont refusées ;
 - dès qu’un projet privé existe, un agent a une clôture et n’a pas de vue Copilot CLI, et la fenêtre le dit : rien n’y tient la clôture, il reste dans sa conversation, qui la tient.
 

@@ -1,8 +1,8 @@
 ---
 title: "Antigravity CLI en plugin"
 subject: "plugins"
-sources: ["docs/PLUGINS-DESIGN.md §4 (INT-10.8)","docs/PLUGINS-DESIGN.md §8.24 (ESC-348)","docs/PROTOCOL.md, Antigravity CLI, « Règles et jugement »","docs/TODO-2.2.md, INT-10.8","Ticket ESC-283","Ticket ESC-348","Ticket ESC-371","Ticket ESC-376","Ticket ESC-388","Ticket ESC-389","Essai real_agy_rules sur agy 1.5.3 (2026-11-08)","Revue de dev.escouade.antigravity-cli@2.2.0 (~/.escouade-review)","Revue de dev.escouade.antigravity-cli@2.2.1 (~/.escouade-review)","Revue de dev.escouade.antigravity-cli@2.2.3 (~/.escouade-review)","Revue de dev.escouade.antigravity-cli@2.2.7 (~/.escouade-review)","Documentation des hooks embarquée dans agy (cmd /c, dossier de hooks.json)","plugins/antigravity/README.en.md"]
-tickets: ["ESC-283","ESC-348","ESC-352","ESC-369","ESC-371","ESC-376","ESC-388","ESC-389","ESC-359","ESC-430"]
+sources: ["docs/PLUGINS-DESIGN.md §4 (INT-10.8)","docs/PLUGINS-DESIGN.md §8.24 (ESC-348)","docs/PROTOCOL.md, Antigravity CLI, « Règles et jugement »","docs/TODO-2.2.md, INT-10.8","Ticket ESC-283","Ticket ESC-348","Ticket ESC-371","Ticket ESC-376","Ticket ESC-388","Ticket ESC-389","Essai real_agy_rules sur agy 1.5.3 (2026-11-08)","Revue de dev.escouade.antigravity-cli@2.2.0 (~/.escouade-review)","Revue de dev.escouade.antigravity-cli@2.2.1 (~/.escouade-review)","Revue de dev.escouade.antigravity-cli@2.2.3 (~/.escouade-review)","Revue de dev.escouade.antigravity-cli@2.2.7 (~/.escouade-review)","Revue de dev.escouade.antigravity-cli@2.2.8 (~/.escouade-review)","Documentation des hooks embarquée dans agy (cmd /c, dossier de hooks.json)","plugins/antigravity/README.en.md"]
+tickets: ["ESC-283","ESC-348","ESC-352","ESC-369","ESC-371","ESC-376","ESC-388","ESC-389","ESC-359","ESC-430","ESC-433"]
 decisions: [68,94,112,116,125,127]
 compared: null
 ---
@@ -89,3 +89,6 @@ Depuis ESC-359, le cœur n'a plus de copie des mots du lancement de l'interface 
 - **Ses hooks** (`hooks.json` du dossier de l'agent) appellent `escouade-hook <événement>`. Sous Windows, `agy` les lance par `cmd /c` dans le dossier de `hooks.json` : `escouade-hook` y est appelé par son chemin entier, écrit avec des `/` et sans guillemets (Go réécrirait un guillemet en `\"`, que `cmd` ne lit pas), et par son nom seulement quand son chemin a un espace, un accent ou un signe de `cmd`, son dossier en tête du `PATH`. Dans les deux cas, `NoDefaultCurrentDirectoryInExePath=1` empêche `cmd` d'exécuter un `escouade-hook.cmd` de son dossier courant. Le manifeste déclare cette variable ; la page des permissions du plugin dit le `PATH` posé.
 - **Le jeton** de `mcp_config.json` est retiré à la fin de la vue comme à la fin du process (voir *Le contrat des harness en process*).
 - **Le texte rédigé** pose `toolPermission: "request-review"`, comme les réglages de l'agent, et vide une clé de la machine que le compte ne donne pas, comme la vue.
+
+- **Le dossier mis en tête du `PATH`** (ESC-433) n'y va que s'il est entier : un lecteur et sa racine (`C:\`, jamais `C:`, qui serait le dossier courant de ce lecteur) ou un partage (`\\hôte\partage`), sans `;` ni `"`. Sinon le `PATH` reste tel quel, `NoDefaultCurrentDirectoryInExePath=1` toujours posé.
+- **La lecture des modèles d'un compte** (`agy models`, ESC-433) vide elle aussi une clé de la machine que le compte ne donne pas, comme la vue et le texte rédigé : les modèles listés sont ceux du compte.

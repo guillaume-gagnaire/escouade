@@ -27,7 +27,7 @@ A Copilot card has “Allow”, “For this session” and “Deny”; no “Alw
 The “Copilot CLI view” runs the agent in Copilot’s interface, in a terminal of the window, on the same session. Its hooks go through a plugin of the agent’s own, given to that interface alone: nothing is written in your Copilot folder. In this view, its requests are answered in Copilot’s interface, where you see them: the plugin’s rules don’t answer them. So that nothing goes through without you:
 
 - in Accept edits and Auto, every write asks: Copilot cannot allow the folder’s writes without those of its `.git` (a hook, `core.fsmonitor`, then a `git commit` with no question), and nothing proves a refusal by path covers the files under `.git`. In Auto, only `git add` and `git commit` go without a question;
-- a write in `.git`, `.copilot`, `.github/copilot`, `.github/hooks` or in the folder of the joined files is refused in every mode, Bypass included (`--deny-tool`, which wins over every permission);
+- Copilot’s write tool is refused in `.git`, `.copilot`, `.github/copilot`, `.github/hooks` and in the folder of the joined files, in every mode (`--deny-tool=write(…)`). This refusal holds that tool alone: in Bypass, a command (`--allow-all`) can still write in those folders;
 - a discussion is held read-only there: its writes and commands are refused;
 - once a private project exists, an agent has a fence and no Copilot CLI view, and the window says so: nothing holds the fence there, it stays in its conversation, which holds it.
 

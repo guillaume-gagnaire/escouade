@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.9
+
+- Under Windows, its view puts the folder of `escouade-hook` first on the `PATH` only when it is whole (a drive and its root, or a share, with no `;` nor `"`): an `escouade-hook` at a drive’s root no longer makes it `C:`, the drive’s current folder (ESC-433).
+- The read of an account’s models (`agy models`) empties a key of the machine’s, as its view and a drafted text do: the models listed are the account’s.
+
 ## 2.2.8
 
 - Under Windows, its view’s hooks call `escouade-hook` by its whole path (with `/`, no quotes), by its name only when a line cannot hold its path, and `NoDefaultCurrentDirectoryInExePath=1` keeps `cmd` from running an `escouade-hook.cmd` of its current folder (ESC-430).

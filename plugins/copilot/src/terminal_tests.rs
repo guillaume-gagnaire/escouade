@@ -128,6 +128,13 @@ fn escouades_server_by_the_cores_file_its_token_in_no_variable_and_an_own_accoun
         secrets.split([',', '=']).any(|v| v == "ESCOUADE_MCP_TOKEN"),
         "{secrets}"
     );
+    // The hooks' token stays: Copilot strips a listed variable from its hooks too (tried on 1.0.98, ESC-433).
+    assert!(
+        !secrets
+            .split([',', '='])
+            .any(|v| v == "ESCOUADE_HOOK_TOKEN"),
+        "{secrets}"
+    );
     assert!(l.args.iter().any(|a| a == "--add-dir=/data/files/a1"));
     for var in INHERITED_TOKENS {
         assert!(

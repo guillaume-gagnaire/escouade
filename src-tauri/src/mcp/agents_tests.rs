@@ -745,7 +745,7 @@ async fn a_copilot_agent_is_given_the_server_by_a_file_naming_its_token_or_refus
             .collect()
     };
     // « Claude et les agents peuvent piloter Escouade » on: its entry in a private file, which
-    // names the token; the token in its environment alone; Copilot reaches the server with it.
+    // holds the token; Copilot reaches the server with it.
     drives(&h, true);
     settled(&h, &id).await;
     let port = h.core.mcp.status().port;
@@ -758,14 +758,18 @@ async fn a_copilot_agent_is_given_the_server_by_a_file_naming_its_token_or_refus
         .position(|a| a == "--additional-mcp-config")
         .unwrap_or_else(|| panic!("{argv:?}"));
     assert_eq!(argv[at + 1], format!("@{}", config.to_string_lossy()));
-    let token = launch["escouadeToken"]
-        .as_str()
-        .expect("a token")
-        .to_string();
-    assert!(argv.iter().all(|a| !a.contains(&token)), "{argv:?}");
-    // In the core's private file itself (ESC-430), which goes with the process.
+    // In the core's private file itself (ESC-430), which goes with the process, and in no
+    // variable its commands would inherit (ESC-433).
+    assert!(launch["escouadeToken"].is_null(), "{launch}");
     let file = std::fs::read_to_string(&config).unwrap();
-    assert!(file.contains(&format!("Bearer {token}")), "{file}");
+    let entry: Value = serde_json::from_str(&file).unwrap();
+    let token = entry["mcpServers"]["escouade"]["headers"]["Authorization"]
+        .as_str()
+        .and_then(|h| h.strip_prefix("Bearer "))
+        .unwrap_or_else(|| panic!("{file}"))
+        .to_string();
+    assert!(!token.is_empty() && !token.contains('$'), "{file}");
+    assert!(argv.iter().all(|a| !a.contains(&token)), "{argv:?}");
     let reached = copilot_noted(&home, "mcp.jsonl").pop().unwrap();
     assert_eq!(
         (reached["name"].as_str(), reached["status"].as_u64()),

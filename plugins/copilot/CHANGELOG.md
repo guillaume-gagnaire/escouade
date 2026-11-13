@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.8
+
+- Its process no longer puts Escouade’s token in `ESCOUADE_MCP_TOKEN`: the core’s private file holds it (Escouade 2.2.0-beta.12 and later), as for its view, the variable is stripped from its commands, and its manifest no longer declares it (ESC-433). An older beta, which named the variable, loses Escouade’s server in its Copilot agents: update it.
+- Its pages no longer say a refusal holds “Bypass included”: it holds the write tool alone, a command can still write there in Bypass.
+
 ## 2.2.7
 
 - Its process sends to a card a write whose path goes back up into Copilot’s settings (`.github/x/../hooks`): a `..` no longer hides `.github/hooks`, `.github/copilot` or `.copilot`, and a folder named of dots and spaces alone, which Windows may read as another one, goes to a card too.
@@ -8,7 +13,7 @@
 
 - In its Copilot CLI view, every write asks in Accept edits and Auto: `--allow-tool=write` covered the worktree’s `.git` too (a hook, then a `git commit` with no question), and nothing proves a refusal by path covers the files under `.git`. Writes in `.git`, `.copilot`, `.github/copilot`, `.github/hooks` and the joined files’ folder are refused there in every mode (`--deny-tool`), and its process sends those of Copilot’s settings to a card, as those of `.git` (ESC-430).
 - Its view no longer says it holds a fence nothing holds: a fenced agent’s view is refused, and says why. A discussion is held read-only there by `--deny-tool=write` and `--deny-tool=shell`.
-- Its view gets Escouade’s token in the core’s private file alone (Escouade 2.3), in no variable, and `ESCOUADE_MCP_TOKEN` is among `--secret-env-vars`; its hooks double every quote PowerShell reads as `'` (`‘ ’ ‚ ‛`).
+- Its view gets Escouade’s token in the core’s private file alone (Escouade 2.2.0-beta.12 and later), and `ESCOUADE_MCP_TOKEN` is among `--secret-env-vars`; its hooks double every quote PowerShell reads as `'` (`‘ ’ ‚ ‛`).
 
 ## 2.2.5
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.7
+
+- Under Windows, its Gemini CLI view puts the folder of `escouade-hook` first on the `PATH` only when it is whole (a drive and its root, or a share, with no `;` nor `"`): an `escouade-hook` at a drive's root no longer makes it `C:`, the drive's current folder (escouade-acp 0.1.6, ESC-433).
+
 ## 2.2.6
 
 - Under Windows, the hooks of its Gemini CLI view call `escouade-hook` by its whole path (with `/`, no quotes), by its name only when a line cannot hold its path, and `NoDefaultCurrentDirectoryInExePath=1` keeps `cmd` from running an `escouade-hook.cmd` of the agent's folder (escouade-acp 0.1.5, ESC-430).

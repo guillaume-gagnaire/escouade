@@ -92,7 +92,7 @@ fn opened() -> Agent {
 }
 
 #[test]
-fn escouades_token_goes_by_a_variable_and_its_file_by_the_arguments() {
+fn escouades_token_is_in_the_cores_file_alone_and_its_file_by_the_arguments() {
     let mut a = Agent::new(&attach());
     let mut p = params();
     p.escouade = Some(Grant {
@@ -104,9 +104,16 @@ fn escouades_token_goes_by_a_variable_and_its_file_by_the_arguments() {
     assert!(l.args.iter().any(|x| x == "--server"));
     assert!(l.args.iter().any(|x| x == "@C:\\data\\mcp\\a1.json"));
     assert!(!l.args.iter().any(|x| x.contains("s3cr3t")));
-    assert_eq!(l.env.len(), 1);
-    assert_eq!(l.env[0].name, "ESCOUADE_MCP_TOKEN");
-    assert_eq!(l.env[0].value, "s3cr3t");
+    // As its interface (ESC-433): no variable its commands would inherit, and the one of the betas stripped from them.
+    assert!(l.env.is_empty(), "{:?}", l.env);
+    let secrets = l
+        .args
+        .iter()
+        .find_map(|x| x.strip_prefix("--secret-env-vars="))
+        .unwrap();
+    assert!(secrets.split(',').any(|v| v == "ESCOUADE_MCP_TOKEN"));
+    // Copilot strips them from its hooks too (tried on 1.0.98): `escouade-hook` would lose its token.
+    assert!(!secrets.split(',').any(|v| v == "ESCOUADE_HOOK_TOKEN"));
     assert!(l.remove_env.is_empty(), "the Principal keeps its tokens");
     assert_eq!(parsed(&l.writes[0])["method"], "connect");
 }

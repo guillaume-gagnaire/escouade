@@ -15,7 +15,7 @@ Escouade’s core finds `copilot` and launches `copilot --server --stdio`. The p
 
 ## The secrets it gets
 
-- **The agent’s MCP token.** At each launch it describes, Escouade gives it the address and token of its MCP server for that agent. Escouade’s entry is a private file the core writes for the agent (`--additional-mcp-config`) and takes away when its process or view stops. For the process, the plugin also puts the token in a variable of the launch (`ESCOUADE_MCP_TOKEN`), which the entry named before Escouade 2.3. For the Copilot CLI view, the token is in that file alone: no variable gives it to its commands, and `ESCOUADE_MCP_TOKEN` is among those Copilot strips from them (`--secret-env-vars`). The token is never among the arguments, and the plugin has no network to send it elsewhere.
+- **The agent’s MCP token.** At each launch it describes, Escouade gives it the address and token of its MCP server for that agent. Escouade’s entry is a private file the core writes for the agent, the token in it (`--additional-mcp-config`), and takes away when its process or view stops. Neither the process nor the Copilot CLI view gets the token in a variable: none gives it to their commands, and `ESCOUADE_MCP_TOKEN` is among those Copilot strips from them (`--secret-env-vars`). The token is never among the arguments, and the plugin has no network to send it elsewhere. The agent’s commands do inherit the hooks’ token (`ESCOUADE_HOOK_TOKEN`, which only tells this agent’s state): Copilot would strip it from its hooks too.
 - **No account sign-in.** The GitHub sign-in stays in the system keychain. The plugin never calls what gives a token in clear (`account.getAllUsers`, `account.getCurrentAuth`): `auth.getStatus` only tells it how Copilot is signed in.
 
 ## What it accepts alone, and what goes to a card
@@ -49,7 +49,7 @@ The plugin also describes the launch of Copilot’s interface (`terminal/launch`
 | Ask, Accept edits | Nothing | Always: a write in `.git`, `.copilot`, `.github/copilot`, `.github/hooks` (by their name and by the path of the agent’s folder) and in the folder of the joined files |
 | Plan | Nothing (`--mode plan`) | The same |
 | Auto | `git add` and `git commit` (`--mode autopilot`) | The same |
-| Bypass | Everything (`--allow-all`) | The same: a refusal wins over every permission |
+| Bypass | Everything (`--allow-all`) | The write tool in the same folders; a command, allowed, can still write there |
 | Discussion | Nothing | Also every write and every command |
 
 No write goes without a question in Accept edits nor in Auto: `--allow-tool=write` would cover the worktree’s `.git`, which the process sends to a card, and the help of Copilot CLI 1.0.98 doesn’t say whether a refusal by path (`write(<folder>)`) covers the files under that folder. The refusals stay set as well.

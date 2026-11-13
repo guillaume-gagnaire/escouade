@@ -14,7 +14,7 @@
 use crate::translate::{form_questions, Ctx, Seen, Translator};
 use crate::words::{self, agent_mode, permission_mode, takes_effort};
 use escouade_plugin_protocol::engine::{
-    AnswerPermission, Attach, EnvVar, Item, Launch, LaunchParams, StartAt, ViewKnown,
+    AnswerPermission, Attach, Item, Launch, LaunchParams, StartAt, ViewKnown,
 };
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
@@ -239,16 +239,12 @@ impl Agent {
         self.read_only = p.read_only;
         self.own_home = p.home.as_deref().is_some_and(|h| !h.is_empty());
         let mut args = words::server_args();
-        let mut env = Vec::new();
         match (&p.escouade, &p.escouade_file) {
-            // Its entry's file, the token in the environment.
-            (Some(grant), Some(file)) => {
+            // Its entry's file, which holds the token itself, as its interface's: in no variable its commands would
+            // inherit (ESC-433).
+            (Some(_), Some(file)) => {
                 self.escouade = true;
                 args.extend(["--additional-mcp-config".into(), format!("@{file}")]);
-                env.push(EnvVar {
-                    name: words::TOKEN_VAR.into(),
-                    value: grant.token.clone(),
-                });
             }
             // Refused: `--disable-mcp-server` does nothing in the server mode (tried), an entry of the user's of its
             // name is also turned off for its session (`session.mcp.disable`).
@@ -271,7 +267,6 @@ impl Agent {
         );
         Launch {
             args,
-            env,
             remove_env,
             read_only: p.read_only,
             // Refused on its permissions: a guard, as its modes' meanings say.

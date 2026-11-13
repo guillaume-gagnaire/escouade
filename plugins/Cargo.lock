@@ -149,7 +149,7 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "escouade-acp"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "base64 0.22.1",
  "dunce",
@@ -168,7 +168,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-agy"
-version = "2.2.8"
+version = "2.2.9"
 dependencies = [
  "escouade-acp",
  "escouade-plugin-protocol",
@@ -228,7 +228,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-copilot"
-version = "2.2.7"
+version = "2.2.8"
 dependencies = [
  "chrono",
  "escouade-acp",
@@ -263,7 +263,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-gemini"
-version = "2.2.6"
+version = "2.2.7"
 dependencies = [
  "escouade-acp",
  "escouade-plugin-protocol",
@@ -356,7 +356,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-mistral"
-version = "2.2.6"
+version = "2.2.7"
 dependencies = [
  "escouade-acp",
  "escouade-plugin-protocol",

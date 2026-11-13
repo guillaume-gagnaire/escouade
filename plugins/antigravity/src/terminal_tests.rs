@@ -227,6 +227,18 @@ fn the_models_of_an_account_are_what_agy_models_lists_in_a_home_of_its_own() {
     let l = step.launch.expect("a process");
     assert_eq!(l.args, ["models"]);
     assert_eq!(env_of(&l, "HOME"), Some("/tmp/agy-read"));
+    // The account's key stays, the machine's other one is emptied (ESC-433), as in its interface.
+    assert_eq!(env_of(&l, "GEMINI_API_KEY"), None);
+    assert_eq!(env_of(&l, "GOOGLE_API_KEY"), Some(""));
+    // An account signed in by Google: both keys of the machine's emptied, its models are its own.
+    let google = read(&AccountRead {
+        env_names: Vec::new(),
+        ..r.clone()
+    })
+    .launch
+    .unwrap();
+    assert_eq!(env_of(&google, "GEMINI_API_KEY"), Some(""));
+    assert_eq!(env_of(&google, "GOOGLE_API_KEY"), Some(""));
     let settings = &l.files[0];
     assert!(
         settings.text.contains("\"modelProvider\": \"gemini\""),
@@ -330,4 +342,40 @@ fn a_text_is_written_in_its_own_home_every_tool_refused_its_provider_the_account
         one_shot_read(&out(""), "en").unwrap_err(),
         "Antigravity CLI gave no answer"
     );
+}
+
+/// ESC-433: only a whole folder goes first on the `PATH`; `C:` alone (the drive's current folder), a relative folder or
+/// one with `;` or `"` would put another folder first, and the `PATH` is left as it is.
+#[test]
+fn only_a_whole_folder_of_escouade_hook_goes_first_on_the_path() {
+    let path = r"C:\Windows";
+    assert_eq!(
+        path_with(r"C:\escouade-hook.exe", path).as_deref(),
+        Some(r"C:\;C:\Windows")
+    );
+    assert_eq!(
+        path_with(r"\\host\share\escouade-hook.exe", path).as_deref(),
+        Some(r"\\host\share;C:\Windows")
+    );
+    for odd in [
+        r"C:escouade-hook.exe",
+        r"C:a\escouade-hook.exe",
+        r"Escouade\escouade-hook.exe",
+        r"\Escouade\escouade-hook.exe",
+        r"C:\a;b\escouade-hook.exe",
+        r#"C:\a"b\escouade-hook.exe"#,
+        r"\\?\C:\Escouade\escouade-hook.exe",
+    ] {
+        assert_eq!(path_with(odd, path), None, "{odd}");
+    }
+    // Its view keeps `cmd` from its current folder all the same, the `PATH` it had left alone.
+    let dir = temp("path-first");
+    let l = launch(&TerminalParams {
+        hook_command: Some(r"C:\a;b\escouade-hook.exe".into()),
+        path: Some(path.into()),
+        ..params(&dir)
+    })
+    .launch;
+    assert_eq!(env_of(&l, NO_CURRENT_DIR), Some("1"));
+    assert_eq!(env_of(&l, "PATH"), None);
 }

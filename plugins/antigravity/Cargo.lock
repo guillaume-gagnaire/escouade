@@ -16,9 +16,9 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "escouade-acp"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58097b3d61107f67d1766071f7ae41ae7b05b27bcd578e10f639622e3c70bf10"
+checksum = "38717333782edf58bf924553713480bea0ea832649934f6630812e6155e3ff73"
 dependencies = [
  "base64",
  "dunce",
@@ -29,7 +29,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-agy"
-version = "2.2.8"
+version = "2.2.9"
 dependencies = [
  "escouade-acp",
  "escouade-plugin-protocol",
@@ -109,9 +109,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.151"
+version = "1.0.154"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14"
+checksum = "e7e9cc8b1b85264074fbcc02a88680c4096b1e47df8f739dceb03bf482f04bd6"
 dependencies = [
  "itoa",
  "memchr",

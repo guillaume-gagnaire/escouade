@@ -15,7 +15,7 @@ C’est le cœur d’Escouade qui trouve `copilot` et lance `copilot --server --
 
 ## Les secrets qu’il reçoit
 
-- **Le jeton MCP de l’agent.** À chaque lancement qu’il décrit, Escouade lui donne l’adresse et le jeton de son serveur MCP pour cet agent. L’entrée d’Escouade est un fichier privé que le cœur écrit pour l’agent (`--additional-mcp-config`) et retire quand son process ou sa vue s’arrête. Pour le process, le plugin met aussi le jeton dans une variable du lancement (`ESCOUADE_MCP_TOKEN`), que l’entrée nommait avant Escouade 2.3. Pour la vue Copilot CLI, le jeton n’est que dans ce fichier : aucune variable ne le donne à ses commandes, et `ESCOUADE_MCP_TOKEN` est parmi celles que Copilot retire de leur sortie (`--secret-env-vars`). Le jeton n’est jamais dans les arguments, et le plugin n’a pas de réseau pour l’envoyer ailleurs.
+- **Le jeton MCP de l’agent.** À chaque lancement qu’il décrit, Escouade lui donne l’adresse et le jeton de son serveur MCP pour cet agent. L’entrée d’Escouade est un fichier privé que le cœur écrit pour l’agent, le jeton dedans (`--additional-mcp-config`), et retire quand son process ou sa vue s’arrête. Ni le process ni la vue Copilot CLI ne reçoivent le jeton dans une variable : aucune ne le donne à leurs commandes, et `ESCOUADE_MCP_TOKEN` est parmi celles que Copilot leur retire (`--secret-env-vars`). Le jeton n’est jamais dans les arguments, et le plugin n’a pas de réseau pour l’envoyer ailleurs. Les commandes de l’agent héritent en revanche du jeton des hooks (`ESCOUADE_HOOK_TOKEN`, qui ne sert qu’à dire l’état de cet agent) : Copilot le retirerait aussi à ses hooks.
 - **Aucune connexion de compte.** La connexion à GitHub reste dans le trousseau du système. Le plugin n’appelle jamais ce qui donne un jeton en clair (`account.getAllUsers`, `account.getCurrentAuth`) : `auth.getStatus` lui dit seulement comment Copilot est connecté.
 
 ## Ce qu’il accepte seul, et ce qui va à la carte
@@ -49,7 +49,7 @@ Le plugin décrit aussi le lancement de l’interface de Copilot (`terminal/laun
 | Demander, Édits auto | Rien | Toujours : l’écriture dans `.git`, `.copilot`, `.github/copilot`, `.github/hooks` (par leur nom et par le chemin du dossier de l’agent) et dans le dossier des fichiers joints |
 | Plan | Rien (`--mode plan`) | Pareil |
 | Auto | `git add` et `git commit` (`--mode autopilot`) | Pareil |
-| Bypass | Tout (`--allow-all`) | Pareil : un refus l’emporte sur toute permission |
+| Bypass | Tout (`--allow-all`) | L’outil d’écriture dans les mêmes dossiers ; une commande, permise, peut encore y écrire |
 | Discussion | Rien | En plus, toute écriture et toute commande |
 
 Aucune écriture ne passe sans question en Édits auto ni en Auto : `--allow-tool=write` couvrirait le `.git` du worktree, que le process envoie à la carte, et l’aide de Copilot CLI 1.0.98 ne dit pas si un refus par chemin (`write(<dossier>)`) couvre les fichiers sous ce dossier. Les refus restent posés en plus.

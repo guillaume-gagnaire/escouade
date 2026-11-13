@@ -12,15 +12,11 @@ pub const PROTOCOL: u64 = 3;
 /// The variables a token of GitHub reaches Copilot in, taken before its own sign-in.
 pub const INHERITED_TOKENS: [&str; 3] = ["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"];
 
-/// The variables whose values Copilot strips from its commands and MCP servers (`--secret-env-vars`): the tokens it
-/// may be given. Not `ESCOUADE_MCP_TOKEN`: listed, Copilot no longer puts it in the header of Escouade's entry
-/// (`${ESCOUADE_MCP_TOKEN}`, which then reaches the server without it: tried on 1.0.98). It is the agent's own token,
-/// for the server it is given, valid while its process lives.
-pub const SECRETS: &str = "GH_TOKEN,GITHUB_TOKEN,COPILOT_GITHUB_TOKEN";
-
-/// Those of its interface: `ESCOUADE_MCP_TOKEN` too, which it is not given (the core's file holds the token itself,
-/// `terminal::launch`), stripped all the same should it come.
-pub const VIEW_SECRETS: &str = "GH_TOKEN,GITHUB_TOKEN,COPILOT_GITHUB_TOKEN,ESCOUADE_MCP_TOKEN";
+/// The variables whose values Copilot strips from its commands, its MCP servers and its hooks (`--secret-env-vars`), in
+/// its process and its interface alike: the tokens it may be given, and `ESCOUADE_MCP_TOKEN`, which it is not given
+/// (the core's private file holds the token itself, from Escouade 2.2.0-beta.12), stripped all the same should it come.
+/// Never `ESCOUADE_HOOK_TOKEN`: Copilot strips it from its hooks too (tried on 1.0.98), and `escouade-hook` needs it.
+pub const SECRETS: &str = "GH_TOKEN,GITHUB_TOKEN,COPILOT_GITHUB_TOKEN,ESCOUADE_MCP_TOKEN";
 
 /// Whether `path` is in what changes what Copilot runs, in the agent's folder `dir`: a folder `.copilot` anywhere under
 /// it, its `.github/copilot` (its settings, their hooks) or `.github/hooks`, whatever the case and the names Windows takes
@@ -57,9 +53,8 @@ pub fn in_its_settings(path: &str, dir: &str) -> bool {
             .any(|w| named(&w[0], ".github", "github~1") && (w[1] == "copilot" || w[1] == "hooks"))
 }
 
-/// The variable the token of Escouade's server reaches Copilot in: its entry's header names it
-/// (`${ESCOUADE_MCP_TOKEN}`, taken from the environment, tried on 1.0.98), so that neither its file nor its command
-/// line holds the token.
+/// The variable the entry of Escouade 2.2.0-beta.1 to beta.11 named (`${ESCOUADE_MCP_TOKEN}`): set by no launch since
+/// the core's private file holds the token (ESC-433), and among `SECRETS`, so that no command of Copilot's has it.
 pub const TOKEN_VAR: &str = "ESCOUADE_MCP_TOKEN";
 
 /// The name of Escouade's MCP server.

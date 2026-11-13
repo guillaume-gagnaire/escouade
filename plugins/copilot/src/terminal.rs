@@ -11,7 +11,7 @@
 //! - A model its account does not list goes as `auto` (ESC-122): Copilot CLI 1.0.98 takes it so, but says it in red.
 
 use crate::words::{
-    catalog, credits, server_args, signed_in, takes_effort, INHERITED_TOKENS, SERVER, VIEW_SECRETS,
+    catalog, credits, server_args, signed_in, takes_effort, INHERITED_TOKENS, SECRETS, SERVER,
 };
 use escouade_plugin_protocol::engine::{
     AccountLines, AccountRead, AccountStep, EnvVar, FileToWrite, Launch, TerminalLaunch,
@@ -113,7 +113,7 @@ pub fn args(p: &TerminalParams, plugin: Option<&str>) -> Vec<String> {
         "--no-auto-update".into(),
         "--disable-builtin-mcps".into(),
         "--disallow-temp-dir".into(),
-        format!("--secret-env-vars={VIEW_SECRETS}"),
+        format!("--secret-env-vars={SECRETS}"),
     ]);
     // Never `auto`, which picks a model itself.
     if !p.model.is_empty() && p.model != "auto" {
@@ -227,8 +227,8 @@ pub fn launch(p: &TerminalParams) -> TerminalLaunch {
         name: p.hook_url_var.clone(),
         value: p.hook_url.clone(),
     }];
-    // Escouade's server by the core's private file, which holds its token itself (Escouade 2.3): the token is in no
-    // variable its commands would inherit, and is among those it strips (`VIEW_SECRETS`).
+    // Escouade's server by the core's private file, which holds its token itself: the token is in no
+    // variable its commands would inherit, and is among those it strips (`SECRETS`).
     match (&p.escouade, &p.escouade_file) {
         (Some(_), Some(file)) => {
             a.extend(["--additional-mcp-config".into(), format!("@{file}")]);

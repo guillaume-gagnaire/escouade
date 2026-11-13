@@ -314,3 +314,43 @@ fn under_windows_a_hook_runs_escouade_hook_by_its_whole_path_and_never_one_of_it
     });
     assert_eq!(env_of(&unix, NO_CURRENT_DIR), None);
 }
+
+/// ESC-433: only a whole folder goes first on the `PATH`; `C:` alone (the drive's current folder), a relative folder or
+/// one with `;` or `"` would put another folder first, and the `PATH` is left as it is.
+#[test]
+fn only_a_whole_folder_of_escouade_hook_goes_first_on_the_path() {
+    let path = r"C:\Windows";
+    assert_eq!(
+        path_first(r"C:\escouade-hook.exe", path).as_deref(),
+        Some(r"C:\;C:\Windows")
+    );
+    assert_eq!(
+        path_first(r"C:\Program Files\Escouade\escouade-hook.exe", "").as_deref(),
+        Some(r"C:\Program Files\Escouade")
+    );
+    assert_eq!(
+        path_first(r"\\host\share\escouade-hook.exe", path).as_deref(),
+        Some(r"\\host\share;C:\Windows")
+    );
+    for odd in [
+        r"C:escouade-hook.exe",
+        r"C:a\escouade-hook.exe",
+        r"Escouade\escouade-hook.exe",
+        r"\Escouade\escouade-hook.exe",
+        r"C:\a;b\escouade-hook.exe",
+        r#"C:\a"b\escouade-hook.exe"#,
+        r"\\?\C:\Escouade\escouade-hook.exe",
+        "escouade-hook.exe",
+    ] {
+        assert_eq!(path_first(odd, path), None, "{odd}");
+    }
+    // Its launch keeps `cmd` from its current folder all the same, the `PATH` it had left alone.
+    let l = vibe(&TerminalParams {
+        home: Some(r"C:\h\agent".into()),
+        hook_command: Some(r"C:\a;b\escouade-hook.exe".into()),
+        path: Some(path.into()),
+        ..params()
+    });
+    assert_eq!(env_of(&l, NO_CURRENT_DIR), Some("1"));
+    assert_eq!(env_of(&l, "PATH"), None);
+}

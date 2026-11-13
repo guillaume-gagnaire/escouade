@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-mistral"
-version = "2.2.6"
+version = "2.2.7"
 description = "Le plugin Mistral d'Escouade : Mistral Vibe comme harness, par ACP, à côté du service de voix"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"
@@ -15,7 +15,7 @@ rust-version = "1.88"
 crate-type = ["cdylib"]
 
 [dependencies]
-escouade-acp = "0.1.5"
+escouade-acp = "0.1.6"
 escouade-plugin-protocol = "0.1.2"
 escouade-voice = "0.1.0"
 serde_json = "1"

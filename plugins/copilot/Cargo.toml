@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-copilot"
-version = "2.2.7"
+version = "2.2.8"
 description = "Le plugin Copilot CLI d'Escouade : GitHub Copilot CLI comme harness, par le protocole de son SDK"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"

@@ -104,10 +104,27 @@ pub fn trusted(mut doc: Value, cwd: &str) -> Value {
     doc
 }
 
-/// The folder of `command`, put first on the `PATH` `path` (Windows: `;` between its folders).
+/// The folder of `command`, put first on the `PATH` `path` (Windows: `;` between its folders), when it is whole: a drive
+/// and its root (`C:\`, never `C:`, the drive's current folder) or a share (`\\host\share`), with no `;` nor `"`, which
+/// would cut it or make another. None otherwise, the `PATH` left as it is: a folder that is not whole would put a current
+/// folder first (ESC-433). As `escouade_acp::terminal::path_first` (0.1.6), which this plugin does not take yet.
 pub fn path_with(command: &str, path: &str) -> Option<String> {
     let cut = command.rfind(['\\', '/'])?;
-    let dir = &command[..cut];
+    // At a drive's root, its separator stays: `C:` alone is the drive's current folder.
+    let dir = match command[..cut].ends_with(':') {
+        true => &command[..=cut],
+        false => &command[..cut],
+    };
+    let b = dir.as_bytes();
+    let drive =
+        b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && matches!(b[2], b'\\' | b'/');
+    let share = b.len() > 2
+        && matches!(b[0], b'\\' | b'/')
+        && b[1] == b[0]
+        && !matches!(b[2], b'\\' | b'/' | b'?' | b'.');
+    if !(drive || share) || dir.contains([';', '"']) {
+        return None;
+    }
     Some(match path.is_empty() {
         true => dir.to_string(),
         false => format!("{dir};{path}"),
@@ -141,6 +158,15 @@ pub fn args(p: &TerminalParams) -> Vec<String> {
 /// A JSON file's text, as `agy` writes them.
 fn pretty(v: &Value) -> String {
     serde_json::to_string_pretty(v).unwrap_or_default()
+}
+
+/// The keys of the machine's emptied, but the one the account gives (`given`, the names of its variables): one of the
+/// machine's would take the account's place.
+fn machine_keys_out(given: &[String]) -> impl Iterator<Item = (String, String)> + '_ {
+    KEY_VARS
+        .iter()
+        .filter(|k| !given.iter().any(|n| n == *k))
+        .map(|k| (k.to_string(), String::new()))
 }
 
 /// A file of the agent's home, read through the host (`agentHome`); none when it is not there.
@@ -214,12 +240,7 @@ pub fn launch(p: &TerminalParams) -> TerminalLaunch {
         }
     }
     // A key of the machine's would take the account's place.
-    env.extend(
-        KEY_VARS
-            .iter()
-            .filter(|k| !p.env_names.iter().any(|n| n == *k))
-            .map(|k| (k.to_string(), String::new())),
-    );
+    env.extend(machine_keys_out(&p.env_names));
     TerminalLaunch {
         launch: Launch {
             args: args(p),
@@ -305,8 +326,10 @@ pub fn read(r: &AccountRead) -> AccountStep {
     };
     let mut doc = json!({});
     set_provider(&mut doc, r.env_names.iter().any(|n| n == KEY_VARS[0]));
+    // A key of the machine's would list the models of another account than this one, as in its interface (ESC-433).
     let env = home_env(&[], home)
         .into_iter()
+        .chain(machine_keys_out(&r.env_names))
         .map(|(name, value)| EnvVar { name, value })
         .collect();
     AccountStep::start(
@@ -383,12 +406,7 @@ pub fn one_shot(p: &OneShotParams) -> Result<OneShotLaunch, String> {
         // A key of the machine's would take the account's place, as in its interface.
         env: home_env(&[], home)
             .into_iter()
-            .chain(
-                KEY_VARS
-                    .iter()
-                    .filter(|k| !p.env_names.iter().any(|n| n == *k))
-                    .map(|k| (k.to_string(), String::new())),
-            )
+            .chain(machine_keys_out(&p.env_names))
             .map(|(name, value)| EnvVar { name, value })
             .collect(),
         input: Some(format!(

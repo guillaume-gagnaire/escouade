@@ -67,18 +67,38 @@ fn hook_env(p: &TerminalParams) -> Vec<(String, String)> {
         return Vec::new();
     };
     let mut env = Vec::new();
-    if let Some(cut) = command.rfind(['\\', '/']) {
-        let (dir, path) = (&command[..cut], p.path.as_deref().unwrap_or_default());
-        env.push((
-            "PATH".into(),
-            match path.is_empty() {
-                true => dir.to_string(),
-                false => format!("{dir};{path}"),
-            },
-        ));
+    if let Some(path) = path_first(command, p.path.as_deref().unwrap_or_default()) {
+        env.push(("PATH".into(), path));
     }
     env.push((NO_CURRENT_DIR.into(), "1".into()));
     env
+}
+
+/// The `PATH` `path` with the folder of `command` first (Windows: `;` between its folders), when that folder is whole: a
+/// drive and its root (`C:\`, never `C:`, the drive's current folder) or a share (`\\host\share`), with no `;` nor `"`,
+/// which would cut it or make another. None otherwise, the `PATH` left as it is: a folder that is not whole would put a
+/// current folder first (ESC-433).
+pub fn path_first(command: &str, path: &str) -> Option<String> {
+    let cut = command.rfind(['\\', '/'])?;
+    // At a drive's root, its separator stays: `C:` alone is the drive's current folder.
+    let dir = match command[..cut].ends_with(':') {
+        true => &command[..=cut],
+        false => &command[..cut],
+    };
+    let b = dir.as_bytes();
+    let drive =
+        b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && matches!(b[2], b'\\' | b'/');
+    let share = b.len() > 2
+        && matches!(b[0], b'\\' | b'/')
+        && b[1] == b[0]
+        && !matches!(b[2], b'\\' | b'/' | b'?' | b'.');
+    if !(drive || share) || dir.contains([';', '"']) {
+        return None;
+    }
+    Some(match path.is_empty() {
+        true => dir.to_string(),
+        false => format!("{dir};{path}"),
+    })
 }
 
 /// Whether a path of Windows can be written alone, with `/`, in a line of `cmd`, PowerShell or Git Bash: none of them
