@@ -1362,18 +1362,8 @@ pub fn github_repo(url: &str) -> Option<(String, String)> {
         .then_some((r.repo.namespace, r.repo.name))
 }
 
-/// Percent-encoding of everything but the unreserved characters (and `/` when `keep_slash`).
-pub(crate) fn encode(s: &str, keep_slash: bool) -> String {
-    let mut out = String::new();
-    for b in s.bytes() {
-        if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) || (keep_slash && b == b'/') {
-            out.push(b as char);
-        } else {
-            out.push_str(&format!("%{b:02X}"));
-        }
-    }
-    out
-}
+// In `escouade-base` (the fake services of the tests of `escouade-forge` encode with it too).
+pub(crate) use escouade_base::text::percent_encode as encode;
 
 /// What the compare page's address keeps of the title and of the description, in bytes before
 /// encoding (each may triple): the address stays a few KB, which browsers and the system's opener

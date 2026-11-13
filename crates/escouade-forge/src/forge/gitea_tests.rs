@@ -12,7 +12,7 @@ use serde_json::json;
 macro_rules! fx {
     ($name:literal) => {
         serde_json::from_str::<Value>(include_str!(concat!(
-            "../../../tests/fixtures/forges/gitea/",
+            "../../../../tests/fixtures/forges/gitea/",
             $name,
             ".json"
         )))
@@ -20,7 +20,7 @@ macro_rules! fx {
     };
 }
 
-const JOB_LOG: &str = include_str!("../../../tests/fixtures/forges/gitea/job-log.txt");
+const JOB_LOG: &str = include_str!("../../../../tests/fixtures/forges/gitea/job-log.txt");
 
 const GITEA: &str = "1.26.0";
 const FORGEJO: &str = "16.0.0-dev-798-568c49e1+gitea-1.22.0";

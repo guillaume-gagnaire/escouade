@@ -1724,12 +1724,14 @@ dependencies = [
  "escouade-acp",
  "escouade-base",
  "escouade-engines",
+ "escouade-forge",
  "escouade-model",
  "escouade-plan",
  "escouade-plugin-cli",
  "escouade-plugin-kit",
  "escouade-plugin-protocol",
  "escouade-plugins",
+ "escouade-updates",
  "escouade-vectors",
  "escouade-voice",
  "escouade-voice-local",
@@ -1742,7 +1744,6 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
- "keyring",
  "libc",
  "log",
  "notify",
@@ -1826,6 +1827,33 @@ dependencies = [
  "tokio",
  "toml_edit 0.25.15+spec-1.1.0",
  "unicode-normalization",
+]
+
+[[package]]
+name = "escouade-forge"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.23.1",
+ "ctor",
+ "escouade-base",
+ "escouade-model",
+ "escouade-plugin-cli",
+ "escouade-plugin-kit",
+ "escouade-plugin-protocol",
+ "escouade-plugins",
+ "keyring",
+ "log",
+ "parking_lot 0.13.0",
+ "rcgen",
+ "reqwest 0.12.28",
+ "rustls",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-rustls",
+ "uuid",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1942,6 +1970,25 @@ dependencies = [
  "wasmtime",
  "wasmtime-wasi",
  "webpki-roots",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "escouade-updates"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ctor",
+ "escouade-base",
+ "escouade-forge",
+ "escouade-model",
+ "escouade-plugin-cli",
+ "escouade-plugins",
+ "parking_lot 0.13.0",
+ "reqwest 0.12.28",
+ "serde_json",
+ "tokio",
+ "uuid",
  "windows-sys 0.61.2",
 ]
 

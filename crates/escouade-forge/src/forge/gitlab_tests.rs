@@ -16,21 +16,25 @@ use serde_json::json;
 
 fn fixture(name: &str) -> Value {
     let text = match name {
-        "project" => include_str!("../../../tests/fixtures/forges/gitlab/project.json"),
-        "fork-project" => include_str!("../../../tests/fixtures/forges/gitlab/fork-project.json"),
-        "merge-request" => include_str!("../../../tests/fixtures/forges/gitlab/merge-request.json"),
-        "branch-mrs" => include_str!("../../../tests/fixtures/forges/gitlab/branch-mrs.json"),
-        "approvals" => include_str!("../../../tests/fixtures/forges/gitlab/approvals.json"),
-        "reviewers" => include_str!("../../../tests/fixtures/forges/gitlab/reviewers.json"),
-        "jobs" => include_str!("../../../tests/fixtures/forges/gitlab/jobs.json"),
-        "discussions" => include_str!("../../../tests/fixtures/forges/gitlab/discussions.json"),
-        "deployments" => include_str!("../../../tests/fixtures/forges/gitlab/deployments.json"),
+        "project" => include_str!("../../../../tests/fixtures/forges/gitlab/project.json"),
+        "fork-project" => {
+            include_str!("../../../../tests/fixtures/forges/gitlab/fork-project.json")
+        }
+        "merge-request" => {
+            include_str!("../../../../tests/fixtures/forges/gitlab/merge-request.json")
+        }
+        "branch-mrs" => include_str!("../../../../tests/fixtures/forges/gitlab/branch-mrs.json"),
+        "approvals" => include_str!("../../../../tests/fixtures/forges/gitlab/approvals.json"),
+        "reviewers" => include_str!("../../../../tests/fixtures/forges/gitlab/reviewers.json"),
+        "jobs" => include_str!("../../../../tests/fixtures/forges/gitlab/jobs.json"),
+        "discussions" => include_str!("../../../../tests/fixtures/forges/gitlab/discussions.json"),
+        "deployments" => include_str!("../../../../tests/fixtures/forges/gitlab/deployments.json"),
         _ => panic!("no fixture {name}"),
     };
     serde_json::from_str(text).unwrap()
 }
 
-const JOB_LOG: &str = include_str!("../../../tests/fixtures/forges/gitlab/job-log.txt");
+const JOB_LOG: &str = include_str!("../../../../tests/fixtures/forges/gitlab/job-log.txt");
 
 /// `gitlab-org/api/client-go`, as its address names it: one segment.
 const P: &str = "/projects/gitlab-org%2Fapi%2Fclient-go";

@@ -1,4 +1,4 @@
-//! What a line of text shows: the characters that are drawn, on one line; a text cut to a length.
+//! What a line of text shows: the characters that are drawn, on one line; a text cut to a length; a slug.
 
 /// `s` cut to `max` bytes at most, on a character's boundary, with `…` when it was cut.
 pub fn truncate(s: &str, max: usize) -> String {
@@ -10,6 +10,61 @@ pub fn truncate(s: &str, max: usize) -> String {
         end -= 1;
     }
     format!("{}…", &s[..end])
+}
+
+/// Kebab-case ASCII slug from free text (accents folded), of at most 40 characters.
+pub fn slugify(s: &str) -> String {
+    slug_within(s, 40)
+}
+
+/// Kebab-case ASCII slug from free text (accents folded), of at most `max` characters: whole
+/// words while they fit, the first one cut when it alone is longer.
+pub fn slug_within(s: &str, max: usize) -> String {
+    let folded: String = s
+        .trim()
+        .to_lowercase()
+        .chars()
+        .map(|c| match c {
+            'à' | 'á' | 'â' | 'ä' | 'ã' => 'a',
+            'ç' => 'c',
+            'è' | 'é' | 'ê' | 'ë' => 'e',
+            'ì' | 'í' | 'î' | 'ï' => 'i',
+            'ò' | 'ó' | 'ô' | 'ö' | 'õ' => 'o',
+            'ù' | 'ú' | 'û' | 'ü' => 'u',
+            'ÿ' => 'y',
+            'ñ' => 'n',
+            c if c.is_ascii_alphanumeric() => c,
+            _ => '-',
+        })
+        .collect();
+    let mut out = String::new();
+    for part in folded.split('-').filter(|p| !p.is_empty()) {
+        if out.len() + part.len() + 1 > max {
+            if out.is_empty() {
+                // ASCII only by now: any byte ends a character.
+                out.push_str(&part[..max.min(part.len())]);
+            }
+            break;
+        }
+        if !out.is_empty() {
+            out.push('-');
+        }
+        out.push_str(part);
+    }
+    out
+}
+
+/// Percent-encoding of everything but the unreserved characters (and `/` when `keep_slash`).
+pub fn percent_encode(s: &str, keep_slash: bool) -> String {
+    let mut out = String::new();
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) || (keep_slash && b == b'/') {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
 }
 
 /// A character that is not drawn, or drawn as something else than itself: the controls, the

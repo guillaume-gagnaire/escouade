@@ -126,7 +126,7 @@ pub fn user_agent() -> String {
     };
     format!(
         "Escouade/{} ({system}; {})",
-        env!("CARGO_PKG_VERSION"),
+        escouade_plugins::APP_VERSION,
         std::env::consts::ARCH
     )
 }

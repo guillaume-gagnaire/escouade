@@ -10,7 +10,7 @@ use super::*;
 
 pub struct AzureProvider;
 
-pub(crate) const NAME: &str = "Azure DevOps";
+pub const NAME: &str = "Azure DevOps";
 
 /// Its public instance.
 pub const CLOUD: &str = "dev.azure.com";
@@ -31,7 +31,7 @@ pub fn api_override(url: &str) -> Option<String> {
 }
 
 /// A remote's path segment, its percent-encoding (`My%20Project`) undone.
-pub(crate) fn decode(s: &str) -> String {
+pub fn decode(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;

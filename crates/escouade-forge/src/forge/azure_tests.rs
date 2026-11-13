@@ -15,23 +15,23 @@ use serde_json::json;
 fn fixture(name: &str) -> Value {
     let text = match name {
         "connection-data" => {
-            include_str!("../../../tests/fixtures/forges/azure/connection-data.json")
+            include_str!("../../../../tests/fixtures/forges/azure/connection-data.json")
         }
-        "pull-request" => include_str!("../../../tests/fixtures/forges/azure/pull-request.json"),
-        "threads" => include_str!("../../../tests/fixtures/forges/azure/threads.json"),
-        "evaluations" => include_str!("../../../tests/fixtures/forges/azure/evaluations.json"),
-        "statuses" => include_str!("../../../tests/fixtures/forges/azure/statuses.json"),
-        "builds" => include_str!("../../../tests/fixtures/forges/azure/builds.json"),
-        "timeline" => include_str!("../../../tests/fixtures/forges/azure/timeline.json"),
+        "pull-request" => include_str!("../../../../tests/fixtures/forges/azure/pull-request.json"),
+        "threads" => include_str!("../../../../tests/fixtures/forges/azure/threads.json"),
+        "evaluations" => include_str!("../../../../tests/fixtures/forges/azure/evaluations.json"),
+        "statuses" => include_str!("../../../../tests/fixtures/forges/azure/statuses.json"),
+        "builds" => include_str!("../../../../tests/fixtures/forges/azure/builds.json"),
+        "timeline" => include_str!("../../../../tests/fixtures/forges/azure/timeline.json"),
         "policy-configurations" => {
-            include_str!("../../../tests/fixtures/forges/azure/policy-configurations.json")
+            include_str!("../../../../tests/fixtures/forges/azure/policy-configurations.json")
         }
         _ => panic!("no fixture {name}"),
     };
     serde_json::from_str(text).unwrap()
 }
 
-const JOB_LOG: &str = include_str!("../../../tests/fixtures/forges/azure/job-log.txt");
+const JOB_LOG: &str = include_str!("../../../../tests/fixtures/forges/azure/job-log.txt");
 
 /// What the fake server answers under, for the organization `acme` and its project `Demo Project`.
 const PROJECT: &str = "/acme/Demo%20Project/_apis";
@@ -1032,24 +1032,6 @@ async fn a_server_is_reached_under_its_collection() {
         .unwrap()
         .is_empty());
     assert_eq!(requests_to(&server, &format!("{base}/pullrequests")), 1);
-}
-
-#[test]
-fn an_entra_id_token_is_asked_again_before_it_ends() {
-    use super::connect::expires_soon;
-    let jwt = |exp: u64| {
-        let e = base64::engine::general_purpose::URL_SAFE_NO_PAD;
-        format!(
-            "{}.{}.sig",
-            e.encode(br#"{"typ":"JWT"}"#),
-            e.encode(format!(r#"{{"exp":{exp}}}"#))
-        )
-    };
-    assert!(!expires_soon(&jwt(10_000), 1_000));
-    assert!(expires_soon(&jwt(1_200), 1_000), "within five minutes");
-    assert!(expires_soon(&jwt(500), 1_000));
-    // A personal token never expires here.
-    assert!(!expires_soon("pat-52-characters", 1_000));
 }
 
 /// A branch's checks (ESC-63): the last status of each context of its last commit, and the

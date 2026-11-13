@@ -89,7 +89,7 @@ async fn clickup() -> Rig {
 }
 
 /// The list l1 « Sprint 12 » and its statuses, out of order as ClickUp may give them.
-pub(crate) fn list(server: &FakeServer) {
+pub fn list(server: &FakeServer) {
     server.on(
         "GET",
         "/list/l1",
@@ -104,7 +104,7 @@ pub(crate) fn list(server: &FakeServer) {
     );
 }
 
-pub(crate) fn task(id: &str, custom: Option<&str>, name: &str, list: &str) -> Value {
+pub fn task(id: &str, custom: Option<&str>, name: &str, list: &str) -> Value {
     json!({
         "id": id, "custom_id": custom, "name": name,
         "markdown_description": "Exporter le journal.\n\n![capture](https://t.clickup.com/a.png)",

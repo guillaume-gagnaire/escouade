@@ -75,7 +75,7 @@ fn the_user_agent_names_the_app_its_system_and_its_architecture() {
         user_agent(),
         format!(
             "Escouade/{} ({os}; {})",
-            env!("CARGO_PKG_VERSION"),
+            escouade_plugins::APP_VERSION,
             std::env::consts::ARCH
         )
     );

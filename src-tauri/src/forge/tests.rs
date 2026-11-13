@@ -905,3 +905,23 @@ async fn the_gitlab_plugin_switched_off_is_said_by_the_view_and_by_its_two_uses(
     h.core.plugins.choose(GITLAB, |c| c.enabled = true).unwrap();
     assert_eq!(served(&h.core.forges_view().await), Some(true));
 }
+
+/// An Azure DevOps token of Entra ID (a JWT) is asked again five minutes before it ends (`connect::expires_soon`).
+#[test]
+fn an_entra_id_token_is_asked_again_before_it_ends() {
+    use super::connect::expires_soon;
+    use base64::Engine as _;
+    let jwt = |exp: u64| {
+        let e = base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        format!(
+            "{}.{}.sig",
+            e.encode(br#"{"typ":"JWT"}"#),
+            e.encode(format!(r#"{{"exp":{exp}}}"#))
+        )
+    };
+    assert!(!expires_soon(&jwt(10_000), 1_000));
+    assert!(expires_soon(&jwt(1_200), 1_000), "within five minutes");
+    assert!(expires_soon(&jwt(500), 1_000));
+    // A personal token never expires here.
+    assert!(!expires_soon("pat-52-characters", 1_000));
+}

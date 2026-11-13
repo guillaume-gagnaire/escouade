@@ -1298,47 +1298,9 @@ fn handed_back(items: &[Value]) -> Option<String> {
         .map(str::to_string)
 }
 
-/// Kebab-case ASCII slug from free text (accents folded), of at most 40 characters.
-pub fn slugify(s: &str) -> String {
-    slug_within(s, 40)
-}
-
-/// Kebab-case ASCII slug from free text (accents folded), of at most `max` characters: whole
-/// words while they fit, the first one cut when it alone is longer.
-fn slug_within(s: &str, max: usize) -> String {
-    let folded: String = s
-        .trim()
-        .to_lowercase()
-        .chars()
-        .map(|c| match c {
-            'à' | 'á' | 'â' | 'ä' | 'ã' => 'a',
-            'ç' => 'c',
-            'è' | 'é' | 'ê' | 'ë' => 'e',
-            'ì' | 'í' | 'î' | 'ï' => 'i',
-            'ò' | 'ó' | 'ô' | 'ö' | 'õ' => 'o',
-            'ù' | 'ú' | 'û' | 'ü' => 'u',
-            'ÿ' => 'y',
-            'ñ' => 'n',
-            c if c.is_ascii_alphanumeric() => c,
-            _ => '-',
-        })
-        .collect();
-    let mut out = String::new();
-    for part in folded.split('-').filter(|p| !p.is_empty()) {
-        if out.len() + part.len() + 1 > max {
-            if out.is_empty() {
-                // ASCII only by now: any byte ends a character.
-                out.push_str(&part[..max.min(part.len())]);
-            }
-            break;
-        }
-        if !out.is_empty() {
-            out.push('-');
-        }
-        out.push_str(part);
-    }
-    out
-}
+// The slugs, in `escouade-base` (the states of an external ticket read them too, `escouade-forge`).
+use escouade_base::text::slug_within;
+pub use escouade_base::text::slugify;
 
 /// The name of a copy of the agent `original`: « <original> (copie) », then « (copie 2) »,
 /// « (copie 3) »… while the project has an agent of that name; “(copy)”, “(copy 2)” in English.

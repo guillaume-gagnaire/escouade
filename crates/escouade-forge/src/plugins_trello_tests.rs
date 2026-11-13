@@ -82,7 +82,7 @@ async fn trello() -> Rig {
     }
 }
 
-pub(crate) fn board(server: &FakeServer) {
+pub fn board(server: &FakeServer) {
     server.on(
         "GET",
         "/boards/b1/lists",

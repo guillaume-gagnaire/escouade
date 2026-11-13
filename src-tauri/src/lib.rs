@@ -149,13 +149,11 @@ mod plugins_accounts_tests;
 #[cfg(test)]
 mod plugins_acp_tests;
 #[cfg(test)]
-mod plugins_adapters_tests;
-#[cfg(test)]
 mod plugins_builtin_tests;
 #[cfg(test)]
 mod plugins_claude_acp_parity_tests;
 #[cfg(test)]
-mod plugins_clickup_tests;
+use escouade_forge::plugins_clickup_tests;
 #[cfg(test)]
 mod plugins_decide_tests;
 #[cfg(test)]
@@ -164,10 +162,6 @@ mod plugins_harness_parity_tests;
 mod plugins_harness_tests;
 #[cfg(test)]
 mod plugins_isola_tests;
-#[cfg(test)]
-mod plugins_jira_tests;
-#[cfg(test)]
-mod plugins_linear_tests;
 #[cfg(test)]
 mod plugins_loans_tests;
 #[cfg(test)]
@@ -189,7 +183,7 @@ use escouade_plugins::plugins_store_tests;
 #[cfg(test)]
 mod plugins_tests;
 #[cfg(test)]
-mod plugins_trello_tests;
+use escouade_forge::plugins_trello_tests;
 #[cfg(test)]
 mod plugins_view_parity_tests;
 #[cfg(test)]

@@ -1,0 +1,62 @@
+[package]
+name = "escouade-forge"
+version = "0.1.0"
+description = "Escouade's code hosts and ticket sources: the contract of a host, the accounts and their secrets in the keychain, the registry of the sources, the adapters of the plugins that serve them"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../src-tauri"
+# A part of the app, cut out of its crate for it to compile faster (docs/CRATES.md): never published.
+publish = false
+
+[features]
+# What the app's tests take: the secrets in memory (never the keychain), the fake services (`integrations::fake`), the
+# hosts served by their plugins (`plugins::builtin::served_forge`), the helpers of their checks.
+testing = ["escouade-base/testing", "escouade-model/testing", "escouade-plugins/testing", "dep:rcgen"]
+
+[dependencies]
+# The languages written in now, the guards of the paths, the slugs.
+escouade-base = { path = "../escouade-base" }
+# The data (settings, services, external tickets, the data folder).
+escouade-model = { path = "../escouade-model" }
+# The host of the plugins that serve the hosts and the sources (their runtime, the store of the secrets).
+escouade-plugins = { path = "../escouade-plugins" }
+escouade-plugin-protocol = { path = "../escouade-plugin-protocol" }
+# The manifests (`tr_in!`) and the kit's contract of a code host (`Forge`), its errors and its texts.
+escouade-plugin-cli = { path = "../escouade-plugin-cli" }
+escouade-plugin-kit = { path = "../escouade-plugin-kit" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["raw_value"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time", "fs", "net"] }
+anyhow = "1"
+parking_lot = "0.13"
+uuid = { version = "1", features = ["v4"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }
+base64 = "0.23"
+log = "0.4"
+# The fake services over https (`integrations::fake`, feature `testing`): a self-signed certificate.
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "ring"], optional = true }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+
+[target.'cfg(windows)'.dependencies]
+# The integrations' secrets in the Credential Manager. Its own store only: neither the fallback
+# that keeps them in memory (lost at the next start) nor Linux's secret-service.
+keyring = { version = "3.6", features = ["windows-native"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# The integrations' secrets in the Keychain.
+keyring = { version = "3.6", features = ["apple-native"] }
+
+[dev-dependencies]
+escouade-base = { path = "../escouade-base", features = ["testing"] }
+escouade-model = { path = "../escouade-model", features = ["testing"] }
+escouade-plugins = { path = "../escouade-plugins", features = ["testing"] }
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "ring"] }
+# Each test process's temporary folder of its own, given before `main` (the app's `src/test_tmp.rs`).
+ctor = "1"
+
+[target.'cfg(windows)'.dev-dependencies]
+# The handles of the reaper of the tests' temporary folders (`test_tmp`).
+windows-sys = { version = "0.61", features = ["Win32_Foundation"] }

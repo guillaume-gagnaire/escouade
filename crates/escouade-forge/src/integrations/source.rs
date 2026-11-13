@@ -99,7 +99,7 @@ impl Registry {
     }
 
     /// One more kind (a fake one in tests; a plugin's, later).
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testing"))]
     pub fn with(mut self, kind: Arc<dyn TicketSourceKind>) -> Self {
         self.kinds.push(kind);
         self

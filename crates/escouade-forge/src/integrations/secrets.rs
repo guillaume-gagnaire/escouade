@@ -16,7 +16,7 @@ pub use escouade_plugins::secrets::SecretStore;
 /// The keychain's service of the app's entries, its identifier; a sandboxed run's (end-to-end
 /// tests, demos) are apart, so that its accounts never take the place of the user's.
 #[cfg_attr(not(any(windows, target_os = "macos")), allow(dead_code))]
-pub(crate) fn keychain_service(sandboxed: bool) -> String {
+pub fn keychain_service(sandboxed: bool) -> String {
     if sandboxed {
         format!("{}.sandbox", paths::IDENTIFIER)
     } else {
@@ -25,7 +25,7 @@ pub(crate) fn keychain_service(sandboxed: bool) -> String {
 }
 
 /// The keychain's entry of an integration: "jira", "trello", "github".
-pub(crate) fn entry(service: Service) -> String {
+pub fn entry(service: Service) -> String {
     service.label().to_lowercase()
 }
 
@@ -53,12 +53,12 @@ impl Secrets {
 
 /// The system's keychain: Windows' Credential Manager, macOS' Keychain (the user's), an entry per
 /// integration under `service`.
-#[cfg(all(not(test), any(windows, target_os = "macos")))]
+#[cfg(all(not(any(test, feature = "testing")), any(windows, target_os = "macos")))]
 struct Keychain {
     service: String,
 }
 
-#[cfg(all(not(test), any(windows, target_os = "macos")))]
+#[cfg(all(not(any(test, feature = "testing")), any(windows, target_os = "macos")))]
 impl Keychain {
     /// The entry `name`, in the platform's own store: never the in-memory one `keyring` falls
     /// back to without it, which would lose the secrets at the next start.
@@ -73,7 +73,7 @@ impl Keychain {
 }
 
 // Its errors say what failed (the platform's code, the attribute too long), never the secret.
-#[cfg(all(not(test), any(windows, target_os = "macos")))]
+#[cfg(all(not(any(test, feature = "testing")), any(windows, target_os = "macos")))]
 impl SecretStore for Keychain {
     fn get(&self, name: &str) -> Result<Option<String>> {
         match self.entry(name)?.get_password() {
@@ -96,10 +96,16 @@ impl SecretStore for Keychain {
 }
 
 /// No keychain the app knows of (Linux): the secrets stay in the file.
-#[cfg(all(not(test), not(any(windows, target_os = "macos"))))]
+#[cfg(all(
+    not(any(test, feature = "testing")),
+    not(any(windows, target_os = "macos"))
+))]
 struct NoKeychain;
 
-#[cfg(all(not(test), not(any(windows, target_os = "macos"))))]
+#[cfg(all(
+    not(any(test, feature = "testing")),
+    not(any(windows, target_os = "macos"))
+))]
 impl SecretStore for NoKeychain {
     fn get(&self, _name: &str) -> Result<Option<String>> {
         Ok(None)
@@ -116,26 +122,29 @@ impl SecretStore for NoKeychain {
 
 /// The store of the accounts of `data`: the system's keychain (the same for every folder, a
 /// sandboxed run's service apart).
-#[cfg(all(not(test), any(windows, target_os = "macos")))]
-pub(crate) fn store_for(_data: &DataDir) -> Arc<dyn SecretStore> {
+#[cfg(all(not(any(test, feature = "testing")), any(windows, target_os = "macos")))]
+pub fn store_for(_data: &DataDir) -> Arc<dyn SecretStore> {
     Arc::new(Keychain {
         service: keychain_service(paths::sandbox_dir().is_some()),
     })
 }
 
-#[cfg(all(not(test), not(any(windows, target_os = "macos"))))]
-pub(crate) fn store_for(_data: &DataDir) -> Arc<dyn SecretStore> {
+#[cfg(all(
+    not(any(test, feature = "testing")),
+    not(any(windows, target_os = "macos"))
+))]
+pub fn store_for(_data: &DataDir) -> Arc<dyn SecretStore> {
     Arc::new(NoKeychain)
 }
 
 /// The secrets in memory (tests), in `escouade-plugins` (feature `testing`).
-#[cfg(test)]
-pub(crate) use escouade_plugins::secrets::MemoryStore;
+#[cfg(any(test, feature = "testing"))]
+pub use escouade_plugins::secrets::MemoryStore;
 
 /// The memory store of the data folder `data` (tests): one per folder, so that a core loaded again
 /// on the same folder finds what the one before kept, as it would in the keychain.
-#[cfg(test)]
-pub(crate) fn memory_of(data: &DataDir) -> Arc<MemoryStore> {
+#[cfg(any(test, feature = "testing"))]
+pub fn memory_of(data: &DataDir) -> Arc<MemoryStore> {
     static STORES: std::sync::Mutex<
         std::collections::BTreeMap<std::path::PathBuf, Arc<MemoryStore>>,
     > = std::sync::Mutex::new(std::collections::BTreeMap::new());
@@ -148,8 +157,8 @@ pub(crate) fn memory_of(data: &DataDir) -> Arc<MemoryStore> {
 }
 
 /// The store of the accounts of `data`: its memory store.
-#[cfg(test)]
-pub(crate) fn store_for(data: &DataDir) -> Arc<dyn SecretStore> {
+#[cfg(any(test, feature = "testing"))]
+pub fn store_for(data: &DataDir) -> Arc<dyn SecretStore> {
     memory_of(data)
 }
 
@@ -157,17 +166,12 @@ pub(crate) fn store_for(data: &DataDir) -> Arc<dyn SecretStore> {
 /// (`Account::in_file`). An account without any (GitHub through `gh`) leaves no entry: the one a
 /// former account of the service left goes; false when it stays (to forget at the next start,
 /// `Accounts::to_forget`).
-pub(crate) fn place(store: &dyn SecretStore, service: Service, a: &mut Account) -> bool {
+pub fn place(store: &dyn SecretStore, service: Service, a: &mut Account) -> bool {
     place_of(store, service, "", a)
 }
 
 /// `place`, for the account `id` of `service` (`Accounts::account`).
-pub(crate) fn place_of(
-    store: &dyn SecretStore,
-    service: Service,
-    id: &str,
-    a: &mut Account,
-) -> bool {
+pub fn place_of(store: &dyn SecretStore, service: Service, id: &str, a: &mut Account) -> bool {
     let secrets = Secrets::of(a);
     a.in_file = false;
     if secrets.is_empty() {
@@ -207,8 +211,8 @@ fn keep(
 }
 
 /// The account's secrets under the service's former entry only (`plugins::accounts::revert`).
-#[cfg_attr(not(test), allow(dead_code))]
-pub(crate) fn keep_legacy(store: &dyn SecretStore, service: Service, a: &Account) -> Result<()> {
+#[cfg_attr(not(any(test, feature = "testing")), allow(dead_code))]
+pub fn keep_legacy(store: &dyn SecretStore, service: Service, a: &Account) -> Result<()> {
     let text = serde_json::to_string(&Secrets::of(a))?;
     keep_secret(store, &entry(service), &text)
 }
@@ -216,12 +220,12 @@ pub(crate) fn keep_legacy(store: &dyn SecretStore, service: Service, a: &Account
 /// The service's secrets leave the store (its account goes, or has none now), under every name
 /// they may have: the former one, the name of Escouade's own hand, and `plugin`'s (the plugin
 /// that served the account, when known); false when they could not (logged).
-pub(crate) fn forget(store: &dyn SecretStore, service: Service) -> bool {
+pub fn forget(store: &dyn SecretStore, service: Service) -> bool {
     forget_of(store, service, "")
 }
 
 /// `forget`, for an account `plugin` served (empty: Escouade's own hand).
-pub(crate) fn forget_of(store: &dyn SecretStore, service: Service, plugin: &str) -> bool {
+pub fn forget_of(store: &dyn SecretStore, service: Service, plugin: &str) -> bool {
     let own = Account::default();
     let other = Account {
         plugin: plugin.to_string(),
@@ -244,7 +248,7 @@ pub(crate) fn forget_of(store: &dyn SecretStore, service: Service, plugin: &str)
 
 /// The keychain's names of the secrets of the account `id` of `service` after its first
 /// (Escouade's own hand's, and `plugin`'s).
-pub(crate) fn names_of_more(service: Service, id: &str, plugin: &str) -> Vec<String> {
+pub fn names_of_more(service: Service, id: &str, plugin: &str) -> Vec<String> {
     let other = Account {
         plugin: plugin.to_string(),
         ..Account::default()
@@ -259,12 +263,7 @@ pub(crate) fn names_of_more(service: Service, id: &str, plugin: &str) -> Vec<Str
 
 /// `forget_of`, for the account `id` of `service`: the first one's under all its names, another
 /// one's under its own.
-pub(crate) fn forget_account(
-    store: &dyn SecretStore,
-    service: Service,
-    id: &str,
-    plugin: &str,
-) -> bool {
+pub fn forget_account(store: &dyn SecretStore, service: Service, id: &str, plugin: &str) -> bool {
     if super::is_first(service, id) {
         return forget_of(store, service, plugin);
     }
@@ -272,7 +271,7 @@ pub(crate) fn forget_account(
 }
 
 /// The entries `names` leave the store; false when they could not (logged).
-pub(crate) fn forget_names(store: &dyn SecretStore, names: &[String]) -> bool {
+pub fn forget_names(store: &dyn SecretStore, names: &[String]) -> bool {
     if let Err(e) = names.iter().try_for_each(|n| store.delete(n)) {
         log::warn!("the system keychain did not forget an account's secrets: {e:#}");
         return false;
@@ -284,7 +283,7 @@ pub(crate) fn forget_names(store: &dyn SecretStore, names: &[String]) -> bool {
 /// is kept (`former`; a version from before may have changed it since), copied under the plugin's
 /// name (`name`) when that one holds something else (the migration of INT-6, and its way back
 /// after a version from before). Served by another plugin: under that plugin's name alone.
-pub(crate) fn read_entry(
+pub fn read_entry(
     store: &dyn SecretStore,
     former: Option<&str>,
     name: &str,
@@ -307,12 +306,14 @@ pub(crate) fn read_entry(
 /// A development build on the user's own data folder (not sandboxed) leaves the file a copy of
 /// the secrets the keychain holds: the installed Escouade, maybe older, still reads them there (a
 /// development build never moves the user's data). Never in tests (throwaway folders).
-pub(crate) fn file_keeps_copy() -> bool {
-    !cfg!(test) && cfg!(debug_assertions) && paths::sandbox_dir().is_none()
+pub fn file_keeps_copy() -> bool {
+    !cfg!(any(test, feature = "testing"))
+        && cfg!(debug_assertions)
+        && paths::sandbox_dir().is_none()
 }
 
 /// A GitHub account that uses the CLI's token: it has none of its own.
-pub(crate) fn through_gh(service: Service, a: &Account) -> bool {
+pub fn through_gh(service: Service, a: &Account) -> bool {
     service == Service::GITHUB && a.label.ends_with(VIA_GH)
 }
 
@@ -350,7 +351,7 @@ fn fill(store: &dyn SecretStore, service: Service, id: &str, a: &mut Account) {
 /// unless it keeps a copy (`file_copy`, `file_keeps_copy`). The entries a « Déconnecter » could
 /// not delete (`Accounts::to_forget`) go; no other, even of a service no account lists: a file
 /// written again after a broken one, or by another version, would cost the others their tokens.
-pub(crate) fn load_accounts(data: &DataDir, store: &dyn SecretStore, file_copy: bool) -> Accounts {
+pub fn load_accounts(data: &DataDir, store: &dyn SecretStore, file_copy: bool) -> Accounts {
     let path = data.integrations_file();
     let more = load_more(data, store);
     let none = |more: super::MoreAccounts| {
@@ -428,7 +429,7 @@ pub(crate) fn load_accounts(data: &DataDir, store: &dyn SecretStore, file_copy: 
 
 /// Writes the accounts to `integrations.json`, without the secrets the store holds (unless the
 /// file keeps a copy of them).
-pub(crate) fn save_accounts(data: &DataDir, accounts: &Accounts) -> Result<()> {
+pub fn save_accounts(data: &DataDir, accounts: &Accounts) -> Result<()> {
     let mut saved = accounts.clone();
     for service in source::registry().services() {
         if let Some(a) = saved
@@ -494,13 +495,13 @@ fn load_more(data: &DataDir, store: &dyn SecretStore) -> super::MoreAccounts {
 
 /// The keychain's entry of the MCP server's token for Claude outside Escouade (« Claude et les
 /// agents peuvent piloter Escouade »), beside the integrations' ones.
-pub(crate) const MCP_ENTRY: &str = "mcp";
+pub const MCP_ENTRY: &str = "mcp";
 
 /// The MCP server's token for Claude outside Escouade: the one left in `mcp-token.json` when the
 /// keychain refused it (moved into the keychain once it takes it), else the keychain's, else a
 /// new one (`make`) kept in the keychain, or in the file (readable by its owner only) when it
 /// refuses it.
-pub(crate) fn mcp_token(
+pub fn mcp_token(
     store: &dyn SecretStore,
     data: &DataDir,
     make: impl FnOnce() -> String,
@@ -535,7 +536,7 @@ pub(crate) fn mcp_token(
 
 /// A new MCP token (`make`) in place of the one kept: the old one leaves the keychain and the
 /// file, the new one is kept as `mcp_token` keeps one it makes.
-pub(crate) fn renew_mcp_token(
+pub fn renew_mcp_token(
     store: &dyn SecretStore,
     data: &DataDir,
     make: impl FnOnce() -> String,
@@ -575,7 +576,7 @@ struct TokenFile {
 }
 
 /// Puts `secret` under `name`, then reads it back: Ok once the store gives it as it was given.
-pub(crate) fn keep_secret(store: &dyn SecretStore, name: &str, secret: &str) -> Result<()> {
+pub fn keep_secret(store: &dyn SecretStore, name: &str, secret: &str) -> Result<()> {
     store.set(name, secret)?;
     if store.get(name)?.as_deref() != Some(secret) {
         bail!("it does not give it back as it was given");

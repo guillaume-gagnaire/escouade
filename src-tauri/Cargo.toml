@@ -98,6 +98,10 @@ escouade-engines = { path = "../crates/escouade-engines" }
 # The host of the plugins (`plugins`, but for its links with the core, the agents and the terminals), and whom the TLS
 # connections trust (`tls`).
 escouade-plugins = { path = "../crates/escouade-plugins" }
+# The code hosts and the ticket sources: their contract, their accounts and secrets, the adapters of their plugins.
+escouade-forge = { path = "../crates/escouade-forge" }
+# What the app learns of a request of the updater that failed (`updates::net`).
+escouade-updates = { path = "../crates/escouade-updates" }
 # The transcription as one speaks (ESC-136): a WebSocket to the service, through the settings' proxy (HTTP CONNECT,
 # opened by hand) and TLS by rustls (ring, as reqwest), the system's roots and Mozilla's.
 tokio-tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
@@ -114,9 +118,6 @@ quick-xml = "0.42"
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Media_Audio", "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_ProcessStatus", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 tauri-winrt-notification = "0.8"
-# The integrations' secrets in the Credential Manager. Its own store only: neither the fallback
-# that keeps them in memory (lost at the next start) nor Linux's secret-service.
-keyring = { version = "3.6", features = ["windows-native"] }
 # The path of a file the page hands the window (`fileorigin`): WebView2's own COM interfaces, in the
 # versions Tauri's wry already uses (`windows-core` for `Interface::cast`, which webview2-com does not re-export).
 webview2-com = "0.39"
@@ -136,8 +137,6 @@ webkit2gtk = { version = "2.0", features = ["v2_20"] }
 tauri-plugin-notification = "2"
 # The inspector of a launch's page in a window of its own (`devpage::open_devtools`): wry's version.
 objc2 = "0.6"
-# The integrations' secrets in the Keychain.
-keyring = { version = "3.6", features = ["apple-native"] }
 
 # The dependencies keep their line tables only (backtraces still say where), Escouade its full debug info: with
 # everything in full, the program database of the debug build went over the MSVC linker's limit (LNK1140, 2026-10-28,
@@ -158,6 +157,8 @@ members = [
     "../crates/escouade-model",
     "../crates/escouade-engines",
     "../crates/escouade-plugins",
+    "../crates/escouade-forge",
+    "../crates/escouade-updates",
 ]
 default-members = [
     ".",
@@ -173,6 +174,8 @@ default-members = [
     "../crates/escouade-model",
     "../crates/escouade-engines",
     "../crates/escouade-plugins",
+    "../crates/escouade-forge",
+    "../crates/escouade-updates",
 ]
 
 # The plugins depend on the kit by version, as the store reads them (their folder, published crates, the checksum of their
@@ -239,3 +242,7 @@ flate2 = "1"
 tar = { version = "0.4", default-features = false }
 # The host as the tests start it (the secrets in memory, the runtime of the workspace's plugins, the fake isola).
 escouade-plugins = { path = "../crates/escouade-plugins", features = ["testing"] }
+# The hosts and the sources as the tests have them (the secrets in memory, the fake services, a host served by its plugin).
+escouade-forge = { path = "../crates/escouade-forge", features = ["testing"] }
+# The fake server of the updates (`updates::fake_server`), for the tests of the updater that stay here.
+escouade-updates = { path = "../crates/escouade-updates", features = ["testing"] }

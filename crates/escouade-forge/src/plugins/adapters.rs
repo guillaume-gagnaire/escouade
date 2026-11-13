@@ -94,16 +94,16 @@ fn typed(plugin: &str, e: CallError, what: &'static str) -> anyhow::Error {
 
 /// A plugin and the runtime that talks to it (for one account: `for_account`).
 #[derive(Clone)]
-pub(super) struct Line {
+pub struct Line {
     rt: Arc<Runtime>,
-    pub(super) plugin: String,
+    pub plugin: String,
     /// The account's budget of calls (`accounts::budget_key`), for a line of one account:
     /// every point of the plugin spends the same.
     budget: Option<String>,
 }
 
 impl Line {
-    pub(super) fn new(rt: Arc<Runtime>, plugin: &str) -> Self {
+    pub fn new(rt: Arc<Runtime>, plugin: &str) -> Self {
         Self {
             rt,
             plugin: plugin.to_string(),
@@ -121,7 +121,7 @@ impl Line {
 
     /// The answer to `method`: its value, the budget it carries (`{ value, rateLimit }`) kept as
     /// the account's.
-    pub(super) async fn call<T: DeserializeOwned>(
+    pub async fn call<T: DeserializeOwned>(
         &self,
         method: &str,
         what: &'static str,

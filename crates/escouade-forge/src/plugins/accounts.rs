@@ -611,7 +611,7 @@ pub fn shared(accounts: &Accounts, kinds: &[AccountKind]) -> Vec<Shared> {
 /// entry, and the new entries go. Ok once each is done; `accounts.vault` is then 0. Nothing calls
 /// it while the former entries are kept up to date beside the new ones: the version that drops
 /// them keeps it as its way back.
-#[cfg_attr(not(test), allow(dead_code))]
+#[cfg_attr(not(any(test, feature = "testing")), allow(dead_code))]
 pub fn revert(store: &dyn SecretStore, accounts: &mut Accounts) -> anyhow::Result<()> {
     use crate::integrations::secrets;
     for service in source::registry().services() {
@@ -635,7 +635,7 @@ pub fn revert(store: &dyn SecretStore, accounts: &mut Accounts) -> anyhow::Resul
 
 /// `revert`, for the keys of the plugin Mistral: `voice` the voice's former entry, `vibe` the former and new names of
 /// the Vibe accounts' keys. Each former entry holds what is read, the new one goes.
-#[cfg_attr(not(test), allow(dead_code))]
+#[cfg_attr(not(any(test, feature = "testing")), allow(dead_code))]
 pub fn revert_mistral(
     store: &dyn SecretStore,
     voice: &str,

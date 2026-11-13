@@ -27,14 +27,13 @@ use std::time::Duration;
 use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
-mod net;
+// What the app learns of a request that failed, and the fake server of the tests: in `escouade-updates` (docs/CRATES.md).
+#[cfg(test)]
+use escouade_updates::fake_server;
+use escouade_updates::net;
 use net::{probe, Failure, Network, Route, Via, What, RELEASES_URL};
 #[cfg(test)]
-mod fake_server;
-#[cfg(test)]
 mod flow_tests;
-#[cfg(test)]
-mod net_tests;
 
 /// How long a check may take.
 const TIMEOUT: Duration = Duration::from_secs(20);

@@ -5,7 +5,7 @@ pub use escouade_plugins::builtin::*;
 
 /// A client of the code host `kind` for the account `creds`, served by the plugin of the first hand for it (`plugin`), its
 /// token lent: what the core does for an account of the first hand.
-#[cfg(test)]
+#[cfg(any(test, feature = "testing"))]
 pub fn served_forge(
     plugin: &str,
     kind: &str,
@@ -15,7 +15,7 @@ pub fn served_forge(
 }
 
 /// `served_forge`, its module reaching the fake services of `routes` by the hosts of its manifest.
-#[cfg(test)]
+#[cfg(any(test, feature = "testing"))]
 pub fn served_forge_on(
     plugin: &str,
     kind: &str,

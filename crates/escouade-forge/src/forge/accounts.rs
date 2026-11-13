@@ -173,7 +173,7 @@ fn fill(store: &dyn SecretStore, a: &mut ForgeAccount) {
 
 /// At a start: the tokens the file holds move to the keychain, the others are read from it, and
 /// the entries a « Déconnecter » left go. True when the file must be written again.
-pub(crate) fn load(store: &dyn SecretStore, accounts: &mut Accounts) -> bool {
+pub fn load(store: &dyn SecretStore, accounts: &mut Accounts) -> bool {
     let pending = std::mem::take(&mut accounts.forget_forges);
     for host in &pending {
         let reconnected = accounts
@@ -200,7 +200,7 @@ pub(crate) fn load(store: &dyn SecretStore, accounts: &mut Accounts) -> bool {
 }
 
 /// What the file keeps of the accounts: no token the keychain holds.
-pub(crate) fn strip(accounts: &mut Accounts, file_copy: bool) {
+pub fn strip(accounts: &mut Accounts, file_copy: bool) {
     for a in &mut accounts.forges {
         if !a.in_file && !file_copy {
             a.token.clear();

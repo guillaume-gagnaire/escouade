@@ -14,30 +14,32 @@ use std::time::Duration;
 
 fn fixture(name: &str) -> Value {
     let text = match name {
-        "pull" => include_str!("../../../tests/fixtures/forges/github/pull.json"),
-        "check-runs" => include_str!("../../../tests/fixtures/forges/github/check-runs.json"),
-        "status" => include_str!("../../../tests/fixtures/forges/github/status.json"),
-        "reviews" => include_str!("../../../tests/fixtures/forges/github/reviews.json"),
+        "pull" => include_str!("../../../../tests/fixtures/forges/github/pull.json"),
+        "check-runs" => include_str!("../../../../tests/fixtures/forges/github/check-runs.json"),
+        "status" => include_str!("../../../../tests/fixtures/forges/github/status.json"),
+        "reviews" => include_str!("../../../../tests/fixtures/forges/github/reviews.json"),
         "issue-comments" => {
-            include_str!("../../../tests/fixtures/forges/github/issue-comments.json")
+            include_str!("../../../../tests/fixtures/forges/github/issue-comments.json")
         }
-        "graphql-pulls" => include_str!("../../../tests/fixtures/forges/github/graphql-pulls.json"),
+        "graphql-pulls" => {
+            include_str!("../../../../tests/fixtures/forges/github/graphql-pulls.json")
+        }
         "graphql-branch" => {
-            include_str!("../../../tests/fixtures/forges/github/graphql-branch.json")
+            include_str!("../../../../tests/fixtures/forges/github/graphql-branch.json")
         }
         "graphql-threads" => {
-            include_str!("../../../tests/fixtures/forges/github/graphql-threads.json")
+            include_str!("../../../../tests/fixtures/forges/github/graphql-threads.json")
         }
-        "deployments" => include_str!("../../../tests/fixtures/forges/github/deployments.json"),
+        "deployments" => include_str!("../../../../tests/fixtures/forges/github/deployments.json"),
         "deployment-statuses" => {
-            include_str!("../../../tests/fixtures/forges/github/deployment-statuses.json")
+            include_str!("../../../../tests/fixtures/forges/github/deployment-statuses.json")
         }
         _ => panic!("no fixture {name}"),
     };
     serde_json::from_str(text).unwrap()
 }
 
-const JOB_LOG: &str = include_str!("../../../tests/fixtures/forges/github/job-log.txt");
+const JOB_LOG: &str = include_str!("../../../../tests/fixtures/forges/github/job-log.txt");
 
 fn repo() -> RepoRef {
     RepoRef {

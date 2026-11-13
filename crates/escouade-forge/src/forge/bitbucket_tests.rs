@@ -12,25 +12,33 @@ use serde_json::json;
 
 fn fixture(name: &str) -> Value {
     let text = match name {
-        "user" => include_str!("../../../tests/fixtures/forges/bitbucket/user.json"),
-        "pullrequest" => include_str!("../../../tests/fixtures/forges/bitbucket/pullrequest.json"),
-        "open" => include_str!("../../../tests/fixtures/forges/bitbucket/pullrequests-open.json"),
-        "comments" => include_str!("../../../tests/fixtures/forges/bitbucket/comments.json"),
-        "statuses" => include_str!("../../../tests/fixtures/forges/bitbucket/statuses.json"),
-        "steps" => include_str!("../../../tests/fixtures/forges/bitbucket/steps.json"),
-        "environments" => {
-            include_str!("../../../tests/fixtures/forges/bitbucket/environments.json")
+        "user" => include_str!("../../../../tests/fixtures/forges/bitbucket/user.json"),
+        "pullrequest" => {
+            include_str!("../../../../tests/fixtures/forges/bitbucket/pullrequest.json")
         }
-        "deployments" => include_str!("../../../tests/fixtures/forges/bitbucket/deployments.json"),
-        "branch" => include_str!("../../../tests/fixtures/forges/bitbucket/branch.json"),
-        "error" => include_str!("../../../tests/fixtures/forges/bitbucket/error.json"),
+        "open" => {
+            include_str!("../../../../tests/fixtures/forges/bitbucket/pullrequests-open.json")
+        }
+        "comments" => include_str!("../../../../tests/fixtures/forges/bitbucket/comments.json"),
+        "statuses" => include_str!("../../../../tests/fixtures/forges/bitbucket/statuses.json"),
+        "steps" => include_str!("../../../../tests/fixtures/forges/bitbucket/steps.json"),
+        "environments" => {
+            include_str!("../../../../tests/fixtures/forges/bitbucket/environments.json")
+        }
+        "deployments" => {
+            include_str!("../../../../tests/fixtures/forges/bitbucket/deployments.json")
+        }
+        "branch" => include_str!("../../../../tests/fixtures/forges/bitbucket/branch.json"),
+        "error" => include_str!("../../../../tests/fixtures/forges/bitbucket/error.json"),
         _ => panic!("no fixture {name}"),
     };
     serde_json::from_str(text).unwrap()
 }
 
-const BUILD_LOG: &str = include_str!("../../../tests/fixtures/forges/bitbucket/step-build-log.txt");
-const TEST_LOG: &str = include_str!("../../../tests/fixtures/forges/bitbucket/step-test-log.txt");
+const BUILD_LOG: &str =
+    include_str!("../../../../tests/fixtures/forges/bitbucket/step-build-log.txt");
+const TEST_LOG: &str =
+    include_str!("../../../../tests/fixtures/forges/bitbucket/step-test-log.txt");
 
 const PR: &str = "/repositories/acme/demo/pullrequests";
 

@@ -1,0 +1,42 @@
+[package]
+name = "escouade-updates"
+version = "0.1.0"
+description = "What Escouade learns when a request of its updater fails, and how it says it: the probe of what answered, through the same proxy and TLS settings"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../src-tauri"
+# A part of the app, cut out of its crate for it to compile faster (docs/CRATES.md): never published.
+publish = false
+
+[features]
+# What the app's tests of the updater take: the fake server of the updates (`fake_server`).
+testing = []
+
+[dependencies]
+# The languages written in now.
+escouade-base = { path = "../escouade-base" }
+# The settings (their proxy, their TLS settings).
+escouade-model = { path = "../escouade-model" }
+# Whom the TLS connections trust (`tls`), and the version of the app (`APP_VERSION`).
+escouade-plugins = { path = "../escouade-plugins" }
+# `tr_in!`.
+escouade-plugin-cli = { path = "../escouade-plugin-cli" }
+anyhow = "1"
+parking_lot = "0.13"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time", "fs", "net"] }
+
+[dev-dependencies]
+escouade-base = { path = "../escouade-base", features = ["testing"] }
+# The fake services over https, a corporate proxy's certificate (`integrations::fake`).
+escouade-forge = { path = "../escouade-forge", features = ["testing"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+# Each test process's temporary folder of its own, given before `main` (the app's `src/test_tmp.rs`).
+ctor = "1"
+
+[target.'cfg(windows)'.dev-dependencies]
+# The handles of the reaper of the tests' temporary folders (`test_tmp`).
+windows-sys = { version = "0.61", features = ["Win32_Foundation"] }
