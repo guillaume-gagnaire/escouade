@@ -1,6 +1,8 @@
 //! Plan rate limits (5-hour session and weekly windows), for each Claude account: told by the
-//! account's processes (`get_usage`, `rate_limit_event`), else read from the OAuth usage endpoint
-//! with the sign-in Claude Code keeps for the account (its folder, or the macOS keychain).
+//! account's processes (`get_usage`, `rate_limit_event`), else by a process of the account its
+//! plugin reads them with (`account/read` of `quota`, ESC-441). Claude Code asks Anthropic with its
+//! own sign-in: the core only tells whether there is one (its folder, or the macOS keychain), and
+//! never asks Anthropic itself.
 
 use crate::accounts;
 use crate::board;
@@ -23,7 +25,7 @@ use std::time::Duration;
 /// weekly windows and its models' own, those it told.
 pub type Windows = Vec<QuotaMeter>;
 
-/// An ISO date of the usage endpoint, in epoch milliseconds.
+/// An ISO date of `get_usage` (the body of Anthropic's usage endpoint), in epoch milliseconds.
 fn iso_ms(v: &Value) -> Option<i64> {
     v.as_str()
         .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
@@ -104,49 +106,11 @@ pub fn reading_of(v: &Value) -> Reading {
     }
 }
 
-/// The app's own requests (quotas, ticket systems): through the proxy, trusting the authorities
+/// The app's own requests (ticket systems, code hosts): through the proxy, trusting the authorities
 /// of `crate::tls` (the system's, the settings' file).
 pub fn http_client(settings: &Settings) -> Result<reqwest::Client> {
     let b = crate::tls::app_builder(settings)?.timeout(Duration::from_secs(15));
     Ok(b.build()?)
-}
-
-/// The endpoint `/usage` relies on.
-pub const USAGE_API: &str = "https://api.anthropic.com/api/oauth/usage";
-
-/// Where the usage endpoint is asked: Anthropic's; in a debug build, `ESCOUADE_USAGE_API` when
-/// set (end-to-end tests); in unit tests a closed port, so that none ever reaches Anthropic's
-/// with the sign-in of the machine's user.
-pub fn api_from_env() -> String {
-    if cfg!(test) {
-        // The discard port, closed: refused at once.
-        return "http://127.0.0.1:9/api/oauth/usage".into();
-    }
-    if cfg!(debug_assertions) {
-        if let Some(api) = std::env::var("ESCOUADE_USAGE_API")
-            .ok()
-            .map(|v| v.trim().to_string())
-            .filter(|v| !v.is_empty())
-        {
-            return api;
-        }
-    }
-    USAGE_API.into()
-}
-
-/// Asks the usage endpoint at `api` for the windows of the account signed in with `token`.
-pub async fn fetch_oauth(settings: &Settings, api: &str, token: &str) -> Result<Windows> {
-    let body: Value = http_client(settings)?
-        .get(api)
-        .bearer_auth(token)
-        .header("anthropic-beta", "oauth-2025-04-20")
-        .header("User-Agent", "escouade")
-        .send()
-        .await?
-        .error_for_status()?
-        .json()
-        .await?;
-    Ok(parse_windows(&body))
 }
 
 /// `read_credentials`, with which sign-in it is.
@@ -243,7 +207,7 @@ pub enum Reading {
     /// Some of its windows (one not told keeps its last reading): a `rate_limit_event`, another
     /// harness's reading.
     Windows(Windows),
-    /// Every meter of the account (Claude Code's `get_usage`, the usage endpoint): they replace
+    /// Every meter of the account (Claude Code's `get_usage`, an agent's or the account's own): they replace
     /// those read before, one the server no longer tells is gone (a plan without a 5-hour window,
     /// ESC-312).
     Full(Windows),
@@ -263,18 +227,6 @@ impl Reading {
     pub fn claude((five_hour, seven_day): (Option<RateWindow>, Option<RateWindow>)) -> Self {
         Reading::Windows(claude_meters(five_hour, seven_day))
     }
-}
-
-/// The account's quota from the endpoint at `api`, with its sign-in: Err when it could not be
-/// read (the network, the server, a file unreadable), the last values standing then.
-pub async fn read_oauth(settings: &Settings, api: &str, sign_in: &SignIn) -> Result<Reading> {
-    Ok(
-        match read_credentials(&sign_in.dir, &sign_in.service).await? {
-            Credentials::Missing => Reading::NotSignedIn,
-            Credentials::Expired => Reading::Expired,
-            Credentials::Token(token) => Reading::Full(fetch_oauth(settings, api, &token).await?),
-        },
-    )
 }
 
 /// A window of the quota as a sentence says it, by its length in `lang`: « de 5 h »,
@@ -493,11 +445,12 @@ impl UsageSnapshot {
     }
 }
 
-/// Minimum delay between two calls to the OAuth usage endpoint for one account. `get_usage` is one
-/// too: Claude Code keeps its answer a minute, then asks the endpoint.
+/// Minimum delay between two readings of one account's quota in the background: by a process of
+/// the account, or its agent's `get_usage`. Each is a call to Anthropic's usage endpoint, made by
+/// Claude Code (it keeps its answer a minute for the processes of the account's folder).
 pub const OAUTH_POLL_MS: i64 = 5 * 60_000;
 
-/// Whether the fallback endpoint may be called again.
+/// Whether the account's quota may be read again in the background.
 pub fn oauth_due(last_call: Option<i64>, now: i64) -> bool {
     last_call.is_none_or(|t| now - t >= OAUTH_POLL_MS)
 }
@@ -505,7 +458,6 @@ pub fn oauth_due(last_call: Option<i64>, now: i64) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::integrations::fake::FakeServer;
     use crate::model::now_ms;
     use crate::paths::test_dir;
     use serde_json::json;
@@ -744,7 +696,7 @@ mod tests {
                 (Some(10_080), Some("Fable"), 0.0)
             ]
         );
-        // The usage endpoint reads it the same way: a complete reading.
+        // A process of the account of its own reads it the same way: a complete reading.
         assert_eq!(at(&u), 2);
     }
 
@@ -880,17 +832,14 @@ mod tests {
     }
 
     #[test]
-    fn the_fallback_endpoint_is_polled_at_most_every_five_minutes() {
+    fn the_quota_is_read_in_the_background_at_most_every_five_minutes() {
         assert!(oauth_due(None, 0));
         assert!(!oauth_due(Some(1_000), 1_000 + 60_000));
         assert!(oauth_due(Some(1_000), 1_000 + 5 * 60_000));
     }
 
     #[test]
-    fn unit_tests_never_ask_anthropics_endpoint_nor_read_the_machine_users_sign_in() {
-        let api = api_from_env();
-        assert!(api.starts_with("http://127.0.0.1:"), "{api}");
-        assert_ne!(api, USAGE_API);
+    fn unit_tests_never_read_the_machine_users_sign_in() {
         let principal = sign_in(&accounts::principal(), &Default::default());
         assert_eq!(
             principal.dir,
@@ -1035,7 +984,7 @@ mod tests {
             json!({ "mcpOAuth": { "x": { "accessToken": "t" } } }),
         );
         let read = |d: PathBuf| async move { read_credentials(&d, NO_ENTRY).await.unwrap() };
-        assert_eq!(read(signed).await, Credentials::Token("tok-pro".into()));
+        assert_eq!(read(signed).await, Credentials::InDate);
         assert_eq!(read(absent).await, Credentials::Missing);
         assert_eq!(read(expired).await, Credentials::Expired);
         assert_eq!(read(other).await, Credentials::Missing);
@@ -1082,7 +1031,7 @@ mod tests {
         // The keychain's entry, when there is one, is the sign-in the stamp is of.
         let entry = sign_in("tok-keychain", later);
         let kept = stored_from(Some(entry), &dir).await.unwrap();
-        assert_eq!(kept.credentials, Credentials::Token("tok-keychain".into()));
+        assert_eq!(kept.credentials, Credentials::InDate);
         assert_ne!(kept.stamp.unwrap(), second);
     }
 
@@ -1097,7 +1046,7 @@ mod tests {
         let entry = json!({ "claudeAiOauth": { "accessToken": "tok-keychain", "expiresAt": now_ms() + 60_000 } });
         assert_eq!(
             credentials_from(Some(entry), &dir).await.unwrap(),
-            Credentials::Token("tok-keychain".into())
+            Credentials::InDate
         );
         // No entry: the file.
         assert_eq!(
@@ -1143,64 +1092,6 @@ mod tests {
         assert!(gate.open(pro, 1_000 + 10 * 60_000));
         // Another entry is asked for as usual.
         assert!(gate.open(perso, 1_001));
-    }
-
-    #[tokio::test]
-    async fn the_endpoint_is_asked_with_the_accounts_token() {
-        let server = FakeServer::start().await;
-        server.on(
-            "GET",
-            "/api/oauth/usage",
-            200,
-            json!({ "five_hour": { "utilization": 40.0, "resets_at": "2026-09-28T01:20:00+00:00" },
-                    "seven_day": { "utilization": 7.0, "resets_at": null } }),
-        );
-        let api = format!("{}/api/oauth/usage", server.url);
-        let settings = Settings::default();
-        let meters = fetch_oauth(&settings, &api, "tok-pro").await.unwrap();
-        let pct: Vec<_> = meters.iter().map(|w| w.pct).collect();
-        assert_eq!(pct, [40.0, 7.0]);
-        let req = &server.requests()[0];
-        assert_eq!(
-            req.headers.get("authorization").map(String::as_str),
-            Some("Bearer tok-pro")
-        );
-        assert_eq!(
-            req.headers.get("anthropic-beta").map(String::as_str),
-            Some("oauth-2025-04-20")
-        );
-        // Through `read_oauth`: the sign-in read from the folder first.
-        let dir = test_dir("usage-read-oauth");
-        let sign_in = |d: &Path| SignIn {
-            dir: d.to_path_buf(),
-            service: NO_ENTRY.into(),
-        };
-        credentials(
-            &dir.join("pro"),
-            json!({ "claudeAiOauth": { "accessToken": "tok-2", "expiresAt": now_ms() + 60_000 } }),
-        );
-        let got = read_oauth(&settings, &api, &sign_in(&dir.join("pro")))
-            .await
-            .unwrap();
-        assert!(matches!(&got, Reading::Full(m) if m.len() == 2), "{got:?}");
-        assert_eq!(
-            server.requests()[1]
-                .headers
-                .get("authorization")
-                .map(String::as_str),
-            Some("Bearer tok-2")
-        );
-        let none = read_oauth(&settings, &api, &sign_in(&dir.join("vide")))
-            .await
-            .unwrap();
-        assert_eq!(none, Reading::NotSignedIn);
-        // Nothing asked without a token.
-        assert_eq!(server.requests().len(), 2);
-        // The server refusing: an error, the last values standing.
-        server.on("GET", "/api/oauth/usage", 500, json!({}));
-        assert!(read_oauth(&settings, &api, &sign_in(&dir.join("pro")))
-            .await
-            .is_err());
     }
 
     #[test]

@@ -130,7 +130,7 @@ Un compte est un dossier de config de Claude Code : `CLAUDE_CONFIG_DIR` (défaut
 - **Principal se lance sans toucher à `CLAUDE_CONFIG_DIR`**, même vers `~/.claude` : sous macOS, le nom du service du trousseau en dépend. Lu dans le binaire : `Claude Code-credentials` quand la variable n'est pas définie, `Claude Code-credentials-<h>` sinon, `<h>` étant les 8 premiers caractères hexadécimaux du SHA-256 de la valeur normalisée en NFC (`CLAUDE_SECURESTORAGE_CONFIG_DIR`, s'il est défini, prend le pas) ; le trousseau passe avant le fichier. Définir la variable changerait donc l'entrée lue et déconnecterait l'utilisateur ; un autre compte reçoit exactement la chaîne dont Escouade calcule le hachage. Chaque dossier a sa connexion : les comptes multiples marchent sous macOS.
 - Sous Windows (et hors macOS), la connexion est `<dossier>/.credentials.json` (`claudeAiOauth.accessToken`, `expiresAt`). Un drapeau distant, `tengu_windows_credman`, pourrait la faire passer au Gestionnaire d'identification avec les mêmes noms : hors périmètre. L'e-mail du compte est `oauthAccount.emailAddress` du `.claude.json`, qui est `<dossier>/.claude.json` quand la variable est définie, sinon `~/.claude.json` (à côté de `~/.claude/`, pas dedans).
 - **Reprise dans un autre dossier** : un transcript `projects/<cwd encodé>/<id>.jsonl` copié dans le `CLAUDE_CONFIG_DIR` d'un autre compte est trouvé par `claude -p --resume <id>` lancé depuis le même dossier de travail (sans connexion, le refus porte sur elle : « Not logged in » ; un identifiant inconnu donne « No conversation found with session ID »). Escouade copie `projects/*/<id>.jsonl` et le dossier voisin `<id>/` (sous-agents, résultats d'outils), pas `file-history/`, `todos/` ni `session-env/`, après avoir arrêté le process de l'agent. **Non vérifié avec un second compte réel** : que l'API accepte une conversation commencée sur un autre compte (blocs de réflexion signés) ; un refus arrive comme un `result` en erreur au premier tour.
-- Quota d'un compte : `get_usage` sur un process vivant du compte, sinon l'endpoint de `/usage` avec le jeton OAuth de sa connexion (voir « CLI → hôte » pour `rate_limit_event`).
+- Quota d'un compte : `get_usage` sur un process vivant du compte, sinon `get_usage` d'un process du compte lancé pour cela (voir « Le quota d'un compte sans agent » ; « CLI → hôte » pour `rate_limit_event`). Escouade n'appelle jamais l'endpoint d'Anthropic lui-même et ne garde pas le jeton : elle lit seulement si la connexion est là, et en date.
 
 ### Ce que vaut `get_usage` (lu dans le binaire 2.1.318, mesuré le 2026-11-06)
 
@@ -141,11 +141,21 @@ Pendant cette retenue, ou sur toute autre erreur de l'endpoint, `get_usage` ne r
 - `rate_limits` vient des en-têtes de **la dernière requête de ce process**, sans contrôle d'âge, sinon de `cachedUsageUtilization` ;
 - seule trace : la clé `limits` manque, alors que le corps de l'endpoint l'a toujours (`null` compris) ; `rate_limits_available` reste `true`.
 
-Escouade en tire trois règles (`usage.rs`, `Core::read_quota`) :
+Escouade en tire trois règles (`usage.rs`, `Core::read_quota`), pour le process d'un agent comme pour celui qu'elle lance pour un compte sans agent :
 
 - une réponse sans `limits` est ce que le process a vu (`Reading::Seen`), pas une lecture : elle ne fait jamais baisser une fenêtre (`seen_meters`), et l'endpoint n'est pas réinterrogé par un autre chemin ;
 - le process interrogé est celui qui a parlé le dernier ;
-- la lecture de fond est tenue aux 5 min de l'endpoint (`OAUTH_POLL_MS`). Seule une demande de la fenêtre lit tout de suite.
+- la lecture de fond est tenue à 5 min (`OAUTH_POLL_MS`), chaque `get_usage` pouvant appeler l'endpoint. Seule une demande de la fenêtre lit tout de suite.
+
+### Le quota d'un compte sans agent (ESC-441, mesuré sur Claude Code 2.1.323 le 2026-11-13)
+
+Jusqu'à ESC-441, le cœur appelait lui-même `https://api.anthropic.com/api/oauth/usage` avec le jeton OAuth lu dans la connexion du compte. Il ne le fait plus : le plugin `dev.escouade.claude-code` sert `account/read` de `quota`, comme Codex et Copilot CLI servent le leur.
+
+- **Le process.** Le cœur lance `claude` pour le compte, comme pour lire ses modèles : les arguments du flux, `--no-session-persistence`, `--strict-mcp-config`, sans tour ni session, dans le dossier du compte (`CLAUDE_CONFIG_DIR`). Le plugin écrit `initialize`, puis `get_usage` une fois `initialize` répondu, et rend le `rate_limits` de la réponse tel quel. Le cœur le lit comme celui d'un agent (`usage::reading_of`) : avec `limits`, une lecture complète ; sans, ce que le process a vu (`Reading::Seen`). Pas de `rate_limits`, une erreur, un process qui s'arrête : la lecture échoue, et les dernières valeurs restent.
+- **La connexion reste au cœur.** Avant de lancer quoi que ce soit, le cœur lit si la connexion est là (`usage::read_credentials`, le trousseau sous macOS, sinon `.credentials.json`) : absente, « Pas connecté », sans process, et relue à la lecture suivante ; expirée, « Connexion expirée », sans process (le rafraîchissement reste celui des agents, « Connexion qui ne se rafraîchit pas ») ; en date, le process part. Le cœur ne garde pas le jeton (`Credentials::InDate` n'en porte aucun), et le plugin ne le voit jamais : Claude Code lit sa connexion lui-même.
+- **Le rythme ne change pas.** Un compte actif dont aucun agent ne répond est lu au plus toutes les 5 minutes (`usage::oauth_due`), un process à la fois.
+- **Mesures.** `initialize` répond en 0,8 s, `get_usage` 0,2 s après, soit à peu près 1 s par lecture (trois essais : 1,04 s, 1,19 s et 1,04 s). Le journal (`--debug-file`) montre un seul `fetchUtilization: GET /api/oauth/usage` par process. Un process lancé moins de 60 s après une réponse lue par un autre process du même dossier n'appelle pas l'endpoint : il rend `cachedUsageUtilization`, que Claude Code garde dans le `.claude.json` du compte avec son `fetchedAtMs`. Une lecture de fond coûte donc au plus un appel à l'endpoint, comme avant, et parfois aucun.
+- **Les 429.** Un 429 n'a pas été provoqué (la sonde elle-même en cause, voir plus haut). Le binaire 2.1.323 retient une réponse d'erreur par jeton (« remembered for this bearer; not asking again for … ») : pendant cette retenue, une réponse sans `limits` ne fait jamais baisser une fenêtre, et une erreur laisse les dernières valeurs, comme le 429 de l'endpoint les laissait.
 
 ### Connexion qui ne se rafraîchit pas (lu dans le binaire 2.1.309, ESC-162)
 

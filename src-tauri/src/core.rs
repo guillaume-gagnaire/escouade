@@ -977,10 +977,8 @@ pub struct Core<R: Runtime = Wry> {
     /// `git config user.name` read in each project's folder (ESC-243), by path: the name of the shared
     /// tickets when none was given (`me_in`).
     pub(crate) git_names: Mutex<HashMap<String, String>>,
-    /// When the usage endpoint was last asked, by account.
+    /// When the quota was last read in the background, by account (`usage::oauth_due`).
     pub(crate) last_oauth_call: Mutex<HashMap<String, i64>>,
-    /// Where the usage endpoint is (`usage::api_from_env`; a fake one in tests).
-    pub(crate) usage_api: RwLock<String>,
     resources: Mutex<resources::Sampler>,
     /// The projects whose git state is being computed (`compute_git`).
     pub(crate) git_inflight: Mutex<std::collections::HashSet<String>>,
@@ -2122,7 +2120,6 @@ impl<R: Runtime> Core<R> {
             wf_tracks: Mutex::default(),
             git_names: Mutex::default(),
             last_oauth_call: Mutex::default(),
-            usage_api: RwLock::new(usage::api_from_env()),
             resources: Mutex::default(),
             git_inflight: Mutex::default(),
             sync_locks: Mutex::default(),
@@ -10923,9 +10920,9 @@ impl<R: Runtime> Core<R> {
     }
 
     /// Every account's quota read: from a process of the account when one runs (`get_usage`), the
-    /// one that spoke last, else, for an active account, from the usage endpoint with its own sign-in,
-    /// at most every five minutes (`usage::OAUTH_POLL_MS`). `paced`: `get_usage` of Claude Code
-    /// asks that endpoint too, and is held to the same five minutes.
+    /// one that spoke last, else, for an active account, from a process of its own (its plugin's
+    /// `account/read`), at most every five minutes (`usage::OAUTH_POLL_MS`). `paced`: `get_usage` of
+    /// Claude Code asks Anthropic, and is held to the same five minutes.
     pub(crate) async fn read_accounts(self: &Arc<Self>, paced: bool) {
         let settings = self.settings.read().clone();
         let spoke: Vec<_> = self
@@ -10963,15 +10960,20 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// The quota of an account of a harness other than Claude Code none of whose agents runs, read
-    /// by a process of its own (`Engine::read_quota`) when it was not in the last five minutes.
-    /// Not signed in, it is looked at again at the next reading (no process was started).
+    /// The quota of an account none of whose agents answered, read by a process of its own
+    /// (`Engine::read_quota`: `account/read` of `quota`, by its plugin) when it was not in the last
+    /// five minutes. Claude Code's sign-in is the core's to know (ESC-441): not signed in, no
+    /// process is started and it is looked at again at the next reading; out of date, it is said so
+    /// as before, its process left to refresh it when an agent runs (`signin.rs`). The process
+    /// reads its quota with its own sign-in: the core neither holds its token nor asks Anthropic.
     async fn read_quota_apart(
         &self,
         settings: &Settings,
         account: &Account,
     ) -> Option<usage::Reading> {
+        let engine = engine::by_id(account.engine);
         let program = accounts::program(account, settings)?;
+        // Noted before asking: two readings at once start one process.
         let before = {
             let mut last = self.last_oauth_call.lock();
             if !usage::oauth_due(last.get(&account.id).copied(), now_ms()) {
@@ -10979,18 +10981,35 @@ impl<R: Runtime> Core<R> {
             }
             last.insert(account.id.clone(), now_ms())
         };
+        let not_asked = || {
+            let mut last = self.last_oauth_call.lock();
+            match before {
+                Some(t) => last.insert(account.id.clone(), t),
+                None => last.remove(&account.id),
+            };
+        };
+        if engine.oauth_sign_in() {
+            let at = usage::sign_in(account, settings);
+            match usage::read_credentials(&at.dir, &at.service).await {
+                Ok(usage::Credentials::InDate) => {}
+                Ok(usage::Credentials::Missing) => {
+                    // Looked at again at the next reading, so that a sign-in shows within a
+                    // minute rather than five.
+                    not_asked();
+                    return Some(usage::Reading::NotSignedIn);
+                }
+                Ok(usage::Credentials::Expired) => return Some(usage::Reading::Expired),
+                Err(e) => {
+                    log::debug!("sign-in of account {}: {e:#}", account.id);
+                    return None;
+                }
+            }
+        }
         let env = [settings.claude_env(), accounts::launch_env(account)].concat();
         let dir = accounts::config_dir(account, settings);
-        match engine::by_id(account.engine)
-            .read_quota(program, env, &dir)
-            .await
-        {
+        match engine.read_quota(program, env, &dir).await {
             Ok(Some(usage::Reading::NotSignedIn)) => {
-                let mut last = self.last_oauth_call.lock();
-                match before {
-                    Some(t) => last.insert(account.id.clone(), t),
-                    None => last.remove(&account.id),
-                };
+                not_asked();
                 Some(usage::Reading::NotSignedIn)
             }
             Ok(reading) => reading,
@@ -11002,10 +11021,11 @@ impl<R: Runtime> Core<R> {
     }
 
     /// One reading of the account's quota, if one is to be had: its process's (`paced`: not asked
-    /// more often than the endpoint), else the endpoint's when the account is active and was not
-    /// asked in the last five minutes. None also for an error of the network or of the server: the
-    /// last values stand. What a process only saw (`Reading::Seen`) means the endpoint does not
-    /// answer: it is not asked again by another way.
+    /// more often than five minutes for Claude Code, whose `get_usage` asks Anthropic), else, when
+    /// the account is active and was not read in the last five minutes, a process of its own
+    /// (`read_quota_apart`). None also for an error of the network or of the server: the last
+    /// values stand. What a process only saw (`Reading::Seen`) means the endpoint does not answer
+    /// it: it is not asked again by another way.
     async fn read_quota(
         &self,
         settings: &Settings,
@@ -11026,7 +11046,7 @@ impl<R: Runtime> Core<R> {
             if let Ok(Some(v)) = p.read_usage().await {
                 return Some(usage::reading_of(&v));
             }
-            // No answer of it: the endpoint may be asked.
+            // No answer of it: a process of the account's own may be asked.
             if let Some(before) = before {
                 let mut last = self.last_oauth_call.lock();
                 match before {
@@ -11038,38 +11058,7 @@ impl<R: Runtime> Core<R> {
         if !account.active {
             return None;
         }
-        // The usage endpoint is Claude Code's: another harness's accounts are read by a process of
-        // their own (Codex: an app-server, `Engine::read_quota`), at most every five minutes, or not
-        // at all (a harness without a quota).
-        if !oauth {
-            return self.read_quota_apart(settings, account).await;
-        }
-        // Noted before asking: two readings at once ask the endpoint once.
-        let before = {
-            let mut last = self.last_oauth_call.lock();
-            if !usage::oauth_due(last.get(&account.id).copied(), now_ms()) {
-                return None;
-            }
-            last.insert(account.id.clone(), now_ms())
-        };
-        let api = self.usage_api.read().clone();
-        match usage::read_oauth(settings, &api, &usage::sign_in(account, settings)).await {
-            Ok(usage::Reading::NotSignedIn) => {
-                // The endpoint was not asked: the next reading looks again, so that a sign-in
-                // shows within a minute rather than five.
-                let mut last = self.last_oauth_call.lock();
-                match before {
-                    Some(t) => last.insert(account.id.clone(), t),
-                    None => last.remove(&account.id),
-                };
-                Some(usage::Reading::NotSignedIn)
-            }
-            Ok(reading) => Some(reading),
-            Err(e) => {
-                log::debug!("usage endpoint, account {}: {e:#}", account.id);
-                None
-            }
-        }
+        self.read_quota_apart(settings, account).await
     }
 }
 

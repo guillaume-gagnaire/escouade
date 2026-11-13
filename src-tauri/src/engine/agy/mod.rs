@@ -20,8 +20,7 @@ use escouade_engines::locate::agy as locate;
 pub(crate) mod terminal;
 
 use super::registry::{
-    CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
-    ToldModel,
+    CostKind, EngineCaps, ForkPoint, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested, ToldModel,
 };
 use super::{
     BoxFuture, Engine, Message, OneShot, Process, Program, Room, Spawn, StartLost, Weight,
@@ -43,12 +42,6 @@ pub static AGY: Agy = Agy;
 pub const TESTED: Tested = Tested {
     oldest: "1.4.9",
     newest: "1.4.9",
-};
-
-/// Its installers (antigravity.google/docs/getting-started).
-const INSTALL: Install = Install {
-    windows: "irm https://antigravity.google/cli/install.ps1 | iex",
-    unix: "curl -fsSL https://antigravity.google/cli/install.sh | bash",
 };
 
 /// The models of its menu until `agy models` has listed them.
@@ -411,10 +404,6 @@ impl Engine for Agy {
 
     fn terminal(&self) -> Option<&'static dyn super::TerminalView> {
         Some(&terminal::AGY_TERMINAL)
-    }
-
-    fn install(&self) -> Install {
-        INSTALL
     }
 
     fn models(&self) -> Vec<ModelDecl> {

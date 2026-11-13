@@ -30,8 +30,7 @@ pub(crate) mod terminal;
 use process::VibeProcess;
 
 use super::registry::{
-    CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
-    ToldModel,
+    CostKind, EngineCaps, ForkPoint, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested, ToldModel,
 };
 use super::{
     BoxFuture, Engine, EngineProcess, Message, OneShot, Process, Program, Room, Spawn, StartLost,
@@ -54,12 +53,6 @@ pub static VIBE: Vibe = Vibe;
 pub const TESTED: Tested = Tested {
     oldest: "3.0.3",
     newest: "3.0.3",
-};
-
-/// Its installer (its README): a tool of `uv`.
-const INSTALL: Install = Install {
-    windows: "uv tool install mistral-vibe",
-    unix: "uv tool install mistral-vibe",
 };
 
 /// The variable that moves all it keeps (its config, its sessions, its trust, its hooks).
@@ -870,10 +863,6 @@ impl Engine for Vibe {
 
     fn terminal(&self) -> Option<&'static dyn super::TerminalView> {
         Some(&terminal::VIBE_TERMINAL)
-    }
-
-    fn install(&self) -> Install {
-        INSTALL
     }
 
     fn models(&self) -> Vec<ModelDecl> {

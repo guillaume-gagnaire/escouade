@@ -22,8 +22,7 @@ pub(crate) mod terminal;
 pub(crate) use bench::fake_codex;
 
 use super::registry::{
-    CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
-    ToldModel,
+    CostKind, EngineCaps, ForkPoint, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested, ToldModel,
 };
 use super::userconfig::{Format, UserConfig};
 use super::{
@@ -48,12 +47,6 @@ pub static CODEX: Codex = Codex;
 pub const TESTED: Tested = Tested {
     oldest: "0.163.0",
     newest: "0.163.0",
-};
-
-/// Its installer, npm's package (the desktop app of Codex comes with an older one of its own).
-const INSTALL: Install = Install {
-    windows: "npm install -g @openai/codex",
-    unix: "npm install -g @openai/codex",
 };
 
 /// The model of its menu until an app-server of the account has listed them (`model/list`): the
@@ -369,10 +362,6 @@ impl Engine for Codex {
 
     fn terminal(&self) -> Option<&'static dyn super::TerminalView> {
         Some(&terminal::CODEX_TERMINAL)
-    }
-
-    fn install(&self) -> Install {
-        INSTALL
     }
 
     fn models(&self) -> Vec<ModelDecl> {

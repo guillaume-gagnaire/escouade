@@ -274,8 +274,6 @@ const LABELS = {
   },
 } as const;
 
-/** The usage endpoint the app asks: a closed port, unless a test gives its own (`appEnv`). */
-const NO_USAGE_API = 'http://127.0.0.1:9/api/oauth/usage';
 /** The store the app reads: a closed port, unless a test starts the fake one (tests/fixtures/store/fake-store.mjs). */
 const NO_STORE = 'http://127.0.0.1:9';
 
@@ -354,7 +352,7 @@ export const test = base.extend<{
   preStart: { run: (root: string) => Record<string, unknown> | void };
 }>({
   // Variables for the app on top of the fixture's, which they replace (`test.use({ appEnv: … })`):
-  // a fake usage endpoint, Principal's folder with a fake-limit in it.
+  // Principal’s folder with a fake-limit in it.
   appEnv: [{}, { option: true }],
   // The arguments of the first launch (`test.use({ appArgs: ['escouade://plugin/<id>'] })`, STORE-11): a restart has none.
   appArgs: [[], { option: true }],
@@ -436,7 +434,6 @@ export const test = base.extend<{
       DISABLE_AUTOUPDATER: undefined,
       DISABLE_UPDATES: undefined,
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: undefined,
-      ESCOUADE_USAGE_API: NO_USAGE_API,
       // Nor store.escouade.dev (STORE-9): a closed port, unless a test starts the fake store and names it.
       ESCOUADE_STORE_URL: process.env.ESCOUADE_STORE_URL ?? NO_STORE,
       ESCOUADE_STORE_MIRROR_URL: process.env.ESCOUADE_STORE_MIRROR_URL ?? NO_STORE,

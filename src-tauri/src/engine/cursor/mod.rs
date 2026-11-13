@@ -25,8 +25,7 @@ pub(crate) use bench::fake_cursor;
 use process::CursorProcess;
 
 use super::registry::{
-    CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
-    ToldModel,
+    CostKind, EngineCaps, ForkPoint, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested, ToldModel,
 };
 use super::{
     BoxFuture, Engine, EngineProcess, Message, OneShot, PermissionAnswer, Process, Program, Room,
@@ -66,12 +65,6 @@ pub static CURSOR: Cursor = Cursor;
 pub const TESTED: Tested = Tested {
     oldest: "2026.10.22",
     newest: "2026.10.22",
-};
-
-/// Its installer.
-const INSTALL: Install = Install {
-    windows: "irm 'https://cursor.com/install?win32=true' | iex",
-    unix: "curl https://cursor.com/install -fsS | bash",
 };
 
 /// The variable that moves its configuration folder (its rules, its model, its sessions).
@@ -746,10 +739,6 @@ impl Engine for Cursor {
 
     fn terminal(&self) -> Option<&'static dyn super::TerminalView> {
         Some(&terminal::CURSOR_TERMINAL)
-    }
-
-    fn install(&self) -> Install {
-        INSTALL
     }
 
     fn models(&self) -> Vec<ModelDecl> {

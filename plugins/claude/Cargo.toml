@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-claude"
-version = "2.2.6"
+version = "2.2.7"
 description = "Le plugin Claude Code d'Escouade : le client de claude et la traduction de ce qu'il écrit"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"

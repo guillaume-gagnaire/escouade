@@ -152,3 +152,76 @@ fn the_models_of_an_account_are_what_initialize_tells_by_a_process_given_no_turn
     });
     assert!(gone.error.is_some());
 }
+
+#[test]
+fn the_quota_of_an_account_is_what_get_usage_tells_once_initialize_is_answered() {
+    let step = read(&AccountRead {
+        read: "quota".into(),
+        ..AccountRead::default()
+    });
+    // A process given no turn and no session, as for its models: Claude Code reads its own sign-in.
+    let l = step.launch.expect("a process");
+    assert!(has(&l.args, "--no-session-persistence") && has(&l.args, "--strict-mcp-config"));
+    assert!(l.env.is_empty() && l.files.is_empty());
+    assert_eq!(step.writes.len(), 1);
+    assert!(step.writes[0].contains("\"subtype\":\"initialize\""));
+    let answer = |id: &str, response: Value| {
+        json!({ "type": "control_response", "response": {
+            "subtype": "success", "request_id": id, "response": response,
+        } })
+        .to_string()
+    };
+    // `initialize` answered: `get_usage` is asked, nothing told yet.
+    let asked = lines(&AccountLines {
+        read: "quota".into(),
+        lines: vec![
+            "{\"type\":\"system\"}".into(),
+            answer("ccm_1", json!({ "models": [] })),
+        ],
+        ..AccountLines::default()
+    });
+    assert_eq!((asked.done.as_ref(), asked.error.as_ref()), (None, None));
+    assert_eq!(asked.writes.len(), 1);
+    let usage: Value = serde_json::from_str(&asked.writes[0]).unwrap();
+    assert_eq!(usage["request"]["subtype"], "get_usage");
+    assert_eq!(usage["request_id"], "ccm_2");
+    // Its rate_limits as told, `limits` included or not: the core tells a reading from what the process saw.
+    let windows =
+        json!({ "limits": null, "five_hour": { "utilization": 40.0, "resets_at": null } });
+    let done = lines(&AccountLines {
+        read: "quota".into(),
+        state: asked.state.clone(),
+        lines: vec![answer("ccm_2", json!({ "rate_limits": windows.clone() }))],
+        ..AccountLines::default()
+    });
+    assert_eq!(done.done, Some(windows));
+    // Nothing to tell, a refusal, or the process gone: the read fails, the last values stand.
+    let none = lines(&AccountLines {
+        read: "quota".into(),
+        lines: vec![answer("ccm_2", json!({ "rate_limits": null }))],
+        ..AccountLines::default()
+    });
+    assert!(none.error.is_some());
+    let refused = json!({ "type": "control_response", "response": {
+        "subtype": "error", "request_id": "ccm_2", "error": "Not logged in",
+    } });
+    let refused = lines(&AccountLines {
+        read: "quota".into(),
+        lines: vec![refused.to_string()],
+        ..AccountLines::default()
+    });
+    assert_eq!(refused.error.as_deref(), Some("get_usage: Not logged in"));
+    let gone = lines(&AccountLines {
+        read: "quota".into(),
+        ended: true,
+        ..AccountLines::default()
+    });
+    assert!(gone.error.is_some());
+    // A read of its models takes no `get_usage` answer for its own.
+    let models = lines(&AccountLines {
+        read: "models".into(),
+        lines: vec![answer("ccm_2", json!({ "rate_limits": {} }))],
+        ..AccountLines::default()
+    });
+    assert_eq!((models.done, models.error), (None, None));
+}

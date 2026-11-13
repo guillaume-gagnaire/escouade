@@ -36,7 +36,7 @@ Dans la fiche du compte, règle le modèle, l’effort et le mode des nouveaux a
 
 - **La liste des comptes** (nom, ordre, réglages) est dans les réglages d’Escouade, `~/.escouade/settings.json`.
 - **Le dossier du compte** : pour le compte de la machine, celui de Claude Code (`~/.claude`, ou celui de `CLAUDE_CONFIG_DIR`) ; pour un nouveau compte, un dossier à lui sous `~/.escouade/claude/`, donné à `claude` par `CLAUDE_CONFIG_DIR`.
-- **La connexion** reste celle de Claude Code : `.credentials.json` dans le dossier du compte, ou le trousseau sous macOS. Escouade la lit pour savoir si le compte est connecté et pour son quota. Le plugin ne la voit jamais.
+- **La connexion** reste celle de Claude Code : `.credentials.json` dans le dossier du compte, ou le trousseau sous macOS. Escouade la lit pour savoir si le compte est connecté ou si sa connexion a expiré ; son quota, Claude Code le lit lui-même. Ni Escouade ni le plugin ne gardent son jeton.
 - La connexion et `.claude.json` ne sont jamais partagés d’un compte à l’autre.
 
 Supprimer un compte le retire de la liste : son dossier reste sur le disque, avec sa connexion et ses conversations.

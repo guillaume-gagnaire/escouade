@@ -122,7 +122,7 @@ impl AccountUsage {
     }
 }
 
-/// Why an account's quota cannot be read from the usage endpoint.
+/// Why an account's quota cannot be read (Claude Code's sign-in, looked at by the core).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SignInProblem {
     /// No sign-in to claude.ai in its folder (an API key, or never signed in).

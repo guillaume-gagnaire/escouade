@@ -7,7 +7,7 @@ import { addProject, expect, send, test, openAdvanced, openSettingsPage, closeSe
 // under the test's. The fake `claude` keeps its sessions in the folder of the account it runs for, and stops every turn at
 // the usage limit while that folder holds a `fake-limit` file.
 
-/** A sign-in that is not out of date. The usage endpoint is a closed port: nothing is ever read of it, the accounts stay signed in. */
+/** A sign-in that is not out of date: the accounts stay signed in, their quota what their fake `claude` tells (its `get_usage` included). */
 const SIGNED_IN = JSON.stringify({ claudeAiOauth: { accessToken: 'tok', refreshToken: 'ref', expiresAt: 4_102_444_800_000 } });
 
 const principalDir = (root: string) => path.join(root, 'claude');

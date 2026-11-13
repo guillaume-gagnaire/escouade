@@ -36,7 +36,7 @@ On the account’s card, set the model, effort and mode of new agents.
 
 - **The list of accounts** (name, order, settings) is in Escouade’s settings, `~/.escouade/settings.json`.
 - **The account’s folder**: for this machine’s account, Claude Code’s own (`~/.claude`, or the one `CLAUDE_CONFIG_DIR` names); for a new account, a folder of its own under `~/.escouade/claude/`, given to `claude` as `CLAUDE_CONFIG_DIR`.
-- **The sign-in** stays Claude Code’s: `.credentials.json` in the account’s folder, or the keychain on macOS. Escouade reads it to know whether the account is signed in, and for its quota. The plugin never sees it.
+- **The sign-in** stays Claude Code’s: `.credentials.json` in the account’s folder, or the keychain on macOS. Escouade reads it to know whether the account is signed in or its sign-in expired; its quota, Claude Code reads itself. Neither Escouade nor the plugin keeps its token.
 - The sign-in and `.claude.json` are never shared between accounts.
 
 Removing an account takes it off the list: its folder stays on the disk, with its sign-in and its conversations.

@@ -207,8 +207,9 @@ pub struct Tested {
 }
 
 /// The command that installs a harness, as « Aucun harness trouvé » gives it: on Windows, and on
-/// macOS and Linux.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+/// macOS and Linux. Its plugin's manifest says it (`contributes.harnesses[].install`): the core keeps
+/// no copy (ESC-441), and empty is a manifest that says none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Install {
     pub windows: &'static str,

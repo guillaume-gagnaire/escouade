@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.7
+
+- The quota of an account without an agent is read by a process of the account given no turn and no session (`account/read` of `quota`: `initialize`, then `get_usage`), its `rate_limits` given as Claude Code tells them. Claude Code reads its own sign-in: Escouade no longer asks Anthropic’s usage endpoint itself, nor reads the token (ESC-441).
+
 ## 2.2.6
 
 - Its manifest declares the environment variables its launches set (`permissions.env`: `CLAUDE_CODE_ARTIFACT`), shown before it is installed: from Escouade 2.2, a plugin sets no other (ESC-424).

@@ -33,8 +33,7 @@ pub(crate) mod terminal;
 mod tests;
 
 use super::registry::{
-    CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
-    ToldModel,
+    CostKind, EngineCaps, ForkPoint, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested, ToldModel,
 };
 use super::{
     BoxFuture, Engine, Message, OneShot, Process, Program, Room, Spawn, StartLost, Weight,
@@ -56,12 +55,6 @@ pub static GEMINI: Gemini = Gemini;
 pub const TESTED: Tested = Tested {
     oldest: "0.66.0",
     newest: "0.66.0",
-};
-
-/// Its installer (its README): npm's package, or Homebrew.
-const INSTALL: Install = Install {
-    windows: "npm install -g @google/gemini-cli",
-    unix: "npm install -g @google/gemini-cli",
 };
 
 /// The variable that moves all it keeps: the folder it makes its `.gemini` in.
@@ -951,10 +944,6 @@ impl Engine for Gemini {
 
     fn terminal(&self) -> Option<&'static dyn super::TerminalView> {
         Some(&terminal::GEMINI_TERMINAL)
-    }
-
-    fn install(&self) -> Install {
-        INSTALL
     }
 
     fn models(&self) -> Vec<ModelDecl> {

@@ -22,7 +22,8 @@
 // message and assistant entry on a line), and a --resume of a session absent from every
 // <dir>/projects/* folder fails as an unknown one does; while a <dir>/fake-limit file is there, every
 // turn is stopped by the usage limit (as "limite") and its quota windows say 100 % (rate_limit_event,
-// get_usage); while a <dir>/fake-usage.json file is there, get_usage tells its body as its rate_limits. While a <dir>/fake-error file is there, every turn fails with an error of the API
+// get_usage); while a <dir>/fake-usage.json file is there, get_usage tells its body as its rate_limits. Each get_usage is
+// logged to <dir>/fake-get-usage.jsonl ({ pid, alone }: alone for a process given no session, an account's own read). While a <dir>/fake-error file is there, every turn fails with an error of the API
 // ("Invalid API key", as an account the user is not signed in to gets), which is no usage limit.
 // While a <dir>/fake-oauth-lost file is there, a turn fails as a sign-in Claude Code could not refresh does
 // (« OAuth session expired and could not be refreshed », ESC-162), and the process that failed so fails every turn after
@@ -3215,11 +3216,17 @@ function startSession() {
             }),
           );
         case 'get_usage':
+          if (configDir !== null)
+            fs.appendFileSync(
+              path.join(configDir, 'fake-get-usage.jsonl'),
+              JSON.stringify({ pid: process.pid, alone: argv.includes('--no-session-persistence') }) + '\n',
+            );
           // While a <dir>/fake-usage.json file is there, its body is the rate_limits told (ESC-312: the rows limits[]).
           if (configDir !== null && fs.existsSync(path.join(configDir, 'fake-usage.json')))
             return ok(m.request_id, { rate_limits: JSON.parse(fs.readFileSync(path.join(configDir, 'fake-usage.json'), 'utf8')) });
-          // Once [quota-rythme] was asked, the windows it tells, read again as the endpoint writes them.
-          if (isPaced()) {
+          // Once [quota-rythme] was asked, or while <dir>/fake-pct or fake-week-pct is there, the windows its turns tell,
+          // read again as the endpoint writes them: a process of the account's own says what its agents say (ESC-441).
+          if (isPaced() || pctOf() !== null || pctOf('fake-week-pct') !== null) {
             const w = windows();
             const said = (x) => ({ utilization: x.utilization * 100, resets_at: new Date(x.resetsAt * 1000).toISOString() });
             return ok(m.request_id, { rate_limits: { limits: null, five_hour: said(w.five_hour), seven_day: said(w.seven_day) } });

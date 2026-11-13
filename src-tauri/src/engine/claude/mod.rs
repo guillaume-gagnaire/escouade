@@ -39,12 +39,6 @@ pub const TESTED: Tested = Tested {
     newest: "2.1.301",
 };
 
-/// Its installers (claude.ai), as the Welcome screen gave the one of Windows.
-const INSTALL: Install = Install {
-    windows: "irm https://claude.ai/install.ps1 | iex",
-    unix: "curl -fsSL https://claude.ai/install.sh | bash",
-};
-
 /// What turns off Claude Code's own update (docs: « Disable auto-updates »): only its check in the
 /// background, `claude update` still works. Claude Code also leaves its plugins as they are then
 /// (`FORCE_AUTOUPDATE_PLUGINS` would bring their update back), nothing else.
@@ -55,20 +49,29 @@ pub const NPM_INSTALL: &str = "npm install -g @anthropic-ai/claude-code";
 
 /// What is said when no `claude` is found (ESC-133), in `lang`: its installation by npm cut
 /// half-way, what it left and the command that puts it back (`locate::interrupted_install`), else
-/// not found, with its installer.
+/// not found, with its installer as the manifest of its plugin says it (`Engine::install`).
 pub fn missing_line(lang: Lang) -> String {
-    missing_line_with(lang, locate::interrupted_install().as_deref())
+    missing_line_with(
+        lang,
+        locate::interrupted_install().as_deref(),
+        crate::plugins::harness::install_of(crate::model::EngineId::CLAUDE),
+    )
 }
 
 /// What is said of a `claude` that stopped before it did anything, when an installation of it by
 /// npm was cut half-way (ESC-133): what it left, and the command that puts it back.
 pub fn interrupted_line(lang: Lang) -> Option<String> {
     let left = locate::interrupted_install()?;
-    Some(missing_line_with(lang, Some(&left)))
+    Some(missing_line_with(lang, Some(&left), Install::default()))
 }
 
-/// `missing_line`, `leftover` what an installation cut half-way left.
-pub fn missing_line_with(lang: Lang, leftover: Option<&std::path::Path>) -> String {
+/// `missing_line`, `leftover` what an installation cut half-way left, `installer` the command of its plugin's
+/// manifest: without one (a manifest that says none), npm's alone is given.
+pub fn missing_line_with(
+    lang: Lang,
+    leftover: Option<&std::path::Path>,
+    installer: Install,
+) -> String {
     let npm = NPM_INSTALL;
     if let Some(left) = leftover {
         let left = left.display();
@@ -79,10 +82,17 @@ pub fn missing_line_with(lang: Lang, leftover: Option<&std::path::Path>) -> Stri
         );
     }
     let install = if cfg!(windows) {
-        INSTALL.windows
+        installer.windows
     } else {
-        INSTALL.unix
+        installer.unix
     };
+    if install.is_empty() {
+        return tr_in!(
+            lang,
+            "Claude Code est introuvable : réinstalle-le (`{npm}`), ou indique son chemin dans Réglages › Comptes et harness.",
+            "Claude Code can’t be found: install it again (`{npm}`), or set its path in Settings › Accounts and harnesses."
+        );
+    }
     tr_in!(
         lang,
         "Claude Code est introuvable : réinstalle-le (`{install}`, ou `{npm}`), ou indique son chemin dans Réglages › Comptes et harness.",
@@ -519,10 +529,6 @@ impl Engine for Claude {
         Some(&terminal::CLAUDE_TERMINAL)
     }
 
-    fn install(&self) -> Install {
-        INSTALL
-    }
-
     fn models(&self) -> Vec<ModelDecl> {
         MODELS
             .iter()
@@ -631,6 +637,23 @@ impl Engine for Claude {
             crate::plugins::harness::plugged_for(self.id(), self.name(), false)?
                 .account_read("models", Value::Null, &program, &env, dir, None)
                 .await
+        })
+    }
+
+    /// Its plugin reads it (`account/read` of `quota`): `get_usage` by a process of the account given
+    /// no turn, its `rate_limits` read as an agent's are (`usage::reading_of`: `Seen` without
+    /// `limits`). Its sign-in was looked at by the core first (`Core::read_quota_apart`).
+    fn read_quota<'a>(
+        &'a self,
+        program: Program,
+        env: Vec<(String, String)>,
+        dir: &'a std::path::Path,
+    ) -> BoxFuture<'a, Result<Option<crate::usage::Reading>>> {
+        Box::pin(async move {
+            let told = crate::plugins::harness::plugged_for(self.id(), self.name(), false)?
+                .account_read("quota", Value::Null, &program, &env, dir, None)
+                .await?;
+            Ok(told.is_object().then(|| crate::usage::reading_of(&told)))
         })
     }
 
@@ -824,27 +847,48 @@ mod tests {
     #[test]
     fn a_claude_not_found_is_said_with_what_puts_it_back() {
         use crate::i18n::Lang::{En, Fr};
-        let install = if cfg!(windows) {
-            "irm https://claude.ai/install.ps1 | iex"
-        } else {
-            "curl -fsSL https://claude.ai/install.sh | bash"
+        // The installer its plugin's manifest declares (ESC-441: the core keeps no copy of it).
+        let manifest: Value = serde_json::from_str(include_str!(
+            "../../../../plugins/claude/escouade-plugin.json"
+        ))
+        .unwrap();
+        let declared = &manifest["contributes"]["harnesses"][0]["install"];
+        let leak = |v: &Value| -> &'static str { Box::leak(v.as_str().unwrap().into()) };
+        let installer = Install {
+            windows: leak(&declared["windows"]),
+            unix: leak(&declared["unix"]),
         };
+        let install = if cfg!(windows) {
+            installer.windows
+        } else {
+            installer.unix
+        };
+        assert!(!install.is_empty());
         assert_eq!(
-            missing_line_with(Fr, None),
+            missing_line_with(Fr, None, installer),
             format!("Claude Code est introuvable : réinstalle-le (`{install}`, ou `npm install -g @anthropic-ai/claude-code`), ou indique son chemin dans Réglages › Comptes et harness.")
         );
         assert_eq!(
-            missing_line_with(En, None),
+            missing_line_with(En, None, installer),
             format!("Claude Code can’t be found: install it again (`{install}`, or `npm install -g @anthropic-ai/claude-code`), or set its path in Settings › Accounts and harnesses.")
+        );
+        // A manifest that says none (or its plugin not loaded): npm's alone.
+        assert_eq!(
+            missing_line_with(Fr, None, Install::default()),
+            "Claude Code est introuvable : réinstalle-le (`npm install -g @anthropic-ai/claude-code`), ou indique son chemin dans Réglages › Comptes et harness."
+        );
+        assert_eq!(
+            missing_line_with(En, None, Install::default()),
+            "Claude Code can’t be found: install it again (`npm install -g @anthropic-ai/claude-code`), or set its path in Settings › Accounts and harnesses."
         );
         // Its installation by npm cut half-way, as on the client's Mac.
         let left = std::path::Path::new("/opt/homebrew/bin/.claude-Xa3k9");
         assert_eq!(
-            missing_line_with(Fr, Some(left)),
+            missing_line_with(Fr, Some(left), installer),
             "L’installation de Claude Code a été interrompue (il en reste /opt/homebrew/bin/.claude-Xa3k9) : relance `npm install -g @anthropic-ai/claude-code` dans un terminal."
         );
         assert_eq!(
-            missing_line_with(En, Some(left)),
+            missing_line_with(En, Some(left), installer),
             "Claude Code’s installation was interrupted (/opt/homebrew/bin/.claude-Xa3k9 is left over): run `npm install -g @anthropic-ai/claude-code` again in a terminal."
         );
     }

@@ -20,8 +20,8 @@ mod run;
 pub(crate) use bench::{fake_opencode, Through};
 
 use super::registry::{
-    CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
-    ToldModel, Version,
+    CostKind, EngineCaps, ForkPoint, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested, ToldModel,
+    Version,
 };
 use super::userconfig::{Format, UserConfig};
 use super::{
@@ -44,12 +44,6 @@ pub static OPENCODE: Opencode = Opencode;
 pub const TESTED: Tested = Tested {
     oldest: "1.19.3",
     newest: "1.19.3",
-};
-
-/// Its installer, npm's package (OpenCode 1; OpenCode 2 is `@opencode/cli`).
-const INSTALL: Install = Install {
-    windows: "npm install -g opencode-ai",
-    unix: "npm install -g opencode-ai",
 };
 
 /// The efforts Escouade's menu has, in its order: a model's `variants` are offered among them.
@@ -280,11 +274,19 @@ impl Engine for Opencode {
     /// OpenCode 2 (`opencode v2.…`): another API, still experimental (docs/TODO-1.8.md, point 0).
     fn unsupported_line(&self, lang: Lang, version: &Version) -> Option<String> {
         (*version >= Version::parse("2.0")).then(|| {
+            // The installer its plugin's manifest says (`Engine::install`); without one, none is named.
+            let cmd = self.install().windows;
+            if cmd.is_empty() {
+                return tr_in!(
+                    lang,
+                    "OpenCode {version} est la ligne 2 d’OpenCode, que Escouade ne prend pas en charge : son API est une autre, encore expérimentale. Installe OpenCode 1.",
+                    "OpenCode {version} is OpenCode’s line 2, which Escouade doesn’t support: its API is another one, still experimental. Install OpenCode 1."
+                );
+            }
             tr_in!(
                 lang,
                 "OpenCode {version} est la ligne 2 d’OpenCode, que Escouade ne prend pas en charge : son API est une autre, encore expérimentale. Installe OpenCode 1 ({cmd}).",
-                "OpenCode {version} is OpenCode’s line 2, which Escouade doesn’t support: its API is another one, still experimental. Install OpenCode 1 ({cmd}).",
-                cmd = INSTALL.windows
+                "OpenCode {version} is OpenCode’s line 2, which Escouade doesn’t support: its API is another one, still experimental. Install OpenCode 1 ({cmd})."
             )
         })
     }
@@ -313,10 +315,6 @@ impl Engine for Opencode {
 
     fn terminal(&self) -> Option<&'static dyn super::TerminalView> {
         None
-    }
-
-    fn install(&self) -> Install {
-        INSTALL
     }
 
     /// None until a server has listed those of the connected providers.

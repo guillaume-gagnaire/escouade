@@ -448,8 +448,12 @@ pub trait Engine: Send + Sync {
     /// Its own interface in a terminal (« Vue <harness> ») that takes the process's place; None
     /// when it has none (`caps().terminal_view` says whether it has one, joined or not).
     fn terminal(&self) -> Option<&'static dyn TerminalView>;
-    /// The command that installs it (« Aucun harness trouvé »).
-    fn install(&self) -> registry::Install;
+    /// The command that installs it (« Aucun harness trouvé », « … introuvable »): what the manifest
+    /// of its plugin says, the plugin that runs its agents (`plugins::harness::install_of`); empty
+    /// when it is not loaded or says none.
+    fn install(&self) -> registry::Install {
+        crate::plugins::harness::install_of(self.id())
+    }
     /// The models the composer offers, in its menu's order.
     fn models(&self) -> Vec<registry::ModelDecl>;
     /// The efforts the composer offers, in its menu's order (none without `caps().effort`).
@@ -482,8 +486,8 @@ pub trait Engine: Send + Sync {
     }
 
     /// The quota of an account none of whose agents runs, read by a process of its own (`program`
-    /// with `env`, its folder `dir`): None when the harness reads none so (Claude Code's endpoint
-    /// is asked by the core).
+    /// with `env`, its folder `dir`), by its plugin (`account/read` of `quota`): None when the
+    /// harness reads none so (a harness without a quota).
     fn read_quota<'a>(
         &'a self,
         _program: Program,
@@ -778,7 +782,7 @@ pub trait Engine: Send + Sync {
         None
     }
     /// Its accounts sign in to claude.ai by OAuth, whose sign-in Escouade reads and watches
-    /// (`usage.rs`, `signin.rs`): their quota read at its usage endpoint, the refresh of an
+    /// (`usage.rs`, `signin.rs`): their quota read only once signed in and in date, the refresh of an
     /// out-of-date token taken in turn before a process starts (Claude Code).
     fn oauth_sign_in(&self) -> bool {
         false

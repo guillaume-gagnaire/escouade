@@ -7,7 +7,7 @@ import { addProject, closeSettings, expect, openSettingsPage, test } from './fix
 // est épuisé », beside « Changer de compte à », no longer in a project's Kanban. Its key is the one it always had
 // (`quotaPause` of settings.json). Principal alone, its fake `claude` saying 85 % of its 5-hour window at each turn.
 
-/** A sign-in that is not out of date (the usage endpoint is a closed port: the quota is the one the turns tell). */
+/** A sign-in that is not out of date (the quota is the one the turns tell, which `get_usage` of a process of the account tells too). */
 const SIGNED_IN = JSON.stringify({ claudeAiOauth: { accessToken: 'tok', refreshToken: 'ref', expiresAt: 4_102_444_800_000 } });
 
 test.use({

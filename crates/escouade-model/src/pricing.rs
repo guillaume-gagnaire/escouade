@@ -58,7 +58,7 @@ impl Usage {
 }
 
 /// Input price, output price and cache-read multiplier; writes cost 1.25× (5 min) and 2× (1 h)
-/// the input price (platform.claude.com/docs/en/about-claude/pricing).
+/// the input price (the pricing page of Anthropic’s documentation).
 const fn p(input: f64, output: f64, read: f64) -> Price {
     Price {
         input,
@@ -91,7 +91,7 @@ pub fn price(model: &str) -> Option<Price> {
 }
 
 /// As `price`, for a request whose prompt is `prompt` tokens long (input, cache reads and writes).
-/// platform.claude.com/docs/en/about-claude/pricing, read 2026-11-11.
+/// the pricing page of Anthropic’s documentation, read 2026-11-11.
 pub fn price_for(model: &str, prompt: u64) -> Option<Price> {
     let lower = model.trim().to_ascii_lowercase();
     if lower.starts_with("gpt-") || lower.starts_with("o4-") {
@@ -227,7 +227,7 @@ mod tests {
         }
     }
 
-    // platform.claude.com/docs/en/about-claude/pricing, read 2026-11-11: input, 5-minute and 1-hour writes, cache hits
+    // the pricing page of Anthropic’s documentation, read 2026-11-11: input, 5-minute and 1-hour writes, cache hits
     // (0.025× the input on Fable and Mythos 5.1 and 5.2, 0.05× on Opus and Sonnet 5.5), output.
     #[test]
     fn prices_each_current_model_as_the_price_list_does() {

@@ -21,8 +21,7 @@ pub(crate) mod terminal;
 pub(crate) use bench::fake_copilot;
 
 use super::registry::{
-    CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
-    ToldModel,
+    CostKind, EngineCaps, ForkPoint, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested, ToldModel,
 };
 use super::userconfig::{Format, UserConfig};
 use super::{
@@ -45,12 +44,6 @@ pub static COPILOT: Copilot = Copilot;
 pub const TESTED: Tested = Tested {
     oldest: "1.0.98",
     newest: "1.0.98",
-};
-
-/// Its installer, npm's package.
-const INSTALL: Install = Install {
-    windows: "npm install -g @github/copilot",
-    unix: "npm install -g @github/copilot",
 };
 
 /// The models of its menu until a process of the account has listed them.
@@ -340,10 +333,6 @@ impl Engine for Copilot {
 
     fn terminal(&self) -> Option<&'static dyn super::TerminalView> {
         Some(&terminal::COPILOT_TERMINAL)
-    }
-
-    fn install(&self) -> Install {
-        INSTALL
     }
 
     fn models(&self) -> Vec<ModelDecl> {

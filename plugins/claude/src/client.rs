@@ -169,7 +169,17 @@ pub fn initialize_line(id: &str) -> String {
     request_line(id, json!({ "subtype": "initialize" }))
 }
 
-/// What the answer `frame` to `initialize` of id `id` says: its answer, or why it refused. None for any other line.
+/// The request of its account's quota (`get_usage`): Claude Code reads it with its own sign-in, the endpoint asked at
+/// most once a minute for every process of the account's folder (docs/PROTOCOL.md, « Ce que vaut `get_usage` »).
+pub fn usage_line(id: &str) -> String {
+    request_line(
+        id,
+        json!({ "subtype": "get_usage", "skip_behaviors": true }),
+    )
+}
+
+/// What the answer `frame` to the request of id `id` (`initialize`, `get_usage`) says: its answer, or why it refused.
+/// None for any other line.
 pub fn initialized(frame: &Value, id: &str) -> Option<Result<Value, String>> {
     let r = &frame["response"];
     if frame["type"] != "control_response" || r["request_id"] != id {
@@ -363,10 +373,7 @@ impl Agent {
     pub fn read_usage(&mut self) -> Vec<String> {
         let id = self.id();
         self.waiting.insert(id.clone(), Waiting::Usage);
-        vec![request_line(
-            &id,
-            json!({ "subtype": "get_usage", "skip_behaviors": true }),
-        )]
+        vec![usage_line(&id)]
     }
 
     pub fn rename(&mut self, title: &str) -> Asked {

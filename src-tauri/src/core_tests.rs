@@ -9676,19 +9676,21 @@ async fn an_agent_waits_for_the_windows_of_its_own_account() {
     assert!(at > reset && at < reset + 120_000, "{at} vs {reset}");
 }
 
+/// The `get_usage` the fake CLI was asked with the account's folder `dir`: by a process of the
+/// account's own (`true`), or an agent's.
+fn usage_asked(dir: &str) -> Vec<bool> {
+    std::fs::read_to_string(Path::new(dir).join("fake-get-usage.jsonl"))
+        .unwrap_or_default()
+        .lines()
+        .map(|l| serde_json::from_str::<Value>(l).unwrap()["alone"] == true)
+        .collect()
+}
+
 #[tokio::test]
-async fn each_active_account_is_read_with_its_own_sign_in_at_most_every_five_minutes() {
-    use crate::integrations::fake::FakeServer;
-    let h = harness("accounts-quota-endpoint");
-    let server = FakeServer::start().await;
-    server.on(
-        "GET",
-        "/api/oauth/usage",
-        200,
-        json!({ "five_hour": { "utilization": 40.0, "resets_at": "2099-01-01T00:00:00+00:00" },
-                "seven_day": { "utilization": 7.0, "resets_at": null } }),
-    );
-    *h.core.usage_api.write() = format!("{}/api/oauth/usage", server.url);
+async fn each_active_account_is_read_by_a_process_of_its_own_at_most_every_five_minutes() {
+    // ESC-441: by its plugin (`account/read` of `quota`), Claude Code reading its own sign-in; the
+    // core tells only whether there is one, and asks Anthropic nothing.
+    let h = harness("accounts-quota-apart");
     let account = |id: &str, active: bool| {
         let dir = h.dir.join(format!("claude-{id}"));
         std::fs::create_dir_all(&dir).unwrap();
@@ -9718,22 +9720,28 @@ async fn each_active_account_is_read_with_its_own_sign_in_at_most_every_five_min
     sign_in(&pro, "tok-pro", later);
     sign_in(&vieux, "tok-vieux", now_ms() - 1_000);
     sign_in(&off, "tok-off", later);
+    // A complete reading (`limits` there, null as from a server before its rows).
+    let full = json!({ "limits": null,
+        "five_hour": { "utilization": 40.0, "resets_at": "2099-01-01T00:00:00+00:00" },
+        "seven_day": { "utilization": 7.0, "resets_at": null } });
+    std::fs::write(
+        Path::new(&pro.config_dir).join("fake-usage.json"),
+        full.to_string(),
+    )
+    .unwrap();
     let mut s = h.core.settings.read().clone();
     // Principal at rest: its sign-in would be the machine user's own.
     s.accounts[0].active = false;
-    s.accounts.extend([pro, vide, vieux, off]);
+    s.accounts
+        .extend([pro.clone(), vide.clone(), vieux.clone(), off.clone()]);
     h.core.save_settings(s).unwrap();
-    let tokens = |server: &FakeServer| -> Vec<String> {
-        server
-            .requests()
-            .iter()
-            .map(|r| r.headers["authorization"].clone())
-            .collect()
-    };
     let get = |h: &Harness, id: &str| h.core.usage.lock().account(id).cloned().unwrap();
     h.core.refresh_usage().await;
-    // One call, for the only account signed in and active.
-    assert_eq!(tokens(&server), ["Bearer tok-pro"]);
+    // One process, for the only account signed in, in date and active.
+    assert_eq!(usage_asked(&pro.config_dir), [true]);
+    for a in [&vide, &vieux, &off] {
+        assert!(usage_asked(&a.config_dir).is_empty(), "{}", a.id);
+    }
     let read = get(&h, "pro");
     assert_eq!(read.five_hour().map(|w| w.pct), Some(40.0));
     assert_eq!(read.seven_day().map(|w| w.pct), Some(7.0));
@@ -9763,17 +9771,13 @@ async fn each_active_account_is_read_with_its_own_sign_in_at_most_every_five_min
     );
     // Again within the five minutes: not asked again.
     h.core.refresh_usage().await;
-    assert_eq!(tokens(&server).len(), 1);
+    assert_eq!(usage_asked(&pro.config_dir).len(), 1);
     // Signed in meanwhile: the account that had no sign-in is read at the next reading, not five
     // minutes later.
-    let creds = json!({ "claudeAiOauth": { "accessToken": "tok-vide", "expiresAt": later } });
-    std::fs::write(
-        h.dir.join("claude-vide").join(".credentials.json"),
-        creds.to_string(),
-    )
-    .unwrap();
+    sign_in(&vide, "tok-vide", later);
     h.core.refresh_usage().await;
-    assert_eq!(tokens(&server), ["Bearer tok-pro", "Bearer tok-vide"]);
+    assert_eq!(usage_asked(&vide.config_dir), [true]);
+    assert_eq!(usage_asked(&pro.config_dir).len(), 1);
     let signed = get(&h, "vide");
     assert_eq!(
         (
@@ -9781,26 +9785,45 @@ async fn each_active_account_is_read_with_its_own_sign_in_at_most_every_five_min
             signed.reason.clone(),
             signed.five_hour().map(|w| w.pct)
         ),
-        (true, None, Some(40.0))
+        (true, None, Some(12.0))
     );
-    // Five minutes later, the network down: the last values stay.
+    // Five minutes later, what the process only saw (`get_usage` without `limits`, Anthropic's
+    // endpoint holding it back): it never lowers a window.
+    let seen =
+        json!({ "five_hour": { "utilization": 5.0, "resets_at": "2099-01-01T00:00:00+00:00" } });
+    std::fs::write(
+        Path::new(&pro.config_dir).join("fake-usage.json"),
+        seen.to_string(),
+    )
+    .unwrap();
     h.core.last_oauth_call.lock().clear();
-    *h.core.usage_api.write() = crate::usage::api_from_env();
     h.core.refresh_usage().await;
+    assert_eq!(usage_asked(&pro.config_dir).len(), 2);
+    assert_eq!(get(&h, "pro").five_hour().map(|w| w.pct), Some(40.0));
+    // Five minutes later again, nothing told: the last values stay.
+    std::fs::write(Path::new(&pro.config_dir).join("fake-usage.json"), "null").unwrap();
+    h.core.last_oauth_call.lock().clear();
+    h.core.refresh_usage().await;
+    assert_eq!(usage_asked(&pro.config_dir).len(), 3);
     let kept = get(&h, "pro");
     assert_eq!(
         (kept.five_hour().map(|w| w.pct), kept.connected),
         (Some(40.0), true)
     );
-    assert_eq!(kept.updated_at, read.updated_at);
+    // Out of date meanwhile: said so, no process started (an agent's refreshes it, `signin.rs`).
+    sign_in(&pro, "tok-pro", now_ms() - 1_000);
+    h.core.last_oauth_call.lock().clear();
+    h.core.refresh_usage().await;
+    assert_eq!(usage_asked(&pro.config_dir).len(), 3);
+    assert_eq!(
+        get(&h, "pro").reason.as_deref(),
+        Some("Connexion expirée : relance Claude Code pour ce compte.")
+    );
 }
 
 #[tokio::test]
 async fn each_account_with_a_running_agent_is_asked_its_quota_by_a_process_of_its_own() {
-    use crate::integrations::fake::FakeServer;
     let h = harness("accounts-quota-get-usage");
-    let server = FakeServer::start().await;
-    *h.core.usage_api.write() = format!("{}/api/oauth/usage", server.url);
     let (p, _) = h.project(false).await;
     let pro = second_account(&h);
     // Pro out of quota: its processes say 100 %, Principal's 12 %.
@@ -9813,8 +9836,8 @@ async fn each_account_with_a_running_agent_is_asked_its_quota_by_a_process_of_it
     h.core.refresh_usage().await;
     assert_eq!(five_hour_pct(&h, "pro"), Some(100.0));
     assert_eq!(five_hour_pct(&h, "principal"), Some(12.0));
-    // Both read from their processes: the endpoint was asked nothing.
-    assert!(server.requests().is_empty(), "{:?}", server.requests());
+    // Read from its agent's process: none of the account's own was started.
+    assert_eq!(usage_asked(&pro.config_dir), [false]);
 }
 
 #[tokio::test]

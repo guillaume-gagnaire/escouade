@@ -13,8 +13,9 @@ Il sert le harness que déclare son manifeste (`contributes.harnesses[0]`, id `c
 - Ce que `claude` écrit arrive par `agent/frames` et repart en éléments de la conversation : textes et raisonnements en direct, appels avec leurs diffs, sous-agents, cartes de permission et de question, fin de tour avec le coût de chaque modèle, quota d’un `rate_limit_event`, limite d’usage, connexion perdue.
 - Un changement de modèle, d’effort ou de mode, une interruption, un titre, une tâche arrêtée, le remote control partent en requêtes de contrôle, dont le cœur attend la réponse (`Asked`, `Item::Answer`).
 - La « Vue Claude Code » passe aussi par le module (`view/translate`) : le cœur lui donne les lignes du journal de la session.
+- Un compte sans agent dit ses modèles et son quota par un process à lui, sans tour ni session (`account/read`) : `initialize`, puis `get_usage` pour le quota. Claude Code lit lui-même sa connexion : ni le cœur ni le plugin n’ont son jeton.
 
-Reste au cœur : la place de Claude Code au registre, les comptes et leur connexion, le quota lu à l’endpoint d’usage, les modèles d’un compte quand aucun agent ne tourne, les textes rédigés (`claude -p`), le PTY de la vue terminal et ses hooks, le serveur MCP d’Escouade, le plan et les demandes de chaque agent.
+Reste au cœur : la place de Claude Code au registre, les comptes et leur connexion (présente, absente ou expirée), le rythme des lectures du quota (un compte au plus toutes les 5 minutes), les textes rédigés (`claude -p`), le PTY de la vue terminal et ses hooks, le serveur MCP d’Escouade, le plan et les demandes de chaque agent.
 
 ## Le dossier
 

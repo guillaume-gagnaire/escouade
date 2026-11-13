@@ -378,6 +378,37 @@ pub fn plugged(plugin: &str) -> Option<&'static ProcessEngine> {
         .map(|(_, _, e, _)| *e)
 }
 
+/// The command that installs the harness of `engine`, as the manifest of its plugin declares it (`install`): the
+/// harness its agents run on when it is plugged, else the manifest the app gives of that plugin (the one it plugs, read
+/// once). Empty when the manifest says none, or for a harness of no plugin of the app (ESC-441: the core keeps no copy).
+pub fn install_of(engine: EngineId) -> Install {
+    let Some(plugin) = plugin_of_engine(engine) else {
+        return Install::default();
+    };
+    if let Some(e) = plugged(plugin) {
+        return e.install;
+    }
+    static READ: Mutex<Vec<(&'static str, Install)>> = Mutex::new(Vec::new());
+    let mut read = READ.lock();
+    if let Some((_, i)) = read.iter().find(|(p, _)| *p == plugin) {
+        return *i;
+    }
+    let declared = super::builtin::manifest_text(plugin, "")
+        .and_then(|m| serde_json::from_str::<Value>(&m).ok())
+        .and_then(|m| {
+            serde_json::from_value::<proto::HarnessDecl>(m["contributes"]["harnesses"][0].clone())
+                .ok()
+        })
+        .and_then(|d| d.install)
+        .unwrap_or_default();
+    let install = Install {
+        windows: leak(&declared.windows),
+        unix: leak(&declared.unix),
+    };
+    read.push((plugin, install));
+    install
+}
+
 /// Starts an agent of the engine `name` through the harness of its plugin `plugin`; told when the plugin is off or not
 /// loaded (its session kept for the next message).
 pub fn spawn_plugged(

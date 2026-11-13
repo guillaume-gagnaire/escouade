@@ -434,7 +434,7 @@ mod tests {
 
     #[test]
     fn the_process_goes_on_with_a_good_sign_in_or_another_one() {
-        let token = stored(Credentials::Token("t".into()), Some("a"));
+        let token = stored(Credentials::InDate, Some("a"));
         assert!(can_go_on(Some(&token), Some("a")));
         // Another process refreshed it: out of date already, but another.
         let other = stored(Credentials::Expired, Some("b"));
@@ -464,7 +464,7 @@ mod tests {
             &wait
         ));
         assert!(signed_in_again(
-            Some(&stored(Credentials::Token("t".into()), Some("n"))),
+            Some(&stored(Credentials::InDate, Some("n"))),
             &wait
         ));
         let wait = SignInWait {
@@ -537,7 +537,7 @@ mod tests {
     #[tokio::test]
     async fn a_token_in_date_lets_every_launch_go_at_once() {
         let gate = RefreshGate::new();
-        let disk = Disk::new(Some(stored(Credentials::Token("t".into()), Some("a"))));
+        let disk = Disk::new(Some(stored(Credentials::InDate, Some("a"))));
         for _ in 0..3 {
             let t = Instant::now();
             let s = gate
@@ -576,7 +576,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(150)).await;
         assert!(!next1.is_finished() && !next2.is_finished());
         // …until the first one wrote its new sign-in.
-        *disk.now.lock() = Some(stored(Credentials::Token("new".into()), Some("new")));
+        *disk.now.lock() = Some(stored(Credentials::InDate, Some("new")));
         let (a, b) = (next1.await.unwrap(), next2.await.unwrap());
         assert_eq!(a.and_then(|s| s.stamp).as_deref(), Some("new"));
         assert_eq!(b.and_then(|s| s.stamp).as_deref(), Some("new"));

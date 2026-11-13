@@ -15,7 +15,7 @@ use unicode_normalization::UnicodeNormalization;
 /// or the same out of date, it cannot.
 pub fn can_go_on(now: Option<&Stored>, launch: Option<&str>) -> bool {
     match now.map(|s| (&s.credentials, s.stamp.as_deref())) {
-        Some((Credentials::Token(_), _)) => true,
+        Some((Credentials::InDate, _)) => true,
         Some((Credentials::Expired, stamp)) => stamp != launch,
         _ => false,
     }
@@ -30,8 +30,9 @@ fn now_ms() -> i64 {
 /// What Claude Code keeps of an account's sign-in to claude.ai.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Credentials {
-    /// Signed in: its OAuth access token.
-    Token(String),
+    /// Signed in, the token in date. The token itself is never kept: since ESC-441 Escouade asks nothing with it,
+    /// Claude Code reads its quota with its own sign-in (`account/read` of `quota`, by its plugin).
+    InDate,
     /// Signed in, the token out of date: Claude Code gets a new one when it runs.
     Expired,
     /// Not signed in (never, or with an API key).
@@ -59,15 +60,15 @@ pub fn stamp_of(oauth: &Value) -> Option<String> {
 /// What `creds` (the JSON of `.credentials.json`, or of the keychain's entry) says at `now` (ms): the rule, without reading.
 pub fn stored_of(creds: &Value, now: i64) -> Stored {
     let oauth = &creds["claudeAiOauth"];
-    let Some(token) = oauth["accessToken"].as_str().filter(|t| !t.is_empty()) else {
+    if oauth["accessToken"].as_str().is_none_or(str::is_empty) {
         return Stored::none();
-    };
+    }
     let expired = oauth["expiresAt"].as_i64().is_some_and(|exp| exp < now);
     Stored {
         credentials: if expired {
             Credentials::Expired
         } else {
-            Credentials::Token(token.to_string())
+            Credentials::InDate
         },
         stamp: stamp_of(oauth),
     }
@@ -217,10 +218,7 @@ mod tests {
     #[test]
     fn what_a_sign_in_says_is_read_without_touching_anything() {
         let creds = json!({ "claudeAiOauth": { "accessToken": "tok", "refreshToken": "r", "expiresAt": 100 } });
-        assert_eq!(
-            stored_of(&creds, 99).credentials,
-            Credentials::Token("tok".into())
-        );
+        assert_eq!(stored_of(&creds, 99).credentials, Credentials::InDate);
         let late = stored_of(&creds, 101);
         assert_eq!(late.credentials, Credentials::Expired);
         // The same sign-in out of date, told by its fingerprint, never its token.

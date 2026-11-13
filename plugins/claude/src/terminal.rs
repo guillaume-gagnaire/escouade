@@ -4,9 +4,12 @@
 //! Its hooks are HTTP hooks to Escouade's server, given with `--settings` (its private file): the core adds there the
 //! fence of a private project and the refusal of Escouade's server, which are its own (`Engine::fence_settings`). Its
 //! models are what `initialize` tells, by a process given no turn: it asks nothing of the API (ESC-121, ESC-124), and no
-//! session is written.
+//! session is written. Its quota is what `get_usage` tells after `initialize`, by such a process (ESC-441): Claude Code
+//! reads it with its own sign-in, which neither the core nor this plugin holds.
 
-use crate::client::{initialize_line, initialized, supports_effort, BASE_ARGS, ESCOUADE_TOOLS};
+use crate::client::{
+    initialize_line, initialized, supports_effort, usage_line, BASE_ARGS, ESCOUADE_TOOLS,
+};
 use escouade_plugin_protocol::engine::{
     AccountLines, AccountRead, AccountStep, FileToWrite, Launch, TerminalLaunch, TerminalParams,
 };
@@ -24,8 +27,10 @@ pub const EVENTS: &[&str] = &[
     "StopFailure",
 ];
 
-/// The id of the request a read of its models asks.
+/// The id of the request a read of its models asks, and the first of a read of its quota.
 const INITIALIZE: &str = "ccm_1";
+/// The id of the request of a read of its quota, once `initialize` is answered.
+const USAGE: &str = "ccm_2";
 
 /// The settings an interface is started with (`--settings <file>`): its hooks, each an HTTP call to `url` with the
 /// token of its variable `token_var`.
@@ -110,7 +115,8 @@ pub fn launch(p: &TerminalParams) -> TerminalLaunch {
 /// The first step of a read of its account: its models (`initialize`, by a process given no turn).
 pub fn read(r: &AccountRead) -> AccountStep {
     match r.read.as_str() {
-        "models" => {
+        // The same process for both: given no turn and no session.
+        "models" | "quota" => {
             let mut args: Vec<String> = BASE_ARGS.iter().map(|s| s.to_string()).collect();
             args.extend([
                 "--no-session-persistence".into(),
@@ -129,15 +135,29 @@ pub fn read(r: &AccountRead) -> AccountStep {
     }
 }
 
-/// What its process wrote: the models `initialize` tells, or why it refused.
+/// What its process wrote: the models `initialize` tells; for the quota, `get_usage` asked once `initialize` is
+/// answered, then its `rate_limits` as Claude Code tells them, which the core reads as it reads an agent's
+/// (`agent/readUsage`, `Item::Usage`). Why it refused, else.
 pub fn lines(l: &AccountLines) -> AccountStep {
+    let quota = l.read == "quota";
     for line in &l.lines {
         let Ok(frame) = serde_json::from_str::<Value>(line.trim()) else {
             continue;
         };
         match initialized(&frame, INITIALIZE) {
+            Some(Ok(_)) if quota => {
+                return AccountStep::more(vec![usage_line(USAGE)], json!({ "asked": USAGE }))
+            }
             Some(Ok(told)) => return AccountStep::done(told["models"].clone()),
             Some(Err(why)) => return AccountStep::failed(why),
+            None => {}
+        }
+        match initialized(&frame, USAGE).filter(|_| quota) {
+            Some(Ok(told)) if told["rate_limits"].is_object() => {
+                return AccountStep::done(told["rate_limits"].clone())
+            }
+            Some(Ok(_)) => return AccountStep::failed("get_usage: no rate_limits"),
+            Some(Err(why)) => return AccountStep::failed(format!("get_usage: {why}")),
             None => {}
         }
     }

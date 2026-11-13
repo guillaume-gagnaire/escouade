@@ -13,8 +13,9 @@ It serves the harness its manifest declares (`contributes.harnesses[0]`, id `cla
 - What `claude` writes comes by `agent/frames` and goes back as items of the conversation: texts and reasonings live, calls with their diffs, subagents, permission and question cards, the end of a turn with each model’s cost, the quota of a `rate_limit_event`, the usage limit, a sign-in lost.
 - A change of model, effort or mode, an interruption, a title, a task stopped, remote control go as control requests, whose answer the core waits for (`Asked`, `Item::Answer`).
 - The “Claude Code view” goes through the module too (`view/translate`): the core hands it the lines of the session’s transcript.
+- An account without an agent tells its models and its quota by a process of its own, given no turn and no session (`account/read`): `initialize`, then `get_usage` for the quota. Claude Code reads its sign-in itself: neither the core nor the plugin holds its token.
 
-What stays in the core: Claude Code’s place in the registry, the accounts and their sign-in, the quota read from the usage endpoint, an account’s models when no agent runs, the written texts (`claude -p`), the terminal view’s PTY and its hooks, Escouade’s MCP server, each agent’s plan and requests.
+What stays in the core: Claude Code’s place in the registry, the accounts and their sign-in (there, missing or expired), the pace of the quota’s readings (an account at most every 5 minutes), the written texts (`claude -p`), the terminal view’s PTY and its hooks, Escouade’s MCP server, each agent’s plan and requests.
 
 ## The folder
 
