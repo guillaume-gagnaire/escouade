@@ -1,0 +1,42 @@
+[package]
+name = "escouade-mcp"
+version = "0.1.0"
+description = "The parts of Escouade's MCP server that stand without the app: its HTTP transport and its guards, the tokens and the port, the activity log, the tools' arguments and their schemas, the declaration in a harness"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../src-tauri"
+# A part of the app, cut out of its crate for it to compile faster (docs/CRATES.md): never published.
+publish = false
+
+[features]
+# The app's tests: a stop waits longer for the port to close (`port::STOP_WAIT`).
+testing = []
+
+[dependencies]
+# The languages written in now.
+escouade-base = { path = "../escouade-base" }
+# The board's columns, the time of an entry, the processes of a declaration (`proc`, `job`).
+escouade-model = { path = "../escouade-model" }
+# A harness's program, the server's entry and how a token is hidden.
+escouade-engines = { path = "../escouade-engines" }
+# `tr_in!`.
+escouade-plugin-cli = { path = "../escouade-plugin-cli" }
+rmcp = { version = "3.9", default-features = false, features = ["server", "macros", "transport-streamable-http-server"] }
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio", "server", "service"] }
+http-body-util = "0.1"
+subtle = "2.6"
+getrandom = "0.4"
+base64 = "0.23"
+uuid = { version = "1", features = ["v4"] }
+parking_lot = "0.13"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+log = "0.4"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "sync", "time", "net"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "sync", "time", "net"] }

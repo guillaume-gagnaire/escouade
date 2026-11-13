@@ -4,81 +4,11 @@
 
 use super::Caller;
 use crate::core::Core;
-use crate::model::{now_ms, UiEvent};
-use parking_lot::Mutex;
-use serde::Serialize;
-use std::collections::VecDeque;
+use crate::model::UiEvent;
 use tauri::Runtime;
 
-/// How many entries the log keeps: the oldest go first.
-pub const KEPT: usize = 200;
-
-/// The longest summary or message an entry keeps, in characters: a request's own text (its path,
-/// a header) could be anything.
-const TEXT_MAX: usize = 300;
-
-/// The longest message of a call that says what it changed (`Outcome::Changed`), in characters:
-/// one line too, but every setting a call set, with its value before and after, may not fit in the
-/// `TEXT_MAX` of a request's own text.
-const CHANGED_MAX: usize = 1_500;
-
-/// How a call ended, or why a request was refused, as the log says it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Outcome {
-    Ok,
-    /// Ended well, and says what it changed (`set_board`: each setting from its value to its new
-    /// one): logged as "ok", with that text as its message.
-    Changed(String),
-    /// Refused by a guard (a request without a valid token, a tool the caller may not use, the
-    /// autopilot's pause…): the message says why.
-    Refused(String),
-    /// The call failed: the message says how.
-    Error(String),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ActivityEntry {
-    pub at: i64,
-    /// Who called: the agent's name, « Claude (hors Escouade) », or « Client inconnu » for a
-    /// request refused before its token said who it came from.
-    pub caller: String,
-    /// The tool called; empty for a request refused before reaching one.
-    pub tool: String,
-    /// What it was asked, in short (its arguments, or the request's method and path). Never a
-    /// token.
-    pub summary: String,
-    /// "ok", "refused" or "error".
-    pub outcome: &'static str,
-    /// Why it was refused, or how it failed.
-    pub message: Option<String>,
-}
-
-/// The entries, oldest first.
-#[derive(Default)]
-pub struct Activity {
-    entries: Mutex<VecDeque<ActivityEntry>>,
-}
-
-impl Activity {
-    pub fn push(&self, entry: ActivityEntry) {
-        let mut entries = self.entries.lock();
-        while entries.len() >= KEPT {
-            entries.pop_front();
-        }
-        entries.push_back(entry);
-    }
-
-    /// The entries kept, oldest first.
-    pub fn entries(&self) -> Vec<ActivityEntry> {
-        self.entries.lock().iter().cloned().collect()
-    }
-
-    /// « Effacer »: no entry left.
-    pub fn clear(&self) {
-        self.entries.lock().clear();
-    }
-}
+// The log and its entries: `escouade-mcp`.
+pub use escouade_mcp::activity::{clip, entry, Activity, ActivityEntry, Outcome};
 
 /// Logs what the server was asked and how it ended, and tells the window. `caller`: None for a
 /// request refused before its token was read. No token may be in `summary` or the message. Not
@@ -90,20 +20,7 @@ pub fn record<R: Runtime>(
     summary: &str,
     outcome: Outcome,
 ) {
-    let (outcome, message, longest) = match outcome {
-        Outcome::Ok => ("ok", None, TEXT_MAX),
-        Outcome::Changed(m) => ("ok", Some(m), CHANGED_MAX),
-        Outcome::Refused(m) => ("refused", Some(m), TEXT_MAX),
-        Outcome::Error(m) => ("error", Some(m), TEXT_MAX),
-    };
-    let entry = ActivityEntry {
-        at: now_ms(),
-        caller: caller_name(core, caller),
-        tool: tool.to_string(),
-        summary: clip(summary),
-        outcome,
-        message: message.map(|m| clip_to(&m, longest)),
-    };
+    let entry = entry(caller_name(core, caller), tool, summary, outcome);
     core.mcp.activity.push(entry.clone());
     core.hub.emit(UiEvent::McpActivity { entry });
 }
@@ -120,23 +37,4 @@ pub fn caller_name<R: Runtime>(core: &Core<R>, caller: Option<&Caller>) -> Strin
             .unwrap_or_else(|| id.clone()),
         None => tr!("Client inconnu", "Unknown client"),
     }
-}
-
-/// `text` on one line, of `TEXT_MAX` characters at most (cut with « … »).
-pub(crate) fn clip(text: &str) -> String {
-    clip_to(text, TEXT_MAX)
-}
-
-/// `text` on one line, of `max` characters at most (cut with « … »).
-fn clip_to(text: &str, max: usize) -> String {
-    let line: String = text
-        .chars()
-        .map(|c| if c.is_control() { ' ' } else { c })
-        .collect();
-    if line.chars().count() <= max {
-        return line;
-    }
-    let mut cut: String = line.chars().take(max - 1).collect();
-    cut.push('…');
-    cut
 }

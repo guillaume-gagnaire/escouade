@@ -18,8 +18,7 @@ use crate::model::Project;
 use crate::vectors::embed::Embedder;
 use crate::vectors::index::{Index, Source};
 use anyhow::{bail, Result};
-use rmcp::schemars;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -36,39 +35,8 @@ pub const MAX_DESCRIPTION: usize = 300;
 /// The longest name, in characters.
 const MAX_NAME: usize = 64;
 
-/// What a memory is about, as Claude Code sorts its own.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema, Default,
-)]
-#[serde(rename_all = "lowercase")]
-pub enum Kind {
-    /// A way to work, a correction or a confirmation of how to do something.
-    #[default]
-    Feedback,
-    /// The work under way, a constraint of the project.
-    Project,
-    /// Where to find something (a page, a dashboard, a tool).
-    Reference,
-    /// Who the user is, what they prefer.
-    User,
-}
-
-impl Kind {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Feedback => "feedback",
-            Self::Project => "project",
-            Self::Reference => "reference",
-            Self::User => "user",
-        }
-    }
-
-    fn parse(s: &str) -> Option<Self> {
-        [Self::Feedback, Self::Project, Self::Reference, Self::User]
-            .into_iter()
-            .find(|k| k.as_str() == s.trim().to_lowercase())
-    }
-}
+// What a memory is about: `escouade-mcp`, whose `write_memory` arguments name it.
+pub use escouade_mcp::memory::Kind;
 
 /// A memory: its file's header, and its text.
 #[derive(Debug, Clone, PartialEq, Serialize)]

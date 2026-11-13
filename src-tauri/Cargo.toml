@@ -70,12 +70,11 @@ escouade-plugin-kit = { path = "../crates/escouade-plugin-kit" }
 # No plugin is linked (docs/PLUGINS-DESIGN.md §8.2): the harnesses' views go through their modules (`view/translate`).
 unicode-normalization = "0.1"
 # The MCP server (« Claude et les agents peuvent piloter Escouade »): the official SDK, its Streamable HTTP
-# transport served by hyper on the loopback, the bearer tokens compared in constant time.
+# transport served by hyper on the loopback (its guards and the tokens, compared in constant time: `escouade-mcp`).
 rmcp = { version = "3.9", default-features = false, features = ["server", "macros", "transport-streamable-http-server"] }
 hyper = { version = "1", features = ["server", "http1"] }
 hyper-util = { version = "0.1", features = ["tokio", "server", "service"] }
 http-body-util = "0.1"
-subtle = "2.6"
 # Its tokens: 32 bytes from the system's random generator.
 getrandom = "0.4"
 # « Codex peut piloter Escouade »: its entry in each account's `config.toml`, the user's comments and layout kept.
@@ -102,6 +101,9 @@ escouade-plugins = { path = "../crates/escouade-plugins" }
 escouade-forge = { path = "../crates/escouade-forge" }
 # What the app learns of a request of the updater that failed (`updates::net`).
 escouade-updates = { path = "../crates/escouade-updates" }
+# The parts of the MCP server that stand without the app: its transport, the tokens and the port, the tools' arguments
+# (docs/CRATES.md, § 13).
+escouade-mcp = { path = "../crates/escouade-mcp" }
 # The transcription as one speaks (ESC-136): a WebSocket to the service, through the settings' proxy (HTTP CONNECT,
 # opened by hand) and TLS by rustls (ring, as reqwest), the system's roots and Mozilla's.
 tokio-tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
@@ -159,6 +161,7 @@ members = [
     "../crates/escouade-plugins",
     "../crates/escouade-forge",
     "../crates/escouade-updates",
+    "../crates/escouade-mcp",
 ]
 default-members = [
     ".",
@@ -176,6 +179,7 @@ default-members = [
     "../crates/escouade-plugins",
     "../crates/escouade-forge",
     "../crates/escouade-updates",
+    "../crates/escouade-mcp",
 ]
 
 # The plugins depend on the kit by version, as the store reads them (their folder, published crates, the checksum of their
@@ -246,3 +250,4 @@ escouade-plugins = { path = "../crates/escouade-plugins", features = ["testing"]
 escouade-forge = { path = "../crates/escouade-forge", features = ["testing"] }
 # The fake server of the updates (`updates::fake_server`), for the tests of the updater that stay here.
 escouade-updates = { path = "../crates/escouade-updates", features = ["testing"] }
+escouade-mcp = { path = "../crates/escouade-mcp", features = ["testing"] }

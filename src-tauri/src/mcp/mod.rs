@@ -66,51 +66,16 @@ use crate::integrations::secrets;
 use crate::model::UiEvent;
 use crate::paths;
 use anyhow::{anyhow, Context, Result};
-use base64::Engine;
-use parking_lot::{Mutex, MutexGuard, RwLock};
-use serde::Serialize;
-use std::collections::HashMap;
-use std::net::{Ipv4Addr, TcpListener};
-use std::ops::RangeInclusive;
+use parking_lot::{Mutex, MutexGuard};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Weak};
-use std::time::{Duration, Instant};
-use subtle::ConstantTimeEq;
 use tauri::Runtime;
 use tokio::sync::watch;
 
-/// Where the server's port is chosen, at its first start or when the one saved is taken.
-pub const PORTS: RangeInclusive<u16> = 47000..=47999;
-
-/// The path of the MCP endpoint: `http://127.0.0.1:<port>/mcp`.
-pub const PATH: &str = "/mcp";
-
-/// How long a stop waits for the port to close: a start right after binds it again. Longer in
-/// the tests: the accept loop runs on the app's runtime, which every test of the binary shares,
-/// and on a 3-core CI runner it went unscheduled for over 2 s (the port, still open, was not
-/// taken again).
-const STOP_WAIT: Duration = Duration::from_secs(if cfg!(test) { 30 } else { 2 });
-
-/// Who a request comes from, as its token says.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Caller {
-    /// Claude Code outside Escouade (a terminal, another tool), with the token its config holds.
-    External,
-    /// The agent of this id, with the token its process was started with.
-    Agent(String),
-}
-
-/// The server as the window is told it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct McpStatus {
-    pub running: bool,
-    /// The port it listens on; stopped, the one saved for its next start (0 before the first).
-    pub port: u16,
-    /// Why it does not run though the settings want it to.
-    pub error: Option<String>,
-}
+// Who a request comes from, the server's status, its port and its tokens: `escouade-mcp`.
+use escouade_mcp::port::{bind, wait_closed};
+pub use escouade_mcp::{new_token, Caller, McpStatus, Tokens, PATH};
 
 /// The server listening: its accept loop stops when `stop` says so (or goes), then says it
 /// closed the port on `closed`.
@@ -118,34 +83,6 @@ struct Running {
     port: u16,
     stop: watch::Sender<bool>,
     closed: mpsc::Receiver<()>,
-}
-
-/// The tokens a request may bring. Compared in constant time, every one of them each time: the
-/// time an answer takes says nothing of how close a token came.
-#[derive(Default)]
-struct Tokens {
-    /// Claude outside Escouade's, once read from the keychain (or made).
-    external: RwLock<Option<String>>,
-    /// The agents', by agent id.
-    agents: RwLock<HashMap<String, String>>,
-}
-
-impl Tokens {
-    fn caller(&self, presented: &str) -> Option<Caller> {
-        let presented = presented.as_bytes();
-        let mut found = None;
-        if let Some(t) = &*self.external.read() {
-            if bool::from(t.as_bytes().ct_eq(presented)) {
-                found = Some(Caller::External);
-            }
-        }
-        for (id, t) in self.agents.read().iter() {
-            if bool::from(t.as_bytes().ct_eq(presented)) {
-                found = Some(Caller::Agent(id.clone()));
-            }
-        }
-        found
-    }
 }
 
 /// `McpServer::sync` held: a start or a stop is done under it, so none comes between the
@@ -262,7 +199,12 @@ impl<R: Runtime> McpServer<R> {
         let (listener, port) = bind(port, &|| self.quitting())?;
         let (stop, stopped) = watch::channel(false);
         let (closed_tx, closed) = mpsc::sync_channel(1);
-        let gate = http::Gate::new(port, std::sync::Arc::downgrade(&core));
+        let gate = http::Gate::new(
+            port,
+            std::sync::Arc::downgrade(&core),
+            tools::Tools::<R>::router(),
+            tools::Tools::<R>::new,
+        );
         let limits = self.limits.lock().clone();
         // On the app's own runtime: never the single-threaded one of a caller, which a stop's
         // wait would block (`wait_closed`).
@@ -509,98 +451,6 @@ impl<R: Runtime> McpServer<R> {
     pub fn caller(&self, token: &str) -> Option<Caller> {
         self.tokens.caller(token)
     }
-}
-
-/// Waits until the accept loop says it closed the port (`STOP_WAIT` at most); false when it did
-/// not say so. On a worker of a multi-threaded runtime (an async command, a tool), the wait first
-/// hands the worker's other tasks to another one, the accept loop among them maybe. Elsewhere (a
-/// thread of its own, a single-threaded runtime) it blocks: the loop runs on the app's runtime.
-fn wait_closed(closed: &mpsc::Receiver<()>) -> bool {
-    use tokio::runtime::{Handle, RuntimeFlavor};
-    let wait = || closed.recv_timeout(STOP_WAIT).is_ok();
-    match Handle::try_current() {
-        Ok(h) if h.runtime_flavor() == RuntimeFlavor::MultiThread => {
-            tokio::task::block_in_place(wait)
-        }
-        _ => wait(),
-    }
-}
-
-/// 32 bytes from the system's random generator, in base64url (43 characters).
-fn new_token() -> String {
-    let mut bytes = [0u8; 32];
-    getrandom::fill(&mut bytes).expect("the system's random generator");
-    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
-}
-
-/// How long the port saved for the server is waited for, when something holds it: a server that
-/// stops and starts again at once (a setting turned off and on) finds its old listener not
-/// quite gone, and must not move to another port (it would be declared again in every account of
-/// Claude Code).
-const BIND_RETRY: Duration = Duration::from_secs(3);
-const BIND_STEP: Duration = Duration::from_millis(25);
-
-/// A listener on 127.0.0.1:`port`, waited for up to `BIND_RETRY` when it is held (no longer once
-/// `quitting` says the app stops); when that one stays taken (or is 0), on a free port of `PORTS`
-/// (tried from a random one, so that two instances, an end-to-end test's beside the user's,
-/// rarely try the same ones).
-fn bind(port: u16, quitting: &dyn Fn() -> bool) -> Result<(TcpListener, u16)> {
-    bind_within(port, BIND_RETRY, quitting)
-}
-
-/// A port that is busy for now, which a moment makes free again: held by a listener on its way
-/// out, or, on Windows, answered « access denied » right after it was released. Any other error
-/// (an address the machine does not have...) does not pass with time.
-fn worth_waiting_for(e: &std::io::Error) -> bool {
-    use std::io::ErrorKind;
-    e.kind() == ErrorKind::AddrInUse || (cfg!(windows) && e.kind() == ErrorKind::PermissionDenied)
-}
-
-/// `bind`, with at most `wait` for the port asked for (tried again every `BIND_STEP`), and none
-/// once `quitting` is true: the app stops, there is no server to start.
-fn bind_within(
-    port: u16,
-    wait: Duration,
-    quitting: &dyn Fn() -> bool,
-) -> Result<(TcpListener, u16)> {
-    let mut refused = None;
-    if port != 0 {
-        let until = Instant::now() + wait;
-        loop {
-            match TcpListener::bind((Ipv4Addr::LOCALHOST, port)) {
-                Ok(l) => return Ok((l, port)),
-                Err(e) if worth_waiting_for(&e) && Instant::now() < until => {
-                    if quitting() {
-                        return Err(anyhow!("the app is stopping"));
-                    }
-                    std::thread::sleep(BIND_STEP);
-                }
-                Err(e) => {
-                    refused = Some(e);
-                    break;
-                }
-            }
-        }
-    }
-    let (first, count) = (*PORTS.start(), PORTS.len() as u32);
-    let from = (uuid::Uuid::new_v4().as_u128() % u128::from(count)) as u32;
-    for i in 0..count {
-        let p = first + ((from + i) % count) as u16;
-        if p == port {
-            continue;
-        }
-        if let Ok(l) = TcpListener::bind((Ipv4Addr::LOCALHOST, p)) {
-            if let Some(e) = refused {
-                log::warn!("mcp: port {port} not available ({e}), {p} is used instead");
-            }
-            return Ok((l, p));
-        }
-    }
-    Err(anyhow!(tr!(
-        "Aucun port libre entre {first} et {last} pour le serveur MCP",
-        "No free port between {first} and {last} for the MCP server",
-        last = PORTS.end()
-    )))
 }
 
 impl<R: Runtime> Core<R> {

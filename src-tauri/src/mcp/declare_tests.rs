@@ -3,10 +3,11 @@
 //! its `config.toml` (ESC-50), OpenCode in its `opencode.json`, Copilot CLI in its
 //! `mcp-config.json`, kept in step with the settings.
 
-use super::install::{current, wanted, Entry, MASK};
+use super::install::{current, wanted, Entry};
 use crate::core_tests::{harness, Harness};
 use crate::engine::{Engine, CLAUDE, CODEX, COPILOT, OPENCODE};
 use crate::model::*;
+use escouade_mcp::install::MASK;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 

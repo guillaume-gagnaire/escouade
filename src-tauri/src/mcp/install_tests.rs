@@ -2,12 +2,13 @@
 //! which keeps the user scope's servers in the `.claude.json` of a folder of the test's.
 
 use super::install::{
-    current, declare, mask_bearer, wanted, withdraw, Declared, Entry, Target, COMMAND_TIMEOUT, MASK,
+    current, declare, mask_bearer, wanted, withdraw, Declared, Entry, Target, COMMAND_TIMEOUT,
 };
 use crate::core_tests::{fake_cli, harness, second_account, Harness};
 use crate::engine::Engine;
 use crate::model::*;
 use crate::paths::test_dir;
+use escouade_mcp::install::MASK;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;

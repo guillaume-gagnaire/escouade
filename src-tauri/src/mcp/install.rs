@@ -8,15 +8,12 @@
 //! The CLI only writes. What is declared is read from `.claude.json` itself: `claude mcp get`
 //! connects to the server, which is slow, and a failed connection says nothing of the entry.
 
-use super::activity::clip;
 use crate::accounts;
 use crate::core::Core;
 use crate::engine::{self, userconfig, Engine};
 use crate::model::{Account, EngineId, Settings};
 use anyhow::{anyhow, bail, Result};
-use serde::Serialize;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
@@ -25,56 +22,11 @@ use tauri::Runtime;
 /// How often the window's focus may bring a declaration run (`Core::declare_on_focus`).
 const FOCUS_RUN_EVERY: Duration = Duration::from_secs(60);
 
-/// How long one `claude mcp` command may take.
-pub const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
-
-// The server's entry, what a user config says of it and how a token is hidden: `escouade-engines`, which the
-// harnesses' user configs (`engine::userconfig`) read too.
-pub use escouade_engines::mcp::{mask_bearer, Entry, Standing, MASK};
-
-/// `text` with every one of `secrets` (a token, whole) hidden, and then any bearer token.
-fn mask_secrets(text: &str, secrets: &[&str]) -> String {
-    let hidden = secrets
-        .iter()
-        .filter(|s| !s.is_empty())
-        .fold(text.to_string(), |t, s| t.replace(*s, MASK));
-    mask_bearer(&hidden)
-}
-
-/// How an account's Claude Code is run, and where it keeps its state.
-#[derive(Debug, Clone)]
-pub struct Target {
-    /// Its `claude`.
-    pub program: crate::engine::Program,
-    /// What its processes get besides the environment of the app: the network settings, and the
-    /// account's `CLAUDE_CONFIG_DIR` (never Principal's).
-    pub env: Vec<(String, String)>,
-    /// Where the command runs.
-    pub cwd: PathBuf,
-    /// Its user config, which holds the servers it reaches in every folder (Claude Code's
-    /// `.claude.json`).
-    pub config: PathBuf,
-    pub timeout: Duration,
-}
-
-/// What `declare` did.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Declared {
-    /// There was no entry: added.
-    Added,
-    /// There was another one: replaced.
-    Replaced,
-    /// It was there as wanted: left as it was.
-    Unchanged,
-}
-
-/// The entry that reaches the server on `port` with `token`.
-pub fn wanted(port: u16, token: &str) -> Entry {
-    Entry {
-        url: format!("http://127.0.0.1:{port}{}", super::PATH),
-        token: token.to_string(),
-    }
-}
+// How an account's program is run, the entry wanted, what a declaration did and where the server stands in an
+// account: `escouade-mcp`; the server's entry and how a token is hidden come from `escouade-engines` through it.
+pub use escouade_mcp::install::{
+    mask_bearer, run, wanted, Declaration, Declared, Entry, Standing, Target, COMMAND_TIMEOUT,
+};
 
 /// The entry the user config `config` of `engine` holds under the server's name, if it holds one.
 /// A file that is not there or cannot be read holds none.
@@ -82,58 +34,6 @@ pub fn current(engine: &dyn Engine, config: &Path) -> Option<Entry> {
     match engine.declared(config) {
         Standing::Declared(entry) => Some(entry),
         _ => None,
-    }
-}
-
-/// Runs the account's program with `args` as the account does, within its time. Err with what Claude Code
-/// said when it fails, any of `secrets` (the tokens in play) hidden: the error goes to the window
-/// and the logs.
-pub(crate) async fn run(target: &Target, args: &[String], secrets: &[&str]) -> Result<()> {
-    let launch = target
-        .program
-        .launch(&target.cwd.to_string_lossy(), args, &target.env)?;
-    let mut cmd = tokio::process::Command::new(&launch.program);
-    cmd.args(&launch.args)
-        .current_dir(&target.cwd)
-        .envs(launch.env)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true);
-    #[cfg(windows)]
-    cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
-    crate::job::isolate(&mut cmd);
-    let child = cmd.spawn().map_err(|e| {
-        anyhow!(tr!(
-            "claude n’a pas pu être lancé : {e}",
-            "claude could not be started: {e}"
-        ))
-    })?;
-    // Dropped when this returns: whatever the command left running ends with it.
-    let _job = crate::job::Job::for_child(&child);
-    let out = tokio::time::timeout(target.timeout, child.wait_with_output())
-        .await
-        .map_err(|_| {
-            anyhow!(tr!(
-                "pas de réponse de claude en {s} s",
-                "no answer from claude in {s} s",
-                s = target.timeout.as_secs()
-            ))
-        })??;
-    if out.status.success() {
-        return Ok(());
-    }
-    let text = |bytes: &[u8]| String::from_utf8_lossy(bytes).trim().to_string();
-    let said = [text(&out.stderr), text(&out.stdout)]
-        .into_iter()
-        .find(|t| !t.is_empty());
-    match said {
-        Some(said) => bail!("{}", clip(&mask_secrets(&said, secrets))),
-        None => bail!(tr!(
-            "claude s’est terminé avec le code {code}",
-            "claude exited with code {code}",
-            code = out.status.code().unwrap_or(-1)
-        )),
     }
 }
 
@@ -188,31 +88,6 @@ type Seen = std::collections::HashMap<PathBuf, std::result::Result<(), String>>;
 /// The harness of `account`, whose user config its declaration goes in.
 fn harness(account: &Account) -> &'static dyn Engine {
     engine::by_id(account.engine)
-}
-
-/// Where the server stands in one account of a harness, as the window shows it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Declaration {
-    /// The id of the account.
-    pub account: String,
-    /// Its harness.
-    pub engine: EngineId,
-    /// The server is declared in it (as wanted).
-    pub ok: bool,
-    /// Why it is not.
-    pub error: Option<String>,
-    /// The command that declares it in this account by hand (for a harness with a user config
-    /// Escouade writes itself, the entry to paste in `file`), its token hidden (`MASK`): the real
-    /// one is built when the user asks to copy it (`Core::mcp_manual_command`), and is never kept
-    /// nor sent with the state.
-    pub command: String,
-    /// The user config the entry is in, with the token in plain text (for a link, the file it
-    /// leads to): `.claude.json`, `config.toml`, `opencode.json`, `mcp-config.json`.
-    pub file: String,
-    /// `command` is the entry to paste in `file` (a harness Escouade writes it in itself); else a
-    /// command to run.
-    pub paste: bool,
 }
 
 /// The accounts of `engine` the server is declared in: its active ones, those the user added alone

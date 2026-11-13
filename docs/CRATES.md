@@ -1,4 +1,4 @@
-# Le découpage du crate de l'app (ESC-408, ESC-410, ESC-411, ESC-412, ESC-414)
+# Le découpage du crate de l'app (ESC-408, ESC-410, ESC-411, ESC-412, ESC-413, ESC-414)
 
 Demande de l'utilisateur (2026-11-11) : « découpe le crate de l'app ». La compilation du crate `escouade` (`src-tauri/`) en mode test est le long pôle de la CI : 12 à 27 min sur le Mac, l'essentiel de l'archive nextest sous Windows et Linux. Ce document mesure ce qui coûte, propose un découpage, dit ce qui est fait (§ 4) et ce qui reste, dans l'ordre (§ 5).
 
@@ -12,6 +12,7 @@ Demande de l'utilisateur (2026-11-11) : « découpe le crate de l'app ». La com
 - **`escouade-plugins` (ESC-411, § 10)** : l'hôte des plugins (registre, runtime, WASM, store, graine, banc, TLS) et ses tests qui ne démarrent pas de `core` sortent de l'app (≈ 22 100 lignes, 7 %) ; en moyenne, « lib (test) » 117 → 108 s (− 8 %) et son pic à 3 jobs 7,8 → 7,1 Go, mais l'app commence 6 s plus tard (elle attend la crate) et l'archive a pris 20 s de plus ici (un binaire de test de plus à lier), à confirmer sur la CI. Restent dans l'app les harness en processus, le puits des faits, les vues, les comptes et adaptateurs des hébergeurs.
 - **`escouade-engines` (ESC-412, § 11)** : seules les parties des harness sans lien sortent (où est le programme de chaque harness, les configs de l'utilisateur qu'Escouade écrit, le serveur MCP tel qu'un harness le reçoit, la connexion de Claude Code, le transcript d'un sous-agent, ce qu'un item d'outil garde : 4 145 lignes, dont 1 326 de tests, 1,3 %) ; aucun gain mesurable, ni en temps ni en mémoire. Le reste ne se tient pas sans l'app : le trait `Engine` prend `AgentRt` et `Effects`, et la lecture des flux (`agent/*`) est faite de blocs `impl AgentRt` ; il faut d'abord sortir l'état d'un agent (§ 11).
 - **`escouade-forge` et `escouade-updates` (ESC-414, § 12)** : les hébergeurs (contrat, comptes, clients), les sources (comptes, secrets du trousseau, registre), les adaptateurs des plugins qui les servent, avec leurs tests et ceux des plugins de tickets qui ne démarrent pas de `core` ; et ce que l'app apprend d'une requête de l'updater qui a échoué (17 200 lignes, 5,9 %). En moyenne de deux passes, « lib (test) » 124 → 107 s (− 13 %) et son pic à 3 jobs 7,2 → 6,8 Go, sous les 7 Go d'un runner macOS pour la première fois ; l'archive ne gagne rien ici (deux binaires de tests de plus).
+- **`escouade-mcp` (ESC-413, § 13)** : seul ce qui se tient sans le cœur sort (le transport HTTP et ses gardes, sur un trait de l'hôte que `Core` implémente ; les jetons et le port ; le journal ; les arguments des outils et leurs schémas ; la partie données de l'installation chez les harness : 1 832 lignes, 0,6 %) ; outils, schémas et textes identiques octet pour octet. « lib (test) » − 2 %, pic mémoire − 144 Mo, archive + 9 s ici. Les outils et leurs 22 000 lignes de tests restent : ils agissent sur `Core` (79 méthodes et champs, 30 modules de l'app) et les 19 fichiers de tests démarrent un vrai cœur ; ce qu'il faudrait est au § 13.
 - **La suite** : les gros morceaux (hôte des plugins, serveur MCP, harness) sont pris dans le cycle `core` ↔ `model` ↔ le reste. Il faut d'abord sortir les types de données (`escouade-model`), puis l'hôte des plugins (≈ 40 000 lignes avec ses tests, le meilleur rapport), puis le serveur MCP. Chaque morceau a son ticket (§ 5). Deux leviers plus simples, à mesurer sur la CI, réduisent le travail ou la mémoire tout de suite (§ 6).
 - **Les leviers de la CI (ESC-409, § 8)** : gardés, les tests sans informations de débogage (les trois OS : Linux − 14 % sur l'archive, le Mac − 4 %, Windows =) et la lib du Mac compilée avant ses tests (son archive de 13 min 11 à 11 min 52, son job de 16 min 01 à 14 min 13 : un seul run, à confirmer par ceux de `main`). Écarté : l'archive du Mac compilée sur un Mac Intel pour Apple Silicon (job de 24 min 26, cache chaud : les runners Intel sont lents).
 
@@ -109,7 +110,7 @@ Chaque ligne est un ticket. Le gain attendu est celui de « lib (test) » sur un
 | 1 | `escouade-model` | **fait (ESC-410, § 9)** | `UiEvent`, `UsageSnapshot`, `AccountUsage` ; le lien de `fence` avec le cœur | — | 9 300 (2 760) | mesuré : « lib (test) » − 21 %, pic − 0,57 Go (§ 9) |
 | 2 | `escouade-plugins` | **fait (ESC-411, § 10)** ; prévu : l'hôte : `manifest`, `runtime`, `wasm`, `beside`, `socket`, `store`, `store_keys`, `files`, `procs`, `journal`, `seed`, `sort`, `decide`, `view`, `reader`, `bench`, et les ≈ 18 000 lignes de `plugins_*_tests.rs` qui ne démarrent pas de `core` | `plugins/harness.rs`, `plugins/events.rs`, `plugins/builtin.rs` (le lien avec le cœur, les agents, les terminaux) | `integrations::secrets::SecretStore` en trait de la crate ; `forge::{RateLimit, bare_host, host_of, remote::parse}` dans la crate ; revu après ESC-410 : `files.rs` prend déjà `Fence` dans `escouade-model`, restent `procs.rs` (`isola::cli`), `mod.rs` (`git::run`, `engine::registry::Version`), `shared.rs` (`engine::Program`), `reader.rs` (`workflow`), `bench` (`facts::NAMES`) et `adapters.rs` (`integrations::source`, `text::default_states`) | ≈ 34 000 (18 000) ; sorti : 22 100 (6 800 de fichiers de tests) | mesuré : « lib (test) » − 8 %, pic − 0,7 Go ; archive + 20 s ici (§ 10) |
 | 3 | `escouade-forge` | **fait (ESC-414, § 12)** ; prévu : `forge/` (contrat des hébergeurs, comptes, `remote`), `integrations/{source, secrets, fake}` et leurs tests | `forge/connect.rs`, `integrations/sync.rs`, `integrations/text.rs` (le cœur) | après 2 | ≈ 12 000 (8 000) ; sorti : 14 900 (9 100 de fichiers de tests) | mesuré : « lib (test) » − 13 %, pic − 0,36 Go (§ 12) |
-| 4 | `escouade-mcp` | le serveur MCP et ses outils, sur un trait de l'hôte que `Core` implémente | l'implémentation du trait | `Core` en paramètre partout ; ses 19 fichiers de tests démarrent un `core` : il faut d'abord une crate de soutien des tests (`core_tests::harness`) | ≈ 35 000 (22 000) | ≈ 10 % ; le plus long |
+| 4 | `escouade-mcp` | **en partie (ESC-413, § 13)** : le transport, les jetons, le port, le journal, les arguments des outils ; prévu : le serveur MCP et ses outils, sur un trait de l'hôte que `Core` implémente | l'implémentation du trait | `Core` en paramètre partout ; ses 19 fichiers de tests démarrent un `core` : il faut d'abord une crate de soutien des tests (`core_tests::harness`) | ≈ 35 000 (22 000) ; sorti : 1 832 (5 tests) | mesuré : « lib (test) » − 2 %, pic − 144 Mo, archive + 9 s ici (§ 13) ; le reste demande des traits par famille d'outils (§ 13) |
 | 5 | `escouade-engines` | **en partie (ESC-412, § 11)** : les parties sans lien ; restent les harness et la lecture de leurs flux | `engine/mod.rs` (le registre et le lien avec le cœur) | il faut d'abord sortir l'état d'un agent (`AgentRt`, `Effects`), que le trait `Engine` et `agent/*` prennent, sur un trait de l'hôte (§ 11) ; puis les comptes et le lancement par les plugins, en trait | fait : 4 145 (1 326) ; reste ≈ 21 000 (≈ 11 500) | mesuré : rien ; reste ≈ 10 % |
 | 6 | `escouade-updates` | **fait (ESC-414, § 12)** : `updates/net.rs`, `updates/fake_server.rs`, `net_tests.rs` (`flow_tests.rs` teste `updates.rs` : il reste) | `updates.rs` | possible dès maintenant : revu après ESC-410, `net.rs` ne prend plus que `i18n` (`escouade-base`) et `model` (`escouade-model`) ; ses tests prennent `integrations::fake::FakeServer`, à sortir avec lui ou dans une aide de test | ≈ 3 300 (2 600) ; sorti : 2 400 (1 400) | mesuré avec la ligne 3 |
 
@@ -425,3 +426,60 @@ Ce qu'elles disent :
 - **La mémoire baisse sans ambiguïté** : − 0,36 Go au pic de « lib (test) », à 20 Mo près dans les deux passes. Avec ESC-410 et ESC-411, « lib (test) » est passée de 8,2 à 6,8 Go à 3 jobs : **sous les 7 Go** d'un runner macOS arm64 pour la première fois, seule ; avec la lib à côté (3,3 Go), toujours au-delà, d'où le levier 2 (§ 8), qui la compile avant.
 - **L'archive ne gagne rien ici** : deux binaires de tests de plus à lier (+ 14,6 Mo), qui reprennent ce que l'app gagne. Comme au § 10, la CI dira si le Mac, qui pagine, y gagne davantage.
 - Une recompilation après un changement des crates recompile aussi l'app, comme au § 3 ; un changement de l'app ne recompile plus les hébergeurs.
+
+## 13. `escouade-mcp` (ESC-413)
+
+Ligne 4 du § 5. Le serveur MCP ne sort pas en entier sans réécrire ses tests (ci-dessous) : la crate `crates/escouade-mcp` (mêmes règles qu'au § 4 : `publish = false`, GPL-3.0-or-later, membre et `default-member`) prend ce qui s'en tient sans l'app, comme le ticket le prévoyait dans ce cas : le transport HTTP, les jetons et le port, le journal, les arguments des outils et leurs schémas, la partie de l'installation chez les harness qui ne lit pas le registre des harness. L'app réexporte tout à ses chemins.
+
+| Module de la crate | Ce qu'il contient | Réexporté par l'app à |
+|---|---|---|
+| racine | `Caller`, `McpStatus`, `PORTS`, `PATH`, `Tokens` (la comparaison en temps constant), `new_token` | `mcp::*` |
+| `port` | `bind`, `bind_within`, `worth_waiting_for`, `wait_closed`, `STOP_WAIT` et leurs tests | importés par `mcp/mod.rs` |
+| `http` | les gardes (`Host`, `Origin`, jeton, chemin, outil inconnu, taille), `Limits`, `Reply`, `serve` ; `Gate` est générique sur un trait `Host` (qui est un jeton, une requête refusée notée, ce que reçoit un outil) et sur le gestionnaire de rmcp | `mcp::http::*` ; `impl Host for Core<R>` reste dans `mcp/http.rs` |
+| `activity` | `Activity`, `ActivityEntry`, `Outcome`, `KEPT`, `clip`, `entry` (une entrée du journal, le nom de l'appelant donné) et son test | `mcp::activity::*` ; `record` et `caller_name` (ils lisent le cœur et ses agents) restent |
+| `args` | les arguments des 59 outils et ce que le modèle en lit (`#[schemars(description)]`), `SPLIT_MAX`, `ColumnArg` → `Column` | `mcp::tools::*` |
+| `memory` | `Kind`, ce dont parle un souvenir (l'argument `type` de `write_memory`) | `memory::Kind` |
+| `install` | `Target`, `Declared`, `Declaration`, `wanted`, `run`, `mask_secrets`, `COMMAND_TIMEOUT` (et `Entry`, `Standing`, `MASK`, `mask_bearer` d'`escouade-engines`) | `mcp::install::*` ; `current`, `declare`, `withdraw` (ils prennent `&dyn Engine`) et la déclaration compte par compte (`impl Core`) restent |
+
+Les outils, leurs schémas et leurs textes sont les mêmes octet pour octet : la liste que donne le routeur (`Tools::router().list_all()`, noms, descriptions, schémas d'entrée, avec l'outil des tests : 60 outils) a été écrite en JSON avant et après, 131 788 octets identiques (`cmp`). Les descriptions des outils et les instructions du serveur sont des attributs du bloc `#[tool_router]`, qui reste à l'app ; les textes des refus et des erreurs (`tr!`) ont été déplacés tels quels.
+
+Ce qui a dû bouger ou s'ouvrir :
+
+- `Gate::new` prend le routeur et de quoi faire le gestionnaire de chaque requête (`Tools::<R>::router()`, `Tools::<R>::new`) : c'est le seul appelant qui change (`McpServer::launch`).
+- `serve` lance chaque connexion par `tokio::spawn` au lieu de `tauri::async_runtime::spawn` : il tourne déjà sur le runtime de l'app (`McpServer::launch` le lance par `tauri::async_runtime::spawn`), où `tokio::spawn` les met aussi ; la crate n'a pas besoin de `tauri`.
+- `STOP_WAIT` (30 s dans les tests, 2 s sinon) passe par la feature `testing`, que l'app prend en dev-dependency.
+- Les champs de `Tokens`, `ColumnArg::name`, `Kind::{as_str, parse}`, `install::run` et `mask_secrets` deviennent `pub` ; `port::held_port` (une aide des tests) est sous `testing`.
+- `subtle` sort des dépendances de l'app (seule la crate compare les jetons).
+
+Ce qui n'a pas bougé : `canon.rs` et les fichiers hachés, les versions des crates publiées, les deux verrous (`cargo metadata --locked` dans `src-tauri` et `plugins` ; celui de `plugins` ne change pas), les tests restés (aucun n'a été réécrit : seuls leurs `use` nomment la crate).
+
+En tout, 1 832 lignes sortent de l'app (290 638 → 288 806 lignes de Rust dans `src-tauri/src`, − 0,6 %, comptées et mesurées sur abfe2979, avant ESC-414), dont 5 tests ; la crate en a 1 986.
+
+### Pourquoi le reste ne sort pas
+
+- **Les outils agissent sur le cœur, pas sur une interface.** Les 11 fichiers des outils (`act`, `read`, `wait`, `files`, `images`, `docs`, `memory`, `prs`, `workflow`, `background`, `resolve` : ≈ 11 000 lignes) prennent `&Core<R>` et en lisent 79 méthodes et champs différents (`core.data`, `core.settings`, `core.agents` et le verrou de chaque `AgentRt`, `core.tickets`, `core.hub`…), et appellent 30 modules de l'app (`tickets`, `board`, `git`, `folders`, `sharing`, `agent`, `engine`, `forge`, `prview`, `docs`, `discussion`, `ticketfiles`, `workflow`, `facts`, `vectors`, `usage`…). Un trait de l'hôte devrait porter tout cela : ce n'est plus un trait, c'est l'app.
+- **Les 19 fichiers de tests démarrent un vrai cœur** (`core_tests::harness`, 22 100 lignes) et lisent ses internes (`h.core.settings.write()`, les tickets, les agents, `h.core.mcp`). Une crate de soutien des tests qui démarrerait un cœur hors de l'app devrait contenir `Core`, donc l'app. Un faux cœur derrière un trait obligerait à réécrire ces tests, qui vérifient justement que les outils font ce que font les boutons de la fenêtre, par les mêmes fonctions du cœur : on y perdrait ce qu'ils prouvent.
+
+L'ordre qui le permettrait, un ticket chacun : (1) un trait de l'hôte par famille d'outils (lire les projets et tickets ; agir sur le tableau ; les agents et leurs demandes ; les documents, la spec, la mémoire), dont les arguments et les réponses sont des données de `escouade-model` ; (2) les outils sur ces traits dans la crate, avec des tests unitaires sur un faux hôte pour ce qui est du protocole (refus, résolution des noms, textes), les 19 fichiers de tests actuels restant dans l'app comme tests d'intégration sur le vrai cœur. Le gain en compilation ne viendrait que de (2), et les tests restés gardent ≈ 22 000 lignes dans « lib (test) ».
+
+### Les mesures (dos à dos, même charge)
+
+Sur le poste, aux conditions de la CI (`CARGO_INCREMENTAL=0`, `CARGO_PROFILE_DEV_DEBUG=0`), dépendances en cache, une compilation de chauffe avant chaque passe, crates du workspace à froid (`cargo clean -p`), avant = `main` (abfe2979), après = cette branche (7a1034e1). Ordre des passes : après, avant, avant, après (puis à 3 jobs : après, avant) ; tous les builds d'abord, les mesures de mémoire ensuite (même ordre), l'archive enfin (même ordre).
+
+| Mesure | Avant, passe 1 / passe 2 | Après, passe 1 / passe 2 | Moyennes |
+|---|---|---|---|
+| `cargo build --tests` | 129 / 128 s | 127 / 123 s | 128,5 → 125 s (− 3 %) |
+| « lib (test) » de `escouade` | 117,5 / 116,5 s | 116,6 / 112,7 s | 117,0 → 114,7 s (− 2 %) |
+| lib de `escouade` | 55,3 / 52,4 s | 51,8 / 49,3 s | 53,9 → 50,6 s (− 6 %) |
+| début de la compilation de l'app | 9,5 et 9,9 s | 9,4 et 8,9 s | = (`escouade-mcp`, lib 1,2 s et tests 1,6 s, finit avant `escouade-plugins`, qu'elle n'attend pas) |
+| même chose à 3 jobs (`-j3`) | 131 s | 132 s | = |
+| « lib (test) » à 3 jobs | 116,2 s | 117,2 s | = |
+| `cargo nextest archive --profile ci` | 115 / 114 s (21 binaires, 245,96 Mo) | 118 / 129 s (22 binaires, 246,22 Mo) | 114,5 → 123,5 s (+ 8 %) |
+| pic mémoire de « lib (test) », 3 jobs (`-Z time-passes`) | 7 186 / 7 166 Mo | 7 029 / 7 035 Mo | 7 176 → 7 032 Mo (− 144 Mo, − 2 %) |
+
+Ce qu'elles disent :
+
+- **Le gain est à la mesure des lignes sorties, et petit** : − 2 % sur « lib (test) », − 6 % sur la lib, − 3 % sur le build entier, dans le bruit d'une passe à l'autre (± 3 % ce jour-là) mais dans le même sens aux deux passes. Rien à 3 jobs, où le travail total ne baisse pas (§ 2).
+- **La mémoire baisse un peu, sans ambiguïté** : − 144 Mo au pic, à 20 Mo près entre les passes. Plus que la part des lignes (0,6 %) : les arguments des outils sont des types à `derive(Deserialize, JsonSchema)` (§ 9), dont le code généré pèse plus que leurs lignes. « lib (test) » reste au niveau des 7 Go d'un runner macOS arm64, et la lib en même temps bien au-delà.
+- **L'archive est plus lente de 9 s** : un binaire de test de plus à lier (celui de la crate, qui embarque rmcp, hyper et tokio ; 5 tests), comme au § 10 ; la seconde passe « après » (129 s) s'écarte de la première de 11 s, à confirmer sur la CI. Si elle le confirme, la piste est `test = false` sur la lib de la crate, ses 5 tests revenant à l'app.
+- Une recompilation après un changement de la crate recompile aussi l'app, comme au § 3 ; un changement dans l'app ne recompile pas la crate.

@@ -1,19 +1,25 @@
 //! The MCP server on a free port, against a real MCP client (rmcp's) and raw HTTP requests.
 
-use super::activity::{self, ActivityEntry, Outcome, KEPT};
+use super::activity::{self, ActivityEntry, Outcome};
 use super::http::{MAX_BODY, MAX_TEXT_BODY};
 use super::tools::Tools;
 use super::*;
 use crate::core_tests::{harness, Harness};
 use crate::model::{Project, Settings};
 use crate::paths::{test_dir, DataDir};
+use base64::Engine;
+use escouade_mcp::activity::KEPT;
+use escouade_mcp::port::held_port;
+use escouade_mcp::PORTS;
 use rmcp::model::CallToolRequestParams;
 use rmcp::service::RunningService;
 use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 use rmcp::transport::StreamableHttpClientTransport;
 use rmcp::{RoleClient, ServiceExt};
 use serde_json::{json, Value};
+use std::net::Ipv4Addr;
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::test::{mock_app, MockRuntime};
 
 /// The tools the server offers, sorted: those that read (`READING`, M2), those that act
@@ -985,54 +991,6 @@ async fn two_first_needs_of_the_external_token_get_the_same_one() {
     assert_eq!(h.core.mcp.external_token().unwrap(), first);
 }
 
-#[test]
-fn the_activity_log_is_cleared_on_demand() {
-    let log = activity::Activity::default();
-    log.push(ActivityEntry {
-        at: 1,
-        caller: "Claude (hors Escouade)".into(),
-        tool: "list_projects".into(),
-        summary: String::new(),
-        outcome: "ok",
-        message: None,
-    });
-    log.clear();
-    assert!(log.entries().is_empty());
-}
-
-/// A port of the machine that something holds, and the listener that holds it.
-fn held_port() -> (std::net::TcpListener, u16) {
-    let holder = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
-    let port = holder.local_addr().unwrap().port();
-    (holder, port)
-}
-
-#[test]
-fn a_saved_port_that_is_released_a_moment_later_is_taken_again_instead_of_another_one() {
-    // Stopped and started again at once: the old listener is not gone yet.
-    let (holder, port) = held_port();
-    let releasing = std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(300));
-        drop(holder);
-    });
-    let (_listener, got) = bind_within(port, Duration::from_secs(3), &|| false).unwrap();
-    releasing.join().unwrap();
-    assert_eq!(got, port);
-}
-
-#[test]
-fn a_saved_port_that_stays_taken_gives_another_one_of_the_range_after_the_wait_only() {
-    let (_holder, port) = held_port();
-    let wait = Duration::from_millis(200);
-    let started = std::time::Instant::now();
-    let (_listener, got) = bind_within(port, wait, &|| false).unwrap();
-    let took = started.elapsed();
-    assert_ne!(got, port);
-    assert!(PORTS.contains(&got), "{got}");
-    assert!(took >= wait, "another port drawn after {took:?}");
-    assert!(took < Duration::from_secs(1), "waited {took:?}");
-}
-
 #[tokio::test]
 async fn the_status_is_told_at_once_while_the_server_waits_for_its_port() {
     // The window asks for it (on a thread of its own) while a start waits for a port that is held:
@@ -1067,28 +1025,6 @@ async fn the_app_quitting_ends_the_wait_for_the_port() {
     let took = started.elapsed();
     assert!(took < Duration::from_secs(2), "waited {took:?}");
     assert!(!h.core.mcp.status().running);
-}
-
-#[test]
-fn only_a_port_that_is_busy_for_now_is_waited_for() {
-    use std::io::{Error, ErrorKind};
-    assert!(worth_waiting_for(&Error::from(ErrorKind::AddrInUse)));
-    // What Windows answers for a port released a moment ago.
-    assert_eq!(
-        worth_waiting_for(&Error::from(ErrorKind::PermissionDenied)),
-        cfg!(windows)
-    );
-    for kind in [ErrorKind::AddrNotAvailable, ErrorKind::InvalidInput] {
-        assert!(!worth_waiting_for(&Error::from(kind)), "{kind:?}");
-    }
-}
-
-#[test]
-fn no_saved_port_draws_one_of_the_range_without_waiting() {
-    let started = std::time::Instant::now();
-    let (_listener, got) = bind_within(0, Duration::from_secs(3), &|| false).unwrap();
-    assert!(PORTS.contains(&got), "{got}");
-    assert!(started.elapsed() < Duration::from_secs(1));
 }
 
 #[tokio::test]

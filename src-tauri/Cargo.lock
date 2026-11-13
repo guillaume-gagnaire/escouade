@@ -1725,6 +1725,7 @@ dependencies = [
  "escouade-base",
  "escouade-engines",
  "escouade-forge",
+ "escouade-mcp",
  "escouade-model",
  "escouade-plan",
  "escouade-plugin-cli",
@@ -1762,7 +1763,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.1",
- "subtle",
  "sys-locale",
  "tar",
  "tauri",
@@ -1854,6 +1854,30 @@ dependencies = [
  "tokio-rustls",
  "uuid",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "escouade-mcp"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.23.1",
+ "escouade-base",
+ "escouade-engines",
+ "escouade-model",
+ "escouade-plugin-cli",
+ "getrandom 0.4.3",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "log",
+ "parking_lot 0.13.0",
+ "rmcp",
+ "serde",
+ "serde_json",
+ "subtle",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]
