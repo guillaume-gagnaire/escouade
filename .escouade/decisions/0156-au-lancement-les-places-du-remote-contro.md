@@ -1,9 +1,9 @@
 ---
-number: null
+number: 156
 id: "au-lancement-les-places-du-remote-contro"
 title: "Au lancement, les places du remote control sous le plafond se prennent à tour de rôle, dans l'ordre de la dernière activité"
 date: "2026-11-13"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-431"
 pages: ["harness/process-des-agents"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"harness/process-des-agents","added":1,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-13T01:58:50+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
