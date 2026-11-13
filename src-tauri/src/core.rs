@@ -134,6 +134,53 @@ impl Drop for RemoteClaim {
     }
 }
 
+/// The turn of an agent among those the Remote Control starts together (`Core::start_remote`,
+/// ESC-431): each asks for its place under the cap (`Core::remote_may_start`) only once the one
+/// before it in their order (the most recently active first) has had its answer, or gave up its
+/// turn, however long each took to get there. Given up when dropped.
+pub(crate) struct RemoteTurn {
+    before: Option<tokio::sync::oneshot::Receiver<()>>,
+    after: Option<tokio::sync::oneshot::Sender<()>>,
+}
+
+impl RemoteTurn {
+    /// `n` turns, one after the other.
+    pub(crate) fn chain(n: usize) -> Vec<RemoteTurn> {
+        let mut turns = Vec::with_capacity(n);
+        let mut before = None;
+        for _ in 0..n {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            turns.push(RemoteTurn {
+                before: before.take(),
+                after: Some(tx),
+            });
+            before = Some(rx);
+        }
+        turns
+    }
+
+    /// A turn of its own, with none before nor after it (`Core::apply_remote`).
+    pub(crate) fn free() -> RemoteTurn {
+        RemoteTurn {
+            before: None,
+            after: None,
+        }
+    }
+
+    /// Waits for the turns before it to be over.
+    pub(crate) async fn wait(&mut self) {
+        if let Some(rx) = self.before.take() {
+            // A sender dropped is a turn given up: over all the same.
+            let _ = rx.await;
+        }
+    }
+
+    /// Its turn over: the next one may ask.
+    pub(crate) fn pass(&mut self) {
+        self.after.take();
+    }
+}
+
 /// Whether a refusal of Remote Control by Claude Code holds for its account, whatever its next
 /// process does (ESC-417): one with no claude.ai subscription. A network or a timeout is not one.
 pub(crate) fn remote_refusal_is_final(text: &str) -> bool {
@@ -1058,6 +1105,10 @@ pub struct Core<R: Runtime = Wry> {
     #[cfg(test)]
     pub(crate) remote_read_pause:
         Mutex<Option<(Arc<tokio::sync::Notify>, Arc<tokio::sync::Notify>)>>,
+    /// How long `apply_remote` lingers for an agent, by id, before it takes its turn (tests of
+    /// `start_remote`'s order, ESC-431).
+    #[cfg(test)]
+    pub(crate) remote_apply_delay: Mutex<HashMap<String, Duration>>,
     /// Times the files of an agent's plan were read, not counting the looks that found them as
     /// before (tests only).
     #[cfg(test)]
@@ -2163,6 +2214,8 @@ impl<R: Runtime> Core<R> {
             remote_decisions: Default::default(),
             #[cfg(test)]
             remote_read_pause: Default::default(),
+            #[cfg(test)]
+            remote_apply_delay: Default::default(),
             #[cfg(test)]
             plan_reads: AtomicUsize::new(0),
             #[cfg(test)]
@@ -4907,6 +4960,12 @@ impl<R: Runtime> Core<R> {
     /// what it set apart. A Remote Control that cannot be linked stays in force, and the agent
     /// says why: its next start tries again.
     pub(crate) async fn apply_remote(self: &Arc<Self>, id: &str) {
+        self.apply_remote_in(id, &mut RemoteTurn::free()).await
+    }
+
+    /// `apply_remote` in its turn among others (`start_remote`): one that comes in asks for its
+    /// place under the cap only then, and passes the turn on.
+    pub(crate) async fn apply_remote_in(self: &Arc<Self>, id: &str, turn: &mut RemoteTurn) {
         enum Step {
             Nothing,
             Changed,
@@ -4914,6 +4973,13 @@ impl<R: Runtime> Core<R> {
             Off(String, Option<RemoteLink>),
         }
         let Ok(h) = self.agent(id) else { return };
+        #[cfg(test)]
+        {
+            let delay = self.remote_apply_delay.lock().get(id).copied();
+            if let Some(d) = delay {
+                tokio::time::sleep(d).await;
+            }
+        }
         // Saved settings are applied by a task of their own, which may come after that of newer
         // ones (a new agent's, while the setting changes): one at a time, each reads them as they
         // are when it decides.
@@ -4969,7 +5035,9 @@ impl<R: Runtime> Core<R> {
                 if setting_up {
                     return;
                 }
-                // Not all at once: a setting turned on for every agent starts three at a time.
+                // In its turn (ESC-431), and not all at once: a setting turned on for every agent
+                // starts three at a time.
+                turn.wait().await;
                 let _start = self.remote_starts.acquire().await;
                 // The setting went off while it waited for its turn: nothing to start. Nor for an
                 // agent done or idle, one that cannot be linked, or over the cap (ESC-417): its
@@ -4977,7 +5045,9 @@ impl<R: Runtime> Core<R> {
                 if !h.lock().meta.remote_control {
                     return;
                 }
-                let Some(_claim) = self.remote_may_start(&h) else {
+                let claim = self.remote_may_start(&h);
+                turn.pass();
+                let Some(_claim) = claim else {
                     return;
                 };
                 // Its interface holds the session in the Claude Code view: started with it.
@@ -5072,15 +5142,17 @@ impl<R: Runtime> Core<R> {
                 Some((id, rt.meta.remote_control, rt.meta.last_activity))
             })
             .collect();
-        // Their turns come in this order (`remote_starts` is fair).
+        // Their places under the cap go in this order, the most recently active first (ESC-431):
+        // each asks for its own once the one before has had its answer (`RemoteTurn`), whatever
+        // the time `apply_remote` took for each.
         held.sort_by_key(|(_, _, last)| std::cmp::Reverse(*last));
-        let held: Vec<(String, bool)> = held.into_iter().map(|(id, h, _)| (id, h)).collect();
+        let turns = RemoteTurn::chain(held.len());
         let mut tasks = Vec::new();
-        for (id, held) in held {
+        for ((id, held, _), mut turn) in held.into_iter().zip(turns) {
             let c = self.clone();
             tasks.push(tauri::async_runtime::spawn(async move {
-                // One that comes in starts its process on its own.
-                c.apply_remote(&id).await;
+                // One that comes in starts its process on its own, in its turn.
+                c.apply_remote_in(&id, &mut turn).await;
                 if !held {
                     return;
                 }
@@ -5095,10 +5167,14 @@ impl<R: Runtime> Core<R> {
                 if !holds {
                     return;
                 }
-                // Not all at once: the agents of the last run start three at a time.
+                // In its turn, and not all at once: the agents of the last run start three at a
+                // time.
+                turn.wait().await;
                 let _start = c.remote_starts.acquire().await;
                 // Done, idle, not to be linked or over the cap: no process (ESC-417).
-                let Some(claim) = c.remote_may_start(&h) else {
+                let claim = c.remote_may_start(&h);
+                turn.pass();
+                let Some(claim) = claim else {
                     return;
                 };
                 // The interface, in the Claude Code view, runs with no window until one asks.

@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- At launch, the Remote Control’s places under its cap always go to the most recently active agents: the newest is no longer sometimes left out in favour of an older one.
 - The Copilot CLI view no longer writes without asking you, even in “Accept edits” and “Auto”, never writes in `.git` nor in its settings, keeps a discussion read-only and does not open for an agent of a private project. On Windows, the harnesses’ hooks call escouade-hook by its whole path: a file of the same name in the agent’s folder no longer runs.
 - A plugin now sets only the environment variables its manifest declares, shown at the install, and never those that would change the program it runs. A third-party plugin’s harness can no longer be a shell or an interpreter, and its version is read only after a first gesture of yours. “Install verified versions only” is on for a new installation.
 - Security: an agent no longer answers another agent’s permissions or questions, even with “Agents can drive Escouade”. Settings › Agents says who may: nobody (the default), the squad lead you choose for each project in Settings › Projects › Team, or every agent.

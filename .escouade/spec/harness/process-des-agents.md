@@ -2,7 +2,7 @@
 title: "Process des agents"
 subject: "harness"
 sources: ["https://github.com/guillaume-gagnaire/escouade/issues/26","src-tauri/src/agentgroups.rs","src-tauri/src/core.rs","src-tauri/src/engine/claude/mod.rs"]
-tickets: ["ESC-417"]
+tickets: ["ESC-417","ESC-431"]
 decisions: [147]
 compared: null
 ---
@@ -22,6 +22,7 @@ Ce qui borne ce que pèsent les process des agents sur la machine : leur arrêt 
 ### Le plafond du remote control
 
 - Le remote control garde au plus « Process gardés au plus » process d'agents non actifs (Réglages › Agents › Remote control, 8 par défaut). Au-delà, les moins récemment actifs s'arrêtent d'abord, leur remote control et leur session distante gardés. Un démarrage pour le remote control qui le dépasserait n'a pas lieu ; ceux en cours comptent.
+- Au lancement de l'app (et à la réouverture d'un projet), les places sous le plafond vont aux agents dans l'ordre de leur dernière activité, la plus récente d'abord, toujours : chacun ne demande la sienne qu'une fois que le précédent dans cet ordre a eu sa réponse, quel que soit le temps qu'a pris pour chacun l'application des réglages du remote control. Un agent actif démarre hors plafond, comme ailleurs.
 - Vérifié après chaque démarrage pour le remote control et avec l'arrêt des inactifs. Un agent actif n'est ni compté ni arrêté. Les interfaces de la vue Claude Code ne sont pas comptées.
 
 ### Les process restés d'un lancement tué (macOS, Linux)
