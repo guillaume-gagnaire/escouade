@@ -712,7 +712,9 @@
   .term :global(.xterm) {
     height: 100%;
   }
-  .term :global(.xterm-viewport) {
+  /* xterm.js paints its theme's background on its scroll container (6) or its viewport (5): the box's shows instead. */
+  .term :global(.xterm-viewport),
+  .term :global(.xterm-scrollable-element) {
     background: transparent !important;
   }
   .said {

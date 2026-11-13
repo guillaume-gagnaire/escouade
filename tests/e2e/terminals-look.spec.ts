@@ -137,9 +137,33 @@ const rgbIn = (page: Page, css: string) =>
     return [...ctx.getImageData(0, 0, 1, 1).data.slice(0, 3)];
   }, css);
 
-/** The colour xterm.js paints its terminal with (set on its viewport from its theme), in 8-bit sRGB. */
+/** The colour xterm.js paints its terminal with (set on its scroll container from its theme, since xterm.js 6), in 8-bit sRGB. */
 const xtermBackground = async (el: Locator) =>
-  rgbIn(el.page(), await el.locator('.xterm-viewport').evaluate((v) => (v as HTMLElement).style.backgroundColor));
+  rgbIn(el.page(), await el.locator('.xterm-scrollable-element').evaluate((v) => (v as HTMLElement).style.backgroundColor));
+
+/**
+ * The colour of the screen's bottom right corner (an empty cell, under the prompt) as the window shows it, in 8-bit
+ * sRGB: what the renderer (WebGL) drew, read from a capture, the canvas keeping no drawing to read back.
+ */
+async function paintedCorner(el: Locator): Promise<number[]> {
+  const page = el.page();
+  const r = (await el.locator('.xterm-screen').boundingBox())!;
+  const png = await page.screenshot({ clip: { x: r.x + r.width - 12, y: r.y + r.height - 12, width: 4, height: 4 } });
+  return page.evaluate(async (b64) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${b64}`;
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    const ctx = c.getContext('2d', { willReadFrequently: true })!;
+    ctx.drawImage(img, 0, 0);
+    return [...ctx.getImageData(1, 1, 1, 1).data.slice(0, 3)];
+  }, png.toString('base64'));
+}
+
+/** Whether two sRGB colours are the same but for rounding (a capture's colour management). */
+const near = (a: number[], b: number[]) => a.every((v, i) => Math.abs(v - b[i]) <= 3);
 
 /** The background of `el`, in 8-bit sRGB. */
 const backgroundOf = async (el: Locator) => rgbIn(el.page(), (await look(el)).background);
@@ -295,6 +319,8 @@ test('xterm takes the theme at once, the terminal kept open, with colours read i
     await theme(page, t);
     const well = await rgbIn(page, 'var(--well)');
     await expect.poll(() => xtermBackground(box), { message: t }).toEqual(well);
+    // What the WebGL renderer draws takes it too, not only its scroll container.
+    await expect.poll(async () => near(await paintedCorner(box), well), { message: `${t}, drawn` }).toBe(true);
   }
   // The same terminal throughout: nothing opened again.
   await expect(page.locator('main.tv .xterm')).toHaveCount(1);

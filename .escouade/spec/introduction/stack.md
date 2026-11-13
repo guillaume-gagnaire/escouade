@@ -2,7 +2,7 @@
 title: "Stack"
 subject: "Introduction"
 sources: ["docs/SPEC.md"]
-tickets: []
+tickets: ["ESC-432"]
 decisions: []
 compared: null
 ---
@@ -17,6 +17,6 @@ Les choix techniques d'Escouade, couche par couche.
 | Backend | Rust (tokio) : PTY (portable-pty), git (gix/CLI), watchers (notify), SQLite (rusqlite), trousseau du système (keyring), corbeille (trash), serveur MCP (`rmcp` 3.5 derrière `hyper`), langue du système (`sys-locale`) |
 | Frontend | Svelte 5 + TypeScript + Vite ; textes par catalogues maison |
 | Éditeur | CodeMirror 6 (`@codemirror/merge` pour les changements dans le texte) |
-| Terminaux | xterm.js (addon WebGL) |
+| Terminaux | xterm.js 6 (addons WebGL, fit, search, unicode11, web-links) |
 | Markdown | marked (GFM) + DOMPurify ; pendant le streaming, le message est rendu de nouveau en entier, au plus une fois par image ; coloration syntaxique (shiki) une fois le texte final |
 | Stockage | `~/.escouade/` : config JSON et SQLite |

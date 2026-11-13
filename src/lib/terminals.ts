@@ -160,6 +160,19 @@ function watchTheme() {
 
 const SCROLL_KEYS = new Set(['PageUp', 'PageDown', 'Home', 'End']);
 
+/**
+ * What Alt and an arrow types, alone of the modifiers: a move by words, as Ctrl and the arrow (readline's Esc b and Esc f
+ * on macOS, where up and down stay Alt's). xterm.js 5 did so itself; 6 sends Alt's own sequence (`[1;3D`), which the
+ * shells read as nothing. Null for any other key.
+ */
+export function altArrow(e: KeyboardEvent, mac: boolean): string | null {
+  if (!e.altKey || e.ctrlKey || e.shiftKey || e.metaKey) return null;
+  const end = { ArrowLeft: 'D', ArrowRight: 'C', ArrowUp: 'A', ArrowDown: 'B' }[e.key];
+  if (!end) return null;
+  if (!mac) return `[1;5${end}`;
+  return end === 'D' ? 'b' : end === 'C' ? 'f' : null;
+}
+
 let gpu: { name?: string } | null = null;
 
 /**
@@ -272,7 +285,14 @@ function createXTerm(readOnly: boolean, room?: Room | null): XTerm {
       return false;
     }
     // A log only scrolls (Shift+PageUp…): every other key goes on to the app's shortcuts.
-    return !x.readOnly || (e.shiftKey && SCROLL_KEYS.has(e.key));
+    if (x.readOnly) return e.shiftKey && SCROLL_KEYS.has(e.key);
+    const words = altArrow(e, IS_MAC);
+    if (words) {
+      x.keyAt = performance.now();
+      term.input(words, true);
+      return false;
+    }
+    return true;
   };
   term.attachCustomKeyEventHandler((e) => {
     const toTerminal = keyToTerminal(e);

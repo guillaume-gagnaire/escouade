@@ -78,6 +78,9 @@ vi.mock('@xterm/xterm', () => ({
     paste(text: string) {
       pasted.push(text);
     }
+    input(data: string) {
+      for (const handler of this.dataHandlers) handler(data);
+    }
     dispose() {}
   },
 }));
@@ -679,6 +682,51 @@ describe('Ctrl+V in a terminal', () => {
     const handler = await keys(true);
     expect(press(handler, { ctrlKey: true })).toBe(true);
     expect(press(handler, { metaKey: true })).toBe(false);
+  });
+});
+
+describe('Alt and an arrow in a terminal', () => {
+  /** The key handler of a terminal opened on macOS or elsewhere, and what it typed. */
+  async function keys(mac: boolean) {
+    vi.resetModules();
+    vi.doMock('./platform', async (original) => ({ ...(await original<typeof import('./platform')>()), IS_MAC: mac }));
+    const terminals = await import('./terminals');
+    fakeBackend({ term_spawn: () => ({ id: `ta-${mac}`, projectId: 'p1', name: 'zsh-1', shell: 'zsh' }) });
+    await terminals.openTerminal('p1', 'zsh', 'zsh-1');
+    const typed: string[] = [];
+    terms.at(-1)!.dataHandlers.unshift((d) => typed.push(d));
+    return { handler: keyHandlers.at(-1)!, typed };
+  }
+  const press = (handler: (e: KeyboardEvent) => boolean, key: string, init: KeyboardEventInit = {}) =>
+    handler(new KeyboardEvent('keydown', { key, altKey: true, ...init }));
+
+  afterEach(() => {
+    vi.doUnmock('./platform');
+    vi.resetModules();
+  });
+
+  it('moves by words under Windows and Linux, as Ctrl and the arrow (xterm.js 5 did so, 6 no longer does)', async () => {
+    const { handler, typed } = await keys(false);
+    expect(press(handler, 'ArrowLeft')).toBe(false);
+    expect(press(handler, 'ArrowRight')).toBe(false);
+    expect(press(handler, 'ArrowUp')).toBe(false);
+    expect(press(handler, 'ArrowDown')).toBe(false);
+    expect(typed).toEqual(['[1;5D', '[1;5C', '[1;5A', '[1;5B']);
+  });
+
+  it('moves by words under macOS as readline does (Esc b, Esc f); up and down stay Alt’s', async () => {
+    const { handler, typed } = await keys(true);
+    expect(press(handler, 'ArrowLeft')).toBe(false);
+    expect(press(handler, 'ArrowRight')).toBe(false);
+    expect(press(handler, 'ArrowUp')).toBe(true);
+    expect(typed).toEqual(['b', 'f']);
+  });
+
+  it('leaves Alt with another modifier, and a log, to xterm.js', async () => {
+    const { handler, typed } = await keys(false);
+    expect(press(handler, 'ArrowLeft', { shiftKey: true })).toBe(true);
+    expect(press(handler, 'ArrowLeft', { ctrlKey: true })).toBe(true);
+    expect(typed).toEqual([]);
   });
 });
 

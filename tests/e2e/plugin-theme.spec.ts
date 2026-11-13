@@ -82,7 +82,7 @@ async function surfaces(page: Page, box: Locator) {
     panel: await rgb(page, await style('.work', 'backgroundColor')),
     text: await rgb(page, await style('body', 'color')),
     line: await rgb(page, 'var(--line)'),
-    terminal: await rgb(page, await box.locator('.xterm-viewport').evaluate((v) => (v as HTMLElement).style.backgroundColor)),
+    terminal: await rgb(page, await box.locator('.xterm-scrollable-element').evaluate((v) => (v as HTMLElement).style.backgroundColor)),
   };
 }
 

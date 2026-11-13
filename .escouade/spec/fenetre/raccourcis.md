@@ -2,8 +2,8 @@
 title: "Raccourcis"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-392"]
-decisions: [128]
+tickets: ["ESC-392","ESC-432"]
+decisions: [128,"terminaux-en-xterm-js-6-alt-fleche-y-gar"]
 compared: null
 ---
 
@@ -72,5 +72,6 @@ Les raccourcis clavier d'Escouade, par défaut. Ils couvrent l'app entière, la 
 ### Dans un terminal
 
 - Les touches du shell lui restent (`Ctrl+C`, `Ctrl+R`, `Ctrl+N`, `Ctrl+K`, `Ctrl+P`…).
+- `Alt+←` / `Alt+→` reculent / avancent d'un mot : le shell reçoit `Ctrl+←` / `Ctrl+→` (sous macOS, `Échap b` / `Échap f`, comme readline). Hors macOS, `Alt+↑` / `Alt+↓` lui arrivent en `Ctrl+↑` / `Ctrl+↓`. Avec un autre modificateur en plus, la touche lui arrive telle quelle. Un log ne les prend pas.
 - L'app y prend `Ctrl+1..9`, `Ctrl+Tab`, `Ctrl+J`, `Ctrl+,`, `Ctrl+Maj+A`, le zoom (`Ctrl+=`, `Ctrl+-`, `Ctrl+0`), `Ctrl+\` (qui y serait SIGQUIT) et, l'écran partagé ouvert, `Ctrl+Maj+\`, `Ctrl+Maj+W` et `Ctrl+Alt+flèche`.
 - Sous macOS, le shell ne reçoit jamais `Cmd` : les raccourcis de l'app y marchent, et `Cmd+C`, `Cmd+V`, `Cmd+A` restent au terminal (copier, coller, tout sélectionner).

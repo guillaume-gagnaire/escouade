@@ -216,7 +216,9 @@
   .box :global(.xterm) {
     height: 100%;
   }
-  .box :global(.xterm-viewport) {
+  /* xterm.js paints its theme's background on its scroll container (6) or its viewport (5): the box's shows instead. */
+  .box :global(.xterm-viewport),
+  .box :global(.xterm-scrollable-element) {
     background: transparent !important;
   }
   /* Its process ended: said over the foot of the terminal, as a notification is. */
