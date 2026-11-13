@@ -4,8 +4,8 @@
 //! - Its interface and `agy -p` keep their conversations in the agent's own home (`ESCOUADE_AGY_HOME`, its `USERPROFILE`
 //!   and `HOME`): `--conversation <id>` opens the agent's when its store has it (`resumes`); a conversation `-p` opened
 //!   and never wrote has none, and would be lost.
-//! - Its hooks (`.gemini/config/hooks.json` of its home) run `escouade-hook <event>`: under Windows by its name, its
-//!   folder first on the `PATH`.
+//! - Its hooks (`.gemini/config/hooks.json` of its home) run `escouade-hook <event>` by its whole path (`hook_line`),
+//!   under Windows with `NoDefaultCurrentDirectoryInExePath` set, so that `cmd` never runs one of its current folder.
 //! - Escouade's server is in its home's MCP config, its token in the file (`agy` expands no variable there).
 //! - Its first screens are passed: its colours (`cache/onboarding.json`) and the trust of the agent's folder
 //!   (`trustedWorkspaces`), with the permission rules of the agent's mode and fence, those of its agents.
@@ -46,13 +46,29 @@ fn windows_path(path: &str) -> bool {
     path.contains('\\') || path.as_bytes().get(1) == Some(&b':')
 }
 
-/// The line its hooks run for `event`: `escouade-hook` by its path quoted for a POSIX shell, or under Windows by its name
-/// (its folder first on the `PATH`), which `cmd /c` finds.
+/// The variable that keeps `cmd` from looking for a program named alone in its current folder first.
+pub const NO_CURRENT_DIR: &str = "NoDefaultCurrentDirectoryInExePath";
+
+/// Whether a path of Windows can be written alone, with `/`, in a line `cmd /c` runs: no quote is needed, which `agy`
+/// (Go) would pass on as `\"`, which `cmd` does not read (tried with Windows 11's `cmd`).
+fn plain_on_windows(path: &str) -> bool {
+    !path.is_empty()
+        && path.chars().all(|c| {
+            c.is_ascii_alphanumeric() || matches!(c, '\\' | '/' | ':' | '.' | '_' | '-' | '~')
+        })
+}
+
+/// The line its hooks run for `event`: `escouade-hook` by its path, quoted for a POSIX shell, under Windows written with
+/// `/` and no quote, which `cmd /c` runs as it is (`agy` runs its hooks so, in the folder of `hooks.json`). A path of
+/// Windows a line cannot hold without quotes (a space, an accent) is called by its name, its folder first on the `PATH`;
+/// `NoDefaultCurrentDirectoryInExePath` keeps `cmd` from looking in its folder first in either case.
 fn hook_line(command: &str, event: &str) -> String {
-    if windows_path(command) {
-        format!("escouade-hook {event}")
-    } else {
-        format!("'{}' {event}", command.replace('\'', r"'\''"))
+    if !windows_path(command) {
+        return format!("'{}' {event}", command.replace('\'', r"'\''"));
+    }
+    match plain_on_windows(command) {
+        true => format!("{} {event}", command.replace('\\', "/")),
+        false => format!("escouade-hook {event}"),
     }
 }
 
@@ -191,6 +207,9 @@ pub fn launch(p: &TerminalParams) -> TerminalLaunch {
                 if let Some(path) = path_with(command, p.path.as_deref().unwrap_or_default()) {
                     env.push(("PATH".into(), path));
                 }
+                // `cmd` looks for a program named alone in its folder first (that of `hooks.json`) unless this is set:
+                // an `escouade-hook.cmd` there would run at each hook.
+                env.push((NO_CURRENT_DIR.into(), "1".into()));
             }
         }
     }
@@ -348,6 +367,8 @@ pub fn one_shot(p: &OneShotParams) -> Result<OneShotLaunch, String> {
         "deny": ["command(*)", "write_file(*)", "read_file(*)", "mcp(*)", "read_url(*)", "execute_url(*)"],
         "ask": [],
     });
+    // What no family covers is reviewed, so refused in `-p`: never `agy`'s default of the day.
+    doc["toolPermission"] = json!(crate::words::TOOL_PERMISSION);
     let mut args = crate::words::launch_args(&crate::words::Settings::default(), None);
     args.extend(["--model".to_string(), text_model(&p.weight)]);
     let question = match p.system.trim().is_empty() {
@@ -359,8 +380,15 @@ pub fn one_shot(p: &OneShotParams) -> Result<OneShotLaunch, String> {
     };
     Ok(OneShotLaunch {
         args,
+        // A key of the machine's would take the account's place, as in its interface.
         env: home_env(&[], home)
             .into_iter()
+            .chain(
+                KEY_VARS
+                    .iter()
+                    .filter(|k| !p.env_names.iter().any(|n| n == *k))
+                    .map(|k| (k.to_string(), String::new())),
+            )
             .map(|(name, value)| EnvVar { name, value })
             .collect(),
         input: Some(format!(

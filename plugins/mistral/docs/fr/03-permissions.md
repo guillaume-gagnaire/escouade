@@ -49,6 +49,10 @@ Le harness est une autre affaire : **Mistral Vibe est un programme à part**, `v
 - **Ce qu’il ne peut pas** : lancer Vibe ou une commande, lire ou écrire un fichier, joindre un autre hôte.
 - **Vibe n’a pas de bac à sable** : une commande que tu acceptes peut tout faire, avec tes droits.
 
+## Les hooks de la vue Vibe
+
+La vue lance les hooks du harness, qui appellent `escouade-hook`. Sous Windows, il y est appelé par son chemin entier, écrit avec des `/` et sans guillemets, et seulement par son nom quand son chemin a un espace, un accent ou un signe qu’un shell lirait. Le plugin pose pour la vue le `PATH` de l’app, le dossier d’Escouade devant, et `NoDefaultCurrentDirectoryInExePath=1`, qui empêche `cmd` de chercher d’abord dans le dossier de l’agent : un `escouade-hook.cmd` posé là ne s’exécute pas.
+
 ## Ce que le plugin ne peut pas faire
 
 - Joindre un autre hôte que `api.mistral.ai`.

@@ -295,6 +295,49 @@ fn a_write_in_git_has_a_card_whatever_its_case() {
 }
 
 #[test]
+fn a_write_in_copilots_settings_has_a_card_whatever_its_name() {
+    for mode in ["acceptEdits", "auto"] {
+        let (mut p, _) = launched(LaunchParams {
+            mode: mode.into(),
+            ..params()
+        });
+        for (i, path) in [
+            "C:\\wt\\.copilot\\settings.json",
+            "C:\\wt\\.COPILOT\\x",
+            "C:\\wt\\sous\\.copilot\\x",
+            "C:\\wt\\.copilot.\\x",
+            "C:\\wt\\.copilot::$INDEX_ALLOCATION\\x",
+            "C:\\wt\\COPILO~1\\x",
+            "C:\\wt\\.github\\copilot\\settings.json",
+            "C:\\wt\\.github\\copilot\\settings.local.json",
+            "C:\\wt\\.github\\hooks\\h.json",
+            "c:/wt/.GitHub/Hooks/h.json",
+            "C:\\wt\\GITHUB~1\\hooks\\h.json",
+        ]
+        .iter()
+        .enumerate()
+        {
+            assert_eq!(
+                asked(&mut p, &format!("{mode}{i}"), write_of(path)),
+                None,
+                "{mode}: {path}"
+            );
+        }
+        for (i, path) in [
+            "C:\\wt\\.github\\workflows\\ci.yml",
+            "C:\\wt\\copilot\\a.md",
+            "C:\\wt\\docs\\hooks\\a.md",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let got = asked(&mut p, &format!("{mode}k{i}"), write_of(path));
+            assert_eq!(got.as_deref(), Some("approve-once"), "{mode}: {path}");
+        }
+    }
+}
+
+#[test]
 fn a_real_path_out_of_its_folder_has_a_card() {
     let (mut p, _) = launched(params());
     for (i, mut r) in [read_of("C:\\wt\\lien.txt"), write_of("C:\\wt\\lien.txt")]

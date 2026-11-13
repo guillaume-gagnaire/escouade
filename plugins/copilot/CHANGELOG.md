@@ -1,8 +1,18 @@
 # Changelog
 
+## 2.2.6
+
+- In its Copilot CLI view, every write asks in Accept edits and Auto: `--allow-tool=write` covered the worktree’s `.git` too (a hook, then a `git commit` with no question), and nothing proves a refusal by path covers the files under `.git`. Writes in `.git`, `.copilot`, `.github/copilot`, `.github/hooks` and the joined files’ folder are refused there in every mode (`--deny-tool`), and its process sends those of Copilot’s settings to a card, as those of `.git` (ESC-430).
+- Its view no longer says it holds a fence nothing holds: a fenced agent’s view is refused, and says why. A discussion is held read-only there by `--deny-tool=write` and `--deny-tool=shell`.
+- Its view gets Escouade’s token in the core’s private file alone (Escouade 2.3), in no variable, and `ESCOUADE_MCP_TOKEN` is among `--secret-env-vars`; its hooks double every quote PowerShell reads as `'` (`‘ ’ ‚ ‛`).
+
 ## 2.2.5
 
 - Its manifest declares the environment variables its launches set (`permissions.env`: `ESCOUADE_MCP_TOKEN`, `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, `GITHUB_TOKEN`), shown before it is installed: from Escouade 2.2, a plugin sets no other (ESC-424).
+
+## 2.2.4
+
+- The launch of its Copilot CLI view (`terminal/launch`) and the reads of an account by a server of its own (`account/read`: its models, its quota, the models listed before the view starts, the copy of a session) are the plugin’s, checked by the core, which keeps the terminal (ESC-359).
 
 ## 2.2.3
 

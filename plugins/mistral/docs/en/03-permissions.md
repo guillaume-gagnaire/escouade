@@ -49,6 +49,10 @@ The harness is another matter: **Mistral Vibe is a separate program**, `vibe-acp
 - **What it cannot do**: start Vibe or a command, read or write a file, reach another host.
 - **Vibe has no sandbox**: a command you accept can do anything, with your rights.
 
+## The hooks of the Vibe view
+
+The view runs the harness’s hooks, which call `escouade-hook`. Under Windows, it is called there by its whole path, written with `/` and no quotes, and by its name only when its path has a space, an accent or a sign a shell would read. For the view, the plugin sets the app’s `PATH`, Escouade’s folder first, and `NoDefaultCurrentDirectoryInExePath=1`, which keeps `cmd` from looking in the agent’s folder first: an `escouade-hook.cmd` put there does not run.
+
 ## What the plugin cannot do
 
 - Reach any host other than `api.mistral.ai`.

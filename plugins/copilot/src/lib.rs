@@ -146,6 +146,13 @@ impl Plugin {
             }
             method::TERMINAL_LAUNCH => {
                 let p: TerminalParams = read(params)?;
+                if let Some(why) = terminal::refused(&p) {
+                    // `Refused`: it will not change.
+                    return Err(Refusal {
+                        code: -32010,
+                        message: why,
+                    });
+                }
                 give(terminal::launch(&p))
             }
             method::ACCOUNT_READ => {

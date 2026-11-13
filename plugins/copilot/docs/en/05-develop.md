@@ -12,7 +12,9 @@ A WASM module (`"run": { "wasm": "Cargo.toml" }`), compiled from this folder alo
 - A message’s images and files go as the core made them; `/compact` by its request (`agent/compact`), a title by `session.name.set` (`agent/rename`).
 - The Copilot CLI view’s transcript is read by the same translation (`view/translate`, `src/view.rs`).
 
-What stays in the core: the terminal view’s PTY and its hooks, the accounts (`copilot login` in each one’s folder), an account’s quota and models read by a server of their own, the written texts (`copilot -p`), Escouade’s MCP server.
+- The launch of the Copilot CLI view (`terminal/launch`) and the reads of an account by a server of its own (`account/read`, `account/lines`: its models, its quota, the models listed before the view starts, the copy of a session) are described here too (`src/terminal.rs`), and checked by the core.
+
+What stays in the core: the PTY of the terminal view and the server of its hooks, the accounts (`copilot login` in each one’s folder), the drafted texts (`copilot -p`), Escouade’s MCP server and the private file of its entry.
 
 ## The folder
 
@@ -24,8 +26,9 @@ What stays in the core: the terminal view’s PTY and its hooks, the accounts (`
 | `src/client.rs` | The client of Copilot’s server, a state machine without a process |
 | `src/translate.rs` | Its events as items of the conversation, the safe requests; the view’s too |
 | `src/view.rs` | The transcript read for the Copilot CLI view |
+| `src/terminal.rs` | The launch of the Copilot CLI view (its refusals, its read-only, a fenced agent refused) and the reads of an account |
 | `src/words.rs` | Its arguments, modes, models, credits, the fence, what it says |
-| `src/tests.rs`, `src/rules_tests.rs` | The client on its own, and what its rules hold through the service |
+| `src/tests.rs`, `src/rules_tests.rs`, `src/terminal_tests.rs` | The client alone, what its rules hold through the service, the launch of the view |
 | `README.fr.md`, `README.en.md`, `docs/` | Its page and its documentation |
 
 ## Its tests

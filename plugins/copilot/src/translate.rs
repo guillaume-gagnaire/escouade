@@ -526,7 +526,8 @@ impl Translator {
     }
 
     /// Whether Escouade's rules answer the permission `r` (its `permissionRequest`) without a card: a read in the
-    /// agent's folder; a write there, but in the mode Plan and in `.git`; `git add` and `git commit` of its worktree in
+    /// agent's folder; a write there, but in the mode Plan, in `.git` and in Copilot's settings (`.copilot`,
+    /// `.github/copilot`, `.github/hooks`: `words::in_its_settings`); `git add` and `git commit` of its worktree in
     /// « Accepter les modifications » and « Auto », its text read as its shell reads it. Each path as asked and as Copilot
     /// resolved it, links followed. Never what Copilot's policy keeps for a human, or a way out of its sandbox.
     pub fn safe(r: &Value, c: &Ctx) -> bool {
@@ -543,7 +544,9 @@ impl Translator {
             "write" => {
                 c.mode != "plan"
                     && inside
-                    && !paths.iter().any(|p| escouade_acp::in_git_folder(p, c.cwd))
+                    && !paths.iter().any(|p| {
+                        escouade_acp::in_git_folder(p, c.cwd) || words::in_its_settings(p, c.cwd)
+                    })
             }
             "shell" => {
                 let ids: Vec<&str> = r["commands"]

@@ -12,7 +12,9 @@ Un module WASM (`"run": { "wasm": "Cargo.toml" }`), compilé depuis ce dossier s
 - `-p` ne demande rien : ce qui demande une permission est refusé sur le moment, et `ask_question` sauté. À la fin d’un tour, le plugin juge chaque refus (`words::judge`), montre les cartes, fait écrire les règles exactes permises et fait reprendre le tour par un message qui dit ce qui a été permis et répondu. Aucune règle-préfixe d’`agy` ne garde quelque chose : docs/PROTOCOL.md, « Règles et jugement ».
 - En Plan, le plan écrit dans sa conversation arrive sur la carte du plan.
 
-Reste au cœur : la place d’Antigravity au registre, ses comptes, les modèles d’un compte (`agy models`), les textes rédigés (`agy -p`), la vue terminal (son PTY, son journal, ses hooks), le serveur MCP d’Escouade, et le retrait de son jeton du dossier de l’agent une fois le process fini.
+- Il décrit aussi le lancement de la vue Antigravity CLI (`terminal/launch` : ses fichiers dans le dossier de l’agent, ses hooks, son `PATH`), la lecture des modèles d’un compte (`account/read`) et les textes rédigés (`engine/oneShot` : `agy -p`, tous les outils refusés), dans `src/terminal.rs`, que le cœur vérifie.
+
+Reste au cœur : la place d’Antigravity au registre, ses comptes, le PTY et le journal de la vue terminal, le serveur de ses hooks, le serveur MCP d’Escouade, et le retrait de son jeton du dossier de l’agent une fois le process ou la vue fini.
 
 ## Le dossier
 

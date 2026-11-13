@@ -1,8 +1,8 @@
 ---
 title: "Le contrat des harness en process"
 subject: "plugins"
-sources: ["docs/PLUGINS-DESIGN.md §4.5 et §4.6","docs/PLUGINS-DESIGN.md §8.29 (ESC-352)","docs/PLUGINS-DESIGN.md §8.34 (ESC-359)","docs/PLUGINS.md §2.2 et §8","docs/TODO-2.2.md (INT-9)","crates/escouade-plugin-protocol/src/engine.rs","crates/escouade-acp/src/terminal.rs","src-tauri/src/plugins/harness.rs","src-tauri/src/plugins/shared.rs","src-tauri/src/plugins/view.rs","src-tauri/src/tui.rs"]
-tickets: ["ESC-221","ESC-223","ESC-225","ESC-224","ESC-283","ESC-226","ESC-352","ESC-362","ESC-359"]
+sources: ["docs/PLUGINS-DESIGN.md §4.5 et §4.6","docs/PLUGINS-DESIGN.md §8.29 (ESC-352)","docs/PLUGINS-DESIGN.md §8.34 (ESC-359)","docs/PLUGINS.md §2.2 et §8","docs/TODO-2.2.md (INT-9)","crates/escouade-plugin-protocol/src/engine.rs","crates/escouade-acp/src/terminal.rs","src-tauri/src/plugins/harness.rs","src-tauri/src/plugins/shared.rs","src-tauri/src/plugins/view.rs","src-tauri/src/tui.rs","Revue de dev.escouade.copilot-cli@2.2.5 (~/.escouade-review)","Revue de dev.escouade.antigravity-cli@2.2.7 (~/.escouade-review)","Essai de cmd sous Windows 11, ESC-430 (2026-11-12)"]
+tickets: ["ESC-221","ESC-223","ESC-225","ESC-224","ESC-283","ESC-226","ESC-352","ESC-362","ESC-359","ESC-430"]
 decisions: [34,68,101,146]
 compared: null
 ---
@@ -125,3 +125,11 @@ Le cœur ne garde plus de copie des mots des plugins de harness : il lance l'int
 Les modèles et le quota d'un compte dont aucun agent ne tourne passent par son plugin (`account/read`) : le plugin décrit le process et ce qu'il lui écrit, le cœur le lance comme un agent (le programme qu'il a trouvé, les variables du compte, son Job object, une minute au plus) et lui passe ce qu'il répond, jusqu'à la réponse. Claude Code, Codex, Copilot CLI, OpenCode et Antigravity CLI y passent ; le texte rédigé d'Antigravity CLI aussi, dans un dossier que le cœur fait pour lui et retire.
 
 **Restent au cœur, et pourquoi** : la connexion d'un compte de Codex (les comptes sont au cœur) ; le menu des modèles de Cursor CLI, Mistral Vibe et Gemini CLI, que le cœur fait aussi pour leurs agents qui tournent, à partir de ce que dit leur client ACP, et qui passera par le plugin quand ce client rendra ce menu lui-même ; la grille de prix d'OpenAI, avec celle d'Anthropic, le coût d'un tour restant calculé par le cœur ; les textes rédigés de Claude Code, Codex, Copilot CLI et OpenCode.
+
+## Ce qu'une interface ne laisse pas passer (ESC-430)
+
+Trouvé à la relecture de Copilot CLI 2.2.5 et d'Antigravity CLI 2.2.7 ; le cœur d'avant ESC-359 avait les mêmes défauts, corrigés aussi dans la 2.2.
+
+- **`escouade-hook` par son chemin entier.** Les hooks d'une interface appellent `escouade-hook` par son chemin, jamais par son nom seul : sous Windows, `cmd` cherche d'abord un programme nommé seul dans son dossier courant, et un `escouade-hook.cmd` posé là (par un dépôt cloné, par une écriture acceptée) s'exécuterait à chaque hook. Sous Windows, le chemin est écrit avec des `/` et sans guillemets, que `cmd`, PowerShell et Git Bash lancent tels quels, et qu'`agy` (Go) ne réécrit pas en `\"`, que `cmd` ne lit pas. Un chemin qu'une ligne ne tient pas sans guillemets (un espace, un accent, un signe d'un shell) reste appelé par son nom, son dossier en tête du `PATH`. Dans les deux cas, le lancement pose `NoDefaultCurrentDirectoryInExePath=1`, que chaque plugin déclare (Antigravity CLI, Gemini CLI, Mistral Vibe ; Copilot CLI et Codex appellent déjà leur chemin entier, Copilot en doublant sous PowerShell chaque apostrophe qu'il lit comme `'`).
+- **Le jeton retiré des fichiers de l'interface.** À la fin de l'interface, le jeton du serveur d'Escouade est révoqué, et le cœur l'ôte aussi des fichiers que le lancement a écrits (le `mcp_config.json` d'Antigravity CLI), comme il l'ôtait déjà à la fin du process.
+- **Un plugin ne dit tenue que la clôture qu'il tient.** La clôture d'un plugin de première main est crue sur parole (`fence_by_client`) ; un plugin dont l'interface ne la tient pas la refuse et le dit (Copilot CLI : voir *Copilot CLI en plugin*).

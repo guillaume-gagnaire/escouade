@@ -12,7 +12,9 @@ A WASM module (`"run": { "wasm": "Cargo.toml" }`), compiled from this folder alo
 - `-p` asks nothing: what needs a permission is refused on the spot, and `ask_question` skipped. At the end of a turn, the plugin judges each refusal (`words::judge`), shows the cards, has the exact rules allowed written and has the turn go on with a message saying what was allowed and answered. No prefix rule of `agy` guards anything: docs/PROTOCOL.md, “Règles et jugement”.
 - In Plan, the plan written in its conversation comes on the plan’s card.
 
-What stays in the core: Antigravity’s place in the registry, its accounts, an account’s models (`agy models`), the written texts (`agy -p`), the terminal view (its PTY, its transcript, its hooks), Escouade’s MCP server, and taking its token out of the agent’s folder once the process is over.
+- It also describes the launch of the Antigravity CLI view (`terminal/launch`: its files in the agent’s folder, its hooks, its `PATH`), the read of an account’s models (`account/read`) and the drafted texts (`engine/oneShot`: `agy -p`, every tool refused), in `src/terminal.rs`, which the core checks.
+
+What stays in the core: Antigravity’s place in the registry, its accounts, the PTY and transcript of the terminal view, the server of its hooks, Escouade’s MCP server, and taking its token out of the agent’s folder once the process or the view is over.
 
 ## The folder
 

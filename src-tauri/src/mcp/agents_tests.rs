@@ -763,9 +763,9 @@ async fn a_copilot_agent_is_given_the_server_by_a_file_naming_its_token_or_refus
         .expect("a token")
         .to_string();
     assert!(argv.iter().all(|a| !a.contains(&token)), "{argv:?}");
+    // In the core's private file itself (ESC-430), which goes with the process.
     let file = std::fs::read_to_string(&config).unwrap();
-    assert!(!file.contains(&token), "{file}");
-    assert!(file.contains("Bearer ${ESCOUADE_MCP_TOKEN}"), "{file}");
+    assert!(file.contains(&format!("Bearer {token}")), "{file}");
     let reached = copilot_noted(&home, "mcp.jsonl").pop().unwrap();
     assert_eq!(
         (reached["name"].as_str(), reached["status"].as_u64()),

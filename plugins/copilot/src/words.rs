@@ -18,6 +18,42 @@ pub const INHERITED_TOKENS: [&str; 3] = ["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GI
 /// for the server it is given, valid while its process lives.
 pub const SECRETS: &str = "GH_TOKEN,GITHUB_TOKEN,COPILOT_GITHUB_TOKEN";
 
+/// Those of its interface: `ESCOUADE_MCP_TOKEN` too, which it is not given (the core's file holds the token itself,
+/// `terminal::launch`), stripped all the same should it come.
+pub const VIEW_SECRETS: &str = "GH_TOKEN,GITHUB_TOKEN,COPILOT_GITHUB_TOKEN,ESCOUADE_MCP_TOKEN";
+
+/// Whether `path` is in what changes what Copilot runs, in the agent's folder `dir`: a folder `.copilot` anywhere under
+/// it, its `.github/copilot` (its settings, their hooks) or `.github/hooks`, whatever the case and the names Windows takes
+/// for them (`.copilot.`, `.copilot::$INDEX_ALLOCATION`). A write there is no work of the agent's: it runs with its next
+/// session, or its next hook. What cannot be placed is in it.
+pub fn in_its_settings(path: &str, dir: &str) -> bool {
+    let parts = |s: &str| -> Option<Vec<String>> {
+        let mut out: Vec<String> = Vec::new();
+        for part in s.replace('\\', "/").to_lowercase().split('/') {
+            let part = part.split(':').next().unwrap_or(part);
+            let part = part.trim_end_matches(['.', ' ']);
+            match part {
+                "" | "." => {}
+                ".." => {
+                    out.pop()?;
+                }
+                p => out.push(p.to_string()),
+            }
+        }
+        Some(out)
+    };
+    let (Some(p), Some(d)) = (parts(path), parts(dir)) else {
+        return true;
+    };
+    let rest = p.strip_prefix(d.as_slice()).unwrap_or(&p);
+    // Their short names under Windows too (`COPILO~1`, `GITHUB~1`).
+    let named = |n: &String, long: &str, short: &str| n == long || n == short;
+    rest.iter().any(|n| named(n, ".copilot", "copilo~1"))
+        || rest
+            .windows(2)
+            .any(|w| named(&w[0], ".github", "github~1") && (w[1] == "copilot" || w[1] == "hooks"))
+}
+
 /// The variable the token of Escouade's server reaches Copilot in: its entry's header names it
 /// (`${ESCOUADE_MCP_TOKEN}`, taken from the environment, tried on 1.0.98), so that neither its file nor its command
 /// line holds the token.

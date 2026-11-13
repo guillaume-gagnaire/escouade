@@ -52,6 +52,10 @@ Si le plugin redémarre, Escouade lui redonne la clôture et la lecture seule de
 
 Ce que la clôture ne tient pas : un script qui ouvre un fichier lui-même, sans que la commande le nomme.
 
+## Les hooks de la vue Gemini CLI
+
+La vue lance les hooks du harness, qui appellent `escouade-hook`. Sous Windows, il y est appelé par son chemin entier, écrit avec des `/` et sans guillemets, et seulement par son nom quand son chemin a un espace, un accent ou un signe qu’un shell lirait. Le plugin pose pour la vue le `PATH` de l’app, le dossier d’Escouade devant, et `NoDefaultCurrentDirectoryInExePath=1`, qui empêche `cmd` de chercher d’abord dans le dossier de l’agent : un `escouade-hook.cmd` posé là ne s’exécute pas.
+
 ## Ce qu’il ne peut pas faire
 
 - lancer `gemini` ou tout autre programme ;

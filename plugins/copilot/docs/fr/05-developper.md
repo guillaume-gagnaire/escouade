@@ -12,7 +12,9 @@ Un module WASM (`"run": { "wasm": "Cargo.toml" }`), compilé depuis ce dossier s
 - Les images et fichiers d’un message passent tels que le cœur les a faits ; `/compact` par sa requête (`agent/compact`), un titre par `session.name.set` (`agent/rename`).
 - Le journal de la vue Copilot CLI est lu par la même traduction (`view/translate`, `src/view.rs`).
 
-Reste au cœur : le PTY de la vue terminal et ses hooks, les comptes (`copilot login` dans le dossier de chacun), le quota et les modèles d’un compte lus par un serveur à eux, les textes rédigés (`copilot -p`), le serveur MCP d’Escouade.
+- Le lancement de la vue Copilot CLI (`terminal/launch`) et les lectures d’un compte par un serveur à lui (`account/read`, `account/lines` : ses modèles, son quota, les modèles listés avant que la vue démarre, la copie d’une session) sont décrits ici aussi (`src/terminal.rs`), et vérifiés par le cœur.
+
+Reste au cœur : le PTY de la vue terminal et le serveur de ses hooks, les comptes (`copilot login` dans le dossier de chacun), les textes rédigés (`copilot -p`), le serveur MCP d’Escouade et le fichier privé de son entrée.
 
 ## Le dossier
 
@@ -24,8 +26,9 @@ Reste au cœur : le PTY de la vue terminal et ses hooks, les comptes (`copilot l
 | `src/client.rs` | Le client du serveur de Copilot, une machine à états sans process |
 | `src/translate.rs` | Ses événements en éléments de la conversation, les demandes sûres ; aussi ceux de la vue |
 | `src/view.rs` | Le journal lu pour la vue Copilot CLI |
+| `src/terminal.rs` | Le lancement de la vue Copilot CLI (ses refus, sa lecture seule, le refus d’un agent clôturé) et les lectures d’un compte |
 | `src/words.rs` | Ses arguments, modes, modèles, crédits, la clôture, ce qu’il dit |
-| `src/tests.rs`, `src/rules_tests.rs` | Le client seul, et ce que tiennent ses règles par le service |
+| `src/tests.rs`, `src/rules_tests.rs`, `src/terminal_tests.rs` | Le client seul, ce que tiennent ses règles par le service, le lancement de la vue |
 | `README.fr.md`, `README.en.md`, `docs/` | Sa page et sa documentation |
 
 ## Ses tests

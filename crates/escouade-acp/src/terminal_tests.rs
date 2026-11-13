@@ -266,3 +266,51 @@ fn cursor_new_agent_on_auto_in_everything_accepted_starts_the_session_escouade_n
         );
     }
 }
+
+#[test]
+fn under_windows_a_hook_runs_escouade_hook_by_its_whole_path_and_never_one_of_its_current_folder() {
+    let plain = r"C:\Users\ana\AppData\Local\Escouade\escouade-hook.exe";
+    assert_eq!(
+        hook_line(plain, Some("BeforeTool")),
+        "C:/Users/ana/AppData/Local/Escouade/escouade-hook.exe BeforeTool"
+    );
+    // What a line cannot hold without quotes: by its name, its folder first on the PATH.
+    for odd in [
+        HOOK_WIN,
+        r"C:\Users\Zoé\escouade-hook.exe",
+        r"C:\a&b\escouade-hook.exe",
+        r"C:\a%PATH%\escouade-hook.exe",
+        r"C:\O'Brien\escouade-hook.exe",
+    ] {
+        assert_eq!(hook_line(odd, None), "escouade-hook", "{odd}");
+    }
+    assert_eq!(hook_line(HOOK_UNIX, None), format!("'{HOOK_UNIX}'"));
+    // Vibe and Gemini CLI: `cmd` never looks in its current folder first, whatever the line.
+    for command in [plain, HOOK_WIN] {
+        let given = TerminalParams {
+            home: Some(r"C:\h\agent".into()),
+            hook_command: Some(command.into()),
+            path: Some(r"C:\Windows".into()),
+            ..params()
+        };
+        for l in [vibe(&given), gemini(&given)] {
+            assert_eq!(env_of(&l, NO_CURRENT_DIR), Some("1"), "{command}");
+            assert!(env_of(&l, "PATH").unwrap().ends_with(r";C:\Windows"));
+        }
+        let hooks = file_of(&vibe(&given), "hooks.toml").unwrap().to_string();
+        assert!(
+            hooks.contains(&format!(
+                "command = {}",
+                serde_json::to_string(&hook_line(command, None)).unwrap()
+            )),
+            "{hooks}"
+        );
+    }
+    // Elsewhere, none: a POSIX shell looks in no current folder.
+    let unix = vibe(&TerminalParams {
+        home: Some("/h/vibe".into()),
+        hook_command: Some(HOOK_UNIX.into()),
+        ..params()
+    });
+    assert_eq!(env_of(&unix, NO_CURRENT_DIR), None);
+}

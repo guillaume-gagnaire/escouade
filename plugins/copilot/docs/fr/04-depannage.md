@@ -28,6 +28,9 @@ Installe-le de nouveau depuis la vue Plugins ; les conversations des agents sont
 **« Le plugin de Copilot CLI n’applique pas la clôture des projets privés : l’agent ne démarre pas. »**, **« … ne tient pas son harness en lecture seule : la discussion ne démarre pas. »**, **« … met le jeton d’Escouade dans les arguments de son harness, que tout le monde peut lire : l’agent ne démarre pas. »**
 Escouade a refusé le lancement que le plugin a décrit. Le plugin officiel ne fait pas cela : mets-le à jour, et signale-le si le message reste.
 
+**« La vue Copilot CLI ne tient pas la clôture des projets privés : cet agent reste dans sa conversation, qui la tient. »**
+Un projet privé existe : chaque agent a alors une clôture (ce qu’il ne doit pas lire des autres projets), et rien ne la tient dans l’interface de Copilot. Continue dans la vue Escouade, dont les règles la tiennent.
+
 ## Pendant un tour
 
 **« Copilot utilise le compte du GitHub CLI (gh), faute de connexion à lui : connecte-toi avec copilot login pour choisir son compte. »**

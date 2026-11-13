@@ -6,7 +6,7 @@ This page says what the plugin does on your machine, and what it cannot do.
 
 Nothing. The plugin is a WASM module Escouade runs in its host: it has no process, no command, no network.
 
-Escouade’s core finds `agy` and launches it, then launches it again when it must (`agy` takes its model, effort and mode at its launch alone, and has no message that stops a turn). The plugin describes each launch (`-p=`, stream-json both ways, the model, the effort, the mode, the conversation, the agent’s own folder as `USERPROFILE` and `HOME`, and its `tmp` subfolder as `TEMP`, `TMP` and `TMPDIR`) and the files to write in that folder. `agy` 1.5.3 writes in its temporary folder with no rule nor question: so it is the agent’s, never your `%TEMP%`, where a write is refused and comes back to the plugin. The core checks each description before it launches anything: Escouade’s token never among the arguments, the fence of a private project in the launch, a discussion held read-only, a file to write only in the agent’s folder.
+Escouade’s core finds `agy` and launches it, then launches it again when it must (`agy` takes its model, effort and mode at its launch alone, and has no message that stops a turn). The plugin describes each launch (`-p=`, stream-json both ways, the model, the effort, the mode, the conversation, the agent’s own folder as `USERPROFILE` and `HOME`, and its `tmp` subfolder as `TEMP`, `TMP` and `TMPDIR`; for the Antigravity CLI view under Windows, the app’s `PATH` too, Escouade’s folder first, and `NoDefaultCurrentDirectoryInExePath=1`) and the files to write in that folder. `agy` 1.5.3 writes in its temporary folder with no rule nor question: so it is the agent’s, never your `%TEMP%`, where a write is refused and comes back to the plugin. The core checks each description before it launches anything: Escouade’s token never among the arguments, the fence of a private project in the launch, a discussion held read-only, a file to write only in the agent’s folder.
 
 ## What it reads
 
@@ -26,7 +26,7 @@ It writes nothing itself. It describes to the core what to write in the agent’
 
 ## The secrets it gets
 
-- **The agent’s MCP token.** With each launch it describes, Escouade gives it the address and the token of its MCP server for that agent. The plugin has them written in `mcp_config.json`, in the agent’s folder: never among the arguments. The core takes the token out of that folder when the process stops. The plugin has no network to send it anywhere.
+- **The agent’s MCP token.** With each launch it describes, Escouade gives it the address and the token of its MCP server for that agent. The plugin has them written in `mcp_config.json`, in the agent’s folder: never among the arguments. The core takes the token out of that folder when the process or the Antigravity CLI view stops. The plugin has no network to send it anywhere.
 - **No account key.** An account’s API key is given to `agy` by the core (`GEMINI_API_KEY`); the plugin only knows the account goes by a key.
 
 ## What it accepts alone, and what goes to a card
@@ -64,6 +64,8 @@ The fence is in the rules of the agent’s folder, written again when the plugin
 What the fence doesn’t hold at once: a command that would read those paths without naming them or by a path the shell makes (`$HOME`, `%CD%`), a short name or a junction to them. Such a command goes to a card, as every command of a fenced agent.
 
 The “Antigravity CLI view” has the same rules: no `allow` rule but in Bypass without a private project nor a discussion, the refusals of the fence, and Accept edits is `agy`’s default mode there. What no rule allows, its interface asks. The `escouade-always.json` file of 2.2.0 is read nowhere any more, and the core erases it.
+
+The view also runs `agy`’s hooks (`hooks.json` of the agent’s folder), which call `escouade-hook <event>`. Under Windows, `agy` runs them through `cmd /c`, in the folder of `hooks.json`: `escouade-hook` is called there by its whole path, written with `/` and no quotes, and by its name only when its path has a space, an accent or a sign `cmd` would read (its folder is then the first of the `PATH`). Either way, `NoDefaultCurrentDirectoryInExePath=1` keeps `cmd` from looking in its current folder first: an `escouade-hook.cmd` put there does not run.
 
 ## What it cannot do
 

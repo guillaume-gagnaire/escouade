@@ -36,7 +36,6 @@ fn a_new_session_is_named_a_known_one_resumed_with_the_agents_options() {
         "--no-auto-update",
         "--disable-builtin-mcps",
         "--disallow-temp-dir",
-        "--allow-tool=write",
         "--allow-tool=shell(git commit)",
     ] {
         assert!(new.args.iter().any(|a| a == flag), "{flag}: {:?}", new.args);
@@ -97,7 +96,8 @@ fn a_new_session_is_named_a_known_one_resumed_with_the_agents_options() {
 }
 
 #[test]
-fn escouades_server_by_its_file_its_token_in_a_variable_and_an_own_account_its_own_sign_in() {
+fn escouades_server_by_the_cores_file_its_token_in_no_variable_and_an_own_account_its_own_sign_in()
+{
     let p = TerminalParams {
         escouade: Some(escouade_plugin_protocol::engine::Grant {
             url: "http://127.0.0.1:4121/mcp".into(),
@@ -114,10 +114,20 @@ fn escouades_server_by_its_file_its_token_in_a_variable_and_an_own_account_its_o
         Some("@/data/mcp/a1.json")
     );
     assert!(!l.args.iter().any(|a| a.contains("jeton")));
-    assert!(l
+    // The token is in the core's file: in no variable its commands would inherit, and stripped from them should it come.
+    assert!(!l
         .env
         .iter()
-        .any(|v| v.name == TOKEN_VAR && v.value == "jeton"));
+        .any(|v| v.name == crate::words::TOKEN_VAR || v.value.contains("jeton")));
+    let secrets = l
+        .args
+        .iter()
+        .find(|a| a.starts_with("--secret-env-vars="))
+        .unwrap();
+    assert!(
+        secrets.split([',', '=']).any(|v| v == "ESCOUADE_MCP_TOKEN"),
+        "{secrets}"
+    );
     assert!(l.args.iter().any(|a| a == "--add-dir=/data/files/a1"));
     for var in INHERITED_TOKENS {
         assert!(
@@ -279,4 +289,132 @@ fn each_choice_at_the_limit_of_its_credits_gives_copilot_its_action_in_either_la
         assert_eq!(limit_answer(&data, &labels[0])["additionalAiCredits"], 5.0);
     }
     assert_eq!(limit_answer(&data, "autre chose")["action"], "cancel");
+}
+
+#[test]
+fn no_write_goes_without_a_question_and_git_and_its_settings_are_refused_in_every_mode() {
+    for mode in [
+        "default",
+        "acceptEdits",
+        "auto",
+        "plan",
+        "bypassPermissions",
+    ] {
+        let a = launch(&TerminalParams {
+            mode: mode.into(),
+            read_dirs: vec!["/data/files/a1".into()],
+            ..params()
+        })
+        .launch
+        .args;
+        assert!(
+            !a.iter().any(|x| x.starts_with("--allow-tool=write")),
+            "{mode}: {a:?}"
+        );
+        for refused in [
+            "--deny-tool=write(.git)",
+            "--deny-tool=write(.copilot)",
+            "--deny-tool=write(/x/repo/.git)",
+            "--deny-tool=write(/x/repo/.copilot)",
+            "--deny-tool=write(/x/repo/.github/copilot)",
+            "--deny-tool=write(/x/repo/.github/hooks)",
+            "--deny-tool=write(/data/files/a1)",
+        ] {
+            assert!(a.iter().any(|x| x == refused), "{mode}: {refused} in {a:?}");
+        }
+    }
+    // « Auto »: its own commands of git alone, as the process.
+    let auto = launch(&TerminalParams {
+        mode: "auto".into(),
+        ..params()
+    })
+    .launch
+    .args;
+    let allowed: Vec<&String> = auto.iter().filter(|a| a.starts_with("--allow")).collect();
+    assert_eq!(
+        allowed,
+        [
+            "--allow-tool=shell(git add)",
+            "--allow-tool=shell(git commit)"
+        ]
+    );
+    // Under Windows, by its separators.
+    let w = launch(&TerminalParams {
+        cwd: r"C:\wt".into(),
+        mode: "acceptEdits".into(),
+        ..params()
+    })
+    .launch
+    .args;
+    assert!(
+        w.iter()
+            .any(|x| x == r"--deny-tool=write(C:\wt\.github\hooks)"),
+        "{w:?}"
+    );
+}
+
+#[test]
+fn a_discussion_is_held_read_only_by_its_refusals_whatever_its_mode() {
+    for mode in ["default", "acceptEdits", "auto", "bypassPermissions"] {
+        let l = launch(&TerminalParams {
+            mode: mode.into(),
+            read_only: true,
+            ..params()
+        })
+        .launch;
+        assert!(l.read_only);
+        for refused in ["--deny-tool=write", "--deny-tool=shell"] {
+            assert!(l.args.iter().any(|x| x == refused), "{mode}: {:?}", l.args);
+        }
+        assert!(
+            !l.args.iter().any(|x| x.starts_with("--allow")),
+            "{mode}: {:?}",
+            l.args
+        );
+        assert!(!l.args.iter().any(|x| x == "autopilot"), "{mode}");
+    }
+    let free = launch(&params()).launch;
+    assert!(!free.read_only && !free.args.iter().any(|x| x == "--deny-tool=shell"));
+}
+
+#[test]
+fn a_fenced_agents_view_is_refused_and_says_why() {
+    let fenced = TerminalParams {
+        fence: vec!["/w/secret".into()],
+        mode: "bypassPermissions".into(),
+        lang: "fr".into(),
+        ..params()
+    };
+    let why = refused(&fenced).expect("refused");
+    assert!(why.contains("clôture"), "{why}");
+    assert!(refused(&TerminalParams {
+        lang: "en".into(),
+        ..fenced.clone()
+    })
+    .unwrap()
+    .contains("fence"));
+    assert!(refused(&params()).is_none());
+    // Its launch never says it holds a fence it does not hold.
+    assert!(!launch(&fenced).launch.fence_by_client);
+    assert!(!launch(&params()).launch.fence_by_client);
+    // Served: a refusal that will not change.
+    let mut plugin = crate::Plugin::default();
+    let got = plugin.handle(
+        escouade_plugin_protocol::engine::method::TERMINAL_LAUNCH,
+        serde_json::to_value(&fenced).unwrap(),
+    );
+    assert_eq!(got.unwrap_err().code, -32010);
+}
+
+#[test]
+fn every_quote_powershell_reads_as_one_is_doubled() {
+    for q in ['\'', '\u{2018}', '\u{2019}', '\u{201A}', '\u{201B}'] {
+        let path = format!(r"C:\Users\O{q}Brien\Escouade\escouade-hook.exe");
+        let hooks = hooks_file(&path);
+        assert_eq!(
+            hooks["hooks"]["sessionStart"][0]["powershell"],
+            format!(r"& 'C:\Users\O{q}{q}Brien\Escouade\escouade-hook.exe' sessionStart"),
+            "{q}"
+        );
+    }
 }

@@ -63,10 +63,6 @@ const MODELS: [(&str, &str); 2] = [("gpt-6-luna", "GPT-6 Luna"), ("gpt-5-mini", 
 /// account of its own (`COPILOT_HOME`), the core's to give.
 pub(crate) const INHERITED_TOKENS: [&str; 3] = ["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"];
 
-/// The variable the token of Escouade's server reaches Copilot in: the entry of the file the core writes names it
-/// (`${ESCOUADE_MCP_TOKEN}`), so that neither its file nor its command line holds the token.
-pub(crate) const TOKEN_VAR: &str = "ESCOUADE_MCP_TOKEN";
-
 /// Whether `model` takes a reasoning effort, for the menu: never « auto », which picks the model itself.
 pub(crate) fn takes_effort(model: &str) -> bool {
     !model.eq_ignore_ascii_case("auto")
@@ -209,12 +205,15 @@ fn message(text: &str, attachments: &[Attachment]) -> Result<Value> {
 }
 
 /// The private file of a process given Escouade's server: its entry, read by
-/// `--additional-mcp-config @<file>`, the token named and not written.
-fn grant_file(url: &str) -> Vec<u8> {
+/// `--additional-mcp-config @<file>`, with its token, as Claude Code's (ESC-430). Its interface
+/// is given the token in no variable its commands would inherit, and strips that variable from
+/// them (`--secret-env-vars`), which keeps Copilot from expanding `${ESCOUADE_MCP_TOKEN}` too
+/// (tried on 1.0.98). The file goes with the process (`release_agent`).
+fn grant_file(url: &str, token: &str) -> Vec<u8> {
     let entry = json!({ "mcpServers": { mcp::SERVER: {
         "type": "http",
         "url": url,
-        "headers": { "Authorization": format!("Bearer ${{{TOKEN_VAR}}}") },
+        "headers": { "Authorization": format!("Bearer {token}") },
         "tools": ["*"],
     } } });
     serde_json::to_vec_pretty(&entry).unwrap_or_default()
@@ -456,9 +455,9 @@ impl Engine for Copilot {
         prompt::WRITER
     }
 
-    /// Its entry, the token named (`${ESCOUADE_MCP_TOKEN}`), never written.
-    fn grant_file(&self, url: &str, _token: &str) -> Option<Vec<u8>> {
-        Some(grant_file(url))
+    /// Its entry, with its token.
+    fn grant_file(&self, url: &str, token: &str) -> Option<Vec<u8>> {
+        Some(grant_file(url, token))
     }
 
     fn refusal(&self) -> Option<Value> {

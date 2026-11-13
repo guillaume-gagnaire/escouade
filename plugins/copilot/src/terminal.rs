@@ -11,8 +11,7 @@
 //! - A model its account does not list goes as `auto` (ESC-122): Copilot CLI 1.0.98 takes it so, but says it in red.
 
 use crate::words::{
-    catalog, credits, server_args, signed_in, takes_effort, INHERITED_TOKENS, SECRETS, SERVER,
-    TOKEN_VAR,
+    catalog, credits, server_args, signed_in, takes_effort, INHERITED_TOKENS, SERVER, VIEW_SECRETS,
 };
 use escouade_plugin_protocol::engine::{
     AccountLines, AccountRead, AccountStep, EnvVar, FileToWrite, Launch, TerminalLaunch,
@@ -63,10 +62,21 @@ fn joined(dir: &str, name: &str) -> String {
     )
 }
 
-/// The line that runs `command` for `event`, in PowerShell (Windows) or in a POSIX shell.
+/// The quotes PowerShell reads as `'` in a string between them: each is doubled there.
+const POWERSHELL_QUOTES: [char; 5] = ['\'', '\u{2018}', '\u{2019}', '\u{201A}', '\u{201B}'];
+
+/// The line that runs `command` for `event`, in PowerShell (Windows) or in a POSIX shell: by its whole path, never by
+/// its name, which a shell may look for in the agent's folder first.
 fn hook_line(command: &str, event: &str, powershell: bool) -> String {
     if powershell {
-        format!("& '{}' {event}", command.replace('\'', "''"))
+        let mut quoted = String::new();
+        for c in command.chars() {
+            quoted.push(c);
+            if POWERSHELL_QUOTES.contains(&c) {
+                quoted.push(c);
+            }
+        }
+        format!("& '{quoted}' {event}")
     } else {
         format!("'{}' {event}", command.replace('\'', r"'\''"))
     }
@@ -103,7 +113,7 @@ pub fn args(p: &TerminalParams, plugin: Option<&str>) -> Vec<String> {
         "--no-auto-update".into(),
         "--disable-builtin-mcps".into(),
         "--disallow-temp-dir".into(),
-        format!("--secret-env-vars={SECRETS}"),
+        format!("--secret-env-vars={VIEW_SECRETS}"),
     ]);
     // Never `auto`, which picks a model itself.
     if !p.model.is_empty() && p.model != "auto" {
@@ -112,26 +122,75 @@ pub fn args(p: &TerminalParams, plugin: Option<&str>) -> Vec<String> {
     if EFFORTS.contains(&p.effort.as_str()) && takes_effort(&p.model) {
         a.extend(["--reasoning-effort".into(), p.effort.clone()]);
     }
-    // As Escouade's rules answer in its view: writes in its folder in « Édits auto » and « Auto », `git add` and
-    // `git commit` too in « Auto ».
+    // No write goes without a question in « Édits auto » nor in « Auto »: `--allow-tool=write` would cover the `.git` of
+    // the worktree too (a hook, `core.fsmonitor`, then a `git commit` with no question), and nothing proves a refusal
+    // by path (`write(<dir>)`) covers the files under it. `git add` and `git commit` in « Auto », as the process.
     match p.mode.as_str() {
+        _ if p.read_only => {}
         "bypassPermissions" => a.push("--allow-all".into()),
         "plan" => a.extend(["--mode".into(), "plan".into()]),
-        "acceptEdits" => a.push("--allow-tool=write".into()),
         "auto" => a.extend([
             "--mode".into(),
             "autopilot".into(),
-            "--allow-tool=write".into(),
             "--allow-tool=shell(git add)".into(),
             "--allow-tool=shell(git commit)".into(),
         ]),
         _ => {}
     }
+    a.extend(denials(p));
     if let Some(dir) = plugin {
         a.extend(["--plugin-dir".into(), dir.to_string()]);
     }
     a
 }
+
+/// Its refusals, which win over every permission, `--allow-all` included: the writes in what changes what Copilot or
+/// `git` run (`.git`, Copilot's settings and hooks of the repository) and in the folders it reads alone (the files
+/// joined to the messages); for a discussion (`read_only`), every write and every command.
+pub fn denials(p: &TerminalParams) -> Vec<String> {
+    let mut d: Vec<String> = Vec::new();
+    if p.read_only {
+        d.extend(["--deny-tool=write".into(), "--deny-tool=shell".into()]);
+    }
+    d.extend(
+        CONFIG_NAMES
+            .iter()
+            .map(|n| format!("--deny-tool=write({n})")),
+    );
+    if !p.cwd.is_empty() {
+        d.extend(
+            CONFIG_DIRS
+                .iter()
+                .map(|n| format!("--deny-tool=write({})", joined(&p.cwd, n))),
+        );
+    }
+    d.extend(
+        p.read_dirs
+            .iter()
+            .map(|r| format!("--deny-tool=write({r})")),
+    );
+    d
+}
+
+/// A fenced agent's interface is refused: nothing in Copilot's interface keeps it from the paths of a private project
+/// (its rules have no kind for a read, and its hooks only look on), so its view would read them with no question in
+/// « Bypass », and on the user's word elsewhere. Its conversation, whose rules Escouade answers, holds the fence.
+pub fn refused(p: &TerminalParams) -> Option<String> {
+    (!p.fence.is_empty()).then(|| {
+        crate::words::said(
+            &p.lang,
+            "La vue Copilot CLI ne tient pas la clôture des projets privés : cet agent reste dans sa conversation, qui la tient.".into(),
+            "Copilot CLI’s view doesn’t hold the fence of private projects: this agent stays in its conversation, which holds it.".into(),
+        )
+    })
+}
+
+/// The names refused to its writes wherever they are (« by trailing path components »).
+pub const CONFIG_NAMES: [&str; 2] = [".git", ".copilot"];
+
+/// The folders of the agent's refused to its writes, by their whole path: `.git`, and what Copilot reads of a
+/// repository's settings and hooks (`copilot help config`, 1.0.98).
+pub const CONFIG_DIRS: [&str; 4] = [".git", ".copilot", ".github/copilot", ".github/hooks"];
 
 /// An account of its own (a `COPILOT_HOME` given) signs in by itself (`copilot login`): a GitHub token of the app's
 /// environment would make it another one, Copilot preferring it.
@@ -168,13 +227,11 @@ pub fn launch(p: &TerminalParams) -> TerminalLaunch {
         name: p.hook_url_var.clone(),
         value: p.hook_url.clone(),
     }];
+    // Escouade's server by the core's private file, which holds its token itself (Escouade 2.3): the token is in no
+    // variable its commands would inherit, and is among those it strips (`VIEW_SECRETS`).
     match (&p.escouade, &p.escouade_file) {
-        (Some(grant), Some(file)) => {
+        (Some(_), Some(file)) => {
             a.extend(["--additional-mcp-config".into(), format!("@{file}")]);
-            env.push(EnvVar {
-                name: TOKEN_VAR.into(),
-                value: grant.token.clone(),
-            });
         }
         _ => a.extend(["--disable-mcp-server".into(), SERVER.into()]),
     }
@@ -199,8 +256,10 @@ pub fn launch(p: &TerminalParams) -> TerminalLaunch {
             args: a,
             env,
             files,
+            // Held by its refusals (`denials`).
             read_only: p.read_only,
-            fence_by_client: true,
+            // Never: a fenced agent's view is refused (`refused`).
+            fence_by_client: false,
             ..Launch::default()
         },
         before: named.then(|| AccountRead {

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.6
+
+- Under Windows, the hooks of its Gemini CLI view call `escouade-hook` by its whole path (with `/`, no quotes), by its name only when a line cannot hold its path, and `NoDefaultCurrentDirectoryInExePath=1` keeps `cmd` from running an `escouade-hook.cmd` of the agent's folder (escouade-acp 0.1.5, ESC-430).
+
 ## 2.2.5
 
 - Its manifest declares the environment variables its launches set (`permissions.env`: `GEMINI_CLI_TRUST_WORKSPACE`, `PATH`), shown before it is installed: from Escouade 2.2, a plugin sets no other (ESC-424).

@@ -2,7 +2,7 @@
   "$schema": "https://escouade.dev/schemas/plugin-1.json",
   "id": "dev.escouade.gemini-cli",
   "name": "Gemini CLI",
-  "version": "2.2.5",
+  "version": "2.2.6",
   "description": {
     "fr": "Gemini CLI comme harness, par ACP : la conversation, sa vue terminal, les permissions et les comptes.",
     "en": "Gemini CLI as a harness, over ACP: the conversation, its terminal view, permissions and accounts."
@@ -20,7 +20,7 @@
   "run": { "wasm": "Cargo.toml" },
   "limits": { "memoryBytes": 268435456, "turnSeconds": 10 },
   "permissions": {
-    "env": ["GEMINI_CLI_TRUST_WORKSPACE", "PATH"],
+    "env": ["GEMINI_CLI_TRUST_WORKSPACE", "PATH", "NoDefaultCurrentDirectoryInExePath"],
     "files": [{ "root": "agentHome", "access": "read" }]
   },
   "contributes": {

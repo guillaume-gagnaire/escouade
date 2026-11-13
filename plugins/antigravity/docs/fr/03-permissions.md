@@ -6,7 +6,7 @@ Cette page dit ce que le plugin fait sur ta machine, et ce qu’il ne peut pas f
 
 Rien. Le plugin est un module WASM qu’Escouade fait tourner dans son hôte : il n’a ni process, ni commande, ni réseau.
 
-C’est le cœur d’Escouade qui trouve `agy` et le lance, puis le relance quand il le faut (`agy` ne prend son modèle, son effort et son mode qu’au lancement, et n’a pas de message qui arrête un tour). Le plugin décrit chaque lancement (`-p=`, le flux en stream-json dans les deux sens, le modèle, l’effort, le mode, la conversation, le dossier propre à l’agent comme `USERPROFILE` et `HOME`, et son sous-dossier `tmp` comme `TEMP`, `TMP` et `TMPDIR`) et les fichiers à écrire dans ce dossier. `agy` 1.5.3 écrit sans règle ni question dans son dossier temporaire : c’est donc celui de l’agent, jamais ton `%TEMP%`, où une écriture est refusée et revient au plugin. Le cœur vérifie chaque description avant de lancer quoi que ce soit : le jeton d’Escouade jamais dans les arguments, la clôture d’un projet privé dans le lancement, une discussion tenue en lecture seule, un fichier à écrire seulement dans le dossier de l’agent.
+C’est le cœur d’Escouade qui trouve `agy` et le lance, puis le relance quand il le faut (`agy` ne prend son modèle, son effort et son mode qu’au lancement, et n’a pas de message qui arrête un tour). Le plugin décrit chaque lancement (`-p=`, le flux en stream-json dans les deux sens, le modèle, l’effort, le mode, la conversation, le dossier propre à l’agent comme `USERPROFILE` et `HOME`, et son sous-dossier `tmp` comme `TEMP`, `TMP` et `TMPDIR` ; pour la vue Antigravity CLI sous Windows, aussi le `PATH` de l’app, le dossier d’Escouade devant, et `NoDefaultCurrentDirectoryInExePath=1`) et les fichiers à écrire dans ce dossier. `agy` 1.5.3 écrit sans règle ni question dans son dossier temporaire : c’est donc celui de l’agent, jamais ton `%TEMP%`, où une écriture est refusée et revient au plugin. Le cœur vérifie chaque description avant de lancer quoi que ce soit : le jeton d’Escouade jamais dans les arguments, la clôture d’un projet privé dans le lancement, une discussion tenue en lecture seule, un fichier à écrire seulement dans le dossier de l’agent.
 
 ## Ce qu’il lit
 
@@ -26,7 +26,7 @@ Il n’écrit rien lui-même. Il décrit au cœur ce qu’il faut écrire dans l
 
 ## Les secrets qu’il reçoit
 
-- **Le jeton MCP de l’agent.** À chaque lancement qu’il décrit, Escouade lui donne l’adresse et le jeton de son serveur MCP pour cet agent. Le plugin les fait écrire dans `mcp_config.json`, dans le dossier de l’agent : jamais dans les arguments. Le cœur retire le jeton de ce dossier quand le process s’arrête. Le plugin n’a pas de réseau pour l’envoyer ailleurs.
+- **Le jeton MCP de l’agent.** À chaque lancement qu’il décrit, Escouade lui donne l’adresse et le jeton de son serveur MCP pour cet agent. Le plugin les fait écrire dans `mcp_config.json`, dans le dossier de l’agent : jamais dans les arguments. Le cœur retire le jeton de ce dossier quand le process ou la vue Antigravity CLI s’arrête. Le plugin n’a pas de réseau pour l’envoyer ailleurs.
 - **Aucune clé de compte.** La clé d’API d’un compte est donnée à `agy` par le cœur (`GEMINI_API_KEY`) ; le plugin sait seulement que le compte passe par une clé.
 
 ## Ce qu’il accepte seul, et ce qui va à la carte
@@ -64,6 +64,8 @@ La clôture est dans les règles du dossier de l’agent, réécrites quand le p
 Ce que la clôture ne tient pas d’office : une commande qui lirait ces chemins sans les nommer ou par un chemin que fait le shell (`$HOME`, `%CD%`), un nom court ou une jonction vers eux. Une telle commande va à une carte, comme toute commande d’un agent clôturé.
 
 La « Vue Antigravity CLI » a les mêmes règles : aucune règle `allow` sauf en Bypass sans projet privé ni discussion, les refus de la clôture, et Édits auto y est le mode par défaut d’`agy`. Ce qu’aucune règle ne permet, son interface le demande. Le fichier `escouade-always.json` de la 2.2.0 n’est plus lu nulle part, et le cœur l’efface.
+
+La vue lance aussi les hooks d’`agy` (`hooks.json` du dossier de l’agent), qui appellent `escouade-hook <événement>`. Sous Windows, `agy` les lance par `cmd /c`, dans le dossier de `hooks.json` : `escouade-hook` y est appelé par son chemin entier, écrit avec des `/` et sans guillemets, et seulement par son nom quand son chemin a un espace, un accent ou un signe que `cmd` lirait (son dossier est alors le premier du `PATH`). Dans les deux cas, `NoDefaultCurrentDirectoryInExePath=1` empêche `cmd` de chercher d’abord dans son dossier courant : un `escouade-hook.cmd` posé là ne s’exécute pas.
 
 ## Ce qu’il ne peut pas faire
 

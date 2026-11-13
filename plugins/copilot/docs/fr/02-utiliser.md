@@ -14,7 +14,7 @@ Copilot n’a pas de bac à sable quand Escouade le pilote : il demande, et ce s
 
 | Mode | Chez Copilot CLI |
 |---|---|
-| Demander | Les lectures et les écritures du dossier de l’agent passent (sauf une écriture dans `.git`) ; les commandes, `git add` et `git commit` compris, le web, les outils MCP et les chemins hors du dossier demandent. |
+| Demander | Les lectures et les écritures du dossier de l’agent passent (sauf une écriture dans `.git` ou dans la configuration de Copilot : `.copilot`, `.github/copilot`, `.github/hooks`) ; les commandes, `git add` et `git commit` compris, le web, les outils MCP et les chemins hors du dossier demandent. |
 | Édits auto | Pareil, et `git add` et `git commit` du worktree passent quand la commande n’est que cela. |
 | Plan | Copilot étudie et propose un plan sans rien modifier : ses lectures du dossier passent, une écriture demande. |
 | Auto | Copilot enchaîne seul jusqu’au bout de sa tâche (son mode autopilot), avec les règles d’Édits auto. |
@@ -24,7 +24,12 @@ Une carte de Copilot a « Autoriser », « Pour cette session » et « Refuser �
 
 ## La vue Copilot CLI
 
-La « Vue Copilot CLI » fait tourner l’agent dans l’interface de Copilot, dans un terminal de la fenêtre, sur la même session. Ses hooks passent par un plugin propre à l’agent, donné à cette seule interface : rien n’est écrit dans ton dossier de Copilot. Dans cette vue, ses demandes se répondent dans l’interface de Copilot : les règles du plugin n’y répondent pas, et la clôture d’un projet privé n’y passe pas.
+La « Vue Copilot CLI » fait tourner l’agent dans l’interface de Copilot, dans un terminal de la fenêtre, sur la même session. Ses hooks passent par un plugin propre à l’agent, donné à cette seule interface : rien n’est écrit dans ton dossier de Copilot. Dans cette vue, ses demandes se répondent dans l’interface de Copilot, où tu les vois : les règles du plugin n’y répondent pas. Pour que rien n’y passe sans toi :
+
+- en Édits auto et en Auto, chaque écriture demande : Copilot ne sait pas permettre les écritures du dossier sans celles de son `.git` (un hook, `core.fsmonitor`, puis un `git commit` sans question), et rien ne prouve qu’un refus par chemin couvre les fichiers sous `.git`. En Auto, seuls `git add` et `git commit` passent sans question ;
+- une écriture dans `.git`, `.copilot`, `.github/copilot`, `.github/hooks` ou dans le dossier des fichiers joints est refusée dans tous les modes, Bypass compris (`--deny-tool`, qui l’emporte sur toute permission) ;
+- une discussion y est tenue en lecture seule : ses écritures et ses commandes sont refusées ;
+- dès qu’un projet privé existe, un agent a une clôture et n’a pas de vue Copilot CLI, et la fenêtre le dit : rien n’y tient la clôture, il reste dans sa conversation, qui la tient.
 
 ## Une discussion de l’onglet Docs
 
@@ -38,5 +43,5 @@ Ses limites :
 
 - c’est un garde-fou, pas une barrière : une commande qui atteint un chemin sans le nommer passe ;
 - en Bypass, Copilot ne demande rien : la clôture ne tient plus ;
-- dans la vue Copilot CLI, ses demandes ne passent pas par Escouade ;
+- la vue Copilot CLI est refusée à un agent clôturé ;
 - les sessions de Copilot sont celles du compte : pour qu’un projet privé ne les partage pas, donne-lui un compte réservé à lui seul.

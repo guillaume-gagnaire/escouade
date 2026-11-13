@@ -14,7 +14,7 @@ Copilot has no sandbox when Escouade drives it: it asks, and the plugin’s rule
 
 | Mode | In Copilot CLI |
 |---|---|
-| Ask | Reads and writes in the agent’s folder go through (but a write in `.git`); commands, `git add` and `git commit` included, the web, MCP tools and paths outside the folder ask. |
+| Ask | Reads and writes in the agent’s folder go through (but a write in `.git` or in Copilot’s settings: `.copilot`, `.github/copilot`, `.github/hooks`); commands, `git add` and `git commit` included, the web, MCP tools and paths outside the folder ask. |
 | Accept edits | The same, and `git add` and `git commit` of the worktree go through when the command is nothing more. |
 | Plan | Copilot studies and proposes a plan without changing anything: its reads of the folder go through, a write asks. |
 | Auto | Copilot goes on by itself to the end of its task (its autopilot mode), with the rules of Accept edits. |
@@ -24,7 +24,12 @@ A Copilot card has “Allow”, “For this session” and “Deny”; no “Alw
 
 ## The Copilot CLI view
 
-The “Copilot CLI view” runs the agent in Copilot’s interface, in a terminal of the window, on the same session. Its hooks go through a plugin of the agent’s own, given to that interface alone: nothing is written in your Copilot folder. In this view, its requests are answered in Copilot’s interface: the plugin’s rules don’t answer them, and the fence of a private project doesn’t reach them.
+The “Copilot CLI view” runs the agent in Copilot’s interface, in a terminal of the window, on the same session. Its hooks go through a plugin of the agent’s own, given to that interface alone: nothing is written in your Copilot folder. In this view, its requests are answered in Copilot’s interface, where you see them: the plugin’s rules don’t answer them. So that nothing goes through without you:
+
+- in Accept edits and Auto, every write asks: Copilot cannot allow the folder’s writes without those of its `.git` (a hook, `core.fsmonitor`, then a `git commit` with no question), and nothing proves a refusal by path covers the files under `.git`. In Auto, only `git add` and `git commit` go without a question;
+- a write in `.git`, `.copilot`, `.github/copilot`, `.github/hooks` or in the folder of the joined files is refused in every mode, Bypass included (`--deny-tool`, which wins over every permission);
+- a discussion is held read-only there: its writes and commands are refused;
+- once a private project exists, an agent has a fence and no Copilot CLI view, and the window says so: nothing holds the fence there, it stays in its conversation, which holds it.
 
 ## A discussion of the Docs tab
 
@@ -38,5 +43,5 @@ Its limits:
 
 - it is a guard, not a barrier: a command that reaches a path without naming it gets through;
 - in Bypass, Copilot asks nothing: the fence no longer holds;
-- in the Copilot CLI view, its requests don’t go through Escouade;
+- the Copilot CLI view is refused to a fenced agent;
 - Copilot’s sessions are the account’s: so that a private project doesn’t share them, give it an account reserved to it alone.

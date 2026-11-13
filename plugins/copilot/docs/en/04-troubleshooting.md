@@ -28,6 +28,9 @@ Install it again from the Plugins view; the agents’ conversations are kept.
 **“The plugin of Copilot CLI doesn’t apply the fence of private projects: the agent doesn’t start.”**, **“… doesn’t hold its harness read-only: the discussion doesn’t start.”**, **“… puts Escouade’s token among its harness’s arguments, which anyone can read: the agent doesn’t start.”**
 Escouade refused the launch the plugin described. The official plugin doesn’t do that: update it, and report it if the message stays.
 
+**“Copilot CLI’s view doesn’t hold the fence of private projects: this agent stays in its conversation, which holds it.”**
+A private project exists: every agent then has a fence (what it must not read of the other projects), and nothing holds it in Copilot’s interface. Go on in the Escouade view, whose rules hold it.
+
 ## During a turn
 
 **“Copilot uses the GitHub CLI’s account (gh), as it isn’t signed in itself: sign in with copilot login to choose its account.”**

@@ -112,11 +112,11 @@ fn a_conversation_its_store_has_is_resumed_in_its_home_with_its_model_trust_hook
         };
         assert_eq!(handler["command"], format!("'{HOOK_UNIX}' {event}"));
     }
-    // Under Windows by its name, its folder first on the PATH.
+    // Under Windows, a path with a space by its name, its folder first on the PATH; `cmd` never looks in its own folder.
     let win = launch(&TerminalParams {
         hook_command: Some(HOOK_WIN.into()),
         path: Some(r"C:\Windows".into()),
-        ..p
+        ..p.clone()
     })
     .launch;
     let hooks = file_of(&win, &hooks_file(&home)).unwrap();
@@ -128,6 +128,40 @@ fn a_conversation_its_store_has_is_resumed_in_its_home_with_its_model_trust_hook
         env_of(&win, "PATH"),
         Some(r"C:\Program Files\Escouade;C:\Windows")
     );
+    assert_eq!(env_of(&win, NO_CURRENT_DIR), Some("1"));
+    // A path a line holds without quotes: by its whole path, with `/`.
+    let plain = launch(&TerminalParams {
+        hook_command: Some(r"C:\Users\ana\AppData\Local\Escouade\escouade-hook.exe".into()),
+        ..p.clone()
+    })
+    .launch;
+    let hooks = file_of(&plain, &hooks_file(&home)).unwrap();
+    assert_eq!(
+        hooks["escouade"]["PreToolUse"][0]["hooks"][0]["command"],
+        "C:/Users/ana/AppData/Local/Escouade/escouade-hook.exe PreToolUse"
+    );
+    assert_eq!(env_of(&plain, NO_CURRENT_DIR), Some("1"));
+    // Nor a quote, an accent, a `&` or a `%`: by its name.
+    for odd in [
+        r"C:\Users\Zoé\Escouade\escouade-hook.exe",
+        r"C:\a&b\escouade-hook.exe",
+        r"C:\a%PATH%\escouade-hook.exe",
+        r"C:\O'Brien\escouade-hook.exe",
+        r"C:\a(1)\escouade-hook.exe",
+    ] {
+        let l = launch(&TerminalParams {
+            hook_command: Some(odd.into()),
+            ..p.clone()
+        })
+        .launch;
+        let hooks = file_of(&l, &hooks_file(&home)).unwrap();
+        assert_eq!(
+            hooks["escouade"]["Stop"][0]["command"], "escouade-hook Stop",
+            "{odd}"
+        );
+    }
+    // Elsewhere, none: a POSIX shell looks in no current folder.
+    assert_eq!(env_of(&launch(&p).launch, NO_CURRENT_DIR), None);
 }
 
 #[test]
@@ -264,6 +298,7 @@ fn a_text_is_written_in_its_own_home_every_tool_refused_its_provider_the_account
     // On its input as JSON: its line breaks escaped.
     assert!(l
         .input
+        .clone()
         .unwrap()
         .contains(r"<instructions>\nFais court.\n</instructions>"));
     // Its Principal signs in by Google: no provider.
@@ -273,6 +308,13 @@ fn a_text_is_written_in_its_own_home_every_tool_refused_its_provider_the_account
     })
     .unwrap();
     assert!(!google.files[0].text.contains("modelProvider"));
+    // What no family covers is reviewed (refused in `-p`), whatever `agy`'s default; a key of the machine's is taken
+    // away, the account's kept.
+    assert_eq!(settings["toolPermission"], crate::words::TOOL_PERMISSION);
+    let emptied =
+        |l: &OneShotLaunch, k: &str| l.env.iter().any(|v| v.name == k && v.value.is_empty());
+    assert!(!emptied(&l, "GEMINI_API_KEY") && emptied(&l, "GOOGLE_API_KEY"));
+    assert!(emptied(&google, "GEMINI_API_KEY") && emptied(&google, "GOOGLE_API_KEY"));
     assert!(one_shot(&OneShotParams { home: None, ..p }).is_err());
     // Its answer, or why not.
     let out = |stdout: &str| OneShotOutput {

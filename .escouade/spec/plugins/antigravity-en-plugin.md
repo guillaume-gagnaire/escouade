@@ -1,8 +1,8 @@
 ---
 title: "Antigravity CLI en plugin"
 subject: "plugins"
-sources: ["docs/PLUGINS-DESIGN.md §4 (INT-10.8)","docs/PLUGINS-DESIGN.md §8.24 (ESC-348)","docs/PROTOCOL.md, Antigravity CLI, « Règles et jugement »","docs/TODO-2.2.md, INT-10.8","Ticket ESC-283","Ticket ESC-348","Ticket ESC-371","Ticket ESC-376","Ticket ESC-388","Ticket ESC-389","Essai real_agy_rules sur agy 1.5.3 (2026-11-08)","Revue de dev.escouade.antigravity-cli@2.2.0 (~/.escouade-review)","Revue de dev.escouade.antigravity-cli@2.2.1 (~/.escouade-review)","Revue de dev.escouade.antigravity-cli@2.2.3 (~/.escouade-review)","plugins/antigravity/README.en.md"]
-tickets: ["ESC-283","ESC-348","ESC-352","ESC-369","ESC-371","ESC-376","ESC-388","ESC-389"]
+sources: ["docs/PLUGINS-DESIGN.md §4 (INT-10.8)","docs/PLUGINS-DESIGN.md §8.24 (ESC-348)","docs/PROTOCOL.md, Antigravity CLI, « Règles et jugement »","docs/TODO-2.2.md, INT-10.8","Ticket ESC-283","Ticket ESC-348","Ticket ESC-371","Ticket ESC-376","Ticket ESC-388","Ticket ESC-389","Essai real_agy_rules sur agy 1.5.3 (2026-11-08)","Revue de dev.escouade.antigravity-cli@2.2.0 (~/.escouade-review)","Revue de dev.escouade.antigravity-cli@2.2.1 (~/.escouade-review)","Revue de dev.escouade.antigravity-cli@2.2.3 (~/.escouade-review)","Revue de dev.escouade.antigravity-cli@2.2.7 (~/.escouade-review)","Documentation des hooks embarquée dans agy (cmd /c, dossier de hooks.json)","plugins/antigravity/README.en.md"]
+tickets: ["ESC-283","ESC-348","ESC-352","ESC-369","ESC-371","ESC-376","ESC-388","ESC-389","ESC-359","ESC-430"]
 decisions: [68,94,112,116,125,127]
 compared: null
 ---
@@ -81,3 +81,11 @@ Le moteur `Agy` du registre garde ce qui n'est pas la conversation : ses capacit
 ## Un arrêt se dit
 
 Coupé pour l'app ou pas chargé, un agent d'Antigravity CLI dit au lancement « Le plugin Antigravity CLI (dev.escouade.antigravity-cli) est coupé ou n'est pas chargé : rallume-le dans la vue Plugins… » et garde sa conversation ; rallumé, il reprend. Un plugin qui plante pendant un tour est relancé comme tout plugin de harness : ses règles sont réécrites aussitôt, sans ce qui avait été accordé, et `agy` relancé avant le message suivant ; une carte montrée avant ne peut plus faire continuer le tour : sa réponse le finit. Ce que le module gardait en attendant le transcript est perdu avec lui.
+
+## Sa vue Antigravity CLI, décrite par le plugin (ESC-359, ESC-430)
+
+Depuis ESC-359, le cœur n'a plus de copie des mots du lancement de l'interface : le plugin le décrit (`terminal/launch`), avec les mêmes règles que ci-dessus, la lecture des modèles d'un compte (`account/read`) et le texte rédigé (`engine/oneShot`), et le cœur vérifie chaque description. Ce que « Ce qui reste au cœur » disait de cette copie vaut désormais pour la description du plugin.
+
+- **Ses hooks** (`hooks.json` du dossier de l'agent) appellent `escouade-hook <événement>`. Sous Windows, `agy` les lance par `cmd /c` dans le dossier de `hooks.json` : `escouade-hook` y est appelé par son chemin entier, écrit avec des `/` et sans guillemets (Go réécrirait un guillemet en `\"`, que `cmd` ne lit pas), et par son nom seulement quand son chemin a un espace, un accent ou un signe de `cmd`, son dossier en tête du `PATH`. Dans les deux cas, `NoDefaultCurrentDirectoryInExePath=1` empêche `cmd` d'exécuter un `escouade-hook.cmd` de son dossier courant. Le manifeste déclare cette variable ; la page des permissions du plugin dit le `PATH` posé.
+- **Le jeton** de `mcp_config.json` est retiré à la fin de la vue comme à la fin du process (voir *Le contrat des harness en process*).
+- **Le texte rédigé** pose `toolPermission: "request-review"`, comme les réglages de l'agent, et vide une clé de la machine que le compte ne donne pas, comme la vue.

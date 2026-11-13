@@ -1,8 +1,17 @@
 # Changelog
 
+## 2.2.8
+
+- Under Windows, its view’s hooks call `escouade-hook` by its whole path (with `/`, no quotes), by its name only when a line cannot hold its path, and `NoDefaultCurrentDirectoryInExePath=1` keeps `cmd` from running an `escouade-hook.cmd` of its current folder (ESC-430).
+- A drafted text sets `toolPermission` and takes away a key of the machine’s, as the view does; its permissions page says the `PATH` it sets.
+
 ## 2.2.7
 
 - Its manifest declares the environment variables its launches set (`permissions.env`: `AGY_CLI_DISABLE_AUTO_UPDATE`, `AGY_CLI_HIDE_ACCOUNT_INFO`, `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `HOME`, `USERPROFILE`, `TEMP`, `TMP`, `TMPDIR`, `PATH`), shown before it is installed: from Escouade 2.2, a plugin sets no other (ESC-424).
+
+## 2.2.6
+
+- The launch of its Antigravity CLI view (`terminal/launch`), the models of an account (`account/read`) and the drafted texts (`engine/oneShot`) are the plugin’s, checked by the core (ESC-359).
 
 ## 2.2.5
 

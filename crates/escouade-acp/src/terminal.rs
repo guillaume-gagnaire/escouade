@@ -56,26 +56,48 @@ fn vars(pairs: Vec<(String, String)>) -> Vec<EnvVar> {
         .collect()
 }
 
-/// The `PATH` with the folder of `escouade-hook` first, under Windows, where a hook runs it by its name.
-fn hook_path(p: &TerminalParams) -> Option<(String, String)> {
-    let command = p.hook_command.as_deref().filter(|c| windows_path(c))?;
-    let dir = &command[..command.rfind(['\\', '/'])?];
-    let path = p.path.as_deref().unwrap_or_default();
-    Some((
-        "PATH".into(),
-        match path.is_empty() {
-            true => dir.to_string(),
-            false => format!("{dir};{path}"),
-        },
-    ))
+/// The variable that keeps `cmd` from looking for a program named alone in its current folder first.
+pub const NO_CURRENT_DIR: &str = "NoDefaultCurrentDirectoryInExePath";
+
+/// Under Windows, the variables of a launch whose hooks run `escouade-hook`: the `PATH` with its folder first, for a
+/// hook that calls it by its name, and `NoDefaultCurrentDirectoryInExePath`, so that `cmd` never looks in its current
+/// folder first (the agent's, where a file `escouade-hook.cmd` would run at each hook).
+fn hook_env(p: &TerminalParams) -> Vec<(String, String)> {
+    let Some(command) = p.hook_command.as_deref().filter(|c| windows_path(c)) else {
+        return Vec::new();
+    };
+    let mut env = Vec::new();
+    if let Some(cut) = command.rfind(['\\', '/']) {
+        let (dir, path) = (&command[..cut], p.path.as_deref().unwrap_or_default());
+        env.push((
+            "PATH".into(),
+            match path.is_empty() {
+                true => dir.to_string(),
+                false => format!("{dir};{path}"),
+            },
+        ));
+    }
+    env.push((NO_CURRENT_DIR.into(), "1".into()));
+    env
 }
 
-/// The line a hook runs: `escouade-hook` by its path quoted for a POSIX shell, or under Windows by its name (its folder
-/// first on the `PATH`).
+/// Whether a path of Windows can be written alone, with `/`, in a line of `cmd`, PowerShell or Git Bash: none of them
+/// needs a quote for it (tried on Windows 11), whatever shell runs the hook.
+fn plain_on_windows(path: &str) -> bool {
+    !path.is_empty()
+        && path.chars().all(|c| {
+            c.is_ascii_alphanumeric() || matches!(c, '\\' | '/' | ':' | '.' | '_' | '-' | '~')
+        })
+}
+
+/// The line a hook runs: `escouade-hook` by its path, quoted for a POSIX shell, under Windows written with `/` and no
+/// quote, which `cmd`, PowerShell and Git Bash all run as it is. A path of Windows a line cannot hold so (a space, an
+/// accent) is called by its name, its folder first on the `PATH` (`hook_env`).
 fn hook_line(command: &str, event: Option<&str>) -> String {
-    let run = match windows_path(command) {
-        true => "escouade-hook".to_string(),
-        false => format!("'{}'", command.replace('\'', r"'\''")),
+    let run = match (windows_path(command), plain_on_windows(command)) {
+        (true, true) => command.replace('\\', "/"),
+        (true, false) => "escouade-hook".to_string(),
+        (false, _) => format!("'{}'", command.replace('\'', r"'\''")),
     };
     match event {
         Some(e) => format!("{run} {e}"),
@@ -194,7 +216,7 @@ pub fn vibe(p: &TerminalParams) -> Launch {
             path: joined(home, VIBE_HOOKS),
             text: vibe_hooks(command),
         });
-        env.extend(hook_path(p));
+        env.extend(hook_env(p));
     }
     Launch {
         args: a,
@@ -318,7 +340,7 @@ pub fn gemini(p: &TerminalParams) -> Launch {
             path: file,
             text: serde_json::to_string_pretty(&doc).unwrap_or_default(),
         });
-        env.extend(hook_path(p));
+        env.extend(hook_env(p));
     }
     Launch {
         args: a,

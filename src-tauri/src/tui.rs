@@ -779,6 +779,36 @@ pub(crate) fn take_relay_away(view: &dyn TerminalView, meta: &mut AgentMeta) {
     }
 }
 
+/// The files of `files` whose text holds `token`.
+pub(crate) fn token_files(
+    files: &[escouade_plugin_protocol::engine::FileToWrite],
+    token: &str,
+) -> Vec<PathBuf> {
+    files
+        .iter()
+        .filter(|f| !token.is_empty() && f.text.contains(token))
+        .map(|f| PathBuf::from(&f.path))
+        .collect()
+}
+
+/// `token` taken out of each of `files`, those that still hold it (a newer launch rewrote them
+/// with its own): refused by the server from now on, it is no longer left on the disk either.
+pub(crate) fn take_token_out(files: &[PathBuf], token: &str) {
+    if token.is_empty() {
+        return;
+    }
+    for file in files {
+        let Ok(text) = std::fs::read_to_string(file) else {
+            continue;
+        };
+        if text.contains(token) {
+            if let Err(e) = std::fs::write(file, text.replace(token, "")) {
+                log::warn!("{}: token not taken out: {e}", file.display());
+            }
+        }
+    }
+}
+
 /// `NO_PROXY` with the loopback in it: the hooks' calls never go through a proxy.
 pub(crate) fn no_proxy(env: &mut Vec<(String, String)>) {
     const LOOPBACK: &str = "127.0.0.1,localhost,::1";
@@ -1628,10 +1658,17 @@ impl<R: Runtime> Core<R> {
                 }
             }
         }
+        // The files of its launch that hold the token of Escouade's server (Antigravity's
+        // `mcp_config.json`): it is taken out of them when the interface is over.
+        let holding = access
+            .token()
+            .map(|t| token_files(&launch.files, t))
+            .unwrap_or_default();
         if let Err(e) = crate::plugins::harness::write_files(&launch) {
             self.hooks.revoke(id);
             if let Some(t) = access.token() {
                 self.mcp.release_agent(id, t);
+                take_token_out(&holding, t);
             }
             return Err(e);
         }
@@ -1759,6 +1796,7 @@ impl<R: Runtime> Core<R> {
                 }
             }
         };
+        let holding_kept = holding.clone();
         let spawned = self.pty.spawn_program(
             info.clone(),
             &view.program(&program),
@@ -1773,6 +1811,7 @@ impl<R: Runtime> Core<R> {
                 if let Some(c) = me.upgrade() {
                     if let Some(t) = &granted {
                         c.mcp.release_agent(&agent, t);
+                        take_token_out(&holding, t);
                     }
                     c.on_tui_exit(&agent, gen, &term, code, &first);
                 }
@@ -1782,6 +1821,7 @@ impl<R: Runtime> Core<R> {
             self.hooks.revoke(id);
             if let Some(t) = access.token() {
                 self.mcp.release_agent(id, t);
+                take_token_out(&holding_kept, t);
             }
             return Err(e);
         }
@@ -2867,6 +2907,39 @@ mod tests {
         let seen = Arc::new(Mutex::new(Vec::new()));
         let sink = seen.clone();
         (seen, Box::new(move |b| sink.lock().extend(b)))
+    }
+
+    #[test]
+    fn the_token_of_escouades_server_is_taken_out_of_its_interfaces_files_when_it_is_over() {
+        use escouade_plugin_protocol::engine::FileToWrite;
+        let dir = crate::plugins_store_tests::temp_dir("tui-token");
+        let (mcp, hooks) = (dir.join("mcp_config.json"), dir.join("hooks.json"));
+        let files = [
+            FileToWrite {
+                path: mcp.to_string_lossy().into_owned(),
+                text: r#"{"headers":{"Authorization":"Bearer tok-1"}}"#.into(),
+            },
+            FileToWrite {
+                path: hooks.to_string_lossy().into_owned(),
+                text: "{}".into(),
+            },
+        ];
+        for f in &files {
+            std::fs::write(&f.path, &f.text).unwrap();
+        }
+        let holding = token_files(&files, "tok-1");
+        assert_eq!(holding, std::slice::from_ref(&mcp));
+        assert!(token_files(&files, "").is_empty());
+        take_token_out(&holding, "tok-1");
+        let left = std::fs::read_to_string(&mcp).unwrap();
+        assert_eq!(left, r#"{"headers":{"Authorization":"Bearer "}}"#);
+        // A newer launch's token, written since, stays.
+        std::fs::write(&mcp, "Bearer tok-2").unwrap();
+        take_token_out(&holding, "tok-1");
+        assert_eq!(std::fs::read_to_string(&mcp).unwrap(), "Bearer tok-2");
+        // A file gone is no error.
+        std::fs::remove_file(&mcp).unwrap();
+        take_token_out(&holding, "tok-1");
     }
 
     #[test]

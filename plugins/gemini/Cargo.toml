@@ -1,6 +1,6 @@
 [package]
 name = "escouade-plugin-gemini"
-version = "2.2.5"
+version = "2.2.6"
 description = "Le plugin Gemini CLI d'Escouade : Gemini CLI comme harness, par ACP"
 authors = ["Guillaume Gagnaire"]
 license = "GPL-3.0-or-later"
@@ -13,5 +13,5 @@ rust-version = "1.88"
 crate-type = ["cdylib"]
 
 [dependencies]
-escouade-acp = "0.1.4"
+escouade-acp = "0.1.5"
 escouade-plugin-protocol = "0.1.2"
