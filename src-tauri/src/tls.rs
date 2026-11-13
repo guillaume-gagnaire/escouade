@@ -47,20 +47,12 @@ impl Net {
     }
 }
 
-/// The proxy `host` goes through: the settings', unless `no_proxy` names it (a host, a domain and
-/// what is under it, `*` for all).
+/// The proxy `host` goes through: the settings', unless `no_proxy` names it (`excluded`). The one
+/// reading of the exclusions (audit SEC-28): the route of every client of the settings
+/// (`proxy`) and the check of a certificate (`Verifier`) ask it, so a certificate goes unchecked
+/// only on a connection that goes through the proxy.
 pub fn proxy_for(net: &Net, host: &str) -> Option<reqwest::Url> {
-    if net.proxy.is_empty() {
-        return None;
-    }
-    let host = host.trim_matches(['[', ']']).to_lowercase();
-    let around = net
-        .no_proxy
-        .split([',', ' ', ';'])
-        .map(|e| e.trim().trim_start_matches('.').to_lowercase())
-        .filter(|e| !e.is_empty())
-        .any(|e| e == "*" || host == e || host.ends_with(&format!(".{e}")));
-    if around {
+    if net.proxy.is_empty() || excluded(&net.no_proxy, host) {
         return None;
     }
     proxy_url(net)
@@ -77,6 +69,98 @@ pub fn proxy_url(net: &Net) -> Option<reqwest::Url> {
         format!("http://{}", net.proxy)
     };
     reqwest::Url::parse(&raw).ok()
+}
+
+/// The proxy of the settings as reqwest takes it, its route decided by `proxy_for` for each host;
+/// None when the settings have no proxy, or one that is no address.
+pub fn proxy(net: &Net) -> Option<reqwest::Proxy> {
+    proxy_url(net)?;
+    let net = net.clone();
+    Some(reqwest::Proxy::custom(move |url| {
+        url.host_str().and_then(|host| proxy_for(&net, host))
+    }))
+}
+
+/// Whether the exclusions `no_proxy` send `host` around the proxy. Each, separated by a comma, a
+/// space or a semicolon: `*` for all; an address, IPv6 in brackets or not; a range of addresses
+/// (`10.0.0.0/8`, `fd00::/8`); a name, which holds for what is under it too, written with a
+/// leading `.` or `*.`, a port or a final dot or not (the port is not compared).
+pub fn excluded(no_proxy: &str, host: &str) -> bool {
+    let host = host
+        .trim()
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .trim_end_matches('.')
+        .to_ascii_lowercase();
+    if host.is_empty() {
+        return false;
+    }
+    let ip = host.parse::<std::net::IpAddr>().ok();
+    no_proxy
+        .split([',', ' ', ';', '\t', '\n', '\r'])
+        .map(str::trim)
+        .filter(|e| !e.is_empty())
+        .any(|e| exclusion_holds(&e.to_ascii_lowercase(), &host, ip))
+}
+
+fn exclusion_holds(entry: &str, host: &str, ip: Option<std::net::IpAddr>) -> bool {
+    if entry == "*" {
+        return true;
+    }
+    // An address or a range, IPv6 in brackets with its port after them.
+    let addr = match entry.strip_prefix('[') {
+        Some(rest) => rest.split(']').next().unwrap_or(""),
+        None => entry,
+    };
+    if let Some((base, bits)) = addr.split_once('/') {
+        return match (ip, base.parse::<std::net::IpAddr>(), bits.parse::<u32>()) {
+            (Some(ip), Ok(base), Ok(bits)) => in_range(ip, base, bits),
+            _ => false,
+        };
+    }
+    if let Ok(a) = addr.parse::<std::net::IpAddr>() {
+        return ip == Some(a);
+    }
+    // An address with its port (`10.1.2.3:8080`).
+    if let Some((a, port)) = entry.rsplit_once(':') {
+        if let (Ok(a), true) = (
+            a.parse::<std::net::Ipv4Addr>(),
+            port.bytes().all(|b| b.is_ascii_digit()),
+        ) {
+            return ip == Some(std::net::IpAddr::V4(a));
+        }
+    }
+    if ip.is_some() {
+        return false;
+    }
+    // A name: `.x`, `*.x`, `x`, its port and its final dot left aside.
+    let name = entry.trim_start_matches('*').trim_start_matches('.');
+    let name = match name.rsplit_once(':') {
+        Some((n, port)) if port.bytes().all(|b| b.is_ascii_digit()) => n,
+        _ => name,
+    };
+    let name = name.trim_end_matches('.');
+    !name.is_empty() && (host == name || host.ends_with(&format!(".{name}")))
+}
+
+/// Whether `ip` is of the range `base/bits` (an IPv4 of an IPv6 range written `::ffff:…` too).
+fn in_range(ip: std::net::IpAddr, base: std::net::IpAddr, bits: u32) -> bool {
+    use std::net::IpAddr::{V4, V6};
+    let ip = match ip {
+        V6(v6) => v6.to_ipv4_mapped().map(V4).unwrap_or(ip),
+        _ => ip,
+    };
+    match (ip, base) {
+        (V4(ip), V4(base)) if bits <= 32 => {
+            let mask = u32::MAX.checked_shl(32 - bits).unwrap_or(0);
+            u32::from(ip) & mask == u32::from(base) & mask
+        }
+        (V6(ip), V6(base)) if bits <= 128 => {
+            let mask = u128::MAX.checked_shl(128 - bits).unwrap_or(0);
+            u128::from(ip) & mask == u128::from(base) & mask
+        }
+        _ => false,
+    }
 }
 
 /// The certificates of a `.pem` file of authorities: an error the user can read when it holds
@@ -191,14 +275,17 @@ pub fn builder(net: &Net) -> reqwest::ClientBuilder {
 }
 
 /// A client of the app's own requests: `builder` of the settings, through their proxy (its
-/// exclusions around it).
+/// exclusions around it, read by `proxy_for` as the certificates are).
 pub fn app_builder(settings: &crate::model::Settings) -> reqwest::Result<reqwest::ClientBuilder> {
-    let mut b = builder(&Net::of(settings));
-    let url = settings.proxy_url.trim();
-    if !url.is_empty() {
-        let proxy =
-            reqwest::Proxy::all(url)?.no_proxy(reqwest::NoProxy::from_string(&settings.no_proxy));
-        b = b.proxy(proxy);
+    let net = Net::of(settings);
+    let mut b = builder(&net);
+    if !net.proxy.is_empty() {
+        // Checked as an address, as before: a proxy that is none is said, not gone around.
+        reqwest::Proxy::all(net.proxy.as_str())?;
+        b = match proxy(&net) {
+            Some(proxy) => b.proxy(proxy),
+            None => b.no_proxy(),
+        };
     }
     Ok(b)
 }

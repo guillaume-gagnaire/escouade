@@ -1246,11 +1246,8 @@ impl Fetcher {
             .user_agent(concat!("escouade/", env!("CARGO_PKG_VERSION")));
         if by_proxy && !settings.proxy.is_empty() {
             // A proxy that is no address stops the call: going around it would leave by a way the user closed.
-            let url = super::socket::proxy_url(settings)?;
-            let proxy = reqwest::Proxy::all(url.as_str())
-                .ok()?
-                .no_proxy(reqwest::NoProxy::from_string(&settings.no_proxy));
-            b = b.proxy(proxy);
+            // Its route decided by the reading of the exclusions its certificates are (audit SEC-28).
+            b = b.proxy(crate::tls::proxy(settings)?);
         }
         b.build().ok()
     }

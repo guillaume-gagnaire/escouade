@@ -567,7 +567,8 @@ fn the_workspace_fills_what_is_not_installed_and_wins_nothing() {
     );
     let e = plugins.remove(builtin::GITHUB, false).unwrap_err();
     assert!(e.to_string().contains("workspace"), "{e}");
-    // A plugin of anyone with an id of the registry, in development, is not taken away.
+    // A folder in development with an id of the registry is of anyone's hand (audit SEC-27): refused, the workspace's
+    // keeps its place.
     let src = temp_dir("workspace-dev");
     std::fs::write(
         src.join(crate::plugins::manifest::FILE),
@@ -583,12 +584,12 @@ fn the_workspace_fills_what_is_not_installed_and_wins_nothing() {
     .unwrap();
     std::fs::create_dir_all(src.join("themes")).unwrap();
     std::fs::write(src.join("themes/mine.json"), "{}").unwrap();
-    plugins.load_dev(&src, Lang::Fr).unwrap();
+    assert!(plugins.load_dev(&src, Lang::Fr).is_err());
     drop(plugins);
     let plugins = Plugins::load_for_core(data, "2.2.0");
     let v = plugins.get(builtin::GITHUB, Lang::Fr).unwrap();
-    assert!(matches!(v.origin, Origin::Dev { .. }), "{:?}", v.origin);
-    assert_eq!(v.version, "9.0.0");
+    assert_eq!(v.origin, Origin::Workspace, "{:?}", v.origin);
+    assert_ne!(v.version, "9.0.0");
 }
 
 #[test]
