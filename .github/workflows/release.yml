@@ -563,8 +563,17 @@ jobs:
         run: |
           mkdir "$RUNNER_TEMP/binaries"
           cd "$RUNNER_TEMP/binaries"
-          # The installers and packages: everything but the updater's JSON and the signatures (.sig) of the updater.
-          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100"             --jq '.[] | select((.name | endswith(".json") or endswith(".sig")) | not) | "(.id) (.name)"' > ../assets.txt
+          # The installers and packages: everything but the updater's JSON and the signatures (.sig) of the updater. The
+          # release was a draft a moment ago, which a token that only reads does not see: it answered 404 right after
+          # `publish` (v2.2.0-beta.12), so the list is asked again for up to two minutes.
+          for try in 1 2 3 4 5 6 7; do
+            if gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" \
+              --jq '.[] | select((.name | endswith(".json") or endswith(".sig")) | not) | "\(.id) \(.name)"' > ../assets.txt; then
+              break
+            fi
+            echo "the release's files are not readable yet (try $try): asked again in 20 s"
+            sleep 20
+          done
           test -s ../assets.txt
           while read -r id name; do
             gh api -H "Accept: application/octet-stream" "repos/$GITHUB_REPOSITORY/releases/assets/$id" > "$name"
