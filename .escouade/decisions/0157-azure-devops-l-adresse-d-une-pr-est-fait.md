@@ -1,9 +1,9 @@
 ---
-number: null
+number: 157
 id: "azure-devops-l-adresse-d-une-pr-est-fait"
 title: "Azure DevOps : l'adresse d'une PR est faite quand Azure ne donne pas webUrl"
 date: "2026-11-13"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-437"
 pages: ["git-fichiers/pull-requests"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"git-fichiers/pull-requests","added":3,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-13T12:16:52+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

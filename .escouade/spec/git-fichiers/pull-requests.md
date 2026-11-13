@@ -3,7 +3,7 @@ title: "Pull requests"
 subject: "Git & fichiers"
 sources: ["docs/SPEC.md","docs/TODO-1.8.md","src/components/PrPanel.svelte","src-tauri/src/prview.rs","src/lib/prs.ts","tests/fixtures/forges/","plugins/azure-devops/src/pulls.rs"]
 tickets: ["ESC-64","ESC-161","ESC-305","ESC-56","ESC-58","ESC-65","ESC-66","ESC-68","ESC-383","ESC-402","ESC-437"]
-decisions: [15,135,"azure-devops-l-adresse-d-une-pr-est-fait"]
+decisions: [15,135,157]
 compared: "2026-10-30T18:20:19+01:00"
 ---
 
