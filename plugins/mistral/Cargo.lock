@@ -149,9 +149,9 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "escouade-acp"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38717333782edf58bf924553713480bea0ea832649934f6630812e6155e3ff73"
+checksum = "3d0e005bb0a29845df80b2d6728bec60fd753bd8e79872b80e6bcea70fcbf9f3"
 dependencies = [
  "base64 0.22.1",
  "dunce",
@@ -179,7 +179,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-mistral"
-version = "2.2.6"
+version = "2.2.7"
 dependencies = [
  "escouade-acp",
  "escouade-plugin-protocol",
