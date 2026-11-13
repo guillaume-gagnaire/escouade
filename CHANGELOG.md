@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Azure DevOps : chaque PR a de nouveau son lien, même quand Azure ne donne pas l’adresse web de son dépôt.
 - Au lancement, les places du remote control sous son plafond vont toujours aux agents les plus récemment actifs : le plus récent n’en reste plus parfois privé au profit d’un plus ancien.
 - La vue Copilot CLI n’écrit plus sans te demander, même en « Édits auto » et « Auto », n’écrit jamais dans `.git` ni dans sa configuration, tient la lecture seule d’une discussion et ne s’ouvre pas pour un agent d’un projet privé. Sous Windows, les hooks des harness appellent escouade-hook par son chemin entier : un fichier du même nom dans le dossier de l’agent ne s’exécute plus.
 - Un plugin ne pose plus que les variables d’environnement que son manifeste déclare, montrées à l’installation, et jamais celles qui changeraient le programme qu’il lance. Le harness d’un plugin tiers ne peut plus être un shell ou un interpréteur, et sa version n’est lue qu’après un premier geste de ta part. « N’installer que des versions vérifiées » est allumé pour une nouvelle installation.

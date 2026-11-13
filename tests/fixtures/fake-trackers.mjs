@@ -530,7 +530,6 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
     }
     if (p.startsWith('/azure/')) {
       const a = p.slice('/azure'.length).toLowerCase();
-      const web = 'https://dev.azure.com/acme/demo/_git/demo';
       const azPull = (x) => ({
         pullRequestId: x.id,
         status: x.status,
@@ -543,7 +542,8 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
         lastMergeSourceCommit: { commitId: `sha${x.id}` },
         reviewers: x.changesRequested ? [{ id: 'bob-id', displayName: 'Bob Martin', uniqueName: 'bob@acme.dev', vote: -5 }] : [],
         autoCompleteSetBy: null,
-        repository: { id: 'repo-demo', name: 'demo', webUrl: web, project: { id: 'project-demo', name: 'demo' } },
+        // No webUrl, as Azure's lists of pull requests (and often its reads) say it (ESC-437).
+        repository: { id: 'repo-demo', name: 'demo', project: { id: 'project-demo', name: 'demo' } },
       });
       if (a === '/acme/_apis/connectiondata')
         return send(200, {

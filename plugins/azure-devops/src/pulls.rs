@@ -127,15 +127,18 @@ fn people(p: &Value) -> impl Iterator<Item = &Value> {
 }
 
 /// A pull request as Azure tells it, without what other calls say (its threads, its checks).
-fn pr_of(p: &Value) -> Option<PullRequest> {
+/// Its link is under its repository's `webUrl`, or under `repo_web` (the repository's address
+/// made by the client) when Azure leaves it out, as its lists of pull requests do.
+fn pr_of(p: &Value, repo_web: &str) -> Option<PullRequest> {
     let number = p["pullRequestId"].as_u64()?;
     let votes: Vec<i64> = people(p).filter_map(|r| r["vote"].as_i64()).collect();
+    let web = p["repository"]["webUrl"]
+        .as_str()
+        .filter(|w| !w.trim().is_empty())
+        .unwrap_or(repo_web);
     Some(PullRequest {
         number,
-        url: p["repository"]["webUrl"]
-            .as_str()
-            .map(|w| format!("{}/pullrequest/{number}", w.trim_end_matches('/')))
-            .unwrap_or_default(),
+        url: format!("{}/pullrequest/{number}", web.trim_end_matches('/')),
         title: p["title"].as_str().unwrap_or("").to_string(),
         state: match p["status"].as_str() {
             Some("completed") => PrState::Merged,
@@ -295,6 +298,35 @@ impl Azure {
         path.pop();
         path.push(enc(org));
         format!("{root}/{}", path.join("/"))
+    }
+
+    /// Where an organization (a collection) is in a browser: under the account's address, even
+    /// when the API is elsewhere (a fake one in the tests).
+    fn web_org_url(&self, org: &str) -> String {
+        let (root, mut path) = self.split_url();
+        path.pop();
+        path.push(enc(org));
+        format!("{root}/{}", path.join("/"))
+    }
+
+    /// A repository's address in a browser (`{org}/{project}/_git/{repository}`), its project and
+    /// its name as the pull request `p` says them, or as `repo` does.
+    fn repo_web(&self, repo: &RepoRef, p: &Value) -> String {
+        let (org, project) = parts(repo);
+        let named = |v: &Value| {
+            v.as_str()
+                .filter(|s| !s.trim().is_empty())
+                .map(str::to_string)
+        };
+        let project =
+            named(&p["repository"]["project"]["name"]).unwrap_or_else(|| project.to_string());
+        let name = named(&p["repository"]["name"]).unwrap_or_else(|| repo.name.clone());
+        format!(
+            "{}/{}/_git/{}",
+            self.web_org_url(org),
+            enc(&project),
+            enc(&name)
+        )
     }
 
     fn project_api(&self, repo: &RepoRef) -> String {
@@ -546,7 +578,7 @@ impl Azure {
     /// A pull request with its open threads and its checks in one word, for an open one (a
     /// merged or abandoned one is not asked more).
     async fn full(&self, repo: &RepoRef, p: &Value) -> Result<PullRequest> {
-        let mut pr = pr_of(p).ok_or_else(unreadable)?;
+        let mut pr = pr_of(p, &self.repo_web(repo, p)).ok_or_else(unreadable)?;
         if pr.state != PrState::Open {
             return Ok(pr);
         }
@@ -973,7 +1005,7 @@ impl Forge for Azure {
                     body,
                 )
                 .await?;
-            let created = pr_of(&made).ok_or_else(unreadable)?;
+            let created = pr_of(&made, &self.repo_web(repo, &made)).ok_or_else(unreadable)?;
             let at = self.pr_api(repo, created.number);
             // The pull request exists: a reviewer Azure does not find or refuses, or a label that
             // fails, does not take it back.

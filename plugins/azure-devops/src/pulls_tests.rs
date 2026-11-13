@@ -85,6 +85,82 @@ fn a_merge_policy_says_its_strategies_its_former_setting_too() {
         [MergeStrategy::Merge]
     );
 }
+/// A pull request as the lists (and often the reads) of Azure tell it: its repository without
+/// `webUrl`. Its link is made from the account's address, its project and its repository.
+fn pull_without_web_url(number: u64, status: &str) -> Value {
+    json!({
+        "pullRequestId": number,
+        "status": status,
+        "title": "Connexion",
+        "sourceRefName": "refs/heads/feat/login",
+        "targetRefName": "refs/heads/main",
+        "repository": {
+            "id": "3411ebc1-d5aa-464f-9615-0b527bc66719",
+            "name": "Mon dépôt",
+            "url": "https://dev.azure.com/acme/7c3e4d55/_apis/git/repositories/3411ebc1",
+            "project": { "id": "7c3e4d55", "name": "Projet Démo" }
+        }
+    })
+}
+
+#[tokio::test]
+async fn a_pull_request_without_web_url_has_its_link_made_on_the_cloud_and_on_a_server() {
+    for (account, org, web) in [
+        (
+            "https://dev.azure.com/acme",
+            "acme",
+            "https://dev.azure.com/acme/Projet%20D%C3%A9mo/_git/Mon%20d%C3%A9p%C3%B4t/pullrequest",
+        ),
+        (
+            "https://tfs.exemple/collection",
+            "collection",
+            "https://tfs.exemple/collection/Projet%20D%C3%A9mo/_git/Mon%20d%C3%A9p%C3%B4t/pullrequest",
+        ),
+    ] {
+        let server = FakeServer::start().await;
+        let repo_api = format!("/{org}/Projet%20D%C3%A9mo/_apis/git/repositories/Mon%20d%C3%A9p%C3%B4t");
+        server.on(
+            "GET",
+            &format!("{repo_api}/pullrequests"),
+            200,
+            json!({ "value": [pull_without_web_url(7, "completed")] }),
+        );
+        server.on(
+            "GET",
+            &format!("{repo_api}/pullRequests/8"),
+            200,
+            pull_without_web_url(8, "abandoned"),
+        );
+        let azure = Azure::new(
+            reqwest::Client::new(),
+            account.into(),
+            Some(server.url.clone()),
+            "pat".into(),
+        );
+        let repo = RepoRef {
+            namespace: format!("{org}/Projet Démo"),
+            name: "Mon dépôt".into(),
+        };
+        let listed = azure
+            .pull_requests_of_branch(&repo, "feat/login")
+            .await
+            .unwrap();
+        assert_eq!(listed[0].url, format!("{web}/7"), "{account}");
+        let read = azure.pull_request(&repo, 8).await.unwrap();
+        assert_eq!(read.url, format!("{web}/8"), "{account}");
+    }
+}
+
+#[test]
+fn a_pull_request_keeps_the_web_url_azure_gives() {
+    let mut p = pull_without_web_url(9, "active");
+    p["repository"]["webUrl"] =
+        json!("https://acme.visualstudio.com/Projet%20D%C3%A9mo/_git/Mon%20d%C3%A9p%C3%B4t/");
+    assert_eq!(
+        pr_of(&p, "https://ignored").unwrap().url,
+        "https://acme.visualstudio.com/Projet%20D%C3%A9mo/_git/Mon%20d%C3%A9p%C3%B4t/pullrequest/9"
+    );
+}
 // ---- A real organization ----
 
 /// Reads and writes on a real Azure DevOps project with a PAT of the user's (Code read and

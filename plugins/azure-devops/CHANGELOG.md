@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.4
+
+- Each pull request has its link again, even when Azure DevOps leaves out its repository's `webUrl` (its lists of pull requests do): it is made from the account's address, the project and the repository, on dev.azure.com and on a Server (ESC-437).
+
 ## 2.2.3
 
 - Its messages, README and documentation send to the settings pages of Escouade 2.2: Connected services and Advanced › Network (ESC-387).

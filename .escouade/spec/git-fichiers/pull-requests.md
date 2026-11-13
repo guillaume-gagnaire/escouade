@@ -1,9 +1,9 @@
 ---
 title: "Pull requests"
 subject: "Git & fichiers"
-sources: ["docs/SPEC.md","docs/TODO-1.8.md","src/components/PrPanel.svelte","src-tauri/src/prview.rs","src/lib/prs.ts","tests/fixtures/forges/"]
-tickets: ["ESC-64","ESC-161","ESC-305","ESC-56","ESC-58","ESC-65","ESC-66","ESC-68","ESC-383","ESC-402"]
-decisions: [15,135]
+sources: ["docs/SPEC.md","docs/TODO-1.8.md","src/components/PrPanel.svelte","src-tauri/src/prview.rs","src/lib/prs.ts","tests/fixtures/forges/","plugins/azure-devops/src/pulls.rs"]
+tickets: ["ESC-64","ESC-161","ESC-305","ESC-56","ESC-58","ESC-65","ESC-66","ESC-68","ESC-383","ESC-402","ESC-437"]
+decisions: [15,135,"azure-devops-l-adresse-d-une-pr-est-fait"]
 compared: "2026-10-30T18:20:19+01:00"
 ---
 
@@ -92,3 +92,8 @@ Sous la carte et dans l'onglet « PR et CI », sur une PR ouverte, jamais d'elle
 - Le cycle des PR hors tickets et ce qui en reste à faire : `docs/TODO-1.8.md`, chapitre 2 (« Les PR hors tickets »).
 
 - Ce qu'une PR devient se notifie (voir *Notifications*), celles qui attendent l'utilisateur sont dans la vue d'ensemble (voir *Vue d'ensemble*), et les agents les lisent par `list_pull_requests` et `get_pull_request` (voir *Serveur MCP*).
+
+## L'adresse d'une PR d'Azure DevOps (ESC-437)
+
+- Azure DevOps ne donne pas toujours l'adresse web du dépôt (`webUrl`) dans une PR : ses listes de PR ne la donnent pas, sa lecture d'une PR souvent pas non plus. L'adresse de la PR est alors faite par le plugin : l'adresse du compte (`https://dev.azure.com/<org>`, ou celle de la collection d'un Azure DevOps Server, chemin compris), puis le projet et le dépôt que dit la PR, chacun encodé (espaces, accents) : `<org>/<projet>/_git/<dépôt>/pullrequest/<n>`. Quand Azure donne `webUrl`, c'est elle qui sert.
+- Cette adresse vient toujours de l'adresse du compte, jamais de celle de l'API (qu'un faux serveur remplace dans les tests).

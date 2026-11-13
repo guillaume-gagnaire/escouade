@@ -178,7 +178,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-azure-devops"
-version = "2.2.3"
+version = "2.2.4"
 dependencies = [
  "anyhow",
  "escouade-plugin-kit",
