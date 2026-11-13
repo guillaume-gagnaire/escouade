@@ -9,6 +9,8 @@
 use super::{Engine, Located, Program};
 use crate::i18n::{self, Lang};
 use crate::model::EngineId;
+// A model as its harness lists it, kept with the account: in `escouade-model` (docs/CRATES.md).
+pub use escouade_model::registry::ToldModel;
 use parking_lot::{Mutex, RwLock};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -225,39 +227,6 @@ pub struct ModelDecl {
     pub effort: bool,
     /// It takes the mode `auto` (`Engine::supports_auto`).
     pub auto: bool,
-}
-
-/// A model as its harness lists it for the account (Codex: `model/list`), which the composer's
-/// menu of its agents offers in place of the declared ones (`ModelDecl`).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ToldModel {
-    /// The id its harness takes.
-    pub id: String,
-    /// Its name in the menu (`GPT-6-Luna`).
-    pub label: String,
-    /// The efforts it takes, in its harness's order (none: no menu « Effort »).
-    pub efforts: Vec<String>,
-    pub default_effort: Option<String>,
-    /// It reads images.
-    pub images: bool,
-    /// The one its harness runs unless told otherwise: the model of a new agent of it.
-    pub default: bool,
-    /// The provider it comes from, when its harness has several (OpenCode: `Ollama (local)`).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider: Option<String>,
-    /// What it costs beside the others, as its harness bills it (Copilot: `billing.multiplier`,
-    /// `1` the base rate, written `×3` beside it in the menu).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub multiplier: Option<String>,
-    /// Its tier of price, when its harness tells no multiplier (Copilot: `low`, `medium`,
-    /// `high`, `very_high`).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub price: Option<String>,
-    /// Not listed by its harness, but the model the account's config names (Codex's `model` of
-    /// its `config.toml`, ESC-186): offered after the listed ones, marked as coming from there.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub from_config: bool,
 }
 
 pub use escouade_plugin_cli::manifest::Version;

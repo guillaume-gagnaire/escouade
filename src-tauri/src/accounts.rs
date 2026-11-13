@@ -18,6 +18,8 @@ use crate::model::{Account, AccountUsage, EngineId, Project, Settings};
 use crate::pace::{self, Standing};
 use crate::pty::TermInfo;
 use anyhow::{bail, Result};
+// The names the data keeps, in `escouade-model` (docs/CRATES.md).
+pub use escouade_model::accounts::{ACCOUNTS_VERSION, PRINCIPAL};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
@@ -25,13 +27,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::Runtime;
-
-/// The id of the user's own account.
-pub const PRINCIPAL: &str = "principal";
-
-/// How far the accounts are brought (`Settings::accounts_version`): 1 since only the accounts
-/// added exist (ESC-128, `migrate`).
-pub const ACCOUNTS_VERSION: u32 = 1;
 
 /// The variable that gives Claude Code its configuration folder.
 pub(crate) const CONFIG_DIR_VAR: &str = "CLAUDE_CONFIG_DIR";

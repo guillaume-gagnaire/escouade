@@ -8,7 +8,7 @@ fn close(a: f64, b: f64) -> bool {
 /// The usages of `tests/fixtures/claude/long-turn.jsonl`: Claude Code writes its cache for 1 hour.
 fn fixture_usages(name: &str) -> Vec<Value> {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../tests/fixtures")
+        .join("../../tests/fixtures")
         .join(name);
     let text = std::fs::read_to_string(path).unwrap();
     text.lines()

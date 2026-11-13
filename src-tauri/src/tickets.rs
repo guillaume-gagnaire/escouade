@@ -4,7 +4,7 @@
 
 use crate::accounts;
 use crate::agent::NotifyKind;
-use crate::board::{self, TurnEnd};
+use crate::board::{self, LiftHold, TurnEnd};
 use crate::core::{not_a_repo, project_not_found, target_branch_refusal, AgentOptions, Core};
 use crate::engine::{self, Process};
 use crate::git;

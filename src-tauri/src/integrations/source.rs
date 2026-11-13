@@ -118,10 +118,6 @@ impl Registry {
         self.kinds.iter().find(|k| k.id() == service.as_str())
     }
 
-    pub fn position(&self, service: Service) -> Option<usize> {
-        self.kinds.iter().position(|k| k.id() == service.as_str())
-    }
-
     /// A client of `service` for `account`; an error when this version does not know the source.
     pub fn client(
         &self,
@@ -407,6 +403,9 @@ mod tests {
             ]
         );
         assert_eq!(Service::GITLAB.label(), "GitLab");
+        // `Service` names and orders them by its own table (`escouade-model`): the same as the registry.
+        let table: Vec<(&str, &str)> = ids.iter().copied().zip(labels.iter().copied()).collect();
+        assert_eq!(table, crate::model::SOURCES);
     }
 
     #[test]

@@ -15,7 +15,6 @@ pub(crate) use mcp::all_tools;
 
 use super::registry::{
     CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
-    ToldModel,
 };
 use super::Program;
 use super::{BoxFuture, Engine, Message, OneShot, Process, Spawn, StartLost, Weight};
@@ -317,57 +316,6 @@ pub fn told_effort(told: &[crate::model::ModelInfo], model: &str) -> Option<bool
         return None;
     }
     told_model(told, model).map(|t| t.supports_effort == Some(true))
-}
-
-/// The composer's menu of the agents of an account, as its `claude` told its models
-/// (`initialize`, ESC-124): in its order and by the names of its `/model`, each with its
-/// efforts; `default` (Claude Code's choice, the same model as another) is not one, but marks
-/// the one it runs. Empty when it tells no names (a list read before ESC-124): the fixed one
-/// serves.
-pub fn catalog(told: &[crate::model::ModelInfo]) -> Vec<ToldModel> {
-    if told.iter().all(|m| m.display_name.is_empty()) {
-        return Vec::new();
-    }
-    let default = told
-        .iter()
-        .find(|m| m.value == "default")
-        .map(|m| m.resolved_model.as_str());
-    let mut marked = false;
-    let mut out = Vec::new();
-    for m in told.iter().filter(|m| m.value != "default") {
-        if out.iter().any(|o: &ToldModel| o.id == m.value) {
-            continue;
-        }
-        let is_default = !marked && default == Some(m.resolved_model.as_str());
-        marked |= is_default;
-        let efforts = if m.supports_effort == Some(true) {
-            m.supported_effort_levels.clone()
-        } else {
-            Vec::new()
-        };
-        out.push(ToldModel {
-            from_config: false,
-            id: m.value.clone(),
-            label: if m.display_name.is_empty() {
-                m.value.clone()
-            } else {
-                m.display_name.clone()
-            },
-            efforts,
-            default_effort: None,
-            images: true,
-            default: is_default,
-            provider: None,
-            multiplier: None,
-            price: None,
-        });
-    }
-    if !marked {
-        if let Some(first) = out.first_mut() {
-            first.default = true;
-        }
-    }
-    out
 }
 
 /// The JSON answer of `claude -p --output-format json`: the whole output, or its last line that
@@ -853,6 +801,8 @@ mod tests {
     use super::*;
     use crate::model::{Criterion, ModelInfo, Ticket};
     use crate::plugins::harness::args_for_log;
+    // The menu `initialize` makes, in `escouade-model` with the accounts' models that keep it.
+    use escouade_model::registry::claude_catalog as catalog;
 
     /// Its `--tools`, after its model: the model of a reading, and none of its tools.
     #[test]

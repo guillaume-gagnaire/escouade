@@ -5,6 +5,9 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
+// A repository's folder, which the projects name: in `escouade-model` (docs/CRATES.md).
+pub use escouade_model::repos::join;
+
 /// Never looked into: what a build, a package manager or the app itself puts in a folder.
 const SKIPPED: [&str; 6] = [
     "node_modules",
@@ -26,19 +29,6 @@ pub fn label(repo: &str) -> String {
     } else {
         repo.to_string()
     }
-}
-
-/// The folder `repo` (from the project's, with `/`) of the folder `base` (the project's, or an
-/// agent's worktrees folder).
-pub fn join(base: &str, repo: &str) -> String {
-    if repo.is_empty() {
-        return base.to_string();
-    }
-    let mut p = PathBuf::from(base);
-    for part in repo.split('/') {
-        p.push(part);
-    }
-    p.to_string_lossy().into_owned()
 }
 
 /// Of the repositories `repos`, the one a path from the project's folder (with `/`) is in, and the

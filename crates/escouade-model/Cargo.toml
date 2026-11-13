@@ -1,0 +1,52 @@
+[package]
+name = "escouade-model"
+version = "0.1.0"
+description = "The data of Escouade (settings, projects, tickets, agents) and what it names, the data folder, the processes and WSL"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../src-tauri"
+# A part of the app, cut out of its crate for it to compile faster (docs/CRATES.md): never published.
+publish = false
+
+[features]
+# What the app's tests build their data with (`NotifyFor::all_but`, `EngineId::BENCH`, `proc::output_in_files`…).
+testing = []
+
+[dependencies]
+# The languages written in now, the guards of the paths.
+escouade-base = { path = "../escouade-base" }
+# An agent's plan (`AgentMeta::plan`).
+escouade-plan = { path = "../escouade-plan" }
+# The data of the code hosts (a ticket's pull requests, a branch's checks).
+escouade-plugin-protocol = { path = "../escouade-plugin-protocol" }
+# The data folder's shared names and `tr_in!`.
+escouade-plugin-cli = { path = "../escouade-plugin-cli" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# The errors of the agents' groups' file (`agentgroups`).
+anyhow = "1"
+parking_lot = "0.13"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+dirs = "7"
+log = "0.4"
+tokio = { version = "1", features = ["process", "io-util", "time"] }
+portable-pty = "0.9"
+# A decision's slug.
+unicode-normalization = "0.1"
+# The proxy of the settings, as an address (`tls::proxy_url`: reqwest's `Url`).
+url = "2"
+# How a decision is cited, as the MCP tools describe it (rmcp's version).
+schemars = "1"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_ProcessStatus", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+escouade-base = { path = "../escouade-base", features = ["testing"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time", "fs"] }

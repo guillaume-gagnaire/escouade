@@ -1724,6 +1724,7 @@ dependencies = [
  "dirs 7.0.0",
  "escouade-acp",
  "escouade-base",
+ "escouade-model",
  "escouade-plan",
  "escouade-plugin-cli",
  "escouade-plugin-kit",
@@ -1810,6 +1811,31 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "escouade-plugin-cli",
+]
+
+[[package]]
+name = "escouade-model"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "dirs 7.0.0",
+ "escouade-base",
+ "escouade-plan",
+ "escouade-plugin-cli",
+ "escouade-plugin-protocol",
+ "libc",
+ "log",
+ "parking_lot 0.13.0",
+ "portable-pty",
+ "schemars 1.2.2",
+ "serde",
+ "serde_json",
+ "tokio",
+ "unicode-normalization",
+ "url",
+ "uuid",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

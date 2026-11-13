@@ -623,6 +623,25 @@ pub use imp::Job;
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
+
+    /// The `PATH` of a test of the workspace holds every folder a build script gives the linker, those of
+    /// whisper-rs-sys's cmake tree among them (46): past the 8191 characters cmd.exe reads. They go, once, as the app's
+    /// `paths::trim_test_path` does.
+    fn trim_test_path() {
+        static ONCE: std::sync::Once = std::sync::Once::new();
+        ONCE.call_once(|| {
+            let Some(path) = std::env::var_os("PATH") else {
+                return;
+            };
+            let kept: Vec<std::path::PathBuf> = std::env::split_paths(&path)
+                .filter(|p| !p.to_string_lossy().contains("whisper-rs-sys-"))
+                .collect();
+            if let Ok(joined) = std::env::join_paths(kept) {
+                // Edition 2021: safe; done once, before the test spawns anything.
+                std::env::set_var("PATH", joined);
+            }
+        });
+    }
     use std::process::Command;
 
     fn alive(pid: u32) -> bool {
@@ -732,7 +751,7 @@ mod tests {
     async fn a_program_the_process_started_before_it_joined_the_job_is_held_too() {
         // What a `.cmd` shim does: `cmd` starts its program at once, maybe before the job exists.
         // The program says it runs, by a file; `cmd` waits for it to end.
-        crate::paths::trim_test_path();
+        trim_test_path();
         let up = std::env::temp_dir().join(format!("ccm-job-adopt-{}", std::process::id()));
         let _ = std::fs::remove_file(&up);
         let mut cmd = tokio::process::Command::new("cmd");

@@ -128,8 +128,8 @@ pub async fn wait_output(mut child: Child) -> io::Result<Output> {
 /// `cmd.output()` for the tests, with stdout and stderr in temporary files instead of pipes: a
 /// file has no end to wait for, so a program started at the same moment (a fake `claude`) that
 /// inherits it cannot hold `cmd` back.
-#[cfg(test)]
-pub(crate) fn output_in_files(cmd: &mut std::process::Command) -> io::Result<Output> {
+#[cfg(any(test, feature = "testing"))]
+pub fn output_in_files(cmd: &mut std::process::Command) -> io::Result<Output> {
     use std::sync::atomic::{AtomicU32, Ordering};
     static NEXT: AtomicU32 = AtomicU32::new(0);
     let base = format!(
@@ -259,7 +259,7 @@ mod tests {
 
     #[tokio::test]
     async fn five_megabytes_come_back_whole() {
-        let dir = crate::paths::test_dir("proc-five-megabytes");
+        let dir = escouade_base::testing::test_dir("proc-five-megabytes");
         let file = dir.join("big.txt");
         let text: String = (0..580_000).map(|i| format!("{i:08}\n")).collect();
         assert!(text.len() > 5_000_000);

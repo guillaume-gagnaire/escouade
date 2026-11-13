@@ -38,10 +38,7 @@ pub use agy::AGY;
 pub(crate) use claude::terminal as claude_terminal;
 #[cfg(test)]
 pub use claude::told_auto as claude_told_auto;
-pub use claude::{
-    catalog as claude_catalog, missing_line as claude_missing_line,
-    told_model as claude_told_model, CLAUDE,
-};
+pub use claude::{missing_line as claude_missing_line, told_model as claude_told_model, CLAUDE};
 #[cfg(test)]
 pub(crate) use codex::fake_codex;
 pub use codex::CODEX;

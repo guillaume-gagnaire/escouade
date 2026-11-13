@@ -269,7 +269,7 @@ mod tests {
     }
 
     fn ledger(name: &str) -> Ledger {
-        let dir = crate::paths::test_dir(&format!("agentgroups-{name}"));
+        let dir = escouade_base::testing::test_dir(&format!("agentgroups-{name}"));
         Ledger::new(dir.join("agent-groups.json"))
     }
 

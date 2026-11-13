@@ -391,7 +391,7 @@ pub fn on_share(path: &Path) -> bool {
 
 /// The distribution and the Linux path (`/` for its root) of a path to the WSL share written with
 /// `/` (`//wsl.localhost/<distro>/…`, `//wsl$/<distro>/…`); None for any other.
-pub(crate) fn share_path(slashed: &str) -> Option<(&str, String)> {
+pub fn share_path(slashed: &str) -> Option<(&str, String)> {
     let (host, rest) = slashed.strip_prefix("//")?.split_once('/')?;
     if !(host.eq_ignore_ascii_case("wsl.localhost") || host.eq_ignore_ascii_case("wsl$")) {
         return None;
@@ -644,7 +644,7 @@ mod tests {
     /// drives under `/win/`) with `claude` in `~/.local/bin`, and `Debian` with nothing.
     fn machine(name: &str) -> Machine {
         // Built a component at a time: the tests run on every system.
-        let share = crate::paths::test_dir(name);
+        let share = escouade_base::testing::test_dir(name);
         let ubuntu = share.join("Ubuntu");
         std::fs::create_dir_all(under(&ubuntu, "/etc")).unwrap();
         std::fs::create_dir_all(under(&ubuntu, "/home/me/.local/bin")).unwrap();

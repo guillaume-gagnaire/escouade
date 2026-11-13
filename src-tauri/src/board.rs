@@ -575,50 +575,16 @@ pub fn pick_threshold(settings: &Settings) -> u32 {
     quota_threshold(settings.quota_pause).min(switch_threshold(settings))
 }
 
-impl Hold {
-    /// What holds the account `id` back (Principal's are the top-level ones).
-    pub fn of(&self, id: &str) -> AccountHold {
-        if id == PRINCIPAL {
-            AccountHold {
-                limit_until: self.limit_until,
-                lifted: self.lifted,
-                lifted_other: self.lifted_other.clone(),
-            }
-        } else {
-            self.accounts.get(id).cloned().unwrap_or_default()
-        }
-    }
+/// "Reprendre maintenant", which reads the accounts' usage (`AccountUsage`, the app's): `Hold` itself is in
+/// `escouade-model`.
+pub trait LiftHold {
+    fn lift(&mut self, usage: &[AccountUsage], threshold: u32, now: i64);
+}
 
-    /// What holds the account `id` back, as `hold` now says (an account that holds nothing is
-    /// not kept).
-    fn set(&mut self, id: &str, hold: AccountHold) {
-        if id == PRINCIPAL {
-            self.limit_until = hold.limit_until;
-            self.lifted = hold.lifted;
-            self.lifted_other = hold.lifted_other;
-        } else if hold == AccountHold::default() {
-            self.accounts.remove(id);
-        } else {
-            self.accounts.insert(id.to_string(), hold);
-        }
-    }
-
-    /// A usage limit with no resume planned on the account: none of its tickets start until
-    /// `until`.
-    pub fn limit(&mut self, id: &str, until: i64) {
-        let hold = self.of(id);
-        self.set(
-            id,
-            AccountHold {
-                limit_until: Some(until),
-                ..hold
-            },
-        );
-    }
-
+impl LiftHold for Hold {
     /// "Reprendre maintenant" at `now`: the pauses after a limit go, and so do the windows of
     /// every account over the threshold, until their end.
-    pub fn lift(&mut self, usage: &[AccountUsage], threshold: u32, now: i64) {
+    fn lift(&mut self, usage: &[AccountUsage], threshold: u32, now: i64) {
         let held: Vec<String> = self.accounts.keys().cloned().collect();
         let ids = usage.iter().map(|u| u.id.as_str());
         let ids = ids.chain(held.iter().map(String::as_str));

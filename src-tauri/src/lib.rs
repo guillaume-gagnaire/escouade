@@ -8,7 +8,6 @@ mod agent;
 mod agentbranch;
 #[cfg(test)]
 mod agentbranch_tests;
-mod agentgroups;
 mod agentprs;
 #[cfg(test)]
 mod agentprs_tests;
@@ -115,13 +114,11 @@ mod handover;
 mod harness_scope;
 #[cfg(test)]
 mod harness_scope_tests;
-mod heat;
 mod hub;
 mod integrations;
 #[cfg(test)]
 mod integrations_tests;
 mod isola;
-mod job;
 mod launchenv;
 mod leftovers;
 mod mcp;
@@ -144,6 +141,8 @@ mod paths;
 mod remote_tests;
 // What an agent is getting through, and the plan files it follows: the crate `escouade-plan`.
 use escouade_plan::{plan, planfiles};
+// The data and what it names, the processes and WSL: the crate `escouade-model` (`model` and `paths` re-export theirs).
+use escouade_model::{agentgroups, heat, job, pricing, proc, wsl};
 mod plugins;
 #[cfg(test)]
 mod plugins_accounts_tests;
@@ -208,11 +207,9 @@ mod plugins_wasm_tests;
 mod pragent;
 #[cfg(test)]
 mod pragent_tests;
-mod pricing;
 #[cfg(test)]
 mod private_tests;
 mod prnews;
-mod proc;
 #[cfg(test)]
 mod process_tests;
 mod projectfile;
@@ -294,7 +291,6 @@ mod workflowrefine;
 #[cfg(test)]
 mod workflowrefine_tests;
 mod worktrees;
-mod wsl;
 
 use crate::core::Core;
 use std::io::Write;

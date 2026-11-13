@@ -32,6 +32,9 @@ use crate::i18n::Lang;
 use crate::model::{Column, Ticket};
 use crate::tickets::TicketDraft;
 
+// What a planning did, kept on its discussion: in `escouade-model` (docs/CRATES.md).
+pub use escouade_model::docsplan::{Made, Plan, Skipped};
+
 /// How long the planner has.
 pub const LIMIT: Duration = Duration::from_secs(600);
 /// The tickets one planning makes at most.
@@ -52,42 +55,6 @@ pub fn planning(project_id: &str) -> bool {
         .lock()
         .map(|p| p.iter().any(|x| x == project_id))
         .unwrap_or(false)
-}
-
-/// A ticket a planning made.
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
-#[serde(rename_all = "camelCase", default)]
-pub struct Made {
-    pub id: String,
-    pub key: String,
-    pub title: String,
-}
-
-/// A ticket the planner proposed and Escouade left out: the board has it already (`key`).
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
-#[serde(rename_all = "camelCase", default)]
-pub struct Skipped {
-    pub title: String,
-    pub key: String,
-}
-
-/// What a planning did.
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
-#[serde(rename_all = "camelCase", default)]
-pub struct Plan {
-    pub id: String,
-    /// When (ms).
-    pub at: i64,
-    /// The discussion it was asked from (its agent); None: from the Specification.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub discussion: Option<String>,
-    /// The changes it planned.
-    pub pages: Vec<String>,
-    pub decisions: Vec<Ref>,
-    pub made: Vec<Made>,
-    pub skipped: Vec<Skipped>,
-    /// « Annuler » was clicked.
-    pub cancelled: bool,
 }
 
 /// What a project has to plan, and its plans, in `planning.json` of its data folder.
