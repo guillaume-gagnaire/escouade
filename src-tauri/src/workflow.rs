@@ -2064,6 +2064,18 @@ pub fn is_stale(scan: &Scan, root: &Path, repos: &[String], roots: &Roots) -> bo
 const ALL_EVERY: std::time::Duration = std::time::Duration::from_secs(30);
 static LAST_ALL: parking_lot::Mutex<Option<std::time::Instant>> = parking_lot::Mutex::new(None);
 static ALL_RUNNING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// What the readings of the workflows write (`workflows.json`, the files of the workflows, the removals), written by
+/// one at a time: `refresh_workflows` and the tracking's first reading (`read_if_never_read`) both write them, and
+/// `write_atomic` goes by one temporary file (ESC-440).
+pub(crate) static WRITING: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+
+#[allow(clippy::type_complexity)]
+/// The reading of each project under way (`refresh_workflows`), by project.
+static READING: std::sync::LazyLock<
+    parking_lot::Mutex<std::collections::HashMap<String, std::sync::Arc<tokio::sync::Mutex<()>>>>,
+> = std::sync::LazyLock::new(Default::default);
+
 /// By project: the fingerprint of its workflows' files as last read or written, and what the
 /// readings of this run changed of each workflow (« Mis à jour par la relecture »).
 #[allow(clippy::type_complexity)]
@@ -2086,6 +2098,20 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
     /// file it read changed (or `force`: « Relire »), and kept when it did. A project that was
     /// never read is read now.
     pub async fn refresh_workflows(&self, project_id: &str, force: bool) -> anyhow::Result<Scan> {
+        // One reading of a project at a time (ESC-440): two at once (the window's cards and its tab, the window back to
+        // the front) wrote `workflows.json` by the same temporary file, and the second's rename failed (« fichier
+        // introuvable »), the window left with no workflow. The second waits, then finds the first's reading kept;
+        // what it writes, it writes under `WRITING`, as the tracking does.
+        let lock = READING
+            .lock()
+            .entry(project_id.to_string())
+            .or_default()
+            .clone();
+        let _one = lock.lock().await;
+        self.refresh_workflows_now(project_id, force).await
+    }
+
+    async fn refresh_workflows_now(&self, project_id: &str, force: bool) -> anyhow::Result<Scan> {
         let project = self.project(project_id)?;
         // « Pas de workflow pour ce projet » (ESC-309): neither read nor written.
         if !project.workflows_enabled {
@@ -2106,6 +2132,8 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             }
         })
         .await?;
+        // What is written, by this reading alone: the tracking may write it too (`read_if_never_read`).
+        let writing = WRITING.lock();
         if changed {
             if let Some(dir) = file.parent() {
                 std::fs::create_dir_all(dir)?;
@@ -2137,6 +2165,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             drop(files);
             folder = crate::workflowfiles::load_all(&places);
         }
+        drop(writing);
         let shared = self.scan_from_files(&project, &folder, &scan);
         self.workflow_read(project_id, &shared, changed || !written.is_empty());
         Ok(shared)

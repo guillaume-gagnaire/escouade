@@ -992,6 +992,11 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
         if file.exists() {
             return;
         }
+        // Written as `refresh_workflows` writes, never at the same time (ESC-440); read meanwhile, it is not read again.
+        let _writing = crate::workflow::WRITING.lock();
+        if file.exists() {
+            return;
+        }
         let Ok(p) = self.project(project_id) else {
             return;
         };

@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Two readings of a project’s workflows at the same time no longer leave the window with no workflow. A ticket blocked because its harness is cut for the project keeps that reason when its agent’s turn ends afterwards.
 - Security: in “Update all”, a version nobody reviewed, or a plugin from a repository or a folder, gets its own window, with its warning; the shared window holds only verified versions that add nothing.
 - Security: a plugin loaded in development, from a folder or from a repository never has the rights of Escouade’s own plugins, whatever its id. The “Skip verification” box now holds only for a connection that really goes through the proxy, even when its exclusions are written as a range of addresses.
 - Plugins: “Update all” is on the updates page too, and an update leaves you on the page you were on. Those that ask for nothing more are confirmed together in one window; the others keep their own, with what they add marked.

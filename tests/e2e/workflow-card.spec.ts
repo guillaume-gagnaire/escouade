@@ -199,13 +199,15 @@ test('the step on the card and in the conversation, an agent of a ticket in GSD 
   }
 
   // Compared to the preview, in both themes.
-  test.skip(
-    !fs.existsSync(chromium.executablePath()) || !fs.existsSync(PREVIEW_FONT),
-    'the preview needs Playwright’s Chromium and the site’s packages (website/npm ci)',
-  );
+  const needs = 'the preview needs Playwright’s Chromium and the site’s packages (website/npm ci)';
+  test.skip(!fs.existsSync(PREVIEW_FONT), needs);
   await card.click();
   await expect(dividers).toHaveCount(2);
-  const browser = await chromium.launch();
+  // Launched headless, Chromium is Playwright's « headless shell », another download than `chromium.executablePath()`:
+  // either may be missing (ESC-440).
+  const browser = await chromium.launch().catch(() => null);
+  test.skip(!browser, needs);
+  if (!browser) return;
   const preview = await browser.newPage();
   try {
     await preview.setViewportSize(RUNNER);
