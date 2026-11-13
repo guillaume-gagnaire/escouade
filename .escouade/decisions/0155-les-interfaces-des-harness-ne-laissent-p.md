@@ -1,9 +1,9 @@
 ---
-number: null
+number: 155
 id: "les-interfaces-des-harness-ne-laissent-p"
 title: "Les interfaces des harness ne laissent passer que ce qu'elles tiennent : vue Copilot CLI sans écriture d'office, refusée sous clôture ; escouade-hook par son chemin entier"
 date: "2026-11-12"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-430"
 pages: ["plugins/copilot-cli-en-plugin","plugins/antigravity-en-plugin","plugins/harness-en-process"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/copilot-cli-en-plugin","added":11,"removed":2},{"page":"plugins/harness-en-process","added":5,"removed":0},{"page":"plugins/antigravity-en-plugin","added":7,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-13T01:17:14+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
