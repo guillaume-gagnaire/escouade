@@ -31,12 +31,15 @@ pub fn in_its_settings(path: &str, dir: &str) -> bool {
         let mut out: Vec<String> = Vec::new();
         for part in s.replace('\\', "/").to_lowercase().split('/') {
             let part = part.split(':').next().unwrap_or(part);
-            let part = part.trim_end_matches(['.', ' ']);
-            match part {
-                "" | "." => {}
-                ".." => {
-                    out.pop()?;
-                }
+            // `..` before the trailing dots go, which would make it nothing and skip it.
+            if part == ".." {
+                out.pop()?;
+                continue;
+            }
+            match part.trim_end_matches(['.', ' ']) {
+                // `...`, `.. `: a name of dots and spaces alone, which Windows may read as another folder.
+                "" if part.len() > 1 => return None,
+                "" => {}
                 p => out.push(p.to_string()),
             }
         }

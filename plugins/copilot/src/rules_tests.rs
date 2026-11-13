@@ -313,6 +313,12 @@ fn a_write_in_copilots_settings_has_a_card_whatever_its_name() {
             "C:\\wt\\.github\\hooks\\h.json",
             "c:/wt/.GitHub/Hooks/h.json",
             "C:\\wt\\GITHUB~1\\hooks\\h.json",
+            // A folder up, which comes back into them.
+            "C:\\wt\\.github\\x\\..\\hooks\\h.json",
+            "C:\\wt\\src\\..\\.copilot\\settings.json",
+            // A name of dots alone, which Windows may read as another folder: a card.
+            "C:\\wt\\.github\\...\\hooks\\h.json",
+            "C:\\wt\\.github\\.. \\hooks\\h.json",
         ]
         .iter()
         .enumerate()
@@ -327,6 +333,7 @@ fn a_write_in_copilots_settings_has_a_card_whatever_its_name() {
             "C:\\wt\\.github\\workflows\\ci.yml",
             "C:\\wt\\copilot\\a.md",
             "C:\\wt\\docs\\hooks\\a.md",
+            "C:\\wt\\.github\\hooks\\..\\workflows\\ci.yml",
         ]
         .iter()
         .enumerate()

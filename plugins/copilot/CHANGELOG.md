@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.7
+
+- Its process sends to a card a write whose path goes back up into Copilot’s settings (`.github/x/../hooks`): a `..` no longer hides `.github/hooks`, `.github/copilot` or `.copilot`, and a folder named of dots and spaces alone, which Windows may read as another one, goes to a card too.
+
 ## 2.2.6
 
 - In its Copilot CLI view, every write asks in Accept edits and Auto: `--allow-tool=write` covered the worktree’s `.git` too (a hook, then a `git commit` with no question), and nothing proves a refusal by path covers the files under `.git`. Writes in `.git`, `.copilot`, `.github/copilot`, `.github/hooks` and the joined files’ folder are refused there in every mode (`--deny-tool`), and its process sends those of Copilot’s settings to a card, as those of `.git` (ESC-430).
