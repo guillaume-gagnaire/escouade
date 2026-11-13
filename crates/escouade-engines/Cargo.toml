@@ -1,0 +1,36 @@
+[package]
+name = "escouade-engines"
+version = "0.1.0"
+description = "The parts of Escouade's harnesses that stand without the app: where their programs are, the user configs Escouade edits, Claude Code's sign-in, a subagent's transcript"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../src-tauri"
+# A part of the app, cut out of its crate for it to compile faster (docs/CRATES.md): never published.
+publish = false
+
+[features]
+# The app's tests: no program of the machine found (`locate`), no keychain read, the helpers of their checks.
+testing = []
+
+[dependencies]
+# The languages written in now.
+escouade-base = { path = "../escouade-base" }
+# WSL, the data folder's private files, the accounts' names.
+escouade-model = { path = "../escouade-model" }
+# A version of a harness, as its folder names it (`locate::cursor`).
+escouade-plugin-cli = { path = "../escouade-plugin-cli" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+chrono = { version = "0.4", features = ["serde"] }
+dirs = "7"
+sha2 = "0.11"
+tokio = { version = "1", features = ["process", "fs"] }
+toml_edit = "0.25"
+unicode-normalization = "0.1"
+
+[dev-dependencies]
+escouade-base = { path = "../escouade-base", features = ["testing"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "fs"] }

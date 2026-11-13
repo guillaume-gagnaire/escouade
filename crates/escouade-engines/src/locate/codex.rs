@@ -6,7 +6,7 @@
 //! (docs/TODO-1.8.md, point 0, « Windows »). A launcher with no package beside it (the tests'
 //! fake) is started as it is.
 
-use crate::engine::Program;
+use crate::program::Program;
 use std::path::{Path, PathBuf};
 
 /// Where npm's package keeps the native program, from the folder of its launcher.
@@ -15,7 +15,7 @@ const NATIVE: [&str; 2] = [
     "node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe",
 ];
 
-pub(super) fn find(configured: &str) -> Option<Program> {
+pub fn find(configured: &str) -> Option<Program> {
     let configured = configured.trim();
     // The end-to-end tests: the fake codex, or none (`none`), never the machine's own.
     let forced = from_env();
@@ -30,7 +30,7 @@ pub(super) fn find(configured: &str) -> Option<Program> {
     };
     let path = if configured.is_empty() {
         // Not from the unit tests: the machine's own codex would answer for one that has none.
-        if cfg!(test) {
+        if cfg!(any(test, feature = "testing")) {
             return None;
         }
         crate::which::find("codex").or_else(desktop)?
@@ -81,7 +81,7 @@ fn native_of(path: &Path) -> PathBuf {
 /// In a debug build, `ESCOUADE_CODEX` when set (end-to-end tests): the program found where none
 /// is set, `none` for none, `path` for the one of the PATH alone. Never in the unit tests, nor in a release.
 fn from_env() -> Option<String> {
-    if cfg!(test) || !cfg!(debug_assertions) {
+    if cfg!(any(test, feature = "testing")) || !cfg!(debug_assertions) {
         return None;
     }
     std::env::var("ESCOUADE_CODEX")
@@ -91,7 +91,7 @@ fn from_env() -> Option<String> {
 
 /// The desktop app's own program (Windows).
 fn desktop() -> Option<PathBuf> {
-    if !cfg!(windows) || cfg!(test) {
+    if !cfg!(windows) || cfg!(any(test, feature = "testing")) {
         return None;
     }
     let local = std::env::var_os("LOCALAPPDATA")?;
@@ -105,7 +105,7 @@ mod tests {
 
     #[test]
     fn npms_launcher_gives_way_to_the_native_program_beside_it() {
-        let dir = crate::paths::test_dir("esc37-codex-locate");
+        let dir = escouade_base::testing::test_dir("esc37-codex-locate");
         let launcher = dir.join("codex.cmd");
         std::fs::write(&launcher, "@echo off\r\n").unwrap();
         // No package beside it (the tests' fake): the launcher itself.

@@ -15,14 +15,13 @@ pub(crate) mod codex;
 pub(crate) mod copilot;
 pub(crate) mod cursor;
 pub(crate) mod gemini;
-pub mod jsonc;
-pub mod mcp;
+pub use escouade_engines::mcp;
 pub mod oneshot;
 pub(crate) mod opencode;
-mod program;
+use escouade_engines::program;
 pub mod registry;
 pub mod terminal;
-pub mod userconfig;
+pub use escouade_engines::userconfig;
 pub(crate) mod vibe;
 
 #[cfg(test)]

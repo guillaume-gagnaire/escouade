@@ -54,7 +54,7 @@ mod tests {
 
     #[test]
     fn resolves_a_bare_name_through_the_path_and_its_extensions() {
-        let dir = crate::paths::test_dir("which-resolve");
+        let dir = escouade_base::testing::test_dir("which-resolve");
         std::fs::write(dir.join("gh.cmd"), "@echo off").unwrap();
         let path = std::env::join_paths([dir.join("nowhere"), dir.clone()]).unwrap();
         let found = resolve_program("gh", Some(path.as_os_str()), ".COM;.EXE;.BAT;.CMD").unwrap();
@@ -72,7 +72,7 @@ mod tests {
 
     #[test]
     fn skips_the_extensionless_scripts_next_to_windows_launchers() {
-        let dir = crate::paths::test_dir("which-scripts");
+        let dir = escouade_base::testing::test_dir("which-scripts");
         std::fs::write(dir.join("gh"), "#!/usr/bin/env sh").unwrap();
         std::fs::write(dir.join("gh.cmd"), "@echo off").unwrap();
         let path = std::env::join_paths([dir.clone()]).unwrap();

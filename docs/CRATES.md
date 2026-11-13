@@ -1,4 +1,4 @@
-# Le découpage du crate de l'app (ESC-408, ESC-410, ESC-411)
+# Le découpage du crate de l'app (ESC-408, ESC-410, ESC-411, ESC-412)
 
 Demande de l'utilisateur (2026-11-11) : « découpe le crate de l'app ». La compilation du crate `escouade` (`src-tauri/`) en mode test est le long pôle de la CI : 12 à 27 min sur le Mac, l'essentiel de l'archive nextest sous Windows et Linux. Ce document mesure ce qui coûte, propose un découpage, dit ce qui est fait (§ 4) et ce qui reste, dans l'ordre (§ 5).
 
@@ -10,6 +10,7 @@ Demande de l'utilisateur (2026-11-11) : « découpe le crate de l'app ». La com
 - **Le gain est à la mesure des lignes sorties** : − 3 % sur « lib (test) » (128 → 124 s) et − 6 % sur la lib (58 → 55 s) sur le poste ; pic mémoire de « lib (test) » de 9,0 à 8,8 Go (§ 3) ; nul à 3 jobs, où le travail total ne baisse pas. Une recompilation après un changement local ne change pas (≈ 30 s) : un changement dans une crate sortie recompile aussi l'app.
 - **`escouade-model` (ESC-410, § 9)** : les types de données (réglages, projets, tickets, agents) et ce qu'ils nomment, `paths`, `proc`, `job`, `wsl`, `heat`, `pricing` et la partie données de `fence` sortent de l'app (≈ 9 300 lignes, 2,9 %) ; en moyenne de deux passes, « lib (test) » 176 → 139 s et pic mémoire 8,2 → 7,6 Go (§ 9), un gain de temps bien au-delà des lignes sorties et à confirmer sur la CI, le poste ayant varié de ± 50 % ce jour-là. `model` n'est plus dans le cycle de `core` : ce qui ne lit que les données peut sortir.
 - **`escouade-plugins` (ESC-411, § 10)** : l'hôte des plugins (registre, runtime, WASM, store, graine, banc, TLS) et ses tests qui ne démarrent pas de `core` sortent de l'app (≈ 22 100 lignes, 7 %) ; en moyenne, « lib (test) » 117 → 108 s (− 8 %) et son pic à 3 jobs 7,8 → 7,1 Go, mais l'app commence 6 s plus tard (elle attend la crate) et l'archive a pris 20 s de plus ici (un binaire de test de plus à lier), à confirmer sur la CI. Restent dans l'app les harness en processus, le puits des faits, les vues, les comptes et adaptateurs des hébergeurs.
+- **`escouade-engines` (ESC-412, § 11)** : seules les parties des harness sans lien sortent (où est le programme de chaque harness, les configs de l'utilisateur qu'Escouade écrit, le serveur MCP tel qu'un harness le reçoit, la connexion de Claude Code, le transcript d'un sous-agent, ce qu'un item d'outil garde : 4 145 lignes, dont 1 326 de tests, 1,3 %) ; aucun gain mesurable, ni en temps ni en mémoire. Le reste ne se tient pas sans l'app : le trait `Engine` prend `AgentRt` et `Effects`, et la lecture des flux (`agent/*`) est faite de blocs `impl AgentRt` ; il faut d'abord sortir l'état d'un agent (§ 11).
 - **La suite** : les gros morceaux (hôte des plugins, serveur MCP, harness) sont pris dans le cycle `core` ↔ `model` ↔ le reste. Il faut d'abord sortir les types de données (`escouade-model`), puis l'hôte des plugins (≈ 40 000 lignes avec ses tests, le meilleur rapport), puis le serveur MCP. Chaque morceau a son ticket (§ 5). Deux leviers plus simples, à mesurer sur la CI, réduisent le travail ou la mémoire tout de suite (§ 6).
 - **Les leviers de la CI (ESC-409, § 8)** : gardés, les tests sans informations de débogage (les trois OS : Linux − 14 % sur l'archive, le Mac − 4 %, Windows =) et la lib du Mac compilée avant ses tests (son archive de 13 min 11 à 11 min 52, son job de 16 min 01 à 14 min 13 : un seul run, à confirmer par ceux de `main`). Écarté : l'archive du Mac compilée sur un Mac Intel pour Apple Silicon (job de 24 min 26, cache chaud : les runners Intel sont lents).
 
@@ -108,7 +109,7 @@ Chaque ligne est un ticket. Le gain attendu est celui de « lib (test) » sur un
 | 2 | `escouade-plugins` | **fait (ESC-411, § 10)** ; prévu : l'hôte : `manifest`, `runtime`, `wasm`, `beside`, `socket`, `store`, `store_keys`, `files`, `procs`, `journal`, `seed`, `sort`, `decide`, `view`, `reader`, `bench`, et les ≈ 18 000 lignes de `plugins_*_tests.rs` qui ne démarrent pas de `core` | `plugins/harness.rs`, `plugins/events.rs`, `plugins/builtin.rs` (le lien avec le cœur, les agents, les terminaux) | `integrations::secrets::SecretStore` en trait de la crate ; `forge::{RateLimit, bare_host, host_of, remote::parse}` dans la crate ; revu après ESC-410 : `files.rs` prend déjà `Fence` dans `escouade-model`, restent `procs.rs` (`isola::cli`), `mod.rs` (`git::run`, `engine::registry::Version`), `shared.rs` (`engine::Program`), `reader.rs` (`workflow`), `bench` (`facts::NAMES`) et `adapters.rs` (`integrations::source`, `text::default_states`) | ≈ 34 000 (18 000) ; sorti : 22 100 (6 800 de fichiers de tests) | mesuré : « lib (test) » − 8 %, pic − 0,7 Go ; archive + 20 s ici (§ 10) |
 | 3 | `escouade-forge` | `forge/` (contrat des hébergeurs, comptes, `remote`), `integrations/{source, secrets, fake}` et leurs tests | `forge/connect.rs`, `integrations/sync.rs`, `integrations/text.rs` (le cœur) | après 2 | ≈ 12 000 (8 000) | ≈ 3 % |
 | 4 | `escouade-mcp` | le serveur MCP et ses outils, sur un trait de l'hôte que `Core` implémente | l'implémentation du trait | `Core` en paramètre partout ; ses 19 fichiers de tests démarrent un `core` : il faut d'abord une crate de soutien des tests (`core_tests::harness`) | ≈ 35 000 (22 000) | ≈ 10 % ; le plus long |
-| 5 | `escouade-engines` | les harness (`engine/*`) et la lecture de leurs flux (`agent/*`) | `engine/mod.rs` (le registre et le lien avec le cœur) | après 1 (fait) et 2 : revu après ESC-410, les harness citent encore `accounts` (76 fois), `plugins` (68), `fence` hors données, `tui`, `core` (12), `mcp` (11), `usage` : `Core` et les comptes passés par un trait | ≈ 36 000 (8 500) | ≈ 8 % |
+| 5 | `escouade-engines` | **en partie (ESC-412, § 11)** : les parties sans lien ; restent les harness et la lecture de leurs flux | `engine/mod.rs` (le registre et le lien avec le cœur) | il faut d'abord sortir l'état d'un agent (`AgentRt`, `Effects`), que le trait `Engine` et `agent/*` prennent, sur un trait de l'hôte (§ 11) ; puis les comptes et le lancement par les plugins, en trait | fait : 4 145 (1 326) ; reste ≈ 21 000 (≈ 11 500) | mesuré : rien ; reste ≈ 10 % |
 | 6 | `escouade-updates` | `updates/net.rs`, `updates/fake_server.rs` et leurs tests | `updates.rs` | possible dès maintenant : revu après ESC-410, `net.rs` ne prend plus que `i18n` (`escouade-base`) et `model` (`escouade-model`) ; ses tests prennent `integrations::fake::FakeServer`, à sortir avec lui ou dans une aide de test | ≈ 3 300 (2 600) | ≈ 1 % |
 
 Les tickets, créés le 2026-11-12 : **ESC-410** (`escouade-model`, ligne 1), **ESC-411** (`escouade-plugins`, ligne 2, après ESC-410 et ESC-359, qui touche aussi l'hôte), **ESC-414** (`escouade-forge` et `escouade-updates`, lignes 3 et 6, après ESC-411), **ESC-412** (`escouade-engines`, ligne 5, après ESC-410), **ESC-413** (`escouade-mcp`, ligne 4, après ESC-411 et ESC-412). Les leviers du § 6 : **ESC-409**.
@@ -131,7 +132,9 @@ ESC-409 les a préparés, avec un troisième (l'archive du Mac compilée sur un 
 - `cfg!(test)` et `#[cfg(test)]` d'une dépendance sont faux quand l'app compile ses tests. Ce qui en dépend reste dans l'app (`i18n::system`, `i18n::set`), ou passe par la feature `testing` d'`escouade-base`.
 - Un statique partagé (la langue du moment) ne se copie jamais : il vit dans une crate et l'app le réexporte.
 - Une struct que l'app écrit en littéral avec `..Default::default()` doit avoir tous ses champs publics.
-- Les tests suivent leur code ; ceux qui démarrent un `core` restent dans l'app.
+- Les tests suivent leur code ; ceux qui démarrent un `core` (ou un `AgentRt`) restent dans l'app.
+- Un bloc `impl` d'un type de l'app dans un fichier sorti (`impl AgentRt` de `agent/sidechain.rs`) reste dans un fichier de l'app.
+- `tr!` est une macro de l'app : la crate a la sienne, sur `escouade_base::i18n::ui()` (`escouade-engines`).
 - `env!("CARGO_PKG_VERSION")` dans une crate est la sienne : ce qui disait la version de l'app la lit autrement (le script de build de `escouade-plugins`). `env!("CARGO_MANIFEST_DIR")` d'un test déplacé : `concat!(env!("CARGO_MANIFEST_DIR"), "/../../src-tauri")` garde ses chemins relatifs.
 - Les aides qu'un test déplacé prête aux tests restés : le fichier entier aussi sous la feature `testing` (ses `#[test]` en sont absents), et `use escouade_x::fichier_tests;` à la racine de l'app.
 - Une mesure de mémoire (`RUSTC_BOOTSTRAP=1`) fait recompiler les dépendances à la compilation suivante : une compilation de chauffe avant chaque mesure de temps.
@@ -322,3 +325,52 @@ Ce qu'elles disent :
 - **Le temps de l'app baisse de 8 %**, à la mesure des lignes sorties (7 %) ; le build entier ne gagne que 3 %, car l'app commence 6 s plus tard : elle attend la crate, qui attend `escouade-model`. À 3 jobs le travail total ne baisse pas (le § 2 le prévoyait).
 - **L'archive est plus lente ici de 20 s** dans les deux passes « après » (123 s dans la passe écartée) : un binaire de test de plus à lier, qui embarque wasmtime, reqwest et tauri (+ 12 Mo ; la crate, elle, n'est compilée qu'une fois, avec la feature `testing`). Le poste variant d'une passe à l'autre, c'est à confirmer sur la CI ; si elle le confirme, la piste est de lier moins (les tests de la crate sans tauri, son démarrage passé par l'app).
 - Une recompilation après un changement de la crate recompile aussi l'app, comme au § 3 ; un changement dans l'app ne recompile plus l'hôte.
+
+## 11. `escouade-engines` (ESC-412)
+
+Ligne 5 du § 5. Les harness et la lecture de leurs flux ne se tiennent pas sans l'app (ci-dessous) : la crate `crates/escouade-engines` (mêmes règles qu'au § 4) n'en prend que les parties sans lien, comme le ticket le prévoyait dans ce cas. L'app réexporte tout à ses chemins.
+
+| Module de la crate | Ce qu'il contient | Réexporté par l'app à |
+|---|---|---|
+| `program` | `Program`, `Located`, `Launch` : le programme d'un harness, du système ou de WSL | `engine::{Program, Located, Launch}` |
+| `locate::{agy, claude, codex, copilot, cursor, gemini, opencode, vibe}` | où est le programme de chaque harness (le réglage, le PATH, les dossiers de ses installeurs) et leurs tests | `engine::<harness>::locate` (`use escouade_engines::locate::codex as locate;` à la place de `mod locate;`) |
+| `which` | le programme d'un nom sur le PATH | `crate::which` |
+| `userconfig`, `jsonc` | les configs de l'utilisateur qu'Escouade écrit lui-même (TOML, JSON avec commentaires) | `engine::userconfig` (ses tests, qui lisent les `USER_CONFIG` des harness, restent dans l'app) |
+| `mcp` | `Escouade` (le serveur donné ou refusé), `SERVER`, `tool_name` ; `Entry`, `Standing`, `MASK`, `mask_bearer`, venus de `mcp::install` | `engine::mcp`, `mcp::install::{Entry, Standing, MASK, mask_bearer}` |
+| `signin` | la connexion de Claude Code (son fichier, le trousseau de macOS, l'empreinte) | `engine::claude::signin` |
+| `sidechain` | le transcript d'un sous-agent : le trouver, le lire, comment il a fini ; `INTERRUPTED` (venu de `agent/transcript.rs`) | `agent::sidechain` |
+| `shape` | ce qu'un item d'outil garde : `tool_result`, `item_input`, `trim_strings`, les limites (`MAX_TEXT`…), venus de `agent.rs` | importés par `agent.rs` |
+
+Ce qui a dû bouger ou s'ouvrir :
+
+- `impl AgentRt { end_subagent, subagent_model }`, qui était dans `agent/sidechain.rs`, reste dans l'app (`agent/subagents.rs`), avec le test qui compare un transcript au flux (il démarre un `AgentRt`).
+- `CONFIG_DIR_VAR` va dans `escouade_model::accounts` (le programme le lit), `text::truncate` dans `escouade_base::text` (le transcript d'un sous-agent coupe ses textes) ; l'app les réexporte.
+- Les `cfg!(test)` des `locate` (ne pas chercher le programme de la machine dans les tests, ni `ESCOUADE_<HARNESS>`), de `signin` (`KeychainGate`, `keychain_answer` compilés pour les tests) et les aides des tests (`Found::len`, `mcp::tool_name`) passent par la feature `testing`, que l'app prend en dev-dependency : ses tests ont le même comportement qu'avant.
+- `tr!` est celui de l'app : la crate a le sien, sur `escouade_base::i18n::ui()`.
+- `locate::*::find` et les autres `pub(super)` des fichiers sortis deviennent `pub`.
+
+Ce qui n'a pas bougé : `canon.rs` et les fichiers hachés, les versions des crates publiées, les deux verrous (`cargo metadata --locked` dans `src-tauri` et `plugins`), les fixtures (`tests/fixtures/real-sidechain.*`, lues à la même profondeur).
+
+### Pourquoi le reste ne sort pas
+
+- **Le trait `Engine` prend l'état d'un agent.** `engine/mod.rs`, qui reste à l'app, définit `Engine` ; chaque harness l'implémente. Ses méthodes nomment `AgentRt` et `Effects` (`translate`, les vues terminal `TerminalView` avec `HookOutcome` et `tui::Registered`), `core::Attachment`, `mcp::install::Target`, `job::JobUsage`. Un harness dans une crate doit avoir le trait dans la même crate ou au-dessous : il faut sortir le trait, donc ce qu'il nomme.
+- **La lecture des flux est l'état d'un agent.** Les fichiers de `agent/` (sauf `sidechain`) sont des blocs `impl AgentRt` sur `use super::*` : ils écrivent dans l'agent (ses items, son plan, ses demandes en attente). `agent.rs` (≈ 6 200 lignes de code, ≈ 4 000 de tests) tient `board::TurnEnd`, `conv::Conv`, `core::naming_text`, `facts`, `launchenv`, `notify`, `pty`, `sentfiles`, `tui`, `voice::spoken`, `plugins::decide`.
+- **Les harness lancent leur programme par l'hôte des plugins** (`plugins::harness`, `plugins::builtin`, 68 citations) et lisent les comptes (`accounts::config_dir`, les connexions, `by_key`…), `usage`, `workflow`, `fence::claude_settings`, `memory::claude_dir`, `board::protocol_prompt`. Leurs bancs (`engine/*/bench.rs`) démarrent le runtime des plugins de test (`plugins_acp_tests`) et le faux `claude` de `core_tests`.
+
+L'ordre qui le permettrait, un ticket chacun : (1) l'état d'un agent (`AgentRt`, `Effects`, `conv`) dans une crate, ce qu'il demande au cœur passé par un trait de l'hôte que l'app implémente (les mots d'un nom, la fin d'un tour, les sons, le terminal) ; (2) le trait `Engine` avec lui, `Attachment` et `Target` en données ; (3) les harness, les comptes et le lancement par les plugins passés par un trait, sur `escouade-plugins` (ESC-411, § 10), qui a déjà sorti l'hôte. Environ 21 000 lignes de code et 11 500 de tests restent ainsi dans l'app.
+
+### Les mesures (dos à dos, même charge)
+
+Sur le poste, aux conditions de la CI (`CARGO_INCREMENTAL=0`, `CARGO_PROFILE_DEV_DEBUG=0`), dépendances en cache, crates du workspace à froid (`cargo clean -p`), avant = `main` (976c5915), après = cette branche, avant qu'elle reprenne ESC-411 (les mesures ne sont pas refaites après). Deux passes par cas, en alternance (après, avant, après, avant). Le pic mémoire est le plus grand `rss` de `-Z time-passes` (`cargo rustc -j3 --lib --profile test -p escouade`), mesuré après tous les builds : `RUSTC_BOOTSTRAP` change l'empreinte des dépendances, et un build qui suit les recompile (une première série, où ils alternaient, a perdu ses temps à tous les cœurs ; ses temps à 3 jobs restent bons).
+
+| Mesure | Avant, passe 1 / passe 2 | Après, passe 1 / passe 2 | Moyennes |
+|---|---|---|---|
+| `cargo build --tests` | 129 / 124 s | 124 / 134 s | 127 → 129 s (=) |
+| « lib (test) » de `escouade` | 121,8 / 117,5 s | 115,3 / 126,7 s | 120 → 121 s (=) |
+| lib de `escouade` | 51,6 / 49,8 s | 49,5 / 54,4 s | 51 → 52 s (=) |
+| `escouade-engines` (lib, tests) | — | 0,9 et 1,4 s / 0,9 et 1,9 s | en parallèle de l'app |
+| même chose à 3 jobs (`-j3`) | 128 / 127 s | 121 / 127 s | 128 → 124 s (− 3 %) |
+| « lib (test) » à 3 jobs | 120,0 / 117,7 s | 113,2 / 118,0 s | 119 → 116 s (− 3 %) |
+| pic mémoire de « lib (test) », 3 jobs | 7 724 / 7 758 Mo | 7 820 / 7 791 Mo | 7 741 → 7 806 Mo (+ 65 Mo) |
+
+Ce qu'elles disent : rien de mesurable. 1,3 % des lignes sortent, sous le bruit du poste (± 5 % d'une passe à l'autre ce jour-là). Les 3 % gagnés à 3 jobs sont de l'ordre de l'écart entre deux passes d'un même cas. Le pic mémoire monte de 65 Mo dans les deux passes, à peine plus que l'écart entre elles (35 Mo) : ce qui sort ici est surtout du code de fonctions (localiser, lire un fichier), pas de types à `derive` comme au § 9, et l'app lit les métadonnées d'une crate de plus. Le gain que la ligne 5 promettait (≈ 8 %) viendra du reste, une fois l'état d'un agent sorti.

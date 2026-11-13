@@ -102,7 +102,7 @@ pub async fn stored_from(keychain: Option<Value>, dir: &Path) -> Result<Stored> 
 }
 
 /// What `security find-generic-password -w` answered.
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", test, feature = "testing"))]
 #[derive(Debug, Clone, PartialEq)]
 pub enum KeychainAnswer {
     /// The entry's secret: Claude Code's sign-in.
@@ -116,7 +116,7 @@ pub enum KeychainAnswer {
 /// The answer of `security` from its exit code (`code`, none when a signal ended it) and its
 /// output: 0 the entry, 44 none (`errSecItemNotFound`, whose low byte the tool exits with), any
 /// other a refusal (`errSecAuthFailed` 51, `errSecUserCanceled` 128…).
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", test, feature = "testing"))]
 pub fn keychain_answer(code: Option<i32>, stdout: &[u8]) -> Result<KeychainAnswer> {
     Ok(match code {
         Some(0) => KeychainAnswer::Entry(serde_json::from_slice(stdout)?),
@@ -127,17 +127,17 @@ pub fn keychain_answer(code: Option<i32>, stdout: &[u8]) -> Result<KeychainAnswe
 
 /// How long a keychain entry whose access was refused is left alone: reading it again would ask
 /// the user again, every minute while the account looks not signed in.
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", test, feature = "testing"))]
 pub const KEYCHAIN_REFUSED_MS: i64 = 10 * 60_000;
 
 /// The keychain entries whose access was refused, and when.
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", test, feature = "testing"))]
 #[derive(Default)]
 pub struct KeychainGate {
     refused: std::collections::HashMap<String, i64>,
 }
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", test, feature = "testing"))]
 impl KeychainGate {
     /// The entry `service` may be asked for at `now`: not refused in the last ten minutes.
     pub fn open(&self, service: &str, now: i64) -> bool {
@@ -157,7 +157,7 @@ impl KeychainGate {
 /// asking again: the last values stand.
 #[cfg(target_os = "macos")]
 // Its tests read no keychain: `usage::from_keychain` has another body there, and a `pub` of the core is not spared.
-#[cfg_attr(test, allow(dead_code))]
+#[cfg_attr(any(test, feature = "testing"), allow(dead_code))]
 pub async fn from_keychain(service: &str) -> Result<Option<Value>> {
     static GATE: std::sync::LazyLock<std::sync::Mutex<KeychainGate>> =
         std::sync::LazyLock::new(Default::default);

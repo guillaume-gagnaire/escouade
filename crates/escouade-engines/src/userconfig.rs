@@ -8,9 +8,9 @@
 //! format, the table of the servers and the names of an entry's fields. Reading, adding, removing
 //! and the text to paste by hand are the same for all.
 
-use super::jsonc;
-use crate::engine::mcp::SERVER;
-use crate::mcp::install::{Entry, Standing};
+use crate::jsonc;
+use crate::mcp::SERVER;
+use crate::mcp::{Entry, Standing};
 use anyhow::{anyhow, bail, Context, Result};
 use std::path::{Path, PathBuf};
 use toml_edit::{DocumentMut, InlineTable, Item, Table};
@@ -253,7 +253,7 @@ impl UserConfig {
         if let Some(dir) = config.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        crate::paths::write_private(config, text.as_bytes()).with_context(|| {
+        escouade_model::paths::write_private(config, text.as_bytes()).with_context(|| {
             tr!(
                 "{file} n’a pas pu être écrit",
                 "{file} could not be written",

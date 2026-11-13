@@ -265,7 +265,7 @@ mod vibe_tests;
 #[cfg(test)]
 mod vibe_tui_tests;
 mod voice;
-mod which;
+use escouade_engines::which;
 mod windowthread;
 #[cfg(test)]
 mod windowthread_tests;

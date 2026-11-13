@@ -10,7 +10,7 @@
 
 #[cfg(test)]
 pub(crate) mod bench;
-mod locate;
+use escouade_engines::locate::copilot as locate;
 mod process;
 mod prompt;
 #[cfg(test)]

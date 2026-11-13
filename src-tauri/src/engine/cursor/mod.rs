@@ -16,7 +16,7 @@
 
 #[cfg(test)]
 pub(crate) mod bench;
-mod locate;
+use escouade_engines::locate::cursor as locate;
 mod process;
 pub(crate) mod terminal;
 

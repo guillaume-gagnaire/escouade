@@ -13,7 +13,7 @@
 
 #[cfg(test)]
 mod bench;
-mod locate;
+use escouade_engines::locate::opencode as locate;
 mod run;
 
 #[cfg(test)]

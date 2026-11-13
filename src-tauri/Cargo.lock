@@ -1723,6 +1723,7 @@ dependencies = [
  "dirs 7.0.0",
  "escouade-acp",
  "escouade-base",
+ "escouade-engines",
  "escouade-model",
  "escouade-plan",
  "escouade-plugin-cli",
@@ -1807,6 +1808,24 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "escouade-plugin-cli",
+]
+
+[[package]]
+name = "escouade-engines"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "dirs 7.0.0",
+ "escouade-base",
+ "escouade-model",
+ "escouade-plugin-cli",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tokio",
+ "toml_edit 0.25.15+spec-1.1.0",
+ "unicode-normalization",
 ]
 
 [[package]]

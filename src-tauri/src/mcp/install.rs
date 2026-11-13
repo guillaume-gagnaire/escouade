@@ -28,44 +28,9 @@ const FOCUS_RUN_EVERY: Duration = Duration::from_secs(60);
 /// How long one `claude mcp` command may take.
 pub const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// What stands in the place of a token that must not be shown or kept in a log.
-pub const MASK: &str = "••••••••";
-
-/// What the server is declared as in Claude Code's `.claude.json`.
-#[derive(Clone, PartialEq, Eq)]
-pub struct Entry {
-    pub url: String,
-    pub token: String,
-}
-
-// By hand: the token is not printed by a `{:?}`, a failed assertion or a log line.
-impl std::fmt::Debug for Entry {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Entry")
-            .field("url", &self.url)
-            .field("token", &MASK)
-            .finish()
-    }
-}
-
-/// `text` with the bearer tokens it holds hidden (`Bearer <token>`, up to a blank or a quote):
-/// what the window shows of a command.
-pub fn mask_bearer(text: &str) -> String {
-    const BEARER: &str = "Bearer ";
-    let mut out = String::with_capacity(text.len());
-    let mut rest = text;
-    while let Some(at) = rest.find(BEARER) {
-        let (head, tail) = rest.split_at(at + BEARER.len());
-        out.push_str(head);
-        out.push_str(MASK);
-        let end = tail
-            .find(|c: char| c.is_whitespace() || c == '"' || c == '\'')
-            .unwrap_or(tail.len());
-        rest = &tail[end..];
-    }
-    out.push_str(rest);
-    out
-}
+// The server's entry, what a user config says of it and how a token is hidden: `escouade-engines`, which the
+// harnesses' user configs (`engine::userconfig`) read too.
+pub use escouade_engines::mcp::{mask_bearer, Entry, Standing, MASK};
 
 /// `text` with every one of `secrets` (a token, whole) hidden, and then any bearer token.
 fn mask_secrets(text: &str, secrets: &[&str]) -> String {
@@ -109,19 +74,6 @@ pub fn wanted(port: u16, token: &str) -> Entry {
         url: format!("http://127.0.0.1:{port}{}", super::PATH),
         token: token.to_string(),
     }
-}
-
-/// What a harness's user config says of the server (`Engine::declared`).
-pub enum Standing {
-    /// There is no such file.
-    NoFile,
-    /// There is a file that cannot be read or is no JSON: nothing can be told of the server.
-    Unreadable,
-    /// The file has no entry of that name.
-    Absent,
-    /// It has one. One that is not an HTTP server with a bearer token has an empty url or token: it
-    /// is there, and it is not the one wanted.
-    Declared(Entry),
 }
 
 /// The entry the user config `config` of `engine` holds under the server's name, if it holds one.

@@ -6,10 +6,10 @@
 //! Under Windows, npm's launcher `gemini.cmd` is started as it is: it runs `node` on the package's
 //! `bundle/gemini.js`, both in the agent's Job (docs/TODO-1.8.md, point 0, « Gemini CLI », point 9).
 
-use crate::engine::Program;
+use crate::program::Program;
 use std::path::{Path, PathBuf};
 
-pub(super) fn find(configured: &str) -> Option<Program> {
+pub fn find(configured: &str) -> Option<Program> {
     let configured = configured.trim();
     // The end-to-end tests: the fake Gemini, or none (`none`), never the machine's own.
     let forced = from_env();
@@ -20,7 +20,7 @@ pub(super) fn find(configured: &str) -> Option<Program> {
     };
     let path = if configured.is_empty() {
         // Not from the unit tests: the machine's own Gemini would answer for one that has none.
-        if cfg!(test) {
+        if cfg!(any(test, feature = "testing")) {
             return None;
         }
         crate::which::find("gemini").or_else(|| installed(&npm_bins()))?
@@ -79,7 +79,7 @@ fn given(configured: &str, home: Option<&Path>) -> Option<PathBuf> {
 /// In a debug build, `ESCOUADE_GEMINI` when set (end-to-end tests): the program found where none
 /// is set, `none` for none. Never in the unit tests, nor in a release.
 fn from_env() -> Option<String> {
-    if cfg!(test) || !cfg!(debug_assertions) {
+    if cfg!(any(test, feature = "testing")) || !cfg!(debug_assertions) {
         return None;
     }
     std::env::var("ESCOUADE_GEMINI")
@@ -93,7 +93,7 @@ mod tests {
 
     #[test]
     fn npms_launcher_is_found_in_its_global_folder_and_a_setting_without_its_extension() {
-        let dir = crate::paths::test_dir("esc274-gemini-locate");
+        let dir = escouade_base::testing::test_dir("esc274-gemini-locate");
         let bin = dir.join("npm");
         std::fs::create_dir_all(&bin).unwrap();
         assert_eq!(installed(std::slice::from_ref(&bin)), None);

@@ -27,7 +27,7 @@
 
 #[cfg(test)]
 pub(crate) mod bench;
-mod locate;
+use escouade_engines::locate::gemini as locate;
 pub(crate) mod terminal;
 #[cfg(test)]
 mod tests;

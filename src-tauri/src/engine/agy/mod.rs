@@ -16,7 +16,7 @@
 
 #[cfg(test)]
 pub(crate) mod bench;
-mod locate;
+use escouade_engines::locate::agy as locate;
 pub(crate) mod terminal;
 
 use super::registry::{

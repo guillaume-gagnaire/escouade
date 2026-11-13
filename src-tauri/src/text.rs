@@ -1,16 +1,6 @@
 //! Small helpers on text.
 
-/// `s` cut to `max` bytes at most, on a character's boundary, with `…` when it was cut.
-pub fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        return s.to_string();
-    }
-    let mut end = max;
-    while !s.is_char_boundary(end) {
-        end -= 1;
-    }
-    format!("{}…", &s[..end])
-}
+pub use escouade_base::text::truncate;
 
 pub use escouade_plugin_protocol::json_line;
 

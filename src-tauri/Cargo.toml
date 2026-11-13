@@ -92,6 +92,9 @@ escouade-plan = { path = "../crates/escouade-plan" }
 escouade-voice-local = { path = "../crates/escouade-voice-local" }
 # The vectors of « Recherche par le sens » (`vectors`), in a crate of the workspace too.
 escouade-vectors = { path = "../crates/escouade-vectors" }
+# The parts of the harnesses that stand without the app (where their programs are, the user configs Escouade edits,
+# Claude Code's sign-in, a subagent's transcript: `engine::{program, jsonc, userconfig, mcp}`, `agent::sidechain`, `which`).
+escouade-engines = { path = "../crates/escouade-engines" }
 # The host of the plugins (`plugins`, but for its links with the core, the agents and the terminals), and whom the TLS
 # connections trust (`tls`).
 escouade-plugins = { path = "../crates/escouade-plugins" }
@@ -153,6 +156,7 @@ members = [
     "../crates/escouade-voice-local",
     "../crates/escouade-vectors",
     "../crates/escouade-model",
+    "../crates/escouade-engines",
     "../crates/escouade-plugins",
 ]
 default-members = [
@@ -167,6 +171,7 @@ default-members = [
     "../crates/escouade-voice-local",
     "../crates/escouade-vectors",
     "../crates/escouade-model",
+    "../crates/escouade-engines",
     "../crates/escouade-plugins",
 ]
 
@@ -226,6 +231,8 @@ tokio-rustls = { version = "0.26", default-features = false, features = ["ring",
 rmcp = { version = "3.9", default-features = false, features = ["server", "macros", "transport-streamable-http-server", "client", "transport-streamable-http-client-reqwest"] }
 # The data the tests build (`NotifyFor::all_but`, `EngineId::BENCH`, `proc::output_in_files`…).
 escouade-model = { path = "../crates/escouade-model", features = ["testing"] }
+# The harnesses as the tests have them: no program of the machine found, no keychain read (`locate`, `signin`).
+escouade-engines = { path = "../crates/escouade-engines", features = ["testing"] }
 # The modules and the archives the tests of the plugins make by hand (those that stay here: a `core`, the fake services).
 wasmtime = { version = "=50.0.1", default-features = false, features = ["cranelift", "runtime", "std", "parallel-compilation", "call-hook"] }
 flate2 = "1"

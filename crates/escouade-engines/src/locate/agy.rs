@@ -3,13 +3,13 @@
 //! PATH of a process started before the installation may not have (docs/TODO-1.8.md, point 0,
 //! « Antigravity CLI »).
 
-use crate::engine::Program;
+use crate::program::Program;
 use std::path::{Path, PathBuf};
 
 /// Its program's name.
 const AGY: &str = "agy";
 
-pub(super) fn find(configured: &str) -> Option<Program> {
+pub fn find(configured: &str) -> Option<Program> {
     let configured = configured.trim();
     // The end-to-end tests: the fake Antigravity, or none (`none`), never the machine's own.
     let forced = from_env();
@@ -20,7 +20,7 @@ pub(super) fn find(configured: &str) -> Option<Program> {
     };
     let path = if configured.is_empty() {
         // Not from the unit tests: the machine's own Antigravity would answer for one that has none.
-        if cfg!(test) {
+        if cfg!(any(test, feature = "testing")) {
             return None;
         }
         crate::which::find(AGY).or_else(installed)?
@@ -68,7 +68,7 @@ fn given(configured: &str, home: Option<&Path>) -> Option<PathBuf> {
 /// In a debug build, `ESCOUADE_AGY` when set (end-to-end tests): the program found where none is
 /// set, `none` for none. Never in the unit tests, nor in a release.
 fn from_env() -> Option<String> {
-    if cfg!(test) || !cfg!(debug_assertions) {
+    if cfg!(any(test, feature = "testing")) || !cfg!(debug_assertions) {
         return None;
     }
     std::env::var("ESCOUADE_AGY")
@@ -82,7 +82,7 @@ mod tests {
 
     #[test]
     fn a_setting_names_the_program_its_extension_left_out_and_none_is_found_in_the_tests() {
-        let dir = crate::paths::test_dir("esc270-agy-locate");
+        let dir = escouade_base::testing::test_dir("esc270-agy-locate");
         let ext = if cfg!(windows) { ".exe" } else { "" };
         let agy = dir.join(format!("agy{ext}"));
         std::fs::write(&agy, "").unwrap();

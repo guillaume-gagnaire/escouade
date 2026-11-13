@@ -12,7 +12,7 @@
 #[cfg(test)]
 mod bench;
 mod exec;
-mod locate;
+use escouade_engines::locate::codex as locate;
 mod process;
 #[cfg(test)]
 mod schema_tests;

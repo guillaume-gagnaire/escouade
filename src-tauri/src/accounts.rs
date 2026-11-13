@@ -29,7 +29,7 @@ use std::time::Duration;
 use tauri::Runtime;
 
 /// The variable that gives Claude Code its configuration folder.
-pub(crate) const CONFIG_DIR_VAR: &str = "CLAUDE_CONFIG_DIR";
+pub(crate) use escouade_model::accounts::CONFIG_DIR_VAR;
 
 /// What a new account may share of Principal's folder: its settings and instructions (files),
 /// then what extends Claude Code (folders). Never its sign-in (`.credentials.json`) nor its

@@ -230,7 +230,7 @@ fn json_round_trip(user: &UserConfig, name: &str, file: &str, text: &str) -> Str
         "{added}"
     );
     // What OpenCode and Copilot read: valid JSON with comments.
-    super::jsonc::parse(&added).unwrap();
+    escouade_engines::jsonc::parse(&added).unwrap();
     user.remove(&file).unwrap();
     assert_eq!(read(&file), text, "removed, the file is as it was");
     assert!(matches!(user.declared(&file), Standing::Absent));

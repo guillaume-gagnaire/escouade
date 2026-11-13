@@ -1,9 +1,9 @@
 //! Where the `claude` of a setting, or of the system, is.
 
 #[cfg(test)]
-use crate::engine::Located;
-use crate::engine::Program;
-use crate::wsl;
+use crate::program::Located;
+use crate::program::Program;
+use escouade_model::wsl;
 use std::path::{Path, PathBuf};
 
 /// Locates the `claude` executable: explicit setting, PATH, then the native installer location;
@@ -20,7 +20,7 @@ pub fn resolve_binary(configured: &str, wsl_distro: &str) -> Option<Program> {
     }
     // Not from the tests: a developer's WSL would answer for a machine that has no claude.
     detect_native().map(Program::Native).or_else(|| {
-        if cfg!(all(windows, not(test))) {
+        if cfg!(all(windows, not(any(test, feature = "testing")))) {
             wsl::detect(wsl_distro).map(Program::Wsl)
         } else {
             None
@@ -137,7 +137,7 @@ pub fn interrupted_install() -> Option<PathBuf> {
 }
 
 /// `interrupted_install` in the folders of programs `bins`.
-pub(super) fn leftover_in(bins: &[PathBuf]) -> Option<PathBuf> {
+pub fn leftover_in(bins: &[PathBuf]) -> Option<PathBuf> {
     let starting = |dir: &Path, prefix: &str| -> Option<PathBuf> {
         std::fs::read_dir(dir)
             .ok()?
@@ -164,7 +164,7 @@ mod tests {
 
     #[test]
     fn what_an_npm_installation_cut_half_way_left_is_found() {
-        let root = crate::paths::test_dir("claude-leftover");
+        let root = escouade_base::testing::test_dir("claude-leftover");
         let bin = if cfg!(windows) {
             root.join("npm")
         } else {
@@ -214,7 +214,7 @@ mod tests {
 
     #[test]
     fn reads_the_settings_forms_of_the_issue() {
-        let dir = crate::paths::test_dir("claude-resolve");
+        let dir = escouade_base::testing::test_dir("claude-resolve");
         let bin = dir.join(".local").join("bin");
         std::fs::create_dir_all(&bin).unwrap();
         let exe = if cfg!(windows) {
@@ -268,7 +268,7 @@ mod tests {
 
     #[test]
     fn tells_where_the_claude_of_a_setting_is() {
-        let dir = crate::paths::test_dir("claude-locate");
+        let dir = escouade_base::testing::test_dir("claude-locate");
         let exe = dir.join(if cfg!(windows) {
             "claude.cmd"
         } else {

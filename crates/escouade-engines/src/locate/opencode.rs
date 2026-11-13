@@ -1,22 +1,22 @@
-//! Where `copilot` is: the program of a setting, else the one on the PATH.
+//! Where `opencode` is: the program of a setting, else the one on the PATH.
 //!
-//! Under Windows, npm's launcher (`copilot.cmd`, `copilot.ps1`) runs a script of Node that starts
-//! the native `copilot.exe` of the platform's package (`@github/copilot-win32-x64`): Escouade starts
-//! that one itself, so that its process is the one in the agent's Job (docs/TODO-1.8.md, point 0,
-//! « Copilot CLI »). A launcher with no package beside it (the tests' fake) is started as it is.
+//! Under Windows, npm's launcher (`opencode.cmd`) only runs the native `opencode.exe` of its package
+//! (`node_modules/opencode-ai/bin/opencode.exe`, docs/TODO-1.8.md, point 0, « OpenCode »): Escouade
+//! starts that one itself, so that its process is the one in the server's Job. A launcher with no
+//! package beside it (the tests' fake) is started as it is.
 
-use crate::engine::Program;
+use crate::program::Program;
 use std::path::{Path, PathBuf};
 
 /// Where npm's package keeps the native program, from the folder of its launcher.
 const NATIVE: [&str; 2] = [
-    "node_modules/@github/copilot/node_modules/@github/copilot-win32-x64/copilot.exe",
-    "node_modules/@github/copilot-win32-x64/copilot.exe",
+    "node_modules/opencode-ai/bin/opencode.exe",
+    "node_modules/opencode-ai/node_modules/opencode-windows-x64/bin/opencode.exe",
 ];
 
-pub(super) fn find(configured: &str) -> Option<Program> {
+pub fn find(configured: &str) -> Option<Program> {
     let configured = configured.trim();
-    // The end-to-end tests: the fake copilot, or none (`none`), never the machine's own.
+    // The end-to-end tests: the fake opencode, or none (`none`), never the machine's own.
     let forced = from_env();
     let configured = match (configured.is_empty(), forced.as_deref()) {
         (true, Some("none")) => return None,
@@ -24,11 +24,11 @@ pub(super) fn find(configured: &str) -> Option<Program> {
         _ => configured,
     };
     let path = if configured.is_empty() {
-        // Not from the unit tests: the machine's own copilot would answer for one that has none.
-        if cfg!(test) {
+        // Not from the unit tests: the machine's own opencode would answer for one that has none.
+        if cfg!(any(test, feature = "testing")) {
             return None;
         }
-        crate::which::find("copilot")?
+        crate::which::find("opencode")?
     } else {
         given(configured, dirs::home_dir().as_deref())?
     };
@@ -73,13 +73,13 @@ fn native_of(path: &Path) -> PathBuf {
         .unwrap_or_else(|| path.to_path_buf())
 }
 
-/// In a debug build, `ESCOUADE_COPILOT` when set (end-to-end tests): the program found where none
+/// In a debug build, `ESCOUADE_OPENCODE` when set (end-to-end tests): the program found where none
 /// is set, `none` for none. Never in the unit tests, nor in a release.
 fn from_env() -> Option<String> {
-    if cfg!(test) || !cfg!(debug_assertions) {
+    if cfg!(any(test, feature = "testing")) || !cfg!(debug_assertions) {
         return None;
     }
-    std::env::var("ESCOUADE_COPILOT")
+    std::env::var("ESCOUADE_OPENCODE")
         .ok()
         .filter(|v| !v.trim().is_empty())
 }
@@ -90,25 +90,21 @@ mod tests {
 
     #[test]
     fn npms_launcher_gives_way_to_the_native_program_beside_it() {
-        let dir = crate::paths::test_dir("esc39-copilot-locate");
-        let launcher = dir.join("copilot.cmd");
+        let dir = escouade_base::testing::test_dir("esc44-opencode-locate");
+        let launcher = dir.join("opencode.cmd");
         std::fs::write(&launcher, "@echo off\r\n").unwrap();
         // No package beside it (the tests' fake): the launcher itself.
         assert_eq!(native_of(&launcher), launcher);
-        let native = dir.join(NATIVE[1]);
+        let native = dir.join(NATIVE[0]);
         std::fs::create_dir_all(native.parent().unwrap()).unwrap();
         std::fs::write(&native, "").unwrap();
         if cfg!(windows) {
             assert_eq!(native_of(&launcher), native);
-            // Its extension left out, as a setting may.
             assert_eq!(
-                given(&dir.join("copilot").to_string_lossy(), None),
-                Some(dir.join("copilot.cmd"))
+                given(&dir.join("opencode").to_string_lossy(), None),
+                Some(dir.join("opencode.cmd"))
             );
         }
-        assert_eq!(
-            given(&dir.join("nothing.exe").to_string_lossy(), None),
-            None
-        );
+        assert_eq!(given(&dir.join("rien.exe").to_string_lossy(), None), None);
     }
 }

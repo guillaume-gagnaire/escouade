@@ -1,9 +1,9 @@
 //! The program of a harness, run as a program of the system or, under Windows, as one installed
 //! in WSL and run through `wsl.exe`.
 
-use crate::i18n::{self, Lang};
-use crate::wsl;
 use anyhow::{anyhow, Result};
+use escouade_base::i18n::{self, Lang};
+use escouade_model::wsl;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
@@ -59,15 +59,14 @@ impl Program {
             .linux_path(cwd)
             .ok_or_else(|| anyhow!(out_of_wsl(i18n::ui(), cwd, &wsl.distro)))?;
         let linux = |value: &str| wsl.linux_path(value).unwrap_or_else(|| value.to_string());
-        let mut vars: Vec<(String, String)> = env
-            .iter()
-            .map(|(k, v)| match k.as_str() {
-                crate::accounts::CONFIG_DIR_VAR | "CLAUDE_SECURESTORAGE_CONFIG_DIR" => {
-                    (k.clone(), linux(v))
-                }
-                _ => (k.clone(), v.clone()),
-            })
-            .collect();
+        let mut vars: Vec<(String, String)> =
+            env.iter()
+                .map(|(k, v)| match k.as_str() {
+                    escouade_model::accounts::CONFIG_DIR_VAR
+                    | "CLAUDE_SECURESTORAGE_CONFIG_DIR" => (k.clone(), linux(v)),
+                    _ => (k.clone(), v.clone()),
+                })
+                .collect();
         let names: Vec<&str> = vars.iter().map(|(k, _)| k.as_str()).collect();
         if let Some(listed) = wslenv(std::env::var("WSLENV").ok().as_deref(), &names) {
             vars.push(("WSLENV".into(), listed));

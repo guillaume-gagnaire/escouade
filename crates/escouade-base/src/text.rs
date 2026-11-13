@@ -1,4 +1,16 @@
-//! What a line of text shows: the characters that are drawn, on one line.
+//! What a line of text shows: the characters that are drawn, on one line; a text cut to a length.
+
+/// `s` cut to `max` bytes at most, on a character's boundary, with `…` when it was cut.
+pub fn truncate(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        return s.to_string();
+    }
+    let mut end = max;
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}…", &s[..end])
+}
 
 /// A character that is not drawn, or drawn as something else than itself: the controls, the
 /// format characters (zero-width marks, direction marks and overrides…), the line and paragraph

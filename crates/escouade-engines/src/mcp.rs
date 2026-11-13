@@ -17,7 +17,7 @@ pub const SERVER: &str = "escouade";
 /// whatever the harness: Claude Code's, which `tools.ts`, the permission card, the activity line
 /// and `convsearch.rs` read. Every adapter names an MCP call with it (docs/TODO-1.8.md, « Un
 /// moteur par agent », table of the tools).
-#[cfg(test)]
+#[cfg(any(test, feature = "testing"))]
 pub fn tool_name(server: &str, tool: &str) -> String {
     format!("mcp__{server}__{tool}")
 }
@@ -61,4 +61,56 @@ impl std::fmt::Debug for Escouade {
             Escouade::Denied { file } => f.debug_struct("Denied").field("file", file).finish(),
         }
     }
+}
+
+/// What stands in the place of a token that must not be shown or kept in a log.
+pub const MASK: &str = "••••••••";
+
+/// What the server is declared as in Claude Code's `.claude.json`.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Entry {
+    pub url: String,
+    pub token: String,
+}
+
+// By hand: the token is not printed by a `{:?}`, a failed assertion or a log line.
+impl std::fmt::Debug for Entry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Entry")
+            .field("url", &self.url)
+            .field("token", &MASK)
+            .finish()
+    }
+}
+
+/// `text` with the bearer tokens it holds hidden (`Bearer <token>`, up to a blank or a quote):
+/// what the window shows of a command.
+pub fn mask_bearer(text: &str) -> String {
+    const BEARER: &str = "Bearer ";
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find(BEARER) {
+        let (head, tail) = rest.split_at(at + BEARER.len());
+        out.push_str(head);
+        out.push_str(MASK);
+        let end = tail
+            .find(|c: char| c.is_whitespace() || c == '"' || c == '\'')
+            .unwrap_or(tail.len());
+        rest = &tail[end..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// What a harness's user config says of the server (`Engine::declared`).
+pub enum Standing {
+    /// There is no such file.
+    NoFile,
+    /// There is a file that cannot be read or is no JSON: nothing can be told of the server.
+    Unreadable,
+    /// The file has no entry of that name.
+    Absent,
+    /// It has one. One that is not an HTTP server with a bearer token has an empty url or token: it
+    /// is there, and it is not the one wanted.
+    Declared(Entry),
 }

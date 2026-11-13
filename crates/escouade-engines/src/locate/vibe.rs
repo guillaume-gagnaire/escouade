@@ -5,13 +5,13 @@
 //! A setting may name `vibe` (the interface) rather than `vibe-acp`: the `vibe-acp` beside it is
 //! taken, the agents' processes speaking ACP (docs/TODO-1.8.md, point 0, « Mistral Vibe »).
 
-use crate::engine::Program;
+use crate::program::Program;
 use std::path::{Path, PathBuf};
 
 /// Its ACP server's name.
-pub(super) const ACP: &str = "vibe-acp";
+pub const ACP: &str = "vibe-acp";
 
-pub(super) fn find(configured: &str) -> Option<Program> {
+pub fn find(configured: &str) -> Option<Program> {
     let configured = configured.trim();
     // The end-to-end tests: the fake Vibe, or none (`none`), never the machine's own.
     let forced = from_env();
@@ -22,7 +22,7 @@ pub(super) fn find(configured: &str) -> Option<Program> {
     };
     let path = if configured.is_empty() {
         // Not from the unit tests: the machine's own Vibe would answer for one that has none.
-        if cfg!(test) {
+        if cfg!(any(test, feature = "testing")) {
             return None;
         }
         crate::which::find(ACP).or_else(installed)?
@@ -88,7 +88,7 @@ fn acp_of(path: PathBuf) -> PathBuf {
 
 /// The interface `vibe` beside the ACP server `vibe-acp` (its `-p` writes the texts, ESC-267);
 /// any other program as it is (a fake plays both).
-pub(super) fn interface_of(path: &Path) -> PathBuf {
+pub fn interface_of(path: &Path) -> PathBuf {
     let stem = path
         .file_stem()
         .map(|s| s.to_string_lossy().to_lowercase())
@@ -131,7 +131,7 @@ fn given(configured: &str, home: Option<&Path>) -> Option<PathBuf> {
 /// In a debug build, `ESCOUADE_VIBE` when set (end-to-end tests): the program found where none is
 /// set, `none` for none. Never in the unit tests, nor in a release.
 fn from_env() -> Option<String> {
-    if cfg!(test) || !cfg!(debug_assertions) {
+    if cfg!(any(test, feature = "testing")) || !cfg!(debug_assertions) {
         return None;
     }
     std::env::var("ESCOUADE_VIBE")
@@ -145,7 +145,7 @@ mod tests {
 
     #[test]
     fn a_setting_naming_the_interface_gives_the_acp_server_beside_it() {
-        let dir = crate::paths::test_dir("esc266-vibe-locate");
+        let dir = escouade_base::testing::test_dir("esc266-vibe-locate");
         let ext = if cfg!(windows) { ".exe" } else { "" };
         let vibe = dir.join(format!("vibe{ext}"));
         std::fs::write(&vibe, "").unwrap();

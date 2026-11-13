@@ -8,13 +8,13 @@
 //! point 0, « Cursor CLI »). A launcher with no version beside it (the tests' fake) is started as
 //! it is.
 
-use crate::engine::Program;
+use crate::program::Program;
 use std::path::{Path, PathBuf};
 
 /// The names of its launcher, its new one first.
 const NAMES: [&str; 2] = ["agent", "cursor-agent"];
 
-pub(super) fn find(configured: &str) -> Option<Program> {
+pub fn find(configured: &str) -> Option<Program> {
     let configured = configured.trim();
     // The end-to-end tests: the fake agent, or none (`none`), never the machine's own.
     let forced = from_env();
@@ -25,7 +25,7 @@ pub(super) fn find(configured: &str) -> Option<Program> {
     };
     let path = if configured.is_empty() {
         // Not from the unit tests: the machine's own agent would answer for one that has none.
-        if cfg!(test) {
+        if cfg!(any(test, feature = "testing")) {
             return None;
         }
         installed().or_else(|| {
@@ -76,7 +76,7 @@ fn given(configured: &str, home: Option<&Path>) -> Option<PathBuf> {
 /// The `node` and the `index.js` its launcher `launcher` runs: those beside it (a launcher in a
 /// version's folder), else those of the newest version of the `versions` folder beside it. None:
 /// the launcher is started as it is.
-pub(super) fn native_of(launcher: &Path) -> Option<(PathBuf, PathBuf)> {
+pub fn native_of(launcher: &Path) -> Option<(PathBuf, PathBuf)> {
     // `~/.local/bin/agent` is a link to the version's own script (never canonical otherwise: under
     // Windows, that would give a verbatim path).
     let linked = std::fs::symlink_metadata(launcher).is_ok_and(|m| m.file_type().is_symlink());
@@ -104,14 +104,14 @@ fn pair_in(dir: &Path) -> Option<(PathBuf, PathBuf)> {
 /// The newest version of `versions` (`2026.10.22-27dcf5f`, or `2026.10.22-10-30-00-27dcf5f`), by
 /// its date then its name, as its launcher picks it.
 fn newest(versions: &Path) -> Option<PathBuf> {
-    let mut found: Vec<(crate::engine::registry::Version, String, PathBuf)> =
+    let mut found: Vec<(escouade_plugin_cli::manifest::Version, String, PathBuf)> =
         std::fs::read_dir(versions)
             .ok()?
             .filter_map(|e| e.ok())
             .filter(|e| e.path().is_dir())
             .filter_map(|e| {
                 let name = e.file_name().to_string_lossy().into_owned();
-                let date = crate::engine::registry::Version::find(&name)?;
+                let date = escouade_plugin_cli::manifest::Version::find(&name)?;
                 Some((date, name, e.path()))
             })
             .filter(|(_, _, p)| pair_in(p).is_some())
@@ -123,7 +123,7 @@ fn newest(versions: &Path) -> Option<PathBuf> {
 /// In a debug build, `ESCOUADE_CURSOR` when set (end-to-end tests): the program found where none
 /// is set, `none` for none. Never in the unit tests, nor in a release.
 fn from_env() -> Option<String> {
-    if cfg!(test) || !cfg!(debug_assertions) {
+    if cfg!(any(test, feature = "testing")) || !cfg!(debug_assertions) {
         return None;
     }
     std::env::var("ESCOUADE_CURSOR")
@@ -137,7 +137,7 @@ mod tests {
 
     #[test]
     fn the_launcher_gives_way_to_the_node_and_script_of_its_newest_version() {
-        let dir = crate::paths::test_dir("esc42-cursor-locate");
+        let dir = escouade_base::testing::test_dir("esc42-cursor-locate");
         let launcher = dir.join("agent.cmd");
         std::fs::write(&launcher, "@echo off\r\n").unwrap();
         // No version beside it (the tests' fake): the launcher itself.

@@ -20,13 +20,6 @@ pub struct HookOutcome {
     pub stopped: bool,
 }
 
-/// The texts Claude Code writes as the user's when a turn is interrupted (also in a subagent's
-/// transcript: `sidechain`).
-pub(super) const INTERRUPTED: &[&str] = &[
-    "[Request interrupted by user",
-    "[Request interrupted by user for tool use",
-];
-
 impl AgentRt {
     /// Its Claude Code interface starts: what was counted of the one before is gone with it.
     pub fn start_tui(&mut self) {

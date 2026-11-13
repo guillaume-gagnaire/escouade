@@ -5,9 +5,9 @@
 
 #[cfg(test)]
 mod bench;
-mod locate;
+use escouade_engines::locate::claude as locate;
 mod mcp;
-pub(crate) mod signin;
+pub(crate) use escouade_engines::signin;
 pub(crate) mod terminal;
 
 #[cfg(test)]

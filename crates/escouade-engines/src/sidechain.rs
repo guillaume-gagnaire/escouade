@@ -7,8 +7,12 @@
 //! what the stream does not, in this view: that the user stopped a subagent in the interface, or
 //! that the API gave up on it (`how_it_ended`).
 
-use super::*;
+use crate::shape::{item_input, tool_result, MAX_REPORT};
+use escouade_base::text::truncate;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use std::collections::{HashMap, HashSet};
+
 use std::path::{Path, PathBuf};
 
 /// A transcript bigger than that is read by its end.
@@ -183,12 +187,14 @@ pub struct Found {
 }
 
 impl Found {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testing"))]
+    // The tests count what is kept; nothing asks whether it is empty.
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.files.len()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testing"))]
     pub fn has(&self, agent: &str, call: &str) -> bool {
         self.get(agent, call).is_some()
     }
@@ -282,13 +288,16 @@ impl Ended {
     }
 }
 
-/// A user entry whose text is the marker of an interruption (`transcript::INTERRUPTED`).
+/// The texts Claude Code writes as the user's when a turn is interrupted, in an agent's transcript as in
+/// a subagent's.
+pub const INTERRUPTED: &[&str] = &[
+    "[Request interrupted by user",
+    "[Request interrupted by user for tool use",
+];
+
+/// A user entry whose text is the marker of an interruption (`INTERRUPTED`).
 fn interrupts(content: &Value) -> bool {
-    let says = |t: &str| {
-        super::transcript::INTERRUPTED
-            .iter()
-            .any(|m| t.starts_with(m))
-    };
+    let says = |t: &str| INTERRUPTED.iter().any(|m| t.starts_with(m));
     match content.as_str() {
         Some(t) => says(t),
         None => content
@@ -395,24 +404,6 @@ pub fn read_changed(
     }))
 }
 
-impl AgentRt {
-    /// The subagent that `call` launched ended as its files show (`how_it_ended`): its row of the
-    /// plan ends as a `task_notification` would end it, with `run` written on its call. A row that
-    /// ended already stays as it was.
-    pub fn end_subagent(&mut self, call: &str, how: Ended, fx: &mut Effects) {
-        let frame = json!({
-            "type": "system", "subtype": "task_notification", "task_id": null,
-            "tool_use_id": call, "status": how.status(),
-        });
-        self.plan_apply(fx, |plan| plan.on_system(&frame, now_ms()));
-    }
-
-    /// The subagent that `call` launched runs on `model`, as its transcript shows (`model_of`).
-    pub fn subagent_model(&mut self, call: &str, model: &str, fx: &mut Effects) {
-        self.child_model(call, model, fx);
-    }
-}
-
 /// The words of a tool's result block, in a subagent's transcript.
 pub fn tool_result_text(content: &Value) -> String {
     match content {
@@ -429,6 +420,8 @@ pub fn tool_result_text(content: &Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shape::MAX_TEXT;
+    use escouade_model::model::new_id;
 
     const SIDECHAIN: &str = include_str!("../../../tests/fixtures/real-sidechain.jsonl");
     const META: &str = include_str!("../../../tests/fixtures/real-sidechain.meta.json");
@@ -629,77 +622,6 @@ mod tests {
         assert_eq!((&result["add"], &result["del"]), (&json!(1), &json!(1)));
         assert_eq!(result["filePath"], "C:/p/a.ts");
         assert_eq!(result["patch"][0]["lines"], json!(["-a", "+b", " c"]));
-    }
-
-    /// The conversation items of the blocks, told as the stream tells them: the thread of `c1`.
-    fn streamed(frames: &[Value]) -> Vec<Value> {
-        let meta = AgentMeta {
-            id: new_id(),
-            cwd: "C:/p".into(),
-            ..Default::default()
-        };
-        let mut a = AgentRt::new(meta, &dir("stream"));
-        let mut fx = Effects::default();
-        for f in frames {
-            a.handle_frame(f, &mut fx);
-        }
-        a.conv
-            .items()
-            .into_iter()
-            .filter(|i| i["parent"] == "c1")
-            .collect()
-    }
-
-    #[test]
-    fn the_items_have_the_forms_the_stream_gives_the_same_blocks() {
-        let blocks = [
-            json!({ "type": "thinking", "thinking": "Je vois." }),
-            json!({ "type": "text", "text": "Je lance." }),
-            json!({ "type": "tool_use", "id": "k1", "name": "Bash", "input": { "command": "ls" } }),
-            json!({ "type": "tool_use", "id": "k2", "name": "Edit", "input": { "file_path": "C:/p/a.ts" } }),
-        ];
-        let results = [
-            (
-                json!({ "type": "tool_result", "tool_use_id": "k1", "content": "a\nb", "is_error": false }),
-                json!({ "stdout": "a\nb", "stderr": "w" }),
-            ),
-            (
-                json!({ "type": "tool_result", "tool_use_id": "k2", "content": "Échec", "is_error": true }),
-                json!({ "filePath": "C:/p/a.ts", "structuredPatch": [{ "oldStart": 1, "newStart": 1, "lines": ["-a", "+b"] }] }),
-            ),
-        ];
-        let mut frames = vec![json!({ "type": "assistant", "parent_tool_use_id": "c1",
-            "message": { "id": "m1", "content": blocks } })];
-        // A transcript has one block to an entry.
-        let mut lines: Vec<String> = blocks
-            .iter()
-            .map(|b| entry("assistant", json!([b])))
-            .collect();
-        for (block, structured) in &results {
-            frames.push(json!({ "type": "user", "parent_tool_use_id": "c1",
-                "message": { "content": [block] }, "tool_use_result": structured }));
-            let id = block["tool_use_id"].as_str().unwrap();
-            lines.push(result_entry(
-                id,
-                block["content"].clone(),
-                block["is_error"] == true,
-                structured.clone(),
-            ));
-        }
-        // What differs on purpose: the ids of the words, and when.
-        let plain = |mut items: Vec<Value>| {
-            for i in &mut items {
-                i.as_object_mut().unwrap().remove("ts");
-                if i["kind"] != "tool" {
-                    i.as_object_mut().unwrap().remove("id");
-                }
-            }
-            items
-        };
-        assert_eq!(
-            plain(sidechain_items(&lines.join("\n"), "c1")),
-            plain(streamed(&frames))
-        );
     }
 
     #[test]
