@@ -1,9 +1,9 @@
 ---
-number: null
+number: 160
 id: "le-quota-de-claude-code-lu-par-son-plugi"
 title: "Le quota de Claude Code lu par son plugin, le cœur ne parle plus à api.anthropic.com"
 date: "2026-11-13"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-441"
 pages: ["harness/comptes"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"harness/comptes","added":4,"removed":4}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-13T22:51:24+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
