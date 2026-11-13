@@ -13,8 +13,8 @@
     },
     {
       "id": "dev.escouade.azure-devops",
-      "version": "2.2.3",
-      "sha256": "a51d3cd99e181280ee48b6860bd4076931b53d43059874062bfe0b1f1c1ee976"
+      "version": "2.2.4",
+      "sha256": "665a8b6c29846c9a5ed482a8765fa705356d2b99ba292a88b76a897283b3bee7"
     },
     {
       "id": "dev.escouade.bitbucket",
