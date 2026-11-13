@@ -233,6 +233,21 @@ fn hidden_window_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> bool 
         && var("ESCOUADE_HIDDEN_WINDOW").is_some_and(|v| !v.is_empty() && v != "0")
 }
 
+/// The size the window of a sandboxed run opens at, in logical pixels: `$ESCOUADE_WINDOW_SIZE` as `1024x728`, which
+/// only a sandboxed run hears. End-to-end tests give it to lay the app out as a CI runner's screen bounds its window
+/// (ESC-440): the page alone made smaller, the app would still hold its zoom to the window's own size.
+pub fn window_size() -> Option<(f64, f64)> {
+    window_size_from(|k| std::env::var_os(k))
+}
+
+fn window_size_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<(f64, f64)> {
+    sandbox_dir_from(&var)?;
+    let size = var("ESCOUADE_WINDOW_SIZE")?;
+    let (w, h) = size.to_str()?.split_once('x')?;
+    let (w, h) = (w.trim().parse::<u32>().ok()?, h.trim().parse::<u32>().ok()?);
+    (w > 0 && h > 0).then(|| (f64::from(w), f64::from(h)))
+}
+
 /// The data folder in `home`. A development build never moves the user's data (the installed app
 /// may still be the old one): it uses the folder under the new name if there is one.
 fn data_dir_in(home: &Path, debug: bool, notes: &mut Vec<String>) -> PathBuf {
@@ -1070,6 +1085,33 @@ mod tests {
             SANDBOX,
             ("ESCOUADE_HIDDEN_WINDOW", "")
         ])));
+    }
+
+    #[test]
+    fn only_a_sandboxed_run_may_size_its_window() {
+        let env = |pairs: &'static [(&'static str, &'static str)]| {
+            move |k: &str| {
+                pairs
+                    .iter()
+                    .find(|(n, _)| *n == k)
+                    .map(|(_, v)| std::ffi::OsString::from(v))
+            }
+        };
+        const SANDBOX: (&str, &str) = ("ESCOUADE_DATA_DIR", "C:/e");
+        const SIZE: (&str, &str) = ("ESCOUADE_WINDOW_SIZE", "1024x728");
+        assert_eq!(
+            window_size_from(env(&[SANDBOX, SIZE])),
+            Some((1024.0, 728.0))
+        );
+        // The user's own app keeps its size, whatever its environment.
+        assert_eq!(window_size_from(env(&[SIZE])), None);
+        assert_eq!(window_size_from(env(&[SANDBOX])), None);
+        for wrong in ["", "1024", "0x728", "ax728", "1024x"] {
+            let v: &'static str = Box::leak(wrong.to_string().into_boxed_str());
+            let pairs: &'static [(&str, &str)] =
+                Box::leak(vec![SANDBOX, ("ESCOUADE_WINDOW_SIZE", v)].into_boxed_slice());
+            assert_eq!(window_size_from(env(pairs)), None, "{wrong}");
+        }
     }
 
     #[test]

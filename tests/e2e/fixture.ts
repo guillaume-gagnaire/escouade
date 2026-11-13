@@ -288,6 +288,8 @@ export const SHOW = !!process.env.ESCOUADE_E2E_SHOW && process.env.ESCOUADE_E2E_
 /**
  * `ESCOUADE_E2E_VIEWPORT=1024x728`: the size of the window at each start, as the CI's runner bounds it (its screen); else
  * the window keeps its own (1440 × 900: off every screen, nothing bounds it). A test that sets its own size still does.
+ * The window is made that size (`ESCOUADE_WINDOW_SIZE`), and its page too: the page alone, the app would hold its zoom
+ * to a window of 1440 × 900 (ESC-440).
  */
 const VIEWPORT = /^(\d+)x(\d+)$/.exec(process.env.ESCOUADE_E2E_VIEWPORT ?? '');
 
@@ -417,6 +419,8 @@ export const test = base.extend<{
       WEBVIEW2_USER_DATA_FOLDER: path.join(root, 'webview'),
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port} ${RENDER_UNSEEN} ${FIXED_SCALE}`,
       ESCOUADE_HIDDEN_WINDOW: SHOW ? undefined : '1',
+      // The window itself at that size, not only its page: the app holds its zoom to the window's size (ESC-440).
+      ESCOUADE_WINDOW_SIZE: VIEWPORT ? `${VIEWPORT[1]}x${VIEWPORT[2]}` : undefined,
       // Never the machine user's own sign-in nor Anthropic's endpoint: Principal's Claude Code
       // folder is a test one (with no sign-in in it), and the quota is asked of nobody.
       CLAUDE_CONFIG_DIR: path.join(root, 'claude'),

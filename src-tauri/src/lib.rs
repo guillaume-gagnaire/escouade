@@ -402,6 +402,11 @@ fn build_window(app: &tauri::App) -> tauri::Result<()> {
     // that would take it from the user's app, the window still hidden.
     let mut window = window.clone();
     window.focus &= !paths::hidden_window();
+    // The size an end-to-end test gives it (a CI runner's screen): the zoom is held to the window's (ESC-440).
+    if let Some((width, height)) = paths::window_size() {
+        window.width = width;
+        window.height = height;
+    }
     // Built with Tauri’s `devtools` for the launches’ pages (ESC-311): the window’s own stay a
     // debug build’s.
     window.devtools = Some(cfg!(debug_assertions));

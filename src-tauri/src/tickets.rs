@@ -2343,6 +2343,15 @@ impl<R: Runtime> Core<R> {
             return;
         }
         let lang = self.lang().claude;
+        // Its harness cut for its project (ESC-404): the end of the turn its cut stopped comes after the cut blocked
+        // the ticket with why, and must not hide it under « Interrompu » or an error (ESC-440).
+        let cut = {
+            let (engine, project) = {
+                let rt = h.lock();
+                (rt.meta.engine, rt.meta.project_id.clone())
+            };
+            self.harness_refusal(engine, &project)
+        };
         let mut reported = None;
         let Ok(next) = self.edit_ticket(&ticket_id, |t| {
             // A ticket started again has another agent: the old one's turns never move it.
@@ -2357,6 +2366,15 @@ impl<R: Runtime> Core<R> {
             // came before this reading or after), and its agent's next finished turn is read.
             if limited && t.blocked.is_some() {
                 return Ok(board::Next::default());
+            }
+            if let Some(why) = cut.as_ref().filter(|_| t.column == Column::Doing) {
+                // Told once: the cut told it already.
+                let told = t.blocked.as_deref() == Some(why.as_str());
+                t.blocked = Some(why.clone());
+                return Ok(board::Next {
+                    blocked: !told,
+                    ..board::Next::default()
+                });
             }
             let next = board::turn_end(lang, t, &end, report.as_ref(), now_ms());
             if reports {

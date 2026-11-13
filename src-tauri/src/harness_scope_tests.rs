@@ -222,6 +222,38 @@ async fn cutting_a_harness_for_a_project_blocks_the_ticket_of_its_agent() {
     assert!(h.ticket(&t.id).blocked.unwrap().contains("Claude Code"));
 }
 
+/// The end of the turn the cut stopped, read after the cut blocked the ticket (it is read apart, `on_turn_end`): the
+/// block still says why, not « Interrompu » nor the error of a process killed (ESC-440).
+#[tokio::test]
+async fn the_end_of_the_turn_a_cut_stopped_keeps_the_ticket_blocked_by_the_cut() {
+    let h = harness("esc440-cut-late-end");
+    let (p, _) = h.project(false).await;
+    h.set_board(&p.id, |s| s.autopilot = false);
+    let t = h
+        .core
+        .ticket_create(&p.id, draft("Long travail [lent]", &[], 5))
+        .await
+        .unwrap();
+    h.core.ticket_start(&t.id).unwrap();
+    let agent = crate::tickets_tests::wait_running(&h, &t.id).await;
+    h.core
+        .set_plugin_project(CLAUDE_PLUGIN, &p.id, false)
+        .await
+        .unwrap();
+    h.wait_ticket(&t.id, "blocked", |t| t.blocked.is_some())
+        .await;
+    for end in [
+        crate::board::TurnEnd::Interrupted,
+        crate::board::TurnEnd::Error("processus arrêté".into()),
+        crate::board::TurnEnd::Finished("Fini".into()),
+    ] {
+        h.core.turn_ended(&agent, end.clone()).await;
+        let why = h.ticket(&t.id).blocked.unwrap();
+        assert!(why.contains("Claude Code"), "{end:?}: {why}");
+        assert_eq!(h.ticket(&t.id).column, Column::Doing, "{end:?}");
+    }
+}
+
 /// A state as the app saved it before ESC-404: a private project with an agent on Claude Code, another private one with
 /// none, an archived agent's private project, and a project that is not private.
 fn state_before(dir: &std::path::Path) -> serde_json::Value {

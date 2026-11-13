@@ -603,6 +603,22 @@ fn seen_by_its_process(account: &Account, pct: u32, resets_at: i64) {
     .unwrap();
 }
 
+/// `turn_over`, then the quota its turn told read: Claude Code (and the fake) tell its `rate_limit_event` after the
+/// `result` that ends the turn, read apart. Recorded after what a test sets next, its windows would take its place
+/// (ESC-440: 37 % read instead of 63 % on the Windows runner).
+async fn turn_and_its_quota_over(h: &Harness, id: &str, account: &str, text: &str) {
+    let at = |h: &Harness| {
+        h.core
+            .usage
+            .lock()
+            .account(account)
+            .map_or(0, |a| a.updated_at)
+    };
+    let before = at(h);
+    turn_over(h, id, text).await;
+    h.wait("its turn's quota read", |h| at(h) != before).await;
+}
+
 /// The quota of `account` over 5 hours, as read now.
 fn five_hours_of(h: &Harness, account: &str) -> f64 {
     let u = h.core.usage.lock();
@@ -615,7 +631,7 @@ async fn the_minute_s_reading_asks_claude_code_as_often_as_the_endpoint() {
     let (p, _) = h.project(true).await;
     let (pro, _) = pro_and_team(&h);
     let id = agent_on(&h, &p, "pro").await.id;
-    turn_over(&h, &id, "Bonjour").await;
+    turn_and_its_quota_over(&h, &id, "pro", "Bonjour").await;
     let resets_at = now_ms() + 3_600_000;
     seen_by_its_process(&pro, 40, resets_at);
     h.core.read_accounts(true).await;
@@ -635,7 +651,7 @@ async fn a_process_at_rest_does_not_take_back_what_the_account_used() {
     let (p, _) = h.project(true).await;
     let (pro, _) = pro_and_team(&h);
     let id = agent_on(&h, &p, "pro").await.id;
-    turn_over(&h, &id, "Bonjour").await;
+    turn_and_its_quota_over(&h, &id, "pro", "Bonjour").await;
     let resets_at = now_ms() + 3_600_000;
     let window = RateWindow {
         pct: 63.0,

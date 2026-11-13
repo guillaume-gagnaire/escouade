@@ -445,7 +445,11 @@ struct W {
 const ID: &str = "dev.test.reactor";
 
 fn loaded(name: &str, limits: Limits) -> W {
-    let folder = copied(name);
+    loaded_from(copied(name), limits)
+}
+
+/// `loaded`, from a copy of the fixture as the test made it.
+fn loaded_from(folder: PathBuf, limits: Limits) -> W {
     let data = DataDir::new(folder.parent().unwrap().join("data"));
     let plugins = Plugins::load(data.clone(), "2.2.0");
     plugins.load_dev(&folder, Lang::En).unwrap();
@@ -559,9 +563,24 @@ async fn a_module_is_precompiled_once_by_its_sha256_and_again_for_a_new_version_
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_plugin_without_its_module_or_with_no_reactor_is_refused_and_says_why() {
-    let w = loaded("missing", Limits::default());
-    std::fs::remove_file(w.folder.join(wasm::MODULE_FILE)).unwrap();
-    let e = w.rt.call(ID, "probe/turns", json!({})).await.unwrap_err();
+    // Gone before it is loaded (ESC-440): once loaded, its folder in development is watched, and a removal then reads
+    // it again 200 ms later (`SETTLE`), which forgets its host: a start still under way is stopped (« stopped », the
+    // only entry), before it says why. The Windows runner's starts are that slow; here the start is made slow, every
+    // thread of the runtime the hosts start on taken for 600 ms, and the folder read again meanwhile: nothing of it
+    // changed since it was loaded, so nothing stops.
+    let folder = copied("missing");
+    std::fs::remove_file(folder.join(wasm::MODULE_FILE)).unwrap();
+    let w = loaded_from(folder, Limits::default());
+    // Its workers: one by core.
+    let workers = std::thread::available_parallelism().map_or(8, |n| n.get());
+    for _ in 0..workers {
+        tauri::async_runtime::spawn(async { std::thread::sleep(Duration::from_millis(600)) });
+    }
+    let rt = w.rt.clone();
+    let call = tokio::spawn(async move { rt.call(ID, "probe/turns", json!({})).await });
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    w.plugins.reload(&[ID.to_string()]);
+    let e = call.await.unwrap().unwrap_err();
     assert!(matches!(e, CallError::Stopped(_)), "{e:?}");
     assert!(
         journal_has(&w.rt, Kind::Stop, "plugin.wasm"),

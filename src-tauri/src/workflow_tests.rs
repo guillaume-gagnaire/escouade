@@ -695,6 +695,62 @@ async fn the_reading_is_kept_in_the_data_folder_and_read_again_when_a_file_chang
     assert!(h.core.refresh_workflows("nope", false).await.is_err());
 }
 
+/// Readings of one project at once (ESC-440): the window's cards and its tab ask together, and the tracking reads a
+/// project never read at its agent's first door. Each gives the workflow, none fails on the temporary file of
+/// another's `workflows.json` (« fichier introuvable »).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn readings_of_a_project_at_once_all_give_its_workflows() {
+    for round in 0..5 {
+        // Never read: the tracking reads it too.
+        let h = crate::core_tests::harness(&format!("workflow-at-once-{round}"));
+        let (p, dir) = h.project(false).await;
+        let cmds = dir.join(".claude/commands");
+        std::fs::create_dir_all(&cmds).unwrap();
+        std::fs::write(
+            cmds.join("one.md"),
+            "Do one, then /two.
+",
+        )
+        .unwrap();
+        std::fs::write(
+            cmds.join("two.md"),
+            "Do two.
+",
+        )
+        .unwrap();
+        let tracking: Vec<_> = (0..4)
+            .map(|_| {
+                let (core, id) = (h.core.clone(), p.id.clone());
+                tokio::task::spawn_blocking(move || core.tracking_scan(&id).workflows.len())
+            })
+            .collect();
+        let all: Vec<_> = (0..8)
+            .map(|i| {
+                let (core, id) = (h.core.clone(), p.id.clone());
+                tokio::spawn(async move { core.refresh_workflows(&id, i % 2 == 0).await })
+            })
+            .collect();
+        for r in all {
+            let scan = r
+                .await
+                .unwrap()
+                .unwrap_or_else(|e| panic!("round {round}: {e:#}"));
+            assert_eq!(scan.workflows.len(), 1, "round {round}: {scan:#?}");
+        }
+        for t in tracking {
+            t.await.unwrap();
+        }
+        // One file for its workflow, not two.
+        let files = std::fs::read_dir(h.core.data.project_files(&p.id).join("workflows"))
+            .map(|d| d.count())
+            .unwrap_or(0)
+            + std::fs::read_dir(dir.join(".escouade/workflows"))
+                .map(|d| d.count())
+                .unwrap_or(0);
+        assert_eq!(files, 1, "round {round}");
+    }
+}
+
 #[test]
 fn with_claude_code_s_folder_elsewhere_its_includes_are_read_there_and_said_as_its() {
     // CLAUDE_CONFIG_DIR away from the home folder (ESC-195): `@~/.claude/…` is that folder, never the
