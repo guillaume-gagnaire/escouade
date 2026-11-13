@@ -197,7 +197,7 @@ pub fn secret_name(plugin: &str, key: &str) -> String {
 }
 
 /// Whether `word` is one of `patterns`: the same, or one a `prefix*` takes in.
-pub(crate) fn matches(pattern: &str, word: &str) -> bool {
+pub fn matches(pattern: &str, word: &str) -> bool {
     match pattern.strip_suffix('*') {
         Some(prefix) => word.starts_with(prefix),
         None => pattern == word,
@@ -206,13 +206,13 @@ pub(crate) fn matches(pattern: &str, word: &str) -> bool {
 
 /// A request on one line. `params` is raw JSON: a newline in it can only be whitespace (a string
 /// of JSON holds none), so it is made a space.
-pub(crate) fn request_line(id: u64, method: &str, params: &RawValue) -> String {
+pub fn request_line(id: u64, method: &str, params: &RawValue) -> String {
     let method = serde_json::to_string(method).unwrap_or_else(|_| "\"\"".into());
     let params = one_line(params.get());
     format!(r#"{{"jsonrpc":"2.0","id":{id},"method":{method},"params":{params}}}"#)
 }
 
-pub(crate) fn notification_line(method: &str, params: &RawValue) -> String {
+pub fn notification_line(method: &str, params: &RawValue) -> String {
     let method = serde_json::to_string(method).unwrap_or_else(|_| "\"\"".into());
     let params = one_line(params.get());
     format!(r#"{{"jsonrpc":"2.0","method":{method},"params":{params}}}"#)
@@ -496,7 +496,7 @@ impl Runtime {
     }
 
     /// The network its plugins get.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testing"))]
     pub fn net(&self) -> super::wasm::Net {
         self.net.read().clone()
     }
@@ -621,7 +621,7 @@ impl Runtime {
     }
 
     /// The tests' network for `net/fetch` (a fake service, the resolver's answer), for the instances to come.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testing"))]
     pub fn set_net(&self, net: super::wasm::Net) {
         *self.net.write() = net;
     }
@@ -805,7 +805,7 @@ impl Runtime {
     }
 
     /// A crash of the instance of the plugin `id`, which has no process to kill: as a fault of its module.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testing"))]
     pub fn crash_instance(&self, id: &str) {
         let Some(h) = self.hosts.lock().get(id).cloned() else {
             return;
@@ -1065,7 +1065,7 @@ impl Runtime {
     }
 
     /// How many places the plugin `id` was given and still holds.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testing"))]
     pub fn lent_places(&self, id: &str) -> usize {
         self.hosts
             .lock()
@@ -1491,7 +1491,7 @@ impl Host {
             // As `harness.rs` keys them: the processes of this runtime.
             let owner = rt as *const Runtime as usize;
             net.shared = Some(Arc::new(move |plugin| {
-                super::shared::ports_of(owner, plugin)
+                crate::shared_ports::ports_of(owner, plugin)
             }));
         }
         let fetcher = super::wasm::Fetcher::new(&self.id, &self.manifest.permissions.network, &net)
@@ -1850,7 +1850,7 @@ impl Host {
 
     /// Stops its process for `stop`: what waits fails, and it does not start again by itself.
     fn stop_with(&self, stop: Stop) {
-        super::view::forget(&self.id);
+        crate::stops::stopped(&self.id);
         let conn = {
             let mut inner = self.inner.lock();
             if matches!(inner.phase, Phase::Stopped(_)) && inner.conn.is_none() {

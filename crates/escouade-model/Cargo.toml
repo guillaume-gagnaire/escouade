@@ -34,6 +34,8 @@ dirs = "7"
 log = "0.4"
 tokio = { version = "1", features = ["process", "io-util", "time"] }
 portable-pty = "0.9"
+# What a watcher of files was told (`git::is_read`).
+notify = "8"
 # A decision's slug.
 unicode-normalization = "0.1"
 # The proxy of the settings, as an address (`tls::proxy_url`: reqwest's `Url`).

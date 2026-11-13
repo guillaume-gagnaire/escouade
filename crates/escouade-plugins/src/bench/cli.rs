@@ -6,8 +6,8 @@
 use super::fake::{Reply, Seen, Session};
 use super::{decision_request, fact, program_of, run, Options, Program};
 
-use crate::plugins::manifest::Manifest;
-use crate::plugins::runtime::{timeout_of, PROTOCOL};
+use crate::manifest::Manifest;
+use crate::runtime::{timeout_of, PROTOCOL};
 use escouade_plugin_cli::cli::{self, read_manifest, usage, Call};
 use serde_json::{json, Value};
 use std::collections::HashMap;

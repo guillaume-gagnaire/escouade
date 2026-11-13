@@ -82,7 +82,7 @@ pub fn client(settings: &Settings) -> reqwest::Result<reqwest::Client> {
     crate::tls::app_builder(settings)?
         .connect_timeout(Duration::from_secs(15))
         .timeout(Duration::from_secs(300))
-        .user_agent(concat!("escouade/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("escouade/", env!("ESCOUADE_APP_VERSION")))
         .build()
 }
 

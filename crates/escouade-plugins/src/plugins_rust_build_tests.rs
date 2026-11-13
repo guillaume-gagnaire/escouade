@@ -4,9 +4,9 @@
 //! played by the bench. That hash is the same on every system: this test proves it on each one of CI, and
 //! `scripts/plugin-build-linux.sh` under Linux from any machine with a container engine.
 
+use crate::bench::cli;
 use crate::i18n::Lang;
 use crate::paths::test_dir;
-use crate::plugins::bench::cli;
 use escouade_plugin_cli::rust::{self, toml, Native, Refusal, Runs};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -16,7 +16,7 @@ const CDYLIB: &str = "[package]\nname = \"p\"\nversion = \"1.0.0\"\nedition = \"
 const LOCK: &str = "version = 4\n\n[[package]]\nname = \"p\"\nversion = \"1.0.0\"\n";
 
 fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
+    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../src-tauri")).join("..")
 }
 
 /// A folder holding `files`, the sources of a plugin in Rust with its lock unless they say otherwise.

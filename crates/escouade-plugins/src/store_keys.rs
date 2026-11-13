@@ -53,7 +53,7 @@ pub fn keys() -> Vec<String> {
 /// Whether `minisig` makes version `version` of plugin `id` verified: the bytes of its
 /// `version.json` signed by one of the app's keys (`keys`), the comment naming this id and this
 /// number.
-#[cfg_attr(not(test), allow(dead_code))]
+#[cfg_attr(not(any(test, feature = "testing")), allow(dead_code))]
 pub fn verified(
     version_json: &[u8],
     minisig: &str,
@@ -205,7 +205,7 @@ mod tests {
 
     #[test]
     fn the_embedded_keys_are_those_of_the_store() {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../store/keys");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../store/keys");
         let mut names: Vec<_> = std::fs::read_dir(&dir)
             .unwrap()
             .filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned()))

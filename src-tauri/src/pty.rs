@@ -15,13 +15,8 @@ use std::sync::atomic::{AtomicI64, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc};
 use std::time::Duration;
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ShellInfo {
-    pub id: String,
-    pub label: String,
-    pub path: String,
-}
+// A shell of the machine, in `escouade-plugins` (a plugin's command runs in one).
+pub use escouade_plugins::events::ShellInfo;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

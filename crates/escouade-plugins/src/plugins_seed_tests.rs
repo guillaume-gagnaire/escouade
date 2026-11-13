@@ -6,11 +6,11 @@
 
 use crate::i18n::Lang;
 use crate::paths::DataDir;
-use crate::plugins::seed::{self, Entry, Seed};
-use crate::plugins::store::{self, Store};
-use crate::plugins::wasm::{Made, Modules};
-use crate::plugins::{builtin, Origin, Plugins, State};
 use crate::plugins_store_tests::{http, temp_dir, Fake};
+use crate::seed::{self, Entry, Seed};
+use crate::store::{self, Store};
+use crate::wasm::{Made, Modules};
+use crate::{builtin, Origin, Plugins, State};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
@@ -360,12 +360,12 @@ async fn a_version_of_the_seed_withdrawn_is_stopped_with_its_reason() {
         s => panic!("not stopped: {s:?}"),
     }
     assert_eq!(view.withdrawn.unwrap().action, "disable");
-    let rt = crate::plugins::runtime::Runtime::new(
+    let rt = crate::runtime::Runtime::new(
         plugins.clone(),
-        std::sync::Arc::new(crate::integrations::secrets::MemoryStore::default()),
+        std::sync::Arc::new(crate::secrets::MemoryStore::default()),
         &data,
         "2.2.0",
-        crate::plugins::runtime::Limits::default(),
+        crate::runtime::Limits::default(),
     );
     assert!(
         rt.call(TRELLO, "x", json!({})).await.is_err(),
@@ -457,12 +457,12 @@ async fn a_module_of_the_seed_is_precompiled_at_its_activation_not_at_the_start(
     let seed = seed_of(&fake, "precompile", &[(TRELLO, "2.2.0")]).await;
     let data = data_of("precompile");
     let plugins = started(&data, seed);
-    let rt = crate::plugins::runtime::Runtime::new(
+    let rt = crate::runtime::Runtime::new(
         plugins.clone(),
-        std::sync::Arc::new(crate::integrations::secrets::MemoryStore::default()),
+        std::sync::Arc::new(crate::secrets::MemoryStore::default()),
         &data,
         "2.2.0",
-        crate::plugins::runtime::Limits::default(),
+        crate::runtime::Limits::default(),
     );
     rt.prepare_all();
     let folder = PathBuf::from(plugins.get(TRELLO, Lang::Fr).unwrap().folder);
@@ -474,7 +474,7 @@ async fn a_module_of_the_seed_is_precompiled_at_its_activation_not_at_the_start(
 
 /// The list a user of 2.1 has (`plugins.json`): each of `ids` given by the app, its origin `builtin` (gone with ESC-355),
 /// those of `off` switched off, and `others` beside them as they are.
-pub(crate) fn list_of_2_1(data: &DataDir, ids: &[&str], off: &[&str], others: Vec<Value>) {
+pub fn list_of_2_1(data: &DataDir, ids: &[&str], off: &[&str], others: Vec<Value>) {
     let mut plugins: Vec<Value> = ids
         .iter()
         .map(|id| {
@@ -570,7 +570,7 @@ fn the_workspace_fills_what_is_not_installed_and_wins_nothing() {
     // A plugin of anyone with an id of the registry, in development, is not taken away.
     let src = temp_dir("workspace-dev");
     std::fs::write(
-        src.join(crate::plugins::manifest::FILE),
+        src.join(crate::manifest::FILE),
         json!({
             "id": builtin::GITHUB,
             "name": "GitHub du développeur",
@@ -593,9 +593,11 @@ fn the_workspace_fills_what_is_not_installed_and_wins_nothing() {
 
 #[test]
 fn the_committed_list_reads_and_names_ids_of_the_registry() {
-    let list =
-        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../plugins/seed.json"))
-            .unwrap();
+    let list = std::fs::read_to_string(
+        Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../src-tauri"))
+            .join("../plugins/seed.json"),
+    )
+    .unwrap();
     for e in seed::parse(&list).expect("plugins/seed.json reads") {
         assert!(builtin::seeds(&e.id), "{} is not an id of the seed", e.id);
         assert_eq!(e.sha256.len(), 64, "{}", e.id);
@@ -619,9 +621,11 @@ fn a_seed_with_nothing_changes_nothing() {
 
 #[test]
 fn the_committed_list_holds_the_first_hand_the_store_signed() {
-    let list =
-        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../plugins/seed.json"))
-            .unwrap();
+    let list = std::fs::read_to_string(
+        Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../src-tauri"))
+            .join("../plugins/seed.json"),
+    )
+    .unwrap();
     let ids: Vec<String> = seed::parse(&list)
         .unwrap()
         .into_iter()
@@ -634,7 +638,7 @@ fn the_committed_list_holds_the_first_hand_the_store_signed() {
         builtin::TRELLO,
         builtin::GITHUB,
         builtin::ACP,
-        crate::plugins::sort::GOOSE,
+        crate::sort::GOOSE,
         "dev.escouade.discord",
         "dev.escouade.team-rules",
     ] {
@@ -844,7 +848,7 @@ async fn nothing_counts_of_a_plugin_the_app_gives_a_folder_in_development_or_a_s
         .any(|v| v.origin == Origin::Workspace));
     let src = temp_dir("in-dev");
     std::fs::write(
-        src.join(crate::plugins::manifest::FILE),
+        src.join(crate::manifest::FILE),
         json!({
             "id": "dev.exemple.mine",
             "name": "Mine",

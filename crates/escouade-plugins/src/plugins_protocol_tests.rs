@@ -3,16 +3,14 @@
 //! version, and the messages the core and its bench send (`initialize`, each fact, a decision). A
 //! change on one side without the other fails here, or in the SDK's test of its generated types.
 
-use crate::plugins::bench::{decision_request, fact, fake::Session, FACTS};
-use crate::plugins::manifest;
-use crate::plugins::runtime::{
-    timeout_of, INVALID_PARAMS, KEYCHAIN, METHOD_NOT_FOUND, NOT_YOURS, PROTOCOL,
-};
+use crate::bench::{decision_request, fact, fake::Session, FACTS};
+use crate::manifest;
+use crate::runtime::{timeout_of, INVALID_PARAMS, KEYCHAIN, METHOD_NOT_FOUND, NOT_YOURS, PROTOCOL};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
 fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
+    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../src-tauri")).join("..")
 }
 
 fn schema() -> Value {
@@ -71,7 +69,7 @@ fn check(value: &Value, schema: &Value, defs: &Value, path: &str, out: &mut Vec<
     }
 }
 
-pub(crate) fn holds(value: &Value, method: &str, part: &str) {
+pub fn holds(value: &Value, method: &str, part: &str) {
     let s = schema();
     let mut problems = Vec::new();
     check(
@@ -124,7 +122,7 @@ fn the_version_delays_and_errors_are_those_of_the_schema() {
     assert_eq!(errors["notYours"]["code"], json!(NOT_YOURS));
     assert_eq!(errors["keychain"]["code"], json!(KEYCHAIN));
     // net/fetch and files/read (ESC-321): the same refusal, the same failure, and the file not there.
-    use crate::plugins::{files, wasm};
+    use crate::{files, wasm};
     assert_eq!(errors["refused"]["code"], json!(wasm::REFUSED));
     assert_eq!(errors["refused"]["code"], json!(files::REFUSED));
     assert_eq!(errors["failed"]["code"], json!(wasm::FAILED));

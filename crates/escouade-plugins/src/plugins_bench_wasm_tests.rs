@@ -5,18 +5,18 @@
 //!
 //! As the tests of plugins_wasm_tests.rs, they need escouade-js built (scripts/escouade-js.sh).
 
+use crate::bench::{cli, run, Options, Report, Scenario, Verdict};
 use crate::i18n::Lang;
+use crate::manifest::Hand;
 use crate::paths::DataDir;
-use crate::plugins::bench::{cli, run, Options, Report, Scenario, Verdict};
-use crate::plugins::manifest::Hand;
-use crate::plugins::wasm;
 use crate::plugins_wasm_tests::ready;
+use crate::wasm;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
+    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../src-tauri")).join("..")
 }
 
 /// The file `build` writes for plugins/<dir>: its id and the version its manifest says.
@@ -40,7 +40,7 @@ fn module_name(dir: &str) -> String {
 
 /// Where the tests keep the pinned Javy and the modules (as plugins_wasm_tests.rs).
 fn shared_data() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("target/wasm-tests")
+    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../src-tauri")).join("target/wasm-tests")
 }
 
 /// A copy of plugins/<dir> (its manifest, its bundle, the JSON files of its root), its manifest on `run.js`.
@@ -180,7 +180,7 @@ fn build_gives_the_modules_of_the_goldens_on_slack_and_team_rules() {
 /// The program the store's image builds says the app's version: the local review compares them (`compiler.prelude`).
 #[test]
 fn the_crate_of_escouade_plugin_has_the_version_of_the_app() {
-    assert_eq!(escouade_plugin_cli::VERSION, env!("CARGO_PKG_VERSION"));
+    assert_eq!(escouade_plugin_cli::VERSION, crate::APP_VERSION);
 }
 
 /// A copy of team-rules whose bundle imports node:child_process.
@@ -301,7 +301,9 @@ async fn offline_a_service_out_of_reach_is_not_judged_and_fails_nothing() {
     let dir = root().join("plugins/trello");
     let target = std::env::var_os("CARGO_TARGET_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("target"));
+        .unwrap_or_else(|| {
+            Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../src-tauri")).join("target")
+        });
     let module = target.join("plugins-wasm/trello/plugin.wasm");
     if !module.exists() {
         return;

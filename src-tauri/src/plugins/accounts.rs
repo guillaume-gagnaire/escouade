@@ -39,11 +39,12 @@
 //! the other: a Vibe account without a key goes by the plugin's, the voice without a key by the first Vibe account's.
 
 use super::manifest::Manifest;
-use super::runtime::secret_name;
-use crate::forge::{self, Provider, RateLimit};
+// The names of an account's secret and budget, and the budget an answer carries, in `escouade-plugins`.
+use crate::forge::{self, Provider};
 use crate::integrations::secrets::SecretStore;
 use crate::integrations::{source, Account, Accounts};
 use crate::model::Service;
+pub use escouade_plugins::accounts::{budget_key, split_budget, vault_name};
 use serde::Serialize;
 use serde_json::Value;
 
@@ -448,11 +449,6 @@ pub fn source_account(service: Service) -> String {
     }
 }
 
-/// The keychain's name of the secret of the account `account` that `plugin` serves.
-pub fn vault_name(plugin: &str, account: &str) -> String {
-    secret_name(plugin, &format!("account:{account}"))
-}
-
 /// The keychain's name of the account of the source `service` (`a.plugin` serving it).
 pub fn source_vault_name(service: Service, a: &Account) -> String {
     vault_name(
@@ -656,25 +652,4 @@ pub fn revert_mistral(
         store.delete(name)?;
     }
     Ok(())
-}
-
-/// What a plugin says of an account's budget of calls, kept for that account: the calls of all
-/// its points spend it (GitHub's 5,000 an hour are its token's, Issues and pull requests alike).
-pub fn budget_key(plugin: &str, account: &str) -> String {
-    vault_name(plugin, account)
-}
-
-/// The budget an answer of a plugin carries (`{ value, rateLimit }`), and its value.
-pub fn split_budget(v: Value) -> (Value, Option<RateLimit>) {
-    match v {
-        Value::Object(mut o)
-            if o.contains_key("value") && o.contains_key("rateLimit") && o.len() == 2 =>
-        {
-            let rate = o
-                .remove("rateLimit")
-                .and_then(|r| serde_json::from_value::<RateLimit>(r).ok());
-            (o.remove("value").unwrap_or(Value::Null), rate)
-        }
-        v => (v, None),
-    }
 }

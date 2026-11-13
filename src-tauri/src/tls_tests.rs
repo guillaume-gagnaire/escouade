@@ -4,6 +4,7 @@
 use super::*;
 use crate::integrations::fake::FakeServer;
 use crate::model::Settings;
+use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// A proxy that opens the tunnels it is asked for (`CONNECT host:port`), as Zscaler's local

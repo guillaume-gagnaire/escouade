@@ -65,6 +65,8 @@ fn thread_of(plugin: &str) -> mpsc::Sender<Job> {
         .lock()
         .entry(plugin.to_string())
         .or_insert_with(|| {
+            // Told when the plugin stops, by the runtime of the plugins (`escouade-plugins`).
+            escouade_plugins::stops::on_stop(plugin, forget);
             let (tx, rx) = mpsc::channel::<Job>();
             let name = format!("views of {plugin}");
             let spawned = std::thread::Builder::new().name(name).spawn(move || {

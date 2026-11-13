@@ -172,7 +172,7 @@ impl Report {
         self.outcomes.iter().all(|o| o.verdict != Verdict::Fail)
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg_attr(not(any(test, feature = "testing")), allow(dead_code))]
     pub fn outcome(&self, s: Scenario) -> &Outcome {
         self.outcomes
             .iter()
@@ -261,7 +261,7 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             lang: crate::i18n::system(),
-            app_version: env!("CARGO_PKG_VERSION").to_string(),
+            app_version: env!("ESCOUADE_APP_VERSION").to_string(),
             hand: manifest::Hand::Third,
             initialize: timeout_of("initialize"),
             grace: Duration::from_secs(2),

@@ -121,7 +121,7 @@ async fn ws_send_says_no_past_its_queue_past_a_message_and_on_no_socket() {
     let (code, _) = beside
         .send(&json!({ "socket": 1, "dataBase64": "%%" }))
         .unwrap_err();
-    assert_eq!(code, crate::plugins::runtime::INVALID_PARAMS);
+    assert_eq!(code, crate::runtime::INVALID_PARAMS);
     let (code, _) = beside.send(&json!({ "socket": 1 })).unwrap_err();
-    assert_eq!(code, crate::plugins::runtime::INVALID_PARAMS);
+    assert_eq!(code, crate::runtime::INVALID_PARAMS);
 }

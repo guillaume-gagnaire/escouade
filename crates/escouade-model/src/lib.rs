@@ -17,6 +17,7 @@ pub mod discussion;
 pub mod docs;
 pub mod docsplan;
 pub mod fence;
+pub mod git;
 pub mod heat;
 pub mod job;
 pub mod model;

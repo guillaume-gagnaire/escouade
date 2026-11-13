@@ -6,14 +6,14 @@
 //! They need escouade-js built (scripts/escouade-js.sh, CI's `escouade-js` job): without it, each says so and passes,
 //! except in CI where it fails. The pinned Javy is downloaded once, into src-tauri/target/wasm-tests/tools.
 
+use crate::files::AgentPlace;
 use crate::i18n::Lang;
-use crate::integrations::secrets::{MemoryStore, SecretStore};
+use crate::journal::Kind;
 use crate::paths::DataDir;
-use crate::plugins::files::AgentPlace;
-use crate::plugins::journal::Kind;
-use crate::plugins::runtime::{secret_name, CallError, Limits, PhaseName, Runtime, Stop};
-use crate::plugins::wasm::{self, Fetcher, Made, Net};
-use crate::plugins::Plugins;
+use crate::runtime::{secret_name, CallError, Limits, PhaseName, Runtime, Stop};
+use crate::secrets::{MemoryStore, SecretStore};
+use crate::wasm::{self, Fetcher, Made, Net};
+use crate::Plugins;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -23,18 +23,21 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
+    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../src-tauri")).join("..")
 }
 
 /// Whether the WASM plugins can run here: escouade-js built into this test binary, and the pinned Javy.
-pub(crate) fn ready() -> bool {
+pub fn ready() -> bool {
     if let Err(e) = wasm::escouade_js() {
         assert!(std::env::var_os("CI").is_none(), "{e}");
         eprintln!("skipped: {e}");
         return false;
     }
     if std::env::var_os("ESCOUADE_JAVY").is_none() {
-        let shared = DataDir::new(Path::new(env!("CARGO_MANIFEST_DIR")).join("target/wasm-tests"));
+        let shared = DataDir::new(
+            Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../src-tauri"))
+                .join("target/wasm-tests"),
+        );
         let javy = wasm::Modules::new(&shared, "tests").javy().unwrap();
         std::env::set_var("ESCOUADE_JAVY", javy);
     }
@@ -997,14 +1000,14 @@ async fn a_plugin_of_run_command_reads_and_does_not_start_and_says_why() {
     let (w, _seen) = sdk_both(true);
     let v = w.plugins.get(&w.id, Lang::En).unwrap();
     assert!(v.manifest.is_some(), "its manifest reads");
-    let crate::plugins::State::Disabled { reason } = &v.state else {
+    let crate::State::Disabled { reason } = &v.state else {
         panic!("{:?}", v.state);
     };
     assert!(reason.contains("run.command"), "{reason}");
     assert!(reason.contains("run.wasm"), "{reason}");
     let fr = w.plugins.get(&w.id, Lang::Fr).unwrap();
     assert!(
-        matches!(&fr.state, crate::plugins::State::Disabled { reason } if reason.contains("ne lance plus")),
+        matches!(&fr.state, crate::State::Disabled { reason } if reason.contains("ne lance plus")),
         "{:?}",
         fr.state
     );

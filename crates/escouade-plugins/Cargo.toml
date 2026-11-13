@@ -1,0 +1,70 @@
+[package]
+name = "escouade-plugins"
+version = "0.1.0"
+description = "The host of Escouade's plugins: their registry, their manifests, their runtime (processes and WASM), the store and the seed"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../src-tauri"
+# A part of the app, cut out of its crate for it to compile faster (docs/CRATES.md): never published.
+publish = false
+
+[features]
+# What the app's tests start the host with: the secrets in memory, the runtime of the workspace's plugins, the fake isola,
+# French as the system's language.
+testing = ["escouade-base/testing"]
+
+[dependencies]
+# The languages written in now, the guards of the paths.
+escouade-base = { path = "../escouade-base" }
+# The data (settings, projects, the data folder, the processes, the git commands).
+escouade-model = { path = "../escouade-model" }
+escouade-plugin-protocol = { path = "../escouade-plugin-protocol" }
+# The manifest's reader and the compiler of the `run.js` plugins.
+escouade-plugin-cli = { path = "../escouade-plugin-cli" }
+escouade-plugin-kit = { path = "../escouade-plugin-kit" }
+# Whether a plugin's file is inside its folder, and the protected parts of a repository (`files/*`).
+escouade-acp = { path = "../escouade-acp" }
+# The runtime the host starts its plugins on: Tauri's (`tauri::async_runtime`), as the app's.
+tauri = { version = "2", features = ["tray-icon", "image-png", "devtools", "unstable"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["raw_value"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time", "fs", "net"] }
+anyhow = "1"
+parking_lot = "0.13"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+notify = "8"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }
+base64 = "0.23"
+log = "0.4"
+sha2 = "0.11"
+# The store's signatures of the verified plugins (docs/STORE.md §4.5).
+minisign-verify = "0.3"
+# A version's archive from the store (STORE-9).
+flate2 = "1"
+tar = { version = "0.4", default-features = false }
+# The plugins' WebSockets (`ws/open`), through the settings' proxy, TLS by rustls (ring).
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-native-certs = "0.8"
+webpki-roots = "1"
+# The JS/TS plugins (`run.js`, ESC-320, docs/PLUGINS-DESIGN.md §5): their module compiled by Javy, run by wasmtime in the
+# app's process (Cranelift, WASI preview 1 alone: no folder, no socket, only the three standard streams). Its compiler is
+# optimized in a build of development (`[profile.dev.package.cranelift-codegen]`… of `src-tauri/Cargo.toml`).
+wasmtime = { version = "=50.0.1", default-features = false, features = ["cranelift", "runtime", "std", "parallel-compilation", "call-hook"] }
+wasmtime-wasi = { version = "=50.0.1", default-features = false, features = ["p1"] }
+bytes = "1"
+
+[dev-dependencies]
+escouade-base = { path = "../escouade-base", features = ["testing"] }
+escouade-model = { path = "../escouade-model", features = ["testing"] }
+# Each test process's temporary folder of its own, given before `main` (the app's `src/test_tmp.rs`).
+ctor = "1"
+
+[target.'cfg(windows)'.dev-dependencies]
+# The handles of the reaper of the tests' temporary folders (`test_tmp`).
+windows-sys = { version = "0.61", features = ["Win32_Foundation"] }

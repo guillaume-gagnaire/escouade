@@ -11,11 +11,9 @@
 //! it as a crash ends a process. Its `fs/*` and `proc/*` are the app's (ESC-333), on the manifest as it is, around one agent
 //! of the bench, `BENCH_AGENT`, in a scratch folder that goes with the session; offline, it runs no program.
 
-use crate::plugins::manifest::Manifest;
-use crate::plugins::runtime::{
-    matches, notification_line, request_line, METHOD_NOT_FOUND, NOT_YOURS,
-};
-use crate::plugins::{files, procs, wasm};
+use crate::manifest::Manifest;
+use crate::runtime::{matches, notification_line, request_line, METHOD_NOT_FOUND, NOT_YOURS};
+use crate::{files, procs, wasm};
 use parking_lot::Mutex;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -62,7 +60,7 @@ fn capabilities(
             manifest.permissions.commands.clone()
         },
         env: manifest.permissions.env.clone(),
-        first_hand: crate::plugins::builtin::first_hand(&manifest.id),
+        first_hand: crate::builtin::first_hand(&manifest.id),
         temp: scratch.join("temp"),
         agents: agents.clone(),
         projects: Arc::new(move |_| Ok(project.clone())),
@@ -538,7 +536,7 @@ fn request(shared: &Shared, method: &str, params: &Value) -> Result<Value, (i64,
             }
         }
         // As the app serves it (ESC-321).
-        "files/read" => crate::plugins::files::read(&shared.folder, params),
+        "files/read" => crate::files::read(&shared.folder, params),
         _ => {
             shared.see(Seen::Unserved {
                 method: method.to_string(),

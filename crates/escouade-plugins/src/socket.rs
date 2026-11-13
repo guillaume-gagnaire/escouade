@@ -7,20 +7,20 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 /// The network settings a WebSocket follows, as reqwest's client does (`crate::tls`).
 pub use crate::tls::Net;
-pub(crate) use crate::tls::{proxy_for, proxy_url};
+pub use crate::tls::{proxy_for, proxy_url};
 
 fn b64(bytes: &[u8]) -> String {
     base64::engine::general_purpose::STANDARD.encode(bytes)
 }
 
 /// What a WebSocket runs over: a TCP connection, TLS or not, through the proxy or not.
-pub(crate) trait Io: AsyncRead + AsyncWrite + Unpin + Send {}
+pub trait Io: AsyncRead + AsyncWrite + Unpin + Send {}
 impl<T: AsyncRead + AsyncWrite + Unpin + Send> Io for T {}
 
-pub(crate) type Ws = tokio_tungstenite::WebSocketStream<Box<dyn Io>>;
+pub type Ws = tokio_tungstenite::WebSocketStream<Box<dyn Io>>;
 
 /// A tunnel to `host:port` through the HTTP proxy `proxy` (CONNECT), its user and password sent when it has them.
-pub(crate) async fn tunnel(
+pub async fn tunnel(
     proxy: &reqwest::Url,
     host: &str,
     port: u16,

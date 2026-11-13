@@ -2,8 +2,30 @@
 
 use std::path::{Path, PathBuf};
 
+/// Cargo puts in the `PATH` of a test every folder a build script gives the linker, and that of whisper-rs-sys gives each
+/// folder of whisper.cpp's cmake tree: the `PATH` then passes the 8191 characters cmd.exe reads. Those folders hold no
+/// program: they go, once, before a test starts anything (as the app's `paths::trim_test_path`).
+#[cfg(windows)]
+pub fn trim_test_path() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let Some(path) = std::env::var_os("PATH") else {
+            return;
+        };
+        let kept: Vec<PathBuf> = std::env::split_paths(&path)
+            .filter(|p| !p.to_string_lossy().contains("whisper-rs-sys-"))
+            .collect();
+        if let Ok(joined) = std::env::join_paths(kept) {
+            // Edition 2021: safe; done once, before the test spawns anything.
+            std::env::set_var("PATH", joined);
+        }
+    });
+}
+
 /// The folder of a test, emptied: in the temporary folder of its process.
 pub fn test_dir(name: &str) -> PathBuf {
+    #[cfg(windows)]
+    trim_test_path();
     let dir = std::env::temp_dir().join(format!("ccm-test-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();

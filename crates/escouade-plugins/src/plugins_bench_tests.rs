@@ -4,14 +4,14 @@
 //! `initialize`, answers past its delay, takes a version it does not speak, asks for another's
 //! secret or writes its own out, or does not end at `shutdown`. `escouade-plugin` runs the same.
 
+use crate::bench::{cli, run, Options, Report, Scenario, Verdict};
 use crate::i18n::Lang;
-use crate::plugins::bench::{cli, run, Options, Report, Scenario, Verdict};
 use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
+    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../src-tauri")).join("..")
 }
 
 fn example(name: &str) -> PathBuf {
@@ -65,9 +65,9 @@ async fn bench(folder: &Path) -> Report {
 /// The bench of a plugin of Escouade's own hand (its id `dev.escouade.*`, ESC-314).
 async fn bench_own(folder: &Path) -> Report {
     let o = Options {
-        hand: crate::plugins::manifest::Hand::First,
+        hand: crate::manifest::Hand::First,
         // The run.js plugins of the repository need the release that serves WASM.
-        app_version: crate::plugins::wasm::SERVED_SINCE.into(),
+        app_version: crate::wasm::SERVED_SINCE.into(),
         ..options()
     };
     run(folder, &o).await
@@ -307,7 +307,7 @@ fn the_command_tests_and_validates_a_folder() {
     // team-rules is a run.js plugin since 2.0.0 (ESC-326): its bench plays it in WASM.
     if crate::plugins_wasm_tests::ready() {
         let rules = path(example("team-rules"));
-        let since = crate::plugins::wasm::SERVED_SINCE;
+        let since = crate::wasm::SERVED_SINCE;
         assert_eq!(
             cli::main(args(&["test", &rules, "--json", own, "--escouade", since])),
             0
@@ -403,7 +403,7 @@ async fn the_source_and_host_scenarios_play_the_calls_of_the_adapters() {
 fn validate_judges_a_plugin_for_the_version_of_escouade_it_is_given() {
     #[cfg(windows)]
     crate::paths::trim_test_path();
-    let slack = Path::new(env!("CARGO_MANIFEST_DIR"))
+    let slack = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../src-tauri"))
         .join("../plugins/slack")
         .to_string_lossy()
         .into_owned();
@@ -417,7 +417,7 @@ fn validate_judges_a_plugin_for_the_version_of_escouade_it_is_given() {
         ])
     };
     assert_eq!(validate("2.1.2"), 1, "the 2.1 does not serve WASM");
-    assert_eq!(validate(crate::plugins::wasm::SERVED_SINCE), 0);
+    assert_eq!(validate(crate::wasm::SERVED_SINCE), 0);
 }
 
 /// ESC-343: `test --escouade <version>` plays the plugin as that version: its range and what `initialize` shows go by
@@ -445,14 +445,14 @@ async fn the_bench_plays_a_plugin_as_the_version_it_is_given() {
     assert!(played.passed(), "{}", played.render(Lang::En));
     assert_eq!(played.escouade, "2.2.0");
 
-    let m = crate::plugins::manifest::read(
+    let m = crate::manifest::read(
         &std::fs::read_to_string(&path).unwrap(),
-        crate::plugins::manifest::Hand::Third,
+        crate::manifest::Hand::Third,
     )
     .manifest
     .ok()
     .unwrap();
-    let hello = crate::plugins::bench::fake::Session::hello(&m, &o.app_version, 1);
+    let hello = crate::bench::fake::Session::hello(&m, &o.app_version, 1);
     assert_eq!(hello["escouade"]["version"], "2.2.0");
 }
 

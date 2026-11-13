@@ -91,25 +91,11 @@ const SESSION_WITHIN: Duration = Duration::from_secs(180);
 /// How many times a call is given again to a plugin that crashed before it answered.
 const RETRIES: usize = 8;
 
+// What a manifest declares of its harnesses, in `escouade-plugins`.
+pub use escouade_plugins::described::harnesses_of;
+
 fn leak(s: &str) -> &'static str {
     Box::leak(s.to_owned().into_boxed_str())
-}
-
-/// The harnesses a manifest declares (`contributes.harnesses`), those that read.
-pub fn harnesses_of(contributes: &serde_json::Map<String, Value>) -> Vec<proto::HarnessDecl> {
-    contributes
-        .get("harnesses")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|h| match serde_json::from_value(h.clone()) {
-            Ok(d) => Some(d),
-            Err(e) => {
-                log::warn!("a harness of a plugin's manifest left aside: {e}");
-                None
-            }
-        })
-        .collect()
 }
 
 /// Registers the harnesses of the plugin `plugin` (its manifest's `contributes`), each one once: answers their ids.
@@ -1013,34 +999,6 @@ pub fn described_id(owner: &str, harness: &str) -> EngineId {
 /// would leave that folder.
 fn bare_name(name: &str) -> bool {
     !name.is_empty() && !name.contains(['/', '\\', ':']) && name != "." && name != ".."
-}
-
-/// What the harness `decl` describes runs, a line each, as the installation shows it (`plugins::asks`): for each name of its
-/// program, its variables and its arguments, and what asks its version, unless that is the usual `--version`. Nothing for
-/// a harness that is not described.
-pub fn described_lines(decl: &proto::HarnessDecl) -> Vec<String> {
-    let Some(acp) = &decl.acp else {
-        return Vec::new();
-    };
-    let names = if decl.locate.names.is_empty() {
-        std::slice::from_ref(&decl.id)
-    } else {
-        decl.locate.names.as_slice()
-    };
-    let usual = decl.version_args == ["--version"];
-    let mut out = Vec::new();
-    for name in names {
-        let vars = acp.env.iter().map(|(k, v)| format!("{k}={v}"));
-        let run: Vec<String> = vars
-            .chain(std::iter::once(name.clone()))
-            .chain(acp.args.iter().cloned())
-            .collect();
-        out.push(run.join(" "));
-        if !usual {
-            out.push(format!("{name} {}", decl.version_args.join(" ")));
-        }
-    }
-    out
 }
 
 /// `path`, or under Windows the same with `.exe` (or `.cmd`, the launcher npm leaves) when that is a file.

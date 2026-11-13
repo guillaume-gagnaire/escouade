@@ -10,16 +10,8 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-/// Where the secrets are kept, one entry per integration: the system's keychain, or memory in
-/// tests (they never touch the machine's).
-pub trait SecretStore: Send + Sync {
-    /// The secret kept under `name`, if there is one.
-    fn get(&self, name: &str) -> Result<Option<String>>;
-    /// Keeps `secret` under `name`, in place of the one there.
-    fn set(&self, name: &str, secret: &str) -> Result<()>;
-    /// Forgets the secret kept under `name` (none there is fine).
-    fn delete(&self, name: &str) -> Result<()>;
-}
+// The store of the secrets the host of the plugins reads too, in `escouade-plugins`; the keychain's is here.
+pub use escouade_plugins::secrets::SecretStore;
 
 /// The keychain's service of the app's entries, its identifier; a sandboxed run's (end-to-end
 /// tests, demos) are apart, so that its accounts never take the place of the user's.
@@ -136,58 +128,9 @@ pub(crate) fn store_for(_data: &DataDir) -> Arc<dyn SecretStore> {
     Arc::new(NoKeychain)
 }
 
-/// The secrets in memory (tests).
+/// The secrets in memory (tests), in `escouade-plugins` (feature `testing`).
 #[cfg(test)]
-#[derive(Default)]
-pub(crate) struct MemoryStore {
-    entries: parking_lot::Mutex<std::collections::BTreeMap<String, String>>,
-    /// Every call fails, as with a keychain out of reach.
-    pub refuse: std::sync::atomic::AtomicBool,
-    /// Says it kept a secret, and keeps nothing.
-    pub lose: std::sync::atomic::AtomicBool,
-}
-
-#[cfg(test)]
-impl MemoryStore {
-    /// What it holds under `name`.
-    pub fn entry(&self, name: &str) -> Option<String> {
-        self.entries.lock().get(name).cloned()
-    }
-
-    /// Everything it holds, by name.
-    pub fn all(&self) -> std::collections::BTreeMap<String, String> {
-        self.entries.lock().clone()
-    }
-
-    fn reached(&self) -> Result<()> {
-        if self.refuse.load(std::sync::atomic::Ordering::SeqCst) {
-            bail!("keychain out of reach");
-        }
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-impl SecretStore for MemoryStore {
-    fn get(&self, name: &str) -> Result<Option<String>> {
-        self.reached()?;
-        Ok(self.entry(name))
-    }
-
-    fn set(&self, name: &str, secret: &str) -> Result<()> {
-        self.reached()?;
-        if !self.lose.load(std::sync::atomic::Ordering::SeqCst) {
-            self.entries.lock().insert(name.into(), secret.into());
-        }
-        Ok(())
-    }
-
-    fn delete(&self, name: &str) -> Result<()> {
-        self.reached()?;
-        self.entries.lock().remove(name);
-        Ok(())
-    }
-}
+pub(crate) use escouade_plugins::secrets::MemoryStore;
 
 /// The memory store of the data folder `data` (tests): one per folder, so that a core loaded again
 /// on the same folder finds what the one before kept, as it would in the keychain.

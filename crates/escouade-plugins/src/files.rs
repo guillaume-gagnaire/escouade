@@ -99,7 +99,11 @@ fn parts_of(path: &str) -> Option<Vec<&str>> {
 
 /// How long `fs/gitProtected` and `fs/fileOnly` wait for git: well within the 2 s of a turn.
 const GIT_WITHIN: std::time::Duration =
-    std::time::Duration::from_secs(if cfg!(test) { 30 } else { 1 });
+    std::time::Duration::from_secs(if cfg!(any(test, feature = "testing")) {
+        30
+    } else {
+        1
+    });
 
 /// Where an agent lives, as the core resolved it: what `fs/*` and `proc/spawn` take for the agent named by a plugin. The
 /// plugin is told its roots by `agent/attach`, and can change none of it.
@@ -656,7 +660,7 @@ fn no_submodule(cwd: &Path, path: &Path) -> bool {
 mod tests {
     use super::*;
     use crate::fence::Fence;
-    use crate::plugins::runtime::INVALID_PARAMS;
+    use crate::runtime::INVALID_PARAMS;
     use serde_json::json;
     use std::cell::RefCell;
 
@@ -721,7 +725,7 @@ mod tests {
         assert_eq!(code(&f, &abs), REFUSED, "{abs}");
         assert_eq!(
             read(&f, &json!({})).unwrap_err().0,
-            super::super::runtime::INVALID_PARAMS
+            crate::runtime::INVALID_PARAMS
         );
     }
 
@@ -789,7 +793,7 @@ mod tests {
             std::fs::write(base.join("home/auth.json"), "{}").unwrap();
             std::fs::write(base.join("other/b.txt"), "à un autre").unwrap();
             std::fs::write(base.join("fenced/c.txt"), "privé").unwrap();
-            let manifest = crate::plugins::manifest::check(
+            let manifest = crate::manifest::check(
                 &json!({
                     "id": "dev.exemple.fichiers",
                     "name": "Fichiers",
@@ -798,7 +802,7 @@ mod tests {
                     "permissions": { "files": files },
                     "limits": limits,
                 }),
-                crate::plugins::manifest::Hand::Third,
+                crate::manifest::Hand::Third,
             )
             .manifest
             .expect("a manifest that holds");

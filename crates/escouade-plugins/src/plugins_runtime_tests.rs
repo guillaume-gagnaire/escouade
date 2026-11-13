@@ -4,34 +4,34 @@
 //! kept meanwhile, a turn past its time, its memory, the journal, the secrets, and `shutdown`.
 
 use crate::i18n::Lang;
-use crate::integrations::secrets::{MemoryStore, SecretStore};
+use crate::journal::{Kind, MASK};
 use crate::paths::DataDir;
-use crate::plugins::journal::{Kind, MASK};
-use crate::plugins::runtime::{
+use crate::runtime::{
     secret_name, CallError, Limits, PhaseName, Runtime, Stop, METHOD_NOT_FOUND, NOT_YOURS,
 };
-use crate::plugins::Plugins;
+use crate::secrets::{MemoryStore, SecretStore};
+use crate::Plugins;
 use serde_json::value::RawValue;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-pub(crate) const ID: &str = "dev.test.fake";
+pub const ID: &str = "dev.test.fake";
 
 fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
+    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../src-tauri")).join("..")
 }
 
-pub(crate) struct Fake {
-    pub(crate) rt: Arc<Runtime>,
-    pub(crate) store: Arc<MemoryStore>,
+pub struct Fake {
+    pub rt: Arc<Runtime>,
+    pub store: Arc<MemoryStore>,
     data: DataDir,
     plugins: Arc<Plugins>,
 }
 
 /// The module of the fake plugin in `dir`, told `args` (its `args.json`): the `run` of its manifest.
-pub(crate) fn fake_module(dir: &Path, args: &[&str]) -> Value {
+pub fn fake_module(dir: &Path, args: &[&str]) -> Value {
     std::fs::create_dir_all(dir).unwrap();
     std::fs::copy(
         root().join("tests/fixtures/plugins/fake/plugin.mjs"),
@@ -44,7 +44,7 @@ pub(crate) fn fake_module(dir: &Path, args: &[&str]) -> Value {
 
 /// Makes the module of the plugin `id` of `rt` ready, as its install does: Javy takes seconds a bundle, more than a
 /// call waits. Nothing for a plugin that is no module.
-pub(crate) fn warm(rt: &Runtime, id: &str) {
+pub fn warm(rt: &Runtime, id: &str) {
     assert!(
         crate::plugins_wasm_tests::ready(),
         "escouade-js and Javy for the fake plugin"
@@ -55,7 +55,7 @@ pub(crate) fn warm(rt: &Runtime, id: &str) {
 }
 
 /// The fake plugin installed in development from a folder of the test's own, told `args` (its `args.json`).
-pub(crate) fn fake(name: &str, args: &[&str], limits: Limits) -> Fake {
+pub fn fake(name: &str, args: &[&str], limits: Limits) -> Fake {
     let base = std::env::temp_dir().join(format!(
         "plugin-runtime-{name}-{}",
         uuid::Uuid::new_v4().simple()
@@ -99,7 +99,7 @@ pub(crate) fn fake(name: &str, args: &[&str], limits: Limits) -> Fake {
 }
 
 /// Limits for a test: room for a slow machine to make the module.
-pub(crate) fn quick() -> Limits {
+pub fn quick() -> Limits {
     Limits {
         initialize: Duration::from_secs(20),
         shutdown: Duration::from_secs(2),
@@ -107,7 +107,7 @@ pub(crate) fn quick() -> Limits {
     }
 }
 
-pub(crate) async fn until(what: &str, f: impl Fn() -> bool) {
+pub async fn until(what: &str, f: impl Fn() -> bool) {
     let started = Instant::now();
     while !f() {
         assert!(
@@ -691,8 +691,8 @@ async fn an_event_that_changed_nothing_leaves_its_process_running() {
 /// `.escouade.yml` gives the fake plugin.
 struct Projects;
 
-impl crate::plugins::events::Place for Projects {
-    fn shell(&self) -> Option<crate::pty::ShellInfo> {
+impl crate::events::Place for Projects {
+    fn shell(&self) -> Option<crate::events::ShellInfo> {
         None
     }
 
@@ -719,7 +719,7 @@ impl crate::plugins::events::Place for Projects {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_project_s_file_gives_its_settings_to_the_plugin_on_in_it() {
     let f = fake("project-settings", &[], quick());
-    let projects: Arc<dyn crate::plugins::events::Place> = Arc::new(Projects);
+    let projects: Arc<dyn crate::events::Place> = Arc::new(Projects);
     f.rt.place_with(Arc::downgrade(&projects));
     f.plugins
         .choose(ID, |c| {

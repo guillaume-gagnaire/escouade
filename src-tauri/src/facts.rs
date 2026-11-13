@@ -191,49 +191,9 @@ pub enum Body {
     WorkflowChanged { workflows: Vec<String> },
 }
 
-/// Every fact's name, in the order of the docs: the protocol's schema lists the same
-/// (`schemas/plugin-protocol-1.json`, `FactName`), and the bench plays them (`bench::FACTS`).
-pub const NAMES: &[&str] = &[
-    "agent.created",
-    "agent.renamed",
-    "agent.status",
-    "agent.stopped",
-    "agent.handover",
-    "turn.ended",
-    "request.permission",
-    "request.question",
-    "request.answered",
-    "ticket.created",
-    "ticket.column",
-    "ticket.report",
-    "ticket.approved",
-    "ticket.rejected",
-    "ticket.merged",
-    "ticket.conflict",
-    "project.added",
-    "project.closed",
-    "worktree.created",
-    "worktree.removed",
-    "launch.started",
-    "launch.ready",
-    "launch.stopped",
-    "tests.result",
-    "app.started",
-    "docs.written",
-    "docs.filed",
-    "docs.gaps",
-    "memory.written",
-    "memory.forgotten",
-    "decision.proposed",
-    "decision.accepted",
-    "pr.opened",
-    "account.switched",
-    "workflow.step_entered",
-    "workflow.step_left",
-    "workflow.looped_back",
-    "workflow.left",
-    "workflow.changed",
-];
+// Every fact's name, in `escouade-plugins` (the bench plays them); the tests read it here.
+#[cfg(test)]
+pub use escouade_plugins::facts::NAMES;
 
 impl Body {
     /// Its name (`ticket.column`).

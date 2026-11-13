@@ -201,19 +201,19 @@ impl Modules {
     }
 
     /// The cache's folder.
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg_attr(not(any(test, feature = "testing")), allow(dead_code))]
     pub fn dir(&self) -> &Path {
         &self.cache
     }
 
     /// The pinned Javy (`Compiler::javy`).
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg_attr(not(any(test, feature = "testing")), allow(dead_code))]
     pub fn javy(&self) -> Result<PathBuf, String> {
         self.compiler.javy()
     }
 
     /// The pinned Javy of the app's tools, whatever `ESCOUADE_JAVY` says.
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg_attr(not(any(test, feature = "testing")), allow(dead_code))]
     pub fn pinned_javy(&self) -> Result<PathBuf, String> {
         self.compiler.pinned_javy()
     }
@@ -323,7 +323,7 @@ impl Modules {
 
     /// The module of a bundle, compiled now, outside the cache: what `escouade-plugin build` writes, the same bytes
     /// on every system for the same bundle (ESC-322).
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg_attr(not(any(test, feature = "testing")), allow(dead_code))]
     pub fn build(&self, bundle: &str) -> Result<Vec<u8>, String> {
         self.compiler.build(bundle)
     }
@@ -1035,7 +1035,7 @@ impl Fetcher {
     }
 
     /// How much an answer may hold.
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg_attr(not(any(test, feature = "testing")), allow(dead_code))]
     pub fn bytes(&self) -> usize {
         self.bytes
     }
@@ -1243,7 +1243,7 @@ impl Fetcher {
             .redirect(reqwest::redirect::Policy::none())
             // The settings' proxy alone, never the system's.
             .no_proxy()
-            .user_agent(concat!("escouade/", env!("CARGO_PKG_VERSION")));
+            .user_agent(concat!("escouade/", env!("ESCOUADE_APP_VERSION")));
         if by_proxy && !settings.proxy.is_empty() {
             // A proxy that is no address stops the call: going around it would leave by a way the user closed.
             let url = super::socket::proxy_url(settings)?;

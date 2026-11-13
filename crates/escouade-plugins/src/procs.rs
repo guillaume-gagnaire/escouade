@@ -97,7 +97,7 @@ pub fn environment(
 /// no file that does not run elsewhere.
 pub fn locate(name: &str) -> Option<PathBuf> {
     // The test double is a script, which only its tests start.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testing"))]
     if name == "isola" {
         return crate::isola::cli();
     }
@@ -580,7 +580,7 @@ async fn wait(mut w: Waited) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugins::files::AgentPlace;
+    use crate::files::AgentPlace;
     use std::time::Instant;
     use tokio::sync::mpsc::UnboundedReceiver;
 
@@ -772,7 +772,7 @@ mod tests {
         std::fs::create_dir_all(base.join("project")).unwrap();
         let told: Arc<Mutex<Vec<String>>> = Arc::default();
         let t = told.clone();
-        let agents: super::super::files::Agents = Arc::default();
+        let agents: crate::files::Agents = Arc::default();
         agents.lock().insert(
             "a".into(),
             AgentPlace {

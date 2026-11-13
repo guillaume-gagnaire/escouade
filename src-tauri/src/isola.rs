@@ -4,39 +4,11 @@
 //! the shape of a service (`Service`). `isola up`, `ls`, `down` and `destroy` are the plugin's and the test launch's.
 
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use std::sync::Mutex;
-#[cfg(not(test))]
-use std::time::{Duration, Instant};
 
-/// The last look for the CLI on the PATH, and when it was made.
-#[cfg(not(test))]
-static CLI: Mutex<Option<(Option<PathBuf>, Instant)>> = Mutex::new(None);
-
-/// The CLI the tests use (never the machine's own).
+// Where the CLI is, and the fake of the tests, in `escouade-plugins` (the host of the plugins runs it).
+pub use escouade_plugins::isola::cli;
 #[cfg(test)]
-pub static TEST_CLI: Mutex<Option<PathBuf>> = Mutex::new(None);
-
-/// The isola CLI, looked for on the PATH at most every 30 s: installed while the app runs, it is
-/// found soon after. As the host looks for it (`proc/*`): what the plugin cannot run is not installed.
-pub fn cli() -> Option<PathBuf> {
-    #[cfg(test)]
-    {
-        TEST_CLI.lock().unwrap_or_else(|e| e.into_inner()).clone()
-    }
-    #[cfg(not(test))]
-    {
-        let mut cached = CLI.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some((found, at)) = cached.as_ref() {
-            if at.elapsed() < Duration::from_secs(30) {
-                return found.clone();
-            }
-        }
-        let found = crate::plugins::procs::locate("isola");
-        *cached = Some((found.clone(), Instant::now()));
-        found
-    }
-}
+pub use escouade_plugins::isola::TEST_CLI;
 
 /// A service of a worktree, for its test launch (the answer of the plugin's `launch/ls`).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -59,7 +31,6 @@ pub(crate) use tests::{run, LIMIT, UP};
 pub(crate) mod tests {
     use super::*;
     use crate::paths::test_dir;
-    use std::path::Path;
     use std::process::Stdio;
     use std::time::Duration;
 
@@ -73,21 +44,7 @@ pub(crate) mod tests {
     /// How long `isola ls`, `down` or `destroy` may take.
     pub const LIMIT: Duration = Duration::from_secs(60);
 
-    /// The fake isola (tests/fixtures/fake-isola.mjs), set as the CLI of every test: only a
-    /// worktree with an `.isola.toml` is its.
-    pub(crate) fn use_fake() -> PathBuf {
-        let fake = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .join("tests")
-            .join("fixtures")
-            .join(if cfg!(windows) {
-                "fake-isola.cmd"
-            } else {
-                "fake-isola"
-            });
-        *TEST_CLI.lock().unwrap() = Some(fake.clone());
-        fake
-    }
+    pub(crate) use escouade_plugins::isola::tests::{calls, use_fake};
 
     /// `isola <args>` in `dir`: what it printed (the test double stands in for the plugin where the test needs the
     /// worktree up).
@@ -110,29 +67,6 @@ pub(crate) mod tests {
             String::from_utf8_lossy(&out.stderr)
         );
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
-    }
-
-    /// The calls the fake isola got in `dir`: their arguments (its log is kept out of the folder,
-    /// which may go).
-    pub(crate) fn calls(dir: &Path) -> Vec<String> {
-        let log = |dir: &Path| {
-            let key: String = dir
-                .to_string_lossy()
-                .chars()
-                .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
-                .collect();
-            std::fs::read_to_string(std::env::temp_dir().join(format!("fake-isola-{key}.log")))
-                .unwrap_or_default()
-        };
-        // The fake names its log after node's `process.cwd()`, the real path: under macOS a temporary folder
-        // (/var/folders/…) is a link to /private/var/folders/….
-        let mut text = log(dir);
-        if text.is_empty() {
-            if let Ok(real) = dir.canonicalize() {
-                text = log(&real);
-            }
-        }
-        text.lines().map(str::to_string).collect()
     }
 
     #[tokio::test]

@@ -4,19 +4,19 @@
 //!
 //! No escouade-js nor Javy here: a reactor is compiled by nothing but Cranelift.
 
+use crate::bench::fake::{Reach, Reply, Session, BENCH_AGENT};
+use crate::bench::{cli, run, Options, Verdict};
+use crate::events::Place;
+use crate::events::ShellInfo;
+use crate::files::AgentPlace;
 use crate::i18n::Lang;
-use crate::integrations::secrets::MemoryStore;
+use crate::journal::Kind;
+use crate::manifest::{self, Hand};
 use crate::paths::DataDir;
-use crate::plugins::bench::fake::{Reach, Reply, Session, BENCH_AGENT};
-use crate::plugins::bench::{cli, run, Options, Verdict};
-use crate::plugins::events::Place;
-use crate::plugins::files::AgentPlace;
-use crate::plugins::journal::Kind;
-use crate::plugins::manifest::{self, Hand};
-use crate::plugins::runtime::{CallError, Limits, Runtime};
-use crate::plugins::wasm::{self, Calls, Fault, Fetcher, Frame, Instance, Made, Net, Wiring};
-use crate::plugins::Plugins;
-use crate::pty::ShellInfo;
+use crate::runtime::{CallError, Limits, Runtime};
+use crate::secrets::MemoryStore;
+use crate::wasm::{self, Calls, Fault, Fetcher, Frame, Instance, Made, Net, Wiring};
+use crate::Plugins;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap};
 use std::io::{BufRead, BufReader, Write};
@@ -28,8 +28,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 
-pub(crate) fn fixture() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures/plugins/reactor")
+pub fn fixture() -> PathBuf {
+    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../src-tauri"))
+        .join("../tests/fixtures/plugins/reactor")
 }
 
 fn module() -> wasmtime::Module {
@@ -57,11 +58,11 @@ fn copied(name: &str) -> PathBuf {
 }
 
 /// The module's instance on a thread of its own, as `spawn_wasm` makes it, on the module of the fixture.
-pub(crate) struct Served {
+pub struct Served {
     tx: Option<UnboundedSender<Frame>>,
-    pub(crate) lines: Receiver<String>,
-    pub(crate) refused: Arc<Mutex<Vec<String>>>,
-    pub(crate) said: Arc<Mutex<Vec<String>>>,
+    pub lines: Receiver<String>,
+    pub refused: Arc<Mutex<Vec<String>>>,
+    pub said: Arc<Mutex<Vec<String>>>,
     ended: Receiver<Option<Fault>>,
 }
 
@@ -72,7 +73,7 @@ fn line(id: u64, method: &str, params: Value) -> Frame {
 
 impl Served {
     /// `first`, written before the thread starts, comes to it together.
-    pub(crate) fn start(
+    pub fn start(
         fetcher: Fetcher,
         limits: wasm::Limits,
         calls: Option<Calls>,
@@ -123,7 +124,7 @@ impl Served {
         Self::start(no_network(), limits, calls, Vec::new())
     }
 
-    pub(crate) fn send(&self, id: u64, method: &str, params: Value) {
+    pub fn send(&self, id: u64, method: &str, params: Value) {
         let _ = self.tx.as_ref().unwrap().send(line(id, method, params));
     }
 
@@ -968,13 +969,13 @@ async fn a_program_goes_to_the_journal_its_secrets_masked() {
 fn a_folder_or_a_command_taken_back_is_no_longer_given() {
     let text = std::fs::read_to_string(fixture().join("escouade-plugin.json")).unwrap();
     let read = manifest::read(&text, Hand::Third).manifest.unwrap();
-    let asks = crate::plugins::asks(&read);
+    let asks = crate::asks(&read);
     assert!(asks.contains(&"files:agent:write".to_string()), "{asks:?}");
     assert!(
         asks.contains(&"commands:git --version".to_string()),
         "{asks:?}"
     );
-    let left = crate::plugins::granted(
+    let left = crate::granted(
         &read,
         &["files:agent:write".into(), "commands:git --version".into()],
     );

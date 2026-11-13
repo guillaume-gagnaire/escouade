@@ -81,6 +81,7 @@ pub fn acquire(
     };
     let shared = start(&own)?;
     shared.enter(dir);
+    escouade_plugins::shared_ports::note(&own, shared.port.clone(), shared.exited.clone());
     map.insert(own, (shared.clone(), 1));
     Ok(shared)
 }
@@ -95,6 +96,7 @@ pub fn release(shared: &Arc<Shared>) {
                 *users = users.saturating_sub(1);
                 if *users == 0 {
                     map.remove(&shared.key);
+                    escouade_plugins::shared_ports::forget(&shared.key, &shared.port);
                     true
                 } else {
                     false
@@ -109,18 +111,9 @@ pub fn release(shared: &Arc<Shared>) {
     }
 }
 
-/// The ports the processes of `plugin` in the runtime `rt` said they listen on, while they live: all `local:shared` may
-/// reach. Never a port the plugin named.
-pub fn ports_of(rt: usize, plugin: &str) -> Vec<u16> {
-    let prefix = format!("{rt}|{plugin}|");
-    RUNNING.lock().as_ref().map_or(Vec::new(), |map| {
-        map.values()
-            .filter(|(s, _)| s.is_alive() && s.key.starts_with(&prefix))
-            .map(|(s, _)| s.port.load(Ordering::Acquire))
-            .filter(|p| *p != 0)
-            .collect()
-    })
-}
+// The ports they said, noted in `escouade-plugins` as they are kept: what the runtime lets `local:shared` reach.
+#[cfg(test)]
+pub use escouade_plugins::shared_ports::ports_of;
 
 /// The port the line `line` says, by the template `listens`: its text around `{host}` and `{port}`, the host being
 /// `127.0.0.1` and nothing else.
@@ -282,6 +275,7 @@ impl Shared {
                 if let Some(map) = all.as_mut() {
                     if map.get(&s.key).is_some_and(|(x, _)| Arc::ptr_eq(x, &s)) {
                         map.remove(&s.key);
+                        escouade_plugins::shared_ports::forget(&s.key, &s.port);
                     }
                 }
             }

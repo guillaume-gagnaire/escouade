@@ -151,10 +151,6 @@ mod plugins_acp_tests;
 #[cfg(test)]
 mod plugins_adapters_tests;
 #[cfg(test)]
-mod plugins_bench_tests;
-#[cfg(test)]
-mod plugins_bench_wasm_tests;
-#[cfg(test)]
 mod plugins_builtin_tests;
 #[cfg(test)]
 mod plugins_claude_acp_parity_tests;
@@ -177,21 +173,19 @@ mod plugins_loans_tests;
 #[cfg(test)]
 mod plugins_net_tests;
 #[cfg(test)]
-mod plugins_protocol_tests;
+use escouade_plugins::plugins_protocol_tests;
 #[cfg(test)]
-mod plugins_reactor_tests;
+use escouade_plugins::plugins_reactor_tests;
 #[cfg(test)]
 mod plugins_reader_tests;
 #[cfg(test)]
-mod plugins_runtime_tests;
+use escouade_plugins::plugins_runtime_tests;
 #[cfg(test)]
-mod plugins_rust_build_tests;
-#[cfg(test)]
-mod plugins_seed_tests;
+use escouade_plugins::plugins_seed_tests;
 #[cfg(test)]
 mod plugins_sort_tests;
 #[cfg(test)]
-mod plugins_store_tests;
+use escouade_plugins::plugins_store_tests;
 #[cfg(test)]
 mod plugins_tests;
 #[cfg(test)]
@@ -203,7 +197,7 @@ mod plugins_wasm_hosts_parity_tests;
 #[cfg(test)]
 mod plugins_wasm_parity_tests;
 #[cfg(test)]
-mod plugins_wasm_tests;
+use escouade_plugins::plugins_wasm_tests;
 mod pragent;
 #[cfg(test)]
 mod pragent_tests;

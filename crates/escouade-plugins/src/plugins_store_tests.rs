@@ -8,8 +8,8 @@
 
 use crate::i18n::Lang;
 use crate::paths::DataDir;
-use crate::plugins::store::{self, Store};
-use crate::plugins::{Origin, Plugins, State};
+use crate::store::{self, Store};
+use crate::{Origin, Plugins, State};
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -18,18 +18,18 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
+    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../src-tauri")).join("..")
 }
 
-pub(crate) fn temp_dir(name: &str) -> PathBuf {
+pub fn temp_dir(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("store-{name}-{}", uuid::Uuid::new_v4().simple()));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
 
 /// The fake store, run by node; stopped when dropped.
-pub(crate) struct Fake {
-    pub(crate) url: String,
+pub struct Fake {
+    pub url: String,
     key: String,
     child: Child,
 }
@@ -42,7 +42,7 @@ impl Drop for Fake {
 }
 
 impl Fake {
-    pub(crate) fn start() -> Self {
+    pub fn start() -> Self {
         let mut child = Command::new("node")
             .arg(root().join("tests/fixtures/store/fake-store.mjs"))
             .stdout(Stdio::piped())
@@ -63,12 +63,12 @@ impl Fake {
 
     /// Trusts its key as the app trusts the store's (this test's process alone: nextest runs each
     /// test in its own).
-    pub(crate) fn trusted(self) -> Self {
+    pub fn trusted(self) -> Self {
         std::env::set_var("ESCOUADE_STORE_TEST_KEY", &self.key);
         self
     }
 
-    pub(crate) fn store(&self, data: &DataDir) -> Store {
+    pub fn store(&self, data: &DataDir) -> Store {
         Store::load(
             data,
             self.url.clone(),
@@ -77,7 +77,7 @@ impl Fake {
         )
     }
 
-    pub(crate) async fn post(&self, path: &str, body: Value) -> Value {
+    pub async fn post(&self, path: &str, body: Value) -> Value {
         reqwest::Client::new()
             .post(format!("{}{path}", self.url))
             .json(&body)
@@ -89,7 +89,7 @@ impl Fake {
             .unwrap()
     }
 
-    pub(crate) async fn state(&self) -> Value {
+    pub async fn state(&self) -> Value {
         reqwest::get(format!("{}/_fake/state", self.url))
             .await
             .unwrap()
@@ -99,7 +99,7 @@ impl Fake {
     }
 }
 
-pub(crate) fn http() -> reqwest::Client {
+pub fn http() -> reqwest::Client {
     reqwest::Client::builder().no_proxy().build().unwrap()
 }
 
@@ -119,7 +119,7 @@ async fn install(
     id: &str,
     version: Option<&str>,
     verified_only: bool,
-) -> Result<crate::plugins::PluginView, String> {
+) -> Result<crate::PluginView, String> {
     let f = store
         .fetch(&http(), id, version, verified_only, Lang::Fr)
         .await?;
@@ -215,7 +215,7 @@ async fn a_verified_version_installs_with_its_seal_checked_here_and_again_offlin
 async fn without_the_store_key_a_verified_version_installs_without_a_seal() {
     // No ESCOUADE_STORE_TEST_KEY: as a release before the user gives the keys (STORE_PUBLIC_KEYS empty).
     let fake = Fake::start();
-    if !crate::plugins::store_keys::STORE_PUBLIC_KEYS.is_empty() {
+    if !crate::store_keys::STORE_PUBLIC_KEYS.is_empty() {
         return;
     }
     let (_, store, plugins) = ready(&fake, "nokey").await;
@@ -338,12 +338,12 @@ async fn a_run_js_plugin_installs_the_module_the_store_compiled_and_a_changed_on
         .collect();
     assert_eq!(kept, vec![served], "the store's module, in the cache");
     // The install precompiles the store's module: the bundle is not compiled here.
-    if crate::plugins::wasm::escouade_js().is_ok() {
-        let modules = crate::plugins::wasm::Modules::new(&data, "2.1.0");
+    if crate::wasm::escouade_js().is_ok() {
+        let modules = crate::wasm::Modules::new(&data, "2.1.0");
         let (_, made) = modules
             .prepare(Path::new(&view.folder), "dist/plugin.mjs")
             .expect("precompiled");
-        assert_eq!(made, crate::plugins::wasm::Made::Precompiled);
+        assert_eq!(made, crate::wasm::Made::Precompiled);
     }
 
     let e = install(&store, &plugins, "dev.exemple.wasm-changed", None, false)
@@ -375,17 +375,17 @@ async fn a_run_wasm_plugin_installs_the_module_the_store_compiled_and_one_withou
     .await
     .unwrap()
     .to_vec();
-    let module = crate::plugins::wasm::MODULE_FILE;
+    let module = crate::wasm::MODULE_FILE;
     assert_eq!(
         std::fs::read(Path::new(&view.folder).join(module)).unwrap(),
         served,
         "the store's module, not the archive's"
     );
-    let modules = crate::plugins::wasm::Modules::new(&data, "2.1.0");
+    let modules = crate::wasm::Modules::new(&data, "2.1.0");
     let (_, made) = modules
         .prepare_reactor(Path::new(&view.folder))
         .expect("precompiled");
-    assert_eq!(made, crate::plugins::wasm::Made::Precompiled);
+    assert_eq!(made, crate::wasm::Made::Precompiled);
 
     let e = install(&store, &plugins, "dev.exemple.reactor-bare", None, false)
         .await

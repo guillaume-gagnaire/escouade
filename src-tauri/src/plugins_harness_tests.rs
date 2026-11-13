@@ -841,3 +841,13 @@ async fn the_arguments_a_before_read_gives_back_are_checked_again() {
         .is_err());
     rt.shutdown();
 }
+
+#[test]
+fn the_host_knows_the_plugins_of_the_harnesses_of_the_core_in_their_order() {
+    // `escouade-plugins` tells a plugin that describes harnesses over ACP from these by its own list.
+    let plugins: Vec<&str> = harness::BUILTIN_HARNESSES
+        .iter()
+        .map(|h| h.plugin)
+        .collect();
+    assert_eq!(plugins, crate::plugins::builtin::HARNESSES);
+}
