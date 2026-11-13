@@ -21,7 +21,14 @@
   "limits": { "fetchSeconds": 120, "fetchBytes": 33554432, "memoryBytes": 268435456, "turnSeconds": 10 },
   "activation": ["voice:mistral"],
   "permissions": {
-    "env": ["VIBE_ENABLE_TELEMETRY", "VIBE_ACTIVE_MODEL", "VIBE_MCP_SERVERS", "ESCOUADE_MCP_TOKEN", "PATH", "NoDefaultCurrentDirectoryInExePath"],
+    "env": [
+      "VIBE_ENABLE_TELEMETRY",
+      "VIBE_ACTIVE_MODEL",
+      "VIBE_MCP_SERVERS",
+      "ESCOUADE_MCP_TOKEN",
+      "PATH",
+      "NoDefaultCurrentDirectoryInExePath"
+    ],
     "network": ["api.mistral.ai"]
   },
   "store": { "docs": "docs" },
