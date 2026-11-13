@@ -585,7 +585,22 @@ async fn the_agents_and_their_summaries_say_how_many_requests_wait_and_of_which_
 async fn an_agent_whose_process_is_gone_counts_no_request_that_can_be_answered() {
     let h = harness("mcp-req-gone");
     let p = project(&h).await;
-    let a = live(&h, &p, "agent-1").await;
+    let a = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                name: Some("agent-1".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta;
+    // Its process is the warm-up's, which nothing else starts: a warm-up that came after the detach below would start
+    // another, whose request could be answered again (1, not 0: the CI under load, ESC-439).
+    h.wait("the warm-up's process", |h| h.alive(&a.id)).await;
+    h.core.ensure_process(&a.id).await.unwrap();
     asks(&h, &a.id, "r1", bash("npm test"));
     let c = external(&h).await;
     let count = |agents: &Value| {

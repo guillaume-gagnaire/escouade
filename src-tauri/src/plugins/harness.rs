@@ -1637,6 +1637,46 @@ enum Launched {
     Shared(proto::Launch),
 }
 
+/// A stop of the tests in an agent's joining of its shared process, before its plugin opens its session: the test acts
+/// there (switches the plugin off), then lets it go on. Per runtime, so that tests in one process do not meet.
+#[cfg(test)]
+pub(crate) mod join_pause {
+    use super::Runtime;
+    use parking_lot::Mutex;
+    use std::sync::Arc;
+    use tokio::sync::Notify;
+
+    pub(crate) struct Pause {
+        pub(crate) reached: Notify,
+        pub(crate) go: Notify,
+    }
+
+    static PAUSES: Mutex<Vec<(usize, Arc<Pause>)>> = Mutex::new(Vec::new());
+
+    /// The next joining on `rt` stops there until `go`.
+    pub(crate) fn set(rt: &Arc<Runtime>) -> Arc<Pause> {
+        let p = Arc::new(Pause {
+            reached: Notify::new(),
+            go: Notify::new(),
+        });
+        PAUSES.lock().push((Arc::as_ptr(rt) as usize, p.clone()));
+        p
+    }
+
+    pub(super) async fn reached(rt: &Arc<Runtime>) {
+        let key = Arc::as_ptr(rt) as usize;
+        let p = {
+            let mut all = PAUSES.lock();
+            let at = all.iter().position(|(k, _)| *k == key);
+            at.map(|i| all.remove(i).1)
+        };
+        if let Some(p) = p {
+            p.reached.notify_one();
+            p.go.notified().await;
+        }
+    }
+}
+
 /// The agents of a plugin, by their key: what it says unasked comes to them.
 static TOLD: Mutex<Vec<(String, std::sync::Weak<ProcessEngineProcess>)>> = Mutex::new(Vec::new());
 
@@ -2181,6 +2221,8 @@ impl ProcessEngineProcess {
             )
             .await
             .map_err(|e| down(self.name, e))?;
+        #[cfg(test)]
+        join_pause::reached(&self.rt).await;
         let open = proto::Open {
             agent: self.key.clone(),
             start: start_at(&spawn.start),
@@ -2221,6 +2263,13 @@ impl ProcessEngineProcess {
             let _ = self
                 .rt
                 .notify(&self.plugin, method::DETACH, json!({ "agent": self.key }));
+            // Its plugin switched off while it was joining (its session already told, the agent idle): an end without
+            // a word but this one (the CI's Windows, 2026-11-13, ESC-439).
+            if let Some(why) = self.off_why().and_then(|e| stop_told(self.name, &e)) {
+                on_frame(json!({ "items": [{ "op": "notice", "level": "error", "text": why }] }));
+                self.failed(&anyhow!(why), on_exit);
+                return;
+            }
             self.failed(&e, on_exit);
             return;
         }
@@ -2247,15 +2296,7 @@ impl ProcessEngineProcess {
         // may see it after the agent's input was closed or its server ended (the CI's Linux, 2026-11-05: the agent
         // stopped without a word).
         let off = |me: &Self| {
-            let status = me.rt.status(&me.plugin);
-            let e = match status
-                .stop
-                .filter(|_| matches!(status.phase, super::runtime::PhaseName::Stopped))
-            {
-                Some(stop) => Some(CallError::Stopped(stop)),
-                None => me.rt.refusal(&me.plugin),
-            }?;
-            let why = stop_told(name, &e)?;
+            let why = stop_told(name, &me.off_why()?)?;
             on_frame(json!({ "items": [{ "op": "notice", "level": "error", "text": why }] }));
             Some(why)
         };
@@ -2325,6 +2366,18 @@ impl ProcessEngineProcess {
             .notify(&self.plugin, method::DETACH, json!({ "agent": self.key }));
         self.rt.detach(&self.plugin, &self.key);
         TOLD.lock().retain(|(k, _)| *k != self.key);
+    }
+
+    /// Why its plugin cannot serve it any more, if it cannot: stopped, or switched off, uninstalled, the app quitting.
+    fn off_why(&self) -> Option<CallError> {
+        let status = self.rt.status(&self.plugin);
+        match status
+            .stop
+            .filter(|_| matches!(status.phase, super::runtime::PhaseName::Stopped))
+        {
+            Some(stop) => Some(CallError::Stopped(stop)),
+            None => self.rt.refusal(&self.plugin),
+        }
     }
 
     /// It no longer uses its shared process: its folder let go when it was the last agent there, the process stopped

@@ -1766,6 +1766,49 @@ async fn an_opencode_agent_that_ends_as_its_plugin_goes_off_says_why() {
     assert!(said(&h, &a).contains(id), "{}", said(&h, &a));
 }
 
+/// The plugin goes off while the agent joins its server, its session already told (the plugin tells it before it answers
+/// the opening): the agent stops and says why. It stopped without a word on the CI's Windows under load (ESC-439), where
+/// `new_agent` saw the session and the test switched the plugin off before the opening was over.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_opencode_agent_whose_plugin_goes_off_as_it_joins_its_server_says_why() {
+    let h = harness("esc439-opencode-off-joining");
+    let (p, _) = h.project(false).await;
+    opencode_account(&h);
+    let pause = crate::plugins::harness::join_pause::set(&h.core.plugin_runtime);
+    let a = h
+        .core
+        .create_agent_with(
+            &p.id,
+            AgentOptions {
+                engine: Some(EngineId::OPENCODE),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .meta
+        .id;
+    tokio::time::timeout(std::time::Duration::from_secs(60), pause.reached.notified())
+        .await
+        .expect("the agent joining its server");
+    // Its session told, as the plugin does before its answer to the opening.
+    h.core.agent(&a).unwrap().lock().handle_frame(
+        &json!({ "items": [{ "op": "session", "session": "ses_joining" }] }),
+        &mut crate::agent::Effects::default(),
+    );
+    let id = crate::plugins::builtin::OPENCODE;
+    h.core.plugins.choose(id, |c| c.enabled = false).unwrap();
+    h.core.plugin_runtime.forget(id);
+    h.core.sync_harnesses();
+    pause.go.notify_one();
+    wait_long(&h, "its stop", 30, |h| {
+        !h.agent(&a).status.is_active() && !h.alive(&a)
+    })
+    .await;
+    wait_long(&h, "why", 30, |h| said(h, &a).contains(id)).await;
+    h.core.stop_for_good();
+}
+
 /// The plugin crashes in the middle of a turn: `opencode serve` goes on (the core runs it), the plugin starts again, hears
 /// the session again, and the turn is stopped and followed by the next as if nothing had happened.
 #[tokio::test(flavor = "multi_thread")]
