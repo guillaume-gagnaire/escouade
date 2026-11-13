@@ -1,9 +1,9 @@
 ---
-number: null
+number: 158
 id: "terminaux-en-xterm-js-6-alt-fleche-y-gar"
 title: "Terminaux en xterm.js 6 ; Alt+flèche y garde le déplacement par mot"
 date: "2026-11-13"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-432"
 pages: ["fenetre/raccourcis","introduction/stack"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/raccourcis","added":1,"removed":0},{"page":"introduction/stack","added":1,"removed":1}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-13T16:33:04+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

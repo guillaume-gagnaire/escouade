@@ -3,7 +3,7 @@ title: "Raccourcis"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md"]
 tickets: ["ESC-392","ESC-432"]
-decisions: [128,"terminaux-en-xterm-js-6-alt-fleche-y-gar"]
+decisions: [128,158]
 compared: null
 ---
 
