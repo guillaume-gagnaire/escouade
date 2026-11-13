@@ -377,10 +377,10 @@ export default defineZone('plugins', {
     failed: 'Nothing was installed.',
     batchTitle: { one: 'Update {count} plugin?', other: 'Update {count} plugins?' },
     batchBody:
-      'None of these versions asks for more than the one installed: no new permission, no new contribution. Your choices are kept.',
+      'All these versions are verified by Escouade, and none asks for more than the one installed: no new permission, no new contribution. Your choices are kept.',
     batchNext: {
-      one: 'Then {count} update that asks for more: it gets its own window.',
-      other: 'Then {count} updates that ask for more: each gets its own window.',
+      one: 'Then {count} update that asks for more, or is not verified: it gets its own window.',
+      other: 'Then {count} updates that ask for more, or are not verified: each gets its own window.',
     },
     batchConfirm: { one: 'Update', other: 'Update all · {count}' },
     newAdd: 'What it adds anew is marked.',

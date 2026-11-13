@@ -1,6 +1,8 @@
 // The updates' page (ESC-436) on the real app, against the fake store of tests/fixtures/store/fake-store.mjs: an update
 // leaves the page where it was (a new install alone opens the plugin's page); « Tout mettre à jour · N » at its head asks
-// once for those that ask for nothing more, then each of the others in its own window, what it adds marked. The versions
+// once for those verified that ask for nothing more, then each of the others in its own window, what it adds marked; a
+// version not verified of a plugin whose installed one was (essai B-16 of the audit, SEC-29, ESC-438) has its own window,
+// its warning said, never the window for all. The versions
 // are published after the start (POST /_fake/release), the store read again 31 s later (ESC-405). ESCOUADE_E2E_SHOTS names
 // a folder for the screenshots of the page before and after.
 import fs from 'node:fs';
@@ -85,6 +87,7 @@ test('an update leaves the updates page where it is; « Tout mettre à jour » a
   // New installs: each opens its plugin's page.
   await installFromStore(page, 'contraste', 'Contraste élevé', 'Installer quand même');
   await installFromStore(page, 'slack', 'escouade-dev', 'Installer quand même');
+  await installFromStore(page, 'nuit', 'Nuit', 'Installer');
 
   // One update, from its line: its window, what it adds marked; then the page stays the updates'.
   await release('dev.exemple.slack', '1.1.0');
@@ -103,35 +106,55 @@ test('an update leaves the updates page where it is; « Tout mettre à jour » a
   await expect(work.locator('h2')).toHaveText('Mises à jour');
   await expect(page.locator('.phead')).toHaveCount(0);
 
-  // Two updates: the high contrast's asks for nothing more, Slack's connects to one more host.
+  // Three updates: the high contrast's, verified, asks for nothing more; Slack's connects to one more host; Nuit's 1.1.0
+  // asks for nothing more either, but nobody reviewed it, when its 1.0.0 installed was verified (B-16).
   await release('dev.exemple.high-contrast', '1.2.0');
   await release('dev.exemple.slack', '1.2.0');
+  await release('dev.exemple.nuit', '1.1.0');
   await lookForUpdates(page);
+  await expect(ups.locator('.up', { hasText: 'Nuit' })).toContainText('v1.0.0 → v1.1.0');
   await expect(ups.locator('.up', { hasText: 'Slack' })).toContainText('v1.1.0 → v1.2.0');
   await expect(ups.locator('.up', { hasText: 'Contraste élevé' })).toContainText('v1.1.0 → v1.2.0');
-  const all = work.getByRole('button', { name: 'Tout mettre à jour · 2' });
+  const all = work.getByRole('button', { name: 'Tout mettre à jour · 3' });
   await expect(all).toBeInViewport();
   await shot(page, 'before');
   await all.click();
 
-  // One window for those that ask for nothing more: nothing installed before its gesture.
+  // One window for those verified that ask for nothing more, and it says so: nothing installed before its gesture.
   const batch = page.getByRole('dialog', { name: 'Mettre à jour 1 plugin ?' });
   await expect(batch).toContainText('Contraste élevé');
   await expect(batch).toContainText('v1.1.0 → v1.2.0');
   await expect(batch).toContainText('Vérifié par Escouade');
-  await expect(batch).toContainText('Ensuite, 1 mise à jour qui demande plus');
+  await expect(batch).toContainText('Toutes ces versions sont vérifiées par Escouade');
+  await expect(batch).not.toContainText('Nuit');
+  await expect(batch).not.toContainText('Non vérifié');
+  await expect(batch).toContainText('Ensuite, 2 mises à jour qui demandent plus, ou ne sont pas vérifiées');
   await expect(ups.locator('.up', { hasText: 'Slack' })).toContainText('En attente de ton accord');
+  await expect(ups.locator('.up', { hasText: 'Nuit' })).toContainText('En attente de ton accord');
   await shot(page, 'batch');
   await batch.getByRole('button', { name: 'Mettre à jour', exact: true }).click();
 
-  // Then Slack's, in its own window, what it adds marked.
-  const next = page.getByRole('dialog', { name: 'Mettre à jour Slack ?' });
-  await expect(next).toContainText('hooks.slack.com');
-  await expect(next.locator('.new')).toHaveCount(1);
-  await expect(ups.locator('.up', { hasText: 'Contraste élevé' })).toContainText('À jour en v1.2.0');
-  await shot(page, 'own');
-  await next.getByRole('button', { name: 'Mettre à jour', exact: true }).click();
-  await expect(next).toBeHidden();
+  // Then Slack's and Nuit's, each in its own window: Slack's what it adds marked, Nuit's the warning of a version nobody
+  // reviewed (B-16), as when it is asked for alone.
+  const slackOwn = page.getByRole('dialog', { name: 'Mettre à jour Slack ?' });
+  const nuitOwn = page.getByRole('dialog', { name: 'Mettre à jour Nuit ?' });
+  for (let n = 0; n < 2; n++) {
+    await expect(slackOwn.or(nuitOwn)).toBeVisible();
+    const own = (await nuitOwn.isVisible()) ? nuitOwn : slackOwn;
+    if (own === nuitOwn) {
+      await expect(own).toContainText('Personne n’a relu cette version.');
+      await expect(own).toContainText('Aucune : version non vérifiée');
+      await expect(own).not.toContainText('Vérifié par Escouade');
+      await shot(page, 'unverified');
+    } else {
+      await expect(own).toContainText('hooks.slack.com');
+      await expect(own.locator('.new')).toHaveCount(1);
+      await shot(page, 'own');
+    }
+    await expect(ups.locator('.up', { hasText: 'Contraste élevé' })).toContainText('À jour en v1.2.0');
+    await own.getByRole('button', { name: 'Mettre à jour', exact: true }).click();
+    await expect(own).toBeHidden();
+  }
 
   // The page stays the updates', and says so.
   await expect(work.locator('h2')).toHaveText('Mises à jour');
@@ -148,4 +171,5 @@ test('an update leaves the updates page where it is; « Tout mettre à jour » a
   const added = page.getByRole('table', { name: 'Ajoutés' });
   await expect(added.getByRole('row', { name: /^Slack/ })).toContainText('1.2.0');
   await expect(added.getByRole('row', { name: /^Contraste élevé/ })).toContainText('1.2.0');
+  await expect(added.getByRole('row', { name: /^Nuit/ })).toContainText('1.1.0');
 });

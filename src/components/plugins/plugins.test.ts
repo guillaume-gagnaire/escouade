@@ -732,6 +732,69 @@ describe('« Tout mettre à jour », and an update that leaves the page where it
     expect(asksMore(alphaPreview(), view({ manifest: null }))).toBe(true);
   });
 
+  it('sorts by the seal too (SEC-29): only a verified version that adds nothing goes in the window for all', () => {
+    const folder = { kind: 'folder', path: 'C:/dev/slack' } as const;
+    // Verified, nothing added: the window for all.
+    expect(asksMore(alphaPreview(), alpha())).toBe(false);
+    // Not verified, nothing added: its own window.
+    expect(asksMore({ ...alphaPreview(), verified: false }, alpha({ verified: false }))).toBe(true);
+    // The seal lost (installed verified, the new one not, or its seal taken off): its own window.
+    expect(asksMore({ ...alphaPreview(), verified: false }, alpha({ verified: true }))).toBe(true);
+    expect(asksMore({ ...alphaPreview(), verified: false, unverified: 'retirée' }, alpha({ verified: true }))).toBe(true);
+    // A plugin of a repository or a folder, never verified, even when it adds nothing: its own window.
+    expect(asksMore({ ...alphaPreview(), verified: false, origin: preview().origin, grown: [] }, view())).toBe(true);
+    expect(asksMore({ ...alphaPreview(), verified: false, origin: folder }, view({ origin: folder }))).toBe(true);
+  });
+
+  it('a version not verified of a plugin that was gets its own window, its warning said (B-16)', async () => {
+    // Nuit, of the store: its 1.0.0 verified, its 1.1.0 not, nothing added; Alpha's 1.3.0 verified, nothing added.
+    const nuit = (over: Partial<PluginView> = {}) =>
+      alpha({ id: 'dev.exemple.nuit', name: 'Nuit', verified: true, update: { version: '1.1.0', verified: false }, ...over });
+    const nuitPreview = () =>
+      preview({
+        ...alphaPreview(),
+        token: 'tok-nuit',
+        id: 'dev.exemple.nuit',
+        name: 'Nuit',
+        version: '1.1.0',
+        verified: false,
+        origin: STORE,
+      });
+    const calls = backend({
+      plugin_inspect_store: ({ id }: { id: string }) => (id === 'dev.exemple.nuit' ? nuitPreview() : alphaPreview()),
+      plugin_install: ({ token }: { token: string }) =>
+        token === 'tok-nuit' ? nuit({ version: '1.1.0', verified: false, update: null }) : alpha({ version: '1.3.0', update: null }),
+    });
+    plugins.list = [nuit(), alpha()];
+    plugins.page = { kind: 'updates' };
+    render(PluginsView);
+    await userEvent.click(await screen.findByRole('button', { name: 'Tout mettre à jour · 2' }));
+
+    // The window for all holds Alpha alone, and says its versions are verified.
+    const batch = await screen.findByRole('dialog', { name: 'Mettre à jour 1 plugin ?' });
+    expect(batch.textContent).toContain('Alpha');
+    expect(batch.textContent).not.toContain('Nuit');
+    expect(batch.textContent).toContain('Toutes ces versions sont vérifiées par Escouade');
+    expect(batch.textContent).not.toContain('Non vérifié');
+    await userEvent.click(within(batch).getByRole('button', { name: 'Mettre à jour' }));
+
+    // Then Nuit, in its own window, with the warning of a version nobody reviewed.
+    const own = await screen.findByRole('dialog', { name: 'Mettre à jour Nuit ?' });
+    expect(own.textContent).toContain('Personne n’a relu cette version.');
+    expect(own.textContent).toContain('Aucune : version non vérifiée');
+    expect(calls.called('plugin_install').map((c) => c.args.token)).toEqual(['tok-alpha']);
+    await userEvent.click(within(own).getByRole('button', { name: 'Mettre à jour' }));
+    await waitFor(() => expect(calls.called('plugin_install').map((c) => c.args.token)).toEqual(['tok-alpha', 'tok-nuit']));
+  });
+
+  it('with no verified version that adds nothing, no window for all: each its own', async () => {
+    backend({ plugin_inspect_store: () => ({ ...alphaPreview(), verified: false }) });
+    plugins.list = [alpha({ verified: true })];
+    await plugins.updateAll();
+    expect(plugins.install?.kind).toBe('preview');
+    expect(plugins.ahead).toEqual([]);
+  });
+
   it('is in English too', async () => {
     setLang('en');
     backend();
@@ -740,6 +803,6 @@ describe('« Tout mettre à jour », and an update that leaves the page where it
     render(PluginsView);
     await userEvent.click(await screen.findByRole('button', { name: 'Update all · 2' }));
     const batch = await screen.findByRole('dialog', { name: 'Update 1 plugin?' });
-    expect(batch.textContent).toContain('Then 1 update that asks for more: it gets its own window.');
+    expect(batch.textContent).toContain('Then 1 update that asks for more, or is not verified: it gets its own window.');
   });
 });

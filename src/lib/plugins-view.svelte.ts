@@ -432,7 +432,7 @@ class PluginsStore {
   }
 
   /**
-   * « Tout mettre à jour » (ESC-436): every update read first. Those that ask for nothing more than the version installed are
+   * « Tout mettre à jour » (ESC-436): every update read first. Those verified that ask for nothing more than the version installed are
    * agreed to together, in one window; each of the others after, in its own, what it adds marked. Nothing is installed
    * without a gesture; a refusal or an error on one is said on its line and stops none of the others.
    */
@@ -546,10 +546,13 @@ class PluginsStore {
 }
 
 /**
- * Whether an update asks for more than the version installed: a permission (`grown`, by the core), or a contribution its
- * manifest did not have. Unknown (no manifest installed to compare with): it does, its own window shown.
+ * Whether an update asks for more than the version installed: a version nobody reviewed (not verified: its seal lost, or
+ * a plugin of a repository or a folder, never verified; SEC-29, ESC-438), a permission (`grown`, by the core), or a
+ * contribution its manifest did not have. Unknown (no manifest installed to compare with): it does. Each of those has its
+ * own window, its warning said; the window for all holds only verified versions that add nothing.
  */
 export function asksMore(preview: PluginPreview, installed: PluginView | null): boolean {
+  if (!preview.verified) return true;
   if (preview.grown.length) return true;
   if (!installed?.manifest) return true;
   return newContributions(preview.manifest, installed.manifest).length > 0;

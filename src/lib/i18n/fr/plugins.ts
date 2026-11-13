@@ -379,10 +379,10 @@ export default {
     failed: 'Rien n’a été installé.',
     batchTitle: { one: 'Mettre à jour {count} plugin ?', other: 'Mettre à jour {count} plugins ?' },
     batchBody:
-      'Aucune de ces versions ne demande plus que celle installée : ni permission, ni contribution nouvelle. Tes choix sont gardés.',
+      'Toutes ces versions sont vérifiées par Escouade, et aucune ne demande plus que celle installée : ni permission, ni contribution nouvelle. Tes choix sont gardés.',
     batchNext: {
-      one: 'Ensuite, {count} mise à jour qui demande plus : elle aura sa propre fenêtre.',
-      other: 'Ensuite, {count} mises à jour qui demandent plus : chacune aura sa propre fenêtre.',
+      one: 'Ensuite, {count} mise à jour qui demande plus, ou n’est pas vérifiée : elle aura sa propre fenêtre.',
+      other: 'Ensuite, {count} mises à jour qui demandent plus, ou ne sont pas vérifiées : chacune aura sa propre fenêtre.',
     },
     batchConfirm: { one: 'Mettre à jour', other: 'Tout mettre à jour · {count}' },
     newAdd: 'Ce qu’elle ajoute de nouveau est marqué.',

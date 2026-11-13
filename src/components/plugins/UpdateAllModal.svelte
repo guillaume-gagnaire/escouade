@@ -6,9 +6,10 @@
   import PluginTile from './PluginTile.svelte';
   import Seal from './Seal.svelte';
 
-  // « Tout mettre à jour » (ESC-436): the updates that ask for nothing more than the version installed (no permission, no
-  // contribution), agreed to together in this one window: each its name, its versions and its seal. Those that ask for
-  // more come after, each in its own window. Nothing is installed before « Tout mettre à jour ».
+  // « Tout mettre à jour » (ESC-436): the updates verified that ask for nothing more than the version installed (no
+  // permission, no contribution), agreed to together in this one window: each its name, its versions and its seal. Those
+  // that ask for more, and those not verified (SEC-29, ESC-438: their warning is their own window's), come after, each in its
+  // own window. Nothing is installed before « Tout mettre à jour ».
   let { step }: { step: Extract<InstallStep, { kind: 'batch' }> } = $props();
 
   const count = $derived(step.previews.length);
@@ -34,10 +35,8 @@
             <span class="st ok" role="status">{t('plugins.updates.done', { version: row.version })}</span>
           {:else if row?.kind === 'error'}
             <span class="st err" role="alert">{row.message}</span>
-          {:else if p.verified}
-            <Seal version={p.version} long />
           {:else}
-            <span class="ptag">{t('plugins.tag.unverified')}</span>
+            <Seal version={p.version} long />
           {/if}
         </li>
       {/each}
@@ -96,14 +95,6 @@
   .mono {
     color: var(--warn-ink);
     font-size: 11.5px;
-  }
-  .ptag {
-    font-size: 11px;
-    padding: 1px 7px;
-    border-radius: 5px;
-    box-shadow: inset 0 0 0 1px var(--line-2);
-    color: var(--muted);
-    white-space: nowrap;
   }
   .st {
     display: inline-flex;

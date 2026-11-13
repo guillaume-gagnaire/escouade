@@ -10,6 +10,7 @@
 // What it holds (the files of Escouade's own plugins, plugins/<id>/; under a third party's id but one, ESC-314):
 // - dev.exemple.high-contrast: 1.0.0 verified, 1.1.0 not (an update that is not verified);
 // - dev.exemple.team-rules: 1.0.0 verified, a program that decides permissions;
+// - dev.exemple.nuit: 1.0.0 verified, 1.1.0 held back and not verified (ESC-438);
 // - dev.exemple.slack: 1.0.0 not verified, a program and its binary for each system;
 // - dev.exemple.later: 2.0.0 for an Escouade to come (min 99.0.0), 1.0.0 for this one (the last compatible is chosen);
 // - dev.exemple.tampered: its archive changed after its version.json (refused);
@@ -253,6 +254,9 @@ const SPEC = [
     path: `plugins/${id.slice('dev.escouade.'.length)}`,
     repo: 'guillaume-gagnaire/escouade',
   })),
+  // ESC-438 (SEC-29, essai B-16): a theme whose 1.0.0 is verified, its 1.1.0 (held back) not, and asks for nothing more.
+  { id: 'dev.exemple.nuit', v: '1.0.0', from: 'high-contrast', verified: true, cat: ['themes'], kw: ['nuit'], installs: 3, name: 'Nuit' },
+  { id: 'dev.exemple.nuit', v: '1.1.0', from: 'high-contrast', cat: ['themes'], kw: ['nuit'], name: 'Nuit', held: true },
   // ESC-436: versions held back, published on demand (POST /_fake/release), for « Tout mettre à jour »: the high contrast's
   // 1.2.0, verified, asks for nothing more than its 1.1.0; Slack's 1.1.0 and 1.2.0 connect each to one more host.
   {

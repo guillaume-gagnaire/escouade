@@ -1,9 +1,9 @@
 ---
 title: "Le store dans l'app"
 subject: "store"
-sources: ["docs/STORE.md","docs/PLUGINS-DESIGN.md §8.33","design/plugins/maquettes-b.html","design/app-redesign/UX-NOTES.md","website/content/docs/fr/plugins/installer.md","src-tauri/src/plugins/store.rs","src-tauri/src/plugins_seed_tests.rs","src-tauri/src/plugins_store_tests.rs"]
-tickets: ["ESC-236","ESC-287","ESC-313","ESC-314","ESC-184","ESC-394","ESC-405","ESC-355","ESC-424","ESC-436"]
-decisions: [21,25,67,132,152,"une-mise-a-jour-de-plugin-laisse-sur-la"]
+sources: ["docs/STORE.md","docs/PLUGINS-DESIGN.md §8.33","design/plugins/maquettes-b.html","design/app-redesign/UX-NOTES.md","website/content/docs/fr/plugins/installer.md","src-tauri/src/plugins/store.rs","src-tauri/src/plugins_seed_tests.rs","src-tauri/src/plugins_store_tests.rs","docs/security/audit-2026-11/rapport.md (ticket/esc-418), SEC-29, essai B-16","src/lib/plugins-view.svelte.ts"]
+tickets: ["ESC-236","ESC-287","ESC-313","ESC-314","ESC-184","ESC-394","ESC-405","ESC-355","ESC-424","ESC-436","ESC-438"]
+decisions: [21,25,67,132,152,"une-mise-a-jour-de-plugin-laisse-sur-la","tout-mettre-a-jour-une-version-non-verif"]
 compared: "2026-10-31T19:50:53+01:00"
 gaps: [{"text":"La spec dit que le schéma `escouade` est enregistré par les installeurs NSIS et MSI sous Windows. Le code ne produit que l'installeur NSIS (`bundle.targets` vaut [\"nsis\"] et rien ne construit de MSI), donc aucun MSI n'enregistre le schéma.","code":["src-tauri/tauri.conf.json"]},{"text":"La spec dit que le `.deb` et le `.rpm` déclarent `x-scheme-handler/escouade`. Sous Linux, la config ne construit que `appimage` et `deb` (`targets: [\"appimage\", \"deb\"]`). Le gabarit de bureau est prévu pour le rpm, mais aucun `.rpm` n'est produit, donc aucun rpm ne déclare le schéma.","code":["src-tauri/tauri.linux.conf.json"]}]
 ---
@@ -86,3 +86,10 @@ Ceci remplace « éteint d'office » dans *L'installation* : « N'installer que 
 - **Rien ne s'installe sans un geste.** Refuser une fenêtre (« Annuler ») n'annule pas les suivantes : la mise à jour refusée reste proposée. Une erreur sur une mise à jour n'arrête pas les autres : version refusée par « N'installer que des versions vérifiées », store injoignable, version incompatible… Elle est dite sur sa ligne. Sur une page sans ces lignes (les installés), elle est dite en tête.
 - **Chaque ligne montre où en est sa mise à jour** : « Lecture de la nouvelle version… », « En attente de ton accord », « Mise à jour… », puis « À jour en v… » ou l'erreur. Tant qu'une mise à jour est en cours, son bouton et « Tout mettre à jour » ne se recliquent pas. Les lignes finies restent affichées jusqu'à ce qu'on quitte la page ou qu'on relance « Chercher maintenant ».
 - Pour cela, le cœur garde en attente **une lecture par plugin**, et non plus une seule pour toute l'app. Une nouvelle lecture du même plugin remplace la précédente. Ce qui est refusé ou annulé est effacé.
+
+## Une version non vérifiée a sa propre fenêtre (ESC-438)
+
+Ceci remplace, dans *« Tout mettre à jour », et rester sur la page*, ce qui se confirme ensemble et ce que dit la fenêtre groupée. La fiche SEC-29 de l'audit de 2026-11 (essai B-16) a montré qu'une version que personne n'a relue partait dans la fenêtre commune, sans l'avertissement de sa fenêtre seule.
+- **La fenêtre commune ne garde que des versions vérifiées** (leur sceau tient avec les clés de l'app) qui ne demandent rien de plus. Elle le dit : « Toutes ces versions sont vérifiées par Escouade, et aucune ne demande plus que celle installée : ni permission, ni contribution nouvelle. Tes choix sont gardés. » Chaque ligne y porte « Vérifié par Escouade ».
+- **Comptent comme demandant plus**, chacune dans sa fenêtre : une version non vérifiée du store, une perte du sceau (la version installée était vérifiée, la nouvelle ne l'est pas, ou son sceau a été retiré), et toute mise à jour d'un plugin venu d'un dépôt git ou d'un dossier, jamais vérifié. Leur fenêtre est celle d'une mise à jour demandée seule, avec son avertissement : « Personne n'a relu cette version. » et « Signature : Aucune : version non vérifiée » pour le store, « Personne n'a relu ce plugin. » pour un dépôt ou un dossier.
+- La fenêtre commune annonce combien suivent : « Ensuite, N mises à jour qui demandent plus, ou ne sont pas vérifiées : chacune aura sa propre fenêtre. » Sans aucune version vérifiée qui n'ajoute rien, il n'y a pas de fenêtre commune : chacune a la sienne, l'une après l'autre.
