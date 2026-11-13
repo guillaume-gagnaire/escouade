@@ -149,8 +149,8 @@ test.describe('two accounts, a conversation stopped by the usage limit', () => {
   });
 });
 
-// « Changer de compte à » (ESC-148): Principal past 95 % of its 5-hour window (its fake `claude` says 96 % at each turn), the
-// threshold at 95 %. The agent's turn runs on Principal whole, then it goes on on the second account, with its session.
+// « Changer de compte à » (ESC-148): Principal past 95 % of its 5-hour window once its agent is on it (its fake `claude`
+// says 96 % at each turn), the threshold at 95 %. The agent's turn runs on Principal whole, then it goes on on the second account, with its session.
 test.describe('two accounts, the first past « Changer de compte à »', () => {
   test.use({
     preStart: {
@@ -159,7 +159,6 @@ test.describe('two accounts, the first past « Changer de compte à »', () => {
           fs.mkdirSync(dir, { recursive: true });
           fs.writeFileSync(path.join(dir, '.credentials.json'), SIGNED_IN);
         }
-        fs.writeFileSync(path.join(principalDir(root), 'fake-pct'), '96');
         return { switchAt: 95, accounts: [{ id: 'pro', name: 'Pro', configDir: proDir(root), claudePath: '', active: true }] };
       },
     },
@@ -170,6 +169,9 @@ test.describe('two accounts, the first past « Changer de compte à »', () => {
     const [principal, pro] = [principalDir(app.root), proDir(app.root)];
     await addProject(page, app.repo);
     await expect(page.getByRole('button', { name: /^Compte\s*:\s*Principal$/ })).toBeVisible();
+    // Past the threshold once its agent is on Principal: an account with no agent tells its quota by a process of its own
+    // (ESC-441), so 96 % at the start would have put the agent on Pro at once. Its next background reading is 5 min away.
+    fs.writeFileSync(path.join(principal, 'fake-pct'), '96');
     await send(page, 'Bonjour');
     // Its turn is answered on Principal, then it moves: the conversation and a notification say so.
     await expect(page.getByText('Bonjour, tu as dit : Bonjour')).toBeVisible();
