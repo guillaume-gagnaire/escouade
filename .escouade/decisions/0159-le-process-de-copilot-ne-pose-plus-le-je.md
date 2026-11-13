@@ -1,9 +1,9 @@
 ---
-number: null
+number: 159
 id: "le-process-de-copilot-ne-pose-plus-le-je"
 title: "Le process de Copilot ne pose plus le jeton d'Escouade dans une variable, et seul un dossier entier va en tête du PATH des hooks"
 date: "2026-11-13"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-433"
 pages: ["plugins/copilot-cli-en-plugin","plugins/antigravity-en-plugin","plugins/harness-en-process"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/copilot-cli-en-plugin","added":5,"removed":4},{"page":"plugins/antigravity-en-plugin","added":2,"removed":0},{"page":"plugins/harness-en-process","added":2,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-13T16:46:59+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
