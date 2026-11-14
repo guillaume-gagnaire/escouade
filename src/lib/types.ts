@@ -138,6 +138,80 @@ export interface Settings {
   userNameCleared?: boolean;
   /** « Voix »: the dictation. */
   voice: VoiceSettings;
+  /** « Serveurs de langage » (ESC-446), by the id of the server: on or off, its path, its arguments. */
+  languageServers?: Record<string, LanguageServerSetting>;
+  /** The projects trusted with their own language servers: the backend’s (`lsp_trust`), never saved from the window. */
+  languageServersTrusted?: string[];
+}
+
+/** A language server’s settings (ESC-446); what is left out is the catalog’s. */
+export interface LanguageServerSetting {
+  enabled?: boolean | null;
+  /** Empty: found. An absolute path, or the name of a program of the PATH. */
+  path?: string;
+  args?: string[] | null;
+}
+
+/** Where a language server was found. */
+export type LspOrigin = 'manual' | 'projectFile' | 'nodeModules' | 'path' | 'standard';
+
+/** Why it was not. */
+export type LspNotFound = { kind: 'manual'; path: string } | { kind: 'projectFile'; path: string } | { kind: 'absent'; install: string };
+
+/** A server of the catalog, for a project (`lsp_servers`). */
+export interface LspStatus {
+  id: string;
+  name: string;
+  languages: string[];
+  enabled: boolean;
+  enabledBy: 'project' | 'app' | 'default';
+  found: { program: string; origin: LspOrigin } | null;
+  missing: LspNotFound | null;
+  install: string;
+  args: string[];
+  /** The repository chose what runs: asked to the user first. */
+  ofProject: boolean;
+  /** It runs code of the project (rust-analyzer, typescript-language-server, gopls): asked to the user first too. */
+  runsProjectCode: boolean;
+  /** It waits for the project’s trust to start in it: `ofProject` or `runsProjectCode`. */
+  needsTrust: boolean;
+  trusted: boolean;
+}
+
+export type LspState = 'starting' | 'running' | 'restarting' | 'failed' | 'stopped';
+
+/** A server running (`lsp_running`, the event `lsp-state`). */
+export interface LspInfo {
+  id: number;
+  project: string;
+  server: string;
+  root: string;
+  program: string;
+  state: LspState;
+  /** Its process, from 1: grown, the server is initialized again. */
+  run: number;
+  restarts: number;
+  error: string | null;
+  retryInMs: number | null;
+}
+
+/** Why `lsp_start` started nothing. */
+export type LspRefused =
+  | { code: 'unknown'; name: string }
+  | { code: 'disabled'; by: 'project' | 'app' | 'default' }
+  | { code: 'notFound'; missing: LspNotFound }
+  | { code: 'needsTrust'; server: string; program: string; args: string[]; reason: 'chosen' | 'runsProjectCode' };
+
+export interface LspStart {
+  info: LspInfo | null;
+  refused: LspRefused | null;
+  message: string | null;
+}
+
+export interface LspLogLine {
+  at: number;
+  source: 'stderr' | 'core';
+  text: string;
 }
 
 /** The dictation's settings (Réglages › Voix). */

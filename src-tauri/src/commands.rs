@@ -4602,3 +4602,118 @@ pub fn devpage_list(
         },
     }
 }
+
+// ---------- the editor's language servers (ESC-446) ----------
+
+type Servers<'a> = State<'a, Arc<crate::lsp::Manager>>;
+
+/// The catalog's servers for a project (or an agent's worktree), or for none (the machine's alone): found or not, where,
+/// turned on, trusted.
+#[tauri::command]
+pub async fn lsp_servers(
+    core: CoreState<'_>,
+    project_id: Option<String>,
+    agent_id: Option<String>,
+) -> Res<Vec<crate::lsp::Status>> {
+    let inputs = match project_id {
+        Some(p) => core.lsp_inputs(&p, agent_id).await.map_err(err)?,
+        None => core.lsp_machine_inputs(),
+    };
+    Ok(inputs.statuses())
+}
+
+/// What `lsp_start` did: the server running for the view, or why not (`refused`, said in `message`).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LspStart {
+    info: Option<crate::lsp::Info>,
+    refused: Option<crate::lsp::Refused>,
+    message: Option<String>,
+}
+
+/// The server of `server` (a server's id or a language's) in a project, for `view`: the one running there, or one
+/// started. Its messages come as `lsp-message`, its states as `lsp-state`.
+#[tauri::command]
+pub async fn lsp_start(
+    core: CoreState<'_>,
+    servers: Servers<'_>,
+    view: String,
+    project_id: String,
+    agent_id: Option<String>,
+    server: String,
+) -> Res<LspStart> {
+    let inputs = core.lsp_inputs(&project_id, agent_id).await.map_err(err)?;
+    let refused = |r: crate::lsp::Refused| LspStart {
+        info: None,
+        message: Some(r.to_string()),
+        refused: Some(r),
+    };
+    let def = match crate::lsp::server_named(&server) {
+        Ok(d) => d,
+        Err(r) => return Ok(refused(r)),
+    };
+    match inputs.launch(def) {
+        Ok(launch) => {
+            let root = inputs.root.display().to_string();
+            let info = servers.acquire(&view, &project_id, def.id, &root, launch);
+            Ok(LspStart {
+                info: Some(info),
+                refused: None,
+                message: None,
+            })
+        }
+        Err(r) => Ok(refused(r)),
+    }
+}
+
+#[tauri::command]
+pub async fn lsp_send(servers: Servers<'_>, id: u32, msg: String) -> Res<()> {
+    servers.send(id, &msg).await.map_err(err)
+}
+
+/// `view` no longer needs the server `id`: it stops a while after the last view lets go of it.
+#[tauri::command]
+pub async fn lsp_release(servers: Servers<'_>, view: String, id: u32) -> Res<()> {
+    servers.release(&view, id);
+    Ok(())
+}
+
+/// `view` is gone: every server it held is let go of.
+#[tauri::command]
+pub async fn lsp_release_view(servers: Servers<'_>, view: String) -> Res<()> {
+    servers.release_view(&view);
+    Ok(())
+}
+
+/// Starts the server `id` again, one that failed too.
+#[tauri::command]
+pub async fn lsp_restart(servers: Servers<'_>, id: u32) -> Res<()> {
+    servers.restart(id).map_err(err)
+}
+
+#[tauri::command]
+pub async fn lsp_running(servers: Servers<'_>) -> Res<Vec<crate::lsp::Info>> {
+    Ok(servers.list())
+}
+
+/// The log of the server `id`: its stderr, and what the core did with it.
+#[tauri::command]
+pub async fn lsp_log(servers: Servers<'_>, id: u32) -> Res<Vec<crate::lsp::manager::LogLine>> {
+    servers.log(id).map_err(err)
+}
+
+/// Trusts the project with its own language servers (a `node_modules/.bin` of its, the path and arguments of its
+/// `.escouade.yml`), or no longer: those running of it stop when no longer trusted.
+#[tauri::command]
+pub async fn lsp_trust(
+    core: CoreState<'_>,
+    servers: Servers<'_>,
+    project_id: String,
+    trusted: bool,
+) -> Res<()> {
+    core.lsp_trust(&project_id, trusted).map_err(err)?;
+    if !trusted {
+        servers.stop_of_project(&project_id);
+    }
+    Ok(())
+}

@@ -109,7 +109,10 @@ pub const RECOMMENDED: &str = "plugins.recommended";
 
 /// Whether `path` is the file's alone (`plugins.*`): no field of the project holds it.
 pub fn file_only(path: &str) -> bool {
-    path.split('.').next() == Some(PLUGINS)
+    matches!(
+        path.split('.').next(),
+        Some(PLUGINS | crate::lsp::FILE_GROUP)
+    )
 }
 
 /// The settings the file gives the plugin `id` (`plugins.<id>`), as read; none when it gives none.
@@ -289,6 +292,8 @@ fn groups() -> Vec<&'static str> {
             out.push(g);
         }
     }
+    // The language servers' (ESC-446): no key of `KEYS`, the file's alone.
+    out.push(crate::lsp::FILE_GROUP);
     out
 }
 
@@ -516,6 +521,15 @@ fn read_v1(t: &Node, values: &mut BTreeMap<String, Value>, warnings: &mut Vec<Wa
                 None if name == PLUGINS && crate::plugins::manifest::is_id(sub) => {
                     take_settings(&path, node, values, warnings)
                 }
+                None if name == crate::lsp::FILE_GROUP => {
+                    if crate::lsp::catalog::get(sub).is_some() {
+                        take_language_server(&path, node, values, warnings)
+                    } else {
+                        let ids: Vec<&str> =
+                            crate::lsp::catalog::SERVERS.iter().map(|s| s.id).collect();
+                        warnings.push(unknown(&path, *line, &ids))
+                    }
+                }
                 None => warnings.push(unknown(&path, *line, &names)),
             }
         }
@@ -616,6 +630,75 @@ fn take_settings(
             }
         };
         out.insert(k.clone(), v);
+    }
+    if !out.is_empty() {
+        values.insert(path.to_string(), Value::Object(out));
+    }
+}
+
+/// The fields of a language server's settings (`language_servers.<id>`, ESC-446).
+const LSP_FIELDS: &[&str] = &["enabled", "path", "args"];
+
+/// A language server's settings (`language_servers.<id>`): `enabled` (true or false), `path` (a program of the
+/// repository, relative to it) and `args` (texts). Its path and its arguments run nothing until the user trusts the
+/// project (`lsp::launch_for`).
+fn take_language_server(
+    path: &str,
+    node: &Node,
+    values: &mut BTreeMap<String, Value>,
+    warnings: &mut Vec<Warning>,
+) {
+    let entries = match &node.v {
+        N::Map(entries) => entries,
+        N::Scalar { null: true, .. } => return,
+        _ => {
+            warnings.push(warn(
+                Some(node.line),
+                tr!(
+                    "« {path} » doit regrouper enabled, path ou args : ignoré",
+                    "“{path}” must hold enabled, path or args: ignored"
+                ),
+            ));
+            return;
+        }
+    };
+    let mut out = Map::new();
+    for (field, line, n) in entries {
+        let full = format!("{path}.{field}");
+        let kind = match field.as_str() {
+            "enabled" => Kind::Bool,
+            "path" => Kind::Text,
+            "args" => Kind::List,
+            _ => {
+                warnings.push(unknown(&full, *line, LSP_FIELDS));
+                continue;
+            }
+        };
+        let read = value_of(&key("", kind, ""), n, warnings).and_then(|v| {
+            if field == "path" && is_absolute(&str_of(&v)) {
+                let p = str_of(&v);
+                return Err((
+                    n.line,
+                    tr!(
+                        "« {p} » : le chemin doit être relatif au dépôt",
+                        "“{p}”: the path must be relative to the repository"
+                    ),
+                ));
+            }
+            Ok(v)
+        });
+        match read {
+            Ok(v) => {
+                out.insert(field.clone(), v);
+            }
+            Err((line, why)) => warnings.push(warn(
+                Some(line),
+                tr!(
+                    "valeur invalide pour {full} : {why} (ignorée)",
+                    "invalid value for {full}: {why} (ignored)"
+                ),
+            )),
+        }
     }
     if !out.is_empty() {
         values.insert(path.to_string(), Value::Object(out));
@@ -1442,6 +1525,28 @@ pub fn schema() -> Value {
                         }),
                     );
                     group["patternProperties"] = Value::Object(by_id);
+                }
+                // Each language server of the catalog, by its id (ESC-446).
+                if g == crate::lsp::FILE_GROUP {
+                    let mut by_id = Map::new();
+                    for s in crate::lsp::catalog::SERVERS {
+                        by_id.insert(
+                            s.id.into(),
+                            json!({
+                                "type": "object",
+                                "description": format!("The language server {}.", s.name),
+                                "properties": {
+                                    "enabled": { "type": "boolean", "description": "Turned on or off for the project, over the app's settings." },
+                                    "path": { "type": "string", "description": "Its program, relative to the repository (as node_modules/.bin/x). Runs once the user trusts the project; a path set in the app's settings wins." },
+                                    "args": { "type": ["array", "string"], "items": { "type": "string" }, "description": "Its arguments, in place of the catalog's. Apply once the user trusts the project." },
+                                },
+                                "additionalProperties": false,
+                            }),
+                        );
+                    }
+                    group["properties"] = Value::Object(by_id);
+                    group["description"] =
+                        json!("The language servers of the editor, by their id.");
                 }
                 props.insert(g.into(), group);
             }

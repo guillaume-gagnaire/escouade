@@ -17,6 +17,7 @@
   import Icon from '../Icon.svelte';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
+  import LanguageServers from './LanguageServers.svelte';
   import Row from './Row.svelte';
   import Switch from './Switch.svelte';
 
@@ -26,7 +27,7 @@
   // - « Langue », the interface's and that of the texts the agents write, applied at once (the backend tells the window,
   //   the menus and its own texts);
   // - « Mises à jour » and « Toi » (the name, the statistics), which were in « À propos » and « Application »;
-  // - « Avancé »: the editor's font size, the id.
+  // - « Avancé »: the editor's font size and its language servers (ESC-446), the id.
   const s = $derived(settingsForm.settings);
   // « Ton nom » left empty is filled with git's (ESC-243), unless emptied on purpose.
   onMount(
@@ -284,9 +285,12 @@
   </Row>
 </Group>
 
-<!-- The editor's font size, and the id that tells a namesake apart. -->
+<!-- The editor's font size and its language servers, and the id that tells a namesake apart. -->
 <Group advanced="general">
   {@render size('editorFontSize')}
+  <Row label={t('settings.lsp.title')} desc={t('settings.lsp.titleDesc')} wide>
+    <LanguageServers />
+  </Row>
   {#if s.userId}
     <Row label={t('share.settings.id')} desc={t('share.settings.idDesc')}>
       <span class="chip mono">{s.userId}</span>

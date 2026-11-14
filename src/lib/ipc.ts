@@ -62,6 +62,10 @@ import type {
   GitLog,
   InitialState,
   Integration,
+  LspInfo,
+  LspLogLine,
+  LspStart,
+  LspStatus,
   McpActivityEntry,
   McpDeclaration,
   McpStatus,
@@ -630,6 +634,17 @@ export const api = {
   /** Commits `paths` with the user's message; the commit's short hash. */
   commitDirect: (projectId: string, agentId: string | null, paths: string[], message: string) =>
     invoke<string>('commit_direct', { projectId, agentId, paths, message }),
+  // The editor’s language servers (ESC-446): their messages come as `lsp-message`, their states as `lsp-state`.
+  lspServers: (projectId: string | null, agentId: string | null = null) => invoke<LspStatus[]>('lsp_servers', { projectId, agentId }),
+  lspStart: (view: string, projectId: string, agentId: string | null, server: string) =>
+    invoke<LspStart>('lsp_start', { view, projectId, agentId, server }),
+  lspSend: (id: number, msg: string) => invoke<void>('lsp_send', { id, msg }),
+  lspRelease: (view: string, id: number) => invoke<void>('lsp_release', { view, id }),
+  lspReleaseView: (view: string) => invoke<void>('lsp_release_view', { view }),
+  lspRestart: (id: number) => invoke<void>('lsp_restart', { id }),
+  lspRunning: () => invoke<LspInfo[]>('lsp_running'),
+  lspLog: (id: number) => invoke<LspLogLine[]>('lsp_log', { id }),
+  lspTrust: (projectId: string, trusted: boolean) => invoke<void>('lsp_trust', { projectId, trusted }),
   fsTree: (projectId: string, agentId: string | null) => invoke<FileTree>('fs_tree', { projectId, agentId }),
   fsRead: (projectId: string, agentId: string | null, path: string) => invoke<FileText>('fs_read', { projectId, agentId, path }),
   /** Refused with "changed" / "deleted" when the file is no longer the one read (`expectedHash`); null forces. */

@@ -98,6 +98,167 @@
       },
       "type": "object"
     },
+    "language_servers": {
+      "additionalProperties": false,
+      "description": "The language servers of the editor, by their id.",
+      "properties": {
+        "css": {
+          "additionalProperties": false,
+          "description": "The language server CSS, SCSS, Less (vscode-css-language-server).",
+          "properties": {
+            "args": {
+              "description": "Its arguments, in place of the catalog's. Apply once the user trusts the project.",
+              "items": {
+                "type": "string"
+              },
+              "type": ["array", "string"]
+            },
+            "enabled": {
+              "description": "Turned on or off for the project, over the app's settings.",
+              "type": "boolean"
+            },
+            "path": {
+              "description": "Its program, relative to the repository (as node_modules/.bin/x). Runs once the user trusts the project; a path set in the app's settings wins.",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "go": {
+          "additionalProperties": false,
+          "description": "The language server Go (gopls).",
+          "properties": {
+            "args": {
+              "description": "Its arguments, in place of the catalog's. Apply once the user trusts the project.",
+              "items": {
+                "type": "string"
+              },
+              "type": ["array", "string"]
+            },
+            "enabled": {
+              "description": "Turned on or off for the project, over the app's settings.",
+              "type": "boolean"
+            },
+            "path": {
+              "description": "Its program, relative to the repository (as node_modules/.bin/x). Runs once the user trusts the project; a path set in the app's settings wins.",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "html": {
+          "additionalProperties": false,
+          "description": "The language server HTML (vscode-html-language-server).",
+          "properties": {
+            "args": {
+              "description": "Its arguments, in place of the catalog's. Apply once the user trusts the project.",
+              "items": {
+                "type": "string"
+              },
+              "type": ["array", "string"]
+            },
+            "enabled": {
+              "description": "Turned on or off for the project, over the app's settings.",
+              "type": "boolean"
+            },
+            "path": {
+              "description": "Its program, relative to the repository (as node_modules/.bin/x). Runs once the user trusts the project; a path set in the app's settings wins.",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "json": {
+          "additionalProperties": false,
+          "description": "The language server JSON (vscode-json-language-server).",
+          "properties": {
+            "args": {
+              "description": "Its arguments, in place of the catalog's. Apply once the user trusts the project.",
+              "items": {
+                "type": "string"
+              },
+              "type": ["array", "string"]
+            },
+            "enabled": {
+              "description": "Turned on or off for the project, over the app's settings.",
+              "type": "boolean"
+            },
+            "path": {
+              "description": "Its program, relative to the repository (as node_modules/.bin/x). Runs once the user trusts the project; a path set in the app's settings wins.",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "python": {
+          "additionalProperties": false,
+          "description": "The language server Python (basedpyright, pyright).",
+          "properties": {
+            "args": {
+              "description": "Its arguments, in place of the catalog's. Apply once the user trusts the project.",
+              "items": {
+                "type": "string"
+              },
+              "type": ["array", "string"]
+            },
+            "enabled": {
+              "description": "Turned on or off for the project, over the app's settings.",
+              "type": "boolean"
+            },
+            "path": {
+              "description": "Its program, relative to the repository (as node_modules/.bin/x). Runs once the user trusts the project; a path set in the app's settings wins.",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "rust": {
+          "additionalProperties": false,
+          "description": "The language server Rust (rust-analyzer).",
+          "properties": {
+            "args": {
+              "description": "Its arguments, in place of the catalog's. Apply once the user trusts the project.",
+              "items": {
+                "type": "string"
+              },
+              "type": ["array", "string"]
+            },
+            "enabled": {
+              "description": "Turned on or off for the project, over the app's settings.",
+              "type": "boolean"
+            },
+            "path": {
+              "description": "Its program, relative to the repository (as node_modules/.bin/x). Runs once the user trusts the project; a path set in the app's settings wins.",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "typescript": {
+          "additionalProperties": false,
+          "description": "The language server TypeScript, JavaScript (typescript-language-server).",
+          "properties": {
+            "args": {
+              "description": "Its arguments, in place of the catalog's. Apply once the user trusts the project.",
+              "items": {
+                "type": "string"
+              },
+              "type": ["array", "string"]
+            },
+            "enabled": {
+              "description": "Turned on or off for the project, over the app's settings.",
+              "type": "boolean"
+            },
+            "path": {
+              "description": "Its program, relative to the repository (as node_modules/.bin/x). Runs once the user trusts the project; a path set in the app's settings wins.",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
     "launch": {
       "description": "The commands that launch the project (« Lancement »). Need the user's approval.",
       "oneOf": [

@@ -2693,6 +2693,9 @@ impl<R: Runtime> Core<R> {
     pub fn save_settings(self: &Arc<Self>, mut s: Settings) -> Result<()> {
         // The MCP server's port is the backend's own (`sync_mcp`): the window's copy may be older.
         s.mcp_port = self.settings.read().mcp_port;
+        // The projects trusted with their own language servers are the backend's (`lsp_trust`, ESC-446): a window does not
+        // trust one by saving its settings.
+        s.language_servers_trusted = self.settings.read().language_servers_trusted.clone();
         // The user's id is the backend's too (`ensure_identity`): a window's copy may be older.
         if s.user_id.is_empty() {
             s.user_id = self.settings.read().user_id.clone();

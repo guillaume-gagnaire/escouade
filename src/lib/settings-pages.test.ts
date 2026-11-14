@@ -88,6 +88,8 @@ const SETTINGS_KEYS: Record<keyof Settings, true> = {
   nameAsked: true,
   userNameCleared: true,
   voice: true,
+  languageServers: true,
+  languageServersTrusted: true,
 };
 
 const PROJECT_KEYS: Record<Exclude<keyof ProjectDraft, 'board'>, true> = {

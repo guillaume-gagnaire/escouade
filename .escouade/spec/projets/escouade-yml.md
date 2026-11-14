@@ -2,8 +2,8 @@
 title: ".escouade.yml"
 subject: "Projets"
 sources: ["docs/SPEC.md","docs/PLUGINS.md","docs/STORE.md"]
-tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288","ESC-309"]
-decisions: []
+tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288","ESC-309","ESC-446"]
+decisions: [165]
 compared: "2026-10-31T10:05:41+01:00"
 ---
 
@@ -41,8 +41,9 @@ Seulement ce qui vaut pour toute l'équipe. Clés en anglais, en `snake_case`, p
 | `workflows.enabled` | `false` : « Pas de workflow pour ce projet », ni lecture ni écriture de ses workflows (voir *Workflows*) ; vrai si absente |
 | `plugins.recommended` | les plugins que le projet propose : des identifiants du store (`dev.exemple.slack`) ; voir *Plugins proposés* |
 | `plugins.<id>` | les réglages que le projet donne au plugin `<id>` : des valeurs simples (texte, nombre, `true`, `false`), jamais un secret |
+| `language_servers.<id>` | le serveur de langage `<id>` du catalogue (`typescript`, `rust`, `python`, `go`, `json`, `css`, `html`) : `enabled` (`true`, `false`), `path` (son programme, relatif au dépôt), `args` (ses arguments) ; voir *Serveurs de langage* |
 
-Une valeur ou une étape seule, hors liste, vaut une liste d'un élément (`launch`, `worktrees.copy`, `worktrees.setup`, `worktrees.teardown`, `plugins.recommended`).
+Une valeur ou une étape seule, hors liste, vaut une liste d'un élément (`launch`, `worktrees.copy`, `worktrees.setup`, `worktrees.teardown`, `plugins.recommended`, `language_servers.<id>.args`).
 
 L'ancienne clé `board.agents_from_target` est encore lue quand le fichier n'a pas `worktrees.base` (`true` vaut `target`, `false` vaut `head`), avec un avertissement à sa ligne. Elle n'est jamais écrite : l'export, qui écrit `worktrees.base`, la retire ; le schéma la garde, marquée `deprecated`.
 
@@ -58,7 +59,7 @@ Chaque cas est tranché :
 - le mode `bypassPermissions` : un dépôt ne lève pas les autorisations de qui l'ouvre. Refusé à la lecture (« bypassPermissions ne se partage pas : il se règle sur chaque machine »), jamais écrit, gardé sur la machine ;
 - les intégrations : liées aux comptes connectés de chacun ;
 - les workflows supprimés d'un projet : retenus par chaque machine (voir *Workflows*) ;
-- les chemins absolus, les jetons, les empreintes approuvées ; les secrets d'un plugin (ils vont au trousseau du système, par sa page).
+- les chemins absolus, les jetons, les empreintes approuvées ; les secrets d'un plugin (ils vont au trousseau du système, par sa page) ; la confiance accordée au projet pour ses serveurs de langage (de chaque machine).
 
 ### Projet privé
 
@@ -77,6 +78,13 @@ Chaque cas est tranché :
 - `plugins.<id>` : les réglages que le projet donne au plugin. Quand le plugin les demande pour ce projet (`settings/get` avec `project`), ils passent devant ceux de l'utilisateur, mais seulement les clés qu'il déclare (`contributes.settings`), d'une valeur de leur type (un `select` parmi ses options), jamais l'un de ses secrets, et seulement s'il est actif dans ce projet : un projet privé ne donne rien à un plugin qui n'y est pas activé. Une valeur qui n'est pas simple (une liste, un groupe) est dite et ignorée.
 - Ces clés sont celles du fichier seul : jamais appliquées au projet, jamais marquées dans la fenêtre, jamais écrites par l'export, qui les garde telles qu'elles sont.
 
+### Serveurs de langage
+
+- `language_servers.<id>` règle pour le projet un serveur de langage de l'éditeur (voir *Serveurs de langage*) : `enabled` l'allume ou le coupe, devant les réglages de l'app ; `path` et `args` désignent son programme et ses arguments.
+- Un serveur inconnu, un champ inconnu, un `path` absolu (ou `~`) sont dits avec leur ligne et ignorés ; un `path` qui sort du dépôt (`..`) ne mène à rien.
+- `path` et `args` sont des choix du dépôt : ils ne servent qu'une fois que l'utilisateur fait confiance au projet pour ses serveurs, sur sa machine. Un chemin réglé à la main dans l'app passe devant `path`.
+- Comme `plugins.*`, ces clés sont celles du fichier seul : jamais appliquées au projet, jamais écrites par l'export.
+
 ### Versions et erreurs
 
 - Le format a un lecteur par version et une migration de chaque version à la suivante (aucune encore).
@@ -88,7 +96,7 @@ Chaque cas est tranché :
 
 ### Schéma
 
-- Un JSON Schema (draft-07), `schemas/escouade.schema.json` dans le dépôt d'Escouade, publié à `https://escouade.dev/schemas/escouade.schema.json`. Il est fait depuis la même liste de clés que le lecteur et l'écriture : il ne peut pas en diverger. Les réglages d'un plugin y sont un groupe par identifiant (`patternProperties`), de valeurs simples.
+- Un JSON Schema (draft-07), `schemas/escouade.schema.json` dans le dépôt d'Escouade, publié à `https://escouade.dev/schemas/escouade.schema.json`. Il est fait depuis la même liste de clés que le lecteur et l'écriture : il ne peut pas en diverger. Les réglages d'un plugin y sont un groupe par identifiant (`patternProperties`), de valeurs simples ; ceux des serveurs de langage, un groupe par serveur du catalogue.
 - Le fichier écrit par Escouade commence par `# yaml-language-server: $schema=…`, pour l'autocomplétion des éditeurs.
 
 ### À l'ouverture
@@ -117,7 +125,7 @@ Chaque cas est tranché :
 
 ### Exporter
 
-- Réglages › Projets › « Exporter vers .escouade.yml » écrit toutes les clés avec les réglages enregistrés du projet (une branche cible vide est omise, le mode `bypassPermissions` aussi, et les clés `plugins.*`, qui ne sont pas des réglages du projet) : par-dessus le fichier existant, en gardant ses commentaires, son ordre et ses clés inconnues ; sinon un nouveau fichier, avec la ligne du schéma, un commentaire qui renvoie à la doc et `version: 1`.
+- Réglages › Projets › « Exporter vers .escouade.yml » écrit toutes les clés avec les réglages enregistrés du projet (une branche cible vide est omise, le mode `bypassPermissions` aussi, et les clés `plugins.*` et `language_servers.*`, qui ne sont pas des réglages du projet) : par-dessus le fichier existant, en gardant ses commentaires, son ordre et ses clés inconnues ; sinon un nouveau fichier, avec la ligne du schéma, un commentaire qui renvoie à la doc et `version: 1`.
 - Les commandes écrites sont celles du projet : approuvées d'office.
 - « Écrire dans .escouade.yml » d'un mode `bypassPermissions` gardé sur la machine n'écrit rien et le garde.
 - Un fichier illisible ou d'une version plus récente n'est pas réécrit : « modifie-le à la main ».

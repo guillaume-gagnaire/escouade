@@ -207,6 +207,13 @@ pub struct Settings {
     pub cache_savings_in_bar: bool,
     /// « Voix »: the dictation (`voice`).
     pub voice: VoiceSettings,
+    /// « Serveurs de langage » (ESC-446): by the id of the server in the catalog (`lsp::catalog`), turned on or off,
+    /// its path, its arguments. What is not set is the catalog's; a project's `.escouade.yml` goes first, but for the
+    /// path set here, which wins.
+    pub language_servers: BTreeMap<String, LanguageServerSetting>,
+    /// The projects (by id) whose own language servers may run: a `node_modules/.bin` of theirs, the path or the
+    /// arguments of their `.escouade.yml` (ESC-446). The backend's alone (`lsp_trust`), as `mcp_port`.
+    pub language_servers_trusted: Vec<String>,
     /// « Ton nom » (Réglages › Général › Toi, ESC-190): written in the tickets shared with
     /// the team and in those this machine moves on; a project may have its own
     /// (`Project::user_name`). Empty until given: the name git knows stands in (ESC-243).
@@ -361,6 +368,18 @@ pub struct Account {
 
 /// The Whisper model of a first dictation: `voice::models::DEFAULT_MODEL` (the app's test checks they agree).
 pub const DEFAULT_WHISPER_MODEL: &str = "base";
+
+/// A language server's settings (ESC-446).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LanguageServerSetting {
+    /// None: on.
+    pub enabled: Option<bool>,
+    /// Empty: found (`lsp::locate`). An absolute path, or the name of a program of the `PATH`.
+    pub path: String,
+    /// None: the catalog's.
+    pub args: Option<Vec<String>>,
+}
 
 /// The dictation's settings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -775,6 +794,8 @@ impl Default for Settings {
             quota_projection: QuotaProjection::Alert,
             cache_savings_in_bar: false,
             voice: VoiceSettings::default(),
+            language_servers: BTreeMap::new(),
+            language_servers_trusted: Vec::new(),
             user_name: String::new(),
             user_id: String::new(),
             name_asked: false,

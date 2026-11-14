@@ -712,4 +712,53 @@ export default {
     banner: 'Les commandes de .escouade.yml attendent ton accord : elles ne tournent pas encore.',
     bannerButton: 'Les lire',
   },
+  // « Serveurs de langage » (Général › Avancé, ESC-446): what the editor starts to read the code.
+  lsp: {
+    title: 'Serveurs de langage',
+    titleDesc:
+      'Ce que l’éditeur lance pour comprendre le code, un par langage, trouvé sur le poste. Rien n’est téléchargé. Le .escouade.yml d’un projet peut en régler.',
+    on: 'Allumé',
+    path: 'Chemin',
+    pathPlaceholder: 'trouvé tout seul',
+    args: 'Arguments',
+    argsPlaceholder: 'ceux du catalogue',
+    /** Where it was found: « Trouvé : C:\…\rust-analyzer.exe (PATH) ». */
+    found: 'Trouvé : {program} ({origin})',
+    origin: {
+      manual: 'réglé à la main',
+      projectFile: '.escouade.yml du projet',
+      nodeModules: 'node_modules du projet',
+      path: 'PATH',
+      standard: 'emplacement de son outil',
+    },
+    absent: 'Introuvable. Pour l’installer : {install}',
+    manualMissing: 'Le chemin réglé ne mène à aucun programme : {path}',
+    fileMissing: 'Le chemin du .escouade.yml ne mène à aucun programme du dépôt : {path}',
+    byProject: 'Allumé ou coupé par le .escouade.yml du projet.',
+    needsTrust:
+      'Ce serveur vient du projet : il ne se lance qu’une fois que tu fais confiance au projet, car un dépôt cloné peut contenir un faux serveur.',
+    trust: 'Faire confiance au projet',
+    untrust: 'Ne plus faire confiance',
+    trusted: 'Tu fais confiance à ce projet pour ses serveurs.',
+    /** A server that runs code of the project (`what`: `runs.<id>`), even installed on the computer. */
+    runsProjectCode:
+      'Ce serveur exécute du code du projet ({what}) : il ne se lance dans un projet qu’une fois que tu fais confiance au projet.',
+    runs: {
+      rust: 'build.rs, macros',
+      typescript: 'le tsserver du node_modules du projet',
+      go: 'la toolchain de son go.mod, cgo',
+    },
+    running: 'En marche',
+    state: {
+      starting: 'Démarre',
+      running: 'En marche',
+      restarting: 'Relance dans {s} s',
+      failed: 'Arrêté après trop de plantages',
+      stopped: 'Arrêté',
+    },
+    log: 'Journal',
+    closeLog: 'Fermer le journal',
+    noLog: 'Rien dans le journal.',
+    restart: 'Relancer',
+  },
 } as const satisfies Tree;

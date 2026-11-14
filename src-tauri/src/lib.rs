@@ -121,6 +121,7 @@ mod integrations_tests;
 mod isola;
 mod launchenv;
 mod leftovers;
+mod lsp;
 mod mcp;
 mod memory;
 mod menus;
@@ -532,6 +533,8 @@ pub fn run() {
                 paths::DataDir::new(paths::default_data_dir()),
             );
             app.manage(core.clone());
+            // The editor's language servers (ESC-446): their messages and states to the window.
+            app.manage(lsp::for_app(app.handle().clone()));
             // The dictation: its events to the window, as the core's.
             let hub = std::sync::Arc::downgrade(&core);
             app.manage(Arc::new(voice::Voice::for_app(
@@ -876,6 +879,15 @@ pub fn run() {
                 commands::commit_preview,
                 commands::commit_propose,
                 commands::commit_direct,
+                commands::lsp_servers,
+                commands::lsp_start,
+                commands::lsp_send,
+                commands::lsp_release,
+                commands::lsp_release_view,
+                commands::lsp_restart,
+                commands::lsp_running,
+                commands::lsp_log,
+                commands::lsp_trust,
                 commands::fs_tree,
                 commands::fs_read,
                 commands::fs_write,
@@ -1002,6 +1014,10 @@ pub fn run() {
         .expect("error while building the application")
         .run(|app, event| match event {
             tauri::RunEvent::Exit => {
+                // The language servers end with the app, with what they started (their Jobs).
+                if let Some(servers) = app.try_state::<Arc<lsp::Manager>>() {
+                    servers.shutdown();
+                }
                 if let Some(core) = app.try_state::<Arc<Core>>() {
                     if !core.quitting.load(Ordering::Acquire) {
                         // macOS: Cmd+Q, the app menu's « Quitter Escouade » (`menus::app_menu`)

@@ -157,6 +157,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('userName', 'general', 'share.settings.name', s('userName', 'userNameCleared')),
   row('telemetry', 'general', 'settings.about.telemetry', s('telemetry')),
   row('editorFontSize', 'general', 'settings.app.editorFontSize', { advanced: true, ...s('editorFontSize') }),
+  row('languageServers', 'general', 'settings.lsp.title', { advanced: true, ...s('languageServers') }),
   row('userId', 'general', 'share.settings.id', { advanced: true, ...s('userId') }),
 
   // Agents › Nouveaux agents, Textes rédigés, Remote control, Piloter Escouade; Avancé.
@@ -323,7 +324,14 @@ export const SETTINGS_ROWS: RowInfo[] = [
  * the bars, dragged), asked once (`nameAsked`), or fixed (`mcpPort`). « Rien d'autre ne quitte la fenêtre »: these
  * were already out of it.
  */
-export const SETTINGS_ELSEWHERE: (keyof Settings)[] = ['railWidth', 'sideWidth', 'nameAsked', 'mcpPort'];
+export const SETTINGS_ELSEWHERE: (keyof Settings)[] = [
+  'railWidth',
+  'sideWidth',
+  'nameAsked',
+  'mcpPort',
+  // Trusted by the editor’s question (`lsp_trust`, ESC-446), never by a save of the window.
+  'languageServersTrusted',
+];
 
 /** The keys of a board set by the app alone: the prefix and the number of its next ticket. */
 export const BOARD_ELSEWHERE: BoardKey[] = ['prefix', 'nextNumber'];

@@ -625,4 +625,52 @@ export default defineZone('settings', {
     banner: 'The commands of .escouade.yml wait for your approval: they don’t run yet.',
     bannerButton: 'Read them',
   },
+  // « Serveurs de langage » (Général › Avancé, ESC-446): what the editor starts to read the code.
+  lsp: {
+    title: 'Language servers',
+    titleDesc:
+      'What the editor starts to understand the code, one per language, found on this computer. Nothing is downloaded. A project’s .escouade.yml can set them.',
+    on: 'On',
+    path: 'Path',
+    pathPlaceholder: 'found automatically',
+    args: 'Arguments',
+    argsPlaceholder: 'the catalog’s',
+    /** Where it was found: « Found: /usr/bin/rust-analyzer (PATH) ». */
+    found: 'Found: {program} ({origin})',
+    origin: {
+      manual: 'set by hand',
+      projectFile: 'the project’s .escouade.yml',
+      nodeModules: 'the project’s node_modules',
+      path: 'PATH',
+      standard: 'its tool’s location',
+    },
+    absent: 'Not found. To install it: {install}',
+    manualMissing: 'The path set leads to no program: {path}',
+    fileMissing: 'The path of .escouade.yml leads to no program of the repository: {path}',
+    byProject: 'Turned on or off by the project’s .escouade.yml.',
+    needsTrust:
+      'This server comes from the project: it only starts once you trust the project, as a cloned repository can hold a fake server.',
+    trust: 'Trust the project',
+    untrust: 'Stop trusting it',
+    trusted: 'You trust this project with its servers.',
+    /** A server that runs code of the project (`what`: `runs.<id>`), even installed on the computer. */
+    runsProjectCode: 'This server runs code of the project ({what}): it only starts in a project once you trust the project.',
+    runs: {
+      rust: 'build.rs, macros',
+      typescript: 'the tsserver of the project’s node_modules',
+      go: 'the toolchain of its go.mod, cgo',
+    },
+    running: 'Running',
+    state: {
+      starting: 'Starting',
+      running: 'Running',
+      restarting: 'Restarting in {s} s',
+      failed: 'Stopped after too many crashes',
+      stopped: 'Stopped',
+    },
+    log: 'Log',
+    closeLog: 'Close the log',
+    noLog: 'Nothing in the log.',
+    restart: 'Restart',
+  },
 });
