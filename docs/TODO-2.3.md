@@ -25,7 +25,7 @@ Conçus le 2026-10-28 : `docs/OVERSEER.md`, maquettes dans `design/overseer/`.
 - [ ] La fondation commune : le cœur et l'interface sur deux machines, au lieu de l'IPC de Tauri dans un seul process.
 - [ ] Le mode serveur : Escouade sur un serveur, qui tourne jour et nuit, piloté par le client du poste.
 - [ ] Le téléphone : voir les agents qui attendent, répondre, envoyer un message, regarder le Kanban, ouvrir le serveur de dev d'un agent.
-- [ ] L'app mobile (iOS, Android), avec WireGuard intégré et des notifications push par un relais chiffré de bout en bout. Sa technique (Tauri 2, Capacitor, React Native ou Flutter) se choisit par une étude avec maquettes : `docs/REMOTE.md`, « Ajouts du 2026-11-14 ».
+- [ ] L'app mobile (iOS, Android), avec WireGuard intégré et des notifications push par un relais chiffré de bout en bout. Sa technique se choisit par l'étude ESC-445 (`docs/MOBILE-STUDY.md`, 2026-11-14) : elle recommande Capacitor, sur l'interface Svelte d'Escouade, et écarte Tauri 2 pour le téléphone. Décision de l'utilisateur à prendre.
 - [ ] Plusieurs serveurs pilotés par un même Escouade, par exemple le travail et le perso : des espaces cloisonnés, comme dans Slack, avec les notifications de tous. Les règles d'une entreprise ne valent que pour son espace, sauf sur un poste qu'elle gère. Voir `docs/REMOTE.md`, « Plusieurs serveurs pilotés par un seul Escouade ».
 - [ ] Les agents sur le serveur en auto-hébergé : ressources par agent, connexion des harness sans navigateur, la machine comme appareil de l'équipe, l'isolement quand plusieurs personnes partagent un serveur.
 
