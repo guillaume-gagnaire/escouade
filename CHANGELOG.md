@@ -4,7 +4,7 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
-## [Non publié]
+## [2.2.0] — 2026-11-14
 
 - Sécurité : l’installation d’un plugin montre aussi les commandes qui installent et mettent à jour son harness, et les variables qu’il retire de son lancement. Celles d’un plugin tiers sont dites venir de lui partout où Escouade les affiche, et il ne peut plus retirer le proxy ni les certificats que tu as réglés.
 - Deux lectures des workflows d’un projet au même moment ne laissent plus la fenêtre sans workflow. Un ticket bloqué parce que son harness est coupé pour le projet garde cette raison quand le tour de son agent finit après.

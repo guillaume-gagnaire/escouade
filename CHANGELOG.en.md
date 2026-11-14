@@ -4,7 +4,7 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
-## [Unreleased]
+## [2.2.0] — 2026-11-14
 
 - Security: installing a plugin also shows the commands that install and update its harness, and the variables it takes off its launch. Those of a third-party plugin are said to come from it wherever Escouade shows them, and it can no longer take off the proxy or the certificates you set.
 - Two readings of a project’s workflows at the same time no longer leave the window with no workflow. A ticket blocked because its harness is cut for the project keeps that reason when its agent’s turn ends afterwards.
