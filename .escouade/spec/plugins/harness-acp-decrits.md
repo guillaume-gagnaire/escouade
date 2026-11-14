@@ -3,7 +3,7 @@ title: "Les harness ACP décrits"
 subject: "plugins"
 sources: ["docs/PLUGINS-DESIGN.md §1.1, §4.4, §4.12, §8.27, §8.31","docs/TODO-2.2.md, PLG-6","Essai réel de Goose 1.57.0 sur Ollama, 2026-11-01 (ESC-178)","Audit de sécurité 2026-11 (ESC-418), fiches SEC-05, SEC-06 et SEC-30 : docs/security/audit-2026-11/rapport.md","docs/PLUGINS.md §1.3, §2.2"]
 tickets: ["ESC-178","ESC-222","ESC-281","ESC-282","ESC-347","ESC-361","ESC-362","ESC-424","ESC-428","ESC-442","ESC-443"]
-decisions: [152,"les-corrections-de-l-audit-dans-la-2-2-v",161,"ce-qu-un-harness-tiers-dit-sans-le-lance"]
+decisions: [152,"les-corrections-de-l-audit-dans-la-2-2-v",161,162]
 compared: null
 ---
 

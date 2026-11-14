@@ -1,9 +1,9 @@
 ---
-number: null
+number: 162
 id: "ce-qu-un-harness-tiers-dit-sans-le-lance"
 title: "Ce qu'un harness tiers dit sans le lancer est montré et jugé (SEC-30)"
 date: "2026-11-14"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-443"
 pages: ["plugins/harness-acp-decrits"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/harness-acp-decrits","added":6,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-14T10:36:44+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
