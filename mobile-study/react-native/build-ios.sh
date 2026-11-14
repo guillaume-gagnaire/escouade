@@ -15,6 +15,6 @@ SCHEME=$(basename "$WS" .xcworkspace)
 for sdk in iphonesimulator iphoneos; do
   dest="generic/platform=iOS Simulator"; [ $sdk = iphoneos ] && dest="generic/platform=iOS"
   xcodebuild -workspace "$WS" -scheme "$SCHEME" -configuration Release -sdk $sdk -destination "$dest" \
-    -derivedDataPath build/ios-$sdk CODE_SIGNING_ALLOWED=NO build -quiet
+    -derivedDataPath build/ios-$sdk ARCHS=arm64 ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO build -quiet
 done
 find build -name "*.app" -path "*Release-*" -maxdepth 6 -print

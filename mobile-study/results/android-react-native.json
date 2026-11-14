@@ -1,0 +1,113 @@
+{
+  "name": "react-native",
+  "pkg": "dev.escouade.study.rn",
+  "date": "2026-11-14T13:07:36.461Z",
+  "device": "sdk_gphone64_x86_64 · Android 15",
+  "weight": {
+    "apkMo": 59.14,
+    "arm64Mo": 34.38,
+    "abis": {
+      "arm64-v8a": 23.18,
+      "x86_64": 24.76
+    },
+    "dexMo": 3.16,
+    "assetsMo": 6.09,
+    "arm64Libs": [
+      {
+        "lib": "libreactnative.so",
+        "mo": 6.72
+      },
+      {
+        "lib": "libbarhopper_v3.so",
+        "mo": 4.72
+      },
+      {
+        "lib": "libhermesvm.so",
+        "mo": 2.58
+      },
+      {
+        "lib": "libexpo-modules-core.so",
+        "mo": 1.52
+      },
+      {
+        "lib": "libreact-native-escouade-core.so",
+        "mo": 1.45
+      },
+      {
+        "lib": "libc++_shared.so",
+        "mo": 1.23
+      }
+    ]
+  },
+  "coldStart": {
+    "runs": 8,
+    "adbRoundTripMs": 26,
+    "firstFrameMs": {
+      "median": 391,
+      "min": 338,
+      "max": 429
+    },
+    "readyMs": {
+      "median": 1803,
+      "min": 1630,
+      "max": 1931
+    }
+  },
+  "conversationOpenMs": 106,
+  "memory": {
+    "appMo": 99.9,
+    "webviewRendererMo": 16.2,
+    "totalMo": 116.1
+  },
+  "fluidity": {
+    "drag": {
+      "gestures": 6,
+      "frames": 634,
+      "fps": 59.2,
+      "jankPct": 0.3,
+      "p95FrameMs": 18.2,
+      "worstMs": 134
+    },
+    "fling": {
+      "gestures": 6,
+      "frames": 751,
+      "fps": 59.3,
+      "jankPct": 0.9,
+      "p95FrameMs": 18.2,
+      "worstMs": 82
+    }
+  },
+  "bridgeUsPerCall": 6.6,
+  "push": {
+    "notification": {
+      "pkg": "dev.escouade.study.rn",
+      "kind": "notification",
+      "closedBefore": true,
+      "relaunched": true,
+      "from": "session",
+      "notifications": 1,
+      "opened": "decrypted",
+      "openMs": 1702
+    },
+    "notificationFromStopped": {
+      "pkg": "dev.escouade.study.rn",
+      "kind": "notification",
+      "closedBefore": true,
+      "relaunched": true,
+      "from": "stopped",
+      "notifications": 1,
+      "opened": "decrypted",
+      "openMs": 1604
+    },
+    "data": {
+      "pkg": "dev.escouade.study.rn",
+      "kind": "data",
+      "closedBefore": true,
+      "relaunched": true,
+      "from": "session",
+      "notifications": 0,
+      "opened": null,
+      "openMs": null
+    }
+  }
+}

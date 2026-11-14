@@ -8,7 +8,7 @@ command -v xcodegen >/dev/null || brew install xcodegen
 rustup target add aarch64-apple-ios aarch64-apple-ios-sim
 [ -d src-tauri/gen/apple ] || npx tauri ios init --ci
 PL=$(ls src-tauri/gen/apple/*_iOS/Info.plist | head -1)
-for kv in "NSCameraUsageDescription string Lire le QR code de l'appairage" "NSFaceIDUsageDescription string Confirmer une autorisation"; do
+for kv in "NSCameraUsageDescription string Lire le QR code de l’appairage" "NSFaceIDUsageDescription string Confirmer une autorisation"; do
   set -- $kv; k=$1; t=$2; shift 2; /usr/libexec/PlistBuddy -c "Add :$k $t $*" "$PL" 2>/dev/null || true
 done
 /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" "$PL" 2>/dev/null || true

@@ -30,5 +30,6 @@
     "type": "git",
     "url": "https://escouade.dev"
   },
-  "author": "Escouade"
+  "author": "Escouade",
+  "homepage": "https://escouade.dev"
 }

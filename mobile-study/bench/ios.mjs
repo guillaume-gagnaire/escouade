@@ -46,6 +46,9 @@ const result = { name, bundle, date: new Date().toISOString(), device: process.e
 result.weight = { simulatorAppMo: +du(simApp).toFixed(1), deviceAppMo: deviceApp ? +du(deviceApp).toFixed(1) : null };
 log('poids', result.weight);
 
+// Les processus WebContent de WebKit déjà là (Safari, les widgets du simulateur) : ceux de l'app sont les nouveaux.
+const webContent = () => execSync('pgrep -f com.apple.WebKit.WebContent || true', { encoding: 'utf8' }).split('\n').filter(Boolean);
+const before = new Set(webContent());
 simctl('install', 'booted', simApp);
 // La permission des notifications, d'avance (applesimutils) : sans elle, simctl push n'affiche rien.
 try {
@@ -81,12 +84,7 @@ const pid = simctl('spawn', 'booted', 'launchctl', 'list').split('\n').find((l) 
 const rss = (p) => Number(execSync(`ps -o rss= -p ${p}`, { encoding: 'utf8' }).trim() || 0) / 1024;
 let webkit = 0;
 try {
-  const pids = execSync(`pgrep -f "com.apple.WebKit.WebContent" || true`, { encoding: 'utf8' }).split('\n').filter(Boolean);
-  // Seuls ceux nés après le dernier lancement (les WebContent d'autres apps du simulateur sont plus vieux).
-  for (const p of pids) {
-    const age = Number(execSync(`ps -o etimes= -p ${p}`, { encoding: 'utf8' }).trim() || 1e9);
-    if (age < 20) webkit += rss(p);
-  }
+  for (const p of webContent()) if (!before.has(p)) webkit += rss(p);
 } catch {
   /* pas de WebKit */
 }

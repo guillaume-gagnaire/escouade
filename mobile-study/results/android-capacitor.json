@@ -1,0 +1,118 @@
+{
+  "name": "capacitor",
+  "pkg": "dev.escouade.study.capacitor",
+  "date": "2026-11-14T13:02:38.912Z",
+  "device": "sdk_gphone64_x86_64 · Android 15",
+  "weight": {
+    "apkMo": 36.69,
+    "arm64Mo": 20.79,
+    "abis": {
+      "arm64-v8a": 5.32,
+      "armeabi-v7a": 3.25,
+      "armeabi": 0.12,
+      "mips": 0.12,
+      "mips64": 0.14,
+      "x86": 6.01,
+      "x86_64": 6.25
+    },
+    "dexMo": 10.93,
+    "assetsMo": 2.1,
+    "arm64Libs": [
+      {
+        "lib": "libbarhopper_v3.so",
+        "mo": 4.72
+      },
+      {
+        "lib": "libescouade_mobile_core.so",
+        "mo": 0.38
+      },
+      {
+        "lib": "libjnidispatch.so",
+        "mo": 0.17
+      },
+      {
+        "lib": "libimage_processing_util_jni.so",
+        "mo": 0.03
+      },
+      {
+        "lib": "libandroidx.graphics.path.so",
+        "mo": 0.01
+      },
+      {
+        "lib": "libdatastore_shared_counter.so",
+        "mo": 0.01
+      }
+    ]
+  },
+  "coldStart": {
+    "runs": 8,
+    "adbRoundTripMs": 27,
+    "firstFrameMs": {
+      "median": 647,
+      "min": 614,
+      "max": 733
+    },
+    "readyMs": {
+      "median": 1492,
+      "min": 958,
+      "max": 1651
+    }
+  },
+  "conversationOpenMs": 901,
+  "memory": {
+    "appMo": 103.8,
+    "webviewRendererMo": 136.4,
+    "totalMo": 240.2
+  },
+  "fluidity": {
+    "drag": {
+      "gestures": 6,
+      "frames": 601,
+      "fps": 59.9,
+      "jankPct": 0.2,
+      "p95FrameMs": 18,
+      "worstMs": 33
+    },
+    "fling": {
+      "gestures": 6,
+      "frames": 676,
+      "fps": 59.7,
+      "jankPct": 0.3,
+      "p95FrameMs": 18.1,
+      "worstMs": 51
+    }
+  },
+  "bridgeUsPerCall": 451.6,
+  "push": {
+    "notification": {
+      "pkg": "dev.escouade.study.capacitor",
+      "kind": "notification",
+      "closedBefore": true,
+      "relaunched": true,
+      "from": "session",
+      "notifications": 1,
+      "opened": "decrypted",
+      "openMs": 1203
+    },
+    "notificationFromStopped": {
+      "pkg": "dev.escouade.study.capacitor",
+      "kind": "notification",
+      "closedBefore": true,
+      "relaunched": true,
+      "from": "stopped",
+      "notifications": 1,
+      "opened": "decrypted",
+      "openMs": 1195
+    },
+    "data": {
+      "pkg": "dev.escouade.study.capacitor",
+      "kind": "data",
+      "closedBefore": true,
+      "relaunched": true,
+      "from": "session",
+      "notifications": 0,
+      "opened": null,
+      "openMs": null
+    }
+  }
+}

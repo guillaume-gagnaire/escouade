@@ -135,12 +135,21 @@ async function coldStart(component) {
 
 // ---------- l'écran ----------
 
-function find(label) {
-  sh('uiautomator dump /sdcard/ui.xml');
-  const xml = sh('cat /sdcard/ui.xml');
+// Le premier vidage de l'écran juste après un lancement échoue parfois (uiautomator, ou l'accessibilité de la
+// WebView pas encore prête) : plusieurs essais.
+async function find(label) {
   const re = new RegExp(`(?:text|content-desc)="[^"]*${label}[^"]*"[^>]*bounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"`);
-  const m = xml.match(re);
-  return m ? { x: (+m[1] + +m[3]) >> 1, y: (+m[2] + +m[4]) >> 1 } : null;
+  for (let i = 0; i < 10; i++) {
+    try {
+      sh('uiautomator dump /sdcard/ui.xml');
+      const m = sh('cat /sdcard/ui.xml').match(re);
+      if (m) return { x: (+m[1] + +m[3]) >> 1, y: (+m[2] + +m[4]) >> 1 };
+    } catch {
+      /* encore */
+    }
+    await sleep(1000);
+  }
+  return null;
 }
 
 // ---------- la mémoire ----------
@@ -166,7 +175,9 @@ function memory() {
 // ---------- la fluidité ----------
 
 function layers() {
-  return [...new Set(sh('dumpsys SurfaceFlinger --list').match(new RegExp(`[^\\s{}]*${pkg.replace(/\./g, '\\.')}[^\\s{}]*\\(BLAST\\)#\\d+`, 'g')) ?? [])];
+  // Toutes les couches de l'app (la fenêtre, et la SurfaceView de Flutter en « (BLAST) ») : celle qui a reçu le plus
+  // d'images pendant le geste est celle qui dessine.
+  return [...new Set(sh('dumpsys SurfaceFlinger --list').match(new RegExp(`[^\\s{}]*${pkg.replace(/\./g, '\\.')}[^\\s{}]*#\\d+`, 'g')) ?? [])];
 }
 
 function latency(layer) {
@@ -234,8 +245,9 @@ async function fluidity() {
 
 // ---------- le push ----------
 
-function push(kind) {
-  const out = execFileSync('node', [join(here, 'android-push.mjs'), pkg, kind], { encoding: 'utf8', env: process.env });
+function push(kind, from = 'session') {
+  const env = { ...process.env, PUSH_FROM: from };
+  const out = execFileSync('node', [join(here, 'android-push.mjs'), pkg, kind], { encoding: 'utf8', env });
   const last = out.trim().split('\n').pop();
   return JSON.parse(last);
 }
@@ -257,7 +269,8 @@ result.coldStart = await coldStart(component);
 // La conversation : du toucher sur l'agent à son affichage.
 await sleep(2000);
 await clearMarks();
-const agent = find('hub-close');
+const agent = await find('hub-close');
+if (!agent) log("l'agent hub-close est introuvable à l'écran");
 const t = Date.now();
 if (agent) sh(`input tap ${agent.x} ${agent.y}`);
 const conv = await waitMark('conv-ready');
@@ -273,7 +286,12 @@ sh(`am force-stop ${pkg}`);
 sh(`am start -n ${component}`);
 const bridge = await waitMark('bridge-us', 40000);
 result.bridgeUsPerCall = bridge ? Number(bridge.v) : null;
-result.push = { notification: push('notification'), data: push('data') };
+sh(`am start -n ${component}`);
+await sleep(8000);
+result.push = { notification: push('notification'), notificationFromStopped: push('notification', 'stopped') };
+sh(`am start -n ${component}`);
+await sleep(8000);
+result.push.data = push('data');
 log('push', JSON.stringify(result.push));
 
 mkdirSync(join(here, '../results'), { recursive: true });

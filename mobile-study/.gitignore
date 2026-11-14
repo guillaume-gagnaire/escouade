@@ -14,3 +14,4 @@ google-services.json
 # Les résultats bruts du banc (les chiffres retenus sont dans docs/MOBILE-STUDY.md et results/*.json).
 bench/out/
 *.log
+.kotlin/

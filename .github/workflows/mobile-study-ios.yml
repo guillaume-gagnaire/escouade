@@ -26,7 +26,8 @@ jobs:
       # Deux Mac à la fois au plus : la CI de main en a besoin aussi.
       max-parallel: 2
       matrix:
-        tech: [tauri, capacitor, flutter, react-native]
+        # Tauri et Flutter ont passé au run 43596441385 : seuls les deux autres sont relancés.
+        tech: [capacitor, react-native]
     env:
       PORT: '8445'
       MS_KEY: AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8
@@ -68,6 +69,7 @@ jobs:
           sleep 2 && curl -sf "http://127.0.0.1:$PORT/api/agents" > /dev/null
       - name: Construire
         run: |
+          set -o pipefail
           start=$(date +%s)
           bash mobile-study/${{ matrix.tech }}/build-ios.sh 2>&1 | tee "$RUNNER_TEMP/build.log"
           echo "BUILD_SECONDS=$(( $(date +%s) - start ))" >> "$GITHUB_ENV"

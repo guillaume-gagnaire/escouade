@@ -12,7 +12,10 @@
 import { execFileSync } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 
+// kind : notification | data. PUSH_FROM=stopped : l'app arrêtée de force avant (sa tâche quitte les récents) ; sinon,
+// le cas courant : l'app utilisée, puis tuée en arrière-plan par le système.
 const [pkg, kind = 'notification'] = process.argv.slice(2);
+const stopped = process.env.PUSH_FROM === 'stopped';
 const port = process.env.PORT;
 const adb = (...a) => execFileSync('adb', a, { encoding: 'utf8' }).trim();
 const sh = (cmd) => adb('shell', cmd);
@@ -33,6 +36,7 @@ sh('cmd notification set_dnd off');
 sh('input keyevent KEYCODE_HOME');
 await sleep(1500);
 sh(`am kill ${pkg}`);
+if (stopped) sh(`am force-stop ${pkg}`);
 await sleep(1500);
 const before = pid();
 console.log(`app ${pkg} : processus ${before ? 'encore là (' + before + ')' : 'fermé'}`);
@@ -54,7 +58,10 @@ const t0 = Date.now();
 // adb shell recolle les arguments par des espaces : chaque valeur est citée pour le shell du téléphone.
 const q = (v) => (v.startsWith('--') ? v : `'${v.replace(/'/g, `'\''`)}'`);
 // Au paquet entier (-p), comme les services Google Play : firebase_messaging (Flutter) a son propre récepteur.
-console.log(sh(['am broadcast -p', pkg, '-a com.google.android.c2dm.intent.RECEIVE', ...extras.map(q)].join(' ')));
+// Une app arrêtée de force ne reçoit une diffusion qu'avec FLAG_INCLUDE_STOPPED_PACKAGES (0x20). FCM ne le fait pas :
+// ce cas ne sert qu'à isoler ce qui tient à la tâche restée dans les récents.
+const target = stopped ? `-p ${pkg} -f 0x20` : `-p ${pkg}`;
+console.log(sh(['am broadcast', target, '-a com.google.android.c2dm.intent.RECEIVE', ...extras.map(q)].join(' ')));
 let after = '';
 for (let i = 0; i < 20 && !after; i++) {
   await sleep(250);
@@ -88,7 +95,7 @@ if (kind === 'notification' && mine.length) {
     console.log(`toucher en ${x},${y}`);
     sh(`input tap ${x} ${y}`);
     var tapAt = Date.now();
-    for (let i = 0; i < 80 && opened === null; i++) {
+    for (let i = 0; i < 160 && opened === null; i++) {
       await sleep(250);
       const marks = await (await fetch(`http://127.0.0.1:${port}/api/marks`)).json();
       const hit = marks.find((k) => k.ev === 'push-open');
@@ -98,6 +105,6 @@ if (kind === 'notification' && mine.length) {
       }
     }
   }
-  console.log(`notification touchée : ${opened ? 'app ouverte, contenu ' + opened + ' en ' + openMs + ' ms après le toucher' : 'pas de repère push-open en 20 s'}`);
+  console.log(`notification touchée : ${opened ? 'app ouverte, contenu ' + opened + ' en ' + openMs + ' ms après le toucher' : 'pas de repère push-open en 40 s'}`);
 }
-console.log(JSON.stringify({ pkg, kind, closedBefore: !before, relaunched: Boolean(after), notifications: mine.length, opened, openMs }));
+console.log(JSON.stringify({ pkg, kind, closedBefore: !before, relaunched: Boolean(after), from: stopped ? 'stopped' : 'session', notifications: mine.length, opened, openMs }));

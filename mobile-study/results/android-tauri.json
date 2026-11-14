@@ -1,0 +1,105 @@
+{
+  "name": "tauri",
+  "pkg": "dev.escouade.study.tauri",
+  "date": "2026-11-14T12:59:22.979Z",
+  "device": "sdk_gphone64_x86_64 · Android 15",
+  "weight": {
+    "apkMo": 15.55,
+    "arm64Mo": 8.85,
+    "abis": {
+      "arm64-v8a": 6.28,
+      "x86_64": 6.7
+    },
+    "dexMo": 1.33,
+    "assetsMo": 0,
+    "arm64Libs": [
+      {
+        "lib": "libescouade_mobile_tauri_lib.so",
+        "mo": 6.24
+      },
+      {
+        "lib": "libimage_processing_util_jni.so",
+        "mo": 0.03
+      },
+      {
+        "lib": "libdatastore_shared_counter.so",
+        "mo": 0.01
+      },
+      {
+        "lib": "libsurface_util_jni.so",
+        "mo": 0
+      }
+    ]
+  },
+  "coldStart": {
+    "runs": 8,
+    "adbRoundTripMs": 45,
+    "firstFrameMs": {
+      "median": 344,
+      "min": 294,
+      "max": 402
+    },
+    "readyMs": {
+      "median": 1682,
+      "min": 1123,
+      "max": 1869
+    }
+  },
+  "conversationOpenMs": 926,
+  "memory": {
+    "appMo": 92,
+    "webviewRendererMo": 136.7,
+    "totalMo": 228.7
+  },
+  "fluidity": {
+    "drag": {
+      "gestures": 6,
+      "frames": 603,
+      "fps": 59.6,
+      "jankPct": 0.7,
+      "p95FrameMs": 18.2,
+      "worstMs": 36
+    },
+    "fling": {
+      "gestures": 6,
+      "frames": 724,
+      "fps": 59.5,
+      "jankPct": 0.6,
+      "p95FrameMs": 18.1,
+      "worstMs": 68
+    }
+  },
+  "bridgeUsPerCall": 494.4,
+  "push": {
+    "notification": {
+      "pkg": "dev.escouade.study.tauri",
+      "kind": "notification",
+      "closedBefore": true,
+      "relaunched": true,
+      "from": "session",
+      "notifications": 1,
+      "opened": null,
+      "openMs": null
+    },
+    "notificationFromStopped": {
+      "pkg": "dev.escouade.study.tauri",
+      "kind": "notification",
+      "closedBefore": true,
+      "relaunched": true,
+      "from": "stopped",
+      "notifications": 1,
+      "opened": "decrypted",
+      "openMs": 1227
+    },
+    "data": {
+      "pkg": "dev.escouade.study.tauri",
+      "kind": "data",
+      "closedBefore": true,
+      "relaunched": true,
+      "from": "session",
+      "notifications": 0,
+      "opened": null,
+      "openMs": null
+    }
+  }
+}
