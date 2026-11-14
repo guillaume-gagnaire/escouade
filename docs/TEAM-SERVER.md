@@ -343,7 +343,7 @@ MLS (Messaging Layer Security) est le standard de l'IETF pour les groupes chiffr
 - **A. Le schéma proposé**, fait pour pouvoir migrer : les entrées du journal suivent la logique des propositions et des commits de MLS. Coût : compris dans le socle.
 - **B. MLS dès le départ.** Coût : environ 10 j de plus, une API qui bouge encore, et la couche de l'historique de toute façon.
 
-**Recommandation : A.** Un Kanban et une spec sont un état qui dure, pas un fil de messages. Le gain de MLS (des groupes de dizaines de milliers d'appareils) ne sert pas une équipe. Dans les deux cas, **un audit externe de la cryptographie** se fait avant de dire le serveur stable (§16, TS-20).
+**Décidé le 2026-11-14 : B, MLS dès le départ**, contre la recommandation ci-dessous, gardée pour mémoire. Le journal signé des membres (§3.7) devient le groupe MLS et ses commits ; l'historique (les clés des époques passées pour un nouvel appareil) reste une couche à part. Recommandation d'origine : A. Un Kanban et une spec sont un état qui dure, pas un fil de messages. Le gain de MLS (des groupes de dizaines de milliers d'appareils) ne sert pas une équipe. Dans les deux cas, **un audit externe de la cryptographie** se fait avant de dire le serveur stable (§16, TS-20).
 
 ### 3.10 L'option sans bout en bout
 
@@ -790,7 +790,11 @@ Seulement des pistes, à étudier plus tard.
 - Le logiciel serveur s'héberge soi-même, par l'équipe.
 - L'app mobile se fait en Capacitor. Plusieurs espaces dans un même Escouade, les règles d'une entreprise ne valant que pour son espace, sauf sur un poste qu'elle gère (`docs/TODO-2.3.md`).
 
-### 15.2 Ce qui reste à décider
+### 15.2 Les choix, tranchés par l'utilisateur le 2026-11-14
+
+**Toutes les recommandations sont retenues, sauf C9 : MLS dès le départ (option B)**, ce qui ajoute environ 10 j au socle chiffré (TS-2, TS-3). Pour C17, le cœur du serveur entre dans la 2.3, et les stratégies du poste (TS-11, TS-12) sont lancées tôt.
+
+Le tableau garde les options, pour mémoire :
 
 | N° | Question | Options | Recommandation |
 | --- | --- | --- | --- |
@@ -802,7 +806,7 @@ Seulement des pistes, à étudier plus tard.
 | C6 | Ce que porte le lien d'invitation | A un secret d'authentification · B les clés | A |
 | C7 | La récupération de l'équipe | A clé de secours · B A et séquestre en option · C rien | B |
 | C8 | Rechiffrer l'historique à la rotation | A non · B en option | A |
-| C9 | MLS ou le schéma proposé | A le schéma, prêt à migrer · B MLS | A |
+| C9 | MLS ou le schéma proposé | A le schéma, prêt à migrer · B MLS | A (**décidé : B, MLS**) |
 | C10 | Le bout en bout | A seul mode · B au choix · C sans | A |
 | C11 | Le pilote auto et les tickets de l'équipe | A ceux qu'on lui confie · B tout ticket libre | A |
 | C12 | La signature des réglages | A un administrateur · B quorum pour le sensible · C B et délai | B |
