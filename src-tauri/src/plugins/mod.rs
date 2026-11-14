@@ -21,3 +21,8 @@ pub mod shared;
 pub mod sort;
 // The terminal views through the modules of their harnesses (ESC-352).
 pub mod view;
+// The attack tests of the security audit of the 2.2.0 (2026-11, ESC-418): kept with its report, all of them ignored
+// (`--run-ignored ignored-only -E 'test(audit_2_2_0)'`).
+#[cfg(test)]
+#[path = "../../../docs/security/audit-2026-11/poc/whitebox/audit_2_2_0.rs"]
+mod audit_2_2_0;

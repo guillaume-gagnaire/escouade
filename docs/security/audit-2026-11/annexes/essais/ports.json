@@ -1,0 +1,26 @@
+{
+  "mcpPort": 4102,
+  "processes": [
+    "escouade.exe",
+    "msedgewebview2.exe",
+    "msedgewebview2.exe",
+    "msedgewebview2.exe",
+    "msedgewebview2.exe",
+    "msedgewebview2.exe",
+    "msedgewebview2.exe"
+  ],
+  "listeners": [
+    {
+      "protocol": "tcp",
+      "address": "127.0.0.1",
+      "port": 4102,
+      "process": "escouade.exe"
+    },
+    {
+      "protocol": "tcp",
+      "address": "127.0.0.1",
+      "port": 4100,
+      "process": "msedgewebview2.exe"
+    }
+  ]
+}

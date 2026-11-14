@@ -1,0 +1,67 @@
+
+file: Escouade_2.2.0_amd64.AppImage (sha256 84a6bdb7018a947d0ee3a07495851836f4775bd88574851c0111df3126eb2b6b)
+workflow: .github/workflows/release.yml@refs/tags/v2.2.0
+source: refs/tags/v2.2.0, commit ab351a0047b8e356a7b0cdaa2b8488e9488b3baf
+trigger: push ; run: actions/runs/43583704479/attempts/1
+signed through: https://token.actions.githubusercontent.com ; certificate of CN=sigstore-intermediate,O=sigstore.dev
+logged: Tlog 2026-11-14T10:49:54.000Z
+ok   the attestation verifies (signature, transparency log)
+ok   it names this file, by this SHA-256
+ok   it is a SLSA build provenance
+ok   the builder is a workflow of the repository
+ok   built on a runner of GitHub
+ok   built from the commit the tag names
+
+file: Escouade_2.2.0_amd64.deb (sha256 317c0c76eeea382c19064d45e31c5deeb9441723a192325448eaec13b3069706)
+workflow: .github/workflows/release.yml@refs/tags/v2.2.0
+source: refs/tags/v2.2.0, commit ab351a0047b8e356a7b0cdaa2b8488e9488b3baf
+trigger: push ; run: actions/runs/43583704479/attempts/1
+signed through: https://token.actions.githubusercontent.com ; certificate of CN=sigstore-intermediate,O=sigstore.dev
+logged: Tlog 2026-11-14T10:49:54.000Z
+ok   the attestation verifies (signature, transparency log)
+ok   it names this file, by this SHA-256
+ok   it is a SLSA build provenance
+ok   the builder is a workflow of the repository
+ok   built on a runner of GitHub
+ok   built from the commit the tag names
+
+file: Escouade_2.2.0_universal.dmg (sha256 71e7de4d0d55a47b7822669457561261e0bafc3b6cae90154e929a9e4dc59f17)
+workflow: .github/workflows/release.yml@refs/tags/v2.2.0
+source: refs/tags/v2.2.0, commit ab351a0047b8e356a7b0cdaa2b8488e9488b3baf
+trigger: push ; run: actions/runs/43583704479/attempts/1
+signed through: https://token.actions.githubusercontent.com ; certificate of CN=sigstore-intermediate,O=sigstore.dev
+logged: Tlog 2026-11-14T10:49:54.000Z
+ok   the attestation verifies (signature, transparency log)
+ok   it names this file, by this SHA-256
+ok   it is a SLSA build provenance
+ok   the builder is a workflow of the repository
+ok   built on a runner of GitHub
+ok   built from the commit the tag names
+
+file: Escouade_2.2.0_x64-setup.exe (sha256 4098e3c5bf28002c15ca4d9e7ecb0541a7df2ef68cabbed336d1add35c223ba4)
+workflow: .github/workflows/release.yml@refs/tags/v2.2.0
+source: refs/tags/v2.2.0, commit ab351a0047b8e356a7b0cdaa2b8488e9488b3baf
+trigger: push ; run: actions/runs/43583704479/attempts/1
+signed through: https://token.actions.githubusercontent.com ; certificate of CN=sigstore-intermediate,O=sigstore.dev
+logged: Tlog 2026-11-14T10:49:54.000Z
+ok   the attestation verifies (signature, transparency log)
+ok   it names this file, by this SHA-256
+ok   it is a SLSA build provenance
+ok   the builder is a workflow of the repository
+ok   built on a runner of GitHub
+ok   built from the commit the tag names
+
+file: Escouade_universal.app.tar.gz (sha256 8775066d4dc96f13df7721725cf24a279cf873d0b3d4293cf86dc03ba0181e98)
+workflow: .github/workflows/release.yml@refs/tags/v2.2.0
+source: refs/tags/v2.2.0, commit ab351a0047b8e356a7b0cdaa2b8488e9488b3baf
+trigger: push ; run: actions/runs/43583704479/attempts/1
+signed through: https://token.actions.githubusercontent.com ; certificate of CN=sigstore-intermediate,O=sigstore.dev
+logged: Tlog 2026-11-14T10:49:54.000Z
+ok   the attestation verifies (signature, transparency log)
+ok   it names this file, by this SHA-256
+ok   it is a SLSA build provenance
+ok   the builder is a workflow of the repository
+ok   built on a runner of GitHub
+ok   built from the commit the tag names
+
+5 files: every attestation verified

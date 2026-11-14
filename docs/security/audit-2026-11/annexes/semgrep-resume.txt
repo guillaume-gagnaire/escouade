@@ -1,0 +1,45 @@
+semgrep 1.185.0, règles publiques p/rust, p/typescript, p/javascript, p/security-audit, p/github-actions, p/secrets
+Fichiers lus : 1633 ; résultats : 162 ; erreurs de lecture : 14
+
+  73  INFO     rust.lang.security.temp-dir.temp-dir
+        crates/escouade-acp/src/files.rs:177
+        crates/escouade-acp/src/git.rs:415
+        crates/escouade-acp/src/git.rs:563
+        crates/escouade-acp/src/git.rs:837
+        crates/escouade-base/src/testing.rs:29
+        crates/escouade-engines/src/sidechain.rs:433
+        … et 67 autres
+  68  INFO     rust.lang.security.unsafe-usage.unsafe-usage
+        crates/escouade-model/src/agentgroups.rs:222
+        crates/escouade-model/src/agentgroups.rs:229
+        crates/escouade-model/src/job.rs:63
+        crates/escouade-model/src/job.rs:122
+        crates/escouade-model/src/job.rs:144
+        crates/escouade-model/src/job.rs:151
+        … et 62 autres
+   9  INFO     rust.lang.security.current-exe.current-exe
+        crates/escouade-model/src/proc.rs:331
+        crates/escouade-plugin-cli/src/cli.rs:370
+        crates/escouade-plugins/src/lib.rs:742
+        crates/escouade-plugins/src/lib.rs:760
+        crates/escouade-voice-local/src/speech/piper.rs:187
+        src-tauri/src/engine/terminal.rs:180
+        … et 3 autres
+   4  INFO     rust.lang.security.args.args
+        crates/escouade-plugin-cli/src/main.rs:5
+        src-tauri/src/bin/escouade-hook.rs:33
+        src-tauri/src/bin/escouade-plugin.rs:7
+        src-tauri/src/deeplink.rs:151
+   4  WARNING  generic.unicode.security.bidi.contains-bidirectional-characters
+        store/server/utils/oauth.ts:90
+        store/server/utils/oauth.ts:90
+        store/server/utils/oauth.ts:90
+        store/server/utils/oauth.ts:90
+   1  WARNING  yaml.github-actions.security.audit.unsafe-add-mask-workflow-command.unsafe-add-mask-workflow-command
+        .github/workflows/release.yml:264
+   1  INFO     rust.lang.security.args-os.args-os
+        crates/escouade-plugin-cli/src/cli.rs:371
+   1  WARNING  rust.lang.security.reqwest-accept-invalid.reqwest-accept-invalid
+        src-tauri/src/testlaunch.rs:147
+   1  ERROR    javascript.node-crypto.security.gcm-no-tag-length.gcm-no-tag-length
+        store/server/utils/tokens.ts:35

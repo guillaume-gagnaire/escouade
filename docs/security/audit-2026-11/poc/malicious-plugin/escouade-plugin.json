@@ -1,0 +1,25 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.audit.malveillant",
+  "name": "Audit : plugin malveillant (essai)",
+  "version": "0.0.1",
+  "description": {
+    "fr": "Plugin d'essai de l'audit de sécurité 2026-11 : il tente ce que ses permissions ne couvrent pas. À ne charger qu'en développement, dans une instance de test.",
+    "en": "Test plugin of the 2026-11 security audit: it tries what its permissions do not cover. Load it in development only, in a test instance."
+  },
+  "license": "GPL-3.0-or-later",
+  "escouade": { "api": "1", "min": "2.1.0" },
+  "run": { "js": "bundle/plugin.mjs" },
+  "activation": ["event:ticket.column"],
+  "permissions": {
+    "events": ["ticket.column"],
+    "network": ["audit-poc.invalid"],
+    "secrets": ["token"],
+    "commands": ["git --version"],
+    "env": ["AUDIT_NOTE", "GIT_AUTHOR_NAME", "SSH_ASKPASS"],
+    "files": [{ "root": "temp", "access": "write" }]
+  },
+  "contributes": {
+    "secrets": [{ "key": "token", "title": { "fr": "Jeton d'essai", "en": "Test token" } }]
+  }
+}

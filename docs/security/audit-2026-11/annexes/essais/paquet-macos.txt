@@ -1,0 +1,15 @@
+archive: Escouade_universal.app.tar.gz (159 entries, bundle Escouade.app, version 2.2.0)
+seal of the bundle (_CodeSignature/CodeResources): present
+stapled notarization ticket (Contents/CodeResources): present, 1779 bytes
+main program: 2 signed architecture(s)
+  hardened runtime: asked by each
+  ad hoc signature (no identity): no
+  a team identifier: present
+  a certificate « Developer ID Application »: present
+  its authority « Developer ID Certification Authority »: present
+  a signed timestamp (« Apple Timestamp Certification Authority »): present
+
+disk image: Escouade_2.2.0_universal.dmg (99322525 bytes, a disk image)
+  a certificate « Developer ID Application »: present
+
+Present is not valid: check on a Mac with codesign --verify --deep --strict, spctl -a -vv and xcrun stapler validate.

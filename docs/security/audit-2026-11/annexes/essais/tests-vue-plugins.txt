@@ -1,0 +1,39 @@
+ ✓ src/components/plugins/plugins.test.ts > the tile of a plugin > shows its logo once plugin_icon gives it, its letters for one without
+ ✓ src/components/plugins/plugins.test.ts > the tile of a plugin > shows the logo of a plugin read before it is installed, in the install window
+ ✓ src/components/plugins/plugins.test.ts > the install window > says where it comes from, its fingerprint, what it adds and what it may do, the strongest first
+ ✓ src/components/plugins/plugins.test.ts > the install window > says a JS/TS plugin runs inside Escouade, isolated, and that its hosts are enforced (ESC-320)
+ ✓ src/components/plugins/plugins.test.ts > the install window > says the folders and the commands of a plugin in WASM, writing in orange and commands in red (ESC-333)
+ ✓ src/components/plugins/plugins.test.ts > the install window > says a command of a process is only declared (ESC-333)
+ ✓ src/components/plugins/plugins.test.ts > the install window > says Escouade holds the webhooks of a declarative plugin to its hosts (ESC-184)
+ ✓ src/components/plugins/plugins.test.ts > the install window > names a webhook by what sets it off, and says where a store plugin comes from once (ESC-184)
+ ✓ src/components/plugins/plugins.test.ts > the install window > installs nothing before « Installer », then the plugin; cancelled, what was set aside is discarded
+ ✓ src/components/plugins/plugins.test.ts > the install window > an update says what it asks for more, marked, and asks again
+ ✓ src/components/plugins/plugins.test.ts > the install window > a refusal stays in the window, and nothing is installed
+ ✓ src/components/plugins/plugins.test.ts > the projects of a plugin > is on in a project unless private, switched project by project
+ ✓ src/components/plugins/plugins.test.ts > the projects of a plugin > says it reaches no project when it is off for the whole app
+ ✓ src/components/plugins/plugins.test.ts > the permissions of a plugin > takes one back, and gives it again; the program itself has no switch
+ ✓ src/components/plugins/plugins.test.ts > the view > lists the installed plugins with their projects in pills, a lock for a private one, and an update offered
+ ✓ src/components/plugins/plugins.test.ts > the view > puts a dev.escouade.* of the store with the plugins added, not with those the app gives (ESC-314)
+ ✓ src/components/plugins/plugins.test.ts > the view > proposes what the seed holds and is not installed, and installs it in one click only (ESC-338, ESC-373)
+ ✓ src/components/plugins/plugins.test.ts > the view > takes a proposed plugin from the store when the store has a newer version (ESC-338)
+ ✓ src/components/plugins/plugins.test.ts > the view > installs an update the seed holds from the seed, with no network (ESC-338)
+ ✓ src/components/plugins/plugins.test.ts > the view > a plugin is uninstalled after its confirmation, its data kept if asked
+ ✓ src/components/plugins/plugins.test.ts > the view > is in English too
+ ✓ src/components/plugins/plugins.test.ts > the commands a plugin runs on facts (PLG-5) > are shown with its permissions and run nothing before « Accepter », which can be taken back
+ ✓ src/components/plugins/plugins.test.ts > the commands a plugin runs on facts (PLG-5) > are not shown for a plugin that runs none
+ ✓ src/components/plugins/plugins.test.ts > « Rechercher des mises à jour » (ESC-405) > shows that it looks while the store is read, then when the store was read and the version found
+ ✓ src/components/plugins/plugins.test.ts > « Rechercher des mises à jour » (ESC-405) > says a store that does not answer, and of when the offers looked at are
+ ✓ src/components/plugins/plugins.test.ts > « Rechercher des mises à jour » (ESC-405) > says it on the tab Versions of a plugin too
+ ✓ src/components/plugins/plugins.test.ts > « Tout mettre à jour », and an update that leaves the page where it was (ESC-436) > is at the head of the updates page, reads them all, then asks once for those that ask for nothing more
+ ✓ src/components/plugins/plugins.test.ts > « Tout mettre à jour », and an update that leaves the page where it was (ESC-436) > refusing one cancels none of the others, and installs nothing
+ ✓ src/components/plugins/plugins.test.ts > « Tout mettre à jour », and an update that leaves the page where it was (ESC-436) > an error on one is said on its line and stops none of the others
+ ✓ src/components/plugins/plugins.test.ts > « Tout mettre à jour », and an update that leaves the page where it was (ESC-436) > one update leaves the page where it was; its line shows it under way, its button not clickable twice
+ ✓ src/components/plugins/plugins.test.ts > « Tout mettre à jour », and an update that leaves the page where it was (ESC-436) > a version that will be loaded switched off is said in its own window, never in the one for all
+ ✓ src/components/plugins/plugins.test.ts > « Tout mettre à jour », and an update that leaves the page where it was (ESC-436) > a new install alone opens the plugin’s page
+ ✓ src/components/plugins/plugins.test.ts > « Tout mettre à jour », and an update that leaves the page where it was (ESC-436) > an update that adds a contribution, or that cannot be compared, asks in its own window
+ ✓ src/components/plugins/plugins.test.ts > « Tout mettre à jour », and an update that leaves the page where it was (ESC-436) > sorts by the seal too (SEC-29): only a verified version that adds nothing goes in the window for all
+ ✓ src/components/plugins/plugins.test.ts > « Tout mettre à jour », and an update that leaves the page where it was (ESC-436) > a version not verified of a plugin that was gets its own window, its warning said (B-16)
+ ✓ src/components/plugins/plugins.test.ts > « Tout mettre à jour », and an update that leaves the page where it was (ESC-436) > with no verified version that adds nothing, no window for all: each its own
+ ✓ src/components/plugins/plugins.test.ts > « Tout mettre à jour », and an update that leaves the page where it was (ESC-436) > is in English too
+ Test Files  1 passed (1)
+      Tests  37 passed (37)

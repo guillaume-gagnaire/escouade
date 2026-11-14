@@ -1,0 +1,61 @@
+{
+  "request": {
+    "type": "permission",
+    "tool": "Bash",
+    "arg": "rm -rf build"
+  },
+  "tries": {
+    "A lists the projects (reference)": {
+      "refused": false,
+      "said": "[{\"id\":\"0f8a456d747b\",\"name\":\"demo-api\",\"path\":\"<profil>\\\\AppData\\\\Local\\\\Temp\\\\escouade-js-tests\\\\e2e-49816\\\\ccm-e2e-ivs6SR\\\\demo-api\",\"branch\":\"main\",\"agents\":2,\"tickets\":{\"todo\":0,\"doing\":0,\"review\":0,\"inReview\":0,\"done\":0},\"remoteControl\":false,\"re"
+    },
+    "B answers its own permission": {
+      "refused": true,
+      "said": "Un agent ne répond pas à ses propres demandes."
+    },
+    "A answers \"always\"": {
+      "refused": true,
+      "said": "« Toujours autoriser » n’est pas offert par le serveur : une règle de permission qui dure reste la décision de l’utilisateur, à prendre dans la fenêtre d’Escouade. Réponds allow ou deny, pour cette demande seulement."
+    },
+    "A attaches a file outside its folder to a ticket": {
+      "refused": true,
+      "said": "Fichier 1 de la liste : Un agent d’Escouade ne joint que des fichiers de son dossier de travail : ce fichier n’en fait pas partie, ou il n’existe pas."
+    },
+    "A sets the Kanban to bypassPermissions": {
+      "refused": true,
+      "said": "Lancer des agents sans aucune demande de permission est une décision de l’utilisateur : le mode bypassPermissions se règle dans la fenêtre (Réglages › Kanban)."
+    },
+    "A stops itself": {
+      "refused": true,
+      "said": "Un agent ne peut pas arrêter son propre tour."
+    },
+    "A writes to itself": {
+      "refused": true,
+      "said": "Un agent ne s’envoie pas de message à lui-même."
+    },
+    "A allows the permission of B": {
+      "refused": true,
+      "said": "Un agent ne répond pas aux permissions ni aux questions d’un autre agent : la demande attend la réponse de l’utilisateur. Seul l’utilisateur peut le permettre, dans Réglages › Agents › Piloter Escouade (« Les agents peuvent répondre aux questions et aux permis"
+    },
+    "A refuses the permission of B in the user’s place": {
+      "refused": true,
+      "said": "Un agent ne répond pas aux permissions ni aux questions d’un autre agent : la demande attend la réponse de l’utilisateur. Seul l’utilisateur peut le permettre, dans Réglages › Agents › Piloter Escouade (« Les agents peuvent répondre aux questions et aux permis"
+    },
+    "A answers it as a question": {
+      "refused": true,
+      "said": "Un agent ne répond pas aux permissions ni aux questions d’un autre agent : la demande attend la réponse de l’utilisateur. Seul l’utilisateur peut le permettre, dans Réglages › Agents › Piloter Escouade (« Les agents peuvent répondre aux questions et aux permis"
+    },
+    "setting on \"chef\", no chef chosen: A allows": {
+      "refused": true,
+      "said": "Seul le chef d’escouade que l’utilisateur a choisi pour ce projet répond aux permissions et aux questions des autres agents, et ce n’est pas toi : la demande attend la réponse de l’utilisateur. Le chef se choisit dans Réglages › Projets › Équipe (« Chef d’esco"
+    },
+    "Claude outside Escouade allows it (the user’s own)": {
+      "refused": false,
+      "said": "{\"decision\":\"allow\",\"id\":\"a25a4072163c\",\"name\":\"demande-une-fake\",\"request\":\"req_perm\"}"
+    },
+    "A creates an agent": {
+      "refused": false,
+      "said": "{\"folder\":{\"id\":\"a567c663-a314-46a9-ab05-450043d79470\",\"name\":\"bonjour-fake\"},\"id\":\"050bdf77fad5\",\"name\":\"agent-3\"}"
+    }
+  }
+}

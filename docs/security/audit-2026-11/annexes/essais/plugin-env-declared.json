@@ -1,0 +1,17 @@
+{
+  "dev.audit.malveillant, declares GIT_CONFIG_*": {
+    "manifestRead": false,
+    "installed": false,
+    "said": "{\"message\":\"Le manifeste (escouade-plugin.json) n'est pas valide ; rien n'a été chargé :\\n- `permissions.env[1]` n'est pas une variable qu'un plugin peut poser : un nom (lettres, chiffres, `_`), hors des variables d'Escouade et des familles qui changeraient ce que lance le programme (`LD_*`, `GIT_*`, `PYTHON*`, `*_PROXY`, `HOME`, `PATH`…).\\n- `permissions.env[2]` n'est pas une variable qu'un plugin peut poser : un nom (lettres, chiffres, `_`), hors des variables d'Escouade et des familles qui ch"
+  },
+  "dev.escouade.audit-poc, declares GIT_CONFIG_*": {
+    "manifestRead": false,
+    "installed": false,
+    "said": "{\"message\":\"Le manifeste (escouade-plugin.json) n'est pas valide ; rien n'a été chargé :\\n- `id` est réservé aux plugins d'Escouade (`dev.escouade.*`).\\n- `permissions.env[1]` n'est pas une variable qu'un plugin peut poser : un nom (lettres, chiffres, `_`), hors des variables d'Escouade et des familles qui changeraient ce que lance le programme (`LD_*`, `GIT_*`, `PYTHON*`, `*_PROXY`, `HOME`, `PATH`…).\\n- `permissions.env[2]` n'est pas une variable qu'un plugin peut poser : un nom (lettres, chiff"
+  },
+  "dev.escouade.audit-poc, declares no refused variable": {
+    "manifestRead": false,
+    "installed": false,
+    "said": "{\"message\":\"Le manifeste (escouade-plugin.json) n'est pas valide ; rien n'a été chargé :\\n- `id` est réservé aux plugins d'Escouade (`dev.escouade.*`).\",\"problems\":[{\"code\":\"reserved\",\"message\":\"`id` est réservé aux plugins d'Escouade (`dev.escouade.*`).\",\"path\":\"id\"}]}"
+  }
+}

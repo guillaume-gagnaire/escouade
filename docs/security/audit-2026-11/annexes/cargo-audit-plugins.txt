@@ -1,0 +1,29 @@
+    Fetching advisory database from `https://github.com/RustSec/advisory-db.git`
+      Loaded 1509 security advisories (from ~\.cargo\advisory-db)
+    Updating crates.io index
+    Scanning Cargo.lock for vulnerabilities (183 crate dependencies)
+Crate:     quinn-proto
+Version:   0.11.18
+Title:     MAX_STREAM_DATA frame can open streams beyond the stream limit
+Date:      2026-09-30
+ID:        RUSTSEC-2026-0523
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0523
+Solution:  Upgrade to >=0.11.19 (patched)
+
+Crate:     quinn-proto
+Version:   0.11.18
+Title:     Long Retry token can panic or exhaust memory in a QUIC client
+Date:      2026-09-30
+ID:        RUSTSEC-2026-0524
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0524
+Solution:  Upgrade to >=0.11.19 (patched)
+
+Crate:     quinn-udp
+Version:   0.5.15
+Title:     Receive loop can spin after a truncated datagram
+Date:      2026-09-30
+ID:        RUSTSEC-2026-0538
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0538
+Solution:  Upgrade to >=0.5.16, <0.6.0 OR >=0.6.3 (patched)
+
+error: 3 vulnerabilities found!

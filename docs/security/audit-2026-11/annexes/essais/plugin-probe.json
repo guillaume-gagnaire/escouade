@@ -1,0 +1,300 @@
+{
+  "tries": [
+    {
+      "name": "mode",
+      "outcome": "probe"
+    },
+    {
+      "name": "net.undeclared-host",
+      "outcome": "refused (-32003) example.com is not in permissions.network of dev.audit.malveillant"
+    },
+    {
+      "name": "net.loopback-ip",
+      "outcome": "refused (-32003) only https: http://127.0.0.1:4102"
+    },
+    {
+      "name": "net.loopback-https",
+      "outcome": "refused (-32003) 127.0.0.1 is not in permissions.network of dev.audit.malveillant"
+    },
+    {
+      "name": "net.localhost",
+      "outcome": "refused (-32003) localhost is not in permissions.network of dev.audit.malveillant"
+    },
+    {
+      "name": "net.private-ip",
+      "outcome": "refused (-32003) 192.168.1.1 is not in permissions.network of dev.audit.malveillant"
+    },
+    {
+      "name": "net.metadata-ip",
+      "outcome": "refused (-32003) only https: http://169.254.169.254"
+    },
+    {
+      "name": "net.decimal-ip",
+      "outcome": "refused (-32003) 127.0.0.1 is not in permissions.network of dev.audit.malveillant"
+    },
+    {
+      "name": "net.ipv6-loopback",
+      "outcome": "refused (-32003) [::1] is not in permissions.network of dev.audit.malveillant"
+    },
+    {
+      "name": "net.userinfo-trick",
+      "outcome": "refused (-32003) 127.0.0.1 is not in permissions.network of dev.audit.malveillant"
+    },
+    {
+      "name": "net.suffix-trick",
+      "outcome": "refused (-32003) audit-poc.invalid.example.com is not in permissions.network of dev.audit.malveillant"
+    },
+    {
+      "name": "net.file-scheme",
+      "outcome": "refused (-32003) only https: null"
+    },
+    {
+      "name": "net.http-declared",
+      "outcome": "refused (-32003) only https: http://audit-poc.invalid"
+    },
+    {
+      "name": "net.socket-loopback",
+      "outcome": "refused (-32601) unknown method net/socket"
+    },
+    {
+      "name": "net.stream-loopback",
+      "outcome": "refused (-32003) only https: http://127.0.0.1:4102"
+    },
+    {
+      "name": "net.global-fetch",
+      "outcome": "refused example.com is not in permissions.network of dev.audit.malveillant"
+    },
+    {
+      "name": "fs.temp-write (allowed)",
+      "outcome": "OK {\"bytes\":1,\"path\":\"<profil>\\\\AppData\\\\Local\\\\Temp\\\\escouade-js-tests\\\\e2e-49816\\\\ccm-e2e-biy2TD\\\\data\\\\plugin-temp\\\\dev.audit.malveillant\\\\note.txt\"}"
+    },
+    {
+      "name": "fs.dotdot-read",
+      "outcome": "refused (-32003) \"../../state.json\" is no path of a root"
+    },
+    {
+      "name": "fs.dotdot-write",
+      "outcome": "refused (-32003) \"../audit-marker.txt\" is no path of a root"
+    },
+    {
+      "name": "fs.absolute-read",
+      "outcome": "refused (-32003) \"C:/Windows/win.ini\" leads out of the plugin's folders"
+    },
+    {
+      "name": "fs.absolute-in-root",
+      "outcome": "refused (-32003) \"C:/Windows/win.ini\" is not relative to its root"
+    },
+    {
+      "name": "fs.unc-read",
+      "outcome": "refused (-32003) \"\\\\\\\\localhost\\\\C$\\\\Windows\\\\win.ini\" leads out of the plugin's folders"
+    },
+    {
+      "name": "fs.home-read",
+      "outcome": "refused (-32003) \"~/.ssh/id_ed25519\" is no path of a root"
+    },
+    {
+      "name": "fs.undeclared-root-agent",
+      "outcome": "refused (-32003) no agent \"a\" was given to this plugin"
+    },
+    {
+      "name": "fs.undeclared-root-agentHome",
+      "outcome": "refused (-32003) no agent \"a\" was given to this plugin"
+    },
+    {
+      "name": "fs.plugin-root-write",
+      "outcome": "refused (-32003) plugin is not in permissions.files"
+    },
+    {
+      "name": "fs.own-manifest",
+      "outcome": "refused (-32003) \"escouade-plugin.json\": the manifest is not read by its plugin"
+    },
+    {
+      "name": "fs.files-read-dotdot",
+      "outcome": "refused (-32003) \"../../settings.json\" is not a file of the plugin's folder"
+    },
+    {
+      "name": "fs.stream",
+      "outcome": "refused (-32003) \"note.txt:hidden\" is no path of a root"
+    },
+    {
+      "name": "fs.node-readFileSync-outside",
+      "outcome": "refused ENOENT: no such file of the plugin, '/plugin/../../settings.json'"
+    },
+    {
+      "name": "fs.node-readFileSync-absolute",
+      "outcome": "refused ENOENT: no such file of the plugin, 'C:\\Windows\\win.ini'"
+    },
+    {
+      "name": "fs.raw-descriptor-3",
+      "outcome": "refused Unsupported file descriptor: 3. Only stdin(0) is supported"
+    },
+    {
+      "name": "fs.raw-descriptor-write-5",
+      "outcome": "refused Unsupported file descriptor: 5. Only stdout(1) and stderr(2) are supported"
+    },
+    {
+      "name": "proc.declared (allowed)",
+      "outcome": "OK {\"proc\":1}"
+    },
+    {
+      "name": "proc.other-args",
+      "outcome": "refused (-32003) git status is not in permissions.commands"
+    },
+    {
+      "name": "proc.more-args",
+      "outcome": "refused (-32003) git --version --build-options is not in permissions.commands"
+    },
+    {
+      "name": "proc.shell",
+      "outcome": "refused (-32003) cmd /C echo AUDIT-POC > audit-marker.txt is not in permissions.commands"
+    },
+    {
+      "name": "proc.powershell",
+      "outcome": "refused (-32003) powershell -c 1 is not in permissions.commands"
+    },
+    {
+      "name": "proc.path",
+      "outcome": "refused (-32003) C:\\Windows\\System32\\whoami.exe is not in permissions.commands"
+    },
+    {
+      "name": "proc.one-word",
+      "outcome": "refused (-32003) git --version & whoami is not in permissions.commands"
+    },
+    {
+      "name": "proc.dir-path",
+      "outcome": "refused (-32003) dir is agent or project, never a path: \"C:\\\\Windows\""
+    },
+    {
+      "name": "proc.env-path",
+      "outcome": "refused (-32003) the variable PATH is one Escouade refuses a plugin: it would change what the program runs"
+    },
+    {
+      "name": "proc.env-ld-preload",
+      "outcome": "refused (-32003) the variable LD_PRELOAD is one Escouade refuses a plugin: it would change what the program runs"
+    },
+    {
+      "name": "proc.env-escouade",
+      "outcome": "refused (-32003) the variable ESCOUADE_DATA_DIR is one Escouade refuses a plugin: it would change what the program runs"
+    },
+    {
+      "name": "proc.env-git-config",
+      "outcome": "refused (-32003) the variable GIT_CONFIG_COUNT is one Escouade refuses a plugin: it would change what the program runs"
+    },
+    {
+      "name": "proc.env-declared (allowed)",
+      "outcome": "OK {\"proc\":2}"
+    },
+    {
+      "name": "proc.env-git-author (allowed)",
+      "outcome": "OK {\"proc\":3}"
+    },
+    {
+      "name": "proc.env-undeclared",
+      "outcome": "refused (-32003) the variable AUDIT_OTHER is not in permissions.env"
+    },
+    {
+      "name": "proc.env-declared-other-case",
+      "outcome": "refused (-32003) the variable audit_note is not in permissions.env"
+    },
+    {
+      "name": "proc.env-git-config-lowercase",
+      "outcome": "refused (-32003) the variable git_config_count is one Escouade refuses a plugin: it would change what the program runs"
+    },
+    {
+      "name": "proc.env-git-ssh-command",
+      "outcome": "refused (-32003) the variable GIT_SSH_COMMAND is one Escouade refuses a plugin: it would change what the program runs"
+    },
+    {
+      "name": "proc.env-git-exec-path",
+      "outcome": "refused (-32003) the variable GIT_EXEC_PATH is one Escouade refuses a plugin: it would change what the program runs"
+    },
+    {
+      "name": "proc.env-home",
+      "outcome": "refused (-32003) the variable HOME is one Escouade refuses a plugin: it would change what the program runs"
+    },
+    {
+      "name": "proc.env-xdg-config",
+      "outcome": "refused (-32003) the variable XDG_CONFIG_HOME is one Escouade refuses a plugin: it would change what the program runs"
+    },
+    {
+      "name": "proc.env-https-proxy",
+      "outcome": "refused (-32003) the variable https_proxy is one Escouade refuses a plugin: it would change what the program runs"
+    },
+    {
+      "name": "proc.env-name-with-equal",
+      "outcome": "refused (-32003) the variable AUDIT_NOTE=1\u0000GIT_CONFIG_COUNT is one Escouade refuses a plugin: it would change what the program runs"
+    },
+    {
+      "name": "proc.env-ssh-askpass (declared, passes)",
+      "outcome": "OK {\"proc\":4}"
+    },
+    {
+      "name": "secret.own (allowed)",
+      "outcome": "OK \"••••\""
+    },
+    {
+      "name": "secret.undeclared",
+      "outcome": "refused (-32001) the secret \"password\" is not one of this plugin's (permissions.secrets)"
+    },
+    {
+      "name": "secret.other-plugin",
+      "outcome": "refused (-32001) the secret \"plugin:dev.escouade.github:token\" is not one of this plugin's (permissions.secrets)"
+    },
+    {
+      "name": "secret.account",
+      "outcome": "refused (-32001) the secret \"account:github.com\" is not one of this plugin's (permissions.secrets)"
+    },
+    {
+      "name": "secret.mcp-token",
+      "outcome": "refused (-32001) the secret \"mcp\" is not one of this plugin's (permissions.secrets)"
+    },
+    {
+      "name": "secret.traversal",
+      "outcome": "refused (-32001) the secret \"../mcp\" is not one of this plugin's (permissions.secrets)"
+    },
+    {
+      "name": "host.settings-write",
+      "outcome": "refused (-32601) unknown method settings/set"
+    },
+    {
+      "name": "host.agents",
+      "outcome": "refused (-32601) unknown method agents/list"
+    },
+    {
+      "name": "host.create-agent",
+      "outcome": "refused (-32601) unknown method agent/create"
+    },
+    {
+      "name": "host.answer-permission",
+      "outcome": "refused (-32601) unknown method permissions/answer"
+    },
+    {
+      "name": "host.decide-undeclared",
+      "outcome": "refused (-32601) unknown method permissions/decide"
+    },
+    {
+      "name": "host.exec",
+      "outcome": "refused (-32601) unknown method shell/exec"
+    },
+    {
+      "name": "host.event-undeclared",
+      "outcome": "refused (-32601) unknown method events/subscribe"
+    },
+    {
+      "name": "proc.eight-at-once",
+      "outcome": "8 started, 0 refused"
+    },
+    {
+      "name": "probe",
+      "outcome": "done"
+    }
+  ],
+  "allowed": [
+    "fs.temp-write (allowed)",
+    "proc.declared (allowed)",
+    "proc.env-declared (allowed)",
+    "proc.env-git-author (allowed)",
+    "proc.env-ssh-askpass (declared, passes)",
+    "secret.own (allowed)"
+  ]
+}

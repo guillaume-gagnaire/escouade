@@ -1,0 +1,34 @@
+{
+  "tried": {
+    "inline <script>": "blocked",
+    "inline event handler": "blocked",
+    "<img onerror>": "blocked",
+    "eval": "blocked",
+    "new Function": "blocked",
+    "setTimeout of a string": "blocked",
+    "fetch": "blocked",
+    "XMLHttpRequest": "blocked",
+    "WebSocket": "blocked",
+    "sendBeacon": "queued",
+    "inline <style> (SEC-05)": "APPLIED"
+  },
+  "csp": [
+    "script-src-elem blocked inline",
+    "script-src-elem blocked http://127.0.0.1:4104/remote.js",
+    "script-src-attr blocked inline",
+    "script-src blocked eval",
+    "connect-src blocked http://127.0.0.1:4104/fetch",
+    "connect-src blocked http://127.0.0.1:4104/xhr",
+    "connect-src blocked ws://127.0.0.1:4104/ws",
+    "connect-src blocked http://127.0.0.1:4104/beacon",
+    "style-src-elem blocked http://127.0.0.1:4104/style.css",
+    "img-src blocked http://127.0.0.1:4104/img.png",
+    "media-src blocked http://127.0.0.1:4104/video.mp4",
+    "media-src blocked http://127.0.0.1:4104/audio.mp3",
+    "img-src blocked http://127.0.0.1:4104/css-url.png",
+    "frame-src blocked http://127.0.0.1:4104",
+    "object-src blocked http://127.0.0.1:4104"
+  ],
+  "requestsToTheDecoy": [],
+  "scriptsThatRan": []
+}

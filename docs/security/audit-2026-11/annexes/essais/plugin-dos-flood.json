@@ -1,0 +1,46 @@
+{
+  "privateMemoryMb": {
+    "before": 19,
+    "peak": 312,
+    "after": 44
+  },
+  "phases": [
+    {
+      "atMs": 425,
+      "phase": "starting",
+      "restarts": 0,
+      "privateMemoryMb": 30
+    },
+    {
+      "atMs": 6244,
+      "phase": "restarting",
+      "restarts": 1,
+      "privateMemoryMb": 112
+    },
+    {
+      "atMs": 8256,
+      "phase": "restarting",
+      "restarts": 2,
+      "privateMemoryMb": 114
+    },
+    {
+      "atMs": 10124,
+      "phase": "restarting",
+      "restarts": 3,
+      "privateMemoryMb": 115
+    },
+    {
+      "atMs": 12174,
+      "phase": "stopped",
+      "restarts": 3,
+      "privateMemoryMb": 44
+    }
+  ],
+  "finalPhase": "stopped",
+  "journalSaid": [
+    "ended (no code) without being asked to: a turn ran past 2000 ms: Escouade stopped its instance",
+    "ended (no code) without being asked to: a turn ran past 2000 ms: Escouade stopped its instance",
+    "ended (no code) without being asked to: a turn ran past 2000 ms: Escouade stopped its instance",
+    "stopped after 4 crashes within 5 minutes"
+  ]
+}

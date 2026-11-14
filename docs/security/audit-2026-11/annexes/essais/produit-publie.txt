@@ -1,0 +1,25 @@
+Version 2.2.0, publiée le 14 novembre 2026 (10 h 49 UTC). Fichiers téléchargés depuis la page de la version.
+
+Fichier : Escouade_2.2.0_x64-setup.exe
+
+Signature Authenticode (Get-AuthenticodeSignature) :
+  état : Valid
+  type : Authenticode
+  horodatée : oui
+  émetteur du certificat : une autorité de Microsoft (signature de code en ligne)
+  clé du signataire : RSA 3072 bits
+
+Copie altérée d'un octet, contre la signature de mise à jour de l'original (verify-update-signature.mjs) :
+  ok   the key is a minisign Ed25519 key
+  ok   the signature names the key the app embeds
+  FAIL the signature of the file holds
+  ok   the signature of the trusted comment holds
+  code de sortie : 1
+
+
+Notarisation de l'application macOS, lue dans le journal du job « Build and upload (macOS) » du run de publication (43583704479) :
+  Notarizing Finished with status Accepted (Processing complete)
+  Stapling app...
+  spctl --assess --type execute : Escouade.app: accepted
+  source=Notarized Developer ID
+  (lu dans le journal ; non rejoué sur un Mac)

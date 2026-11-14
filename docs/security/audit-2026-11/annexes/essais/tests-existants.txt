@@ -1,0 +1,461 @@
+        PASS (  1/467) escouade attach::tests::an_interface_stays_while_its_process_is_on_the_same_server
+        PASS (  2/467) escouade accounts::tests::a_session_the_account_does_not_have_is_refused_with_where_it_looked
+        PASS (  3/467) escouade accounts::tests::an_unknown_account_is_none_never_principal
+        PASS (  4/467) escouade accounts::tests::a_session_id_that_is_a_path_is_refused_before_anything_is_read
+        PASS (  5/467) escouade accounts::tests::an_account_asked_for_is_taken_when_active_whatever_its_quota
+        PASS (  6/467) escouade accounts::tests::a_gemini_account_goes_by_its_google_sign_in_or_its_key_never_by_the_apps
+        PASS (  7/467) escouade agent::tests::a_turn_refused_in_claude_codes_own_interface_is_said_so_and_its_conversation_left_to_it
+        PASS (  8/467) escouade attachfiles::tests::a_long_name_is_cut_in_the_stem_and_keeps_its_extension
+        PASS (  9/467) escouade accounts::tests::a_cursor_account_goes_by_its_own_key_and_the_machines_by_its_sign_in
+        PASS ( 10/467) escouade accounts::tests::a_harness_without_a_quota_keeps_the_order_alone
+        PASS ( 11/467) escouade agent::tests::an_unknown_field_or_frame_of_a_newer_claude_code_leaves_the_turn_going
+        PASS ( 12/467) escouade attach::tests::an_interface_stops_once_the_server_of_its_process_changed
+        PASS ( 13/467) escouade agent::tests::a_refused_turn_goes_on_from_the_end_of_the_turn_before_or_anew_when_it_was_the_first
+        PASS ( 14/467) escouade attach::tests::an_interface_without_a_process_waits_for_one_a_few_seconds
+        PASS ( 15/467) escouade attachfiles::tests::a_name_ends_with_neither_a_dot_nor_a_space
+        PASS ( 16/467) escouade agent::tests::an_action_refused_without_a_word_is_told_to_claude_in_its_language
+        PASS ( 17/467) escouade agent::tests::the_names_of_the_attached_files_are_kept_with_the_message
+        PASS ( 18/467) escouade accounts::tests::the_antigravity_sign_in_is_its_keychains_entry_by_name_alone
+        PASS ( 19/467) escouade agent::cache::tests::a_turn_that_cached_nothing_does_not_warm_and_an_unknown_life_is_none
+        PASS ( 20/467) escouade agent::vibe::tests::a_permission_refused_cuts_the_turn_and_always_holds_for_the_agent
+        PASS ( 21/467) escouade agent::codex::tests::a_turn_codex_refused_to_start_ends_in_error_with_its_reason
+        PASS ( 22/467) escouade attachfiles::tests::a_name_never_leads_out_of_its_folder
+        PASS ( 23/467) escouade agent::codex::tests::an_unknown_message_item_or_field_of_a_newer_codex_leaves_the_turn_going
+        PASS ( 24/467) escouade agent::tests::what_claude_is_told_of_a_refusal_through_the_server_names_who_refused
+        PASS ( 25/467) escouade attachfiles::tests::a_name_or_a_path_with_a_line_break_stays_on_its_line
+        PASS ( 26/467) escouade attachfiles::tests::a_name_the_user_knows_stays_as_it_is
+        PASS ( 27/467) escouade attachfiles::tests::a_safe_name_is_its_own_safe_name
+        PASS ( 28/467) escouade attachfiles::tests::only_the_reading_of_a_file_joined_by_its_path_is_granted
+        PASS ( 29/467) escouade agent::copilot::tests::a_message_refused_ends_its_turn_in_error
+        PASS ( 30/467) escouade attachfiles::tests::the_characters_windows_reserves_and_the_controls_are_replaced
+        PASS ( 31/467) escouade attachfiles::tests::the_lines_tell_claude_each_file_by_its_name_and_the_path_it_reads_it_by
+        PASS ( 32/467) escouade agent::agy::tests::a_fenced_path_is_refused_by_its_rules_even_in_bypass_without_a_card
+        PASS ( 33/467) escouade attachfiles::tests::the_names_of_windows_devices_are_prefixed
+        PASS ( 34/467) escouade attachfiles::tests::the_text_comes_first_then_an_empty_line_then_the_files
+        PASS ( 35/467) escouade attachfiles::tests::two_paths_of_one_file_are_the_same_file
+        PASS ( 36/467) escouade attachfiles_tests::a_chunk_or_an_end_for_a_handle_nobody_opened_is_refused
+        PASS ( 37/467) escouade agent::gemini::tests::a_fenced_file_is_refused_by_its_rules_even_in_yolo
+        PASS ( 38/467) escouade agent::gemini::tests::a_permission_refused_cuts_the_turn_and_always_holds_for_the_session
+        PASS ( 39/467) escouade attachfiles_tests::a_copy_left_half_written_goes_unless_a_window_is_still_writing_it
+        PASS ( 40/467) escouade attachfiles_tests::a_joined_file_is_told_to_the_window_in_camel_case
+        PASS ( 41/467) escouade attachfiles_tests::copies_older_than_the_days_of_the_settings_go_with_their_empty_folders
+        PASS ( 42/467) escouade attachfiles_tests::no_separator_of_lines_leaves_a_name_or_a_path_into_the_lines_of_the_message
+        PASS ( 43/467) escouade agent::vibe::tests::a_write_naming_a_fenced_path_is_refused_without_a_card
+        PASS ( 44/467) escouade agent::agy::tests::a_command_refused_asks_once_the_turn_is_over_then_runs_and_always_holds
+        PASS ( 45/467) escouade attachfiles_tests::the_core_takes_its_paths_from_the_table_the_app_manages_and_the_command_fills_it
+        PASS ( 46/467) escouade attachfiles_tests::the_files_of_the_drafts_go_after_a_day_whatever_the_settings_say
+        PASS ( 47/467) escouade attachfiles_tests::the_files_of_the_users_own_that_were_joined_are_remembered_by_agent_and_the_oldest_leave_first
+        PASS ( 48/467) escouade agy_tests::the_quota_met_ends_the_turn_limited_and_the_agent_goes_on_by_itself
+        PASS ( 49/467) escouade attachfiles_tests::the_path_claude_reads_a_file_by_is_its_linux_one_in_wsl
+        PASS ( 50/467) escouade attachfiles_tests::a_copy_is_discarded_with_its_folder
+        PASS ( 51/467) escouade attachfiles_tests::a_copy_belongs_to_an_agent_that_is_there_or_to_the_drafts
+        PASS ( 52/467) escouade board::tests::a_quota_threshold_not_offered_is_100_percent
+        PASS ( 53/467) escouade attachfiles_tests::a_copy_that_does_not_weigh_what_was_announced_is_refused_and_removed
+        PASS ( 54/467) escouade attachfiles_tests::a_file_is_joined_by_the_id_of_a_path_the_host_read_and_by_nothing_else
+        PASS ( 55/467) escouade attachfiles_tests::a_file_out_of_the_folder_of_its_owner_is_refused_and_stays
+        PASS ( 56/467) escouade board::tests::a_ticket_that_already_waits_for_it_is_refused_as_a_dependency
+        PASS ( 57/467) escouade attachfiles_tests::a_file_is_copied_in_chunks_under_the_folder_of_its_agent
+        PASS ( 58/467) escouade attachfiles_tests::a_file_over_the_cap_of_the_settings_is_refused_and_zero_is_no_cap
+        PASS ( 59/467) escouade attachfiles_tests::a_file_of_the_users_own_is_checked_and_not_copied
+        PASS ( 60/467) escouade attachfiles_tests::a_file_that_is_not_one_of_the_agents_is_refused_and_nothing_is_sent
+        PASS ( 61/467) escouade board::tests::an_account_without_a_quota_never_pauses_the_autopilot_but_after_a_usage_limit
+        PASS ( 62/467) escouade board::tests::at_startup_a_ticket_under_way_goes_on_waits_for_its_quota_or_starts_again
+        PASS ( 63/467) escouade attachfiles_tests::a_path_with_a_separator_of_lines_is_not_joined_as_it_is
+        PASS ( 64/467) escouade attachfiles_tests::a_link_that_leads_into_the_data_folder_does_not_join_what_it_leads_to
+        PASS ( 65/467) escouade board::tests::the_days_budget_of_an_account_without_a_quota_pauses_the_autopilot_until_midnight
+        PASS ( 66/467) escouade attachfiles_tests::an_empty_file_is_joined_all_the_same
+        PASS ( 67/467) escouade attachfiles_tests::cancelling_a_copy_removes_what_was_written
+        PASS ( 68/467) escouade attachfiles_tests::a_link_that_leaves_the_folder_is_not_followed
+        PASS ( 69/467) escouade board::tests::without_the_autopilot_only_launched_tickets_start_and_nothing_starts_on_a_quota
+        PASS ( 70/467) escouade branchci::tests::a_pushed_branch_is_followed_until_its_ci_settles_and_for_three_days_at_most
+        PASS ( 71/467) escouade attachfiles_tests::nothing_in_the_data_folder_of_escouade_is_joined_by_its_path
+        PASS ( 72/467) escouade attachfiles_tests::a_copy_is_read_without_a_question_since_its_folder_was_given_to_claude
+        PASS ( 73/467) escouade attachfiles_tests::a_file_of_the_users_own_that_the_host_never_handed_out_is_refused_at_the_sending
+        PASS ( 74/467) escouade bypass::tests::a_new_installation_asks_the_mode_and_runs_the_recommended_one_until_it_is_answered
+        PASS ( 75/467) escouade attachfiles_tests::a_file_of_the_users_own_is_checked_again_and_granted_when_the_message_is_sent
+        PASS ( 76/467) escouade attachfiles_tests::a_message_tells_claude_where_its_files_are_in_the_language_of_its_texts
+        PASS ( 77/467) escouade bypass::tests::every_known_harness_flag_of_bypass_is_held_off_and_kept_on
+        PASS ( 78/467) escouade attachfiles_tests::closing_a_project_keeps_the_files_of_its_agents_and_erasing_its_history_removes_them
+        PASS ( 79/467) escouade bypass::tests::an_installation_that_existed_keeps_its_modes_and_bypass_if_it_used_it
+        PASS ( 80/467) escouade attachfiles_tests::the_name_of_a_copy_is_made_safe
+        PASS ( 81/467) escouade bypass::tests::the_arguments_that_open_the_mode_of_no_question_leave_a_launch_unless_allowed
+        PASS ( 82/467) escouade attachfiles_tests::a_message_that_fails_and_is_sent_again_still_finds_its_files_of_the_users_own
+        PASS ( 83/467) escouade codex_tests::a_codex_sign_in_is_read_from_its_auth_json_its_email_from_its_id_token
+        PASS ( 84/467) escouade codex_tests::a_new_codex_account_shares_its_settings_skills_and_instructions_and_never_its_sign_in
+        PASS ( 85/467) escouade attachfiles_tests::in_the_claude_code_view_files_stay_refused_as_attachments_do
+        PASS ( 86/467) escouade attachfiles_tests::the_purge_runs_at_the_start_and_leaves_what_a_window_is_still_copying
+        PASS ( 87/467) escouade attachfiles_tests::claude_starts_with_the_folder_of_the_files_joined_to_its_agent_readable
+        PASS ( 88/467) escouade copilot_tests::a_copilot_sign_in_is_the_user_its_config_json_names_never_a_token
+        PASS ( 89/467) escouade copilot_tests::a_new_copilot_account_shares_its_mcp_servers_instructions_agents_and_skills_and_never_its_sign_in
+        PASS ( 90/467) escouade attachfiles_tests::removing_a_project_for_good_removes_the_files_of_its_agents
+        PASS ( 91/467) escouade codex_tests::the_quota_of_a_codex_account_without_an_agent_is_read_by_an_app_server_of_its_own
+        PASS ( 92/467) escouade attachfiles_tests::files_alone_make_a_message_that_never_names_the_agent
+        PASS ( 94/467) escouade attachfiles_tests::the_reading_of_a_file_joined_by_its_path_is_allowed_by_itself_and_nothing_else_is
+        PASS ( 95/467) escouade core_tests::quota_windows_saved_before_the_accounts_are_principals_and_each_account_keeps_its_own
+        PASS ( 97/467) escouade core_tests::the_process_asked_for_a_quota_is_the_last_to_have_spoken
+        PASS ( 98/467) escouade deeplink_tests::the_installers_register_the_scheme
+        PASS ( 99/467) escouade devpage_tests::escouades_own_addresses_are_refused_even_on_the_launchs_origin
+        PASS (100/467) escouade discussion_tests::writes_and_commands_are_refused_and_escouades_tools_for_the_docs_let_through
+        PASS (101/467) escouade docsshare_tests::a_refused_credential_is_told_in_a_simple_sentence
+        PASS (102/467) escouade engine::claude::tests::a_message_without_attachments_is_plain_text
+        PASS (103/467) escouade engine::claude::tests::attachments_come_before_the_text_as_content_blocks
+        PASS (104/467) escouade engine::claude::tests::unsupported_or_oversized_attachments_are_refused
+        PASS (105/467) escouade core_tests::a_worktrees_folder_or_a_branch_prefix_that_cannot_be_is_refused_and_nothing_changes
+        PASS (106/467) escouade engine::copilot::terminal::tests::a_folder_trusted_or_under_a_trusted_one_is_not_asked_about
+        PASS (107/467) escouade engine::copilot::terminal::tests::a_sessions_log_is_found_once_written_and_copied_with_its_folder
+        PASS (108/467) escouade core_tests::an_unsupported_file_is_refused_before_it_reaches_claude
+        PASS (109/467) escouade engine::copilot::terminal::tests::the_folder_of_its_plugins_data_is_named_as_copilot_names_it
+        PASS (110/467) escouade engine::gemini::tests::an_agent_goes_by_its_accounts_sign_in_not_the_one_refreshed_in_its_home
+        PASS (111/467) escouade core_tests::a_message_to_a_subagent_that_ended_is_refused_whatever_its_end_and_nothing_is_sent
+        PASS (112/467) escouade engine::registry::tests::every_harness_declares_its_installer_and_its_composers_models_and_efforts
+        PASS (113/467) escouade engine::userconfig_tests::an_entry_there_is_replaced_in_place_and_an_inline_table_of_servers_is_refused_untouched
+        PASS (114/467) escouade bypass::tests::the_mode_of_no_question_is_refused_without_the_setting
+        PASS (115/467) escouade engine::vibe::tests::a_fence_is_refused_to_the_file_tools_in_the_agents_config_and_taken_out_after
+        PASS (116/467) escouade core_tests::launch_commands_that_were_all_refused_are_told_so_and_not_as_nothing_found
+        PASS (117/467) escouade fence::tests::claude_code_is_refused_reading_and_writing_each_path
+        PASS (118/467) escouade core_tests::a_remote_session_kept_is_reattached_by_the_next_process_when_remote_control_is_back
+        PASS (119/467) escouade core_tests::worktree_commands_that_were_all_refused_are_told_so_and_not_as_nothing_found
+        PASS (120/467) escouade copilot_tests::an_account_of_its_own_on_the_github_clis_sign_in_is_not_signed_in
+        PASS (121/467) escouade core_tests::attached_files_reach_claude_as_content_blocks
+        PASS (122/467) escouade discussion_tests::a_discussion_whose_first_message_is_refused_leaves_no_agent
+        PASS (123/467) escouade docs_tests::a_docs_branch_that_is_not_a_branch_name_is_refused
+        PASS (124/467) escouade core_tests::each_account_with_a_running_agent_is_asked_its_quota_by_a_process_of_its_own
+        PASS (125/467) escouade folders_tests::settle_keeps_an_id_the_snapshot_does_not_know
+        PASS (126/467) escouade folders_tests::settle_lists_old_agents_before_a_new_one
+        PASS (127/467) escouade engine::registry::tests::an_older_claude_code_is_refused_with_its_reason_and_a_newer_one_taken
+        PASS (128/467) escouade folders_tests::settle_puts_the_principal_first
+        PASS (129/467) escouade core_tests::stop_bg_task_is_refused_in_the_claude_code_view_without_a_process_and_for_what_is_over
+        PASS (130/467) escouade forge::tests::a_self_hosted_instance_is_known_by_its_account_and_otherwise_left_unknown
+        PASS (131/467) escouade core_tests::a_turn_a_safeguard_refused_is_left_out_of_the_history_and_a_second_one_is_cut_at_the_same_point
+        PASS (133/467) escouade fsedit::tests::says_in_french_why_the_trash_refused
+        PASS (134/467) escouade cursor_tests::a_refused_key_the_limit_and_a_blocked_write_are_said_on_the_conversation
+        PASS (135/467) escouade core_tests::an_unknown_session_is_replaced_and_the_message_still_delivered
+        PASS (136/467) escouade handover::tests::an_account_is_usable_for_a_handover_unless_out_for_its_quota_by_the_pace_of_its_windows
+        PASS (137/467) escouade core_tests::a_terminal_is_refused_for_an_agent_whose_worktree_vanished
+        PASS (138/467) escouade folders_tests::core_hooks::a_move_to_a_folder_that_went_is_refused
+        PASS (139/467) escouade harness_scope_tests::the_update_never_turns_on_a_third_party_harness_for_a_private_project
+        PASS (140/467) escouade harness_scope_tests::the_update_turns_on_a_harness_for_the_private_projects_that_use_it_once
+        PASS (141/467) escouade launchenv::tests::the_file_is_read_whole_or_refused_never_cut
+        PASS (142/467) escouade branches_tests::an_agent_is_refused_a_new_branch_git_would_refuse_and_nothing_is_made
+        PASS (143/467) escouade core_tests::a_resume_whose_process_stops_on_a_sign_in_error_tells_the_failure_as_a_card
+        PASS (144/467) escouade fsedit::tests::changing_only_the_case_of_what_git_tracks_is_refused_and_moves_nothing
+        PASS (145/467) escouade harness_scope_tests::a_third_party_harness_is_not_launched_in_a_private_project_until_turned_on_there
+        PASS (146/467) escouade mcp::answer_rights_tests::no_tool_of_the_server_names_the_chef
+        PASS (147/467) escouade mcp::answer_rights_tests::nobody_answers_for_another_agent_by_default_and_in_settings_saved_before
+        PASS (148/467) escouade git::repo_tests::a_worktrees_folder_holding_the_repositorys_own_files_is_refused_and_never_excluded
+        PASS (149/467) escouade core_tests::merging_is_refused_with_a_typed_error_when_the_project_is_not_on_the_base
+        PASS (150/467) escouade harness_scope_tests::a_private_project_asks_once_then_its_agent_starts
+        PASS (151/467) escouade agentbranch_tests::a_switch_is_refused_while_it_would_lose_or_scramble_something
+        PASS (152/467) escouade harness_scope_tests::an_agent_of_a_private_project_waits_for_its_harness_to_be_turned_on
+        PASS (153/467) escouade mcp::act_tests::a_refused_creation_leaves_no_folder_and_the_caller_where_it_was
+        PASS (154/467) escouade integrations_tests::a_refused_comment_is_set_aside_at_once_and_does_not_hold_the_next_move_back
+        PASS (155/467) escouade harness_scope_tests::a_harness_turned_off_for_a_project_runs_no_agent_there
+        PASS (156/467) escouade core_tests::a_rate_limit_event_of_an_agent_on_the_second_account_only_touches_its_quota
+        PASS (157/467) escouade fence_tests::claude_code_is_refused_the_private_projects_folders_and_its_own_agents_the_others
+        PASS (158/467) escouade mcp::act_tests::a_ticket_refused_its_start_keeps_its_folder_and_makes_none
+        PASS (159/467) escouade fence_tests::copilot_is_refused_a_read_of_the_private_project_by_escouade_never_asking_the_user
+        PASS (160/467) escouade core_tests::a_resume_on_another_account_is_refused_where_it_cannot_be_and_changes_nothing
+        PASS (161/467) escouade mcp::act_tests::the_tools_for_agents_are_refused_to_claude_outside_escouade_and_logged
+        PASS (162/467) escouade mcp::act_tests::a_message_is_refused_when_the_account_of_the_agent_it_goes_to_is_held_and_only_then
+        PASS (163/467) escouade git::repo_tests::a_refused_commit_leaves_the_index_as_it_was
+        PASS (164/467) escouade git::repo_tests::a_base_that_looks_like_a_git_option_is_refused_and_nothing_is_created
+        PASS (165/467) escouade mcp::images::tests::a_path_that_is_not_absolute_or_leads_off_the_machine_is_refused_before_the_disk_is_touched
+        PASS (166/467) escouade mcp::background_tests::a_bytes_that_is_no_whole_number_is_refused_by_the_schema_and_never_echoed
+        PASS (167/467) escouade mcp::background_tests::a_message_that_cannot_go_to_a_subagent_is_refused_in_the_words_of_the_window_and_nothing_is_sent
+        PASS (168/467) escouade mcp::act_tests::an_agent_is_created_while_an_account_is_free_for_its_project_and_refused_when_none_is
+        PASS (169/467) escouade mcp::background_tests::work_that_cannot_be_stopped_is_refused_in_the_words_of_the_window
+        PASS (170/467) escouade mcp::answer_rights_tests::an_agent_that_creates_another_cannot_allow_its_permission
+        PASS (171/467) escouade mcp::act_tests::a_setting_that_does_not_fit_or_is_the_users_to_give_is_refused_with_the_reason_and_nothing_changes
+        PASS (172/467) escouade harness_scope_tests::cutting_a_harness_for_a_project_blocks_the_ticket_of_its_agent
+        PASS (173/467) escouade harness_scope_tests::the_end_of_the_turn_a_cut_stopped_keeps_the_ticket_blocked_by_the_cut
+        PASS (174/467) escouade mcp::background_tests::an_unknown_id_is_told_and_an_agent_of_escouade_reads_the_tasks_of_the_projects_it_sees
+        PASS (175/467) escouade mcp::tests::a_call_of_an_unknown_tool_is_refused_before_rmcp_keeps_its_name
+        PASS (176/467) escouade mcp::tests::a_foreign_host_or_a_web_pages_origin_is_refused_whatever_the_token
+        PASS (177/467) escouade mcp::agents_tests::a_copilot_agent_is_given_the_server_by_a_file_naming_its_token_or_refused_it
+        PASS (178/467) escouade harness_scope_tests::the_autopilot_blocks_a_ticket_whose_harness_is_off_for_its_project
+        PASS (179/467) escouade mcp::files_tests::a_ticket_that_has_started_is_refused_before_any_file_is_read_or_reference_looked_at
+        PASS (180/467) escouade mcp::files_tests::a_file_that_is_not_the_tickets_or_is_gone_is_refused_with_a_text
+        PASS (181/467) escouade mcp::background_tests::a_message_to_a_subagent_that_no_longer_runs_is_refused_whatever_its_end_and_nothing_is_sent
+        PASS (182/467) escouade mcp::tests::a_request_without_a_token_or_with_an_unknown_one_is_refused_and_logged
+        PASS (183/467) escouade mcp::files_tests::files_of_any_format_are_attached_to_a_new_ticket_by_content_or_path_and_listed
+        PASS (184/467) escouade mcp::files_tests::more_than_twenty_files_are_refused_before_any_is_read_or_copied
+        PASS (185/467) escouade mcp::tests::claude_codes_discover_probe_its_initialize_and_an_unknown_method_get_json_rpc_answers
+        PASS (186/467) escouade mcp::images_tests::a_path_that_leads_nowhere_good_is_refused_and_nothing_is_made
+        PASS (187/467) escouade mcp::images_tests::a_ticket_that_has_started_is_refused_before_any_file_is_read_or_reference_looked_at
+        PASS (188/467) escouade mcp::harness_scope_tests::no_tool_starts_an_agent_on_a_harness_off_for_its_project_nor_turns_it_on
+        PASS (189/467) escouade memory::tests::a_memory_folder_that_is_a_link_is_refused
+        PASS (190/467) escouade mcp::agents_tests::a_codex_agent_is_given_the_server_by_its_options_and_its_token_by_its_environment_or_refused_it
+        PASS (191/467) escouade mcp::images_tests::a_ticket_that_has_started_is_refused_its_images_as_the_window_refuses_it
+        PASS (192/467) escouade model::tests::the_quotas_of_every_account_travel_in_camel_case
+        PASS (193/467) escouade mcp::answer_rights_tests::with_nobody_an_agent_answers_neither_a_permission_nor_a_question_the_chef_neither
+        PASS (194/467) escouade memory::tests::an_escouade_folder_that_is_a_link_is_refused_even_before_the_memory_is_made
+        PASS (195/467) escouade mcp::images_tests::paths_past_the_count_a_ticket_takes_are_refused_without_reading_them
+        PASS (196/467) escouade navigation::tests::a_navigation_anywhere_else_is_refused_and_opened_nowhere
+        PASS (197/467) escouade mcp::images_tests::an_image_that_is_not_the_tickets_or_is_gone_is_refused_with_a_text
+        PASS (198/467) escouade mcp::images_tests::images_given_by_content_are_attached_to_a_new_ticket_and_listed_by_get_ticket
+        PASS (199/467) escouade mcp::answer_rights_tests::with_every_agent_any_agent_answers_another
+        PASS (200/467) escouade mcp::memory_tests::a_memory_without_a_description_or_a_name_is_refused
+        PASS (201/467) escouade mcp::act_tests::pause_past_the_quota_holds_back_the_autopilot_alone_never_a_ticket_started_by_hand
+        PASS (202/467) escouade navigation::tests::a_navigation_to_the_web_or_mail_is_refused_and_opened_outside
+        PASS (203/467) escouade mcp::act_tests::a_ticket_is_started_while_an_account_is_free_for_its_project_and_refused_when_none_is
+        PASS (204/467) escouade branches_tests::an_agent_is_refused_the_branch_of_the_folder_or_of_another_worktree_and_nothing_is_made
+        PASS (205/467) escouade navigation::tests::a_new_window_is_always_refused_and_only_the_outside_ones_are_opened
+        PASS (206/467) escouade navigation::tests::a_refused_reload_leaves_the_window_where_it_was
+        PASS (207/467) escouade mcp::answer_rights_tests::with_the_chef_only_the_designated_agent_answers_and_says_so
+        PASS (208/467) escouade plugins_acp_tests::a_launch_of_anyone_takes_off_nothing_the_core_gives_nor_a_refused_family
+        PASS (209/467) escouade plugins_acp_tests::a_launch_sets_what_its_plugin_declares_and_never_a_refused_family
+        PASS (210/467) escouade opencode_tests::opencode_2_is_recognized_and_refused_with_its_reason
+        PASS (211/467) escouade plugins_acp_tests::a_third_party_description_cannot_name_a_refused_variable_for_the_core_to_set
+        PASS (212/467) escouade plugins_acp_tests::a_third_party_harness_on_bash_is_refused
+        PASS (213/467) escouade plugins_acp_tests::the_commands_of_a_third_party_harness_are_said_to_be_its_plugins
+        PASS (214/467) escouade plugins_acp_tests::the_variables_of_a_description_are_its_acp_env_and_those_the_core_names
+        PASS (215/467) escouade plugins_acp_tests::w_32_what_a_described_harness_words_is_shown_and_judged
+        PASS (216/467) escouade plugins_builtin_tests::a_folder_in_development_with_an_id_of_the_registry_is_refused
+        PASS (217/467) escouade plugins_acp_tests::a_variable_proc_refuses_in_a_third_party_description_is_refused_with_its_reason
+        PASS (218/467) escouade plugins_builtin_tests::a_reserved_id_is_refused_to_a_plugin_of_anyone_else_s_hand
+        PASS (219/467) escouade plugins_builtin_tests::the_first_hand_comes_from_the_seed_or_the_signed_store_alone
+        PASS (220/467) escouade plugins_builtin_tests::a_folder_in_development_never_has_the_rights_of_the_first_hand_whatever_its_id
+        PASS (221/467) escouade plugins_acp_tests::a_first_hand_manifest_keeps_its_word_on_the_fence
+        PASS (222/467) escouade mcp::private_tests::a_private_project_s_folders_are_named_as_unknown
+        PASS (223/467) escouade plugins_harness_tests::a_fence_in_a_file_of_json_is_read_as_said_and_a_file_outside_the_agents_folder_refused
+        PASS (224/467) escouade plugins_harness_tests::a_relaunch_opens_the_mode_of_no_question_only_with_the_setting_and_its_variables_are_judged
+        PASS (225/467) escouade plugins_acp_tests::the_version_of_a_third_party_harness_is_asked_after_a_gesture_alone
+        PASS (226/467) escouade plugins_harness_tests::only_a_plugin_of_the_first_hand_may_hold_the_fence_itself
+        PASS (227/467) escouade mcp::tools_tests::a_wait_asked_for_nothing_too_much_an_unknown_ticket_or_a_since_that_is_none_fails
+        PASS (228/467) escouade plugins_harness_tests::the_attach_of_a_shared_process_sets_only_the_variables_its_plugin_may_set
+        PASS (229/467) escouade mcp::tools_tests::without_a_ticket_named_an_agent_reads_its_own_and_claude_outside_is_refused
+        PASS (230/467) escouade pragent_tests::a_forks_pull_request_its_host_cannot_give_is_refused
+        PASS (231/467) escouade plugins_tests::inspections_of_several_plugins_are_kept_one_per_plugin
+        PASS (232/467) escouade plugins_net_tests::a_refused_socket_says_what_the_service_answered_and_never_its_key
+        PASS (233/467) escouade plugins_wasm_parity_tests::a_host_outside_the_manifest_is_refused_to_linear
+        PASS (234/467) escouade plugins_acp_tests::a_plain_variable_of_a_third_party_and_any_of_the_first_hand_go_through
+        PASS (236/467) escouade projectfile_tests::an_unknown_key_is_told_with_its_line_and_what_it_looks_like
+        PASS (237/467) escouade projectfile_tests::a_worktrees_dir_inside_the_project_is_refused_when_applied
+        PASS (238/467) escouade prreview::tests::a_review_with_comments_not_decided_or_nothing_to_say_is_refused
+        PASS (239/467) escouade projectlogo::tests::a_file_too_heavy_unreadable_or_of_another_format_is_refused_saying_why
+        PASS (240/467) escouade search::tests::a_search_refused_says_why_in_english
+        PASS (241/467) escouade pty::input_tests::a_slow_echo_of_a_write_the_log_forgot_says_the_backend_times_are_unknown
+        PASS (242/467) escouade sentfiles::tests::an_image_of_the_web_not_in_https_is_refused_before_any_request
+        PASS (243/467) escouade sharing_tests::a_file_in_conflict_is_neither_read_nor_written_until_settled
+        PASS (244/467) escouade signin::tests::a_token_in_date_lets_every_launch_go_at_once
+        PASS (245/467) escouade signin::tests::a_refresh_refused_lets_the_waiting_launches_go
+        PASS (246/467) escouade signin::tests::a_wait_ends_with_another_sign_in_only
+        PASS (247/467) escouade signin::tests::the_process_goes_on_with_a_good_sign_in_or_another_one
+        PASS (248/467) escouade signin::tests::the_restarts_wait_longer_each_time
+        PASS (249/467) escouade signin::tests::the_lines_are_said_in_both_languages
+        PASS (250/467) escouade plugins_tests::a_folder_in_development_is_loaded_in_place_and_read_again_when_it_changes
+        PASS (251/467) escouade signin::tests::the_two_errors_of_a_sign_in_not_refreshed_are_told_from_others
+        PASS (252/467) escouade signin::tests::out_of_date_the_first_launch_goes_and_the_next_wait_for_its_refresh
+        PASS (253/467) escouade plugins_harness_tests::a_one_shot_question_is_described_by_the_plugin_run_by_the_core_and_read_by_the_plugin
+        PASS (254/467) escouade signin::tests::a_refresh_that_never_comes_holds_a_launch_for_the_bound_only
+        PASS (255/467) escouade mcp::requests_tests::a_permission_is_refused_through_the_server_and_claude_is_told_who_refused
+        PASS (256/467) escouade testlaunch::tests::a_launch_refused_or_cut_short_says_why_in_english
+        PASS (257/467) escouade syspath::tests::the_path_of_the_registry_is_read_with_its_variables_expanded
+        PASS (258/467) escouade testlaunch::worktree_run_tests::a_launch_command_whose_folder_is_not_in_the_worktree_is_refused_with_why
+        PASS (259/467) escouade testlaunch::tests::a_recipe_step_runs_in_its_folder_with_the_ports_and_its_variables
+        PASS (260/467) escouade ticket_accounts_tests::a_file_of_a_later_version_with_an_unknown_source_loses_none_of_the_others
+        PASS (261/467) escouade ticketfiles::tests::a_file_kept_whose_name_leads_out_of_the_folder_is_refused_and_never_touched
+        PASS (262/467) escouade ticketfiles::tests::a_file_over_the_cap_of_the_settings_is_refused_and_one_at_the_cap_is_not
+        PASS (263/467) escouade ticketfiles::tests::a_path_that_is_not_a_copy_of_the_drafts_is_refused
+        PASS (264/467) escouade ticketimages::tests::the_attachments_are_the_images_read_and_the_names_of_those_that_could_not_be
+        PASS (265/467) escouade ticketimages::tests::an_image_whose_base64_is_too_long_is_refused_before_it_is_decoded
+        PASS (266/467) escouade plugins_sort_tests::a_plugin_uninstalled_is_not_put_back_at_the_start_but_on_the_gesture_that_needs_it
+        PASS (267/467) escouade ticketfiles::tests::a_link_that_leaves_the_drafts_is_refused
+        PASS (268/467) escouade mcp::tools_tests::an_ambiguous_or_unknown_name_is_an_error_that_lists_the_choices
+        PASS (269/467) escouade ticketimages::tests::the_total_is_refused_in_the_loop_before_the_next_image_is_looked_at
+        PASS (270/467) escouade mcp::requests_tests::an_answer_is_refused_for_always_oneself_a_private_project_a_wrong_kind_or_a_request_gone
+        PASS (271/467) escouade projectfile_tests::the_tickets_agents_set_in_the_window_are_written_but_bypass_permissions
+        PASS (272/467) escouade mcp::requests_tests::the_requests_of_one_agent_or_one_project_are_listed_and_an_unknown_name_is_told
+        PASS (273/467) escouade sharing_tests::sharing_without_a_name_is_refused_and_the_name_of_the_project_comes_first
+        PASS (274/467) escouade opencode_tests::an_opencode_agent_whose_plugin_goes_off_as_it_joins_its_server_says_why
+        PASS (275/467) escouade plugins_decide_tests::a_folder_in_development_that_decides_runs_again_once_read_again
+        PASS (276/467) escouade plugins_reader_tests::a_graph_that_does_not_hold_is_refused_whole_and_with_why
+        PASS (277/467) escouade tickets_tests::a_kept_file_whose_name_leads_out_of_the_tickets_folder_is_refused_and_never_touched
+        PASS (278/467) escouade tickets_tests::a_file_over_the_cap_of_the_settings_is_refused_whole_and_one_under_it_goes_in
+        PASS (279/467) escouade opencode_tests::the_opencode_view_joins_the_agents_session_beside_escouade
+        PASS (280/467) escouade tickets_tests::says_in_english_why_a_ticket_is_refused_or_blocked_and_what_its_notification_says
+        PASS (281/467) escouade tls::tests::a_file_with_no_certificate_is_told
+        PASS (282/467) escouade tickets_tests::a_path_that_is_not_a_copy_of_the_drafts_is_refused_and_a_refusal_uses_no_key
+        PASS (283/467) escouade tickets_tests::a_quota_window_read_before_a_restart_still_holds_the_tickets_back_until_lifted
+        PASS (284/467) escouade tls::tests::a_host_excluded_by_a_range_goes_around_the_proxy_and_its_certificate_is_checked
+        PASS (285/467) escouade tls::tests::ignoring_the_certificates_does_nothing_without_a_proxy
+        PASS (286/467) escouade plugins_acp_tests::the_fake_acp_agent_described_by_a_manifest_passes_the_bench
+        PASS (287/467) escouade tls::tests::ignoring_the_certificates_holds_through_the_proxy_alone
+        PASS (288/467) escouade tls::tests::the_exclusions_are_read_as_written_by_the_tools_of_a_proxy
+        PASS (289/467) escouade tls::tests::the_agents_get_the_file_and_the_unchecked_tls_only_with_a_proxy
+        PASS (290/467) escouade tls::tests::the_file_of_extra_authorities_makes_the_app_trust_a_proxys_root
+        PASS (291/467) escouade tui::tests::an_automatic_start_is_refused_after_two_quick_exits_in_a_row_a_manual_one_never
+        PASS (292/467) escouade tui::tests::an_interface_refused_escouades_tools_is_kept_from_its_server_by_the_same_settings
+        PASS (293/467) escouade updates::flow_tests::a_check_refused_every_time_fails_quietly_by_itself_and_loudly_by_hand
+        PASS (294/467) escouade updates::flow_tests::a_download_refused_automatically_is_quiet_until_the_failures_have_gone_on
+        PASS (295/467) escouade pty::tests::the_end_of_the_sign_in_ends_what_it_started_but_the_programs_with_a_window
+        PASS (296/467) escouade updates::flow_tests::a_download_refused_every_time_is_read_again_and_tried_once_more_only
+        PASS (297/467) escouade tickets_tests::a_ticket_is_refused_an_account_its_project_may_not_use
+        PASS (298/467) escouade updates::flow_tests::a_download_refused_once_reads_latest_json_again_and_goes_through
+        PASS (299/467) escouade pty::write_log_tests::a_slow_echo_of_a_write_the_backend_forgot_says_its_times_are_unknown
+        PASS (300/467) escouade updates::flow_tests::a_proxy_that_refuses_the_installer_is_not_gone_around_and_the_browser_is_offered
+        PASS (301/467) escouade updates::flow_tests::an_installer_neither_the_proxy_nor_a_direct_access_gives_has_both_told
+        PASS (302/467) escouade tickets_tests::a_tickets_images_have_the_formats_and_limits_of_the_chats_attachments
+        PASS (303/467) escouade updates::flow_tests::an_installer_on_another_domain_does_not_send_the_browser_there
+        PASS (304/467) escouade pty::write_log_tests::an_echo_read_before_the_write_returned_is_not_a_negative_step
+        PASS (305/467) escouade process_tests::a_claude_of_wsl_gets_its_arguments_folder_and_variables_in_linux
+        PASS (306/467) escouade signin_tests::a_message_of_the_user_takes_over_from_the_wait
+        PASS (307/467) escouade plugins_decide_tests::a_refusal_tells_the_harness_who_refused_and_why_and_wins_over_an_allowance
+        PASS (308/467) escouade updates::flow_tests::an_installer_that_is_not_the_one_signed_fails_with_the_plugins_words
+        PASS (309/467) escouade tickets_tests::a_launch_command_in_a_worktree_stops_with_its_agent_and_is_refused_once_archived
+        PASS (310/467) escouade updates::flow_tests::an_installer_whose_tunnel_the_proxy_turns_down_is_not_gone_around_and_the_browser_is_offered
+        PASS (311/467) escouade updates::tests::the_installer_starts_once_the_app_has_stopped_then_the_new_version_starts
+        PASS (313/467) escouade pty::write_log_tests::the_echo_read_before_the_write_returns_still_counts
+        PASS (314/467) escouade usage::tests::a_max_plan_without_a_5_hour_window_keeps_no_5_hour_bar_after_a_complete_reading
+        PASS (315/467) escouade usage::tests::a_rate_limit_event_still_merges_into_the_last_complete_reading
+        PASS (317/467) escouade signin_tests::a_login_typed_while_the_agent_waits_for_one_lets_it_go_on
+        PASS (318/467) escouade usage::tests::a_reading_touches_only_its_account_and_the_current_ones_windows_come_first
+        PASS (319/467) escouade signin_tests::a_tickets_agent_goes_on_and_its_ticket_is_never_blocked
+        PASS (320/467) escouade usage::tests::a_state_saved_before_the_scopes_is_read_again_and_a_scoped_meter_kept
+        PASS (321/467) escouade signin_tests::without_a_sign_in_the_agent_waits_for_one_then_goes_on_by_itself
+        PASS (322/467) escouade tickets_tests::resuming_a_ticket_whose_agent_waits_for_its_quota_is_refused
+        PASS (323/467) escouade usage::tests::an_account_not_signed_in_or_expired_says_why_until_it_is_read_again
+        PASS (324/467) escouade usage::tests::an_entry_refused_is_not_asked_for_again_for_ten_minutes
+        PASS (325/467) escouade usage::tests::an_inherited_secure_storage_folder_comes_first_as_claude_code_has_it
+        PASS (327/467) escouade usage::tests::each_account_keeps_its_sign_in_in_its_folder_principal_in_the_apps
+        PASS (328/467) escouade usage::tests::extra_usage_is_over_when_a_reading_shows_every_window_under_100
+        PASS (329/467) escouade signin_tests::two_restarts_at_most_then_it_waits_for_another_sign_in
+        PASS (330/467) escouade usage::tests::extra_usage_is_over_when_the_full_window_is_reset
+        PASS (331/467) escouade usage::tests::fable_over_the_threshold_holds_fable_alone
+        PASS (332/467) escouade usage::tests::get_usage_without_limits_is_what_its_process_saw
+        PASS (333/467) escouade tui_tests::a_hook_without_the_token_of_an_interface_is_refused
+        PASS (334/467) escouade usage::tests::on_macos_the_keychain_entry_comes_before_a_file_left_in_the_folder
+        PASS (335/467) escouade usage::tests::one_sign_in_is_told_from_another_by_a_stamp_that_is_never_the_token
+        PASS (336/467) escouade usage::tests::parses_usage_windows
+        PASS (337/467) escouade tui_tests::an_interface_refused_escouades_tools_is_started_without_its_server
+        PASS (338/467) escouade usage::tests::rows_are_taken_in_the_servers_order_with_its_names_a_surfaces_left_out
+        PASS (339/467) escouade usage::tests::the_accounts_follow_the_settings_order_new_and_removed_ones_included
+        PASS (340/467) escouade usage::tests::the_current_account_is_the_first_active_one_under_the_threshold
+        PASS (341/467) escouade usage::tests::the_keychain_entry_is_named_after_the_accounts_folder_as_claude_code_names_it
+        PASS (342/467) escouade usage::tests::the_cost_of_the_day_is_set_for_each_account_and_in_total
+        PASS (343/467) escouade usage::tests::the_keychain_tells_an_entry_none_or_a_refusal
+        PASS (344/467) escouade ticketprs::tests::a_merge_refused_by_the_host_is_said_on_the_card
+        PASS (345/467) escouade usage::tests::the_quota_is_read_in_the_background_at_most_every_five_minutes
+        PASS (346/467) escouade usage::tests::the_reasons_are_told_in_both_languages
+        PASS (347/467) escouade usage::tests::the_rows_of_the_real_answer_give_the_5_hour_the_week_and_fables_week
+        PASS (348/467) escouade tickets_tests::a_ticket_stopped_by_the_usage_limit_waits_and_nothing_starts_until_the_quota_resets
+        PASS (349/467) escouade usage::tests::the_windows_are_kept_across_a_restart_by_account
+        PASS (350/467) escouade usage::tests::the_sign_in_is_read_from_the_accounts_folder_present_absent_or_expired
+        PASS (351/467) escouade usage::tests::unit_tests_never_read_the_machine_users_sign_in
+        PASS (352/467) escouade usage::tests::what_a_process_saw_only_says_what_shows_it_is_newer
+        PASS (353/467) escouade usage::tests::what_a_process_saw_says_nothing_of_the_sign_in
+        PASS (354/467) escouade usage::tests::what_holds_the_autopilot_back_is_kept_for_the_accounts_there_are
+        PASS (355/467) escouade usage::tests::with_every_account_kept_to_projects_the_current_one_is_still_an_active_one
+        PASS (356/467) escouade usage::tests::without_rows_the_windows_and_model_scoped_are_read
+        PASS (357/467) escouade windowthread_tests::an_unknown_command_is_refused
+        PASS (358/467) escouade workflowrefine_tests::a_step_added_on_a_file_that_was_not_sent_is_refused
+        PASS (359/467) escouade voice::tests::a_download_cut_short_or_refused_is_not_kept
+        PASS (360/467) escouade voice::online_catalog::tests::a_refused_key_lists_nothing_and_says_so
+        PASS (361/467) escouade workflowfiles_tests::a_file_that_is_a_link_is_refused_not_read
+        PASS (362/467) escouade voice::online::tests::a_key_refused_says_so_for_every_service
+        PASS (363/467) escouade workflowrefine_tests::a_step_described_better_and_a_way_back_are_taken
+        PASS (364/467) escouade workflowrefine_tests::a_workflow_the_project_does_not_have_is_refused_and_one_answered_twice_is_taken_once
+        PASS (365/467) escouade workflowrefine_tests::an_answer_that_is_not_the_schema_is_refused
+        PASS (366/467) escouade workflowrefine_tests::what_is_made_up_is_refused_and_told
+        PASS (367/467) escouade tickets_tests::a_ticket_whose_turn_a_safeguard_refused_is_blocked_for_it_and_is_not_sent_again_by_itself
+        PASS (368/467) escouade worktrees::tests::the_commands_refused_as_not_plain_are_counted_the_others_left_out_are_not
+        PASS (369/467) escouade worktrees::tests::the_launch_question_names_the_shell_the_way_to_set_a_variable_in_it_and_what_not_to_give
+        PASS (370/467) escouade-acp files::tests::a_file_is_refused_by_the_fence_and_goes_there_and_back
+        PASS (371/467) escouade-acp plugin::tests::a_launch_opens_its_own_session_after_an_attach_that_named_one
+        PASS (372/467) escouade-acp terminal::tests::vibe_does_not_resume_a_session_it_does_not_have_and_bypass_stays_ask_with_a_fence
+        PASS (373/467) escouade-acp terminal::tests::vibe_gets_escouades_server_by_its_variables_never_its_command_line
+        PASS (374/467) escouade-base paths::tests::a_path_leaving_its_folder_is_refused_in_english
+        PASS (375/467) escouade-engines jsonc::tests::what_is_no_json_is_refused_with_where
+        PASS (376/467) escouade-engines program::tests::a_claude_of_wsl_runs_through_wsl_exe_its_files_and_variables_in_linux
+        PASS (377/467) escouade tickets_tests::a_ticket_set_on_an_account_held_by_its_quota_waits_while_the_others_start
+        PASS (378/467) escouade-engines program::tests::a_folder_wsl_cannot_reach_is_refused_rather_than_another_used
+        PASS (379/467) escouade-engines program::tests::wslenv_names_the_variables_after_those_the_app_names
+        PASS (380/467) escouade-engines signin::tests::what_a_sign_in_says_is_read_without_touching_anything
+        PASS (381/467) escouade prview_tests::a_refused_token_and_the_limit_are_told_apart
+        PASS (382/467) escouade-forge forge::azure_tests::a_refused_reviewer_does_not_take_the_pull_request_back
+        PASS (383/467) escouade-forge forge::bitbucket_tests::a_refused_reviewer_does_not_take_the_pull_request_back
+        PASS (384/467) escouade-forge forge::bitbucket_tests::a_failed_or_undeployed_deployment_says_so_and_an_unknown_ref_has_none
+        PASS (385/467) escouade worktrees::tests::a_step_runs_in_its_folder_with_the_variables_and_its_failure_says_why
+        PASS (386/467) escouade-forge forge::azure_tests::a_refused_token_is_a_refusal_whatever_azure_answers
+        PASS (387/467) escouade-forge forge::gitea_tests::a_refused_merge_says_what_the_instance_said
+        PASS (388/467) escouade-forge forge::gitea_tests::a_refused_reviewer_does_not_take_the_pull_request_back
+        PASS (389/467) escouade-forge integrations::source::tests::a_kind_added_to_the_registry_is_found_and_an_unknown_one_has_no_client
+        PASS (390/467) escouade-forge integrations::source::tests::a_source_is_serialized_as_its_id_and_an_unknown_one_is_kept
+        PASS (391/467) escouade-forge integrations::source::tests::the_sources_keep_the_order_of_the_registry_the_unknown_after
+        PASS (392/467) escouade-forge forge::gitea_tests::the_account_says_who_the_token_is_and_a_refused_one_is_a_401
+        PASS (393/467) escouade-forge forge::github_tests::a_refused_reviewer_does_not_take_the_pull_request_back
+        PASS (394/467) escouade-forge plugins_linear_tests::a_key_refused_reads_as_credentials_refused_and_can_be_put_right
+        PASS (395/467) escouade-forge plugins_clickup_tests::a_key_refused_reads_as_credentials_refused_and_can_be_put_right
+        PASS (396/467) escouade voice::live::tests::a_refused_key_a_failure_or_a_stream_cut_is_said_and_nothing_hangs
+        PASS (397/467) escouade-model fence::tests::a_folder_above_the_agents_own_is_never_refused
+        PASS (398/467) escouade-model fence::tests::the_agents_of_a_private_project_are_refused_the_others
+        PASS (399/467) escouade-model fence::tests::without_a_private_project_nothing_is_refused
+        PASS (400/467) escouade-model fence::tests::the_agents_of_the_other_projects_are_refused_a_private_one
+        PASS (401/467) escouade-model model::tests::only_verified_plugins_for_a_new_installation_and_an_existing_one_keeps_its_choice
+        PASS (402/467) escouade-model model::tests::settings_saved_before_the_attached_files_get_the_defaults_of_the_spec
+        PASS (403/467) escouade-model model::tests::settings_saved_before_the_quota_pause_hold_tickets_back_at_100_percent_only
+        PASS (404/467) escouade-model model::tests::the_quota_projection_shows_past_80_percent_unless_chosen_otherwise
+        PASS (405/467) escouade signin_tests::the_launches_of_an_account_out_of_date_wait_for_the_first_ones_refresh
+        PASS (406/467) escouade-forge forge::github_tests::a_long_log_is_read_whole_and_a_longer_one_is_refused
+        PASS (407/467) escouade-model model::tests::the_quota_windows_are_saved_by_account_and_an_older_state_keeps_principals
+        PASS (408/467) escouade-model paths::tests::a_sandboxed_run_takes_the_new_variable_then_the_former_one
+        PASS (409/467) escouade-model pricing::openai::tests::a_turn_is_estimated_from_its_tokens_and_an_unknown_model_is_not
+        PASS (410/467) escouade-model pricing::tests::unknown_models_have_no_estimate
+        PASS (411/467) escouade-plan planfiles_tests::a_file_of_a_megabyte_is_cut_never_refused
+        PASS (412/467) escouade-plan plan_tests::an_update_of_an_unknown_id_makes_the_task
+        PASS (413/467) escouade-plan planfiles_tests::a_plan_outside_the_repository_is_refused
+        PASS (414/467) escouade-plan planfiles_tests::a_plan_that_is_a_link_out_of_the_repository_is_refused
+        PASS (415/467) escouade-plan planfiles_tests::a_path_not_lexically_under_the_root_is_refused_without_asking_the_disk
+        PASS (416/467) escouade-plugin-protocol tests::a_method_unknown_is_refused_and_a_notification_is_not_answered
+        PASS (417/467) escouade-plugin-protocol engine::tests::an_item_of_an_unknown_op_is_left_aside_and_the_known_ones_read
+        PASS (418/467) escouade-plugin-protocol engine::tests::a_grant_and_a_variable_never_print_their_secret
+        PASS (419/467) escouade-plugin-protocol tests::garbage_is_refused_with_a_parse_error
+        PASS (420/467) escouade-plan planfiles_tests::a_remote_or_device_path_is_refused_before_it_is_compared_to_the_root
+        PASS (421/467) escouade-plan planfiles_tests::a_variable_removes_the_workspace_only_when_it_is_that_folder_and_nothing_more
+        PASS (422/467) escouade-plugins files::tests::a_path_of_another_agent_a_dotdot_or_a_free_path_is_refused_and_said
+        PASS (423/467) escouade-plugins plugins_bench_wasm_tests::a_javy_archive_changed_is_refused
+        PASS (424/467) escouade-plugins plugins_bench_wasm_tests::a_bundle_that_imports_node_child_process_is_refused_with_the_reason_in_french_and_english
+        PASS (425/467) escouade-plugins plugins_reactor_tests::a_fetch_refused_goes_to_the_journal_from_beside_the_thread
+        PASS (426/467) escouade-plugins plugins_seed_tests::the_committed_list_holds_the_first_hand_the_store_signed
+        PASS (427/467) escouade-plugins plugins_rust_build_tests::a_patch_or_a_replace_is_refused
+        PASS (428/467) escouade-plugins plugins_rust_build_tests::a_manifest_that_is_not_there_or_does_not_read_is_refused
+        PASS (429/467) escouade-plugins plugins_rust_build_tests::a_target_other_than_a_cdylib_is_refused
+        PASS (430/467) escouade-plugins plugins_rust_build_tests::a_script_or_a_macro_of_the_plugin_itself_is_refused
+        PASS (431/467) escouade-plugins plugins_rust_build_tests::a_path_that_leaves_the_folder_is_refused_in_every_table
+        PASS (432/467) escouade-plugins plugins_rust_build_tests::what_would_change_the_compilation_is_refused
+        PASS (433/467) escouade-plugins files::tests::a_link_that_leaves_its_root_is_refused_one_that_stays_is_followed
+        PASS (434/467) escouade-plugins plugins_reactor_tests::a_plugin_without_its_module_or_with_no_reactor_is_refused_and_says_why
+        PASS (435/467) escouade-plugins plugins_rust_build_tests::a_plugin_without_its_lock_is_refused_with_the_reason
+        PASS (436/467) escouade-plugins plugins_rust_build_tests::what_does_not_come_from_crates_io_is_refused
+        PASS (437/467) escouade-plugins procs::tests::a_variable_passes_declared_and_out_of_the_refused_families
+        PASS (438/467) escouade-plugins plugins_store_tests::escouade_s_own_folder_is_refused_in_development
+        PASS (439/467) escouade-updates net_tests::a_download_a_company_proxy_refused_says_so_and_sends_to_the_browser
+        PASS (440/467) escouade-plugins plugins_store_tests::a_run_js_plugin_installs_the_module_the_store_compiled_and_a_changed_one_is_refused
+        PASS (441/467) escouade-updates net_tests::a_download_refused_by_something_that_never_named_itself_is_a_plain_refusal
+        PASS (442/467) escouade-plugins plugins_rust_build_tests::version_says_the_toolchain_and_a_toolchain_of_another_form_is_refused
+        PASS (443/467) escouade-plugins store_keys::tests::a_seal_is_refused_while_the_app_embeds_no_key
+        PASS (444/467) escouade-plugins plugins_seed_tests::a_version_for_another_escouade_is_refused
+        PASS (445/467) escouade-plugins plugins_seed_tests::an_install_from_the_seed_for_a_gesture_counts
+        PASS (446/467) escouade-plugins plugins_store_tests::an_unverified_version_installs_unless_only_verified_ones_are_wanted
+        PASS (447/467) escouade tickets_tests::a_merge_is_refused_into_a_branch_an_agent_works_on
+        PASS (448/467) escouade-plugins plugins_store_tests::a_run_wasm_plugin_installs_the_module_the_store_compiled_and_one_without_is_refused
+        PASS (449/467) escouade-plugins plugins_store_tests::a_plugin_in_a_folder_keeps_its_folder_and_a_folder_that_climbs_is_refused
+        PASS (450/467) escouade-plugins plugins_seed_tests::a_false_signature_or_a_changed_file_is_refused_and_says_why
+        PASS (451/467) escouade-plugins plugins_seed_tests::nothing_counts_of_a_plugin_the_app_gives_a_folder_in_development_or_a_seed_of_development
+        PASS (452/467) escouade-updates net_tests::the_probe_reads_the_code_the_page_and_the_name_of_what_refused
+        PASS (453/467) escouade-updates net_tests::a_success_is_unreadable_not_refused_and_its_body_is_not_read
+        PASS (454/467) escouade-plugins procs::tests::the_variables_it_names_reach_the_program
+        PASS (455/467) escouade-plugins procs::tests::git_status_with_a_configuration_by_variables_is_refused_even_declared
+        PASS (456/467) escouade-forge plugins_adapters_tests::a_host_that_crashes_leaves_the_pull_requests_unknown_not_lost
+        PASS (457/467) escouade-forge plugins_adapters_tests::the_plugin_gets_its_token_itself_and_a_refused_one_is_a_401
+        PASS (458/467) escouade tickets_tests::a_second_validation_while_one_runs_is_refused
+        PASS (459/467) escouade mcp::docs_tests::what_the_docs_have_to_share_is_read_and_sharing_is_the_users_gesture
+        PASS (460/467) escouade-plugins plugins_runtime_tests::while_it_restarts_messages_wait_and_what_was_attached_is_given_again
+        PASS (461/467) escouade-plugins plugins_runtime_tests::a_folder_in_development_read_again_stops_its_process_for_the_new_manifest
+        PASS (462/467) escouade-plugins plugins_wasm_tests::slack_is_refused_any_host_but_those_of_its_permissions
+        PASS (463/467) escouade tickets_tests::an_approval_not_waited_for_is_refused_as_the_windows_then_runs_in_the_background
+        PASS (464/467) escouade tickets_tests::a_merge_is_refused_on_a_project_folder_with_uncommitted_changes
+        PASS (465/467) escouade prreview::tests::an_answer_that_is_no_review_says_so_and_a_refused_publication_stays_a_draft
+        PASS (466/467) escouade-plugins plugins_rust_build_tests::a_dependency_with_a_script_off_the_list_is_refused_before_it_runs
+        PASS (467/467) escouade ticketprs::review_tests::a_conflict_with_the_target_is_settled_by_a_merge_of_the_target
+     Summary 467 tests run: 467 passed (7 leaky), 4188 skipped

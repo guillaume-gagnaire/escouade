@@ -1,0 +1,35 @@
+{
+  "theUpdate": "a theme whose 1.0.0 is verified and whose 1.1.0 is not; it asks for nothing more",
+  "askedAlone": {
+    "says": {
+      "nobody reviewed this version (« Personne n’a relu cette version »)": true,
+      "a tag « Non vérifié »": true,
+      "the seal « Vérifié par Escouade »": false
+    },
+    "buttons": ["Annuler", "Mettre à jour"],
+    "text": "Mettre à jour Contraste élevé ? Co Contraste élevé Non vérifié Escouade · v1.1.0 · MIT dev.exemple.high-contrast Un thème à fort contraste, clair et sombre : texte pur, bordures nettes, couleurs d'état franches. Personne n’a relu cette version. Elle vient du store, son archive est bien celle que l’auteur a publiée, mais rien ne dit ce que fait son programme. Vient de store.escouade.dev Version v1.0.0 → v1.1.0 → 6b86b27 Empreinte store:28af…5834 · archive reçue identique Signature Aucune : version non vérifiée Elle ne demande rien de plus que la v1.0.0 installée. Ce qu’il ajoute Un thème, dans "
+  },
+  "windowsOfUpdateAll": [
+    {
+      "title": "Mettre à jour Contraste élevé ?",
+      "says": {
+        "nobody reviewed this version (« Personne n’a relu cette version »)": true,
+        "a tag « Non vérifié »": true,
+        "the seal « Vérifié par Escouade »": false
+      },
+      "buttons": ["Annuler", "Mettre à jour"],
+      "text": "Mettre à jour Contraste élevé ? Co Contraste élevé Non vérifié Escouade · v1.1.0 · MIT dev.exemple.high-contrast Un thème à fort contraste, clair et sombre : texte pur, bordures nettes, couleurs d'état franches. Personne n’a relu cette version. Elle vient du store, son archive est bien celle que l’auteur a publiée, mais rien ne dit ce que fait son programme. Vient de store.escouade.dev Version v1.0.0 → v1.1.0 → 6b86b27 Empreinte store:28af…5834 · archive reçue identique Signature Aucune : version non vérifiée Elle ne demande rien de plus que la v1.0.0 installée. Ce qu’il ajoute Un thème, dans "
+    },
+    {
+      "title": "Mettre à jour Slack ?",
+      "says": {
+        "nobody reviewed this version (« Personne n’a relu cette version »)": true,
+        "a tag « Non vérifié »": true,
+        "the seal « Vérifié par Escouade »": false
+      },
+      "buttons": ["Annuler", "Mettre à jour"],
+      "text": "Mettre à jour Slack ? Sl Slack Non vérifié Escouade · v1.1.0 · MIT dev.exemple.slack Les tickets à tester et les agents qui attendent, dans le salon Slack de chaque projet. Personne n’a relu cette version. Elle vient du store, son archive est bien celle que l’auteur a publiée, mais rien ne dit ce que fait son programme. Vient de store.escouade.dev Version v1.0.0 → v1.1.0 → eb1e33e Empreinte store:a930…598e · archive reçue identique Signature Aucune : version non vérifiée Cette version demande plus que la v1.0.0 installée : ton accord est redemandé. Il sera chargé désactivé : Escouade ne lance "
+    }
+  ],
+  "installedAfterClosingThem": "1.0.0"
+}

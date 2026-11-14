@@ -1,0 +1,22 @@
+{
+  "inside the project": {
+    "images": 1,
+    "text": ""
+  },
+  "outside the project": {
+    "images": 1,
+    "text": ""
+  },
+  "a file that is no image": {
+    "images": 0,
+    "text": "Image introuvable : <profil>/AppData/Local/Temp/escoua"
+  },
+  "a system file": {
+    "images": 0,
+    "text": "Image introuvable : C:/Windows/win.ini"
+  },
+  "a share": {
+    "images": 0,
+    "text": ""
+  }
+}

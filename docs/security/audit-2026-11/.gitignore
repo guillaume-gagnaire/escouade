@@ -1,0 +1,4 @@
+# What build.mjs keeps to look at (the report's HTML), and what a test run leaves.
+build/
+audit-out/
+poc/malicious-plugin/mode.json

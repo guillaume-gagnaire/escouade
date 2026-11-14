@@ -1,0 +1,41 @@
+manifest: version 2.2.0, 9 platforms
+
+linux-x86_64, linux-x86_64-appimage
+file: Escouade_2.2.0_amd64.AppImage (129899000 bytes, sha256 84a6bdb7018a947d0ee3a07495851836f4775bd88574851c0111df3126eb2b6b)
+algorithm: Ed25519 over BLAKE2b-512 (prehashed)
+trusted comment: timestamp:1794651886 file:Escouade_2.2.0_amd64.AppImage version:2.2.0
+ok   the key is a minisign Ed25519 key
+ok   the signature names the key the app embeds
+ok   the signature of the file holds
+ok   the signature of the trusted comment holds
+ok   the .sig beside the file is the manifest's signature
+
+linux-x86_64-deb
+file: Escouade_2.2.0_amd64.deb (57828686 bytes, sha256 317c0c76eeea382c19064d45e31c5deeb9441723a192325448eaec13b3069706)
+algorithm: Ed25519 over BLAKE2b-512 (prehashed)
+trusted comment: timestamp:1794651886 file:Escouade_2.2.0_amd64.deb version:2.2.0
+ok   the key is a minisign Ed25519 key
+ok   the signature names the key the app embeds
+ok   the signature of the file holds
+ok   the signature of the trusted comment holds
+ok   the .sig beside the file is the manifest's signature
+
+windows-x86_64, windows-x86_64-nsis
+file: Escouade_2.2.0_x64-setup.exe (40689016 bytes, sha256 4098e3c5bf28002c15ca4d9e7ecb0541a7df2ef68cabbed336d1add35c223ba4)
+algorithm: Ed25519 over BLAKE2b-512 (prehashed)
+trusted comment: timestamp:1794652262 file:Escouade_2.2.0_x64-setup.exe version:2.2.0
+ok   the key is a minisign Ed25519 key
+ok   the signature names the key the app embeds
+ok   the signature of the file holds
+ok   the signature of the trusted comment holds
+ok   the .sig beside the file is the manifest's signature
+
+darwin-aarch64, darwin-x86_64, darwin-aarch64-app, darwin-x86_64-app
+file: Escouade_universal.app.tar.gz (102051971 bytes, sha256 8775066d4dc96f13df7721725cf24a279cf873d0b3d4293cf86dc03ba0181e98)
+algorithm: Ed25519 over BLAKE2b-512 (prehashed)
+trusted comment: timestamp:1794653297 file:Escouade.app.tar.gz version:2.2.0
+ok   the key is a minisign Ed25519 key
+ok   the signature names the key the app embeds
+ok   the signature of the file holds
+ok   the signature of the trusted comment holds
+ok   the .sig beside the file is the manifest's signature

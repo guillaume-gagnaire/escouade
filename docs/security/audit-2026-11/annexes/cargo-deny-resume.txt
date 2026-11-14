@@ -1,0 +1,9 @@
+cargo deny 0.20.2 --manifest-path src-tauri/Cargo.toml --config deny.toml check   (deny.toml : celui du dépôt)
+
+advisories ok, bans ok, licenses ok, sources ok
+
+  62  warning[duplicate]
+  11  warning[wildcard]
+   4  warning[license-not-encountered]
+
+Erreurs :

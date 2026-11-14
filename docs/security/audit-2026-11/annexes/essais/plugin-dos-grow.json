@@ -1,0 +1,28 @@
+{
+  "privateMemoryMb": {
+    "before": 18,
+    "peak": 153,
+    "after": 43
+  },
+  "phases": [
+    {
+      "atMs": 257,
+      "phase": "starting",
+      "restarts": 0,
+      "privateMemoryMb": 23
+    },
+    {
+      "atMs": 4300,
+      "phase": "stopped",
+      "restarts": 3,
+      "privateMemoryMb": 42
+    }
+  ],
+  "finalPhase": "stopped",
+  "journalSaid": [
+    "ended (no code) without being asked to: its instance crashed: error while executing at wasm backtrace:: Exception { message: Some(\"out of memory\"), stack: Some(\"    at grow (function.mjs:541:35)\\n    ",
+    "Exception { message: Some(\"out of memory\"), stack: Some(\"    at grow (function.mjs:541:35)\\n    at handle (function.mjs:578:26)\\n    at <anonymous> (function.mjs:599:60)\\n    at pump (function.mjs:348",
+    "ended (no code) without being asked to: its instance crashed: error while executing at wasm backtrace:: Exception { message: Some(\"out of memory\"), stack: Some(\"    at grow (function.mjs:541:35)\\n    ",
+    "stopped after 4 crashes within 5 minutes"
+  ]
+}

@@ -1,0 +1,22 @@
+cargo-geiger 0.13.0, cargo geiger --output-format Ascii, dans src-tauri
+
+524 crates dans le graphe : 266 avec du code unsafe (!), 199 sans (?), 59 qui l'interdisent (:))
+
+Les crates du dépôt (x/y : unsafe utilisé par la construction / trouvé dans la crate) :
+Functions  Expressions  Impls  Traits  Methods
+1/1        141/196      0/0    0/0     0/0      !  escouade 2.2.0
+0/0        0/0          0/0    0/0     0/0      ?  escouade-acp 0.1.6
+0/0        0/0          0/0    0/0     0/0      ?  escouade-base 0.1.0
+0/0        0/0          0/0    0/0     0/0      ?  escouade-engines 0.1.0
+0/0        0/0          0/0    0/0     0/0      ?  escouade-forge 0.1.0
+0/0        0/0          0/0    0/0     0/0      ?  escouade-mcp 0.1.0
+1/1        254/254      2/2    0/0     0/0      !  escouade-model 0.1.0
+0/0        0/0          0/0    0/0     0/0      ?  escouade-plan 0.1.0
+0/0        0/0          0/0    0/0     0/0      ?  escouade-plugin-cli 2.2.0
+0/0        0/0          0/0    0/0     0/0      ?  escouade-plugin-kit 0.1.2
+0/0        8/8          0/0    0/0     0/0      !  escouade-plugin-protocol 0.1.2
+0/0        3/3          0/0    0/0     0/0      !  escouade-plugins 0.1.0
+0/0        0/0          0/0    0/0     0/0      ?  escouade-updates 0.1.0
+0/0        0/0          0/0    0/0     0/0      ?  escouade-vectors 0.1.0
+0/0        0/0          0/0    0/0     0/0      ?  escouade-voice 0.1.0
+1/1        10/10        0/0    0/0     0/0      !  escouade-voice-local 0.1.0

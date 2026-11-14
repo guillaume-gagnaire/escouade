@@ -1,0 +1,212 @@
+{
+  "valid token (reference)": {
+    "status": 200,
+    "cors": null,
+    "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{\"tools\":{}},\"serverInfo\":{\"name\":\"escouade\",\"version\":\"2.2.0\"},\"instructions\":\""
+  },
+  "no token": {
+    "status": 401,
+    "cors": null,
+    "body": "Requête refusée : pas de jeton"
+  },
+  "wrong token": {
+    "status": 401,
+    "cors": null,
+    "body": "Requête refusée : jeton inconnu"
+  },
+  "token of another length": {
+    "status": 401,
+    "cors": null,
+    "body": "Requête refusée : jeton inconnu"
+  },
+  "token with a suffix": {
+    "status": 401,
+    "cors": null,
+    "body": "Requête refusée : jeton inconnu"
+  },
+  "basic scheme": {
+    "status": 401,
+    "cors": null,
+    "body": "Requête refusée : pas de jeton"
+  },
+  "token in the query": {
+    "status": 401,
+    "cors": null,
+    "body": "Requête refusée : pas de jeton"
+  },
+  "token in a cookie": {
+    "status": 401,
+    "cors": null,
+    "body": "Requête refusée : pas de jeton"
+  },
+  "Host: evil.example": {
+    "status": 403,
+    "cors": null,
+    "body": "Requête refusée : en-tête Host inattendu (evil.example)"
+  },
+  "Host: evil.example:<port>": {
+    "status": 403,
+    "cors": null,
+    "body": "Requête refusée : en-tête Host inattendu (evil.example:4102)"
+  },
+  "Host: 127.0.0.1:<port>.evil.example": {
+    "status": 403,
+    "cors": null,
+    "body": "Requête refusée : en-tête Host inattendu (127.0.0.1:4102.evil.example)"
+  },
+  "Host: 127.0.0.1:<port+1>": {
+    "status": 403,
+    "cors": null,
+    "body": "Requête refusée : en-tête Host inattendu (127.0.0.1:4103)"
+  },
+  "Host: 127.0.0.1": {
+    "status": 403,
+    "cors": null,
+    "body": "Requête refusée : en-tête Host inattendu (127.0.0.1)"
+  },
+  "Host: [::1]:<port>": {
+    "status": 403,
+    "cors": null,
+    "body": "Requête refusée : en-tête Host inattendu ([::1]:4102)"
+  },
+  "Host: 0.0.0.0:<port>": {
+    "status": 403,
+    "cors": null,
+    "body": "Requête refusée : en-tête Host inattendu (0.0.0.0:4102)"
+  },
+  "Origin: https://evil.example": {
+    "status": 403,
+    "cors": null,
+    "body": "Requête refusée : en-tête Origin d’une page web (https://evil.example)"
+  },
+  "Origin: null": {
+    "status": 403,
+    "cors": null,
+    "body": "Requête refusée : en-tête Origin d’une page web (null)"
+  },
+  "Origin: http://127.0.0.1:<port>": {
+    "status": 403,
+    "cors": null,
+    "body": "Requête refusée : en-tête Origin d’une page web (http://127.0.0.1:4102)"
+  },
+  "Origin: http://localhost": {
+    "status": 403,
+    "cors": null,
+    "body": "Requête refusée : en-tête Origin d’une page web (http://localhost)"
+  },
+  "Origin: tauri://localhost": {
+    "status": 403,
+    "cors": null,
+    "body": "Requête refusée : en-tête Origin d’une page web (tauri://localhost)"
+  },
+  "no Host (HTTP/1.0)": {
+    "status": 403,
+    "cors": null,
+    "body": "Requête refusée : pas d’en-tête Host"
+  },
+  "absolute URI of another host": {
+    "status": 403,
+    "cors": null,
+    "body": "Requête refusée : en-tête Host inattendu (evil.example)"
+  },
+  "CORS preflight": {
+    "status": 403,
+    "cors": null,
+    "body": "Requête refusée : en-tête Origin d’une page web (https://evil.example)"
+  },
+  "path / with the token": {
+    "status": 404,
+    "cors": null,
+    "body": "Requête refusée : chemin inconnu (/)"
+  },
+  "path / without a token": {
+    "status": 401,
+    "cors": null,
+    "body": "Requête refusée : pas de jeton"
+  },
+  "path /mcp/ with the token": {
+    "status": 404,
+    "cors": null,
+    "body": "Requête refusée : chemin inconnu (/mcp/)"
+  },
+  "path /mcp/ without a token": {
+    "status": 401,
+    "cors": null,
+    "body": "Requête refusée : pas de jeton"
+  },
+  "path /mcp/../mcp with the token": {
+    "status": 404,
+    "cors": null,
+    "body": "Requête refusée : chemin inconnu (/mcp/../mcp)"
+  },
+  "path /mcp/../mcp without a token": {
+    "status": 401,
+    "cors": null,
+    "body": "Requête refusée : pas de jeton"
+  },
+  "path /MCP with the token": {
+    "status": 404,
+    "cors": null,
+    "body": "Requête refusée : chemin inconnu (/MCP)"
+  },
+  "path /MCP without a token": {
+    "status": 401,
+    "cors": null,
+    "body": "Requête refusée : pas de jeton"
+  },
+  "path /mcp%2f with the token": {
+    "status": 404,
+    "cors": null,
+    "body": "Requête refusée : chemin inconnu (/mcp%2f)"
+  },
+  "path /mcp%2f without a token": {
+    "status": 401,
+    "cors": null,
+    "body": "Requête refusée : pas de jeton"
+  },
+  "path //mcp with the token": {
+    "status": 404,
+    "cors": null,
+    "body": "Requête refusée : chemin inconnu (//mcp)"
+  },
+  "path //mcp without a token": {
+    "status": 401,
+    "cors": null,
+    "body": "Requête refusée : pas de jeton"
+  },
+  "path /.env with the token": {
+    "status": 404,
+    "cors": null,
+    "body": "Requête refusée : chemin inconnu (/.env)"
+  },
+  "path /.env without a token": {
+    "status": 401,
+    "cors": null,
+    "body": "Requête refusée : pas de jeton"
+  },
+  "path /hook with the token": {
+    "status": 404,
+    "cors": null,
+    "body": "Requête refusée : chemin inconnu (/hook)"
+  },
+  "path /hook without a token": {
+    "status": 401,
+    "cors": null,
+    "body": "Requête refusée : pas de jeton"
+  },
+  "GET /mcp with the token": {
+    "status": 405,
+    "cors": null,
+    "body": "Method Not Allowed"
+  },
+  "a body that is not JSON": {
+    "status": 415,
+    "cors": null,
+    "body": "fail to deserialize request body EOF while parsing a value at line 1 column 11"
+  },
+  "a body announced at 64 MiB": {
+    "status": 413,
+    "cors": null,
+    "body": "Requête refusée : trop volumineuse"
+  }
+}

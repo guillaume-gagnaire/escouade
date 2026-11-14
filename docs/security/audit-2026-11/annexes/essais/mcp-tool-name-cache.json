@@ -1,0 +1,130 @@
+{
+  "privateMemoryMbAtStart": 19,
+  "rounds": [
+    {
+      "round": "1",
+      "protocolVersion": "2025-06-18",
+      "mbOfNamesSent": 50,
+      "statuses": {
+        "400": 200
+      },
+      "privateMemoryMb": 19
+    },
+    {
+      "round": "2",
+      "protocolVersion": "2025-06-18",
+      "mbOfNamesSent": 50,
+      "statuses": {
+        "400": 200
+      },
+      "privateMemoryMb": 19
+    },
+    {
+      "round": "3",
+      "protocolVersion": "2026-07-28",
+      "mbOfNamesSent": 50,
+      "statuses": {
+        "400": 200
+      },
+      "privateMemoryMb": 21
+    },
+    {
+      "round": "4",
+      "protocolVersion": "2026-07-28",
+      "mbOfNamesSent": 50,
+      "statuses": {
+        "400": 200
+      },
+      "privateMemoryMb": 20
+    },
+    {
+      "round": "5",
+      "protocolVersion": "2026-07-28",
+      "mbOfNamesSent": 50,
+      "statuses": {
+        "400": 200
+      },
+      "privateMemoryMb": 20
+    }
+  ],
+  "statusWithoutToken": 401,
+  "waysAround": [
+    {
+      "shape": "in a batch, behind a call of a real tool",
+      "statuses": {
+        "400": 200
+      },
+      "privateMemoryMb": 20
+    },
+    {
+      "shape": "the method twice, the harmless one last",
+      "statuses": {
+        "415": 200
+      },
+      "privateMemoryMb": 19
+    },
+    {
+      "shape": "the method twice, the harmless one first",
+      "statuses": {
+        "400": 200
+      },
+      "privateMemoryMb": 18
+    },
+    {
+      "shape": "the name twice, a real tool last",
+      "statuses": {
+        "400": 200
+      },
+      "privateMemoryMb": 19
+    },
+    {
+      "shape": "the name twice, a real tool first",
+      "statuses": {
+        "400": 200
+      },
+      "privateMemoryMb": 19
+    },
+    {
+      "shape": "bytes after the JSON",
+      "statuses": {
+        "415": 200
+      },
+      "privateMemoryMb": 20
+    },
+    {
+      "shape": "a byte order mark before the JSON",
+      "statuses": {
+        "415": 200
+      },
+      "privateMemoryMb": 20
+    },
+    {
+      "shape": "the method with an escape",
+      "statuses": {
+        "400": 200
+      },
+      "privateMemoryMb": 20
+    },
+    {
+      "shape": "a real tool’s name in another case",
+      "statuses": {
+        "400": 200
+      },
+      "privateMemoryMb": 20
+    },
+    {
+      "shape": "list_projects with 3 MiB of arguments",
+      "statuses": {
+        "413": 1
+      },
+      "privateMemoryMb": 18
+    },
+    {
+      "shape": "create_ticket with 3 MiB of arguments",
+      "statuses": {
+        "200": 1
+      },
+      "privateMemoryMb": 21
+    }
+  ]
+}
