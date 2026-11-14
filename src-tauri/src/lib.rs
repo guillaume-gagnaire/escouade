@@ -139,6 +139,7 @@ mod pagecrash;
 mod paths;
 #[cfg(test)]
 mod remote_tests;
+mod vscodestudy;
 // What an agent is getting through, and the plan files it follows: the crate `escouade-plan`.
 use escouade_plan::{plan, planfiles};
 // The data and what it names, the processes and WSL: the crate `escouade-model` (`model` and `paths` re-export theirs).
@@ -891,6 +892,13 @@ pub fn run() {
                 commands::remote_image,
                 commands::fs_mkdir,
                 commands::fs_base,
+                commands::lsp_start,
+                commands::lsp_send,
+                commands::lsp_stop,
+                commands::vscode_host_start,
+                commands::study_env,
+                commands::study_log,
+                commands::study_quit,
                 commands::code_search,
                 commands::term_spawn,
                 commands::run_start,

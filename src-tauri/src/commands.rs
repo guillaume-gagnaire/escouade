@@ -2341,6 +2341,55 @@ pub async fn commit_direct(
     counted(&core, Event::Committed, r)
 }
 
+// ---------- ESC-444, the study of the VS Code view ----------
+
+/// Starts the language server `server` (`rust`, `typescript`) in the project's folder.
+#[tauri::command]
+pub async fn lsp_start(
+    app: tauri::AppHandle,
+    core: CoreState<'_>,
+    project_id: String,
+    server: String,
+) -> Res<u32> {
+    let (root, _) = core.edit_root(&project_id, None).await.map_err(err)?;
+    crate::vscodestudy::lsp_start(app, &server, std::path::Path::new(&root)).map_err(err)
+}
+
+#[tauri::command]
+pub fn lsp_send(id: u32, msg: String) -> Res<()> {
+    crate::vscodestudy::lsp_send(id, msg).map_err(err)
+}
+
+#[tauri::command]
+pub fn lsp_stop(id: u32) {
+    crate::vscodestudy::lsp_stop(id)
+}
+
+#[tauri::command]
+pub async fn vscode_host_start() -> Res<crate::vscodestudy::HostInfo> {
+    let log = crate::vscodestudy::study_file().map(|f| f.with_extension("host.log"));
+    crate::vscodestudy::host_start(log).await.map_err(err)
+}
+
+/// Whether the app was started for the study's measures (`ESCOUADE_VSCODE_STUDY`), and its options.
+#[tauri::command]
+pub fn study_env() -> Option<String> {
+    crate::vscodestudy::study_file()?;
+    Some(std::env::var("ESCOUADE_VSCODE_STUDY_OPTS").unwrap_or_default())
+}
+
+#[tauri::command]
+pub fn study_log(line: String) -> Res<()> {
+    crate::vscodestudy::study_log(&line).map_err(err)
+}
+
+#[tauri::command]
+pub fn study_quit(app: tauri::AppHandle) {
+    if crate::vscodestudy::study_file().is_some() {
+        app.exit(0);
+    }
+}
+
 // ---------- embedded editor ----------
 
 #[tauri::command]

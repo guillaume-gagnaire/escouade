@@ -29,7 +29,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' ipc: http://ipc.localhost"
+      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data: blob: https://open-vsx.org https://openvsxorg.blob.core.windows.net https://openvsx.eclipsecontent.org; style-src 'self' 'unsafe-inline' blob:; font-src 'self' data: blob:; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval' blob: https://open-vsx.org https://openvsxorg.blob.core.windows.net https://openvsx.eclipsecontent.org; worker-src 'self' blob:; frame-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost blob: data: https://open-vsx.org https://openvsxorg.blob.core.windows.net https://openvsx.eclipsecontent.org ws://127.0.0.1:* http://127.0.0.1:*"
     }
   },
   "bundle": {

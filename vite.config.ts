@@ -6,6 +6,8 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig({
   plugins: [svelte()],
   clearScreen: false,
+  // ESC-444 (study): the workers of the VS Code view are ES modules (its extension host imports its own).
+  worker: { format: 'es' },
   server: {
     port: 1420,
     strictPort: true,
