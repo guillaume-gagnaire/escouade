@@ -200,6 +200,7 @@ async function run(mode, n) {
       nameAsked: true,
       accountsVersion: 1,
       autoUpdate: false,
+      ...(args.theme ? { theme: args.theme } : {}),
     }),
   );
   const logFile = path.join(dir, 'study.log');

@@ -119,19 +119,21 @@ export const tokenSources: Record<string, string> = {};
 
 /** The tokens of `el` (the project's tint is on its frame), as `#rrggbbaa`. */
 export function readTokens(el: Element = document.documentElement): Tokens {
-  const probe = document.createElement('span');
-  el.appendChild(probe);
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 1;
   const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
   const out = {} as Tokens;
+  // A probe of its own for each token: WKWebView answered the first token's colour for all of them when one probe's
+  // colour was changed from token to token (its text then the colour of its background).
   for (const t of TOKENS) {
+    const probe = document.createElement('span');
     probe.style.color = `var(--${t})`;
+    el.appendChild(probe);
     const css = getComputedStyle(probe).color;
+    probe.remove();
     tokenSources[t] = css;
     out[t] = cssToHex(css) ?? canvasHex(ctx, css);
   }
-  probe.remove();
   return out;
 }
 

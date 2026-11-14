@@ -88,7 +88,7 @@ export async function maybeRun() {
       );
       const label = document.querySelector('#vscode-layer .explorer-folders-view .label-name');
       await log(
-        `theme panel=${tokenSources.panel} text=${tokenSources.text} bg=${bg ? getComputedStyle(bg).backgroundColor : '-'} label=${label ? getComputedStyle(label).color : '-'}`,
+        `theme panel=${tokenSources.panel} text=${tokenSources.text} soft=${tokenSources.soft} p=${tokenSources.p} bg=${bg ? getComputedStyle(bg).backgroundColor : '-'} label=${label ? getComputedStyle(label).color : '-'}`,
       );
     }
     await sleep(rest);
