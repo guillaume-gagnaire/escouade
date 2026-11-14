@@ -143,7 +143,7 @@ jobs:
         shell: bash
         run: |
           case "$RUNNER_OS" in
-            Linux) dpkg -l | grep -E 'libwebkit2gtk-4.1-0 ' | awk '{print "WebKitGTK " $3}' ;;
+            Linux) echo "WebKitGTK $(dpkg-query -W -f='${Version}' libwebkit2gtk-4.1-0)" ;;
             macOS) sw_vers; defaults read /System/Library/Frameworks/WebKit.framework/Resources/Info CFBundleVersion ;;
             Windows) reg query "HKLM\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" /v pv || true ;;
           esac | tee -a "$GITHUB_STEP_SUMMARY"

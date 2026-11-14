@@ -295,6 +295,7 @@ async function run(mode, n) {
     failed: log.find((l) => l.text.startsWith('failed'))?.text ?? null,
     marks: log.find((l) => l.text.startsWith('marks'))?.text ?? null,
     lsp: log.find((l) => l.text.startsWith('lsp '))?.text ?? null,
+    theme: log.find((l) => l.text.startsWith('theme '))?.text ?? null,
     extensions: log.filter((l) => l.text.startsWith('ext ') || l.text.startsWith('cspell ')).map((l) => l.text),
     pageErrors: log.filter((l) => l.text.startsWith('error ')).map((l) => l.text.slice(6)),
     env: log.find((l) => l.text.startsWith('env'))?.text ?? null,

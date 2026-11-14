@@ -36,14 +36,86 @@ export const TOKENS = [
 export type Tokens = Record<(typeof TOKENS)[number], string>;
 
 /** `#rrggbbaa` of a colour of the browser's, by a canvas of one pixel (any notation the engine knows). */
-function hex(ctx: CanvasRenderingContext2D, css: string): string {
+function canvasHex(ctx: CanvasRenderingContext2D, css: string): string {
   ctx.clearRect(0, 0, 1, 1);
   ctx.fillStyle = '#000';
   ctx.fillStyle = css;
   ctx.fillRect(0, 0, 1, 1);
   const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
-  return '#' + [r, g, b, a].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return toHex(r, g, b, a / 255);
 }
+
+const toHex = (r: number, g: number, b: number, a: number) =>
+  '#' +
+  [r, g, b, a * 255]
+    .map((x) =>
+      Math.round(Math.min(255, Math.max(0, x)))
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('');
+
+/** sRGB's transfer curve, from a linear value (0 to 1) to 0 to 255. */
+const encode = (x: number) => 255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055);
+
+/** Oklab (L 0 to 1) to sRGB 0 to 255 (Björn Ottosson's matrices). */
+function oklabToRgb(L: number, a: number, b: number): [number, number, number] {
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  return [
+    encode(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+    encode(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+    encode(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s),
+  ];
+}
+
+/**
+ * `#rrggbbaa` of a colour as `getComputedStyle` gives it, by each engine its own way: `rgb()`/`rgba()` (WebView2),
+ * `color(srgb …)`, `oklch()`, `oklab()` (WebKit keeps a color-mix's space), `#hex`. Null for another notation.
+ */
+export function cssToHex(css: string): string | null {
+  const s = css.trim().toLowerCase();
+  const nums = (body: string) =>
+    body
+      .replace(/[,/]/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((x) => (x.endsWith('%') ? parseFloat(x) / 100 : x === 'none' ? 0 : parseFloat(x)));
+  const inner = /^[a-z-]+\((.*)\)$/.exec(s)?.[1];
+  if (s.startsWith('#')) {
+    const h = s.slice(1);
+    const full = h.length <= 4 ? [...h].map((c) => c + c).join('') : h;
+    const [r, g, b, a = 255] = (full.match(/../g) ?? []).map((x) => parseInt(x, 16));
+    return toHex(r, g, b, a / 255);
+  }
+  if (!inner) return null;
+  if (s.startsWith('rgb')) {
+    const [r, g, b, a = 1] = nums(inner);
+    return toHex(r, g, b, a);
+  }
+  if (s.startsWith('color(')) {
+    const [space, ...rest] = inner.split(/\s+/);
+    if (space !== 'srgb') return null;
+    const [r, g, b, a = 1] = nums(rest.join(' '));
+    return toHex(r * 255, g * 255, b * 255, a);
+  }
+  if (s.startsWith('oklch(')) {
+    const [L, C, H, a = 1] = nums(inner);
+    const h = (H * Math.PI) / 180;
+    const [r, g, b] = oklabToRgb(L > 1 ? L / 100 : L, C * Math.cos(h), C * Math.sin(h));
+    return toHex(r, g, b, a);
+  }
+  if (s.startsWith('oklab(')) {
+    const [L, A, B, a = 1] = nums(inner);
+    const [r, g, b] = oklabToRgb(L > 1 ? L / 100 : L, A, B);
+    return toHex(r, g, b, a);
+  }
+  return null;
+}
+
+/** What the engine gave for each token, for the study's log (WKWebView read them all transparent through a canvas). */
+export const tokenSources: Record<string, string> = {};
 
 /** The tokens of `el` (the project's tint is on its frame), as `#rrggbbaa`. */
 export function readTokens(el: Element = document.documentElement): Tokens {
@@ -55,7 +127,9 @@ export function readTokens(el: Element = document.documentElement): Tokens {
   const out = {} as Tokens;
   for (const t of TOKENS) {
     probe.style.color = `var(--${t})`;
-    out[t] = hex(ctx, getComputedStyle(probe).color);
+    const css = getComputedStyle(probe).color;
+    tokenSources[t] = css;
+    out[t] = cssToHex(css) ?? canvasHex(ctx, css);
   }
   probe.remove();
   return out;

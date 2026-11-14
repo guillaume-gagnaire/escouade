@@ -82,6 +82,14 @@ export async function maybeRun() {
     if (vscode) {
       const s = (globalThis as { __escouadeVscode?: { marks: Record<string, number>; nodeHost: unknown } }).__escouadeVscode;
       await log(`marks ${JSON.stringify(s?.marks ?? {})} host ${JSON.stringify(s?.nodeHost ?? null)}`);
+      const { tokenSources } = await import('./theme');
+      const bg = document.querySelector(
+        '#vscode-layer .monaco-workbench .part.editor .monaco-editor-background, #vscode-layer .monaco-workbench .part.sidebar',
+      );
+      const label = document.querySelector('#vscode-layer .explorer-folders-view .label-name');
+      await log(
+        `theme panel=${tokenSources.panel} text=${tokenSources.text} bg=${bg ? getComputedStyle(bg).backgroundColor : '-'} label=${label ? getComputedStyle(label).color : '-'}`,
+      );
     }
     await sleep(rest);
     await log('mark rest-editor');
@@ -120,7 +128,9 @@ async function install(api: Vs, id: string): Promise<string> {
   );
   const end = Date.now() + 120_000;
   while (state === 'pending' && Date.now() < end) {
-    document.querySelector<HTMLElement>('#vscode-layer .monaco-dialog-box .monaco-button')?.click();
+    // By its words: the order of the buttons is each system's (macOS puts « Cancel » first, Linux « Learn More »).
+    const buttons = [...document.querySelectorAll<HTMLElement>('#vscode-layer .monaco-dialog-box .monaco-button')];
+    buttons.find((b) => /trust|install/i.test(b.textContent ?? ''))?.click();
     await sleep(250);
   }
   return state === 'pending' ? 'timeout' : state;
