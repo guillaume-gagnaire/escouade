@@ -2277,6 +2277,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "escouade-policy"
+version = "0.1.0"
+dependencies = [
+ "core-foundation 0.10.1",
+ "core-foundation-sys",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "windows-sys 0.61.2",
+ "winreg 0.55.0",
+]
+
+[[package]]
 name = "escouade-team-crypto"
 version = "0.1.0"
 dependencies = [

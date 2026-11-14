@@ -1,0 +1,29 @@
+[package]
+name = "escouade-policy"
+version = "0.1.0"
+description = "Escouade's managed-device policies (TS-0b): the Policies registry keys on Windows, the managed preferences domain on macOS, /etc/escouade/policies on Linux, read into one model"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../src-tauri"
+# A trial, wired into nothing yet (docs/TEAM-SERVER.md §16, TS-0b): never published.
+publish = false
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(windows)'.dependencies]
+# The registry, as the app's own dependencies already read it (winreg 0.55 is in the lock).
+winreg = "0.55"
+# Whether this process is elevated: a Policies key it may write without being so has had its ACL loosened.
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Threading"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# CFPreferencesCopyAppValue and CFPreferencesAppValueIsForced (core-foundation-sys), and the CF types around them.
+core-foundation = "0.10"
+core-foundation-sys = "0.8"
+
+[dev-dependencies]
+tempfile = "3"
