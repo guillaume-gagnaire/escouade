@@ -80,4 +80,4 @@ Demandé le 2026-11-14 : l'éditeur (CodeMirror 6, avec son arborescence et ses 
 - [ ] Les restes du redesign (`docs/TODO-2.2.md`, chapitre « Restes du redesign »), dont la vidéo qui montre encore l'app de la 1.8 (ESC-85).
 - [ ] Les essais réels de Gitea, de Forgejo et d'Azure DevOps (`docs/TODO-2.2.md`, chapitre « Hébergeurs de code »).
 - [ ] `ort` à monter à la main sur les deux cibles ensemble (la PR Dependabot #36 ne montait que l'une), après vérification de la bibliothèque de Microsoft pour Linux.
-- [ ] Les constats faibles encore ouverts de l'audit de sécurité (SEC-12 à SEC-23, SEC-25, SEC-26), à trier.
+- [ ] Les 18 constats de l'audit de sécurité d'Escouade 2.2.0 (`docs/security/audit-2026-11/rapport.md`, SEC-01 à SEC-18), à trier : trois moyens (SEC-01 à SEC-03, dont SEC-03 connu et laissé en l'état), quatorze faibles (SEC-04 à SEC-17) et des observations (SEC-18).
