@@ -1,0 +1,211 @@
+<!doctype html>
+<!--
+  ESC-449 : la page de comparaison des trois directions des PR dans Escouade (2.3). Elle montre les captures de
+  captures/ (node design/pr-2-3/render.mjs) et celles de l'existant (existant/, prises dans la vraie app par les e2e).
+  ?theme=light pour la lire en clair ; les captures suivent le thème choisi.
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Les PR dans Escouade · trois directions</title>
+<link rel="stylesheet" href="../../node_modules/@fontsource-variable/inter/opsz.css" />
+<style>
+  :root {
+    --p: oklch(0.72 0.12 48);
+    --frame: color-mix(in oklch, var(--p) 8%, #08090a);
+    --panel: color-mix(in oklch, var(--p) 4.5%, #0e0f11);
+    --raise: color-mix(in oklch, var(--p) 6%, #15161a);
+    --line: rgba(255, 255, 255, 0.075);
+    --line-2: rgba(255, 255, 255, 0.12);
+    --text: #f7f8f8;
+    --soft: #d0d3d8;
+    --muted: #989da6;
+    --run: oklch(0.79 0.15 155);
+    --wait: oklch(0.84 0.14 82);
+    --del: oklch(0.74 0.14 22);
+    --brain: oklch(0.8 0.12 300);
+    color-scheme: dark;
+  }
+  :root[data-theme='light'] {
+    --frame: color-mix(in oklch, var(--p) 7%, #f0f1f3);
+    --panel: color-mix(in oklch, var(--p) 2.5%, #fdfdfd);
+    --raise: color-mix(in oklch, var(--p) 4%, #f4f5f7);
+    --line: rgba(15, 17, 22, 0.09);
+    --line-2: rgba(15, 17, 22, 0.14);
+    --text: #15171c;
+    --soft: #363a42;
+    --muted: #555a63;
+    --run: oklch(0.48 0.13 155);
+    --wait: oklch(0.5 0.11 70);
+    --del: oklch(0.5 0.18 25);
+    --brain: oklch(0.5 0.16 300);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--frame); color: var(--text); font: 14px/1.55 'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif;
+    font-feature-settings: 'cv11', 'ss03'; -webkit-font-smoothing: antialiased; }
+  main > section, .dir { min-width: 0; }
+  main { max-width: 1480px; margin: 0 auto; padding: 36px 32px 64px; display: grid; gap: 36px; }
+  header { display: flex; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 24px; font-weight: 650; letter-spacing: -0.02em; }
+  header p { margin: 6px 0 0; color: var(--muted); max-width: 820px; }
+  .theme { margin-left: auto; display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line); }
+  .theme a { padding: 5px 12px; border-radius: 7px; color: var(--muted); text-decoration: none; font-weight: 550; font-size: 13px; }
+  .theme a.on { background: var(--panel); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2); }
+  h2 { margin: 0 0 4px; font-size: 18px; font-weight: 650; letter-spacing: -0.01em; display: flex; align-items: baseline; gap: 10px; }
+  h2 .k { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: var(--text); color: var(--frame); font-size: 13px; }
+  h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--soft); }
+  .lead { color: var(--muted); margin: 0 0 14px; max-width: 900px; }
+  section { display: grid; gap: 12px; }
+  .dir { padding: 22px; border-radius: 14px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); display: grid; gap: 16px; }
+  .dir.rec { box-shadow: inset 0 0 0 1.5px var(--run); }
+  .badge { font-size: 12px; font-weight: 600; color: var(--run); padding: 2px 8px; border-radius: 6px; background: oklch(from var(--run) l c h / 0.1); }
+  .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .shots.three { grid-template-columns: repeat(3, 1fr); }
+  figure { margin: 0; display: grid; gap: 6px; }
+  figure img { width: 100%; border-radius: 10px; box-shadow: 0 0 0 1px var(--line-2); display: block; }
+  .shots.ex img { max-height: 520px; width: auto; max-width: 100%; }
+  figcaption { font-size: 12.5px; color: var(--muted); }
+  .pc { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .pc > div { padding: 14px 16px; border-radius: 10px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line); }
+  .pc h3 { display: flex; gap: 8px; align-items: center; }
+  .pc .plus h3 { color: var(--run); } .pc .minus h3 { color: var(--del); }
+  ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; background: var(--panel); border-radius: 12px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--line); }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12.5px; }
+  td:first-child { color: var(--soft); font-weight: 550; width: 22%; }
+  .y { color: var(--run); font-weight: 600; } .m { color: var(--wait); font-weight: 600; } .n { color: var(--del); font-weight: 600; }
+  .note { padding: 14px 16px; border-radius: 10px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line); color: var(--soft); }
+  .note b { color: var(--text); }
+  ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+  code { font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: 0.9em; }
+  @media (max-width: 900px) { .shots, .shots.three, .pc { grid-template-columns: 1fr; } main { padding: 20px 16px 40px; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Les PR dans Escouade · trois directions</h1>
+      <p>ESC-449, pour la 2.3. Voir la PR dans Escouade, laisser un agent relecteur la commenter à côté du code comme le ferait un humain, et mieux la contrôler. Trois maquettes statiques dans le style de l'app (jetons, polices, icônes de la 2.0), sur une même PR fictive : #214 « Connexion par lien magique », ouverte par l'agent du ticket ATL-42 et relue par l'agent « Relecteur ».</p>
+    </div>
+    <nav class="theme" aria-label="Thème"><a href="?" id="t-dark">Sombre</a><a href="?theme=light" id="t-light">Clair</a></nav>
+  </header>
+
+  <section id="existant">
+    <h2>Aujourd'hui</h2>
+    <p class="lead">La PR existe dans Escouade en quatre morceaux, et jamais en entier : on ne voit ni sa description, ni son diff, ni ses commits. Les relectures se lisent sans y répondre. Celle de l'agent est un brouillon à trier, sans dialogue. Le merge ne se fait que depuis la carte d'un ticket. Captures prises dans la vraie app (debug), sur le faux GitHub des e2e.</p>
+    <div class="shots ex">
+      <figure><img data-src="existant/prs-view.png" alt="La vue Pull requests du projet" /><figcaption><b>Vue « Pull requests »</b> (ESC-65) : une ligne par PR, « Faire relire » et « Lancer un agent ». Cliquer une PR ouvre… le navigateur.</figcaption></figure>
+      <figure><img data-src="existant/prs-review.png" alt="La relecture d'une PR par un agent" /><figcaption><b>Relecture par un agent</b> (ESC-66) : des commentaires à garder, corriger ou écarter, puis « Publier ». Pas de fil, pas de réponse, pas de suggestion ; on lit un extrait du diff, jamais le fichier.</figcaption></figure>
+      <figure><img data-src="existant/pr-tab-failed.png" alt="L'onglet PR et CI de l'agent" /><figcaption><b>Onglet « PR et CI »</b> du panneau latéral : l'en-tête de la PR, ses contrôles et leur journal, « Relancer les échecs », ses relectures « en lecture : Escouade ne publie rien en ton nom ».</figcaption></figure>
+      <figure><img data-src="existant/kanban-pr-review.png" alt="La colonne En revue du Kanban" /><figcaption><b>Colonne « En revue »</b> (ESC-59 à 62) : l'état et la CI de la PR d'un ticket, « L'agent corrige », « Merger », « Merger quand c'est vert ». Le seul endroit d'où l'on merge.</figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>Les trois en un coup d'œil</h2>
+    <div style="overflow-x:auto"><table style="min-width:760px">
+      <tr><th></th><th>A · L'onglet de la PR</th><th>B · La relecture dans l'éditeur</th><th>C · La PR à côté de l'agent</th></tr>
+      <tr><td>L'idée</td><td>La PR comme chez l'hébergeur, dans la place de travail : onglets Conversation, Commits, Contrôles, Fichiers ; la colonne de droite la pilote.</td><td>La PR est un mode de l'éditeur : arbre des fichiers modifiés, diff au centre, remarques dans la marge à hauteur de leur ligne ; le reste dans un tiroir.</td><td>Deux colonnes : l'agent (du ticket ou relecteur) à gauche, la PR à droite, sous une carte « Prête à merger ? » ; les remarques en fil d'actualité.</td></tr>
+      <tr><td>Voir la PR</td><td class="y">Tout, à sa place habituelle</td><td class="m">Le code d'abord ; description et discussion dans le tiroir</td><td class="m">Remarques d'abord ; le diff entier est un onglet étroit</td></tr>
+      <tr><td>L'agent commente à côté du code</td><td class="y">Fils dans le diff, sous leur ligne</td><td class="y">Dans la marge, en face de la ligne, le code jamais caché</td><td class="m">Chaque remarque porte ses lignes ; « Dans l'éditeur » pour le reste</td></tr>
+      <tr><td>« Demander à l'agent de corriger »</td><td class="m">Un bouton ; l'agent travaille ailleurs</td><td class="m">Un bouton ; l'agent travaille ailleurs</td><td class="y">L'agent est juste à côté : on voit la remarque arriver et le travail se faire</td></tr>
+      <tr><td>Contrôle de la PR</td><td class="y">Colonne de droite et boîte de merge toujours visibles</td><td class="m">Barre du haut et menus ; relecteurs et étiquettes dans le tiroir</td><td class="y">Carte « Prête à merger ? » : ce qui bloque, et le geste qui débloque</td></tr>
+      <tr><td>Dépend de</td><td>Rien de neuf : un diff à nous (CodeMirror, déjà là)</td><td class="n">L'éditeur de la 2.3 (vue VS Code, A1 à A8) pour être bien fait</td><td>Les colonnes côte à côte (split view)</td></tr>
+      <tr><td>Coût estimé</td><td class="m">Moyen : ~9 tickets</td><td class="n">Élevé : ~11 tickets, dont l'API des commentaires de VS Code</td><td class="m">Moyen : ~9 tickets</td></tr>
+    </table></div>
+  </section>
+
+  <section id="a">
+    <div class="dir rec">
+      <h2><span class="k">A</span>L'onglet de la PR <span class="badge">recommandée</span></h2>
+      <p class="lead" style="margin:0">Un clic sur une PR (vue « Pull requests », carte « En revue », onglet « PR et CI », pastille de l'agent) l'ouvre dans la place de travail, comme le Kanban. Les remarques de l'agent sont des fils dans le diff, sous leur ligne, avec sa sévérité, ses suggestions et ses gestes ; la colonne de droite dit qui relit, les étiquettes, brouillon ou prête, la branche, et la boîte de merge dit ce qui manque.</p>
+      <div class="shots"><figure><img data-src="captures/a-fenetre" alt="A, la PR et la relecture" /><figcaption>Fichiers : les fils de l'agent dans le diff ; un fil résolu se replie.</figcaption></figure>
+        <figure><img data-src="captures/a-controle" alt="A, le contrôle" /><figcaption>Conversation : description, événements, résumé de l'agent ; « Ta relecture » (approuver, demander des changements).</figcaption></figure></div>
+      <figure><img data-src="captures/a-etats" alt="A, les états" /><figcaption>Les états : un bandeau sous les onglets et la boîte de merge disent la même chose, avec le geste.</figcaption></figure>
+      <div class="pc"><div class="plus"><h3>Ce qu'elle favorise</h3><ul>
+        <li>Ce qu'on connaît : la grammaire de GitHub et de GitLab, rien à apprendre.</li>
+        <li>Tout de la PR, au même endroit, et le contrôle toujours visible à droite.</li>
+        <li>Se construit sur ce qui existe : la vue « Pull requests » mène à la PR au lieu du navigateur ; la relecture d'ESC-66 devient l'onglet Fichiers.</li>
+        <li>Ne dépend pas du chantier de l'éditeur : elle peut sortir avant lui.</li></ul></div>
+      <div class="minus"><h3>Ce qu'elle coûte</h3><ul>
+        <li>Refaire une page d'hébergeur : diff, fils, timeline, boîte de merge (le gros du travail).</li>
+        <li>Un diff à nous, sans serveur de langage ni « aller à la définition ».</li>
+        <li>L'agent qui corrige est ailleurs : on suit son travail par la pastille « corrige… » ou en ouvrant l'agent.</li>
+        <li>Une vue de plus dans une app qui en a déjà beaucoup.</li></ul></div></div>
+    </div>
+  </section>
+
+  <section id="b">
+    <div class="dir">
+      <h2><span class="k">B</span>La relecture dans l'éditeur</h2>
+      <p class="lead" style="margin:0">Ouvrir une PR met l'éditeur en mode relecture : à gauche les fichiers modifiés (vus, remarques par fichier), au centre le diff, à droite la marge où chaque remarque se pose en face de sa ligne. Une barre du haut porte l'état, la CI, les approbations, « Approuver » et « Merger » ; un tiroir en bas porte la description, les commits, les contrôles, la discussion et les relecteurs.</p>
+      <div class="shots"><figure><img data-src="captures/b-fenetre" alt="B, la PR et la relecture" /><figcaption>Le diff et la marge : un point violet dans la gouttière, la carte en face.</figcaption></figure>
+        <figure><img data-src="captures/b-controle" alt="B, le contrôle" /><figcaption>Le tiroir ouvert (contrôles, relecteurs, étiquettes) et le menu du merge.</figcaption></figure></div>
+      <figure><img data-src="captures/b-etats" alt="B, les états" /><figcaption>Les états : le journal ou le conflit prennent l'éditeur, la marge dit quoi faire.</figcaption></figure>
+      <div class="pc"><div class="plus"><h3>Ce qu'elle favorise</h3><ul>
+        <li>Le code d'abord : on relit comme on code, le fichier entier à un clic, les remarques ne cachent jamais une ligne.</li>
+        <li>Avec la vue VS Code (décidée pour la 2.3) : serveurs de langage, « aller à la définition » pendant la relecture, et l'API des commentaires de VS Code faite pour cela.</li>
+        <li>Corriger soi-même dans la foulée : on est déjà dans l'éditeur.</li></ul></div>
+      <div class="minus"><h3>Ce qu'elle coûte</h3><ul>
+        <li>Dépend de l'éditeur de la 2.3 : sans lui, il faut tout faire deux fois (CodeMirror, puis VS Code).</li>
+        <li>La PR se voit mal en entier : description, discussion et commits sont repliés dans un tiroir.</li>
+        <li>La marge prend 340 px : serrée en dessous de 1280 px, impossible en colonne étroite.</li>
+        <li>Le plus cher des trois ; l'éditeur change de rôle (on y relit aussi).</li></ul></div></div>
+    </div>
+  </section>
+
+  <section id="c">
+    <div class="dir">
+      <h2><span class="k">C</span>La PR à côté de l'agent</h2>
+      <p class="lead" style="margin:0">La PR devient une colonne, à côté de la conversation de l'agent. En tête, une carte « Prête à merger ? » en quatre cases (contrôles, relecture, approbations, branche), chacune avec ce qui bloque et le geste. Dessous, les remarques en fil d'actualité, chacune avec ses lignes. « Demander à l'agent de corriger » dépose la remarque dans la conversation de gauche, et on regarde l'agent la traiter.</p>
+      <div class="shots"><figure><img data-src="captures/c-fenetre" alt="C, la PR et la relecture" /><figcaption>L'agent du ticket corrige la remarque qu'on vient de lui passer, la PR à côté.</figcaption></figure>
+        <figure><img data-src="captures/c-controle" alt="C, le contrôle" /><figcaption>L'onglet Contrôles et le menu de la PR : brouillon, relecteurs, étiquettes, branche.</figcaption></figure></div>
+      <figure><img data-src="captures/c-etats" alt="C, les états" /><figcaption>Les états : la carte change de titre et de geste ; à gauche, l'agent relecteur ou celui du ticket.</figcaption></figure>
+      <div class="pc"><div class="plus"><h3>Ce qu'elle favorise</h3><ul>
+        <li>L'identité d'Escouade : la PR est un travail d'agents, on les voit relire et corriger.</li>
+        <li>La décision : la carte dit d'un coup ce qui manque pour merger, et comment le débloquer.</li>
+        <li>Le passage remarque → correction, sans quitter l'écran.</li></ul></div>
+      <div class="minus"><h3>Ce qu'elle coûte</h3><ul>
+        <li>La colonne de la PR est étroite : un diff entier s'y lit mal, une relecture humaine longue aussi.</li>
+        <li>Une PR sans agent (celle d'un collègue) laisse la colonne de gauche vide ou demande d'en lancer un.</li>
+        <li>Les remarques en fil d'actualité perdent l'ordre des fichiers.</li></ul></div></div>
+    </div>
+  </section>
+
+  <section id="reco">
+    <h2>Recommandation : A, avec deux emprunts</h2>
+    <div class="note">
+      <p style="margin:0 0 10px"><b>A</b> répond aux trois demandes sans attendre l'éditeur, et prolonge ce qui existe : la vue « Pull requests » ouvre la PR au lieu du navigateur, la relecture d'ESC-66 devient l'onglet Fichiers avec de vrais fils. Elle se lit comme GitHub, ce que l'utilisateur et ses collègues savent déjà faire.</p>
+      <p style="margin:0 0 10px"><b>De C</b>, je garde la boîte « prête à merger ? » qui dit ce qui bloque avec le geste (déjà dans A, à droite), et le geste « Demander à l'agent de corriger » qui ouvre l'agent dans une colonne à côté de la PR (split view), au lieu de l'envoyer ailleurs.</p>
+      <p style="margin:0"><b>De B</b>, je garde « Ouvrir dans l'éditeur » sur chaque fil : quand la vue VS Code sera là, une PR pourra s'y relire avec la marge, sans refaire A.</p>
+    </div>
+    <h3 style="margin-top:8px">Le découpage proposé (détail dans README.md)</h3>
+    <ol>
+      <li><b>PR-1</b> Lire une PR entière chez l'hébergeur : description, commits, fichiers, fils avec leurs lignes et leurs réponses (opérations et capacités des plugins, GitHub d'abord).</li>
+      <li><b>PR-2</b> La vue de la PR : en-tête, onglets, ouverte depuis la vue « Pull requests », la carte « En revue », l'onglet « PR et CI » et la pastille de l'agent.</li>
+      <li><b>PR-3</b> L'onglet Fichiers : diff unifié coloré, arbre des fichiers, « Vu », gros fichiers repliés.</li>
+      <li><b>PR-4</b> Les fils : commenter une ligne, répondre, résoudre, rouvrir, chez l'hébergeur.</li>
+      <li><b>PR-5</b> L'agent relecteur en fils : ses remarques sous leur ligne, sévérité, suggestions ; remplace le brouillon d'ESC-66.</li>
+      <li><b>PR-6</b> Parler à l'agent relecteur et faire corriger : il répond dans le fil ; « Demander à l'agent de corriger », « Appliquer la suggestion ».</li>
+      <li><b>PR-7</b> Ta relecture : approuver, demander des changements, commenter.</li>
+      <li><b>PR-8</b> Le contrôle : brouillon ou prête, relecteurs, étiquettes, mise à jour de la branche, relance d'un contrôle, boîte de merge.</li>
+      <li><b>PR-9</b> Les états, la spec, la doc du site et les autres hébergeurs (GitLab, Gitea / Forgejo, Bitbucket, Azure DevOps).</li>
+    </ol>
+  </section>
+</main>
+<script>
+  const light = new URLSearchParams(location.search).get('theme') === 'light';
+  if (light) document.documentElement.dataset.theme = 'light';
+  document.getElementById(light ? 't-light' : 't-dark').classList.add('on');
+  for (const img of document.querySelectorAll('img[data-src]')) {
+    const s = img.dataset.src;
+    img.src = s.endsWith('.png') ? s : `${s}${light ? '-clair' : ''}.png`;
+    img.loading = 'lazy';
+  }
+</script>
+</body>
+</html>

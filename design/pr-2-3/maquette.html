@@ -1,0 +1,913 @@
+<!doctype html>
+<!--
+  ESC-449 : les PR dans Escouade (2.3), trois directions. Maquette statique, rien n'est branché.
+  ?d=a|b|c, &theme=light, puis #fenetre (la PR et la relecture de l'agent, 1440 × 900), #controle (le contrôle de la PR :
+  verdict, relecteurs, étiquettes, merge) ou #etats (relecture en cours, CI rouge, conflit, prête à fusionner).
+  Jetons, polices et icônes de l'app (src/app.css, src/lib/icons.ts) ; données fictives (projet « atlas-web »).
+  Captures : node design/pr-2-3/render.mjs
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>ESC-449 · les PR dans Escouade</title>
+<link rel="stylesheet" href="../../node_modules/@fontsource-variable/inter/opsz.css" />
+<link rel="stylesheet" href="../../node_modules/@fontsource/jetbrains-mono/400.css" />
+<link rel="stylesheet" href="../../node_modules/@fontsource/jetbrains-mono/500.css" />
+<script src="icons.js"></script>
+<style>
+  /* Les jetons de src/app.css (sombre, puis clair). Teint du projet : --p. */
+  :root {
+    --p: oklch(0.72 0.12 48);
+    --frame: color-mix(in oklch, var(--p) 8%, #08090a);
+    --panel: color-mix(in oklch, var(--p) 4.5%, #0e0f11);
+    --raise: color-mix(in oklch, var(--p) 6%, #15161a);
+    --raise-2: color-mix(in oklch, var(--p) 6%, #1b1c20);
+    --well: color-mix(in oklch, var(--p) 2%, #0a0b0d);
+    --fg-rgb: 255, 255, 255;
+    --line: rgba(255, 255, 255, 0.075);
+    --line-2: rgba(255, 255, 255, 0.12);
+    --line-3: rgba(255, 255, 255, 0.2);
+    --hover: rgba(255, 255, 255, 0.045);
+    --text: #f7f8f8;
+    --soft: #d0d3d8;
+    --muted: #989da6;
+    --dim: #8f949e;
+    --text-ai: #e9ebee;
+    --brand: #35c1bd;
+    --p-ink: color-mix(in oklch, var(--p) 70%, white);
+    --p-soft: color-mix(in oklch, var(--p) 14%, transparent);
+    --run: oklch(0.79 0.15 155);
+    --wait: oklch(0.84 0.14 82);
+    --wait-bg: oklch(from var(--wait) l c h / 0.07);
+    --wait-line: oklch(from var(--wait) l c h / 0.32);
+    --add: oklch(0.8 0.13 155);
+    --del: oklch(0.74 0.14 22);
+    --info: oklch(0.8 0.1 235);
+    --brain: oklch(0.8 0.12 300);
+    --merged: oklch(0.74 0.13 300);
+    --idle: #7a7f88;
+    --primary: #f2f3f4;
+    --on-primary: #08090a;
+    --on-wait: #1a1405;
+    --code-fg: #d5d8dd;
+    --code-ln: #555a62;
+    --syn-k: oklch(0.78 0.11 300);
+    --syn-f: oklch(0.83 0.09 235);
+    --syn-s: oklch(0.82 0.11 150);
+    --syn-n: oklch(0.84 0.11 65);
+    --add-bg: oklch(from var(--add) l c h / 0.09);
+    --add-bg-2: oklch(from var(--add) l c h / 0.2);
+    --del-bg: oklch(from var(--del) l c h / 0.09);
+    --del-bg-2: oklch(from var(--del) l c h / 0.2);
+    --shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
+    --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+    color-scheme: dark;
+  }
+  :root[data-theme='light'] {
+    --frame: color-mix(in oklch, var(--p) 7%, #f0f1f3);
+    --panel: color-mix(in oklch, var(--p) 2.5%, #fdfdfd);
+    --raise: color-mix(in oklch, var(--p) 4%, #f4f5f7);
+    --raise-2: color-mix(in oklch, var(--p) 5%, #eceef1);
+    --well: color-mix(in oklch, var(--p) 2.5%, #f6f7f9);
+    --fg-rgb: 15, 17, 22;
+    --line: rgba(15, 17, 22, 0.09);
+    --line-2: rgba(15, 17, 22, 0.14);
+    --line-3: rgba(15, 17, 22, 0.24);
+    --hover: rgba(15, 17, 22, 0.045);
+    --text: #15171c;
+    --soft: #363a42;
+    --muted: #555a63;
+    --dim: #5c616a;
+    --text-ai: #1d2026;
+    --brand: oklch(0.52 0.09 190);
+    --p-ink: color-mix(in oklch, var(--p) 50%, #15171c);
+    --run: oklch(0.48 0.13 155);
+    --wait: oklch(0.5 0.11 70);
+    --wait-bg: oklch(from var(--wait) l c h / 0.09);
+    --wait-line: oklch(from var(--wait) l c h / 0.4);
+    --add: oklch(0.47 0.12 155);
+    --del: oklch(0.5 0.18 25);
+    --info: oklch(0.5 0.12 245);
+    --brain: oklch(0.5 0.16 300);
+    --merged: oklch(0.5 0.16 300);
+    --primary: #1b1d22;
+    --on-primary: #f7f8f8;
+    --on-wait: #fff;
+    --code-fg: #24272e;
+    --code-ln: #8f949c;
+    --syn-k: oklch(0.5 0.16 300);
+    --syn-f: oklch(0.5 0.13 250);
+    --syn-s: oklch(0.5 0.12 150);
+    --syn-n: oklch(0.53 0.13 55);
+    --add-bg: oklch(from var(--add) l c h / 0.08);
+    --add-bg-2: oklch(from var(--add) l c h / 0.17);
+    --del-bg: oklch(from var(--del) l c h / 0.07);
+    --del-bg-2: oklch(from var(--del) l c h / 0.15);
+    --shadow: 0 14px 32px rgba(15, 17, 22, 0.16);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--frame); }
+  body { font-variant-ligatures: none; margin: 0; font: 13px/1.45 'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif; font-feature-settings: 'cv11', 'ss03';
+    color: var(--text); -webkit-font-smoothing: antialiased; }
+  p { margin: 0; }
+  svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  code, .code, .log { font-feature-settings: 'calt' 0, 'liga' 0; }
+  .mono { font-feature-settings: 'calt' 0, 'liga' 0; font-family: var(--mono); font-size: 0.92em; letter-spacing: -0.01em; }
+  .muted { color: var(--muted); }
+  .num { font-variant-numeric: tabular-nums; }
+  .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .sp { margin-left: auto; }
+
+  /* ───────── La fenêtre : barre de titre, rail des projets, barre latérale, place de travail, barre d'état ───────── */
+  .win { width: 1440px; height: 900px; display: grid; grid-template-columns: 52px 276px 1fr; grid-template-rows: 44px 1fr 30px;
+    background: var(--frame); overflow: hidden; position: relative; }
+  .win.wide { grid-template-columns: 52px 1fr; }
+  .tb { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 0 0 0 14px; font-size: 13px; color: var(--muted); }
+  .tb .logo { width: 22px; height: 22px; border-radius: 6px; background: var(--brand); display: grid; place-items: center; color: #08090a; }
+  .tb .proj { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-weight: 600; margin-left: 18px; }
+  .tb .proj .sq { width: 8px; height: 8px; border-radius: 2.5px; background: var(--p); }
+  .tb .search { margin-left: 330px; width: 340px; height: 30px; border-radius: 8px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line);
+    display: flex; align-items: center; gap: 8px; padding: 0 6px 0 11px; }
+  .tb .search kbd { margin-left: auto; }
+  .tb .ed { margin-left: auto; display: inline-flex; gap: 7px; align-items: center; color: var(--soft); }
+  .tb .wbtn { width: 46px; height: 44px; display: grid; place-items: center; color: var(--muted); }
+  kbd { font: 500 11px/1 'Inter Variable', Inter, sans-serif; padding: 3px 6px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--line-2); color: var(--muted); }
+  .rail { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 6px 0 8px; } .rail .low { margin-top: auto; display: grid; gap: 6px; }
+  .rail .r-i { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: var(--muted); }
+  .rail .tile { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; font-weight: 700; font-size: 12px; color: #101114;
+    background: var(--p); box-shadow: 0 0 0 2px var(--frame), 0 0 0 3.5px var(--p); }
+  .rail .tile.o { background: oklch(0.72 0.11 250); box-shadow: none; opacity: 0.9; }
+  .side { min-width: 0; padding: 4px 10px 10px 10px; display: flex; flex-direction: column; gap: 4px; }
+  .stabs { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line); }
+  .stabs span { flex: 1 1 auto; padding: 0 4px; font-size: 12px !important; display: inline-flex; justify-content: center; align-items: center; gap: 5px; height: 26px; border-radius: 7px; color: var(--muted);
+    font-weight: 550; font-size: 12.5px; white-space: nowrap; }
+  .stabs span.on { background: var(--panel); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2), 0 1px 2px rgba(0, 0, 0, 0.18); }
+  .stabs .c { color: var(--dim); font-size: 11.5px; font-weight: 500; }
+  .new { display: flex; align-items: center; gap: 8px; height: 32px; margin: 8px 0 4px; padding: 0 8px 0 9px; color: var(--soft); font-weight: 550; }
+  .new .plus { width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; background: rgba(var(--fg-rgb), 0.07);
+    box-shadow: inset 0 0 0 1px var(--line); }
+  .new kbd { margin-left: auto; }
+  .agent { border-radius: 11px; padding: 10px 12px; display: grid; gap: 3px; font-size: 12.5px; }
+  .agent.on { background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .agent .r { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .agent .n { font-weight: 620; }
+  .agent .key { color: var(--muted); font-size: 11.5px; font-weight: 550; }
+  .agent .m { color: var(--muted); font-size: 12px; }
+  .ring { width: 9px; height: 9px; border-radius: 50%; box-shadow: inset 0 0 0 1.6px var(--run); flex: none; }
+  .ring.wt { box-shadow: inset 0 0 0 1.6px var(--wait); }
+  .ring.idle { box-shadow: inset 0 0 0 1.6px var(--idle); }
+  .ring.brain { box-shadow: inset 0 0 0 1.6px var(--brain); }
+  .side .foot { margin-top: auto; border-top: 1px solid var(--line); padding: 10px 6px 0; display: grid; gap: 8px; color: var(--muted); font-size: 12px; }
+  .side .foot .r { display: flex; gap: 8px; align-items: center; }
+  .main { min-width: 0; min-height: 0; background: var(--panel); border-radius: 12px 0 0 0; box-shadow: inset 0 0 0 1px var(--line); display: flex;
+    flex-direction: column; overflow: hidden; position: relative; }
+  .status { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 14px; color: var(--muted); font-size: 12px; }
+  .status b { color: var(--text); font-weight: 600; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; background: var(--idle); flex: none; }
+  .dot.ok { background: var(--run); } .dot.wt { background: var(--wait); } .dot.ko { background: var(--del); }
+
+  /* ───────── Commun aux trois : boutons, pastilles, CI, menus, diff, fils ───────── */
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--text); font-weight: 550; font-size: 12.5px; white-space: nowrap; background: rgba(var(--fg-rgb), 0.03); flex: none; }
+  .btn.sm { height: 26px; padding: 0 9px; font-size: 12px; border-radius: 7px; }
+  .btn.icon { width: 30px; padding: 0; justify-content: center; color: var(--soft); }
+  .btn.sm.icon { width: 26px; }
+  .btn.quiet { box-shadow: none; background: none; color: var(--muted); }
+  .btn.primary { background: var(--primary); color: var(--on-primary); box-shadow: none; }
+  .btn.go { background: oklch(from var(--run) calc(l - 0.12) c h); color: #fff; box-shadow: none; }
+  :root[data-theme='light'] .btn.go { background: var(--run); }
+  .btn.ko { color: var(--del); box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.4); }
+  .btn.off { opacity: 0.45; }
+  .btn.agentic { color: var(--brain); box-shadow: inset 0 0 0 1px oklch(from var(--brain) l c h / 0.4); background: oklch(from var(--brain) l c h / 0.06); }
+  .split { display: inline-flex; flex: none; }
+  .split .btn:first-child { border-radius: 8px 0 0 8px; }
+  .split .btn:last-child { border-radius: 0 8px 8px 0; width: 28px; padding: 0; justify-content: center; margin-left: 1px; }
+  .pill { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 11.5px; font-weight: 600;
+    white-space: nowrap; flex: none; color: var(--soft); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .pill.open { color: var(--run); box-shadow: inset 0 0 0 1px oklch(from var(--run) l c h / 0.4); background: oklch(from var(--run) l c h / 0.07); }
+  .pill.draft { color: var(--muted); }
+  .pill.merged { color: var(--merged); box-shadow: inset 0 0 0 1px oklch(from var(--merged) l c h / 0.4); }
+  .pill.ko { color: var(--del); box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.4); background: oklch(from var(--del) l c h / 0.07); }
+  .pill.wt { color: var(--wait); box-shadow: inset 0 0 0 1px var(--wait-line); background: var(--wait-bg); }
+  .pill.ai { color: var(--brain); box-shadow: inset 0 0 0 1px oklch(from var(--brain) l c h / 0.4); background: oklch(from var(--brain) l c h / 0.06); }
+  .lbl { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: 10px; font-size: 11.5px; font-weight: 550;
+    color: var(--soft); box-shadow: inset 0 0 0 1px var(--line-2); white-space: nowrap; }
+  .lbl i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+  .ci { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px 0 7px; border-radius: 7px; font-size: 12px; font-weight: 550;
+    color: var(--soft); background: rgba(var(--fg-rgb), 0.04); box-shadow: inset 0 0 0 1px var(--line); white-space: nowrap; flex: none; }
+  .ci.ok svg { color: var(--run); }
+  .ci.ko { color: var(--del); box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.35); background: oklch(from var(--del) l c h / 0.07); }
+  .ci.wt { color: var(--wait); }
+  .spin { width: 11px; height: 11px; border-radius: 50%; border: 1.6px solid var(--wait); border-right-color: transparent; flex: none; display: inline-block; }
+  .spin.ai { border-color: var(--brain); border-right-color: transparent; }
+  .av { width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 10px; font-weight: 700; flex: none;
+    background: oklch(0.72 0.11 250); color: #0d0f12; }
+  .av.me { background: var(--p); }
+  .av.ai { background: oklch(from var(--brain) l c h / 0.16); color: var(--brain); box-shadow: inset 0 0 0 1px oklch(from var(--brain) l c h / 0.45); }
+  .av.tk { background: oklch(from var(--run) l c h / 0.14); color: var(--run); box-shadow: inset 0 0 0 1px oklch(from var(--run) l c h / 0.4); }
+  .av.sm { width: 18px; height: 18px; font-size: 9px; }
+  .tag-ai { font-size: 10.5px; font-weight: 650; color: var(--brain); padding: 1px 5px; border-radius: 4px; background: oklch(from var(--brain) l c h / 0.1); }
+  .sev { font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
+  .sev.hi { color: var(--del); background: oklch(from var(--del) l c h / 0.1); }
+  .sev.md { color: var(--wait); background: var(--wait-bg); }
+  .sev.lo { color: var(--muted); background: rgba(var(--fg-rgb), 0.05); }
+  .menu { position: absolute; z-index: 9; padding: 6px; border-radius: 12px; background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow);
+    font-size: 12.5px; display: grid; gap: 1px; }
+  :root[data-theme='light'] .menu { background: #fff; }
+  .menu h4 { margin: 4px 8px 6px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+  .menu .it { display: grid; grid-template-columns: 18px 1fr; gap: 2px 8px; padding: 7px 8px; border-radius: 7px; align-items: start; }
+  .menu .it.hl { background: var(--hover); }
+  .menu .it b { font-weight: 600; }
+  .menu .it small { grid-column: 2; color: var(--muted); font-size: 11.5px; }
+  .menu .it .sel { color: var(--text); }
+  .menu .sepl { height: 1px; background: var(--line); margin: 4px 2px; }
+  .menu .it .k { margin-left: auto; }
+  .cb { width: 15px; height: 15px; border-radius: 4px; box-shadow: inset 0 0 0 1.5px var(--line-3); display: inline-grid; place-items: center; flex: none; }
+  .cb.on { background: var(--text); color: var(--panel); box-shadow: none; }
+  .radio { width: 15px; height: 15px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line-3); display: inline-block; flex: none; margin-top: 1px; }
+  .radio.on { box-shadow: inset 0 0 0 4.5px var(--text); }
+
+  /* Le code : diff unifié ou côte à côte. */
+  .code { font-variant-ligatures: none; font-family: var(--mono); font-size: 12px; line-height: 20px; color: var(--code-fg); }
+  .dl { display: grid; grid-template-columns: 44px 44px 18px 1fr; white-space: pre; min-height: 20px; }
+  .dl .ln { color: var(--code-ln); text-align: right; padding-right: 8px; user-select: none; }
+  .dl .k { color: var(--code-ln); text-align: center; }
+  .dl.add { background: var(--add-bg); } .dl.add .ln { background: var(--add-bg); color: oklch(from var(--add) l c h / 0.8); } .dl.add .k { color: var(--add); }
+  .dl.del { background: var(--del-bg); } .dl.del .ln { background: var(--del-bg); color: oklch(from var(--del) l c h / 0.8); } .dl.del .k { color: var(--del); }
+  .dl.hunk { color: var(--info); background: oklch(from var(--info) l c h / 0.06); grid-template-columns: 106px 1fr; }
+  .dl.hunk .tx { color: var(--muted); }
+  .dl.mark { box-shadow: inset 3px 0 0 var(--brain); }
+  .dl.mark .ln { color: var(--brain); }
+  .tk-k { color: var(--syn-k); } .tk-f { color: var(--syn-f); } .tk-s { color: var(--syn-s); } .tk-n { color: var(--syn-n); } .tk-c { color: var(--code-ln); font-style: italic; }
+
+  /* Un fil de discussion de relecture. */
+  .thread { border-radius: 10px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); overflow: hidden; font-family: 'Inter Variable', Inter, sans-serif;
+    font-size: 12.5px; line-height: 1.5; white-space: normal; color: var(--text); }
+  .thread.ai { box-shadow: inset 0 0 0 1px var(--line-2), inset 3px 0 0 var(--brain); }
+  .thread .msg { display: grid; grid-template-columns: 22px 1fr; gap: 3px 9px; padding: 10px 12px 8px; }
+  .thread .msg + .msg { border-top: 1px solid var(--line); }
+  .thread .who { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; }
+  .thread .who b { font-weight: 620; }
+  .thread .who .t { color: var(--muted); font-size: 11.5px; }
+  .thread .bd { grid-column: 2; color: var(--text-ai); }
+  .thread .bd code { display: inline; font-family: var(--mono); font-size: 11.5px; padding: 0 4px; border-radius: 4px; background: rgba(var(--fg-rgb), 0.06); }
+  .thread .sugg { grid-column: 2; margin-top: 6px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line-2); overflow: hidden; }
+  .thread .sugg .sh { display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 6px 0 10px; font-size: 11.5px; color: var(--muted); border-bottom: 1px solid var(--line);
+    background: rgba(var(--fg-rgb), 0.025); }
+  .thread .sugg .dl { grid-template-columns: 18px 1fr; }
+  .thread .acts { display: flex; align-items: center; gap: 6px; padding: 8px 12px 10px 43px; flex-wrap: wrap; }
+  .thread .reply { margin: 0 12px 10px 43px; height: 30px; border-radius: 8px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line); display: flex;
+    align-items: center; padding: 0 10px; color: var(--dim); font-size: 12.5px; }
+  .thread .fixing { display: flex; align-items: center; gap: 8px; margin: 0 12px 10px 43px; padding: 7px 10px; border-radius: 8px; font-size: 12px; color: var(--soft);
+    background: oklch(from var(--run) l c h / 0.06); box-shadow: inset 0 0 0 1px oklch(from var(--run) l c h / 0.3); }
+  .thread .fixing b { font-weight: 600; }
+  .thread.resolved { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+  .thread .rz { display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--muted); font-size: 12px; }
+  .thread .rz b { color: var(--soft); font-weight: 550; }
+
+  /* Planche des états. */
+  .sheet { width: 1440px; min-height: 900px; padding: 22px 26px 26px; display: grid; grid-template-columns: 1fr 1fr; gap: 22px 22px; background: var(--frame); align-content: start; }
+  .sheet > h1 { grid-column: 1 / -1; margin: 0; font-size: 15px; font-weight: 620; letter-spacing: -0.01em; }
+  .sheet > h1 span { color: var(--muted); font-weight: 450; font-size: 13px; margin-left: 8px; }
+  .cell { display: grid; gap: 8px; align-content: start; }
+  .cell h2 { margin: 0; font-size: 12.5px; font-weight: 600; color: var(--soft); display: flex; gap: 8px; align-items: center; }
+  .cell h2 small { color: var(--muted); font-weight: 450; font-size: 12px; }
+  .frame { background: var(--panel); border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; position: relative; }
+
+  /* ═════════════════════ A · « L'onglet de la PR » : la PR comme chez l'hébergeur, dans la place de travail ═════════════════════ */
+  .A .hd { display: flex; align-items: center; gap: 10px; padding: 12px 16px 10px 14px; }
+  .A .hd .back { color: var(--muted); }
+  .A .hd .tt { display: grid; gap: 3px; min-width: 0; }
+  .A .hd .t1 { display: flex; align-items: center; gap: 9px; min-width: 0; }
+  .A .hd h1 { margin: 0; font-size: 15px; font-weight: 620; letter-spacing: -0.01em; white-space: nowrap; }
+  .A .hd h1 .n { color: var(--muted); font-weight: 500; margin-right: 4px; }
+  .A .hd .t2 { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .A .hd .t2 .mono { color: var(--soft); }
+  .A .hd .right { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .A .tabs { display: flex; gap: 2px; height: 38px; padding: 0 14px; border-bottom: 1px solid var(--line); align-items: stretch; }
+  .A .tabs span { display: inline-flex; align-items: center; gap: 7px; padding: 0 10px; color: var(--muted); font-weight: 550; font-size: 12.5px; box-shadow: inset 0 -2px 0 transparent; }
+  .A .tabs span.on { color: var(--text); box-shadow: inset 0 -2px 0 var(--text); }
+  .A .tabs .c { color: var(--dim); font-size: 11.5px; font-weight: 500; }
+  .A .tabs .rv { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+  .A .body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 268px; }
+  .A .col { min-width: 0; overflow: hidden; padding: 12px 14px 14px 16px; display: grid; gap: 12px; align-content: start; }
+  .A .file { border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line-2); overflow: hidden; background: var(--well); }
+  .A .fh { display: flex; align-items: center; gap: 9px; height: 36px; padding: 0 10px 0 12px; background: var(--raise); border-bottom: 1px solid var(--line); font-size: 12.5px; }
+  .A .fh .mono { font-weight: 500; }
+  .A .fh .st { font-size: 11.5px; font-family: var(--mono); }
+  .A .fh .st .a { color: var(--add); } .A .fh .st .d { color: var(--del); }
+  .A .fh .seen { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; }
+  .A .inl { padding: 8px 12px 10px 106px; background: var(--panel); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .A .aside { border-left: 1px solid var(--line); padding: 14px 14px; display: grid; gap: 14px; align-content: start; font-size: 12.5px; overflow: hidden; }
+  .A .aside h3 { margin: 0 0 7px; font-size: 11.5px; font-weight: 600; color: var(--muted); display: flex; align-items: center; }
+  .A .aside h3 .g { margin-left: auto; color: var(--dim); }
+  .A .aside .sec { padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .A .aside .sec:last-child { border-bottom: 0; }
+  .A .rvr { display: flex; align-items: center; gap: 8px; height: 26px; }
+  .A .rvr .st { margin-left: auto; color: var(--muted); font-size: 12px; display: inline-flex; gap: 5px; align-items: center; }
+  .A .lbls { display: flex; gap: 5px; flex-wrap: wrap; }
+  .A .kv { display: flex; align-items: center; gap: 8px; min-height: 24px; color: var(--soft); }
+  .A .kv .muted { font-size: 12px; }
+  .A .mbox { border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line-2); overflow: hidden; background: var(--raise); }
+  .A .mbox .mr { display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+  .A .mbox .mr .ic { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; flex: none; }
+  .A .mbox .mr .ic.ok { color: var(--run); background: oklch(from var(--run) l c h / 0.12); }
+  .A .mbox .mr .ic.ko { color: var(--del); background: oklch(from var(--del) l c h / 0.12); }
+  .A .mbox .mr .ic.wt { color: var(--wait); background: var(--wait-bg); }
+  .A .mbox .mr .ic.ai { color: var(--brain); background: oklch(from var(--brain) l c h / 0.12); }
+  .A .mbox .mr .tx { display: grid; min-width: 0; }
+  .A .mbox .mr .tx b { font-weight: 600; }
+  .A .mbox .mr .tx small { color: var(--muted); font-size: 11.5px; }
+  .A .mbox .mf { flex-wrap: wrap; display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--panel); }
+  .A .conv { display: grid; gap: 12px; max-width: 780px; }
+  .A .desc { border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line-2); overflow: hidden; }
+  .A .desc .dh { display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: var(--raise); border-bottom: 1px solid var(--line); font-size: 12.5px; }
+  .A .desc .db { padding: 12px 14px; display: grid; gap: 8px; color: var(--text-ai); }
+  .A .desc ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
+  .A .ev { display: flex; align-items: center; gap: 10px; padding-left: 10px; color: var(--muted); font-size: 12.5px; }
+  .A .ev .gl { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--soft); flex: none; }
+  .A .ev b { color: var(--text); font-weight: 600; }
+  .A .ev .mono { color: var(--soft); }
+  .A .banner { display: flex; align-items: center; gap: 10px; margin: 0 14px; padding: 9px 12px; border-radius: 10px; font-size: 12.5px; }
+  .A .banner.ai { background: oklch(from var(--brain) l c h / 0.07); box-shadow: inset 0 0 0 1px oklch(from var(--brain) l c h / 0.3); }
+  .A .banner.ko { background: oklch(from var(--del) l c h / 0.07); box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.32); }
+  .A .banner.wt { background: var(--wait-bg); box-shadow: inset 0 0 0 1px var(--wait-line); }
+  .A .banner.ok { background: oklch(from var(--run) l c h / 0.07); box-shadow: inset 0 0 0 1px oklch(from var(--run) l c h / 0.3); }
+
+  /* ═════════════════════ B · « La relecture dans l'éditeur » : le code au centre, les remarques dans la marge ═════════════════════ */
+  .B .bar { display: flex; align-items: center; gap: 9px; height: 46px; padding: 0 12px 0 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .B .bar .tt { font-weight: 620; font-size: 13.5px; }
+  .B .bar .tt .n { color: var(--muted); font-weight: 500; margin-right: 3px; }
+  .B .bar .br { color: var(--muted); font-size: 12px; }
+  .B .bar .br .mono { color: var(--soft); }
+  .B .bar .vs { width: 1px; height: 18px; background: var(--line-2); flex: none; }
+  .B .ws { flex: 1; min-height: 0; display: grid; grid-template-columns: 214px 1fr 336px; }
+  .B .tree { border-right: 1px solid var(--line); padding: 10px 8px; display: grid; gap: 1px; align-content: start; font-size: 12.5px; overflow: hidden; }
+  .B .tree h3 { margin: 2px 6px 8px; font-size: 11.5px; color: var(--muted); font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .B .tree .prog { margin: 0 6px 10px; height: 4px; border-radius: 2px; background: rgba(var(--fg-rgb), 0.08); overflow: hidden; }
+  .B .tree .prog i { display: block; height: 100%; width: 50%; background: var(--soft); }
+  .B .tree .f { display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 6px; border-radius: 7px; color: var(--soft); min-width: 0; }
+  .B .tree .f.on { background: var(--hover); color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+  .B .tree .f.dir { color: var(--muted); height: 24px; }
+  .B .tree .f .cm { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: var(--brain); }
+  .B .tree .f .seen { color: var(--run); }
+  .B .tree .f .a { color: var(--add); font-size: 11px; font-family: var(--mono); }
+  .B .tree .ind { padding-left: 20px; }
+  .B .ed { min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .B .etabs { display: flex; height: 34px; border-bottom: 1px solid var(--line); background: var(--frame); flex: none; }
+  .B .etabs span { display: inline-flex; align-items: center; gap: 7px; padding: 0 12px; font-size: 12.5px; color: var(--muted); border-right: 1px solid var(--line); }
+  .B .etabs span.on { background: var(--panel); color: var(--text); box-shadow: inset 0 2px 0 var(--p); }
+  .B .etabs .md { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; color: var(--muted); font-size: 12px; border: 0; }
+  .B .sbs { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
+  .B .sbs > div { min-width: 0; overflow: hidden; }
+  .B .sbs > div + div { border-left: 1px solid var(--line); }
+  .B .sbs .dl { grid-template-columns: 38px 1fr; }
+  .B .sbs .dl.gap { background: repeating-linear-gradient(135deg, transparent 0 5px, rgba(var(--fg-rgb), 0.025) 5px 10px); }
+  .B .sbs .dl.hunk { grid-template-columns: 1fr; padding-left: 10px; }
+  .B .sbs .dl .ln { padding-right: 10px; }
+  .B .sbs .dl.add .tx, .B .sbs .dl.del .tx { padding-left: 2px; }
+  .B .sbs .dl .tx { padding-left: 8px; overflow: hidden; }
+  .B .uni { flex: 1; overflow: hidden; } .B .uni .dl { grid-template-columns: 40px 40px 16px 1fr; } .B .uni .dl.cmt .ln:nth-child(2) { position: relative; } .B .uni .dl.cmt .ln:nth-child(2)::after { content: ''; position: absolute; right: -14px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--brain); } .B .uni .dl.cmt .k { color: transparent; } .B .uni .dl.mark { background: oklch(from var(--brain) l c h / 0.1); }
+  .B .sbs .dl.cmt .ln { position: relative; }
+  .B .sbs .dl.cmt .ln::before { content: ''; position: absolute; left: 4px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--brain); }
+  .B .sbs .dl.mark { box-shadow: inset 2px 0 0 var(--brain); background: oklch(from var(--brain) l c h / 0.08); }
+  .B .margin { border-left: 1px solid var(--line); background: var(--frame); position: relative; overflow: hidden; }
+  .B .margin .mh { display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px 0 12px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+  .B .margin .mh b { color: var(--text); font-weight: 600; }
+  .B .margin .card { position: absolute; left: 10px; right: 10px; }
+  .B .margin .card .thread { box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow); }
+  .B .margin .card.dim .thread { box-shadow: inset 0 0 0 1px var(--line); }
+  .B .margin .card::before { content: ''; position: absolute; left: -11px; top: 16px; width: 11px; height: 1px; background: oklch(from var(--brain) l c h / 0.6); }
+  .B .margin .thread .acts { padding-left: 12px; }
+  .B .margin .thread .msg { grid-template-columns: 18px 1fr; gap: 3px 8px; padding: 9px 10px 6px; }
+  .B .margin .thread .reply, .B .margin .thread .fixing { margin-left: 10px; margin-right: 10px; }
+  .B .drawer { border-top: 1px solid var(--line); background: var(--panel); flex: none; }
+  .B .drawer .dt { display: flex; align-items: center; gap: 2px; height: 34px; padding: 0 8px; }
+  .B .drawer .dt span { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: 7px; font-size: 12.5px; color: var(--muted); font-weight: 550; }
+  .B .drawer .dt span.on { color: var(--text); background: var(--hover); box-shadow: inset 0 0 0 1px var(--line); }
+  .B .drawer .dt .c { color: var(--dim); font-size: 11.5px; font-weight: 500; }
+  .B .drawer .dc { display: grid; grid-template-columns: 1.2fr 1fr; gap: 0; border-top: 1px solid var(--line); height: 286px; }
+  .B .drawer .dc > div { padding: 12px 14px; overflow: hidden; display: grid; gap: 8px; align-content: start; }
+  .B .drawer .dc > div + div { border-left: 1px solid var(--line); }
+  .B .drawer h3 { margin: 0; font-size: 11.5px; color: var(--muted); font-weight: 600; display: flex; gap: 8px; align-items: center; }
+  .B .chk { display: flex; align-items: center; gap: 9px; height: 28px; font-size: 12.5px; padding: 0 4px; border-radius: 6px; }
+  .B .chk .d { margin-left: auto; color: var(--muted); font-size: 12px; }
+  .B .chk.ko { background: oklch(from var(--del) l c h / 0.06); }
+  .B .log { font-family: var(--mono); font-size: 11.5px; line-height: 18px; color: var(--code-fg); background: var(--well); border-radius: 8px; padding: 8px 10px;
+    box-shadow: inset 0 0 0 1px var(--line); white-space: pre; overflow: hidden; }
+  .B .log .e { color: var(--del); }
+
+  /* ═════════════════════ C · « La PR à côté de l'agent » : une colonne PR, une colonne agent ═════════════════════ */
+  .C .cols { flex: 1; min-height: 0; display: grid; grid-template-columns: 420px 1fr; }
+  .C .chat { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-width: 0; }
+  .C .colh { display: flex; align-items: center; gap: 9px; height: 50px; padding: 0 12px 0 14px; border-bottom: 1px solid var(--line); white-space: nowrap; flex: none; }
+  .C .colh b { font-weight: 620; }
+  .C .colh .m { color: var(--muted); font-size: 12px; }
+  .C .msgs { flex: 1; padding: 14px 16px; display: grid; gap: 14px; align-content: start; overflow: hidden; font-size: 13px; }
+  .C .you { justify-self: end; max-width: 330px; padding: 8px 12px; border-radius: 12px 12px 4px 12px; background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line); }
+  .C .ag { color: var(--text-ai); display: grid; gap: 6px; }
+  .C .ag .who { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
+  .C .tool { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line); font-size: 12px; color: var(--soft); }
+  .C .tool .mono { color: var(--muted); }
+  .C .tool .a { color: var(--add); font-family: var(--mono); font-size: 11px; } .C .tool .d { color: var(--del); font-family: var(--mono); font-size: 11px; }
+  .C .handoff { border-radius: 10px; padding: 9px 11px; display: grid; gap: 4px; font-size: 12.5px;
+    background: oklch(from var(--brain) l c h / 0.06); box-shadow: inset 0 0 0 1px oklch(from var(--brain) l c h / 0.3); }
+  .C .handoff .h { display: flex; align-items: center; gap: 7px; font-weight: 600; color: var(--brain); font-size: 12px; }
+  .C .handoff .q { color: var(--soft); }
+  .C .comp { margin: 0 14px 14px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line-2); background: var(--raise); padding: 10px 12px; display: grid; gap: 10px; flex: none; }
+  .C .comp .ph { color: var(--dim); }
+  .C .comp .r { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+  .C .pr { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .C .ready { margin: 12px 14px 0; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line-2); background: var(--raise); overflow: hidden; flex: none; }
+  .C .ready .rh { display: flex; align-items: center; gap: 9px; padding: 10px 12px; }
+  .C .ready .rh b { font-weight: 620; font-size: 13px; }
+  .C .ready .steps { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); }
+  .C .ready .stp { padding: 9px 12px; display: grid; gap: 2px; font-size: 12px; min-width: 0; }
+  .C .ready .stp + .stp { border-left: 1px solid var(--line); }
+  .C .ready .stp .l { display: flex; align-items: center; gap: 6px; color: var(--muted); font-weight: 550; font-size: 11.5px; }
+  .C .ready .stp .v { font-weight: 600; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .C .ready .stp.ok .l svg { color: var(--run); } .C .ready .stp.ko .v { color: var(--del); } .C .ready .stp.wt .v { color: var(--wait); } .C .ready .stp.ai .v { color: var(--brain); }
+  .C .ready .stp .a { color: var(--muted); font-size: 11.5px; }
+  .C .ptabs { display: flex; gap: 2px; height: 36px; padding: 0 12px; margin-top: 8px; border-bottom: 1px solid var(--line); align-items: stretch; flex: none; }
+  .C .ptabs span { display: inline-flex; align-items: center; gap: 6px; padding: 0 9px; color: var(--muted); font-weight: 550; font-size: 12.5px; box-shadow: inset 0 -2px 0 transparent; }
+  .C .ptabs span.on { color: var(--text); box-shadow: inset 0 -2px 0 var(--text); }
+  .C .ptabs .c { color: var(--dim); font-size: 11.5px; font-weight: 500; }
+  .C .ptabs .flt { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 500; box-shadow: none; }
+  .C .feed { flex: 1; min-height: 0; overflow: hidden; padding: 12px 14px; display: grid; gap: 12px; align-content: start; }
+  .C .rem { border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line-2); overflow: hidden; background: var(--well); }
+  .C .rem .rh { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px 0 12px; background: var(--raise); border-bottom: 1px solid var(--line); font-size: 12px; }
+  .C .rem .rh .mono { color: var(--soft); }
+  .C .rem .dl { grid-template-columns: 40px 18px 1fr; } .C .rem .conf .dl { grid-template-columns: 0 40px 18px 1fr; } .C .rem .conf .dl.hunk { grid-template-columns: 58px 1fr; } .C .rem .rh { white-space: nowrap; } .sheet .B .bar .br, .sheet .B .bar .tt { display: none; } .sheet .B .bar .btn.sm.quiet { display: none; }
+  .C .rem .thread { border-radius: 0; box-shadow: none; background: var(--panel); border-top: 1px solid var(--line); }
+  .C .rem .thread.ai { box-shadow: inset 3px 0 0 var(--brain); }
+  .C .pfoot { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); flex: none; }
+  .C .pfoot .m { color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const q = new URLSearchParams(location.search);
+const D = (q.get('d') || 'a').toLowerCase();
+const ROUTE = (location.hash || '#fenetre').slice(1);
+if (q.get('theme') === 'light') document.documentElement.dataset.theme = 'light';
+
+const ic = (n, s = 14) => `<svg class="i" viewBox="0 0 16 16" style="width:${s}px;height:${s}px">${ICONS[n] || ''}</svg>`;
+const ok = (s = 14) => `<span style="color:var(--run);display:inline-flex">${ic('check-c', s)}</span>`;
+const ko = (s = 14) => `<span style="color:var(--del);display:inline-flex">${ic('close', s)}</span>`;
+
+/* ───────── Les données : la PR #214 du ticket ATL-42, relue par l'agent « Relecteur » ───────── */
+const PR = { n: 214, title: 'Connexion par lien magique', head: 'ticket/atl-42', base: 'main', ticket: 'ATL-42', agent: 'Lien magique' };
+const FILES = [
+  { dir: 'src/auth/', name: 'magic-link.ts', a: 48, d: 6, c: 2, seen: false },
+  { dir: 'src/auth/', name: 'session.ts', a: 12, d: 3, c: 1, seen: true },
+  { dir: 'src/routes/', name: 'login.svelte', a: 31, d: 9, c: 1, seen: false },
+  { dir: 'tests/auth/', name: 'magic-link.test.ts', a: 64, d: 0, c: 0, seen: true },
+];
+const CHECKS = [
+  ['lint', 'ok', '42 s'], ['unit', 'ok', '1 min 12'], ['build', 'ok', '2 min 05'], ['e2e (Linux)', 'ok', '3 min 40'], ['e2e (Windows)', 'ok', '4 min 18'],
+];
+const COMMITS = [
+  ['a1b2c3d', 'feat(auth): lien magique par e-mail', 'Lien magique', 'il y a 2 h'],
+  ['9e8f7a6', 'test(auth): un lien expiré est refusé', 'Lien magique', 'il y a 2 h'],
+  ['3f2a91c', 'fix(auth): durée du lien à 10 min (relecture)', 'Lien magique', 'il y a 25 min'],
+  ['77c0d12', 'chore(i18n): messages de connexion', 'Lien magique', 'il y a 20 min'],
+];
+const k = (s) => `<span class="tk-k">${s}</span>`, f = (s) => `<span class="tk-f">${s}</span>`, s_ = (s) => `<span class="tk-s">${s}</span>`, n_ = (s) => `<span class="tk-n">${s}</span>`;
+/** Le diff de magic-link.ts : [genre, ancien n°, nouveau n°, texte]. */
+const DIFF_ML = [
+  ['@', '', '', '@@ -15,6 +15,20 @@ export async function sendMagicLink(email: string, locale: Locale)'],
+  [' ', 15, 15, `  ${k('const')} token = ${f('randomBytes')}(${n_('32')}).${f('toString')}(${s_("'base64url'")});`],
+  [' ', 16, 16, `  ${k('await')} store.${f('put')}(${f('hash')}(token), { email, at: Date.${f('now')}() });`],
+  ['-', 17, '', `  ${k('return')} mailer.${f('send')}(email, ${f('link')}(token));`],
+  ['+', '', 17, `  ${k('await')} mailer.${f('send')}(email, ${f('link')}(token), { locale });`],
+  ['+', '', 18, `  ${k('return')} { sent: ${k('true')} };`],
+  [' ', 18, 19, `}`],
+  [' ', 19, 20, ``],
+  ['+', '', 21, `${k('export')} ${k('async')} ${k('function')} ${f('verifyMagicLink')}(token: ${k('string')}, stored: ${k('string')}) {`],
+  ['+', '', 22, `  ${k('const')} given = ${f('hash')}(token);`],
+  ['+', '', 23, `  ${k('if')} (given === stored) {`, 't1'],
+  ['+', '', 24, `    ${k('return')} ${f('openSession')}();`],
+  ['+', '', 25, `  }`],
+  ['+', '', 26, `  ${k('return')} ${k('null')};`],
+  ['+', '', 27, `}`],
+  ['+', '', 28, ``],
+  ['+', '', 29, `${k('const')} TTL_MS = ${n_('10')} * ${n_('60')} * ${n_('1000')};`, 't2'],
+  ['+', '', 30, ``],
+  ['+', '', 31, `${k('export')} ${k('function')} ${f('expired')}(at: ${k('number')}) {`],
+  ['+', '', 32, `  ${k('return')} Date.${f('now')}() - at > TTL_MS;`],
+  ['+', '', 33, `}`],
+];
+const DIFF_SE = [
+  ['@', '', '', '@@ -8,6 +8,9 @@ export function openSession(user: User)'],
+  [' ', 8, 8, `${k('export')} ${k('function')} ${f('openSession')}(user: User) {`],
+  [' ', 9, 9, `  ${k('const')} id = ${f('newId')}();`],
+  ['-', 10, '', `  ${f('setCookie')}(${s_("'sid'")}, id, { httpOnly: ${k('true')} });`],
+  ['+', '', 10, `  ${f('setCookie')}(${s_("'sid'")}, id, {`, 't3'],
+  ['+', '', 11, `    httpOnly: ${k('true')},`],
+  ['+', '', 12, `    secure: ${k('true')},`],
+  ['+', '', 13, `  });`],
+  [' ', 11, 14, `  ${k('return')} id;`],
+];
+const DIFF_LG = [
+  ['@', '', '', '@@ -44,4 +44,8 @@ {#if failed}'],
+  [' ', 46, 46, `  {${k('#if')} expired}`],
+  ['+', '', 47, `    &lt;${f('p')} class=${s_('"err"')}&gt;`],
+  ['+', '', 48, `      Lien expiré, redemande-en un.`, 't4'],
+  ['+', '', 49, `    &lt;/${f('p')}&gt;`],
+];
+const ME = 'ada';
+/** Les fils de la relecture de l'agent (et la réponse de l'utilisateur). */
+const T = {
+  t1: { file: 'src/auth/magic-link.ts', line: 23, sev: ['hi', 'Sécurité'], state: 'open',
+    msgs: [['ai', 'Relecteur', 'il y a 12 min', 'Le jeton est comparé avec <code>===</code> : la comparaison s\'arrête au premier caractère différent, et sa durée renseigne un attaquant. Compare en temps constant.']],
+    sugg: [['-', `  ${k('if')} (given === stored) {`], ['+', `  ${k('if')} (${f('timingSafeEqual')}(Buffer.${f('from')}(given), Buffer.${f('from')}(stored))) {`]] },
+  t2: { file: 'src/auth/magic-link.ts', line: 29, sev: ['md', 'Spec'], state: 'resolved',
+    msgs: [['ai', 'Relecteur', 'il y a 40 min', 'La spec (Connexion › Lien magique) donne 10 min au lien, pas 15.'], ['me', ME, 'il y a 35 min', 'Bien vu. Corrige.'], ['tk', 'Lien magique', 'il y a 25 min', 'Corrigé dans <code>3f2a91c</code>.']] },
+  t3: { file: 'src/auth/session.ts', line: 10, sev: ['md', 'Sécurité'], state: 'fixing',
+    msgs: [['ai', 'Relecteur', 'il y a 12 min', 'Le cookie de session n\'a pas <code>sameSite</code> : ajoute <code>sameSite: \'lax\'</code>, sinon il part avec les requêtes d\'un autre site.']] },
+  t4: { file: 'src/routes/login.svelte', line: 48, sev: ['lo', 'Détail'], state: 'open',
+    msgs: [['ai', 'Relecteur', 'il y a 12 min', 'Texte en dur : il manque à <code>en.json</code>. Passe par <code>t(\'login.expired\')</code>.']] },
+};
+
+/* ───────── Les morceaux communs ───────── */
+function dline(l, opt = {}) {
+  const [kind, o, n, tx, th] = l;
+  if (kind === '@') return `<div class="dl hunk"><span class="ln"></span><span class="tx">${tx}</span></div>`;
+  const cls = kind === '+' ? 'add' : kind === '-' ? 'del' : '';
+  return `<div class="dl ${cls}${th && opt.mark ? ' mark' : ''}"><span class="ln">${o}</span><span class="ln">${n}</span><span class="k">${kind === ' ' ? '' : kind}</span><span class="tx">${tx}</span></div>`;
+}
+function av(kind, name) {
+  if (kind === 'ai') return `<span class="av ai">${ic('sparkle', 12)}</span>`;
+  if (kind === 'tk') return `<span class="av tk">${ic('agents', 11)}</span>`;
+  if (kind === 'me') return `<span class="av me">${name.slice(0, 2).toUpperCase()}</span>`;
+  return `<span class="av">${name.slice(0, 2).toUpperCase()}</span>`;
+}
+function msg([kind, who, when, body]) {
+  return `<div class="msg">${av(kind, who)}<div class="who"><b>${kind === 'me' ? 'Toi' : who}</b>${kind === 'ai' ? '<span class="tag-ai">agent relecteur</span>' : kind === 'tk' ? '<span class="tag-ai" style="color:var(--run);background:oklch(from var(--run) l c h / .1)">agent du ticket</span>' : ''}<span class="t">${when}</span></div><p class="bd">${body}</p></div>`;
+}
+/** Un fil : ses messages, sa suggestion, ses gestes. opt.compact : la marge de B. */
+function thread(id, opt = {}) {
+  const t = T[id];
+  if (t.state === 'resolved' && !opt.open)
+    return `<div class="thread resolved"><div class="rz">${ok(14)}<b>Résolu</b> · ${t.msgs.length} messages · ${t.msgs[0][3].replace(/<[^>]+>/g, '').slice(0, opt.compact ? 26 : 60)}…<span class="sp">Rouvrir</span></div></div>`;
+  let h = `<div class="thread ai">`;
+  const first = t.msgs[0];
+  h += (opt.compact ? msg(first).replace(/<span class="tag-ai">[^<]*<\/span>/, '') : msg(first)).replace('<span class="t">', `<span class="sev ${t.sev[0]}">${t.sev[1]}</span><span class="t">`);
+  if (t.sugg && !opt.nosugg)
+    h += `<div class="msg" style="padding-top:0;border-top:0"><span></span><div class="sugg"><div class="sh">${ic('edit', 12)} Suggestion<span class="sp"></span><span class="btn sm">Appliquer</span></div><div class="code">${t.sugg.map(([kd, tx]) => `<div class="dl ${kd === '+' ? 'add' : 'del'}"><span class="k">${kd}</span><span class="tx">${tx}</span></div>`).join('')}</div></div></div>`;
+  for (const m of t.msgs.slice(1)) h += msg(m);
+  if (t.state === 'fixing') {
+    h += `<div class="fixing"><span class="spin" style="border-color:var(--run);border-right-color:transparent"></span><span><b>Lien magique</b> corrige${opt.compact ? '…' : ' cette remarque, dans son worktree…'}</span><span class="sp muted">${opt.compact ? '' : 'Voir l\'agent'}</span></div>`;
+  } else {
+    h += `<div class="acts"><span class="btn sm">Répondre</span><span class="btn sm">${ic('check', 12)}Résoudre</span><span class="btn sm agentic">${ic('sparkle', 12)}${opt.compact ? 'Faire corriger' : 'Demander à l\'agent de corriger'}</span></div>`;
+  }
+  return h + `</div>`;
+}
+
+function titlebar() {
+  return `<div class="tb"><span class="logo">${ic('agents', 13)}</span><span class="proj"><span class="sq"></span>atlas-web ${ic('down', 12)}</span>
+    <span class="search">${ic('search', 13)}Rechercher<kbd>Ctrl K</kbd></span>
+    <span class="ed">${ic('code', 14)}Éditeur</span><span style="display:flex"><span class="wbtn">${ic('min', 13)}</span><span class="wbtn">${ic('max', 12)}</span><span class="wbtn">${ic('close', 13)}</span></span></div>`;
+}
+function rail() {
+  return `<div class="rail"><span class="r-i">${ic('overview', 15)}</span><span class="tile">AW</span><span class="tile o">ES</span><span class="r-i">${ic('plus', 15)}</span><span class="low"><span class="r-i">${ic('stats', 15)}</span><span class="r-i">${ic('puzzle', 15)}</span><span class="r-i">${ic('sliders', 15)}</span></span></div>`;
+}
+function sidebar(tab) {
+  const tabs = [['agents', 'Agents', '3'], ['kanban', 'Kanban', ''], ['pr', 'PR', ''], ['page', 'Docs', '']]
+    .map(([i, l, c]) => `<span class="${(tab === 'pr' && i === 'pr') || (tab === 'agents' && i === 'agents') ? 'on' : ''}">${l}${c ? `<span class="c">${c}</span>` : ''}</span>`).join('');
+  const agents = `
+    <div class="agent ${tab === 'agents' ? 'on' : ''}"><div class="r"><span class="ring"></span><span class="n ell">Lien magique</span><span class="key sp">ATL-42</span></div>
+      <div class="m ell">PR #214 · corrige une remarque</div></div>
+    <div class="agent"><div class="r"><span class="ring brain"></span><span class="n ell">Relecteur</span><span class="key sp">PR #214</span></div>
+      <div class="m ell">${D === 'a' && ROUTE === 'etats' ? 'relit la PR' : '4 remarques · 2 ouvertes'}</div></div>
+    <div class="agent"><div class="r"><span class="ring wt"></span><span class="n ell">Export CSV</span><span class="key sp">ATL-45</span></div>
+      <div class="m ell" style="color:var(--wait)">attend ta réponse</div></div>`;
+  return `<div class="side"><div class="stabs">${tabs}</div>
+    <div class="new"><span class="plus">${ic('plus', 12)}</span>Nouvel agent<kbd>Ctrl N</kbd></div>${agents}
+    <div class="foot"><div class="r"><b style="color:var(--soft);font-weight:600">Terminaux</b> 1<span class="sp">${ic('plus', 13)}</span></div><div class="r">${ic('term', 13)}npm run dev<span class="sp dot ok"></span></div><div class="r" style="border-top:1px solid var(--line);padding-top:8px">${ic('folder', 13)}<span class="mono ell">~/dev/atlas-web</span></div><div class="r">${ic('branch', 13)}<span class="mono">main</span><span class="sp mono" style="color:var(--add)">+0</span></div></div></div>`;
+}
+function statusbar() {
+  return `<div class="status"><span><span class="dot ok"></span> <b>2</b> actifs</span><span><span class="dot wt"></span> <b>1</b> en attente</span>
+    <span class="sp">Claude <b>5 h</b> 34 %</span><span>Aujourd'hui <b>4,12 $</b></span><span>${ic('branch', 12)} <span class="mono">main</span></span></div>`;
+}
+function shell(main, tab = 'pr') {
+  return `<div class="win">${titlebar()}${rail()}${sidebar(tab)}<div class="main">${main}</div>${statusbar()}</div>`;
+}
+const LABELS = `<span class="lbl" style="--c:oklch(0.72 0.12 250)"><i></i>auth</span><span class="lbl" style="--c:oklch(0.74 0.14 22)"><i></i>sécurité</span>`;
+
+/* ═════════════════════ A ═════════════════════ */
+function aHeader(state = 'base', compact = false) {
+  if (compact)
+    return `<div class="hd"><div class="tt"><div class="t1"><h1><span class="n">#${PR.n}</span>${PR.title}</h1><span class="pill open">${ic('pr', 12)}Ouverte</span></div></div>
+      <div class="right"><span class="btn icon">${ic('ext', 14)}</span><span class="btn">Ta relecture ${ic('down', 12)}</span></div></div>`;
+  const merge = state === 'ready' ? `<span class="split"><span class="btn go">${ic('merge', 13)}Squash et merger</span><span class="btn go">${ic('down', 12)}</span></span>`
+    : `<span class="split"><span class="btn">${ic('merge', 13)}Squash et merger</span><span class="btn">${ic('down', 12)}</span></span>`;
+  return `<div class="hd"><span class="btn quiet icon back">${ic('left', 14)}</span>
+    <div class="tt"><div class="t1"><h1><span class="n">#${PR.n}</span>${PR.title}</h1><span class="pill open">${ic('pr', 12)}Ouverte</span></div>
+      <div class="t2"><span class="mono">${PR.head}</span>→<span class="mono">${PR.base}</span>·<span>ticket ${PR.ticket}</span>·<span>par l'agent ${PR.agent}</span>·<span>4 commits</span></div></div>
+    <div class="right"><span class="btn icon" title="Ouvrir sur GitHub">${ic('ext', 14)}</span><span class="btn">${ic('sparkle', 13)}Relire à nouveau</span>
+      <span class="btn">Ta relecture ${ic('down', 12)}</span>${merge}</div></div>`;
+}
+function aTabs(on, ci = '5/5', compact = false) {
+  const ts = [['Conversation', '6'], ['Commits', '4'], ['Contrôles', ci], ['Fichiers', '4']];
+  return `<div class="tabs">${ts.map(([l, c]) => `<span class="${l === on ? 'on' : ''}">${l}<span class="c">${c}</span></span>`).join('')}
+    ${compact ? '</div>' : `<span class="rv">${ic('sparkle', 13)}<span>Relecture de l'agent : <b style="color:var(--text)">4 remarques</b>, 2 ouvertes</span><span class="btn sm">Suivante ${ic('down', 11)}</span></span></div>`}`;
+}
+function aFile(file, diff, opt = {}) {
+  const ff = FILES.find((x) => file.endsWith(x.name));
+  let rows = '';
+  for (const l of diff) {
+    rows += dline(l, { mark: true });
+    if (l[4] && !(opt.skip || []).includes(l[4])) rows += `<div class="inl">${thread(l[4], opt)}</div>`;
+  }
+  return `<div class="file"><div class="fh">${ic('down', 12)}<span class="mono">${file}</span><span class="st"><span class="a">+${ff.a}</span> <span class="d">−${ff.d}</span></span>
+    ${ff.c ? `<span class="pill ai" style="height:20px">${ic('sparkle', 11)}${ff.c}</span>` : ''}<span class="seen"><span class="cb ${ff.seen ? 'on' : ''}">${ff.seen ? ic('check', 11) : ''}</span>Vu</span></div><div class="code">${rows}</div></div>`;
+}
+function aAside(state = 'base') {
+  const rv = `<div class="sec"><h3>Relecteurs<span class="g">${ic('sliders', 13)}</span></h3>
+    <div class="rvr">${av('ai')}<span>Relecteur</span><span class="st">${state === 'reviewing' ? '<span class="spin ai"></span>relit' : `${ic('edit', 12)}a commenté`}</span></div>
+    <div class="rvr"><span class="av sm" style="width:22px;height:22px">MA</span><span>marta</span><span class="st"><span class="dot wt"></span>demandée</span></div>
+    <div class="rvr">${av('me', ME)}<span>Toi</span><span class="st">${state === 'ready' ? `<span style="color:var(--run);display:inline-flex;gap:5px;align-items:center">${ic('check', 12)}approuvée</span>` : '—'}</span></div></div>`;
+  const lb = `<div class="sec"><h3>Étiquettes<span class="g">${ic('sliders', 13)}</span></h3><div class="lbls">${LABELS}</div></div>`;
+  const kv = `<div class="sec"><h3>La PR</h3>
+    <div class="kv"><span class="cb"></span>Brouillon<span class="sp muted">prête à relire</span></div>
+    <div class="kv">${ic('branch', 13)}<span>${state === 'conflict' ? '<b style="color:var(--del)">En conflit</b> avec main' : 'À jour avec main'}</span><span class="sp btn sm ${state === 'conflict' ? '' : 'off'}">Mettre à jour</span></div>
+    <div class="kv">${ic('kanban', 13)}<span>ATL-42 · En revue</span></div></div>`;
+  return `<div class="aside">${rv}${lb}${kv}${aMergeBox(state)}</div>`;
+}
+const MB = {
+  base: [['wt', 'clock', 'Relecture demandée', '1 approbation manquante (marta)'], ['ai', 'sparkle', '2 fils ouverts', 'de la relecture de l\'agent'], ['ok', 'check', 'Contrôles passés', '5 sur 5'], ['ok', 'check', 'Pas de conflit', 'à jour avec main']],
+  reviewing: [['ai', 'sparkle', 'L\'agent relit', '3 fichiers sur 4 lus'], ['wt', 'clock', 'Contrôles en cours', '3 sur 5'], ['ok', 'check', 'Pas de conflit', 'à jour avec main']],
+  ci: [['ko', 'close', '1 contrôle en échec', 'e2e (Linux) · 2 tests'], ['ok', 'check', '0 fil ouvert', 'relecture traitée'], ['ok', 'check', 'Pas de conflit', 'à jour avec main']],
+  conflict: [['ko', 'close', 'Conflit avec main', 'src/auth/session.ts'], ['ok', 'check', 'Contrôles passés', '5 sur 5'], ['ok', 'check', 'Approuvée', 'par toi et marta']],
+  ready: [['ok', 'check', 'Approuvée', 'par toi et marta'], ['ok', 'check', 'Fils résolus', '4 sur 4'], ['ok', 'check', 'Contrôles passés', '5 sur 5'], ['ok', 'check', 'Pas de conflit', 'à jour avec main']],
+};
+function aMergeBox(state = 'base') {
+  const rows = MB[state].map(([c, i, b, s]) => `<div class="mr"><span class="ic ${c}">${c === 'ai' && /relit/.test(b) ? '<span class="spin ai"></span>' : c === 'wt' && /cours/.test(b) ? '<span class="spin"></span>' : ic(i, 12)}</span><span class="tx"><b>${b}</b><small>${s}</small></span></div>`).join('');
+  const act = state === 'ready' ? `<span class="split" style="flex:1"><span class="btn go" style="flex:1;justify-content:center">${ic('merge', 13)}Squash et merger</span><span class="btn go">${ic('down', 12)}</span></span>`
+    : state === 'ci' ? `<span class="btn ko" style="flex:1;justify-content:center">${ic('restart', 13)}Relancer l'échec</span><span class="btn agentic" style="flex:1 1 100%;justify-content:center">${ic('sparkle', 12)}Faire corriger par Lien magique</span>`
+    : state === 'conflict' ? `<span class="btn" style="flex:1;justify-content:center">${ic('branch', 13)}Mettre à jour</span><span class="btn agentic">${ic('sparkle', 12)}Résoudre</span>`
+    : `<span class="btn off" style="flex:1;justify-content:center">${ic('merge', 13)}Squash et merger</span><span class="btn icon">${ic('down', 12)}</span></div><div class="mf" style="padding-top:0"><span class="cb"></span><span class="muted" style="font-size:12px">Auto-merge quand tout passe</span>`;
+  return `<div class="mbox">${rows}<div class="mf">${act}</div></div>`;
+}
+function A_fenetre() {
+  const main = `<div class="A" style="display:contents">${aHeader()}${aTabs('Fichiers')}
+    <div class="body"><div class="col">${aFile('src/auth/magic-link.ts', DIFF_ML.slice(0, 20))}</div>${aAside()}</div></div>`;
+  return shell(main);
+}
+function A_controle() {
+  const desc = `<div class="desc"><div class="dh">${av('tk')}<b>Lien magique</b><span class="tag-ai" style="color:var(--run);background:oklch(from var(--run) l c h / .1)">agent du ticket</span><span class="muted">a ouvert la PR il y a 2 h</span><span class="sp btn sm quiet">${ic('edit', 12)}Modifier</span></div>
+    <div class="db"><p>Connexion sans mot de passe : un lien envoyé par e-mail, valable 10 minutes, ouvre la session.</p>
+    <ul><li><code class="mono">sendMagicLink</code> envoie le lien dans la langue de l'utilisateur ;</li><li><code class="mono">verifyMagicLink</code> l'ouvre, une fois ;</li><li>un lien expiré se dit sur la page de connexion.</li></ul><p class="muted">Closes #88 · ticket ATL-42</p></div></div>`;
+  const ev = (g, h) => `<div class="ev"><span class="gl">${ic(g, 12)}</span>${h}</div>`;
+  const tl = [
+    ev('push', `<b>Lien magique</b> a poussé 2 commits <span class="mono">a1b2c3d</span> <span class="mono">9e8f7a6</span> · il y a 2 h`),
+    ev('sparkle', `<b>Relecteur</b> a relu la PR : <span style="color:var(--text)">4 remarques, dont 1 de sécurité</span> · il y a 12 min`),
+  ].join('');
+  const sum = `<div class="thread ai">${msg(['ai', 'Relecteur', 'il y a 12 min', 'Le flux est clair et testé. Deux points de sécurité avant de merger : la comparaison du jeton (<code>magic-link.ts:23</code>) et le cookie sans <code>sameSite</code> (<code>session.ts:10</code>). Le reste est mineur.'])}<div class="acts"><span class="btn sm">Voir les 4 remarques</span><span class="btn sm agentic">${ic('sparkle', 12)}Demander à l'agent de tout corriger</span></div></div>`;
+  const main = `<div class="A" style="display:contents">${aHeader()}${aTabs('Conversation')}
+    <div class="body"><div class="col"><div class="conv">${desc}${tl}${sum}${ev('push', `<b>Lien magique</b> a poussé <span class="mono">3f2a91c</span> fix(auth): durée du lien à 10 min · il y a 25 min`)}
+    <div class="thread"><div class="msg">${av('me', ME)}<div class="who"><b>Toi</b><span class="t">écris un commentaire</span></div></div><div class="reply">Commenter la PR, ou @Relecteur pour lui poser une question…</div></div></div></div>${aAside()}</div></div>`;
+  let html = shell(main);
+  // Le menu « Ta relecture » ouvert, et celui du merge.
+  html = html.replace('</div><div class="status">', `
+    <div class="menu" style="top:100px;right:150px;width:330px"><h4>Ta relecture de la PR #214</h4>
+      <div class="it"><span class="radio"></span><span><b>Commenter</b></span><small>sans verdict</small></div>
+      <div class="it hl"><span class="radio on"></span><span><b>Approuver</b></span><small>les 2 fils ouverts restent ouverts</small></div>
+      <div class="it"><span class="radio"></span><span><b>Demander des changements</b></span><small>l'agent du ticket les reçoit comme retours</small></div>
+      <div class="sepl"></div><div style="padding:6px 8px;display:grid;gap:8px"><div class="thread" style="background:var(--well)"><div class="reply" style="margin:8px;height:46px;align-items:flex-start;padding-top:7px">Rien à ajouter, merci.</div></div>
+      <div style="display:flex;gap:6px;justify-content:flex-end"><span class="btn sm quiet">Annuler</span><span class="btn sm primary">Envoyer sur GitHub</span></div></div></div>
+    <div class="menu" style="top:100px;right:14px;width:270px;display:none"></div>
+  </div><div class="status">`);
+  return html;
+}
+function A_etats() {
+  const cell = (title, sub, state, banner) => `<div class="cell"><h2>${title}<small>${sub}</small></h2><div class="frame A" style="height:420px;display:flex;flex-direction:column">${aHeader(state, true)}${aTabs('Fichiers', state === 'ci' ? '4/5' : state === 'reviewing' ? '3/5' : '5/5', true)}
+    <div style="padding-top:10px">${banner}</div><div class="body" style="grid-template-columns:1fr 268px;margin-top:10px"><div class="col" style="padding-top:0">${state === 'reviewing' ? aFile('src/auth/session.ts', DIFF_SE, { skip: ['t3'] }) : state === 'conflict' ? aConflict() : state === 'ci' ? aCiLog() : aFile('src/auth/magic-link.ts', DIFF_ML.slice(14, 21), { skip: ['t1'] })}</div><div class="aside" style="padding-top:0;border-left:1px solid var(--line)">${aMergeBox(state)}</div></div></div></div>`;
+  return `<div class="sheet A">${'<h1>A · L\'onglet de la PR<span>les quatre états, dans l\'en-tête, un bandeau et la boîte de merge</span></h1>'}
+    ${cell('Relecture en cours', 'l\'agent relit, ses remarques arrivent fichier par fichier', 'reviewing', `<div class="banner ai"><span class="spin ai"></span><span><b>Relecteur</b> relit la PR : 3 fichiers sur 4, 3 remarques déjà là.</span><span class="sp btn sm quiet">Arrêter</span></div>`)}
+    ${cell('CI rouge', 'le contrôle en échec, son journal, la relance et la correction', 'ci', `<div class="banner ko">${ko()}<span><b>e2e (Linux)</b> a échoué : 2 tests.</span><span class="sp btn sm">${ic('restart', 12)}Relancer</span><span class="btn sm agentic">${ic('sparkle', 12)}Faire corriger par Lien magique</span></div>`)}
+    ${cell('Conflit', 'main a avancé ; mettre à jour ou faire résoudre', 'conflict', `<div class="banner wt">${ic('branch', 14)}<span><b>Conflit avec main</b> dans <span class="mono">src/auth/session.ts</span>.</span><span class="sp btn sm">Mettre à jour la branche</span><span class="btn sm agentic">${ic('sparkle', 12)}Faire résoudre</span></div>`)}
+    ${cell('Prête à fusionner', 'tout est vert : le merge et sa méthode', 'ready', `<div class="banner ok">${ok()}<span><b>Prête à merger</b> : approuvée, fils résolus, contrôles passés.</span></div>`)}
+  </div>`;
+}
+function aConflict() {
+  return `<div class="file"><div class="fh">${ic('down', 12)}<span class="mono">src/auth/session.ts</span><span class="pill ko" style="height:20px">conflit</span></div><div class="code">
+    <div class="dl hunk"><span class="ln"></span><span class="tx">&lt;&lt;&lt;&lt;&lt;&lt;&lt; ticket/atl-42</span></div>
+    <div class="dl add"><span class="ln"></span><span class="ln">10</span><span class="k">+</span><span class="tx">  ${f('setCookie')}(${s_("'sid'")}, id, { httpOnly: ${k('true')}, secure: ${k('true')} });</span></div>
+    <div class="dl hunk"><span class="ln"></span><span class="tx">======= main</span></div>
+    <div class="dl del"><span class="ln">10</span><span class="ln"></span><span class="k">−</span><span class="tx">  ${f('setSessionCookie')}(id, { maxAge: ${n_('3600')} });</span></div>
+    <div class="dl hunk"><span class="ln"></span><span class="tx">&gt;&gt;&gt;&gt;&gt;&gt;&gt;</span></div></div></div>`;
+}
+function aCiLog() {
+  return `<div class="file"><div class="fh">${ko(13)}<span>e2e (Linux)</span><span class="muted">3 min 40 · échec</span><span class="sp btn sm quiet">${ic('ext', 12)}Journal complet</span></div>
+    <div class="code" style="padding:8px 12px;white-space:pre;line-height:19px;font-size:11.5px">  ✓ login › envoie le lien (1.2 s)
+<span style="color:var(--del)">  ✗ login › un lien expiré se dit (5.0 s)</span>
+<span style="color:var(--del)">    Expected: "Lien expiré, redemande-en un."</span>
+<span style="color:var(--del)">    Received: "login.expired"</span>
+<span style="color:var(--del)">  ✗ login › le lien ne sert qu'une fois (5.0 s)</span>
+  18 passed, 2 failed</div></div>`;
+}
+
+/* ═════════════════════ B ═════════════════════ */
+function bBar(state = 'base') {
+  const ci = state === 'ci' ? `<span class="ci ko">${ic('close', 12)}1 échec</span>` : state === 'reviewing' ? `<span class="ci wt"><span class="spin"></span>3/5</span>` : `<span class="ci ok">${ic('check-c', 13)}5/5</span>`;
+  const cf = state === 'conflict' ? `<span class="pill ko">${ic('branch', 12)}Conflit</span>` : '';
+  const merge = state === 'ready' ? `<span class="split"><span class="btn go">${ic('merge', 13)}Merger</span><span class="btn go">${ic('down', 12)}</span></span>` : `<span class="split"><span class="btn off">${ic('merge', 13)}Merger</span><span class="btn">${ic('down', 12)}</span></span>`;
+  return `<div class="bar"><span class="pill open">${ic('pr', 12)}#${PR.n}</span><span class="tt ell">${PR.title}</span><span class="br"><span class="mono">${PR.head}</span> → <span class="mono">${PR.base}</span></span>
+    <span class="vs"></span>${ci}${cf}<span class="pill ${state === 'ready' ? 'open' : 'wt'}">${state === 'ready' ? ic('check', 12) + '2 approbations' : ic('clock', 12) + '1 approbation sur 2'}</span>
+    <span class="sp"></span><span class="btn sm quiet">${ic('ext', 13)}</span><span class="btn">${ic('check', 13)}Approuver ${ic('down', 12)}</span>${merge}</div>`;
+}
+function bTree(active = 'magic-link.ts') {
+  let h = `<div class="tree"><h3>${ic('pr', 12)}Fichiers modifiés<span class="sp" style="font-weight:500">2 / 4 vus</span></h3><div class="prog"><i></i></div>`;
+  let dir = '';
+  for (const x of FILES) {
+    if (x.dir !== dir) { dir = x.dir; h += `<div class="f dir">${ic('folder', 13)}<span class="mono ell">${dir}</span></div>`; }
+    h += `<div class="f ind ${x.name === active ? 'on' : ''}">${ic('file', 13)}<span class="ell">${x.name}</span>${x.c ? `<span class="cm">${ic('agents', 11)}${x.c}</span>` : x.seen ? `<span class="cm seen">${ic('check', 12)}</span>` : `<span class="cm"><span class="a">+${x.a}</span></span>`}</div>`;
+  }
+  return h + `<div style="margin:14px 6px 0;padding-top:12px;border-top:1px solid var(--line);display:grid;gap:7px;font-size:12px;color:var(--muted)"><span style="display:flex;gap:7px;align-items:center">${ic('sparkle', 13)}<b style="color:var(--text);font-weight:600">Relecteur</b><span class="sp">a fini</span></span><span>4 remarques · 2 ouvertes · 1 corrigée · 1 en cours</span><span class="btn sm" style="justify-self:start">${ic('restart', 12)}Relire à nouveau</span></div></div>`;
+}
+/** Le diff côte à côte de magic-link.ts : à gauche l'ancien, à droite le nouveau, lignes alignées. */
+function bSbs(diff) {
+  const L = [], R = [];
+  let i = 0;
+  while (i < diff.length) {
+    const l = diff[i];
+    if (l[0] === '@') { L.push(`<div class="dl hunk"><span class="tx">${l[3]}</span></div>`); R.push(`<div class="dl hunk"><span class="tx">&nbsp;</span></div>`); i++; continue; }
+    if (l[0] === ' ') { L.push(`<div class="dl"><span class="ln">${l[1]}</span><span class="tx">${l[3]}</span></div>`); R.push(`<div class="dl"><span class="ln">${l[2]}</span><span class="tx">${l[3]}</span></div>`); i++; continue; }
+    const dels = [], adds = [];
+    while (i < diff.length && diff[i][0] === '-') dels.push(diff[i++]);
+    while (i < diff.length && diff[i][0] === '+') adds.push(diff[i++]);
+    const n = Math.max(dels.length, adds.length);
+    for (let j = 0; j < n; j++) {
+      const d = dels[j], a = adds[j];
+      L.push(d ? `<div class="dl del"><span class="ln">${d[1]}</span><span class="tx">${d[3]}</span></div>` : `<div class="dl gap"><span class="ln"></span><span class="tx"></span></div>`);
+      R.push(a ? `<div class="dl add${a[4] ? ' cmt' + (a[4] === 't1' ? ' mark' : '') : ''}"><span class="ln">${a[2]}</span><span class="tx">${a[3]}</span></div>` : `<div class="dl gap"><span class="ln"></span><span class="tx"></span></div>`);
+    }
+  }
+  return `<div class="sbs code"><div>${L.join('')}</div><div>${R.join('')}</div></div>`;
+}
+/** Le diff unifié de l'éditeur : un point violet dans la gouttière des lignes commentées. */
+function bUni(diff) {
+  return '<div class="uni code">' + diff.map((l) => dline(l, { mark: l[4] === 't1' }).replace('class="dl ', l[4] ? 'class="dl cmt ' : 'class="dl ')).join('') + '</div>';
+}
+function bEditor(drawer) {
+  return `<div class="ed"><div class="etabs"><span class="on">${ic('file', 13)}magic-link.ts<span class="muted" style="font-size:11px">diff</span></span><span>${ic('file', 13)}session.ts</span>
+    <span class="md">Unifié ${ic('down', 11)}</span><span class="md">${ic('read', 13)}Fichier entier</span></div>${bUni(DIFF_ML)}${drawer}</div>`;
+}
+function bDrawer(open) {
+  const tabs = [['Description', ''], ['Commits', '4'], ['Contrôles', '5/5'], ['Discussion', '2'], ['Relecteurs', '2']];
+  const head = `<div class="dt">${tabs.map(([l, c], i) => `<span class="${open && (l === 'Contrôles' || (open === 'meta' && l.startsWith('Relecteurs'))) ? 'on' : ''}">${l}${c ? `<span class="c">${c}</span>` : ''}</span>`).join('')}<span class="sp btn sm quiet">${ic(open ? 'down' : 'up', 13)}</span></div>`;
+  if (!open) return `<div class="drawer">${head}</div>`;
+  const checks = CHECKS.map(([n, st, d]) => `<div class="chk">${ok(14)}<span>${n}</span><span class="d">${d}</span></div>`).join('');
+  return `<div class="drawer">${head}<div class="dc"><div><h3>Contrôles<span class="sp btn sm">${ic('restart', 12)}Tout relancer</span></h3>${checks}</div>
+    <div><h3>Relecteurs</h3>
+      <div class="chk">${av('ai')}<span>Relecteur</span><span class="d">a commenté</span></div>
+      <div class="chk"><span class="av">MA</span><span>marta</span><span class="d">demandée</span></div>
+      <h3 style="margin-top:6px">Étiquettes<span class="sp muted">${ic('plus', 12)}</span></h3><div style="display:flex;gap:5px">${LABELS}</div>
+      <h3 style="margin-top:6px">Branche</h3><div class="chk">${ic('branch', 13)}<span>À jour avec main</span><span class="d">Brouillon <span class="cb" style="vertical-align:-3px;margin-left:4px"></span></span></div></div></div></div>`;
+}
+/** La marge : les fils posés à hauteur de leur ligne (20 px par ligne, 34 px d'onglets, 46 de barre). */
+function bMargin(opt = {}) {
+  const at = (row) => 34 + row * 20 - 6;
+  const cards = opt.cards || [['t1', 10], ['t2', 22]];
+  return `<div class="margin"><div class="mh">${ic('sparkle', 13)}<b>Remarques</b> · magic-link.ts<span class="sp">2</span></div>
+    ${cards.map(([id, row, extra]) => `<div class="card ${extra || ''}" style="top:${at(row)}px">${typeof id === 'string' ? thread(id, { compact: true }) : id}</div>`).join('')}</div>`;
+}
+function B_fenetre() {
+  const main = `<div class="B" style="display:contents">${bBar()}<div class="ws">${bTree()}${bEditor(bDrawer(false))}${bMargin()}</div></div>`;
+  return shell(main);
+}
+function B_controle() {
+  const main = `<div class="B" style="display:contents">${bBar()}<div class="ws">${bTree()}${bEditor(bDrawer(true))}${bMargin({ cards: [['t1', 10]] })}</div></div>`;
+  let html = shell(main);
+  html = html.replace('</div><div class="status">', `
+    <div class="menu" style="top:92px;right:12px;width:310px"><h4>Merger la PR #214</h4>
+      <div class="it hl"><span class="radio on"></span><span><b>Squash et merger</b></span><small>un commit sur main : « feat(auth): connexion par lien magique (#214) »</small></div>
+      <div class="it"><span class="radio"></span><span><b>Commit de merge</b></span><small>les 4 commits, et un commit de merge</small></div>
+      <div class="it"><span class="radio"></span><span><b>Rebase et merger</b></span><small>les 4 commits, sans commit de merge</small></div>
+      <div class="sepl"></div>
+      <div class="it"><span class="cb on">${ic('check', 11)}</span><span><b>Supprimer la branche</b></span><small>et le worktree de l'agent</small></div>
+      <div class="it"><span class="cb"></span><span><b>Auto-merge</b></span><small>quand les contrôles et les relectures passent</small></div>
+      <div class="it"><span class="cb on">${ic('check', 11)}</span><span><b>Passer ATL-42 en Terminé</b></span></div></div>
+  </div><div class="status">`);
+  return html;
+}
+function B_etats() {
+  const fr = (state, rows, margin) => `<div class="frame B" style="height:390px;display:flex;flex-direction:column">${bBar(state)}<div class="ws" style="grid-template-columns:1fr 318px">
+    <div class="ed"><div class="etabs"><span class="on">${ic('file', 13)}${rows.name}</span></div>${rows.html}</div>${margin}</div></div>`;
+  const mg = (cards, title = 'Remarques') => `<div class="margin"><div class="mh">${ic('sparkle', 13)}<b>${title}</b></div>${cards}</div>`;
+  const reviewing = fr('reviewing', { name: 'session.ts', html: bUni(DIFF_SE) }, mg(`<div class="card" style="top:46px"><div class="thread ai"><div class="msg">${av('ai')}<div class="who"><b>Relecteur</b><span class="spin ai"></span><span class="t">relit</span></div><p class="bd muted">session.ts, ligne 10…</p></div></div></div>
+    <div class="card dim" style="top:150px"><div class="thread" style="padding:10px 12px;font-size:12px;color:var(--muted)">${ic('sparkle', 12)} 3 fichiers sur 4 lus · 3 remarques<br><span class="btn sm" style="margin-top:8px">Arrêter la relecture</span></div></div>`, 'L\'agent relit'));
+  const ci = fr('ci', { name: 'e2e (Linux) · journal', html: `<div class="code" style="padding:10px 14px;white-space:pre;font-size:11.5px;line-height:19px;flex:1">  ✓ login › envoie le lien (1.2 s)
+<span style="color:var(--del)">  ✗ login › un lien expiré se dit (5.0 s)
+    Expected: "Lien expiré, redemande-en un."
+    Received: "login.expired"
+  ✗ login › le lien ne sert qu'une fois (5.0 s)</span>
+  18 passed, 2 failed</div>` }, mg(`<div class="card" style="top:46px"><div class="thread" style="box-shadow:inset 0 0 0 1px oklch(from var(--del) l c h / .4)"><div class="msg">${ko()}<div class="who"><b>e2e (Linux)</b><span class="t">échec · 3 min 40</span></div><p class="bd">2 tests en échec : la clé <code>login.expired</code> n'a pas de texte en français.</p></div><div class="acts" style="padding-left:12px"><span class="btn sm">${ic('restart', 12)}Relancer</span><span class="btn sm agentic">${ic('sparkle', 12)}Faire corriger</span></div></div></div>`, 'Contrôles'));
+  const conflict = fr('conflict', { name: 'session.ts · conflit', html: `<div class="sbs code"><div><div class="dl hunk"><span class="tx">ticket/atl-42</span></div><div class="dl add"><span class="ln">10</span><span class="tx">  ${f('setCookie')}(${s_("'sid'")}, id, {</span></div><div class="dl add"><span class="ln">11</span><span class="tx">    httpOnly: ${k('true')}, secure: ${k('true')} });</span></div></div><div><div class="dl hunk"><span class="tx">main</span></div><div class="dl del"><span class="ln">10</span><span class="tx">  ${f('setSessionCookie')}(id, {</span></div><div class="dl del"><span class="ln">11</span><span class="tx">    maxAge: ${n_('3600')} });</span></div></div></div>` },
+    mg(`<div class="card" style="top:46px"><div class="thread" style="box-shadow:inset 0 0 0 1px var(--wait-line)"><div class="msg"><span style="color:var(--wait)">${ic('branch', 15)}</span><div class="who"><b>Conflit avec main</b></div><p class="bd">main a changé <code>setCookie</code> en <code>setSessionCookie</code> depuis l'ouverture.</p></div><div class="acts" style="padding-left:12px"><span class="btn sm">Garder la PR</span><span class="btn sm">Garder main</span><span class="btn sm agentic">${ic('sparkle', 12)}Faire résoudre</span></div></div></div>`, 'Conflit'));
+  const ready = fr('ready', { name: 'magic-link.ts', html: bUni(DIFF_ML.slice(8, 20)) }, mg(`<div class="card" style="top:46px"><div class="thread" style="box-shadow:inset 0 0 0 1px oklch(from var(--run) l c h / .4)"><div class="msg">${ok(16)}<div class="who"><b>Prête à merger</b></div><p class="bd">2 approbations · 4 fils résolus · 5 contrôles passés · à jour avec main.</p></div><div class="acts" style="padding-left:12px"><span class="btn sm go">${ic('merge', 12)}Squash et merger</span></div></div></div>`, 'Tout est vert'));
+  const cell = (t, s, h) => `<div class="cell"><h2>${t}<small>${s}</small></h2>${h}</div>`;
+  return `<div class="sheet B"><h1>B · La relecture dans l'éditeur<span>les quatre états, dans la barre de la PR et la marge</span></h1>
+    ${cell('Relecture en cours', 'la marge se remplit à mesure', reviewing)}${cell('CI rouge', 'le journal prend l\'éditeur, la marge dit quoi faire', ci)}
+    ${cell('Conflit', 'les deux versions côte à côte, dans l\'éditeur', conflict)}${cell('Prête à fusionner', 'la barre passe au vert', ready)}</div>`;
+}
+
+/* ═════════════════════ C ═════════════════════ */
+function cChat(state = 'base') {
+  const body = state === 'reviewing'
+    ? `<div class="ag"><span class="who">${av('ai')}<b style="color:var(--text)">Relecteur</b> · relit la PR #214</span><p>Je lis le diff fichier par fichier. <b>magic-link.ts</b> : 2 remarques.</p>
+       <div class="tool">${ic('read', 13)}<span>Lit</span><span class="mono">src/auth/session.ts</span><span class="spin ai sp"></span></div></div>`
+    : `<div class="you">Corrige les remarques de la relecture qui sont marquées sécurité.</div>
+    <div class="handoff"><span class="h">${ic('sparkle', 13)}Remarque de Relecteur · session.ts:10</span><span class="q">Le cookie de session n'a pas <code class="mono">sameSite</code>…</span></div>
+    <div class="ag"><span class="who">${av('tk')}<b style="color:var(--text)">Lien magique</b> · Claude Opus</span>
+      <p>J'ajoute <code class="mono">sameSite: 'lax'</code> au cookie, puis je reprends la comparaison du jeton.</p>
+      <div class="tool">${ic('edit', 13)}<span>Modifie</span><span class="mono">src/auth/session.ts</span><span class="sp a">+1</span></div>
+      <div class="tool">${ic('bash', 13)}<span>Lance</span><span class="mono">npm test -- auth</span><span class="spin sp" style="border-color:var(--run);border-right-color:transparent"></span></div></div>`;
+  return `<div class="chat"><div class="colh">${state === 'reviewing' ? av('ai') : av('tk')}<b>${state === 'reviewing' ? 'Relecteur' : 'Lien magique'}</b><span class="m">${state === 'reviewing' ? 'agent relecteur' : 'ATL-42 · travaille'}</span><span class="sp btn sm quiet icon">${ic('more', 13)}</span></div>
+    <div class="msgs">${body}</div><div class="comp"><span class="ph">Écrire à ${state === 'reviewing' ? 'Relecteur' : 'Lien magique'}…</span><div class="r">${ic('clip', 13)}<span>Opus · medium</span><span class="sp btn sm icon primary">${ic('up', 13)}</span></div></div></div>`;
+}
+const READY = {
+  base: { t: 'Pas encore prête', i: ['wt', 'clock'], steps: [['ok', 'Contrôles', `${ic('check', 13)}5 / 5`, '5 min 12'], ['ai', 'Relecture', '2 fils ouverts', '1 corrigé, 1 en cours'], ['wt', 'Approbations', '1 sur 2', 'marta demandée'], ['ok', 'Branche', `${ic('check', 13)}à jour`, 'pas de conflit']] },
+  reviewing: { t: 'Relecture en cours', i: ['ai', 'sparkle'], steps: [['wt', 'Contrôles', '<span class="spin"></span>3 / 5', 'e2e en cours'], ['ai', 'Relecture', '<span class="spin ai"></span>3 / 4 fichiers', '3 remarques'], ['wt', 'Approbations', '0 sur 2', ''], ['ok', 'Branche', `${ic('check', 13)}à jour`, '']] },
+  ci: { t: 'CI rouge', i: ['ko', 'close'], steps: [['ko', 'Contrôles', `${ic('close', 13)}1 échec`, 'e2e (Linux)'], ['ok', 'Relecture', `${ic('check', 13)}résolue`, '4 fils'], ['ok', 'Approbations', `${ic('check', 13)}2 sur 2`, ''], ['ok', 'Branche', `${ic('check', 13)}à jour`, '']] },
+  conflict: { t: 'Conflit avec main', i: ['ko', 'branch'], steps: [['ok', 'Contrôles', `${ic('check', 13)}5 / 5`, ''], ['ok', 'Relecture', `${ic('check', 13)}résolue`, ''], ['ok', 'Approbations', `${ic('check', 13)}2 sur 2`, ''], ['ko', 'Branche', `${ic('close', 13)}conflit`, 'session.ts']] },
+  ready: { t: 'Prête à merger', i: ['ok', 'check-c'], steps: [['ok', 'Contrôles', `${ic('check', 13)}5 / 5`, ''], ['ok', 'Relecture', `${ic('check', 13)}résolue`, '4 fils'], ['ok', 'Approbations', `${ic('check', 13)}2 sur 2`, 'toi, marta'], ['ok', 'Branche', `${ic('check', 13)}à jour`, '']] },
+};
+function cReady(state = 'base') {
+  const r = READY[state];
+  const color = { ok: 'var(--run)', ko: 'var(--del)', wt: 'var(--wait)', ai: 'var(--brain)' }[r.i[0]];
+  const act = state === 'ready' ? `<span class="split"><span class="btn go">${ic('merge', 13)}Squash et merger</span><span class="btn go">${ic('down', 12)}</span></span>`
+    : state === 'ci' ? `<span class="btn sm">${ic('restart', 12)}Relancer</span><span class="btn sm agentic">${ic('sparkle', 12)}Faire corriger</span>`
+    : state === 'conflict' ? `<span class="btn sm">Mettre à jour</span><span class="btn sm agentic">${ic('sparkle', 12)}Faire résoudre</span>`
+    : state === 'reviewing' ? `<span class="btn sm quiet">Arrêter</span>`
+    : `<span class="btn sm">Auto-merge</span><span class="split"><span class="btn sm off">${ic('merge', 12)}Merger</span><span class="btn sm">${ic('down', 11)}</span></span>`;
+  return `<div class="ready"><div class="rh"><span style="color:${color};display:inline-flex">${state === 'reviewing' ? '<span class="spin ai"></span>' : ic(r.i[1], 16)}</span><b>${r.t}</b><span class="sp"></span>${act}</div>
+    <div class="steps">${r.steps.map(([c, l, v, a]) => `<div class="stp ${c}"><span class="l">${l}</span><span class="v">${v}</span>${a ? `<span class="a">${a}</span>` : ''}</div>`).join('')}</div></div>`;
+}
+function cPrHead() {
+  return `<div class="colh"><span class="pill open">${ic('pr', 12)}#${PR.n}</span><b class="ell">${PR.title}</b><span class="m mono">${PR.head} → ${PR.base}</span>
+    <span class="sp btn sm quiet icon">${ic('ext', 13)}</span><span class="btn sm">Ta relecture ${ic('down', 11)}</span><span class="btn sm quiet icon">${ic('more', 13)}</span></div>`;
+}
+function cRem(id, diff, from, to) {
+  const t = T[id];
+  return `<div class="rem"><div class="rh">${ic('file', 13)}<span class="mono">${t.file}</span><span class="muted">ligne ${t.line}</span><span class="sp"></span>${t.state === 'resolved' ? '' : `<span class="btn sm quiet">${ic('read', 12)}Dans l'éditeur</span>`}</div>
+    <div class="code">${diff.slice(from, to).map((l) => dline(l, { mark: true }).replace('<span class="ln">' + l[1] + '</span>', '')).join('')}</div>${thread(id)}</div>`;
+}
+function cPr(state, tabOn = 'Remarques') {
+  const tabs = [['Remarques', '4'], ['Fichiers', '4'], ['Commits', '4'], ['Contrôles', '5'], ['Description', '']];
+  const feed = tabOn === 'Remarques'
+    ? `${cRem('t1', DIFF_ML, 9, 13)}${cRem('t3', DIFF_SE, 3, 6)}`
+    : '';
+  return `<div class="pr">${cPrHead()}${cReady(state)}<div class="ptabs">${tabs.map(([l, c]) => `<span class="${l === tabOn ? 'on' : ''}">${l}${c ? `<span class="c">${c}</span>` : ''}</span>`).join('')}
+    <span class="flt">Ouvertes d'abord ${ic('down', 11)}</span></div><div class="feed">${feed}</div></div>`;
+}
+function C_fenetre() {
+  return shell(`<div class="C" style="display:contents"><div class="cols">${cChat()}${cPr('base')}</div></div>`, 'agents');
+}
+function C_controle() {
+  // L'onglet « Contrôles » de la colonne, et le menu « … » de la PR : brouillon, relecteurs, étiquettes, branche.
+  const checks = CHECKS.map(([n, st, d]) => `<div style="display:flex;align-items:center;gap:9px;height:30px;padding:0 10px;border-bottom:1px solid var(--line)">${ok(14)}<span>${n}</span><span class="sp muted" style="font-size:12px">${d}</span><span class="btn sm quiet icon">${ic('ext', 12)}</span></div>`).join('');
+  const meta = `<div class="rem" style="background:var(--panel)"><div class="rh"><b style="font-weight:600">Contrôles de GitHub Actions</b><span class="sp btn sm">${ic('restart', 12)}Tout relancer</span></div>${checks}</div>
+    <div class="rem" style="background:var(--panel)"><div class="rh"><b style="font-weight:600">Commits</b><span class="sp muted">4</span></div>${COMMITS.map(([h, m, a, w]) => `<div style="display:flex;align-items:center;gap:9px;height:30px;padding:0 10px;border-bottom:1px solid var(--line);font-size:12.5px">${av('tk')}<span class="ell">${m}</span><span class="sp mono muted">${h}</span><span class="muted" style="font-size:12px;white-space:nowrap">${w}</span></div>`).join('')}</div>`;
+  let html = shell(`<div class="C" style="display:contents"><div class="cols">${cChat()}<div class="pr">${cPrHead()}${cReady('base')}<div class="ptabs">${[['Remarques', '4'], ['Fichiers', '4'], ['Commits', '4'], ['Contrôles', '5'], ['Description', '']].map(([l, c]) => `<span class="${l === 'Contrôles' ? 'on' : ''}">${l}${c ? `<span class="c">${c}</span>` : ''}</span>`).join('')}</div><div class="feed">${meta}</div></div></div></div>`, 'agents');
+  html = html.replace('</div><div class="status">', `
+    <div class="menu" style="top:92px;right:14px;width:300px"><h4>La PR #214</h4>
+      <div class="it"><span>${ic('edit', 13)}</span><span><b>Repasser en brouillon</b></span></div>
+      <div class="it hl"><span>${ic('user', 13)}</span><span><b>Relecteurs</b></span><small>Relecteur (agent) · marta · <span style="color:var(--text)">+ ajouter</span></small></div>
+      <div class="it"><span>${ic('star', 13)}</span><span><b>Étiquettes</b></span><small>auth · sécurité</small></div>
+      <div class="sepl"></div>
+      <div class="it"><span>${ic('branch', 13)}</span><span><b>Mettre à jour la branche</b></span><small>à jour avec main</small></div>
+      <div class="it"><span>${ic('sparkle', 13)}</span><span><b>Faire relire à nouveau</b></span><small>par un agent, sur les nouveaux commits</small></div>
+      <div class="sepl"></div>
+      <div class="it"><span>${ic('ext', 13)}</span><span><b>Ouvrir sur GitHub</b></span></div>
+      <div class="it"><span style="color:var(--del)">${ic('close', 13)}</span><span><b style="color:var(--del)">Fermer la PR</b></span></div></div>
+  </div><div class="status">`);
+  return html;
+}
+function C_etats() {
+  const fr = (state, chat, extra = '') => `<div class="frame C" style="height:400px;display:flex"><div class="cols" style="grid-template-columns:250px 1fr;width:100%">${chat}<div class="pr">${cPrHead()}${cReady(state)}${extra}</div></div></div>`;
+  const mini = (who, kind, html) => `<div class="chat"><div class="colh">${av(kind)}<b>${who}</b></div><div class="msgs" style="font-size:12.5px">${html}</div></div>`;
+  const reviewing = fr('reviewing', mini('Relecteur', 'ai', `<div class="ag"><p>Je relis la PR #214, fichier par fichier.</p><div class="tool">${ic('read', 13)}<span class="mono">session.ts</span><span class="spin ai sp"></span></div></div>`),
+    `<div class="feed">${cRem('t1', DIFF_ML, 10, 12).replace(/<div class="acts">[\s\S]*?<\/div><\/div><\/div>$/, '</div></div>')}</div>`);
+  const ci = fr('ci', mini('Lien magique', 'tk', `<div class="handoff"><span class="h">${ic('close', 13)}CI · e2e (Linux)</span><span class="q">2 tests en échec : <code class="mono">login.expired</code> sans texte.</span></div><div class="ag"><p>J'ajoute la traduction et je relance les tests.</p></div>`),
+    `<div class="feed"><div class="rem"><div class="rh">${ko(13)}<b style="font-weight:600">e2e (Linux)</b><span class="muted">3 min 40</span><span class="sp btn sm quiet">Journal</span></div><div class="code" style="padding:8px 12px;white-space:pre;font-size:11.5px;line-height:19px"><span style="color:var(--del)">  ✗ login › un lien expiré se dit
+    Received: "login.expired"</span></div></div></div>`);
+  const conflict = fr('conflict', mini('Lien magique', 'tk', `<div class="ag"><p class="muted">En attente.</p></div>`),
+    `<div class="feed"><div class="rem"><div class="rh">${ic('branch', 13)}<span class="mono">src/auth/session.ts</span><span class="pill ko" style="height:20px">conflit</span></div>${aConflict().replace(/^<div class="file">[\s\S]*?<\/div><div class="code">/, '<div class="code conf">').replace(/<\/div><\/div>$/, '</div>')}</div></div>`);
+  const ready = fr('ready', mini('Lien magique', 'tk', `<div class="ag"><p>Les 4 remarques sont traitées, les tests passent.</p></div>`),
+    `<div class="feed"><div class="rem"><div class="rh">${ok(13)}<b style="font-weight:600">Le merge</b></div><div style="padding:10px 12px;display:grid;gap:6px;font-size:12.5px;color:var(--soft)"><span>Squash en un commit sur main · la branche et le worktree supprimés · ATL-42 en Terminé</span></div></div></div>`);
+  const cell = (t, s, h) => `<div class="cell"><h2>${t}<small>${s}</small></h2>${h}</div>`;
+  return `<div class="sheet C"><h1>C · La PR à côté de l'agent<span>les quatre états, dans la carte « prête à merger ? » et l'agent d'à côté</span></h1>
+    ${cell('Relecture en cours', 'l\'agent relecteur dans la colonne de gauche', reviewing)}${cell('CI rouge', 'l\'échec part à l\'agent du ticket, d\'un clic', ci)}
+    ${cell('Conflit', 'la carte dit ce qui bloque, et le geste', conflict)}${cell('Prête à fusionner', 'tout est vert, le merge dit ce qu\'il fera', ready)}</div>`;
+}
+
+const R = { a: { fenetre: A_fenetre, controle: A_controle, etats: A_etats }, b: { fenetre: B_fenetre, controle: B_controle, etats: B_etats }, c: { fenetre: C_fenetre, controle: C_controle, etats: C_etats } };
+document.getElementById('root').innerHTML = (R[D] && R[D][ROUTE] ? R[D][ROUTE] : A_fenetre)();
+</script>
+</body>
+</html>
