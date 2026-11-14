@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3
+
+- `Forge`: a pull request read whole, four calls more a host serves or refuses (`unsupported` by default): `description`, `commits`, `files` and `threads` (`forge/description`, `forge/commits`, `forge/files`, `forge/threads`), on the types of escouade-plugin-protocol 0.1.3 (`PrDescription`, `PrCommit`, `PrFile`, `ReviewThread` and its `ThreadComment`s).
+
 ## 0.1.2
 
 - `Hosts`: a source served from several accounts. An account after its first names its secret (`account:<name>`), and each one keeps its own client.

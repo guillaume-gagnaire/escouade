@@ -892,6 +892,39 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
         };
         return send(200, { data: { repository: { pullRequest: { reviewThreads: { nodes: x?.changesRequested ? [thread] : [] } } } } });
       }
+      // A pull request read whole (ESC-452): its threads with their lines, their answers and their state, as a test sets
+      // them (`threadsWhole`: [{ id, path, line, startLine, originalLine, side, resolved, outdated, comments: [{ id,
+      // author, body }] }]); by default the one a request for changes opens.
+      if (q.operationName === 'PrThreads') {
+        const x = g.pulls.find((y) => y.number === q.variables.number);
+        const asked =
+          x?.threadsWhole ??
+          (x?.changesRequested
+            ? [{ id: 'PRRT_1', path: 'src/app.ts', line: 1, comments: [{ id: 1, author: 'bob', body: 'Ce nom est peu clair.' }] }]
+            : []);
+        const at = (s) => new Date(Date.parse('2026-11-14T09:00:00Z') + s * 60_000).toISOString();
+        const nodes = asked.map((t) => ({
+          id: t.id,
+          isResolved: !!t.resolved,
+          isOutdated: !!t.outdated,
+          path: t.path,
+          line: t.outdated ? null : t.line,
+          startLine: t.startLine ?? null,
+          originalLine: t.originalLine ?? t.line,
+          diffSide: t.side ?? 'RIGHT',
+          comments: {
+            nodes: t.comments.map((c, i) => ({
+              databaseId: c.id,
+              author: { login: c.author },
+              body: c.body,
+              createdAt: at(i),
+              lastEditedAt: null,
+              diffHunk: i === 0 ? `@@ -0,0 +1 @@\n+${t.path}` : '',
+            })),
+          },
+        }));
+        return send(200, { data: { repository: { pullRequest: x ? { reviewThreads: { nodes } } : null } } });
+      }
       return send(200, { data: null, errors: [{ message: `unknown operation ${q.operationName}` }] });
     }
     if (p === '/github/repos/acme/demo/pulls' && method === 'POST') {
@@ -918,14 +951,37 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
         base: { ref: pull.base },
       });
     }
-    m = p.match(/^\/github\/repos\/acme\/demo\/pulls\/(\d+)(\/reviews)?$/);
+    m = p.match(/^\/github\/repos\/acme\/demo\/pulls\/(\d+)(\/reviews|\/commits|\/files)?$/);
     if (m) {
       const pull = g.pulls.find((x) => x.number === Number(m[1]));
       if (!pull) return send(404, { message: 'Not Found' });
+      // A pull request read whole (ESC-452): its commits (`commits`: [{ sha, message, author }], by default one of its
+      // title) and its files as GitHub counts them (`files`: [{ filename, status, additions, deletions }]).
+      if (m[2] === '/commits')
+        return send(
+          200,
+          (pull.commits ?? [{ sha: `sha${pull.number}`, message: pull.title, author: pull.author ?? 'ada' }]).map((c) => ({
+            sha: c.sha,
+            html_url: `https://github.com/acme/demo/commit/${c.sha}`,
+            author: { login: c.author },
+            commit: { message: c.message, author: { name: c.author, date: '2026-11-14T09:00:00Z' } },
+          })),
+        );
+      if (m[2] === '/files') return send(200, pull.files ?? []);
       if (m[2] && method === 'POST') return send(200, { id: 1 });
       if (m[2])
         return send(200, pull.changesRequested ? [{ user: { login: 'bob' }, state: 'CHANGES_REQUESTED', body: 'Ajoute un test.' }] : []);
-      return send(200, { number: pull.number, head: { sha: `sha${pull.number}`, ref: pull.head } });
+      // Its description (ESC-452): `updatedAt` moves it, as a comment or a push does on GitHub.
+      return send(200, {
+        number: pull.number,
+        body: pull.body ?? '',
+        updated_at: pull.updatedAt ?? '2026-11-14T09:00:00Z',
+        head: { sha: `sha${pull.number}`, ref: pull.head },
+        base: { sha: 'base', ref: pull.base },
+        labels: (pull.labels ?? []).map((name) => ({ name })),
+        commits: (pull.commits ?? [1]).length,
+        changed_files: (pull.files ?? []).length,
+      });
     }
     m = p.match(/^\/github\/repos\/acme\/demo\/commits\/sha(\d+)\/(check-runs|status)$/);
     if (m) {
@@ -998,7 +1054,18 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
     }
     if (m) return send(200, [{ state: 'success', environment_url: `https://demo-pr-${m[1]}.vercel.app` }]);
     m = p.match(/^\/github\/repos\/acme\/demo\/issues\/(\d+)\/comments$/);
-    if (m && method === 'GET' && g.pulls.some((x) => x.number === Number(m[1]))) return send(200, []);
+    // The conversation under its description (`conversation`: [{ id, author, body }], ESC-452).
+    if (m && method === 'GET' && g.pulls.some((x) => x.number === Number(m[1])))
+      return send(
+        200,
+        (g.pulls.find((x) => x.number === Number(m[1])).conversation ?? []).map((c) => ({
+          id: c.id,
+          user: { login: c.author },
+          body: c.body,
+          created_at: '2026-11-14T09:30:00Z',
+          updated_at: '2026-11-14T09:30:00Z',
+        })),
+      );
 
     if (p === '/github/user') return send(200, { login: 'ada' });
     if (p === '/github/user/repos') return send(200, [{ full_name: 'acme/demo' }, { full_name: 'ada/blog' }]);

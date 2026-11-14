@@ -194,6 +194,8 @@ impl ForgeKind for GiteaForge {
 
 `account.url` is the instance the user typed, hence `{account}` in `permissions.network`. A refused token, a limit reached and the budget of calls are dealt with by `Hosts`. The bench plays `account/me` and `forge/pullRequestsOfBranch` as soon as `contributes.forges` is declared.
 
+Since kit 0.1.3, a code host can also give a pull request whole, for the pull request view of Escouade 2.3: `description` (its text, its tip's commit and when it changed), `commits`, `files` (the files and their counts; Escouade reads the lines from git) and `threads` (the threads on lines, with their answers and their state `open`, `resolved` or `outdated`, then the conversation's comments, without a `path`). What you do not write answers `Unsupported`: Escouade shows the pull request without that part.
+
 ## Writing a harness
 
 For an agent that speaks ACP, [the manifest](plugins/harnesses) is enough, without a line of code. Otherwise, a harness is a state machine that never waits, and depends on the protocol alone: `turn::run` holds the loop, on both targets.

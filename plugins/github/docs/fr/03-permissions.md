@@ -17,7 +17,7 @@ Ce plugin est un module WASM : il tourne dans Escouade, isolé, sans programme �
 Il lit, avec ton compte :
 
 - ton login, et les droits d'un jeton classic (pour la ligne du compte) ;
-- les PR des dépôts de tes projets : leur état, leurs relecteurs, leurs relectures, leurs commentaires et leurs fils, leurs checks et statuts, le journal d'un job d'Actions, leurs déploiements et ceux des environnements du dépôt ; les réglages de merge du dépôt ;
+- les PR des dépôts de tes projets : leur état, leurs relecteurs, leurs relectures, leurs commentaires et leurs fils (avec leurs réponses et leur état), leur description, leurs commits et leurs fichiers modifiés, leurs checks et statuts, le journal d'un job d'Actions, leurs déploiements et ceux des environnements du dépôt ; les réglages de merge du dépôt ;
 - pour GitHub Issues : tes dépôts, leurs étiquettes et leurs issues ouvertes.
 
 Il écrit, quand Escouade le lui demande :

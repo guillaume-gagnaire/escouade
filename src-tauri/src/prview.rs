@@ -7,8 +7,8 @@
 use crate::agentprs::log_tail;
 use crate::core::Core;
 use crate::forge::{
-    Capabilities, Check, Deployment, Forge, PullRequest, RateLimit, RepoRef, Review, ReviewComment,
-    Unsupported,
+    Capabilities, Check, Deployment, Forge, PullRequest, RateLimit, Reading, RepoRef, Review,
+    ReviewComment, Unsupported,
 };
 use crate::integrations::HttpError;
 use crate::model::now_ms;
@@ -79,20 +79,20 @@ pub struct Read<T> {
 }
 
 impl<T> Read<T> {
-    fn ok(data: T) -> Self {
+    pub(crate) fn ok(data: T) -> Self {
         Self {
             data: Some(data),
             failure: None,
         }
     }
-    fn failed(e: &anyhow::Error, limit: Option<RateLimit>) -> Self {
+    pub(crate) fn failed(e: &anyhow::Error, limit: Option<RateLimit>) -> Self {
         Self {
             data: None,
             failure: Some(failure(e, limit)),
         }
     }
     /// Not asked of the host: its limit of calls is near.
-    fn limited(reset: Option<u64>) -> Self {
+    pub(crate) fn limited(reset: Option<u64>) -> Self {
         let message = tr!(
             "Limite d'API de l'hébergeur presque atteinte : la lecture attend.",
             "The host's API limit is nearly reached: the reading waits."
@@ -145,6 +145,9 @@ pub struct Can {
     pub rerun: bool,
     pub reviews: bool,
     pub deployments: bool,
+    /// What it reads of a pull request whole (ESC-452, `prread`): not the tab's.
+    #[serde(skip)]
+    pub reading: Reading,
 }
 
 impl From<&Capabilities> for Can {
@@ -155,6 +158,7 @@ impl From<&Capabilities> for Can {
             rerun: c.rerun,
             reviews: c.reviews,
             deployments: c.deployments,
+            reading: c.reading,
         }
     }
 }
@@ -532,7 +536,7 @@ impl<R: Runtime> Core<R> {
     }
 
     /// The client, the repository and what the host can do for that pull request.
-    async fn pr_place(
+    pub(crate) async fn pr_place(
         self: &Arc<Self>,
         project_id: &str,
         number: u64,

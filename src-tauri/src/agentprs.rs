@@ -1012,6 +1012,7 @@ impl<R: Runtime> Core<R> {
             rt.meta.branch_ci = branch_ci;
             (changed, before)
         };
+        self.pr_contents_seen(&now_meta.project_id, &prs, None);
         if changed {
             self.emit_agent(&h);
             self.request_save();
@@ -1443,6 +1444,7 @@ impl<R: Runtime> Core<R> {
             rt.meta.pr_word = Some(word);
             (changed, before, rt.meta.clone())
         };
+        self.pr_contents_seen(&meta.project_id, &prs, None);
         if changed {
             self.emit_agent(&h);
             self.request_save();

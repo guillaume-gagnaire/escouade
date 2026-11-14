@@ -429,6 +429,10 @@ async fn forge_call(f: &dyn Forge, name: &str, p: &Value) -> Result<Value, Refus
                 .map_err(refusal)?,
         ),
         "environments" => to_value(f.environments(&repo()?).await.map_err(refusal)?),
+        "description" => to_value(f.description(&repo()?, number()?).await.map_err(refusal)?),
+        "commits" => to_value(f.commits(&repo()?, number()?).await.map_err(refusal)?),
+        "files" => to_value(f.files(&repo()?, number()?).await.map_err(refusal)?),
+        "threads" => to_value(f.threads(&repo()?, number()?).await.map_err(refusal)?),
         other => Err(Refusal::not_found(&format!("forge/{other}"))),
     }
 }

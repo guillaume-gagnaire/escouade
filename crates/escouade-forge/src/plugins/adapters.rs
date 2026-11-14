@@ -21,8 +21,8 @@
 use super::runtime::{CallError, Runtime, METHOD_NOT_FOUND};
 use crate::forge::{
     BoxFuture, Check, Credentials, Deployment, Forge, Identity, MergeOptions, MergeStrategy,
-    PullRequest, PullRequestDraft, RateLimit, RepoRef, Review, ReviewComment, ReviewDraft,
-    Unsupported,
+    PrCommit, PrDescription, PrFile, PullRequest, PullRequestDraft, RateLimit, RepoRef, Review,
+    ReviewComment, ReviewDraft, ReviewThread, Unsupported,
 };
 use crate::integrations::source::{TicketSource, TicketSourceKind};
 use crate::integrations::{
@@ -752,6 +752,50 @@ impl Forge for ProcessForge {
             "forge/environments",
             "environments",
             json!({ "repo": repo }),
+        ))
+    }
+
+    fn description<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+    ) -> BoxFuture<'a, Result<PrDescription>> {
+        Box::pin(self.ask(
+            "forge/description",
+            "description",
+            json!({ "repo": repo, "number": number }),
+        ))
+    }
+
+    fn commits<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+    ) -> BoxFuture<'a, Result<Vec<PrCommit>>> {
+        Box::pin(self.ask(
+            "forge/commits",
+            "commits",
+            json!({ "repo": repo, "number": number }),
+        ))
+    }
+
+    fn files<'a>(&'a self, repo: &'a RepoRef, number: u64) -> BoxFuture<'a, Result<Vec<PrFile>>> {
+        Box::pin(self.ask(
+            "forge/files",
+            "files",
+            json!({ "repo": repo, "number": number }),
+        ))
+    }
+
+    fn threads<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+    ) -> BoxFuture<'a, Result<Vec<ReviewThread>>> {
+        Box::pin(self.ask(
+            "forge/threads",
+            "threads",
+            json!({ "repo": repo, "number": number }),
         ))
     }
 }

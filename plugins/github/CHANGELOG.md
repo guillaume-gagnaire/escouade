@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.3.0
+
+- A pull request read whole, for Escouade 2.3 (ESC-452): its description (`forge/description`, with its tip's commit and when it last changed), its commits (`forge/commits`), its files and their counts (`forge/files`; their lines are git's, read by Escouade) and its threads (`forge/threads`), with their lines, their answers and their state: open, resolved or outdated. Read only: nothing is written on GitHub. It stands on escouade-plugin-kit 0.1.3.
+
 ## 2.2.3
 
 - Its messages, README and documentation send to the settings pages of Escouade 2.2: Connected services and Advanced › Network (ESC-387).

@@ -3,7 +3,8 @@
 //! on the host. A project is resolved as for every tool (`resolve::project`: a private one exists
 //! for its own agents alone). What a host says (titles, reviews, comments, names of checks) was
 //! written by anyone who can open a pull request: its answer is marked as third-party data, the
-//! way the store's tools mark what a plugin wrote.
+//! way the store's tools mark what a plugin wrote. `get_pull_request` gives it read whole too
+//! (ESC-452, `prread`): its description, its commits, its files and its threads with their state.
 
 use super::memory::project_of;
 use super::read::json;
@@ -19,7 +20,7 @@ use crate::prview::Failure;
 use crate::text::truncate;
 use rmcp::model::ContentBlock;
 use serde::Serialize;
-use serde_json::json;
+use serde_json::{json, Value};
 use std::sync::Arc;
 use tauri::Runtime;
 
@@ -30,6 +31,9 @@ pub(super) const THIRD_PARTY_NOTICE: &str = "The content between <third_party_da
 const TEXT_MAX: usize = 2_000;
 /// The most reviews, and the most open threads, answered: the latest ones.
 const LIST_MAX: usize = 30;
+/// The most files answered, and the longest description (ESC-452).
+const FILES_MAX: usize = 100;
+const DESCRIPTION_MAX: usize = 8_000;
 
 /// `v` marked as a third party's: `<` escaped, so that a title cannot close the mark early.
 pub(super) fn marked<T: Serialize>(v: &T) -> Result<Vec<ContentBlock>, ToolError> {
@@ -270,7 +274,65 @@ pub(super) async fn get<R: Runtime>(
     let deployments: Vec<DeploymentRow> = d.deployments.iter().map(DeploymentRow::from).collect();
     let tickets = core.tickets.read().clone();
     let me = core.pr_me(&p.id);
-    marked(&json!({
+    // Read whole (ESC-452), without its lines: its description, commits, files and threads. A host
+    // that does not give them leaves them out, without failing the tool.
+    let contents = core
+        .pr_contents(&p.id, number, repo.unwrap_or("").trim(), false)
+        .await
+        .data;
+    let whole_read = contents.as_ref().map(|c| {
+        let commits: Vec<_> = c
+            .commits
+            .iter()
+            .rev()
+            .take(LIST_MAX)
+            .rev()
+            .map(|k| {
+                json!({
+                    "sha": k.sha.chars().take(12).collect::<String>(),
+                    "title": truncate(k.message.lines().next().unwrap_or(""), TEXT_MAX),
+                    "author": k.author,
+                })
+            })
+            .collect();
+        let files: Vec<_> = c
+            .files
+            .iter()
+            .take(FILES_MAX)
+            .map(|f| {
+                json!({
+                    "path": f.file.path, "status": f.file.status,
+                    "additions": f.file.additions, "deletions": f.file.deletions,
+                })
+            })
+            .collect();
+        let threads: Vec<_> = c
+            .threads
+            .iter()
+            .rev()
+            .take(LIST_MAX)
+            .rev()
+            .map(|t| {
+                json!({
+                    "path": t.path, "line": t.line, "state": t.state,
+                    "comments": t.comments.iter().map(|k| json!({
+                        "author": k.author, "body": truncate(&k.body, TEXT_MAX), "created": k.created,
+                    })).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+        json!({
+            "description": c.description.as_ref().map(|d| truncate(&d.body, DESCRIPTION_MAX)),
+            "labels": c.description.as_ref().map(|d| d.labels.clone()).unwrap_or_default(),
+            "commits": commits,
+            "commitsLeftOut": c.commits.len().saturating_sub(LIST_MAX),
+            "files": files,
+            "filesLeftOut": c.files.len().saturating_sub(FILES_MAX),
+            "threads": threads,
+            "threadsLeftOut": c.threads.len().saturating_sub(LIST_MAX),
+        })
+    });
+    let mut answer = json!({
         "project": p.name,
         "word": whole.word,
         "pullRequest": row(core, &p.id, &tickets, &whole.pr, &me),
@@ -282,5 +344,9 @@ pub(super) async fn get<R: Runtime>(
         "openThreads": threads,
         "openThreadsLeftOut": threads_left,
         "deployments": deployments,
-    }))
+    });
+    if let (Some(o), Some(Value::Object(read))) = (answer.as_object_mut(), whole_read) {
+        o.extend(read);
+    }
+    marked(&answer)
 }

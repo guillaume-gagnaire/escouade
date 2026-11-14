@@ -38,9 +38,30 @@ pub use escouade_plugin_kit::forge::BoxFuture;
 
 // The data of the hosts, shared with the plugins that serve them (docs/PLUGINS-DESIGN.md §4.5).
 pub use escouade_plugin_protocol::forge::{
-    Check, CheckState, Deployment, Identity, MergeOptions, MergeStrategy, PrState, PullRequest,
-    PullRequestDraft, RateLimit, Review, ReviewComment, ReviewDraft, ReviewLine, ReviewState,
+    Check, CheckState, Deployment, DiffSide, FileStatus, Identity, MergeOptions, MergeStrategy,
+    PrCommit, PrDescription, PrFile, PrState, PullRequest, PullRequestDraft, RateLimit, Review,
+    ReviewComment, ReviewDraft, ReviewLine, ReviewState, ReviewThread, ThreadComment, ThreadState,
 };
+
+/// What a host reads of a pull request whole (ESC-452): each `true` is a call its client serves.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Reading {
+    pub description: bool,
+    pub commits: bool,
+    pub files: bool,
+    pub threads: bool,
+}
+
+impl Reading {
+    /// All four: GitHub's.
+    pub const ALL: Self = Self {
+        description: true,
+        commits: true,
+        files: true,
+        threads: true,
+    };
+}
 
 /// What a host can do, declared by its provider: the window and the PR's cycle offer only these.
 #[derive(Debug, Clone, PartialEq, Serialize, Default)]
@@ -66,6 +87,10 @@ pub struct Capabilities {
     pub deployments: bool,
     /// The failed jobs of a pull request can run again.
     pub rerun: bool,
+    /// What it reads of a pull request whole (ESC-452), each a call of its own: its description
+    /// (`Forge::description`), its commits, its files (their lines are git's) and its threads with
+    /// their lines, their answers and their state. A host without one says it cannot.
+    pub reading: Reading,
     pub merge_strategies: Vec<MergeStrategy>,
 }
 

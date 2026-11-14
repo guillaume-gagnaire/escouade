@@ -262,3 +262,191 @@ fn a_repository_that_says_nothing_has_every_strategy_and_no_auto_merge() {
     assert_eq!(untold.strategies.len(), 3);
     assert!(!untold.auto_merge);
 }
+
+// A pull request read whole (ESC-452).
+
+#[test]
+fn a_description_says_its_text_its_commits_and_when_it_moved() {
+    let d = description_of(&json!({
+        "body": "Ajoute la connexion par lien.",
+        "updated_at": "2026-11-14T10:00:00Z",
+        "head": { "sha": "abc" }, "base": { "sha": "def" },
+        "labels": [{ "name": "auth" }, { "name": "ux" }],
+        "additions": 12, "deletions": 3, "changed_files": 2, "commits": 4,
+    }));
+    assert_eq!(d.body, "Ajoute la connexion par lien.");
+    assert_eq!((d.head_sha.as_str(), d.base_sha.as_str()), ("abc", "def"));
+    assert_eq!(d.updated, 1_794_650_400);
+    assert_eq!(d.labels, ["auth", "ux"]);
+    assert_eq!(
+        (d.additions, d.deletions, d.changed_files, d.commits),
+        (12, 3, 2, 4)
+    );
+    // A pull request without a text: GitHub's null.
+    assert_eq!(description_of(&json!({ "body": null })).body, "");
+}
+
+#[test]
+fn a_commit_is_its_authors_login_else_the_name_git_keeps() {
+    let c = commit_of(&json!({
+        "sha": "a1", "html_url": "https://github.com/cli/cli/commit/a1",
+        "author": { "login": "ada" },
+        "commit": { "message": "feat: lien\n\nLe corps.", "author": { "name": "Ada L.", "date": "2026-11-14T09:00:00Z" } },
+    }));
+    assert_eq!((c.sha.as_str(), c.author.as_str()), ("a1", "ada"));
+    assert_eq!(c.message, "feat: lien\n\nLe corps.");
+    assert_eq!(c.created, 1_794_646_800);
+    let unknown = commit_of(
+        &json!({ "sha": "b2", "author": null, "commit": { "message": "x", "author": { "name": "Bob" } } }),
+    );
+    assert_eq!(unknown.author, "Bob");
+}
+
+#[test]
+fn a_files_status_is_one_of_five() {
+    let f = file_of(
+        &json!({ "filename": "src/b.rs", "previous_filename": "src/a.rs", "status": "renamed", "additions": 1, "deletions": 0 }),
+    );
+    assert_eq!(f.status, FileStatus::Renamed);
+    assert_eq!(f.previous_path.as_deref(), Some("src/a.rs"));
+    for (said, status) in [
+        ("added", FileStatus::Added),
+        ("removed", FileStatus::Removed),
+        ("copied", FileStatus::Copied),
+        ("modified", FileStatus::Modified),
+        ("changed", FileStatus::Modified),
+    ] {
+        assert_eq!(
+            file_of(&json!({ "filename": "x", "status": said })).status,
+            status,
+            "{said}"
+        );
+    }
+}
+
+#[test]
+fn threads_come_with_their_lines_their_answers_and_their_state() {
+    let data = json!({ "repository": { "pullRequest": { "reviewThreads": { "nodes": [
+        { "id": "PRRT_1", "isResolved": false, "isOutdated": false, "path": "src/app.ts", "line": 12, "startLine": 10,
+          "originalLine": 12, "diffSide": "RIGHT",
+          "comments": { "nodes": [
+            { "databaseId": 1, "author": { "login": "bob" }, "body": "Ce nom est peu clair.", "createdAt": "2026-11-14T09:00:00Z",
+              "lastEditedAt": null, "diffHunk": "@@ -1 +1 @@\n+export const x = 1;" },
+            { "databaseId": 2, "author": { "login": "ada" }, "body": "Renommé.", "createdAt": "2026-11-14T10:00:00Z",
+              "lastEditedAt": "2026-11-14T10:05:00Z", "diffHunk": "" },
+          ] } },
+        { "id": "PRRT_2", "isResolved": true, "isOutdated": true, "path": "src/a.ts", "line": null, "originalLine": 3,
+          "diffSide": "LEFT", "comments": { "nodes": [{ "databaseId": 3, "author": null, "body": "Réglé." }] } },
+        { "id": "PRRT_3", "isResolved": false, "isOutdated": true, "path": "src/a.ts", "line": null, "originalLine": 5,
+          "comments": { "nodes": [] } },
+    ] } } } });
+    let t = threads_of(&data);
+    assert_eq!(t.len(), 3);
+    assert_eq!(t[0].id, "PRRT_1");
+    assert_eq!(
+        (t[0].path.as_deref(), t[0].line, t[0].start_line),
+        (Some("src/app.ts"), Some(12), Some(10))
+    );
+    assert_eq!(t[0].state, ThreadState::Open);
+    assert_eq!(t[0].side, DiffSide::Right);
+    assert_eq!(t[0].comments.len(), 2, "its answer under it");
+    assert_eq!(t[0].comments[1].author, "ada");
+    assert_ne!(t[0].comments[1].updated, 0, "edited");
+    assert_eq!(t[0].comments[0].updated, 0);
+    assert_eq!(
+        t[0].excerpt.as_deref(),
+        Some("@@ -1 +1 @@\n+export const x = 1;")
+    );
+    // Resolved says it first, outdated next.
+    assert_eq!(
+        (t[1].state, t[1].side, t[1].line, t[1].original_line),
+        (ThreadState::Resolved, DiffSide::Left, None, Some(3))
+    );
+    assert_eq!(t[1].comments[0].author, "?", "a user since deleted");
+    assert_eq!(t[2].state, ThreadState::Outdated);
+    assert!(threads_of(&json!({ "repository": { "pullRequest": null } })).is_empty());
+}
+
+#[test]
+fn a_comment_of_the_conversation_is_a_thread_without_a_path() {
+    let t = conversation_of(&json!({
+        "id": 9, "user": { "login": "bob" }, "body": "Merci !",
+        "created_at": "2026-11-14T09:00:00Z", "updated_at": "2026-11-14T09:00:00Z",
+    }));
+    assert!(!t.on_lines());
+    assert_eq!(t.state, ThreadState::Open);
+    assert_eq!(
+        (t.comments[0].id.as_str(), t.comments[0].author.as_str()),
+        ("9", "bob")
+    );
+    assert_eq!(t.comments[0].updated, 0, "never edited");
+}
+
+#[tokio::test]
+async fn the_four_reads_ask_github_where_they_should() {
+    let server = FakeServer::start().await;
+    server.on(
+        "GET",
+        "/repos/cli/cli/pulls/7",
+        200,
+        json!({ "body": "Texte", "head": { "sha": "abc" } }),
+    );
+    server.on(
+        "GET",
+        "/repos/cli/cli/pulls/7/commits",
+        200,
+        json!([{ "sha": "a1", "author": { "login": "ada" }, "commit": { "message": "feat: x" } }]),
+    );
+    server.on(
+        "GET",
+        "/repos/cli/cli/pulls/7/files",
+        200,
+        json!([{ "filename": "a.ts", "status": "added", "additions": 2, "deletions": 0 }]),
+    );
+    server.on(
+        "POST",
+        "/graphql#PrThreads",
+        200,
+        json!({ "data": { "repository": { "pullRequest": { "reviewThreads": { "nodes": [
+            { "id": "T", "isResolved": false, "isOutdated": false, "path": "a.ts", "line": 1, "comments": { "nodes": [] } },
+        ] } } } } }),
+    );
+    server.on(
+        "GET",
+        "/repos/cli/cli/issues/7/comments",
+        200,
+        json!([{ "id": 4, "user": { "login": "bob" }, "body": "LGTM" }]),
+    );
+    let github = Github::new(reqwest::Client::new(), server.url.clone(), "t".into());
+    assert_eq!(
+        github.description(&repo(), 7).await.unwrap().head_sha,
+        "abc"
+    );
+    assert_eq!(github.commits(&repo(), 7).await.unwrap()[0].sha, "a1");
+    assert_eq!(
+        github.files(&repo(), 7).await.unwrap()[0].status,
+        FileStatus::Added
+    );
+    let threads = github.threads(&repo(), 7).await.unwrap();
+    assert_eq!(
+        threads.len(),
+        2,
+        "the thread on its line, then the conversation"
+    );
+    assert!(threads[0].on_lines() && !threads[1].on_lines());
+    let asked: Vec<String> = server.requests().iter().map(|r| r.target.clone()).collect();
+    assert!(
+        asked
+            .iter()
+            .any(|t| t == "/repos/cli/cli/pulls/7/commits?per_page=100"),
+        "{asked:?}"
+    );
+    assert!(
+        asked
+            .iter()
+            .any(|t| t == "/repos/cli/cli/pulls/7/files?per_page=100"),
+        "{asked:?}"
+    );
+    // Nothing written: a read is a read.
+    assert!(server.writes().iter().all(|r| r.path() == "/graphql"));
+}

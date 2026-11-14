@@ -2780,6 +2780,8 @@ export type UiEvent =
   | { type: 'focusPrs'; projectId: string }
   /** A reading of the project's list of pull requests, whoever made it: its open ones (ESC-403). */
   | { type: 'prsRead'; projectId: string; numbers: number[] }
+  /** A pull request read whole changed on its host, as the following of the pull requests saw it: read it again (ESC-452). */
+  | { type: 'prChanged'; projectId: string; number: number }
   /** Why no ticket of the project's board starts (its target branch), or null once they may. */
   | { type: 'boardIssue'; projectId: string; issue: string | null }
   | { type: 'environments'; environments: ProjectEnvironments }
@@ -3241,6 +3243,68 @@ export interface PrFailure {
 export interface PrRead<T> {
   data?: T;
   failure?: PrFailure;
+}
+
+/** A pull request read whole (`prread::PrContents`, ESC-452), by `pr_contents`. Every text of it is a third party's. */
+export interface PrContents {
+  thirdParty: true;
+  word: string;
+  pr: PullRequest;
+  description?: {
+    body: string;
+    headSha?: string;
+    baseSha?: string;
+    updated?: number;
+    labels?: string[];
+    additions?: number;
+    deletions?: number;
+    changedFiles?: number;
+    commits?: number;
+  };
+  commits: { sha: string; message: string; author: string; created?: number; url?: string }[];
+  files: PrContentsFile[];
+  /** On lines, then the conversation's (no `path`). */
+  threads: PrThread[];
+  /** What the host reads: a part it does not is missing, not empty. */
+  reading: { description: boolean; commits: boolean; files: boolean; threads: boolean };
+  diff: boolean;
+  tip?: string;
+  diffFailure?: string;
+  readAt: number;
+  checkedAt: number;
+  rateLimit?: { limit: number; remaining: number; reset: number };
+}
+
+/** A line of a file's diff: `+`, `-`, a space, or `@` a hunk's head; its number in the base and in the tip. */
+export interface PrLine {
+  kind: '+' | '-' | ' ' | '@';
+  old?: number;
+  new?: number;
+  text: string;
+}
+
+export interface PrContentsFile {
+  path: string;
+  previousPath?: string;
+  status: 'added' | 'modified' | 'removed' | 'renamed' | 'copied';
+  additions: number;
+  deletions: number;
+  lines: PrLine[];
+  binary: boolean;
+  generated: boolean;
+  cut: boolean;
+}
+
+export interface PrThread {
+  id: string;
+  path?: string;
+  line?: number;
+  startLine?: number;
+  originalLine?: number;
+  side: 'left' | 'right';
+  state: 'open' | 'resolved' | 'outdated';
+  comments: { id: string; author: string; body: string; created?: number; updated?: number }[];
+  excerpt?: string;
 }
 
 /** Why an agent has no « Ouvrir une PR… » (`prview::NoPr`). */

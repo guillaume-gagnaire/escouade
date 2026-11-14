@@ -14,6 +14,8 @@ Le plugin sert deux choses d'Escouade sur le même compte : l'hébergeur de code
 
 **Les relectures.** Le plugin lit les relectures et les commentaires de la PR, avec leurs fils. Quand tu fais relire une PR par un agent, c'est lui qui publie, en une fois, ce que tu as gardé : le texte, les commentaires sur les lignes et ton choix (« Commenter », « Demander des changements », « Approuver »). Il répond aussi sous un commentaire d'une ligne.
 
+**Une PR entière** (Escouade 2.3). Le plugin lit aussi la description d'une PR, ses commits, ses fichiers modifiés et ses fils de discussion, avec leurs lignes, leurs réponses et leur état (ouvert, résolu, dépassé), et les commentaires de la conversation. Les lignes du diff, Escouade les lit par git, sans passer par GitHub. Rien n'est écrit sur GitHub pour cela.
+
 **Les déploiements.** Le plugin lit les déploiements d'un commit et ceux des environnements du dépôt : la carte d'un ticket terminé dit où il tourne, et la vue « Environnements » montre un couloir par environnement.
 
 **La vue « Pull requests ».** Elle montre les 30 PR ouvertes du dépôt les plus récemment mises à jour, de toi ou d'autres.

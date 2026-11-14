@@ -1,9 +1,9 @@
 ---
 title: "Hébergeurs de code"
 subject: "Git & fichiers"
-sources: ["docs/SPEC.md","plugins/gitlab/README.fr.md","plugins/gitlab/docs/fr/","tests/fixtures/forges/gitlab/README.md","docs/TODO-2.2.md (Hébergeurs de code)","plugins/gitea/README.fr.md","plugins/gitea/docs/fr/","tests/fixtures/forges/gitea/README.md","docs/TODO-1.8.md","src-tauri/src/telemetry.rs"]
-tickets: ["ESC-54","ESC-55","ESC-56","ESC-58","ESC-70","ESC-241","ESC-212","ESC-57","ESC-67","ESC-345","ESC-69","ESC-367","ESC-383"]
-decisions: [104]
+sources: ["docs/SPEC.md","plugins/gitlab/README.fr.md","plugins/gitlab/docs/fr/","tests/fixtures/forges/gitlab/README.md","docs/TODO-2.2.md (Hébergeurs de code)","plugins/gitea/README.fr.md","plugins/gitea/docs/fr/","tests/fixtures/forges/gitea/README.md","docs/TODO-1.8.md","src-tauri/src/telemetry.rs","design/pr-2-3/README.md","docs/TODO-2.3.md (Les PR dans Escouade)"]
+tickets: ["ESC-54","ESC-55","ESC-56","ESC-58","ESC-70","ESC-241","ESC-212","ESC-57","ESC-67","ESC-345","ESC-69","ESC-367","ESC-383","ESC-452"]
+decisions: [104,166]
 compared: null
 ---
 
@@ -137,3 +137,13 @@ Quatre événements disent, si l'utilisateur a accepté les statistiques, que le
 Rien ne part vers les serveurs d'Escouade : les jetons restent sur le poste (trousseau du système, sinon `integrations.json`), et les appels vont de l'app à l'hébergeur, par le proxy des réglages réseau. La page Confidentialité du site le dit, avec ce que voient l'hébergeur et le service du harness (une relecture et les textes proposés lui donnent le diff), et elle liste chaque événement : un test du site la compare à `src-tauri/src/telemetry.rs`.
 
 Le site dit aussi ce qui a été essayé (page « Les hébergeurs de code ») : GitHub en lecture sur le vrai service ; ses écritures contre le faux GitHub des tests ; les autres d'après leur documentation, contre de faux serveurs. Une page ne promet pas plus que ce qui a tourné.
+
+## Lire une PR entière (ESC-452)
+
+Premier ticket des PR dans Escouade (2.3, direction A : `design/pr-2-3/README.md`). Rien ne se voit encore : le cœur sait lire une PR entière, que la vue de la PR (PR-2 et suivants) affichera.
+
+- **Quatre lectures d'un hébergeur**, déclarées par ses capacités (`reading` : description, commits, fichiers, fils) : `forge/description` (le texte de la PR, ses étiquettes, son commit de tête et de base, quand elle a changé, ses comptes de lignes, de fichiers et de commits), `forge/commits` (du plus ancien : identifiant, message entier, auteur, date), `forge/files` (chemin, ancien chemin, ajouté / modifié / supprimé / renommé / copié, lignes ajoutées et retirées) et `forge/threads` (les fils sur des lignes : fichier, ligne, première ligne, ligne d'origine, côté du diff, état ouvert, résolu ou dépassé, le premier commentaire puis ses réponses, l'extrait du diff ; puis les commentaires de la conversation, sans fichier ni ligne).
+- **GitHub les sert** (plugin `dev.escouade.github` 2.3.0, kit 0.1.3) : la PR en REST (lecture conditionnelle), ses commits et ses fichiers page après page, ses fils en GraphQL (100 fils, 100 commentaires chacun) et la conversation. Un fil résolu se dit résolu même s'il est dépassé. **GitLab, Gitea / Forgejo, Bitbucket Cloud et Azure DevOps** déclarent qu'ils ne savent pas encore (PR-9) : leur plugin répond « Cet hébergeur ne sait pas faire », et la partie manque sans erreur.
+- **Le diff vient de git**, pas de l'hébergeur : la tête et la base sont récupérées dans `refs/escouade/review/<n>/read/…`, supprimées aussitôt ; aucune branche ne bouge, rien n'est poussé. Chaque ligne a son numéro dans la base et dans la tête ; un fichier binaire le dit ; un fichier généré (verrou, minifié) est marqué ; au-delà de 3 000 lignes par fichier et 30 000 par PR, le fichier est coupé et le dit. Une PR d'un autre dépôt que celui du projet est lue sans lignes, avec la raison.
+- **Gardée** : redonnée telle quelle pendant 20 s ; ensuite, deux appels (la PR et sa description) disent si elle a changé (son état, sa CI, ses relectures, ses fils ouverts, son commit de tête, sa date de mise à jour) ; sinon tout est relu. Le suivi des PR (la liste du projet, les PR des agents, celles des tickets) la marque à relire dès qu'il la voit changer, et le dit à la fenêtre. Une lecture qui échoue n'est pas gardée ; près de la limite d'appels de l'hébergeur, la dernière lecture reste.
+- **Données d'un tiers** : titre, description, messages de commit, chemins, fils et noms sont écrits par quiconque peut ouvrir une PR. La lecture le dit (`thirdParty`), la fenêtre les montre comme du texte, et `get_pull_request` les donne dans sa balise de données d'un tiers, avec la description, les commits, les fichiers (sans lignes) et les fils et leur état, jamais comme une consigne. Rien n'est écrit chez l'hébergeur.

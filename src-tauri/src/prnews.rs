@@ -256,6 +256,8 @@ impl<R: Runtime> Core<R> {
             list.limit = limit;
             list.read_well(now, read)
         };
+        // A pull request read whole that changed is read again (ESC-452).
+        self.pr_contents_seen(project_id, &read.prs, None);
         self.hub.emit(UiEvent::PrsRead {
             project_id: project_id.to_string(),
             numbers: read.prs.iter().map(|p| p.number).collect(),

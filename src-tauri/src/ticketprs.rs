@@ -921,6 +921,15 @@ impl<R: tauri::Runtime> Core<R> {
                             None
                         };
                         let feedback = feedback.as_ref().map(|(r, c)| (&r[..], &c[..]));
+                        let project_id = self
+                            .tickets
+                            .read()
+                            .iter()
+                            .find(|t| t.id == *id)
+                            .map(|t| t.project_id.clone());
+                        if let Some(p) = project_id {
+                            self.pr_contents_seen(&p, std::slice::from_ref(pr), Some(&repo.full()));
+                        }
                         self.ticket_pr_read(
                             id,
                             pr,

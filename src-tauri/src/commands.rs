@@ -2195,6 +2195,27 @@ pub async fn agent_pr_detail(
         .await)
 }
 
+/// A pull request of the project read whole (ESC-452): its description, commits, files with their
+/// lines (git's) and threads, kept while it does not change; or why the host did not give it. Its
+/// texts are a third party's (`PrContents::third_party`).
+#[tauri::command]
+pub async fn pr_contents(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+    // The repository it was read in, when not the target's (`PullRequest::host_repo`).
+    host_repo: Option<String>,
+) -> Res<crate::prview::Read<crate::prread::PrContents>> {
+    Ok(core
+        .pr_contents(
+            &project_id,
+            number,
+            host_repo.as_deref().unwrap_or(""),
+            true,
+        )
+        .await)
+}
+
 /// The end of the log of a check's job of the agent's pull request `number`.
 #[tauri::command]
 pub async fn agent_pr_log(

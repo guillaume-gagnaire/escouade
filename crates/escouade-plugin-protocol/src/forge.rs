@@ -278,3 +278,203 @@ pub struct Identity {
     /// none when it does not (fine-grained tokens, Bitbucket, Gitea).
     pub scopes: Option<Vec<String>>,
 }
+
+// A pull request read whole (ESC-452, the PR in Escouade): its description, its commits, its files and its threads, each a
+// call of its own (`forge/description`, `forge/commits`, `forge/files`, `forge/threads`) that a host serves or refuses
+// (`unsupported`). What they say was written by whoever can open a pull request: the core keeps it as a third party's.
+
+/// The description of a pull request and what changes when it moves (`forge/description`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PrDescription {
+    /// Its text, in the host's Markdown; empty when it has none.
+    pub body: String,
+    /// The commit at its tip and the one of its base, when the host says them: what tells a push.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub head_sha: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub base_sha: String,
+    /// When it last changed (seconds since 1970: a comment, a push, a review); 0 when the host does not say.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub updated: u64,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub labels: Vec<String>,
+    /// Its lines added and removed, its files and its commits, as the host counts them; 0 when it does not say.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub additions: u64,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub deletions: u64,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub changed_files: u64,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub commits: u64,
+}
+
+/// A commit of a pull request, the oldest first (`forge/commits`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PrCommit {
+    /// Its full id.
+    pub sha: String,
+    /// Its whole message: its title is its first line.
+    pub message: String,
+    /// Who wrote it: the host's login, else the name git keeps.
+    pub author: String,
+    /// When it was written (seconds since 1970); 0 when the host does not say.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub created: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+}
+
+/// What a pull request does to a file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum FileStatus {
+    Added,
+    #[default]
+    Modified,
+    Removed,
+    Renamed,
+    Copied,
+}
+
+/// A file a pull request changes, as its host counts it (`forge/files`). Its lines are not here: the core reads the
+/// diff from git.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PrFile {
+    pub path: String,
+    /// Renamed or copied: where it was.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub previous_path: Option<String>,
+    pub status: FileStatus,
+    pub additions: u64,
+    pub deletions: u64,
+}
+
+/// Where a thread stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum ThreadState {
+    #[default]
+    Open,
+    Resolved,
+    /// Not resolved, but its lines changed since it was written: it speaks of a former version.
+    Outdated,
+}
+
+/// The side of the diff a thread's lines are on: the base's (`Left`, lines removed) or the tip's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum DiffSide {
+    Left,
+    #[default]
+    Right,
+}
+
+/// A comment of a thread: its first, or an answer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ThreadComment {
+    /// What `Forge::reply` answers under.
+    pub id: String,
+    pub author: String,
+    pub body: String,
+    /// When it was written, and last edited (seconds since 1970); 0 when the host does not say.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub created: u64,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub updated: u64,
+}
+
+/// A thread of a pull request (`forge/threads`): on lines of a file, with its answers and its state; or, without a
+/// path, a comment of the conversation under the description, which has no line and does not resolve.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ReviewThread {
+    /// The host's id of the thread (what resolves it); empty when it has none.
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    /// Its last line in the version it is on, and its first when it holds several; none when the host lost it (an
+    /// outdated one), or of the conversation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_line: Option<u32>,
+    /// Its line in the version it was written on.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub original_line: Option<u32>,
+    pub side: DiffSide,
+    pub state: ThreadState,
+    /// Its first comment, then its answers, the oldest first.
+    pub comments: Vec<ThreadComment>,
+    /// The lines of the diff it was written on, as the host keeps them (GitHub's `diffHunk`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub excerpt: Option<String>,
+}
+
+impl ReviewThread {
+    /// On lines of a file, not of the conversation.
+    pub fn on_lines(&self) -> bool {
+        self.path.is_some()
+    }
+}
+
+#[cfg(test)]
+mod read_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn a_thread_travels_in_camel_case_and_without_what_it_lacks() {
+        let t = ReviewThread {
+            id: "T1".into(),
+            path: Some("src/a.rs".into()),
+            line: Some(4),
+            start_line: Some(2),
+            state: ThreadState::Outdated,
+            comments: vec![ThreadComment {
+                id: "1".into(),
+                author: "bob".into(),
+                body: "Pourquoi ?".into(),
+                created: 10,
+                updated: 0,
+            }],
+            ..Default::default()
+        };
+        let v = serde_json::to_value(&t).unwrap();
+        assert_eq!(v["startLine"], 2);
+        assert_eq!(v["state"], "outdated");
+        assert_eq!(v["side"], "right");
+        assert!(v.get("originalLine").is_none());
+        assert!(v["comments"][0].get("updated").is_none());
+        assert!(t.on_lines());
+        // What a plugin of another language writes, with what it leaves out.
+        let back: ReviewThread =
+            serde_json::from_value(json!({ "id": "", "comments": [], "state": "resolved" }))
+                .unwrap();
+        assert_eq!(back.state, ThreadState::Resolved);
+        assert!(!back.on_lines());
+    }
+
+    #[test]
+    fn a_description_a_file_and_a_commit_read_with_their_defaults() {
+        let d: PrDescription =
+            serde_json::from_value(json!({ "body": "x", "headSha": "abc" })).unwrap();
+        assert_eq!(
+            (d.body.as_str(), d.head_sha.as_str(), d.updated),
+            ("x", "abc", 0)
+        );
+        let f: PrFile = serde_json::from_value(
+            json!({ "path": "a", "status": "renamed", "previousPath": "b" }),
+        )
+        .unwrap();
+        assert_eq!(f.status, FileStatus::Renamed);
+        assert_eq!(f.previous_path.as_deref(), Some("b"));
+        let c: PrCommit =
+            serde_json::from_value(json!({ "sha": "1", "message": "feat: x\n\ncorps" })).unwrap();
+        assert_eq!(c.author, "");
+    }
+}

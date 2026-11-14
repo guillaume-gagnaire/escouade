@@ -194,6 +194,8 @@ impl ForgeKind for GiteaForge {
 
 `account.url` est l’instance que l’utilisateur a saisie, d’où `{account}` dans `permissions.network`. Un jeton refusé, une limite atteinte et le budget d’appels sont traités par `Hosts`. Le banc joue `account/me` et `forge/pullRequestsOfBranch` dès que `contributes.forges` est déclaré.
 
+Depuis le kit 0.1.3, un hébergeur peut aussi donner une PR entière, pour la vue des PR d’Escouade 2.3 : `description` (son texte, son commit de tête et quand elle a changé), `commits`, `files` (les fichiers et leurs comptes ; les lignes, Escouade les lit par git) et `threads` (les fils sur les lignes, avec leurs réponses et leur état `open`, `resolved` ou `outdated`, puis les commentaires de la conversation, sans `path`). Ce que tu n’écris pas répond `Unsupported` : Escouade montre la PR sans cette partie.
+
 ## Écrire un harness
 
 Pour un agent qui parle ACP, le [manifeste](plugins/harnesses) suffit, sans une ligne de code. Sinon, un harness est une machine à états sans attente, qui ne dépend que du protocole : `turn::run` tient la boucle, sur les deux cibles.

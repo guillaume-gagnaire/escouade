@@ -27,6 +27,8 @@ impl Provider for GiteaProvider {
             // Gitea's Actions only, from its 1.26; the plugin says `Unsupported` to an instance
             // that cannot (and to every Forgejo).
             rerun: true,
+            // Not read yet (PR-9): its client says `unsupported`.
+            reading: Reading::default(),
             // A title that starts with `WIP:`.
             draft: true,
             // `merge_when_checks_succeed`, on a protected branch only.

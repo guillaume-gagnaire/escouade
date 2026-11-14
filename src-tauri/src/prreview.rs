@@ -179,7 +179,7 @@ pub fn parse_diff(text: &str) -> Vec<FileDiff> {
     files
 }
 
-fn generated(path: &str) -> bool {
+pub(crate) fn generated(path: &str) -> bool {
     let name = path.rsplit('/').next().unwrap_or(path);
     GENERATED.contains(&name) || name.ends_with(".min.js") || name.ends_with(".min.css")
 }
@@ -415,35 +415,48 @@ struct Source {
 /// The tip and the base of pull request `n`, fetched into refs of their own and gone once read:
 /// no branch moves. The diff is from where it left its base, as the host shows it.
 async fn read_diff(s: &Source) -> Result<(String, Vec<FileDiff>)> {
-    let n = s.pr.number;
+    let (sha, text) = git_diff(&s.root, &s.plan, &s.remote, &s.pr, "").await?;
+    Ok((sha, parse_diff(&text)))
+}
+
+/// `git diff`'s text of pull request `pr`, from where it left its base to its tip, and that tip:
+/// both fetched into `refs/escouade/review/<n>/<leaf>tip` and `…base`, removed once read, so that
+/// no branch moves. `leaf` keeps a reading (`read/`, ESC-452) from a review's refs.
+pub(crate) async fn git_diff(
+    root: &str,
+    plan: &FetchPlan,
+    remote: &str,
+    pr: &PullRequest,
+    leaf: &str,
+) -> Result<(String, String)> {
+    let n = pr.number;
     let (tip, base) = (
-        format!("refs/escouade/review/{n}/tip"),
-        format!("refs/escouade/review/{n}/base"),
+        format!("refs/escouade/review/{n}/{leaf}tip"),
+        format!("refs/escouade/review/{n}/{leaf}base"),
     );
     let read = async {
-        let source = s
-            .plan
+        let source = plan
             .refspec
             .trim_start_matches('+')
             .split(':')
             .next()
             .unwrap_or_default();
-        git::fetch_ref(&s.root, &s.plan.from, &format!("+{source}:{tip}")).await?;
-        let wanted = format!("+refs/heads/{}:{base}", s.pr.base);
-        git::fetch_ref(&s.root, &s.remote, &wanted).await?;
-        let head = if s.plan.second_parent {
+        git::fetch_ref(root, &plan.from, &format!("+{source}:{tip}")).await?;
+        let wanted = format!("+refs/heads/{}:{base}", pr.base);
+        git::fetch_ref(root, remote, &wanted).await?;
+        let head = if plan.second_parent {
             format!("{tip}^2")
         } else {
             tip.clone()
         };
-        let sha = git::text(&s.root, &["rev-parse", &head]).await?;
-        let from = git::text(&s.root, &["merge-base", &base, &sha])
+        let sha = git::text(root, &["rev-parse", &head]).await?;
+        let from = git::text(root, &["merge-base", &base, &sha])
             .await
             .unwrap_or_else(|_| base.clone());
         // The repository's and the user's own settings do not reach what is parsed: no external
         // diff, no conversion, a prefix of a/ and b/.
         let bytes = git::run(
-            &s.root,
+            root,
             &[
                 "-c",
                 "core.quotePath=false",
@@ -458,11 +471,11 @@ async fn read_diff(s: &Source) -> Result<(String, Vec<FileDiff>)> {
             ],
         )
         .await?;
-        Ok::<_, anyhow::Error>((sha, parse_diff(&String::from_utf8_lossy(&bytes))))
+        Ok::<_, anyhow::Error>((sha, String::from_utf8_lossy(&bytes).into_owned()))
     }
     .await;
     for r in [&tip, &base] {
-        let _ = git::run(&s.root, &["update-ref", "-d", r]).await;
+        let _ = git::run(root, &["update-ref", "-d", r]).await;
     }
     read
 }

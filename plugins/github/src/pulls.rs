@@ -592,6 +592,143 @@ fn pr_of_graphql(p: &Value) -> Option<PullRequest> {
     })
 }
 
+/// The threads of a pull request, with their lines, their answers and their state (ESC-452).
+const THREADS_QUERY: &str = "query PrThreads($owner: String!, $name: String!, $number: Int!) { \
+    repository(owner: $owner, name: $name) { pullRequest(number: $number) { \
+    reviewThreads(first: 100) { nodes { id isResolved isOutdated path line startLine originalLine diffSide \
+    comments(first: 100) { nodes { databaseId author { login } body createdAt lastEditedAt diffHunk } } } } } } }";
+
+/// A login, else « ? » for a user since deleted (GitHub's « ghost »).
+fn login(v: &Value) -> String {
+    v["login"].as_str().unwrap_or("?").to_string()
+}
+
+fn line_of(v: &Value) -> Option<u32> {
+    v.as_u64().and_then(|l| u32::try_from(l).ok())
+}
+
+/// What REST says of a pull request's description (`GET /pulls/<n>`).
+pub fn description_of(p: &Value) -> PrDescription {
+    let count = |k: &str| p[k].as_u64().unwrap_or(0);
+    PrDescription {
+        body: p["body"].as_str().unwrap_or("").to_string(),
+        head_sha: p["head"]["sha"].as_str().unwrap_or("").to_string(),
+        base_sha: p["base"]["sha"].as_str().unwrap_or("").to_string(),
+        updated: instant(&p["updated_at"]).unwrap_or(0),
+        labels: p["labels"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|l| l["name"].as_str())
+            .map(str::to_string)
+            .collect(),
+        additions: count("additions"),
+        deletions: count("deletions"),
+        changed_files: count("changed_files"),
+        commits: count("commits"),
+    }
+}
+
+/// A commit of `GET /pulls/<n>/commits`: its author's login, else the name git keeps.
+pub fn commit_of(c: &Value) -> PrCommit {
+    let author = c["author"]["login"]
+        .as_str()
+        .or_else(|| c["commit"]["author"]["name"].as_str())
+        .unwrap_or("?");
+    PrCommit {
+        sha: c["sha"].as_str().unwrap_or("").to_string(),
+        message: c["commit"]["message"].as_str().unwrap_or("").to_string(),
+        author: author.to_string(),
+        created: instant(&c["commit"]["author"]["date"]).unwrap_or(0),
+        url: c["html_url"].as_str().map(str::to_string),
+    }
+}
+
+/// A file of `GET /pulls/<n>/files`.
+pub fn file_of(f: &Value) -> PrFile {
+    PrFile {
+        path: f["filename"].as_str().unwrap_or("").to_string(),
+        previous_path: f["previous_filename"].as_str().map(str::to_string),
+        status: match f["status"].as_str() {
+            Some("added") => FileStatus::Added,
+            Some("removed") => FileStatus::Removed,
+            Some("renamed") => FileStatus::Renamed,
+            Some("copied") => FileStatus::Copied,
+            // « modified », « changed » (its mode alone), « unchanged ».
+            _ => FileStatus::Modified,
+        },
+        additions: f["additions"].as_u64().unwrap_or(0),
+        deletions: f["deletions"].as_u64().unwrap_or(0),
+    }
+}
+
+/// The threads of GraphQL's `reviewThreads`: resolved first said, then outdated, else open.
+pub fn threads_of(data: &Value) -> Vec<ReviewThread> {
+    data["repository"]["pullRequest"]["reviewThreads"]["nodes"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|t| {
+            let comments: Vec<ThreadComment> = t["comments"]["nodes"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|c| ThreadComment {
+                    id: c["databaseId"]
+                        .as_u64()
+                        .map(|i| i.to_string())
+                        .unwrap_or_default(),
+                    author: login(&c["author"]),
+                    body: c["body"].as_str().unwrap_or("").to_string(),
+                    created: instant(&c["createdAt"]).unwrap_or(0),
+                    updated: instant(&c["lastEditedAt"]).unwrap_or(0),
+                })
+                .collect();
+            let excerpt = t["comments"]["nodes"][0]["diffHunk"]
+                .as_str()
+                .filter(|h| !h.is_empty())
+                .map(str::to_string);
+            ReviewThread {
+                id: t["id"].as_str().unwrap_or("").to_string(),
+                path: t["path"].as_str().map(str::to_string),
+                line: line_of(&t["line"]),
+                start_line: line_of(&t["startLine"]),
+                original_line: line_of(&t["originalLine"]),
+                side: match t["diffSide"].as_str() {
+                    Some("LEFT") => DiffSide::Left,
+                    _ => DiffSide::Right,
+                },
+                state: if t["isResolved"] == true {
+                    ThreadState::Resolved
+                } else if t["isOutdated"] == true {
+                    ThreadState::Outdated
+                } else {
+                    ThreadState::Open
+                },
+                comments,
+                excerpt,
+            }
+        })
+        .collect()
+}
+
+/// A comment of the conversation under the description (`GET /issues/<n>/comments`): a thread
+/// without a path, of one comment.
+pub fn conversation_of(c: &Value) -> ReviewThread {
+    ReviewThread {
+        comments: vec![ThreadComment {
+            id: c["id"].as_u64().map(|i| i.to_string()).unwrap_or_default(),
+            author: login(&c["user"]),
+            body: c["body"].as_str().unwrap_or("").to_string(),
+            created: instant(&c["created_at"]).unwrap_or(0),
+            updated: instant(&c["updated_at"])
+                .filter(|u| Some(*u) != instant(&c["created_at"]))
+                .unwrap_or(0),
+        }],
+        ..Default::default()
+    }
+}
+
 /// A pull request as REST tells it (what a creation answers).
 fn pr_of_rest(p: &Value) -> Result<PullRequest> {
     Ok(PullRequest {
@@ -1080,6 +1217,74 @@ impl Forge for Github {
                     excerpt: None,
                 });
             }
+            Ok(out)
+        })
+    }
+
+    fn description<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+    ) -> BoxFuture<'a, Result<PrDescription>> {
+        Box::pin(async move {
+            // Conditional, as `head_sha`'s: unchanged, it costs nothing of the limit.
+            let pr = self
+                .get(&format!("{}/pulls/{number}", Self::repo_path(repo)))
+                .await?;
+            Ok(description_of(&pr))
+        })
+    }
+
+    fn commits<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+    ) -> BoxFuture<'a, Result<Vec<PrCommit>>> {
+        Box::pin(async move {
+            // GitHub lists 250 of them at most.
+            let all = self
+                .list(&format!(
+                    "{}/pulls/{number}/commits?per_page=100",
+                    Self::repo_path(repo)
+                ))
+                .await?;
+            Ok(all.iter().map(commit_of).collect())
+        })
+    }
+
+    fn files<'a>(&'a self, repo: &'a RepoRef, number: u64) -> BoxFuture<'a, Result<Vec<PrFile>>> {
+        Box::pin(async move {
+            let all = self
+                .list(&format!(
+                    "{}/pulls/{number}/files?per_page=100",
+                    Self::repo_path(repo)
+                ))
+                .await?;
+            Ok(all.iter().map(file_of).collect())
+        })
+    }
+
+    fn threads<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+    ) -> BoxFuture<'a, Result<Vec<ReviewThread>>> {
+        Box::pin(async move {
+            let data = self
+                .graphql(
+                    "PrThreads",
+                    THREADS_QUERY,
+                    json!({ "owner": repo.namespace, "name": repo.name, "number": number }),
+                )
+                .await?;
+            let mut out = threads_of(&data);
+            let conversation = self
+                .list(&format!(
+                    "{}/issues/{number}/comments?per_page=100",
+                    Self::repo_path(repo)
+                ))
+                .await?;
+            out.extend(conversation.iter().map(conversation_of));
             Ok(out)
         })
     }

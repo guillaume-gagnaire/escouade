@@ -161,7 +161,18 @@ Trois façons, de la plus simple à la plus complète :
 
 ### 2.4 Les hébergeurs de code
 
-`contributes.forges`, sur un compte déclaré : `account/me` et `forge/*` (`createPr`, `pullRequest`, `pullRequestsOfBranch`, `pullRequests`, `mergeOptions`, `merge`, `autoMerge`, `checks`, `branchChecks`, `jobLog`, `rerunFailed`, `reviews`, `comments`, `comment`, `review`, `reply`, `deployments`, `environments`). Chaque méthode est refusée par défaut (`unsupported`, -32601), selon les `capabilities` déclarées. `ProcessForge` répond au trait `Forge` (`src-tauri/src/forge/`) ; chaque réponse est `{ value, rateLimit? }`.
+`contributes.forges`, sur un compte déclaré : `account/me` et `forge/*` (`createPr`, `pullRequest`, `pullRequestsOfBranch`, `pullRequests`, `mergeOptions`, `merge`, `autoMerge`, `checks`, `branchChecks`, `jobLog`, `rerunFailed`, `reviews`, `comments`, `comment`, `review`, `reply`, `deployments`, `environments`, et depuis la 2.3 `description`, `commits`, `files`, `threads`). Chaque méthode est refusée par défaut (`unsupported`, -32601), selon les `capabilities` déclarées. `ProcessForge` répond au trait `Forge` (`src-tauri/src/forge/`) ; chaque réponse est `{ value, rateLimit? }`.
+
+**Lire une PR entière** (ESC-452, kit 0.1.3, protocole 0.1.3) : quatre lectures que l'hébergeur déclare dans `Capabilities::reading` (`description`, `commits`, `files`, `threads`) ; GitHub les sert toutes, GitLab, Gitea et Forgejo, Bitbucket et Azure DevOps aucune pour l'instant (PR-9), et leur plugin répond `unsupported`.
+
+| Méthode | Paramètres | Réponse |
+|---|---|---|
+| `forge/description` | `repo`, `number` | `PrDescription` : `body` (Markdown), `headSha`, `baseSha`, `updated` (secondes), `labels`, `additions`, `deletions`, `changedFiles`, `commits` |
+| `forge/commits` | `repo`, `number` | `PrCommit[]`, du plus ancien : `sha`, `message` entier, `author` (login, sinon le nom de git), `created`, `url` |
+| `forge/files` | `repo`, `number` | `PrFile[]` : `path`, `previousPath`, `status` (`added`, `modified`, `removed`, `renamed`, `copied`), `additions`, `deletions`. Pas de lignes : le cœur lit le diff par git, dans `refs/escouade/review/<n>/read/…` supprimées aussitôt |
+| `forge/threads` | `repo`, `number` | `ReviewThread[]` : `id`, `path`, `line`, `startLine`, `originalLine`, `side` (`left`, `right`), `state` (`open`, `resolved`, `outdated`), `comments` (`id`, `author`, `body`, `created`, `updated` ; le premier puis les réponses), `excerpt`. Sans `path` : un commentaire de la conversation, sans ligne ni résolution |
+
+Le cœur (`src-tauri/src/prread.rs`, commande `pr_contents`) les lit ensemble, garde la lecture 20 s, puis tant que la PR et sa description (son commit de tête, `updated`) ne changent pas ; le suivi des PR (la liste du projet, celles des agents et des tickets) la marque à relire quand il la voit changer (`UiEvent::PrChanged`). Tout y est marqué comme données d'un tiers (`thirdParty`), et `get_pull_request` le donne dans sa balise `<third_party_data>`.
 
 **Les comptes** (`contributes.accounts`, `AccountKind`, `plugins/accounts.rs`) : les hôtes (le public, les instances à soi et comment les reconnaître), les façons de se connecter (jeton, CLI), les champs, les droits, la page du jeton. Un compte sert tous les points de son plugin. Le jeton va au coffre sous `plugin:<id>:account:<compte>` et **le cœur le prête** au plugin avant chaque appel (`Runtime::lend`) : `secrets/get` donne le prêté d'abord, jamais le secret d'un autre plugin. Les erreurs sont typées : `-(32000 + statut)` pour un statut HTTP (`-32401` : reconnecter le compte), `-32010` pour un refus durable, `-32601` pour un appel non servi.
 

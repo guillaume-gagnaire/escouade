@@ -218,6 +218,38 @@ pub trait Forge: Send + Sync {
         unsupported("resolve")
     }
 
+    /// The description of a pull request, with its tip's commit and when it last changed (ESC-452).
+    fn description<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _number: u64,
+    ) -> BoxFuture<'a, Result<PrDescription>> {
+        unsupported("description")
+    }
+
+    /// The commits of a pull request, the oldest first.
+    fn commits<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _number: u64,
+    ) -> BoxFuture<'a, Result<Vec<PrCommit>>> {
+        unsupported("commits")
+    }
+
+    /// The files a pull request changes and their counts; their lines are git's, read by the core.
+    fn files<'a>(&'a self, _repo: &'a RepoRef, _number: u64) -> BoxFuture<'a, Result<Vec<PrFile>>> {
+        unsupported("files")
+    }
+
+    /// The threads of a pull request: on lines, with their answers and their state, then the conversation's comments.
+    fn threads<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _number: u64,
+    ) -> BoxFuture<'a, Result<Vec<ReviewThread>>> {
+        unsupported("threads")
+    }
+
     /// What the host's last answer said of its limit, when it says it.
     fn rate_limit(&self) -> Option<RateLimit> {
         None

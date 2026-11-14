@@ -17,7 +17,7 @@ This plugin is a WASM module: it runs inside Escouade, isolated, with no program
 It reads, with your account:
 
 - your login, and a classic token's scopes (for the account's row);
-- the pull requests of your projects' repositories: their state, reviewers, reviews, comments and threads, checks and statuses, an Actions job's log, their deployments and those of the repository's environments; the repository's merge settings;
+- the pull requests of your projects' repositories: their state, reviewers, reviews, comments and threads (with their answers and their state), description, commits and changed files, checks and statuses, an Actions job's log, their deployments and those of the repository's environments; the repository's merge settings;
 - for GitHub Issues: your repositories, their labels and their open issues.
 
 It writes, when Escouade asks it to:

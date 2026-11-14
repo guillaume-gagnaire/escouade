@@ -243,6 +243,13 @@ pub enum UiEvent {
         project_id: String,
         numbers: Vec<u64>,
     },
+    /// A pull request read whole (ESC-452, `pr_contents`) changed, as the following of the pull
+    /// requests saw it: what the window shows of it is read again.
+    #[serde(rename_all = "camelCase")]
+    PrChanged {
+        project_id: String,
+        number: u64,
+    },
     /// Why no ticket of the project's board starts (its target branch has no commit yet, or is
     /// gone), or None once they may start again.
     /// A review of a pull request written by an agent, changed (ESC-66).

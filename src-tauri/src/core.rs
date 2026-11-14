@@ -1141,6 +1141,8 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) pr_lists: Mutex<HashMap<String, crate::prnews::PrList>>,
     /// The pull requests the tools read whole (ESC-68): an agent that asks again gets the same.
     pub(crate) pr_wholes: Mutex<HashMap<String, (Instant, crate::prview::PrWhole)>>,
+    /// The pull requests read whole (ESC-452), with what tells they changed.
+    pub(crate) pr_contents: Mutex<HashMap<String, crate::prread::Kept>>,
     /// The environments of the projects' hosts as last read (ESC-67), by project id; when the
     /// view « Environnements » of a project was last open; and whether a commit (the merge of a
     /// ticket) is in another (what runs in an environment), as git said it.
@@ -2193,6 +2195,7 @@ impl<R: Runtime> Core<R> {
             ticket_prs_wake: tokio::sync::Notify::new(),
             pr_lists: Mutex::default(),
             pr_wholes: Mutex::default(),
+            pr_contents: Mutex::default(),
             deploys: Mutex::default(),
             deploys_viewed: Mutex::default(),
             deploys_contains: Mutex::default(),

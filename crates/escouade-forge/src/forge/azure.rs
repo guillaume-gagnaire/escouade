@@ -100,6 +100,8 @@ impl Provider for AzureProvider {
             // Azure Pipelines' environments say nothing simple of a branch: none.
             deployments: false,
             rerun: true,
+            // Not read yet (PR-9): its client says `unsupported`.
+            reading: Reading::default(),
             merge_strategies: vec![
                 MergeStrategy::Merge,
                 MergeStrategy::Squash,

@@ -26,6 +26,8 @@ impl Provider for BitbucketProvider {
         Capabilities {
             pull_requests: true,
             rerun: false,
+            // Not read yet (PR-9): its client says `unsupported`.
+            reading: Reading::default(),
             draft: true,
             // No call merges once the checks pass (BCLOUD-22055, BCLOUD-22062): Escouade waits for the checks and
             // merges itself.

@@ -205,6 +205,9 @@ mod projectfile;
 #[cfg(test)]
 mod projectfile_tests;
 mod projectlogo;
+mod prread;
+#[cfg(test)]
+mod prread_tests;
 mod prreview;
 mod prview;
 #[cfg(test)]
@@ -855,6 +858,7 @@ pub fn run() {
                 commands::agent_git_sync,
                 commands::agent_pr_fix,
                 commands::agent_pr_detail,
+                commands::pr_contents,
                 commands::agent_pr_log,
                 commands::agent_pr_rerun,
                 commands::agent_no_pr,

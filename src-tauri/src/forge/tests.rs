@@ -183,6 +183,18 @@ fn each_host_says_its_word_and_what_it_can_do() {
     assert_eq!(r.get("github").unwrap().request_word(), "PR");
     assert!(!r.get("bitbucket").unwrap().capabilities().auto_merge);
     assert!(r.get("github").unwrap().capabilities().auto_merge);
+    // A pull request read whole (ESC-452): GitHub's alone so far, the others say they cannot.
+    assert_eq!(
+        r.get("github").unwrap().capabilities().reading,
+        crate::forge::Reading::ALL
+    );
+    for other in ["gitlab", "bitbucket", "gitea", "azure"] {
+        assert_eq!(
+            r.get(other).unwrap().capabilities().reading,
+            crate::forge::Reading::default(),
+            "{other}"
+        );
+    }
     assert!(r.get("bitbucket").unwrap().needs_email());
     assert_eq!(
         r.get("github").unwrap().token_page("https://github.com"),
