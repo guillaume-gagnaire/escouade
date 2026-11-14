@@ -25,7 +25,7 @@ Conçus le 2026-10-28 : `docs/OVERSEER.md`, maquettes dans `design/overseer/`.
 - [ ] La fondation commune : le cœur et l'interface sur deux machines, au lieu de l'IPC de Tauri dans un seul process.
 - [ ] Le mode serveur : Escouade sur un serveur, qui tourne jour et nuit, piloté par le client du poste.
 - [ ] Le téléphone : voir les agents qui attendent, répondre, envoyer un message, regarder le Kanban, ouvrir le serveur de dev d'un agent.
-- [ ] L'app mobile (iOS, Android), avec WireGuard intégré et des notifications push par un relais chiffré de bout en bout. Sa technique se choisit par l'étude ESC-445 (`docs/MOBILE-STUDY.md`, 2026-11-14) : elle recommande Capacitor, sur l'interface Svelte d'Escouade, et écarte Tauri 2 pour le téléphone. Décision de l'utilisateur à prendre.
+- [ ] L'app mobile (iOS, Android), avec WireGuard intégré et des notifications push par un relais chiffré de bout en bout. Sa technique se choisit par l'étude ESC-445 (`docs/MOBILE-STUDY.md`, 2026-11-14) : elle recommande Capacitor, sur l'interface Svelte d'Escouade, et écarte Tauri 2 pour le téléphone. **Décidé par l'utilisateur le 2026-11-14 : Capacitor**, et le chef d'escouade gère les déploiements sur les stores (App Store, Google Play). L'app vient après la fondation de l'API distante, dont elle est un client.
 - [ ] Plusieurs serveurs pilotés par un même Escouade, par exemple le travail et le perso : des espaces cloisonnés, comme dans Slack, avec les notifications de tous. Les règles d'une entreprise ne valent que pour son espace, sauf sur un poste qu'elle gère. Voir `docs/REMOTE.md`, « Plusieurs serveurs pilotés par un seul Escouade ».
 - [ ] Les agents sur le serveur en auto-hébergé : ressources par agent, connexion des harness sans navigateur, la machine comme appareil de l'équipe, l'isolement quand plusieurs personnes partagent un serveur.
 
@@ -54,7 +54,7 @@ Demandé le 2026-11-14 : le flux des PR de la 2.2 marche, mais son expérience n
 
 Demandé le 2026-11-14 : l'éditeur (CodeMirror 6, avec son arborescence et ses onglets à nous) est agréable, mais il n'a pas tout. Il n'a ni serveur de langage, ni extensions. Peut-on y mettre l'éditeur de VS Code, avec son arborescence, son code et ses onglets ?
 
-- [x] L'étude est faite (ESC-444, 2026-11-14, `docs/EDITOR-STUDY.md`, maquette sur la branche `study/esc-444`) : elle recommande la vue VS Code par monaco-vscode-api, d'abord sans Node (6 à 7 semaines d'agent), puis l'hôte Node par un serveur VSCodium téléchargé à la demande. Décision de l'utilisateur à prendre.
+- [x] L'étude est faite (ESC-444, 2026-11-14, `docs/EDITOR-STUDY.md`, maquette sur la branche `study/esc-444`) : elle recommande la vue VS Code par monaco-vscode-api, d'abord sans Node (6 à 7 semaines d'agent), puis l'hôte Node par un serveur VSCodium téléchargé à la demande. **Décidé par l'utilisateur le 2026-11-14 : la vue VS Code, avec l'hôte Node** : le Node du poste s'il est compatible, sinon un Node téléchargé à la demande. Les tickets suivent le tableau du §7 de l'étude (A1 à A8, puis N1 et N2).
 - [ ] (Pour mémoire, ce qu'elle visait) Une étude, avec une maquette qui tourne. La piste : `@codingame/monaco-vscode-api` (MIT), qui fait tourner les services du plan de travail de VS Code dans une page web, sans Electron : l'éditeur, les groupes d'onglets, l'explorateur, la recherche, les thèmes, les raccourcis et les extensions web. Il faut y brancher :
   - les fichiers, par le cœur Rust ;
   - les serveurs de langage, lancés par le cœur et reliés par `monaco-languageclient` ;
