@@ -24,8 +24,8 @@
     void (async () => {
       try {
         mod = await import('../../lib/vscode/workbench');
-        const { vscodeNodeHost } = await import('../../lib/vscode/flag');
-        await mod.workbench(project.id, { nodeHost: vscodeNodeHost });
+        const { vscodeFlags } = await import('../../lib/vscode/flag.svelte');
+        await mod.workbench(project.id, { nodeHost: vscodeFlags.nodeHost });
         if (!place.isConnected) return;
         // In a pane: a press on the workbench makes it active, a hover shows its ×, as anywhere in a pane.
         const pane = place.closest<HTMLElement>('[data-pane-key]');

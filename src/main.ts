@@ -33,3 +33,6 @@ markWebKit();
 const pages = new URLSearchParams(location.search).get('pages');
 if (pages) mount(PagesWindow, { target: document.getElementById('app')!, props: { projectId: pages } });
 else mount(App, { target: document.getElementById('app')! });
+
+// ESC-444 (study): the bench of the editors, when the app was started for it (ESCOUADE_VSCODE_STUDY).
+if (!pages) void import('./lib/vscode/study').then((m) => m.maybeRun());

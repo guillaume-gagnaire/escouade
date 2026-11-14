@@ -212,12 +212,12 @@ test('the VS Code view: files by the core, a language server, the theme, Open VS
     console.log(`ESC-444 install ${id}: ${s}${asked ? ` (asked: ${asked})` : ''}`);
     return s;
   };
-  for (const id of ['dracula-theme.theme-dracula', 'vscodevim.vim', 'tamasfe.even-better-toml']) expect(await install(id)).toBe('ok');
+  for (const id of ['dracula-theme.theme-dracula', 'tamasfe.even-better-toml']) expect(await install(id)).toBe('ok');
   type Ext = { id: string; activated: boolean; errors: string[]; browser: boolean; node: boolean };
   const exts = () => page.evaluate('globalThis.__escouadeVscode.extensions()') as Promise<Ext[]>;
   await expect
     .poll(async () => (await exts()).map((e) => e.id), { timeout: 60_000 })
-    .toEqual(expect.arrayContaining(['dracula-theme.theme-dracula', 'vscodevim.vim', 'tamasfe.even-better-toml']));
+    .toEqual(expect.arrayContaining(['dracula-theme.theme-dracula', 'tamasfe.even-better-toml']));
   // The theme of the extension is one of the workbench's, and can be put on; then Escouade's again.
   expect(await page.evaluate('globalThis.__escouadeVscode.colorThemes()')).toEqual(expect.arrayContaining(['Dracula Theme']));
   const editorBg = () =>
@@ -231,9 +231,6 @@ test('the VS Code view: files by the core, a language server, the theme, Open VS
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'vscode-dracula.png') });
   await vs(page, "await vscode.workspace.getConfiguration('workbench').update('colorTheme', 'Escouade', 1);");
   await expect.poll(editorBg).toBe(ours);
-  // Vim, a web extension: its code runs in the page's extension host (a web worker), activated at the start.
-  await expect.poll(async () => (await exts()).find((e) => e.id === 'vscodevim.vim')?.activated, { timeout: 60_000 }).toBe(true);
-  expect((await exts()).find((e) => e.id === 'vscodevim.vim')?.errors).toEqual([]);
   // Even Better TOML: its language is known, but its server (a worker of 35 MB) is not served by Open VSX: logged.
   await explorer.getByText('config.toml', { exact: true }).click();
   await expect
@@ -313,6 +310,40 @@ test('the VS Code view: files by the core, a language server, the theme, Open VS
   await expect.poll(() => laidOver(page, pane)).toBe(true);
   expect(await tabs(page)).toEqual(before);
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'vscode-pane-back.png') });
+
+  // Several columns of the editor. In the pane, VS Code's own groups of tabs side by side.
+  await vs(page, "await vscode.commands.executeCommand('workbench.action.splitEditorRight');");
+  await expect(wb.locator('.part.editor .editor-group-container')).toHaveCount(2);
+  if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'vscode-pane-split.png') });
+  await vs(page, "await vscode.commands.executeCommand('workbench.action.joinAllGroups');");
+  await expect(wb.locator('.part.editor .editor-group-container')).toHaveCount(1);
+  // Elsewhere in the page (another column), a code editor of its own on the same model: the same text, the same
+  // diagnostics, a change typed there is the tab's.
+  await page.evaluate(async () => {
+    const el = document.createElement('div');
+    el.id = 'esc444-second';
+    el.style.cssText = 'position:fixed;left:380px;top:120px;width:420px;height:240px;z-index:10;';
+    document.body.appendChild(el);
+    const s = (globalThis as unknown as { __escouadeVscode: { standaloneEditor(rel: string, el: HTMLElement): Promise<() => void> } })
+      .__escouadeVscode;
+    await s.standaloneEditor('src/app.ts', el);
+  });
+  const second = page.locator('#esc444-second');
+  await expect(second.locator('.view-lines')).toContainText('pas un nombre');
+  await expect(second.locator('.squiggly-error').first()).toBeVisible({ timeout: 30_000 });
+  await second.locator('.view-lines').click();
+  await page.keyboard.press('Control+Home');
+  await page.keyboard.type('// colonne 2');
+  await page.keyboard.press('Enter');
+  await expect(wb.locator('.tabs-container .tab.dirty .label-name')).toContainText(['app.ts']);
+  if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'vscode-second-editor.png') });
+  await vs(page, "await vscode.commands.executeCommand('workbench.action.files.revert');");
+
+  // Vim, a web extension, last (its keys would take what is typed above, in the second editor too): its code runs in
+  // the page's extension host (a web worker), activated at the start.
+  expect(await install('vscodevim.vim')).toBe('ok');
+  await expect.poll(async () => (await exts()).find((e) => e.id === 'vscodevim.vim')?.activated, { timeout: 60_000 }).toBe(true);
+  expect((await exts()).find((e) => e.id === 'vscodevim.vim')?.errors).toEqual([]);
 
   // The extension host never started again: nothing of the workbench was moved in the page.
   expect(await page.evaluate(() => (window as unknown as { esc444Boots?: number }).esc444Boots)).toBe(1);

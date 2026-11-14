@@ -83,6 +83,42 @@ struct Study {
     next: AtomicU32,
     servers: Mutex<HashMap<u32, mpsc::UnboundedSender<Option<String>>>>,
     host: Mutex<Option<tokio::process::Child>>,
+    /** Every program started (language servers, the extension host): ended with their children when the app ends. */
+    pids: Mutex<Vec<u32>>,
+}
+
+/** Its own process group (Linux, macOS), so that its children end with it. */
+fn own_group(cmd: &mut Command) {
+    #[cfg(unix)]
+    cmd.process_group(0);
+    #[cfg(not(unix))]
+    let _ = cmd;
+}
+
+/** Ends `pid` and the processes it started. */
+fn kill_tree(pid: u32) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = std::process::Command::new("taskkill")
+            .args(["/T", "/F", "/PID", &pid.to_string()])
+            .creation_flags(crate::proc::CREATE_NO_WINDOW)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+    #[cfg(unix)]
+    // SAFETY: a signal sent to a process group the study made (`own_group`).
+    unsafe {
+        libc::kill(-(pid as i32), libc::SIGTERM);
+    }
+}
+
+/** Ends every program the study started: called when the app ends (the statics are never dropped). */
+pub fn shutdown() {
+    for pid in std::mem::take(&mut *study().pids.lock()) {
+        kill_tree(pid);
+    }
 }
 
 fn study() -> &'static Study {
@@ -100,11 +136,13 @@ pub fn lsp_start<R: Runtime>(app: AppHandle<R>, name: &str, root: &Path) -> Resu
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .kill_on_drop(true);
+    own_group(&mut cmd);
     #[cfg(windows)]
     cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
     let mut child = cmd
         .spawn()
         .with_context(|| format!("starting {}", program.display()))?;
+    study().pids.lock().extend(child.id());
     let id = study().next.fetch_add(1, Ordering::Relaxed) + 1;
     let mut stdin = child.stdin.take().context("stdin")?;
     let stdout = child.stdout.take().context("stdout")?;
@@ -216,7 +254,9 @@ pub async fn host_start(data: &Path, log: Option<PathBuf>) -> Result<HostInfo> {
     }
     #[cfg(windows)]
     cmd.creation_flags(crate::proc::CREATE_NO_WINDOW);
+    own_group(&mut cmd);
     let child = cmd.spawn().context("starting the VS Code server")?;
+    study().pids.lock().extend(child.id());
     *study().host.lock() = Some(child);
     // Ready when it accepts a connection.
     for _ in 0..100 {

@@ -1010,6 +1010,8 @@ pub fn run() {
         .expect("error while building the application")
         .run(|app, event| match event {
             tauri::RunEvent::Exit => {
+                // ESC-444 (study): its language servers and its Node extension host end with the app.
+                vscodestudy::shutdown();
                 if let Some(core) = app.try_state::<Arc<Core>>() {
                     if !core.quitting.load(Ordering::Acquire) {
                         // macOS: Cmd+Q, the app menu's « Quitter Escouade » (`menus::app_menu`)

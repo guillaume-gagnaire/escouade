@@ -16,7 +16,7 @@
   import { devpages } from '../../lib/devpage.svelte';
   import EditorView from '../editor/EditorView.svelte';
   import VscodeView from '../editor/VscodeView.svelte';
-  import { vscodeEditor } from '../../lib/vscode/flag';
+  import { vscodeFlags } from '../../lib/vscode/flag.svelte';
   import Icon from '../Icon.svelte';
   import RunView from '../RunView.svelte';
   import SidePanel from '../SidePanel.svelte';
@@ -84,7 +84,7 @@
   {:else if pageOf}
     <DevPage agent={pageOf} />
   {:else if item.kind === 'editor'}
-    {#if vscodeEditor}
+    {#if vscodeFlags.editor}
       <VscodeView {project} />
     {:else}
       <EditorView {project} />

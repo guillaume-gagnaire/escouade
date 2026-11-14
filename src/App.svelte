@@ -33,7 +33,7 @@
   import DiffModal from './components/DiffModal.svelte';
   import EditorView from './components/editor/EditorView.svelte';
   import VscodeView from './components/editor/VscodeView.svelte';
-  import { vscodeEditor } from './lib/vscode/flag';
+  import { vscodeFlags } from './lib/vscode/flag.svelte';
   import QuickOpen from './components/QuickOpen.svelte';
   import SidePanel from './components/SidePanel.svelte';
   import SubagentView from './components/SubagentView.svelte';
@@ -245,7 +245,7 @@
             {/key}
           {:else if app.editorOn}
             {#key project.id}
-              {#if vscodeEditor}
+              {#if vscodeFlags.editor}
                 <VscodeView {project} />
               {:else}
                 <EditorView {project} />

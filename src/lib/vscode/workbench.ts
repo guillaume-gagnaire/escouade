@@ -379,6 +379,24 @@ export const coreTimings = () => fsProvider?.timings ?? [];
 /** Whether the workbench was started in this page. */
 export const started = () => !!host;
 
+/**
+ * A second column of the editor, without a second workbench: a code editor of its own in `el`, on the same model as the
+ * workbench's tab of `rel` (its text, its changes, its diagnostics, the theme are shared). It has no tabs nor tree of
+ * VS Code's: those would be Escouade's. Returns what closes it.
+ */
+export async function standaloneEditor(rel: string, el: HTMLElement, projectId = [...folders.keys()][0]) {
+  const monaco = await import('monaco-editor');
+  const root = folders.get(projectId);
+  if (!root) throw new Error('project not open');
+  const uri = vscode.Uri.from({ ...files, path: `${root}/${rel}` });
+  // The workbench's document: its model, the one the tab edits.
+  const doc = await vscode.workspace.openTextDocument(uri);
+  const model = monaco.editor.getModel(monaco.Uri.parse(doc.uri.toString()));
+  if (!model) throw new Error('no model');
+  const editor = monaco.editor.create(el, { model, automaticLayout: true, minimap: { enabled: false } });
+  return () => editor.dispose();
+}
+
 /** For the study's tests and bench: the extension API of the view, and what it measured. */
 (globalThis as Record<string, unknown>).__escouadeVscode = {
   vscode,
@@ -386,6 +404,7 @@ export const started = () => !!host;
   openFile,
   folderOf,
   coreTimings,
+  standaloneEditor,
   /** The extensions the workbench runs, in which host, activated or not, with their errors. */
   async extensions() {
     const service = await getService(IExtensionService);
