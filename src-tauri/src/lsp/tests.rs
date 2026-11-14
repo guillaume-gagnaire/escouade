@@ -1177,7 +1177,13 @@ async fn the_core_reads_the_project_file_and_keeps_the_trust_its_own() {
     .unwrap();
     h.core.read_shared(&p.id, false);
     let inputs = h.core.lsp_inputs(&p.id, None).await.unwrap();
-    assert_eq!(inputs.root, repo);
+    // The same folder, however Windows spells it: the CI's temporary folder has a short 8.3 name.
+    assert!(
+        crate::tickets::same_dir(&inputs.root.to_string_lossy(), &repo.to_string_lossy()),
+        "{} is not {}",
+        inputs.root.display(),
+        repo.display()
+    );
     assert!(!inputs.trusted);
     let rust = inputs
         .statuses()
