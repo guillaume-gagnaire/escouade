@@ -245,6 +245,8 @@ export default {
     commandsApplied: 'appliqué par Escouade : rien d’autre ne se lance, mais ce programme a tes droits',
     commandsNote: 'déclaré par le plugin : Escouade ne filtre pas ce que lance son programme',
     envApplied: 'appliqué par Escouade : aucune autre variable, et jamais celles qui changeraient le programme lancé',
+    harnessCommandNote: 'écrite par le plugin : Escouade l’affiche sans la lancer, lis-la avant de la coller dans un terminal',
+    harnessUnsetApplied: 'appliqué par Escouade : jamais le proxy, les autorités ni les variables qu’il pose lui-même',
     filesApplied: 'appliqué par Escouade : seulement les dossiers de l’agent, liens suivis, jamais un projet privé',
     networkNote: 'déclaré par le plugin : Escouade ne filtre pas encore son réseau',
     networkApplied: 'appliqué par Escouade : il ne joint aucun autre hôte, ni une adresse de ta machine ou de ton réseau local',
@@ -295,6 +297,7 @@ export default {
     cardPrivate: '{name} n’est pas activé pour ce projet privé : cet agent ne démarre pas et ne reçoit rien.',
     cardOff: '{name} est coupé pour ce projet : cet agent ne démarre pas et ne reçoit rien.',
     ticketWhy: 'Son harness, {name}, n’est pas activé pour ce projet.',
+    commandFrom: 'Commande donnée par le plugin {plugin}, pas par Escouade : lis-la avant de la lancer.',
   },
 
   settings: {
@@ -404,6 +407,9 @@ export default {
     harness: 'Lance pour ses agents ce programme de ton ordinateur, avec tes droits',
     commands: 'Lance cette commande sur ton ordinateur',
     env: 'Pose cette variable d’environnement sur ce qu’il lance',
+    harnessInstall: 'Donne la commande qui installe son harness',
+    harnessUpdate: 'Donne la commande qui met à jour son harness',
+    harnessUnset: 'Retire cette variable d’environnement de ce que lance son harness',
     filesRead: 'Lit les fichiers de tes agents',
     filesWrite: 'Écrit dans les dossiers de tes agents',
     filesHome: 'Lit le dossier de compte de tes agents',

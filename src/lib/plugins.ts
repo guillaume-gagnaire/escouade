@@ -287,6 +287,29 @@ export function askOf(word: string, m: Manifest | null, lang: string): Ask {
     case 'harness':
       // A harness it describes (PLG-6): the program of the user's machine its agents run, with its arguments.
       return { word, icon: 'term', text: t('plugins.ask.harness'), detail: what, strong: true, red: false };
+    case 'harnessInstall':
+    case 'harnessUpdate':
+      // What its harness's manifest says installs or updates it (SEC-30): the app shows it, said to come from the plugin.
+      return {
+        word,
+        icon: 'term',
+        text: t(kind === 'harnessInstall' ? 'plugins.ask.harnessInstall' : 'plugins.ask.harnessUpdate'),
+        detail: what,
+        strong: false,
+        red: false,
+        note: t('plugins.perms.harnessCommandNote'),
+      };
+    case 'harnessUnset':
+      // A variable its harness's launches take off: never the proxy nor the authorities Escouade gives (SEC-30).
+      return {
+        word,
+        icon: 'bash',
+        text: t('plugins.ask.harnessUnset'),
+        detail: what,
+        strong: false,
+        red: false,
+        note: t('plugins.perms.harnessUnsetApplied'),
+      };
     case 'commands':
       return {
         word,

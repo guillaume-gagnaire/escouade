@@ -298,6 +298,10 @@ pub struct EngineDecl {
     pub caps: EngineCaps,
     /// How to install it (« Aucun harness trouvé »).
     pub install: Install,
+    /// The plugin of anyone's that words that command (`Engine::commands_from`, SEC-30): the window says it comes from
+    /// it. None for the app's own.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub install_from: Option<String>,
     /// The models of the composer's menu, in its order.
     pub models: Vec<ModelDecl>,
     /// The efforts of the composer's menu, in its order (empty when `caps.effort` is false).
@@ -309,21 +313,26 @@ pub struct EngineDecl {
 }
 
 pub fn declared() -> Vec<EngineDecl> {
-    all()
-        .into_iter()
-        .map(|e| EngineDecl {
+    all().into_iter().map(EngineDecl::of).collect()
+}
+
+impl EngineDecl {
+    /// What `e` declares.
+    pub fn of(e: &dyn Engine) -> Self {
+        EngineDecl {
             id: e.id(),
             name: e.name(),
             speaker: e.speaker(),
             tested: e.tested(),
             caps: e.caps(),
             install: e.install(),
+            install_from: e.commands_from(),
             models: e.models(),
             efforts: e.efforts().to_vec(),
             writer: e.writer(super::Weight::Light),
             writer_takes_model: e.writer_takes_model(),
-        })
-        .collect()
+        }
+    }
 }
 
 /// The state of `engine`, from its program, its version and whether an account is signed in, and
@@ -364,6 +373,15 @@ pub fn too_old(lang: Lang, engine: &dyn Engine, found: &str) -> String {
     let found = Version::parse(found);
     let why = engine.oldest_reason(lang);
     let update = engine.update_command();
+    // A command a plugin of anyone's words is said to be its, not Escouade's (SEC-30).
+    let update = match engine.commands_from() {
+        Some(plugin) => tr_in!(
+            lang,
+            "commande donnée par le plugin {plugin}, pas par Escouade : {update}",
+            "a command given by the plugin {plugin}, not by Escouade: {update}"
+        ),
+        None => update.to_string(),
+    };
     tr_in!(
         lang,
         "{name} {found} est trop ancien pour Escouade, qui demande au moins la version {oldest} : {why}. Mets-le à jour ({update}).",

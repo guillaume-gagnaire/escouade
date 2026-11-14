@@ -44,6 +44,19 @@ describe('Welcome', () => {
     expect(screen.queryByRole('button', { name: /Ajouter un projet/ })).not.toBeInTheDocument();
   });
 
+  it('says the command of a harness of anyone’s plugin is that plugin’s, and Escouade’s own as before (SEC-30)', () => {
+    fakeBackend();
+    app.engines = [CLAUDE_ENGINE, { ...BARE_ENGINE, installFrom: 'dev.exemple.outil' }];
+    app.enginesFound = [];
+    render(Welcome);
+    const items = within(screen.getByRole('region', { name: 'Aucun harness trouvé' })).getAllByRole('listitem');
+    expect(
+      within(items[1]).getByText('Commande donnée par le plugin dev.exemple.outil, pas par Escouade : lis-la avant de la lancer.'),
+    ).toHaveAttribute('data-command-from', 'dev.exemple.outil');
+    expect(items[0].querySelector('[data-command-from]')).toBeNull();
+    expect(items[0]).not.toHaveTextContent('pas par Escouade');
+  });
+
   it('looks for the harnesses again, and opens Réglages › Comptes et harness', async () => {
     const backend = fakeBackend({ claude_found: () => ({ claudeFound: true, claudePathFound: true, enginesFound: ['claude'] }) });
     app.engines = [CLAUDE_ENGINE, BARE_ENGINE];

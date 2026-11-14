@@ -111,6 +111,22 @@ describe('the first agent of a private project on a harness (ESC-404)', () => {
     expect(b.called('create_agent')).toHaveLength(0);
   });
 
+  it('shows what else its harness says: the commands that install and update it, the variables it takes off (SEC-30)', async () => {
+    const outil = {
+      ...claudePlugin,
+      asks: ['harness:outil acp', 'harnessInstall:npm i -g outil', 'harnessUpdate:outil upgrade', 'harnessUnset:OUTIL_TOKEN'],
+    } as PluginView;
+    backend({ plugins_list: () => [outil] });
+    render(HarnessConsentModal, { projectId: 'p2', engine: 'claude', onEnabled: () => {} });
+    expect(await screen.findByText('outil acp')).toBeInTheDocument();
+    expect(screen.getByText('Donne la commande qui installe son harness')).toBeInTheDocument();
+    expect(screen.getByText('npm i -g outil')).toBeInTheDocument();
+    expect(screen.getByText('Donne la commande qui met à jour son harness')).toBeInTheDocument();
+    expect(screen.getByText('outil upgrade')).toBeInTheDocument();
+    expect(screen.getByText('Retire cette variable d’environnement de ce que lance son harness')).toBeInTheDocument();
+    expect(screen.getByText('OUTIL_TOKEN')).toBeInTheDocument();
+  });
+
   it('« Activer » turns its plugin on for the project, then the agent is made', async () => {
     app.harnessScope = { p2: { off: [], asks: ['claude'] } };
     const b = backend();

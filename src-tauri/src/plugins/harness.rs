@@ -707,8 +707,10 @@ impl ProcessEngine {
                 .map(|(k, _)| k.clone())
                 .collect(),
         };
-        let launch: proto::OneShotLaunch = self.call(method::ONE_SHOT, &params).await?;
-        check_env(self.name, &self.vars(), &launch.env).map_err(|e| anyhow!(e))?;
+        let mut launch: proto::OneShotLaunch = self.call(method::ONE_SHOT, &params).await?;
+        let vars = self.vars();
+        check_env(self.name, &vars, &launch.env).map_err(|e| anyhow!(e))?;
+        vars.hold_removed(self.name, &mut launch.remove_env);
         // Its files under the folder of the question alone.
         let home_text = home.map(|h| h.to_string_lossy().into_owned());
         for f in &launch.files {
@@ -771,7 +773,9 @@ impl ProcessEngine {
         let mut told: proto::TerminalLaunch = told?;
         crate::bypass::hold(&mut told.launch.args, bypass);
         self.check_told(&params, fence_by_core, &told.launch)?;
-        check_env(self.name, &self.vars(), &told.launch.env).map_err(|e| anyhow!(e))?;
+        let vars = self.vars();
+        check_env(self.name, &vars, &told.launch.env).map_err(|e| anyhow!(e))?;
+        vars.hold_removed(self.name, &mut told.launch.remove_env);
         Ok(told)
     }
 
@@ -857,7 +861,9 @@ impl ProcessEngine {
             };
             // A read never needs the mode of no question: whatever the setting, nothing opens it (ESC-429).
             crate::bypass::hold(&mut launch.args, false);
-            check_env(self.name, &self.vars(), &launch.env).map_err(|e| anyhow!(e))?;
+            let vars = self.vars();
+            check_env(self.name, &vars, &launch.env).map_err(|e| anyhow!(e))?;
+            vars.hold_removed(self.name, &mut launch.remove_env);
             for f in &launch.files {
                 check_file(self.name, Some(&dir.to_string_lossy()), &f.path)
                     .map_err(|e| anyhow!(e))?;
@@ -1162,6 +1168,28 @@ impl Vars {
         (!self.given.contains(&var) && !env_allowed(self.declared.as_deref(), var, hand))
             .then(|| undeclared_var(name, var))
     }
+
+    /// Keeps of `remove`, the variables a launch takes off its harness's environment, those it may (SEC-30): all for
+    /// Escouade's own hand; for anyone's, none it could not set (`procs::forbidden_var`, the families
+    /// `manifest::env_refused` names) nor any the core gives itself (the proxy and the file of authorities of the
+    /// settings, the account's variables, the hooks' address). The others stay, with a line in the log.
+    pub(crate) fn hold_removed(&self, name: &str, remove: &mut Vec<String>) {
+        if self.first_hand {
+            return;
+        }
+        remove.retain(|var| {
+            let refused = super::procs::forbidden_var(var)
+                || super::manifest::env_refused(var, super::manifest::Hand::Third)
+                || crate::model::EXTRA_CA_VARS
+                    .iter()
+                    .any(|v| v.eq_ignore_ascii_case(var))
+                || self.given.iter().any(|v| v.eq_ignore_ascii_case(var));
+            if refused {
+                log::warn!("{name}: its plugin may not take {var} off its environment, kept");
+            }
+            !refused
+        });
+    }
 }
 
 /// The variables a launch sets, judged by `vars`. Answers why it is refused.
@@ -1183,6 +1211,7 @@ pub(crate) fn next_launch(
 ) -> Result<proto::Launch> {
     check_env(name, vars, &launch.env).map_err(|e| anyhow!(e))?;
     let mut launch = launch.clone();
+    vars.hold_removed(name, &mut launch.remove_env);
     crate::bypass::hold(&mut launch.args, bypass);
     Ok(launch)
 }
@@ -1407,6 +1436,9 @@ impl Engine for ProcessEngine {
     }
     fn update_command(&self) -> &'static str {
         self.update_command
+    }
+    fn commands_from(&self) -> Option<String> {
+        (!self.first_hand).then(|| self.owner.clone())
     }
     fn version_args(&self) -> &'static [&'static str] {
         self.version_args
@@ -2109,6 +2141,7 @@ impl ProcessEngineProcess {
         )
         .map_err(|e| anyhow!(e))?;
         check_env(self.name, &self.vars, &launch.env).map_err(|e| anyhow!(e))?;
+        self.vars.hold_removed(self.name, &mut launch.remove_env);
         {
             let mut a = self.attach.lock();
             a.home = home.clone();

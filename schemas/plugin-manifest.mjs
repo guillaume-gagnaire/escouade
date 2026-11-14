@@ -131,6 +131,7 @@ const ENV_EXACT = [
   'BROWSER',
   'CURL_CA_BUNDLE',
   'REQUESTS_CA_BUNDLE',
+  'CODEX_CA_CERTIFICATE',
 ];
 const ENV_PREFIXES = ['ESCOUADE_', 'LD_', 'DYLD_', 'PYTHON', 'RUBY', 'PERL', 'NODE_', 'NPM_CONFIG_', 'SSL_', 'XDG_'];
 
@@ -470,7 +471,8 @@ export function validate(manifest, options = {}) {
           const a = string(it.account, p);
           if (a !== null && !accounts.includes(a)) problem(p, 'account');
         }
-        // A harness of anyone's (ESC-424): no shell nor interpreter as its program, no variable Escouade refuses.
+        // A harness of anyone's (ESC-424): no shell nor interpreter as its program, no variable Escouade refuses, set or
+        // taken off (SEC-30).
         if (point === 'harnesses' && !firstParty) {
           for (const [at, it] of list) {
             const names = isObject(it.locate) && Array.isArray(it.locate.names) ? it.locate.names : [];
@@ -481,6 +483,11 @@ export function validate(manifest, options = {}) {
             else if (typeof it.id === 'string' && interpreter(it.id)) problem(join(at, 'id'), 'interpreter');
             if (isObject(it.acp) && isObject(it.acp.env))
               for (const k of Object.keys(it.acp.env)) if (envRefused(k)) problem(join(join(at, 'acp.env'), k), 'variable');
+            // The variables it takes off its launch, judged as those it sets (SEC-30).
+            if (isObject(it.acp) && Array.isArray(it.acp.removeEnv))
+              it.acp.removeEnv.forEach((k, i) => {
+                if (typeof k === 'string' && envRefused(k)) problem(`${at}.acp.removeEnv[${i}]`, 'variable');
+              });
             for (const key of ['accountVar', 'keyVar'])
               if (typeof it[key] === 'string' && envRefused(it[key])) problem(join(at, key), 'variable');
           }

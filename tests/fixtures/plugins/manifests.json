@@ -1509,7 +1509,7 @@
       "ignored": []
     },
     {
-      "name": "a harness of anyone runs no shell nor interpreter, and sets no refused variable (ESC-424)",
+      "name": "a harness of anyone runs no shell nor interpreter, and sets nor takes off no refused variable (ESC-424, SEC-30)",
       "manifest": {
         "id": "dev.exemple.outil",
         "name": "Outil",
@@ -1531,7 +1531,8 @@
                 "env": {
                   "OUTIL_MODE": "acp",
                   "GIT_SSH_COMMAND": "x"
-                }
+                },
+                "removeEnv": ["OUTIL_TOKEN", "HTTPS_PROXY", "no_proxy", "NODE_EXTRA_CA_CERTS", "CODEX_CA_CERTIFICATE", "SSL_CERT_FILE"]
               },
               "accountVar": "HOME"
             },
@@ -1550,6 +1551,11 @@
         "contributes.harnesses[0].locate.names[2] interpreter",
         "contributes.harnesses[0].locate.names[3] interpreter",
         "contributes.harnesses[0].acp.env.GIT_SSH_COMMAND variable",
+        "contributes.harnesses[0].acp.removeEnv[1] variable",
+        "contributes.harnesses[0].acp.removeEnv[2] variable",
+        "contributes.harnesses[0].acp.removeEnv[3] variable",
+        "contributes.harnesses[0].acp.removeEnv[4] variable",
+        "contributes.harnesses[0].acp.removeEnv[5] variable",
         "contributes.harnesses[0].accountVar variable",
         "contributes.harnesses[1].id interpreter"
       ],

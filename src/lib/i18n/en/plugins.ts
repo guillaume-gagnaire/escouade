@@ -246,6 +246,8 @@ export default defineZone('plugins', {
     commandsApplied: 'enforced by Escouade: nothing else runs, but this program has your rights',
     commandsNote: 'declared by the plugin: Escouade does not filter what its program runs',
     envApplied: 'enforced by Escouade: no other variable, and never one that would change the program run',
+    harnessCommandNote: 'written by the plugin: Escouade shows it without running it, read it before pasting it in a terminal',
+    harnessUnsetApplied: 'enforced by Escouade: never the proxy, the authorities nor the variables it sets itself',
     filesApplied: 'enforced by Escouade: the agent’s folders only, links followed, never a private project',
     networkNote: 'declared by the plugin: Escouade does not filter its network yet',
     networkApplied: 'enforced by Escouade: it reaches no other host, nor an address of your machine or local network',
@@ -295,6 +297,7 @@ export default defineZone('plugins', {
     cardPrivate: '{name} is not turned on for this private project: this agent does not start and gets nothing.',
     cardOff: '{name} is off for this project: this agent does not start and gets nothing.',
     ticketWhy: 'Its harness, {name}, is not turned on for this project.',
+    commandFrom: 'A command given by the plugin {plugin}, not by Escouade: read it before running it.',
   },
 
   settings: {
@@ -402,6 +405,9 @@ export default defineZone('plugins', {
     harness: 'Runs this program of your computer for its agents, with your rights',
     commands: 'Runs this command on your computer',
     env: 'Sets this environment variable on what it runs',
+    harnessInstall: 'Gives the command that installs its harness',
+    harnessUpdate: 'Gives the command that updates its harness',
+    harnessUnset: 'Takes this environment variable off what its harness runs',
     filesRead: 'Reads your agents’ files',
     filesWrite: 'Writes in your agents’ folders',
     filesHome: 'Reads your agents’ account folder',

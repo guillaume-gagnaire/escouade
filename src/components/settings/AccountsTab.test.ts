@@ -811,6 +811,23 @@ describe('AccountsTab with two harnesses (ESC-30)', () => {
     expect(within(bare).queryByRole('button', { name: /Ajouter un compte/ })).toBeNull();
   });
 
+  it('says the command that installs a harness of anyone’s plugin is that plugin’s, not Escouade’s (SEC-30)', async () => {
+    app.engines = [CLAUDE_ENGINE, { ...BARE_ENGINE, installFrom: 'dev.exemple.outil' }];
+    app.enginesFound = ['claude'];
+    const info = (e: typeof BARE_ENGINE, state: string) => ({ ...e, located: { path: null }, version: null, state, note: null });
+    fakeBackend({
+      account_status: statuses,
+      save_settings: () => [],
+      engines: () => [info(CLAUDE_ENGINE, 'ready'), info({ ...BARE_ENGINE, installFrom: 'dev.exemple.outil' }, 'absent')],
+    });
+    render(SettingsModal, { page: 'accounts' });
+    const bare = screen.getByRole('region', { name: 'Harness nu' });
+    const from = await within(bare).findByText(/Commande donnée par le plugin dev.exemple.outil, pas par Escouade/);
+    expect(from).toHaveAttribute('data-command-from', 'dev.exemple.outil');
+    expect(within(bare).getByLabelText('Installation')).toHaveTextContent('npm install -g @openai/codex');
+    expect(within(screen.getByRole('region', { name: 'Claude Code' })).queryByText(/pas par Escouade/)).toBeNull();
+  });
+
   // ESC-407: the page lists only the harnesses an installed plugin brings; one is installed in Réglages › Plugins or on the
   // home screen, never here.
   it('offers no harness the seed holds that is not installed, and keeps the accounts of one whose plugin is gone', async () => {

@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Sécurité : l’installation d’un plugin montre aussi les commandes qui installent et mettent à jour son harness, et les variables qu’il retire de son lancement. Celles d’un plugin tiers sont dites venir de lui partout où Escouade les affiche, et il ne peut plus retirer le proxy ni les certificats que tu as réglés.
 - Deux lectures des workflows d’un projet au même moment ne laissent plus la fenêtre sans workflow. Un ticket bloqué parce que son harness est coupé pour le projet garde cette raison quand le tour de son agent finit après.
 - Sécurité : dans « Tout mettre à jour », une version que personne n’a relue, ou un plugin venu d’un dépôt ou d’un dossier, a sa propre fenêtre, avec son avertissement ; la fenêtre commune ne garde que des versions vérifiées qui n’ajoutent rien.
 - Sécurité : un plugin chargé en développement, depuis un dossier ou un dépôt n’a jamais les droits des plugins d’Escouade, quel que soit son identifiant. « Ignorer la vérification des certificats » ne vaut plus que pour une connexion qui passe vraiment par le proxy, même quand ses exclusions s’écrivent en plage d’adresses.

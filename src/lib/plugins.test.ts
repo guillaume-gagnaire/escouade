@@ -43,3 +43,23 @@ describe('the variables a plugin sets', () => {
     expect(ask.note).toContain('aucune autre variable');
   });
 });
+
+// What else a harness's manifest says (SEC-30): its commands, shown as written by the plugin, and the variables it takes off.
+describe('what a harness of a plugin says beside what it runs', () => {
+  it('shows the commands that install and update it, said to be written by the plugin', () => {
+    const install = askOf('harnessInstall:npm install -g outil', null, 'fr');
+    expect(install.text).toBe('Donne la commande qui installe son harness');
+    expect(install.detail).toBe('npm install -g outil');
+    expect(install.note).toContain('écrite par le plugin');
+    const update = askOf('harnessUpdate:outil upgrade: --yes', null, 'fr');
+    expect(update.text).toBe('Donne la commande qui met à jour son harness');
+    expect(update.detail).toBe('outil upgrade: --yes');
+  });
+
+  it('names each variable it takes off, never the proxy nor the authorities Escouade gives', () => {
+    const unset = askOf('harnessUnset:OUTIL_TOKEN', null, 'fr');
+    expect(unset.text).toBe('Retire cette variable d’environnement de ce que lance son harness');
+    expect(unset.detail).toBe('OUTIL_TOKEN');
+    expect(unset.note).toContain('jamais le proxy');
+  });
+});

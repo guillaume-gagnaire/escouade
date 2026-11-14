@@ -80,6 +80,10 @@
                 use:tip={t('shell.welcome.copy', { harness: e.name })}
                 onclick={() => copy(install(e))}><Icon name="import" size={14} /></button
               >
+              {#if e.installFrom}
+                <!-- Worded by a plugin of anyone's, not by Escouade (SEC-30). -->
+                <small class="from" data-command-from={e.installFrom}>{t('plugins.harness.commandFrom', { plugin: e.installFrom })}</small>
+              {/if}
             </li>
           {/each}
         </ul>
@@ -182,6 +186,12 @@
   }
   .name {
     font-weight: 600;
+  }
+  .from {
+    grid-column: 2 / -1;
+    margin-top: -8px;
+    color: var(--warn-ink);
+    font-size: 12px;
   }
   .cmd {
     padding: 6px 9px;

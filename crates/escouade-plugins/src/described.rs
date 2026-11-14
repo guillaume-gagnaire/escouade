@@ -48,3 +48,28 @@ pub fn described_lines(decl: &proto::HarnessDecl) -> Vec<String> {
     }
     out
 }
+
+/// What else the harness `decl` says the user would not see run (SEC-30), as the installation shows it (`plugins::asks`):
+/// the commands that install and update it, which the app then shows (`harnessInstall:<command>`, once if the same on every
+/// system, `harnessUpdate:<command>`), and the variables a launch of its takes off its environment
+/// (`harnessUnset:<variable>`, those of its description: a harness with code says its own at each launch).
+pub fn told_words(decl: &proto::HarnessDecl) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Some(i) = &decl.install {
+        for c in [&i.windows, &i.unix] {
+            let word = format!("harnessInstall:{}", c.trim());
+            if !c.trim().is_empty() && !out.contains(&word) {
+                out.push(word);
+            }
+        }
+    }
+    if let Some(u) = decl.update_command.as_deref().map(str::trim) {
+        if !u.is_empty() {
+            out.push(format!("harnessUpdate:{u}"));
+        }
+    }
+    if let Some(acp) = &decl.acp {
+        out.extend(acp.remove_env.iter().map(|v| format!("harnessUnset:{v}")));
+    }
+    out
+}

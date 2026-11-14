@@ -517,6 +517,7 @@ pub fn env_refused(name: &str, hand: Hand) -> bool {
                 | "BROWSER"
                 | "CURL_CA_BUNDLE"
                 | "REQUESTS_CA_BUNDLE"
+                | "CODEX_CA_CERTIFICATE"
         )
 }
 
@@ -1460,7 +1461,8 @@ impl Checker {
 
     /// The objects of the list of an extension point.
     /// A harness of anyone's (ESC-424): its program (`locate.names`, else its id) no shell nor interpreter, and the
-    /// variables it sets (`acp.env`, `accountVar`, `keyVar`) none that Escouade refuses a plugin.
+    /// variables it sets (`acp.env`, `accountVar`, `keyVar`) and those it takes off (`acp.removeEnv`, SEC-30) none that
+    /// Escouade refuses a plugin: taking off the proxy or the authorities the core gives is as much as setting others.
     fn harness_of_anyone(&mut self, at: &str, item: &Map<String, Value>) {
         let names = item
             .get("locate")
@@ -1492,6 +1494,17 @@ impl Checker {
             for k in env.keys() {
                 if env_refused(k, Hand::Third) {
                     self.problem(&join(&join(at, "acp.env"), k), Code::Variable);
+                }
+            }
+        }
+        if let Some(removed) = item
+            .get("acp")
+            .and_then(|a| a.get("removeEnv"))
+            .and_then(Value::as_array)
+        {
+            for (i, k) in removed.iter().enumerate() {
+                if k.as_str().is_some_and(|k| env_refused(k, Hand::Third)) {
+                    self.problem(&format!("{at}.acp.removeEnv[{i}]"), Code::Variable);
                 }
             }
         }

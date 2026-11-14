@@ -25,7 +25,17 @@ if (argv.includes('--version')) {
 const logFile = process.env.FAKE_ACP_LOG;
 const log = (entry) => logFile && fs.appendFileSync(logFile, JSON.stringify(entry) + '\n');
 const home = process.env.FAKE_ACP_HOME || path.join(process.cwd(), '.fake-acp');
-log({ launch: { argv, cwd: process.cwd(), home: process.env.FAKE_ACP_HOME ?? null } });
+// What it was given of the network's settings and of a plain variable (SEC-30: what a launch takes off).
+log({
+  launch: {
+    argv,
+    cwd: process.cwd(),
+    home: process.env.FAKE_ACP_HOME ?? null,
+    proxy: process.env.HTTPS_PROXY ?? null,
+    authorities: process.env.NODE_EXTRA_CA_CERTS ?? null,
+    plain: process.env.FAKE_ACP_PLAIN ?? null,
+  },
+});
 const sessionsDir = path.join(home, 'sessions');
 fs.mkdirSync(sessionsDir, { recursive: true });
 

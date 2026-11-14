@@ -412,6 +412,12 @@ pub trait Engine: Send + Sync {
     fn oldest_reason(&self, lang: crate::i18n::Lang) -> String;
     /// The command that updates it, as the refusal tells it.
     fn update_command(&self) -> &'static str;
+    /// The plugin of anyone's whose manifest words its commands that install and update it (`install`,
+    /// `update_command`), by its id: wherever the app shows them it says so, not as its own (SEC-30). None for a harness of
+    /// the app or of a plugin of Escouade's own hand.
+    fn commands_from(&self) -> Option<String> {
+        None
+    }
     /// The arguments that make its program print its version.
     fn version_args(&self) -> &'static [&'static str];
     /// Whether its version is asked only once the user acted on it (`registry::gesture`): a harness a plugin of anyone's

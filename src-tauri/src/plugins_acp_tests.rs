@@ -889,14 +889,34 @@ fn third_party_manifest(change: impl FnOnce(&mut Value)) -> crate::plugins::mani
 }
 
 /// What runs is what the user was shown before installing, as `permissions.commands` shows each command: every name the
-/// program may be found by, its variables, and what asks its version, which runs with no agent.
+/// program may be found by, its variables, and what asks its version, which runs with no agent; and what else its
+/// manifest says (SEC-30): the commands that install and update it, the variables it takes off.
 #[test]
 fn the_installation_shows_all_that_a_description_runs() {
     let plain = crate::plugins::asks(&third_party_manifest(|_| {}));
     assert_eq!(
         plain,
-        ["harness:fake-acp acp"],
+        [
+            "harness:fake-acp acp",
+            "harnessInstall:npm install -g fake-acp"
+        ],
         "nothing more for the plain one"
+    );
+    let told = crate::plugins::asks(&third_party_manifest(|h| {
+        h["install"] =
+            json!({ "windows": "winget install fake-acp", "unix": "brew install fake-acp" });
+        h["updateCommand"] = json!("fake-acp upgrade");
+        h["acp"]["removeEnv"] = json!(["FAKE_ACP_TOKEN"]);
+    }));
+    assert_eq!(
+        told,
+        [
+            "harness:fake-acp acp",
+            "harnessInstall:winget install fake-acp",
+            "harnessInstall:brew install fake-acp",
+            "harnessUpdate:fake-acp upgrade",
+            "harnessUnset:FAKE_ACP_TOKEN",
+        ]
     );
     let asks = crate::plugins::asks(&third_party_manifest(|h| {
         h["locate"]["names"] = json!(["fake-acp", "faux"]);
@@ -1494,4 +1514,241 @@ async fn the_version_of_a_third_party_harness_is_asked_after_a_gesture_alone() {
     );
     assert!(!first.version_waits_gesture());
     rt.shutdown();
+}
+
+/// SEC-30: what a launch of anyone's plugin takes off its harness's environment is held to what it could set: never a
+/// family refused it (the proxy, the authorities, `ESCOUADE_*`…) nor a variable the core gives itself (the account's, the
+/// hooks' address); Escouade's own hand takes off what it says (Copilot CLI, its tokens).
+#[test]
+fn a_launch_of_anyone_takes_off_nothing_the_core_gives_nor_a_refused_family() {
+    let named = || -> Vec<String> {
+        [
+            "OUTIL_TOKEN",
+            "HTTPS_PROXY",
+            "https_proxy",
+            "NO_PROXY",
+            "NODE_EXTRA_CA_CERTS",
+            "CODEX_CA_CERTIFICATE",
+            "SSL_CERT_FILE",
+            "OUTIL_HOME",
+            "ESCOUADE_HOOKS_URL",
+            "LD_PRELOAD",
+        ]
+        .iter()
+        .map(|v| v.to_string())
+        .collect()
+    };
+    let third = harness::Vars {
+        first_hand: false,
+        declared: Some(Vec::new()),
+        given: vec!["OUTIL_HOME"],
+    };
+    let mut removed = named();
+    third.hold_removed("Outil", &mut removed);
+    assert_eq!(removed, ["OUTIL_TOKEN"]);
+    let own = harness::Vars {
+        first_hand: true,
+        declared: None,
+        given: vec!["OUTIL_HOME"],
+    };
+    let mut removed = named();
+    own.hold_removed("Copilot CLI", &mut removed);
+    assert_eq!(removed, named());
+    // Its next program as its first.
+    let launch = proto::Launch {
+        remove_env: named(),
+        ..proto::Launch::default()
+    };
+    let next = harness::next_launch("Outil", &third, &launch, false).unwrap();
+    assert_eq!(next.remove_env, ["OUTIL_TOKEN"]);
+}
+
+/// SEC-30: a third party's description that names the proxy, the authorities and the account's variable in its
+/// `removeEnv` (a manifest the core did not check) still runs its harness with them; its plain variable goes. The first
+/// hand takes off all it names.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_harness_of_anyone_keeps_the_proxy_and_the_authorities_escouade_gives() {
+    let (rt, _, _) = runtime("tiers-retrait");
+    for (owner, kept) in [(OWNER, true), ("dev.escouade.goose", false)] {
+        let mut decl = fake_manifest()["contributes"]["harnesses"][0].clone();
+        decl["acp"]["removeEnv"] = json!([
+            "HTTPS_PROXY",
+            "NODE_EXTRA_CA_CERTS",
+            "FAKE_ACP_HOME",
+            "FAKE_ACP_PLAIN"
+        ]);
+        let engine = described(&rt, owner, decl);
+        let dir = bench_dir(&format!("plg6-tiers-retrait-{kept}"));
+        let mut a = Driven::spawn_with(engine, &dir, |s| {
+            s.env.extend([
+                ("HTTPS_PROXY".into(), "http://proxy.invalid:3128".into()),
+                ("NODE_EXTRA_CA_CERTS".into(), "C:/ca.pem".into()),
+                ("FAKE_ACP_PLAIN".into(), "oui".into()),
+            ]);
+        });
+        let end = a.turn("bonjour").await;
+        assert!(matches!(end, TurnEnd::Finished(_)), "{owner}: {end:?}");
+        let logged = a.logged();
+        let launch = logged
+            .iter()
+            .find_map(|e| e.get("launch"))
+            .unwrap_or_else(|| panic!("{owner}: no launch in {logged:?}"))
+            .clone();
+        let has = |k: &str| launch[k].is_string();
+        assert_eq!(has("proxy"), kept, "{owner}: {launch}");
+        assert_eq!(has("authorities"), kept, "{owner}: {launch}");
+        assert_eq!(has("home"), kept, "{owner}: {launch}");
+        assert!(
+            !has("plain"),
+            "{owner}: its own variable is taken off: {launch}"
+        );
+        a.stop().await;
+    }
+    rt.shutdown();
+}
+
+/// SEC-30: the commands that install and update a harness of anyone's are said to come from its plugin, by its id,
+/// wherever the app shows them (the window's declaration, the refusal of a version too old); the first hand's are said
+/// as before.
+#[test]
+fn the_commands_of_a_third_party_harness_are_said_to_be_its_plugins() {
+    let (rt, _, _) = runtime("tiers-commandes");
+    let mut decl = fake_manifest()["contributes"]["harnesses"][0].clone();
+    decl["updateCommand"] = json!("npm install -g fake-acp@latest");
+    let third = described(&rt, OWNER, decl.clone());
+    assert_eq!(third.commands_from().as_deref(), Some(OWNER));
+    assert_eq!(
+        crate::engine::registry::EngineDecl::of(third)
+            .install_from
+            .as_deref(),
+        Some(OWNER)
+    );
+    let said = crate::engine::registry::too_old(crate::i18n::Lang::Fr, third, "0.9.0");
+    assert!(
+        said.contains(&format!(
+            "commande donnée par le plugin {OWNER}, pas par Escouade : npm install -g fake-acp@latest"
+        )),
+        "{said}"
+    );
+    let said = crate::engine::registry::too_old(crate::i18n::Lang::En, third, "0.9.0");
+    assert!(
+        said.contains(&format!("the plugin {OWNER}, not by Escouade")),
+        "{said}"
+    );
+    let own = described(&rt, "dev.escouade.goose", decl);
+    assert_eq!(own.commands_from(), None);
+    assert_eq!(
+        crate::engine::registry::EngineDecl::of(own).install_from,
+        None
+    );
+    let said = crate::engine::registry::too_old(crate::i18n::Lang::Fr, own, "0.9.0");
+    assert!(
+        said.ends_with("Mets-le à jour (npm install -g fake-acp@latest)."),
+        "{said}"
+    );
+    rt.shutdown();
+}
+
+/// W-32 of the audit of 2026-11 (ESC-418, SEC-30), turned around: the manifest of anyone's plugin that takes the proxy
+/// and the authorities off its harness is refused, each with the reason of the same variable set; what the installation
+/// shows of the harness says its two commands and the variables it takes off; the app says those commands are its
+/// plugin's; and a launch that names the proxy among what it takes off keeps the proxy of the settings.
+#[test]
+fn w_32_what_a_described_harness_words_is_shown_and_judged() {
+    use crate::plugins::manifest::{self, Hand};
+    let install = "AUDIT-POC: a line to paste in a terminal";
+    let update = "AUDIT-POC: another line to paste";
+    let taken_off = [
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "NO_PROXY",
+        "NODE_EXTRA_CA_CERTS",
+        "SSL_CERT_FILE",
+    ];
+    let manifest_of = |acp: Value| {
+        json!({
+            "id": "dev.exemple.audit",
+            "name": "Audit",
+            "version": "1.0.0",
+            "escouade": { "api": "1", "min": "2.2.0" },
+            "contributes": { "harnesses": [{
+                "id": "audit",
+                "name": "Audit",
+                "locate": { "names": ["audit-poc-harness-that-is-not-installed"] },
+                "tested": { "oldest": "9.0.0", "newest": "9.0.0" },
+                "install": { "windows": install, "unix": install },
+                "updateCommand": update,
+                "acp": acp,
+            }] },
+        })
+    };
+    // 1. Refused to a third party, each variable at its place and for the reason of the same one set.
+    let with = manifest_of(json!({ "args": ["acp"], "removeEnv": taken_off }));
+    let problems = manifest::check(&with, Hand::Third)
+        .manifest
+        .expect_err("the manifest that takes the proxy off is refused");
+    let said = format!("{problems:?}");
+    for (i, name) in taken_off.iter().enumerate() {
+        assert!(
+            said.contains(&format!("contributes.harnesses[0].acp.removeEnv[{i}]")),
+            "{name}: {said}"
+        );
+        let set = manifest_of(json!({ "args": ["acp"], "env": { *name: "x" } }));
+        let set = format!("{:?}", manifest::check(&set, Hand::Third).manifest.err());
+        assert!(set.contains("Variable"), "{name}: {set}");
+    }
+    assert!(said.contains("Variable"), "{said}");
+    // A plain variable taken off holds, and the first hand is not judged.
+    let plain = manifest_of(json!({ "args": ["acp"], "removeEnv": ["AUDIT_TOKEN"] }));
+    let m = manifest::check(&plain, Hand::Third).manifest.unwrap();
+    assert!(manifest::check(&with, Hand::First).manifest.is_ok());
+    // 2. The installation shows its two commands and what it takes off, with what it runs.
+    let asks = crate::plugins::asks(&m);
+    for word in [
+        format!("harnessInstall:{install}"),
+        format!("harnessUpdate:{update}"),
+        "harnessUnset:AUDIT_TOKEN".to_string(),
+        "harness:audit-poc-harness-that-is-not-installed acp".to_string(),
+    ] {
+        assert!(asks.contains(&word), "{word} in {asks:?}");
+    }
+    assert_eq!(
+        asks.iter()
+            .filter(|w| w.starts_with("harnessInstall:"))
+            .count(),
+        1,
+        "the same command on every system, once: {asks:?}"
+    );
+    assert!(!crate::plugins::revocable(&format!(
+        "harnessInstall:{install}"
+    )));
+    // 3. The app says those commands are its plugin's.
+    let decl = harness::harnesses_of(&m.contributes).remove(0);
+    let (rt, _, _) = runtime("w32");
+    let engine: &'static ProcessEngine = Box::leak(Box::new(ProcessEngine::described(
+        rt.clone(),
+        "dev.exemple.audit",
+        decl,
+    )));
+    let told = engine.install();
+    assert_eq!((told.windows, told.unix), (install, install));
+    let declared = crate::engine::registry::EngineDecl::of(engine);
+    assert_eq!(declared.install_from.as_deref(), Some("dev.exemple.audit"));
+    let too_old = crate::engine::registry::too_old(crate::i18n::Lang::En, engine, "1.0.0");
+    assert!(
+        too_old.contains(&format!(
+            "a command given by the plugin dev.exemple.audit, not by Escouade: {update}"
+        )),
+        "{too_old}"
+    );
+    rt.shutdown();
+    // 4. A launch that names the proxy and the authorities keeps those of the settings.
+    let vars = harness::Vars {
+        first_hand: false,
+        declared: Some(Vec::new()),
+        given: Vec::new(),
+    };
+    let mut removed: Vec<String> = taken_off.iter().map(|v| v.to_string()).collect();
+    vars.hold_removed("Audit", &mut removed);
+    assert!(removed.is_empty(), "{removed:?}");
 }

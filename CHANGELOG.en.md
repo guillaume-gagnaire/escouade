@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Security: installing a plugin also shows the commands that install and update its harness, and the variables it takes off its launch. Those of a third-party plugin are said to come from it wherever Escouade shows them, and it can no longer take off the proxy or the certificates you set.
 - Two readings of a project’s workflows at the same time no longer leave the window with no workflow. A ticket blocked because its harness is cut for the project keeps that reason when its agent’s turn ends afterwards.
 - Security: in “Update all”, a version nobody reviewed, or a plugin from a repository or a folder, gets its own window, with its warning; the shared window holds only verified versions that add nothing.
 - Security: a plugin loaded in development, from a folder or from a repository never has the rights of Escouade’s own plugins, whatever its id. The “Skip verification” box now holds only for a connection that really goes through the proxy, even when its exclusions are written as a range of addresses.

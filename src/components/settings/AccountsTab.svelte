@@ -493,6 +493,12 @@
     {#if absent && decl}
       <!-- Claude Code's says whether its installation was cut half-way, with its repair (ESC-133). -->
       <p class="hnote">{(info?.state === 'absent' && info.note) || t('settings.claude.installDesc')}</p>
+      {#if decl.installFrom}
+        <!-- Worded by a plugin of anyone's, not by Escouade (SEC-30). -->
+        <p class="hnote warn" data-command-from={decl.installFrom}>
+          {t('plugins.harness.commandFrom', { plugin: decl.installFrom })}
+        </p>
+      {/if}
     {/if}
     {#if !list.length}
       <!-- A harness installed without an account (ESC-128): nothing starts on it until one is added. -->

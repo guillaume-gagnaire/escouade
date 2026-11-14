@@ -774,6 +774,8 @@ export interface EngineDecl {
   caps: EngineCaps;
   /** The command that installs it, on Windows and elsewhere (« Aucun harness trouvé »). */
   install: { windows: string; unix: string };
+  /** The plugin of anyone's whose manifest gives that command, by its id (SEC-30): the window says it is its, not Escouade's. */
+  installFrom?: string;
   /** The models of the composer's menu, in its order. */
   models: ModelDecl[];
   /** The efforts of the composer's menu, in its order (empty without `caps.effort`). */

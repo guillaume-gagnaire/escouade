@@ -1,9 +1,9 @@
 ---
 title: "Les harness ACP décrits"
 subject: "plugins"
-sources: ["docs/PLUGINS-DESIGN.md §1.1, §4.4, §4.12, §8.27, §8.31","docs/TODO-2.2.md, PLG-6","Essai réel de Goose 1.57.0 sur Ollama, 2026-11-01 (ESC-178)","Audit de sécurité 2026-11 (ESC-418), fiches SEC-05 et SEC-06 : docs/security/audit-2026-11/rapport.md","docs/PLUGINS.md §1.3, §2.2"]
-tickets: ["ESC-178","ESC-222","ESC-281","ESC-282","ESC-347","ESC-361","ESC-362","ESC-424","ESC-428","ESC-442"]
-decisions: [152,"les-corrections-de-l-audit-dans-la-2-2-v",161]
+sources: ["docs/PLUGINS-DESIGN.md §1.1, §4.4, §4.12, §8.27, §8.31","docs/TODO-2.2.md, PLG-6","Essai réel de Goose 1.57.0 sur Ollama, 2026-11-01 (ESC-178)","Audit de sécurité 2026-11 (ESC-418), fiches SEC-05, SEC-06 et SEC-30 : docs/security/audit-2026-11/rapport.md","docs/PLUGINS.md §1.3, §2.2"]
+tickets: ["ESC-178","ESC-222","ESC-281","ESC-282","ESC-347","ESC-361","ESC-362","ESC-424","ESC-428","ESC-442","ESC-443"]
+decisions: [152,"les-corrections-de-l-audit-dans-la-2-2-v",161,"ce-qu-un-harness-tiers-dit-sans-le-lance"]
 compared: null
 ---
 
@@ -88,3 +88,12 @@ Ceci remplace, dans « La confiance d'un harness décrit », les phrases sur les
 - **Pas de shell ni d'interpréteur.** Un harness d'un tiers ne nomme comme programme ni `sh`, `bash`, `zsh`, `dash`, `ksh`, `fish`, `cmd`, `powershell`, `pwsh`, `python*`, `node`, `deno`, `bun`, `ruby`, `perl`, `php`, `lua`, `osascript`, `wscript`, `cscript`, `mshta`, `rundll32`, `env`, `wsl`… (sans casse, `.exe` compris). Le manifeste est refusé (code `interpreter`), et un nom de ce genre est retiré de `locate.names` : le programme n'est pas trouvé.
 - **`versionArgs` attend un geste.** La version d'un harness décrit par un tiers n'est lue qu'après un geste de l'utilisateur sur ce harness dans la session de l'app : un agent ou un terminal de lui lancé. Ni l'installation, ni le démarrage, ni la liste des harness ne la lancent ; d'ici là, sa version est inconnue. La première main la lit comme avant.
 - **L'installation** montre aussi une ligne `env:<variable>` par variable déclarée, non révocable, et une mise à jour qui en ajoute une redemande l'accord.
+
+## Ajouts d'ESC-443 (audit de sécurité, SEC-30)
+
+Ceci complète « L'installation montre tout ce qui tournera » et la liste des familles refusées d'ESC-424.
+
+- **`removeEnv` est jugé comme `env`.** Un manifeste tiers dont l'`acp.removeEnv` nomme une variable des familles refusées est refusé, avec la même raison (code `variable`, à `acp.removeEnv[i]`), dans l'app, dans `escouade-plugin validate` et au store. `CODEX_CA_CERTIFICATE` rejoint ces familles, comme les autres fichiers d'autorités.
+- **Le cœur ne retire jamais, pour un tiers, ce qu'il pose lui-même.** Sur chaque lancement d'un plugin tiers (`engine/launch`, la relance, `terminal/launch`, `engine/oneShot`, `account/read`), une variable à retirer qui est d'une famille refusée, ou que le cœur donne (le proxy et le fichier d'autorités des réglages, `accountVar`, `keyVar`, l'adresse des hooks), reste posée ; le journal le dit. La première main retire ce qu'elle dit (Copilot CLI, ses jetons).
+- **L'installation montre ce que le harness dit sans le lancer.** Avec ce qu'il lance, la fenêtre d'installation et de mise à jour d'un plugin, et celle de l'accord d'un projet privé, montrent sa commande d'installation (`harnessInstall:`, une fois si elle est la même sur tous les systèmes), sa commande de mise à jour (`harnessUpdate:`), notées « écrites par le plugin : Escouade l'affiche sans la lancer », et chaque variable qu'il retire (`harnessUnset:`). Ces lignes ne se retirent pas ; une mise à jour qui en change redemande l'accord.
+- **La commande d'un tiers est dite la sienne.** Là où Escouade affiche la commande d'installation ou de mise à jour d'un harness décrit par un plugin tiers (l'accueil « Aucun harness trouvé », Réglages › Comptes et harness, le refus d'une version trop ancienne), elle est dite « donnée par le plugin <id>, pas par Escouade », le plugin nommé par son identifiant, qu'un tiers ne peut pas prendre à la première main. Les plugins `dev.escouade.*` gardent l'affichage d'avant.

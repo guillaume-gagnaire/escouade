@@ -52,7 +52,14 @@ test.describe('an agent on a harness an ACP plugin describes', () => {
     expect('ok' in read, JSON.stringify(read)).toBe(true);
     const preview = (read as { ok: { token: string; asks: string[] } }).ok;
     expect(preview.asks).toContain('harness:fake-acp acp');
+    // And the command its manifest gives to install it (SEC-30), shown as written by the plugin.
+    expect(preview.asks).toContain('harnessInstall:npm install -g fake-acp');
     expect('ok' in (await invoke(page, 'plugin_install', { token: preview.token }))).toBe(true);
+    // Wherever the app shows that command, it says it comes from this plugin of anyone's, not from Escouade.
+    const decls = await invoke<{ id: string; installFrom?: string }[]>(page, 'engines_declared');
+    expect('ok' in decls, JSON.stringify(decls)).toBe(true);
+    const fake = (decls as { ok: { id: string; installFrom?: string }[] }).ok.find((e) => e.id === ENGINE);
+    expect(fake?.installFrom).toBe('dev.example.fake-acp');
 
     await addProject(page, app.repo);
     // The menu « Harness » reads the registry again: the harness the plugin describes is in it.
