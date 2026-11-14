@@ -266,7 +266,7 @@ test('the VS Code view: files by the core, a language server, the theme, Open VS
   await expect.poll(() => laidOver(page, pane)).toBe(true);
   await expect.poll(() => tabs(page)).toEqual(before);
   const width = () => wb.evaluate((e) => Math.round(e.getBoundingClientRect().width));
-  if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'vscode-pane.png') });
+  if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'vscode-pane.png'), style: '.conv .msgs { visibility: hidden }' });
 
   // Moved to the agent's place (the two swap: the compass has no room for a third on that side): the same tabs.
   await dragTo(
@@ -309,12 +309,12 @@ test('the VS Code view: files by the core, a language server, the theme, Open VS
   await expect.poll(() => keys(page)).toEqual([agentKey, 'editor']);
   await expect.poll(() => laidOver(page, pane)).toBe(true);
   expect(await tabs(page)).toEqual(before);
-  if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'vscode-pane-back.png') });
+  if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'vscode-pane-back.png'), style: '.conv .msgs { visibility: hidden }' });
 
   // Several columns of the editor. In the pane, VS Code's own groups of tabs side by side.
   await vs(page, "await vscode.commands.executeCommand('workbench.action.splitEditorRight');");
   await expect(wb.locator('.part.editor .editor-group-container')).toHaveCount(2);
-  if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'vscode-pane-split.png') });
+  if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'vscode-pane-split.png'), style: '.conv .msgs { visibility: hidden }' });
   await vs(page, "await vscode.commands.executeCommand('workbench.action.joinAllGroups');");
   await expect(wb.locator('.part.editor .editor-group-container')).toHaveCount(1);
   // Elsewhere in the page (another column), a code editor of its own on the same model: the same text, the same
@@ -322,7 +322,8 @@ test('the VS Code view: files by the core, a language server, the theme, Open VS
   await page.evaluate(async () => {
     const el = document.createElement('div');
     el.id = 'esc444-second';
-    el.style.cssText = 'position:fixed;left:380px;top:120px;width:420px;height:240px;z-index:10;';
+    el.style.cssText =
+      'position:fixed;left:380px;top:120px;width:420px;height:240px;z-index:10;background:var(--panel);box-shadow:0 0 0 1px var(--line),0 12px 32px rgba(0,0,0,.25);border-radius:10px;overflow:hidden;';
     document.body.appendChild(el);
     const s = (globalThis as unknown as { __escouadeVscode: { standaloneEditor(rel: string, el: HTMLElement): Promise<() => void> } })
       .__escouadeVscode;
@@ -336,7 +337,7 @@ test('the VS Code view: files by the core, a language server, the theme, Open VS
   await page.keyboard.type('// colonne 2');
   await page.keyboard.press('Enter');
   await expect(wb.locator('.tabs-container .tab.dirty .label-name')).toContainText(['app.ts']);
-  if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'vscode-second-editor.png') });
+  if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'vscode-second-editor.png'), style: '.conv .msgs { visibility: hidden }' });
   await vs(page, "await vscode.commands.executeCommand('workbench.action.files.revert');");
 
   // Vim, a web extension, last (its keys would take what is typed above, in the second editor too): its code runs in
