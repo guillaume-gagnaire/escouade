@@ -24,8 +24,8 @@
     void (async () => {
       try {
         mod = await import('../../lib/vscode/workbench');
-        const study = (globalThis as { __escouadeStudy?: { nodeHost?: boolean } }).__escouadeStudy;
-        await mod.workbench(project.id, { nodeHost: study?.nodeHost });
+        const { vscodeNodeHost } = await import('../../lib/vscode/flag');
+        await mod.workbench(project.id, { nodeHost: vscodeNodeHost });
         if (!place.isConnected) return;
         // In a pane: a press on the workbench makes it active, a hover shows its ×, as anywhere in a pane.
         const pane = place.closest<HTMLElement>('[data-pane-key]');
@@ -53,7 +53,8 @@
   });
 
   async function startServer() {
-    if (servers.has(project.id) || !mod) return;
+    // With the Node extension host, the language extensions run there (the core's servers read `file:` URIs).
+    if (servers.has(project.id) || !mod || mod.nodeHost) return;
     servers.add(project.id);
     const { api } = await import('../../lib/ipc');
     const tree = await api.fsTree(project.id, null);

@@ -318,3 +318,104 @@ test('the VS Code view: files by the core, a language server, the theme, Open VS
   expect(await page.evaluate(() => (window as unknown as { esc444Boots?: number }).esc444Boots)).toBe(1);
   console.log('ESC-444 page errors:', errors);
 });
+
+// The Node extension host of VS Code (its server, `ESCOUADE_STUDY_VSCODE_SERVER`), started by the core with the system's
+// Node on the loopback with a token, and extensions of Open VSX that need Node: Code Spell Checker, ESLint (with the
+// project's own eslint). Skipped without the server.
+test.describe('with the Node extension host', () => {
+  const server = process.env.ESCOUADE_STUDY_VSCODE_SERVER;
+  test.use({
+    appEnv: {
+      ESCOUADE_STUDY_TS_LSP: path.resolve(import.meta.dirname, '..', '..', 'node_modules', '.bin', 'typescript-language-server.cmd'),
+      ...(server ? { ESCOUADE_STUDY_VSCODE_SERVER: server } : {}),
+      ...(process.env.ESCOUADE_STUDY_NODE ? { ESCOUADE_STUDY_NODE: process.env.ESCOUADE_STUDY_NODE } : {}),
+      ...(process.env.ESCOUADE_STUDY_HOST_PORT ? { ESCOUADE_STUDY_HOST_PORT: process.env.ESCOUADE_STUDY_HOST_PORT } : {}),
+    },
+  });
+
+  test('extensions that need Node run in VS Code’s server, with the system’s Node', async ({ app }) => {
+    test.skip(!server, 'ESCOUADE_STUDY_VSCODE_SERVER: the folder of the VS Code server of the same commit');
+    test.skip(process.platform !== 'win32', 'WebView2: driven by its DevTools protocol');
+    test.setTimeout(400_000);
+    writeProject(app.repo);
+    // ESLint of the project, as a team would have it: the extension uses the project's own.
+    fs.writeFileSync(
+      path.join(app.repo, 'eslint.config.mjs'),
+      "export default [{ files: ['**/*.js'], rules: { 'no-unused-vars': 'error' } }];\n",
+    );
+    fs.writeFileSync(path.join(app.repo, 'src', 'lint.js'), 'const inutile = 1;\n');
+    fs.writeFileSync(path.join(app.repo, 'src', 'notes.md'), '# Notes\n\nCe fichier a une fautte : recieve.\n');
+    execFileSync('npm', ['install', '--no-audit', '--no-fund', '-D', 'eslint@9'], { cwd: app.repo, shell: true, stdio: 'pipe' });
+    fs.writeFileSync(path.join(app.repo, '.gitignore'), 'node_modules/\n');
+    execFileSync('git', ['add', '-A'], { cwd: app.repo });
+    execFileSync('git', ['commit', '-qm', 'ESLint'], { cwd: app.repo });
+
+    await addProject(app.page, app.repo);
+    await app.page.evaluate(() => {
+      localStorage.setItem('escouade.dev.vscodeEditor', '1');
+      localStorage.setItem('escouade.dev.vscodeNodeHost', '1');
+    });
+    await app.page.reload();
+    const page = app.page;
+    page.on('console', (m) => {
+      if (m.type() === 'error') console.log(`ESC-444 node console.error: ${m.text().slice(0, 400)}`);
+    });
+    await expect(page.locator('aside.side .agent')).toHaveCount(1, { timeout: 30_000 });
+    await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+    const wb = page.locator('#vscode-layer .monaco-workbench');
+    await expect(wb).toBeVisible({ timeout: 90_000 });
+    const host = (await page.evaluate('globalThis.__escouadeVscode.nodeHost')) as { authority: string; node: string } | null;
+    console.log('ESC-444 node host:', host, 'marks', JSON.stringify(await page.evaluate('globalThis.__escouadeVscode.marks')));
+    expect(host?.authority).toMatch(/^127\.0\.0\.1:\d+$/);
+    // The server answers only with its token (its /version is public).
+    const port = host!.authority.split(':')[1];
+    expect((await fetch(`http://127.0.0.1:${port}/`)).status).toBe(403);
+
+    const explorer = wb.locator('.explorer-folders-view');
+    await expect(explorer.getByText('src', { exact: true })).toBeVisible({ timeout: 30_000 });
+    const install = async (id: string) => {
+      await page.evaluate(`(() => {
+        const { vscode } = globalThis.__escouadeVscode;
+        globalThis.esc444Install = globalThis.esc444Install ?? {};
+        globalThis.esc444Install['${id}'] = 'pending';
+        vscode.commands.executeCommand('workbench.extensions.installExtension', '${id}').then(
+          () => (globalThis.esc444Install['${id}'] = 'ok'),
+          (e) => (globalThis.esc444Install['${id}'] = 'error: ' + e),
+        );
+      })()`);
+      const state = () => page.evaluate(`globalThis.esc444Install['${id}']`) as Promise<string>;
+      const dialog = wb.locator('.monaco-dialog-box');
+      const deadline = Date.now() + 120_000;
+      while (Date.now() < deadline && (await state()) === 'pending') {
+        if (await dialog.isVisible()) await dialog.getByRole('button').first().click();
+        await page.waitForTimeout(250);
+      }
+      const s = await state();
+      console.log(`ESC-444 node install ${id}: ${s}`);
+      return s;
+    };
+    const t0 = Date.now();
+    expect(await install('streetsidesoftware.code-spell-checker')).toBe('ok');
+    console.log(`ESC-444 node install cspell took ${Date.now() - t0} ms`);
+    expect(await install('dbaeumer.vscode-eslint')).toBe('ok');
+    type Ext = { id: string; activated: boolean; errors: string[] };
+    const exts = () => page.evaluate('globalThis.__escouadeVscode.extensions()') as Promise<Ext[]>;
+    const diags = () =>
+      page.evaluate(
+        "(async () => globalThis.__escouadeVscode.vscode.languages.getDiagnostics().flatMap(([u, ds]) => ds.map((d) => u.path.split('/').pop() + ' [' + (d.source ?? '') + '] ' + d.message)))()",
+      ) as Promise<string[]>;
+
+    await explorer.getByText('src', { exact: true }).click();
+    await explorer.getByText('notes.md', { exact: true }).click();
+    await expect.poll(async () => (await diags()).join('\n'), { timeout: 90_000 }).toMatch(/notes\.md \[cSpell\].*recieve/i);
+    await explorer.getByText('lint.js', { exact: true }).click();
+    await expect.poll(async () => (await diags()).join('\n'), { timeout: 120_000 }).toMatch(/lint\.js \[eslint\].*inutile/i);
+    console.log('ESC-444 node diagnostics:', JSON.stringify(await diags()));
+    // The files are still the core's: the workbench read them by its commands, not by the server.
+    const reads = (await page.evaluate("globalThis.__escouadeVscode.coreTimings().filter((t) => t.op === 'read').length")) as number;
+    console.log('ESC-444 node reads by the core:', reads);
+    expect(reads).toBeGreaterThan(0);
+    console.log('ESC-444 node extensions:', JSON.stringify((await exts()).filter((e) => !e.id.startsWith('vscode.'))));
+    if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'vscode-node-host.png') });
+  });
+});

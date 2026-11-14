@@ -163,9 +163,10 @@ fn token() -> String {
 }
 
 /// Starts the Node extension host of VS Code (the server of `ESCOUADE_STUDY_VSCODE_SERVER`, its `out/server-main.js`)
-/// with `node` (the system's by default, `ESCOUADE_STUDY_NODE` otherwise), on the loopback, with a token. Its log goes
-/// to `log` when given.
-pub async fn host_start(log: Option<PathBuf>) -> Result<HostInfo> {
+/// with `node` (the system's by default, `ESCOUADE_STUDY_NODE` otherwise), on the loopback, with a token given in a
+/// file (not on its command line, which any process of the machine reads). Its data and its extensions are in `data`,
+/// never in the user's `~/.vscode-server`. Its log goes to `log` when given.
+pub async fn host_start(data: &Path, log: Option<PathBuf>) -> Result<HostInfo> {
     let server = std::env::var_os("ESCOUADE_STUDY_VSCODE_SERVER")
         .map(PathBuf::from)
         .context("ESCOUADE_STUDY_VSCODE_SERVER is not set")?;
@@ -181,15 +182,26 @@ pub async fn host_start(log: Option<PathBuf>) -> Result<HostInfo> {
     if let Some(mut old) = study().host.lock().take() {
         let _ = old.start_kill();
     }
-    // A free port of the loopback, taken then given back for the server to listen on.
-    let port = std::net::TcpListener::bind("127.0.0.1:0")?
-        .local_addr()?
-        .port();
+    // The port the study gives (its range), or a free one of the loopback, taken then given back.
+    let port = match std::env::var("ESCOUADE_STUDY_HOST_PORT") {
+        Ok(p) => p.parse().context("ESCOUADE_STUDY_HOST_PORT")?,
+        Err(_) => std::net::TcpListener::bind("127.0.0.1:0")?
+            .local_addr()?
+            .port(),
+    };
     let token = token();
+    std::fs::create_dir_all(data.join("extensions"))?;
+    let token_file = data.join("connection-token");
+    std::fs::write(&token_file, &token)?;
     let mut cmd = Command::new(&node);
     cmd.arg(server.join("out").join("server-main.js"))
         .args(["--host", "127.0.0.1", "--port", &port.to_string()])
-        .arg(format!("--connection-token={token}"))
+        .arg("--connection-token-file")
+        .arg(&token_file)
+        .arg("--server-data-dir")
+        .arg(data)
+        .arg("--extensions-dir")
+        .arg(data.join("extensions"))
         .args(["--accept-server-license-terms", "--disable-telemetry"])
         .stdin(Stdio::null())
         .kill_on_drop(true);

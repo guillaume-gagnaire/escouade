@@ -2366,9 +2366,12 @@ pub fn lsp_stop(id: u32) {
 }
 
 #[tauri::command]
-pub async fn vscode_host_start() -> Res<crate::vscodestudy::HostInfo> {
-    let log = crate::vscodestudy::study_file().map(|f| f.with_extension("host.log"));
-    crate::vscodestudy::host_start(log).await.map_err(err)
+pub async fn vscode_host_start(core: CoreState<'_>) -> Res<crate::vscodestudy::HostInfo> {
+    let data = core.data.root().join("vscode-server");
+    let log = Some(data.join("server.log"));
+    crate::vscodestudy::host_start(&data, log)
+        .await
+        .map_err(err)
 }
 
 /// Whether the app was started for the study's measures (`ESCOUADE_VSCODE_STUDY`), and its options.

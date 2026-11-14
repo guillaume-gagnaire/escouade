@@ -22,3 +22,14 @@ export function setVscodeEditor(on: boolean) {
     // A private window: the setting stays off.
   }
 }
+
+export const VSCODE_NODE_FLAG = 'escouade.dev.vscodeNodeHost';
+
+/** The Node extension host of VS Code, started by the core with the system's Node (`vscode_host_start`). */
+export const vscodeNodeHost = (() => {
+  try {
+    return localStorage.getItem(VSCODE_NODE_FLAG) === '1';
+  } catch {
+    return false;
+  }
+})();

@@ -25,7 +25,11 @@ import getEnvironmentServiceOverride from '@codingame/monaco-vscode-environment-
 import getExplorerServiceOverride from '@codingame/monaco-vscode-explorer-service-override';
 import getExtensionGalleryServiceOverride from '@codingame/monaco-vscode-extension-gallery-service-override';
 import getExtensionServiceOverride from '@codingame/monaco-vscode-extensions-service-override';
-import getFilesServiceOverride, { initFile, registerFileSystemOverlay } from '@codingame/monaco-vscode-files-service-override';
+import getFilesServiceOverride, {
+  initFile,
+  registerCustomProvider,
+  registerFileSystemOverlay,
+} from '@codingame/monaco-vscode-files-service-override';
 import getKeybindingsServiceOverride from '@codingame/monaco-vscode-keybindings-service-override';
 import getLanguagesServiceOverride from '@codingame/monaco-vscode-languages-service-override';
 import getLifecycleServiceOverride from '@codingame/monaco-vscode-lifecycle-service-override';
@@ -90,6 +94,10 @@ const folders = new Map<string, string>();
 export let nodeHost: { authority: string; node: string } | null = null;
 
 const WORKSPACE = vscode.Uri.file('/escouade.code-workspace');
+/** The scheme of the projects' files in the workbench: `file`, or the Node host's `vscode-remote`. */
+let files: { scheme: string; authority?: string } = { scheme: 'file' };
+/** How the workbench names the projects' files. */
+export const filesScheme = () => files;
 
 /**
  * The layer the workbench lives in: fixed over the window, never moved in the page (an iframe moved in the DOM loads
@@ -208,8 +216,16 @@ async function start(projectId: string, opts: WorkbenchOptions): Promise<HTMLEle
     }
   }
 
-  fsProvider = new EscouadeFileSystem();
-  registerFileSystemOverlay(1, fsProvider);
+  // With the Node extension host, the workspace is the server's (`vscode-remote:`): its extensions see its files as
+  // their own (`file:` on their side). Those files are still read and written by the core, by the same provider.
+  if (remote) {
+    files = { scheme: 'vscode-remote', authority: remote.authority };
+    fsProvider = new EscouadeFileSystem('vscode-remote');
+    registerCustomProvider('vscode-remote', fsProvider);
+  } else {
+    fsProvider = new EscouadeFileSystem('file');
+    registerFileSystemOverlay(1, fsProvider);
+  }
   const root = await rootOf(projectId);
   folders.set(projectId, root.path);
   fsProvider.addRoot(projectId, root.path);
@@ -302,7 +318,7 @@ async function start(projectId: string, opts: WorkbenchOptions): Promise<HTMLEle
 
 async function rootOf(projectId: string) {
   const tree = await api.fsTree(projectId, null);
-  return vscode.Uri.file(tree.root);
+  return vscode.Uri.from({ ...files, path: vscode.Uri.file(tree.root).path });
 }
 
 /** The workbench, started on `projectId` the first time; that project's folder in its workspace. */
@@ -349,7 +365,7 @@ export async function relayout() {
 export async function openFile(projectId: string, rel: string, opts: { preview?: boolean } = {}) {
   const root = folders.get(projectId);
   if (!root) return;
-  const uri = vscode.Uri.from({ scheme: 'file', path: `${root}/${rel}` });
+  const uri = vscode.Uri.from({ ...files, path: `${root}/${rel}` });
   const doc = await vscode.workspace.openTextDocument(uri);
   await vscode.window.showTextDocument(doc, { preview: opts.preview ?? false, preserveFocus: true });
 }

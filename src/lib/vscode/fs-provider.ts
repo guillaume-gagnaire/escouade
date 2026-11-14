@@ -41,6 +41,10 @@ export class EscouadeFileSystem extends Disposable implements IFileSystemProvide
   private readonly roots: Root[] = [];
   /** How each file read is to be written back. */
   private readonly meta = new Map<string, { hash: string; eol: 'lf' | 'crlf'; bom: boolean }>();
+  constructor(private readonly scheme: string) {
+    super();
+  }
+
   /** What the calls to the core took (ms), for the study's measures. */
   readonly timings: { op: string; ms: number }[] = [];
 
@@ -50,7 +54,7 @@ export class EscouadeFileSystem extends Disposable implements IFileSystemProvide
   }
 
   private find(uri: Uri): { root: Root; rel: string } | null {
-    if (uri.scheme !== 'file') return null;
+    if (uri.scheme !== this.scheme) return null;
     for (const root of this.roots) {
       const rel = relativeTo(root.path, uri.path, fold);
       if (rel !== null) return { root, rel };
