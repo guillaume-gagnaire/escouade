@@ -2,7 +2,7 @@
 // longue (FlashList), l'autorisation sous verrou biométrique (expo-local-authentication), l'appairage par QR code
 // (expo-camera), le push (expo-notifications : FCM sous Android, APNs sous iOS) et le Rust par uniffi-bindgen-react-native.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, ToastAndroid, Platform } from 'react-native';
+import { Pressable, ScrollView, StatusBar as RNStatusBar, StyleSheet, Text, View, ToastAndroid, Platform } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as LocalAuthentication from 'expo-local-authentication';
@@ -254,7 +254,8 @@ function Status() {
 }
 
 const s = StyleSheet.create({
-  shell: { flex: 1, backgroundColor: C.panel, paddingTop: 36 },
+  // Android 15 dessine sous la barre d'état (bord à bord) : l'en-tête descend de sa hauteur.
+  shell: { flex: 1, backgroundColor: C.panel, paddingTop: Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 24) + 4 : 50 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: C.frame, borderBottomWidth: 1, borderBottomColor: C.line },
   h1: { flex: 1, color: C.text, fontSize: 17, fontWeight: '600' },
   back: { color: C.text, fontSize: 28, paddingRight: 8 },

@@ -44,8 +44,15 @@ jobs:
       - name: Outils
         run: |
           rustup target add aarch64-apple-ios aarch64-apple-ios-sim
-          brew tap wix/brew && brew install applesimutils
           xcodebuild -version
+      # applesimutils accorde les notifications au simulateur (sans elles, simctl push n affiche rien). Homebrew 6
+      # refuse les taps non approuvés : on approuve cette seule formule. Sans elle, le banc le dit et continue.
+      - name: applesimutils
+        continue-on-error: true
+        run: |
+          brew tap wix/brew
+          brew trust --formula wix/brew/applesimutils || brew trust wix/brew/applesimutils
+          brew install wix/brew/applesimutils
       - uses: subosito/flutter-action@v2
         if: matrix.tech == 'flutter'
         with:
