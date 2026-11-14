@@ -54,7 +54,8 @@ Demandé le 2026-11-14 : le flux des PR de la 2.2 marche, mais son expérience n
 
 Demandé le 2026-11-14 : l'éditeur (CodeMirror 6, avec son arborescence et ses onglets à nous) est agréable, mais il n'a pas tout. Il n'a ni serveur de langage, ni extensions. Peut-on y mettre l'éditeur de VS Code, avec son arborescence, son code et ses onglets ?
 
-- [ ] Une étude, avec une maquette qui tourne. La piste : `@codingame/monaco-vscode-api` (MIT), qui fait tourner les services du plan de travail de VS Code dans une page web, sans Electron : l'éditeur, les groupes d'onglets, l'explorateur, la recherche, les thèmes, les raccourcis et les extensions web. Il faut y brancher :
+- [x] L'étude est faite (ESC-444, 2026-11-14, `docs/EDITOR-STUDY.md`, maquette sur la branche `study/esc-444`) : elle recommande la vue VS Code par monaco-vscode-api, d'abord sans Node (6 à 7 semaines d'agent), puis l'hôte Node par un serveur VSCodium téléchargé à la demande. Décision de l'utilisateur à prendre.
+- [ ] (Pour mémoire, ce qu'elle visait) Une étude, avec une maquette qui tourne. La piste : `@codingame/monaco-vscode-api` (MIT), qui fait tourner les services du plan de travail de VS Code dans une page web, sans Electron : l'éditeur, les groupes d'onglets, l'explorateur, la recherche, les thèmes, les raccourcis et les extensions web. Il faut y brancher :
   - les fichiers, par le cœur Rust ;
   - les serveurs de langage, lancés par le cœur et reliés par `monaco-languageclient` ;
   - le thème d'Escouade.
