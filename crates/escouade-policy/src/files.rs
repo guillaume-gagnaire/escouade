@@ -422,6 +422,9 @@ mod system {
             assert!(policies.warnings().is_empty());
         }
 
+        // Not on macOS: its /etc is a link to /private/etc, refused as any link, and its policies come from the managed
+        // preferences (`macos.rs`), never from /etc (`crate::read`).
+        #[cfg(not(target_os = "macos"))]
         #[test]
         fn root_s_own_etc_is_trusted() {
             // /etc and the folders above it are root's and closed to others on any sane system.
