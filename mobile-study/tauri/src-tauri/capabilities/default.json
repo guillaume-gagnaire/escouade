@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "La maquette : ses commandes, le push, et sur le téléphone le QR code et la biométrie.",
+  "windows": ["main"],
+  "permissions": ["core:default", "notifications:default"]
+}

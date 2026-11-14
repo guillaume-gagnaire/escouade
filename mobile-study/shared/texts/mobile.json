@@ -1,0 +1,22 @@
+{
+  "pair": "Appairer",
+  "pairTitle": "Appairer ce téléphone",
+  "pairHelp": "Sur le PC ou le serveur : Réglages › Téléphone › Appairer, puis vise le QR code.",
+  "scan": "Lire le QR code",
+  "paired": "Appairé",
+  "notPaired": "Pas encore appairé : le serveur de la maquette est celui de la compilation.",
+  "lockReason": "Confirme pour répondre à l'autorisation",
+  "lockFailed": "Le verrou n'a pas été levé : rien n'est envoyé.",
+  "sent": "Réponse envoyée",
+  "status": "État",
+  "rust": "Rust",
+  "bridge": "Pont (1 000 ouvertures)",
+  "push": "Push",
+  "pushRegister": "Inscrire aux notifications",
+  "pushOpened": "Ouvert par une notification",
+  "back": "Retour",
+  "wholeCommand": "La commande entière",
+  "noWait": "au travail",
+  "question": "question",
+  "permission": "autorisation"
+}

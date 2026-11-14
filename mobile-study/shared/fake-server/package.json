@@ -1,0 +1,13 @@
+{
+  "name": "escouade-mobile-study-fake-server",
+  "private": true,
+  "type": "module",
+  "description": "ESC-445 : le faux serveur des maquettes mobiles",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  }
+}

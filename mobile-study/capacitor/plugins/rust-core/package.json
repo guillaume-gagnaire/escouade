@@ -1,0 +1,8 @@
+{
+  "name": "escouade-rust-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ESC-445 : le plugin Capacitor du Rust commun sous iOS (paquet Swift sur les liaisons UniFFI). Sous Android, il est dans l'app (RustCorePlugin.kt).",
+  "license": "GPL-3.0-or-later",
+  "capacitor": { "ios": { "src": "ios" } }
+}

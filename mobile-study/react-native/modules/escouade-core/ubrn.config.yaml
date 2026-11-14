@@ -1,0 +1,14 @@
+# ESC-445 : le Rust commun (mobile-study/shared/core) en turbo-module, par uniffi-bindgen-react-native.
+rust:
+  directory: ../../../shared/core
+  manifestPath: Cargo.toml
+android:
+  cargoExtras: ["--features", "uniffi"]
+  targets:
+    - x86_64
+    - arm64-v8a
+ios:
+  cargoExtras: ["--features", "uniffi"]
+  targets:
+    - aarch64-apple-ios
+    - aarch64-apple-ios-sim

@@ -1,0 +1,21 @@
+{
+  "name": "escouade-mobile-tauri",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "ESC-445 : la maquette mobile en Tauri 2 (l'interface Svelte de mobile-study/svelte-ui, le Rust sans pont)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@choochmeque/tauri-plugin-notifications-api": "0.4.6",
+    "@tauri-apps/api": "^2.10.0",
+    "@tauri-apps/plugin-barcode-scanner": "^2.5.3",
+    "@tauri-apps/plugin-biometric": "^2.5.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4"
+  }
+}

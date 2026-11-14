@@ -1,0 +1,22 @@
+// Les jetons du design d'Escouade (src/app.css, thème sombre), recopiés : React Native ne lit pas le CSS.
+export const C = {
+  frame: '#0a0b0c',
+  panel: '#101113',
+  raise: '#17181c',
+  well: '#0b0c0e',
+  line: 'rgba(255,255,255,0.075)',
+  text: '#f7f8f8',
+  soft: '#d0d3d8',
+  muted: '#989da6',
+  dim: '#8f949e',
+  textAi: '#e9ebee',
+  brand: '#35c1bd',
+  pInk: '#f0b98c',
+  pSoft: 'rgba(217,145,90,0.14)',
+  run: '#5dd39a',
+  wait: '#f2c85b',
+  waitBg: 'rgba(242,200,91,0.07)',
+  waitLine: 'rgba(242,200,91,0.32)',
+  add: '#7fd6a0',
+  del: '#f08a80',
+};

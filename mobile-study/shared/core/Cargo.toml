@@ -1,0 +1,40 @@
+[package]
+name = "escouade-mobile-core"
+version = "0.1.0"
+edition = "2021"
+description = "ESC-445 : le code Rust commun aux quatre maquettes (XChaCha20-Poly1305), appelé par Tauri sans pont, par UniFFI (Capacitor, React Native) et par flutter_rust_bridge."
+publish = false
+license = "GPL-3.0-or-later"
+
+[lib]
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[features]
+default = []
+# Les liaisons UniFFI (Kotlin et Swift pour Capacitor, uniffi-bindgen-react-native pour React Native).
+uniffi = ["dep:uniffi"]
+# Le générateur des liaisons (cargo run --features uniffi-cli --bin uniffi-bindgen -- generate …).
+uniffi-cli = ["uniffi", "uniffi/cli"]
+
+[dependencies]
+chacha20poly1305 = "0.10.1"
+base64 = "0.22"
+getrandom = "0.2"
+thiserror = "2"
+uniffi = { version = "0.31", optional = true }
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+required-features = ["uniffi-cli"]
+
+# Les mêmes réglages que la maquette Tauri (src-tauri/Cargo.toml), pour comparer les poids.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+# Hors de tout espace de travail du dépôt.
+[workspace]

@@ -1,0 +1,9 @@
+{
+  "appId": "dev.escouade.study.capacitor",
+  "appName": "Escouade Capacitor",
+  "webDir": "dist",
+  "backgroundColor": "#08090a",
+  "server": { "androidScheme": "https", "cleartext": true },
+  "android": { "allowMixedContent": true },
+  "plugins": { "PushNotifications": { "presentationOptions": ["badge", "sound", "alert"] } }
+}

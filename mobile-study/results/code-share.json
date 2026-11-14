@@ -1,0 +1,97 @@
+{
+  "tauri": {
+    "ownLines": 98,
+    "sharedStudyLines": 501,
+    "escouadeLines": 1488,
+    "reusedPct": 95,
+    "escouadeFiles": [
+      "src/lib/markdown.ts",
+      "src/lib/diff.ts",
+      "src/components/DiffView.svelte",
+      "src/app.css"
+    ],
+    "texts": "le catalogue entier (t())",
+    "files": {
+      "tauri/src/platform.ts": 50,
+      "tauri/src/main.ts": 3,
+      "tauri/src-tauri/src/lib.rs": 21,
+      "tauri/src-tauri/src/main.rs": 3,
+      "tauri/vite.config.ts": 9,
+      "tauri/index.html": 12,
+      "svelte-ui/src/App.svelte": 151,
+      "svelte-ui/src/Message.svelte": 44,
+      "svelte-ui/src/server.ts": 58,
+      "svelte-ui/src/platform.ts": 20,
+      "svelte-ui/src/texts.ts": 2,
+      "svelte-ui/src/main.ts": 11,
+      "svelte-ui/src/mobile.css": 215
+    }
+  },
+  "capacitor": {
+    "ownLines": 188,
+    "sharedStudyLines": 501,
+    "escouadeLines": 1488,
+    "reusedPct": 91,
+    "escouadeFiles": [
+      "src/lib/markdown.ts",
+      "src/lib/diff.ts",
+      "src/components/DiffView.svelte",
+      "src/app.css"
+    ],
+    "texts": "le catalogue entier (t())",
+    "files": {
+      "capacitor/src/platform.ts": 63,
+      "capacitor/src/main.ts": 3,
+      "capacitor/android/app/src/main/java/dev/escouade/study/capacitor/RustCorePlugin.kt": 35,
+      "capacitor/android/app/src/main/java/dev/escouade/study/capacitor/MainActivity.java": 10,
+      "capacitor/plugins/rust-core/ios/Sources/RustCorePlugin/RustCorePlugin.swift": 36,
+      "capacitor/plugins/rust-core/Package.swift": 20,
+      "capacitor/vite.config.ts": 9,
+      "capacitor/index.html": 12,
+      "svelte-ui/src/App.svelte": 151,
+      "svelte-ui/src/Message.svelte": 44,
+      "svelte-ui/src/server.ts": 58,
+      "svelte-ui/src/platform.ts": 20,
+      "svelte-ui/src/texts.ts": 2,
+      "svelte-ui/src/main.ts": 11,
+      "svelte-ui/src/mobile.css": 215
+    }
+  },
+  "react-native": {
+    "ownLines": 481,
+    "sharedStudyLines": 0,
+    "escouadeLines": 131,
+    "reusedPct": 21,
+    "escouadeFiles": [
+      "src/lib/diff.ts"
+    ],
+    "texts": "le catalogue entier (t())",
+    "files": {
+      "react-native/App.tsx": 247,
+      "react-native/index.ts": 26,
+      "react-native/src/Message.tsx": 110,
+      "react-native/src/server.ts": 59,
+      "react-native/src/rust.ts": 5,
+      "react-native/src/theme.ts": 21,
+      "react-native/src/escouade.ts": 5,
+      "react-native/src/rune-shim.ts": 1,
+      "react-native/metro.config.js": 7
+    }
+  },
+  "flutter": {
+    "ownLines": 640,
+    "sharedStudyLines": 0,
+    "escouadeLines": 0,
+    "reusedPct": 0,
+    "escouadeFiles": [],
+    "texts": "8 clés exportées en JSON (shared/texts/export-texts.mjs)",
+    "files": {
+      "flutter/lib/main.dart": 326,
+      "flutter/lib/message.dart": 169,
+      "flutter/lib/server.dart": 62,
+      "flutter/lib/texts.dart": 16,
+      "flutter/lib/theme.dart": 51,
+      "flutter/rust/src/api/core.rs": 16
+    }
+  }
+}

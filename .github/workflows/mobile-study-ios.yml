@@ -1,0 +1,96 @@
+# ESC-445 : l'étude de l'app mobile, sous iOS. Ce workflow ne tourne que sur la branche d'étude study/esc-445-ios
+# (poussée à la main, jamais fusionnée ni ouverte en PR) : il construit chacune des quatre maquettes de mobile-study/
+# pour le simulateur iOS (et l'appareil, non signé, pour le poids), puis y lance le banc bench/ios.mjs (démarrage,
+# mémoire, pont Rust, push par `simctl push`). Il n'utilise aucun secret du dépôt et ne publie rien.
+name: Étude mobile (iOS)
+
+on:
+  push:
+    branches: [study/esc-445-ios]
+  workflow_dispatch:
+
+concurrency:
+  group: mobile-study-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    name: ${{ matrix.tech }}
+    runs-on: macos-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      # Deux Mac à la fois au plus : la CI de main en a besoin aussi.
+      max-parallel: 2
+      matrix:
+        tech: [tauri, capacitor, flutter, react-native]
+    env:
+      PORT: '8445'
+      MS_KEY: AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8
+      MS_SERVER: http://127.0.0.1:8445
+      VITE_MS_SERVER: http://127.0.0.1:8445
+      VITE_MS_KEY: AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8
+      EXPO_PUBLIC_MS_SERVER: http://127.0.0.1:8445
+      EXPO_PUBLIC_MS_KEY: AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8
+      MS_PUBLIC_URL: http://127.0.0.1:8445
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Outils
+        run: |
+          rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+          brew tap wix/brew && brew install applesimutils
+          xcodebuild -version
+      - uses: subosito/flutter-action@v2
+        if: matrix.tech == 'flutter'
+        with:
+          flutter-version: 3.50.0
+          channel: stable
+      - name: Dépendances du dépôt (Svelte, vite, marked)
+        if: matrix.tech == 'tauri' || matrix.tech == 'capacitor'
+        run: npm ci
+      - name: Faux serveur
+        run: |
+          cd mobile-study/shared/fake-server && npm ci
+          nohup node server.mjs > "$RUNNER_TEMP/fake-server.log" 2>&1 &
+          sleep 2 && curl -sf "http://127.0.0.1:$PORT/api/agents" > /dev/null
+      - name: Construire
+        run: |
+          start=$(date +%s)
+          bash mobile-study/${{ matrix.tech }}/build-ios.sh 2>&1 | tee "$RUNNER_TEMP/build.log"
+          echo "BUILD_SECONDS=$(( $(date +%s) - start ))" >> "$GITHUB_ENV"
+      - name: Simulateur
+        run: |
+          SIM=$(xcrun simctl list devices available -j | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const d=Object.entries(JSON.parse(s).devices).filter(([r])=>r.includes('iOS')).flatMap(([,l])=>l).filter(x=>/^iPhone/.test(x.name));const p=d.find(x=>/iPhone 1[5-7]$/.test(x.name))||d[0];console.log(p.udid+' '+p.name)})")
+          echo "SIM_UDID=${SIM%% *}" >> "$GITHUB_ENV"
+          echo "SIM_NAME=${SIM#* }" >> "$GITHUB_ENV"
+          xcrun simctl boot "${SIM%% *}"
+          xcrun simctl bootstatus "${SIM%% *}" -b
+      - name: Banc
+        run: |
+          cd mobile-study
+          case "${{ matrix.tech }}" in
+            tauri) SIM_APP=$(find tauri/src-tauri/gen/apple/build -name "*.app" -maxdepth 4 | head -1); DEV_APP="";;
+            capacitor) SIM_APP=$(find capacitor/build/ios-iphonesimulator -name "App.app" | head -1); DEV_APP=$(find capacitor/build/ios-iphoneos -name "App.app" | head -1);;
+            flutter) SIM_APP=$(find flutter/build/ios/iphonesimulator -name "Runner.app" | head -1); DEV_APP=$(find flutter/build/ios/iphoneos -name "Runner.app" | head -1);;
+            react-native) SIM_APP=$(find react-native/build/ios-iphonesimulator -name "*.app" -path "*Release-*" | head -1); DEV_APP=$(find react-native/build/ios-iphoneos -name "*.app" -path "*Release-*" | head -1);;
+          esac
+          BUNDLE=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$SIM_APP/Info.plist")
+          echo "app : $SIM_APP ($BUNDLE), appareil : ${DEV_APP:-non construit}"
+          node bench/ios.mjs "${{ matrix.tech }}" "$BUNDLE" "$SIM_APP" $DEV_APP
+          node -e "const f='results/ios-${{ matrix.tech }}.json';const j=require('./'+f);j.buildSeconds=Number(process.env.BUILD_SECONDS);j.xcode=require('child_process').execSync('xcodebuild -version').toString().split('\n')[0];require('fs').writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
+      - name: Résultats
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-${{ matrix.tech }}
+          path: |
+            mobile-study/results/
+            ${{ runner.temp }}/build.log
+            ${{ runner.temp }}/fake-server.log
+          if-no-files-found: warn

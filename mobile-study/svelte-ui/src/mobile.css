@@ -1,0 +1,225 @@
+/* Le téléphone par-dessus la feuille de style d'Escouade (`src/app.css`, reprise entière : ses jetons, son Markdown, ses
+ * diffs) : un corps plus grand, une seule colonne, les zones sûres de l'écran. */
+html,
+body {
+  font-size: 15px;
+  background: var(--panel);
+  overscroll-behavior: none;
+}
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--frame);
+  border-bottom: 1px solid var(--line);
+}
+header h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.back {
+  background: none;
+  border: 0;
+  font-size: 28px;
+  line-height: 1;
+  padding: 0 8px 0 0;
+}
+.chip {
+  background: var(--raise);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  padding: 6px 12px;
+}
+
+main {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.agents {
+  padding: 8px;
+}
+.agent {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 14px 12px;
+  margin-bottom: 6px;
+  background: var(--raise);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--run);
+  flex: none;
+}
+.dot.wait {
+  background: var(--wait);
+}
+.who {
+  flex: 1;
+  min-width: 0;
+}
+.who small {
+  color: var(--muted);
+}
+.prev {
+  color: var(--soft);
+  font-size: 13px;
+}
+.badge {
+  font-size: 12px;
+  color: var(--wait);
+  background: var(--wait-bg);
+  border: 1px solid var(--wait-line);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.conv {
+  padding: 10px 12px 24px;
+}
+/* Comme la conversation du bureau : ce qui est hors de l'écran n'est ni mis en page ni peint. */
+.conv .row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 160px;
+  margin-bottom: 10px;
+}
+.msg.user {
+  margin-left: 15%;
+  padding: 10px 12px;
+  background: var(--p-soft);
+  border-radius: 14px 14px 4px 14px;
+}
+.msg.md {
+  color: var(--text-ai);
+}
+.msg.tool {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--well);
+}
+.tool-head {
+  padding: 8px 10px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-name {
+  font-weight: 600;
+  color: var(--p-ink);
+}
+.out {
+  margin: 0;
+  padding: 8px 10px;
+  font: 12px/1.5 var(--mono, monospace);
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--soft);
+}
+.diff {
+  overflow-x: auto;
+  font-size: 12px;
+}
+.msg.perm {
+  border: 1px solid var(--wait-line);
+  background: var(--wait-bg);
+  border-radius: 12px;
+  padding: 12px;
+}
+.perm-title {
+  font-weight: 600;
+}
+.perm-desc {
+  margin: 4px 0 10px;
+  color: var(--soft);
+}
+.perm-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.perm-cmd {
+  margin: 4px 0 12px;
+  padding: 10px;
+  background: var(--well);
+  border-radius: 8px;
+  font: 12px/1.5 var(--mono, monospace);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.perm-actions {
+  display: flex;
+  gap: 10px;
+}
+.perm-actions button,
+.primary {
+  flex: 1;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: var(--raise-2);
+  font-weight: 600;
+}
+.perm-actions .allow,
+.primary {
+  background: var(--brand);
+  color: #04110f;
+  border-color: transparent;
+}
+
+.pane {
+  padding: 16px;
+}
+.pane dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 12px;
+}
+.pane dt {
+  color: var(--muted);
+}
+.pane dd {
+  margin: 0;
+  word-break: break-all;
+}
+.ok {
+  color: var(--add);
+}
+.err {
+  color: var(--del);
+}
+
+.toast {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  padding: 12px 14px;
+  background: var(--raise-2);
+  border: 1px solid var(--line-3);
+  border-radius: 12px;
+}

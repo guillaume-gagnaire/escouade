@@ -1,0 +1,22 @@
+{
+  "fr": {
+    "composer.permission.title": "{engine} demande une autorisation",
+    "composer.permission.allow": "Autoriser",
+    "composer.permission.deny": "Refuser",
+    "composer.permission.allowed": "Autorisé",
+    "composer.permission.denied": "Refusé",
+    "nav.titleBar.waiting": "Agents en attente de réponse",
+    "conv.markdown.plainText": "texte",
+    "common.copy": "Copier"
+  },
+  "en": {
+    "composer.permission.title": "{engine} is asking for permission",
+    "composer.permission.allow": "Allow",
+    "composer.permission.deny": "Deny",
+    "composer.permission.allowed": "Allowed",
+    "composer.permission.denied": "Denied",
+    "nav.titleBar.waiting": "Agents waiting for an answer",
+    "conv.markdown.plainText": "text",
+    "common.copy": "Copy"
+  }
+}

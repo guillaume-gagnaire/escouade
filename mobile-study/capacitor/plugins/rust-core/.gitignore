@@ -1,0 +1,3 @@
+# Produits par build-ios.sh
+ios/escouade_mobile_coreFFI.xcframework/
+ios/Sources/EscouadeMobileCore/*.swift

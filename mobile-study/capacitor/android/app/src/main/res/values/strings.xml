@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Escouade Capacitor</string>
+    <string name="title_activity_main">Escouade Capacitor</string>
+    <string name="package_name">dev.escouade.study.capacitor</string>
+    <string name="custom_url_scheme">dev.escouade.study.capacitor</string>
+</resources>

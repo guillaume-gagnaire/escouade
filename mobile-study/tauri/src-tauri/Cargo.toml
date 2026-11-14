@@ -1,0 +1,32 @@
+[package]
+name = "escouade-mobile-tauri"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "GPL-3.0-or-later"
+
+[lib]
+name = "escouade_mobile_tauri_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2.12", features = [] }
+serde = { version = "1", features = ["derive"] }
+escouade-mobile-core = { path = "../../shared/core" }
+tauri-plugin-notifications = { version = "0.4.6", default-features = false, features = ["push-notifications"] }
+
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-barcode-scanner = "2.5"
+tauri-plugin-biometric = "2.5"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[workspace]

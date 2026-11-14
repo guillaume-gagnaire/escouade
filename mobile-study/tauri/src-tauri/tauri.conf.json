@@ -1,0 +1,23 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Escouade Tauri",
+  "version": "0.1.0",
+  "identifier": "dev.escouade.study.tauri",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [{ "title": "Escouade", "backgroundColor": "#08090a" }],
+    "security": { "csp": null }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["icons/icon.png"],
+    "android": { "minSdkVersion": 26 },
+    "iOS": { "minimumSystemVersion": "15.0" }
+  }
+}

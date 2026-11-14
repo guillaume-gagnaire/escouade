@@ -1,0 +1,55 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+# generated native folders
+/ios
+/android
+
+# ESC-445 : produits par build-android.sh et build-ios.sh
+/android/
+/ios/
+google-services.json
+modules/escouade-core/android/src/main/jniLibs/
+modules/escouade-core/build/
+# Ce que uniffi-bindgen-react-native génère (build-android.sh, build-ios.sh le refont)
+modules/escouade-core/android/
+modules/escouade-core/ios/
+modules/escouade-core/cpp/
+modules/escouade-core/src/
+modules/escouade-core/build/
+modules/escouade-core/*.podspec

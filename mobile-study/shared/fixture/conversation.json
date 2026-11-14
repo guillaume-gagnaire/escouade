@@ -1,0 +1,2514 @@
+{
+ "agents": [
+  {
+   "id": "a1",
+   "name": "hub-close",
+   "project": "Escouade",
+   "waiting": "permission",
+   "preview": "Pousser la branche et ouvrir la PR"
+  },
+  {
+   "id": "a2",
+   "name": "tunnel-wg",
+   "project": "Escouade",
+   "waiting": "question",
+   "preview": "SSH ou WireGuard par défaut ?"
+  },
+  {
+   "id": "a3",
+   "name": "site-docs",
+   "project": "Site",
+   "waiting": "permission",
+   "preview": "npm run build"
+  },
+  {
+   "id": "a4",
+   "name": "store-checks",
+   "project": "Store",
+   "waiting": null,
+   "preview": "Lance les onze vérifications…"
+  }
+ ],
+ "items": [
+  {
+   "id": "m1",
+   "ts": 1794646813329,
+   "kind": "user",
+   "text": "Relis le diff avant de committer, et lance clippy."
+  },
+  {
+   "id": "m2",
+   "ts": 1794646826377,
+   "kind": "text",
+   "text": "## Ce que j'ai changé\n\n1. La reconnexion attend de plus en plus (500 ms, 1 s, 2 s… jusqu'à 30 s).\n2. Le client rejoue ce qu'il a manqué depuis son dernier numéro vu.\n3. Les terminaux gardent un tampon de 256 Kio.\n\n| Cas | Avant | Après |\n|---|---|---|\n| Coupure de 2 s | conversation vide | reprise sans trou |\n| Coupure de 5 min | erreur | reprise, tampon rejoué |\n\n> La poignée de main refuse un client d'une autre version majeure."
+  },
+  {
+   "id": "m3",
+   "ts": 1794646849881,
+   "kind": "text",
+   "text": "J'ai regardé **`hub.rs`** : l'abonné est retiré deux fois quand deux clients ferment dans le même tour de boucle.\n\n- le premier `close` retire l'entrée ;\n- le second trouve une place vide et **panique** sur `unwrap()` ;\n- la correction : `remove` rend une `Option`, qu'on ignore.\n\nJe corrige et j'ajoute le test `two_clients_close_together` (n° 2)."
+  },
+  {
+   "id": "m4",
+   "ts": 1794646875065,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/remote.ts"
+   },
+   "diff": "diff --git a/src/lib/remote.ts b/src/lib/remote.ts\n--- a/src/lib/remote.ts\n+++ b/src/lib/remote.ts\n@@ -13,9 +13,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m5",
+   "ts": 1794646900518,
+   "kind": "user",
+   "text": "Le hub perd un abonné quand deux clients ferment en même temps, regarde."
+  },
+  {
+   "id": "m6",
+   "ts": 1794646927076,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "npm run check"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.2s"
+  },
+  {
+   "id": "m7",
+   "ts": 1794646947414,
+   "kind": "text",
+   "text": "J'ai regardé **`hub.rs`** : l'abonné est retiré deux fois quand deux clients ferment dans le même tour de boucle.\n\n- le premier `close` retire l'entrée ;\n- le second trouve une place vide et **panique** sur `unwrap()` ;\n- la correction : `remove` rend une `Option`, qu'on ignore.\n\nJe corrige et j'ajoute le test `two_clients_close_together` (n° 6)."
+  },
+  {
+   "id": "m8",
+   "ts": 1794646964099,
+   "kind": "text",
+   "text": "Le test passe maintenant. Voici le cœur de la correction :\n\n```rust\n/// Reprend un client après une coupure : rejoue ce qu'il n'a pas vu depuis `since`.\npub fn resume(&mut self, client: ClientId, since: u64) -> Result<Vec<Frame>, HubError> {\n    let sub = self.subscribers.get_mut(&client).ok_or(HubError::Unknown(client))?;\n    let frames: Vec<Frame> = self.log.iter().filter(|f| f.seq > since).cloned().collect();\n    sub.last_seen = frames.last().map(|f| f.seq).unwrap_or(since);\n    tracing::debug!(client = %client, count = frames.len(), \"reprise n°7\");\n    Ok(frames)\n}\n```\n\nEt côté interface :\n\n```ts\nexport async function reconnect(url: string, attempt = 2): Promise<WebSocket> {\n  const delay = Math.min(30_000, 500 * 2 ** attempt);\n  await new Promise((r) => setTimeout(r, delay));\n  const ws = new WebSocket(url);\n  ws.binaryType = 'arraybuffer';\n  return ws;\n}\n```"
+  },
+  {
+   "id": "m9",
+   "ts": 1794646977550,
+   "kind": "user",
+   "text": "Relis le diff avant de committer, et lance clippy."
+  },
+  {
+   "id": "m10",
+   "ts": 1794646999952,
+   "kind": "text",
+   "text": "Le test passe maintenant. Voici le cœur de la correction :\n\n```rust\n/// Reprend un client après une coupure : rejoue ce qu'il n'a pas vu depuis `since`.\npub fn resume(&mut self, client: ClientId, since: u64) -> Result<Vec<Frame>, HubError> {\n    let sub = self.subscribers.get_mut(&client).ok_or(HubError::Unknown(client))?;\n    let frames: Vec<Frame> = self.log.iter().filter(|f| f.seq > since).cloned().collect();\n    sub.last_seen = frames.last().map(|f| f.seq).unwrap_or(since);\n    tracing::debug!(client = %client, count = frames.len(), \"reprise n°9\");\n    Ok(frames)\n}\n```\n\nEt côté interface :\n\n```ts\nexport async function reconnect(url: string, attempt = 4): Promise<WebSocket> {\n  const delay = Math.min(30_000, 500 * 2 ** attempt);\n  await new Promise((r) => setTimeout(r, delay));\n  const ws = new WebSocket(url);\n  ws.binaryType = 'arraybuffer';\n  return ws;\n}\n```"
+  },
+  {
+   "id": "m11",
+   "ts": 1794647018764,
+   "kind": "text",
+   "text": "## Ce que j'ai changé\n\n1. La reconnexion attend de plus en plus (500 ms, 1 s, 2 s… jusqu'à 30 s).\n2. Le client rejoue ce qu'il a manqué depuis son dernier numéro vu.\n3. Les terminaux gardent un tampon de 256 Kio.\n\n| Cas | Avant | Après |\n|---|---|---|\n| Coupure de 2 s | conversation vide | reprise sans trou |\n| Coupure de 5 min | erreur | reprise, tampon rejoué |\n\n> La poignée de main refuse un client d'une autre version majeure."
+  },
+  {
+   "id": "m12",
+   "ts": 1794647033796,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo nextest run -p escouade-base hub"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 1.11s"
+  },
+  {
+   "id": "m13",
+   "ts": 1794647055355,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "crates/escouade-base/src/hub.rs"
+   },
+   "diff": "diff --git a/crates/escouade-base/src/hub.rs b/crates/escouade-base/src/hub.rs\n--- a/crates/escouade-base/src/hub.rs\n+++ b/crates/escouade-base/src/hub.rs\n@@ -22,9 +22,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m14",
+   "ts": 1794647071314,
+   "kind": "text",
+   "text": "## Ce que j'ai changé\n\n1. La reconnexion attend de plus en plus (500 ms, 1 s, 2 s… jusqu'à 30 s).\n2. Le client rejoue ce qu'il a manqué depuis son dernier numéro vu.\n3. Les terminaux gardent un tampon de 256 Kio.\n\n| Cas | Avant | Après |\n|---|---|---|\n| Coupure de 2 s | conversation vide | reprise sans trou |\n| Coupure de 5 min | erreur | reprise, tampon rejoué |\n\n> La poignée de main refuse un client d'une autre version majeure."
+  },
+  {
+   "id": "m15",
+   "ts": 1794647088967,
+   "kind": "user",
+   "text": "Relis le diff avant de committer, et lance clippy."
+  },
+  {
+   "id": "m16",
+   "ts": 1794647097438,
+   "kind": "text",
+   "text": "Le test passe maintenant. Voici le cœur de la correction :\n\n```rust\n/// Reprend un client après une coupure : rejoue ce qu'il n'a pas vu depuis `since`.\npub fn resume(&mut self, client: ClientId, since: u64) -> Result<Vec<Frame>, HubError> {\n    let sub = self.subscribers.get_mut(&client).ok_or(HubError::Unknown(client))?;\n    let frames: Vec<Frame> = self.log.iter().filter(|f| f.seq > since).cloned().collect();\n    sub.last_seen = frames.last().map(|f| f.seq).unwrap_or(since);\n    tracing::debug!(client = %client, count = frames.len(), \"reprise n°15\");\n    Ok(frames)\n}\n```\n\nEt côté interface :\n\n```ts\nexport async function reconnect(url: string, attempt = 0): Promise<WebSocket> {\n  const delay = Math.min(30_000, 500 * 2 ** attempt);\n  await new Promise((r) => setTimeout(r, delay));\n  const ws = new WebSocket(url);\n  ws.binaryType = 'arraybuffer';\n  return ws;\n}\n```"
+  },
+  {
+   "id": "m17",
+   "ts": 1794647116059,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/components/Conversation.svelte"
+   },
+   "diff": "diff --git a/src/components/Conversation.svelte b/src/components/Conversation.svelte\n--- a/src/components/Conversation.svelte\n+++ b/src/components/Conversation.svelte\n@@ -26,9 +26,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m18",
+   "ts": 1794647131682,
+   "kind": "user",
+   "text": "Pourquoi l'e2e de la conversation est-il rouge sous macOS ?"
+  },
+  {
+   "id": "m19",
+   "ts": 1794647157550,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "crates/escouade-base/src/hub.rs"
+   },
+   "diff": "diff --git a/crates/escouade-base/src/hub.rs b/crates/escouade-base/src/hub.rs\n--- a/crates/escouade-base/src/hub.rs\n+++ b/crates/escouade-base/src/hub.rs\n@@ -28,9 +28,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m20",
+   "ts": 1794647179741,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "git diff --stat"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.6s"
+  },
+  {
+   "id": "m21",
+   "ts": 1794647205932,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "git diff --stat"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.7s"
+  },
+  {
+   "id": "m22",
+   "ts": 1794647228872,
+   "kind": "text",
+   "text": "## Ce que j'ai changé\n\n1. La reconnexion attend de plus en plus (500 ms, 1 s, 2 s… jusqu'à 30 s).\n2. Le client rejoue ce qu'il a manqué depuis son dernier numéro vu.\n3. Les terminaux gardent un tampon de 256 Kio.\n\n| Cas | Avant | Après |\n|---|---|---|\n| Coupure de 2 s | conversation vide | reprise sans trou |\n| Coupure de 5 min | erreur | reprise, tampon rejoué |\n\n> La poignée de main refuse un client d'une autre version majeure."
+  },
+  {
+   "id": "m23",
+   "ts": 1794647251684,
+   "kind": "user",
+   "text": "Le hub perd un abonné quand deux clients ferment en même temps, regarde."
+  },
+  {
+   "id": "m24",
+   "ts": 1794647268025,
+   "kind": "text",
+   "text": "## Ce que j'ai changé\n\n1. La reconnexion attend de plus en plus (500 ms, 1 s, 2 s… jusqu'à 30 s).\n2. Le client rejoue ce qu'il a manqué depuis son dernier numéro vu.\n3. Les terminaux gardent un tampon de 256 Kio.\n\n| Cas | Avant | Après |\n|---|---|---|\n| Coupure de 2 s | conversation vide | reprise sans trou |\n| Coupure de 5 min | erreur | reprise, tampon rejoué |\n\n> La poignée de main refuse un client d'une autre version majeure."
+  },
+  {
+   "id": "m25",
+   "ts": 1794647291374,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 1.24s"
+  },
+  {
+   "id": "m26",
+   "ts": 1794647310477,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:65:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:125:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m27",
+   "ts": 1794647335023,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "git diff --stat"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.9s"
+  },
+  {
+   "id": "m28",
+   "ts": 1794647350061,
+   "kind": "text",
+   "text": "## Ce que j'ai changé\n\n1. La reconnexion attend de plus en plus (500 ms, 1 s, 2 s… jusqu'à 30 s).\n2. Le client rejoue ce qu'il a manqué depuis son dernier numéro vu.\n3. Les terminaux gardent un tampon de 256 Kio.\n\n| Cas | Avant | Après |\n|---|---|---|\n| Coupure de 2 s | conversation vide | reprise sans trou |\n| Coupure de 5 min | erreur | reprise, tampon rejoué |\n\n> La poignée de main refuse un client d'une autre version majeure."
+  },
+  {
+   "id": "m29",
+   "ts": 1794647369027,
+   "kind": "user",
+   "text": "Le hub perd un abonné quand deux clients ferment en même temps, regarde."
+  },
+  {
+   "id": "m30",
+   "ts": 1794647390610,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "crates/escouade-base/src/hub.rs"
+   },
+   "diff": "diff --git a/crates/escouade-base/src/hub.rs b/crates/escouade-base/src/hub.rs\n--- a/crates/escouade-base/src/hub.rs\n+++ b/crates/escouade-base/src/hub.rs\n@@ -39,9 +39,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m31",
+   "ts": 1794647397677,
+   "kind": "text",
+   "text": "C'est la frame lue dans le même lot que le plantage : sous macOS, `read()` rend les deux d'un coup. Je découpe par longueur annoncée plutôt que par appel, voir `Frame::split` dans `crates/escouade-base/src/frame.rs`."
+  },
+  {
+   "id": "m32",
+   "ts": 1794647408209,
+   "kind": "text",
+   "text": "## Ce que j'ai changé\n\n1. La reconnexion attend de plus en plus (500 ms, 1 s, 2 s… jusqu'à 30 s).\n2. Le client rejoue ce qu'il a manqué depuis son dernier numéro vu.\n3. Les terminaux gardent un tampon de 256 Kio.\n\n| Cas | Avant | Après |\n|---|---|---|\n| Coupure de 2 s | conversation vide | reprise sans trou |\n| Coupure de 5 min | erreur | reprise, tampon rejoué |\n\n> La poignée de main refuse un client d'une autre version majeure."
+  },
+  {
+   "id": "m33",
+   "ts": 1794647428624,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 1.32s"
+  },
+  {
+   "id": "m34",
+   "ts": 1794647449855,
+   "kind": "user",
+   "text": "Peux-tu brancher la reconnexion du client distant quand le tunnel tombe ?"
+  },
+  {
+   "id": "m35",
+   "ts": 1794647458784,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:74:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:134:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m36",
+   "ts": 1794647479378,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:75:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:135:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m37",
+   "ts": 1794647489785,
+   "kind": "text",
+   "text": "C'est la frame lue dans le même lot que le plantage : sous macOS, `read()` rend les deux d'un coup. Je découpe par longueur annoncée plutôt que par appel, voir `Frame::split` dans `crates/escouade-base/src/frame.rs`."
+  },
+  {
+   "id": "m38",
+   "ts": 1794647497236,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "crates/escouade-base/src/hub.rs"
+   },
+   "diff": "diff --git a/crates/escouade-base/src/hub.rs b/crates/escouade-base/src/hub.rs\n--- a/crates/escouade-base/src/hub.rs\n+++ b/crates/escouade-base/src/hub.rs\n@@ -47,9 +47,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m39",
+   "ts": 1794647512303,
+   "kind": "user",
+   "text": "Le hub perd un abonné quand deux clients ferment en même temps, regarde."
+  },
+  {
+   "id": "m40",
+   "ts": 1794647537007,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/ipc.ts"
+   },
+   "diff": "diff --git a/src/lib/ipc.ts b/src/lib/ipc.ts\n--- a/src/lib/ipc.ts\n+++ b/src/lib/ipc.ts\n@@ -49,9 +49,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m41",
+   "ts": 1794647561061,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "git diff --stat"
+   },
+   "output": " src/lib/remote.ts | 34 ++++++++++++++++++++++++----------\n crates/escouade-base/src/hub.rs | 12 ++++++++----\n 2 files changed, 32 insertions(+), 14 deletions(-)"
+  },
+  {
+   "id": "m42",
+   "ts": 1794647578493,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:81:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:141:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m43",
+   "ts": 1794647590266,
+   "kind": "user",
+   "text": "Relis le diff avant de committer, et lance clippy."
+  },
+  {
+   "id": "m44",
+   "ts": 1794647610271,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 9.4s"
+  },
+  {
+   "id": "m45",
+   "ts": 1794647634441,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "git diff --stat"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 1.44s"
+  },
+  {
+   "id": "m46",
+   "ts": 1794647643087,
+   "kind": "text",
+   "text": "## Ce que j'ai changé\n\n1. La reconnexion attend de plus en plus (500 ms, 1 s, 2 s… jusqu'à 30 s).\n2. Le client rejoue ce qu'il a manqué depuis son dernier numéro vu.\n3. Les terminaux gardent un tampon de 256 Kio.\n\n| Cas | Avant | Après |\n|---|---|---|\n| Coupure de 2 s | conversation vide | reprise sans trou |\n| Coupure de 5 min | erreur | reprise, tampon rejoué |\n\n> La poignée de main refuse un client d'une autre version majeure."
+  },
+  {
+   "id": "m47",
+   "ts": 1794647661853,
+   "kind": "text",
+   "text": "## Ce que j'ai changé\n\n1. La reconnexion attend de plus en plus (500 ms, 1 s, 2 s… jusqu'à 30 s).\n2. Le client rejoue ce qu'il a manqué depuis son dernier numéro vu.\n3. Les terminaux gardent un tampon de 256 Kio.\n\n| Cas | Avant | Après |\n|---|---|---|\n| Coupure de 2 s | conversation vide | reprise sans trou |\n| Coupure de 5 min | erreur | reprise, tampon rejoué |\n\n> La poignée de main refuse un client d'une autre version majeure."
+  },
+  {
+   "id": "m48",
+   "ts": 1794647671259,
+   "kind": "user",
+   "text": "Pourquoi l'e2e de la conversation est-il rouge sous macOS ?"
+  },
+  {
+   "id": "m49",
+   "ts": 1794647684785,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/ipc.ts"
+   },
+   "diff": "diff --git a/src/lib/ipc.ts b/src/lib/ipc.ts\n--- a/src/lib/ipc.ts\n+++ b/src/lib/ipc.ts\n@@ -58,9 +58,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m50",
+   "ts": 1794647709565,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:89:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:149:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m51",
+   "ts": 1794647727221,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "git diff --stat"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 1.50s"
+  },
+  {
+   "id": "m52",
+   "ts": 1794647742192,
+   "kind": "user",
+   "text": "Relis le diff avant de committer, et lance clippy."
+  },
+  {
+   "id": "m53",
+   "ts": 1794647767355,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:92:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:152:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m54",
+   "ts": 1794647793421,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "crates/escouade-base/src/hub.rs"
+   },
+   "diff": "diff --git a/crates/escouade-base/src/hub.rs b/crates/escouade-base/src/hub.rs\n--- a/crates/escouade-base/src/hub.rs\n+++ b/crates/escouade-base/src/hub.rs\n@@ -63,9 +63,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m55",
+   "ts": 1794647801192,
+   "kind": "text",
+   "text": "Le test passe maintenant. Voici le cœur de la correction :\n\n```rust\n/// Reprend un client après une coupure : rejoue ce qu'il n'a pas vu depuis `since`.\npub fn resume(&mut self, client: ClientId, since: u64) -> Result<Vec<Frame>, HubError> {\n    let sub = self.subscribers.get_mut(&client).ok_or(HubError::Unknown(client))?;\n    let frames: Vec<Frame> = self.log.iter().filter(|f| f.seq > since).cloned().collect();\n    sub.last_seen = frames.last().map(|f| f.seq).unwrap_or(since);\n    tracing::debug!(client = %client, count = frames.len(), \"reprise n°54\");\n    Ok(frames)\n}\n```\n\nEt côté interface :\n\n```ts\nexport async function reconnect(url: string, attempt = 4): Promise<WebSocket> {\n  const delay = Math.min(30_000, 500 * 2 ** attempt);\n  await new Promise((r) => setTimeout(r, delay));\n  const ws = new WebSocket(url);\n  ws.binaryType = 'arraybuffer';\n  return ws;\n}\n```"
+  },
+  {
+   "id": "m56",
+   "ts": 1794647813249,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:95:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:155:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m57",
+   "ts": 1794647821745,
+   "kind": "user",
+   "text": "Ajoute un test pour la poignée de main des versions."
+  },
+  {
+   "id": "m58",
+   "ts": 1794647842215,
+   "kind": "text",
+   "text": "J'ai regardé **`hub.rs`** : l'abonné est retiré deux fois quand deux clients ferment dans le même tour de boucle.\n\n- le premier `close` retire l'entrée ;\n- le second trouve une place vide et **panique** sur `unwrap()` ;\n- la correction : `remove` rend une `Option`, qu'on ignore.\n\nJe corrige et j'ajoute le test `two_clients_close_together` (n° 57)."
+  },
+  {
+   "id": "m59",
+   "ts": 1794647866615,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:98:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:158:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m60",
+   "ts": 1794647880504,
+   "kind": "text",
+   "text": "C'est la frame lue dans le même lot que le plantage : sous macOS, `read()` rend les deux d'un coup. Je découpe par longueur annoncée plutôt que par appel, voir `Frame::split` dans `crates/escouade-base/src/frame.rs`."
+  },
+  {
+   "id": "m61",
+   "ts": 1794647900774,
+   "kind": "user",
+   "text": "Le hub perd un abonné quand deux clients ferment en même temps, regarde."
+  },
+  {
+   "id": "m62",
+   "ts": 1794647912878,
+   "kind": "text",
+   "text": "## Ce que j'ai changé\n\n1. La reconnexion attend de plus en plus (500 ms, 1 s, 2 s… jusqu'à 30 s).\n2. Le client rejoue ce qu'il a manqué depuis son dernier numéro vu.\n3. Les terminaux gardent un tampon de 256 Kio.\n\n| Cas | Avant | Après |\n|---|---|---|\n| Coupure de 2 s | conversation vide | reprise sans trou |\n| Coupure de 5 min | erreur | reprise, tampon rejoué |\n\n> La poignée de main refuse un client d'une autre version majeure."
+  },
+  {
+   "id": "m63",
+   "ts": 1794647925276,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:42:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:162:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m64",
+   "ts": 1794647937693,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 1.63s"
+  },
+  {
+   "id": "m65",
+   "ts": 1794647947475,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "npm run check"
+   },
+   "output": " src/lib/remote.ts | 34 ++++++++++++++++++++++++----------\n crates/escouade-base/src/hub.rs | 12 ++++++++----\n 2 files changed, 32 insertions(+), 14 deletions(-)"
+  },
+  {
+   "id": "m66",
+   "ts": 1794647974107,
+   "kind": "user",
+   "text": "Le hub perd un abonné quand deux clients ferment en même temps, regarde."
+  },
+  {
+   "id": "m67",
+   "ts": 1794647988243,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "crates/escouade-base/src/hub.rs"
+   },
+   "diff": "diff --git a/crates/escouade-base/src/hub.rs b/crates/escouade-base/src/hub.rs\n--- a/crates/escouade-base/src/hub.rs\n+++ b/crates/escouade-base/src/hub.rs\n@@ -76,9 +76,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m68",
+   "ts": 1794648003749,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.2s"
+  },
+  {
+   "id": "m69",
+   "ts": 1794648010759,
+   "kind": "text",
+   "text": "J'ai regardé **`hub.rs`** : l'abonné est retiré deux fois quand deux clients ferment dans le même tour de boucle.\n\n- le premier `close` retire l'entrée ;\n- le second trouve une place vide et **panique** sur `unwrap()` ;\n- la correction : `remove` rend une `Option`, qu'on ignore.\n\nJe corrige et j'ajoute le test `two_clients_close_together` (n° 68)."
+  },
+  {
+   "id": "m70",
+   "ts": 1794648018522,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "git diff --stat"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.3s"
+  },
+  {
+   "id": "m71",
+   "ts": 1794648029551,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src-tauri/src/remote/tunnel.rs"
+   },
+   "diff": "diff --git a/src-tauri/src/remote/tunnel.rs b/src-tauri/src/remote/tunnel.rs\n--- a/src-tauri/src/remote/tunnel.rs\n+++ b/src-tauri/src/remote/tunnel.rs\n@@ -80,9 +80,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m72",
+   "ts": 1794648040917,
+   "kind": "user",
+   "text": "Peux-tu brancher la reconnexion du client distant quand le tunnel tombe ?"
+  },
+  {
+   "id": "m73",
+   "ts": 1794648067494,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "crates/escouade-base/src/hub.rs"
+   },
+   "diff": "diff --git a/crates/escouade-base/src/hub.rs b/crates/escouade-base/src/hub.rs\n--- a/crates/escouade-base/src/hub.rs\n+++ b/crates/escouade-base/src/hub.rs\n@@ -82,9 +82,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m74",
+   "ts": 1794648089560,
+   "kind": "text",
+   "text": "Le test passe maintenant. Voici le cœur de la correction :\n\n```rust\n/// Reprend un client après une coupure : rejoue ce qu'il n'a pas vu depuis `since`.\npub fn resume(&mut self, client: ClientId, since: u64) -> Result<Vec<Frame>, HubError> {\n    let sub = self.subscribers.get_mut(&client).ok_or(HubError::Unknown(client))?;\n    let frames: Vec<Frame> = self.log.iter().filter(|f| f.seq > since).cloned().collect();\n    sub.last_seen = frames.last().map(|f| f.seq).unwrap_or(since);\n    tracing::debug!(client = %client, count = frames.len(), \"reprise n°73\");\n    Ok(frames)\n}\n```\n\nEt côté interface :\n\n```ts\nexport async function reconnect(url: string, attempt = 3): Promise<WebSocket> {\n  const delay = Math.min(30_000, 500 * 2 ** attempt);\n  await new Promise((r) => setTimeout(r, delay));\n  const ws = new WebSocket(url);\n  ws.binaryType = 'arraybuffer';\n  return ws;\n}\n```"
+  },
+  {
+   "id": "m75",
+   "ts": 1794648109604,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 1.74s"
+  },
+  {
+   "id": "m76",
+   "ts": 1794648116795,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src-tauri/src/remote/tunnel.rs"
+   },
+   "diff": "diff --git a/src-tauri/src/remote/tunnel.rs b/src-tauri/src/remote/tunnel.rs\n--- a/src-tauri/src/remote/tunnel.rs\n+++ b/src-tauri/src/remote/tunnel.rs\n@@ -85,9 +85,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m77",
+   "ts": 1794648134405,
+   "kind": "text",
+   "text": "## Ce que j'ai changé\n\n1. La reconnexion attend de plus en plus (500 ms, 1 s, 2 s… jusqu'à 30 s).\n2. Le client rejoue ce qu'il a manqué depuis son dernier numéro vu.\n3. Les terminaux gardent un tampon de 256 Kio.\n\n| Cas | Avant | Après |\n|---|---|---|\n| Coupure de 2 s | conversation vide | reprise sans trou |\n| Coupure de 5 min | erreur | reprise, tampon rejoué |\n\n> La poignée de main refuse un client d'une autre version majeure."
+  },
+  {
+   "id": "m78",
+   "ts": 1794648159783,
+   "kind": "user",
+   "text": "Peux-tu brancher la reconnexion du client distant quand le tunnel tombe ?"
+  },
+  {
+   "id": "m79",
+   "ts": 1794648170184,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo nextest run -p escouade-base hub"
+   },
+   "output": " src/lib/remote.ts | 34 ++++++++++++++++++++++++----------\n crates/escouade-base/src/hub.rs | 12 ++++++++----\n 2 files changed, 32 insertions(+), 14 deletions(-)"
+  },
+  {
+   "id": "m80",
+   "ts": 1794648181166,
+   "kind": "text",
+   "text": "Le test passe maintenant. Voici le cœur de la correction :\n\n```rust\n/// Reprend un client après une coupure : rejoue ce qu'il n'a pas vu depuis `since`.\npub fn resume(&mut self, client: ClientId, since: u64) -> Result<Vec<Frame>, HubError> {\n    let sub = self.subscribers.get_mut(&client).ok_or(HubError::Unknown(client))?;\n    let frames: Vec<Frame> = self.log.iter().filter(|f| f.seq > since).cloned().collect();\n    sub.last_seen = frames.last().map(|f| f.seq).unwrap_or(since);\n    tracing::debug!(client = %client, count = frames.len(), \"reprise n°79\");\n    Ok(frames)\n}\n```\n\nEt côté interface :\n\n```ts\nexport async function reconnect(url: string, attempt = 4): Promise<WebSocket> {\n  const delay = Math.min(30_000, 500 * 2 ** attempt);\n  await new Promise((r) => setTimeout(r, delay));\n  const ws = new WebSocket(url);\n  ws.binaryType = 'arraybuffer';\n  return ws;\n}\n```"
+  },
+  {
+   "id": "m81",
+   "ts": 1794648195162,
+   "kind": "user",
+   "text": "Pourquoi l'e2e de la conversation est-il rouge sous macOS ?"
+  },
+  {
+   "id": "m82",
+   "ts": 1794648209832,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "npm run check"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.7s"
+  },
+  {
+   "id": "m83",
+   "ts": 1794648218257,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": " src/lib/remote.ts | 34 ++++++++++++++++++++++++----------\n crates/escouade-base/src/hub.rs | 12 ++++++++----\n 2 files changed, 32 insertions(+), 14 deletions(-)"
+  },
+  {
+   "id": "m84",
+   "ts": 1794648226282,
+   "kind": "text",
+   "text": "C'est la frame lue dans le même lot que le plantage : sous macOS, `read()` rend les deux d'un coup. Je découpe par longueur annoncée plutôt que par appel, voir `Frame::split` dans `crates/escouade-base/src/frame.rs`."
+  },
+  {
+   "id": "m85",
+   "ts": 1794648245647,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.8s"
+  },
+  {
+   "id": "m86",
+   "ts": 1794648270855,
+   "kind": "user",
+   "text": "Le hub perd un abonné quand deux clients ferment en même temps, regarde."
+  },
+  {
+   "id": "m87",
+   "ts": 1794648280132,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:66:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:106:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m88",
+   "ts": 1794648289217,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "crates/escouade-base/src/hub.rs"
+   },
+   "diff": "diff --git a/crates/escouade-base/src/hub.rs b/crates/escouade-base/src/hub.rs\n--- a/crates/escouade-base/src/hub.rs\n+++ b/crates/escouade-base/src/hub.rs\n@@ -97,9 +97,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m89",
+   "ts": 1794648296600,
+   "kind": "user",
+   "text": "Ajoute un test pour la poignée de main des versions."
+  },
+  {
+   "id": "m90",
+   "ts": 1794648318771,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/remote.ts"
+   },
+   "diff": "diff --git a/src/lib/remote.ts b/src/lib/remote.ts\n--- a/src/lib/remote.ts\n+++ b/src/lib/remote.ts\n@@ -99,9 +99,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m91",
+   "ts": 1794648341363,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/ipc.ts"
+   },
+   "diff": "diff --git a/src/lib/ipc.ts b/src/lib/ipc.ts\n--- a/src/lib/ipc.ts\n+++ b/src/lib/ipc.ts\n@@ -100,9 +100,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m92",
+   "ts": 1794648363029,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:71:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:111:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m93",
+   "ts": 1794648375210,
+   "kind": "text",
+   "text": "J'ai regardé **`hub.rs`** : l'abonné est retiré deux fois quand deux clients ferment dans le même tour de boucle.\n\n- le premier `close` retire l'entrée ;\n- le second trouve une place vide et **panique** sur `unwrap()` ;\n- la correction : `remove` rend une `Option`, qu'on ignore.\n\nJe corrige et j'ajoute le test `two_clients_close_together` (n° 92)."
+  },
+  {
+   "id": "m94",
+   "ts": 1794648389555,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/remote.ts"
+   },
+   "diff": "diff --git a/src/lib/remote.ts b/src/lib/remote.ts\n--- a/src/lib/remote.ts\n+++ b/src/lib/remote.ts\n@@ -103,9 +103,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m95",
+   "ts": 1794648414502,
+   "kind": "user",
+   "text": "Pourquoi l'e2e de la conversation est-il rouge sous macOS ?"
+  },
+  {
+   "id": "m96",
+   "ts": 1794648439561,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src-tauri/src/remote/tunnel.rs"
+   },
+   "diff": "diff --git a/src-tauri/src/remote/tunnel.rs b/src-tauri/src/remote/tunnel.rs\n--- a/src-tauri/src/remote/tunnel.rs\n+++ b/src-tauri/src/remote/tunnel.rs\n@@ -105,9 +105,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m97",
+   "ts": 1794648446793,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": " src/lib/remote.ts | 34 ++++++++++++++++++++++++----------\n crates/escouade-base/src/hub.rs | 12 ++++++++----\n 2 files changed, 32 insertions(+), 14 deletions(-)"
+  },
+  {
+   "id": "m98",
+   "ts": 1794648464058,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "npm run check"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.2s"
+  },
+  {
+   "id": "m99",
+   "ts": 1794648483274,
+   "kind": "text",
+   "text": "Le test passe maintenant. Voici le cœur de la correction :\n\n```rust\n/// Reprend un client après une coupure : rejoue ce qu'il n'a pas vu depuis `since`.\npub fn resume(&mut self, client: ClientId, since: u64) -> Result<Vec<Frame>, HubError> {\n    let sub = self.subscribers.get_mut(&client).ok_or(HubError::Unknown(client))?;\n    let frames: Vec<Frame> = self.log.iter().filter(|f| f.seq > since).cloned().collect();\n    sub.last_seen = frames.last().map(|f| f.seq).unwrap_or(since);\n    tracing::debug!(client = %client, count = frames.len(), \"reprise n°98\");\n    Ok(frames)\n}\n```\n\nEt côté interface :\n\n```ts\nexport async function reconnect(url: string, attempt = 3): Promise<WebSocket> {\n  const delay = Math.min(30_000, 500 * 2 ** attempt);\n  await new Promise((r) => setTimeout(r, delay));\n  const ws = new WebSocket(url);\n  ws.binaryType = 'arraybuffer';\n  return ws;\n}\n```"
+  },
+  {
+   "id": "m100",
+   "ts": 1794648504521,
+   "kind": "user",
+   "text": "Relis le diff avant de committer, et lance clippy."
+  },
+  {
+   "id": "m101",
+   "ts": 1794648519207,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "git diff --stat"
+   },
+   "output": " src/lib/remote.ts | 34 ++++++++++++++++++++++++----------\n crates/escouade-base/src/hub.rs | 12 ++++++++----\n 2 files changed, 32 insertions(+), 14 deletions(-)"
+  },
+  {
+   "id": "m102",
+   "ts": 1794648536219,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:81:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:121:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m103",
+   "ts": 1794648554362,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "npm run check"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 2.02s"
+  },
+  {
+   "id": "m104",
+   "ts": 1794648565072,
+   "kind": "user",
+   "text": "Ajoute un test pour la poignée de main des versions."
+  },
+  {
+   "id": "m105",
+   "ts": 1794648580595,
+   "kind": "text",
+   "text": "C'est la frame lue dans le même lot que le plantage : sous macOS, `read()` rend les deux d'un coup. Je découpe par longueur annoncée plutôt que par appel, voir `Frame::split` dans `crates/escouade-base/src/frame.rs`."
+  },
+  {
+   "id": "m106",
+   "ts": 1794648587741,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/components/Conversation.svelte"
+   },
+   "diff": "diff --git a/src/components/Conversation.svelte b/src/components/Conversation.svelte\n--- a/src/components/Conversation.svelte\n+++ b/src/components/Conversation.svelte\n@@ -115,9 +115,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m107",
+   "ts": 1794648597882,
+   "kind": "text",
+   "text": "## Ce que j'ai changé\n\n1. La reconnexion attend de plus en plus (500 ms, 1 s, 2 s… jusqu'à 30 s).\n2. Le client rejoue ce qu'il a manqué depuis son dernier numéro vu.\n3. Les terminaux gardent un tampon de 256 Kio.\n\n| Cas | Avant | Après |\n|---|---|---|\n| Coupure de 2 s | conversation vide | reprise sans trou |\n| Coupure de 5 min | erreur | reprise, tampon rejoué |\n\n> La poignée de main refuse un client d'une autre version majeure."
+  },
+  {
+   "id": "m108",
+   "ts": 1794648612722,
+   "kind": "user",
+   "text": "Pourquoi l'e2e de la conversation est-il rouge sous macOS ?"
+  },
+  {
+   "id": "m109",
+   "ts": 1794648628646,
+   "kind": "text",
+   "text": "Le test passe maintenant. Voici le cœur de la correction :\n\n```rust\n/// Reprend un client après une coupure : rejoue ce qu'il n'a pas vu depuis `since`.\npub fn resume(&mut self, client: ClientId, since: u64) -> Result<Vec<Frame>, HubError> {\n    let sub = self.subscribers.get_mut(&client).ok_or(HubError::Unknown(client))?;\n    let frames: Vec<Frame> = self.log.iter().filter(|f| f.seq > since).cloned().collect();\n    sub.last_seen = frames.last().map(|f| f.seq).unwrap_or(since);\n    tracing::debug!(client = %client, count = frames.len(), \"reprise n°108\");\n    Ok(frames)\n}\n```\n\nEt côté interface :\n\n```ts\nexport async function reconnect(url: string, attempt = 3): Promise<WebSocket> {\n  const delay = Math.min(30_000, 500 * 2 ** attempt);\n  await new Promise((r) => setTimeout(r, delay));\n  const ws = new WebSocket(url);\n  ws.binaryType = 'arraybuffer';\n  return ws;\n}\n```"
+  },
+  {
+   "id": "m110",
+   "ts": 1794648643659,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "crates/escouade-base/src/hub.rs"
+   },
+   "diff": "diff --git a/crates/escouade-base/src/hub.rs b/crates/escouade-base/src/hub.rs\n--- a/crates/escouade-base/src/hub.rs\n+++ b/crates/escouade-base/src/hub.rs\n@@ -119,9 +119,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m111",
+   "ts": 1794648659049,
+   "kind": "text",
+   "text": "C'est la frame lue dans le même lot que le plantage : sous macOS, `read()` rend les deux d'un coup. Je découpe par longueur annoncée plutôt que par appel, voir `Frame::split` dans `crates/escouade-base/src/frame.rs`."
+  },
+  {
+   "id": "m112",
+   "ts": 1794648684526,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/components/Conversation.svelte"
+   },
+   "diff": "diff --git a/src/components/Conversation.svelte b/src/components/Conversation.svelte\n--- a/src/components/Conversation.svelte\n+++ b/src/components/Conversation.svelte\n@@ -121,9 +121,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m113",
+   "ts": 1794648697255,
+   "kind": "user",
+   "text": "Peux-tu brancher la reconnexion du client distant quand le tunnel tombe ?"
+  },
+  {
+   "id": "m114",
+   "ts": 1794648716027,
+   "kind": "text",
+   "text": "C'est la frame lue dans le même lot que le plantage : sous macOS, `read()` rend les deux d'un coup. Je découpe par longueur annoncée plutôt que par appel, voir `Frame::split` dans `crates/escouade-base/src/frame.rs`."
+  },
+  {
+   "id": "m115",
+   "ts": 1794648731588,
+   "kind": "text",
+   "text": "## Ce que j'ai changé\n\n1. La reconnexion attend de plus en plus (500 ms, 1 s, 2 s… jusqu'à 30 s).\n2. Le client rejoue ce qu'il a manqué depuis son dernier numéro vu.\n3. Les terminaux gardent un tampon de 256 Kio.\n\n| Cas | Avant | Après |\n|---|---|---|\n| Coupure de 2 s | conversation vide | reprise sans trou |\n| Coupure de 5 min | erreur | reprise, tampon rejoué |\n\n> La poignée de main refuse un client d'une autre version majeure."
+  },
+  {
+   "id": "m116",
+   "ts": 1794648751871,
+   "kind": "user",
+   "text": "Pourquoi l'e2e de la conversation est-il rouge sous macOS ?"
+  },
+  {
+   "id": "m117",
+   "ts": 1794648772826,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:96:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:136:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m118",
+   "ts": 1794648797233,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo nextest run -p escouade-base hub"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 2.17s"
+  },
+  {
+   "id": "m119",
+   "ts": 1794648806396,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/ipc.ts"
+   },
+   "diff": "diff --git a/src/lib/ipc.ts b/src/lib/ipc.ts\n--- a/src/lib/ipc.ts\n+++ b/src/lib/ipc.ts\n@@ -128,9 +128,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m120",
+   "ts": 1794648814552,
+   "kind": "user",
+   "text": "Le hub perd un abonné quand deux clients ferment en même temps, regarde."
+  },
+  {
+   "id": "m121",
+   "ts": 1794648821888,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "git diff --stat"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.0s"
+  },
+  {
+   "id": "m122",
+   "ts": 1794648838768,
+   "kind": "text",
+   "text": "Le test passe maintenant. Voici le cœur de la correction :\n\n```rust\n/// Reprend un client après une coupure : rejoue ce qu'il n'a pas vu depuis `since`.\npub fn resume(&mut self, client: ClientId, since: u64) -> Result<Vec<Frame>, HubError> {\n    let sub = self.subscribers.get_mut(&client).ok_or(HubError::Unknown(client))?;\n    let frames: Vec<Frame> = self.log.iter().filter(|f| f.seq > since).cloned().collect();\n    sub.last_seen = frames.last().map(|f| f.seq).unwrap_or(since);\n    tracing::debug!(client = %client, count = frames.len(), \"reprise n°121\");\n    Ok(frames)\n}\n```\n\nEt côté interface :\n\n```ts\nexport async function reconnect(url: string, attempt = 1): Promise<WebSocket> {\n  const delay = Math.min(30_000, 500 * 2 ** attempt);\n  await new Promise((r) => setTimeout(r, delay));\n  const ws = new WebSocket(url);\n  ws.binaryType = 'arraybuffer';\n  return ws;\n}\n```"
+  },
+  {
+   "id": "m123",
+   "ts": 1794648860076,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "npm run check"
+   },
+   "output": " src/lib/remote.ts | 34 ++++++++++++++++++++++++----------\n crates/escouade-base/src/hub.rs | 12 ++++++++----\n 2 files changed, 32 insertions(+), 14 deletions(-)"
+  },
+  {
+   "id": "m124",
+   "ts": 1794648886273,
+   "kind": "text",
+   "text": "C'est la frame lue dans le même lot que le plantage : sous macOS, `read()` rend les deux d'un coup. Je découpe par longueur annoncée plutôt que par appel, voir `Frame::split` dans `crates/escouade-base/src/frame.rs`."
+  },
+  {
+   "id": "m125",
+   "ts": 1794648911053,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:44:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:144:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m126",
+   "ts": 1794648937727,
+   "kind": "user",
+   "text": "Peux-tu brancher la reconnexion du client distant quand le tunnel tombe ?"
+  },
+  {
+   "id": "m127",
+   "ts": 1794648953891,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "crates/escouade-base/src/hub.rs"
+   },
+   "diff": "diff --git a/crates/escouade-base/src/hub.rs b/crates/escouade-base/src/hub.rs\n--- a/crates/escouade-base/src/hub.rs\n+++ b/crates/escouade-base/src/hub.rs\n@@ -136,9 +136,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m128",
+   "ts": 1794648974973,
+   "kind": "text",
+   "text": "C'est la frame lue dans le même lot que le plantage : sous macOS, `read()` rend les deux d'un coup. Je découpe par longueur annoncée plutôt que par appel, voir `Frame::split` dans `crates/escouade-base/src/frame.rs`."
+  },
+  {
+   "id": "m129",
+   "ts": 1794648984361,
+   "kind": "user",
+   "text": "Ajoute un test pour la poignée de main des versions."
+  },
+  {
+   "id": "m130",
+   "ts": 1794649007727,
+   "kind": "text",
+   "text": "Le test passe maintenant. Voici le cœur de la correction :\n\n```rust\n/// Reprend un client après une coupure : rejoue ce qu'il n'a pas vu depuis `since`.\npub fn resume(&mut self, client: ClientId, since: u64) -> Result<Vec<Frame>, HubError> {\n    let sub = self.subscribers.get_mut(&client).ok_or(HubError::Unknown(client))?;\n    let frames: Vec<Frame> = self.log.iter().filter(|f| f.seq > since).cloned().collect();\n    sub.last_seen = frames.last().map(|f| f.seq).unwrap_or(since);\n    tracing::debug!(client = %client, count = frames.len(), \"reprise n°129\");\n    Ok(frames)\n}\n```\n\nEt côté interface :\n\n```ts\nexport async function reconnect(url: string, attempt = 4): Promise<WebSocket> {\n  const delay = Math.min(30_000, 500 * 2 ** attempt);\n  await new Promise((r) => setTimeout(r, delay));\n  const ws = new WebSocket(url);\n  ws.binaryType = 'arraybuffer';\n  return ws;\n}\n```"
+  },
+  {
+   "id": "m131",
+   "ts": 1794649027399,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "npm run check"
+   },
+   "output": " src/lib/remote.ts | 34 ++++++++++++++++++++++++----------\n crates/escouade-base/src/hub.rs | 12 ++++++++----\n 2 files changed, 32 insertions(+), 14 deletions(-)"
+  },
+  {
+   "id": "m132",
+   "ts": 1794649045256,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:51:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:151:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m133",
+   "ts": 1794649054307,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/remote.ts"
+   },
+   "diff": "diff --git a/src/lib/remote.ts b/src/lib/remote.ts\n--- a/src/lib/remote.ts\n+++ b/src/lib/remote.ts\n@@ -142,9 +142,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m134",
+   "ts": 1794649068571,
+   "kind": "text",
+   "text": "J'ai regardé **`hub.rs`** : l'abonné est retiré deux fois quand deux clients ferment dans le même tour de boucle.\n\n- le premier `close` retire l'entrée ;\n- le second trouve une place vide et **panique** sur `unwrap()` ;\n- la correction : `remove` rend une `Option`, qu'on ignore.\n\nJe corrige et j'ajoute le test `two_clients_close_together` (n° 133)."
+  },
+  {
+   "id": "m135",
+   "ts": 1794649089723,
+   "kind": "user",
+   "text": "Ajoute un test pour la poignée de main des versions."
+  },
+  {
+   "id": "m136",
+   "ts": 1794649107961,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo nextest run -p escouade-base hub"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.5s"
+  },
+  {
+   "id": "m137",
+   "ts": 1794649119133,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "npm run check"
+   },
+   "output": " src/lib/remote.ts | 34 ++++++++++++++++++++++++----------\n crates/escouade-base/src/hub.rs | 12 ++++++++----\n 2 files changed, 32 insertions(+), 14 deletions(-)"
+  },
+  {
+   "id": "m138",
+   "ts": 1794649131928,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "crates/escouade-base/src/hub.rs"
+   },
+   "diff": "diff --git a/crates/escouade-base/src/hub.rs b/crates/escouade-base/src/hub.rs\n--- a/crates/escouade-base/src/hub.rs\n+++ b/crates/escouade-base/src/hub.rs\n@@ -147,9 +147,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m139",
+   "ts": 1794649142007,
+   "kind": "user",
+   "text": "Peux-tu brancher la reconnexion du client distant quand le tunnel tombe ?"
+  },
+  {
+   "id": "m140",
+   "ts": 1794649168315,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/remote.ts"
+   },
+   "diff": "diff --git a/src/lib/remote.ts b/src/lib/remote.ts\n--- a/src/lib/remote.ts\n+++ b/src/lib/remote.ts\n@@ -149,9 +149,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m141",
+   "ts": 1794649189519,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src-tauri/src/remote/tunnel.rs"
+   },
+   "diff": "diff --git a/src-tauri/src/remote/tunnel.rs b/src-tauri/src/remote/tunnel.rs\n--- a/src-tauri/src/remote/tunnel.rs\n+++ b/src-tauri/src/remote/tunnel.rs\n@@ -150,9 +150,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m142",
+   "ts": 1794649201050,
+   "kind": "user",
+   "text": "Le hub perd un abonné quand deux clients ferment en même temps, regarde."
+  },
+  {
+   "id": "m143",
+   "ts": 1794649214661,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/ipc.ts"
+   },
+   "diff": "diff --git a/src/lib/ipc.ts b/src/lib/ipc.ts\n--- a/src/lib/ipc.ts\n+++ b/src/lib/ipc.ts\n@@ -152,9 +152,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m144",
+   "ts": 1794649228246,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": " src/lib/remote.ts | 34 ++++++++++++++++++++++++----------\n crates/escouade-base/src/hub.rs | 12 ++++++++----\n 2 files changed, 32 insertions(+), 14 deletions(-)"
+  },
+  {
+   "id": "m145",
+   "ts": 1794649242994,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": " src/lib/remote.ts | 34 ++++++++++++++++++++++++----------\n crates/escouade-base/src/hub.rs | 12 ++++++++----\n 2 files changed, 32 insertions(+), 14 deletions(-)"
+  },
+  {
+   "id": "m146",
+   "ts": 1794649269845,
+   "kind": "text",
+   "text": "Le test passe maintenant. Voici le cœur de la correction :\n\n```rust\n/// Reprend un client après une coupure : rejoue ce qu'il n'a pas vu depuis `since`.\npub fn resume(&mut self, client: ClientId, since: u64) -> Result<Vec<Frame>, HubError> {\n    let sub = self.subscribers.get_mut(&client).ok_or(HubError::Unknown(client))?;\n    let frames: Vec<Frame> = self.log.iter().filter(|f| f.seq > since).cloned().collect();\n    sub.last_seen = frames.last().map(|f| f.seq).unwrap_or(since);\n    tracing::debug!(client = %client, count = frames.len(), \"reprise n°145\");\n    Ok(frames)\n}\n```\n\nEt côté interface :\n\n```ts\nexport async function reconnect(url: string, attempt = 0): Promise<WebSocket> {\n  const delay = Math.min(30_000, 500 * 2 ** attempt);\n  await new Promise((r) => setTimeout(r, delay));\n  const ws = new WebSocket(url);\n  ws.binaryType = 'arraybuffer';\n  return ws;\n}\n```"
+  },
+  {
+   "id": "m147",
+   "ts": 1794649279671,
+   "kind": "text",
+   "text": "## Ce que j'ai changé\n\n1. La reconnexion attend de plus en plus (500 ms, 1 s, 2 s… jusqu'à 30 s).\n2. Le client rejoue ce qu'il a manqué depuis son dernier numéro vu.\n3. Les terminaux gardent un tampon de 256 Kio.\n\n| Cas | Avant | Après |\n|---|---|---|\n| Coupure de 2 s | conversation vide | reprise sans trou |\n| Coupure de 5 min | erreur | reprise, tampon rejoué |\n\n> La poignée de main refuse un client d'une autre version majeure."
+  },
+  {
+   "id": "m148",
+   "ts": 1794649299588,
+   "kind": "user",
+   "text": "Pourquoi l'e2e de la conversation est-il rouge sous macOS ?"
+  },
+  {
+   "id": "m149",
+   "ts": 1794649307274,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "git diff --stat"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 2.48s"
+  },
+  {
+   "id": "m150",
+   "ts": 1794649319687,
+   "kind": "text",
+   "text": "Le test passe maintenant. Voici le cœur de la correction :\n\n```rust\n/// Reprend un client après une coupure : rejoue ce qu'il n'a pas vu depuis `since`.\npub fn resume(&mut self, client: ClientId, since: u64) -> Result<Vec<Frame>, HubError> {\n    let sub = self.subscribers.get_mut(&client).ok_or(HubError::Unknown(client))?;\n    let frames: Vec<Frame> = self.log.iter().filter(|f| f.seq > since).cloned().collect();\n    sub.last_seen = frames.last().map(|f| f.seq).unwrap_or(since);\n    tracing::debug!(client = %client, count = frames.len(), \"reprise n°149\");\n    Ok(frames)\n}\n```\n\nEt côté interface :\n\n```ts\nexport async function reconnect(url: string, attempt = 4): Promise<WebSocket> {\n  const delay = Math.min(30_000, 500 * 2 ** attempt);\n  await new Promise((r) => setTimeout(r, delay));\n  const ws = new WebSocket(url);\n  ws.binaryType = 'arraybuffer';\n  return ws;\n}\n```"
+  },
+  {
+   "id": "m151",
+   "ts": 1794649332902,
+   "kind": "text",
+   "text": "Le test passe maintenant. Voici le cœur de la correction :\n\n```rust\n/// Reprend un client après une coupure : rejoue ce qu'il n'a pas vu depuis `since`.\npub fn resume(&mut self, client: ClientId, since: u64) -> Result<Vec<Frame>, HubError> {\n    let sub = self.subscribers.get_mut(&client).ok_or(HubError::Unknown(client))?;\n    let frames: Vec<Frame> = self.log.iter().filter(|f| f.seq > since).cloned().collect();\n    sub.last_seen = frames.last().map(|f| f.seq).unwrap_or(since);\n    tracing::debug!(client = %client, count = frames.len(), \"reprise n°150\");\n    Ok(frames)\n}\n```\n\nEt côté interface :\n\n```ts\nexport async function reconnect(url: string, attempt = 0): Promise<WebSocket> {\n  const delay = Math.min(30_000, 500 * 2 ** attempt);\n  await new Promise((r) => setTimeout(r, delay));\n  const ws = new WebSocket(url);\n  ws.binaryType = 'arraybuffer';\n  return ws;\n}\n```"
+  },
+  {
+   "id": "m152",
+   "ts": 1794649359515,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/ipc.ts"
+   },
+   "diff": "diff --git a/src/lib/ipc.ts b/src/lib/ipc.ts\n--- a/src/lib/ipc.ts\n+++ b/src/lib/ipc.ts\n@@ -161,9 +161,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m153",
+   "ts": 1794649367040,
+   "kind": "user",
+   "text": "Ajoute un test pour la poignée de main des versions."
+  },
+  {
+   "id": "m154",
+   "ts": 1794649380264,
+   "kind": "text",
+   "text": "J'ai regardé **`hub.rs`** : l'abonné est retiré deux fois quand deux clients ferment dans le même tour de boucle.\n\n- le premier `close` retire l'entrée ;\n- le second trouve une place vide et **panique** sur `unwrap()` ;\n- la correction : `remove` rend une `Option`, qu'on ignore.\n\nJe corrige et j'ajoute le test `two_clients_close_together` (n° 153)."
+  },
+  {
+   "id": "m155",
+   "ts": 1794649403929,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src-tauri/src/remote/tunnel.rs"
+   },
+   "diff": "diff --git a/src-tauri/src/remote/tunnel.rs b/src-tauri/src/remote/tunnel.rs\n--- a/src-tauri/src/remote/tunnel.rs\n+++ b/src-tauri/src/remote/tunnel.rs\n@@ -164,9 +164,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m156",
+   "ts": 1794649429167,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src-tauri/src/remote/tunnel.rs"
+   },
+   "diff": "diff --git a/src-tauri/src/remote/tunnel.rs b/src-tauri/src/remote/tunnel.rs\n--- a/src-tauri/src/remote/tunnel.rs\n+++ b/src-tauri/src/remote/tunnel.rs\n@@ -165,9 +165,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m157",
+   "ts": 1794649444153,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 2.56s"
+  },
+  {
+   "id": "m158",
+   "ts": 1794649468525,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "crates/escouade-base/src/hub.rs"
+   },
+   "diff": "diff --git a/crates/escouade-base/src/hub.rs b/crates/escouade-base/src/hub.rs\n--- a/crates/escouade-base/src/hub.rs\n+++ b/crates/escouade-base/src/hub.rs\n@@ -167,9 +167,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m159",
+   "ts": 1794649482747,
+   "kind": "user",
+   "text": "Pourquoi l'e2e de la conversation est-il rouge sous macOS ?"
+  },
+  {
+   "id": "m160",
+   "ts": 1794649506889,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 2.59s"
+  },
+  {
+   "id": "m161",
+   "ts": 1794649517594,
+   "kind": "text",
+   "text": "Le test passe maintenant. Voici le cœur de la correction :\n\n```rust\n/// Reprend un client après une coupure : rejoue ce qu'il n'a pas vu depuis `since`.\npub fn resume(&mut self, client: ClientId, since: u64) -> Result<Vec<Frame>, HubError> {\n    let sub = self.subscribers.get_mut(&client).ok_or(HubError::Unknown(client))?;\n    let frames: Vec<Frame> = self.log.iter().filter(|f| f.seq > since).cloned().collect();\n    sub.last_seen = frames.last().map(|f| f.seq).unwrap_or(since);\n    tracing::debug!(client = %client, count = frames.len(), \"reprise n°160\");\n    Ok(frames)\n}\n```\n\nEt côté interface :\n\n```ts\nexport async function reconnect(url: string, attempt = 0): Promise<WebSocket> {\n  const delay = Math.min(30_000, 500 * 2 ** attempt);\n  await new Promise((r) => setTimeout(r, delay));\n  const ws = new WebSocket(url);\n  ws.binaryType = 'arraybuffer';\n  return ws;\n}\n```"
+  },
+  {
+   "id": "m162",
+   "ts": 1794649538331,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/components/Conversation.svelte"
+   },
+   "diff": "diff --git a/src/components/Conversation.svelte b/src/components/Conversation.svelte\n--- a/src/components/Conversation.svelte\n+++ b/src/components/Conversation.svelte\n@@ -171,9 +171,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m163",
+   "ts": 1794649560434,
+   "kind": "user",
+   "text": "Le hub perd un abonné quand deux clients ferment en même temps, regarde."
+  },
+  {
+   "id": "m164",
+   "ts": 1794649580950,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo nextest run -p escouade-base hub"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.4s"
+  },
+  {
+   "id": "m165",
+   "ts": 1794649594714,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "npm run check"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.5s"
+  },
+  {
+   "id": "m166",
+   "ts": 1794649609907,
+   "kind": "user",
+   "text": "Peux-tu brancher la reconnexion du client distant quand le tunnel tombe ?"
+  },
+  {
+   "id": "m167",
+   "ts": 1794649634625,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo nextest run -p escouade-base hub"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 2.66s"
+  },
+  {
+   "id": "m168",
+   "ts": 1794649644822,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src-tauri/src/remote/tunnel.rs"
+   },
+   "diff": "diff --git a/src-tauri/src/remote/tunnel.rs b/src-tauri/src/remote/tunnel.rs\n--- a/src-tauri/src/remote/tunnel.rs\n+++ b/src-tauri/src/remote/tunnel.rs\n@@ -177,9 +177,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m169",
+   "ts": 1794649652852,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/components/Conversation.svelte"
+   },
+   "diff": "diff --git a/src/components/Conversation.svelte b/src/components/Conversation.svelte\n--- a/src/components/Conversation.svelte\n+++ b/src/components/Conversation.svelte\n@@ -178,9 +178,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m170",
+   "ts": 1794649673211,
+   "kind": "text",
+   "text": "J'ai regardé **`hub.rs`** : l'abonné est retiré deux fois quand deux clients ferment dans le même tour de boucle.\n\n- le premier `close` retire l'entrée ;\n- le second trouve une place vide et **panique** sur `unwrap()` ;\n- la correction : `remove` rend une `Option`, qu'on ignore.\n\nJe corrige et j'ajoute le test `two_clients_close_together` (n° 169)."
+  },
+  {
+   "id": "m171",
+   "ts": 1794649689462,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:90:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:110:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m172",
+   "ts": 1794649703929,
+   "kind": "user",
+   "text": "Pourquoi l'e2e de la conversation est-il rouge sous macOS ?"
+  },
+  {
+   "id": "m173",
+   "ts": 1794649716349,
+   "kind": "text",
+   "text": "C'est la frame lue dans le même lot que le plantage : sous macOS, `read()` rend les deux d'un coup. Je découpe par longueur annoncée plutôt que par appel, voir `Frame::split` dans `crates/escouade-base/src/frame.rs`."
+  },
+  {
+   "id": "m174",
+   "ts": 1794649733797,
+   "kind": "text",
+   "text": "C'est la frame lue dans le même lot que le plantage : sous macOS, `read()` rend les deux d'un coup. Je découpe par longueur annoncée plutôt que par appel, voir `Frame::split` dans `crates/escouade-base/src/frame.rs`."
+  },
+  {
+   "id": "m175",
+   "ts": 1794649746830,
+   "kind": "user",
+   "text": "Le hub perd un abonné quand deux clients ferment en même temps, regarde."
+  },
+  {
+   "id": "m176",
+   "ts": 1794649765735,
+   "kind": "text",
+   "text": "C'est la frame lue dans le même lot que le plantage : sous macOS, `read()` rend les deux d'un coup. Je découpe par longueur annoncée plutôt que par appel, voir `Frame::split` dans `crates/escouade-base/src/frame.rs`."
+  },
+  {
+   "id": "m177",
+   "ts": 1794649774536,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:96:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:116:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m178",
+   "ts": 1794649797401,
+   "kind": "user",
+   "text": "Ajoute un test pour la poignée de main des versions."
+  },
+  {
+   "id": "m179",
+   "ts": 1794649823304,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/components/Conversation.svelte"
+   },
+   "diff": "diff --git a/src/components/Conversation.svelte b/src/components/Conversation.svelte\n--- a/src/components/Conversation.svelte\n+++ b/src/components/Conversation.svelte\n@@ -188,9 +188,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m180",
+   "ts": 1794649838575,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo nextest run -p escouade-base hub"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 14.0s"
+  },
+  {
+   "id": "m181",
+   "ts": 1794649860191,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 14.0s"
+  },
+  {
+   "id": "m182",
+   "ts": 1794649875228,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "npm run check"
+   },
+   "output": " src/lib/remote.ts | 34 ++++++++++++++++++++++++----------\n crates/escouade-base/src/hub.rs | 12 ++++++++----\n 2 files changed, 32 insertions(+), 14 deletions(-)"
+  },
+  {
+   "id": "m183",
+   "ts": 1794649889096,
+   "kind": "user",
+   "text": "Pourquoi l'e2e de la conversation est-il rouge sous macOS ?"
+  },
+  {
+   "id": "m184",
+   "ts": 1794649902739,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": " src/lib/remote.ts | 34 ++++++++++++++++++++++++----------\n crates/escouade-base/src/hub.rs | 12 ++++++++----\n 2 files changed, 32 insertions(+), 14 deletions(-)"
+  },
+  {
+   "id": "m185",
+   "ts": 1794649919269,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/ipc.ts"
+   },
+   "diff": "diff --git a/src/lib/ipc.ts b/src/lib/ipc.ts\n--- a/src/lib/ipc.ts\n+++ b/src/lib/ipc.ts\n@@ -194,9 +194,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m186",
+   "ts": 1794649941289,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src-tauri/src/remote/tunnel.rs"
+   },
+   "diff": "diff --git a/src-tauri/src/remote/tunnel.rs b/src-tauri/src/remote/tunnel.rs\n--- a/src-tauri/src/remote/tunnel.rs\n+++ b/src-tauri/src/remote/tunnel.rs\n@@ -195,9 +195,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m187",
+   "ts": 1794649948573,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/components/Conversation.svelte"
+   },
+   "diff": "diff --git a/src/components/Conversation.svelte b/src/components/Conversation.svelte\n--- a/src/components/Conversation.svelte\n+++ b/src/components/Conversation.svelte\n@@ -196,9 +196,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m188",
+   "ts": 1794649959718,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 2.87s"
+  },
+  {
+   "id": "m189",
+   "ts": 1794649970452,
+   "kind": "user",
+   "text": "Ajoute un test pour la poignée de main des versions."
+  },
+  {
+   "id": "m190",
+   "ts": 1794649991020,
+   "kind": "text",
+   "text": "## Ce que j'ai changé\n\n1. La reconnexion attend de plus en plus (500 ms, 1 s, 2 s… jusqu'à 30 s).\n2. Le client rejoue ce qu'il a manqué depuis son dernier numéro vu.\n3. Les terminaux gardent un tampon de 256 Kio.\n\n| Cas | Avant | Après |\n|---|---|---|\n| Coupure de 2 s | conversation vide | reprise sans trou |\n| Coupure de 5 min | erreur | reprise, tampon rejoué |\n\n> La poignée de main refuse un client d'une autre version majeure."
+  },
+  {
+   "id": "m191",
+   "ts": 1794650010502,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/ipc.ts"
+   },
+   "diff": "diff --git a/src/lib/ipc.ts b/src/lib/ipc.ts\n--- a/src/lib/ipc.ts\n+++ b/src/lib/ipc.ts\n@@ -200,9 +200,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m192",
+   "ts": 1794650019609,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 2.91s"
+  },
+  {
+   "id": "m193",
+   "ts": 1794650037774,
+   "kind": "user",
+   "text": "Relis le diff avant de committer, et lance clippy."
+  },
+  {
+   "id": "m194",
+   "ts": 1794650058632,
+   "kind": "text",
+   "text": "C'est la frame lue dans le même lot que le plantage : sous macOS, `read()` rend les deux d'un coup. Je découpe par longueur annoncée plutôt que par appel, voir `Frame::split` dans `crates/escouade-base/src/frame.rs`."
+  },
+  {
+   "id": "m195",
+   "ts": 1794650083935,
+   "kind": "text",
+   "text": "J'ai regardé **`hub.rs`** : l'abonné est retiré deux fois quand deux clients ferment dans le même tour de boucle.\n\n- le premier `close` retire l'entrée ;\n- le second trouve une place vide et **panique** sur `unwrap()` ;\n- la correction : `remove` rend une `Option`, qu'on ignore.\n\nJe corrige et j'ajoute le test `two_clients_close_together` (n° 194)."
+  },
+  {
+   "id": "m196",
+   "ts": 1794650095691,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "crates/escouade-base/src/hub.rs"
+   },
+   "diff": "diff --git a/crates/escouade-base/src/hub.rs b/crates/escouade-base/src/hub.rs\n--- a/crates/escouade-base/src/hub.rs\n+++ b/crates/escouade-base/src/hub.rs\n@@ -205,9 +205,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m197",
+   "ts": 1794650119656,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:56:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:136:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m198",
+   "ts": 1794650136563,
+   "kind": "user",
+   "text": "Relis le diff avant de committer, et lance clippy."
+  },
+  {
+   "id": "m199",
+   "ts": 1794650147994,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/ipc.ts"
+   },
+   "diff": "diff --git a/src/lib/ipc.ts b/src/lib/ipc.ts\n--- a/src/lib/ipc.ts\n+++ b/src/lib/ipc.ts\n@@ -208,9 +208,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m200",
+   "ts": 1794650155759,
+   "kind": "text",
+   "text": "C'est la frame lue dans le même lot que le plantage : sous macOS, `read()` rend les deux d'un coup. Je découpe par longueur annoncée plutôt que par appel, voir `Frame::split` dans `crates/escouade-base/src/frame.rs`."
+  },
+  {
+   "id": "m201",
+   "ts": 1794650181609,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/remote.ts"
+   },
+   "diff": "diff --git a/src/lib/remote.ts b/src/lib/remote.ts\n--- a/src/lib/remote.ts\n+++ b/src/lib/remote.ts\n@@ -210,9 +210,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m202",
+   "ts": 1794650204089,
+   "kind": "user",
+   "text": "Peux-tu brancher la reconnexion du client distant quand le tunnel tombe ?"
+  },
+  {
+   "id": "m203",
+   "ts": 1794650224263,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/remote.ts"
+   },
+   "diff": "diff --git a/src/lib/remote.ts b/src/lib/remote.ts\n--- a/src/lib/remote.ts\n+++ b/src/lib/remote.ts\n@@ -212,9 +212,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m204",
+   "ts": 1794650232210,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:63:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:143:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m205",
+   "ts": 1794650247034,
+   "kind": "text",
+   "text": "Le test passe maintenant. Voici le cœur de la correction :\n\n```rust\n/// Reprend un client après une coupure : rejoue ce qu'il n'a pas vu depuis `since`.\npub fn resume(&mut self, client: ClientId, since: u64) -> Result<Vec<Frame>, HubError> {\n    let sub = self.subscribers.get_mut(&client).ok_or(HubError::Unknown(client))?;\n    let frames: Vec<Frame> = self.log.iter().filter(|f| f.seq > since).cloned().collect();\n    sub.last_seen = frames.last().map(|f| f.seq).unwrap_or(since);\n    tracing::debug!(client = %client, count = frames.len(), \"reprise n°204\");\n    Ok(frames)\n}\n```\n\nEt côté interface :\n\n```ts\nexport async function reconnect(url: string, attempt = 4): Promise<WebSocket> {\n  const delay = Math.min(30_000, 500 * 2 ** attempt);\n  await new Promise((r) => setTimeout(r, delay));\n  const ws = new WebSocket(url);\n  ws.binaryType = 'arraybuffer';\n  return ws;\n}\n```"
+  },
+  {
+   "id": "m206",
+   "ts": 1794650263501,
+   "kind": "user",
+   "text": "Pourquoi l'e2e de la conversation est-il rouge sous macOS ?"
+  },
+  {
+   "id": "m207",
+   "ts": 1794650276047,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/remote.ts"
+   },
+   "diff": "diff --git a/src/lib/remote.ts b/src/lib/remote.ts\n--- a/src/lib/remote.ts\n+++ b/src/lib/remote.ts\n@@ -216,9 +216,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m208",
+   "ts": 1794650285516,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:67:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:147:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m209",
+   "ts": 1794650305262,
+   "kind": "text",
+   "text": "Le test passe maintenant. Voici le cœur de la correction :\n\n```rust\n/// Reprend un client après une coupure : rejoue ce qu'il n'a pas vu depuis `since`.\npub fn resume(&mut self, client: ClientId, since: u64) -> Result<Vec<Frame>, HubError> {\n    let sub = self.subscribers.get_mut(&client).ok_or(HubError::Unknown(client))?;\n    let frames: Vec<Frame> = self.log.iter().filter(|f| f.seq > since).cloned().collect();\n    sub.last_seen = frames.last().map(|f| f.seq).unwrap_or(since);\n    tracing::debug!(client = %client, count = frames.len(), \"reprise n°208\");\n    Ok(frames)\n}\n```\n\nEt côté interface :\n\n```ts\nexport async function reconnect(url: string, attempt = 3): Promise<WebSocket> {\n  const delay = Math.min(30_000, 500 * 2 ** attempt);\n  await new Promise((r) => setTimeout(r, delay));\n  const ws = new WebSocket(url);\n  ws.binaryType = 'arraybuffer';\n  return ws;\n}\n```"
+  },
+  {
+   "id": "m210",
+   "ts": 1794650313496,
+   "kind": "user",
+   "text": "Peux-tu brancher la reconnexion du client distant quand le tunnel tombe ?"
+  },
+  {
+   "id": "m211",
+   "ts": 1794650327068,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:70:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:150:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m212",
+   "ts": 1794650349576,
+   "kind": "text",
+   "text": "J'ai regardé **`hub.rs`** : l'abonné est retiré deux fois quand deux clients ferment dans le même tour de boucle.\n\n- le premier `close` retire l'entrée ;\n- le second trouve une place vide et **panique** sur `unwrap()` ;\n- la correction : `remove` rend une `Option`, qu'on ignore.\n\nJe corrige et j'ajoute le test `two_clients_close_together` (n° 211)."
+  },
+  {
+   "id": "m213",
+   "ts": 1794650359899,
+   "kind": "text",
+   "text": "J'ai regardé **`hub.rs`** : l'abonné est retiré deux fois quand deux clients ferment dans le même tour de boucle.\n\n- le premier `close` retire l'entrée ;\n- le second trouve une place vide et **panique** sur `unwrap()` ;\n- la correction : `remove` rend une `Option`, qu'on ignore.\n\nJe corrige et j'ajoute le test `two_clients_close_together` (n° 212)."
+  },
+  {
+   "id": "m214",
+   "ts": 1794650370895,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/ipc.ts"
+   },
+   "diff": "diff --git a/src/lib/ipc.ts b/src/lib/ipc.ts\n--- a/src/lib/ipc.ts\n+++ b/src/lib/ipc.ts\n@@ -223,9 +223,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m215",
+   "ts": 1794650383431,
+   "kind": "text",
+   "text": "C'est la frame lue dans le même lot que le plantage : sous macOS, `read()` rend les deux d'un coup. Je découpe par longueur annoncée plutôt que par appel, voir `Frame::split` dans `crates/escouade-base/src/frame.rs`."
+  },
+  {
+   "id": "m216",
+   "ts": 1794650394879,
+   "kind": "user",
+   "text": "Le hub perd un abonné quand deux clients ferment en même temps, regarde."
+  },
+  {
+   "id": "m217",
+   "ts": 1794650409266,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/ipc.ts"
+   },
+   "diff": "diff --git a/src/lib/ipc.ts b/src/lib/ipc.ts\n--- a/src/lib/ipc.ts\n+++ b/src/lib/ipc.ts\n@@ -226,9 +226,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m218",
+   "ts": 1794650422045,
+   "kind": "text",
+   "text": "J'ai regardé **`hub.rs`** : l'abonné est retiré deux fois quand deux clients ferment dans le même tour de boucle.\n\n- le premier `close` retire l'entrée ;\n- le second trouve une place vide et **panique** sur `unwrap()` ;\n- la correction : `remove` rend une `Option`, qu'on ignore.\n\nJe corrige et j'ajoute le test `two_clients_close_together` (n° 217)."
+  },
+  {
+   "id": "m219",
+   "ts": 1794650432482,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/components/Conversation.svelte"
+   },
+   "diff": "diff --git a/src/components/Conversation.svelte b/src/components/Conversation.svelte\n--- a/src/components/Conversation.svelte\n+++ b/src/components/Conversation.svelte\n@@ -228,9 +228,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m220",
+   "ts": 1794650450245,
+   "kind": "user",
+   "text": "Relis le diff avant de committer, et lance clippy."
+  },
+  {
+   "id": "m221",
+   "ts": 1794650475178,
+   "kind": "text",
+   "text": "Le test passe maintenant. Voici le cœur de la correction :\n\n```rust\n/// Reprend un client après une coupure : rejoue ce qu'il n'a pas vu depuis `since`.\npub fn resume(&mut self, client: ClientId, since: u64) -> Result<Vec<Frame>, HubError> {\n    let sub = self.subscribers.get_mut(&client).ok_or(HubError::Unknown(client))?;\n    let frames: Vec<Frame> = self.log.iter().filter(|f| f.seq > since).cloned().collect();\n    sub.last_seen = frames.last().map(|f| f.seq).unwrap_or(since);\n    tracing::debug!(client = %client, count = frames.len(), \"reprise n°220\");\n    Ok(frames)\n}\n```\n\nEt côté interface :\n\n```ts\nexport async function reconnect(url: string, attempt = 0): Promise<WebSocket> {\n  const delay = Math.min(30_000, 500 * 2 ** attempt);\n  await new Promise((r) => setTimeout(r, delay));\n  const ws = new WebSocket(url);\n  ws.binaryType = 'arraybuffer';\n  return ws;\n}\n```"
+  },
+  {
+   "id": "m222",
+   "ts": 1794650501183,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "npm run check"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 3.21s"
+  },
+  {
+   "id": "m223",
+   "ts": 1794650509967,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/components/Conversation.svelte"
+   },
+   "diff": "diff --git a/src/components/Conversation.svelte b/src/components/Conversation.svelte\n--- a/src/components/Conversation.svelte\n+++ b/src/components/Conversation.svelte\n@@ -232,9 +232,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m224",
+   "ts": 1794650519540,
+   "kind": "text",
+   "text": "J'ai regardé **`hub.rs`** : l'abonné est retiré deux fois quand deux clients ferment dans le même tour de boucle.\n\n- le premier `close` retire l'entrée ;\n- le second trouve une place vide et **panique** sur `unwrap()` ;\n- la correction : `remove` rend une `Option`, qu'on ignore.\n\nJe corrige et j'ajoute le test `two_clients_close_together` (n° 223)."
+  },
+  {
+   "id": "m225",
+   "ts": 1794650532909,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo nextest run -p escouade-base hub"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 3.24s"
+  },
+  {
+   "id": "m226",
+   "ts": 1794650556047,
+   "kind": "user",
+   "text": "Le hub perd un abonné quand deux clients ferment en même temps, regarde."
+  },
+  {
+   "id": "m227",
+   "ts": 1794650576108,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:86:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:166:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m228",
+   "ts": 1794650588150,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "crates/escouade-base/src/hub.rs"
+   },
+   "diff": "diff --git a/crates/escouade-base/src/hub.rs b/crates/escouade-base/src/hub.rs\n--- a/crates/escouade-base/src/hub.rs\n+++ b/crates/escouade-base/src/hub.rs\n@@ -237,9 +237,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m229",
+   "ts": 1794650599640,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "crates/escouade-base/src/hub.rs"
+   },
+   "diff": "diff --git a/crates/escouade-base/src/hub.rs b/crates/escouade-base/src/hub.rs\n--- a/crates/escouade-base/src/hub.rs\n+++ b/crates/escouade-base/src/hub.rs\n@@ -238,9 +238,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m230",
+   "ts": 1794650612353,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/ipc.ts"
+   },
+   "diff": "diff --git a/src/lib/ipc.ts b/src/lib/ipc.ts\n--- a/src/lib/ipc.ts\n+++ b/src/lib/ipc.ts\n@@ -239,9 +239,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m231",
+   "ts": 1794650620046,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/components/Conversation.svelte"
+   },
+   "diff": "diff --git a/src/components/Conversation.svelte b/src/components/Conversation.svelte\n--- a/src/components/Conversation.svelte\n+++ b/src/components/Conversation.svelte\n@@ -240,9 +240,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m232",
+   "ts": 1794650637938,
+   "kind": "user",
+   "text": "Peux-tu brancher la reconnexion du client distant quand le tunnel tombe ?"
+  },
+  {
+   "id": "m233",
+   "ts": 1794650651451,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/ipc.ts"
+   },
+   "diff": "diff --git a/src/lib/ipc.ts b/src/lib/ipc.ts\n--- a/src/lib/ipc.ts\n+++ b/src/lib/ipc.ts\n@@ -242,9 +242,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m234",
+   "ts": 1794650662093,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:93:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:173:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m235",
+   "ts": 1794650672827,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "npm run check"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 15.8s"
+  },
+  {
+   "id": "m236",
+   "ts": 1794650698988,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/remote.ts"
+   },
+   "diff": "diff --git a/src/lib/remote.ts b/src/lib/remote.ts\n--- a/src/lib/remote.ts\n+++ b/src/lib/remote.ts\n@@ -245,9 +245,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m237",
+   "ts": 1794650723875,
+   "kind": "user",
+   "text": "Ajoute un test pour la poignée de main des versions."
+  },
+  {
+   "id": "m238",
+   "ts": 1794650737775,
+   "kind": "text",
+   "text": "C'est la frame lue dans le même lot que le plantage : sous macOS, `read()` rend les deux d'un coup. Je découpe par longueur annoncée plutôt que par appel, voir `Frame::split` dans `crates/escouade-base/src/frame.rs`."
+  },
+  {
+   "id": "m239",
+   "ts": 1794650756704,
+   "kind": "text",
+   "text": "C'est la frame lue dans le même lot que le plantage : sous macOS, `read()` rend les deux d'un coup. Je découpe par longueur annoncée plutôt que par appel, voir `Frame::split` dans `crates/escouade-base/src/frame.rs`."
+  },
+  {
+   "id": "m240",
+   "ts": 1794650768857,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/remote.ts"
+   },
+   "diff": "diff --git a/src/lib/remote.ts b/src/lib/remote.ts\n--- a/src/lib/remote.ts\n+++ b/src/lib/remote.ts\n@@ -249,9 +249,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m241",
+   "ts": 1794650787949,
+   "kind": "user",
+   "text": "Ajoute un test pour la poignée de main des versions."
+  },
+  {
+   "id": "m242",
+   "ts": 1794650810648,
+   "kind": "text",
+   "text": "## Ce que j'ai changé\n\n1. La reconnexion attend de plus en plus (500 ms, 1 s, 2 s… jusqu'à 30 s).\n2. Le client rejoue ce qu'il a manqué depuis son dernier numéro vu.\n3. Les terminaux gardent un tampon de 256 Kio.\n\n| Cas | Avant | Après |\n|---|---|---|\n| Coupure de 2 s | conversation vide | reprise sans trou |\n| Coupure de 5 min | erreur | reprise, tampon rejoué |\n\n> La poignée de main refuse un client d'une autre version majeure."
+  },
+  {
+   "id": "m243",
+   "ts": 1794650820117,
+   "kind": "text",
+   "text": "Le test passe maintenant. Voici le cœur de la correction :\n\n```rust\n/// Reprend un client après une coupure : rejoue ce qu'il n'a pas vu depuis `since`.\npub fn resume(&mut self, client: ClientId, since: u64) -> Result<Vec<Frame>, HubError> {\n    let sub = self.subscribers.get_mut(&client).ok_or(HubError::Unknown(client))?;\n    let frames: Vec<Frame> = self.log.iter().filter(|f| f.seq > since).cloned().collect();\n    sub.last_seen = frames.last().map(|f| f.seq).unwrap_or(since);\n    tracing::debug!(client = %client, count = frames.len(), \"reprise n°242\");\n    Ok(frames)\n}\n```\n\nEt côté interface :\n\n```ts\nexport async function reconnect(url: string, attempt = 2): Promise<WebSocket> {\n  const delay = Math.min(30_000, 500 * 2 ** attempt);\n  await new Promise((r) => setTimeout(r, delay));\n  const ws = new WebSocket(url);\n  ws.binaryType = 'arraybuffer';\n  return ws;\n}\n```"
+  },
+  {
+   "id": "m244",
+   "ts": 1794650834452,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/components/Conversation.svelte"
+   },
+   "diff": "diff --git a/src/components/Conversation.svelte b/src/components/Conversation.svelte\n--- a/src/components/Conversation.svelte\n+++ b/src/components/Conversation.svelte\n@@ -253,9 +253,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m245",
+   "ts": 1794650857663,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo nextest run -p escouade-base hub"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 16.1s"
+  },
+  {
+   "id": "m246",
+   "ts": 1794650883656,
+   "kind": "text",
+   "text": "J'ai regardé **`hub.rs`** : l'abonné est retiré deux fois quand deux clients ferment dans le même tour de boucle.\n\n- le premier `close` retire l'entrée ;\n- le second trouve une place vide et **panique** sur `unwrap()` ;\n- la correction : `remove` rend une `Option`, qu'on ignore.\n\nJe corrige et j'ajoute le test `two_clients_close_together` (n° 245)."
+  },
+  {
+   "id": "m247",
+   "ts": 1794650892724,
+   "kind": "user",
+   "text": "Le hub perd un abonné quand deux clients ferment en même temps, regarde."
+  },
+  {
+   "id": "m248",
+   "ts": 1794650902712,
+   "kind": "text",
+   "text": "## Ce que j'ai changé\n\n1. La reconnexion attend de plus en plus (500 ms, 1 s, 2 s… jusqu'à 30 s).\n2. Le client rejoue ce qu'il a manqué depuis son dernier numéro vu.\n3. Les terminaux gardent un tampon de 256 Kio.\n\n| Cas | Avant | Après |\n|---|---|---|\n| Coupure de 2 s | conversation vide | reprise sans trou |\n| Coupure de 5 min | erreur | reprise, tampon rejoué |\n\n> La poignée de main refuse un client d'une autre version majeure."
+  },
+  {
+   "id": "m249",
+   "ts": 1794650928431,
+   "kind": "text",
+   "text": "J'ai regardé **`hub.rs`** : l'abonné est retiré deux fois quand deux clients ferment dans le même tour de boucle.\n\n- le premier `close` retire l'entrée ;\n- le second trouve une place vide et **panique** sur `unwrap()` ;\n- la correction : `remove` rend une `Option`, qu'on ignore.\n\nJe corrige et j'ajoute le test `two_clients_close_together` (n° 248)."
+  },
+  {
+   "id": "m250",
+   "ts": 1794650938926,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo nextest run -p escouade-base hub"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 3.49s"
+  },
+  {
+   "id": "m251",
+   "ts": 1794650955699,
+   "kind": "user",
+   "text": "Ajoute un test pour la poignée de main des versions."
+  },
+  {
+   "id": "m252",
+   "ts": 1794650972418,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src-tauri/src/remote/tunnel.rs"
+   },
+   "diff": "diff --git a/src-tauri/src/remote/tunnel.rs b/src-tauri/src/remote/tunnel.rs\n--- a/src-tauri/src/remote/tunnel.rs\n+++ b/src-tauri/src/remote/tunnel.rs\n@@ -261,9 +261,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m253",
+   "ts": 1794650995961,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo nextest run -p escouade-base hub"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 16.4s"
+  },
+  {
+   "id": "m254",
+   "ts": 1794651016773,
+   "kind": "text",
+   "text": "J'ai regardé **`hub.rs`** : l'abonné est retiré deux fois quand deux clients ferment dans le même tour de boucle.\n\n- le premier `close` retire l'entrée ;\n- le second trouve une place vide et **panique** sur `unwrap()` ;\n- la correction : `remove` rend une `Option`, qu'on ignore.\n\nJe corrige et j'ajoute le test `two_clients_close_together` (n° 253)."
+  },
+  {
+   "id": "m255",
+   "ts": 1794651029051,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/components/Conversation.svelte"
+   },
+   "diff": "diff --git a/src/components/Conversation.svelte b/src/components/Conversation.svelte\n--- a/src/components/Conversation.svelte\n+++ b/src/components/Conversation.svelte\n@@ -264,9 +264,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m256",
+   "ts": 1794651043991,
+   "kind": "user",
+   "text": "Peux-tu brancher la reconnexion du client distant quand le tunnel tombe ?"
+  },
+  {
+   "id": "m257",
+   "ts": 1794651070275,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/remote.ts"
+   },
+   "diff": "diff --git a/src/lib/remote.ts b/src/lib/remote.ts\n--- a/src/lib/remote.ts\n+++ b/src/lib/remote.ts\n@@ -266,9 +266,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m258",
+   "ts": 1794651092304,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "git diff --stat"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 16.6s"
+  },
+  {
+   "id": "m259",
+   "ts": 1794651113845,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:58:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:118:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m260",
+   "ts": 1794651137707,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "crates/escouade-base/src/hub.rs"
+   },
+   "diff": "diff --git a/crates/escouade-base/src/hub.rs b/crates/escouade-base/src/hub.rs\n--- a/crates/escouade-base/src/hub.rs\n+++ b/crates/escouade-base/src/hub.rs\n@@ -269,9 +269,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m261",
+   "ts": 1794651150008,
+   "kind": "user",
+   "text": "Relis le diff avant de committer, et lance clippy."
+  },
+  {
+   "id": "m262",
+   "ts": 1794651157700,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 3.61s"
+  },
+  {
+   "id": "m263",
+   "ts": 1794651179534,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 3.62s"
+  },
+  {
+   "id": "m264",
+   "ts": 1794651194363,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/ipc.ts"
+   },
+   "diff": "diff --git a/src/lib/ipc.ts b/src/lib/ipc.ts\n--- a/src/lib/ipc.ts\n+++ b/src/lib/ipc.ts\n@@ -273,9 +273,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m265",
+   "ts": 1794651204041,
+   "kind": "user",
+   "text": "Peux-tu brancher la reconnexion du client distant quand le tunnel tombe ?"
+  },
+  {
+   "id": "m266",
+   "ts": 1794651223269,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "git diff --stat"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 16.8s"
+  },
+  {
+   "id": "m267",
+   "ts": 1794651248215,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:66:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:126:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m268",
+   "ts": 1794651272963,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo nextest run -p escouade-base hub"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 3.67s"
+  },
+  {
+   "id": "m269",
+   "ts": 1794651283694,
+   "kind": "user",
+   "text": "Pourquoi l'e2e de la conversation est-il rouge sous macOS ?"
+  },
+  {
+   "id": "m270",
+   "ts": 1794651299632,
+   "kind": "text",
+   "text": "C'est la frame lue dans le même lot que le plantage : sous macOS, `read()` rend les deux d'un coup. Je découpe par longueur annoncée plutôt que par appel, voir `Frame::split` dans `crates/escouade-base/src/frame.rs`."
+  },
+  {
+   "id": "m271",
+   "ts": 1794651315086,
+   "kind": "text",
+   "text": "Le test passe maintenant. Voici le cœur de la correction :\n\n```rust\n/// Reprend un client après une coupure : rejoue ce qu'il n'a pas vu depuis `since`.\npub fn resume(&mut self, client: ClientId, since: u64) -> Result<Vec<Frame>, HubError> {\n    let sub = self.subscribers.get_mut(&client).ok_or(HubError::Unknown(client))?;\n    let frames: Vec<Frame> = self.log.iter().filter(|f| f.seq > since).cloned().collect();\n    sub.last_seen = frames.last().map(|f| f.seq).unwrap_or(since);\n    tracing::debug!(client = %client, count = frames.len(), \"reprise n°270\");\n    Ok(frames)\n}\n```\n\nEt côté interface :\n\n```ts\nexport async function reconnect(url: string, attempt = 0): Promise<WebSocket> {\n  const delay = Math.min(30_000, 500 * 2 ** attempt);\n  await new Promise((r) => setTimeout(r, delay));\n  const ws = new WebSocket(url);\n  ws.binaryType = 'arraybuffer';\n  return ws;\n}\n```"
+  },
+  {
+   "id": "m272",
+   "ts": 1794651326937,
+   "kind": "user",
+   "text": "Pourquoi l'e2e de la conversation est-il rouge sous macOS ?"
+  },
+  {
+   "id": "m273",
+   "ts": 1794651348204,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/ipc.ts"
+   },
+   "diff": "diff --git a/src/lib/ipc.ts b/src/lib/ipc.ts\n--- a/src/lib/ipc.ts\n+++ b/src/lib/ipc.ts\n@@ -282,9 +282,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m274",
+   "ts": 1794651355785,
+   "kind": "text",
+   "text": "## Ce que j'ai changé\n\n1. La reconnexion attend de plus en plus (500 ms, 1 s, 2 s… jusqu'à 30 s).\n2. Le client rejoue ce qu'il a manqué depuis son dernier numéro vu.\n3. Les terminaux gardent un tampon de 256 Kio.\n\n| Cas | Avant | Après |\n|---|---|---|\n| Coupure de 2 s | conversation vide | reprise sans trou |\n| Coupure de 5 min | erreur | reprise, tampon rejoué |\n\n> La poignée de main refuse un client d'une autre version majeure."
+  },
+  {
+   "id": "m275",
+   "ts": 1794651367390,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "npm run check"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 3.74s"
+  },
+  {
+   "id": "m276",
+   "ts": 1794651380601,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/components/Conversation.svelte"
+   },
+   "diff": "diff --git a/src/components/Conversation.svelte b/src/components/Conversation.svelte\n--- a/src/components/Conversation.svelte\n+++ b/src/components/Conversation.svelte\n@@ -285,9 +285,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m277",
+   "ts": 1794651406473,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/remote.ts"
+   },
+   "diff": "diff --git a/src/lib/remote.ts b/src/lib/remote.ts\n--- a/src/lib/remote.ts\n+++ b/src/lib/remote.ts\n@@ -286,9 +286,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m278",
+   "ts": 1794651420387,
+   "kind": "user",
+   "text": "Le hub perd un abonné quand deux clients ferment en même temps, regarde."
+  },
+  {
+   "id": "m279",
+   "ts": 1794651435795,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src/lib/remote.ts"
+   },
+   "diff": "diff --git a/src/lib/remote.ts b/src/lib/remote.ts\n--- a/src/lib/remote.ts\n+++ b/src/lib/remote.ts\n@@ -288,9 +288,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m280",
+   "ts": 1794651451314,
+   "kind": "text",
+   "text": "J'ai regardé **`hub.rs`** : l'abonné est retiré deux fois quand deux clients ferment dans le même tour de boucle.\n\n- le premier `close` retire l'entrée ;\n- le second trouve une place vide et **panique** sur `unwrap()` ;\n- la correction : `remove` rend une `Option`, qu'on ignore.\n\nJe corrige et j'ajoute le test `two_clients_close_together` (n° 279)."
+  },
+  {
+   "id": "m281",
+   "ts": 1794651476497,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo nextest run -p escouade-base hub"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 17.3s"
+  },
+  {
+   "id": "m282",
+   "ts": 1794651494000,
+   "kind": "user",
+   "text": "Pourquoi l'e2e de la conversation est-il rouge sous macOS ?"
+  },
+  {
+   "id": "m283",
+   "ts": 1794651517531,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": " src/lib/remote.ts | 34 ++++++++++++++++++++++++----------\n crates/escouade-base/src/hub.rs | 12 ++++++++----\n 2 files changed, 32 insertions(+), 14 deletions(-)"
+  },
+  {
+   "id": "m284",
+   "ts": 1794651537972,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 3.83s"
+  },
+  {
+   "id": "m285",
+   "ts": 1794651551591,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "npm run check"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 3.84s"
+  },
+  {
+   "id": "m286",
+   "ts": 1794651568024,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "git diff --stat"
+   },
+   "output": " src/lib/remote.ts | 34 ++++++++++++++++++++++++----------\n crates/escouade-base/src/hub.rs | 12 ++++++++----\n 2 files changed, 32 insertions(+), 14 deletions(-)"
+  },
+  {
+   "id": "m287",
+   "ts": 1794651577428,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "git diff --stat"
+   },
+   "output": "running 48 tests\ntest hub::tests::two_clients_close_together ... ok\ntest hub::tests::resume_replays_since ... ok\ntest remote::handshake::refuses_other_major ... ok\n\ntest result: ok. 48 passed; 0 failed; 0 ignored; finished in 3.86s"
+  },
+  {
+   "id": "m288",
+   "ts": 1794651602840,
+   "kind": "user",
+   "text": "Ajoute un test pour la poignée de main des versions."
+  },
+  {
+   "id": "m289",
+   "ts": 1794651616172,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo nextest run -p escouade-base hub"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 17.6s"
+  },
+  {
+   "id": "m290",
+   "ts": 1794651629167,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:89:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:149:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m291",
+   "ts": 1794651642931,
+   "kind": "text",
+   "text": "Clippy dit deux choses :\n\n```text\nwarning: this `if let` can be collapsed into the outer `match`\n  --> src-tauri/src/remote/tunnel.rs:90:13\nwarning: redundant clone\n  --> crates/escouade-base/src/hub.rs:150:41\n```\n\nJe les corrige toutes les deux."
+  },
+  {
+   "id": "m292",
+   "ts": 1794651662135,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "crates/escouade-base/src/hub.rs"
+   },
+   "diff": "diff --git a/crates/escouade-base/src/hub.rs b/crates/escouade-base/src/hub.rs\n--- a/crates/escouade-base/src/hub.rs\n+++ b/crates/escouade-base/src/hub.rs\n@@ -301,9 +301,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m293",
+   "ts": 1794651675295,
+   "kind": "user",
+   "text": "Pourquoi l'e2e de la conversation est-il rouge sous macOS ?"
+  },
+  {
+   "id": "m294",
+   "ts": 1794651685180,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src-tauri/src/remote/tunnel.rs"
+   },
+   "diff": "diff --git a/src-tauri/src/remote/tunnel.rs b/src-tauri/src/remote/tunnel.rs\n--- a/src-tauri/src/remote/tunnel.rs\n+++ b/src-tauri/src/remote/tunnel.rs\n@@ -303,9 +303,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m295",
+   "ts": 1794651695633,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "src-tauri/src/remote/tunnel.rs"
+   },
+   "diff": "diff --git a/src-tauri/src/remote/tunnel.rs b/src-tauri/src/remote/tunnel.rs\n--- a/src-tauri/src/remote/tunnel.rs\n+++ b/src-tauri/src/remote/tunnel.rs\n@@ -304,9 +304,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m296",
+   "ts": 1794651703581,
+   "kind": "tool",
+   "name": "Edit",
+   "status": "ok",
+   "input": {
+    "file_path": "crates/escouade-base/src/hub.rs"
+   },
+   "diff": "diff --git a/crates/escouade-base/src/hub.rs b/crates/escouade-base/src/hub.rs\n--- a/crates/escouade-base/src/hub.rs\n+++ b/crates/escouade-base/src/hub.rs\n@@ -305,9 +305,12 @@ impl Hub {\n     pub fn close(&mut self, client: ClientId) {\n-        let sub = self.subscribers.remove(&client).unwrap();\n-        sub.sender.close();\n+        // Deux fermetures dans le même tour : la seconde ne trouve plus rien.\n+        if let Some(sub) = self.subscribers.remove(&client) {\n+            sub.sender.close();\n+        }\n         self.metrics.clients.set(self.subscribers.len() as i64);\n     }\n \n     pub fn publish(&mut self, frame: Frame) {\n-        for sub in self.subscribers.values() {\n+        self.log.push(frame.clone());\n+        for sub in self.subscribers.values_mut() {\n             let _ = sub.sender.try_send(frame.clone());\n         }\n     }"
+  },
+  {
+   "id": "m297",
+   "ts": 1794651717489,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": " src/lib/remote.ts | 34 ++++++++++++++++++++++++----------\n crates/escouade-base/src/hub.rs | 12 ++++++++----\n 2 files changed, 32 insertions(+), 14 deletions(-)"
+  },
+  {
+   "id": "m298",
+   "ts": 1794651725109,
+   "kind": "tool",
+   "name": "Bash",
+   "status": "ok",
+   "input": {
+    "command": "cargo clippy --all-targets -- -D warnings"
+   },
+   "output": "    Checking escouade-base v2.2.0\n    Checking escouade v2.2.0 (src-tauri)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 17.9s"
+  },
+  {
+   "id": "m299",
+   "ts": 1794651746084,
+   "kind": "user",
+   "text": "Relis le diff avant de committer, et lance clippy."
+  },
+  {
+   "id": "m300",
+   "ts": 1794651771445,
+   "kind": "permission",
+   "toolUseId": "toolu_esc445",
+   "toolName": "Bash",
+   "input": {
+    "description": "Pousser la branche et ouvrir la PR",
+    "command": "git push --force-with-lease origin ticket/esc-445 && gh pr create --base main --head ticket/esc-445 \\\n  --title \"fix(hub): deux clients qui ferment ensemble\" \\\n  --body \"Le second close ne panique plus. Tests : cargo nextest run -p escouade-base hub (48 ok)\" \\\n  && rm -rf target/debug/incremental"
+   }
+  }
+ ]
+}

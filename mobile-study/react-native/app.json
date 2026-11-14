@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Escouade RN",
+    "slug": "escouade-rn",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#101113",
+    "ios": {
+      "bundleIdentifier": "dev.escouade.study.rn",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSAppTransportSecurity": { "NSAllowsArbitraryLoads": true },
+        "UIBackgroundModes": ["remote-notification"]
+      }
+    },
+    "android": {
+      "package": "dev.escouade.study.rn",
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "backgroundColor": "#101113",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-secure-store",
+      ["expo-camera", { "cameraPermission": "Lire le QR code de l'appairage", "recordAudioAndroid": false }],
+      ["expo-local-authentication", { "faceIDPermission": "Confirmer une autorisation" }],
+      ["expo-notifications", { "enableBackgroundRemoteNotifications": true }],
+      [
+        "expo-build-properties",
+        {
+          "android": { "usesCleartextTraffic": true, "minSdkVersion": 26, "ndkVersion": "29.0.14206865" },
+          "ios": { "deploymentTarget": "16.4" }
+        }
+      ]
+    ]
+  }
+}

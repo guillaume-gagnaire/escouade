@@ -1,0 +1,24 @@
+[package]
+name = "escouade_flutter_rust"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+flutter_rust_bridge = "=2.13.0"
+escouade-mobile-core = { path = "../../shared/core" }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+
+# Les mêmes réglages que les autres maquettes, pour comparer les poids.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[workspace]

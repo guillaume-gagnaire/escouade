@@ -1,0 +1,36 @@
+{
+  "name": "escouade-rn",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@shopify/flash-list": "2.3.2",
+    "@ubjs/core": "^0.31.0-7",
+    "expo": "~58.0.25",
+    "expo-build-properties": "~58.0.12",
+    "expo-camera": "~58.0.14",
+    "expo-local-authentication": "~58.0.3",
+    "expo-notifications": "~58.1.9",
+    "expo-secure-store": "~58.0.3",
+    "expo-status-bar": "~58.0.5",
+    "expo-task-manager": "~58.0.14",
+    "react": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-code-highlighter": "^1.3.1",
+    "react-native-escouade-core": "file:modules/escouade-core",
+    "react-native-marked": "^8.3.4",
+    "react-native-svg": "15.16.0",
+    "react-syntax-highlighter": "^16.1.2"
+  },
+  "devDependencies": {
+    "@types/react": "~19.3.0",
+    "typescript": "~6.0.3",
+    "uniffi-bindgen-react-native": "^0.31.0-7"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web"
+  },
+  "private": true
+}
