@@ -851,3 +851,68 @@ fn the_host_knows_the_plugins_of_the_harnesses_of_the_core_in_their_order() {
         .collect();
     assert_eq!(plugins, crate::plugins::builtin::HARNESSES);
 }
+
+fn var(name: &str) -> EnvVar {
+    EnvVar {
+        name: name.into(),
+        value: "1".into(),
+    }
+}
+
+/// A third party's plugin that declares `MON_OUTIL_MODE` alone.
+fn declared_alone() -> harness::Vars {
+    harness::Vars {
+        first_hand: false,
+        declared: Some(vec!["MON_OUTIL_MODE".into()]),
+        given: vec![],
+    }
+}
+
+/// SEC-09, kept from the 2.2 (ESC-428, ESC-442): the next program a plugin launches for the same agent opens the mode of
+/// no question no more than its first, unless « Autoriser le mode Bypass » is on; its variables are judged as its first's.
+#[test]
+fn a_relaunch_opens_the_mode_of_no_question_only_with_the_setting_and_its_variables_are_judged() {
+    let launch = proto::Launch {
+        args: vec![
+            "--dangerously-skip-permissions".into(),
+            "--yolo".into(),
+            "-p".into(),
+        ],
+        env: vec![var("MON_OUTIL_MODE")],
+        ..proto::Launch::default()
+    };
+    let held = harness::next_launch("Outil", &declared_alone(), &launch, false).unwrap();
+    assert_eq!(held.args, ["-p"]);
+    let allowed = harness::next_launch("Outil", &declared_alone(), &launch, true).unwrap();
+    assert_eq!(allowed.args, launch.args);
+    // A variable the manifest does not declare, or one that would change the program run: no relaunch.
+    for refused in ["AUTRE", "GIT_CONFIG_COUNT", "NODE_OPTIONS"] {
+        let mut odd = launch.clone();
+        odd.env.push(var(refused));
+        let err = harness::next_launch("Outil", &declared_alone(), &odd, true).unwrap_err();
+        assert!(err.to_string().contains(refused), "{refused}: {err}");
+    }
+}
+
+/// ESC-424, kept from the 2.2 (ESC-428, ESC-442): what a terminal that joins an agent on a shared process is given
+/// (`agent/open`'s `attach`) sets only the variables its plugin may set, as a launch would.
+#[test]
+fn the_attach_of_a_shared_process_sets_only_the_variables_its_plugin_may_set() {
+    let attach = proto::Launch {
+        args: vec!["attach".into(), "a1".into()],
+        env: vec![var("MON_OUTIL_MODE")],
+        ..proto::Launch::default()
+    };
+    let joined = harness::joining("Outil", &declared_alone(), attach.clone()).unwrap();
+    assert_eq!(joined.args, ["attach", "a1"]);
+    assert_eq!(
+        joined.env,
+        [("MON_OUTIL_MODE".to_string(), "1".to_string())]
+    );
+    for refused in ["AUTRE", "LD_PRELOAD", "HOME"] {
+        let mut odd = attach.clone();
+        odd.env.push(var(refused));
+        let err = harness::joining("Outil", &declared_alone(), odd).unwrap_err();
+        assert!(err.to_string().contains(refused), "{refused}: {err}");
+    }
+}

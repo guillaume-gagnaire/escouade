@@ -1172,6 +1172,31 @@ fn check_env(name: &str, vars: &Vars, env: &[proto::EnvVar]) -> std::result::Res
     }
 }
 
+/// The next program of an agent (its plugin's relaunch), checked as its first was by the caller: its variables judged by
+/// `vars`, and without « Autoriser le mode Bypass » (`bypass` off) nothing in its arguments opens the mode of no question
+/// (SEC-09; kept from the 2.2 by ESC-428 and ESC-442).
+pub(crate) fn next_launch(
+    name: &str,
+    vars: &Vars,
+    launch: &proto::Launch,
+    bypass: bool,
+) -> Result<proto::Launch> {
+    check_env(name, vars, &launch.env).map_err(|e| anyhow!(e))?;
+    let mut launch = launch.clone();
+    crate::bypass::hold(&mut launch.args, bypass);
+    Ok(launch)
+}
+
+/// How a terminal joins an agent on a shared process (the `attach` of `agent/open`): what it is given runs the plugin's
+/// variables too, judged as a launch's (ESC-424; kept from the 2.2 by ESC-428 and ESC-442).
+pub(crate) fn joining(name: &str, vars: &Vars, attach: proto::Launch) -> Result<terminal::Attach> {
+    check_env(name, vars, &attach.env).map_err(|e| anyhow!(e))?;
+    Ok(terminal::Attach {
+        args: attach.args,
+        env: attach.env.into_iter().map(|v| (v.name, v.value)).collect(),
+    })
+}
+
 /// Why the variable `var` a plugin sets and does not declare is refused.
 fn undeclared_var(name: &str, var: &str) -> String {
     tr!(
@@ -2167,10 +2192,8 @@ impl ProcessEngineProcess {
             launch,
         )
         .map_err(|e| anyhow!(e))?;
-        check_env(self.name, &self.vars, &launch.env).map_err(|e| anyhow!(e))?;
         // Its next program no more than its first: nothing opens the mode of no question without the setting (SEC-09).
-        let mut launch = launch.clone();
-        crate::bypass::hold(&mut launch.args, spawn.bypass);
+        let launch = next_launch(self.name, &self.vars, launch, spawn.bypass)?;
         write_files(&launch)?;
         self.start_program(spawn, &launch, &[])
     }
@@ -2275,11 +2298,7 @@ impl ProcessEngineProcess {
         )?;
         if let Some(a) = opened.attach {
             // What a terminal that joins it is given runs the plugin's variables too: judged as a launch's (ESC-424).
-            check_env(self.name, &self.vars, &a.env).map_err(|e| anyhow!(e))?;
-            *self.joins.lock() = Some(terminal::Attach {
-                args: a.args,
-                env: a.env.into_iter().map(|v| (v.name, v.value)).collect(),
-            });
+            *self.joins.lock() = Some(joining(self.name, &self.vars, a)?);
         }
         *self.catalog.lock() = opened.catalog.and_then(|c| serde_json::from_value(c).ok());
         Ok(())

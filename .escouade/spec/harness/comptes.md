@@ -2,8 +2,8 @@
 title: "Comptes"
 subject: "Harness"
 sources: ["docs/SPEC.md","tests/fixtures/claude-usage/real-2.1.314.json","tests/fixtures/quota-pace.json","design/settings-2-2/PROPOSITION.md","docs/PROTOCOL.md"]
-tickets: ["ESC-30","ESC-52","ESC-88","ESC-120","ESC-124","ESC-128","ESC-141","ESC-147","ESC-148","ESC-162","ESC-312","ESC-382","ESC-425","ESC-428","ESC-441"]
-decisions: [20,24,123,154,160,"les-corrections-de-l-audit-dans-la-2-2-v"]
+tickets: ["ESC-30","ESC-52","ESC-88","ESC-120","ESC-124","ESC-128","ESC-141","ESC-147","ESC-148","ESC-162","ESC-312","ESC-382","ESC-425","ESC-428","ESC-441","ESC-442"]
+decisions: [20,24,123,154,160,"les-corrections-de-l-audit-dans-la-2-2-v","la-2-3-de-main-et-la-2-2-reunies-par-un"]
 compared: "2026-10-31T17:26:28+01:00"
 ---
 
