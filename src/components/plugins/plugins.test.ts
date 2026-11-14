@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from '../../lib/i18n';
 import type { Manifest, PluginPreview, PluginView } from '../../lib/plugins';
-import { plugins } from '../../lib/plugins-view.svelte';
+import { asksMore, plugins } from '../../lib/plugins-view.svelte';
 import { app } from '../../lib/state.svelte';
 import { fakeBackend, project, resetApp } from '../../test/ipc';
 import InstallModal from './InstallModal.svelte';
@@ -98,6 +98,8 @@ beforeEach(() => {
   plugins.error = null;
   plugins.page = { kind: 'installed' };
   plugins.icons = {};
+  plugins.rows = {};
+  plugins.ahead = [];
 });
 
 describe('the tile of a plugin', () => {
@@ -553,5 +555,254 @@ describe('« Rechercher des mises à jour » (ESC-405)', () => {
     render(PluginPage, { plugin: view(), tab: 'versions' });
     await userEvent.click(screen.getByRole('button', { name: 'Chercher une mise à jour' }));
     expect((await screen.findByRole('status')).textContent).toBe('Store lu le 09/11 10:42');
+  });
+});
+
+describe('« Tout mettre à jour », and an update that leaves the page where it was (ESC-436)', () => {
+  // Alpha, of the store: its 1.3.0 asks for nothing more. Slack, of a repository: its 1.3.0 connects to one more host.
+  const STORE = {
+    kind: 'store',
+    version: '1.2.0',
+    sha256: 'a'.repeat(64),
+    verified: true,
+    repository: 'https://github.com/x/alpha',
+    tag: 'v1.2.0',
+    commit: 'c'.repeat(40),
+  } as const;
+  const alpha = (over: Partial<PluginView> = {}) =>
+    view({ id: 'dev.exemple.alpha', name: 'Alpha', origin: STORE, update: { version: '1.3.0', verified: true }, ...over });
+  const slack = (over: Partial<PluginView> = {}) => view({ update: { version: '1.3.0', tag: 'v1.3.0' }, ...over });
+  const PREVIOUS = { version: '1.2.0', fingerprint: 'x', asks: ASKS };
+  const alphaPreview = () =>
+    preview({ token: 'tok-alpha', id: 'dev.exemple.alpha', name: 'Alpha', version: '1.3.0', previous: PREVIOUS, verified: true });
+  const slackPreview = () =>
+    preview({
+      token: 'tok-slack',
+      version: '1.3.0',
+      previous: PREVIOUS,
+      grown: ['network:api.slack.com'],
+      asks: [...ASKS, 'network:api.slack.com'],
+    });
+
+  function backend(over: Record<string, (a: any) => unknown> = {}) {
+    return fakeBackend({
+      plugins_list: () => plugins.list,
+      plugin_inspect_store: () => alphaPreview(),
+      plugin_inspect_git: () => slackPreview(),
+      plugin_install: ({ token }: { token: string }) =>
+        token === 'tok-alpha' ? alpha({ version: '1.3.0', update: null }) : slack({ version: '1.3.0', update: null }),
+      ...over,
+    });
+  }
+
+  it('is at the head of the updates page, reads them all, then asks once for those that ask for nothing more', async () => {
+    const calls = backend();
+    plugins.list = [alpha(), slack()];
+    plugins.page = { kind: 'updates' };
+    render(PluginsView);
+    await userEvent.click(await screen.findByRole('button', { name: 'Tout mettre à jour · 2' }));
+
+    // One window for Alpha, which asks for nothing more: nothing installed before the gesture.
+    const batch = await screen.findByRole('dialog', { name: 'Mettre à jour 1 plugin ?' });
+    expect(batch.textContent).toContain('Alpha');
+    expect(batch.textContent).toContain('v1.2.0 → v1.3.0');
+    expect(batch.textContent).toContain('Vérifié par Escouade');
+    expect(batch.textContent).toContain('Ensuite, 1 mise à jour qui demande plus');
+    expect(calls.called('plugin_install')).toHaveLength(0);
+    // While it waits, « Tout mettre à jour » cannot be clicked again.
+    expect(screen.getByRole('button', { name: 'Tout mettre à jour · 2', hidden: true }).hasAttribute('disabled')).toBe(true);
+    await userEvent.click(within(batch).getByRole('button', { name: 'Mettre à jour' }));
+
+    // Then Slack, in its own window, what it adds marked.
+    const own = await screen.findByRole('dialog', { name: 'Mettre à jour Slack ?' });
+    expect(own.textContent).toContain('Cette version demande plus que la v1.2.0 installée');
+    expect(own.textContent).toContain('nouveau');
+    expect(calls.called('plugin_install').map((c) => c.args.token)).toEqual(['tok-alpha']);
+    await userEvent.click(within(own).getByRole('button', { name: 'Mettre à jour' }));
+
+    await waitFor(() => expect(calls.called('plugin_install').map((c) => c.args.token)).toEqual(['tok-alpha', 'tok-slack']));
+    // The page stays the updates', and says it is empty; the lines say what was done.
+    expect(plugins.page).toEqual({ kind: 'updates' });
+    expect(await screen.findByText('Tes plugins sont à jour.')).toBeTruthy();
+    expect(screen.getAllByText('À jour en v1.3.0')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: /Tout mettre à jour/ })).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('refusing one cancels none of the others, and installs nothing', async () => {
+    const calls = backend();
+    plugins.list = [alpha(), slack()];
+    await plugins.updateAll();
+    expect(plugins.install?.kind).toBe('batch');
+    plugins.cancel();
+    // The one that asks for more is shown all the same.
+    expect(plugins.install?.kind === 'preview' && plugins.install.preview.id).toBe(MANIFEST.id);
+    plugins.cancel();
+    expect(plugins.install).toBeNull();
+    expect(calls.called('plugin_install')).toHaveLength(0);
+    expect(calls.called('plugin_discard').map((c) => c.args.token)).toEqual(['tok-alpha', 'tok-slack']);
+    // Both still offered, their buttons free again.
+    expect(plugins.rows).toEqual({});
+    expect(plugins.updates.map((p) => p.id)).toEqual(['dev.exemple.alpha', MANIFEST.id]);
+  });
+
+  it('an error on one is said on its line and stops none of the others', async () => {
+    const beta = alpha({ id: 'dev.exemple.beta', name: 'Beta' });
+    const calls = backend({
+      plugin_inspect_store: ({ id }: { id: string }) => {
+        if (id === 'dev.exemple.alpha') throw { message: 'Cette version n’est pas vérifiée.', problems: [] };
+        return preview({ ...alphaPreview(), token: 'tok-beta', id, name: 'Beta' });
+      },
+      plugin_install: ({ token }: { token: string }) => {
+        if (token === 'tok-beta') throw { message: 'Le store ne répond pas.', problems: [] };
+        return slack({ version: '1.3.0', update: null });
+      },
+    });
+    plugins.list = [alpha(), beta, slack()];
+    plugins.page = { kind: 'updates' };
+    render(PluginsView);
+    await userEvent.click(await screen.findByRole('button', { name: 'Tout mettre à jour · 3' }));
+    const batch = await screen.findByRole('dialog', { name: 'Mettre à jour 1 plugin ?' });
+    expect(batch.textContent).toContain('Beta');
+    await userEvent.click(within(batch).getByRole('button', { name: 'Mettre à jour' }));
+    const own = await screen.findByRole('dialog', { name: 'Mettre à jour Slack ?' });
+    await userEvent.click(within(own).getByRole('button', { name: 'Mettre à jour' }));
+    await waitFor(() => expect(calls.called('plugin_install')).toHaveLength(2));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    const alerts = screen.getAllByRole('alert').map((a) => a.textContent);
+    expect(alerts).toContain('Cette version n’est pas vérifiée.');
+    expect(alerts).toContain('Le store ne répond pas.');
+    expect(await screen.findByText('À jour en v1.3.0')).toBeTruthy();
+    // Those that failed stay offered, to try again.
+    expect(screen.getByRole('button', { name: 'Tout mettre à jour · 2' }).hasAttribute('disabled')).toBe(false);
+  });
+
+  it('one update leaves the page where it was; its line shows it under way, its button not clickable twice', async () => {
+    let read: (v: PluginPreview) => void = () => {};
+    const calls = backend({ plugin_inspect_git: () => new Promise((done) => (read = done)) });
+    plugins.list = [slack()];
+    plugins.page = { kind: 'updates' };
+    render(PluginsView);
+    const button = await screen.findByRole('button', { name: 'Mettre à jour' });
+    await userEvent.click(button);
+    expect((await screen.findByText('Lecture de la nouvelle version…')).closest('.up')).toBeTruthy();
+    expect(button.hasAttribute('disabled')).toBe(true);
+    await userEvent.click(button);
+    expect(calls.called('plugin_inspect_git')).toHaveLength(1);
+    read(slackPreview());
+    const own = await screen.findByRole('dialog', { name: 'Mettre à jour Slack ?' });
+    expect(screen.getByText('En attente de ton accord')).toBeTruthy();
+    await userEvent.click(within(own).getByRole('button', { name: 'Mettre à jour' }));
+    expect(await screen.findByText('À jour en v1.3.0')).toBeTruthy();
+    expect(plugins.page).toEqual({ kind: 'updates' });
+
+    // From the installed ones, or a plugin's page: the page stays too.
+    for (const page of [{ kind: 'installed' }, { kind: 'plugin', id: MANIFEST.id, tab: 'versions' }] as const) {
+      plugins.list = [slack()];
+      plugins.page = page;
+      plugins.rows = {};
+      backend();
+      await plugins.update(plugins.list[0]);
+      await plugins.confirm();
+      expect(plugins.page).toEqual(page);
+    }
+  });
+
+  it('a version that will be loaded switched off is said in its own window, never in the one for all', async () => {
+    backend({ plugin_inspect_store: () => ({ ...alphaPreview(), refusal: 'Escouade ne lance plus run.command.' }) });
+    plugins.list = [alpha()];
+    await plugins.updateAll();
+    expect(plugins.install?.kind === 'preview' && plugins.install.preview.refusal).toBe('Escouade ne lance plus run.command.');
+    expect(plugins.ahead).toEqual([]);
+  });
+
+  it('a new install alone opens the plugin’s page', async () => {
+    backend({ plugin_install: () => view() });
+    plugins.page = { kind: 'store' };
+    plugins.install = { kind: 'preview', preview: preview(), busy: false, error: null };
+    await plugins.confirm();
+    expect(plugins.page).toEqual({ kind: 'plugin', id: MANIFEST.id, tab: 'overview' });
+  });
+
+  it('an update that adds a contribution, or that cannot be compared, asks in its own window', () => {
+    const more: Manifest = { ...MANIFEST, contributes: { ...MANIFEST.contributes, themes: [{ id: 'nuit', name: 'Nuit' }] } };
+    expect(asksMore(alphaPreview(), view())).toBe(false);
+    expect(asksMore(slackPreview(), view())).toBe(true);
+    expect(asksMore(preview({ ...alphaPreview(), manifest: more }), view())).toBe(true);
+    expect(asksMore(alphaPreview(), view({ manifest: null }))).toBe(true);
+  });
+
+  it('sorts by the seal too (SEC-29): only a verified version that adds nothing goes in the window for all', () => {
+    const folder = { kind: 'folder', path: 'C:/dev/slack' } as const;
+    // Verified, nothing added: the window for all.
+    expect(asksMore(alphaPreview(), alpha())).toBe(false);
+    // Not verified, nothing added: its own window.
+    expect(asksMore({ ...alphaPreview(), verified: false }, alpha({ verified: false }))).toBe(true);
+    // The seal lost (installed verified, the new one not, or its seal taken off): its own window.
+    expect(asksMore({ ...alphaPreview(), verified: false }, alpha({ verified: true }))).toBe(true);
+    expect(asksMore({ ...alphaPreview(), verified: false, unverified: 'retirée' }, alpha({ verified: true }))).toBe(true);
+    // A plugin of a repository or a folder, never verified, even when it adds nothing: its own window.
+    expect(asksMore({ ...alphaPreview(), verified: false, origin: preview().origin, grown: [] }, view())).toBe(true);
+    expect(asksMore({ ...alphaPreview(), verified: false, origin: folder }, view({ origin: folder }))).toBe(true);
+  });
+
+  it('a version not verified of a plugin that was gets its own window, its warning said (B-16)', async () => {
+    // Nuit, of the store: its 1.0.0 verified, its 1.1.0 not, nothing added; Alpha's 1.3.0 verified, nothing added.
+    const nuit = (over: Partial<PluginView> = {}) =>
+      alpha({ id: 'dev.exemple.nuit', name: 'Nuit', verified: true, update: { version: '1.1.0', verified: false }, ...over });
+    const nuitPreview = () =>
+      preview({
+        ...alphaPreview(),
+        token: 'tok-nuit',
+        id: 'dev.exemple.nuit',
+        name: 'Nuit',
+        version: '1.1.0',
+        verified: false,
+        origin: STORE,
+      });
+    const calls = backend({
+      plugin_inspect_store: ({ id }: { id: string }) => (id === 'dev.exemple.nuit' ? nuitPreview() : alphaPreview()),
+      plugin_install: ({ token }: { token: string }) =>
+        token === 'tok-nuit' ? nuit({ version: '1.1.0', verified: false, update: null }) : alpha({ version: '1.3.0', update: null }),
+    });
+    plugins.list = [nuit(), alpha()];
+    plugins.page = { kind: 'updates' };
+    render(PluginsView);
+    await userEvent.click(await screen.findByRole('button', { name: 'Tout mettre à jour · 2' }));
+
+    // The window for all holds Alpha alone, and says its versions are verified.
+    const batch = await screen.findByRole('dialog', { name: 'Mettre à jour 1 plugin ?' });
+    expect(batch.textContent).toContain('Alpha');
+    expect(batch.textContent).not.toContain('Nuit');
+    expect(batch.textContent).toContain('Toutes ces versions sont vérifiées par Escouade');
+    expect(batch.textContent).not.toContain('Non vérifié');
+    await userEvent.click(within(batch).getByRole('button', { name: 'Mettre à jour' }));
+
+    // Then Nuit, in its own window, with the warning of a version nobody reviewed.
+    const own = await screen.findByRole('dialog', { name: 'Mettre à jour Nuit ?' });
+    expect(own.textContent).toContain('Personne n’a relu cette version.');
+    expect(own.textContent).toContain('Aucune : version non vérifiée');
+    expect(calls.called('plugin_install').map((c) => c.args.token)).toEqual(['tok-alpha']);
+    await userEvent.click(within(own).getByRole('button', { name: 'Mettre à jour' }));
+    await waitFor(() => expect(calls.called('plugin_install').map((c) => c.args.token)).toEqual(['tok-alpha', 'tok-nuit']));
+  });
+
+  it('with no verified version that adds nothing, no window for all: each its own', async () => {
+    backend({ plugin_inspect_store: () => ({ ...alphaPreview(), verified: false }) });
+    plugins.list = [alpha({ verified: true })];
+    await plugins.updateAll();
+    expect(plugins.install?.kind).toBe('preview');
+    expect(plugins.ahead).toEqual([]);
+  });
+
+  it('is in English too', async () => {
+    setLang('en');
+    backend();
+    plugins.list = [alpha(), slack()];
+    plugins.page = { kind: 'updates' };
+    render(PluginsView);
+    await userEvent.click(await screen.findByRole('button', { name: 'Update all · 2' }));
+    const batch = await screen.findByRole('dialog', { name: 'Update 1 plugin?' });
+    expect(batch.textContent).toContain('Then 1 update that asks for more, or is not verified: it gets its own window.');
   });
 });

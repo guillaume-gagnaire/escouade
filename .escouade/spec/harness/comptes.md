@@ -2,8 +2,8 @@
 title: "Comptes"
 subject: "Harness"
 sources: ["docs/SPEC.md","tests/fixtures/claude-usage/real-2.1.314.json","tests/fixtures/quota-pace.json","design/settings-2-2/PROPOSITION.md","docs/PROTOCOL.md"]
-tickets: ["ESC-30","ESC-52","ESC-88","ESC-120","ESC-124","ESC-128","ESC-141","ESC-147","ESC-148","ESC-162","ESC-312","ESC-382","ESC-425","ESC-441"]
-decisions: [20,24,123,154,160]
+tickets: ["ESC-30","ESC-52","ESC-88","ESC-120","ESC-124","ESC-128","ESC-141","ESC-147","ESC-148","ESC-162","ESC-312","ESC-382","ESC-425","ESC-428","ESC-441"]
+decisions: [20,24,123,154,160,"les-corrections-de-l-audit-dans-la-2-2-v"]
 compared: "2026-10-31T17:26:28+01:00"
 ---
 
@@ -246,3 +246,4 @@ Ce qui suit remplace « mode `auto` » comme défaut du harness, plus haut.
 - Un compte qui ne dit pas de mode prend ce choix quand son harness l'a, sinon `auto`, sinon « Demander ». Le mode Bypass n'est jamais un défaut.
 - **« Autoriser le mode Bypass »** (Réglages › Agents › Permissions), éteint par défaut, avec l'avertissement « En mode Bypass, le harness n’attend aucune permission… ». Éteint : un agent en `bypassPermissions` ne démarre pas (ni process ni vue terminal) et ne peut y passer (« Le mode Bypass n’est pas autorisé : active « Autoriser le mode Bypass » dans Réglages › Agents, ou choisis un autre mode. ») ; les menus du champ (grisé, « Le mode Bypass est coupé : à permettre dans Réglages › Agents. »), d'un compte et du Kanban ne le proposent pas, sauf pour le mode où l'on est déjà ; le cœur retire `--allow-dangerously-skip-permissions` et `--dangerously-skip-permissions` du lancement que décrit un plugin, agent comme vue terminal.
 - **Une installation existante** garde ses modes : au premier démarrage qui connaît ces réglages, `agentMode` vaut `auto` si ses réglages existaient, et « Autoriser le mode Bypass » est trouvé allumé si un compte, un Kanban ou un agent (son mode ou celui où son plan revient) utilisait déjà Bypass. Ce premier calcul est écrit tout de suite ; le choix de l'utilisateur ensuite n'est plus deviné. Aucun mode d'agent ni de ticket n'est changé.
+- **La relance** (ESC-428) : sans « Autoriser le mode Bypass », le cœur retire aussi ces deux drapeaux du programme suivant qu'un plugin lance pour le même agent ; réglage allumé, ses arguments restent ceux que le plugin décrit.

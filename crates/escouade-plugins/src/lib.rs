@@ -209,19 +209,41 @@ pub enum Origin {
     },
 }
 
-/// What a plugin of `origin` may take of Escouade's own (ESC-314). The ids `dev.escouade.*` go to
-/// a version of the store signed for it (the store takes them from the app's repository alone) and
-/// to a folder in development; never to a folder copied or a repository cloned, which anyone may
-/// hand out. A build of development gives the same hand to a module of the seed that is not signed
-/// (`scripts/seed-dev.sh`) and to the workspace's; a release does not.
-pub fn hand_of(origin: &Origin) -> manifest::Hand {
-    match origin {
-        Origin::Store { verified: true, .. } | Origin::Dev { .. } | Origin::Workspace => {
-            manifest::Hand::First
-        }
-        Origin::Store { seed: true, .. } if cfg!(debug_assertions) => manifest::Hand::First,
-        _ => manifest::Hand::Third,
+/// What the plugin `id` of `origin` may take of Escouade's own (ESC-314): the hand its manifest is
+/// read with. Escouade's own hand is its origin and its id together (audit SEC-27): an id
+/// `dev.escouade.*` that comes from the seed or from a version of the store signed for it (the
+/// store takes them from the app's repository alone, then signs). A folder in development, a
+/// folder copied or a repository cloned, which anyone may hand out, are of anyone's hand whatever
+/// their id, and the id `dev.escouade.*` is refused to them: what holds that id at run time
+/// (`builtin::first_hand`) came that way. A build of development gives the same hand to a module
+/// of the seed that is not signed (`scripts/seed-dev.sh`) and to the workspace's (`plugins/`,
+/// what the tests run of the first hand); a release does not.
+pub fn hand_of(origin: &Origin, id: &str) -> manifest::Hand {
+    let ours = match origin {
+        Origin::Store { verified: true, .. } | Origin::Workspace => true,
+        Origin::Store { seed: true, .. } => cfg!(debug_assertions),
+        Origin::Dev { .. } => dev_of_the_first_hand(),
+        Origin::Store { .. } | Origin::Folder { .. } | Origin::Git { .. } => false,
+    };
+    if ours && builtin::first_hand(id) {
+        manifest::Hand::First
+    } else {
+        manifest::Hand::Third
     }
+}
+
+/// A test that loads in development a plugin of `plugins/` it changed (`Plugins::load_dev_of_the_first_hand`): the
+/// folders in development of its process are of Escouade's own hand, as before SEC-27. Never in a build of the app.
+#[cfg(any(test, feature = "testing"))]
+static DEV_OF_THE_FIRST_HAND: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Whether a folder in development is of Escouade's own hand: in a test that said so alone, never in the app.
+fn dev_of_the_first_hand() -> bool {
+    #[cfg(any(test, feature = "testing"))]
+    return DEV_OF_THE_FIRST_HAND.load(Ordering::SeqCst);
+    #[cfg(not(any(test, feature = "testing")))]
+    false
 }
 
 /// A plugin of the list (`plugins.json`).
@@ -902,7 +924,7 @@ impl Plugins {
 
     fn read(&self, installed: Installed) -> Loaded {
         let folder = self.folder_of(&installed);
-        let hand = hand_of(&installed.origin);
+        let hand = hand_of(&installed.origin, &installed.id);
         let read = match installed.origin {
             // Its folder holds its module, not its sources: its manifest is the repository's, read as it is.
             Origin::Workspace => builtin::manifest_text(&installed.id, &self.app_version)
@@ -970,7 +992,7 @@ impl Plugins {
             .filter(|l| {
                 l.installed.origin == Origin::Workspace
                     || (matches!(l.installed.origin, Origin::Store { .. })
-                        && hand_of(&l.installed.origin) == manifest::Hand::First
+                        && hand_of(&l.installed.origin, &l.installed.id) == manifest::Hand::First
                         && self.seed.has(&l.installed.id))
             })
             .filter_map(|l| {
@@ -1200,6 +1222,19 @@ impl Plugins {
         self.install(&p.token, lang)
     }
 
+    /// As `load_dev`, of Escouade's own hand: what a test does of a plugin of `plugins/` it changed (its hosts, its
+    /// program). The whole process takes the folders in development for the first hand from then on (one test a
+    /// process, as nextest runs them); never in a build of the app (audit SEC-27).
+    #[cfg(any(test, feature = "testing"))]
+    pub fn load_dev_of_the_first_hand(
+        &self,
+        dir: &Path,
+        lang: Lang,
+    ) -> Result<PluginView, Refusal> {
+        DEV_OF_THE_FIRST_HAND.store(true, Ordering::SeqCst);
+        self.load_dev(dir, lang)
+    }
+
     /// What installing the plugin of the local folder `src` would do, before anything is
     /// installed: its copy is set aside, pinned by the SHA-256 of its files, until `install` or
     /// `discard`.
@@ -1301,9 +1336,15 @@ impl Plugins {
         result
     }
 
-    /// What loading the folder in development `dir` in place would do: nothing is copied.
+    /// What loading the folder in development `dir` in place would do: nothing is copied. Of anyone's hand, as a
+    /// folder copied is (audit SEC-27): the id `dev.escouade.*` is refused to it.
     pub fn inspect_dev(&self, dir: &Path, lang: Lang) -> Result<Preview, Refusal> {
-        let m = Self::checked(dir, manifest::Hand::First, lang)?;
+        let hand = if dev_of_the_first_hand() {
+            manifest::Hand::First
+        } else {
+            manifest::Hand::Third
+        };
+        let m = Self::checked(dir, hand, lang)?;
         let path = std::path::absolute(dir)
             .map(|p| p.display().to_string())
             .unwrap_or_else(|_| dir.display().to_string());
@@ -1382,9 +1423,15 @@ impl Plugins {
             unverified,
         };
         let mut staged = self.staged.lock();
-        // What was set aside and never answered goes: one inspection at a time is enough.
-        for (_, old) in staged.drain() {
-            if let Some(d) = old.dir {
+        // What was set aside for this plugin and never answered goes: one inspection per plugin at a time is enough.
+        // Those of other plugins stay, so that « Tout mettre à jour » reads every update before asking (ESC-436).
+        let old: Vec<String> = staged
+            .iter()
+            .filter(|(_, s)| s.installed.id == preview.id)
+            .map(|(t, _)| t.clone())
+            .collect();
+        for t in old {
+            if let Some(d) = staged.remove(&t).and_then(|s| s.dir) {
                 remove_dir(&d);
             }
         }
@@ -2172,7 +2219,8 @@ impl Plugins {
                     f.version
                 )));
             }
-            let hand = if signed {
+            // Signed and of the id of Escouade's own: a version of anyone's the store verified is read as anyone's.
+            let hand = if signed && builtin::first_hand(&f.id) {
                 manifest::Hand::First
             } else {
                 manifest::Hand::Third

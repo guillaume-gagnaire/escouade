@@ -207,7 +207,9 @@ pub fn is_builtin(id: &str) -> bool {
 }
 
 /// Whether `id` is of Escouade's own hand: `dev.escouade.*`, an id the manifest refuses to a third party and that installs
-/// signed alone, which holds for those the app does not give (Goose). The one test of it.
+/// signed alone, which holds for those the app does not give (Goose). The one test of it at run time: a plugin holds that
+/// id only when it came from the seed or signed from the store (`super::hand_of`, audit SEC-27); a folder in
+/// development, copied or cloned, is refused it.
 pub fn first_hand(id: &str) -> bool {
     id.starts_with(super::manifest::RESERVED_PREFIX)
 }

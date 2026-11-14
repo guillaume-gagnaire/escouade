@@ -461,7 +461,12 @@ async fn the_team_rules_example_refuses_rm_rf_with_its_reason() {
     let app = env!("CARGO_PKG_VERSION").split(['-', '+']).next().unwrap();
     m["escouade"]["min"] = serde_json::json!(app);
     std::fs::write(&manifest, serde_json::to_string_pretty(&m).unwrap()).unwrap();
-    let id = h.core.plugins.load_dev(&dir, Lang::En).unwrap().id;
+    let id = h
+        .core
+        .plugins
+        .load_dev_of_the_first_hand(&dir, Lang::En)
+        .unwrap()
+        .id;
     crate::plugins_runtime_tests::warm(&h.core.plugin_runtime, &id);
     // Its module made now, before the waits' 60 s: Javy and wasmtime's compilation of a debug build take long on a
     // busy machine (the CI's, 2026-11-02), as the app makes it at an install.

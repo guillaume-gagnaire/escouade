@@ -136,7 +136,7 @@ The journal’s file is `~/.escouade/plugin-logs/<id>.log` ([the protocol](plugi
 
 When it starts, Escouade looks for a newer version of each plugin: a higher tag of its git repository, a higher version in the folder it was copied from, the last compatible version of the catalog for a plugin of the store (“v1.3.0 · not verified” when it has no seal). What it finds is **offered, never installed by itself**: “v1.3.0 available” on its line, “Update to v1.3.0” on its page, the list in Updates, and “Update all” at the top of the installed ones.
 
-An update goes through the install window, from the installed version to the new one. **If it asks for more**, the window says so (“your consent is asked again”) and marks “new” each permission more. Your choices stay: its projects, the permissions taken back, its settings and its secrets. “Update all” opens the window of each, one after the other.
+An update goes through the install window, from the installed version to the new one. **If it asks for more**, the window says so (“your consent is asked again”) and marks “new” each permission more. Your choices stay: its projects, the permissions taken back, its settings and its secrets. “Update all” first reads each new version: those verified by Escouade that ask for nothing more are agreed to together, in one window. Each of the others gets its own, one after the other: those that ask for more, and those nobody reviewed (a version not verified, or a plugin from a repository or a folder), with their warning.
 
 ## Withdrawn by Escouade
 

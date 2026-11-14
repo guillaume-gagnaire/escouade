@@ -10,6 +10,7 @@
 // What it holds (the files of Escouade's own plugins, plugins/<id>/; under a third party's id but one, ESC-314):
 // - dev.exemple.high-contrast: 1.0.0 verified, 1.1.0 not (an update that is not verified);
 // - dev.exemple.team-rules: 1.0.0 verified, a program that decides permissions;
+// - dev.exemple.nuit: 1.0.0 verified, 1.1.0 held back and not verified (ESC-438);
 // - dev.exemple.slack: 1.0.0 not verified, a program and its binary for each system;
 // - dev.exemple.later: 2.0.0 for an Escouade to come (min 99.0.0), 1.0.0 for this one (the last compatible is chosen);
 // - dev.exemple.tampered: its archive changed after its version.json (refused);
@@ -30,7 +31,8 @@
 //   (not in the catalogue), for the sort of the seed (ESC-373).
 // Its controls: POST /_fake/revocations { entries, serial? } signs and serves the next list (the mirror too);
 // POST /_fake/down { down } makes /api/v1 answer 503; POST /_fake/bump { id, version } publishes `version` of `id` (its last
-// line again, ESC-405); GET /_fake/state says the installs counted and the requests;
+// line again, ESC-405); POST /_fake/release { id, version } publishes a version held back, its own manifest and seal (ESC-436);
+// GET /_fake/state says the installs counted and the requests;
 // POST /_fake/seed { dir, plugins: [{ id, version }] } writes in `dir` the seed of those versions as the release makes it
 // (the bytes and the signatures of the store, the list of the day), with its seed.json.
 //
@@ -252,12 +254,54 @@ const SPEC = [
     path: `plugins/${id.slice('dev.escouade.'.length)}`,
     repo: 'guillaume-gagnaire/escouade',
   })),
+  // ESC-438 (SEC-29, essai B-16): a theme whose 1.0.0 is verified, its 1.1.0 (held back) not, and asks for nothing more.
+  { id: 'dev.exemple.nuit', v: '1.0.0', from: 'high-contrast', verified: true, cat: ['themes'], kw: ['nuit'], installs: 3, name: 'Nuit' },
+  { id: 'dev.exemple.nuit', v: '1.1.0', from: 'high-contrast', cat: ['themes'], kw: ['nuit'], name: 'Nuit', held: true },
+  // ESC-436: versions held back, published on demand (POST /_fake/release), for « Tout mettre à jour »: the high contrast's
+  // 1.2.0, verified, asks for nothing more than its 1.1.0; Slack's 1.1.0 and 1.2.0 connect each to one more host.
+  {
+    id: 'dev.exemple.high-contrast',
+    v: '1.2.0',
+    from: 'high-contrast',
+    verified: true,
+    cat: ['themes'],
+    kw: ['contraste', 'thème'],
+    held: true,
+  },
+  {
+    id: 'dev.exemple.slack',
+    v: '1.1.0',
+    from: 'slack',
+    cat: ['notifications'],
+    kw: ['slack', 'notifications'],
+    binaries: true,
+    held: true,
+    over: { permissions: { events: ['ticket.column', 'agent.status'], network: ['slack.com', 'files.slack.com'], secrets: ['token'] } },
+  },
+  {
+    id: 'dev.exemple.slack',
+    v: '1.2.0',
+    from: 'slack',
+    cat: ['notifications'],
+    kw: ['slack', 'notifications'],
+    binaries: true,
+    held: true,
+    over: {
+      permissions: {
+        events: ['ticket.column', 'agent.status'],
+        network: ['slack.com', 'files.slack.com', 'hooks.slack.com'],
+        secrets: ['token'],
+      },
+    },
+  },
 ];
 
 /** The store's content: the catalogue, the files by path, signed with `key`. */
 export function build(key) {
   const files = new Map();
   const plugins = new Map();
+  /** The versions held back (ESC-436): their files served, their line of the catalogue added by /_fake/release. */
+  const held = [];
   SPEC.forEach((s, n) => {
     const commit = sha256(String(n)).slice(0, 40);
     // A third party's copy has no repository of the app's; Escouade's own keeps its manifest's.
@@ -267,6 +311,7 @@ export function build(key) {
       ...(s.repo ? {} : { repository: undefined }),
       ...(s.name ? { name: s.name } : {}),
       ...(s.min ? { escouade: { api: '1', min: s.min } } : {}),
+      ...(s.over ?? {}),
     };
     const f = s.runJs ? runJs(over) : s.runWasm ? runWasm(over) : example(s.from, over);
     if (s.icon) {
@@ -344,8 +389,7 @@ export function build(key) {
         versions: [],
       });
     const p = plugins.get(s.id);
-    p.latest = s.v;
-    p.versions.unshift({
+    const line = {
       version: s.v,
       published_at: `2026-10-${String(20 + n).padStart(2, '0')}T08:00:00.000Z`,
       sha256: sha256(json),
@@ -372,7 +416,10 @@ export function build(key) {
         ...(wasmPath ? { wasm: wasmPath } : {}),
         ...(signed ? { signature: `${base}/version.json.minisig` } : {}),
       },
-    });
+    };
+    if (s.held) return held.push({ id: s.id, line });
+    p.latest = s.v;
+    p.versions.unshift(line);
   });
   const catalog = {
     format: 1,
@@ -381,7 +428,7 @@ export function build(key) {
     revocations: null,
     plugins: [...plugins.values()].sort((a, b) => a.id.localeCompare(b.id)),
   };
-  return { catalog, files };
+  return { catalog, files, held };
 }
 
 /** What a tool of the store's MCP server answers, marked as third-party data when it comes from a plugin (server/utils/mcp.ts). */
@@ -542,7 +589,7 @@ function publishingOf(p, catalog, files, listed) {
 /** Starts the fake store on `port` (0: any). */
 export function startFakeStore(port = 0) {
   const key = testKey();
-  const { catalog, files } = build(key);
+  const { catalog, files, held } = build(key);
   let body;
   let etag;
   const listed = () => {
@@ -616,6 +663,17 @@ export function startFakeStore(port = 0) {
       const rename = (o) =>
         o ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === 'string' ? v.replace(from, to) : v])) : o;
       plugin.versions.unshift({ ...last, version: b.version, published_at: new Date().toISOString(), files: rename(last.files) });
+      plugin.latest = b.version;
+      listed();
+      return send(200, '{}');
+    }
+    if (path === '/_fake/release' && req.method === 'POST') {
+      // A version held back published (ESC-436): its line at the head of its plugin's, with its own manifest and seal.
+      const b = json();
+      const h = held.find((x) => x.id === b.id && x.line.version === b.version);
+      const plugin = catalog.plugins.find((x) => x.id === b.id);
+      if (!h || !plugin) return send(404, '{}');
+      plugin.versions.unshift({ ...h.line, published_at: new Date().toISOString() });
       plugin.latest = b.version;
       listed();
       return send(200, '{}');

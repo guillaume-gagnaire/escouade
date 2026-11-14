@@ -1,7 +1,7 @@
 <script lang="ts">
   import { locale, t } from '../../lib/i18n';
   import { asksOf, contributionsOf, originOf, shortPrint, textOf } from '../../lib/plugins';
-  import { plugins, type InstallStep } from '../../lib/plugins-view.svelte';
+  import { newContributions, plugins, type InstallStep } from '../../lib/plugins-view.svelte';
   import Icon from '../Icon.svelte';
   import Modal from '../modals/Modal.svelte';
   import PluginTile from './PluginTile.svelte';
@@ -32,6 +32,12 @@
           : t('plugins.install.title', { name: p.name }),
   );
   const adds = $derived(contributionsOf(m, lang));
+  // An update: what it adds that the version installed did not, marked as its permissions are (ESC-436).
+  const fresh = $derived.by(() => {
+    const before = p?.previous ? (plugins.byId(p.id)?.manifest ?? null) : null;
+    return before ? new Set(newContributions(m, before, lang)) : new Set<string>();
+  });
+  const more = $derived(!!p && (p.grown.length > 0 || fresh.size > 0));
   const asks = $derived(p ? asksOf(p.asks, m, lang) : []);
   const confirmLabel = $derived(
     dev
@@ -134,7 +140,7 @@
           >{/if}
       </div>
       {#if p.previous}
-        {#if p.grown.length}
+        {#if more}
           <p class="grown" role="status">
             <Icon name="up" size={14} /><span>{t('plugins.install.grown', { version: p.previous.version })}</span>
           </p>
@@ -147,7 +153,11 @@
         <h4>{t('plugins.page.adds')}</h4>
         {#if adds.length}
           <ul class="adds">
-            {#each adds as line (line)}<li><Icon name="sparkle" size={14} /><span>{line}</span></li>{/each}
+            {#each adds as line (line)}<li>
+                <Icon name="sparkle" size={14} /><span>{line}</span>{#if fresh.has(line)}<span class="new"
+                    >{t('plugins.install.grownMark')}</span
+                  >{/if}
+              </li>{/each}
           </ul>
         {:else}
           <p class="hint">{t('plugins.page.addsNothing')}</p>
@@ -301,10 +311,19 @@
   }
   .adds li {
     display: grid;
-    grid-template-columns: 18px minmax(0, 1fr);
+    grid-template-columns: 18px minmax(0, 1fr) auto;
     gap: 8px;
     font-size: 12.5px;
     color: var(--soft);
+  }
+  .new {
+    align-self: center;
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 5px;
+    color: var(--warn-ink);
+    box-shadow: inset 0 0 0 1px var(--wait-line);
   }
   .adds :global(.icon) {
     margin-top: 2px;

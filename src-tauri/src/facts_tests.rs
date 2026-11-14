@@ -890,7 +890,12 @@ async fn the_discord_example_posts_the_tickets_to_test_and_the_agents_waiting() 
     let dir = h.dir.join("discord");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("escouade-plugin.json"), manifest.to_string()).unwrap();
-    let id = h.core.plugins.load_dev(&dir, Lang::En).unwrap().id;
+    let id = h
+        .core
+        .plugins
+        .load_dev_of_the_first_hand(&dir, Lang::En)
+        .unwrap()
+        .id;
     crate::plugins_runtime_tests::warm(&h.core.plugin_runtime, &id);
     h.core
         .secrets

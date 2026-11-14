@@ -136,7 +136,7 @@ Le fichier du journal est `~/.escouade/plugin-logs/<id>.log` ([le protocole](plu
 
 Au démarrage, Escouade cherche une version plus récente de chaque plugin : une étiquette plus haute de son dépôt git, une version plus haute dans le dossier d’où il a été copié, la dernière version compatible du catalogue pour un plugin du store (« v1.3.0 · non vérifiée » quand elle n’a pas de sceau). Ce qu’il trouve est **proposé, jamais installé seul** : « v1.3.0 disponible » sur sa ligne, « Mettre à jour vers la v1.3.0 » sur sa page, la liste dans Mises à jour, et « Tout mettre à jour » en tête des installés.
 
-Une mise à jour passe par la fenêtre d’installation, de la version installée à la nouvelle. **Si elle demande plus**, la fenêtre le dit (« ton accord est redemandé ») et marque « nouveau » chaque permission en plus. Tes choix restent : ses projets, les permissions retirées, ses réglages et ses secrets. « Tout mettre à jour » ouvre la fenêtre de chacune, l’une après l’autre.
+Une mise à jour passe par la fenêtre d’installation, de la version installée à la nouvelle. **Si elle demande plus**, la fenêtre le dit (« ton accord est redemandé ») et marque « nouveau » chaque permission en plus. Tes choix restent : ses projets, les permissions retirées, ses réglages et ses secrets. « Tout mettre à jour » lit d’abord chaque nouvelle version : celles qui sont vérifiées par Escouade et ne demandent rien de plus se confirment ensemble, dans une seule fenêtre. Les autres ont chacune la leur, l’une après l’autre : celles qui demandent plus, et celles que personne n’a relues (une version non vérifiée, ou un plugin venu d’un dépôt ou d’un dossier), avec leur avertissement.
 
 ## Le retrait par Escouade
 

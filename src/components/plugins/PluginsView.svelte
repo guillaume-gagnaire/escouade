@@ -6,6 +6,7 @@
   import { plugins } from '../../lib/plugins-view.svelte';
   import Icon from '../Icon.svelte';
   import InstallModal from './InstallModal.svelte';
+  import UpdateAllModal from './UpdateAllModal.svelte';
   import PluginPage from './PluginPage.svelte';
   import PluginRows from './PluginRows.svelte';
   import PluginTile from './PluginTile.svelte';
@@ -102,9 +103,10 @@
               ></button>{t('plugins.installed.verifiedOnly')}</label
             >
           {/if}
-          {#if page.kind === 'installed' && plugins.updates.length}
-            <button class="btn warn" onclick={() => plugins.updateAll()}
-              >{t('plugins.installed.updateAll', { count: plugins.updates.length })}</button
+          {#if (page.kind === 'installed' || page.kind === 'updates') && plugins.updates.length}
+            <!-- « Tout mettre à jour » on both pages (ESC-436); not twice while one is under way. -->
+            <button class="btn warn" disabled={plugins.updating} aria-busy={plugins.updating} onclick={() => plugins.updateAll()}
+              >{t('plugins.updates.all', { count: plugins.updates.length })}</button
             >
           {/if}
           {#if page.kind === 'updates'}
@@ -190,21 +192,45 @@
             >
           </p>
         {:else if page.kind === 'updates'}
-          {#if plugins.updates.length}
+          {#if !plugins.updates.length}
+            <p class="hint">{t('plugins.updates.empty')}</p>
+          {/if}
+          {#if plugins.updateLines.length}
+            <!-- Each line says how its update goes (ESC-436): read, waiting for the user's word, installing, done or why not. -->
             <div class="ups">
-              {#each plugins.updates as p (p.id)}
+              {#each plugins.updateLines as p (p.id)}
+                {@const row = plugins.rows[p.id]}
                 <div class="up">
                   <PluginTile id={p.id} name={p.name} installed />
-                  <div>
-                    <b>{p.name}</b><span class="mono">{t('plugins.updates.row', { from: p.version, to: p.update?.version ?? '' })}</span>
+                  <div class="what">
+                    <b>{p.name}</b>
+                    {#if row?.kind === 'done'}
+                      <span class="st ok" role="status">{t('plugins.updates.done', { version: row.version })}</span>
+                    {:else}
+                      <span class="mono">{t('plugins.updates.row', { from: p.version, to: p.update?.version ?? '' })}</span>
+                      {#if row?.kind === 'reading' || row?.kind === 'installing'}
+                        <span class="st" role="status"><i class="spin" aria-hidden="true"></i>{t(`plugins.updates.${row.kind}`)}</span>
+                      {:else if row?.kind === 'waiting'}
+                        <span class="st" role="status">{t('plugins.updates.waiting')}</span>
+                      {:else if row?.kind === 'error'}
+                        <span class="st bad" role="alert">{row.message}</span>
+                      {/if}
+                    {/if}
                   </div>
                   <button class="btn" onclick={() => plugins.openPlugin(p.id, 'versions')}>{t('plugins.page.tabs.versions')}</button>
-                  <button class="btn primary" onclick={() => plugins.update(p)}>{t('plugins.updates.update')}</button>
+                  {#if p.update && row?.kind !== 'done'}
+                    <button
+                      class="btn primary"
+                      disabled={plugins.busy(p.id)}
+                      aria-busy={plugins.busy(p.id)}
+                      onclick={() => plugins.update(p)}>{t('plugins.updates.update')}</button
+                    >
+                  {:else}
+                    <span></span>
+                  {/if}
                 </div>
               {/each}
             </div>
-          {:else}
-            <p class="hint">{t('plugins.updates.empty')}</p>
           {/if}
         {:else if page.kind === 'dev'}
           {#if plugins.dev.length}
@@ -230,7 +256,9 @@
   {/if}
 </div>
 
-{#if plugins.install}<InstallModal step={plugins.install} />{/if}
+{#if plugins.install?.kind === 'batch'}<UpdateAllModal step={plugins.install} />{:else if plugins.install}<InstallModal
+    step={plugins.install}
+  />{/if}
 
 <style>
   .plugins-work {
@@ -319,6 +347,30 @@
   .up .mono {
     color: var(--warn-ink);
     font-size: 11.5px;
+  }
+  .what {
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 10px;
+  }
+  .what b {
+    flex-basis: 100%;
+  }
+  .st {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  .st.ok {
+    color: var(--teal-ink);
+  }
+  .st.bad {
+    color: var(--del);
+    white-space: pre-wrap;
   }
   .hint {
     margin: 14px 0 0;

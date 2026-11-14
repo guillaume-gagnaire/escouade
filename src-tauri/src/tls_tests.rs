@@ -154,3 +154,90 @@ fn the_agents_get_the_file_and_the_unchecked_tls_only_with_a_proxy() {
         assert!(!has(&env, "NODE_TLS_REJECT_UNAUTHORIZED"));
     }
 }
+
+/// The PoC W-28 of the audit (SEC-28): the setting on, a proxy set, and a server of the machine excluded by a range of
+/// addresses. Who decides the route and who decides the check read the exclusions alike (`proxy_for`): the server is
+/// reached directly, and its certificate is checked, so refused.
+#[tokio::test]
+async fn a_host_excluded_by_a_range_goes_around_the_proxy_and_its_certificate_is_checked() {
+    let server = FakeServer::start_tls().await;
+    server.on("GET", "/ok", 200, serde_json::json!({}));
+    let url = format!("{}/ok", server.url);
+    let (proxy, opened) = tunnel_proxy().await;
+    let mut settings = Settings {
+        proxy_url: proxy,
+        insecure_tls: true,
+        ..Settings::default()
+    };
+    for around in [
+        "127.0.0.0/8",
+        "127.0.0.1/32",
+        "10.0.0.0/8, 127.0.0.0/8",
+        "127.0.0.1:443",
+        "[127.0.0.1]",
+    ] {
+        settings.no_proxy = around.into();
+        assert_eq!(status(&settings, &url).await, None, "{around}: unchecked");
+        assert_eq!(*opened.lock().unwrap(), 0, "{around}: through the proxy");
+    }
+    // Out of the range, through the proxy: unchecked, as the setting says.
+    settings.no_proxy = "10.0.0.0/8".into();
+    assert_eq!(status(&settings, &url).await, Some(200));
+    assert_eq!(*opened.lock().unwrap(), 1);
+}
+
+/// The one reading of the exclusions (SEC-28): what a proxy's tools write, and what is no exclusion of a host.
+#[test]
+fn the_exclusions_are_read_as_written_by_the_tools_of_a_proxy() {
+    for (no_proxy, host) in [
+        ("*", "example.com"),
+        ("internal.example", "internal.example"),
+        ("internal.example", "INTERNAL.example"),
+        ("internal.example", "a.internal.example"),
+        (".corp.example", "x.corp.example"),
+        ("*.corp.example", "x.corp.example"),
+        ("internal.example:8443", "internal.example"),
+        ("internal.example.", "internal.example"),
+        ("internal.example", "internal.example."),
+        ("10.0.0.0/8", "10.1.2.3"),
+        ("127.0.0.0/8", "127.0.0.1"),
+        ("10.1.2.3", "10.1.2.3"),
+        ("10.1.2.3:8080", "10.1.2.3"),
+        ("[::1]", "::1"),
+        ("::1", "[::1]"),
+        ("[::1]:443", "::1"),
+        ("fd00::/8", "fd12::1"),
+        ("10.0.0.0/8", "::ffff:10.1.2.3"),
+        ("a.example;b.example 10.0.0.0/8,c.example", "10.200.0.1"),
+    ] {
+        assert!(
+            excluded(no_proxy, host),
+            "{no_proxy} does not exclude {host}"
+        );
+    }
+    for (no_proxy, host) in [
+        ("", "example.com"),
+        ("internal.example", "notinternal.example"),
+        ("internal.example", "internal.example.evil.test"),
+        ("10.0.0.0/8", "11.1.2.3"),
+        ("10.0.0.0/8", "10.example"),
+        ("10.1.2.3", "10.1.2.30"),
+        ("10.0.0.0/33", "10.1.2.3"),
+        ("fd00::/8", "fe80::1"),
+        ("*.corp.example", "corp.example.evil"),
+        ("10.0.0.0", "10.0.0.0.evil.test"),
+    ] {
+        assert!(!excluded(no_proxy, host), "{no_proxy} excludes {host}");
+    }
+    // The route and the check ask the same: through the proxy what is not excluded, around it what is.
+    let net = Net {
+        proxy: "http://127.0.0.1:9000".into(),
+        no_proxy: "10.0.0.0/8".into(),
+        insecure: true,
+        extra_ca: String::new(),
+    };
+    assert!(proxy_for(&net, "10.1.2.3").is_none());
+    assert!(proxy_for(&net, "example.com").is_some());
+    assert!(proxy(&net).is_some());
+    assert!(proxy(&Net::default()).is_none());
+}

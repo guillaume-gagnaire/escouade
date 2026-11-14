@@ -2,8 +2,8 @@
 title: "Les harness ACP décrits"
 subject: "plugins"
 sources: ["docs/PLUGINS-DESIGN.md §1.1, §4.4, §4.12, §8.27, §8.31","docs/TODO-2.2.md, PLG-6","Essai réel de Goose 1.57.0 sur Ollama, 2026-11-01 (ESC-178)","Audit de sécurité 2026-11 (ESC-418), fiches SEC-05 et SEC-06 : docs/security/audit-2026-11/rapport.md","docs/PLUGINS.md §1.3, §2.2"]
-tickets: ["ESC-178","ESC-222","ESC-281","ESC-282","ESC-347","ESC-361","ESC-362","ESC-424"]
-decisions: [152]
+tickets: ["ESC-178","ESC-222","ESC-281","ESC-282","ESC-347","ESC-361","ESC-362","ESC-424","ESC-428"]
+decisions: [152,"les-corrections-de-l-audit-dans-la-2-2-v"]
 compared: null
 ---
 
@@ -82,7 +82,7 @@ Un harness décrit est servi par `dev.escouade.acp`, mais c'est son auteur qui e
 
 Ceci remplace, dans « La confiance d'un harness décrit », les phrases sur les variables et sur `versionArgs`.
 
-- **Les variables déclarées.** Un lancement (`engine/launch`, `terminal/launch`, `engine/oneShot`, `account/read`, la relance) ne pose que les variables que le plugin qui décrit le harness déclare (`permissions.env`), celles de son `acp.env` (que l'installation montre déjà) et celles que le cœur pose lui-même (`accountVar`, `keyVar`, `ESCOUADE_HOOK_URL`). Toute autre est refusée : l'agent ne démarre pas, et la variable est nommée.
+- **Les variables déclarées.** Un lancement (`engine/launch`, `terminal/launch`, `engine/oneShot`, `account/read`, la relance, l'attach que rend `agent/open` pour un terminal qui rejoint un process partagé) ne pose que les variables que le plugin qui décrit le harness déclare (`permissions.env`), celles de son `acp.env` (que l'installation montre déjà) et celles que le cœur pose lui-même (`accountVar`, `keyVar`, `ESCOUADE_HOOK_URL`). Toute autre est refusée : l'agent ne démarre pas, et la variable est nommée.
 - **Les familles refusées à un tiers, même déclarées** : `ESCOUADE_*`, `LD_*`, `DYLD_*`, `GIT_*` sauf `GIT_AUTHOR_*` et `GIT_COMMITTER_*`, `PYTHON*`, `RUBY*`, `PERL*`, `NODE_*`, `JAVA_TOOL_OPTIONS`, `_JAVA_OPTIONS`, `JDK_JAVA_OPTIONS`, `npm_config_*`, `*_PROXY`, `SSL_*`, `CURL_CA_BUNDLE`, `REQUESTS_CA_BUNDLE`, `HOME`, `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `XDG_*`, `PATH`, `PATHEXT`, `COMSPEC`, `SHELL`, `BASH_ENV`, `ENV`, `ZDOTDIR`, `IFS`, `PROMPT_COMMAND`, `EDITOR`, `VISUAL`, `PAGER`, `BROWSER`, quelle que soit la casse. Cela vaut pour `acp.env`, `accountVar` et `keyVar`. Le lecteur du manifeste refuse déjà un manifeste tiers qui en nomme une (code `variable`), dans l'app, dans `escouade-plugin validate` et au store.
 - **La première main** est tenue à ce qu'elle déclare, sans la liste des familles : Antigravity CLI pose `HOME`, `USERPROFILE` et ses dossiers temporaires sur le dossier de son agent. Une version de la première main d'avant `permissions.env` garde ses lancements comme avant.
 - **Pas de shell ni d'interpréteur.** Un harness d'un tiers ne nomme comme programme ni `sh`, `bash`, `zsh`, `dash`, `ksh`, `fish`, `cmd`, `powershell`, `pwsh`, `python*`, `node`, `deno`, `bun`, `ruby`, `perl`, `php`, `lua`, `osascript`, `wscript`, `cscript`, `mshta`, `rundll32`, `env`, `wsl`… (sans casse, `.exe` compris). Le manifeste est refusé (code `interpreter`), et un nom de ce genre est retiré de `locate.names` : le programme n'est pas trouvé.

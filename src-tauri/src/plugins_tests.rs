@@ -598,6 +598,42 @@ fn an_inspection_says_what_it_may_do_the_strongest_first_and_installs_nothing() 
     assert!(view.choices.enabled);
 }
 
+/// « Tout mettre à jour » reads every update before asking (ESC-436): what is set aside for one plugin stays while
+/// another is read; a new reading of the same plugin replaces its own.
+#[test]
+fn inspections_of_several_plugins_are_kept_one_per_plugin() {
+    let base = temp_dir("inspect-several");
+    let data = DataDir::new(base.join("data"));
+    let (a, b) = (base.join("a"), base.join("b"));
+    plugin_folder(
+        &a,
+        &programmed("dev.exemple.slack", "1.0.0", &["hooks.slack.com"]),
+    );
+    plugin_folder(
+        &b,
+        &programmed("dev.exemple.other", "1.0.0", &["api.other.dev"]),
+    );
+    let plugins = Plugins::load(data, "2.1.0");
+
+    let first = plugins.inspect_folder(&a, Lang::En).unwrap();
+    let again = plugins.inspect_folder(&a, Lang::En).unwrap();
+    let other = plugins.inspect_folder(&b, Lang::En).unwrap();
+    let refusal = plugins.install(&first.token, Lang::En).unwrap_err();
+    assert!(
+        refusal.message.contains("no longer current"),
+        "{}",
+        refusal.message
+    );
+    assert_eq!(
+        plugins.install(&other.token, Lang::En).unwrap().id,
+        "dev.exemple.other"
+    );
+    assert_eq!(
+        plugins.install(&again.token, Lang::En).unwrap().id,
+        "dev.exemple.slack"
+    );
+}
+
 #[test]
 fn an_update_keeps_the_users_choices_and_says_what_it_asks_for_more() {
     let base = temp_dir("update");

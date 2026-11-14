@@ -3,18 +3,18 @@
   "plugins": [
     {
       "id": "dev.escouade.acp",
-      "version": "2.2.3",
-      "sha256": "ba159d9d827f6b65f5a54d034b13b61dcebb1f6406edd70b720963d026c81e62"
+      "version": "2.2.4",
+      "sha256": "16d9d39c75ce67e2de85581faf9390d2b10cb4c524867202596e5db28ca82b9a"
     },
     {
       "id": "dev.escouade.antigravity-cli",
-      "version": "2.2.5",
-      "sha256": "b0e667ff0d230749e89f1ba2b2108ed6728b9e7e141c0c47d284b2040c29bb26"
+      "version": "2.2.9",
+      "sha256": "03f935f6ef307eac4634b95c8009a353379893ad04dc6b72196f545318f6923e"
     },
     {
       "id": "dev.escouade.azure-devops",
-      "version": "2.2.3",
-      "sha256": "a51d3cd99e181280ee48b6860bd4076931b53d43059874062bfe0b1f1c1ee976"
+      "version": "2.2.4",
+      "sha256": "665a8b6c29846c9a5ed482a8765fa705356d2b99ba292a88b76a897283b3bee7"
     },
     {
       "id": "dev.escouade.bitbucket",
@@ -23,8 +23,8 @@
     },
     {
       "id": "dev.escouade.claude-code",
-      "version": "2.2.4",
-      "sha256": "7687bc8e6f0def9d9d7ce5e7ae64eb8dcd91069c5b46b37a6541ab320e34bbda"
+      "version": "2.2.7",
+      "sha256": "e9b14b9d5e48b42fab3e71ce750cfaea986a50eddc4ec64db9f3d8821d9fc34c"
     },
     {
       "id": "dev.escouade.clickup",
@@ -33,18 +33,18 @@
     },
     {
       "id": "dev.escouade.codex",
-      "version": "2.2.3",
-      "sha256": "d2b657296b16102f92be1e7e6f573f4d4598a5243feedce12a859a4f90fb17b8"
+      "version": "2.2.5",
+      "sha256": "5541e31233d8571279ed96e65e2be956a1ee20eecb35e9b4194e7e2d4ab105ac"
     },
     {
       "id": "dev.escouade.copilot-cli",
-      "version": "2.2.3",
-      "sha256": "eac8cf3d28447f9f27cac91b45be570d5119bef1e935d66ae3f36e942f233feb"
+      "version": "2.2.8",
+      "sha256": "a9c9b5ea36a221a31800cd2d2c7839f9b663ac9e09800e1aed4f5bf69d4e146e"
     },
     {
       "id": "dev.escouade.cursor-cli",
-      "version": "2.2.3",
-      "sha256": "bdef0db9ab6f3316dab6c8b2170cdcb3b9d661856adca1c058b0865ebf24bfa9"
+      "version": "2.2.5",
+      "sha256": "48ea61c8d78d48ce432e27c879dcc7cde7e7e1214ec677762ecace8413ed0fb1"
     },
     {
       "id": "dev.escouade.deepgram",
@@ -63,8 +63,8 @@
     },
     {
       "id": "dev.escouade.gemini-cli",
-      "version": "2.2.3",
-      "sha256": "aed43a7839f17523565b29f6eeb2490294954cb4d6a15556e29fa78c69b31db2"
+      "version": "2.2.7",
+      "sha256": "6ab669cc52c85824f48ae1abf47ae3b1db932f68162619f6226e3e5f564f618e"
     },
     {
       "id": "dev.escouade.gitea",
@@ -98,8 +98,8 @@
     },
     {
       "id": "dev.escouade.isola",
-      "version": "2.2.1",
-      "sha256": "7de0624234864f9767de3869bdd664f7e4d39d21051d0d62174f2f398cd1b9c6"
+      "version": "2.2.2",
+      "sha256": "11d879800f79c99c2e52136b3838ed1acb9a18551f22e6ba0fce7b7415eccc09"
     },
     {
       "id": "dev.escouade.jira",
@@ -113,8 +113,8 @@
     },
     {
       "id": "dev.escouade.mistral",
-      "version": "2.2.3",
-      "sha256": "7d0f65b014513fefe9195195be268b72941ca35e411f078ff899e187f22dd4e4"
+      "version": "2.2.7",
+      "sha256": "ab2f265770729cadacc96162abb6757de80b975a79765ed5d3912cf4f79ff85c"
     },
     {
       "id": "dev.escouade.openai",
@@ -123,8 +123,8 @@
     },
     {
       "id": "dev.escouade.opencode",
-      "version": "2.2.3",
-      "sha256": "6de45bea93a527be08b1b7b8744eb3d7e529d1ec146ff2b7dd061351dfb64bf6"
+      "version": "2.2.5",
+      "sha256": "704a7a51b9d09d497e9c00ffc39405f6ec06bbf145ac4ca52705710820b7c138"
     },
     {
       "id": "dev.escouade.slack",

@@ -4,7 +4,16 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { untrack } from 'svelte';
 import { fDayMonth, fTime } from './format';
 import { t } from './i18n';
-import { pluginsApi, type Category, type PluginPreview, type PluginRefusal, type PluginView, type SeedOffer } from './plugins';
+import {
+  contributionsOf,
+  pluginsApi,
+  type Category,
+  type Manifest,
+  type PluginPreview,
+  type PluginRefusal,
+  type PluginView,
+  type SeedOffer,
+} from './plugins';
 import { storeApi, type CatalogPlugin, type DeepLink, type StoreView, type Suggestion } from './store';
 import { readSetAside, setAside } from './proposed-plugins';
 import { app } from './state.svelte';
@@ -31,7 +40,17 @@ const WEEK = 7 * 24 * 3600 * 1000;
 /** What the install window shows: a plugin read, or the fields of a git repository before it is read. */
 export type InstallStep =
   | { kind: 'git'; url: string; tag: string; busy: boolean; error: string | null }
-  | { kind: 'preview'; preview: PluginPreview; busy: boolean; error: string | null };
+  | { kind: 'preview'; preview: PluginPreview; busy: boolean; error: string | null }
+  /** « Tout mettre à jour »: the updates that ask for nothing more, agreed to together (ESC-436). */
+  | { kind: 'batch'; previews: PluginPreview[]; busy: boolean; error: string | null };
+
+/** An update's line: read, waiting for the user's word, installing, done, or what went wrong. */
+export type UpdateRow =
+  | { kind: 'reading' }
+  | { kind: 'waiting' }
+  | { kind: 'installing' }
+  | { kind: 'done'; version: string }
+  | { kind: 'error'; message: string };
 
 /** The text of a refusal of the core: its message (a plugin's Refusal, an Error), or what came. */
 function refusalText(e: unknown): string {
@@ -52,8 +71,10 @@ class PluginsStore {
   checking = $state(false);
   /** The installed plugins' icons, by id, once read (null: none, its letters). */
   icons = $state<Record<string, string | null>>({});
-  /** « Tout mettre à jour »: the updates still to show, one window each, the user's consent asked for every one. */
-  queue: string[] = [];
+  /** « Tout mettre à jour »: the updates read that ask for more, still to show, one window each (ESC-436). */
+  ahead = $state<PluginPreview[]>([]);
+  /** How each update under way goes, by id, on its line of the updates' page (ESC-436); the finished ones until it is left. */
+  rows = $state<Record<string, UpdateRow>>({});
   /** The store as the core keeps it (STORE-9): its catalogue cached, when it was read. */
   store = $state<StoreView | null>(null);
   storeBusy = $state(false);
@@ -82,6 +103,16 @@ class PluginsStore {
 
   get updates() {
     return this.list.filter((p) => p.update);
+  }
+
+  /** The lines of the updates' page: the updates offered, and those done or refused since it was opened (ESC-436). */
+  get updateLines() {
+    return this.list.filter((p) => p.update || this.rows[p.id]);
+  }
+
+  /** The lines finished (done, an error) forgotten: the page shows what is offered now. */
+  private forgetFinished() {
+    for (const id of Object.keys(this.rows)) if (!this.busy(id)) delete this.rows[id];
   }
 
   get dev() {
@@ -258,6 +289,7 @@ class PluginsStore {
   }
 
   show(page: PluginsPage) {
+    if (page.kind === 'updates' && this.page.kind !== 'updates') this.forgetFinished();
     this.page = page;
     this.error = null;
   }
@@ -291,6 +323,7 @@ class PluginsStore {
       void app.refreshEngines();
       this.list = this.list.filter((p) => p.id !== id);
       delete this.icons[id];
+      delete this.rows[id];
       await this.loadOffers();
       if (this.page.kind === 'plugin' && this.page.id === id) this.show({ kind: 'installed' });
     } catch (e) {
@@ -301,6 +334,7 @@ class PluginsStore {
   /** « Rechercher des mises à jour »: the store read again by the core first (ESC-405); `store` says when, or that it did not answer. */
   async checkUpdates() {
     this.checking = true;
+    this.forgetFinished();
     try {
       const got = await pluginsApi.checkUpdates();
       if (got) {
@@ -342,26 +376,114 @@ class PluginsStore {
     }
   }
 
-  /** An update offered: the new version read and shown, the permissions it adds marked, before anything is installed. */
-  async update(p: PluginView) {
-    if (!p.update) return;
+  /** How an update offered reads its new version (from the seed, the store, its repository or its folder); null: it cannot. */
+  private readUpdate(p: PluginView): (() => Promise<PluginPreview>) | null {
+    const u = p.update;
+    if (!u) return null;
     const o = p.origin;
-    if (p.update.seed) await this.inspect(() => pluginsApi.inspectSeed(p.id));
-    else if (o.kind === 'store') await this.fromStore(p.id, p.update.version);
-    else if (o.kind === 'git' && p.update.tag) await this.inspect(() => pluginsApi.inspectGit(o.url, p.update!.tag!));
-    else if (o.kind === 'folder') await this.inspect(() => pluginsApi.inspectFolder(o.path));
+    if (u.seed) return () => pluginsApi.inspectSeed(p.id);
+    if (o.kind === 'store') return () => pluginsApi.inspectStore(p.id, u.version);
+    if (o.kind === 'git' && u.tag) {
+      const tag = u.tag;
+      return () => pluginsApi.inspectGit(o.url, tag);
+    }
+    if (o.kind === 'folder') return () => pluginsApi.inspectFolder(o.path);
+    return null;
   }
 
-  /** « Tout mettre à jour »: each update's window in turn; cancelling one stops there. */
+  /** A refusal of an update, said on its line; on a page without its line (the installed ones, a plugin's), in the head too. */
+  private failed(id: string, message: string) {
+    this.rows[id] = { kind: 'error', message };
+    if (this.page.kind !== 'updates') {
+      const name = this.byId(id)?.name ?? id;
+      const line = t('plugins.updates.failedOf', { name, message });
+      this.error = this.error ? `${this.error}\n${line}` : line;
+    }
+  }
+
+  /** Whether an update's line is under way (read, waiting for the user's word, installing): its button cannot be clicked again. */
+  busy(id: string) {
+    const r = this.rows[id];
+    return !!r && (r.kind === 'reading' || r.kind === 'waiting' || r.kind === 'installing');
+  }
+
+  /** Whether an update is under way, one or « Tout mettre à jour ». */
+  get updating() {
+    return Object.keys(this.rows).some((id) => this.busy(id));
+  }
+
+  /**
+   * An update offered: the new version read and shown, the permissions it adds marked, before anything is installed. The
+   * page stays the one it was clicked on (ESC-436); its line says how it goes.
+   */
+  async update(p: PluginView) {
+    if (this.busy(p.id)) return;
+    const read = this.readUpdate(p);
+    if (!read) return;
+    this.error = null;
+    this.rows[p.id] = { kind: 'reading' };
+    try {
+      const preview = await read();
+      this.rows[p.id] = { kind: 'waiting' };
+      this.install = { kind: 'preview', preview, busy: false, error: null };
+    } catch (e) {
+      this.failed(p.id, refusalText(e));
+    }
+  }
+
+  /**
+   * « Tout mettre à jour » (ESC-436): every update read first. Those verified that ask for nothing more than the version installed are
+   * agreed to together, in one window; each of the others after, in its own, what it adds marked. Nothing is installed
+   * without a gesture; a refusal or an error on one is said on its line and stops none of the others.
+   */
   async updateAll() {
-    this.queue = this.updates.map((p) => p.id);
-    await this.next();
+    if (this.updating) return;
+    const list = this.updates.filter((p) => this.readUpdate(p));
+    if (!list.length) return;
+    this.error = null;
+    for (const p of list) this.rows[p.id] = { kind: 'reading' };
+    const quiet: PluginPreview[] = [];
+    const loud: PluginPreview[] = [];
+    for (const p of list) {
+      try {
+        const preview = await this.readUpdate(p)!();
+        this.rows[p.id] = { kind: 'waiting' };
+        // A version that will be loaded switched off (its refusal) is said in its own window, as one that asks for more.
+        (preview.refusal || asksMore(preview, this.byId(preview.id)) ? loud : quiet).push(preview);
+      } catch (e) {
+        this.failed(p.id, refusalText(e));
+      }
+    }
+    this.ahead = loud;
+    if (quiet.length) this.install = { kind: 'batch', previews: quiet, busy: false, error: null };
+    else this.next();
   }
 
-  private async next() {
-    const id = this.queue.shift();
-    const p = id ? this.byId(id) : null;
-    if (p) await this.update(p);
+  /** The next update of « Tout mettre à jour » that asks for more, in its own window. */
+  private next() {
+    const preview = this.ahead.shift();
+    if (preview) this.install = { kind: 'preview', preview, busy: false, error: null };
+  }
+
+  /** The updates that ask for nothing more, agreed to together: installed one after the other, an error on one said on its line. */
+  async confirmBatch() {
+    const step = this.install;
+    if (step?.kind !== 'batch' || step.busy) return;
+    step.busy = true;
+    for (const preview of step.previews) {
+      this.rows[preview.id] = { kind: 'installing' };
+      try {
+        const view = await pluginsApi.install(preview.token);
+        this.installed(view);
+        this.rows[view.id] = { kind: 'done', version: view.version };
+      } catch (e) {
+        this.failed(preview.id, refusalText(e));
+      }
+    }
+    void app.refreshEngines();
+    void this.loadOffers().catch(() => {});
+    this.install = null;
+    this.next();
   }
 
   async inspect(read: () => Promise<PluginPreview>) {
@@ -374,23 +496,31 @@ class PluginsStore {
     }
   }
 
-  /** « Installer »: what was read is installed, and its page shown. */
+  /** A plugin installed anew: its view in the list, its icon read again (it may have changed). */
+  private installed(view: PluginView) {
+    delete this.icons[view.id];
+    this.put(view);
+  }
+
+  /** « Installer »: what was read is installed; a new plugin's page shown, an update leaving the page where it was (ESC-436). */
   async confirm() {
     const step = this.install;
-    if (step?.kind !== 'preview') return;
+    if (step?.kind !== 'preview' || step.busy) return;
+    const update = !!step.preview.previous;
     step.busy = true;
     step.error = null;
+    if (update) this.rows[step.preview.id] = { kind: 'installing' };
     try {
       const view = await pluginsApi.install(step.preview.token);
-      // Installed anew (an update): its icon may have changed.
-      delete this.icons[view.id];
-      this.put(view);
+      this.installed(view);
       void app.refreshEngines();
       this.install = null;
       void this.loadOffers().catch(() => {});
-      if (this.queue.length) await this.next();
+      if (update) this.rows[view.id] = { kind: 'done', version: view.version };
       else this.openPlugin(view.id);
+      this.next();
     } catch (e) {
+      if (update) this.rows[step.preview.id] = { kind: 'waiting' };
       if (this.install === step) {
         step.busy = false;
         step.error = refusalText(e);
@@ -398,13 +528,40 @@ class PluginsStore {
     }
   }
 
-  /** The window closed without installing: what was set aside goes. */
+  /**
+   * The window closed without installing: what was set aside goes. An update refused stays offered; the next one of « Tout
+   * mettre à jour » is shown all the same.
+   */
   cancel() {
     const step = this.install;
+    if (step?.kind === 'batch' && step.busy) return;
     this.install = null;
-    this.queue = [];
-    if (step?.kind === 'preview') void pluginsApi.discard(step.preview.token).catch(() => {});
+    const previews = step?.kind === 'preview' ? [step.preview] : step?.kind === 'batch' ? step.previews : [];
+    for (const preview of previews) {
+      void pluginsApi.discard(preview.token).catch(() => {});
+      if (this.busy(preview.id)) delete this.rows[preview.id];
+    }
+    this.next();
   }
+}
+
+/**
+ * Whether an update asks for more than the version installed: a version nobody reviewed (not verified: its seal lost, or
+ * a plugin of a repository or a folder, never verified; SEC-29, ESC-438), a permission (`grown`, by the core), or a
+ * contribution its manifest did not have. Unknown (no manifest installed to compare with): it does. Each of those has its
+ * own window, its warning said; the window for all holds only verified versions that add nothing.
+ */
+export function asksMore(preview: PluginPreview, installed: PluginView | null): boolean {
+  if (!preview.verified) return true;
+  if (preview.grown.length) return true;
+  if (!installed?.manifest) return true;
+  return newContributions(preview.manifest, installed.manifest).length > 0;
+}
+
+/** The lines of what `next` adds that `before` did not (`contributionsOf`, in one language: they are compared, not shown). */
+export function newContributions(next: Manifest | null, before: Manifest | null, lang = 'en'): string[] {
+  const had = new Set(contributionsOf(before, lang));
+  return contributionsOf(next, lang).filter((line) => !had.has(line));
 }
 
 function readDismissed(): Record<string, number> {

@@ -80,7 +80,7 @@ fn plugin(
     .unwrap();
     let data = DataDir::new(base.join("data"));
     let plugins = Plugins::load(data.clone(), "2.2.0");
-    plugins.load_dev(&folder, Lang::En).unwrap();
+    load_dev(&plugins, &folder);
     let store = Arc::new(MemoryStore::default());
     let rt = Runtime::new(plugins.clone(), store.clone(), &data, "2.2.0", limits);
     // Its module made first (as at its installation): the calls' delays are not spent compiling it.
@@ -908,7 +908,7 @@ fn sdk_both(command: bool) -> (W, Seen) {
     .unwrap();
     let data = DataDir::new(base.join("data"));
     let plugins = Plugins::load(data.clone(), "2.2.0");
-    plugins.load_dev(&folder, Lang::En).unwrap();
+    load_dev(&plugins, &folder);
     let store = Arc::new(MemoryStore::default());
     let rt = Runtime::new(
         plugins.clone(),
@@ -1269,4 +1269,21 @@ async fn a_run_js_reads_the_folder_of_its_agent_and_runs_a_declared_command() {
         "proc/spawn: ran git --version"
     ));
     w.rt.shutdown();
+}
+
+/// Loads the folder in development `folder`: of Escouade's own hand when it is one of `plugins/` (its id
+/// `dev.escouade.*`), changed for the test, as a folder in development is of anyone's otherwise (audit SEC-27).
+fn load_dev(plugins: &Plugins, folder: &Path) {
+    let m: Value = serde_json::from_str(
+        &std::fs::read_to_string(folder.join("escouade-plugin.json")).unwrap(),
+    )
+    .unwrap();
+    let own = m["id"].as_str().is_some_and(crate::builtin::first_hand);
+    if own {
+        plugins
+            .load_dev_of_the_first_hand(folder, Lang::En)
+            .unwrap();
+    } else {
+        plugins.load_dev(folder, Lang::En).unwrap();
+    }
 }

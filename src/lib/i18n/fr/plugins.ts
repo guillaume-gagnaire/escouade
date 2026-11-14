@@ -121,7 +121,6 @@ export default {
     chipOn: '{project} : actif',
     chipOff: '{project} : coupé',
     nowhere: 'aucun projet',
-    updateAll: { one: 'Tout mettre à jour · {count}', other: 'Tout mettre à jour · {count}' },
     category: 'Catégorie : {name}',
     categoryEmpty: 'Aucun plugin installé dans cette catégorie.',
     verifiedOnly: 'N’installer que des versions vérifiées',
@@ -142,6 +141,12 @@ export default {
     unreachableNone: 'Store injoignable : aucune offre lue encore',
     row: 'v{from} → v{to}',
     update: 'Mettre à jour',
+    all: { one: 'Tout mettre à jour · {count}', other: 'Tout mettre à jour · {count}' },
+    reading: 'Lecture de la nouvelle version…',
+    waiting: 'En attente de ton accord',
+    installing: 'Mise à jour…',
+    done: 'À jour en v{version}',
+    failedOf: '{name} : {message}',
   },
 
   dev: {
@@ -372,6 +377,15 @@ export default {
     read: 'Lire le plugin',
     reading: 'Lecture…',
     failed: 'Rien n’a été installé.',
+    batchTitle: { one: 'Mettre à jour {count} plugin ?', other: 'Mettre à jour {count} plugins ?' },
+    batchBody:
+      'Toutes ces versions sont vérifiées par Escouade, et aucune ne demande plus que celle installée : ni permission, ni contribution nouvelle. Tes choix sont gardés.',
+    batchNext: {
+      one: 'Ensuite, {count} mise à jour qui demande plus, ou n’est pas vérifiée : elle aura sa propre fenêtre.',
+      other: 'Ensuite, {count} mises à jour qui demandent plus, ou ne sont pas vérifiées : chacune aura sa propre fenêtre.',
+    },
+    batchConfirm: { one: 'Mettre à jour', other: 'Tout mettre à jour · {count}' },
+    newAdd: 'Ce qu’elle ajoute de nouveau est marqué.',
   },
 
   uninstall: {

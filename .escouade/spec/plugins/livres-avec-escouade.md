@@ -1,15 +1,23 @@
 ---
 title: "Les plugins d'Escouade (la première main)"
 subject: "plugins"
-sources: ["docs/PLUGINS-DESIGN.md §8.7, §8.8, §8.10, §8.33","src-tauri/src/plugins/builtin.rs","src-tauri/src/plugins/mod.rs","src-tauri/src/plugins/runtime.rs","src-tauri/src/plugins/seed.rs","src-tauri/src/plugins/sort.rs","src-tauri/src/plugins_builtin_tests.rs","src-tauri/src/plugins_seed_tests.rs","src-tauri/src/plugins_wasm_tests.rs","plugins/seed.json","tests/fixtures/plugins/minimal/README.md"]
-tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339","ESC-344","ESC-351","ESC-349","ESC-348","ESC-345","ESC-350","ESC-367","ESC-370","ESC-373","ESC-354","ESC-394","ESC-404","ESC-355"]
-decisions: [80,92,110,113,117,142]
+sources: ["docs/PLUGINS-DESIGN.md §8.7, §8.8, §8.10, §8.33","src-tauri/src/plugins/builtin.rs","src-tauri/src/plugins/mod.rs","src-tauri/src/plugins/runtime.rs","src-tauri/src/plugins/seed.rs","src-tauri/src/plugins/sort.rs","src-tauri/src/plugins_builtin_tests.rs","src-tauri/src/plugins_seed_tests.rs","src-tauri/src/plugins_wasm_tests.rs","plugins/seed.json","tests/fixtures/plugins/minimal/README.md","docs/security/audit-2026-11/rapport.md (branche ticket/esc-418), fiche SEC-27"]
+tickets: ["ESC-210","ESC-221","ESC-285","ESC-217","ESC-56","ESC-58","ESC-280","ESC-281","ESC-327","ESC-282","ESC-225","ESC-223","ESC-224","ESC-283","ESC-226","ESC-338","ESC-339","ESC-344","ESC-351","ESC-349","ESC-348","ESC-345","ESC-350","ESC-367","ESC-370","ESC-373","ESC-354","ESC-394","ESC-404","ESC-355","ESC-435"]
+decisions: [80,92,110,113,117,142,"la-premiere-main-vient-de-l-origine-et-l"]
 compared: null
 ---
 
 # Les plugins d'Escouade (la première main)
 
 Depuis la 2.2 (ESC-355, Z3), l'app ne **donne** plus aucun plugin. Les plugins de première main (`dev.escouade.*`, `plugins/<id-court>/` du dépôt) sont des plugins à part entière : publiés, relus et signés sur le store, portés par l'installeur (l'amorce), installés par le chemin du store (origine `store`, marque `seed` pour ceux de l'amorce), rangés dans « Ajoutés » comme les autres. Ils se coupent, se mettent à jour sur un clic et se désinstallent. L'origine `builtin`, ses programmes `{escouade}/…`, le contrôle `check_program`, l'empreinte `builtin:<version>`, la règle « l'identifiant de l'app l'emporte » et le programme `escouade-plugins` ont disparu.
+
+## Qui est de la première main (audit SEC-27, ESC-435)
+
+- **La première main, c'est l'origine et l'identifiant ensemble** : un identifiant `dev.escouade.*` venu de l'amorce ou d'une version du store **signée** (le store ne prend ces identifiants que du dépôt de l'app, puis les signe). Une build de développement y ajoute les modules du dépôt (origine `workspace`) et ceux de l'amorce non signés de `scripts/seed-dev.sh` ; une release, jamais.
+- **Un dossier en développement, un dossier copié ou un dépôt cloné sont toujours tiers, quel que soit leur identifiant** : leur manifeste est lu comme celui de n'importe qui, et l'identifiant `dev.escouade.*` leur est refusé (« identifiant réservé »). Une version du store vérifiée d'un autre auteur est lue comme un tiers aussi.
+- Une entrée déjà installée en développement sous `dev.escouade.*` par une version d'avant reste dans la liste, mais ne se charge pas (son manifeste ne tient pas) : rien d'elle ne tourne.
+- Ainsi, à l'exécution, l'identifiant `dev.escouade.*` suffit à dire la première main (variables refusées même déclarées, interpréteurs d'un harness décrit, parole sur la clôture) : seul ce qui vient de l'amorce ou du store signé peut le porter.
+- Les plugins de `plugins/` restent jugés de la première main dans les tests : les e2e et les tests Rust les lancent depuis le dépôt (origine `workspace`), et le banc de conformité (`plugins/ci.mjs`) les joue avec `--first-party`.
 
 ## Le registre
 
@@ -19,7 +27,7 @@ Depuis la 2.2 (ESC-355, Z3), l'app ne **donne** plus aucun plugin. Les plugins d
 
 ## Une build de développement : l'origine `workspace`
 
-Une build de développement et les tests lancent les modules du dépôt (`scripts/plugins-wasm.sh`, `<target>/plugins-wasm/<id-court>/plugin.wasm`) pour chaque identifiant du registre dont l'amorce n'a pas les fichiers : origine `workspace`, rangés dans « Du dépôt », leur version celle de la build, leur `escouade.min` lu la sienne. Ils ne se désinstallent pas (ils reviendraient au lancement) et se coupent. Ce qui est installé d'un identifiant (l'amorce, le store, un dossier en développement) garde sa place : aucun plugin ne gagne par son identifiant. Une release ne fait jamais d'entrée `workspace`.
+Une build de développement et les tests lancent les modules du dépôt (`scripts/plugins-wasm.sh`, `<target>/plugins-wasm/<id-court>/plugin.wasm`) pour chaque identifiant du registre dont l'amorce n'a pas les fichiers : origine `workspace`, rangés dans « Du dépôt », leur version celle de la build, leur `escouade.min` lu la sienne. Ils ne se désinstallent pas (ils reviendraient au lancement) et se coupent. Ce qui est installé d'un identifiant (l'amorce, le store) garde sa place : aucun plugin ne gagne par son identifiant. Un dossier en développement ne peut pas prendre l'identifiant d'un plugin du registre (il est réservé). Une release ne fait jamais d'entrée `workspace`.
 
 ## Une mise à jour depuis la 2.1
 
@@ -40,7 +48,7 @@ Escouade ne lance plus aucun programme natif, **quelle que soit l'origine** du p
 
 - OpenAI, Groq, Mistral, ElevenLabs et Deepgram sont des modules de la première main ; Réglages › Voix se comporte comme avant (voir *Réglages › Voix*). Coupé, le service quitte la page et la dictée repasse en local. Un plugin d'un autre auteur peut servir un nouveau service ou prendre la place de l'un d'eux, à son identifiant à lui. Le plugin « Mistral » porte la voix et Mistral Vibe.
 - Claude Code, Codex, Copilot CLI, Cursor CLI, Gemini CLI, OpenCode, Antigravity CLI et Mistral Vibe sont servis par leur plugin de première main ; voir leurs pages *… en plugin*. Le bouton projet par projet s'applique à leur harness (ESC-404) : coupé pour un projet, le harness n'y est plus proposé ; dans un projet privé, le premier agent demande « Activer ».
-- Le mot d'un plugin qu'il tient lui-même la clôture des projets privés (`fence_by_client`) n'est pris que d'un plugin de première main (`dev.escouade.*`, qui ne s'installe que signé), comme l'était celui d'un plugin donné par l'app.
+- Le mot d'un plugin qu'il tient lui-même la clôture des projets privés (`fence_by_client`) n'est pris que d'un plugin de première main (`dev.escouade.*`, qui ne vient que de l'amorce ou du store signé, jamais d'un dossier en développement), comme l'était celui d'un plugin donné par l'app.
 
 ## L'amorce (ESC-338, ESC-354)
 

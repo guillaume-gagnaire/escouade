@@ -6,6 +6,10 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Deux lectures des workflows d’un projet au même moment ne laissent plus la fenêtre sans workflow. Un ticket bloqué parce que son harness est coupé pour le projet garde cette raison quand le tour de son agent finit après.
+- Sécurité : dans « Tout mettre à jour », une version que personne n’a relue, ou un plugin venu d’un dépôt ou d’un dossier, a sa propre fenêtre, avec son avertissement ; la fenêtre commune ne garde que des versions vérifiées qui n’ajoutent rien.
+- Sécurité : un plugin chargé en développement, depuis un dossier ou un dépôt n’a jamais les droits des plugins d’Escouade, quel que soit son identifiant. « Ignorer la vérification des certificats » ne vaut plus que pour une connexion qui passe vraiment par le proxy, même quand ses exclusions s’écrivent en plage d’adresses.
+- Plugins : « Tout mettre à jour » est aussi sur la page des mises à jour, et une mise à jour te laisse sur la page où tu étais. Celles qui ne demandent rien de plus se confirment ensemble dans une seule fenêtre ; les autres gardent la leur, avec ce qu’elles ajoutent marqué.
 - Azure DevOps : chaque PR a de nouveau son lien, même quand Azure ne donne pas l’adresse web de son dépôt.
 - Au lancement, les places du remote control sous son plafond vont toujours aux agents les plus récemment actifs : le plus récent n’en reste plus parfois privé au profit d’un plus ancien.
 - La vue Copilot CLI n’écrit plus sans te demander, même en « Édits auto » et « Auto », n’écrit jamais dans `.git` ni dans sa configuration, tient la lecture seule d’une discussion et ne s’ouvre pas pour un agent d’un projet privé. Sous Windows, les hooks des harness appellent escouade-hook par son chemin entier : un fichier du même nom dans le dossier de l’agent ne s’exécute plus.

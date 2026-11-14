@@ -2168,8 +2168,11 @@ impl ProcessEngineProcess {
         )
         .map_err(|e| anyhow!(e))?;
         check_env(self.name, &self.vars, &launch.env).map_err(|e| anyhow!(e))?;
-        write_files(launch)?;
-        self.start_program(spawn, launch, &[])
+        // Its next program no more than its first: nothing opens the mode of no question without the setting (SEC-09).
+        let mut launch = launch.clone();
+        crate::bypass::hold(&mut launch.args, spawn.bypass);
+        write_files(&launch)?;
+        self.start_program(spawn, &launch, &[])
     }
 
     /// What its plugin says of it unasked (`agent/items`) comes to it.
@@ -2271,6 +2274,8 @@ impl ProcessEngineProcess {
                 .map_err(|e| down(self.name, e))?,
         )?;
         if let Some(a) = opened.attach {
+            // What a terminal that joins it is given runs the plugin's variables too: judged as a launch's (ESC-424).
+            check_env(self.name, &self.vars, &a.env).map_err(|e| anyhow!(e))?;
             *self.joins.lock() = Some(terminal::Attach {
                 args: a.args,
                 env: a.env.into_iter().map(|v| (v.name, v.value)).collect(),

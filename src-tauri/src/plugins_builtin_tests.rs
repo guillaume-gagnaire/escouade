@@ -110,10 +110,10 @@ fn a_reserved_id_is_refused_to_a_plugin_of_anyone_else_s_hand() {
     assert!(plugins.inspect_folder(&dir, Lang::En).is_err());
 }
 
-/// No plugin wins by its id (ESC-355): in development, Escouade's own hand may take the id of one of the registry, and
-/// it takes the place of the workspace's.
+/// No plugin wins by its id (ESC-355), and a folder in development is of anyone's hand whatever its id (audit SEC-27):
+/// the id of one of the registry, Escouade's own, is refused to it, and the workspace's keeps its place.
 #[test]
-fn a_folder_in_development_with_an_id_of_the_registry_takes_its_place() {
+fn a_folder_in_development_with_an_id_of_the_registry_is_refused() {
     let dir = base("same-id");
     let src = dir.join("src");
     std::fs::create_dir_all(&src).unwrap();
@@ -124,12 +124,10 @@ fn a_folder_in_development_with_an_id_of_the_registry_takes_its_place() {
     std::fs::write(src.join(manifest::FILE), m.to_string()).unwrap();
     std::fs::write(src.join("plugin.mjs"), "").unwrap();
     let plugins = plugins_in(&DataDir::new(dir.join("data")));
-    let preview = plugins.inspect_dev(&src, Lang::En).unwrap();
-    assert!(preview.refusal.is_none(), "{:?}", preview.refusal);
-    plugins.install(&preview.token, Lang::En).unwrap();
+    assert!(plugins.inspect_dev(&src, Lang::En).is_err());
     let v = plugins.get(ID, Lang::En).unwrap();
-    assert!(matches!(v.origin, Origin::Dev { .. }), "{:?}", v.origin);
-    assert_eq!(v.version, "9.9.9");
+    assert_eq!(v.origin, Origin::Workspace, "{:?}", v.origin);
+    assert_ne!(v.version, "9.9.9");
 }
 
 #[test]
@@ -390,5 +388,115 @@ fn the_code_hosts_are_modules_that_reach_their_hosts_and_their_instances() {
         assert_eq!(declared, instances, "{id}");
         assert_eq!(m.limits.fetch_seconds, Some(15), "{id}");
         assert_eq!(m.limits.fetch_bytes, Some(8 << 20), "{id}");
+    }
+}
+
+/// The PoC B-14 of the audit (SEC-27): a folder loaded in development that takes an id of Escouade's own
+/// (`dev.escouade.*`), declares a command and the variables `GIT_CONFIG_*` refused to anyone's plugin. It is of anyone's
+/// hand whatever its id: refused when it is read, and, written in `plugins.json` by an Escouade before the fix, not loaded
+/// (its manifest does not hold), so nothing of it runs with the rights of the first hand.
+#[test]
+fn a_folder_in_development_never_has_the_rights_of_the_first_hand_whatever_its_id() {
+    let dir = base("b14");
+    let folder = |id: &str, env: bool| {
+        let src = dir.join(id);
+        std::fs::create_dir_all(&src).unwrap();
+        let mut m: serde_json::Value =
+            serde_json::from_str(&builtin::manifest_text(ID, VERSION).unwrap()).unwrap();
+        m["id"] = json!(id);
+        m["version"] = json!("1.0.0");
+        m["run"] = json!({ "js": "plugin.mjs" });
+        m["permissions"]["commands"] = json!(["git --version"]);
+        if env {
+            m["permissions"]["env"] =
+                json!(["GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"]);
+        }
+        std::fs::write(src.join(manifest::FILE), m.to_string()).unwrap();
+        std::fs::write(src.join("plugin.mjs"), "").unwrap();
+        src
+    };
+    let data = DataDir::new(dir.join("data"));
+    let plugins = plugins_in(&data);
+    // Read as anyone's: the id of Escouade's own is refused to it, with or without the variables.
+    let poc = folder("dev.escouade.audit-poc", true);
+    assert!(plugins.inspect_dev(&poc, Lang::En).is_err());
+    assert!(plugins
+        .inspect_dev(&folder("dev.escouade.audit-plain", false), Lang::En)
+        .is_err());
+    assert!(plugins.get("dev.escouade.audit-poc", Lang::En).is_none());
+    // Under an id of anyone's, it installs, of anyone's hand.
+    let third = folder("dev.audit.plain", false);
+    let p = plugins.inspect_dev(&third, Lang::En).unwrap();
+    plugins.install(&p.token, Lang::En).unwrap();
+    let v = plugins.get("dev.audit.plain", Lang::En).unwrap();
+    assert!(matches!(v.origin, Origin::Dev { .. }));
+    assert_eq!(v.state, State::Ready);
+    assert_eq!(crate::plugins::hand_of(&v.origin, &v.id), Hand::Third);
+    // Installed in development by an Escouade before the fix: its entry stays, its manifest does not hold.
+    let mut index: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(data.plugins_file()).unwrap()).unwrap();
+    let mut entry = index["plugins"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["id"] == "dev.audit.plain")
+        .unwrap()
+        .clone();
+    entry["id"] = json!("dev.escouade.audit-poc");
+    entry["origin"] = json!({ "kind": "dev", "path": poc.display().to_string() });
+    index["plugins"].as_array_mut().unwrap().push(entry);
+    std::fs::write(data.plugins_file(), index.to_string()).unwrap();
+    let again = plugins_in(&data);
+    let v = again.get("dev.escouade.audit-poc", Lang::En).unwrap();
+    match &v.state {
+        State::Invalid { problems, .. } => {
+            assert!(
+                problems.iter().any(|p| p.problem.path == "id"),
+                "{problems:?}"
+            )
+        }
+        other => panic!("loaded: {other:?}"),
+    }
+    assert!(v.manifest.is_none());
+}
+
+/// Escouade's own hand is the origin and the id together (SEC-27): the seed's and the store's signed versions, and the
+/// workspace's of a build of development; never a folder in development, copied or cloned, nor an unsigned version.
+#[test]
+fn the_first_hand_comes_from_the_seed_or_the_signed_store_alone() {
+    let store = |verified: bool, seed: bool| Origin::Store {
+        version: "1.0.0".into(),
+        sha256: String::new(),
+        verified,
+        repository: String::new(),
+        path: String::new(),
+        tag: String::new(),
+        commit: String::new(),
+        seed,
+    };
+    let path = || "C:/plugins/x".to_string();
+    for origin in [store(true, false), store(true, true), Origin::Workspace] {
+        assert_eq!(
+            crate::plugins::hand_of(&origin, ID),
+            Hand::First,
+            "{origin:?}"
+        );
+        // Signed, of anyone's id: anyone's.
+        assert_eq!(crate::plugins::hand_of(&origin, "dev.audit.x"), Hand::Third);
+    }
+    for origin in [
+        store(false, false),
+        Origin::Dev { path: path() },
+        Origin::Folder { path: path() },
+        Origin::Git {
+            url: "https://example.com/x.git".into(),
+            tag: "v1.0.0".into(),
+        },
+    ] {
+        assert_eq!(
+            crate::plugins::hand_of(&origin, ID),
+            Hand::Third,
+            "{origin:?}"
+        );
     }
 }

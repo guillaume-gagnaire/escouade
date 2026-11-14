@@ -518,18 +518,18 @@ async fn escouade_s_own_hand_installs_from_the_store_signed_and_stays_a_store_pl
         .all(|p| p.id != "dev.escouade.slack"));
 }
 
-/// The folder of a plugin of Escouade's own hand loads in development (ESC-314), as its author
-/// tries it; a folder copied or a repository cloned does not take its id.
+/// The folder of a plugin of Escouade's own hand does not load in development (audit SEC-27), as a folder copied or a
+/// repository cloned does not (ESC-314): it is of anyone's hand whatever its id, and its id is Escouade's own. Its author
+/// tries it from the workspace of a build of development, or on the bench (`--first-party`).
 #[tokio::test]
-async fn escouade_s_own_folder_loads_in_development() {
+async fn escouade_s_own_folder_is_refused_in_development() {
     let data = DataDir::new(temp_dir("first-party-dev").join("data"));
     let plugins = Plugins::load(data, "2.1.0");
-    let view = plugins
+    let e = plugins
         .load_dev(&root().join("plugins/discord"), Lang::Fr)
-        .unwrap();
-    assert_eq!(view.id, "dev.escouade.discord");
-    assert!(matches!(view.origin, Origin::Dev { .. }));
-    assert!(matches!(view.state, State::Ready), "{:?}", view.state);
+        .unwrap_err();
+    assert!(e.message.contains("dev.escouade.*"), "{}", e.message);
+    assert!(plugins.get("dev.escouade.discord", Lang::Fr).is_none());
 }
 
 #[tokio::test]
