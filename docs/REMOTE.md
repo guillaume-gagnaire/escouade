@@ -269,6 +269,7 @@ L'option B de « Ce que voit le téléphone » passe en tête. L'option A, l'int
   - **Capacitor** : il reprend aussi l'interface Svelte, dans la même WebView. Ses plugins mobiles sont mûrs (push, biométrie, appareil photo pour le QR code). Le Rust passe par un plugin natif (Swift et Kotlin, par UniFFI).
   - **React Native** (avec Expo) : des vues natives, et un outillage mûr (notifications par Expo, builds et publication par EAS). Mais l'interface est à réécrire en React, et le Rust passe par un pont natif (UniFFI, par uniffi-bindgen-react-native).
   - **Flutter** : un rendu à lui, très régulier, et un pont Rust mûr (flutter_rust_bridge). Mais l'interface est à réécrire en Dart, un langage de plus pour l'équipe.
+  - **L'étude est faite** (ESC-445, 2026-11-14) : `docs/MOBILE-STUDY.md`, avec les quatre maquettes de `mobile-study/` (branche `study/esc-445-ios`) et leurs mesures sous Android et iOS. Elle recommande **Capacitor** (l'interface Svelte reprise, le push et le QR code par des plugins officiels) et écarte Tauri 2 pour le téléphone ; la décision 5 reste à prendre.
 - **Ce que l'étude mesure**, sur une même maquette (la liste des agents qui attendent, la réponse à une autorisation, une notification push qui réveille l'app fermée, le tunnel WireGuard en Rust) :
   - la fluidité d'une longue conversation (Markdown, blocs de code, diff) sur un Android d'entrée de gamme ;
   - le poids de l'app et le démarrage ;
