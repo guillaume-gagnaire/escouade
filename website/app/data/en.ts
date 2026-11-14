@@ -1,6 +1,6 @@
 // Everything the English page says. fr.ts says the same, key for key.
 import type { Catalog } from './catalog';
-import { DOWNLOAD, STORE, SUPPORT } from './site';
+import { DOWNLOAD, SUPPORT } from './site';
 import { docPath } from './docs';
 
 export const en: Catalog = {
@@ -245,21 +245,20 @@ export const en: Catalog = {
 
   roadmap: {
     title: 'What comes next.',
-    lead: 'Your code host in the loop, reviews by an agent, plugins and their marketplace. No date promised: the work is planned in detail on GitHub.',
+    lead: 'An agent that watches over all your projects, Escouade away from your desk, and what your team knows in one place. No date promised: the work is planned in detail on GitHub.',
     next: 'Version {version} · in the works',
     items: [
       {
-        title: 'GitHub, GitLab, Bitbucket and Gitea',
-        text: 'Tickets’ pull requests followed through to the merge, with their CI and their deployments, without leaving Escouade.',
+        title: 'The Overseer and scheduled tasks',
+        text: 'An agent that follows all your projects for you: it starts, reviews, merges and reports back, by voice or keyboard. Tasks also start on a schedule, like a dependency review every Monday.',
       },
       {
-        title: 'Get a PR reviewed',
-        text: 'An agent reads a pull request’s diff and writes its comments by file and by line. You keep, edit or drop each one, then publish: nothing leaves without you.',
+        title: 'Escouade from anywhere',
+        text: 'Follow and drive your agents from your phone: answer a question, approve a permission, check the Kanban. Or leave Escouade running day and night on a server, driven from your desk.',
       },
       {
-        title: 'Plugins and their marketplace',
-        text: 'Plugins extend Escouade: ticket sources, code hosts, harnesses, voice, notifications, themes and permission rules. They install from the app and are listed on the store, where every version passes eleven checks.',
-        link: { label: 'Browse the store', href: STORE.en },
+        title: 'A server for the team',
+        text: 'A project’s Kanban, spec, decisions, documents and shared memory on a server of the team, instead of staying on each machine, with a store for its private plugins.',
       },
     ],
     plan: 'The detailed plan (in French)',

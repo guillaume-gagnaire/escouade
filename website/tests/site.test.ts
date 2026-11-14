@@ -506,12 +506,11 @@ describe.each(PAGES)('generated site ($lang)', ({ lang, file, url, other }) => {
     expect(header).toContain(`>${escapeText(text.header.docs)}</a>`);
   });
 
-  it('leads to the plugin store in its language, from the header, the footer and the roadmap', () => {
+  // The roadmap of the 2.3 no longer announces the store, which came out with the 2.2: the header and the footer lead to it.
+  it('leads to the plugin store in its language, from the header and the footer', () => {
     const header = html.match(/<header[\s\S]*?<\/header>/)?.[0] ?? '';
     const footer = html.match(/<footer class="foot[\s\S]*?<\/footer>/)?.[0] ?? '';
-    const start = html.indexOf(`id="${text.anchors.roadmap}"`);
-    const roadmap = start < 0 ? '' : html.slice(start, html.indexOf('</section>', start));
-    for (const part of [header, footer, roadmap]) {
+    for (const part of [header, footer]) {
       expect(
         tags(part, 'a').some((a) => a.href === STORE[lang]),
         part.slice(0, 80),

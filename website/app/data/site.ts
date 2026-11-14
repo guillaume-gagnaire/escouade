@@ -23,7 +23,7 @@ export const STORE: Record<Lang, string> = {
 };
 export const DOWNLOAD = `${REPO}/releases/latest`;
 /** The version the roadmap announces, whose detailed plan is `docs/TODO-<it>.md`. A test fails once it is out. */
-export const NEXT = '2.2';
+export const NEXT = '2.3';
 export const PLAN = `${REPO}/blob/main/docs/TODO-${NEXT}.md`;
 /** What is already out, in the page’s language: CHANGELOG.md in French, CHANGELOG.en.md in English. */
 export const CHANGELOG: Record<Lang, string> = {

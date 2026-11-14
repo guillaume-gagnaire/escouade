@@ -1,7 +1,7 @@
 // Everything the French page says. en.ts says the same, key for key.
 // The French guillemets hold non-breaking spaces ( ), so that « Importer » never splits over two lines.
 import type { Catalog } from './catalog';
-import { DOWNLOAD, STORE, SUPPORT } from './site';
+import { DOWNLOAD, SUPPORT } from './site';
 import { docPath } from './docs';
 
 export const fr: Catalog = {
@@ -249,21 +249,20 @@ export const fr: Catalog = {
 
   roadmap: {
     title: 'Ce qui arrive ensuite.',
-    lead: 'Ton hébergeur de code dans la boucle, des relectures par un agent, les plugins et leur place de marché. Pas de date promise : le chantier est décrit en détail sur GitHub.',
+    lead: 'Un agent qui veille sur tous tes projets, Escouade loin de ton poste, et ce que sait ton équipe au même endroit. Pas de date promise : le chantier est décrit en détail sur GitHub.',
     next: 'Version {version} · en préparation',
     items: [
       {
-        title: 'GitHub, GitLab, Bitbucket et Gitea',
-        text: 'Les pull requests des tickets suivies jusqu’au merge, avec leur CI et leurs déploiements, sans quitter Escouade.',
+        title: 'L’Overseer et les tâches programmées',
+        text: 'Un agent qui suit tous tes projets à ta place : il lance, relit, fusionne et te rend compte, à la voix ou au clavier. Des tâches se lancent aussi à heure fixe, comme une revue des dépendances chaque lundi.',
       },
       {
-        title: 'Faire relire une PR',
-        text: 'Un agent lit le diff d’une pull request et rédige ses commentaires par fichier et par ligne. Tu gardes, corriges ou écartes chacun, puis tu publies : rien ne part sans toi.',
+        title: 'Escouade à distance',
+        text: 'Suis et pilote tes agents depuis ton téléphone : réponds à une question, valide une autorisation, regarde le Kanban. Ou laisse Escouade tourner jour et nuit sur un serveur, piloté depuis ton poste.',
       },
       {
-        title: 'Les plugins et leur place de marché',
-        text: 'Des plugins étendent Escouade : sources de tickets, hébergeurs, harness, voix, notifications, thèmes et règles d’autorisation. Ils s’installent depuis l’app et sont listés sur le store, où chaque version passe onze contrôles.',
-        link: { label: 'Voir le store', href: STORE.fr },
+        title: 'Un serveur pour l’équipe',
+        text: 'Le Kanban, la spec, les décisions, les documents et la mémoire partagée d’un projet sur un serveur de l’équipe, au lieu de rester sur chaque poste, avec un store pour ses plugins privés.',
       },
     ],
     plan: 'Le plan détaillé',
