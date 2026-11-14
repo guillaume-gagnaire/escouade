@@ -1,0 +1,54 @@
+[package]
+name = "escouade-team-server"
+version = "0.1.0"
+description = "Escouade's team server (TS-1): blind, it keeps only encrypted bytes, orders the team's and the projects' streams, stores encrypted files and broadcasts them live; devices sign in by a signed challenge"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.91"
+workspace = "../../src-tauri"
+# Published with the 2.3 (binaries and image), not before.
+publish = false
+
+[[bin]]
+name = "escouade-team-server"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "ws", "query", "matched-path"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "fs", "sync", "time", "io-util"] }
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["server", "http1", "tokio", "service"] }
+http-body-util = "0.1"
+tower = { version = "0.5", default-features = false, features = ["util"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+# TLS with a given certificate (ring, as the app's reqwest), or none behind a reverse proxy.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+rustls-pki-types = { version = "1", features = ["std"] }
+# The databases: SQLite by rusqlite, at the version the app's lock holds (one libsqlite3-sys per workspace:
+# `links = "sqlite3"`), PostgreSQL by tokio-postgres; both behind `db::Store`.
+rusqlite = { version = "0.41", features = ["bundled"] }
+tokio-postgres = { version = "0.7", default-features = false, features = ["runtime"] }
+# S3-compatible storage (MinIO, Garage, AWS): signed by hand (SigV4), sent by the reqwest the workspace already has.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots"] }
+ciborium = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_bytes = "0.11"
+ed25519-dalek = "2"
+sha2 = "0.10"
+hmac = "0.12"
+hex = "0.4"
+base64 = "0.22"
+getrandom = "0.3"
+async-trait = "0.1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "ansi"] }
+
+[dev-dependencies]
+tempfile = "3"
+tokio-tungstenite = "0.29"
+rcgen = "0.14"
+serde_json = "1"
+escouade-team-crypto = { path = "../escouade-team-crypto" }

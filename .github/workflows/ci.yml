@@ -566,6 +566,22 @@ jobs:
       fail-fast: false
       matrix:
         part: [1, 2]
+    # The team server's tests also run on PostgreSQL (crates/escouade-team-server, `postgres::` variants, ESC-456):
+    # started before the job's steps, each test in a schema of its own.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: team
+          POSTGRES_PASSWORD: team
+          POSTGRES_DB: team
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U team"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -607,6 +623,7 @@ jobs:
         # As in the environment of an agent of Escouade: the tests must not depend on it.
         env:
           CLAUDE_CODE_ENABLE_TODO_TOOLS: '1'
+          ESCOUADE_TEST_POSTGRES_URL: postgres://team:team@localhost:5432/team
         # Extracted where the build put it (the same path on every Linux runner): the paths cargo wrote into the tests
         # (`CARGO_BIN_EXE_escouade-hook`, the fake codex beside them) are right as they are.
         run: |

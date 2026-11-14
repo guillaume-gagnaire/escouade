@@ -1,0 +1,6 @@
+# Caddy gets and renews the certificate (ACME), and passes HTTPS and the WebSocket to the team server.
+# ESCOUADE_TEAM_DOMAIN: the name the members reach, pointed at this machine (ports 80 and 443 open).
+{$ESCOUADE_TEAM_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy team-server:8443
+}

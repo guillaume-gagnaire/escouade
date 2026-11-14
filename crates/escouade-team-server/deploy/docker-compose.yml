@@ -1,0 +1,63 @@
+# An example: the team server behind Caddy, which holds TLS. From this folder:
+#   ESCOUADE_TEAM_DOMAIN=team.example.org docker compose build
+#   docker compose run --rm team-server init     # prints the token that creates the team, once
+#   ESCOUADE_TEAM_DOMAIN=team.example.org docker compose up -d
+# Back up the `team-data` volume (the base and the files): it holds only encrypted bytes, and is useless without the
+# members' keys.
+
+services:
+  team-server:
+    build:
+      context: ../../..
+      dockerfile: crates/escouade-team-server/Dockerfile
+    image: escouade-team-server:local
+    restart: unless-stopped
+    environment:
+      ESCOUADE_TEAM_DATA: /data
+      ESCOUADE_TEAM_LISTEN: 0.0.0.0:8443
+      # Caddy is the only peer: the client's address is the last hop of X-Forwarded-For.
+      ESCOUADE_TEAM_TRUST_PROXY: "1"
+      # Prometheus, on the compose's network only (not published).
+      ESCOUADE_TEAM_METRICS_LISTEN: 0.0.0.0:9464
+      # PostgreSQL instead of SQLite (the `postgres` service below):
+      # ESCOUADE_TEAM_DATABASE_URL: postgres://team:change-me@postgres/team
+      # Files in S3 (MinIO, Garage) instead of the volume:
+      # ESCOUADE_TEAM_S3_ENDPOINT: http://garage:3900
+      # ESCOUADE_TEAM_S3_BUCKET: escouade
+      # ESCOUADE_TEAM_S3_REGION: garage
+      # ESCOUADE_TEAM_S3_ACCESS_KEY: …
+      # ESCOUADE_TEAM_S3_SECRET_KEY: …
+    volumes:
+      - team-data:/data
+    # Not published: only Caddy reaches it.
+    expose:
+      - "8443"
+
+  caddy:
+    image: docker.io/library/caddy:2
+    restart: unless-stopped
+    environment:
+      ESCOUADE_TEAM_DOMAIN: ${ESCOUADE_TEAM_DOMAIN:?set ESCOUADE_TEAM_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on:
+      - team-server
+
+  # postgres:
+  #   image: docker.io/library/postgres:17
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_USER: team
+  #     POSTGRES_PASSWORD: change-me
+  #     POSTGRES_DB: team
+  #   volumes:
+  #     - team-postgres:/var/lib/postgresql/data
+
+volumes:
+  team-data:
+  caddy-data:
+  # team-postgres:

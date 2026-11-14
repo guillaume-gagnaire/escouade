@@ -1,0 +1,61 @@
+# The team server as a systemd service, behind a reverse proxy on the same machine (Caddy, nginx), or in TLS itself
+# (ESCOUADE_TEAM_TLS_CERT and ESCOUADE_TEAM_TLS_KEY, readable by the service's user).
+#
+#   sudo install -m 0755 escouade-team-server /usr/local/bin/
+#   sudo useradd --system --home-dir /var/lib/escouade-team-server --shell /usr/sbin/nologin escouade-team
+#   sudo install -m 0644 escouade-team-server.service /etc/systemd/system/
+#   sudo install -d -o escouade-team -m 0700 /var/lib/escouade-team-server
+#   sudo -u escouade-team ESCOUADE_TEAM_DATA=/var/lib/escouade-team-server escouade-team-server init
+#   sudo systemctl daemon-reload && sudo systemctl enable --now escouade-team-server
+#
+# Its own user, apart from Escouade's server mode (docs/REMOTE.md), which runs agents and is never exposed.
+
+[Unit]
+Description=Escouade team server (blind: encrypted bytes only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=escouade-team
+Group=escouade-team
+Environment=ESCOUADE_TEAM_DATA=/var/lib/escouade-team-server
+Environment=ESCOUADE_TEAM_LISTEN=127.0.0.1:8443
+Environment=ESCOUADE_TEAM_TRUST_PROXY=1
+Environment=ESCOUADE_TEAM_METRICS_LISTEN=127.0.0.1:9464
+# Environment=ESCOUADE_TEAM_DATABASE_URL=postgres://team@/team?host=/run/postgresql
+# Secrets (S3 keys) in a file only root reads:
+# EnvironmentFile=/etc/escouade-team-server/env
+ExecStart=/usr/local/bin/escouade-team-server serve
+Restart=on-failure
+RestartSec=2
+
+StateDirectory=escouade-team-server
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+UMask=0077
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,15 @@
+# The build context is the repository: only the Rust workspace goes in.
+**/node_modules
+**/target
+src-tauri/target
+website
+video
+store
+prototypes
+design
+public
+tests
+docs
+.git
+**/.env
+**/.env.*
