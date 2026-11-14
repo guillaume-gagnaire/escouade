@@ -244,6 +244,89 @@ Si Tailscale (ou Netbird, Headscale) est installé sur la machine d'Escouade et 
 
 À ne pas faire : refaire Tailscale (perçage de NAT des deux côtés, relais hébergés).
 
+## Ajouts du 2026-11-14 : l'app mobile et les agents sur le serveur
+
+Demandé par l'utilisateur pour la 2.3, quand il a choisi la feuille de route du site :
+- intégrer une vraie app mobile à cette étude ;
+- voir comment les agents tournent côté serveur.
+
+### Les agents sur le serveur, en auto-hébergé
+
+C'est déjà le principe du mode serveur plus haut : les agents, leurs harness et leurs worktrees tournent sur la machine d'`escouade-server`. Le client de bureau et le téléphone n'en sont que des vues. En auto-hébergé, c'est gratuit : l'utilisateur fournit la machine.
+
+À préciser dans les essais :
+- **Les ressources** : la mémoire d'un agent et de son harness au repos et en tour, pour dimensionner un VPS (par exemple combien d'agents tiennent sur 4 Go). Le disque des worktrees.
+- **La connexion des harness sur le serveur**, sans navigateur sur place : un code d'appareil, ou une adresse ouverte sur le poste. C'est déjà dans les tâches du mode serveur.
+- **Avec le serveur d'équipe** (`docs/TODO-2.3.md`) : une machine en mode serveur est un appareil de l'équipe comme un autre. Elle détient les clés de l'équipe pour lire le Kanban, la spec et la mémoire de ses projets, et l'équipe peut la retirer comme on retire un membre.
+- **L'isolement** : les agents d'un serveur partagé par plusieurs personnes tournent avec les droits du compte du service. Un utilisateur système par membre, ou un conteneur par projet, est à étudier avant d'ouvrir un serveur à plusieurs.
+
+### L'app mobile
+
+L'option B de « Ce que voit le téléphone » passe en tête. L'option A, l'interface web dans le tunnel, reste la première étape et le recours.
+
+- **La technique, à choisir par une étude avec maquettes** (demande de l'utilisateur, qui a lu que Tauri 2 n'est pas au point sur mobile). Dans tous les cas, l'app est un client sur l'API distante de la fondation, sans cœur ni agent sur le téléphone. Les candidats :
+  - **Tauri 2** : il reprend l'interface Svelte et le Rust sans pont. Mais ses plugins mobiles sont jeunes : le push passe par des plugins communautaires, avant leur 1.0. Le travail en arrière-plan et les outils de build sont moins mûrs. Il rend dans la WebView du système.
+  - **Capacitor** : il reprend aussi l'interface Svelte, dans la même WebView. Ses plugins mobiles sont mûrs (push, biométrie, appareil photo pour le QR code). Le Rust passe par un plugin natif (Swift et Kotlin, par UniFFI).
+  - **React Native** (avec Expo) : des vues natives, et un outillage mûr (notifications par Expo, builds et publication par EAS). Mais l'interface est à réécrire en React, et le Rust passe par un pont natif (UniFFI, par uniffi-bindgen-react-native).
+  - **Flutter** : un rendu à lui, très régulier, et un pont Rust mûr (flutter_rust_bridge). Mais l'interface est à réécrire en Dart, un langage de plus pour l'équipe.
+- **Ce que l'étude mesure**, sur une même maquette (la liste des agents qui attendent, la réponse à une autorisation, une notification push qui réveille l'app fermée, le tunnel WireGuard en Rust) :
+  - la fluidité d'une longue conversation (Markdown, blocs de code, diff) sur un Android d'entrée de gamme ;
+  - le poids de l'app et le démarrage ;
+  - le push sur les deux systèmes ;
+  - le pont vers le Rust ;
+  - la part de code reprise d'Escouade ;
+  - l'effort de maintenance à deux systèmes.
+- **Ce qu'elle vise** : le PC, un serveur auto-hébergé, ou plus tard une machine hébergée, choisis comme dans le client de bureau, une machine par vue.
+- **WireGuard dans l'app.**
+  - Le pair WireGuard d'Escouade (`boringtun` et `smoltcp`, en Rust) se compile pour iOS et Android : il n'y a plus besoin de l'app WireGuard à part.
+  - L'appairage se fait par le même QR code.
+  - Comme sur le PC, seul le trafic de l'app passe dans le tunnel. Il n'y a donc pas de VPN système, ni de Network Extension sous iOS.
+- **Les notifications push**, quand l'app est fermée : un agent qui attend une réponse, un ticket en revue, une CI rouge.
+  - APNs et FCM ne passent que par un serveur qui détient les identifiants de l'app : il faut un relais de notifications tenu par l'éditeur, même pour l'auto-hébergé.
+  - Le contenu est chiffré de bout en bout : le relais ne voit qu'un réveil, et le téléphone déchiffre lui-même le texte de la notification.
+  - Sans relais, c'est-à-dire si l'utilisateur le refuse, l'app ne sait rien tant qu'elle est fermée.
+- **En arrière-plan** : iOS coupe vite les connexions d'une app en arrière-plan. Le push sert de réveil, et l'app se reconnecte quand on l'ouvre.
+- **Sur l'appareil** :
+  - les clés du pair et le jeton d'appareil sont dans le trousseau du système (Secure Enclave sous iOS, Keystore sous Android) ;
+  - un verrou biométrique est possible avant de répondre à une autorisation ;
+  - l'appareil est révocable depuis le PC ou le serveur.
+- **Ce qu'on fait depuis le téléphone** : la vue d'ensemble, la conversation d'un agent, les réponses aux autorisations et aux questions (avec la commande entière affichée), l'envoi d'un message, le Kanban, la dictée, et l'aperçu du serveur de test d'un agent.
+- **La publication** :
+  - le compte développeur Apple existe déjà (signature macOS) ;
+  - il faut un compte Google Play ;
+  - la revue d'Apple s'applique à chaque version.
+
+### Plusieurs serveurs pilotés par un seul Escouade
+
+Demandé le 2026-11-14 : « avoir plusieurs serveurs Escouade pilotés par un seul Escouade (comme ça j'ai Escouade pour le taf, et en perso) ». Cela tranche dans un sens la décision 1 plus bas (une fenêtre par machine), et il faut l'étendre.
+
+- **Des espaces, comme dans Slack.** Une colonne d'icônes à gauche, une par machine : le poste lui-même, le serveur du travail, le serveur perso.
+  - Chaque icône porte le nombre d'agents qui attendent.
+  - On passe de l'un à l'autre d'un clic ou par Ctrl+1, Ctrl+2.
+  - Un espace peut aussi s'ouvrir dans sa propre fenêtre.
+  - Le poste est un espace comme les autres, son cœur étant dans l'app.
+- **Chaque espace est cloisonné** :
+  - ses projets, ses agents, ses réglages, ses comptes, ses plugins et son serveur MCP sont les siens ;
+  - rien ne passe de l'un à l'autre : ni un agent, ni une mémoire, ni un plugin, ni un secret ;
+  - le client garde une connexion, un tunnel (SSH ou WireGuard) et un jeton d'appareil par serveur, rangés à part dans le trousseau.
+- **Les notifications** arrivent de tous les espaces, avec le nom de l'espace en tête. Une vue « tout ce qui attend, partout » est possible, mais il faut décider ce qu'elle montre d'un espace de travail (voir plus bas).
+- **Les règles d'une entreprise ne valent que pour son espace.** Celles du serveur d'équipe (`docs/TODO-2.3.md`) s'appliquent à l'espace du travail, jamais à l'espace perso. Mais un poste géré par l'entreprise (stratégies Intune, profil MDM) peut imposer des règles à toute l'app :
+  - les serveurs permis, par exemple « seulement ceux de l'entreprise » ;
+  - l'interdiction de la vue agrégée ;
+  - ou que les notifications de l'espace du travail ne montrent pas leur contenu.
+
+  C'est une attente classique d'un RSSI pour un poste de l'entreprise.
+- **L'app mobile** a la même liste d'espaces, appairés un par un.
+- **À étudier** :
+  - ce que la barre des projets et la vue d'ensemble deviennent avec plusieurs espaces ;
+  - le coût mémoire de plusieurs connexions ouvertes ;
+  - la reprise d'un espace après une coupure, sans gêner les autres.
+
+**Décisions à prendre (en plus des quatre plus bas)** :
+5. L'app mobile dès la 2.3, ou l'interface web d'abord ; et sa technique (Tauri 2, Capacitor, React Native ou Flutter), après l'étude.
+6. Le relais de notifications push, offert à l'auto-hébergé ou non.
+7. Plusieurs espaces dans un même Escouade (demandé) : la colonne d'espaces à la Slack, et ce qu'une vue agrégée peut montrer d'un espace de travail.
+
 ## L'ordre proposé
 
 1. **Essais courts.**
