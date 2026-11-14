@@ -825,7 +825,7 @@ Le socle s'appuie sur la fondation du mode serveur (`docs/REMOTE.md`) pour le tr
 | Ticket | Contenu | Après | Coût |
 | --- | --- | --- | --- |
 | **Essais** | | | |
-| TS-0a | Une maquette de la cryptographie dans une crate à part : journal signé, enveloppes HPKE, invitation par MAC, fourche détectée ; avec des vecteurs de test | — | 4 j |
+| TS-0a | Une maquette de la cryptographie dans une crate à part : journal signé, enveloppes HPKE, invitation par MAC, fourche détectée ; avec des vecteurs de test. **Fait (ESC-453), en MLS (C9-B)** : `crates/escouade-team-crypto`, son `README.md` dit ce que fait MLS, ce qui reste à nous et les points pour l'audit | — | 4 j |
 | TS-0b | La lecture des stratégies du poste sur les trois systèmes : registre `Policies`, `CFPreferencesAppValueIsForced` avec un profil installé, `/etc` | — | 2 j |
 | TS-0c | La reprise d'une session de harness copiée sur un autre poste (Claude Code, Codex), chemins réécrits | — | 2 j |
 | **Socle** | | | |

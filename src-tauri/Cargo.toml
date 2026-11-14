@@ -162,6 +162,7 @@ members = [
     "../crates/escouade-forge",
     "../crates/escouade-updates",
     "../crates/escouade-mcp",
+    "../crates/escouade-team-crypto",
 ]
 default-members = [
     ".",
@@ -180,6 +181,7 @@ default-members = [
     "../crates/escouade-forge",
     "../crates/escouade-updates",
     "../crates/escouade-mcp",
+    "../crates/escouade-team-crypto",
 ]
 
 # The plugins depend on the kit by version, as the store reads them (their folder, published crates, the checksum of their
