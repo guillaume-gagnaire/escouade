@@ -12,8 +12,8 @@ use crate::mcp::tools::ToolError;
 use crate::mcp::Caller;
 use crate::model::{new_id, now_ms, AgentMeta, UiEvent};
 use crate::overseer::{
-    self, check_source, covering, Action, Batch, Directive, Event, Outcome, Outgoing, Place, Scope,
-    Source, State, Undo, UndoWhat, UserMessage,
+    self, check_source, covering, Action, Batch, Directive, Event, News, NewsKind, Outcome,
+    Outgoing, Place, Scope, Source, State, Undo, UndoWhat, UserMessage,
 };
 use crate::paths;
 use anyhow::{anyhow, bail, Context, Result};
@@ -35,6 +35,8 @@ pub struct Hub {
     pub(crate) hold_ms: AtomicI64,
     /// How many wake-up messages were sent (the tests wait for them).
     pub(crate) wakes: AtomicU64,
+    /// Its global shortcut (ESC-468), registered while it is on.
+    pub(crate) hotkey: crate::hotkey::Hotkey,
     dir: PathBuf,
 }
 
@@ -63,6 +65,7 @@ impl Hub {
             group_ms: AtomicU64::new(group),
             hold_ms: AtomicI64::new(hold),
             wakes: AtomicU64::new(0),
+            hotkey: crate::hotkey::Hotkey::default(),
             dir,
         }
     }
@@ -129,6 +132,10 @@ pub struct OverseerView {
     pub actions: Vec<ActionView>,
     /// The user's messages, oldest first.
     pub messages: Vec<UserMessage>,
+    /// The news of the tickets, oldest first (ESC-468): the cards of its discussion.
+    pub news: Vec<News>,
+    /// Its global shortcut: registered, or why not (ESC-468).
+    pub shortcut: crate::hotkey::HotkeyState,
 }
 
 /// The facts' sink that wakes it.
@@ -217,6 +224,8 @@ impl<R: Runtime> Core<R> {
                 })
                 .collect(),
             messages: st.messages.clone(),
+            news: st.news.clone(),
+            shortcut: self.overseer.hotkey.state(),
         }
     }
 
@@ -231,6 +240,7 @@ impl<R: Runtime> Core<R> {
     /// The settings were read or saved: its agent made when it is to run, its harness, account, model and effort those
     /// of the settings (taken while it is at rest); not to run, its process stops (its session is kept).
     pub fn overseer_sync(self: &Arc<Self>) {
+        self.overseer_hotkey();
         if !self.overseer_wanted() {
             if let Some(h) = self.overseer_agent() {
                 let stopped = {
@@ -253,6 +263,42 @@ impl<R: Runtime> Core<R> {
             log::warn!("overseer: not made: {e:#}");
         }
         self.overseer_changed();
+    }
+
+    /// Its global shortcut in step with the settings: the one they keep while it is turned on, none else. Refused (taken
+    /// by another app), the reason is kept for Réglages › Overseer.
+    pub(crate) fn overseer_hotkey(&self) {
+        let (on, spec) = {
+            let s = self.settings.read();
+            (s.overseer.enabled, s.overseer.shortcut.clone())
+        };
+        if let Err(e) = self.overseer.hotkey.apply(on.then_some(spec.as_str())) {
+            log::warn!("overseer: shortcut {spec} not registered: {}", e.text());
+        }
+    }
+
+    /// « Raccourci global » of Réglages › Overseer: `spec` registered first (while it is on), then kept in the settings;
+    /// one another app holds is refused, and the one before stays.
+    pub fn overseer_shortcut_set(self: &Arc<Self>, spec: &str) -> Result<()> {
+        let spec = spec.trim();
+        if !spec.is_empty() {
+            crate::hotkey::accelerator(spec).map_err(|e| anyhow!(e.text()))?;
+        }
+        if self.settings.read().overseer.enabled {
+            let r = self
+                .overseer
+                .hotkey
+                .apply((!spec.is_empty()).then_some(spec));
+            if let Err(e) = r {
+                self.overseer_changed();
+                bail!(e.text());
+            }
+        }
+        let mut settings = self.settings.read().clone();
+        settings.overseer.shortcut = spec.to_string();
+        self.save_settings(settings)?;
+        self.overseer_changed();
+        Ok(())
     }
 
     /// Its agent: made if it is not, in step with the settings otherwise.
@@ -361,6 +407,21 @@ impl<R: Runtime> Core<R> {
 
     /// A message of the user to the Overseer (its discussion): kept, with its id, then sent marked as the user's.
     pub async fn overseer_send(self: &Arc<Self>, text: &str, said: bool) -> Result<String> {
+        self.overseer_message(text, said, false).await
+    }
+
+    /// A sentence said in the voice conversation of its screen (ESC-468): a message « dit », its answer ending with a
+    /// passage to be read aloud, as a conversation with an agent asks (`send_spoken`).
+    pub async fn overseer_said(self: &Arc<Self>, text: &str) -> Result<String> {
+        self.overseer_message(text, true, true).await
+    }
+
+    async fn overseer_message(
+        self: &Arc<Self>,
+        text: &str,
+        said: bool,
+        spoken: bool,
+    ) -> Result<String> {
         let text = text.trim();
         if text.is_empty() {
             bail!(tr!("Écris un message.", "Write a message."));
@@ -386,7 +447,11 @@ impl<R: Runtime> Core<R> {
         };
         self.overseer_changed();
         let body = self.overseer_renewed(&h, overseer::user_text(i18n::claude(), &m));
-        self.send_message_from(&id, None, body, Vec::new()).await?;
+        if spoken {
+            self.send_spoken(&id, body).await?;
+        } else {
+            self.send_message_from(&id, None, body, Vec::new()).await?;
+        }
         Ok(m.id)
     }
 
@@ -537,9 +602,47 @@ impl<R: Runtime> Core<R> {
             }),
             _ => None,
         };
+        if let (Some(e), Some(t), Some(p)) = (&event, &fact.ticket, &fact.project) {
+            let news = match e {
+                Event::Column { to, .. } if to == "done" => Some((NewsKind::Done, String::new())),
+                Event::Column { .. } => Some((NewsKind::Review, String::new())),
+                Event::Blocked { why, .. } => Some((NewsKind::Blocked, why.clone())),
+                _ => None,
+            };
+            if let Some((kind, text)) = news {
+                self.overseer_news(kind, t, &p.id, &p.name, text);
+            }
+        }
         if let Some(e) = event {
             self.overseer_note(e);
         }
+    }
+
+    /// A piece of news of the ticket `t`: a card of its discussion (ESC-468), the window told.
+    fn overseer_news(
+        &self,
+        kind: NewsKind,
+        t: &crate::facts::TicketRef,
+        project_id: &str,
+        project: &str,
+        text: String,
+    ) {
+        {
+            let mut st = self.overseer.state.lock();
+            let id = st.next_id("n");
+            st.keep_news(News {
+                id,
+                at: now_ms(),
+                kind,
+                ticket_id: t.id.clone(),
+                ticket: t.key.clone(),
+                title: t.title.clone(),
+                project_id: project_id.to_string(),
+                project: project.to_string(),
+                text,
+            });
+        }
+        self.overseer_changed();
     }
 
     /// An event that wakes it, gathered with those that come close to it.
@@ -565,6 +668,12 @@ impl<R: Runtime> Core<R> {
         if p.private {
             return;
         }
+        let tref = crate::facts::TicketRef {
+            id: t.id.clone(),
+            key: t.key.clone(),
+            title: t.title.clone(),
+        };
+        self.overseer_news(NewsKind::Ci, &tref, &p.id, &p.name, news.join(", "));
         self.overseer_note(Event::Ci {
             ticket: t.key.clone(),
             project: p.name,

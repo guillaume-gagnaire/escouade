@@ -242,6 +242,19 @@ pub struct OverseerSettings {
     pub model: String,
     /// Its effort: empty, its harness's own.
     pub effort: String,
+    /// The global shortcut that opens its screen from anywhere (ESC-468), as the dictation's is kept (`Mod+Alt+KeyO`,
+    /// `Mod` Ctrl or Cmd); empty: none.
+    pub shortcut: String,
+}
+
+/// The Overseer's global shortcut by default: ⌘⌥O on macOS; Alt+Maj+O elsewhere, as Ctrl+Alt is AltGr on many
+/// keyboards (it types « ó », « œ »…).
+pub fn default_overseer_shortcut() -> String {
+    if cfg!(target_os = "macos") {
+        "Mod+Alt+KeyO".into()
+    } else {
+        "Alt+Shift+KeyO".into()
+    }
 }
 
 impl Default for OverseerSettings {
@@ -252,6 +265,7 @@ impl Default for OverseerSettings {
             account: String::new(),
             model: "haiku".into(),
             effort: String::new(),
+            shortcut: default_overseer_shortcut(),
         }
     }
 }

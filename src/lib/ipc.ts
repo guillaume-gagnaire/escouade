@@ -214,6 +214,12 @@ export const api = {
   /** Reads `text` aloud: the number of the reading, which its end (`convSpoken`) and a barge-in carry. */
   conversationSay: (session: number, text: string) => invoke<number>('conversation_say', { session, text }),
   conversationStop: () => invoke<void>('conversation_stop'),
+  /** The sentence being said ended at once (ESC-468): sent, or dropped (the reading under way stopped too). */
+  conversationEnd: (session: number, send: boolean) => invoke<void>('conversation_end', { session, send }),
+  /** The Overseer's screen starts talking: refused while this device's policy turns the dictation off. */
+  overseerVoiceStart: () => invoke<ConvStarted>('overseer_voice_start'),
+  /** « Raccourci global » of Réglages › Overseer: registered, then kept; refused when another app holds it. */
+  overseerShortcutSet: (shortcut: string) => invoke<void>('overseer_shortcut_set', { shortcut }),
   /** A sentence said, sent to the agent with the instruction to end with a passage to be read aloud. */
   conversationSend: (id: string, text: string) => invoke<void>('conversation_send', { id, text }),
   speechDownload: (id: string) => invoke<void>('speech_download', { id }),

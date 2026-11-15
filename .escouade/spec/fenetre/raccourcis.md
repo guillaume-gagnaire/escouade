@@ -2,14 +2,14 @@
 title: "Raccourcis"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-392","ESC-432","ESC-464"]
-decisions: [128,158,176]
+tickets: ["ESC-392","ESC-432","ESC-464","ESC-468"]
+decisions: [128,158,176,181]
 compared: null
 ---
 
 ## Ce que c'est
 
-Les raccourcis clavier d'Escouade, par défaut. Ils couvrent l'app entière, la conversation, la dictée, l'éditeur et les fenêtres. Dans un terminal, les touches du shell lui restent, sauf quelques raccourcis de l'app ; dans la vue VS Code de l'éditeur, celles de VS Code, sauf celles qu'Escouade garde.
+Les raccourcis clavier d'Escouade, par défaut. Ils couvrent l'app entière, la conversation, la dictée, l'Overseer, l'éditeur et les fenêtres. Dans un terminal, les touches du shell lui restent, sauf quelques raccourcis de l'app ; dans la vue VS Code de l'éditeur, celles de VS Code, sauf celles qu'Escouade garde. Un seul est global, hors de la fenêtre : celui de l'Overseer.
 
 ## Comportement
 
@@ -34,6 +34,11 @@ Les raccourcis clavier d'Escouade, par défaut. Ils couvrent l'app entière, la 
 - Écran partagé : `Ctrl+Alt+←→↑↓` passe au volet de ce côté, `Ctrl+Maj+W` ferme le volet actif.
 - `Ctrl+,` : réglages.
 - `Ctrl+=` / `Ctrl+-` / `Ctrl+0` : zoom de l'interface, une fenêtre ouverte aussi (voir *Fenêtre*).
+
+### Overseer
+
+- **Global**, depuis n'importe où, Escouade au premier plan ou non : `Alt+Maj+O` sous Windows et Linux, `⌥⌘O` sous macOS, ouvre son écran (la fenêtre revient au premier plan). Il ne vaut que l'Overseer allumé, se change ou se retire dans Réglages › Overseer › « Raccourci global », et un raccourci déjà pris par une autre app y est refusé. Sous Wayland, il n'existe pas : un raccourci du bureau lance `xdg-open escouade://overseer` (voir *L'Overseer*).
+- Dans son écran : `Entrée` envoie, `Maj+Entrée` va à la ligne ; `Espace` maintenu, le champ vide, fait parler, relâché il envoie ; `Échap` annule ce qui est dit ou arrête sa voix, sinon ferme l'écran.
 
 ### Conversation
 
@@ -69,3 +74,4 @@ Les raccourcis clavier d'Escouade, par défaut. Ils couvrent l'app entière, la 
 - `Alt+←` / `Alt+→` reculent / avancent d'un mot : le shell reçoit `Ctrl+←` / `Ctrl+→` (sous macOS, `Échap b` / `Échap f`, comme readline). Hors macOS, `Alt+↑` / `Alt+↓` lui arrivent en `Ctrl+↑` / `Ctrl+↓`. Avec un autre modificateur en plus, la touche lui arrive telle quelle. Un log ne les prend pas.
 - L'app y prend `Ctrl+1..9`, `Ctrl+Tab`, `Ctrl+J`, `Ctrl+,`, `Ctrl+Maj+A`, le zoom (`Ctrl+=`, `Ctrl+-`, `Ctrl+0`), `Ctrl+\` (qui y serait SIGQUIT) et, l'écran partagé ouvert, `Ctrl+Maj+\`, `Ctrl+Maj+W` et `Ctrl+Alt+flèche`.
 - Sous macOS, le shell ne reçoit jamais `Cmd` : les raccourcis de l'app y marchent, et `Cmd+C`, `Cmd+V`, `Cmd+A` restent au terminal (copier, coller, tout sélectionner).
+- Le raccourci global de l'Overseer est pris par le système avant tout terminal.

@@ -89,6 +89,15 @@ impl Endpointer {
         self.spoken_ms = 0;
     }
 
+    /// The sentence under way is ended by the window, not by its silence (« appuyer pour parler »): the next speech
+    /// starts a new one. What it learnt of the room stays.
+    pub fn end_sentence(&mut self) {
+        self.speaking = false;
+        self.quiet_ms = 0;
+        self.spoken_ms = 0;
+        self.recent.clear();
+    }
+
     /// The next frame, by its RMS.
     pub fn push(&mut self, level: f32) -> Option<Heard> {
         if !self.speaking {

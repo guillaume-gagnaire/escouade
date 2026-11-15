@@ -114,6 +114,9 @@ mod handover;
 mod harness_scope;
 #[cfg(test)]
 mod harness_scope_tests;
+mod hotkey;
+#[cfg(test)]
+mod hotkey_tests;
 mod hub;
 mod integrations;
 #[cfg(test)]
@@ -597,6 +600,29 @@ pub fn run() {
             {
                 log::error!("app menu not set: {e}");
             }
+            // The Overseer's global shortcut (ESC-468): the system's, through its plugin; recorded in a sandbox (the
+            // end-to-end tests press it by `overseer_hotkey_press`); none where an app has none (Wayland), as the
+            // settings say. A plugin that cannot start leaves the app without it, nothing else.
+            if paths::sandbox_dir().is_some() {
+                core.overseer
+                    .hotkey
+                    .set_keys(Arc::new(hotkey::Recorded::default()));
+            } else if !hotkey::wayland() {
+                let plugin = tauri_plugin_global_shortcut::Builder::new()
+                    .with_handler(|app, _shortcut, event| {
+                        if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                            hotkey::pressed(app);
+                        }
+                    })
+                    .build();
+                match app.handle().plugin(plugin) {
+                    Ok(()) => core
+                        .overseer
+                        .hotkey
+                        .set_keys(Arc::new(hotkey::PluginKeys(app.handle().clone()))),
+                    Err(e) => log::warn!("overseer: no global shortcut here: {e}"),
+                }
+            }
             core.start(git_rx);
             // The Principals of settings saved before 1.8.1 kept or dropped, once (ESC-128).
             let migrating = core.clone();
@@ -990,6 +1016,9 @@ pub fn run() {
                 commands::overseer_send,
                 commands::overseer_undo,
                 commands::overseer_revoke,
+                commands::overseer_shortcut_set,
+                commands::overseer_voice_start,
+                commands::overseer_hotkey_press,
                 commands::ticket_update,
                 commands::ticket_delete,
                 commands::clean_worktrees,
@@ -1077,6 +1106,7 @@ pub fn run() {
                 commands::conversation_listen,
                 commands::conversation_hold,
                 commands::conversation_say,
+                commands::conversation_end,
                 commands::conversation_stop,
                 commands::conversation_send,
                 commands::speech_download,

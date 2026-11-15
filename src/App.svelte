@@ -68,7 +68,7 @@
   import PluginsSide from './components/plugins/PluginsSide.svelte';
   import PluginsView from './components/plugins/PluginsView.svelte';
   import StatusBar from './components/StatusBar.svelte';
-  import OverseerPanel from './components/overseer/OverseerPanel.svelte';
+  import OverseerScreen from './components/overseer/OverseerScreen.svelte';
   import { overseer } from './lib/overseer.svelte';
   import TerminalView from './components/TerminalView.svelte';
   import TitleBar from './components/TitleBar.svelte';
@@ -310,7 +310,7 @@
 </div>
 
 {#if overseer.open}
-  <OverseerPanel />
+  <OverseerScreen />
 {/if}
 
 {#if app.modal?.kind === 'newProject'}
@@ -402,7 +402,8 @@
   <TicketForm projectId={app.modal.projectId} scheduling task={app.modal.task} onsubmit={() => false} resume={app.modal.resume} />
 {/if}
 
-{#if conversation.overlay}
+<!-- The Overseer's voice is its own screen's (ESC-468), never this overlay. -->
+{#if conversation.overlay && conversation.agentId !== overseer.view.agentId}
   <ConversationOverlay />
 {/if}
 <ContextMenu />

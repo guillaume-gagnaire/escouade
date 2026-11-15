@@ -1257,6 +1257,18 @@ function startSession() {
   // the instruction from the ticket's words and the approval, Escouade refuses both). A wake-up of events: « RAS ».
   async function overseerTurn(text) {
     const said = /^\[Message de l’utilisateur · (m-\d+) · [^\]]+\]\n([\s\S]*)$/.exec(text);
+    if (!said) return 'RAS';
+    const [, id, whole] = said;
+    // Said in its screen's voice (ESC-468): the instruction to end with a passage to be read is taken off, and the answer
+    // ends with one.
+    const voiced = whole.includes('<escouade-voice>');
+    const words = voiced ? whole.slice(0, whole.indexOf('<escouade-voice>')).trim() : whole;
+    if (voiced) return `${await overseerWords(id, words)}\n\n<spoken>C’est noté, je m’en occupe.</spoken>`;
+    return overseerWords(id, words);
+  }
+
+  /** What the Overseer answers the user's `words` (the message `id`), and what it does for them. */
+  async function overseerWords(id, words) {
     const tool = async (name, args) => JSON.parse((await escouadeTool(name, args)).content[0].text);
     const tried = async (name, args) => {
       try {
@@ -1266,8 +1278,28 @@ function startSession() {
         return e.message;
       }
     };
-    if (!said) return 'RAS';
-    const [, id, words] = said;
+    // ESC-468: « ne merge surtout pas » gives no instruction, whatever words of it are quoted.
+    const negated = /ne merge surtout pas ([A-Z]+-\d+)/i.exec(words);
+    if (negated) {
+      const why = await tried('add_directive', {
+        message: id,
+        quote: 'merge',
+        summary: 'Fusionner',
+        actions: ['merge'],
+        ticket: negated[1],
+      });
+      return why
+        ? `Escouade a refusé la consigne : ta phrase dit « ne merge pas ». Tu me confirmes que je peux merger ${negated[1]} ?`
+        : 'Consigne notée.';
+    }
+    // ESC-468: a ticket started; its agent done, it reaches « À tester »: its news, a card of the screen.
+    const start = /^lance ([A-Z]+-\d+)/i.exec(words.trim());
+    if (start) {
+      await tool('start_ticket', { ticket: start[1] });
+      return `C’est parti : ${start[1]} est lancé.`;
+    }
+    const approve = /^valide ([A-Z]+-\d+)\.?$/i.exec(words.trim());
+    if (approve) return `Je regarde ${approve[1]} avant de le valider.`;
     const ticket = /crée un ticket « (.+?) » sur ([\w-]+)/i.exec(words);
     if (ticket) {
       const made = await tool('create_ticket', { project: ticket[2], title: ticket[1] });
@@ -2668,7 +2700,9 @@ function startSession() {
       file: m[2].trim(),
     }));
     if (attached.length) return readAttached(attached);
-    if (text.includes('<escouade-voice>')) return voiceTurn(text);
+    // The Overseer answers a sentence said in its screen itself (ESC-468): `overseerTurn`, through `ticketTurn`.
+    const overseerAgent = appended.startsWith('Tu es l’Overseer') || appended.startsWith('You are Escouade’s Overseer');
+    if (text.includes('<escouade-voice>') && !overseerAgent) return voiceTurn(text);
     if (text.includes('[ferme-lentement]')) slowClose = true;
     if (text.includes('[quota-rythme]')) pace();
     const entering = text.match(/\[worktree ([\w./-]+)\]/);

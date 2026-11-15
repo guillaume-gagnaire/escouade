@@ -1,8 +1,10 @@
 <script lang="ts">
   import { accountsOf } from '../../lib/accounts';
+  import { shortcutLabel, shortcutOf } from '../../lib/dictation';
+  import { dictation } from '../../lib/dictation.svelte';
   import { engineOptions, engineOf } from '../../lib/engines';
   import { t } from '../../lib/i18n';
-  import { overseer } from '../../lib/overseer.svelte';
+  import { defaultShortcut, overseer } from '../../lib/overseer.svelte';
   import { api } from '../../lib/ipc';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
@@ -15,8 +17,15 @@
 
   // Réglages › Overseer (ESC-462, docs/OVERSEER.md § « Comment il est fait »): whether it runs, its harness, its account,
   // its model (Haiku on Claude Code by default) and its effort; then the user's instructions, each withdrawn by a click.
-  // Its screen, its voice and its shortcut come with OV-2.
-  const DEFAULTS: OverseerSettings = { enabled: false, engine: 'claude', account: '', model: 'haiku', effort: '' };
+  // Its global shortcut (ESC-468): registered as it is chosen, refused when another app holds it.
+  const DEFAULTS: OverseerSettings = {
+    enabled: false,
+    engine: 'claude',
+    account: '',
+    model: 'haiku',
+    effort: '',
+    shortcut: defaultShortcut(),
+  };
   const s = $derived(settingsForm.settings);
   const o = $derived<OverseerSettings>({ ...DEFAULTS, ...(s.overseer ?? {}) });
   const set = (patch: Partial<OverseerSettings>) => (s.overseer = { ...o, ...patch });
@@ -38,7 +47,48 @@
     }
     set({ enabled: on });
   }
+
+  // « Raccourci global »: the keys pressed after « Changer » are the new one, registered at once; refused, it says why.
+  let recording = $state(false);
+  let shortcutError = $state<string | null>(null);
+  const shortcut = $derived(o.shortcut ?? defaultShortcut());
+  const hotkey = $derived(overseer.view.shortcut);
+
+  async function choose(spec: string) {
+    shortcutError = null;
+    try {
+      await api.overseerShortcutSet(spec);
+      set({ shortcut: spec });
+    } catch (e) {
+      shortcutError = String(e);
+    }
+  }
+
+  function record(e: KeyboardEvent) {
+    if (!recording) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === 'Escape') return stopRecording();
+    const s = shortcutOf(e);
+    if (!s) return;
+    stopRecording();
+    void choose(s);
+  }
+
+  function startRecording() {
+    recording = true;
+    dictation.recording = true;
+  }
+
+  function stopRecording() {
+    recording = false;
+    dictation.recording = false;
+  }
+
+  $effect(() => () => (dictation.recording = false));
 </script>
+
+<svelte:window onkeydowncapture={record} />
 
 <Group title={t('overseer.settings.groupAgent')}>
   <Row label={t('overseer.settings.enabled')} desc={t('overseer.settings.enabledDesc')} row="overseerAgent">
@@ -102,6 +152,40 @@
   <Row label={t('overseer.settings.memory')} desc={t('overseer.settings.memoryDesc')} />
 </Group>
 
+<Group title={t('overseer.settings.groupScreen')}>
+  <Row label={t('overseer.settings.shortcut')} desc={t('overseer.settings.shortcutDesc')} row="overseerShortcut">
+    <div class="keys">
+      <kbd data-overseer-shortcut
+        >{recording
+          ? t('overseer.settings.shortcutRecording')
+          : shortcut
+            ? shortcutLabel(shortcut)
+            : t('overseer.settings.shortcutNone')}</kbd
+      >
+      <button class="btn ghost small" onclick={() => (recording ? stopRecording() : startRecording())}
+        >{t('overseer.settings.shortcutChange')}</button
+      >
+      {#if shortcut !== defaultShortcut()}
+        <button class="btn ghost small" onclick={() => void choose(defaultShortcut())}>{t('overseer.settings.shortcutDefault')}</button>
+      {/if}
+      {#if shortcut}
+        <button class="btn ghost small" aria-label={t('overseer.settings.shortcutRemove')} onclick={() => void choose('')}
+          >{t('overseer.screen.remove')}</button
+        >
+      {/if}
+    </div>
+  </Row>
+  {#if hotkey?.unsupported}
+    <p class="warn" role="note" data-shortcut-wayland>{t('overseer.settings.shortcutWayland')}</p>
+  {:else if shortcutError || hotkey?.error}
+    <p class="warn" role="alert" data-shortcut-error>{shortcutError ?? hotkey?.error}</p>
+  {:else if shortcut}
+    <p class="note" data-shortcut-state>
+      {hotkey?.active === shortcut ? t('overseer.settings.shortcutActive') : t('overseer.settings.shortcutOff')}
+    </p>
+  {/if}
+</Group>
+
 <Group title={t('overseer.settings.groupDirectives')}>
   <Row label={t('overseer.settings.groupDirectives')} desc={t('overseer.settings.directivesDesc')} wide row="overseerDirectives">
     <Directives />
@@ -112,6 +196,24 @@
 </Group>
 
 <style>
+  .keys {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .keys kbd {
+    padding: 2px 8px;
+    border-radius: 5px;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    font: inherit;
+    font-size: 12.5px;
+  }
+  .note {
+    color: var(--muted);
+    font-size: 12.5px;
+    margin: 4px 0 8px;
+  }
   .warn {
     color: var(--warn-ink);
     font-size: 12.5px;

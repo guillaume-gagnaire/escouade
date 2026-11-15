@@ -3800,6 +3800,8 @@ export interface OverseerSettings {
   model: string;
   /** Empty: its harness's own. */
   effort: string;
+  /** The global shortcut that opens its screen (ESC-468), as the dictation's is kept; empty: none. Absent before it. */
+  shortcut?: string;
 }
 
 /** An action that goes out, which needs an instruction of the user. */
@@ -3833,6 +3835,30 @@ export interface OverseerAction {
   undoable: boolean;
 }
 
+/** What a piece of news says of its ticket (ESC-468). */
+export type OverseerNewsKind = 'review' | 'done' | 'blocked' | 'ci';
+
+/** A piece of news of a ticket: a card of its discussion, with ready answers. */
+export interface OverseerNews {
+  id: string;
+  at: number;
+  kind: OverseerNewsKind;
+  ticketId: string;
+  ticket: string;
+  title: string;
+  projectId: string;
+  project: string;
+  /** What happened, for a block or a pull request's news. */
+  text?: string;
+}
+
+/** Its global shortcut: registered, or why not; none at all here (Wayland). */
+export interface OverseerShortcut {
+  active: string | null;
+  error: string | null;
+  unsupported: boolean;
+}
+
 export interface OverseerMessage {
   id: string;
   text: string;
@@ -3850,4 +3876,7 @@ export interface OverseerView {
   directives: OverseerDirective[];
   actions: OverseerAction[];
   messages: OverseerMessage[];
+  /** The news of the tickets, oldest first (ESC-468). Absent from the tests made before it. */
+  news?: OverseerNews[];
+  shortcut?: OverseerShortcut;
 }

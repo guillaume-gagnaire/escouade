@@ -210,6 +210,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
 
   // Overseer › L'agent, Consignes (ESC-462).
   row('overseerAgent', 'overseer', 'overseer.settings.enabled', s('overseer')),
+  row('overseerShortcut', 'overseer', 'overseer.settings.shortcut'),
   row('overseerDirectives', 'overseer', 'overseer.settings.groupDirectives'),
 
   // Voix › Dictée, Conversation.

@@ -6,6 +6,12 @@ import { api } from './ipc';
 import type { Outgoing, OverseerDirective, OverseerView } from './types';
 import { t } from './i18n';
 import { fDate } from './format';
+import { IS_MAC } from './platform';
+
+/** Its global shortcut by default (`model::default_overseer_shortcut`): ⌘⌥O on macOS, Alt+Maj+O elsewhere (Ctrl+Alt is AltGr). */
+export function defaultShortcut(mac = IS_MAC): string {
+  return mac ? 'Mod+Alt+KeyO' : 'Alt+Shift+KeyO';
+}
 
 const EMPTY: OverseerView = {
   enabled: false,

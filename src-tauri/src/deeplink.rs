@@ -6,6 +6,9 @@
 //! `escouade://team/join/<server>/<id>#s=…&t=…` (TS-3): an invitation to a team, as the team server's page hands it over
 //! (`/join/<id>`, the secret read after the `#` in the browser). It opens « Rejoindre une équipe » with the link filled in,
 //! its server and the team's six words shown: joining stays the user's gesture.
+//!
+//! `escouade://overseer` (ESC-468): the Overseer's screen, as its global shortcut opens it (`hotkey`); under Wayland, where
+//! an app has no global shortcut, the desktop's own shortcut runs `xdg-open escouade://overseer`.
 
 use crate::core::Core;
 use parking_lot::Mutex;
@@ -27,6 +30,8 @@ pub enum DeepLink {
     Plugin { id: String },
     /// An invitation to a team (TS-3): the link as `teams::parse_link` reads it, `https://<server>/join/<id>#…`.
     TeamJoin { link: String },
+    /// The Overseer's screen (ESC-468).
+    Overseer,
     /// A link of the scheme the app cannot read: said, nothing done.
     Bad { url: String },
 }
@@ -51,6 +56,9 @@ pub fn parse(url: &str) -> DeepLink {
                 url: "escouade://team/join/…".into(),
             },
         };
+    }
+    if rest.eq_ignore_ascii_case("overseer") || rest.eq_ignore_ascii_case("overseer/") {
+        return DeepLink::Overseer;
     }
     let Some(rest) = strip_prefix_ci(rest, "plugin/") else {
         return bad();
@@ -110,6 +118,7 @@ pub fn deliver<R: Runtime>(app: &AppHandle<R>, urls: impl IntoIterator<Item = St
                     .next()
                     .unwrap_or("")
             ),
+            DeepLink::Overseer => log::info!("deep link: the Overseer's screen"),
             DeepLink::Bad { url } => log::warn!("deep link not understood: {url}"),
         }
         if let Some(inbox) = app.try_state::<Inbox>() {

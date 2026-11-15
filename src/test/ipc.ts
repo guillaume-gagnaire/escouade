@@ -15,6 +15,7 @@ import { clearDrafts } from '../lib/question-answers.svelte';
 import { trees } from '../lib/editor/trees.svelte';
 import { app } from '../lib/state.svelte';
 import { overseer } from '../lib/overseer.svelte';
+import { overseerVoice } from '../lib/overseer-voice.svelte';
 import { workflows } from '../lib/workflows.svelte';
 import type {
   AccountUsage,
@@ -425,6 +426,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.tickets = Object.fromEntries((over.tickets ?? []).map((t) => [t.id, t]));
   app.scheduled = [];
   overseer.reset();
+  overseerVoice.clear();
   app.board = {};
   app.prReviews = {};
   app.prReviewOpen = {};

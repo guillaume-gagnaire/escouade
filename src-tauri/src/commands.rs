@@ -4024,6 +4024,20 @@ pub fn speech_info(voice: VoiceState) -> crate::voice::SpeechInfo {
     voice.speech_info()
 }
 
+/// The Overseer's screen starts talking (ESC-468): as `conversation_start`, but never while this device's policy turns
+/// the dictation off (TS-12): its voice is cut too.
+#[tauri::command(async)]
+pub fn overseer_voice_start(
+    core: CoreState,
+    voice: VoiceState,
+) -> Res<crate::voice::conversation::ConvStarted> {
+    core.locks
+        .read()
+        .check_dictation()
+        .map_err(|e| e.to_string())?;
+    conversation_start(core, voice)
+}
+
 /// Starts a conversation with the settings' microphone, model and voice; or says what is to be downloaded first.
 #[tauri::command(async)]
 pub fn conversation_start(
@@ -4071,6 +4085,28 @@ pub fn conversation_say(voice: VoiceState, session: u64, text: String) -> Res<u6
     voice.conversation_say(session, &text).map_err(voice_err)
 }
 
+/// « Raccourci global » of Réglages › Overseer (ESC-468): registered, then kept; refused when another app holds it.
+#[tauri::command(async)]
+pub fn overseer_shortcut_set(core: CoreState, shortcut: String) -> Res<()> {
+    core.overseer_shortcut_set(&shortcut).map_err(err)
+}
+
+/// The Overseer's shortcut pressed, in a sandbox only (the end-to-end tests): the system's keys are not reached there.
+#[tauri::command]
+pub fn overseer_hotkey_press(app: tauri::AppHandle) -> Res<()> {
+    if crate::paths::sandbox_dir().is_none() {
+        return Err("only in a sandbox".into());
+    }
+    crate::hotkey::pressed(&app);
+    Ok(())
+}
+
+/// Ends the sentence being said at once (ESC-468, the Overseer's Space let go): sent, or dropped (Escape).
+#[tauri::command]
+pub fn conversation_end(voice: VoiceState, session: u64, send: bool) {
+    voice.conversation_end(session, send);
+}
+
 #[tauri::command]
 pub fn conversation_stop(voice: VoiceState) {
     voice.conversation_stop();
@@ -4079,6 +4115,14 @@ pub fn conversation_stop(voice: VoiceState) {
 /// A sentence said in the conversation, sent to the agent with the instruction to end with a passage to be read.
 #[tauri::command]
 pub async fn conversation_send(core: CoreState<'_>, id: String, text: String) -> Res<()> {
+    // The Overseer's screen talks with it (ESC-468): a message of the user « dit », kept for its instructions.
+    if core.is_overseer(&id) {
+        core.locks
+            .read()
+            .check_dictation()
+            .map_err(|e| e.to_string())?;
+        return core.overseer_said(&text).await.map(|_| ()).map_err(err);
+    }
     let r = core.send_spoken(&id, text).await.map_err(err);
     counted(&core, Event::MessageSent, r)
 }

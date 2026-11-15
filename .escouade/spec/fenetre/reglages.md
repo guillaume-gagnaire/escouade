@@ -2,8 +2,8 @@
 title: "Réglages"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/index.html","design/settings-2-2/captures/a-plugins.png","design/settings-2-2/captures/a-projet.png","design/settings-2-2/captures/a-comptes.png"]
-tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-462"]
-decisions: [118,119,120,121,123,124,126,145,147]
+tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-462","ESC-468"]
+decisions: [118,119,120,121,123,124,126,145,147,181]
 compared: null
 ---
 
@@ -86,7 +86,7 @@ Les réglages ne listent que ce qu'apporte un plugin installé : un harness, une
   - un dossier des worktrees ou un préfixe de branche refusé, avec la raison sous le champ (voir *Git & fichiers*) ;
   - un nombre vidé ou sous 0, par exemple « Un nombre entier, 0 ou plus : 15 reste enregistré. » ; un nombre à virgule est arrondi à l'entier du dessous ; une taille de texte hors de ses bornes est ramenée dedans.
 - Ce qui coûte le dit sur sa rangée, comme avant : le proxy et les certificats ne valent pour un agent qu'au prochain démarrage de son process, le remote control lance aussitôt le process `claude` de chaque agent actif concerné (voir *Process des agents*).
-- Certaines rangées passent par leur propre appel au backend, comme avant : l'apparence (voir *Fenêtre*), « Recevoir les versions bêta » (enregistré, puis une recherche de mise à jour), les comptes des harness et leur « Projection des quotas » (voir *Barre de statut*), les comptes des intégrations (voir *Intégrations*), l'interrupteur « Les agents peuvent piloter Escouade » (voir *Serveur MCP*), les modèles de la voix, téléchargés ou effacés sur leur ligne, sur la page Plugins l'interrupteur d'un plugin et « Installer » d'un plugin proposé, et sur la page Confidentialité l'interrupteur d'un plugin dans le projet.
+- Certaines rangées passent par leur propre appel au backend, comme avant : l'apparence (voir *Fenêtre*), « Recevoir les versions bêta » (enregistré, puis une recherche de mise à jour), les comptes des harness et leur « Projection des quotas » (voir *Barre de statut*), les comptes des intégrations (voir *Intégrations*), l'interrupteur « Les agents peuvent piloter Escouade » (voir *Serveur MCP*), les modèles de la voix, téléchargés ou effacés sur leur ligne, le « Raccourci global » de l'Overseer (enregistré auprès du système avant d'être gardé, voir *L'Overseer*), sur la page Plugins l'interrupteur d'un plugin et « Installer » d'un plugin proposé, et sur la page Confidentialité l'interrupteur d'un plugin dans le projet.
 - Rien ne se perd au redémarrage : ce qui est enregistré est dans `settings.json` et les fichiers des projets, dont aucune clé ne change. Le refus du remote control qu'un compte a reçu pour de bon y est gardé avec le compte ; un enregistrement de la fenêtre le garde tant que les réglages du compte ne changent pas (voir *Barre latérale*, « Remote control »).
 
 ### Les pages
@@ -173,10 +173,12 @@ Le tableau des plugins, côté réglages, et le seul endroit des réglages où l
 - Ignorer la vérification des certificats ne vaut pour un process `claude` qu'à son prochain démarrage.
 - La page Plugins n'active pas un plugin projet par projet : c'est la page Confidentialité de chaque projet, ou l'onglet Projets de la page du plugin, dans la vue Plugins.
 - Les textes des plugins publiés à part (Jira, ClickUp, Azure DevOps, Copilot) disent encore les anciens noms d'onglets jusqu'à leur prochaine version (ESC-387) ; le test des chemins ne lit pas `plugins/`.
+- Il n'y a pas de page « Raccourcis » : chaque raccourci réglable l'est sur la page de sa fonction (la dictée dans Voix, l'Overseer dans Overseer), et la page *Raccourcis* de la spec les liste.
 
-### La page Overseer (ESC-462)
+### La page Overseer (ESC-462, ESC-468)
 
 - Dans « Escouade », entre Services connectés et Voix : « Overseer », « L'agent qui pilote tous tes projets : son harness, son compte, son modèle et tes consignes ».
 - « L'agent » : « Activer l'Overseer » (éteint par défaut ; l'allumer allume aussi « Claude et les agents peuvent piloter Escouade », et la page dit quand celui-ci est éteint), « Harness » (dès deux harness offerts), « Compte » (« Le premier utilisable » par défaut), « Modèle » (Haiku sur Claude Code par défaut), « Effort » (« Celui du harness »), et une ligne qui dit où est sa mémoire.
+- « Son écran » › « Raccourci global » : le raccourci qui ouvre son écran de n'importe où (`Alt+Maj+O`, `⌥⌘O` sous macOS), « Changer » puis les touches, « Par défaut », « Retirer ». Il est enregistré auprès du système avant d'être gardé : un raccourci déjà pris est refusé, avec la raison sous la rangée, et l'ancien reste. Sous la rangée : « Actif », « Actif quand l'Overseer est allumé », ou, sous Wayland, ce qu'il faut faire à la place (voir *L'Overseer*).
 - « Consignes » : la liste des consignes de l'utilisateur, chacune retirée par « Retirer » (voir *L'Overseer*).
-- Le registre a deux rangées pour elle : `overseerAgent` (la clé `overseer` des réglages) et `overseerDirectives`.
+- Le registre a trois rangées pour elle : `overseerAgent` (la clé `overseer` des réglages, son raccourci compris), `overseerShortcut` et `overseerDirectives`.

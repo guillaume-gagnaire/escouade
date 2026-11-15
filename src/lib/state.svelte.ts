@@ -21,6 +21,7 @@ import { setLang, t } from './i18n';
 import { shownAgents, sidebarItems, type SidebarItem } from './sidebar';
 import { dictation } from './dictation.svelte';
 import { conversation } from './conversation.svelte';
+import { overseerVoice } from './overseer-voice.svelte';
 import { mcp } from './mcp.svelte';
 import { readPref, writePref } from './prefs';
 import { errorText, missingAccountOf } from './refusal';
@@ -995,6 +996,7 @@ class AppState {
       case 'voice':
         dictation.take(e.voice);
         conversation.take(e.voice);
+        overseerVoice.take(e.voice);
         break;
       case 'docsShare':
         this.docsShare[e.projectId] = { pending: e.pending, conflict: e.conflict };

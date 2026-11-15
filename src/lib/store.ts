@@ -72,6 +72,8 @@ export type DeepLink =
   | { kind: 'plugin'; id: string }
   /** An invitation to a team (TS-3): « Rejoindre une équipe », the link filled in. */
   | { kind: 'teamJoin'; link: string }
+  /** The Overseer's screen (ESC-468): its global shortcut, or `xdg-open escouade://overseer` under Wayland. */
+  | { kind: 'overseer' }
   | { kind: 'bad'; url: string };
 
 export const storeApi = {

@@ -976,6 +976,8 @@ fn fuzz_the_deep_link_gives_a_plugin_id_or_nothing() {
                     "{url:?} gave {link:?}"
                 );
             }
+            // The Overseer's screen (ESC-468, after this audit): it carries nothing.
+            DeepLink::Overseer => {}
             DeepLink::Bad { url: shown } => {
                 assert!(shown.chars().count() <= 121 && !shown.chars().any(char::is_control));
             }

@@ -1236,3 +1236,46 @@ fn real_elevenlabs_live_and_by_request_hear_the_whole_sentence() {
         println!("{name}: by request, {request_ms} ms after the end: {request:?}");
     }
 }
+
+#[test]
+fn space_let_go_sends_the_sentence_at_once_and_escape_drops_it() {
+    // « Appuyer pour parler » of the Overseer (ESC-468): the sentence ends when Space is let go, not at its silence.
+    let c = conv_harness("conv-end", "pose le tag");
+    let h = &c.h;
+    put_model(&h.voice.store, "base");
+    put_voice(&h.voice, "fr_FR-siwis-medium");
+    let session = listening(h.voice.conversation_start(conv_choice()).unwrap());
+    hear(h, 0.4, 0.0);
+    hear(h, 0.8, 0.3);
+    wait_for(h, |e| matches!(e, VoiceEvent::ConvSpeech { .. }));
+    // Let go while still speaking: sent now, its silence not waited for.
+    h.voice.conversation_end(session, true);
+    hear(h, 0.2, 0.3);
+    let heard = wait_for(h, |e| matches!(e, VoiceEvent::ConvHeard { .. }));
+    assert_eq!(heard, VoiceEvent::ConvHeard { session, text: "pose le tag".into(), error: None });
+    assert_eq!(c.h.fake.calls.lock().len(), 1);
+    // It holds afterwards: what is said now is not taken.
+    hear(h, 0.8, 0.3);
+    hear(h, 1.0, 0.0);
+    assert_eq!(c.h.fake.calls.lock().len(), 1);
+    // Listening again, Escape drops the sentence under way: nothing transcribed, nothing told.
+    h.voice.conversation_listen(session);
+    hear(h, 0.4, 0.0);
+    hear(h, 0.8, 0.3);
+    h.voice.conversation_end(session, false);
+    hear(h, 1.0, 0.0);
+    assert_eq!(c.h.fake.calls.lock().len(), 1);
+    let n = conv_events(h).iter().filter(|e| matches!(e, VoiceEvent::ConvHeard { .. })).count();
+    assert_eq!(n, 1, "{:?}", conv_events(h));
+    // Let go before any word: told empty, so the window knows nothing was heard.
+    h.voice.conversation_listen(session);
+    hear(h, 0.3, 0.0);
+    h.voice.conversation_end(session, true);
+    hear(h, 0.2, 0.0);
+    let empty = conv_events(h)
+        .into_iter()
+        .filter(|e| matches!(e, VoiceEvent::ConvHeard { .. }))
+        .nth(1);
+    assert_eq!(empty, Some(VoiceEvent::ConvHeard { session, text: String::new(), error: None }));
+    h.voice.conversation_stop();
+}

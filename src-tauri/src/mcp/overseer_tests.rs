@@ -530,3 +530,119 @@ async fn its_agent_lives_in_the_system_folder_on_haiku_and_comes_back_after_a_re
         serde_json::from_slice(&std::fs::read(h.core.data.state_file()).unwrap()).unwrap();
     assert!(state.agents.iter().any(|a| a.id == id));
 }
+
+#[tokio::test]
+async fn its_screen_gets_the_news_and_a_negated_instruction_is_refused() {
+    // ESC-468: a ticket that reaches « À tester » is a card of its discussion; « ne merge surtout pas » gives no
+    // instruction, whatever words of it are quoted, while a plain « merge-le » does.
+    let h = harness("mcp-overseer-screen");
+    let p = project(&h).await;
+    let id = overseer(&h);
+    let t = ticket(&h, &p, "Paiement en 4 fois", "").await;
+    h.core.facts.emit(
+        Body::TicketColumn {
+            from: "doing".into(),
+            to: "review".into(),
+        },
+        About::ticket(&t.id),
+    );
+    h.core.facts.flush();
+    h.wait("the news of the ticket", |h| {
+        !h.core.overseer_view().news.is_empty()
+    })
+    .await;
+    let news = h.core.overseer_view().news;
+    assert_eq!(news.len(), 1);
+    assert_eq!(news[0].kind, crate::overseer::NewsKind::Review);
+    assert_eq!(news[0].ticket, t.key);
+    assert_eq!(news[0].ticket_id, t.id);
+    assert_eq!(news[0].title, "Paiement en 4 fois");
+    assert_eq!(news[0].project_id, p.id);
+    // « Terminé » next: one card for the ticket, its last news.
+    h.core.facts.emit(
+        Body::TicketColumn {
+            from: "review".into(),
+            to: "done".into(),
+        },
+        About::ticket(&t.id),
+    );
+    h.core.facts.flush();
+    h.wait("the ticket done", |h| {
+        h.core.overseer_view().news[0].kind == crate::overseer::NewsKind::Done
+    })
+    .await;
+    assert_eq!(h.core.overseer_view().news.len(), 1);
+
+    let c = as_agent(&h, &id).await;
+    let no = says(
+        &h,
+        &format!("Ne merge surtout pas {}, je relis d’abord", t.key),
+    );
+    for quote in ["Ne merge surtout pas", "merge"] {
+        let why = refused(
+            &c,
+            "add_directive",
+            json!({ "message": no, "quote": quote, "summary": "x", "actions": ["merge"] }),
+        )
+        .await;
+        assert!(
+            why.contains("négation") && why.contains("confirmer"),
+            "{why}"
+        );
+    }
+    assert!(h.core.overseer_view().directives.is_empty());
+    // Asked plainly, the user says it plainly.
+    let yes = says(&h, &format!("Oui, merge {}", t.key));
+    call(
+        &c,
+        "add_directive",
+        json!({ "message": yes, "quote": "merge", "summary": "Fusionner", "actions": ["merge"], "ticket": t.key, "once": true }),
+    )
+    .await;
+    assert_eq!(h.core.overseer_view().directives.len(), 1);
+}
+
+#[tokio::test]
+async fn its_shortcut_is_kept_once_registered_and_refused_when_another_app_holds_it() {
+    let h = harness("mcp-overseer-shortcut");
+    let keys = std::sync::Arc::new(crate::hotkey_tests::FakeKeys {
+        taken: vec!["CommandOrControl+Alt+KeyK".into()],
+        ..Default::default()
+    });
+    h.core.overseer.hotkey.set_keys(keys.clone());
+    overseer(&h);
+    // Turned on, its default shortcut is held.
+    h.core.overseer_hotkey();
+    let default = crate::hotkey::accelerator(&default_overseer_shortcut()).unwrap();
+    assert_eq!(*keys.held.lock(), vec![default]);
+    // Changed: registered, then kept in the settings.
+    h.core.overseer_shortcut_set("Mod+Alt+KeyJ").unwrap();
+    assert_eq!(h.core.settings.read().overseer.shortcut, "Mod+Alt+KeyJ");
+    assert_eq!(
+        *keys.held.lock(),
+        vec!["CommandOrControl+Alt+KeyJ".to_string()]
+    );
+    assert_eq!(
+        h.core.overseer_view().shortcut.active.as_deref(),
+        Some("Mod+Alt+KeyJ")
+    );
+    // Taken by another app: refused, the settings and the shortcut before kept.
+    let e = h
+        .core
+        .overseer_shortcut_set("Mod+Alt+KeyK")
+        .unwrap_err()
+        .to_string();
+    assert!(e.contains("déjà pris"), "{e}");
+    assert_eq!(h.core.settings.read().overseer.shortcut, "Mod+Alt+KeyJ");
+    assert_eq!(
+        *keys.held.lock(),
+        vec!["CommandOrControl+Alt+KeyJ".to_string()]
+    );
+    // Not a shortcut: refused before the system is asked.
+    assert!(h.core.overseer_shortcut_set("KeyJ").is_err());
+    // Turned off: let go.
+    let mut s = h.core.settings.read().clone();
+    s.overseer.enabled = false;
+    h.core.save_settings(s).unwrap();
+    assert!(keys.held.lock().is_empty());
+}

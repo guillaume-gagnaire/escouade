@@ -467,3 +467,158 @@ fn its_state_keeps_the_latest_messages_and_actions() {
     let back: State = serde_json::from_value(serde_json::to_value(&s).unwrap()).unwrap();
     assert_eq!((back.next, back.messages.len()), (s.next, MESSAGES_KEPT));
 }
+
+// ---------- a negation near the action (ESC-468) ----------
+
+/// Whether the user's message `text` gives `actions` by the words `quote`: `Ok`, or why not.
+fn gives(text: &str, quote: &str, actions: &[Outgoing]) -> Result<(), SourceRefusal> {
+    let messages = vec![msg("m-1", text, NOW - 1_000)];
+    check_source(&messages, "m-1", quote, actions, NOW).map(|_| ())
+}
+
+#[test]
+fn a_negation_near_the_action_gives_no_instruction_in_french() {
+    for (text, quote) in [
+        ("Ne merge surtout pas", "Ne merge surtout pas"),
+        ("ne merge surtout pas", "merge"),
+        ("Tu ne merges pas ESC-31.", "merges"),
+        ("merge pas", "merge"),
+        ("Ne fusionne jamais sur main", "fusionne"),
+        ("Tu ne merges plus rien sans moi", "merges"),
+        ("je ne veux pas que tu merges", "merges"),
+        ("Arrête de merger seul", "merger"),
+        ("Évite de merger ce soir", "merger"),
+        ("Je t'interdis de merger", "merger"),
+        ("Sans merger, regarde la CI", "Sans merger"),
+        ("Ne merge ni ne pousse", "merge"),
+    ] {
+        assert_eq!(
+            gives(text, quote, &[Outgoing::Merge]),
+            Err(SourceRefusal::Negated(Outgoing::Merge)),
+            "{text}"
+        );
+    }
+}
+
+#[test]
+fn a_negation_near_the_action_gives_no_instruction_in_english() {
+    for (text, quote) in [
+        ("Don't merge it", "merge"),
+        ("don’t merge it", "don’t merge it"),
+        ("Do not push to main", "push"),
+        ("Never publish on Friday", "publish"),
+        ("You can't tag it yet", "tag"),
+        ("No merging today", "merging"),
+        ("Stop merging on your own", "merging"),
+        ("Avoid merging before the review", "merging"),
+        ("Merge? Not now.", "Merge? Not now"),
+        ("You won't merge without me", "merge"),
+    ] {
+        let action = if text.contains("push") {
+            Outgoing::Push
+        } else if text.contains("publish") {
+            Outgoing::Publish
+        } else if text.contains("tag") {
+            Outgoing::Tag
+        } else {
+            Outgoing::Merge
+        };
+        assert_eq!(
+            gives(text, quote, &[action]),
+            Err(SourceRefusal::Negated(action)),
+            "{text}"
+        );
+    }
+}
+
+#[test]
+fn a_negation_far_from_the_action_leaves_the_permission() {
+    for (text, quote, action) in [
+        // Out of the words around the action (five before, two after).
+        (
+            "Merge-le. Je ne veux pas attendre",
+            "Merge-le",
+            Outgoing::Merge,
+        ),
+        (
+            "Ne touche pas aux tests, mais tu peux merger",
+            "tu peux merger",
+            Outgoing::Merge,
+        ),
+        (
+            "Don't wait for me; publish it",
+            "publish it",
+            Outgoing::Publish,
+        ),
+        // « plus » without « ne »: more, not anymore.
+        ("Merge plus vite", "Merge plus vite", Outgoing::Merge),
+    ] {
+        assert_eq!(gives(text, quote, &[action]), Ok(()), "{text}");
+    }
+    // Near it, even across a comma or a full stop (« Merge? Not now. »): the user is asked to say it plainly.
+    for (text, quote, action) in [
+        ("Non, merge-le.", "merge-le", Outgoing::Merge),
+        ("No, push it", "push it", Outgoing::Push),
+        ("Merge-le, ne pousse pas", "Merge-le", Outgoing::Merge),
+    ] {
+        assert_eq!(
+            gives(text, quote, &[action]),
+            Err(SourceRefusal::Negated(action)),
+            "{text}"
+        );
+    }
+}
+
+#[test]
+fn the_false_friends_are_decided_permission_or_not() {
+    // Litotes and phrases that say yes through a negation: a permission.
+    for (text, quote, action) in [
+        (
+            "N'hésite pas à merger",
+            "N'hésite pas à merger",
+            Outgoing::Merge,
+        ),
+        ("n’hésite pas à merger ESC-31", "merger", Outgoing::Merge),
+        ("N'oublie pas de pousser", "pousser", Outgoing::Push),
+        ("Pas de souci, merge", "merge", Outgoing::Merge),
+        ("pas de problème pour merger", "merger", Outgoing::Merge),
+        (
+            "Merge sans attendre",
+            "Merge sans attendre",
+            Outgoing::Merge,
+        ),
+        ("Valide sans me demander", "Valide", Outgoing::Approve),
+        ("Ne te gêne pas pour publier", "publier", Outgoing::Publish),
+        ("Don't hesitate to merge", "merge", Outgoing::Merge),
+        ("Don't forget to push", "push", Outgoing::Push),
+        ("Feel free to tag it", "tag", Outgoing::Tag),
+        ("Merge without asking me", "Merge", Outgoing::Merge),
+        ("No problem, merge it", "merge it", Outgoing::Merge),
+        // « ne… que » restricts, it does not deny: the instruction keeps the condition in its summary.
+        ("Ne merge que si la CI est verte", "merge", Outgoing::Merge),
+    ] {
+        assert_eq!(gives(text, quote, &[action]), Ok(()), "{text}");
+    }
+    // A negation left once the phrase that says yes is taken off: no.
+    for (text, quote) in [
+        ("N'hésite pas à ne pas merger", "merger"),
+        ("Pas de souci, mais ne merge pas", "merge"),
+        ("Feel free not to merge", "merge"),
+        ("Ne merge pas que celui-là", "merge"),
+    ] {
+        assert_eq!(
+            gives(text, quote, &[Outgoing::Merge]),
+            Err(SourceRefusal::Negated(Outgoing::Merge)),
+            "{text}"
+        );
+    }
+}
+
+#[test]
+fn a_negated_instruction_is_refused_with_the_way_to_ask() {
+    let fr = SourceRefusal::Negated(Outgoing::Merge).text(Lang::Fr);
+    assert!(fr.contains("négation"), "{fr}");
+    assert!(fr.contains("confirmer"), "{fr}");
+    let en = SourceRefusal::Negated(Outgoing::Merge).text(Lang::En);
+    assert!(en.contains("negation"), "{en}");
+}

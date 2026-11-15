@@ -182,3 +182,15 @@ fn reads_an_invitation_to_a_team_and_keeps_its_secret_out_of_a_bad_one() {
     // Found among a launch's arguments.
     assert_eq!(links_in(["escouade.exe", deep]), vec![deep.to_string()]);
 }
+
+#[test]
+fn reads_the_overseer_s_screen() {
+    // ESC-468: what its global shortcut opens, and what a desktop's own shortcut runs under Wayland.
+    assert_eq!(parse(crate::hotkey::OVERSEER_LINK), DeepLink::Overseer);
+    assert_eq!(parse("Escouade://Overseer/"), DeepLink::Overseer);
+    assert_eq!(parse("escouade:overseer"), DeepLink::Overseer);
+    assert!(matches!(
+        parse("escouade://overseer/x"),
+        DeepLink::Bad { .. }
+    ));
+}

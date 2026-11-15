@@ -18,6 +18,7 @@ import { storeApi, type CatalogPlugin, type DeepLink, type StoreView, type Sugge
 import { readSetAside, setAside } from './proposed-plugins';
 import { app } from './state.svelte';
 import { api } from './ipc';
+import { overseer } from './overseer.svelte';
 
 export type PluginTab = 'overview' | 'permissions' | 'versions' | 'projects' | 'settings' | 'journal';
 
@@ -225,6 +226,8 @@ class PluginsStore {
       if (link.kind === 'plugin') {
         app.openPlugins();
         this.openStorePlugin(link.id);
+      } else if (link.kind === 'overseer') {
+        overseer.open = true;
       } else if (link.kind === 'teamJoin') {
         // Joining stays the user's gesture: the link is shown with its server and the team's six words.
         app.modal = { kind: 'team', step: 'join', link: link.link };
