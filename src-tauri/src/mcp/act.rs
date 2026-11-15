@@ -86,12 +86,12 @@ const CRITERIA_MAX: usize = 30;
 const MESSAGE_MAX: usize = 32_000;
 
 /// A guard said no.
-fn refusal(e: anyhow::Error) -> ToolError {
+pub(super) fn refusal(e: anyhow::Error) -> ToolError {
     ToolError::Refused(format!("{e:#}"))
 }
 
 /// Something asked does not fit.
-fn failure(e: anyhow::Error) -> ToolError {
+pub(super) fn failure(e: anyhow::Error) -> ToolError {
     ToolError::Failed(format!("{e:#}"))
 }
 
@@ -158,7 +158,7 @@ pub(super) fn message_text(asked: &str) -> Result<&str, ToolError> {
 }
 
 /// A title: on one line, not blank, `TITLE_MAX` characters at most.
-fn title(asked: &str) -> Result<String, ToolError> {
+pub(super) fn title(asked: &str) -> Result<String, ToolError> {
     let line = one_line(asked);
     if line.is_empty() {
         return Err(failure(title_missing()));
@@ -187,7 +187,7 @@ fn description(asked: &str) -> Result<String, ToolError> {
 }
 
 /// The criteria, one per line (as the window's form takes them), blank lines dropped.
-fn criteria(asked: &[String]) -> Result<Vec<String>, ToolError> {
+pub(super) fn criteria(asked: &[String]) -> Result<Vec<String>, ToolError> {
     let lines: Vec<String> = asked
         .iter()
         .flat_map(|c| c.lines())
@@ -272,7 +272,7 @@ pub(super) fn without_origin(description: &str) -> &str {
 
 /// The description of a ticket made through the server: what the caller wrote, then who made it.
 /// The limit of `description` is on what was written, not on this line.
-fn described<R: Runtime>(
+pub(super) fn described<R: Runtime>(
     core: &Core<R>,
     caller: &Caller,
     written: &str,
@@ -465,6 +465,7 @@ pub(super) async fn create_ticket<R: Runtime>(
         shared: a.shared,
         pages: None,
         decisions: None,
+        scheduled: None,
     };
     let made = core
         .ticket_create(&project.id, draft)
@@ -576,6 +577,7 @@ pub(super) async fn update_ticket<R: Runtime>(
         shared: a.shared,
         pages: None,
         decisions: None,
+        scheduled: None,
     };
     let (images_given, files_given) = (
         !add.is_empty() || !remove.is_empty(),
@@ -805,7 +807,7 @@ fn model_setting<R: Runtime>(
 }
 
 /// The model and the effort a tool sets, each checked against the harness that carries them.
-fn model_and_effort<R: Runtime>(
+pub(super) fn model_and_effort<R: Runtime>(
     core: &Core<R>,
     on: &Carrier,
     model: Option<&str>,
@@ -831,7 +833,7 @@ fn auto_off(asked: Option<&str>) -> Option<&str> {
 /// The account a tool names for a ticket (ESC-153): `None` when left out, an empty one for
 /// `auto`, else the id of the account of that name (in any case) or of that id; one there is no
 /// account of is given as it is, for the core to refuse it, saying so.
-fn account_setting<R: Runtime>(core: &Core<R>, asked: Option<&str>) -> Option<String> {
+pub(super) fn account_setting<R: Runtime>(core: &Core<R>, asked: Option<&str>) -> Option<String> {
     let asked = auto_off(asked)?.trim();
     let settings = core.settings.read();
     let named = |a: &&crate::model::Account| {
@@ -1438,7 +1440,7 @@ pub(super) struct Carrier {
 
 /// The harness of a model or an effort given for `project`, for its `ticket` when there is one, and
 /// for `account` (`account_setting`: the call's, `Some("")` for auto) when the call names one.
-fn carrier<R: Runtime>(
+pub(super) fn carrier<R: Runtime>(
     core: &Core<R>,
     project: &Project,
     ticket: Option<&Ticket>,
@@ -2231,6 +2233,7 @@ fn sub_draft<R: Runtime>(
         shared: None,
         pages: None,
         decisions: None,
+        scheduled: None,
     })
 }
 

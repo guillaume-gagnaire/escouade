@@ -1375,3 +1375,42 @@ describe('TicketCard with an account of its own', () => {
     expect(screen.getByRole('button', { name: "L'agent corrige" })).toBeInTheDocument();
   });
 });
+
+describe('TicketCard of a scheduled task (ESC-448)', () => {
+  beforeEach(() => resetApp());
+
+  it('says « ⏱ programmée » and opens its task', async () => {
+    fakeBackend();
+    const task = { id: 's1', projectId: 'p1', title: 'Revue des dépendances' } as never;
+    app.scheduled = [task];
+    render(TicketCard, {
+      ticket: ticket({ scheduled: 's1' }),
+      project: project(),
+      queueIndex: 0,
+      busyCount: 1,
+      quota: null,
+      onedit: () => {},
+    });
+    await userEvent.click(screen.getByRole('button', { name: '⏱ programmée' }));
+    expect(app.modal).toMatchObject({ kind: 'schedule', projectId: 'p1', task: { id: 's1' } });
+  });
+
+  it('keeps the mark, without a link, once its task is deleted', () => {
+    fakeBackend();
+    render(TicketCard, {
+      ticket: ticket({ scheduled: 'gone' }),
+      project: project(),
+      queueIndex: 0,
+      busyCount: 1,
+      quota: null,
+      onedit: () => {},
+    });
+    expect(screen.getByRole('button', { name: '⏱ programmée' })).toBeDisabled();
+  });
+
+  it('has no mark for any other ticket', () => {
+    fakeBackend();
+    render(TicketCard, { ticket: ticket(), project: project(), queueIndex: 0, busyCount: 1, quota: null, onedit: () => {} });
+    expect(screen.queryByText('⏱ programmée')).toBeNull();
+  });
+});

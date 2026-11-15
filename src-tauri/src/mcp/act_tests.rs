@@ -121,7 +121,13 @@ async fn the_acting_tools_say_what_they_take_and_that_they_change_things() {
         );
         // And of the board's flow, only an approval and a deletion cannot be taken back.
         let destructive = match *name {
-            "approve_ticket" | "delete_ticket" | "stop_background_work" => Some(true),
+            "approve_ticket"
+            | "delete_ticket"
+            | "stop_background_work"
+            | "delete_scheduled_task" => Some(true),
+            "create_scheduled_task" | "update_scheduled_task" | "pause_scheduled_task" => {
+                Some(false)
+            }
             // No agent is touched by a folder's deletion: it only puts its agents out of it.
             "delete_folder" | "create_folder" | "update_folder" | "move_agent" => Some(false),
             "reject_ticket" | "resume_ticket" | "resolve_conflict" | "dismiss_block"
@@ -165,6 +171,14 @@ async fn the_acting_tools_say_what_they_take_and_that_they_change_things() {
     assert_eq!(required("report_progress"), ["line"]);
     assert_eq!(required("split_ticket"), ["tickets"]);
     assert_eq!(required("reject_ticket"), ["comment", "ticket"]);
+    assert_eq!(required("create_scheduled_task"), ["project", "title"]);
+    for name in [
+        "update_scheduled_task",
+        "pause_scheduled_task",
+        "delete_scheduled_task",
+    ] {
+        assert_eq!(required(name), ["project", "task"], "{name}");
+    }
     for name in [
         "approve_ticket",
         "resume_ticket",

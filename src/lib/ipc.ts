@@ -91,6 +91,9 @@ import type {
   TestRecipe,
   Ticket,
   TicketDraft,
+  Rhythm,
+  ScheduledDraft,
+  ScheduledTask,
   TicketImageData,
   TranscriptCursor,
   UiEvent,
@@ -691,6 +694,12 @@ export const api = {
   ticketCreate: (projectId: string, draft: TicketDraft) => invoke<Ticket>('ticket_create', { projectId, draft }),
   ticketUpdate: (id: string, draft: TicketDraft) => invoke<Ticket>('ticket_update', { id, draft }),
   ticketDelete: (id: string) => invoke<void>('ticket_delete', { id }),
+  /** The scheduled tasks (ESC-448): made, changed, paused or resumed, deleted; the next due times of a rhythm. */
+  scheduledCreate: (projectId: string, draft: ScheduledDraft) => invoke<ScheduledTask>('scheduled_create', { projectId, draft }),
+  scheduledUpdate: (id: string, draft: ScheduledDraft) => invoke<ScheduledTask>('scheduled_update', { id, draft }),
+  scheduledPause: (id: string, paused: boolean) => invoke<ScheduledTask>('scheduled_pause', { id, paused }),
+  scheduledDelete: (id: string) => invoke<void>('scheduled_delete', { id }),
+  scheduledPreview: (rhythm: Rhythm) => invoke<number[]>('scheduled_preview', { rhythm }),
   cleanWorktrees: (projectId: string) => invoke<LeftoverReport>('clean_worktrees', { projectId }),
   /** The images of a ticket with their content, for its form; those whose file is gone are left out. */
   ticketImages: (id: string) => invoke<TicketImageData[]>('ticket_images', { id }),

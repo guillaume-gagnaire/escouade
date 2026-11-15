@@ -1,0 +1,58 @@
+import type { Tree } from '../types';
+
+// Les tâches programmées (ESC-448) : leur section de la barre latérale, leur formulaire, la marque de leurs tickets.
+export default {
+  section: {
+    title: 'Programmées',
+    add: 'Programmer une tâche',
+    none: 'Aucune tâche programmée : une revue chaque lundi, un rapport chaque soir…',
+    pause: 'Mettre en pause « {title} »',
+    resume: 'Reprendre « {title} »',
+    paused: 'en pause',
+    running: 'en cours ({key})',
+    never: 'jamais',
+    edit: 'Modifier',
+    delete: 'Supprimer',
+    deleteTitle: 'Supprimer la tâche programmée ?',
+    deleteBody: '« {title} » ne lancera plus de ticket. Les tickets qu’elle a créés restent sur le Kanban.',
+    openTicket: 'Ouvrir {key}',
+  },
+  rhythm: {
+    daily: 'Chaque jour {time}',
+    weekly: 'Chaque {day} {time}',
+    weeklyMany: 'Chaque {days} {time}',
+    weekdays: 'Du lundi au vendredi {time}',
+    monthly: 'Le {day} du mois {time}',
+    cron: 'Cron {cron}',
+  },
+  next: {
+    tonight: 'ce soir',
+    today: 'aujourd’hui {time}',
+    tomorrow: 'demain {time}',
+    on: '{date} {time}',
+  },
+  form: {
+    newTitle: 'Nouvelle tâche programmée',
+    editTitle: 'Modifier la tâche programmée',
+    rhythm: 'Rythme',
+    kind: { daily: 'Chaque jour', weekly: 'Chaque semaine', monthly: 'Chaque mois', cron: 'Cron' },
+    days: 'Jours',
+    day: 'Jour du mois',
+    time: 'Heure',
+    cron: 'Expression',
+    cronHelp: 'Cinq champs : minute, heure, jour du mois, mois, jour de la semaine (heure de la machine).',
+    closed: 'Escouade fermé à l’heure dite',
+    catchUp: 'Lancer au retour d’Escouade, une seule fois même si plusieurs échéances ont été manquées',
+    neverTwice: 'Jamais deux à la fois : si la précédente tourne encore, l’échéance passe son tour.',
+    upcoming: 'Prochaines :',
+    description: 'Consigne',
+    descriptionPlaceholder: 'Ce que l’agent fait à chaque échéance…',
+    submit: 'Programmer',
+    save: 'Enregistrer',
+  },
+  card: {
+    mark: '⏱ programmée',
+    markTitle: 'Créé par la tâche programmée « {title} »',
+    markGone: 'Créé par une tâche programmée supprimée depuis',
+  },
+} as const satisfies Tree;

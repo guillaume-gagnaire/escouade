@@ -421,6 +421,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.agents = Object.fromEntries((over.agents ?? []).map((a) => [a.id, a]));
   app.attention = {};
   app.tickets = Object.fromEntries((over.tickets ?? []).map((t) => [t.id, t]));
+  app.scheduled = [];
   app.board = {};
   app.prReviews = {};
   app.prReviewOpen = {};

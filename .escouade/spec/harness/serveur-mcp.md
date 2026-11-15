@@ -2,7 +2,7 @@
 title: "Serveur MCP"
 subject: "Harness"
 sources: ["docs/SPEC.md","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","docs/security/audit-2026-11/rapport.md (branche ticket/esc-418, fiche SEC-03)"]
-tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422"]
+tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422","ESC-448"]
 decisions: [153]
 compared: null
 ---
@@ -273,3 +273,15 @@ Après les garde-fous de *Jetons et garde-fous* (`Host`, `Origin`, jeton, chemin
 - toute requête de plus de 32 Mio, déclarée ou non → 413. Le « 32 Mio au plus » des images et fichiers ci-dessus ne vaut donc que pour ces deux outils.
 
 Un corps qui n'est pas du JSON est laissé à la bibliothèque, sous le même plafond.
+
+## Les tâches programmées (ESC-448)
+
+Cinq outils gèrent les tâches programmées d'un projet comme leur section de la barre latérale (voir *Tâches programmées*), pour l'Overseer et le chef d'escouade. Une tâche se nomme dans son projet (`project`, puis `task` : son id ou son titre, casse ignorée ; un titre porté par plusieurs tâches demande l'id). Ils suivent les règles des tickets : `resolve::project` et `may_act_on`, donc un projet privé n'est trouvé que par ses propres agents, mot pour mot comme un nom que rien ne porte.
+
+- `list_scheduled_tasks` (lecture seule) : id, titre, consigne, critères, `rhythm` (`daily`, `weekly` avec `days` 1 = lundi à 7 = dimanche, `monthly` avec `day`, à `time` HH:MM ; ou `cron`), `cron` (l'expression suivie), `catchUp`, `paused`, `next` (prochaine échéance, RFC 3339 dans l'heure de la machine, `null` en pause), `lastTicket` (la clé du ticket de sa dernière exécution) et `running` (ce ticket encore « À faire » ou « En cours »), `lastRunAt`, `lastNote`, `account` (nom, ou `auto`), `model`, `effort`.
+- `create_scheduled_task` : `project`, `title` (requis), `rhythm` et ses `days`, `day`, `time`, `cron`, `description` (terminée par « Créé par <auteur> via Escouade »), `criteria`, `catchUp` (vrai par défaut), `account`, `model`, `effort` (contrôlés comme ceux de `create_ticket`). Refusé, sans rien créer, pour un rythme absent, sans jour, une heure illisible, une expression qui n'a pas cinq champs ou ne se lit pas, un rythme qui ne tombe jamais.
+- `update_scheduled_task` : ce qui est donné change ; un nouveau rythme compte à partir de maintenant.
+- `pause_scheduled_task` : `paused` (vrai par défaut) met en pause ; faux reprend à la prochaine échéance.
+- `delete_scheduled_task` (destructif) : la tâche part, les tickets qu'elle a créés restent. Nommé pour ce qu'il fait, comme `delete_ticket`.
+
+Chacun répond la tâche comme `list_scheduled_tasks` (`delete_scheduled_task` : `id`, `title`, `deleted`).

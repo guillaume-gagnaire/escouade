@@ -152,6 +152,18 @@ Avec ces outils, Claude conduit un ticket de bout en bout sans que tu ouvres la 
 
 Chacun suit les règles du bouton de la fenêtre et les garde-fous ci-dessous : un agent d’Escouade ne valide ni ne renvoie son propre ticket, et n’agit que dans les projets qu’il voit.
 
+### Les tâches programmées
+
+Les [tâches programmées](board#les-taches-programmees) d’un projet se gèrent comme dans leur section de la barre latérale. Une tâche se nomme dans son projet, par son id ou son titre. Ces outils suivent les règles des tickets : un agent d’Escouade agit là où il voit, et un projet privé n’est trouvé que par ses propres agents.
+
+| Outil | Arguments | Ce qu’il fait |
+|---|---|---|
+| `list_scheduled_tasks` | `project` | Les tâches du projet : id, titre, consigne, critères, rythme (`rhythm` : `daily`, `weekly` avec `days`, `monthly` avec `day`, à `time` ; ou `cron`), l’expression cron qu’elle suit, `catchUp`, `paused`, la prochaine échéance (`next`, heure de la machine), le ticket de sa dernière exécution (`lastTicket`) et s’il tourne encore (`running`), `lastNote`, le compte, le modèle et l’effort. |
+| `create_scheduled_task` | `project`, `title`, `rhythm`, `days`, `day`, `time`, `cron`, `description`, `criteria`, `catchUp`, `account`, `model`, `effort` | Crée une tâche ; sa première échéance est la prochaine. `catchUp` est vrai par défaut. Refusé pour un rythme qui n’en est pas un ou qui ne tombe jamais. |
+| `update_scheduled_task` | `project`, `task`, et au choix les champs de `create_scheduled_task` | Change ce qui est donné ; un nouveau rythme compte à partir de maintenant. |
+| `pause_scheduled_task` | `project`, `task`, `paused` (vrai par défaut) | Met en pause, ou reprend à la prochaine échéance. |
+| `delete_scheduled_task` | `project`, `task` | Supprime la tâche ; les tickets qu’elle a créés restent. Irréversible. |
+
 ### Les sous-agents et les tâches de fond d’un agent
 
 Un agent « Terminé » peut avoir encore du travail qui tourne : `list_agents` et `get_agent_summary` comptent ses sous-agents en cours (`subagentsRunning`) et ses tâches de fond en cours (`backgroundTasksRunning`, le « N en fond » de sa carte). Quand l’un des deux n’est pas nul, `list_background_work` dit lesquels, `get_background_output` lit la fin de la sortie d’une commande ou le rapport d’un sous-agent, puis `stop_background_work` arrête ce qui ne doit pas continuer, ou `message_subagent` donne une consigne à un sous-agent en arrière-plan. C’est ce que tu fais dans la fenêtre avec [les sous-agents](plan#les-sous-agents) et [les tâches de fond](plan#les-taches-de-fond) d’un agent, avec les mêmes bornes et les mêmes refus. La sortie d’une commande peut être longue : `bytes` (64 Kio au plus) en demande moins que la fenêtre, pour que la réponse tienne dans ce que Claude Code accepte d’un outil (environ 25 000 jetons). Lire n’est jamais agir : `get_background_output` ne change rien, même pour le rapport d’un sous-agent en vue Claude Code.

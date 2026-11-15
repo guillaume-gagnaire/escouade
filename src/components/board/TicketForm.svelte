@@ -10,7 +10,8 @@
   import { keyLabel, primaryKey } from '../../lib/platform';
   import { ariaEnter } from '../../lib/shortcuts';
   import { app, type TicketFormDraft } from '../../lib/state.svelte';
-  import type { EngineId, Ticket, TicketDraft } from '../../lib/types';
+  import type { EngineId, Rhythm, RhythmKind, ScheduledDraft, ScheduledTask, Ticket, TicketDraft } from '../../lib/types';
+  import { cronOf, dateLabel, defaultRhythm, parseTime, timeValue, weekday } from '../../lib/scheduled';
   import { choosesEngine, engineName, engineOptions } from '../../lib/engines';
   import { EFFORTS, modelLabel } from '../../lib/models';
   import {
@@ -48,23 +49,36 @@
     projectId,
     onsubmit,
     resume,
+    scheduling = false,
+    task,
   }: {
     ticket?: Ticket;
     projectId: string;
     onsubmit: (d: TicketDraft) => boolean | void | Promise<boolean | void>;
     resume?: TicketFormDraft;
+    /**
+     * « Programmer » (ESC-448): the form of a scheduled task, new or (`task`) edited. Its rhythm under its title, then the
+     * prompt and the rest of a ticket; no branch, no « Après », no files and no sharing: its tickets are made at each due
+     * time, on this machine alone.
+     */
+    scheduling?: boolean;
+    task?: ScheduledTask;
   } = $props();
 
   // What the form opened with, to tell whether leaving it loses anything.
   const start = untrack(() => ({
-    title: ticket?.title ?? '',
-    description: ticket?.description ?? '',
-    criteria: ticket?.criteria.map((c) => c.text).join('\n') ?? '',
-    maxLoops: ticket?.maxLoops ?? 5,
+    title: ticket?.title ?? task?.title ?? '',
+    description: ticket?.description ?? task?.description ?? '',
+    criteria: ticket?.criteria.map((c) => c.text).join('\n') ?? task?.criteria.join('\n') ?? '',
+    maxLoops: ticket?.maxLoops ?? (task?.maxLoops || 5),
     after: ticket?.after ?? [],
     branch: ticket?.branch ?? '',
-    engine: ticket?.engine ?? null,
-    options: { account: ticket?.account ?? '', model: ticket?.model ?? '', effort: ticket?.effort ?? '' },
+    engine: ticket?.engine ?? task?.engine ?? null,
+    options: {
+      account: ticket?.account ?? task?.account ?? '',
+      model: ticket?.model ?? task?.model ?? '',
+      effort: ticket?.effort ?? task?.effort ?? '',
+    },
     images: ticket?.images.map((i) => i.file) ?? [],
     files: ticket?.files.map((f) => f.file) ?? [],
   }));
@@ -153,8 +167,88 @@
       });
     },
   };
+  /** The rhythm of a scheduled task (« Programmer »), and its time as its field holds it. */
+  const startRhythm: Rhythm = untrack(() => (task ? { ...task.rhythm, days: [...task.rhythm.days] } : defaultRhythm()));
+  let rhythm = $state<Rhythm>(untrack(() => (resume?.rhythm ? { ...resume.rhythm } : { ...startRhythm, days: [...startRhythm.days] })));
+  let time = $state(untrack(() => resume?.time ?? timeValue(startRhythm)));
+  /** « Lancer au retour d'Escouade, une seule fois »: on for a new task. */
+  const startCatchUp = untrack(() => task?.catchUp ?? true);
+  let catchUp = $state(untrack(() => resume?.catchUp ?? startCatchUp));
+  /** The next due times of the rhythm (the backend's, summer time included), or why it is refused. */
+  let upcoming = $state<number[]>([]);
+  let rhythmError = $state<string | null>(null);
+  /** The rhythm as the form gives it: its time from its field. */
+  const rhythmShown = $derived.by(() => {
+    const at = parseTime(time);
+    return { ...rhythm, days: [...rhythm.days], hour: at?.hour ?? rhythm.hour, minute: at?.minute ?? rhythm.minute };
+  });
+  // Asked again a moment after each change of the rhythm: a cron typed reads once its typing pauses.
+  $effect(() => {
+    if (!scheduling) return;
+    const r = rhythmShown;
+    if (r.kind !== 'cron' && !parseTime(time)) {
+      upcoming = [];
+      rhythmError = null;
+      return;
+    }
+    let gone = false;
+    const timer = setTimeout(() => {
+      api
+        .scheduledPreview(r)
+        .then((next) => {
+          if (gone) return;
+          upcoming = next;
+          rhythmError = null;
+        })
+        .catch((e) => {
+          if (gone) return;
+          upcoming = [];
+          rhythmError = e instanceof Error ? e.message : String(e);
+        });
+    }, 150);
+    return () => {
+      gone = true;
+      clearTimeout(timer);
+    };
+  });
+
+  function setKind(kind: RhythmKind) {
+    rhythm.kind = kind;
+    if (kind === 'cron' && !rhythm.cron.trim()) rhythm.cron = cronOf({ ...rhythmShown, kind: 'weekly' });
+  }
+
+  function toggleDay(d: number) {
+    rhythm.days = rhythm.days.includes(d) ? rhythm.days.filter((x) => x !== d) : [...rhythm.days, d].sort((a, b) => a - b);
+  }
+
+  /** Saves the scheduled task: true once it is. */
+  async function saveTask(d: TicketDraft): Promise<boolean> {
+    const draft: ScheduledDraft = {
+      title: d.title,
+      description: d.description,
+      criteria: d.criteria,
+      maxLoops: d.maxLoops,
+      engine: d.engine ?? null,
+      account: d.account,
+      model: d.model,
+      effort: d.effort,
+      rhythm: rhythmShown,
+      catchUp,
+    };
+    try {
+      if (task) await api.scheduledUpdate(task.id, draft);
+      else await api.scheduledCreate(projectId, draft);
+      return true;
+    } catch (e) {
+      failed(e);
+      return false;
+    }
+  }
+
   let busy = $state(false);
-  const ready = $derived(title.trim().length > 0 && !busy && !reading && !copying);
+  const ready = $derived(
+    title.trim().length > 0 && !busy && !reading && !copying && (!scheduling || (!rhythmError && upcoming.length > 0)),
+  );
   const changed = $derived(
     title !== start.title ||
       description !== start.description ||
@@ -169,7 +263,8 @@
       after.some((id) => !start.after.includes(id)) ||
       imagesChanged(images, held) ||
       filesChanged(files, start.files) ||
-      shared !== sharedStart,
+      shared !== sharedStart ||
+      (scheduling && (JSON.stringify(rhythmShown) !== JSON.stringify(startRhythm) || catchUp !== startCatchUp)),
   );
   /** What it may come after: the other tickets of the project not done yet, oldest first. */
   const candidates = $derived(
@@ -190,8 +285,10 @@
    */
   const self = untrack(() => app.modal);
   onDestroy(() => {
-    if (self?.kind === 'ticket')
+    if (self?.kind === 'ticket' || self?.kind === 'schedule')
       self.resume = {
+        // A scheduled task's rhythm too (« Programmer »).
+        ...(scheduling ? { rhythm: { ...rhythm, days: [...rhythm.days] }, time, catchUp } : {}),
         title,
         description,
         criteria,
@@ -233,7 +330,8 @@
    */
   onMount(() => {
     const dialog = form?.closest<HTMLElement>('[role="dialog"]');
-    if (!dialog) return;
+    // A scheduled task has no files: nothing is pasted or dropped in its form.
+    if (!dialog || scheduling) return;
     const over = (e: DragEvent) => {
       if (!e.dataTransfer?.types.includes('Files')) return;
       e.preventDefault();
@@ -607,7 +705,7 @@
     app.markAnswered(self);
     let saved: boolean | void = false;
     try {
-      saved = await onsubmit({
+      saved = await (scheduling ? saveTask : onsubmit)({
         title: title.trim(),
         description: description.trim(),
         criteria: criteria
@@ -694,9 +792,18 @@
   </div>
 {/snippet}
 
-<Modal title={ticket ? t('board.form.editTitle', { key: ticket.key }) : t('board.form.newTitle')} width={760} tall onclose={leave}>
+<Modal
+  title={scheduling
+    ? t(task ? 'scheduled.form.editTitle' : 'scheduled.form.newTitle')
+    : ticket
+      ? t('board.form.editTitle', { key: ticket.key })
+      : t('board.form.newTitle')}
+  width={760}
+  tall
+  onclose={leave}
+>
   <div class="form" class:short class:drag={dragOver} role="presentation" bind:this={form} onkeydown={chord}>
-    <div class="fld">
+    <div class="fld" class:row={scheduling}>
       <label for="{uid}-title">{t('board.form.title')}</label>
       <!-- svelte-ignore a11y_autofocus -->
       <input
@@ -707,18 +814,78 @@
         onkeydown={(e) => e.key === 'Enter' && !e.isComposing && !e.repeat && !primaryKey(e) && submit()}
       />
     </div>
+    {#if scheduling}
+      <!-- « Programmer » (ESC-448, programmees-formulaire.png): its rhythm, simple or in cron, at once under its title; what
+           Escouade closed at the time does; the next due times. The prompt and the rest of a ticket come under it. -->
+      <div class="sched" data-schedule>
+        <span class="lb" id="{uid}-kind">{t('scheduled.form.rhythm')}</span>
+        <div class="segmented kinds" role="group" aria-labelledby="{uid}-kind">
+          {#each ['daily', 'weekly', 'monthly', 'cron'] as const as k (k)}
+            <button aria-pressed={rhythm.kind === k} onclick={() => setKind(k)}>{t(`scheduled.form.kind.${k}`)}</button>
+          {/each}
+        </div>
+        {#if rhythm.kind === 'weekly'}
+          <span class="lb" id="{uid}-days">{t('scheduled.form.days')}</span>
+          <div class="days" role="group" aria-labelledby="{uid}-days">
+            {#each [1, 2, 3, 4, 5, 6, 7] as d (d)}
+              <button class="day" aria-pressed={rhythm.days.includes(d)} aria-label={weekday(d)} onclick={() => toggleDay(d)}
+                >{weekday(d, 'narrow')}</button
+              >
+            {/each}
+          </div>
+        {:else if rhythm.kind === 'monthly'}
+          <label class="lb" for="{uid}-day">{t('scheduled.form.day')}</label>
+          <input id="{uid}-day" class="field num" type="number" min="1" max="31" bind:value={rhythm.day} />
+        {/if}
+        {#if rhythm.kind === 'cron'}
+          <label class="lb" for="{uid}-cron">{t('scheduled.form.cron')}</label>
+          <div class="cron">
+            <input
+              id="{uid}-cron"
+              class="field mono"
+              spellcheck="false"
+              autocomplete="off"
+              placeholder="0 7 * * 1"
+              aria-describedby="{uid}-cron-help"
+              bind:value={rhythm.cron}
+            />
+            <span class="help" id="{uid}-cron-help">{t('scheduled.form.cronHelp')}</span>
+          </div>
+        {:else}
+          <label class="lb" for="{uid}-time">{t('scheduled.form.time')}</label>
+          <input id="{uid}-time" class="field time" type="time" bind:value={time} />
+        {/if}
+        <span class="lb" id="{uid}-closed">{t('scheduled.form.closed')}</span>
+        <label class="catch"
+          ><input type="checkbox" aria-describedby="{uid}-closed" bind:checked={catchUp} /><span>{t('scheduled.form.catchUp')}</span></label
+        >
+        <span></span>
+        <div class="help next" role="status">
+          <span>{t('scheduled.form.neverTwice')}</span>
+          {#if rhythmError}
+            <span class="refusal">{rhythmError}</span>
+          {:else if upcoming.length}
+            <span data-upcoming
+              >{t('scheduled.form.upcoming')}
+              {#each upcoming as at, i (at)}{#if i > 0}<span class="sep">{' · '}</span>{/if}{#if i === 0}<b>{dateLabel(at)}</b
+                  >{:else}{dateLabel(at)}{/if}{/each}<span class="sep">{' · '}</span><code>{cronOf(rhythmShown)}</code></span
+            >
+          {/if}
+        </div>
+      </div>
+    {/if}
     <!-- The description takes what the window leaves free: a large field to write in, whatever its height; a long text
          scrolls in it, never over the fields under it (ESC-189). -->
     <div class="fld desc">
       <div class="lab-row">
-        <label for="{uid}-description">{t('board.form.description')}</label>
+        <label for="{uid}-description">{t(scheduling ? 'scheduled.form.description' : 'board.form.description')}</label>
         <MicButton target={dictated} below />
       </div>
       <textarea
         bind:this={descriptionField}
         id="{uid}-description"
         class="field description"
-        placeholder={t('board.form.descriptionPlaceholder')}
+        placeholder={t(scheduling ? 'scheduled.form.descriptionPlaceholder' : 'board.form.descriptionPlaceholder')}
         bind:value={description}></textarea>
       <input
         bind:this={fileInput}
@@ -732,44 +899,46 @@
           e.currentTarget.value = '';
         }}
       />
-      <!-- Its images and its files in one row of chips, as the message's, and what attaches one at its end. -->
-      <div class="atts">
-        {#if images.length}
-          <ul class="imgs" bind:this={imageList} aria-label={t('board.form.images.label')}>
-            {#each images as img, i (i)}
-              {@const label =
-                images.length > 1 ? t('board.form.images.ranked', { name: img.name, n: i + 1, total: images.length }) : img.name}
-              <!-- Screenshots are all named image.png: with several images, each has its rank in its label. -->
-              <li class="att img" use:tip={{ text: label, cut: true }}>
-                {#if img.url}
-                  <img class="th" src={img.url} alt={label} />
-                {:else}
-                  <span class="th wait" role="img" aria-label={t('board.form.images.loading', { name: label })}></span>
-                {/if}
-                <span class="nm2"
-                  ><b>{img.name}</b><span
-                    >{img.size ? t('board.form.images.kindSize', { size: fSize(img.size) }) : t('board.form.images.kind')}</span
-                  ></span
-                >
-                <button class="x rm" aria-label={t('board.form.images.remove', { name: label })} onclick={() => removeImage(i)}
-                  ><Icon name="close" size={14} /></button
-                >
-              </li>
-            {/each}
-          </ul>
-        {/if}
-        {#if files.length}
-          <ul class="files" bind:this={fileList} aria-label={t('board.form.files.label')}>
-            {#each files as f, i (f)}
-              <li><AttachmentChip attachment={f} onremove={() => removeFile(i)} /></li>
-            {/each}
-          </ul>
-        {/if}
-        <button class="btn attach" use:tip={t('board.form.attachTitle')} onclick={() => fileInput?.click()}
-          ><Icon name="clip" size={14} />{t('board.form.attach')}</button
-        >
-      </div>
-      {#if !short}<span class="help">{t('board.form.attachHelp')}</span>{/if}
+      {#if !scheduling}
+        <!-- Its images and its files in one row of chips, as the message's, and what attaches one at its end. -->
+        <div class="atts">
+          {#if images.length}
+            <ul class="imgs" bind:this={imageList} aria-label={t('board.form.images.label')}>
+              {#each images as img, i (i)}
+                {@const label =
+                  images.length > 1 ? t('board.form.images.ranked', { name: img.name, n: i + 1, total: images.length }) : img.name}
+                <!-- Screenshots are all named image.png: with several images, each has its rank in its label. -->
+                <li class="att img" use:tip={{ text: label, cut: true }}>
+                  {#if img.url}
+                    <img class="th" src={img.url} alt={label} />
+                  {:else}
+                    <span class="th wait" role="img" aria-label={t('board.form.images.loading', { name: label })}></span>
+                  {/if}
+                  <span class="nm2"
+                    ><b>{img.name}</b><span
+                      >{img.size ? t('board.form.images.kindSize', { size: fSize(img.size) }) : t('board.form.images.kind')}</span
+                    ></span
+                  >
+                  <button class="x rm" aria-label={t('board.form.images.remove', { name: label })} onclick={() => removeImage(i)}
+                    ><Icon name="close" size={14} /></button
+                  >
+                </li>
+              {/each}
+            </ul>
+          {/if}
+          {#if files.length}
+            <ul class="files" bind:this={fileList} aria-label={t('board.form.files.label')}>
+              {#each files as f, i (f)}
+                <li><AttachmentChip attachment={f} onremove={() => removeFile(i)} /></li>
+              {/each}
+            </ul>
+          {/if}
+          <button class="btn attach" use:tip={t('board.form.attachTitle')} onclick={() => fileInput?.click()}
+            ><Icon name="clip" size={14} />{t('board.form.attach')}</button
+          >
+        </div>
+        {#if !short}<span class="help">{t('board.form.attachHelp')}</span>{/if}
+      {/if}
     </div>
     <div class="fld">
       <!-- The loops beside the criteria: how many rounds its agent gets to meet them. -->
@@ -806,78 +975,80 @@
           {#if !short}<span class="help">{t('board.form.engineHelp', { engine: engineName(projectEngine) })}</span>{/if}
         </div>
       {/if}
-      <div class="fld" role="group" aria-label={t('branches.ticket.branch')}>
-        <span class="lb" id="{uid}-branch">{t('branches.ticket.branch')}</span>
-        <button
-          class="select pick"
-          bind:this={branchButton}
-          aria-haspopup="menu"
-          aria-labelledby="{uid}-branch {uid}-branch-value"
-          use:tip={branch || own}
-          onclick={branchMenu}
-        >
-          <Icon name="branch" size={14} /><b class="mono" id="{uid}-branch-value">{branch || own}</b><Icon name="down" size={14} />
-        </button>
-      </div>
-      {#if candidates.length}
-        <!-- « Après », a menu's button as in the preview: the tickets checked, the list and its search in its popover. -->
-        <div class="fld after" role="group" aria-label={t('board.form.after')}>
-          <span class="lb" id="{uid}-after">{t('board.form.after')}</span>
+      {#if !scheduling}
+        <div class="fld" role="group" aria-label={t('branches.ticket.branch')}>
+          <span class="lb" id="{uid}-branch">{t('branches.ticket.branch')}</span>
           <button
             class="select pick"
-            bind:this={afterButton}
-            aria-haspopup="dialog"
-            aria-expanded={afterOpen}
-            aria-labelledby="{uid}-after {uid}-after-value"
-            use:tip={afterShown}
-            onclick={() => (afterOpen ? closeAfter() : openAfter())}
+            bind:this={branchButton}
+            aria-haspopup="menu"
+            aria-labelledby="{uid}-branch {uid}-branch-value"
+            use:tip={branch || own}
+            onclick={branchMenu}
           >
-            <b id="{uid}-after-value">{afterShown}</b><Icon name="down" size={14} />
+            <Icon name="branch" size={14} /><b class="mono" id="{uid}-branch-value">{branch || own}</b><Icon name="down" size={14} />
           </button>
-          {#if afterOpen}
-            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-            <div
-              class="pop"
-              bind:this={afterPop}
-              role="dialog"
-              tabindex="-1"
-              aria-label={t('board.form.after')}
-              style:left="{popAt.left}px"
-              style:top={popAt.top === null ? undefined : `${popAt.top}px`}
-              style:bottom={popAt.bottom === null ? undefined : `${popAt.bottom}px`}
-              style:width="{popAt.width}px"
-              onkeydown={afterKey}
-            >
-              <!-- svelte-ignore a11y_autofocus -->
-              <input
-                class="field search"
-                role="searchbox"
-                placeholder={t('board.form.searchKey')}
-                aria-label={t('board.form.searchKey')}
-                spellcheck="false"
-                autocomplete="off"
-                autofocus
-                bind:value={query}
-              />
-              {#if shown.length}
-                <ul class="deps">
-                  {#each shown as x (x.id)}
-                    <li>
-                      <label
-                        ><input type="checkbox" checked={after.includes(x.id)} onchange={(e) => toggle(x, e.currentTarget)} /><span
-                          class="key">{x.key}</span
-                        > <span class="name" use:tip={{ text: x.title, cut: true }}>{x.title}</span></label
-                      >
-                    </li>
-                  {/each}
-                </ul>
-              {:else}
-                <span class="help">{t('board.form.noMatch')}</span>
-              {/if}
-              {#if refusal}<span class="refusal" role="alert">{refusal}</span>{/if}
-            </div>
-          {/if}
         </div>
+        {#if candidates.length}
+          <!-- « Après », a menu's button as in the preview: the tickets checked, the list and its search in its popover. -->
+          <div class="fld after" role="group" aria-label={t('board.form.after')}>
+            <span class="lb" id="{uid}-after">{t('board.form.after')}</span>
+            <button
+              class="select pick"
+              bind:this={afterButton}
+              aria-haspopup="dialog"
+              aria-expanded={afterOpen}
+              aria-labelledby="{uid}-after {uid}-after-value"
+              use:tip={afterShown}
+              onclick={() => (afterOpen ? closeAfter() : openAfter())}
+            >
+              <b id="{uid}-after-value">{afterShown}</b><Icon name="down" size={14} />
+            </button>
+            {#if afterOpen}
+              <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+              <div
+                class="pop"
+                bind:this={afterPop}
+                role="dialog"
+                tabindex="-1"
+                aria-label={t('board.form.after')}
+                style:left="{popAt.left}px"
+                style:top={popAt.top === null ? undefined : `${popAt.top}px`}
+                style:bottom={popAt.bottom === null ? undefined : `${popAt.bottom}px`}
+                style:width="{popAt.width}px"
+                onkeydown={afterKey}
+              >
+                <!-- svelte-ignore a11y_autofocus -->
+                <input
+                  class="field search"
+                  role="searchbox"
+                  placeholder={t('board.form.searchKey')}
+                  aria-label={t('board.form.searchKey')}
+                  spellcheck="false"
+                  autocomplete="off"
+                  autofocus
+                  bind:value={query}
+                />
+                {#if shown.length}
+                  <ul class="deps">
+                    {#each shown as x (x.id)}
+                      <li>
+                        <label
+                          ><input type="checkbox" checked={after.includes(x.id)} onchange={(e) => toggle(x, e.currentTarget)} /><span
+                            class="key">{x.key}</span
+                          > <span class="name" use:tip={{ text: x.title, cut: true }}>{x.title}</span></label
+                        >
+                      </li>
+                    {/each}
+                  </ul>
+                {:else}
+                  <span class="help">{t('board.form.noMatch')}</span>
+                {/if}
+                {#if refusal}<span class="refusal" role="alert">{refusal}</span>{/if}
+              </div>
+            {/if}
+          </div>
+        {/if}
       {/if}
       <!-- The account, the model and the effort of its agents (ESC-153), on « Auto » unless set. -->
       {@render select('account', t('board.form.options.account'), accountShown, (el) => (accountButton = el), accountMenu)}
@@ -898,7 +1069,9 @@
   {#snippet footer()}
     <!-- Shared with the team (ESC-190, choice 115), in the footer: the body keeps all its height for the description. What
          its file is, what goes with it and who commits it, in its tooltip. -->
-    {#if theirs && ticket?.shared}
+    {#if scheduling}
+      <!-- A scheduled task is this machine's alone: never shared (docs/OVERSEER.md). -->
+    {:else if theirs && ticket?.shared}
       <span class="share-foot" use:tip={t('share.form.theirs', { name: authorName(ticket) })}
         ><Icon name="team" size={14} /><span class="sr">{t('share.form.theirs', { name: authorName(ticket) })}</span><span
           aria-hidden="true">{t('share.card.by', { name: authorName(ticket) })}</span
@@ -914,7 +1087,7 @@
     <span class="hint">{hint[0]}<kbd>{keyLabel('Ctrl+Enter')}</kbd>{hint[1]}</span>
     <button class="btn" onclick={leave}>{t('common.cancel')}</button>
     <button class="btn primary" disabled={!ready} aria-keyshortcuts={ariaEnter()} onclick={submit}
-      >{ticket ? t('common.save') : t('common.add')}</button
+      >{scheduling ? t(task ? 'scheduled.form.save' : 'scheduled.form.submit') : ticket ? t('common.save') : t('common.add')}</button
     >
   {/snippet}
 </Modal>
@@ -1238,5 +1411,95 @@
     align-self: center;
     color: var(--muted);
     font-size: 12px;
+  }
+
+  /* « Programmer » (ESC-448, programmees-formulaire.png): the labels on the left, the fields on the right. */
+  .fld.row {
+    grid-template-columns: 200px minmax(0, 1fr);
+    align-items: center;
+    gap: 6px 16px;
+  }
+  .sched {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px 16px;
+  }
+  .sched > .lb {
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .kinds {
+    justify-self: stretch;
+  }
+  .kinds button {
+    flex: 1 1 0;
+  }
+  .days {
+    display: flex;
+    gap: 6px;
+  }
+  .day {
+    width: 34px;
+    height: 32px;
+    border: 1px solid var(--line-2);
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .day:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+  .day[aria-pressed='true'] {
+    border-color: color-mix(in oklch, var(--p) 70%, transparent);
+    background: color-mix(in oklch, var(--p) 18%, transparent);
+    color: var(--text);
+  }
+  .sched .num,
+  .sched .time {
+    width: 120px;
+    height: 30px;
+  }
+  .sched .mono {
+    height: 30px;
+    font-family: var(--mono);
+  }
+  .cron {
+    display: grid;
+    gap: 4px;
+  }
+  .catch {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    color: var(--soft);
+    font-size: 13px;
+    line-height: 1.5;
+    cursor: pointer;
+  }
+  .catch input {
+    flex: none;
+    margin-top: 3px;
+  }
+  .next {
+    display: grid;
+    gap: 2px;
+    line-height: 1.6;
+  }
+  .next b {
+    color: var(--text);
+  }
+  .next code {
+    font: 12px var(--mono);
+    color: var(--soft);
+  }
+  .next .refusal {
+    color: var(--del);
+  }
+  .short .sched {
+    gap: 8px 16px;
   }
 </style>

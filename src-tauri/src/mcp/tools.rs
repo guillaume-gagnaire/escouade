@@ -46,6 +46,7 @@ use super::images;
 use super::memory;
 use super::prs;
 use super::read;
+use super::scheduled;
 use super::wait;
 use super::workflow;
 use super::Caller;
@@ -1135,6 +1136,106 @@ impl<R: Runtime> Tools<R> {
         let asked = summary(&[("ticket", Some(&args.ticket))]);
         let result = act::dismiss_block(&ctx.core, &ctx.caller, args);
         ctx.reply("dismiss_block", &asked, result)
+    }
+
+    #[tool(
+        description = "List a project's scheduled tasks (Escouade's « Programmées »): tickets of an agent that come back at fixed times, on this machine alone. For each: its id, title, description (the prompt its tickets get), criteria, rhythm (daily, weekly with days 1 = Monday to 7 = Sunday, monthly with day, at time HH:MM; or cron with its expression), cron (the expression it runs by), catchUp (whether a due time missed while Escouade was closed runs at its return, once), paused, next (its next due time in the machine's time, null while paused), lastTicket (the key of the ticket its last run made) and running (that ticket still To do or In progress: the next due time then passes its turn), lastRunAt, lastNote (why its last due time made no ticket), and the account, model and effort of its tickets' agents.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn list_scheduled_tasks(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<ListScheduledTasksArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[("project", Some(&args.project))]);
+        let result = scheduled::list(&ctx.core, &ctx.caller, args);
+        ctx.reply("list_scheduled_tasks", &asked, result)
+    }
+
+    #[tool(
+        description = "Create a scheduled task in a project: at each of its due times, Escouade makes a ticket of it (its title, its description as the prompt, its criteria, account, model and effort) and launches it; the ticket follows the Kanban as one launched by hand, within its places and quotas, marked as scheduled. Give its rhythm: daily (time), weekly (days, time), monthly (day, time) or cron (a five-field expression), in the machine's time. Never twice: a due time passes its turn while the ticket of the run before is still To do or In progress, and several due times missed while Escouade was closed give one run at its return (catchUp, true by default) or none (false: it waits for the next). Its first due time is the next one from now. It stays on this machine, never shared through the repository. Answers the task as list_scheduled_tasks does.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn create_scheduled_task(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<CreateScheduledTaskArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("title", Some(&args.title)),
+            ("cron", args.fields.cron.as_deref()),
+            ("time", args.fields.time.as_deref()),
+        ]);
+        let result = scheduled::create(&ctx.core, &ctx.caller, args);
+        ctx.reply("create_scheduled_task", &asked, result)
+    }
+
+    #[tool(
+        description = "Change a project's scheduled task, named by its id or its title: what you give changes (title, description, criteria, rhythm and its days, day, time or cron, catchUp, account, model, effort), the rest stays. A new rhythm counts from now: none of its past due times runs. The tickets it made already stay as they are. Answers the task as list_scheduled_tasks does.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn update_scheduled_task(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<UpdateScheduledTaskArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("task", Some(&args.task)),
+            ("title", args.title.as_deref()),
+        ]);
+        let result = scheduled::update(&ctx.core, &ctx.caller, args);
+        ctx.reply("update_scheduled_task", &asked, result)
+    }
+
+    #[tool(
+        description = "Pause a project's scheduled task (paused true, the default), named by its id or its title: its due times then pass without a ticket; or resume it (paused false): it runs again from its next due time, none of those of the pause. Answers the task as list_scheduled_tasks does.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            open_world_hint = false
+        )
+    )]
+    async fn pause_scheduled_task(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<PauseScheduledTaskArgs>,
+    ) -> CallToolResult {
+        let paused = args.paused.unwrap_or(true).to_string();
+        let asked = summary(&[
+            ("project", Some(&args.project)),
+            ("task", Some(&args.task)),
+            ("paused", Some(&paused)),
+        ]);
+        let result = scheduled::pause(&ctx.core, &ctx.caller, args);
+        ctx.reply("pause_scheduled_task", &asked, result)
+    }
+
+    #[tool(
+        description = "Delete a project's scheduled task, named by its id or its title: it makes no ticket any more, for good. The tickets it made stay on the Kanban. Answers its id, title and deleted (true).",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn delete_scheduled_task(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<DeleteScheduledTaskArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[("project", Some(&args.project)), ("task", Some(&args.task))]);
+        let result = scheduled::delete(&ctx.core, &ctx.caller, args);
+        ctx.reply("delete_scheduled_task", &asked, result)
     }
 
     #[tool(

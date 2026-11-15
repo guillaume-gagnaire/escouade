@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Scheduled tasks: an agent’s ticket that comes back at fixed times (every day, every week, every month or in cron), project by project, from the new “Scheduled” section of the sidebar. Escouade makes and launches it at its due time, never two at once, once at its return if it was closed.
 - A device managed by an IT department can impose settings through its policies (registry, MDM profile, `/etc`): telemetry, the beta channel, Bypass mode, the modes and harnesses allowed, Remote Control. An imposed setting is greyed with a padlock that says who imposes it, and Escouade refuses it everywhere, the window, the agents and `.escouade.yml` included.
 - An agent that reads a GitHub pull request now gets all of it: its description, its commits, its files and its discussion threads with their answers and their state. It is the first stone of the pull request view in Escouade.
 

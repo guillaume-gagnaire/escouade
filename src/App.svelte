@@ -377,6 +377,9 @@
   <MergedBranchesModal projectId={app.modal.projectId} repo={app.modal.repo ?? null} />
 {:else if app.modal?.kind === 'ticket'}
   <TicketForm projectId={app.modal.projectId} ticket={app.modal.ticket} onsubmit={app.modal.onSubmit} resume={app.modal.resume} />
+{:else if app.modal?.kind === 'schedule'}
+  <!-- « Programmer » (ESC-448): the ticket's form for a scheduled task; it saves the task itself. -->
+  <TicketForm projectId={app.modal.projectId} scheduling task={app.modal.task} onsubmit={() => false} resume={app.modal.resume} />
 {/if}
 
 {#if conversation.overlay}

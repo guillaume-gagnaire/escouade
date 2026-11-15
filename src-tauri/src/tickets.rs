@@ -382,11 +382,16 @@ pub struct TicketDraft {
     /// The pages and decisions it implements (« Planifier », ESC-262); None: as they are.
     pub pages: Option<Vec<String>>,
     pub decisions: Option<Vec<crate::docs::Ref>>,
+    /// The scheduled task it is made from at one of its due times (ESC-448): launched at once
+    /// (`forced`, the places and the quotas of the board holding it as one launched by hand).
+    /// Never from the window or a tool.
+    #[serde(skip)]
+    pub scheduled: Option<String>,
 }
 
 /// A field that is there, null or not: Some, its value (null: None); absent, it is None by its
 /// `default`.
-fn given<'de, D, T>(d: D) -> std::result::Result<Option<Option<T>>, D::Error>
+pub(crate) fn given<'de, D, T>(d: D) -> std::result::Result<Option<Option<T>>, D::Error>
 where
     D: serde::Deserializer<'de>,
     T: Deserialize<'de>,
@@ -612,6 +617,8 @@ impl<R: Runtime> Core<R> {
             effort: trimmed(d.effort.as_deref()),
             pages: d.pages.clone().unwrap_or_default(),
             decisions: d.decisions.clone().unwrap_or_default(),
+            forced: d.scheduled.is_some(),
+            scheduled: d.scheduled.clone(),
             ..Default::default()
         };
         let pushed = {
@@ -662,7 +669,7 @@ impl<R: Runtime> Core<R> {
     /// The account a ticket's form or a tool names (« Compte », ESC-153), trimmed: empty for
     /// « Auto » (and when none is named), else one its project may use on `engine`
     /// (`accounts::ticket_refusal` says why not).
-    fn ticket_account(
+    pub(crate) fn ticket_account(
         &self,
         project: &Project,
         engine: EngineId,

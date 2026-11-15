@@ -1,0 +1,58 @@
+import { defineZone } from '../types';
+
+// The scheduled tasks (ESC-448): their section of the sidebar, their form, the mark of their tickets.
+export default defineZone('scheduled', {
+  section: {
+    title: 'Scheduled',
+    add: 'Schedule a task',
+    none: 'No scheduled task: a review every Monday, a report every evening…',
+    pause: 'Pause “{title}”',
+    resume: 'Resume “{title}”',
+    paused: 'paused',
+    running: 'running ({key})',
+    never: 'never',
+    edit: 'Edit',
+    delete: 'Delete',
+    deleteTitle: 'Delete the scheduled task?',
+    deleteBody: '“{title}” will launch no more tickets. The tickets it made stay on the Kanban.',
+    openTicket: 'Open {key}',
+  },
+  rhythm: {
+    daily: 'Every day {time}',
+    weekly: 'Every {day} {time}',
+    weeklyMany: 'Every {days} {time}',
+    weekdays: 'Monday to Friday {time}',
+    monthly: 'On the {day} of the month {time}',
+    cron: 'Cron {cron}',
+  },
+  next: {
+    tonight: 'tonight',
+    today: 'today {time}',
+    tomorrow: 'tomorrow {time}',
+    on: '{date} {time}',
+  },
+  form: {
+    newTitle: 'New scheduled task',
+    editTitle: 'Edit the scheduled task',
+    rhythm: 'Rhythm',
+    kind: { daily: 'Every day', weekly: 'Every week', monthly: 'Every month', cron: 'Cron' },
+    days: 'Days',
+    day: 'Day of the month',
+    time: 'Time',
+    cron: 'Expression',
+    cronHelp: 'Five fields: minute, hour, day of the month, month, day of the week (the machine’s time).',
+    closed: 'Escouade closed at the time',
+    catchUp: 'Launch when Escouade is back, once even if several due times were missed',
+    neverTwice: 'Never two at once: while the previous one still runs, the due time passes its turn.',
+    upcoming: 'Next:',
+    description: 'Prompt',
+    descriptionPlaceholder: 'What the agent does at each due time…',
+    submit: 'Schedule',
+    save: 'Save',
+  },
+  card: {
+    mark: '⏱ scheduled',
+    markTitle: 'Made by the scheduled task “{title}”',
+    markGone: 'Made by a scheduled task deleted since',
+  },
+});

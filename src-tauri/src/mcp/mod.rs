@@ -50,6 +50,9 @@ mod remote_tests;
 #[cfg(test)]
 mod requests_tests;
 mod resolve;
+mod scheduled;
+#[cfg(test)]
+mod scheduled_tests;
 #[cfg(test)]
 mod tests;
 pub(crate) mod tools;

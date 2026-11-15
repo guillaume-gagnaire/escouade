@@ -76,6 +76,7 @@
   import { backTarget, forwardTargets } from '../lib/handover';
   import type { Agent, AgentFolder, AgentStatus, BranchInfo, Project } from '../lib/types';
   import RunsSection from './RunsSection.svelte';
+  import ScheduledSection from './ScheduledSection.svelte';
   import EngineMark from './EngineMark.svelte';
   import StatusDot from './StatusDot.svelte';
   import FoldTitle from './FoldTitle.svelte';
@@ -1182,6 +1183,10 @@
           {/if}
           <div class="a-meta">
             <EngineMark engine={a.engine} />
+            {#if ticket?.scheduled}
+              <!-- Its ticket was made by a scheduled task (ESC-448): « ⏱ programmée », as programmees-barre.png. -->
+              <span class="sched-mark" data-scheduled-mark>{t('scheduled.card.mark')}</span>
+            {/if}
             {#if ticket?.column === 'doing' || ticket?.column === 'review'}
               <span class="ticket-chip">{ticket.key}</span>
               {#if ticket.column === 'doing'}
@@ -1577,6 +1582,8 @@
       {/if}
     </div>
 
+    <!-- « Programmées » (ESC-448), above the launches (place A of programmees-barre.png). -->
+    <ScheduledSection {project} />
     <RunsSection {project} />
 
     <section class="sec terms" class:folded={termsFolded} aria-label={t('nav.sidebar.terminals')}>
@@ -2144,6 +2151,12 @@
     color: var(--muted);
     font-size: 11.5px;
     font-variant-numeric: tabular-nums;
+  }
+  /* « ⏱ programmée » (ESC-448). */
+  .sched-mark {
+    flex: none;
+    color: var(--muted);
+    white-space: nowrap;
   }
   .ticket-chip {
     flex: none;

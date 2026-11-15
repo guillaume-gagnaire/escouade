@@ -2,7 +2,7 @@
 title: "Barre latérale"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","src-tauri/src/core.rs","src-tauri/src/engine/claude/mod.rs","src-tauri/src/worktrees.rs","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","https://github.com/guillaume-gagnaire/escouade/issues/26"]
-tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390","ESC-396","ESC-398","ESC-403","ESC-417"]
+tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390","ESC-396","ESC-398","ESC-403","ESC-417","ESC-448"]
 decisions: [129,133,147]
 compared: null
 ---
@@ -240,3 +240,8 @@ La section entre Agents et Terminaux : les commandes qui lancent le projet pour 
 ### Température du cache sur la carte (ESC-398)
 
 - Au bout de la ligne du modèle, à droite : la température du cache de l'agent (« 100 °C » → « 0 °C », « — °C » quand son harness ne dit rien), dans la couleur de sa chaleur, son sens en mots pour les lecteurs d'écran et en infobulle. Voir *Température du cache*.
+
+### Programmées (ESC-448)
+
+- Une section « Programmées » entre les agents et « Lancement » (place A de `programmees-barre.png`) : les tâches programmées du projet, chacune avec son titre, son rythme, sa prochaine échéance (ou « en cours » et le lien vers son ticket, ou « en pause ») et un interrupteur de pause ; « ＋ » ouvre le formulaire du ticket en mode « Programmer ». Hauteur limitée, défilable ; repliée à son en-tête dans une fenêtre basse. Voir *Tâches programmées*.
+- La carte d'un agent dont le ticket vient d'une tâche programmée porte « ⏱ programmée » dans sa ligne du bas, avant la clé du ticket.

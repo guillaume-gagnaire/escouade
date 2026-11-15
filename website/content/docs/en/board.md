@@ -144,6 +144,16 @@ A ticket’s agent ends each of its answers with a report: which criteria are me
 
 If an answer comes without a report, the agent is prompted once. Without a report a second time, the ticket gets blocked (“Criteria report missing”) and you can “Resume” it.
 
+## Scheduled tasks
+
+A scheduled task is an agent’s ticket that comes back at fixed times: a review of the dependencies every Monday, a report every evening. At each due time, Escouade makes a ticket from the task and launches it; it follows the Kanban as a ticket launched by hand, within its slots and quotas, and its card says “⏱ scheduled”, a link to its task.
+
+- **Seeing them.** The “Scheduled” section of the sidebar, above “Launch”, lists the project’s tasks: their title, their rhythm, their next due time (or “running” with the link to their ticket) and a pause switch. A click on a row opens the task; a right click pauses or deletes it (the tickets it made stay).
+- **Making one.** “＋” opens the ticket’s form in “Schedule” mode: the rhythm under the title (every day, every week on the days chosen, every month, or a five-field cron expression), the time, then the prompt, the criteria, the account, the model and the effort, as for a ticket. The form shows the next three due times.
+- **Never two at once.** A due time passes its turn while the previous ticket is “To do” or “In progress”; “To test” counts as done.
+- **Escouade closed at the time.** With “Launch when Escouade is back, once”, the task starts when you are back, once even if several due times were missed; without it, it waits for the next one.
+- **On your machine.** The time is the machine’s, summer time included. Scheduled tasks are never shared through the repository: shared, each member of the team would launch them.
+
 ## Going further
 
 - [The autopilot](autopilot): how tickets are picked up, looped on, and paused.

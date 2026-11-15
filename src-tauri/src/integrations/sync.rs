@@ -319,6 +319,7 @@ pub(crate) fn draft_of(i: &ExternalIssue, max_loops: u32, extract: bool) -> Tick
         shared: None,
         pages: None,
         decisions: None,
+        scheduled: None,
     }
 }
 

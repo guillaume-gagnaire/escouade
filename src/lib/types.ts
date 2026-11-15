@@ -1237,6 +1237,65 @@ export interface Ticket {
   pr?: TicketPr | null;
   /** The branch its validation pushed without a pull request (« Valider et pousser », ESC-63), and its CI as last read. */
   pushed?: BranchCi | null;
+  /** The scheduled task that made it at one of its due times (ESC-448): « ⏱ programmée » on its card. */
+  scheduled?: string;
+}
+
+/** How often a scheduled task comes back (ESC-448). */
+export type RhythmKind = 'daily' | 'weekly' | 'monthly' | 'cron';
+
+/** The rhythm of a scheduled task, in the machine's time: `days` 1 (Monday) to 7 (Sunday), `day` 1 to 31. */
+export interface Rhythm {
+  kind: RhythmKind;
+  days: number[];
+  day: number;
+  hour: number;
+  minute: number;
+  cron: string;
+}
+
+/** A ticket of an agent that comes back at fixed times, of one project (ESC-448), this machine's alone. */
+export interface ScheduledTask {
+  id: string;
+  projectId: string;
+  title: string;
+  /** The prompt its tickets get (their description). */
+  description: string;
+  criteria: string[];
+  maxLoops: number;
+  engine: EngineId | null;
+  account: string;
+  model: string;
+  effort: string;
+  rhythm: Rhythm;
+  /** « Lancer au retour d'Escouade, une seule fois ». */
+  catchUp: boolean;
+  paused: boolean;
+  createdAt: number;
+  since: number;
+  lastDue: number | null;
+  /** The ticket its last run made (by id). */
+  lastTicket: string | null;
+  lastRunAt: number | null;
+  /** What became of its last due time when it made no ticket. */
+  lastNote: string | null;
+  /** Its next due time (ms), none while paused. */
+  next: number | null;
+}
+
+/** A scheduled task as its form gives it: what is absent stays as it is. */
+export interface ScheduledDraft {
+  title?: string;
+  description?: string;
+  criteria?: string[];
+  maxLoops?: number;
+  engine?: EngineId | null;
+  account?: string;
+  model?: string;
+  effort?: string;
+  rhythm?: Rhythm;
+  catchUp?: boolean;
+  paused?: boolean;
 }
 
 /** The CI of a branch without a pull request (ESC-63, `branchci::BranchCi`): a project's target, or a ticket's pushed branch. */
@@ -2772,6 +2831,8 @@ export type UiEvent =
   /** The update downloaded did not install, the app still running: no automatic restart for it any more. */
   | { type: 'updateFailed'; version: string }
   | { type: 'ticket'; ticket: Ticket }
+  /** The scheduled tasks of every project, all of them, once one changed (ESC-448). */
+  | { type: 'scheduled'; tasks: ScheduledTask[] }
   | { type: 'ticketRemoved'; id: string; projectId: string }
   | { type: 'project'; project: Project }
   | { type: 'devPage'; page: PageEvent }
@@ -2868,6 +2929,8 @@ export interface SetupOutput {
 export interface InitialState {
   projects: Project[];
   tickets: Ticket[];
+  /** The scheduled tasks of every project (ESC-448). */
+  scheduled?: ScheduledTask[];
   agents: Agent[];
   ui: UiState;
   settings: Settings;

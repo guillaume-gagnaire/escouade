@@ -152,6 +152,18 @@ With these tools, Claude takes a ticket from start to finish without you opening
 
 Each follows the rules of the window’s button and the guardrails below: an Escouade agent neither approves nor sends back its own ticket, and only acts in the projects it sees.
 
+### Scheduled tasks
+
+A project’s [scheduled tasks](board#scheduled-tasks) are managed as in their section of the sidebar. A task is named within its project, by its id or its title. These tools follow the rules of the tickets: an Escouade agent acts where it sees, and a private project is found by its own agents alone.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `list_scheduled_tasks` | `project` | The project’s tasks: id, title, prompt, criteria, rhythm (`rhythm`: `daily`, `weekly` with `days`, `monthly` with `day`, at `time`; or `cron`), the cron expression it follows, `catchUp`, `paused`, the next due time (`next`, the machine’s time), the ticket of its last run (`lastTicket`) and whether it still runs (`running`), `lastNote`, the account, the model and the effort. |
+| `create_scheduled_task` | `project`, `title`, `rhythm`, `days`, `day`, `time`, `cron`, `description`, `criteria`, `catchUp`, `account`, `model`, `effort` | Creates a task; its first due time is the next one. `catchUp` is true by default. Refused for a rhythm that is none or never comes. |
+| `update_scheduled_task` | `project`, `task`, and any of the fields of `create_scheduled_task` | Changes what is given; a new rhythm counts from now. |
+| `pause_scheduled_task` | `project`, `task`, `paused` (true by default) | Pauses it, or resumes it from its next due time. |
+| `delete_scheduled_task` | `project`, `task` | Deletes the task; the tickets it made stay. Cannot be undone. |
+
 ### An agent’s subagents and background tasks
 
 An agent that shows “Done” may still have work running: `list_agents` and `get_agent_summary` count its subagents that are running (`subagentsRunning`) and its background tasks that are running (`backgroundTasksRunning`, the “N in background” of its card). When either is not zero, `list_background_work` says which ones, `get_background_output` reads the end of a command’s output or a subagent’s report, then `stop_background_work` stops what should not go on, or `message_subagent` gives an instruction to a subagent in the background. It is what you do in the window with an agent’s [subagents](plan#subagents) and [background tasks](plan#background-tasks), with the same limits and the same refusals. A command’s output can be long: `bytes` (64 KiB at most) asks for less than the window, so the answer fits what Claude Code accepts from a tool (about 25,000 tokens). Reading is never acting: `get_background_output` changes nothing, even for the report of a subagent in the Claude Code view.

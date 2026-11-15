@@ -25,6 +25,7 @@ import prs from './prs';
 import envs from './envs';
 import repos from './repos';
 import runs from './runs';
+import scheduled from './scheduled';
 import devpage from './devpage';
 import settings from './settings';
 import share from './share';
@@ -74,6 +75,7 @@ export const fr = {
   share,
   workflow,
   plugins,
+  scheduled,
 } as const;
 
 export type Catalog = typeof fr;

@@ -136,6 +136,10 @@ pub enum SignInProblem {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum UiEvent {
+    /// The scheduled tasks of every project, all of them, once one changed (ESC-448).
+    Scheduled {
+        tasks: Vec<crate::scheduled::ScheduledView>,
+    },
     /// Where an agent is in its project's workflow, when what shows of it changed (ESC-193).
     WorkflowTrack {
         track: crate::workflow_track::TrackView,

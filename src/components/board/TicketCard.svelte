@@ -386,6 +386,18 @@
         >{/if}
     {/if}
     <span class="key">{ticket.key.split('@')[0]}</span>
+    {#if ticket.scheduled}
+      <!-- Made by a scheduled task at one of its due times (ESC-448): its mark, the link to its task. -->
+      {@const task = app.scheduled.find((x) => x.id === ticket.scheduled)}
+      <button
+        class="sched-mark"
+        data-scheduled-mark
+        disabled={!task}
+        use:tip={task ? t('scheduled.card.markTitle', { title: task.title }) : t('scheduled.card.markGone')}
+        onclick={(e) => act(e, () => task && (app.modal = { kind: 'schedule', projectId: ticket.projectId, task }))}
+        >{t('scheduled.card.mark')}</button
+      >
+    {/if}
     {#if isMine(ticket) && !ticket.shared?.gone}
       <!-- Shared with the team by this machine's user (ESC-190, choice 116): a discreet mark, its file in the tooltip. -->
       <span
@@ -892,6 +904,25 @@
   .row {
     flex-wrap: wrap;
     gap: 6px;
+  }
+  /* « ⏱ programmée » (ESC-448): the link to the task that made it. */
+  .sched-mark {
+    flex: none;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 11.5px;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .sched-mark:hover:not(:disabled) {
+    color: var(--text);
+    text-decoration: underline;
+  }
+  .sched-mark:disabled {
+    cursor: default;
   }
   .key {
     flex: none;

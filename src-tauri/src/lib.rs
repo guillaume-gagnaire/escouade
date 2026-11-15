@@ -218,6 +218,9 @@ mod repos;
 #[cfg(test)]
 mod repos_tests;
 mod resources;
+mod scheduled;
+#[cfg(test)]
+mod scheduled_tests;
 mod search;
 mod selfupdate;
 mod sentfiles;
@@ -919,6 +922,11 @@ pub fn run() {
                 commands::quit_app,
                 commands::set_unsaved,
                 commands::ticket_create,
+                commands::scheduled_create,
+                commands::scheduled_update,
+                commands::scheduled_pause,
+                commands::scheduled_delete,
+                commands::scheduled_preview,
                 commands::ticket_update,
                 commands::ticket_delete,
                 commands::clean_worktrees,

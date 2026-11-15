@@ -65,6 +65,8 @@ fn no_shell() -> String {
 pub struct InitialState {
     projects: Vec<Project>,
     tickets: Vec<Ticket>,
+    /// The scheduled tasks of every project (ESC-448).
+    scheduled: Vec<crate::scheduled::ScheduledView>,
     agents: Vec<AgentView>,
     ui: UiState,
     settings: Settings,
@@ -135,6 +137,7 @@ pub fn subscribe(
     let projects = core.projects.read().clone();
     let tickets = core.tickets.read().clone();
     let agents = core.agent_views();
+    let scheduled = core.scheduled_views();
     let setup_output = core.setup_outputs();
     let ui = core.ui.read().clone();
     let usage = core.usage.lock().clone();
@@ -157,6 +160,7 @@ pub fn subscribe(
         lang,
         projects,
         tickets,
+        scheduled,
         agents,
         ui,
         shells: pty::detect_shells(&settings),
@@ -4625,6 +4629,47 @@ pub fn devpage_list(
             shown: None,
         },
     }
+}
+
+// ---------- scheduled tasks (ESC-448) ----------
+
+#[tauri::command]
+pub fn scheduled_create(
+    core: CoreState,
+    project_id: String,
+    draft: crate::scheduled::ScheduledDraft,
+) -> Res<crate::scheduled::ScheduledView> {
+    core.scheduled_create(&project_id, draft).map_err(err)
+}
+
+#[tauri::command]
+pub fn scheduled_update(
+    core: CoreState,
+    id: String,
+    draft: crate::scheduled::ScheduledDraft,
+) -> Res<crate::scheduled::ScheduledView> {
+    core.scheduled_update(&id, draft).map_err(err)
+}
+
+/// The switch of a task's row: paused, or resumed.
+#[tauri::command]
+pub fn scheduled_pause(
+    core: CoreState,
+    id: String,
+    paused: bool,
+) -> Res<crate::scheduled::ScheduledView> {
+    core.scheduled_set_paused(&id, paused).map_err(err)
+}
+
+#[tauri::command]
+pub fn scheduled_delete(core: CoreState, id: String) -> Res<()> {
+    core.scheduled_delete(&id).map_err(err)
+}
+
+/// « Prochaines » of the form: the next due times of a rhythm, or why it is refused.
+#[tauri::command]
+pub fn scheduled_preview(core: CoreState, rhythm: crate::model::Rhythm) -> Res<Vec<i64>> {
+    core.scheduled_preview(&rhythm).map_err(err)
 }
 
 // ---------- the editor's language servers (ESC-446) ----------

@@ -974,6 +974,12 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) leftover_histories: Mutex<Vec<String>>,
     /// The reviews written by an agent (ESC-66), one per pull request.
     pub(crate) pr_reviews: RwLock<Vec<crate::prreview::PrReview>>,
+    /// The scheduled tasks of every project (ESC-448): this machine's alone.
+    pub(crate) scheduled: RwLock<Vec<crate::model::ScheduledTask>>,
+    /// One look at the scheduled tasks' due times at a time (`scheduled_tick`).
+    pub(crate) scheduled_lock: tokio::sync::Mutex<()>,
+    /// The time the scheduled tasks go by, and when this run of the app began on it.
+    pub(crate) schedule_clock: crate::scheduled::Clock,
     /// Serializes agent creation so that concurrent creations get distinct names.
     create_lock: tokio::sync::Mutex<()>,
     conv_buffer: Mutex<HashMap<String, Vec<ConvOp>>>,
@@ -1917,6 +1923,7 @@ impl<R: Runtime> Core<R> {
         // they can be now.
         let mut leftover = std::mem::take(&mut state.leftover_histories);
         let pr_reviews = std::mem::take(&mut state.pr_reviews);
+        let scheduled = std::mem::take(&mut state.scheduled);
         closed::retry_leftovers(&data, &mut leftover);
         // The folder of the closed projects is read here, once: the index (`closed_index`) keeps
         // what the app needs of it from now on.
@@ -2139,6 +2146,9 @@ impl<R: Runtime> Core<R> {
             closed_index: Mutex::new(closed_index),
             leftover_histories: Mutex::new(leftover),
             pr_reviews: RwLock::new(pr_reviews),
+            scheduled: RwLock::new(scheduled),
+            scheduled_lock: tokio::sync::Mutex::new(()),
+            schedule_clock: crate::scheduled::Clock::from_env(),
             create_lock: tokio::sync::Mutex::new(()),
             conv_buffer: Mutex::default(),
             conv_flush: tokio::sync::Notify::new(),
@@ -2561,6 +2571,15 @@ impl<R: Runtime> Core<R> {
                 c.retry_due_syncs();
             }
         });
+        // The scheduled tasks' due times (ESC-448): looked at once the app is up, then often
+        // enough for a task to start within its minute.
+        let c = self.clone();
+        tauri::async_runtime::spawn(async move {
+            loop {
+                c.scheduled_tick().await;
+                tokio::time::sleep(crate::scheduled::tick_every()).await;
+            }
+        });
         // The pull requests of the tickets « En revue » (ESC-59), without a webhook.
         self.clone().follow_ticket_prs();
         let c = self.clone();
@@ -2632,6 +2651,7 @@ impl<R: Runtime> Core<R> {
         let pr_reviews = crate::prreview::kept_reviews(&self.pr_reviews.read(), |id| {
             projects.iter().any(|p| p.id == id)
         });
+        let scheduled = self.scheduled.read().clone();
         PersistedState {
             projects,
             agents,
@@ -2643,6 +2663,7 @@ impl<R: Runtime> Core<R> {
             pause,
             leftover_histories,
             pr_reviews,
+            scheduled,
         }
     }
 
@@ -9460,6 +9481,8 @@ impl<R: Runtime> Core<R> {
         // open. One whose history is kept stays in their lists, until that is erased.
         if erase {
             self.forget_project_in_accounts(id);
+            // Its scheduled tasks too (ESC-448): a history kept keeps them, for its return.
+            self.scheduled_forget_project(id);
         }
         // After the project is out: `ticket_create` checks the project under the projects' read
         // lock, which it holds while it adds the ticket, so a ticket it adds before this is dropped

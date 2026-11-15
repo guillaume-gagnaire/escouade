@@ -97,6 +97,31 @@ fn naming_calls() -> Vec<(&'static str, Names, Value)> {
             json!({ "project": "{}", "folder": "x" }),
         ),
         ("list_tickets", Names::Project, json!({ "project": "{}" })),
+        (
+            "list_scheduled_tasks",
+            Names::Project,
+            json!({ "project": "{}" }),
+        ),
+        (
+            "create_scheduled_task",
+            Names::Project,
+            json!({ "project": "{}", "title": "Chaque jour", "rhythm": "daily", "time": "07:00" }),
+        ),
+        (
+            "update_scheduled_task",
+            Names::Project,
+            json!({ "project": "{}", "task": "x", "title": "Autre" }),
+        ),
+        (
+            "pause_scheduled_task",
+            Names::Project,
+            json!({ "project": "{}", "task": "x" }),
+        ),
+        (
+            "delete_scheduled_task",
+            Names::Project,
+            json!({ "project": "{}", "task": "x" }),
+        ),
         ("get_board", Names::Project, json!({ "project": "{}" })),
         ("get_workflow", Names::Project, json!({ "project": "{}" })),
         ("list_requests", Names::Project, json!({ "project": "{}" })),

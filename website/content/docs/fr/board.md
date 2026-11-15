@@ -144,6 +144,16 @@ L’agent d’un ticket termine chacune de ses réponses par un bilan : quels cr
 
 Si une réponse arrive sans bilan, l’agent est relancé une fois. Sans bilan une seconde fois, le ticket se bloque (« Bilan des critères manquant ») et tu peux le « Reprendre ».
 
+## Les tâches programmées
+
+Une tâche programmée est un ticket d’agent qui revient à heure fixe : une revue des dépendances chaque lundi, un rapport chaque soir. À chaque échéance, Escouade crée un ticket depuis la tâche et le lance ; il suit le Kanban comme un ticket lancé à la main, dans ses places et ses quotas, et sa carte porte « ⏱ programmée », un lien vers sa tâche.
+
+- **Les voir.** La section « Programmées » de la barre latérale, au-dessus de « Lancement », liste les tâches du projet : leur titre, leur rythme, leur prochaine échéance (ou « en cours » avec le lien vers leur ticket) et un interrupteur de pause. Un clic sur une ligne ouvre la tâche ; un clic droit la met en pause ou la supprime (les tickets qu’elle a créés restent).
+- **En créer une.** « ＋ » ouvre le formulaire du ticket en mode « Programmer » : le rythme sous le titre (chaque jour, chaque semaine aux jours choisis, chaque mois, ou une expression cron de cinq champs), l’heure, puis la consigne, les critères, le compte, le modèle et l’effort, comme pour un ticket. Le formulaire affiche les trois prochaines échéances.
+- **Jamais deux à la fois.** Une échéance passe son tour tant que le ticket précédent est « À faire » ou « En cours » ; « À tester » compte comme fini.
+- **Escouade fermé à l’heure dite.** Avec « Lancer au retour d’Escouade, une seule fois », la tâche part à ton retour, une seule fois même si plusieurs échéances ont été manquées ; sans, elle attend la suivante.
+- **Sur ta machine.** L’heure est celle de la machine, heure d’été comprise. Les tâches programmées ne sont jamais partagées par le dépôt : partagées, chaque membre de l’équipe les lancerait.
+
 ## Aller plus loin
 
 - [Le pilote auto](autopilot) : comment les tickets sont pris, bouclés et mis en pause.

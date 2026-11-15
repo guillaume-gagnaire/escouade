@@ -947,3 +947,116 @@ pub struct SplitTicketArgs {
     )]
     pub chain: Option<bool>,
 }
+
+// ---------- scheduled tasks (ESC-448) ----------
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ListScheduledTasksArgs {
+    #[schemars(description = "The project: its id, or its name in any case.")]
+    pub project: String,
+}
+
+/// How often a scheduled task comes back, as a tool's argument names it.
+#[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum RhythmArg {
+    Daily,
+    Weekly,
+    Monthly,
+    Cron,
+}
+
+/// The fields of a scheduled task that `create_scheduled_task` and `update_scheduled_task` share.
+#[derive(Debug, Default, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduledFieldsArgs {
+    #[schemars(
+        description = "What each of its tickets is to do: the prompt its agent gets, in a few sentences or paragraphs (10,000 characters at most)."
+    )]
+    pub description: Option<String>,
+    #[schemars(
+        description = "The acceptance criteria of each of its tickets, one per item (30 at most, 500 characters each)."
+    )]
+    pub criteria: Option<Vec<String>>,
+    #[schemars(
+        description = "How often it comes back: daily (every day at time), weekly (on days at time), monthly (on day at time) or cron (as the cron expression cron says)."
+    )]
+    pub rhythm: Option<RhythmArg>,
+    #[schemars(
+        description = "The days of the week of a weekly rhythm, 1 (Monday) to 7 (Sunday), like [1, 4]."
+    )]
+    pub days: Option<Vec<u8>>,
+    #[schemars(
+        description = "The day of the month of a monthly rhythm, 1 to 31 (a month without it is skipped)."
+    )]
+    pub day: Option<u8>,
+    #[schemars(
+        description = "The time of a daily, weekly or monthly rhythm, in the machine's time, as HH:MM (24 hours), like 07:00."
+    )]
+    pub time: Option<String>,
+    #[schemars(
+        description = "The cron expression of a cron rhythm: five fields (minute, hour, day of the month, month, day of the week), like 0 7 * * 1, in the machine's time."
+    )]
+    pub cron: Option<String>,
+    #[schemars(
+        description = "When Escouade was closed at a due time: true (the default for a new task) runs it at Escouade's return, once however many were missed; false waits for the next due time."
+    )]
+    pub catch_up: Option<bool>,
+    #[schemars(
+        description = "The account its tickets' agents start on: its name (in any case) or its id, or auto (the default), the current account of the project's harness."
+    )]
+    pub account: Option<String>,
+    #[schemars(
+        description = "The model of its tickets' agents, as the window's model menu offers it (sonnet, opus, haiku for Claude Code…), or auto (the default)."
+    )]
+    pub model: Option<String>,
+    #[schemars(
+        description = "The effort of its tickets' agents (low, medium, high, xhigh or max), or auto (the default)."
+    )]
+    pub effort: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CreateScheduledTaskArgs {
+    #[schemars(description = "The project: its id, or its name in any case.")]
+    pub project: String,
+    #[schemars(
+        description = "The task's title, on one line (200 characters at most): its tickets have it."
+    )]
+    pub title: String,
+    #[serde(flatten)]
+    pub fields: ScheduledFieldsArgs,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct UpdateScheduledTaskArgs {
+    #[schemars(description = "The project: its id, or its name in any case.")]
+    pub project: String,
+    #[schemars(description = "The scheduled task: its id, or its title in any case.")]
+    pub task: String,
+    #[schemars(description = "Its new title, on one line (200 characters at most).")]
+    pub title: Option<String>,
+    #[serde(flatten)]
+    pub fields: ScheduledFieldsArgs,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct PauseScheduledTaskArgs {
+    #[schemars(description = "The project: its id, or its name in any case.")]
+    pub project: String,
+    #[schemars(description = "The scheduled task: its id, or its title in any case.")]
+    pub task: String,
+    #[schemars(
+        description = "true pauses it (its due times pass without a ticket), false resumes it (from its next due time). Left out, true."
+    )]
+    pub paused: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct DeleteScheduledTaskArgs {
+    #[schemars(description = "The project: its id, or its name in any case.")]
+    pub project: String,
+    #[schemars(description = "The scheduled task: its id, or its title in any case.")]
+    pub task: String,
+}

@@ -78,6 +78,8 @@ import type {
   ShellInfo,
   TermInfo,
   Ticket,
+  ScheduledTask,
+  Rhythm,
   TicketDraft,
   UiEvent,
   UiState,
@@ -223,7 +225,9 @@ export type Modal =
       ticket?: Ticket;
       onSubmit: (d: TicketDraft) => boolean | Promise<boolean>;
       resume?: TicketFormDraft;
-    };
+    }
+  /** « Programmer » (ESC-448): the form of a scheduled task of the project, new or (its `task`) edited. */
+  | { kind: 'schedule'; projectId: string; task?: ScheduledTask; resume?: TicketFormDraft };
 
 /** What a commit's window had written when another dialog took its place: its message, and Haiku's proposal as it came. */
 export interface CommitDraft {
@@ -252,6 +256,10 @@ export interface TicketFormDraft {
    * window back shows where it is. Absent: those of the ticket.
    */
   files?: FormFile[];
+  /** Of a scheduled task (« Programmer »): its rhythm, its time field and « Lancer au retour d'Escouade ». */
+  rhythm?: Rhythm;
+  time?: string;
+  catchUp?: boolean;
 }
 
 /** What the window of a new branch had written when the question of the stash took its place. */
@@ -456,6 +464,8 @@ class AppState {
   attention = $state<Record<string, true>>({});
   /** Every project's tickets, by id. */
   tickets = $state<Record<string, Ticket>>({});
+  /** The scheduled tasks of every project (ESC-448), in the order they were made. */
+  scheduled = $state<ScheduledTask[]>([]);
   /** Projects whose board fills the main area (not saved). */
   board = $state<Record<string, boolean>>({});
   /** Projects whose Docs tab (ESC-258) fills the main area, in place of the agents and the board (not saved). */
@@ -769,6 +779,7 @@ class AppState {
     this.projects = s.projects;
     this.agents = Object.fromEntries(s.agents.map((a) => [a.id, a]));
     this.tickets = Object.fromEntries((s.tickets ?? []).map((t) => [t.id, t]));
+    this.scheduled = s.scheduled ?? [];
     this.boardIssues = { ...s.boardIssues };
     // Read by the loop of the pull requests a little after the start: what it read already, those the events bring after.
     api
@@ -891,6 +902,9 @@ class AppState {
         break;
       case 'ticketRemoved':
         delete this.tickets[e.id];
+        break;
+      case 'scheduled':
+        this.scheduled = e.tasks;
         break;
       case 'project':
         this.replaceProject(e.project);

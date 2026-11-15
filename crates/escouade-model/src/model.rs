@@ -1472,6 +1472,78 @@ pub struct Ticket {
     /// The branch its validation pushed without a pull request (« Valider et pousser », ESC-63)
     /// and its CI as last read: the pill of its card « Terminé ». None otherwise.
     pub pushed: Option<crate::branchci::BranchCi>,
+    /// The scheduled task (`ScheduledTask::id`) that made it at one of its due times (ESC-448):
+    /// its card says « ⏱ programmée » with a link to it. None for any other ticket.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scheduled: Option<String>,
+}
+
+/// How often a scheduled task comes back (ESC-448).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum RhythmKind {
+    /// Every day, at `hour:minute`.
+    #[default]
+    Daily,
+    /// On the days `days` of each week, at `hour:minute`.
+    Weekly,
+    /// On the day `day` of each month, at `hour:minute`: a month without it is skipped.
+    Monthly,
+    /// As the cron expression `cron` says (five fields, minute to day of the week).
+    Cron,
+}
+
+/// The rhythm of a scheduled task (ESC-448), in the machine's time.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Rhythm {
+    pub kind: RhythmKind,
+    /// The days of the week of `Weekly`, 1 (Monday) to 7 (Sunday).
+    pub days: Vec<u8>,
+    /// The day of the month of `Monthly`, 1 to 31.
+    pub day: u8,
+    pub hour: u8,
+    pub minute: u8,
+    /// The expression of `Cron`.
+    pub cron: String,
+}
+
+/// A ticket of an agent that comes back at fixed times, of one project (ESC-448,
+/// docs/OVERSEER.md): at each due time, a ticket is made from it and launched. This machine's
+/// alone, never shared through the repository: each member of a team would launch it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ScheduledTask {
+    pub id: String,
+    pub project_id: String,
+    pub title: String,
+    /// The prompt: what its tickets are to do (their description).
+    pub description: String,
+    pub criteria: Vec<String>,
+    pub max_loops: u32,
+    /// Its tickets' harness (None: the project's), account, model and effort (empty: « Auto »).
+    pub engine: Option<EngineId>,
+    pub account: String,
+    pub model: String,
+    pub effort: String,
+    pub rhythm: Rhythm,
+    /// « Lancer au retour d'Escouade, une seule fois »: a due time missed while Escouade was
+    /// closed runs at its return, once however many were missed; else it waits for the next.
+    pub catch_up: bool,
+    /// Paused: its due times pass without a ticket.
+    pub paused: bool,
+    pub created_at: i64,
+    /// From when its due times count (ms): its creation, a change of its rhythm, its resume.
+    pub since: i64,
+    /// The last due time dealt with (ms), run or passed: the next ones come after it, never it
+    /// again. None: none yet, they come after `since`.
+    pub last_due: Option<i64>,
+    /// The ticket its last run made (by id), and when.
+    pub last_ticket: Option<String>,
+    pub last_run_at: Option<i64>,
+    /// What became of its last due time when it made no ticket (passed its turn, or the ticket
+    /// could not be made), until the next one.
+    pub last_note: Option<String>,
 }
 
 /// The pull request of a ticket « En revue » (ESC-59), as its host last told it.
@@ -2559,6 +2631,8 @@ pub struct PersistedState {
     pub leftover_histories: Vec<String>,
     /// The reviews written by an agent, waiting for the user or published (ESC-66).
     pub pr_reviews: Vec<crate::prreview::PrReview>,
+    /// The scheduled tasks of every project (ESC-448): this machine's alone.
+    pub scheduled: Vec<ScheduledTask>,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
