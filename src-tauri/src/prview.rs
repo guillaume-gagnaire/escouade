@@ -356,6 +356,58 @@ impl<R: Runtime> Core<R> {
         client.rerun_failed(&repo, number).await
     }
 
+    /// The checks, reviews and comments (and deployments) of a pull request of the project, for its
+    /// view (ESC-457): through whoever holds it (`pr_place`), as the tab reads an agent's.
+    pub async fn pr_detail(
+        self: &Arc<Self>,
+        project_id: &str,
+        number: u64,
+        host_repo: &str,
+    ) -> Read<PrDetail> {
+        let (client, repo, can) = match self.pr_place(project_id, number, host_repo).await {
+            Ok(t) => t,
+            Err(e) => return Read::failed(&e, None),
+        };
+        let pr = match again!(client.pull_request(&repo, number)) {
+            Ok(pr) => pr,
+            Err(e) => return Read::failed(&e, client.rate_limit()),
+        };
+        match detail_of(&*client, &repo, number, can, &pr).await {
+            Ok(d) => Read::ok(d),
+            Err(e) => Read::failed(&e, client.rate_limit()),
+        }
+    }
+
+    /// The end of the log of a check's job of a pull request of the project (its view).
+    pub async fn pr_log(
+        self: &Arc<Self>,
+        project_id: &str,
+        number: u64,
+        host_repo: &str,
+        job: &str,
+    ) -> Read<String> {
+        let (client, repo, _) = match self.pr_place(project_id, number, host_repo).await {
+            Ok(t) => t,
+            Err(e) => return Read::failed(&e, None),
+        };
+        match again!(client.job_log(&repo, job)) {
+            Ok(log) => Read::ok(log_tail(&log, LOG_VIEW)),
+            Err(e) => Read::failed(&e, client.rate_limit()),
+        }
+    }
+
+    /// « Relancer les échecs » of a pull request of the project (its view), on a click only: how
+    /// many runs started.
+    pub async fn pr_rerun(
+        self: &Arc<Self>,
+        project_id: &str,
+        number: u64,
+        host_repo: &str,
+    ) -> Result<usize> {
+        let (client, repo, _) = self.pr_place(project_id, number, host_repo).await?;
+        client.rerun_failed(&repo, number).await
+    }
+
     /// Why the agent has no « Ouvrir une PR… »; none when it can open one.
     pub async fn agent_no_pr(self: &Arc<Self>, id: &str) -> Result<Option<NoPr>> {
         let project_id = self.agent(id)?.lock().meta.project_id.clone();

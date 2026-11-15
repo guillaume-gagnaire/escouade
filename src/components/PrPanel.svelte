@@ -192,6 +192,8 @@
           <span class="ic {prTone(p)}"><Icon name={prIcon(p)} size={14} /></span>
           <span class="num mono">#{p.number}</span>
           <span class="st {p.state === 'open' && p.draft ? 'draft' : p.state}">{stateWord(p)}</span>
+          <!-- The view of the pull request (ESC-457), in the work area; the icon beside it, its page in the browser. -->
+          <button class="btn small view" onclick={() => app.openPrView(project.id, p)}>{t('prs.page.open', { word })}</button>
           <button
             class="icon-btn ext"
             aria-label={t('prs.chipLabel', { word, number: p.number, state: stateWord(p) })}
@@ -321,7 +323,7 @@
           <div class="sec-h"><h3 id="hosts-others">{t('prs.view.others', { word })}</h3></div>
           <ul class="list">
             {#each others as o (prKey(o))}
-              {@render prRow(o, word, () => openPr(o, word), t('prs.tipHead', { word, number: o.number, title: o.title }))}
+              {@render prRow(o, word, () => app.openPrView(project.id, o), t('prs.tipHead', { word, number: o.number, title: o.title }))}
             {/each}
           </ul>
         </section>
@@ -362,7 +364,7 @@
             {@render prRow(
               p,
               word,
-              () => (owner ? app.selectAgent(owner.id) : openPr(p, word)),
+              () => (owner ? app.selectAgent(owner.id) : app.openPrView(project.id, p)),
               owner ? t('prs.view.project.ofAgent', { agent: owner.name }) : t('prs.tipHead', { word, number: p.number, title: p.title }),
             )}
           {/each}
@@ -541,6 +543,15 @@
     color: var(--text);
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .btn.view {
+    margin-left: auto;
+    height: 24px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+  .btn.view + .ext {
+    margin-left: 0;
   }
   .ext {
     width: 22px;

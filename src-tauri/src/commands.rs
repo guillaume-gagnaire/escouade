@@ -2223,6 +2223,52 @@ pub async fn pr_contents(
         .await)
 }
 
+/// The view of a pull request (ESC-457): its checks, reviews, comments and deployments, read by
+/// whoever holds it in the project; or why the host did not give them.
+#[tauri::command]
+pub async fn pr_detail(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+    host_repo: Option<String>,
+) -> Res<crate::prview::Read<crate::prview::PrDetail>> {
+    Ok(core
+        .pr_detail(&project_id, number, host_repo.as_deref().unwrap_or(""))
+        .await)
+}
+
+/// The end of the log of a check's job of a pull request of the project (its view).
+#[tauri::command]
+pub async fn pr_log(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+    job: String,
+    host_repo: Option<String>,
+) -> Res<crate::prview::Read<String>> {
+    Ok(core
+        .pr_log(
+            &project_id,
+            number,
+            host_repo.as_deref().unwrap_or(""),
+            &job,
+        )
+        .await)
+}
+
+/// « Relancer les échecs » from the view of a pull request: how many runs started.
+#[tauri::command]
+pub async fn pr_rerun(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+    host_repo: Option<String>,
+) -> Res<usize> {
+    core.pr_rerun(&project_id, number, host_repo.as_deref().unwrap_or(""))
+        .await
+        .map_err(err)
+}
+
 /// The end of the log of a check's job of the agent's pull request `number`.
 #[tauri::command]
 pub async fn agent_pr_log(

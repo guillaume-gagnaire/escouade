@@ -40,20 +40,7 @@
   import { canSwitchView, copyRemoteLink, inHarnessView, integrateBase, openRemote, switchView, toggleRemote } from '../lib/agent-actions';
   import { can, canFork, engineName, offered, speakerOf } from '../lib/engines';
   import { startAgentOn } from '../lib/branch-actions';
-  import {
-    canFixChecks,
-    canFixReviews,
-    cardPrs,
-    fixPr,
-    openPr,
-    prIcon,
-    prKey,
-    prMenuItem,
-    prTip,
-    prTone,
-    prWord,
-    stateWord,
-  } from '../lib/prs';
+  import { canFixChecks, canFixReviews, cardPrs, fixPr, prIcon, prKey, prMenuItem, prTip, prTone, prWord, stateWord } from '../lib/prs';
   import { runIn } from '../lib/launch-actions';
   import { shortBranch } from '../lib/branches';
   import { buffers, lossNotice } from '../lib/editor/buffers.svelte';
@@ -1311,9 +1298,9 @@
               <div class="pr" data-pr={p.number}>
                 <button
                   class="prnum {prTone(p)}"
-                  aria-label={t('prs.chipLabel', { word, number: p.number, state: stateWord(p) })}
+                  aria-label={t('prs.chipView', { word, number: p.number, state: stateWord(p) })}
                   use:tip={{ text: prTip(word, p), aria: false }}
-                  onclick={() => openPr(p, word)}
+                  onclick={() => app.openPrView(a.projectId, p)}
                   ><Icon name={prIcon(p)} size={12} />{p.repo ? `${repoLabel(p.repo)} ` : ''}#{p.number}</button
                 >
                 <!-- Where it goes and its CI in words (ESC-305): « #41 → main · CI en échec ». -->

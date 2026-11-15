@@ -1149,41 +1149,24 @@ describe('TicketCard with an account of its own', () => {
     expect(container.querySelector('.prfacts .conflicting')).toHaveTextContent('conflit avec main');
     // Its criteria are behind it now: the card stays short.
     expect(screen.queryByRole('list', { name: 'Critères' })).toBeNull();
-    // Its number opens it in the browser, not the ticket.
-    await userEvent.click(screen.getByRole('button', { name: /Ouvrir la PR #12 dans le navigateur/ }));
+    // Its number opens its view (ESC-457), not the ticket.
+    await userEvent.click(screen.getByRole('button', { name: 'Ouvrir la PR #12 (approuvée)' }));
     expect(app.modal).toBeNull();
   });
 
-  it('opens the page of its pull request by a click and by Entrée, never the ticket, and says why it cannot (ESC-402)', async () => {
-    let refuse = false;
-    const backend = fakeBackend({
-      open_url: () => {
-        if (refuse) throw 'aucun navigateur';
-      },
-    });
-    const pr = ticketPr({ url: 'https://dev.azure.com/acme/Demo/_git/demo/pullrequest/12' });
-    show(ticket({ column: 'pr', agentId: 'a1', pr }));
-    const num = screen.getByRole('button', { name: /Ouvrir la PR #12 dans le navigateur/ });
+  it('opens the view of its pull request by a click and by Entrée, never the ticket nor the browser (ESC-457)', async () => {
+    const backend = fakeBackend();
+    show(ticket({ column: 'pr', agentId: 'a1', pr: ticketPr({ url: 'https://dev.azure.com/acme/Demo/_git/demo/pullrequest/12' }) }));
+    const num = screen.getByRole('button', { name: /^Ouvrir la PR #12 \(/ });
     await userEvent.click(num);
+    expect(app.prOpen.p1).toEqual({ number: 12 });
+    app.prOpen.p1 = null;
     num.focus();
     await userEvent.keyboard('{Enter}');
-    const url = 'https://dev.azure.com/acme/Demo/_git/demo/pullrequest/12';
-    await waitFor(() => expect(backend.called('open_url').map((c) => c.args.url)).toEqual([url, url]));
+    expect(app.prOpen.p1).toEqual({ number: 12 });
     expect(app.modal).toBeNull();
     expect(app.ui.selectedAgent).toEqual({});
-
-    refuse = true;
-    await userEvent.click(num);
-    await waitFor(() =>
-      expect(app.toasts.at(-1)).toMatchObject({ text: 'La PR #12 ne s’ouvre pas dans le navigateur : aucun navigateur', kind: 'error' }),
-    );
-    // An address its host did not give: said, nothing asked of the system.
-    const calls = backend.called('open_url').length;
-    cleanup();
-    show(ticket({ column: 'pr', agentId: 'a1', pr: ticketPr({ url: '' }) }));
-    await userEvent.click(screen.getByRole('button', { name: /Ouvrir la PR #12 dans le navigateur/ }));
-    expect(app.toasts.at(-1)?.text).toBe('La PR #12 ne s’ouvre pas dans le navigateur : son hébergeur n’a pas donné l’adresse de sa page.');
-    expect(backend.called('open_url')).toHaveLength(calls);
+    expect(backend.called('open_url')).toHaveLength(0);
   });
 
   it('says on the card that its host cannot be read, the ticket staying in review', () => {

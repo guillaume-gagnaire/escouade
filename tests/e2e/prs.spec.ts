@@ -111,7 +111,8 @@ test('an ordinary agent opens its pull request, and its card follows its CI and 
   ]);
   expect(git(bare, 'log', '-1', '--format=%s', branch)).toBe('feat: connexion par jeton');
   // Its number in the header, under the card and beside its branch in the status bar; « Ouvrir une PR » gone while it is open.
-  await expect(page.getByRole('button', { name: 'Ouvrir la PR #101 dans le navigateur (brouillon)' })).toHaveCount(3);
+  await expect(page.getByRole('button', { name: 'Ouvrir la PR #101 dans le navigateur (brouillon)' })).toHaveCount(2);
+  await expect(page.getByRole('button', { name: 'Ouvrir la PR #101 (brouillon)' })).toHaveCount(1);
   await expect(page.locator('footer').getByRole('button', { name: 'Ouvrir la PR #101 dans le navigateur (brouillon)' })).toBeVisible();
   await expect(page.locator('footer .sync')).toContainText(branch);
   await expect(page.getByRole('button', { name: 'Ouvrir une PR' })).toHaveCount(0);
@@ -123,7 +124,7 @@ test('an ordinary agent opens its pull request, and its card follows its CI and 
   });
   await showAgain(page);
   const prs = page.getByRole('group', { name: /^Pull requests de / });
-  const num = prs.getByRole('button', { name: 'Ouvrir la PR #101 dans le navigateur (ouverte)' });
+  const num = prs.getByRole('button', { name: 'Ouvrir la PR #101 (ouverte)' });
   await expect(num).toHaveText('#101');
   // Its CI failed: the icon of a failure (the 2.0 design draws it).
   await expect(num.locator('[data-icon="close"]')).toHaveCount(1);
@@ -232,7 +233,8 @@ test('each agent follows the pull requests of the worktree it went into by itsel
       method: 'POST',
       body: JSON.stringify({ title: `Le travail de ${head}`, body: '', head, base: 'main' }),
     });
-  const chip = (scope: Page | Locator, n: number) => scope.getByRole('button', { name: `Ouvrir la PR #${n} dans le navigateur (ouverte)` });
+  const chip = (scope: Page | Locator, n: number) =>
+    scope.getByRole('button', { name: new RegExp(`^Ouvrir la PR #${n} (dans le navigateur )?\\(ouverte\\)$`) });
   const anyChip = (scope: Locator) => scope.getByRole('button', { name: /^Ouvrir la PR #/ });
 
   // Each one shown again reads its own: the group under its card has its pull request alone.

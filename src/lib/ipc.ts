@@ -29,6 +29,7 @@ import type {
   NoteChoice,
   AgentReview,
   ReviewVerdict,
+  PrContents,
   PrDetail,
   PrRead,
   ProjectEnvironments,
@@ -496,6 +497,18 @@ export const api = {
   /** « Relancer les échecs », on a click only: how many runs started. */
   agentPrRerun: (id: string, number: number, hostRepo?: string) =>
     invoke<number>('agent_pr_rerun', { id, number, ...(hostRepo ? { hostRepo } : {}) }),
+  /** A pull request of the project read whole (ESC-452): kept while it does not change. Every text of it is a third party's. */
+  prContents: (projectId: string, number: number, hostRepo?: string) =>
+    invoke<PrRead<PrContents>>('pr_contents', { projectId, number, ...(hostRepo ? { hostRepo } : {}) }),
+  /** The view of a pull request (ESC-457): its checks, reviews and comments, read by whoever holds it in the project. */
+  prDetail: (projectId: string, number: number, hostRepo?: string) =>
+    invoke<PrRead<PrDetail>>('pr_detail', { projectId, number, ...(hostRepo ? { hostRepo } : {}) }),
+  /** The end of the log of a check's job, from the view of a pull request. */
+  prLog: (projectId: string, number: number, job: string, hostRepo?: string) =>
+    invoke<PrRead<string>>('pr_log', { projectId, number, job, ...(hostRepo ? { hostRepo } : {}) }),
+  /** « Relancer les échecs » from the view of a pull request, on a click only: how many runs started. */
+  prRerun: (projectId: string, number: number, hostRepo?: string) =>
+    invoke<number>('pr_rerun', { projectId, number, ...(hostRepo ? { hostRepo } : {}) }),
   /** Why the agent has no « Ouvrir une PR… »; null when it can open one. */
   agentNoPr: (id: string) => invoke<NoPr | null>('agent_no_pr', { id }),
   /** The open pull requests of the project, on the remote of its target. */

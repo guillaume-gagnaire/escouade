@@ -30,6 +30,7 @@
   import type { PrFailure, PrRead, Project, ProjectPrs, PullRequest } from '../../lib/types';
   import Icon from '../Icon.svelte';
   import PrReviewView from './PrReviewView.svelte';
+  import PrView from './PrView.svelte';
 
   // The project's « Pull requests » view (ESC-65, direction A of design/esc-65): beside the Kanban, its open pull requests
   // in a dense list (CI, reviews, conflict, author, age), three filters, and on the row chosen « Lancer un agent » (Entrée)
@@ -56,6 +57,8 @@
   const reviews = $derived(app.prReviews[project.id] ?? {});
   /** Those come since the tab was last opened (ESC-403), marked until it is opened again. */
   const fresh = $derived(freshIn(app.ui.prSeen?.[project.id]));
+  /** The pull request whose view fills this one, in place of the list (ESC-457). */
+  const viewing = $derived(app.prOpen[project.id] ?? null);
   /** The review that fills the view, in place of the list (ESC-66). */
   const reviewing = $derived.by(() => {
     const n = app.prReviewOpen[project.id];
@@ -151,7 +154,16 @@
   </div>
 {/snippet}
 
-{#if reviewing}
+{#if viewing}
+  {#key `${viewing.hostRepo ?? ''}#${viewing.number}`}
+    <PrView
+      {project}
+      number={viewing.number}
+      hostRepo={viewing.hostRepo}
+      listed={all.find((p) => p.number === viewing.number && (p.hostRepo ?? '') === (viewing.hostRepo ?? '')) ?? null}
+    />
+  {/key}
+{:else if reviewing}
   <PrReviewView {project} review={reviewing} {me} />
 {:else}
   <main class="prs" aria-busy={reading}>
@@ -214,8 +226,10 @@
                 bind:this={rows[i]}
                 aria-label={t('prs.list.row', { word, number: p.number, title: p.title })}
                 aria-current={i === at ? 'true' : undefined}
-                onclick={() => choose(i)}
-                ondblclick={() => void act(p)}
+                onclick={() => {
+                  choose(i, false);
+                  app.openPrView(project.id, p);
+                }}
                 onkeydown={(e) => onKey(e, i)}
               >
                 <span class="st {rowTone(p)}"><Icon name={p.draft ? 'pr' : ci.icon} size={14} /></span>

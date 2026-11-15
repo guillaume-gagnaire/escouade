@@ -477,6 +477,11 @@ class AppState {
   prReviews = $state<Record<string, Record<number, AgentReview>>>({});
   /** The pull request whose review fills the « Pull requests » view, by project. */
   prReviewOpen = $state<Record<string, number | null>>({});
+  /** The pull request whose view (ESC-457) fills the « Pull requests » view, by project: its number, and its repository
+   * when not the target's. */
+  prOpen = $state<Record<string, { number: number; hostRepo?: string } | null>>({});
+  /** How many times each pull request changed on the host (`prChanged`), by `<project>#<number>`: its view reads it again. */
+  prChanges = $state<Record<string, number>>({});
   /** The word of each project's code host for a pull request (« PR », « MR » on GitLab), once read (ESC-65). */
   prWords = $state<Record<string, string>>({});
   /**
@@ -966,6 +971,11 @@ class AppState {
       case 'prReview':
         this.gotPrReview(e.review);
         break;
+      case 'prChanged': {
+        const key = `${e.projectId}#${e.number}`;
+        this.prChanges[key] = (this.prChanges[key] ?? 0) + 1;
+        break;
+      }
       case 'prReviewGone':
         if (this.prReviews[e.projectId]) delete this.prReviews[e.projectId][e.number];
         break;
@@ -1712,8 +1722,23 @@ class AppState {
   }
 
   showPrReview(projectId: string, number: number) {
+    this.prOpen[projectId] = null;
     this.prReviewOpen[projectId] = number;
     this.openPrs(projectId);
+  }
+
+  /**
+   * Shows the view of a pull request of a project (ESC-457), in its « Pull requests » view in place of its list and of a
+   * review: from the list, the Kanban's card « En revue », the tab « PR et CI » and an agent's pull request.
+   */
+  openPrView(projectId: string, pr: { number: number; hostRepo?: string }) {
+    this.prReviewOpen[projectId] = null;
+    this.prOpen[projectId] = { number: pr.number, ...(pr.hostRepo ? { hostRepo: pr.hostRepo } : {}) };
+    this.openPrs(projectId);
+  }
+
+  closePrView(projectId: string) {
+    this.prOpen[projectId] = null;
   }
 
   closePrReview(projectId: string) {

@@ -174,6 +174,14 @@ describe('the « PR et CI » tab', () => {
     expect(backend.called('agent_pr_rerun')).toHaveLength(0);
   });
 
+  it('opens the view of the agent’s pull request in the work area (ESC-457), its icon the browser', async () => {
+    fakeBackend({ agent_pr_detail: () => ({ data: DETAIL }) });
+    render(PrPanel, { project: project(), agent: app.agents.a1 });
+    await userEvent.click(await screen.findByRole('button', { name: 'Ouvrir la PR' }));
+    expect(app.prOpen.p1).toEqual({ number: 7 });
+    expect(openUrl).not.toHaveBeenCalled();
+  });
+
   it('opens a failed check on the end of its log, and re-runs the failures on a click only', async () => {
     const backend = fakeBackend({
       agent_pr_detail: () => ({ data: DETAIL }),

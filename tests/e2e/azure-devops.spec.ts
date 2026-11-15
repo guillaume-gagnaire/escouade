@@ -117,7 +117,8 @@ test('an agent opens its pull request on Azure DevOps, and its card follows its 
   ]);
   expect(git(bare, 'log', '-1', '--format=%s', branch)).toBe('feat: connexion par jeton');
   // Its number in the header, under the card and beside its branch in the status bar.
-  await expect(page.getByRole('button', { name: 'Ouvrir la PR #101 dans le navigateur (brouillon)' })).toHaveCount(3);
+  await expect(page.getByRole('button', { name: 'Ouvrir la PR #101 dans le navigateur (brouillon)' })).toHaveCount(2);
+  await expect(page.getByRole('button', { name: 'Ouvrir la PR #101 (brouillon)' })).toHaveCount(1);
   await expect(page.locator('footer').getByRole('button', { name: 'Ouvrir la PR #101 dans le navigateur (brouillon)' })).toBeVisible();
   await expect(page.locator('footer .sync')).toContainText(branch);
   await expect(page.getByRole('button', { name: 'Ouvrir une PR' })).toHaveCount(0);
@@ -129,7 +130,7 @@ test('an agent opens its pull request on Azure DevOps, and its card follows its 
   });
   await showAgain(page);
   const prs = page.getByRole('group', { name: /^Pull requests de / });
-  const num = prs.getByRole('button', { name: 'Ouvrir la PR #101 dans le navigateur (ouverte)' });
+  const num = prs.getByRole('button', { name: 'Ouvrir la PR #101 (ouverte)' });
   await expect(num).toHaveText('#101');
   await expect(num.locator('[data-icon="close"]')).toHaveCount(1);
   await expect(page.locator('footer').getByRole('button', { name: 'Ouvrir la PR #101 dans le navigateur (ouverte)' })).toBeVisible();

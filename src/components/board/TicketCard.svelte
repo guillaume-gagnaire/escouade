@@ -38,7 +38,7 @@
   import { shareTicket } from '../../lib/share-actions';
   import { docsStore } from '../../lib/docs.svelte';
   import { pageTitle } from '../../lib/planning';
-  import { openPrPage, prIcon, prTone } from '../../lib/prs';
+  import { prIcon, prTone } from '../../lib/prs';
   import {
     asPull,
     canFixCi,
@@ -512,7 +512,7 @@
     >{/if}
 
   {#if ticket.column === 'pr' && ticket.pr}
-    <!-- « En revue » (ESC-59): its pull request as its host last told it; its number opens it in the browser. -->
+    <!-- « En revue » (ESC-59): its pull request as its host last told it; its number opens its view (ESC-457). -->
     {@const p = ticket.pr}
     {@const pull = asPull(p)}
     {@const ci = ciLine(p)}
@@ -521,8 +521,9 @@
     <div class="prline" data-ticket-pr={p.number}>
       <button
         class="prnum {prTone(pull)}"
-        aria-label={t('prs.chipLabel', { word: p.word, number: p.number, state: prStateWord(p) })}
-        onclick={(e) => act(e, () => openPrPage(p))}><Icon name={prIcon(pull)} size={12} />{p.word} #{p.number}</button
+        aria-label={t('prs.chipView', { word: p.word, number: p.number, state: prStateWord(p) })}
+        onclick={(e) => act(e, () => app.openPrView(project.id, { number: p.number }))}
+        ><Icon name={prIcon(pull)} size={12} />{p.word} #{p.number}</button
       >
       <span class="prstate {prStateKey(p)}">{prStateWord(p)}</span>
       {#if ci}<button

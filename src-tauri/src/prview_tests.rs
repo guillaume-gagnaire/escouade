@@ -403,3 +403,97 @@ async fn a_server_error_is_read_once_more_before_it_is_told() {
     let f = h.core.agent_pr_detail(&id, 7, "").await.failure.unwrap();
     assert_eq!(f.kind, FailureKind::Unreachable);
 }
+
+#[tokio::test]
+async fn the_view_of_a_projects_pull_request_reads_its_checks_log_and_reruns_without_an_agent() {
+    let h = harness("prview-view");
+    let server = FakeServer::start().await;
+    let (p, _, _) = github_project(&h, &server, true).await;
+    server.on(
+        "POST",
+        "/graphql#Pulls",
+        200,
+        json!({ "data": { "repository": { "p12": {
+            "number": 12, "url": "https://github.com/acme/demo/pull/12", "title": "Lien magique",
+            "state": "OPEN", "isDraft": false, "headRefName": "x", "baseRefName": "main",
+            "mergeable": "MERGEABLE", "isCrossRepository": false, "autoMergeRequest": null,
+            "author": { "login": "bob" }, "latestOpinionatedReviews": { "nodes": [] },
+            "reviewThreads": { "nodes": [] },
+            "commits": { "nodes": [{ "commit": { "statusCheckRollup": { "state": "FAILURE" } } }] },
+        } } } }),
+    );
+    server.on(
+        "GET",
+        "/repos/acme/demo/pulls/12",
+        200,
+        json!({ "number": 12, "state": "open", "head": { "sha": "abc", "ref": "x" }, "base": { "ref": "main" } }),
+    );
+    server.on(
+        "GET",
+        "/repos/acme/demo/commits/abc/check-runs",
+        200,
+        json!({ "check_runs": [
+            { "id": 77, "name": "test", "status": "completed", "conclusion": "failure",
+              "app": { "slug": "github-actions" } },
+        ] }),
+    );
+    server.on(
+        "GET",
+        "/repos/acme/demo/commits/abc/status",
+        200,
+        json!({ "statuses": [] }),
+    );
+    server.on("GET", "/repos/acme/demo/pulls/12/reviews", 200, json!([]));
+    server.on(
+        "POST",
+        "/graphql#Threads",
+        200,
+        json!({ "data": { "repository": { "pullRequest": { "reviewThreads": { "nodes": [] } } } } }),
+    );
+    server.on("GET", "/repos/acme/demo/issues/12/comments", 200, json!([]));
+    server.on("GET", "/repos/acme/demo/deployments", 200, json!([]));
+
+    let read = h.core.pr_detail(&p.id, 12, "").await;
+    assert_eq!(read.failure, None);
+    let d = read.data.unwrap();
+    assert_eq!(d.checks.len(), 1);
+    assert_eq!(d.checks[0].job.as_deref(), Some("77"));
+
+    server.on_text(
+        "GET",
+        "/repos/acme/demo/actions/jobs/77/logs",
+        200,
+        "FAIL src/app.test.ts",
+        &[],
+    );
+    let log = h.core.pr_log(&p.id, 12, "", "77").await.data.unwrap();
+    assert_eq!(log, "FAIL src/app.test.ts");
+
+    server.on(
+        "GET",
+        "/repos/acme/demo/actions/jobs/77",
+        200,
+        json!({ "run_id": 7 }),
+    );
+    server.on(
+        "POST",
+        "/repos/acme/demo/actions/runs/7/rerun-failed-jobs",
+        201,
+        json!({}),
+    );
+    assert_eq!(h.core.pr_rerun(&p.id, 12, "").await.unwrap(), 1);
+
+    // Another repository than the target's, that no agent nor ticket holds: not found, said.
+    let f = h
+        .core
+        .pr_detail(&p.id, 12, "zed/other")
+        .await
+        .failure
+        .unwrap();
+    assert!(f.message.contains("#12"), "{}", f.message);
+
+    // A project without a remote: its reason.
+    let h = harness("prview-view-none");
+    let (q, _) = h.project(false).await;
+    assert!(h.core.pr_detail(&q.id, 1, "").await.failure.is_some());
+}

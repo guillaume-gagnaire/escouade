@@ -142,11 +142,11 @@ test('an agent’s pull request opens its page from its header, its card, the st
   await page.getByRole('button', { name: 'Agents', exact: true }).click();
   await cards.first().click();
   const name = `Ouvrir la PR #${n} dans le navigateur (ouverte)`;
-  await expect(page.getByRole('button', { name })).toHaveCount(3);
+  // Header and status bar; the number under the card opens its view (ESC-457, pr-view.spec.ts).
+  await expect(page.getByRole('button', { name })).toHaveCount(2);
   const { opened, refuse } = await watch(page);
 
   await opensBoth(page, opened, page.locator('main.conv header').getByRole('button', { name }), PAGE(n), 'header');
-  await opensBoth(page, opened, page.locator(`.side [data-prs]`).getByRole('button', { name }), PAGE(n), 'card');
   await opensBoth(page, opened, page.locator('footer').getByRole('button', { name }), PAGE(n), 'status bar');
 
   // The menu of its card: « Voir la PR #n ».
@@ -204,7 +204,7 @@ test('the project’s pull requests and a review open the pull request’s page,
   await opensBoth(page, opened, view.getByRole('button', { name: 'Ouvrir dans le navigateur' }), PAGE(n), 'review');
 });
 
-test('a ticket’s pull request opens its page from its card « En revue »', async ({ app }) => {
+test('a ticket’s pull request opens its page from its view, opened by its card « En revue »', async ({ app }) => {
   test.setTimeout(240_000);
   const { page } = app;
   remote(app);
@@ -226,5 +226,8 @@ test('a ticket’s pull request opens its page from its card « En revue »', as
   const line = card.locator('[data-ticket-pr="101"]');
   await expect(line).toContainText('PR #101', { timeout: 60_000 });
   const { opened } = await watch(page);
-  await opensBoth(page, opened, line.getByRole('button', { name: /Ouvrir la PR #101 dans le navigateur/ }), PAGE(101), 'ticket card');
+  // Its number opens its view (ESC-457), whose « Ouvrir sur GitHub » opens its page.
+  await line.getByRole('button', { name: /^Ouvrir la PR #101 \(/ }).click();
+  const view = page.getByRole('main', { name: 'La PR #101' });
+  await opensBoth(page, opened, view.getByRole('button', { name: 'Ouvrir sur GitHub' }), PAGE(101), 'ticket’s view');
 });
