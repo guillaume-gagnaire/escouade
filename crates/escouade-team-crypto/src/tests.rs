@@ -939,3 +939,235 @@ fn the_words_are_bip39() {
         mnemonic.words().take(6).collect::<Vec<_>>()
     );
 }
+
+#[test]
+fn a_staged_commit_is_merged_only_once_the_server_took_it() {
+    let (mut relay, mut alice, _) = new_team(None);
+    let mut dave = join(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Admin),
+        member(4),
+    );
+    // Both stage a commit for epoch 1; the server takes Alice's.
+    let from_alice = alice.stage(&Change::Rotate).unwrap();
+    let from_dave = dave.stage(&Change::Rotate).unwrap();
+    assert!(
+        alice.stage(&Change::Rotate).is_err(),
+        "one pending commit at a time"
+    );
+    assert_eq!(
+        dave.epoch().unwrap(),
+        1,
+        "nothing merged before the server answers"
+    );
+    publish(&mut relay, from_alice);
+    let rest = alice.confirm_pending().unwrap();
+    assert!(rest.commit.is_none() && rest.history.is_some() && rest.recovery.is_some());
+    publish(&mut relay, rest);
+    assert!(matches!(relay.publish(from_dave), Err(Error::Conflict)));
+    // Dave drops his, plays Alice's: one branch.
+    assert!(
+        dave.process_commit(&relay.commits[1]).is_err(),
+        "his own waits"
+    );
+    dave.abandon_pending().unwrap();
+    dave.process_commit(&relay.commits[1]).unwrap();
+    assert_eq!(dave.checkpoint(), alice.checkpoint());
+    // A change already done is not staged again.
+    let mut carol = join(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Member),
+        member(3),
+    );
+    dave.sync(&relay.commits).unwrap();
+    publish(&mut relay, alice.remove_member(member(3)).unwrap());
+    dave.sync(&relay.commits).unwrap();
+    assert!(dave.is_done(&Change::RemoveMember(member(3))).unwrap());
+    assert!(!dave.is_done(&Change::Rotate).unwrap());
+    assert!(carol.sync(&relay.commits).is_ok());
+}
+
+#[test]
+fn an_admission_lost_to_another_commit_gives_its_invitation_back() {
+    let (mut relay, mut alice, _) = new_team(None);
+    let link = alice
+        .invite(
+            Purpose::NewMember(Role::Member),
+            NOW,
+            DEFAULT_LIFETIME,
+            SERVER,
+        )
+        .unwrap();
+    let mut bob = TeamDevice::new(member(2)).unwrap();
+    let request = bob.request_join(&link).unwrap();
+    alice.stage(&Change::Admit(request.clone(), NOW)).unwrap();
+    alice.abandon_pending().unwrap();
+    // Admitted again, once.
+    publish(&mut relay, alice.admit(&request, NOW).unwrap());
+    bob.accept_welcome(&relay.welcomes[&link.id]).unwrap();
+    assert_eq!(bob.epoch().unwrap(), 1);
+}
+
+#[test]
+fn the_state_saved_gives_the_same_device_back() {
+    let (mut relay, mut alice, _) = new_team(None);
+    let bob = join(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Member),
+        member(2),
+    );
+    let state = alice.saved_state();
+    assert_eq!(
+        state.group_id.as_deref(),
+        Some(alice.group_id().unwrap().as_slice())
+    );
+    assert_eq!(state.invitations.len(), 1);
+    assert!(state.pending.is_none() && !state.removed);
+    assert_eq!(alice.records().count(), 2);
+    let _ = bob;
+}
+
+#[test]
+fn a_beacon_shows_a_fork_to_the_other_branch() {
+    let (mut relay, mut alice, _) = new_team(None);
+    let mut dave = join(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Admin),
+        member(4),
+    );
+    let mut bob = join(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Member),
+        member(2),
+    );
+    dave.sync(&relay.commits).unwrap();
+    // The same branch: the same head.
+    let beacon = alice.beacon(NOW).unwrap();
+    assert_eq!(bob.check_beacon(&beacon).unwrap(), HeadCheck::Same);
+    assert_eq!(bob.head_words().unwrap(), alice.head_words().unwrap());
+    // A forged beacon (another key) or a changed one is set aside.
+    let mut changed = beacon.clone();
+    changed.head[0] ^= 1;
+    assert!(matches!(
+        bob.check_beacon(&changed),
+        Err(Error::BadSignature)
+    ));
+    let outsider = TeamDevice::new(member(9)).unwrap();
+    let mut forged = beacon.clone();
+    forged.author = outsider.signature_key();
+    assert!(matches!(
+        bob.check_beacon(&forged),
+        Err(Error::BadSignature)
+    ));
+
+    // The server shows Bob Dave's commit, Alice keeps hers: two branches.
+    let from_alice = alice.rotate().unwrap();
+    let from_dave = dave.rotate().unwrap();
+    bob.process_commit(&from_dave.commit.unwrap().1).unwrap();
+    let _ = from_alice;
+    let beacon = alice.beacon(NOW).unwrap();
+    assert!(matches!(
+        bob.check_beacon(&beacon),
+        Err(Error::Fork { epoch: 3 })
+    ));
+    // And a history link of Alice's branch does not open on Bob's.
+    let link = alice.history_link(3).unwrap();
+    assert!(bob.learn_history(&link).is_err());
+}
+
+#[test]
+fn a_history_link_is_written_again_by_any_member_who_holds_the_epoch() {
+    let (mut relay, mut alice, _) = new_team(None);
+    let mut bob = join(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Member),
+        member(2),
+    );
+    publish(&mut relay, alice.rotate().unwrap());
+    bob.sync(&relay.commits).unwrap();
+    // Bob, who holds epochs 1 and 2, writes the link of epoch 2 again (its committer's went missing).
+    let from_bob = bob.history_link(2).unwrap();
+    assert!(bob.history_link(0).is_err());
+    relay.history.remove(&2);
+
+    // Eve joins at epoch 3, without the history yet: the server has no link of epoch 2.
+    let link = alice
+        .invite(
+            Purpose::NewMember(Role::Member),
+            NOW,
+            DEFAULT_LIFETIME,
+            SERVER,
+        )
+        .unwrap();
+    let mut eve = TeamDevice::new(member(5)).unwrap();
+    let request = eve.request_join(&link).unwrap();
+    publish(&mut relay, alice.admit(&request, NOW).unwrap());
+    eve.accept_welcome(&relay.welcomes[&link.id]).unwrap();
+    assert!(matches!(
+        eve.read_history(|e| relay.history_link(e)),
+        Err(Error::MissingHistory(2))
+    ));
+    assert_eq!(
+        eve.known_epochs(),
+        vec![3],
+        "the walk stops whole at a missing link"
+    );
+    assert!(eve.learn_history(&relay.history_link(3).unwrap()).unwrap());
+    // Bob's link gives epoch 1, then the server's link of epoch 1 gives epoch 0.
+    assert!(eve.learn_history(&from_bob).unwrap());
+    assert!(
+        !eve.learn_history(&from_bob).unwrap(),
+        "known, the same head"
+    );
+    assert!(eve.learn_history(&relay.history_link(1).unwrap()).unwrap());
+    assert_eq!(eve.known_epochs(), vec![0, 1, 2, 3]);
+    // A link Eve cannot open (made for another epoch) is refused.
+    let mut wrong = from_bob.clone();
+    wrong.epoch = 3;
+    assert!(eve.learn_history(&wrong).is_err());
+}
+
+#[test]
+fn neither_a_removed_member_nor_the_server_raises_a_false_fork() {
+    let (mut relay, mut alice, _) = new_team(None);
+    let mut mallory = join(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Member),
+        member(9),
+    );
+    let mut bob = join(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Member),
+        member(2),
+    );
+    mallory.sync(&relay.commits).unwrap();
+    let old = mallory.epoch().unwrap();
+    publish(&mut relay, alice.remove_member(member(9)).unwrap());
+    bob.sync(&relay.commits).unwrap();
+
+    // Mallory, removed, signs a beacon of an epoch she was in, with a head of her own making.
+    let mut lie = mallory.beacon(NOW).unwrap();
+    assert_eq!(lie.epoch, old);
+    lie.head = [7; 32];
+    let group_id = bob.group_id().unwrap();
+    lie.signature = {
+        use openmls_traits::signatures::Signer;
+        let bytes = Beacon::signed_bytes(&group_id, lie.epoch, &lie.head, lie.at, &lie.author);
+        let (_, signer, _) = mallory.mls();
+        signer.sign(&bytes).unwrap()
+    };
+    assert!(matches!(bob.check_beacon(&lie), Err(Error::BadSignature)));
+
+    // The server forges an object that cites another head for an epoch Bob holds: no leaf signed it.
+    let mut forged = alice.seal(project(1), object(1), 1, b"x").unwrap();
+    forged.header.head = [7; 32];
+    assert!(matches!(bob.open(&forged), Err(Error::BadSignature)));
+}

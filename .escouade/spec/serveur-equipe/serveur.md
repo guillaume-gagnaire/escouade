@@ -1,15 +1,15 @@
 ---
 title: "Le serveur d'équipe"
 subject: "serveur-equipe"
-sources: ["docs/TEAM-SERVER.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md"]
-tickets: ["ESC-456"]
-decisions: [167]
+sources: ["docs/TEAM-SERVER.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team/README.md"]
+tickets: ["ESC-456","ESC-458"]
+decisions: [167,168]
 compared: null
 ---
 
 # Le serveur d'équipe
 
-Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (Docker avec Caddy, ou systemd). Il est distinct du mode serveur, qui lance des agents et ne s'expose pas. Pas encore branché dans l'app : le client viendra avec TS-2 et TS-3. Rien n'est publié avant la 2.3.
+Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (Docker avec Caddy, ou systemd). Il est distinct du mode serveur, qui lance des agents et ne s'expose pas. Son client est la crate `escouade-team` (TS-2, voir « Le client de l'équipe »), pas encore branchée dans l'app : l'interface viendra avec TS-3. Rien n'est publié avant la 2.3.
 
 ## Aveugle
 
@@ -19,10 +19,11 @@ Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (D
 
 ## Les appareils et l'entrée
 
-- Un appareil : un id, une clé publique Ed25519, une équipe, un rôle (administrateur ou membre), révoqué ou non.
+- Un appareil : un id, une clé publique Ed25519, une équipe, un rôle (administrateur ou membre), révoqué ou non. L'id d'un appareil sur le serveur est aussi celui de son identité dans le groupe MLS de l'équipe, mais sa clé pour le serveur n'est pas sa clé MLS.
 - `escouade-team-server init` crée la base et affiche un jeton à usage unique : le premier appareil qui s'inscrit avec crée l'équipe et en devient administrateur. Une seconde utilisation est refusée.
 - Un administrateur demande un jeton d'inscription par nouvel appareil (24 h par défaut, 7 jours au plus) : c'est le point d'entrée des invitations de TS-3.
 - Un administrateur révoque un appareil de l'équipe, un appareil se révoque lui-même : ses sessions et ses connexions en direct se ferment aussitôt.
+- Le rôle sur le serveur est celui de l'inscription : un membre nommé administrateur dans le registre de l'équipe ne l'est pas encore sur le serveur (TS-3).
 
 ## L'authentification
 

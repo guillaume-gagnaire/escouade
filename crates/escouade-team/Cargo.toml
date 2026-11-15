@@ -1,0 +1,56 @@
+[package]
+name = "escouade-team"
+version = "0.1.0"
+description = "Escouade's team client (TS-2): the team as an MLS group (by escouade-team-crypto), its device keys in the keychain, its state in SQLite, the client of the team server"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+# openmls 0.9 asks for 1.91.
+rust-version = "1.91"
+workspace = "../../src-tauri"
+# Wired into the app by TS-3 and TS-4 (docs/TEAM-SERVER.md §16): never published.
+publish = false
+
+[features]
+# The fuzzing targets' bodies (`fuzzing`), and the raw MLS group they commit with. Never in the app.
+fuzzing = ["escouade-team-crypto/test-door"]
+
+[dependencies]
+# The cryptography: the MLS group, its roster and rules, the project keys by epoch, the history, the beacons.
+escouade-team-crypto = { path = "../escouade-team-crypto" }
+openmls = "0.9.2"
+openmls_rust_crypto = "0.6"
+openmls_basic_credential = "0.6"
+openmls_traits = "0.6"
+# The state of openmls and ours, per team: SQLite by rusqlite, at the version the app's lock holds (one libsqlite3-sys
+# per workspace: `links = "sqlite3"`; openmls_sqlite_storage asks for rusqlite 0.37), each value encrypted.
+rusqlite = { version = "0.41", features = ["bundled"] }
+chacha20poly1305 = "0.10"
+# The client of the server: reqwest as the core builds it (its proxy, its authorities), and the live connection by
+# tokio-tungstenite through the same proxy (HTTP CONNECT) and TLS (rustls, ring), as the app's live transcription.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots"] }
+tokio = { version = "1", features = ["rt", "macros", "net", "sync", "time", "io-util"] }
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pki-types = { version = "1", features = ["std"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+async-trait = "0.1"
+ciborium = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_bytes = "0.11"
+serde_json = "1"
+ed25519-dalek = "2"
+sha2 = "0.11"
+hex = { version = "0.4", features = ["serde"] }
+base64 = "0.22"
+getrandom = "0.3"
+thiserror = "2"
+log = "0.4"
+zeroize = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+escouade-team-server = { path = "../escouade-team-server" }
+escouade-team-crypto = { path = "../escouade-team-crypto", features = ["test-door"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time", "io-util"] }
+tempfile = "3"

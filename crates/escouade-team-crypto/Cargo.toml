@@ -8,7 +8,7 @@ edition = "2021"
 # openmls 0.9 asks for 1.91.
 rust-version = "1.91"
 workspace = "../../src-tauri"
-# A mock-up, wired into nothing yet (docs/TEAM-SERVER.md §16, TS-0a): never published.
+# The cryptographic layer of `escouade-team` (TS-2), wired into the app through it only: never published.
 publish = false
 
 [dependencies]
@@ -32,3 +32,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 zeroize = { version = "1", features = ["derive"] }
+
+[features]
+# The raw MLS group of a device (`TeamDevice::mls`), for the client's tests that play a device or a server that
+# breaks the rules. Never in the app.
+test-door = []

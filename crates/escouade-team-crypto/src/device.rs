@@ -1,9 +1,16 @@
 //! A device of the team: its MLS client, and what it keeps above MLS (the records of its epochs, its checkpoint).
 //!
-//! Every operation that changes the group returns a [`Publication`]: what goes to the server (the commit, a
-//! Welcome, the history link, the recovery and escrow wraps). The device merges its own commit at once; a server
-//! that already holds a commit for that epoch refuses the second one (`relay.rs`), and the device then starts again
-//! from the server's commits (TS-2).
+//! Every change of the group is **staged** first ([`TeamDevice::stage`]): its commit goes to the server, and the
+//! device merges it only once the server took it ([`TeamDevice::confirm_pending`]). A server that already holds a
+//! commit for that epoch refuses the second one; the device then drops its own ([`TeamDevice::abandon_pending`]),
+//! processes the commit that won, and stages again if the change is still to do: it never holds two epochs that
+//! diverge. The calls of the mock-up that commit and merge at once (`rotate`, `admit`…) stay, for the tests that play
+//! the server in memory (`relay.rs`).
+//!
+//! The device is generic over its provider (`openmls_traits::OpenMlsProvider`): the mock-up's tests take the one in
+//! memory, the client (`escouade-team`) its SQLite storage. What MLS does not keep (the records, the invitations,
+//! the pending commit) is given out by [`TeamDevice::saved_state`] and [`TeamDevice::records`], and taken back by
+//! [`TeamDevice::restore`].
 
 use std::collections::BTreeMap;
 
@@ -19,7 +26,10 @@ use openmls_rust_crypto::OpenMlsRustCrypto;
 use openmls_traits::random::OpenMlsRand;
 use openmls_traits::signatures::Signer;
 use openmls_traits::OpenMlsProvider;
+use serde::{Deserialize, Serialize};
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
+use crate::beacon::Beacon;
 use crate::content::{ObjectHeader, SealedObject};
 use crate::history::{walk_back, HistoryLink};
 use crate::identity::{DeviceId, DeviceKind, Identity, MemberId, ObjectId, ProjectId};
@@ -47,11 +57,23 @@ pub struct Publication {
     pub escrow: Option<EscrowWrap>,
 }
 
+impl Publication {
+    /// The second half of a change (after the server took its commit) joined to the first.
+    fn join(mut self, rest: Publication) -> Publication {
+        self.welcome = rest.welcome;
+        self.history = rest.history;
+        self.recovery = rest.recovery;
+        self.escrow = rest.escrow;
+        self
+    }
+}
+
 /// The highest epoch a device has seen, and its head: kept beside its keys (in the keychain), it refuses to go
 /// back, like the `serial` of the store's revocation list.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Checkpoint {
     pub epoch: u64,
+    #[serde(with = "hex::serde")]
     pub head: [u8; 32],
 }
 
@@ -75,6 +97,48 @@ pub enum Processed {
     Removed,
 }
 
+/// A change of the group, as a device stages it (and stages it again after losing its epoch to another commit).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Change {
+    /// Removes a member: all their devices, and their entry in the roster.
+    RemoveMember(MemberId),
+    /// Revokes a device (a stolen one): by its member, or by an administrator.
+    RemoveDevice(DeviceId),
+    /// "Change the team's keys": an empty commit with a path.
+    Rotate,
+    SetRole(MemberId, Role),
+    SetEscrow(Option<EscrowPublic>),
+    ReplaceRecovery(RecoveryPublic),
+    /// Admits an invitee's request, at the hour `now`.
+    Admit(JoinRequest, u64),
+}
+
+/// The commit a device staged and sent, until the server takes it or refuses it. Kept in the device's saved state:
+/// a device that stops between the two finds it again, and the server's log says which way it went.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
+pub struct PendingCommit {
+    /// The epoch the commit applies to.
+    pub from_epoch: u64,
+    /// The commit, as it goes to the server.
+    pub commit: Vec<u8>,
+    /// The Welcome of an admission, sent with its confirmation once the commit is merged.
+    pub welcome: Option<Vec<u8>>,
+    pub invitation_id: Option<[u8; 16]>,
+    pub invitation_secret: Option<[u8; 32]>,
+}
+
+/// What a device keeps beside the MLS group (which its provider's storage holds) and its records (kept one by one):
+/// the group's id, the invitations it made, the link it joins by, whether it was removed, the commit it waits on.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct SavedState {
+    pub group_id: Option<Vec<u8>>,
+    pub invitations: Vec<Invitation>,
+    /// The invitation link being used to join (`InviteLink::to_url`).
+    pub joining: Option<String>,
+    pub removed: bool,
+    pub pending: Option<PendingCommit>,
+}
+
 /// The leaf capabilities every device of the team announces: the suite, the roster's extension, basic credentials.
 pub fn capabilities() -> Capabilities {
     Capabilities::new(
@@ -86,15 +150,18 @@ pub fn capabilities() -> Capabilities {
     )
 }
 
+/// No past epoch's message secrets are kept (`max_past_epochs` 0): only commits travel as MLS messages, each of the
+/// epoch it applies to, and the content has its own keys (`keys.rs`). The storage forgets them at each epoch.
 fn join_config() -> MlsGroupJoinConfig {
     MlsGroupJoinConfig::builder()
         .wire_format_policy(MIXED_CIPHERTEXT_WIRE_FORMAT_POLICY)
         .use_ratchet_tree_extension(true)
+        .max_past_epochs(0)
         .build()
 }
 
-fn random_nonce(provider: &OpenMlsRustCrypto) -> Result<[u8; 24], Error> {
-    provider.rand().random_array().map_err(|_| Error::Random)
+fn random_nonce(rand: &impl OpenMlsRand) -> Result<[u8; 24], Error> {
+    rand.random_array().map_err(|_| Error::Random)
 }
 
 pub(crate) fn encode(message: &MlsMessageOut) -> Result<Vec<u8>, Error> {
@@ -105,8 +172,8 @@ pub(crate) fn decode(bytes: &[u8]) -> Result<MlsMessageIn, Error> {
     MlsMessageIn::tls_deserialize_exact(bytes).map_err(mls)
 }
 
-pub struct TeamDevice {
-    provider: OpenMlsRustCrypto,
+pub struct TeamDevice<P: OpenMlsProvider = OpenMlsRustCrypto> {
+    provider: P,
     signer: SignatureKeyPair,
     identity: Identity,
     group: Option<MlsGroup>,
@@ -115,15 +182,17 @@ pub struct TeamDevice {
     invitations: BTreeMap<[u8; 16], Invitation>,
     joining: Option<InviteLink>,
     removed: bool,
+    pending: Option<PendingCommit>,
 }
 
-impl TeamDevice {
-    /// A new device of `member`, its signature key made here (in the client: kept in the keychain, never exported).
+impl TeamDevice<OpenMlsRustCrypto> {
+    /// A new device of `member`, in memory, its signature key made here (in the client: kept in the keychain, never
+    /// exported).
     pub fn new(member: MemberId) -> Result<Self, Error> {
         let provider = OpenMlsRustCrypto::default();
         let signer = SignatureKeyPair::new(CIPHERSUITE.signature_algorithm()).map_err(mls)?;
         let device = DeviceId::random(provider.rand())?;
-        Ok(Self::with_keys(
+        Ok(Self::with_identity(
             provider,
             signer,
             Identity {
@@ -134,11 +203,19 @@ impl TeamDevice {
         ))
     }
 
-    fn with_keys(
-        provider: OpenMlsRustCrypto,
-        signer: SignatureKeyPair,
-        identity: Identity,
-    ) -> Self {
+    /// [`TeamDevice::recover_with`], in memory.
+    pub fn recover(
+        words: &str,
+        wrap: &RecoveryWrap,
+        group_id: &[u8],
+    ) -> Result<(Self, Publication), Error> {
+        Self::recover_with(OpenMlsRustCrypto::default(), words, wrap, group_id)
+    }
+}
+
+impl<P: OpenMlsProvider> TeamDevice<P> {
+    /// A device on `provider`, its keys and identity given (the client reads them from the keychain).
+    pub fn with_identity(provider: P, signer: SignatureKeyPair, identity: Identity) -> Self {
         Self {
             provider,
             signer,
@@ -149,7 +226,67 @@ impl TeamDevice {
             invitations: BTreeMap::new(),
             joining: None,
             removed: false,
+            pending: None,
         }
+    }
+
+    /// A device started again: its group loaded from the provider's storage, its records and state given back. Its
+    /// checkpoint is that of the group's epoch; the caller compares it to the one kept apart
+    /// ([`Self::check_restored`]).
+    pub fn restore(
+        provider: P,
+        signer: SignatureKeyPair,
+        identity: Identity,
+        state: SavedState,
+        records: Vec<EpochRecord>,
+    ) -> Result<Self, Error> {
+        let mut device = Self::with_identity(provider, signer, identity);
+        device.records = records.into_iter().map(|r| (r.epoch, r)).collect();
+        device.invitations = state
+            .invitations
+            .iter()
+            .map(|i| (i.id, i.clone()))
+            .collect();
+        device.joining = match &state.joining {
+            Some(url) => Some(InviteLink::parse(url)?),
+            None => None,
+        };
+        device.removed = state.removed;
+        device.pending = state.pending.clone();
+        if let Some(id) = &state.group_id {
+            let group = MlsGroup::load(device.provider.storage(), &GroupId::from_slice(id))
+                .map_err(mls)?
+                .ok_or_else(|| Error::Mls("the saved group is not in the storage".into()))?;
+            let epoch = group.epoch().as_u64();
+            let record = device
+                .records
+                .get(&epoch)
+                .ok_or(Error::UnknownEpoch(epoch))?;
+            device.checkpoint = Some(Checkpoint {
+                epoch,
+                head: record.head,
+            });
+            device.group = Some(group);
+        }
+        Ok(device)
+    }
+
+    /// What to keep beside the group and the records, to [`Self::restore`] the device.
+    pub fn saved_state(&self) -> SavedState {
+        SavedState {
+            group_id: self
+                .group
+                .as_ref()
+                .map(|g| g.group_id().as_slice().to_vec()),
+            invitations: self.invitations.values().cloned().collect(),
+            joining: self.joining.as_ref().map(InviteLink::to_url),
+            removed: self.removed,
+            pending: self.pending.clone(),
+        }
+    }
+
+    pub fn provider(&self) -> &P {
+        &self.provider
     }
 
     pub fn identity(&self) -> Identity {
@@ -197,6 +334,14 @@ impl TeamDevice {
         ))
     }
 
+    /// The leaves of the current epoch: who is in the team, device by device (the verified journal of the members).
+    pub fn leaves(&self) -> Result<Vec<Identity>, Error> {
+        self.group()?
+            .members()
+            .map(|m| Identity::from_credential(&m.credential))
+            .collect()
+    }
+
     /// The escrow key, when the team has one: the client shows it to every member, always
     /// ("This team has an escrow key: the organisation can read its content").
     pub fn escrow(&self) -> Result<Option<EscrowPublic>, Error> {
@@ -225,6 +370,16 @@ impl TeamDevice {
     /// The record of an epoch (for the tests, the vectors and the audit: in the client it never leaves the device).
     pub fn record(&self, epoch: u64) -> Option<&EpochRecord> {
         self.records.get(&epoch)
+    }
+
+    /// Every record this device holds, oldest first (the client keeps each in its encrypted storage).
+    pub fn records(&self) -> impl Iterator<Item = &EpochRecord> {
+        self.records.values()
+    }
+
+    /// The commit this device staged and waits on, if any.
+    pub fn pending(&self) -> Option<&PendingCommit> {
+        self.pending.as_ref()
     }
 
     // === The team's birth ===
@@ -257,6 +412,7 @@ impl TeamDevice {
             .ciphersuite(CIPHERSUITE)
             .with_wire_format_policy(MIXED_CIPHERTEXT_WIRE_FORMAT_POLICY)
             .use_ratchet_tree_extension(true)
+            .max_past_epochs(0)
             .with_group_context_extensions(roster.to_extensions()?)
             .with_capabilities(capabilities())
             .build(&self.provider, &self.signer, self.credential_with_key())
@@ -332,14 +488,85 @@ impl TeamDevice {
 
     // === Commits ===
 
-    /// Commits, checks the commit against the rules as every other device will, merges it, and says what to publish.
-    fn commit(
+    /// Stages a change: builds its commit, checks it against the rules as every other device will, and keeps it
+    /// pending. The publication holds the commit only; the rest comes with [`Self::confirm_pending`], once the
+    /// server has taken the commit.
+    pub fn stage(&mut self, change: &Change) -> Result<Publication, Error> {
+        if self.pending.is_some() {
+            return Err(Error::Mls(
+                "a commit of this device is pending: confirm or abandon it first".into(),
+            ));
+        }
+        match change {
+            Change::RemoveMember(member) => {
+                self.require_admin()?;
+                let mut roster = self.roster()?;
+                roster.members.remove(member);
+                let leaves =
+                    self.leaves_where(|i| i.member == *member && i.kind == DeviceKind::Device)?;
+                self.stage_commit(Vec::new(), leaves, Some(roster), None)
+            }
+            Change::RemoveDevice(device) => {
+                let leaves = self.leaves_where(|i| i.device == *device)?;
+                if leaves.is_empty() {
+                    return Err(Error::Policy("no such device in the team".into()));
+                }
+                self.stage_commit(Vec::new(), leaves, None, None)
+            }
+            Change::Rotate => self.stage_commit(Vec::new(), Vec::new(), None, None),
+            Change::SetRole(member, role) => {
+                self.require_admin()?;
+                let mut roster = self.roster()?;
+                if roster.members.insert(*member, *role).is_none() {
+                    return Err(Error::Policy("no such member".into()));
+                }
+                self.stage_commit(Vec::new(), Vec::new(), Some(roster), None)
+            }
+            Change::SetEscrow(escrow) => {
+                self.require_admin()?;
+                let mut roster = self.roster()?;
+                roster.escrow = escrow.clone();
+                self.stage_commit(Vec::new(), Vec::new(), Some(roster), None)
+            }
+            Change::ReplaceRecovery(recovery) => {
+                self.require_admin()?;
+                let mut roster = self.roster()?;
+                roster.recovery = recovery.clone();
+                let own = self.identity;
+                let leaves = self.leaves_where(|i| i.kind == DeviceKind::Recovery && *i != own)?;
+                self.stage_commit(Vec::new(), leaves, Some(roster), None)
+            }
+            Change::Admit(request, now) => self.stage_admit(request, *now),
+        }
+    }
+
+    /// Whether a change has nothing left to do in the current epoch (another commit did it): the device does not
+    /// stage it again after losing its epoch.
+    pub fn is_done(&self, change: &Change) -> Result<bool, Error> {
+        let roster = self.roster()?;
+        Ok(match change {
+            Change::RemoveMember(member) => {
+                !roster.members.contains_key(member)
+                    && self
+                        .leaves_where(|i| i.member == *member && i.kind == DeviceKind::Device)?
+                        .is_empty()
+            }
+            Change::RemoveDevice(device) => self.leaves_where(|i| i.device == *device)?.is_empty(),
+            Change::Rotate | Change::Admit(..) => false,
+            Change::SetRole(member, role) => roster.role(member) == Some(*role),
+            Change::SetEscrow(escrow) => roster.escrow == *escrow,
+            Change::ReplaceRecovery(recovery) => roster.recovery == *recovery,
+        })
+    }
+
+    fn stage_commit(
         &mut self,
         adds: Vec<KeyPackage>,
         removals: Vec<LeafNodeIndex>,
         roster: Option<Roster>,
-    ) -> Result<(Publication, Option<MlsMessageOut>), Error> {
-        let previous = self.current_record()?.clone();
+        invitation: Option<([u8; 16], [u8; 32])>,
+    ) -> Result<Publication, Error> {
+        self.current_record()?;
         let provider = &self.provider;
         let group = self.group.as_mut().ok_or(Error::NotInTeam)?;
         let from_epoch = group.epoch().as_u64();
@@ -373,27 +600,108 @@ impl TeamDevice {
             return Err(e);
         }
         let commit = encode(bundle.commit())?;
-        let welcome = bundle.to_welcome_msg();
-        group.merge_pending_commit(provider).map_err(mls)?;
+        let welcome = match bundle.to_welcome_msg() {
+            Some(w) => Some(encode(&w)?),
+            None => None,
+        };
+        self.pending = Some(PendingCommit {
+            from_epoch,
+            commit: commit.clone(),
+            welcome,
+            invitation_id: invitation.map(|(id, _)| id),
+            invitation_secret: invitation.map(|(_, s)| s),
+        });
+        Ok(Publication {
+            commit: Some((from_epoch, commit)),
+            ..Default::default()
+        })
+    }
+
+    /// The server took the pending commit: merges it, records the new epoch, and says the rest to publish (the
+    /// history link, the recovery and escrow wraps, the Welcome of an admission).
+    pub fn confirm_pending(&mut self) -> Result<Publication, Error> {
+        let pending = self
+            .pending
+            .clone()
+            .ok_or_else(|| Error::Mls("no pending commit".into()))?;
+        let previous = self
+            .records
+            .get(&pending.from_epoch)
+            .cloned()
+            .ok_or(Error::UnknownEpoch(pending.from_epoch))?;
+        let group = self.group.as_mut().ok_or(Error::NotInTeam)?;
+        if group.epoch().as_u64() != pending.from_epoch || group.pending_commit().is_none() {
+            return Err(Error::Mls(
+                "the pending commit is no longer in the group".into(),
+            ));
+        }
+        group.merge_pending_commit(&self.provider).map_err(mls)?;
+        self.pending = None;
 
         let record = self.enter_epoch()?;
         let history = HistoryLink::make(
             &self.group_id()?,
             &record,
             &previous,
-            random_nonce(&self.provider)?,
+            random_nonce(self.provider.rand())?,
         )?;
         let (recovery, escrow) = self.wraps(&record)?;
-        Ok((
-            Publication {
-                commit: Some((from_epoch, commit)),
-                welcome: None,
-                history: Some(history),
-                recovery: Some(recovery),
-                escrow,
-            },
+        let welcome = match (
+            pending.welcome.as_ref(),
+            pending.invitation_id,
+            pending.invitation_secret.as_ref(),
+        ) {
+            (Some(welcome), Some(id), Some(secret)) => {
+                let group = self.group()?;
+                let confirmation = welcome_confirmation(
+                    secret,
+                    group.group_id().as_slice(),
+                    group.epoch().as_u64(),
+                    group.epoch_authenticator().as_slice(),
+                );
+                Some((
+                    id,
+                    WelcomeDelivery {
+                        welcome: welcome.clone(),
+                        confirmation,
+                    },
+                ))
+            }
+            _ => None,
+        };
+        Ok(Publication {
+            commit: None,
             welcome,
-        ))
+            history: Some(history),
+            recovery: Some(recovery),
+            escrow,
+        })
+    }
+
+    /// The server refused the pending commit (another holds its epoch): drops it, and gives the invitation it used
+    /// back. The device then processes the commit that won, and stages again if the change is still to do.
+    pub fn abandon_pending(&mut self) -> Result<(), Error> {
+        let Some(pending) = self.pending.take() else {
+            return Ok(());
+        };
+        if let Some(id) = pending.invitation_id {
+            if let Some(inv) = self.invitations.get_mut(&id) {
+                inv.used = false;
+            }
+        }
+        if let Some(group) = self.group.as_mut() {
+            group
+                .clear_pending_commit(self.provider.storage())
+                .map_err(mls)?;
+        }
+        Ok(())
+    }
+
+    /// Stages, then merges at once: for a server in memory that takes every commit in turn (`relay.rs`).
+    fn commit_now(&mut self, change: Change) -> Result<Publication, Error> {
+        let staged = self.stage(&change)?;
+        let rest = self.confirm_pending()?;
+        Ok(staged.join(rest))
     }
 
     fn current_record(&self) -> Result<&EpochRecord, Error> {
@@ -421,54 +729,41 @@ impl TeamDevice {
     /// Removes a member: all their devices, and their entry in the roster, in one commit. A new epoch starts that
     /// the member does not have (C8-A: the history is not encrypted again).
     pub fn remove_member(&mut self, member: MemberId) -> Result<Publication, Error> {
-        self.require_admin()?;
-        let mut roster = self.roster()?;
-        roster.members.remove(&member);
-        let leaves = self.leaves_where(|i| i.member == member && i.kind == DeviceKind::Device)?;
-        Ok(self.commit(Vec::new(), leaves, Some(roster))?.0)
+        self.commit_now(Change::RemoveMember(member))
     }
 
     /// Revokes a device (a stolen one): by its member, or by an administrator.
     pub fn remove_device(&mut self, device: DeviceId) -> Result<Publication, Error> {
-        let leaves = self.leaves_where(|i| i.device == device)?;
-        Ok(self.commit(Vec::new(), leaves, None)?.0)
+        self.commit_now(Change::RemoveDevice(device))
     }
 
     /// "Change the team's keys": an empty commit with a path, after an incident.
     pub fn rotate(&mut self) -> Result<Publication, Error> {
-        Ok(self.commit(Vec::new(), Vec::new(), None)?.0)
+        self.commit_now(Change::Rotate)
     }
 
     pub fn set_role(&mut self, member: MemberId, role: Role) -> Result<Publication, Error> {
-        self.require_admin()?;
-        let mut roster = self.roster()?;
-        if roster.members.insert(member, role).is_none() {
-            return Err(Error::Policy("no such member".into()));
-        }
-        Ok(self.commit(Vec::new(), Vec::new(), Some(roster))?.0)
+        self.commit_now(Change::SetRole(member, role))
     }
 
     /// Sets or clears the organisation's escrow key. Every member sees it.
     pub fn set_escrow(&mut self, escrow: Option<EscrowPublic>) -> Result<Publication, Error> {
-        self.require_admin()?;
-        let mut roster = self.roster()?;
-        roster.escrow = escrow;
-        Ok(self.commit(Vec::new(), Vec::new(), Some(roster))?.0)
+        self.commit_now(Change::SetEscrow(escrow))
     }
 
     /// Puts a new recovery key in place of the old one (after a recovery, or when the words may have leaked), and
     /// removes the old recovery leaf if it is in the group.
     pub fn replace_recovery(&mut self, recovery: RecoveryPublic) -> Result<Publication, Error> {
-        self.require_admin()?;
-        let mut roster = self.roster()?;
-        roster.recovery = recovery;
-        let own = self.identity;
-        let leaves = self.leaves_where(|i| i.kind == DeviceKind::Recovery && *i != own)?;
-        Ok(self.commit(Vec::new(), leaves, Some(roster))?.0)
+        self.commit_now(Change::ReplaceRecovery(recovery))
     }
 
     /// Processes a commit of the server's log: MLS checks it, then the team's rules (`policy.rs`), then it is merged.
     pub fn process_commit(&mut self, bytes: &[u8]) -> Result<Processed, Error> {
+        if self.pending.is_some() {
+            return Err(Error::Mls(
+                "a commit of this device is pending: confirm or abandon it first".into(),
+            ));
+        }
         let message = decode(bytes)?.try_into_protocol_message().map_err(mls)?;
         let current = self.epoch()?;
         let epoch = message.epoch().as_u64();
@@ -572,6 +867,10 @@ impl TeamDevice {
     /// An administrator (or the member, for their own device) admits a request: checks the invitation and the MAC,
     /// adds the device (and the member to the roster), and makes the Welcome and its confirmation.
     pub fn admit(&mut self, request: &JoinRequest, now: u64) -> Result<Publication, Error> {
+        self.commit_now(Change::Admit(request.clone(), now))
+    }
+
+    fn stage_admit(&mut self, request: &JoinRequest, now: u64) -> Result<Publication, Error> {
         let invitation = self
             .invitations
             .get(&request.invitation)
@@ -614,26 +913,20 @@ impl TeamDevice {
                 None
             }
         };
-        // Used from now on, even if what follows fails: an invitation never serves twice.
+        // Used from now on, even if what follows fails: an invitation never serves twice. A commit the server
+        // refuses gives it back (`abandon_pending`).
         if let Some(inv) = self.invitations.get_mut(&request.invitation) {
             inv.used = true;
         }
-        let (mut publication, welcome) = self.commit(vec![key_package], Vec::new(), new_roster)?;
-        let welcome = welcome.ok_or_else(|| Error::Mls("an Add without a Welcome".into()))?;
-        let group = self.group()?;
-        let confirmation = welcome_confirmation(
-            &invitation.secret,
-            group.group_id().as_slice(),
-            group.epoch().as_u64(),
-            group.epoch_authenticator().as_slice(),
-        );
-        publication.welcome = Some((
-            invitation.id,
-            WelcomeDelivery {
-                welcome: encode(&welcome)?,
-                confirmation,
-            },
-        ));
+        let publication = self.stage_commit(
+            vec![key_package],
+            Vec::new(),
+            new_roster,
+            Some((invitation.id, invitation.secret)),
+        )?;
+        if self.pending.as_ref().is_none_or(|p| p.welcome.is_none()) {
+            return Err(Error::Mls("an Add without a Welcome".into()));
+        }
         Ok(publication)
     }
 
@@ -687,6 +980,48 @@ impl TeamDevice {
         Ok(n)
     }
 
+    /// Learns the record of the epoch before `link.epoch` from one history link, when this device holds
+    /// `link.epoch`. True when it is new; false when it was known, with the same head; [`Error::Fork`] when it was
+    /// known with another head (two members of one epoch saw two pasts). A link this device cannot open (the
+    /// server's, or of a branch it is not on) is an error, and the caller tries another.
+    pub fn learn_history(&mut self, link: &HistoryLink) -> Result<bool, Error> {
+        let group_id = self.group_id()?;
+        let current = self
+            .records
+            .get(&link.epoch)
+            .ok_or(Error::UnknownEpoch(link.epoch))?;
+        let previous = link.open(&group_id, current)?;
+        match self.records.get(&previous.epoch) {
+            Some(known) if known.head == previous.head => Ok(false),
+            Some(_) => Err(Error::Fork {
+                epoch: previous.epoch,
+            }),
+            None => {
+                self.records.insert(previous.epoch, previous);
+                Ok(true)
+            }
+        }
+    }
+
+    /// The history link of `epoch`, made by any member who holds that epoch and the one before: the one its
+    /// committer did not write (a device that stopped before sending it) is written by another.
+    pub fn history_link(&self, epoch: u64) -> Result<HistoryLink, Error> {
+        if epoch == 0 {
+            return Err(Error::UnknownEpoch(0));
+        }
+        let current = self.records.get(&epoch).ok_or(Error::UnknownEpoch(epoch))?;
+        let previous = self
+            .records
+            .get(&(epoch - 1))
+            .ok_or(Error::MissingHistory(epoch))?;
+        HistoryLink::make(
+            &self.group_id()?,
+            current,
+            previous,
+            random_nonce(self.provider.rand())?,
+        )
+    }
+
     // === Content ===
 
     /// Encrypts and signs an object of a project, under the current epoch.
@@ -709,14 +1044,25 @@ impl TeamDevice {
         SealedObject::seal(
             record,
             header,
-            random_nonce(&self.provider)?,
+            random_nonce(self.provider.rand())?,
             plaintext,
             |bytes| self.signer.sign(bytes).map_err(mls),
         )
     }
 
-    /// Checks the head the object cites (a fork shows here), its author, then decrypts.
+    /// Checks the object's author and signature, then the head it cites (a fork shows here), then decrypts. The
+    /// author first: an object the server forged (no leaf's signature) is refused as such, never taken for a fork.
     pub fn open(&self, sealed: &SealedObject) -> Result<Vec<u8>, Error> {
+        if let Some(record) = self.records.get(&sealed.header.epoch) {
+            if !record.has_author(&sealed.header.author) {
+                return Err(Error::BadSignature);
+            }
+            crate::content::verify_ed25519(
+                &sealed.header.author,
+                &SealedObject::signed_bytes(&sealed.header, &sealed.nonce, &sealed.ciphertext),
+                &sealed.signature,
+            )?;
+        }
         match self.check_head(sealed.header.epoch, &sealed.header.head)? {
             HeadCheck::Same => {}
             HeadCheck::Behind => return Err(Error::Behind(sealed.header.epoch)),
@@ -779,23 +1125,60 @@ impl TeamDevice {
         Ok(())
     }
 
+    /// A head beacon of the current epoch, signed by this device's leaf (`beacon.rs`).
+    pub fn beacon(&self, at: u64) -> Result<Beacon, Error> {
+        let record = self.current_record()?;
+        Beacon::sign(
+            &self.group_id()?,
+            record.epoch,
+            record.head,
+            at,
+            self.signer.to_public_vec(),
+            |bytes| self.signer.sign(bytes).map_err(mls),
+        )
+    }
+
+    /// What this device makes of a member's beacon: its signature by a leaf of this device's current epoch (a
+    /// member still in the team: one removed, who keeps the keys of old epochs, cannot raise a false alarm), also a
+    /// leaf of the beacon's epoch when this device holds it (a leaf keeps its key), then its head, as
+    /// [`Self::check_head`]. A beacon signed by nobody known is [`Error::BadSignature`], and changes nothing.
+    pub fn check_beacon(&self, beacon: &Beacon) -> Result<HeadCheck, Error> {
+        let now = self.current_record()?;
+        if !now.has_author(&beacon.author)
+            || self
+                .records
+                .get(&beacon.epoch)
+                .is_some_and(|r| !r.has_author(&beacon.author))
+        {
+            return Err(Error::BadSignature);
+        }
+        beacon.verify(&self.group_id()?)?;
+        self.check_head(beacon.epoch, &beacon.head)
+    }
+
+    /// The six words of the current epoch's head, to compare out of band ("we see the same team"): the server
+    /// that partitions the team for good shows two sets of words.
+    pub fn head_words(&self) -> Result<[&'static str; 6], Error> {
+        Ok(TeamFingerprint(self.current_record()?.head).words())
+    }
+
     // === Recovery ===
 
     /// The recovery key comes back: its words open the last recovery wrap, and it joins the group by an external
     /// commit, as the recovery leaf, an administrator. It then invites the new devices.
-    pub fn recover(
+    pub fn recover_with(
+        provider: P,
         words: &str,
         wrap: &RecoveryWrap,
         group_id: &[u8],
     ) -> Result<(Self, Publication), Error> {
         let key = RecoveryKey::from_words(words)?;
-        let provider = OpenMlsRustCrypto::default();
         let (previous, group_info) = wrap.open(provider.crypto(), &key, group_id)?;
         let group_info = match decode(&group_info)?.extract() {
             MlsMessageBodyIn::GroupInfo(gi) => gi,
             _ => return Err(Error::Encoding("a recovery wrap holds a GroupInfo".into())),
         };
-        let mut device = Self::with_keys(provider, key.signature_keys(), key.identity());
+        let mut device = Self::with_identity(provider, key.signature_keys(), key.identity());
         let (group, bundle) = MlsGroup::external_commit_builder()
             .with_config(join_config())
             .build_group(&device.provider, group_info, device.credential_with_key())
@@ -831,7 +1214,7 @@ impl TeamDevice {
             group_id,
             &record,
             &previous,
-            random_nonce(&device.provider)?,
+            random_nonce(device.provider.rand())?,
         )?;
         let (recovery, escrow) = device.wraps(&record)?;
         Ok((
@@ -847,10 +1230,11 @@ impl TeamDevice {
     }
 }
 
-/// A test door: the raw MLS group, to play a device that breaks the rules (`tests.rs`).
-#[cfg(test)]
-impl TeamDevice {
-    pub(crate) fn mls(&mut self) -> (&OpenMlsRustCrypto, &SignatureKeyPair, &mut MlsGroup) {
+/// A test door: the raw MLS group, to play a device that breaks the rules (`tests.rs`, and the client's tests with
+/// the feature `test-door`).
+#[cfg(any(test, feature = "test-door"))]
+impl<P: OpenMlsProvider> TeamDevice<P> {
+    pub fn mls(&mut self) -> (&P, &SignatureKeyPair, &mut MlsGroup) {
         (
             &self.provider,
             &self.signer,

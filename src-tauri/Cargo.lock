@@ -2369,6 +2369,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "escouade-team"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "chacha20poly1305",
+ "ciborium",
+ "ed25519-dalek",
+ "escouade-team-crypto",
+ "escouade-team-server",
+ "futures-util",
+ "getrandom 0.3.4",
+ "hex",
+ "log",
+ "openmls",
+ "openmls_basic_credential",
+ "openmls_rust_crypto",
+ "openmls_traits",
+ "reqwest 0.12.28",
+ "rusqlite",
+ "rustls",
+ "rustls-pki-types",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-rustls",
+ "tokio-tungstenite 0.30.0",
+ "zeroize",
+]
+
+[[package]]
 name = "escouade-team-crypto"
 version = "0.1.0"
 dependencies = [

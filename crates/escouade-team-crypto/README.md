@@ -1,6 +1,6 @@
 # escouade-team-crypto : la maquette de la cryptographie du serveur d'équipe (TS-0a)
 
-Ticket ESC-453, ligne TS-0a de `docs/TEAM-SERVER.md` §16. Le choix C9-B (MLS dès le départ) a été tranché par l'utilisateur le 2026-11-14 (§15.2). Cette crate n'est encore branchée nulle part : TS-2 en fera la crate `escouade-team` du client.
+Ticket ESC-453, ligne TS-0a de `docs/TEAM-SERVER.md` §16. Le choix C9-B (MLS dès le départ) a été tranché par l'utilisateur le 2026-11-14 (§15.2). Depuis TS-2 (ESC-458), c'est la couche cryptographique du client `escouade-team`, qui y ajoute le trousseau, le stockage SQLite et le serveur (`crates/escouade-team/README.md`). Elle reste pure et synchrone, sans disque ni réseau.
 
 ## En bref
 
@@ -42,7 +42,7 @@ Ticket ESC-453, ligne TS-0a de `docs/TEAM-SERVER.md` §16. Le choix C9-B (MLS d�
 
 ## Les tests et les vecteurs
 
-`cargo nextest run -p escouade-team-crypto` lance 18 tests, en 1 s environ.
+`cargo nextest run -p escouade-team-crypto` lance 24 tests, en quelques secondes. Les 6 derniers sont venus avec TS-2 : le commit en deux temps (préparé, puis fusionné une fois pris par le serveur, ou abandonné), l'invitation rendue par un commit perdu, l'état sauvegardé, les balises de tête, les liens d'historique écrits par un autre membre, et l'absence de fausse alerte de fourche (ni un membre retiré, ni le serveur).
 
 - **Groupe** : la suite, le registre, la genèse, les six mots ; ajout et retrait d'un membre ; rotation sans rechiffrer l'ancien contenu (C8-A) ; clés différentes par projet et par époque.
 - **Un membre retiré ne lit plus rien de nouveau**, ni par l'API, ni avec aucune des clés qu'il a eues : il n'ouvre ni les objets, ni les liens d'historique, ni les commits suivants.
@@ -66,13 +66,19 @@ Ticket ESC-453, ligne TS-0a de `docs/TEAM-SERVER.md` §16. Le choix C9-B (MLS d�
 6. **Le séquestre** : sa visibilité dépend de l'interface, et rien n'oblige un committer malveillant à sceller pour le séquestre (le séquestre ne lit alors plus, il ne lit jamais plus que voulu).
 7. **La détection de fourche** n'a lieu que si quelque chose passe d'une branche à l'autre. Un serveur qui partitionne l'équipe pour toujours reste invisible sans comparaison hors bande : il faut prévoir des balises de tête régulières, signées, et les six mots de la tête dans l'interface.
 8. **Le point de contrôle** doit être gardé hors de l'état restaurable (au trousseau), sinon une sauvegarde ancienne le ramène avec elle.
-9. **La persistance d'openmls** (ici `MemoryStorage`) : son format, son chiffrement au repos, l'effacement des clés passées (avis GHSA-qr9h-x63w-vqfm).
+9. **La persistance d'openmls** (`MemoryStorage` ici, SQLite chiffré dans `escouade-team`) : son format, son chiffrement au repos, l'effacement des clés passées (avis GHSA-qr9h-x63w-vqfm).
 10. **Les métadonnées** : le serveur voit la taille et l'heure des commits, des liens et des enveloppes, et le nombre d'époques.
 
-## Ce qui reste à faire (TS-2, TS-3)
+## Ce que TS-2 a fait, ce qui reste (TS-3, TS-5, TS-18)
 
-- La persistance (stockage SQLite d'openmls), les clés d'appareil au trousseau, le point de contrôle hors de l'état.
-- Les commits concurrents : sur un conflit, rejouer depuis le journal du serveur. Les liens d'historique manquants écrits par n'importe quel membre. Les balises de tête.
-- Les projets limités à quelques membres : un groupe MLS par projet, avec le même code.
-- L'ajout d'un appareil par QR code et par code court (PAKE) : même mécanisme que `Purpose::OwnDevice`.
-- Le fuzzing de `policy::check_commit`, du décodage des messages et du registre.
+Fait par TS-2 (ESC-458), ici et dans `escouade-team` :
+- la persistance (stockage SQLite d'openmls), les clés d'appareil au trousseau, le point de contrôle hors de l'état ;
+- les commits concurrents (le commit en deux temps, `Change`, `is_done`), rejoués depuis le flux du serveur ;
+- les liens d'historique manquants écrits par n'importe quel membre (`history_link`, `learn_history`) ;
+- les balises de tête (`beacon.rs`) et les six mots de la tête (`head_words`) ;
+- le fuzzing de `policy::check_commit` et du décodage (les cibles de `crates/escouade-team/fuzz`).
+
+Ce qui reste :
+- les projets limités à quelques membres : un groupe MLS par projet, avec le même code (TS-5) ;
+- l'ajout d'un appareil par QR code et par code court (PAKE) : même mécanisme que `Purpose::OwnDevice` (TS-3) ;
+- faire tourner le fuzzing longtemps (TS-18), et l'audit externe (TS-20).

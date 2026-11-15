@@ -1,0 +1,35 @@
+# The fuzzing targets of the team's client (cargo-fuzz), run by hand, never in the CI:
+#   cargo install cargo-fuzz
+#   cd crates/escouade-team/fuzz && cargo +nightly fuzz run commit
+#   cargo +nightly fuzz run roster
+# A package of its own, outside the app's workspace (its own lock, its own target).
+[package]
+name = "escouade-team-fuzz"
+version = "0.0.0"
+license = "GPL-3.0-or-later"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+escouade-team = { path = "..", features = ["fuzzing"] }
+
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "commit"
+path = "fuzz_targets/commit.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "roster"
+path = "fuzz_targets/roster.rs"
+test = false
+doc = false
+bench = false

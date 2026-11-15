@@ -5,8 +5,10 @@
 //! recovery key of 24 words and the optional escrow key, the detection of a fork or a rollback. `README.md` says
 //! what each part does, its choices, and the points for the external audit (TS-20).
 //!
-//! Wired into nothing yet: TS-2 makes of it the `escouade-team` crate of the client.
+//! The cryptographic layer of the client, `escouade-team` (TS-2), which adds the keychain, the storage and the
+//! server around it; pure and synchronous, without any I/O.
 
+pub mod beacon;
 pub mod content;
 pub mod device;
 pub mod history;
@@ -25,7 +27,10 @@ mod vectors;
 
 use openmls::prelude::Ciphersuite;
 
-pub use device::{Checkpoint, HeadCheck, Processed, Publication, TeamDevice};
+pub use beacon::Beacon;
+pub use device::{
+    Change, Checkpoint, HeadCheck, PendingCommit, Processed, Publication, SavedState, TeamDevice,
+};
 pub use identity::{DeviceId, DeviceKind, Identity, MemberId, ObjectId, ProjectId};
 pub use invite::{InvitationError, InviteLink, Purpose};
 pub use recovery::{EscrowKey, RecoveryKey};
