@@ -3,6 +3,7 @@
   import { openPath } from '../../lib/opener';
   import { t } from '../../lib/i18n';
   import { choosesEngine, engineOptions } from '../../lib/engines';
+  import { bounded, HARNESSES_KEY } from '../../lib/locks.svelte';
   import { accountName, accountsOf, serves } from '../../lib/accounts';
   import { askCloseProject } from '../../lib/project-actions';
   import { settingsForm } from '../../lib/settings.svelte';
@@ -143,10 +144,10 @@
   <!-- From two harnesses that can be used on (ESC-391), or the one chosen that cannot any more beside one, saying why: the
        one of its new agents and tickets (none chosen: Claude Code). -->
   {#if choosesEngine(draft.engine ?? 'claude', project.id)}
-    <Row label={t('settings.project.engine')} desc={t('settings.project.engineDesc')} shared="agents.engine">
+    <Row label={t('settings.project.engine')} desc={t('settings.project.engineDesc')} shared="agents.engine" row="projectEngine">
       <Chips
         label={t('settings.project.engine')}
-        options={engineOptions(draft.engine ?? 'claude', project.id)}
+        options={bounded(HARNESSES_KEY, engineOptions(draft.engine ?? 'claude', project.id))}
         bind:value={() => draft.engine ?? 'claude', (v) => (draft.engine = v)}
       />
     </Row>

@@ -104,6 +104,8 @@ escouade-updates = { path = "../crates/escouade-updates" }
 # The parts of the MCP server that stand without the app: its transport, the tokens and the port, the tools' arguments
 # (docs/CRATES.md, § 13).
 escouade-mcp = { path = "../crates/escouade-mcp" }
+# The policies of a managed device (TS-0b), the rank 6 of the layers of the settings (`locks`, TS-11).
+escouade-policy = { path = "../crates/escouade-policy" }
 # The transcription as one speaks (ESC-136): a WebSocket to the service, through the settings' proxy (HTTP CONNECT,
 # opened by hand) and TLS by rustls (ring, as reqwest), the system's roots and Mozilla's.
 tokio-tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }

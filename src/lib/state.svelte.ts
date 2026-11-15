@@ -1,5 +1,6 @@
 // Global application state (Svelte 5 runes) fed by the backend event channel.
 
+import { setLocks } from './locks.svelte';
 import { openUrl } from './opener';
 import { api } from './ipc';
 import { applyConvOps, dropConversation, releaseIdle } from './conversations.svelte';
@@ -798,6 +799,7 @@ class AppState {
     this.claudeFound = s.claudeFound;
     this.claudePathFound = s.claudePathFound ?? s.claudeFound;
     this.version = s.version;
+    setLocks(s.locks);
     this.models = s.models;
     this.engines = s.engines ?? [];
     this.engineModels = s.engineModels ?? {};
@@ -924,6 +926,9 @@ class AppState {
         break;
       case 'language':
         this.takeLang(e.lang);
+        break;
+      case 'locks':
+        setLocks(e.locks);
         break;
       case 'mcpStatus':
       case 'mcpDeclared':

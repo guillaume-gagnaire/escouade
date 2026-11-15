@@ -842,7 +842,7 @@ Le socle s'appuie sur la fondation du mode serveur (`docs/REMOTE.md`) pour le tr
 | TS-9 | La spec, les décisions et les documents sur le serveur : fichiers chiffrés, brouillon de ticket versé à la validation, index et vecteurs locaux, choix par projet (C4), import | TS-5 | 8 j |
 | TS-10 | La mémoire d'équipe : provenance signée, validation des souvenirs d'agent, marquage au MCP, quarantaine et retrait en masse, refus des secrets | TS-9 | 5 j |
 | **Réglages imposés** | | | |
-| TS-11 | Le moteur des couches et le verrou : six rangs, bornes croisées, `locked_by` dans le registre des réglages, refus du cœur (fenêtre, MCP, export), affichage grisé avec qui l'impose | — | 5 j |
+| TS-11 | Le moteur des couches et le verrou : six rangs, bornes croisées, `locked_by` dans le registre des réglages, refus du cœur (fenêtre, MCP, export), affichage grisé avec qui l'impose. **Fait (ESC-455)** : `src-tauri/src/locks.rs` et sa table de sept clés, le rang 6 lu au démarrage, le rang 5 injectable et vide ; page de spec « Réglages imposés » | — | 5 j |
 | TS-12 | Les stratégies du poste : la liste unique, l'ADMX et ses ADML (fr, en), le profil MDM et son manifeste, `/etc/escouade/policies`, relues à chaud, l'enrôlement ; la page du site pour les services informatiques | TS-0b, TS-11 | 5 j |
 | TS-13 | Le `.escouade.yml` d'équipe : format (`defaults`, `enforced`, `proposed`), signature et quorum (C12), sortes de clés, chaîne des versions, bande du diff et historique, accord des clés sensibles, relecture des exécutables sur chaque poste | TS-2, TS-11 | 6 j |
 | **Store privé** | | | |

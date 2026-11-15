@@ -135,7 +135,7 @@
 <!-- Only while a harness has Remote Control. -->
 {#if installedEngines().some((e) => e.caps.remoteControl)}
   <Group title={t('settings.project.remoteTitle')}>
-    <Row label={t('settings.project.remote')} desc={t('settings.project.remoteDesc')}>
+    <Row label={t('settings.project.remote')} desc={t('settings.project.remoteDesc')} row="projectRemote">
       {#snippet extra()}
         {#if coveredByAll}<span class="more" id="remote-covered">{t('settings.project.remoteGlobal')}</span>{/if}
       {/snippet}

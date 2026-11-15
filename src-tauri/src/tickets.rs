@@ -719,6 +719,10 @@ impl<R: Runtime> Core<R> {
             let had = self.ticket(id)?;
             let project = self.project(&had.project_id)?;
             let engine = d.engine.unwrap_or(had.engine).unwrap_or(project.engine());
+            // A harness the policies do not allow (TS-11), given or the one an account is asked on.
+            if d.engine.is_some_and(|e| e != had.engine) || d.account.is_some() {
+                self.locks.read().check_engine(engine.as_str())?;
+            }
             match d.account.as_deref() {
                 Some(asked) => Some(self.ticket_account(&project, engine, Some(asked))?),
                 None if !had.account.is_empty()
@@ -1174,6 +1178,10 @@ impl<R: Runtime> Core<R> {
                 fallback
             }
         };
+        // A mode the policies do not allow (TS-11): refused, and said.
+        if self.project(project_id)?.board.mode != s.mode {
+            self.locks.read().check_mode(&s.mode)?;
+        }
         let project = {
             let mut projects = self.projects.write();
             let p = projects
@@ -2287,6 +2295,8 @@ impl<R: Runtime> Core<R> {
     }
 
     pub(crate) async fn turn_ended(self: &Arc<Self>, agent_id: &str, end: TurnEnd) {
+        // Its turn over, a mode the policies no longer allow goes to the nearest allowed (TS-11).
+        self.settle_locked_mode(agent_id).await;
         let report = match &end {
             TurnEnd::Finished(text) => board::parse_report(text),
             _ => None,

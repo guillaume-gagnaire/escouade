@@ -414,7 +414,7 @@ mod system {
             machine_key.set_value("updates.channel", &"stable").unwrap();
             machine_key
                 .set_value(
-                    "harness.allowedModels",
+                    "harnesses.allowedModels",
                     &r#"{"claude": ["opus", "sonnet"]}"#,
                 )
                 .unwrap();
@@ -424,7 +424,7 @@ mod system {
                     &vec!["localhost".to_owned(), "*.acme.corp".to_owned()],
                 )
                 .unwrap();
-            let (list, _) = machine_key.create_subkey("harness.allowed").unwrap();
+            let (list, _) = machine_key.create_subkey("harnesses.allowed").unwrap();
             list.set_value("2", &"codex").unwrap();
             list.set_value("1", &"claude").unwrap();
             list.set_value("10", &"opencode").unwrap();
@@ -432,11 +432,11 @@ mod system {
             user_key.set_value("telemetry.enabled", &1u32).unwrap();
             user_key.set_value("voice.onlineAllowed", &0u32).unwrap();
             user_key
-                .set_value("permissions.allowedModes", &r#"["default", "plan""#)
+                .set_value("permissions.modes", &r#"["default", "plan""#)
                 .unwrap();
             user_key
                 .set_raw_value(
-                    "remoteControl.allowed",
+                    "remoteControl.enabled",
                     &RegValue {
                         bytes: vec![1, 2, 3],
                         vtype: REG_BINARY,
@@ -465,7 +465,7 @@ mod system {
                 Some((Value::from("http://proxy.acme:3128"), Source::Machine))
             );
             assert_eq!(
-                value("harness.allowedModels"),
+                value("harnesses.allowedModels"),
                 Some((
                     serde_json::json!({"claude": ["opus", "sonnet"]}),
                     Source::Machine
@@ -479,14 +479,14 @@ mod system {
                 ))
             );
             assert_eq!(
-                value("harness.allowed"),
+                value("harnesses.allowed"),
                 Some((
                     serde_json::json!(["claude", "codex", "opencode"]),
                     Source::Machine
                 ))
             );
-            assert_eq!(value("permissions.allowedModes"), None);
-            assert_eq!(value("remoteControl.allowed"), None);
+            assert_eq!(value("permissions.modes"), None);
+            assert_eq!(value("remoteControl.enabled"), None);
             let malformed: Vec<&str> = policies
                 .warnings()
                 .iter()
@@ -497,10 +497,7 @@ mod system {
                 .collect();
             let mut malformed = malformed;
             malformed.sort();
-            assert_eq!(
-                malformed,
-                ["permissions.allowedModes", "remoteControl.allowed"]
-            );
+            assert_eq!(malformed, ["permissions.modes", "remoteControl.enabled"]);
         }
 
         #[test]
@@ -720,12 +717,12 @@ mod tests {
     #[test]
     fn a_value_and_a_list_of_the_same_name_keep_the_list_and_say_so() {
         let machine = Node {
-            values: vec![("harness.allowed".into(), sz("claude"))],
-            subkeys: vec![("harness.allowed".into(), values(&[("1", sz("codex"))]))],
+            values: vec![("harnesses.allowed".into(), sz("claude"))],
+            subkeys: vec![("harnesses.allowed".into(), values(&[("1", sz("codex"))]))],
         };
         let policies = from_nodes(Some(&machine), None, PROVISIONAL_KEYS);
         assert_eq!(
-            policies.get("harness.allowed").unwrap().value,
+            policies.get("harnesses.allowed").unwrap().value,
             json!(["codex"])
         );
         assert_eq!(policies.warnings().len(), 1);

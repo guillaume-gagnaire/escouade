@@ -121,6 +121,7 @@ mod integrations_tests;
 mod isola;
 mod launchenv;
 mod leftovers;
+mod locks;
 mod lsp;
 mod mcp;
 mod memory;

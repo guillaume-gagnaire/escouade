@@ -332,7 +332,10 @@ mod system {
                 &domain.0,
                 &["proxy.url", "-string", "http://proxy.acme:3128"],
             );
-            defaults_write(&domain.0, &["harness.allowed", "-array", "claude", "codex"]);
+            defaults_write(
+                &domain.0,
+                &["harnesses.allowed", "-array", "claude", "codex"],
+            );
 
             let preferences = SystemPreferences::new(&domain.0, PROVISIONAL_KEYS);
             // CFPreferences sees the values: the reader does reach them…
@@ -341,7 +344,7 @@ mod system {
                 Some(PrefValue::Bool(false))
             );
             assert_eq!(
-                preferences.copy_value("harness.allowed"),
+                preferences.copy_value("harnesses.allowed"),
                 Some(PrefValue::Array(vec![
                     PrefValue::String("claude".into()),
                     PrefValue::String("codex".into())
@@ -396,10 +399,10 @@ mod tests {
                 "NSWindow Frame main",
                 (PrefValue::String("0 0 800 600".into()), false),
             ),
-            ("harness.maxEffort", (PrefValue::Integer(2), true)),
+            ("harnesses.maxEffort", (PrefValue::Integer(2), true)),
             ("proxy.url", (PrefValue::String("http://p:1".into()), true)),
             (
-                "harness.allowedModels",
+                "harnesses.allowedModels",
                 (PrefValue::String(r#"{"claude":["opus"]}"#.into()), true),
             ),
             (
@@ -426,10 +429,10 @@ mod tests {
         assert!(policies.iter().all(|p| p.source == Source::Profile));
         assert_eq!(value("telemetry.enabled"), Some(json!(false)));
         assert_eq!(value("voice.dictation"), None);
-        assert_eq!(value("harness.maxEffort"), Some(json!(2)));
+        assert_eq!(value("harnesses.maxEffort"), Some(json!(2)));
         assert_eq!(value("proxy.url"), Some(json!("http://p:1")));
         assert_eq!(
-            value("harness.allowedModels"),
+            value("harnesses.allowedModels"),
             Some(json!({"claude": ["opus"]}))
         );
         // Inside an array, a string that looks like JSON stays a string.
@@ -446,7 +449,7 @@ mod tests {
         let fake = Fake(HashMap::from([
             ("proxy.authorities", (PrefValue::Unsupported("data"), true)),
             (
-                "harness.allowedModels",
+                "harnesses.allowedModels",
                 (PrefValue::String("{oops".into()), true),
             ),
             (

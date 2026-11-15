@@ -313,6 +313,10 @@ pub enum UiEvent {
     Language {
         lang: crate::i18n::LangInfo,
     },
+    /// What the policies lock changed (TS-11): the window greys the settings they impose.
+    Locks {
+        locks: crate::locks::Locks,
+    },
     /// Lines the step `step` (from 0) of the setup of an agent's worktree wrote since the window
     /// was last sent some (50 ms apart at most), its `total` lines so far counting them. A step
     /// starts with none: the window forgets the lines of the step before.

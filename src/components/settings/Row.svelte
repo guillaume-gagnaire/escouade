@@ -1,11 +1,16 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { lockLine } from '../../lib/locks.svelte';
+  import { SETTINGS_ROWS } from '../../lib/settings-pages';
+  import Icon from '../Icon.svelte';
   import SharedMark from './SharedMark.svelte';
 
   // A setting (`.sr` of the 2.0 design): its label (and hint), what it does, its control on the right, or under it when
   // `wide`; `shared`, the keys of the project's .escouade.yml it shows, marked when the file sets them; `extra`, more
   // lines under what it does (« Trouvé : … », « Claude Code seulement : … »); `error`, why what is typed is not saved
-  // (ESC-380), under it with `errorId` for the field's aria-describedby.
+  // (ESC-380), under it with `errorId` for the field's aria-describedby. `row`: its id in `SETTINGS_ROWS`; when the policies
+  // of this device or a team impose its value (its `lockedBy`, TS-11), its control is greyed and inert, with a padlock
+  // and who imposes it.
   let {
     label,
     hint = '',
@@ -16,6 +21,7 @@
     extra,
     error = '',
     errorId,
+    row,
     children,
   }: {
     label: string;
@@ -27,11 +33,13 @@
     extra?: Snippet;
     error?: string;
     errorId?: string;
+    row?: string;
     children?: Snippet;
   } = $props();
+  const lock = $derived(row ? (SETTINGS_ROWS.find((r) => r.id === row)?.lockedBy ?? null) : null);
 </script>
 
-<div class="sr" class:wide>
+<div class="sr" class:wide class:locked={!!lock}>
   <div class="lab">
     <b class="l"
       >{label}{#if hint}&nbsp;<span class="h">{hint}</span>{/if}</b
@@ -39,9 +47,10 @@
     {#if desc}<span class="d" id={descId}>{desc}</span>{/if}
     {#if extra}{@render extra()}{/if}
     {#if error}<p class="bad" id={errorId}>{error}</p>{/if}
+    {#if lock}<p class="lock"><Icon name="lock" size={13} />{lockLine(lock)}</p>{/if}
     {#if shared}<SharedMark keys={shared} />{/if}
   </div>
-  {#if children}<div class="ctl">{@render children()}</div>{/if}
+  {#if children}<div class="ctl" inert={!!lock} aria-disabled={lock ? true : undefined}>{@render children()}</div>{/if}
 </div>
 
 <style>
@@ -114,6 +123,20 @@
   }
   .lab > :global(.bad) {
     color: var(--del);
+  }
+  /* Imposed (TS-11): the control greyed and inert, the padlock and who imposes it under what it does. */
+  .lock {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 3px 0 0;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 550;
+  }
+  .locked > .ctl {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
   .ctl {
     display: flex;

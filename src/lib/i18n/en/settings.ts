@@ -625,6 +625,15 @@ export default defineZone('settings', {
     banner: 'The commands of .escouade.yml wait for your approval: they don’t run yet.',
     bannerButton: 'Read them',
   },
+  /** A setting imposed by the policies of this device or by a team (TS-11): greyed, with who imposes it. */
+  locks: {
+    byDevice: 'Imposed by this device’s policy',
+    byTeam: 'Imposed by the team {team}',
+    deniedDevice: 'not allowed by this device’s policy',
+    deniedTeam: 'not allowed by the team {team}',
+    warnings: 'Policies of this device',
+    warningsDesc: 'What the IT department set and Escouade could not apply.',
+  },
   // « Serveurs de langage » (Général › Avancé, ESC-446): what the editor starts to read the code.
   lsp: {
     title: 'Language servers',

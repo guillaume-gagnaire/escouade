@@ -913,6 +913,12 @@ pub struct Core<R: Runtime = Wry> {
     pub data: DataDir,
     pub hub: Hub,
     pub settings: RwLock<Settings>,
+    /// What ranks 5 and 6 of the layers impose (`locks`, TS-11): made from `managed` and `team`.
+    pub locks: RwLock<crate::locks::Locks>,
+    /// The policies of this device (rank 6), read once at the start.
+    pub managed: RwLock<crate::locks::Managed>,
+    /// What a team imposes (rank 5): none until the team server comes; injectable (`set_team_policies`).
+    pub team_policies: RwLock<Option<crate::locks::TeamPolicies>>,
     /// The usage statistics, once the user agreed to them (`telemetry`).
     pub telemetry: Arc<Telemetry>,
     pub projects: RwLock<Vec<Project>>,
@@ -1888,6 +1894,20 @@ impl<R: Runtime> Core<R> {
         accounts::normalize(&mut settings);
         settings.normalize_display();
         settings.normalize_mid_turn_delay();
+        // The policies of this device (rank 6, TS-11), before anything reads the settings: what they lock is brought
+        // within them (the telemetry's consent, the beta channel, the mode of no question...).
+        let managed = crate::locks::Managed::read();
+        let locks = crate::locks::Locks::compute(crate::locks::KEYS, None, &managed);
+        for w in &locks.warnings {
+            log::warn!("policies: {w}");
+        }
+        if !locks.locks.is_empty() {
+            log::info!("policies: {} locked by this device", locks.locks.len());
+        }
+        let clamped = locks.clamp_settings(&mut settings);
+        if !clamped.is_empty() {
+            log::info!("policies: settings brought within {clamped:?}");
+        }
         let mut state: PersistedState = read_json(&data.state_file()).unwrap_or_default();
         // « Les agents partent de la branche cible » kept as their branch to start from (ESC-160).
         for p in &mut state.projects {
@@ -2081,6 +2101,9 @@ impl<R: Runtime> Core<R> {
             data,
             hub: Hub::default(),
             settings: RwLock::new(settings),
+            locks: RwLock::new(locks),
+            managed: RwLock::new(managed),
+            team_policies: RwLock::new(None),
             projects: RwLock::new(state.projects),
             tickets: RwLock::new(tickets),
             ui: RwLock::new(state.ui),
@@ -2249,6 +2272,11 @@ impl<R: Runtime> Core<R> {
         core.migrate_private_harnesses();
         // Once (SEC-09): « Autoriser le mode Bypass » on for an installation that already uses it.
         core.settle_bypass();
+        // The projects and the agents brought within what the policies lock (TS-11), the settings written as they are.
+        if !clamped.is_empty() {
+            core.write_settings_file();
+        }
+        core.settle_locks();
         // The pinned Javy of the run.js plugins downloads through Réglages › Avancé › Réseau (ESC-320); their modules are
         // made ready in the cache, precompiled again for this version of the app when it changed.
         {
@@ -2708,6 +2736,8 @@ impl<R: Runtime> Core<R> {
         s.normalize_display();
         accounts::normalize(&mut s);
         accounts::check(&s)?;
+        // What the policies lock is not the window's to change (TS-11): refused, and said.
+        self.locks.read().check_settings(&s)?;
         accounts::keep_remote_refusals(&self.settings.read().accounts, &mut s.accounts);
         let bytes = serde_json::to_vec_pretty(&s)?;
         paths::write_atomic(&self.data.settings_file(), &bytes)?;
@@ -3659,6 +3689,9 @@ impl<R: Runtime> Core<R> {
         self.check_harness_in(engine, &project_id)?;
         // The mode of no question without « Autoriser le mode Bypass » (SEC-09).
         crate::bypass::check(&h.lock().meta.mode, self.bypass_allowed())?;
+        // A harness or a mode the policies do not allow (TS-11).
+        self.locks.read().check_engine(engine.as_str())?;
+        self.locks.read().check_mode(&h.lock().meta.mode)?;
         // In the Claude Code view, its interface has the session (`tui`).
         if h.lock().meta.terminal {
             bail!(tr!(
@@ -4858,6 +4891,10 @@ impl<R: Runtime> Core<R> {
     /// and was started with another state of Remote Control than the one asked for.
     pub async fn set_remote_control(self: &Arc<Self>, id: &str, enabled: bool) -> Result<bool> {
         let h = self.agent(id)?;
+        // Locked off by the policies (TS-11): refused, and said.
+        if enabled && self.locks.read().value(crate::locks::REMOTE) == Some(&Value::Bool(false)) {
+            bail!(self.locks.read().imposed(crate::locks::REMOTE));
+        }
         if !enabled {
             h.lock().meta.remote_off = true;
             self.remember_remote_off(id, true);
@@ -4960,10 +4997,10 @@ impl<R: Runtime> Core<R> {
         }
         let step = {
             let mut rt = h.lock();
-            match (
-                remote_wanted(&rt.meta, global, project),
-                rt.meta.remote_control,
-            ) {
+            // Locked off by the policies (TS-11): none, whatever was chosen by hand.
+            let locked = self.locks.read().value(crate::locks::REMOTE) == Some(&Value::Bool(false));
+            let wanted = remote_wanted(&rt.meta, global, project).filter(|_| !locked);
+            match (wanted, rt.meta.remote_control) {
                 (Some(source), false) => {
                     rt.meta.remote_control = true;
                     rt.meta.remote_source = Some(source);
@@ -6431,6 +6468,8 @@ impl<R: Runtime> Core<R> {
         // A discussion of the Docs tab stays in a mode that asks before a write (ESC-261).
         if let Some(m) = mode.as_deref() {
             crate::bypass::check(m, self.bypass_allowed())?;
+            // A mode the policies do not allow (TS-11).
+            self.locks.read().check_mode(m)?;
             if h.lock().meta.discussion.is_some() && !crate::discussion::MODES.contains(&m) {
                 bail!(tr!(
                     "Une discussion ne modifie jamais le code : elle reste en mode « Demander » ou « Plan ».",
@@ -6608,6 +6647,8 @@ impl<R: Runtime> Core<R> {
         // Nor on one whose plugin is off for the project (ESC-404): the window asks the user first, in a private
         // project; a tool, the Kanban or the app itself never turns it on.
         self.check_harness_in(engine, project_id)?;
+        // Nor on one the policies do not allow (TS-11).
+        self.locks.read().check_engine(engine.as_str())?;
         // Whatever the agent is (ticket, discussion, planner…), a spec in Escouade is the one to follow.
         let follow = self.docs_follow(&project, self.lang().claude).await;
         let mut meta = AgentMeta {
@@ -6666,7 +6707,21 @@ impl<R: Runtime> Core<R> {
         );
         meta.model = self.model_for(engine, o.model.unwrap_or(defaults.model));
         meta.effort = o.effort.unwrap_or(defaults.effort);
-        meta.mode = o.mode.unwrap_or_else(|| defaults.mode.clone());
+        // A mode asked that the policies do not allow is refused; its account's goes to the nearest allowed (TS-11).
+        meta.mode = match o.mode {
+            Some(m) => {
+                self.locks.read().check_mode(&m)?;
+                m
+            }
+            None => {
+                let locks = self.locks.read();
+                if locks.check_mode(&defaults.mode).is_err() {
+                    locks.nearest_mode(&defaults.mode)
+                } else {
+                    defaults.mode.clone()
+                }
+            }
+        };
         // Started in Plan: its plan approved, it goes on in its mode of departure, the ticket's or
         // the board's (`o.mode`), else its account's, else the app's (ESC-277).
         if meta.mode == "plan" {
@@ -8964,6 +9019,8 @@ impl<R: Runtime> Core<R> {
         {
             bail!(why);
         }
+        // A harness, a mode or the remote control the policies lock (TS-11): refused, and said.
+        self.locks.read().check_project(&before, &p)?;
         // A source of tickets chosen, a harness by default: their plugin from the seed if it is not installed (ESC-373).
         for l in &p.integrations.links {
             if before.integrations.link(l.service).is_none() {

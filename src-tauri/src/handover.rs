@@ -25,7 +25,7 @@ use std::sync::Arc;
 use tauri::Runtime;
 
 /// Escouade's modes, from the one that allows the least to the one that allows the most.
-const MODES: [&str; 5] = [
+pub(crate) const MODES: [&str; 5] = [
     "plan",
     "default",
     "acceptEdits",

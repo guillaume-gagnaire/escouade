@@ -5897,3 +5897,67 @@ async fn a_ticket_whose_folder_went_starts_its_agent_loose() {
     assert!(folder_holding(&h, &p.id, &id).is_none());
     h.core.mcp.stop();
 }
+
+/// TS-11: what the policies of this device lock is refused by the tools too, and said: a mode of the Kanban outside the
+/// modes allowed, an agent or a ticket's account on a harness not allowed.
+#[tokio::test]
+async fn the_tools_are_refused_what_the_policies_lock() {
+    let h = harness("mcp-act-locks");
+    let (p, _) = h.project(false).await;
+    let t = made(&h, &p, "Verrou").await;
+    let policy = |pairs: &[(&str, Value)]| crate::locks::Managed {
+        values: pairs
+            .iter()
+            .map(|(k, v)| {
+                (
+                    (*k).to_owned(),
+                    (v.clone(), "the machine's policy".to_owned()),
+                )
+            })
+            .collect(),
+        warnings: Vec::new(),
+    };
+    h.core.set_managed(policy(&[
+        (crate::locks::MODES_KEY, json!(["plan", "default"])),
+        (crate::locks::HARNESSES, json!(["codex"])),
+    ]));
+    let c = external(&h).await;
+    let said = refused(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "mode": "acceptEdits" }),
+    )
+    .await;
+    assert!(
+        said.contains("Le mode « acceptEdits » n’est pas permis par la stratégie de ce poste."),
+        "{said}"
+    );
+    assert_eq!(h.core.project(&p.id).unwrap().board.mode, "");
+    let v = read(
+        &c,
+        "set_board",
+        json!({ "project": "demo", "mode": "plan" }),
+    )
+    .await;
+    assert_eq!(v["mode"], "plan");
+    let said = refused(
+        &c,
+        "create_agent",
+        json!({ "project": "demo", "message": "Bonjour" }),
+    )
+    .await;
+    assert!(
+        said.contains("Le harness « claude » n’est pas permis par la stratégie de ce poste."),
+        "{said}"
+    );
+    let said = refused(
+        &c,
+        "update_ticket",
+        json!({ "ticket": t.id, "account": PRINCIPAL }),
+    )
+    .await;
+    assert!(
+        said.contains("Le harness « claude » n’est pas permis"),
+        "{said}"
+    );
+}

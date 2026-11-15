@@ -112,6 +112,8 @@ pub struct InitialState {
     lang: crate::i18n::LangInfo,
     /// What the page showed when its process last ended, for it to offer to open it again.
     page_crash: Option<crate::pagecrash::PageCrash>,
+    /// What the policies of this device and a team lock (TS-11): the window greys what they impose.
+    locks: crate::locks::Locks,
 }
 
 // Off the main thread: finding a `claude` of WSL may start its distribution (seconds).
@@ -182,6 +184,7 @@ pub fn subscribe(
         accounts,
         setup_output,
         page_crash: core.take_page_crash(),
+        locks: core.locks.read().clone(),
     }
 }
 

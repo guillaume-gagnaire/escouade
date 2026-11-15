@@ -1140,13 +1140,23 @@ pub struct Applied {
 /// Applies what was read to the project: every key the file sets, but those kept on this machine;
 /// its commands only once trusted (or when the project has them already, nothing new to run).
 /// Records the file in `p.shared.file`.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn apply(p: &mut Project, read: &Read) -> Applied {
+    apply_locked(p, read, &crate::locks::Locks::default())
+}
+
+/// `apply`, but a key the policies lock here (a harness or a mode not allowed, TS-11) is left out, and said.
+pub fn apply_locked(p: &mut Project, read: &Read, locks: &crate::locks::Locks) -> Applied {
     let mut changed = Vec::new();
     let mut warnings = read.warnings.clone();
     let mut commands = BTreeMap::new();
     for (k, v) in &read.values {
         // The plugins' keys stay the file's: the window and the plugins read them there.
         if p.shared.local.contains(k) || file_only(k) {
+            continue;
+        }
+        if let Some(why) = locks.file_refusal(k, v) {
+            warnings.push(warn(None, format!("{k} : {why}")));
             continue;
         }
         if key_of(k).is_some_and(|k| k.command) {
@@ -1420,9 +1430,18 @@ fn writable(k: &str, v: &Value) -> bool {
 
 /// Every key, as the project has them: what « Exporter vers .escouade.yml » writes (but what is not
 /// `writable`).
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn export_values(p: &Project) -> Vec<(&'static str, Value)> {
+    export_values_locked(p, &crate::locks::Locks::default())
+}
+
+/// `export_values` but what the policies bound here (TS-11): a teammate's device may not have them.
+pub fn export_values_locked(
+    p: &Project,
+    locks: &crate::locks::Locks,
+) -> Vec<(&'static str, Value)> {
     KEYS.iter()
-        .filter(|k| !k.file_only)
+        .filter(|k| !k.file_only && !locks.bounds_file_key(k.path))
         .map(|k| (k.path, get(p, k.path)))
         .filter(|(k, v)| writable(k, v))
         .collect()
@@ -1594,14 +1613,14 @@ fn text_fingerprint(text: Option<&str>) -> String {
 }
 
 /// Reads the file into the project: what it sets applied, or why it cannot be read.
-fn read_into(p: &mut Project, text: Option<&str>) -> Applied {
+fn read_into(p: &mut Project, text: Option<&str>, locks: &crate::locks::Locks) -> Applied {
     p.shared.seen = Some(text_fingerprint(text));
     match text.map(read) {
         None => {
             p.shared.file = None;
             Applied::default()
         }
-        Some(Ok(r)) => apply(p, &r),
+        Some(Ok(r)) => apply_locked(p, &r, locks),
         Some(Err(w)) => {
             p.shared.file = Some(SharedFile {
                 error: Some(w),
@@ -1619,7 +1638,7 @@ pub fn preview(path: &str) -> Option<Project> {
     let path = path.trim().trim_end_matches(['\\', '/']);
     let text = file_text(path)?;
     let mut p = crate::core::blank_project(path);
-    read_into(&mut p, Some(&text));
+    read_into(&mut p, Some(&text), &crate::locks::Locks::default());
     Some(p)
 }
 
@@ -1629,6 +1648,8 @@ impl<R: Runtime> Core<R> {
     pub fn read_shared(self: &Arc<Self>, project_id: &str, opened: bool) -> Option<Project> {
         let path = self.project(project_id).ok()?.path;
         let text = file_text(&path);
+        // Taken before the projects, never under their lock.
+        let locks = self.locks.read().clone();
         let (before, after, applied) = {
             let mut projects = self.projects.write();
             let p = projects.iter_mut().find(|p| p.id == project_id)?;
@@ -1636,7 +1657,7 @@ impl<R: Runtime> Core<R> {
                 return None;
             }
             let before = p.clone();
-            let applied = read_into(p, text.as_deref());
+            let applied = read_into(p, text.as_deref(), &locks);
             (before, p.clone(), applied)
         };
         let file = after.shared.file.as_ref();
@@ -1764,8 +1785,19 @@ impl<R: Runtime> Core<R> {
         keys: Option<Vec<String>>,
     ) -> Result<Project> {
         let p = self.project(project_id)?;
+        // A value the policies bound here is not written (TS-11): asked by name, refused and said.
+        if let Some(k) = keys
+            .iter()
+            .flatten()
+            .find(|k| self.locks.read().bounds_file_key(k))
+        {
+            bail!(tr!(
+                "{k} n'est pas écrit dans {FILE} : sa valeur est bornée par la stratégie de ce poste.",
+                "{k} is not written into {FILE}: its value is bounded by this device's policy."
+            ));
+        }
         let values: Vec<(&str, Value)> = match &keys {
-            None => export_values(&p),
+            None => export_values_locked(&p, &self.locks.read()),
             Some(keys) => keys
                 .iter()
                 .filter_map(|k| key_of(k))

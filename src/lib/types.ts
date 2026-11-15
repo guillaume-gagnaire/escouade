@@ -2798,6 +2798,8 @@ export type UiEvent =
   | { type: 'toast'; text: string }
   /** The settings changed a language: the window switches to it at once. */
   | { type: 'language'; lang: LangInfo }
+  /** What the policies of this device or a team lock changed (TS-11). */
+  | { type: 'locks'; locks: Locks }
   /** The MCP server started, stopped, could not start, or listens on another port. */
   | { type: 'mcpStatus'; status: McpStatus }
   /** A call to the MCP server, or a request refused. */
@@ -2914,6 +2916,32 @@ export interface InitialState {
   lang?: LangInfo;
   /** What the page showed when its process last ended (ESC-290): offered again, never reopened by itself. */
   pageCrash?: { projectId: string | null; agentId: string | null } | null;
+  /** What the policies of this device and a team lock (TS-11); absent before it. */
+  locks?: Locks;
+}
+
+/** Who imposes a lock (TS-11): the policy of this device (rank 6), or a team (rank 5). */
+export type LockedBy = { kind: 'device'; source: string } | { kind: 'team'; team: string };
+
+/** One rank's list of a bound: what it allows. */
+export interface LockBound {
+  by: LockedBy;
+  allowed: string[];
+}
+
+/** What ranks 5 and 6 impose on a key (`permissions.modes`): a value, or bounds. */
+export interface Lock {
+  key: string;
+  value: unknown;
+  by: LockedBy | null;
+  bounds: LockBound[];
+}
+
+/** The locks of the moment (`locks::Locks`): by key, the keys locking each row of `SETTINGS_ROWS`, the warnings. */
+export interface Locks {
+  locks: Record<string, Lock>;
+  rows: Record<string, string[]>;
+  warnings: string[];
 }
 
 /** An update installed: its version and its release notes (markdown). */

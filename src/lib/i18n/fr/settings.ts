@@ -712,6 +712,15 @@ export default {
     banner: 'Les commandes de .escouade.yml attendent ton accord : elles ne tournent pas encore.',
     bannerButton: 'Les lire',
   },
+  /** A setting imposed by the policies of this device or by a team (TS-11): greyed, with who imposes it. */
+  locks: {
+    byDevice: 'Imposé par la stratégie de ce poste',
+    byTeam: 'Imposé par l’équipe {team}',
+    deniedDevice: 'non permis par la stratégie de ce poste',
+    deniedTeam: 'non permis par l’équipe {team}',
+    warnings: 'Stratégies de ce poste',
+    warningsDesc: 'Ce que le service informatique a posé et qu’Escouade n’a pas pu appliquer.',
+  },
   // « Serveurs de langage » (Général › Avancé, ESC-446): what the editor starts to read the code.
   lsp: {
     title: 'Serveurs de langage',

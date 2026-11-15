@@ -2090,6 +2090,7 @@ dependencies = [
  "escouade-plugin-kit",
  "escouade-plugin-protocol",
  "escouade-plugins",
+ "escouade-policy",
  "escouade-updates",
  "escouade-vectors",
  "escouade-voice",

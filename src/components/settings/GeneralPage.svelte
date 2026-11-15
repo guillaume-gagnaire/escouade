@@ -5,6 +5,7 @@
   import { LANG_NAMES, t, type Lang } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { openUrl } from '../../lib/opener';
+  import { locks } from '../../lib/locks.svelte';
   import { keyLabel } from '../../lib/platform';
   import { pluginThemes } from '../../lib/plugin-theme.svelte';
   import { themeLabel } from '../../lib/plugin-themes';
@@ -151,6 +152,15 @@
   </Row>
 {/snippet}
 
+<!-- What the policies of this device said and Escouade could not apply (TS-11): also in the log. -->
+{#if locks.current.warnings.length}
+  <Group title={t('settings.locks.warnings')} note={t('settings.locks.warningsDesc')}>
+    <ul class="policy-warnings">
+      {#each locks.current.warnings as w (w)}<li>{w}</li>{/each}
+    </ul>
+  </Group>
+{/if}
+
 <Group title={t('settings.groups.appearance')}>
   <Row label={t('settings.app.theme')} desc={t('settings.app.themeDesc')}>
     <Chips
@@ -256,7 +266,7 @@
   <Row label={t('settings.about.autoUpdate')} desc={t('settings.about.autoUpdateDesc')}>
     <Switch label={t('settings.about.autoUpdate')} bind:on={s.autoUpdate} />
   </Row>
-  <Row label={t('settings.about.betaUpdates')} desc={t('settings.about.betaUpdatesDesc')}>
+  <Row label={t('settings.about.betaUpdates')} desc={t('settings.about.betaUpdatesDesc')} row="betaUpdates">
     <Switch label={t('settings.about.betaUpdates')} bind:on={() => app.settings.betaUpdates === true, (on) => void setBetaUpdates(on)} />
   </Row>
 </Group>
@@ -275,7 +285,7 @@
       bind:value={() => s.userName ?? '', (v) => settingsForm.setUserName(v)}
     />
   </Row>
-  <Row label={t('settings.about.telemetry')} desc={t('settings.about.telemetryDesc')}>
+  <Row label={t('settings.about.telemetry')} desc={t('settings.about.telemetryDesc')} row="telemetry">
     {#snippet extra()}
       <button class="link" onclick={() => openUrl(privacyUrl()).catch((e) => app.toast(String(e), 'error'))}
         >{t('settings.about.telemetryMore')}</button
@@ -382,5 +392,13 @@
   }
   .link:hover {
     text-decoration: underline;
+  }
+  /* What the policies said (TS-11). */
+  .policy-warnings {
+    margin: 6px 0 0;
+    padding-left: 18px;
+    color: var(--warn-ink);
+    font-size: 12px;
+    line-height: 1.6;
   }
 </style>

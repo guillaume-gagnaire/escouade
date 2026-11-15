@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Un poste géré par un service informatique peut imposer des réglages par ses stratégies (registre, profil MDM, `/etc`) : télémétrie, canal bêta, mode Bypass, modes et harness permis, Remote Control. Un réglage imposé est grisé avec un cadenas qui dit qui l’impose, et Escouade le refuse partout, fenêtre, agents et `.escouade.yml` compris.
 - Un agent qui lit une PR de GitHub en a maintenant tout : sa description, ses commits, ses fichiers et ses fils de discussion avec leurs réponses et leur état. C’est la première pierre de la vue des PR dans Escouade.
 
 ## [2.2.0] — 2026-11-14

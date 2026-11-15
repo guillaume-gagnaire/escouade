@@ -5,7 +5,8 @@
 
 import { t, tIn, type Key, type Lang } from './i18n';
 import type { IconName } from './icons';
-import type { BoardSettings, Settings } from './types';
+import { lockedBy } from './locks.svelte';
+import type { BoardSettings, LockedBy, Settings } from './types';
 import type { ProjectDraft } from './settings.svelte';
 
 /** Who a page sets: Escouade, or the project chosen. */
@@ -100,6 +101,8 @@ export interface RowInfo {
   /** The keys of a project it sets, and of its board. */
   project: ProjectKey[];
   board: BoardKey[];
+  /** Who imposes its value (TS-11): the policy of this device or a team, read from the core's locks; null when free. */
+  readonly lockedBy: LockedBy | null;
 }
 
 /** A label that is not a text of the catalogs (the name of a program). */
@@ -120,6 +123,9 @@ function row(id: string, page: SettingsPage, label: Key | Raw, o: RowOptions = {
     settings: o.settings ?? [],
     project: o.project ?? [],
     board: o.board ?? [],
+    get lockedBy() {
+      return lockedBy(id);
+    },
     get label() {
       return typeof label === 'string' ? t(label) : label.raw;
     },
@@ -145,6 +151,7 @@ const s = (...settings: (keyof Settings)[]) => ({ settings });
 
 export const SETTINGS_ROWS: RowInfo[] = [
   // Général › Apparence, Langue, Mises à jour, Toi; Avancé.
+  row('policyWarnings', 'general', 'settings.locks.warnings'),
   row('theme', 'general', 'settings.app.theme', s('theme')),
   row('colors', 'general', 'settings.app.colors', s('pluginTheme')),
   row('zoom', 'general', 'settings.app.zoom', s('uiZoom')),

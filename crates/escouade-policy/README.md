@@ -1,6 +1,6 @@
 # escouade-policy : les stratégies du poste géré (TS-0b)
 
-Ticket ESC-454, ligne TS-0b de `docs/TEAM-SERVER.md` §16 (conception au §6.3). La crate n'est branchée nulle part. TS-11 (le moteur des couches et le verrou) et TS-12 (la liste unique, l'ADMX, le profil MDM, la relecture à chaud) viendront après.
+Ticket ESC-454, ligne TS-0b de `docs/TEAM-SERVER.md` §16 (conception au §6.3). Elle est branchée par TS-11 (ESC-455) : le cœur la lit au démarrage, avec les clés de sa table (`read_known`, `src-tauri/src/locks.rs`), comme rang 6 des couches de réglages. TS-12 (la liste unique, l'ADMX, le profil MDM, la relecture à chaud) viendra après.
 
 ## Ce qu'elle lit
 

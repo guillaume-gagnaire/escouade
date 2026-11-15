@@ -2,6 +2,7 @@
   import { writerOf, writerOptions } from '../../lib/engines';
   import { FIRST_MODES, RECOMMENDED_MODE } from '../../lib/first-mode';
   import { installedEngines } from '../../lib/installed';
+  import { bounded, MODES_KEY } from '../../lib/locks.svelte';
   import { t } from '../../lib/i18n';
   import { settingsForm, type NumberSetting } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
@@ -78,14 +79,14 @@
 
 <!-- SEC-09: the mode of new agents chosen at the first start, and the mode of no question allowed or not. -->
 <Group title={t('settings.permissions.title')}>
-  <Row label={t('settings.permissions.agentMode')} desc={t('settings.permissions.agentModeDesc')}>
+  <Row label={t('settings.permissions.agentMode')} desc={t('settings.permissions.agentModeDesc')} row="agentMode">
     <Chips
       label={t('settings.permissions.agentMode')}
-      options={firstModes}
+      options={bounded(MODES_KEY, firstModes)}
       bind:value={() => s.agentMode || RECOMMENDED_MODE, (v) => (s.agentMode = v)}
     />
   </Row>
-  <Row label={t('settings.permissions.allowBypass')} desc={t('settings.permissions.allowBypassDesc')}>
+  <Row label={t('settings.permissions.allowBypass')} desc={t('settings.permissions.allowBypassDesc')} row="allowBypass">
     <Switch label={t('settings.permissions.allowBypass')} bind:on={() => !!s.allowBypass, (v) => (s.allowBypass = v)} />
   </Row>
 </Group>
@@ -126,7 +127,7 @@
 {#if remote.length}
   <!-- Said where it is set: the other harnesses have none (lot 0 of the 2.0 design). -->
   <Group title={t('settings.groups.remote')}>
-    <Row label={t('settings.claude.remoteAll')} desc={t('settings.claude.remoteAllDesc')}>
+    <Row label={t('settings.claude.remoteAll')} desc={t('settings.claude.remoteAllDesc')} row="remoteAll">
       {#snippet extra()}
         <span class="only"
           ><Icon name="info" size={14} />{t('settings.claude.remoteOnly', { harness: remote.map((e) => e.name).join(', ') })}</span
