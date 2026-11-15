@@ -222,7 +222,11 @@ pub fn back_up(data: &Path, file: &str, now: DateTime<Utc>) -> std::io::Result<B
 pub fn back_up_all(data: &Path, now: DateTime<Utc>) {
     for file in FILES {
         match back_up(data, file, now) {
-            Ok(BackedUp::Made(p)) => log::info!("{file}: copied to {}", p.display()),
+            // Named from the data folder: the journal of every start names no folder of the disk.
+            Ok(BackedUp::Made(p)) => log::info!(
+                "{file}: copied to {}",
+                p.strip_prefix(data).unwrap_or(&p).display()
+            ),
             Ok(BackedUp::Unreadable) => {
                 log::warn!("{file} does not read: not copied, its copies stay")
             }
