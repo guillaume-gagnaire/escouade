@@ -2323,6 +2323,14 @@ impl Plugins {
         ))
     }
 
+    /// The id of what the inspection `token` set aside, and where it comes from: what the policies of a managed device
+    /// check before an install (`plugins.allowedOrigins`, TS-12).
+    pub fn staged_origin(&self, token: &str) -> Option<(String, Origin)> {
+        let staged = self.staged.lock();
+        let installed = &staged.get(token)?.installed;
+        Some((installed.id.clone(), installed.origin.clone()))
+    }
+
     /// The id of what the inspection `token` set aside, and whether a plugin of that id is
     /// installed (an update).
     pub fn staged(&self, token: &str) -> Option<(String, bool)> {

@@ -328,9 +328,12 @@ pub enum UiEvent {
     Language {
         lang: crate::i18n::LangInfo,
     },
-    /// What the policies lock changed (TS-11): the window greys the settings they impose.
+    /// What the policies lock changed (TS-11): the window greys the settings they impose. `settings`, when they
+    /// brought the app's settings within them (a policy changed while the app runs, TS-12): the window takes them.
     Locks {
         locks: crate::locks::Locks,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        settings: Option<Box<Settings>>,
     },
     /// Lines the step `step` (from 0) of the setup of an agent's worktree wrote since the window
     /// was last sent some (50 ms apart at most), its `total` lines so far counting them. A step

@@ -3769,6 +3769,11 @@ fn voice_err(e: crate::voice::VoiceError) -> String {
 /// time, and the answer waits for them.
 #[tauri::command(async)]
 pub fn voice_start(core: CoreState, voice: VoiceState) -> Res<crate::voice::Started> {
+    // The dictation turned off by this device's policy (TS-12).
+    core.locks
+        .read()
+        .check_dictation()
+        .map_err(|e| e.to_string())?;
     let choice =
         voice_choice(&core.settings.read(), &*core.secrets, &voice.catalog).map_err(voice_err)?;
     voice.start(&choice).map_err(voice_err)

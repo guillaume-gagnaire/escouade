@@ -1958,3 +1958,26 @@ describe('the split screen when a content goes (ESC-399)', () => {
     expect(app.singleItem).toEqual({ kind: 'agent', id: 'a2' });
   });
 });
+
+describe('a policy changed while the app runs (TS-12)', () => {
+  it('gives the settings it brought within it to the app and to an open form, which saves nothing over them', async () => {
+    const { settingsForm } = await import('./settings.svelte');
+    const { emit, backend } = await start({ settings: { ...SETTINGS, autoUpdate: true } });
+    settingsForm.open();
+    expect(settingsForm.settings.autoUpdate).toBe(true);
+    const locks = {
+      locks: { 'updates.automatic': { key: 'updates.automatic', value: false, by: { kind: 'device', source: 'x' }, bounds: [] } },
+      rows: { autoUpdate: ['updates.automatic'] },
+      warnings: [],
+    } as const;
+    emit({ type: 'locks', locks: structuredClone(locks) as never, settings: { ...SETTINGS, autoUpdate: false } });
+    expect(app.settings.autoUpdate).toBe(false);
+    expect(settingsForm.settings.autoUpdate).toBe(false);
+    const before = backend.calls.length;
+    expect(await settingsForm.save()).toBe(true);
+    expect(backend.calls.slice(before).filter((c) => c.cmd === 'save_settings')).toEqual([]);
+    // Locks alone (nothing brought within them) leave the settings as they are.
+    emit({ type: 'locks', locks: { locks: {}, rows: {}, warnings: [] } });
+    expect(app.settings.autoUpdate).toBe(false);
+  });
+});

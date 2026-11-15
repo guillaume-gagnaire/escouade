@@ -1669,6 +1669,27 @@ impl<R: Runtime> ServerHandler for Tools<R> {
     ) -> Result<CallToolResponse, ErrorData> {
         let tool = request.name.to_string();
         let ctx = ToolCtx::<R>::of(&context);
+        // Claude outside Escouade in reading alone, by this device's policy (`mcp.externalClients`, TS-12): a tool
+        // that writes is refused before it runs.
+        if let Some(c) = ctx.as_ref() {
+            if matches!(c.caller, Caller::External)
+                && c.core.locks.read().mcp_external() == "readOnly"
+                && !reads_only(&tool)
+            {
+                let why = tr!(
+                    "Outil refusé : la stratégie de ce poste ne permet aux clients MCP extérieurs que de lire.",
+                    "Tool refused: this device’s policy lets outside MCP clients read only."
+                );
+                activity::record(
+                    &c.core,
+                    Some(&c.caller),
+                    &activity::clip(&tool),
+                    "",
+                    Outcome::Refused(why.clone()),
+                );
+                return Ok(CallToolResult::error(vec![ContentBlock::text(why)]).into());
+            }
+        }
         let answer = self
             .router
             .call(ToolCallContext::new(self, request, context))
@@ -1717,6 +1738,13 @@ impl<R: Runtime> ServerHandler for Tools<R> {
         );
         answer
     }
+}
+
+/// Whether a tool only reads: what an outside client in reading alone may call (`mcp.externalClients`).
+pub(crate) fn reads_only(tool: &str) -> bool {
+    ["get_", "list_", "read_", "search_", "wait_"]
+        .iter()
+        .any(|p| tool.starts_with(p))
 }
 
 /// `message` up to the first value of the client’s that it quotes: serde puts them in double

@@ -263,7 +263,7 @@
       {/if}
     </Row>
   {/if}
-  <Row label={t('settings.about.autoUpdate')} desc={t('settings.about.autoUpdateDesc')}>
+  <Row label={t('settings.about.autoUpdate')} desc={t('settings.about.autoUpdateDesc')} row="autoUpdate">
     <Switch label={t('settings.about.autoUpdate')} bind:on={s.autoUpdate} />
   </Row>
   <Row label={t('settings.about.betaUpdates')} desc={t('settings.about.betaUpdatesDesc')} row="betaUpdates">

@@ -258,7 +258,7 @@ mod system {
         use serde_json::json;
 
         use super::*;
-        use crate::{Source, PROVISIONAL_KEYS};
+        use crate::Source;
 
         fn chmod(path: &Path, mode: u32) {
             fs::set_permissions(path, fs::Permissions::from_mode(mode)).unwrap();
@@ -307,7 +307,7 @@ mod system {
             write(&dir, "notes.txt", "not read", 0o644);
             write(&dir, ".30-swap.json", "{", 0o644);
 
-            let policies = read_folder(folder(&root, &dir, uid), PROVISIONAL_KEYS);
+            let policies = read_folder(folder(&root, &dir, uid), &crate::known_keys());
 
             assert_eq!(
                 policies.get("telemetry.enabled").unwrap().value,
@@ -343,7 +343,7 @@ mod system {
             );
             symlink(dir.join("10-ok.json"), dir.join("40-link.json")).unwrap();
 
-            let policies = read_folder(folder(&root, &dir, uid), PROVISIONAL_KEYS);
+            let policies = read_folder(folder(&root, &dir, uid), &crate::known_keys());
 
             assert_eq!(policies.len(), 1);
             assert!(policies.get("telemetry.enabled").is_some());
@@ -368,7 +368,7 @@ mod system {
                 return; // run as root, the files are root's
             }
             write(&dir, "10.json", r#"{"telemetry.enabled": false}"#, 0o644);
-            let policies = read_folder(folder(&root, &dir, 0), PROVISIONAL_KEYS);
+            let policies = read_folder(folder(&root, &dir, 0), &crate::known_keys());
             assert!(policies.is_empty());
             assert!(
                 matches!(policies.warnings(), [Warning::Refused { reason, .. }] if reason.contains("owned by user"))
@@ -380,14 +380,14 @@ mod system {
             let (root, dir, uid) = setup();
             write(&dir, "10.json", r#"{"telemetry.enabled": false}"#, 0o644);
             chmod(&dir, 0o777);
-            let policies = read_folder(folder(&root, &dir, uid), PROVISIONAL_KEYS);
+            let policies = read_folder(folder(&root, &dir, uid), &crate::known_keys());
             assert!(policies.is_empty());
             assert!(matches!(policies.warnings(), [Warning::Refused { .. }]));
 
             // Nor one under a folder others may change: they could put another in its place.
             chmod(&dir, 0o755);
             chmod(root.path(), 0o777);
-            let policies = read_folder(folder(&root, &dir, uid), PROVISIONAL_KEYS);
+            let policies = read_folder(folder(&root, &dir, uid), &crate::known_keys());
             assert!(policies.is_empty());
             assert!(
                 matches!(policies.warnings(), [Warning::Refused { reason, .. }] if reason.contains("above"))
@@ -407,7 +407,7 @@ mod system {
                 0o644,
             );
 
-            let policies = read_folder(folder(&root, &dir, uid), PROVISIONAL_KEYS);
+            let policies = read_folder(folder(&root, &dir, uid), &crate::known_keys());
 
             assert_eq!(policies.len(), 1);
             assert_eq!(policies.warnings().len(), 4, "{:?}", policies.warnings());
@@ -417,7 +417,7 @@ mod system {
         fn an_absent_folder_gives_nothing_and_says_nothing() {
             let (root, dir, uid) = setup();
             let absent = dir.join("absent");
-            let policies = read_folder(folder(&root, &absent, uid), PROVISIONAL_KEYS);
+            let policies = read_folder(folder(&root, &absent, uid), &crate::known_keys());
             assert!(policies.is_empty());
             assert!(policies.warnings().is_empty());
         }
@@ -453,7 +453,6 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-    use crate::PROVISIONAL_KEYS;
 
     #[test]
     fn the_last_file_wins_key_by_key() {
@@ -467,7 +466,7 @@ mod tests {
                 r#"{"telemetry.enabled": true}"#.to_owned(),
             ),
         ];
-        let policies = from_contents(&files, PROVISIONAL_KEYS);
+        let policies = from_contents(&files, &crate::known_keys());
         assert_eq!(
             policies.get("telemetry.enabled").unwrap().value,
             json!(true)
@@ -492,7 +491,7 @@ mod tests {
                 r#"{"future.key": [1], "proxy.url": null}"#.to_owned(),
             ),
         ];
-        let policies = from_contents(&files, PROVISIONAL_KEYS);
+        let policies = from_contents(&files, &crate::known_keys());
         assert_eq!(policies.get("future.key").unwrap().value, json!([1]));
         let kinds: Vec<&str> = policies
             .warnings()

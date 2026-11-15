@@ -300,7 +300,6 @@ mod system {
         use std::process::Command;
 
         use super::*;
-        use crate::PROVISIONAL_KEYS;
 
         /// A test domain of `defaults`, deleted when dropped.
         struct TestDomain(String);
@@ -337,7 +336,7 @@ mod system {
                 &["harnesses.allowed", "-array", "claude", "codex"],
             );
 
-            let preferences = SystemPreferences::new(&domain.0, PROVISIONAL_KEYS);
+            let preferences = SystemPreferences::new(&domain.0, &crate::known_keys());
             // CFPreferences sees the values: the reader does reach them…
             assert_eq!(
                 preferences.copy_value("telemetry.enabled"),
@@ -356,7 +355,7 @@ mod system {
                 .any(|k| k == "proxy.url"));
             // …but none is forced, so none is a policy.
             assert!(!preferences.is_forced("telemetry.enabled"));
-            let policies = read_domain(&domain.0, PROVISIONAL_KEYS);
+            let policies = read_domain(&domain.0, &crate::known_keys());
             assert!(policies.is_empty(), "{policies:?}");
             assert!(policies.warnings().is_empty());
         }
@@ -370,7 +369,6 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-    use crate::PROVISIONAL_KEYS;
 
     /// Preferences in memory: a value, and whether it is forced.
     struct Fake(HashMap<&'static str, (PrefValue, bool)>);
@@ -423,7 +421,7 @@ mod tests {
                 ),
             ),
         ]));
-        let policies = read_preferences(&fake, PROVISIONAL_KEYS);
+        let policies = read_preferences(&fake, &crate::known_keys());
         let value = |key: &str| policies.get(key).map(|p| p.value.clone());
         assert_eq!(policies.len(), 6);
         assert!(policies.iter().all(|p| p.source == Source::Profile));
@@ -459,7 +457,7 @@ mod tests {
             ("bad key", (PrefValue::Bool(true), true)),
             ("telemetry.enabled", (PrefValue::Bool(false), true)),
         ]));
-        let policies = read_preferences(&fake, PROVISIONAL_KEYS);
+        let policies = read_preferences(&fake, &crate::known_keys());
         assert_eq!(policies.len(), 1);
         assert_eq!(policies.warnings().len(), 4, "{:?}", policies.warnings());
         assert!(policies
@@ -474,7 +472,7 @@ mod tests {
             "future.policy",
             (PrefValue::Integer(1), true),
         )]));
-        let policies = read_preferences(&fake, PROVISIONAL_KEYS);
+        let policies = read_preferences(&fake, &crate::known_keys());
         assert_eq!(policies.get("future.policy").unwrap().value, json!(1));
         assert!(matches!(policies.warnings(), [Warning::UnknownKey { .. }]));
     }

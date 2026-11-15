@@ -1,0 +1,280 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated from crates/escouade-policy/src/list.rs (cargo run -p escouade-policy --example generate): do not edit. -->
+<policyDefinitionResources xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <displayName>Escouade</displayName>
+  <description>Les stratégies d’Escouade pour les postes gérés.</description>
+  <resources>
+    <stringTable>
+      <string id="escouade">Escouade</string>
+      <string id="SUPPORTED_ESCOUADE_2_3">Escouade 2.3 et plus</string>
+      <string id="cat_permissions">Modes de permission</string>
+      <string id="cat_harnesses">Harness et modèles</string>
+      <string id="cat_plugins">Plugins</string>
+      <string id="cat_projects">Projets</string>
+      <string id="cat_network">Proxy et certificats</string>
+      <string id="cat_privacy">Télémétrie et voix</string>
+      <string id="cat_remote">Remote Control</string>
+      <string id="cat_updates">Mises à jour</string>
+      <string id="cat_servers">Serveurs</string>
+      <string id="cat_mcp">Clients MCP extérieurs</string>
+      <string id="cat_enrollment">Enrôlement</string>
+      <string id="permissions_allowBypass">Interdire le mode Bypass</string>
+      <string id="permissions_allowBypass_Explain">Le mode où un harness ne demande rien (bypassPermissions) n’est plus permis à aucun agent. Seule la valeur false (0) s’impose.
+
+Sur le poste : Réglages › Agents › « Autoriser le mode Bypass », éteint et grisé ; le mode Bypass refusé partout.
+
+Clé : permissions.allowBypass (booléen, false (0)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
+      <string id="permissions_modes">Modes de permission permis</string>
+      <string id="permissions_modes_Explain">La liste des modes que les agents peuvent prendre : plan, default, acceptEdits, auto, bypassPermissions. Un agent dans un autre mode finit son tour, puis passe au mode permis le plus proche.
+
+Sur le poste : Les modes non permis grisés dans « Mode par défaut des agents », le mode du Kanban et le mode d’un agent.
+
+Clé : permissions.modes (liste, parmi plan, default, acceptEdits, auto, bypassPermissions). Sorte : restreindre.</string>
+      <string id="permissions_defaultMode">Mode par défaut des agents</string>
+      <string id="permissions_defaultMode_Explain">Le mode des nouveaux agents : plan, default, acceptEdits ou auto. Il reste dans les modes permis : hors d’eux, c’est le plus proche permis.
+
+Sur le poste : Réglages › Agents › « Mode par défaut des agents », grisé.
+
+Clé : permissions.defaultMode (chaîne, plan, default, acceptEdits, auto). Sorte : valeur.</string>
+      <string id="permissions_defaultMode_plan">plan</string>
+      <string id="permissions_defaultMode_default">default</string>
+      <string id="permissions_defaultMode_acceptEdits">acceptEdits</string>
+      <string id="permissions_defaultMode_auto">auto</string>
+      <string id="harnesses_allowed">Harness permis</string>
+      <string id="harnesses_allowed_Explain">La liste des harness que les agents peuvent utiliser, par leur id (claude, codex, copilot, cursor, opencode, gemini…). Un agent d’un harness devenu interdit s’arrête à la fin de son tour.
+
+Sur le poste : Le harness d’un projet, d’un agent, d’un ticket : un harness non permis est grisé et refusé.
+
+Clé : harnesses.allowed (liste). Sorte : restreindre.</string>
+      <string id="harnesses_allowedModels">Modèles permis par harness</string>
+      <string id="harnesses_allowedModels_Explain">Un objet JSON qui donne, pour chaque harness, la liste de ses modèles permis. Un harness absent de l’objet garde tous ses modèles.
+
+Sur le poste : Un agent ou un ticket sur un modèle non permis est refusé à son démarrage.
+
+Clé : harnesses.allowedModels (JSON). Sorte : restreindre.</string>
+      <string id="harnesses_maxEffort">Effort au plus</string>
+      <string id="harnesses_maxEffort_Explain">L’effort le plus haut qu’un agent peut recevoir : low, medium, high, xhigh ou max.
+
+Sur le poste : L’effort des agents du Kanban ramené à ce plafond ; un effort plus haut refusé.
+
+Clé : harnesses.maxEffort (chaîne, low, medium, high, xhigh, max). Sorte : restreindre.</string>
+      <string id="harnesses_maxEffort_low">low</string>
+      <string id="harnesses_maxEffort_medium">medium</string>
+      <string id="harnesses_maxEffort_high">high</string>
+      <string id="harnesses_maxEffort_xhigh">xhigh</string>
+      <string id="harnesses_maxEffort_max">max</string>
+      <string id="plugins_allowedOrigins">Origines des plugins permises</string>
+      <string id="plugins_allowedOrigins_Explain">D’où un plugin peut s’installer : store-verified (le store, versions vérifiées), store (le store, toute version), team-store (le store de l’équipe), git, folder (un dossier), dev (un dossier en développement).
+
+Sur le poste : L’installation d’un plugin d’une autre origine est refusée et dite.
+
+Clé : plugins.allowedOrigins (liste, parmi store-verified, store, team-store, git, folder, dev). Sorte : restreindre.</string>
+      <string id="plugins_allowed">Plugins permis</string>
+      <string id="plugins_allowed_Explain">La liste des ids de plugins qui peuvent s’installer. Absente, tous le peuvent.
+
+Sur le poste : L’installation d’un plugin hors de la liste est refusée et dite.
+
+Clé : plugins.allowed (liste). Sorte : restreindre.</string>
+      <string id="plugins_denied">Plugins interdits</string>
+      <string id="plugins_denied_Explain">La liste des ids de plugins qui ne s’installent jamais, même permis par ailleurs.
+
+Sur le poste : L’installation d’un plugin de la liste est refusée et dite.
+
+Clé : plugins.denied (liste). Sorte : restreindre.</string>
+      <string id="plugins_verifiedOnly">N’installer que des versions vérifiées</string>
+      <string id="plugins_verifiedOnly_Explain">Une version du store sans le sceau « Vérifié par Escouade » est refusée, à l’installation comme à la mise à jour. Seule la valeur true (1) s’impose.
+
+Sur le poste : Plugins › « N’installer que des versions vérifiées », allumé et grisé.
+
+Clé : plugins.verifiedOnly (booléen, true (1)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
+      <string id="projects_forcePrivate">Projets privés d’office</string>
+      <string id="projects_forcePrivate_Explain">Chaque projet est privé : ses agents ne voient aucun autre projet, et aucun autre projet ne le voit. Seule la valeur true (1) s’impose.
+
+Sur le poste : « Nouveaux projets privés » et « Projet privé » de chaque projet, allumés et grisés.
+
+Clé : projects.forcePrivate (booléen, true (1)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
+      <string id="projects_deniedFiles">Motifs de fichiers interdits</string>
+      <string id="projects_deniedFiles_Explain">Des motifs de fichiers (à la manière de .gitignore) que les agents ne lisent ni n’écrivent, ajoutés à ceux des projets.
+
+Sur le poste : Lu et gardé ; appliqué aux agents avec la clôture des fichiers d’un projet (à venir).
+
+Clé : projects.deniedFiles (liste). Sorte : restreindre.</string>
+      <string id="proxy_url">Adresse du proxy</string>
+      <string id="proxy_url_Explain">Le proxy HTTP(S) de l’app, des plugins et des agents, par exemple http://proxy.example.com:3128.
+
+Sur le poste : Réglages › Avancé › Réseau, l’adresse du proxy grisée.
+
+Clé : proxy.url (chaîne). Sorte : sensible.</string>
+      <string id="proxy_exclusions">Exclusions du proxy</string>
+      <string id="proxy_exclusions_Explain">Les hôtes joints sans le proxy (NO_PROXY), un par ligne.
+
+Sur le poste : Réglages › Avancé › Réseau, les exclusions grisées.
+
+Clé : proxy.exclusions (liste). Sorte : sensible.</string>
+      <string id="proxy_denyInsecureTls">Interdire d’ignorer la vérification TLS</string>
+      <string id="proxy_denyInsecureTls_Explain">« Ignorer la vérification des certificats TLS » est éteint et ne s’allume plus. Seule la valeur true (1) s’impose.
+
+Sur le poste : Réglages › Avancé › Réseau › « Ignorer la vérification des certificats TLS », éteint et grisé.
+
+Clé : proxy.denyInsecureTls (booléen, true (1)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
+      <string id="proxy_authorities">Fichier d’autorités de certification</string>
+      <string id="proxy_authorities_Explain">Le chemin d’un fichier .pem d’autorités crues en plus du magasin du système (la racine d’un proxy d’entreprise).
+
+Sur le poste : Réglages › Avancé › Réseau › « Autorités de certification supplémentaires », grisé.
+
+Clé : proxy.authorities (chaîne). Sorte : sensible.</string>
+      <string id="telemetry_enabled">Éteindre les statistiques d’usage</string>
+      <string id="telemetry_enabled_Explain">Les statistiques anonymes ne partent plus. Seule la valeur false (0) s’impose.
+
+Sur le poste : Réglages › Général › « Statistiques d’usage », éteint et grisé.
+
+Clé : telemetry.enabled (booléen, false (0)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
+      <string id="voice_onlineAllowed">Interdire les voix en ligne</string>
+      <string id="voice_onlineAllowed_Explain">La dictée et la voix de la conversation restent sur le poste (Whisper et Piper) : aucun service en ligne. Seule la valeur false (0) s’impose.
+
+Sur le poste : Réglages › Voix, « En ligne » ramené au local (Whisper, Piper) et refusé.
+
+Clé : voice.onlineAllowed (booléen, false (0)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
+      <string id="voice_dictation">Éteindre la dictée</string>
+      <string id="voice_dictation_Explain">La dictée ne démarre plus. Seule la valeur false (0) s’impose.
+
+Sur le poste : Réglages › Voix › Dictée, grisé ; la dictée refusée.
+
+Clé : voice.dictation (booléen, false (0)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
+      <string id="remoteControl_enabled">Interdire le Remote Control</string>
+      <string id="remoteControl_enabled_Explain">Aucun agent n’est joignable depuis claude.ai. Seule la valeur false (0) s’impose.
+
+Sur le poste : « Remote control pour tous les agents », celui d’un projet et d’un agent, éteints et grisés.
+
+Clé : remoteControl.enabled (booléen, false (0)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
+      <string id="updates_channel">Canal stable seulement</string>
+      <string id="updates_channel_Explain">Aucune version bêta n’est proposée. Seule la valeur stable s’impose.
+
+Sur le poste : Réglages › Général › « Recevoir les versions bêta », éteint et grisé.
+
+Clé : updates.channel (chaîne, stable, beta). Sorte : restreindre.</string>
+      <string id="updates_channel_stable">stable</string>
+      <string id="updates_channel_beta">beta</string>
+      <string id="updates_automatic">Couper la mise à jour automatique</string>
+      <string id="updates_automatic_Explain">Une nouvelle version est proposée, jamais installée seule : le service informatique déploie les siennes. Seule la valeur false (0) s’impose.
+
+Sur le poste : Réglages › Général › « Installer les mises à jour automatiquement », éteint et grisé.
+
+Clé : updates.automatic (booléen, false (0)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
+      <string id="servers_allowed">Serveurs permis</string>
+      <string id="servers_allowed_Explain">Les adresses des serveurs d’équipe et des serveurs en mode serveur que l’app peut joindre. Absente, tous.
+
+Sur le poste : Un serveur hors de la liste est refusé, avec la raison.
+
+Clé : servers.allowed (liste). Sorte : restreindre.</string>
+      <string id="servers_personalSpace">Interdire l’espace perso</string>
+      <string id="servers_personalSpace_Explain">Seuls les espaces des serveurs permis s’ouvrent, pas celui du poste seul. Seule la valeur false (0) s’impose.
+
+Sur le poste : Lu et gardé ; appliqué avec les espaces du mode serveur (à venir).
+
+Clé : servers.personalSpace (booléen, false (0)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
+      <string id="servers_aggregateView">Interdire la vue agrégée</string>
+      <string id="servers_aggregateView_Explain">Les espaces ne se montrent pas ensemble dans une même vue. Seule la valeur false (0) s’impose.
+
+Sur le poste : Lu et gardé ; appliqué avec les espaces du mode serveur (à venir).
+
+Clé : servers.aggregateView (booléen, false (0)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
+      <string id="servers_contentlessNotifications">Notifications sans contenu</string>
+      <string id="servers_contentlessNotifications_Explain">Les notifications venues d’un serveur disent qu’il se passe quelque chose, jamais quoi. Seule la valeur true (1) s’impose.
+
+Sur le poste : Lu et gardé ; appliqué avec les notifications du serveur d’équipe (à venir).
+
+Clé : servers.contentlessNotifications (booléen, true (1)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
+      <string id="mcp_externalClients">Clients MCP extérieurs</string>
+      <string id="mcp_externalClients_Explain">Ce que Claude hors d’Escouade (un client MCP extérieur) peut faire par le serveur MCP d’Escouade : denied (rien), readOnly (lire seulement), allowed (tout). Les agents d’Escouade ne sont pas concernés.
+
+Sur le poste : Un client extérieur refusé à la connexion (denied), ou ses outils qui écrivent refusés (readOnly).
+
+Clé : mcp.externalClients (chaîne, denied, readOnly, allowed). Sorte : restreindre.</string>
+      <string id="mcp_externalClients_denied">denied</string>
+      <string id="mcp_externalClients_readOnly">readOnly</string>
+      <string id="mcp_externalClients_allowed">allowed</string>
+      <string id="team_server">Serveur d’équipe</string>
+      <string id="team_server_Explain">L’adresse du serveur d’équipe de l’entreprise : le membre n’a plus qu’à accepter son invitation.
+
+Sur le poste : Gardé par l’app ; l’écran d’entrée dans l’équipe le préremplira (à venir).
+
+Clé : team.server (chaîne). Sorte : valeur.</string>
+      <string id="team_fingerprint">Empreinte de l’équipe</string>
+      <string id="team_fingerprint_Explain">L’empreinte de l’équipe attendue sur le serveur d’équipe : une équipe d’une autre empreinte est refusée.
+
+Sur le poste : Gardée par l’app ; vérifiée à l’entrée dans l’équipe (à venir).
+
+Clé : team.fingerprint (chaîne). Sorte : valeur.</string>
+      <string id="team_onlyThisServer">Refuser tout autre serveur d’équipe</string>
+      <string id="team_onlyThisServer_Explain">Seul le serveur d’équipe posé par la stratégie peut être joint. Seule la valeur true (1) s’impose.
+
+Sur le poste : Un autre serveur d’équipe est refusé, avec la raison.
+
+Clé : team.onlyThisServer (booléen, true (1)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
+    </stringTable>
+    <presentationTable>
+      <presentation id="permissions_modes">
+        <listBox refId="permissions_modes">Modes de permission permis</listBox>
+      </presentation>
+      <presentation id="permissions_defaultMode">
+        <dropdownList refId="permissions_defaultMode" noSort="true">Mode par défaut des agents</dropdownList>
+      </presentation>
+      <presentation id="harnesses_allowed">
+        <listBox refId="harnesses_allowed">Harness permis</listBox>
+      </presentation>
+      <presentation id="harnesses_allowedModels">
+        <textBox refId="harnesses_allowedModels">
+          <label>Modèles permis par harness</label>
+        </textBox>
+      </presentation>
+      <presentation id="harnesses_maxEffort">
+        <dropdownList refId="harnesses_maxEffort" noSort="true">Effort au plus</dropdownList>
+      </presentation>
+      <presentation id="plugins_allowedOrigins">
+        <listBox refId="plugins_allowedOrigins">Origines des plugins permises</listBox>
+      </presentation>
+      <presentation id="plugins_allowed">
+        <listBox refId="plugins_allowed">Plugins permis</listBox>
+      </presentation>
+      <presentation id="plugins_denied">
+        <listBox refId="plugins_denied">Plugins interdits</listBox>
+      </presentation>
+      <presentation id="projects_deniedFiles">
+        <listBox refId="projects_deniedFiles">Motifs de fichiers interdits</listBox>
+      </presentation>
+      <presentation id="proxy_url">
+        <textBox refId="proxy_url">
+          <label>Adresse du proxy</label>
+        </textBox>
+      </presentation>
+      <presentation id="proxy_exclusions">
+        <listBox refId="proxy_exclusions">Exclusions du proxy</listBox>
+      </presentation>
+      <presentation id="proxy_authorities">
+        <textBox refId="proxy_authorities">
+          <label>Fichier d’autorités de certification</label>
+        </textBox>
+      </presentation>
+      <presentation id="updates_channel">
+        <dropdownList refId="updates_channel" noSort="true">Canal stable seulement</dropdownList>
+      </presentation>
+      <presentation id="servers_allowed">
+        <listBox refId="servers_allowed">Serveurs permis</listBox>
+      </presentation>
+      <presentation id="mcp_externalClients">
+        <dropdownList refId="mcp_externalClients" noSort="true">Clients MCP extérieurs</dropdownList>
+      </presentation>
+      <presentation id="team_server">
+        <textBox refId="team_server">
+          <label>Serveur d’équipe</label>
+        </textBox>
+      </presentation>
+      <presentation id="team_fingerprint">
+        <textBox refId="team_fingerprint">
+          <label>Empreinte de l’équipe</label>
+        </textBox>
+      </presentation>
+    </presentationTable>
+  </resources>
+</policyDefinitionResources>

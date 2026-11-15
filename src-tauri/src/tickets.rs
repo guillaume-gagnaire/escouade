@@ -1189,6 +1189,10 @@ impl<R: Runtime> Core<R> {
         if self.project(project_id)?.board.mode != s.mode {
             self.locks.read().check_mode(&s.mode)?;
         }
+        // An effort above the policies' ceiling (TS-12).
+        if self.project(project_id)?.board.effort != s.effort {
+            self.locks.read().check_effort(&s.effort)?;
+        }
         let project = {
             let mut projects = self.projects.write();
             let p = projects

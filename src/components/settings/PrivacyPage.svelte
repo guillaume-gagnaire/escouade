@@ -75,6 +75,7 @@
     label={t('settings.project.private')}
     desc={IS_WINDOWS ? `${t('settings.project.privateDesc')} ${t('settings.project.privateWindows')}` : t('settings.project.privateDesc')}
     shared="private"
+    row="private"
   >
     <Switch label={t('settings.project.private')} bind:on={draft.private} />
   </Row>

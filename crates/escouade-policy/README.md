@@ -1,6 +1,23 @@
-# escouade-policy : les stratégies du poste géré (TS-0b)
+# escouade-policy : les stratégies du poste géré (TS-0b, TS-12)
 
-Ticket ESC-454, ligne TS-0b de `docs/TEAM-SERVER.md` §16 (conception au §6.3). Elle est branchée par TS-11 (ESC-455) : le cœur la lit au démarrage, avec les clés de sa table (`read_known`, `src-tauri/src/locks.rs`), comme rang 6 des couches de réglages. TS-12 (la liste unique, l'ADMX, le profil MDM, la relecture à chaud) viendra après.
+Tickets ESC-454 (TS-0b : la lecture) et ESC-465 (TS-12 : la liste unique, les fichiers générés, la relecture à chaud), lignes de `docs/TEAM-SERVER.md` §16 (conception aux §6.3 et §6.4). Le cœur la lit comme rang 6 des couches de réglages (TS-11, ESC-455, `src-tauri/src/locks.rs`) : au démarrage, puis à chaque changement.
+
+## La liste unique (TS-12)
+
+`src/list.rs` est la seule liste des stratégies (`POLICIES`, 30 clés) : pour chacune son **type** (booléen, liste, chaîne, nombre, JSON), sa **sorte** (restreindre, valeur, sensible), sa **forme** (interrupteur, choix, plafond, borne, liste d'interdits, texte, JSON), les lignes des Réglages qu'elle verrouille (`SETTINGS_ROWS`), et ses textes en français et en anglais. Elle remplace `PROVISIONAL_KEYS`, et c'est la table du cœur (`locks::KEYS` est elle).
+
+- **Les types** : `read()` lit puis convertit chaque clé de la liste (`list::convert`, `Policies::typed`). Un `REG_DWORD` 0 ou 1 devient un booléen, une chaîne seule une liste d'un élément, une chaîne JSON un objet ; ce qui ne va pas est retiré et dit (`Warning::Malformed`). Une clé hors de la liste reste telle quelle, dite inconnue.
+- **Les fichiers générés** (`src/generate.rs`) : `policies/windows/escouade.admx` et ses ADML `fr-FR`, `en-US` ; `policies/macos/` : le manifeste ProfileManifests, le schéma de Jamf, un `.mobileconfig` d'exemple ; `policies/linux/` : le schéma JSON de `/etc/escouade/policies` et un exemple ; la page du site `website/content/docs/{fr,en}/managed-policies.md`. `cargo run -p escouade-policy --example generate` les écrit ; le test `the_files_of_the_repository_are_what_the_list_generates` échoue tant qu'ils divergent. D'autres tests relisent l'ADMX et les ADML (chaque chaîne et chaque présentation nommées existent), le profil et le manifeste (par la crate `plist`), et les schémas.
+
+## La relecture à chaud (TS-12)
+
+`src/watch.rs` : un fil attend un signe de changement (`Changes`), relit, et rappelle quand les stratégies diffèrent des dernières.
+
+- **Windows** : `RegNotifyChangeKeyValue` sur `HKLM\SOFTWARE\Policies` et `HKCU\SOFTWARE\Policies`, sous-arbre compris (la clé `Escouade` peut ne pas exister encore), réarmé après chaque signe.
+- **macOS** : les fichiers de `/Library/Managed Preferences` ; **Linux** : ceux de `/etc/escouade`. Noms, tailles et dates, regardés chaque seconde (`Poll`) : pas de dépendance, et un dossier qui apparaît plus tard est vu.
+- Partout, tout est relu toutes les 30 s en plus (le cœur), au cas où un changement ne donnerait aucun signe.
+- **Injectable** : `watch::spawn(lecture, signe, dernières, période, rappel)` ; les tests donnent un canal (`Channel`) et leur propre lecture. L'e2e passe par la source d'essai du cœur (`ESCOUADE_TEST_POLICIES`, build de développement seulement), surveillée par `Poll`.
+- `cargo run -p escouade-policy --example read -- --watch` imprime les stratégies à chaque changement : c'est l'outil des essais réels.
 
 ## Ce qu'elle lit
 
@@ -16,11 +33,11 @@ Ticket ESC-454, ligne TS-0b de `docs/TEAM-SERVER.md` §16 (conception au §6.3).
 - `Refused` : la clé, le dossier ou le fichier n'est pas digne de confiance.
 - `Unreadable` : la clé, le dossier ou le fichier n'a pas pu être lu.
 
-Rien ne fait planter la lecture : `escouade_policy::read()` rend toujours un résultat. Les clés connues sont provisoires (`PROVISIONAL_KEYS`, tirées du §6.4) : la liste unique de TS-12 les remplacera.
+Rien ne fait planter la lecture : `escouade_policy::read()` rend toujours un résultat. Les clés connues sont celles de la liste unique (`known_keys()`).
 
 **Les valeurs.**
 - **Windows** :
-  - `REG_DWORD`, `REG_QWORD` et `REG_DWORD_BIG_ENDIAN` donnent un nombre. Un booléen ADMX est un `REG_DWORD` à 0 ou 1 : c'est la liste de TS-12 qui dira quelles clés sont booléennes.
+  - `REG_DWORD`, `REG_QWORD` et `REG_DWORD_BIG_ENDIAN` donnent un nombre. Un booléen ADMX est un `REG_DWORD` à 0 ou 1 : la liste dit quelles clés sont booléennes, et `read()` les convertit.
   - `REG_SZ` donne une chaîne. S'il commence par `{` ou `[`, il est lu comme du JSON : c'est la forme d'un réglage complexe, et un JSON cassé est ignoré et dit.
   - `REG_EXPAND_SZ` donne la chaîne telle qu'écrite, sans développer les `%VARIABLE%`.
   - `REG_MULTI_SZ` donne une liste de chaînes.
@@ -64,25 +81,34 @@ Rien ne fait planter la lecture : `escouade_policy::read()` rend toujours un ré
 
 **macOS : compilé, pas exécuté.** `cargo clippy -p escouade-policy --all-targets --target x86_64-apple-darwin -D warnings` passe : le code CoreFoundation et son test sont typés et sans avertissement. Les tests sans CoreFoundation (le lecteur `Preferences` simulé) tournent sur Windows et Linux. Le test réel (`a_value_of_defaults_write_is_read_but_not_forced_so_no_policy`) écrit un domaine de test par `defaults write`. Il vérifie que CFPreferences voit bien les valeurs mais ne les dit pas forcées, donc qu'aucune n'est une stratégie, puis il efface le domaine. **Il n'a pas encore tourné sur un Mac** : la CI macOS de `release/2.3` le lancera (nextest de la crate).
 
-## Ce qui n'a pas été vérifié, à faire dans les essais réels de TS-12
+## Les essais de TS-12 (le 2026-11-15)
 
-- **Un vrai GPO.** Une stratégie posée par `gpedit.msc` (ou par Intune) depuis l'ADMX de TS-12, dans `HKLM` puis dans `HKCU`. Il faut vérifier :
-  - qu'elle arrive en `machine` et en `user`, et que la machine gagne ;
-  - qu'une liste ADMX (`<list>` avec `explicitValue` absent) donne bien les valeurs `1`, `2`… ;
-  - qu'un `<enum>` et un `<boolean>` donnent les `REG_DWORD` attendus.
+**Windows 11 Pro 26200, compte non élevé (niveau d'intégrité moyen).**
+- **La stratégie locale (gpedit) n'a pas pu être essayée** : poser l'ADMX dans `C:\Windows\PolicyDefinitions` demande l'élévation UAC, que l'agent n'a pas. `scripts/windows-trial.ps1`, à lancer en administrateur, pose l'ADMX et ses ADML, écrit quelques stratégies dans `HKLM` et `HKCU` comme le ferait la stratégie de groupe, montre leur ACL et ce que lit la crate, puis dit quoi vérifier à la main dans gpedit (`-Cleanup` retire tout). **À faire par le chef avec l'utilisateur.**
+- **Écrire `HKCU\Software\Policies\Escouade` avec les droits de ce compte : refusé** (« Accès refusé », par `New-Item` comme par `reg add`). C'est ce que TS-0b avait lu dans l'ACL : l'utilisateur n'a que la lecture sur sa propre clé `Policies`. Rien ne peut donc être posé là sans administrateur.
+- **La relecture à chaud, sur le vrai registre** : `RegNotifyChangeKeyValue` sur une vraie clé de test de `HKCU\Software\` (hors de `Policies`) a dit une valeur écrite, une sous-clé de liste créée et un élément de liste ajouté, puis plus rien (`the_registry_tells_a_value_written_and_a_list_subkey_created`). Une stratégie écrite dans cette clé pendant que la surveillance tourne a été relue et convertie : le `REG_DWORD` 0 de `updates.automatic` est arrivé en `false` (`a_policy_written_in_the_registry_while_it_runs_is_read_again_and_typed`).
+- **Dans l'app** : la source d'essai (build de développement) changée pendant que l'app tourne grise le réglage, puis le libère (`tests/e2e/policies-live.spec.ts`) ; un agent dont le harness devient interdit est arrêté entre deux tours (`locks::policies_tests`).
+- Les fichiers générés sont relus par les tests : l'ADMX et ses ADML (XML bien formé, chaque chaîne et chaque présentation nommées existent, une liste écrite en sous-clé `<clé>` avec `valuePrefix=""`, donc des valeurs `1`, `2`…), le profil et le manifeste (par la crate `plist`), les schémas.
 
-  Il faut aussi relire l'ACL de `Policies\Escouade` telle que la crée la stratégie de groupe. Il faut un Windows Pro avec un compte administrateur, donc une élévation UAC.
-- **Le cas `admin_only` quand l'app tourne élevée.** Escouade ne sait plus rien distinguer : tout est accepté. À dire dans la page des services informatiques.
-- **Un vrai profil MDM installé.** Il faut un `.mobileconfig` du domaine `dev.gagnaire.escouade`, installé à la main dans Réglages Système > Profils, puis par un MDM si possible. Il faut vérifier :
-  - que `CFPreferencesAppValueIsForced` dit vrai pour ses clés et faux pour un `defaults write` du même domaine ;
-  - que la valeur forcée gagne sur le `defaults write` ;
-  - que `CFPreferencesCopyKeyList` liste, ou non, les clés du profil. La crate lit aussi les clés des plists de `/Library/Managed Preferences`, au cas où.
-  - que les tableaux et les dictionnaires du profil arrivent tels quels ;
-  - le profil par utilisateur, dans `/Library/Managed Preferences/<user>/`.
-- **Le premier lancement du test réel macOS**, en CI ou sur un Mac.
-- **La relecture à chaud**, que la crate ne fait pas : surveiller le registre (`RegNotifyChangeKeyValue`), `/Library/Managed Preferences` et `/etc/escouade`.
-- **La liste unique et les types.** Dire quelles clés sont des booléens, des listes ou des bornes. Convertir un `REG_DWORD` 0/1 en booléen. Remplacer `PROVISIONAL_KEYS`. Générer l'ADMX, les ADML, le manifeste et le schéma JSON.
-- **Linux, au-delà d'Ubuntu.** Les ACL POSIX (`setfacl`) ne sont pas lues une à une. Mais quand un fichier a une ACL étendue, ses bits de groupe sont son masque, qui borne toute entrée nommée. Une écriture donnée à un autre utilisateur met donc `w` dans le masque, et le fichier est refusé comme ouvert au groupe. C'est la règle de POSIX.1e : elle n'a pas été essayée, car `setfacl` manque dans la distribution WSL. Un dossier `/etc` en lecture seule, comme sur NixOS ou dans un conteneur, n'a pas été essayé.
+**Linux (WSL 2, Ubuntu) : 51 tests de la crate, tous verts, et un essai réel en root.** `read --watch` lancé, puis :
+1. `/etc/escouade/policies/10-company.json` posé (644, root) avec `{"updates.automatic": 0, "permissions.modes": "plan"}` : vu en moins de 3 s, `false` et `["plan"]` ;
+2. le même fichier changé : vu, `telemetry.enabled` à `false` ;
+3. `20-loose.json` posé en 666 : vu, refusé et dit, les autres valeurs gardées ;
+4. le dossier retiré : vu, plus aucune stratégie.
+
+**macOS : rien n'a pu être essayé.** Pas de Mac ici. Restent :
+- **un vrai profil MDM** : installer `policies/macos/escouade-example.mobileconfig` (réduit à quelques clés) à la main dans Réglages Système › Profils, puis par un MDM (Jamf, Intune, Kandji). Il faut vérifier que `CFPreferencesAppValueIsForced` dit vrai pour ses clés, que les tableaux et le dictionnaire de `harnesses.allowedModels` arrivent tels quels, et le profil par utilisateur dans `/Library/Managed Preferences/<user>/` ;
+- **la relecture à chaud** : qu'un profil installé ou retiré change bien un fichier de `/Library/Managed Preferences` (ce que regarde `Poll`), et que `CFPreferencesAppSynchronize` rend la nouvelle valeur sans redémarrer ; sinon la relecture des 30 s ne suffirait pas non plus, à cause du cache de CFPreferences ;
+- que Jamf Pro accepte `dev.gagnaire.escouade.json` comme schéma personnalisé, et ProfileCreator le manifeste ;
+- le premier lancement du test réel macOS de TS-0b, en CI ou sur un Mac.
+
+## Ce qui reste à essayer
+
+- **Un vrai GPO** (`scripts/windows-trial.ps1`, en administrateur), dans `HKLM` puis dans `HKCU` : qu'une stratégie arrive en `machine` et en `user` et que la machine gagne ; qu'une liste ADMX donne bien `1`, `2`… ; qu'un `<enum>` et un booléen donnent les valeurs attendues ; l'ACL de `Policies\Escouade` telle que la crée la stratégie de groupe ; qu'un changement dans gpedit suivi de `gpupdate` est vu par `read --watch`. Puis l'import dans Intune (ADMX importés).
+- **Le cas `admin_only` quand l'app tourne élevée** : Escouade ne sait plus rien distinguer et lit tout. La page du site le dit.
+- **macOS** : ci-dessus.
+- **Linux, au-delà d'Ubuntu** : les ACL POSIX (`setfacl`) et un `/etc` en lecture seule (NixOS, conteneur), comme le notait TS-0b.
+- **Ce que la liste garde sans l'appliquer encore** : `projects.deniedFiles` (avec la clôture des fichiers d'un projet), `servers.personalSpace`, `servers.aggregateView`, `servers.contentlessNotifications` (avec les espaces et le serveur d'équipe), et l'écran d'entrée dans l'équipe qui lira l'enrôlement (TS-4).
 
 ## Lancer
 
@@ -90,4 +116,8 @@ Rien ne fait planter la lecture : `escouade_policy::read()` rend toujours un ré
 cd src-tauri
 cargo nextest run -p escouade-policy
 cargo run -p escouade-policy --example read   # les stratégies de ce poste, en JSON
+cargo run -p escouade-policy --example read -- --watch   # et à chaque changement
+cargo run -p escouade-policy --example generate   # l'ADMX, les profils, les schémas et la page du site
 ```
+
+L'essai en administrateur sous Windows : `powershell -ExecutionPolicy Bypass -File crates/escouade-policy/scripts/windows-trial.ps1` (puis `-Cleanup`).

@@ -473,6 +473,21 @@ class SettingsForm {
     this.launchProposal = {};
   }
 
+  /**
+   * The settings a policy brought within it while the app runs (TS-12): what they changed is taken by the draft and by
+   * what a change is measured against, so the form shows it and never saves the value before over it.
+   */
+  takeImposed(next: Settings) {
+    const fresh = $state.snapshot(next) as unknown as Record<string, unknown>;
+    const base = this.#base.settings as unknown as Record<string, unknown>;
+    const changed: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(fresh)) if (JSON.stringify(v) !== JSON.stringify(base[k])) changed[k] = v;
+    if (!Object.keys(changed).length) return;
+    this.#base = { ...this.#base, settings: { ...this.#base.settings, ...changed } };
+    const draft = this.settings as unknown as Record<string, unknown>;
+    for (const [k, v] of Object.entries(changed)) draft[k] = structuredClone(v);
+  }
+
   /** « Ton nom » filled with git's name (ESC-243) when it has none and was not emptied on purpose. */
   prefillName(git: string | null) {
     const base = this.#base.settings;
@@ -752,3 +767,4 @@ class SettingsForm {
 }
 
 export const settingsForm = new SettingsForm();
+app.onImposed((s) => settingsForm.takeImposed(s));

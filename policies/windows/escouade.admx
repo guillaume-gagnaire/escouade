@@ -1,0 +1,335 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated from crates/escouade-policy/src/list.rs (cargo run -p escouade-policy --example generate): do not edit. -->
+<policyDefinitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <policyNamespaces>
+    <target prefix="escouade" namespace="Escouade.Policies" />
+  </policyNamespaces>
+  <resources minRequiredRevision="1.0" />
+  <supportedOn>
+    <definitions>
+      <definition name="SUPPORTED_ESCOUADE_2_3" displayName="$(string.SUPPORTED_ESCOUADE_2_3)" />
+    </definitions>
+  </supportedOn>
+  <categories>
+    <category name="escouade" displayName="$(string.escouade)" />
+    <category name="permissions" displayName="$(string.cat_permissions)">
+      <parentCategory ref="escouade" />
+    </category>
+    <category name="harnesses" displayName="$(string.cat_harnesses)">
+      <parentCategory ref="escouade" />
+    </category>
+    <category name="plugins" displayName="$(string.cat_plugins)">
+      <parentCategory ref="escouade" />
+    </category>
+    <category name="projects" displayName="$(string.cat_projects)">
+      <parentCategory ref="escouade" />
+    </category>
+    <category name="network" displayName="$(string.cat_network)">
+      <parentCategory ref="escouade" />
+    </category>
+    <category name="privacy" displayName="$(string.cat_privacy)">
+      <parentCategory ref="escouade" />
+    </category>
+    <category name="remote" displayName="$(string.cat_remote)">
+      <parentCategory ref="escouade" />
+    </category>
+    <category name="updates" displayName="$(string.cat_updates)">
+      <parentCategory ref="escouade" />
+    </category>
+    <category name="servers" displayName="$(string.cat_servers)">
+      <parentCategory ref="escouade" />
+    </category>
+    <category name="mcp" displayName="$(string.cat_mcp)">
+      <parentCategory ref="escouade" />
+    </category>
+    <category name="enrollment" displayName="$(string.cat_enrollment)">
+      <parentCategory ref="escouade" />
+    </category>
+  </categories>
+  <policies>
+    <policy name="permissions_allowBypass" class="Both" displayName="$(string.permissions_allowBypass)" explainText="$(string.permissions_allowBypass_Explain)" key="Software\Policies\Escouade" valueName="permissions.allowBypass">
+      <parentCategory ref="permissions" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="0" />
+      </enabledValue>
+    </policy>
+    <policy name="permissions_modes" class="Both" displayName="$(string.permissions_modes)" explainText="$(string.permissions_modes_Explain)" presentation="$(presentation.permissions_modes)" key="Software\Policies\Escouade">
+      <parentCategory ref="permissions" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <list id="permissions_modes" key="Software\Policies\Escouade\permissions.modes" valuePrefix="" />
+      </elements>
+    </policy>
+    <policy name="permissions_defaultMode" class="Both" displayName="$(string.permissions_defaultMode)" explainText="$(string.permissions_defaultMode_Explain)" presentation="$(presentation.permissions_defaultMode)" key="Software\Policies\Escouade">
+      <parentCategory ref="permissions" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <enum id="permissions_defaultMode" valueName="permissions.defaultMode" required="true">
+          <item displayName="$(string.permissions_defaultMode_plan)">
+            <value>
+              <string>plan</string>
+            </value>
+          </item>
+          <item displayName="$(string.permissions_defaultMode_default)">
+            <value>
+              <string>default</string>
+            </value>
+          </item>
+          <item displayName="$(string.permissions_defaultMode_acceptEdits)">
+            <value>
+              <string>acceptEdits</string>
+            </value>
+          </item>
+          <item displayName="$(string.permissions_defaultMode_auto)">
+            <value>
+              <string>auto</string>
+            </value>
+          </item>
+        </enum>
+      </elements>
+    </policy>
+    <policy name="harnesses_allowed" class="Both" displayName="$(string.harnesses_allowed)" explainText="$(string.harnesses_allowed_Explain)" presentation="$(presentation.harnesses_allowed)" key="Software\Policies\Escouade">
+      <parentCategory ref="harnesses" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <list id="harnesses_allowed" key="Software\Policies\Escouade\harnesses.allowed" valuePrefix="" />
+      </elements>
+    </policy>
+    <policy name="harnesses_allowedModels" class="Both" displayName="$(string.harnesses_allowedModels)" explainText="$(string.harnesses_allowedModels_Explain)" presentation="$(presentation.harnesses_allowedModels)" key="Software\Policies\Escouade">
+      <parentCategory ref="harnesses" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <text id="harnesses_allowedModels" valueName="harnesses.allowedModels" required="true" maxLength="4096" />
+      </elements>
+    </policy>
+    <policy name="harnesses_maxEffort" class="Both" displayName="$(string.harnesses_maxEffort)" explainText="$(string.harnesses_maxEffort_Explain)" presentation="$(presentation.harnesses_maxEffort)" key="Software\Policies\Escouade">
+      <parentCategory ref="harnesses" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <enum id="harnesses_maxEffort" valueName="harnesses.maxEffort" required="true">
+          <item displayName="$(string.harnesses_maxEffort_low)">
+            <value>
+              <string>low</string>
+            </value>
+          </item>
+          <item displayName="$(string.harnesses_maxEffort_medium)">
+            <value>
+              <string>medium</string>
+            </value>
+          </item>
+          <item displayName="$(string.harnesses_maxEffort_high)">
+            <value>
+              <string>high</string>
+            </value>
+          </item>
+          <item displayName="$(string.harnesses_maxEffort_xhigh)">
+            <value>
+              <string>xhigh</string>
+            </value>
+          </item>
+          <item displayName="$(string.harnesses_maxEffort_max)">
+            <value>
+              <string>max</string>
+            </value>
+          </item>
+        </enum>
+      </elements>
+    </policy>
+    <policy name="plugins_allowedOrigins" class="Both" displayName="$(string.plugins_allowedOrigins)" explainText="$(string.plugins_allowedOrigins_Explain)" presentation="$(presentation.plugins_allowedOrigins)" key="Software\Policies\Escouade">
+      <parentCategory ref="plugins" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <list id="plugins_allowedOrigins" key="Software\Policies\Escouade\plugins.allowedOrigins" valuePrefix="" />
+      </elements>
+    </policy>
+    <policy name="plugins_allowed" class="Both" displayName="$(string.plugins_allowed)" explainText="$(string.plugins_allowed_Explain)" presentation="$(presentation.plugins_allowed)" key="Software\Policies\Escouade">
+      <parentCategory ref="plugins" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <list id="plugins_allowed" key="Software\Policies\Escouade\plugins.allowed" valuePrefix="" />
+      </elements>
+    </policy>
+    <policy name="plugins_denied" class="Both" displayName="$(string.plugins_denied)" explainText="$(string.plugins_denied_Explain)" presentation="$(presentation.plugins_denied)" key="Software\Policies\Escouade">
+      <parentCategory ref="plugins" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <list id="plugins_denied" key="Software\Policies\Escouade\plugins.denied" valuePrefix="" />
+      </elements>
+    </policy>
+    <policy name="plugins_verifiedOnly" class="Both" displayName="$(string.plugins_verifiedOnly)" explainText="$(string.plugins_verifiedOnly_Explain)" key="Software\Policies\Escouade" valueName="plugins.verifiedOnly">
+      <parentCategory ref="plugins" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="1" />
+      </enabledValue>
+    </policy>
+    <policy name="projects_forcePrivate" class="Both" displayName="$(string.projects_forcePrivate)" explainText="$(string.projects_forcePrivate_Explain)" key="Software\Policies\Escouade" valueName="projects.forcePrivate">
+      <parentCategory ref="projects" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="1" />
+      </enabledValue>
+    </policy>
+    <policy name="projects_deniedFiles" class="Both" displayName="$(string.projects_deniedFiles)" explainText="$(string.projects_deniedFiles_Explain)" presentation="$(presentation.projects_deniedFiles)" key="Software\Policies\Escouade">
+      <parentCategory ref="projects" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <list id="projects_deniedFiles" key="Software\Policies\Escouade\projects.deniedFiles" valuePrefix="" />
+      </elements>
+    </policy>
+    <policy name="proxy_url" class="Both" displayName="$(string.proxy_url)" explainText="$(string.proxy_url_Explain)" presentation="$(presentation.proxy_url)" key="Software\Policies\Escouade">
+      <parentCategory ref="network" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <text id="proxy_url" valueName="proxy.url" required="true" maxLength="1024" />
+      </elements>
+    </policy>
+    <policy name="proxy_exclusions" class="Both" displayName="$(string.proxy_exclusions)" explainText="$(string.proxy_exclusions_Explain)" presentation="$(presentation.proxy_exclusions)" key="Software\Policies\Escouade">
+      <parentCategory ref="network" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <list id="proxy_exclusions" key="Software\Policies\Escouade\proxy.exclusions" valuePrefix="" />
+      </elements>
+    </policy>
+    <policy name="proxy_denyInsecureTls" class="Both" displayName="$(string.proxy_denyInsecureTls)" explainText="$(string.proxy_denyInsecureTls_Explain)" key="Software\Policies\Escouade" valueName="proxy.denyInsecureTls">
+      <parentCategory ref="network" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="1" />
+      </enabledValue>
+    </policy>
+    <policy name="proxy_authorities" class="Both" displayName="$(string.proxy_authorities)" explainText="$(string.proxy_authorities_Explain)" presentation="$(presentation.proxy_authorities)" key="Software\Policies\Escouade">
+      <parentCategory ref="network" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <text id="proxy_authorities" valueName="proxy.authorities" required="true" maxLength="1024" />
+      </elements>
+    </policy>
+    <policy name="telemetry_enabled" class="Both" displayName="$(string.telemetry_enabled)" explainText="$(string.telemetry_enabled_Explain)" key="Software\Policies\Escouade" valueName="telemetry.enabled">
+      <parentCategory ref="privacy" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="0" />
+      </enabledValue>
+    </policy>
+    <policy name="voice_onlineAllowed" class="Both" displayName="$(string.voice_onlineAllowed)" explainText="$(string.voice_onlineAllowed_Explain)" key="Software\Policies\Escouade" valueName="voice.onlineAllowed">
+      <parentCategory ref="privacy" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="0" />
+      </enabledValue>
+    </policy>
+    <policy name="voice_dictation" class="Both" displayName="$(string.voice_dictation)" explainText="$(string.voice_dictation_Explain)" key="Software\Policies\Escouade" valueName="voice.dictation">
+      <parentCategory ref="privacy" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="0" />
+      </enabledValue>
+    </policy>
+    <policy name="remoteControl_enabled" class="Both" displayName="$(string.remoteControl_enabled)" explainText="$(string.remoteControl_enabled_Explain)" key="Software\Policies\Escouade" valueName="remoteControl.enabled">
+      <parentCategory ref="remote" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="0" />
+      </enabledValue>
+    </policy>
+    <policy name="updates_channel" class="Both" displayName="$(string.updates_channel)" explainText="$(string.updates_channel_Explain)" presentation="$(presentation.updates_channel)" key="Software\Policies\Escouade">
+      <parentCategory ref="updates" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <enum id="updates_channel" valueName="updates.channel" required="true">
+          <item displayName="$(string.updates_channel_stable)">
+            <value>
+              <string>stable</string>
+            </value>
+          </item>
+          <item displayName="$(string.updates_channel_beta)">
+            <value>
+              <string>beta</string>
+            </value>
+          </item>
+        </enum>
+      </elements>
+    </policy>
+    <policy name="updates_automatic" class="Both" displayName="$(string.updates_automatic)" explainText="$(string.updates_automatic_Explain)" key="Software\Policies\Escouade" valueName="updates.automatic">
+      <parentCategory ref="updates" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="0" />
+      </enabledValue>
+    </policy>
+    <policy name="servers_allowed" class="Both" displayName="$(string.servers_allowed)" explainText="$(string.servers_allowed_Explain)" presentation="$(presentation.servers_allowed)" key="Software\Policies\Escouade">
+      <parentCategory ref="servers" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <list id="servers_allowed" key="Software\Policies\Escouade\servers.allowed" valuePrefix="" />
+      </elements>
+    </policy>
+    <policy name="servers_personalSpace" class="Both" displayName="$(string.servers_personalSpace)" explainText="$(string.servers_personalSpace_Explain)" key="Software\Policies\Escouade" valueName="servers.personalSpace">
+      <parentCategory ref="servers" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="0" />
+      </enabledValue>
+    </policy>
+    <policy name="servers_aggregateView" class="Both" displayName="$(string.servers_aggregateView)" explainText="$(string.servers_aggregateView_Explain)" key="Software\Policies\Escouade" valueName="servers.aggregateView">
+      <parentCategory ref="servers" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="0" />
+      </enabledValue>
+    </policy>
+    <policy name="servers_contentlessNotifications" class="Both" displayName="$(string.servers_contentlessNotifications)" explainText="$(string.servers_contentlessNotifications_Explain)" key="Software\Policies\Escouade" valueName="servers.contentlessNotifications">
+      <parentCategory ref="servers" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="1" />
+      </enabledValue>
+    </policy>
+    <policy name="mcp_externalClients" class="Both" displayName="$(string.mcp_externalClients)" explainText="$(string.mcp_externalClients_Explain)" presentation="$(presentation.mcp_externalClients)" key="Software\Policies\Escouade">
+      <parentCategory ref="mcp" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <enum id="mcp_externalClients" valueName="mcp.externalClients" required="true">
+          <item displayName="$(string.mcp_externalClients_denied)">
+            <value>
+              <string>denied</string>
+            </value>
+          </item>
+          <item displayName="$(string.mcp_externalClients_readOnly)">
+            <value>
+              <string>readOnly</string>
+            </value>
+          </item>
+          <item displayName="$(string.mcp_externalClients_allowed)">
+            <value>
+              <string>allowed</string>
+            </value>
+          </item>
+        </enum>
+      </elements>
+    </policy>
+    <policy name="team_server" class="Both" displayName="$(string.team_server)" explainText="$(string.team_server_Explain)" presentation="$(presentation.team_server)" key="Software\Policies\Escouade">
+      <parentCategory ref="enrollment" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <text id="team_server" valueName="team.server" required="true" maxLength="1024" />
+      </elements>
+    </policy>
+    <policy name="team_fingerprint" class="Both" displayName="$(string.team_fingerprint)" explainText="$(string.team_fingerprint_Explain)" presentation="$(presentation.team_fingerprint)" key="Software\Policies\Escouade">
+      <parentCategory ref="enrollment" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <text id="team_fingerprint" valueName="team.fingerprint" required="true" maxLength="1024" />
+      </elements>
+    </policy>
+    <policy name="team_onlyThisServer" class="Both" displayName="$(string.team_onlyThisServer)" explainText="$(string.team_onlyThisServer_Explain)" key="Software\Policies\Escouade" valueName="team.onlyThisServer">
+      <parentCategory ref="enrollment" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="1" />
+      </enabledValue>
+    </policy>
+  </policies>
+</policyDefinitions>

@@ -1,0 +1,262 @@
+{
+  "description": "Escouade’s policies for managed devices. Generated from crates/escouade-policy/src/list.rs: do not edit.",
+  "properties": {
+    "harnesses.allowed": {
+      "description": "The list of the harnesses agents may use, by their id (claude, codex, copilot, cursor, opencode, gemini…). An agent of a harness no longer allowed stops at the end of its turn. The harness of a project, an agent, a ticket: a harness not allowed is grayed and refused.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Allowed harnesses",
+      "type": "array"
+    },
+    "harnesses.allowedModels": {
+      "additionalProperties": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "description": "A JSON object that gives, for each harness, the list of its allowed models. A harness absent from the object keeps all its models. An agent or a ticket on a model not allowed is refused at its start.",
+      "title": "Allowed models by harness",
+      "type": "object"
+    },
+    "harnesses.maxEffort": {
+      "description": "The highest effort an agent may be given: low, medium, high, xhigh or max. The effort of the board’s agents brought down to this ceiling; a higher effort refused.",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "title": "Maximum effort",
+      "type": "string"
+    },
+    "mcp.externalClients": {
+      "description": "What Claude outside Escouade (an outside MCP client) may do through Escouade’s MCP server: denied (nothing), readOnly (read only), allowed (everything). Escouade’s own agents are not concerned. An outside client refused at its connection (denied), or its tools that write refused (readOnly).",
+      "enum": [
+        "denied",
+        "readOnly",
+        "allowed"
+      ],
+      "title": "Outside MCP clients",
+      "type": "string"
+    },
+    "permissions.allowBypass": {
+      "description": "The mode where a harness asks nothing (bypassPermissions) is no longer allowed to any agent. Only the value false (0) is imposed. Settings › Agents › “Allow Bypass mode”, off and grayed; the Bypass mode refused everywhere.",
+      "enum": [
+        false
+      ],
+      "title": "Deny the Bypass mode",
+      "type": "boolean"
+    },
+    "permissions.defaultMode": {
+      "description": "The mode of new agents: plan, default, acceptEdits or auto. It stays within the allowed modes: outside them, the nearest allowed one. Settings › Agents › “Default mode of agents”, grayed.",
+      "enum": [
+        "plan",
+        "default",
+        "acceptEdits",
+        "auto"
+      ],
+      "title": "Default agent mode",
+      "type": "string"
+    },
+    "permissions.modes": {
+      "description": "The list of the modes agents may take: plan, default, acceptEdits, auto, bypassPermissions. An agent in another mode ends its turn, then goes to the nearest allowed mode. The modes not allowed grayed in “Default mode of agents”, the board’s mode and an agent’s mode.",
+      "items": {
+        "enum": [
+          "plan",
+          "default",
+          "acceptEdits",
+          "auto",
+          "bypassPermissions"
+        ],
+        "type": "string"
+      },
+      "title": "Allowed permission modes",
+      "type": "array"
+    },
+    "plugins.allowed": {
+      "description": "The list of the plugin ids that may be installed. Absent, all may. Installing a plugin outside the list is refused and said.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Allowed plugins",
+      "type": "array"
+    },
+    "plugins.allowedOrigins": {
+      "description": "Where a plugin may be installed from: store-verified (the store, verified versions), store (the store, any version), team-store (the team’s store), git, folder (a folder), dev (a folder in development). Installing a plugin of another origin is refused and said.",
+      "items": {
+        "enum": [
+          "store-verified",
+          "store",
+          "team-store",
+          "git",
+          "folder",
+          "dev"
+        ],
+        "type": "string"
+      },
+      "title": "Allowed plugin origins",
+      "type": "array"
+    },
+    "plugins.denied": {
+      "description": "The list of the plugin ids that are never installed, even when allowed elsewhere. Installing a plugin of the list is refused and said.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Denied plugins",
+      "type": "array"
+    },
+    "plugins.verifiedOnly": {
+      "description": "A version of the store without the “Verified by Escouade” seal is refused, at an install as at an update. Only the value true (1) is imposed. Plugins › “Install verified versions only”, on and grayed.",
+      "enum": [
+        true
+      ],
+      "title": "Install verified versions only",
+      "type": "boolean"
+    },
+    "projects.deniedFiles": {
+      "description": "File patterns (the .gitignore way) agents neither read nor write, added to those of the projects. Read and kept; applied to the agents with a project’s fence of files (to come).",
+      "items": {
+        "type": "string"
+      },
+      "title": "Denied file patterns",
+      "type": "array"
+    },
+    "projects.forcePrivate": {
+      "description": "Every project is private: its agents see no other project, and no other project sees it. Only the value true (1) is imposed. “New projects are private” and each project’s “Private project”, on and grayed.",
+      "enum": [
+        true
+      ],
+      "title": "Private projects by default",
+      "type": "boolean"
+    },
+    "proxy.authorities": {
+      "description": "The path of a .pem file of authorities trusted besides the system’s store (a corporate proxy’s root). Settings › Advanced › Network › “Extra certificate authorities”, grayed.",
+      "title": "Certificate authorities file",
+      "type": "string"
+    },
+    "proxy.denyInsecureTls": {
+      "description": "“Skip TLS certificate verification” is off and can no longer be turned on. Only the value true (1) is imposed. Settings › Advanced › Network › “Skip TLS certificate verification”, off and grayed.",
+      "enum": [
+        true
+      ],
+      "title": "Deny skipping the TLS check",
+      "type": "boolean"
+    },
+    "proxy.exclusions": {
+      "description": "The hosts reached without the proxy (NO_PROXY), one per line. Settings › Advanced › Network, the exclusions grayed.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Proxy exclusions",
+      "type": "array"
+    },
+    "proxy.url": {
+      "description": "The HTTP(S) proxy of the app, the plugins and the agents, for example http://proxy.example.com:3128. Settings › Advanced › Network, the proxy’s address grayed.",
+      "title": "Proxy address",
+      "type": "string"
+    },
+    "remoteControl.enabled": {
+      "description": "No agent is reachable from claude.ai. Only the value false (0) is imposed. “Remote control for all agents”, a project’s and an agent’s, off and grayed.",
+      "enum": [
+        false
+      ],
+      "title": "Deny the Remote Control",
+      "type": "boolean"
+    },
+    "servers.aggregateView": {
+      "description": "The spaces are not shown together in one view. Only the value false (0) is imposed. Read and kept; applied with the spaces of the server mode (to come).",
+      "enum": [
+        false
+      ],
+      "title": "Deny the aggregate view",
+      "type": "boolean"
+    },
+    "servers.allowed": {
+      "description": "The addresses of the team servers and the servers in server mode the app may reach. Absent, all. A server outside the list is refused, with the reason.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Allowed servers",
+      "type": "array"
+    },
+    "servers.contentlessNotifications": {
+      "description": "The notifications from a server say something happens, never what. Only the value true (1) is imposed. Read and kept; applied with the team server’s notifications (to come).",
+      "enum": [
+        true
+      ],
+      "title": "Notifications without content",
+      "type": "boolean"
+    },
+    "servers.personalSpace": {
+      "description": "Only the spaces of the allowed servers open, not the device’s own. Only the value false (0) is imposed. Read and kept; applied with the spaces of the server mode (to come).",
+      "enum": [
+        false
+      ],
+      "title": "Deny the personal space",
+      "type": "boolean"
+    },
+    "team.fingerprint": {
+      "description": "The fingerprint of the team expected on the team server: a team of another fingerprint is refused. Kept by the app; checked when joining the team (to come).",
+      "title": "Team fingerprint",
+      "type": "string"
+    },
+    "team.onlyThisServer": {
+      "description": "Only the team server the policy sets may be joined. Only the value true (1) is imposed. Another team server is refused, with the reason.",
+      "enum": [
+        true
+      ],
+      "title": "Refuse any other team server",
+      "type": "boolean"
+    },
+    "team.server": {
+      "description": "The address of the company’s team server: the member only has to accept their invitation. Kept by the app; the screen to join the team will fill it in (to come).",
+      "title": "Team server",
+      "type": "string"
+    },
+    "telemetry.enabled": {
+      "description": "The anonymous statistics are no longer sent. Only the value false (0) is imposed. Settings › General › “Usage statistics”, off and grayed.",
+      "enum": [
+        false
+      ],
+      "title": "Turn the usage statistics off",
+      "type": "boolean"
+    },
+    "updates.automatic": {
+      "description": "A new version is offered, never installed by itself: the IT department deploys its own. Only the value false (0) is imposed. Settings › General › “Install updates automatically”, off and grayed.",
+      "enum": [
+        false
+      ],
+      "title": "Turn automatic updates off",
+      "type": "boolean"
+    },
+    "updates.channel": {
+      "description": "No beta version is offered. Only the value stable is imposed. Settings › General › “Receive beta versions”, off and grayed.",
+      "enum": [
+        "stable",
+        "beta"
+      ],
+      "title": "Stable channel only",
+      "type": "string"
+    },
+    "voice.dictation": {
+      "description": "The dictation no longer starts. Only the value false (0) is imposed. Settings › Voice › Dictation, grayed; the dictation refused.",
+      "enum": [
+        false
+      ],
+      "title": "Turn the dictation off",
+      "type": "boolean"
+    },
+    "voice.onlineAllowed": {
+      "description": "The dictation and the conversation’s voice stay on the device (Whisper and Piper): no online service. Only the value false (0) is imposed. Settings › Voice, “Online” brought back to local (Whisper, Piper) and refused.",
+      "enum": [
+        false
+      ],
+      "title": "Deny online voices",
+      "type": "boolean"
+    }
+  },
+  "title": "Escouade (dev.gagnaire.escouade)"
+}

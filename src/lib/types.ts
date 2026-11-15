@@ -2880,7 +2880,7 @@ export type UiEvent =
   /** The settings changed a language: the window switches to it at once. */
   | { type: 'language'; lang: LangInfo }
   /** What the policies of this device or a team lock changed (TS-11). */
-  | { type: 'locks'; locks: Locks }
+  | { type: 'locks'; locks: Locks; settings?: Settings }
   /** The MCP server started, stopped, could not start, or listens on another port. */
   | { type: 'mcpStatus'; status: McpStatus }
   /** A call to the MCP server, or a request refused. */

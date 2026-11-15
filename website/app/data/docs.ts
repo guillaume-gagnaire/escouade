@@ -66,7 +66,7 @@ export const DOC_GROUPS = [
       'plugins/faq',
     ],
   },
-  { id: 'reference', pages: ['shortcuts', 'escouade-yml', 'data', 'updates', 'troubleshooting'] },
+  { id: 'reference', pages: ['shortcuts', 'escouade-yml', 'managed-policies', 'data', 'updates', 'troubleshooting'] },
 ] as const;
 
 export type DocGroupId = (typeof DOC_GROUPS)[number]['id'];

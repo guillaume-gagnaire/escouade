@@ -111,7 +111,7 @@
 <!-- « Transcription » (choice 34 of the 2.0 design): local or online first, what goes online said under it, then the
      microphone, the shortcut, the language and Whisper's models. -->
 <Group title={t('voice.settings.transcription')}>
-  <Row label={t('voice.settings.engine')} desc={t('voice.settings.engineDesc')}>
+  <Row label={t('voice.settings.engine')} desc={t('voice.settings.engineDesc')} row="dictation">
     <Chips
       label={t('voice.settings.engine')}
       options={[

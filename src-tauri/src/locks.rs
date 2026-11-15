@@ -13,10 +13,12 @@
 //! key has its sort ([`Sort`]): an executable one is never imposed by the team, a sensitive one waits for each member's
 //! consent (TS-13) and is not imposed by the team either until then.
 //!
-//! [`KEYS`] is the one table of the keys known so far: each with its sort, its form and the rows of the settings it
-//! locks (`SETTINGS_ROWS`, src/lib/settings-pages.ts). TS-12 completes it and generates the ADMX from it.
+//! [`KEYS`] is the single list of the policies (`escouade_policy::list`, TS-12): each key with its sort, its form, its
+//! type and the rows of the settings it locks (`SETTINGS_ROWS`, src/lib/settings-pages.ts). The ADMX, the profiles, the
+//! schema of /etc and the site's page are generated from it.
 //!
-//! Rank 6 is read once at the start (`Managed::read`); rank 5 has no source yet (the team server comes later): it is
+//! Rank 6 is read at the start (`Managed::read`), then again at each change while the app runs (`Managed::watch`,
+//! `Core::watch_policies`); rank 5 has no source yet (the team server comes later): it is
 //! injectable (`Core::set_team_policies`) and empty in the app. The core refuses a write of what is locked, by the
 //! window, the MCP and the `.escouade.yml` (`Locks::check_settings`, `Locks::check_project`, `Locks::file_refusal`).
 
@@ -26,141 +28,30 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-/// What a key may do, when an administrator imposes it (§6.5).
-// Sensitive and Executable: no key of the app's table has them yet (TS-12 and TS-13 add them); the engine knows them.
-#[cfg_attr(not(test), allow(dead_code))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Sort {
-    /// It turns a function off or narrows a list: applied at once. The worst a pirate gets of it is a denial of service.
-    Restrict,
-    /// A value (a target branch, a prefix): applied and shown.
-    Value,
-    /// A proxy's address, a file of authorities: waits for each member's consent when it is the team's (TS-13).
-    Sensitive,
-    /// A command, a hook, a plugin to install: never imposed by the team; the managed device alone may.
-    Executable,
-}
+// The single list of the policies (TS-12, `escouade_policy::list`) is the core's table: each key with its sort, its form,
+// its type and the rows of the settings it locks. The ADMX, the profiles, the schema of /etc and the site's page are
+// generated from it. Some keys are only read and kept (their feature comes later): named by the tests alone.
+#[allow(unused_imports)]
+pub use escouade_policy::list::{
+    Def as LockKey, Form, Sort, AGGREGATE_VIEW, ALLOW_BYPASS, AUTHORITIES, AUTO_UPDATE, CHANNEL,
+    CONTENTLESS, DEFAULT_MODE, DENIED_FILES, DENY_INSECURE_TLS, DICTATION, FORCE_PRIVATE,
+    HARNESSES, MAX_EFFORT, MCP_EXTERNAL, MODELS, MODES_KEY, ONLY_THIS_SERVER, PERSONAL_SPACE,
+    PLUGINS_ALLOWED, PLUGINS_DENIED, PLUGIN_ORIGINS_KEY, POLICIES as KEYS, PROXY_EXCLUSIONS,
+    PROXY_URL, REMOTE, SERVERS, TEAM_FINGERPRINT, TEAM_SERVER, TELEMETRY, VERIFIED_ONLY,
+    VOICE_ONLINE,
+};
 
-/// The shape of a key's value.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Form {
-    /// On or off. For a key that restricts, only `restricted` may be imposed (« Statistiques » off, never on).
-    Flag { restricted: Option<bool> },
-    /// One of `choices`; for a key that restricts, only `restricted`.
-    Choice {
-        choices: &'static [&'static str],
-        restricted: Option<&'static str>,
-    },
-    /// A list of what is allowed: crossed between the ranks that set it. `universe`: what it may name (none: any name,
-    /// as the harnesses the plugins bring).
-    Bound {
-        universe: Option<&'static [&'static str]>,
-    },
-}
-
-/// A key of the table.
-#[cfg_attr(not(test), allow(dead_code))]
-#[derive(Clone, Copy, Debug)]
-pub struct LockKey {
-    /// As the policies name it (`permissions.allowBypass`).
-    pub key: &'static str,
-    pub sort: Sort,
-    pub form: Form,
-    /// The rows of the settings' register it locks, or whose choices it bounds (`SETTINGS_ROWS` ids).
-    pub rows: &'static [&'static str],
-    /// The bound a value of it stays within (`permissions.defaultMode` within `permissions.modes`).
-    pub within: Option<&'static str>,
-}
-
-/// The modes a bound of modes may name, from the one that allows the least to the one that allows the most.
-pub const MODES: &[&str] = &crate::handover::MODES;
+/// The modes a bound of modes may name, from the one that allows the least to the one that allows the most
+/// (`handover::MODES`, checked equal by a test).
+pub const MODES: &[&str] = escouade_policy::list::MODES;
+/// The efforts, from the least to the most.
+pub const EFFORTS: &[&str] = escouade_policy::list::EFFORTS;
 /// The harness's mode of no question (`bypass::BYPASS`).
 const BYPASS: &str = crate::bypass::BYPASS;
-
-pub const ALLOW_BYPASS: &str = "permissions.allowBypass";
-pub const MODES_KEY: &str = "permissions.modes";
-pub const DEFAULT_MODE: &str = "permissions.defaultMode";
-pub const HARNESSES: &str = "harnesses.allowed";
-pub const TELEMETRY: &str = "telemetry.enabled";
-pub const CHANNEL: &str = "updates.channel";
-pub const REMOTE: &str = "remoteControl.enabled";
-
-/// The one table of the keys known so far (§6.4). Each says its sort and the rows it locks.
-pub const KEYS: &[LockKey] = &[
-    LockKey {
-        key: ALLOW_BYPASS,
-        sort: Sort::Restrict,
-        form: Form::Flag {
-            restricted: Some(false),
-        },
-        rows: &["allowBypass"],
-        within: None,
-    },
-    LockKey {
-        key: MODES_KEY,
-        sort: Sort::Restrict,
-        form: Form::Bound {
-            universe: Some(MODES),
-        },
-        rows: &["agentMode", "mode"],
-        within: None,
-    },
-    LockKey {
-        key: DEFAULT_MODE,
-        sort: Sort::Value,
-        form: Form::Choice {
-            choices: &["plan", "default", "acceptEdits", "auto"],
-            restricted: None,
-        },
-        rows: &["agentMode"],
-        within: Some(MODES_KEY),
-    },
-    LockKey {
-        key: HARNESSES,
-        sort: Sort::Restrict,
-        form: Form::Bound { universe: None },
-        rows: &["projectEngine"],
-        within: None,
-    },
-    LockKey {
-        key: TELEMETRY,
-        sort: Sort::Restrict,
-        form: Form::Flag {
-            restricted: Some(false),
-        },
-        rows: &["telemetry"],
-        within: None,
-    },
-    LockKey {
-        key: CHANNEL,
-        sort: Sort::Restrict,
-        form: Form::Choice {
-            choices: &["stable", "beta"],
-            restricted: Some("stable"),
-        },
-        rows: &["betaUpdates"],
-        within: None,
-    },
-    LockKey {
-        key: REMOTE,
-        sort: Sort::Restrict,
-        form: Form::Flag {
-            restricted: Some(false),
-        },
-        rows: &["remoteAll", "projectRemote"],
-        within: None,
-    },
-];
 
 /// The key of the table named so.
 pub fn key_of<'a>(table: &'a [LockKey], key: &str) -> Option<&'a LockKey> {
     table.iter().find(|k| k.key == key)
-}
-
-/// The names of the table's keys: what `escouade-policy` knows.
-pub fn names() -> Vec<&'static str> {
-    KEYS.iter().map(|k| k.key).collect()
 }
 
 // ---------- the ranks ----------
@@ -235,48 +126,91 @@ impl Managed {
                 .iter()
                 .map(|p| (p.key.clone(), (p.value.clone(), p.source.to_string())))
                 .collect(),
-            warnings: policies.warnings().iter().map(|w| w.to_string()).collect(),
+            // A key outside the list is said by `Locks::compute`, in the language of the interface.
+            warnings: policies
+                .warnings()
+                .iter()
+                .filter(|w| !matches!(w, escouade_policy::Warning::UnknownKey { .. }))
+                .map(|w| w.to_string())
+                .collect(),
         }
     }
 
-    /// The policies of this device, read once at the start. In a build of development only, `ESCOUADE_TEST_POLICIES`
-    /// names a JSON file (`{"telemetry.enabled": false}`) read in their place: the e2e's source. Never in a release
-    /// (SEC-13 of the audit of 2.2.0: a variable must not lift what an administrator imposes, nor impose anything).
+    /// The policies of this device, read at the start (then watched, `Managed::watch`). In a build of development
+    /// only, `ESCOUADE_TEST_POLICIES` names a JSON file (`{"telemetry.enabled": false}`) read in their place: the e2e's
+    /// source, watched too. Never in a release (SEC-13 of the audit of 2.2.0: a variable must not lift what an
+    /// administrator imposes, nor impose anything).
     pub fn read() -> Self {
         #[cfg(debug_assertions)]
         if let Some(managed) = test_source() {
-            return managed;
+            return Self::of(&managed.read());
         }
-        Self::of(&escouade_policy::read_known(&names()))
+        Self::of(&escouade_policy::read())
+    }
+
+    /// The policies watched while the app runs (TS-12): each change is given to `on_change`, on the watch's thread. The
+    /// registry is told by Windows, the files of `/Library/Managed Preferences` and `/etc/escouade` are looked at
+    /// every second; everything is read again every 30 s as well.
+    pub fn watch(on_change: impl FnMut(Managed) + Send + 'static) -> escouade_policy::watch::Watch {
+        let mut on_change = on_change;
+        let tell = move |p: escouade_policy::Policies| on_change(Managed::of(&p));
+        #[cfg(debug_assertions)]
+        if let Some(test) = test_source() {
+            let changes = escouade_policy::watch::Poll::new(
+                vec![test.path.clone()],
+                std::time::Duration::from_millis(200),
+            );
+            let first = test.read();
+            return escouade_policy::watch::spawn(
+                move || test.read(),
+                Box::new(changes),
+                first,
+                WATCH_PERIOD,
+                tell,
+            );
+        }
+        escouade_policy::watch::system_watch(escouade_policy::read(), WATCH_PERIOD, tell)
+    }
+}
+
+/// How often the policies are read again, whatever the signs of the system.
+const WATCH_PERIOD: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// The e2e's source of policies: a JSON file, read again at each change.
+#[cfg(debug_assertions)]
+struct TestSource {
+    path: std::path::PathBuf,
+}
+
+#[cfg(debug_assertions)]
+impl TestSource {
+    /// Its policies, typed as the system's are; a file gone or broken gives none, said in the log.
+    fn read(&self) -> escouade_policy::Policies {
+        let text = match std::fs::read_to_string(&self.path) {
+            Ok(t) => t,
+            Err(e) => {
+                log::warn!("policies: test source not read: {e}");
+                return escouade_policy::Policies::default();
+            }
+        };
+        match serde_json::from_str::<BTreeMap<String, Value>>(&text) {
+            Ok(map) => escouade_policy::Policies::from_values(
+                map,
+                escouade_policy::Source::File(self.path.clone()),
+            ),
+            Err(e) => {
+                log::warn!("policies: test source is not a JSON object: {e}");
+                escouade_policy::Policies::default()
+            }
+        }
     }
 }
 
 /// The e2e's source of policies: a JSON file named by `ESCOUADE_TEST_POLICIES`, in a build of development alone.
 #[cfg(debug_assertions)]
-fn test_source() -> Option<Managed> {
+fn test_source() -> Option<TestSource> {
     let path = std::env::var_os("ESCOUADE_TEST_POLICIES")?;
-    let text = match std::fs::read_to_string(&path) {
-        Ok(t) => t,
-        Err(e) => {
-            log::warn!("policies: test source not read: {e}");
-            return None;
-        }
-    };
-    let map: BTreeMap<String, Value> = match serde_json::from_str(&text) {
-        Ok(m) => m,
-        Err(e) => {
-            log::warn!("policies: test source is not a JSON object: {e}");
-            return None;
-        }
-    };
-    let source = std::path::PathBuf::from(path).display().to_string();
-    Some(Managed {
-        values: map
-            .into_iter()
-            .map(|(k, v)| (k, (v, source.clone())))
-            .collect(),
-        warnings: Vec::new(),
-    })
+    Some(TestSource { path: path.into() })
 }
 
 // ---------- the locks ----------
@@ -346,7 +280,7 @@ fn normalize(k: &LockKey, v: &Value) -> std::result::Result<Value, String> {
             Value::Number(n) if n.as_u64() == Some(1) => Ok(Value::Bool(true)),
             _ => Err(tr!("un booléen est attendu", "a Boolean is expected")),
         },
-        Form::Choice { choices, .. } => match v.as_str() {
+        Form::Choice { choices, .. } | Form::Ceiling { choices } => match v.as_str() {
             Some(s) if choices.contains(&s) => Ok(Value::String(s.to_owned())),
             _ => Err(tr!(
                 "une de ces valeurs est attendue : {list}",
@@ -354,7 +288,8 @@ fn normalize(k: &LockKey, v: &Value) -> std::result::Result<Value, String> {
                 list = choices.join(", ")
             )),
         },
-        Form::Bound { universe } => {
+        Form::Bound { .. } | Form::Union => {
+            let universe = k.form.choices();
             let items: Vec<&Value> = match v {
                 Value::Array(a) => a.iter().collect(),
                 Value::String(_) => vec![v],
@@ -377,6 +312,12 @@ fn normalize(k: &LockKey, v: &Value) -> std::result::Result<Value, String> {
             }
             Ok(Value::Array(out))
         }
+        Form::Text => match v.as_str().map(str::trim) {
+            Some(s) if !s.is_empty() => Ok(Value::String(s.to_owned())),
+            _ => Err(tr!("une chaîne est attendue", "a string is expected")),
+        },
+        // Typed by escouade-policy already (a JSON string parsed): what is left is an object or not.
+        Form::Json | Form::Number { .. } => escouade_policy::list::convert(k, v),
     }
 }
 
@@ -495,6 +436,35 @@ impl Locks {
                             allowed: strings(&v),
                         })
                         .collect(),
+                }
+            } else if let Form::Ceiling { choices } = k.form {
+                // A ceiling: the lower one holds, the managed device's when they are equal.
+                let rank = |v: &Value| choices.iter().position(|c| Some(*c) == v.as_str());
+                let (by, value) = layers
+                    .into_iter()
+                    .min_by_key(|(_, v)| rank(v))
+                    .expect("one layer at least");
+                Lock {
+                    key: k.key.to_owned(),
+                    value: Some(value),
+                    by: Some(by),
+                    bounds: Vec::new(),
+                }
+            } else if k.form == Form::Union {
+                // What each rank denies or adds, together; said imposed by the strongest.
+                let mut all: Vec<String> = Vec::new();
+                for (_, v) in &layers {
+                    for x in strings(v) {
+                        if !all.contains(&x) {
+                            all.push(x);
+                        }
+                    }
+                }
+                Lock {
+                    key: k.key.to_owned(),
+                    value: Some(Value::from(all)),
+                    by: Some(layers[0].0.clone()),
+                    bounds: Vec::new(),
                 }
             } else {
                 // A value: the managed device's wins (it comes first).
@@ -621,6 +591,181 @@ impl Locks {
         self.value(key) == Some(&Value::Bool(false))
     }
 
+    /// The flag `key` locked on.
+    fn on(&self, key: &str) -> bool {
+        self.value(key) == Some(&Value::Bool(true))
+    }
+
+    /// The string imposed on `key`.
+    pub fn text(&self, key: &str) -> Option<&str> {
+        self.value(key).and_then(Value::as_str)
+    }
+
+    // ---------- what they refuse elsewhere than in the settings ----------
+
+    /// The effort `effort`, refused above the ceiling `harnesses.maxEffort` (an effort a harness names that is not one
+    /// of the list's passes).
+    pub fn check_effort(&self, effort: &str) -> Result<()> {
+        let Some(max) = self.text(MAX_EFFORT) else {
+            return Ok(());
+        };
+        let rank = |e: &str| EFFORTS.iter().position(|x| *x == e);
+        match (rank(effort), rank(max)) {
+            (Some(e), Some(m)) if e > m => bail!(tr!(
+                "L’effort « {effort} » dépasse « {max} », le plus haut permis {by}.",
+                "The effort “{effort}” is above “{max}”, the highest allowed {by}.",
+                by = self.by_line(MAX_EFFORT)
+            )),
+            _ => Ok(()),
+        }
+    }
+
+    /// `effort` brought down to the ceiling, when it is above it.
+    pub fn effort_within(&self, effort: &str) -> String {
+        match (self.check_effort(effort), self.text(MAX_EFFORT)) {
+            (Err(_), Some(max)) => max.to_owned(),
+            _ => effort.to_owned(),
+        }
+    }
+
+    /// The model `model` of the harness `engine`, refused when `harnesses.allowedModels` names the harness and not
+    /// the model. An empty model (the harness's default) passes.
+    pub fn check_model(&self, engine: &str, model: &str) -> Result<()> {
+        if model.is_empty() {
+            return Ok(());
+        }
+        let Some(allowed) = self.value(MODELS).and_then(|m| m.get(engine)) else {
+            return Ok(());
+        };
+        if strings(allowed).iter().any(|m| m == model) {
+            return Ok(());
+        }
+        bail!(tr!(
+            "Le modèle « {model} » de {engine} n’est pas permis {by}.",
+            "The model “{model}” of {engine} is not allowed {by}.",
+            by = self.by_line(MODELS)
+        ))
+    }
+
+    /// A plugin `id` installed from `origin` (one of `plugins.allowedOrigins`' names: `store-verified`, `store`,
+    /// `git`, `folder`, `dev`), refused when the policies do not allow it.
+    pub fn check_plugin(&self, id: &str, origin: &str) -> Result<()> {
+        if self
+            .value(PLUGINS_DENIED)
+            .is_some_and(|d| strings(d).iter().any(|x| x == id))
+        {
+            bail!(tr!(
+                "Le plugin « {id} » est interdit {by}.",
+                "The plugin “{id}” is denied {by}.",
+                by = self.by_line(PLUGINS_DENIED)
+            ));
+        }
+        if let Some(by) = self.get(PLUGINS_ALLOWED).and_then(|l| l.denied_by(id)) {
+            bail!(tr!(
+                "Le plugin « {id} » n’est pas permis {by}.",
+                "The plugin “{id}” is not allowed {by}.",
+                by = by.by()
+            ));
+        }
+        if origin == "store" && self.on(VERIFIED_ONLY) {
+            bail!(self.imposed(VERIFIED_ONLY));
+        }
+        // A verified version of the store is a version of the store: `store` allows it too.
+        let allowed = |o: &str| self.allows(PLUGIN_ORIGINS_KEY, o);
+        if !(allowed(origin) || origin == "store-verified" && allowed("store")) {
+            let by = self
+                .get(PLUGIN_ORIGINS_KEY)
+                .and_then(|l| l.denied_by(origin))
+                .map(LockedBy::by)
+                .unwrap_or_default();
+            bail!(tr!(
+                "Un plugin de cette origine ({origin}) n’est pas permis {by}.",
+                "A plugin of this origin ({origin}) is not allowed {by}."
+            ));
+        }
+        Ok(())
+    }
+
+    /// Whether the dictation may start.
+    pub fn check_dictation(&self) -> Result<()> {
+        if self.off(DICTATION) {
+            bail!(self.imposed(DICTATION));
+        }
+        Ok(())
+    }
+
+    /// What Claude outside Escouade may do through its MCP server: `denied`, `readOnly` or `allowed`.
+    pub fn mcp_external(&self) -> &str {
+        self.text(MCP_EXTERNAL).unwrap_or("allowed")
+    }
+
+    /// What the managed device enrolls: the team server, its team's fingerprint, and whether any other server is
+    /// refused. None when it sets no team server. The screen to join a team (TS-4) reads it.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn enrollment(&self) -> Option<Enrollment> {
+        let server = self.text(TEAM_SERVER)?.to_owned();
+        Some(Enrollment {
+            server,
+            fingerprint: self.text(TEAM_FINGERPRINT).map(str::to_owned),
+            only_this_server: self.on(ONLY_THIS_SERVER),
+        })
+    }
+
+    /// A server the app is asked to join (a team server, a server in server mode): refused when the managed device
+    /// allows only its own team server, or a list that does not hold it. `fingerprint`, the team's, is checked against
+    /// the one enrolled when both are known. Joining a team (TS-4) and a server in server mode go through it.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn check_server(&self, url: &str, fingerprint: Option<&str>) -> Result<()> {
+        let asked = server_address(url);
+        if self.on(ONLY_THIS_SERVER) {
+            match self.text(TEAM_SERVER).map(server_address) {
+                Some(own) if own == asked => {}
+                Some(own) => bail!(tr!(
+                    "Le serveur {asked} est refusé : la stratégie de ce poste ne permet que {own}.",
+                    "The server {asked} is refused: this device’s policy allows {own} alone."
+                )),
+                None => bail!(tr!(
+                    "Le serveur {asked} est refusé : la stratégie de ce poste refuse tout autre serveur d’équipe que le sien, et n’en pose aucun.",
+                    "The server {asked} is refused: this device’s policy refuses any team server but its own, and sets none."
+                )),
+            }
+        }
+        if let Some(lock) = self.get(SERVERS) {
+            let allowed = lock.allowed().unwrap_or_default();
+            if !allowed.iter().any(|a| server_address(a) == asked) {
+                let by = lock
+                    .bounds
+                    .iter()
+                    .find(|b| !b.allowed.iter().any(|a| server_address(a) == asked))
+                    .map(|b| b.by.by())
+                    .unwrap_or_default();
+                bail!(tr!(
+                    "Le serveur {asked} n’est pas permis {by}.",
+                    "The server {asked} is not allowed {by}."
+                ));
+            }
+        }
+        if let (Some(want), Some(got)) = (self.text(TEAM_FINGERPRINT), fingerprint) {
+            let same = self
+                .text(TEAM_SERVER)
+                .is_some_and(|own| server_address(own) == asked);
+            if same && !want.trim().eq_ignore_ascii_case(got.trim()) {
+                bail!(tr!(
+                    "L’équipe de {asked} n’a pas l’empreinte que pose la stratégie de ce poste : refusée.",
+                    "The team of {asked} does not have the fingerprint this device’s policy sets: refused."
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// « par la stratégie de ce poste »: who imposes `key`.
+    fn by_line(&self, key: &str) -> String {
+        self.by(key)
+            .map(LockedBy::by)
+            .unwrap_or_else(|| tr!("par la stratégie de ce poste", "by this device’s policy"))
+    }
+
     // ---------- what they do to the settings ----------
 
     /// The app's settings brought within the locks; the keys that changed them.
@@ -641,6 +786,57 @@ impl Locks {
         if self.off(REMOTE) && s.remote_control_all {
             s.remote_control_all = false;
             changed.push(REMOTE);
+        }
+        if self.off(AUTO_UPDATE) && s.auto_update {
+            s.auto_update = false;
+            changed.push(AUTO_UPDATE);
+        }
+        if self.on(DENY_INSECURE_TLS) && s.insecure_tls {
+            s.insecure_tls = false;
+            changed.push(DENY_INSECURE_TLS);
+        }
+        if self.on(VERIFIED_ONLY) && !s.plugins_verified_only {
+            s.plugins_verified_only = true;
+            changed.push(VERIFIED_ONLY);
+        }
+        if self.on(FORCE_PRIVATE) && !s.private_projects {
+            s.private_projects = true;
+            changed.push(FORCE_PRIVATE);
+        }
+        if let Some(url) = self.text(PROXY_URL) {
+            if s.proxy_url.trim() != url {
+                s.proxy_url = url.to_owned();
+                changed.push(PROXY_URL);
+            }
+        }
+        if let Some(list) = self.value(PROXY_EXCLUSIONS).map(strings) {
+            let set: Vec<&str> = s
+                .no_proxy
+                .split(',')
+                .map(str::trim)
+                .filter(|x| !x.is_empty())
+                .collect();
+            if set != list.iter().map(String::as_str).collect::<Vec<_>>() {
+                s.no_proxy = list.join(",");
+                changed.push(PROXY_EXCLUSIONS);
+            }
+        }
+        if let Some(ca) = self.text(AUTHORITIES) {
+            if s.extra_ca_file.trim() != ca {
+                s.extra_ca_file = ca.to_owned();
+                changed.push(AUTHORITIES);
+            }
+        }
+        if self.off(VOICE_ONLINE)
+            && (s.voice.transcription == "online" || s.voice.speech.engine == "online")
+        {
+            if s.voice.transcription == "online" {
+                s.voice.transcription = "local".into();
+            }
+            if s.voice.speech.engine == "online" {
+                s.voice.speech.engine = "local".into();
+            }
+            changed.push(VOICE_ONLINE);
         }
         if let Some(mode) = self.value(DEFAULT_MODE).and_then(Value::as_str) {
             let mode = self.nearest_mode(mode);
@@ -718,6 +914,14 @@ impl Locks {
             p.remote_control = false;
             changed.push(REMOTE);
         }
+        if self.on(FORCE_PRIVATE) && !p.private {
+            p.private = true;
+            changed.push(FORCE_PRIVATE);
+        }
+        if self.check_effort(&p.board.effort).is_err() {
+            p.board.effort = self.effort_within(&p.board.effort);
+            changed.push(MAX_EFFORT);
+        }
         changed
     }
 
@@ -732,6 +936,12 @@ impl Locks {
         if after.remote_control && !before.remote_control && self.off(REMOTE) {
             bail!(self.imposed(REMOTE));
         }
+        if !after.private && self.on(FORCE_PRIVATE) {
+            bail!(self.imposed(FORCE_PRIVATE));
+        }
+        if after.board.effort != before.board.effort {
+            self.check_effort(&after.board.effort)?;
+        }
         Ok(())
     }
 
@@ -741,6 +951,7 @@ impl Locks {
         match key {
             "board.mode" if !s.is_empty() => self.check_mode(s).err().map(|e| e.to_string()),
             "agents.engine" if !s.is_empty() => self.check_engine(s).err().map(|e| e.to_string()),
+            "board.effort" if !s.is_empty() => self.check_effort(s).err().map(|e| e.to_string()),
             _ => None,
         }
     }
@@ -751,6 +962,7 @@ impl Locks {
         match key {
             "board.mode" => self.get(MODES_KEY).is_some() || self.get(ALLOW_BYPASS).is_some(),
             "agents.engine" => self.get(HARNESSES).is_some(),
+            "board.effort" => self.get(MAX_EFFORT).is_some(),
             _ => false,
         }
     }
@@ -762,6 +974,49 @@ impl Locks {
         }
         let m = self.nearest_mode(&meta.mode);
         Some(if m == BYPASS { "plan".to_owned() } else { m })
+    }
+}
+
+/// The name `plugins.allowedOrigins` gives the origin of a plugin. The plugins of the repository's workspace (a build of
+/// development alone) and of the seed are Escouade's own, verified: `store-verified`.
+pub fn origin_name(origin: &crate::plugins::Origin) -> &'static str {
+    use crate::plugins::Origin;
+    match origin {
+        Origin::Folder { .. } => "folder",
+        Origin::Git { .. } => "git",
+        Origin::Dev { .. } => "dev",
+        Origin::Workspace => "store-verified",
+        Origin::Store { seed: true, .. } | Origin::Store { verified: true, .. } => "store-verified",
+        Origin::Store { .. } => "store",
+    }
+}
+
+/// What the managed device enrolls (§6.3): the team server and the team's fingerprint. The screen to join a team (TS-4)
+/// fills them in; until then the core keeps them and refuses another server (`Locks::check_server`).
+#[cfg_attr(not(test), allow(dead_code))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Enrollment {
+    pub server: String,
+    pub fingerprint: Option<String>,
+    pub only_this_server: bool,
+}
+
+/// A server's address as it is compared: trimmed, its scheme and host in lower case, without the final `/`.
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn server_address(url: &str) -> String {
+    let url = url.trim().trim_end_matches('/');
+    match url.split_once("://") {
+        Some((scheme, rest)) => {
+            let (host, path) = rest.split_once('/').unwrap_or((rest, ""));
+            let mut out = format!("{}://{}", scheme.to_lowercase(), host.to_lowercase());
+            if !path.is_empty() {
+                out.push('/');
+                out.push_str(path);
+            }
+            out
+        }
+        None => url.to_lowercase(),
     }
 }
 
@@ -874,11 +1129,29 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
         self.apply_locks();
     }
 
-    /// Rank 6, as read (`Managed::read` at the start; a test gives its own). The locks are made again and applied.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// Rank 6, as read (`Managed::read` at the start, `watch_policies` at each change; a test gives its own). The locks
+    /// are made again and applied.
     pub(crate) fn set_managed(self: &std::sync::Arc<Self>, managed: Managed) {
         *self.managed.write() = managed;
         self.apply_locks();
+    }
+
+    /// Rank 6 watched while the app runs (TS-12): a policy changed is applied at once, as at the start. The agents at
+    /// work follow at the end of their turn (`settle_locked_mode`).
+    pub(crate) fn watch_policies(self: &std::sync::Arc<Self>) {
+        let weak = std::sync::Arc::downgrade(self);
+        let watch = Managed::watch(move |managed| {
+            let Some(core) = weak.upgrade() else { return };
+            if *core.managed.read() == managed {
+                return;
+            }
+            log::info!(
+                "policies: changed while the app runs ({} set)",
+                managed.values.len()
+            );
+            core.set_managed(managed);
+        });
+        *self.policy_watch.lock() = Some(watch);
     }
 
     /// The locks made again from ranks 5 and 6, and what they lock brought within them: the settings, the projects, the
@@ -897,15 +1170,17 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             let locks = self.locks.read();
             locks.clamp_settings(&mut self.settings.write())
         };
-        if !changed.is_empty() {
+        let settings = (!changed.is_empty()).then(|| {
             log::info!("policies: settings brought within {changed:?}");
             let telemetry = self.settings.read().telemetry;
             self.telemetry.set_consent(telemetry);
             self.write_settings_file();
-        }
+            Box::new(self.settings.read().clone())
+        });
         self.settle_locks();
         self.hub.emit(crate::model::UiEvent::Locks {
             locks: self.locks.read().clone(),
+            settings,
         });
     }
 
@@ -935,7 +1210,10 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             .iter()
             .filter(|(_, h)| {
                 let rt = h.lock();
-                !rt.meta.status.is_active() && locks.agent_mode_after(&rt.meta).is_some()
+                !rt.meta.status.is_active()
+                    && (locks.agent_mode_after(&rt.meta).is_some()
+                        || rt.proc.is_some()
+                            && locks.check_engine(rt.meta.engine.as_str()).is_err())
             })
             .map(|(id, _)| id.clone())
             .collect();
@@ -949,6 +1227,39 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
     /// Called once its turn is over (`turn_ended`), and at once for an agent not at work.
     pub(crate) async fn settle_locked_mode(self: &std::sync::Arc<Self>, id: &str) {
         let Ok(h) = self.agent(id) else { return };
+        // A harness no longer allowed: its process stops between two turns, and the agent says why (§6.2). Its next
+        // message is refused at the start of a process (`check_engine`).
+        let denied = {
+            let rt = h.lock();
+            self.locks
+                .read()
+                .check_engine(rt.meta.engine.as_str())
+                .err()
+                .map(|e| e.to_string())
+        };
+        if let Some(why) = denied {
+            let stopped = {
+                let mut rt = h.lock();
+                if rt.meta.status.is_active() {
+                    None
+                } else {
+                    rt.detach()
+                }
+            };
+            if let Some(p) = stopped {
+                p.close_input();
+                self.emit_agent(&h);
+                let text = tr!(
+                    "{why} L’agent s’arrête à la fin de son tour.",
+                    "{why} The agent stops at the end of its turn."
+                );
+                let _ = self.with_agent(id, |rt, fx| {
+                    rt.notice("warning", text, fx);
+                    Ok(())
+                });
+            }
+            return;
+        }
         let (from, to) = {
             let rt = h.lock();
             (
@@ -983,3 +1294,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
 #[cfg(test)]
 #[path = "locks_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "locks_policies_tests.rs"]
+mod policies_tests;

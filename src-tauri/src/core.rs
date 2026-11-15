@@ -915,8 +915,10 @@ pub struct Core<R: Runtime = Wry> {
     pub settings: RwLock<Settings>,
     /// What ranks 5 and 6 of the layers impose (`locks`, TS-11): made from `managed` and `team`.
     pub locks: RwLock<crate::locks::Locks>,
-    /// The policies of this device (rank 6), read once at the start.
+    /// The policies of this device (rank 6), read at the start, then again at each change (`watch_policies`, TS-12).
     pub managed: RwLock<crate::locks::Managed>,
+    /// The watch of the policies of this device, while the app runs; stopped when dropped.
+    pub(crate) policy_watch: Mutex<Option<escouade_policy::watch::Watch>>,
     /// What a team imposes (rank 5): none until the team server comes; injectable (`set_team_policies`).
     pub team_policies: RwLock<Option<crate::locks::TeamPolicies>>,
     /// The usage statistics, once the user agreed to them (`telemetry`).
@@ -2113,6 +2115,7 @@ impl<R: Runtime> Core<R> {
             settings: RwLock::new(settings),
             locks: RwLock::new(locks),
             managed: RwLock::new(managed),
+            policy_watch: Mutex::new(None),
             team_policies: RwLock::new(None),
             projects: RwLock::new(state.projects),
             tickets: RwLock::new(tickets),
@@ -2457,6 +2460,13 @@ impl<R: Runtime> Core<R> {
         lang: crate::i18n::Lang,
     ) -> Result<crate::plugins::PluginView, crate::plugins::Refusal> {
         let staged = self.plugins.staged(token);
+        // A plugin, or an origin, the policies do not allow (TS-12): refused before anything changes.
+        if let Some((id, origin)) = self.plugins.staged_origin(token) {
+            self.locks
+                .read()
+                .check_plugin(&id, crate::locks::origin_name(&origin))
+                .map_err(|e| crate::plugins::Refusal::other(e.to_string()))?;
+        }
         if let Some((id, true)) = &staged {
             self.plugin_runtime.forget(id);
         }
@@ -2483,6 +2493,10 @@ impl<R: Runtime> Core<R> {
     pub fn start(self: &Arc<Self>, git_rx: mpsc::UnboundedReceiver<String>) {
         let projects = self.projects.read().clone();
         self.tell_started();
+        // The policies of this device, read again whenever they change while the app runs (TS-12).
+        if !cfg!(test) {
+            self.watch_policies();
+        }
         // The plugins that decide run before the first permission asked (PLG-8).
         crate::plugins::decide::warm(&self.plugins, &self.plugin_runtime);
         self.telemetry.track(self.started_event());
@@ -3750,6 +3764,16 @@ impl<R: Runtime> Core<R> {
         // A harness or a mode the policies do not allow (TS-11).
         self.locks.read().check_engine(engine.as_str())?;
         self.locks.read().check_mode(&h.lock().meta.mode)?;
+        // A model or an effort the policies do not allow (TS-12).
+        {
+            let (model, effort) = {
+                let rt = h.lock();
+                (rt.meta.model.clone(), rt.meta.effort.clone())
+            };
+            let locks = self.locks.read();
+            locks.check_model(engine.as_str(), &model)?;
+            locks.check_effort(&effort)?;
+        }
         // In the Claude Code view, its interface has the session (`tui`).
         if h.lock().meta.terminal {
             bail!(tr!(
@@ -6523,6 +6547,17 @@ impl<R: Runtime> Core<R> {
         mode: Option<String>,
     ) -> Result<()> {
         let h = self.agent(id)?;
+        // A model or an effort the policies do not allow (TS-12).
+        {
+            let engine = h.lock().meta.engine;
+            let locks = self.locks.read();
+            if let Some(m) = model.as_deref() {
+                locks.check_model(engine.as_str(), m)?;
+            }
+            if let Some(e) = effort.as_deref() {
+                locks.check_effort(e)?;
+            }
+        }
         // A discussion of the Docs tab stays in a mode that asks before a write (ESC-261).
         if let Some(m) = mode.as_deref() {
             crate::bypass::check(m, self.bypass_allowed())?;
@@ -6765,6 +6800,11 @@ impl<R: Runtime> Core<R> {
         );
         meta.model = self.model_for(engine, o.model.unwrap_or(defaults.model));
         meta.effort = o.effort.unwrap_or(defaults.effort);
+        // A model the policies do not allow is refused; an effort above their ceiling comes down to it (TS-12).
+        self.locks
+            .read()
+            .check_model(engine.as_str(), &meta.model)?;
+        meta.effort = self.locks.read().effort_within(&meta.effort);
         // A mode asked that the policies do not allow is refused; its account's goes to the nearest allowed (TS-11).
         meta.mode = match o.mode {
             Some(m) => {

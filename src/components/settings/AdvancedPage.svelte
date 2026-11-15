@@ -68,8 +68,8 @@
   });
 </script>
 
-{#snippet text(label: string, hint: string, value: string, set: (v: string) => void, placeholder = '')}
-  <Row {label} {hint}>
+{#snippet text(label: string, hint: string, value: string, set: (v: string) => void, placeholder = '', row?: string)}
+  <Row {label} {hint} {row}>
     <input
       class="field mono input"
       aria-label={label}
@@ -88,8 +88,9 @@
     s.proxyUrl,
     (v) => (s.proxyUrl = v),
     t('settings.network.proxyUrlNone'),
+    'proxyUrl',
   )}
-  {@render text(t('settings.network.exclusions'), t('settings.network.exclusionsHint'), s.noProxy, (v) => (s.noProxy = v))}
+  {@render text(t('settings.network.exclusions'), t('settings.network.exclusionsHint'), s.noProxy, (v) => (s.noProxy = v), '', 'noProxy')}
   <Row label={t('settings.network.proxyTerminals')}>
     <Switch label={t('settings.network.proxyTerminals')} bind:on={s.proxyTerminals} />
   </Row>
@@ -98,6 +99,7 @@
     desc={`${t('settings.network.extraCaDesc')} ${t('settings.network.certificatesNote')}`}
     error={caError}
     errorId="extraCa-error"
+    row="extraCaFile"
   >
     {#snippet extra()}{#if caCount !== null}<span class="more" data-testid="extra-ca-count"
           >{t('settings.network.extraCaCount', { count: caCount })}</span
@@ -114,7 +116,7 @@
       <button class="btn" onclick={chooseCa}>{t('settings.network.extraCaChoose')}</button>
     </div>
   </Row>
-  <Row label={t('settings.network.insecureTls')} desc={t('settings.network.insecureTlsDesc')}>
+  <Row label={t('settings.network.insecureTls')} desc={t('settings.network.insecureTlsDesc')} row="insecureTls">
     <Switch label={t('settings.network.insecureTls')} bind:on={s.insecureTls} />
   </Row>
 </Group>

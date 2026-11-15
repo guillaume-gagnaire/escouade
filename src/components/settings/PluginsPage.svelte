@@ -125,7 +125,7 @@
 {/if}
 
 <Group title={t('plugins.settingsPage.security')} aria-label={t('plugins.settingsPage.security')}>
-  <Row label={t('plugins.installed.verifiedOnly')} desc={revocations}>
+  <Row label={t('plugins.installed.verifiedOnly')} desc={revocations} row="pluginsVerifiedOnly">
     <button
       class="switch"
       class:on={!!settingsForm.settings.pluginsVerifiedOnly}

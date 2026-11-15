@@ -349,6 +349,11 @@ class AppState {
   agents = $state<Record<string, Agent>>({});
   ui = $state<UiState>({ activeProject: null, view: 'project', selectedAgent: {} });
   settings = $state<Settings>({} as Settings);
+  /** Who takes the settings a policy brought within it while the app runs (the form of Réglages, TS-12). */
+  #imposed: ((s: Settings) => void)[] = [];
+  onImposed(f: (s: Settings) => void): void {
+    this.#imposed.push(f);
+  }
   usage = $state<Usage>({ todayCost: 0, accounts: [], current: {} });
   resources = $state<Resources>({ instances: 0, memory: 0, cpu: 0, agents: [] });
   git = $state<Record<string, GitInfo>>({});
@@ -957,6 +962,11 @@ class AppState {
         break;
       case 'locks':
         setLocks(e.locks);
+        // A policy changed while the app runs brought the settings within it (TS-12): taken, and by an open form.
+        if (e.settings) {
+          this.settings = e.settings;
+          for (const f of this.#imposed) f(e.settings);
+        }
         break;
       case 'mcpStatus':
       case 'mcpDeclared':

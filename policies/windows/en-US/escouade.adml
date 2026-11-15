@@ -1,0 +1,280 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated from crates/escouade-policy/src/list.rs (cargo run -p escouade-policy --example generate): do not edit. -->
+<policyDefinitionResources xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <displayName>Escouade</displayName>
+  <description>Escouade’s policies for managed devices.</description>
+  <resources>
+    <stringTable>
+      <string id="escouade">Escouade</string>
+      <string id="SUPPORTED_ESCOUADE_2_3">Escouade 2.3 and later</string>
+      <string id="cat_permissions">Permission modes</string>
+      <string id="cat_harnesses">Harnesses and models</string>
+      <string id="cat_plugins">Plugins</string>
+      <string id="cat_projects">Projects</string>
+      <string id="cat_network">Proxy and certificates</string>
+      <string id="cat_privacy">Telemetry and voice</string>
+      <string id="cat_remote">Remote Control</string>
+      <string id="cat_updates">Updates</string>
+      <string id="cat_servers">Servers</string>
+      <string id="cat_mcp">Outside MCP clients</string>
+      <string id="cat_enrollment">Enrollment</string>
+      <string id="permissions_allowBypass">Deny the Bypass mode</string>
+      <string id="permissions_allowBypass_Explain">The mode where a harness asks nothing (bypassPermissions) is no longer allowed to any agent. Only the value false (0) is imposed.
+
+On the device: Settings › Agents › “Allow Bypass mode”, off and grayed; the Bypass mode refused everywhere.
+
+Key: permissions.allowBypass (Boolean, false (0)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+      <string id="permissions_modes">Allowed permission modes</string>
+      <string id="permissions_modes_Explain">The list of the modes agents may take: plan, default, acceptEdits, auto, bypassPermissions. An agent in another mode ends its turn, then goes to the nearest allowed mode.
+
+On the device: The modes not allowed grayed in “Default mode of agents”, the board’s mode and an agent’s mode.
+
+Key: permissions.modes (list, among plan, default, acceptEdits, auto, bypassPermissions). Sort: restrict.</string>
+      <string id="permissions_defaultMode">Default agent mode</string>
+      <string id="permissions_defaultMode_Explain">The mode of new agents: plan, default, acceptEdits or auto. It stays within the allowed modes: outside them, the nearest allowed one.
+
+On the device: Settings › Agents › “Default mode of agents”, grayed.
+
+Key: permissions.defaultMode (string, plan, default, acceptEdits, auto). Sort: value.</string>
+      <string id="permissions_defaultMode_plan">plan</string>
+      <string id="permissions_defaultMode_default">default</string>
+      <string id="permissions_defaultMode_acceptEdits">acceptEdits</string>
+      <string id="permissions_defaultMode_auto">auto</string>
+      <string id="harnesses_allowed">Allowed harnesses</string>
+      <string id="harnesses_allowed_Explain">The list of the harnesses agents may use, by their id (claude, codex, copilot, cursor, opencode, gemini…). An agent of a harness no longer allowed stops at the end of its turn.
+
+On the device: The harness of a project, an agent, a ticket: a harness not allowed is grayed and refused.
+
+Key: harnesses.allowed (list). Sort: restrict.</string>
+      <string id="harnesses_allowedModels">Allowed models by harness</string>
+      <string id="harnesses_allowedModels_Explain">A JSON object that gives, for each harness, the list of its allowed models. A harness absent from the object keeps all its models.
+
+On the device: An agent or a ticket on a model not allowed is refused at its start.
+
+Key: harnesses.allowedModels (JSON). Sort: restrict.</string>
+      <string id="harnesses_maxEffort">Maximum effort</string>
+      <string id="harnesses_maxEffort_Explain">The highest effort an agent may be given: low, medium, high, xhigh or max.
+
+On the device: The effort of the board’s agents brought down to this ceiling; a higher effort refused.
+
+Key: harnesses.maxEffort (string, low, medium, high, xhigh, max). Sort: restrict.</string>
+      <string id="harnesses_maxEffort_low">low</string>
+      <string id="harnesses_maxEffort_medium">medium</string>
+      <string id="harnesses_maxEffort_high">high</string>
+      <string id="harnesses_maxEffort_xhigh">xhigh</string>
+      <string id="harnesses_maxEffort_max">max</string>
+      <string id="plugins_allowedOrigins">Allowed plugin origins</string>
+      <string id="plugins_allowedOrigins_Explain">Where a plugin may be installed from: store-verified (the store, verified versions), store (the store, any version), team-store (the team’s store), git, folder (a folder), dev (a folder in development).
+
+On the device: Installing a plugin of another origin is refused and said.
+
+Key: plugins.allowedOrigins (list, among store-verified, store, team-store, git, folder, dev). Sort: restrict.</string>
+      <string id="plugins_allowed">Allowed plugins</string>
+      <string id="plugins_allowed_Explain">The list of the plugin ids that may be installed. Absent, all may.
+
+On the device: Installing a plugin outside the list is refused and said.
+
+Key: plugins.allowed (list). Sort: restrict.</string>
+      <string id="plugins_denied">Denied plugins</string>
+      <string id="plugins_denied_Explain">The list of the plugin ids that are never installed, even when allowed elsewhere.
+
+On the device: Installing a plugin of the list is refused and said.
+
+Key: plugins.denied (list). Sort: restrict.</string>
+      <string id="plugins_verifiedOnly">Install verified versions only</string>
+      <string id="plugins_verifiedOnly_Explain">A version of the store without the “Verified by Escouade” seal is refused, at an install as at an update. Only the value true (1) is imposed.
+
+On the device: Plugins › “Install verified versions only”, on and grayed.
+
+Key: plugins.verifiedOnly (Boolean, true (1)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+      <string id="projects_forcePrivate">Private projects by default</string>
+      <string id="projects_forcePrivate_Explain">Every project is private: its agents see no other project, and no other project sees it. Only the value true (1) is imposed.
+
+On the device: “New projects are private” and each project’s “Private project”, on and grayed.
+
+Key: projects.forcePrivate (Boolean, true (1)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+      <string id="projects_deniedFiles">Denied file patterns</string>
+      <string id="projects_deniedFiles_Explain">File patterns (the .gitignore way) agents neither read nor write, added to those of the projects.
+
+On the device: Read and kept; applied to the agents with a project’s fence of files (to come).
+
+Key: projects.deniedFiles (list). Sort: restrict.</string>
+      <string id="proxy_url">Proxy address</string>
+      <string id="proxy_url_Explain">The HTTP(S) proxy of the app, the plugins and the agents, for example http://proxy.example.com:3128.
+
+On the device: Settings › Advanced › Network, the proxy’s address grayed.
+
+Key: proxy.url (string). Sort: sensitive.</string>
+      <string id="proxy_exclusions">Proxy exclusions</string>
+      <string id="proxy_exclusions_Explain">The hosts reached without the proxy (NO_PROXY), one per line.
+
+On the device: Settings › Advanced › Network, the exclusions grayed.
+
+Key: proxy.exclusions (list). Sort: sensitive.</string>
+      <string id="proxy_denyInsecureTls">Deny skipping the TLS check</string>
+      <string id="proxy_denyInsecureTls_Explain">“Skip TLS certificate verification” is off and can no longer be turned on. Only the value true (1) is imposed.
+
+On the device: Settings › Advanced › Network › “Skip TLS certificate verification”, off and grayed.
+
+Key: proxy.denyInsecureTls (Boolean, true (1)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+      <string id="proxy_authorities">Certificate authorities file</string>
+      <string id="proxy_authorities_Explain">The path of a .pem file of authorities trusted besides the system’s store (a corporate proxy’s root).
+
+On the device: Settings › Advanced › Network › “Extra certificate authorities”, grayed.
+
+Key: proxy.authorities (string). Sort: sensitive.</string>
+      <string id="telemetry_enabled">Turn the usage statistics off</string>
+      <string id="telemetry_enabled_Explain">The anonymous statistics are no longer sent. Only the value false (0) is imposed.
+
+On the device: Settings › General › “Usage statistics”, off and grayed.
+
+Key: telemetry.enabled (Boolean, false (0)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+      <string id="voice_onlineAllowed">Deny online voices</string>
+      <string id="voice_onlineAllowed_Explain">The dictation and the conversation’s voice stay on the device (Whisper and Piper): no online service. Only the value false (0) is imposed.
+
+On the device: Settings › Voice, “Online” brought back to local (Whisper, Piper) and refused.
+
+Key: voice.onlineAllowed (Boolean, false (0)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+      <string id="voice_dictation">Turn the dictation off</string>
+      <string id="voice_dictation_Explain">The dictation no longer starts. Only the value false (0) is imposed.
+
+On the device: Settings › Voice › Dictation, grayed; the dictation refused.
+
+Key: voice.dictation (Boolean, false (0)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+      <string id="remoteControl_enabled">Deny the Remote Control</string>
+      <string id="remoteControl_enabled_Explain">No agent is reachable from claude.ai. Only the value false (0) is imposed.
+
+On the device: “Remote control for all agents”, a project’s and an agent’s, off and grayed.
+
+Key: remoteControl.enabled (Boolean, false (0)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+      <string id="updates_channel">Stable channel only</string>
+      <string id="updates_channel_Explain">No beta version is offered. Only the value stable is imposed.
+
+On the device: Settings › General › “Receive beta versions”, off and grayed.
+
+Key: updates.channel (string, stable, beta). Sort: restrict.</string>
+      <string id="updates_channel_stable">stable</string>
+      <string id="updates_channel_beta">beta</string>
+      <string id="updates_automatic">Turn automatic updates off</string>
+      <string id="updates_automatic_Explain">A new version is offered, never installed by itself: the IT department deploys its own. Only the value false (0) is imposed.
+
+On the device: Settings › General › “Install updates automatically”, off and grayed.
+
+Key: updates.automatic (Boolean, false (0)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+      <string id="servers_allowed">Allowed servers</string>
+      <string id="servers_allowed_Explain">The addresses of the team servers and the servers in server mode the app may reach. Absent, all.
+
+On the device: A server outside the list is refused, with the reason.
+
+Key: servers.allowed (list). Sort: restrict.</string>
+      <string id="servers_personalSpace">Deny the personal space</string>
+      <string id="servers_personalSpace_Explain">Only the spaces of the allowed servers open, not the device’s own. Only the value false (0) is imposed.
+
+On the device: Read and kept; applied with the spaces of the server mode (to come).
+
+Key: servers.personalSpace (Boolean, false (0)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+      <string id="servers_aggregateView">Deny the aggregate view</string>
+      <string id="servers_aggregateView_Explain">The spaces are not shown together in one view. Only the value false (0) is imposed.
+
+On the device: Read and kept; applied with the spaces of the server mode (to come).
+
+Key: servers.aggregateView (Boolean, false (0)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+      <string id="servers_contentlessNotifications">Notifications without content</string>
+      <string id="servers_contentlessNotifications_Explain">The notifications from a server say something happens, never what. Only the value true (1) is imposed.
+
+On the device: Read and kept; applied with the team server’s notifications (to come).
+
+Key: servers.contentlessNotifications (Boolean, true (1)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+      <string id="mcp_externalClients">Outside MCP clients</string>
+      <string id="mcp_externalClients_Explain">What Claude outside Escouade (an outside MCP client) may do through Escouade’s MCP server: denied (nothing), readOnly (read only), allowed (everything). Escouade’s own agents are not concerned.
+
+On the device: An outside client refused at its connection (denied), or its tools that write refused (readOnly).
+
+Key: mcp.externalClients (string, denied, readOnly, allowed). Sort: restrict.</string>
+      <string id="mcp_externalClients_denied">denied</string>
+      <string id="mcp_externalClients_readOnly">readOnly</string>
+      <string id="mcp_externalClients_allowed">allowed</string>
+      <string id="team_server">Team server</string>
+      <string id="team_server_Explain">The address of the company’s team server: the member only has to accept their invitation.
+
+On the device: Kept by the app; the screen to join the team will fill it in (to come).
+
+Key: team.server (string). Sort: value.</string>
+      <string id="team_fingerprint">Team fingerprint</string>
+      <string id="team_fingerprint_Explain">The fingerprint of the team expected on the team server: a team of another fingerprint is refused.
+
+On the device: Kept by the app; checked when joining the team (to come).
+
+Key: team.fingerprint (string). Sort: value.</string>
+      <string id="team_onlyThisServer">Refuse any other team server</string>
+      <string id="team_onlyThisServer_Explain">Only the team server the policy sets may be joined. Only the value true (1) is imposed.
+
+On the device: Another team server is refused, with the reason.
+
+Key: team.onlyThisServer (Boolean, true (1)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+    </stringTable>
+    <presentationTable>
+      <presentation id="permissions_modes">
+        <listBox refId="permissions_modes">Allowed permission modes</listBox>
+      </presentation>
+      <presentation id="permissions_defaultMode">
+        <dropdownList refId="permissions_defaultMode" noSort="true">Default agent mode</dropdownList>
+      </presentation>
+      <presentation id="harnesses_allowed">
+        <listBox refId="harnesses_allowed">Allowed harnesses</listBox>
+      </presentation>
+      <presentation id="harnesses_allowedModels">
+        <textBox refId="harnesses_allowedModels">
+          <label>Allowed models by harness</label>
+        </textBox>
+      </presentation>
+      <presentation id="harnesses_maxEffort">
+        <dropdownList refId="harnesses_maxEffort" noSort="true">Maximum effort</dropdownList>
+      </presentation>
+      <presentation id="plugins_allowedOrigins">
+        <listBox refId="plugins_allowedOrigins">Allowed plugin origins</listBox>
+      </presentation>
+      <presentation id="plugins_allowed">
+        <listBox refId="plugins_allowed">Allowed plugins</listBox>
+      </presentation>
+      <presentation id="plugins_denied">
+        <listBox refId="plugins_denied">Denied plugins</listBox>
+      </presentation>
+      <presentation id="projects_deniedFiles">
+        <listBox refId="projects_deniedFiles">Denied file patterns</listBox>
+      </presentation>
+      <presentation id="proxy_url">
+        <textBox refId="proxy_url">
+          <label>Proxy address</label>
+        </textBox>
+      </presentation>
+      <presentation id="proxy_exclusions">
+        <listBox refId="proxy_exclusions">Proxy exclusions</listBox>
+      </presentation>
+      <presentation id="proxy_authorities">
+        <textBox refId="proxy_authorities">
+          <label>Certificate authorities file</label>
+        </textBox>
+      </presentation>
+      <presentation id="updates_channel">
+        <dropdownList refId="updates_channel" noSort="true">Stable channel only</dropdownList>
+      </presentation>
+      <presentation id="servers_allowed">
+        <listBox refId="servers_allowed">Allowed servers</listBox>
+      </presentation>
+      <presentation id="mcp_externalClients">
+        <dropdownList refId="mcp_externalClients" noSort="true">Outside MCP clients</dropdownList>
+      </presentation>
+      <presentation id="team_server">
+        <textBox refId="team_server">
+          <label>Team server</label>
+        </textBox>
+      </presentation>
+      <presentation id="team_fingerprint">
+        <textBox refId="team_fingerprint">
+          <label>Team fingerprint</label>
+        </textBox>
+      </presentation>
+    </presentationTable>
+  </resources>
+</policyDefinitionResources>

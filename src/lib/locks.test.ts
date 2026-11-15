@@ -64,8 +64,27 @@ describe('the locks of the settings (TS-11)', () => {
   });
 
   it('names the rows the core’s table locks, each one of the register', () => {
-    // locks::KEYS (src-tauri/src/locks.rs): its `rows`, checked there too against this file.
-    for (const id of ['allowBypass', 'agentMode', 'mode', 'projectEngine', 'telemetry', 'betaUpdates', 'remoteAll', 'projectRemote'])
+    // locks::KEYS (escouade-policy's list): its `rows`, checked there too against this file.
+    for (const id of [
+      'allowBypass',
+      'agentMode',
+      'mode',
+      'projectEngine',
+      'telemetry',
+      'betaUpdates',
+      'remoteAll',
+      'projectRemote',
+      // TS-12: the list of escouade-policy.
+      'autoUpdate',
+      'proxyUrl',
+      'noProxy',
+      'extraCaFile',
+      'insecureTls',
+      'pluginsVerifiedOnly',
+      'privateProjects',
+      'private',
+      'dictation',
+    ])
       expect(SETTINGS_ROWS.some((r) => r.id === id)).toBe(true);
   });
 });

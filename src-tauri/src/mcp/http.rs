@@ -15,7 +15,12 @@ impl<R: Runtime> Host for Core<R> {
     type Ctx = ToolCtx<R>;
 
     fn caller(&self, token: &str) -> Option<Caller> {
-        self.mcp.caller(token)
+        let caller = self.mcp.caller(token)?;
+        // Claude outside Escouade, refused by this device's policy (`mcp.externalClients`, TS-12): not let in.
+        if matches!(caller, Caller::External) && self.locks.read().mcp_external() == "denied" {
+            return None;
+        }
+        Some(caller)
     }
 
     fn refused(&self, caller: Option<&Caller>, asked: &str, message: String) {

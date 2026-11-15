@@ -370,7 +370,7 @@ mod system {
         use winreg::{RegKey, RegValue};
 
         use super::*;
-        use crate::{Source, PROVISIONAL_KEYS};
+        use crate::Source;
 
         /// A test key under `HKCU\Software\` (not `Policies`), deleted when dropped.
         struct TestKey {
@@ -444,8 +444,12 @@ mod system {
                 )
                 .unwrap();
 
-            let policies =
-                read_registry(location(&machine), location(&user), false, PROVISIONAL_KEYS);
+            let policies = read_registry(
+                location(&machine),
+                location(&user),
+                false,
+                &crate::known_keys(),
+            );
 
             let value = |key: &str| {
                 policies
@@ -513,7 +517,7 @@ mod system {
                 path: r"Software\EscouadePolicyTest-absent-key",
             };
 
-            let policies = read_registry(location(&machine), absent, true, PROVISIONAL_KEYS);
+            let policies = read_registry(location(&machine), absent, true, &crate::known_keys());
 
             assert!(policies.is_empty());
             assert!(
@@ -543,7 +547,7 @@ mod system {
                 hive: HKEY_CURRENT_USER,
                 path: r"Software\EscouadePolicyTest-absent-key",
             };
-            let policies = read_registry(absent, absent, true, PROVISIONAL_KEYS);
+            let policies = read_registry(absent, absent, true, &crate::known_keys());
             assert!(policies.is_empty());
             assert!(policies.warnings().is_empty());
         }
@@ -555,7 +559,6 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-    use crate::PROVISIONAL_KEYS;
 
     fn sz(text: &str) -> RawValue {
         let mut bytes: Vec<u8> = text.encode_utf16().flat_map(u16::to_le_bytes).collect();
@@ -673,7 +676,7 @@ mod tests {
             ("telemetry.enabled", dword(1)),
             ("voice.dictation", dword(0)),
         ]);
-        let policies = from_nodes(Some(&machine), Some(&user), PROVISIONAL_KEYS);
+        let policies = from_nodes(Some(&machine), Some(&user), &crate::known_keys());
         assert_eq!(
             policies.get("telemetry.enabled").unwrap().source,
             Source::Machine
@@ -703,7 +706,7 @@ mod tests {
                 .collect(),
             subkeys: vec![("plugins.allowed".into(), list)],
         };
-        let policies = from_nodes(Some(&machine), None, PROVISIONAL_KEYS);
+        let policies = from_nodes(Some(&machine), None, &crate::known_keys());
         assert_eq!(
             policies.get("plugins.allowed").unwrap().value,
             json!(["a", "b", "c", 9])
@@ -720,7 +723,7 @@ mod tests {
             values: vec![("harnesses.allowed".into(), sz("claude"))],
             subkeys: vec![("harnesses.allowed".into(), values(&[("1", sz("codex"))]))],
         };
-        let policies = from_nodes(Some(&machine), None, PROVISIONAL_KEYS);
+        let policies = from_nodes(Some(&machine), None, &crate::known_keys());
         assert_eq!(
             policies.get("harnesses.allowed").unwrap().value,
             json!(["codex"])
@@ -731,7 +734,7 @@ mod tests {
     #[test]
     fn unknown_keys_are_kept_and_reported() {
         let user = values(&[("future.setting", dword(1))]);
-        let policies = from_nodes(None, Some(&user), PROVISIONAL_KEYS);
+        let policies = from_nodes(None, Some(&user), &crate::known_keys());
         assert_eq!(policies.get("future.setting").unwrap().value, json!(1));
         assert!(matches!(policies.warnings(), [Warning::UnknownKey { .. }]));
     }

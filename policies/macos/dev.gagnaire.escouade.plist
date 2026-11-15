@@ -1,0 +1,557 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Generated from crates/escouade-policy/src/list.rs (cargo run -p escouade-policy --example generate): do not edit. -->
+<plist version="1.0">
+<dict>
+  <key>pfm_app_url</key>
+  <string>https://escouade.dev/</string>
+  <key>pfm_description</key>
+  <string>Escouade’s policies for managed devices: what the IT department imposes on the app.</string>
+  <key>pfm_documentation_url</key>
+  <string>https://escouade.dev/en/docs/managed-policies/</string>
+  <key>pfm_domain</key>
+  <string>dev.gagnaire.escouade</string>
+  <key>pfm_format_version</key>
+  <integer>1</integer>
+  <key>pfm_last_modified</key>
+  <date>2026-11-15T00:00:00Z</date>
+  <key>pfm_platforms</key>
+  <array>
+    <string>macOS</string>
+  </array>
+  <key>pfm_subkeys</key>
+  <array>
+    <dict>
+      <key>pfm_default</key>
+      <string>dev.gagnaire.escouade</string>
+      <key>pfm_name</key>
+      <string>PayloadType</string>
+      <key>pfm_require</key>
+      <string>always</string>
+      <key>pfm_title</key>
+      <string>Payload Type</string>
+      <key>pfm_type</key>
+      <string>string</string>
+    </dict>
+    <dict>
+      <key>pfm_default</key>
+      <integer>1</integer>
+      <key>pfm_name</key>
+      <string>PayloadVersion</string>
+      <key>pfm_require</key>
+      <string>always</string>
+      <key>pfm_title</key>
+      <string>Payload Version</string>
+      <key>pfm_type</key>
+      <string>integer</string>
+    </dict>
+    <dict>
+      <key>pfm_default</key>
+      <string>dev.gagnaire.escouade</string>
+      <key>pfm_name</key>
+      <string>PayloadIdentifier</string>
+      <key>pfm_require</key>
+      <string>always</string>
+      <key>pfm_title</key>
+      <string>Payload Identifier</string>
+      <key>pfm_type</key>
+      <string>string</string>
+    </dict>
+    <dict>
+      <key>pfm_format</key>
+      <string>^[0-9A-Za-z]{8}-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}-[0-9A-Za-z]{12}$</string>
+      <key>pfm_name</key>
+      <string>PayloadUUID</string>
+      <key>pfm_require</key>
+      <string>always</string>
+      <key>pfm_title</key>
+      <string>Payload UUID</string>
+      <key>pfm_type</key>
+      <string>string</string>
+    </dict>
+    <dict>
+      <key>pfm_default</key>
+      <string>Escouade</string>
+      <key>pfm_name</key>
+      <string>PayloadDisplayName</string>
+      <key>pfm_title</key>
+      <string>Payload Display Name</string>
+      <key>pfm_type</key>
+      <string>string</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>The mode where a harness asks nothing (bypassPermissions) is no longer allowed to any agent. Only the value false (0) is imposed. On the device: Settings › Agents › “Allow Bypass mode”, off and grayed; the Bypass mode refused everywhere.</string>
+      <key>pfm_name</key>
+      <string>permissions.allowBypass</string>
+      <key>pfm_range_list</key>
+      <array>
+        <false/>
+      </array>
+      <key>pfm_title</key>
+      <string>Deny the Bypass mode</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>The list of the modes agents may take: plan, default, acceptEdits, auto, bypassPermissions. An agent in another mode ends its turn, then goes to the nearest allowed mode. On the device: The modes not allowed grayed in “Default mode of agents”, the board’s mode and an agent’s mode.</string>
+      <key>pfm_name</key>
+      <string>permissions.modes</string>
+      <key>pfm_subkeys</key>
+      <array>
+        <dict>
+          <key>pfm_name</key>
+          <string>item</string>
+          <key>pfm_range_list</key>
+          <array>
+            <string>plan</string>
+            <string>default</string>
+            <string>acceptEdits</string>
+            <string>auto</string>
+            <string>bypassPermissions</string>
+          </array>
+          <key>pfm_type</key>
+          <string>string</string>
+        </dict>
+      </array>
+      <key>pfm_title</key>
+      <string>Allowed permission modes</string>
+      <key>pfm_type</key>
+      <string>array</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>The mode of new agents: plan, default, acceptEdits or auto. It stays within the allowed modes: outside them, the nearest allowed one. On the device: Settings › Agents › “Default mode of agents”, grayed.</string>
+      <key>pfm_name</key>
+      <string>permissions.defaultMode</string>
+      <key>pfm_range_list</key>
+      <array>
+        <string>plan</string>
+        <string>default</string>
+        <string>acceptEdits</string>
+        <string>auto</string>
+      </array>
+      <key>pfm_title</key>
+      <string>Default agent mode</string>
+      <key>pfm_type</key>
+      <string>string</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>The list of the harnesses agents may use, by their id (claude, codex, copilot, cursor, opencode, gemini…). An agent of a harness no longer allowed stops at the end of its turn. On the device: The harness of a project, an agent, a ticket: a harness not allowed is grayed and refused.</string>
+      <key>pfm_name</key>
+      <string>harnesses.allowed</string>
+      <key>pfm_subkeys</key>
+      <array>
+        <dict>
+          <key>pfm_name</key>
+          <string>item</string>
+          <key>pfm_type</key>
+          <string>string</string>
+        </dict>
+      </array>
+      <key>pfm_title</key>
+      <string>Allowed harnesses</string>
+      <key>pfm_type</key>
+      <string>array</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>A JSON object that gives, for each harness, the list of its allowed models. A harness absent from the object keeps all its models. On the device: An agent or a ticket on a model not allowed is refused at its start.</string>
+      <key>pfm_name</key>
+      <string>harnesses.allowedModels</string>
+      <key>pfm_title</key>
+      <string>Allowed models by harness</string>
+      <key>pfm_type</key>
+      <string>dictionary</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>The highest effort an agent may be given: low, medium, high, xhigh or max. On the device: The effort of the board’s agents brought down to this ceiling; a higher effort refused.</string>
+      <key>pfm_name</key>
+      <string>harnesses.maxEffort</string>
+      <key>pfm_range_list</key>
+      <array>
+        <string>low</string>
+        <string>medium</string>
+        <string>high</string>
+        <string>xhigh</string>
+        <string>max</string>
+      </array>
+      <key>pfm_title</key>
+      <string>Maximum effort</string>
+      <key>pfm_type</key>
+      <string>string</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>Where a plugin may be installed from: store-verified (the store, verified versions), store (the store, any version), team-store (the team’s store), git, folder (a folder), dev (a folder in development). On the device: Installing a plugin of another origin is refused and said.</string>
+      <key>pfm_name</key>
+      <string>plugins.allowedOrigins</string>
+      <key>pfm_subkeys</key>
+      <array>
+        <dict>
+          <key>pfm_name</key>
+          <string>item</string>
+          <key>pfm_range_list</key>
+          <array>
+            <string>store-verified</string>
+            <string>store</string>
+            <string>team-store</string>
+            <string>git</string>
+            <string>folder</string>
+            <string>dev</string>
+          </array>
+          <key>pfm_type</key>
+          <string>string</string>
+        </dict>
+      </array>
+      <key>pfm_title</key>
+      <string>Allowed plugin origins</string>
+      <key>pfm_type</key>
+      <string>array</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>The list of the plugin ids that may be installed. Absent, all may. On the device: Installing a plugin outside the list is refused and said.</string>
+      <key>pfm_name</key>
+      <string>plugins.allowed</string>
+      <key>pfm_subkeys</key>
+      <array>
+        <dict>
+          <key>pfm_name</key>
+          <string>item</string>
+          <key>pfm_type</key>
+          <string>string</string>
+        </dict>
+      </array>
+      <key>pfm_title</key>
+      <string>Allowed plugins</string>
+      <key>pfm_type</key>
+      <string>array</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>The list of the plugin ids that are never installed, even when allowed elsewhere. On the device: Installing a plugin of the list is refused and said.</string>
+      <key>pfm_name</key>
+      <string>plugins.denied</string>
+      <key>pfm_subkeys</key>
+      <array>
+        <dict>
+          <key>pfm_name</key>
+          <string>item</string>
+          <key>pfm_type</key>
+          <string>string</string>
+        </dict>
+      </array>
+      <key>pfm_title</key>
+      <string>Denied plugins</string>
+      <key>pfm_type</key>
+      <string>array</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>A version of the store without the “Verified by Escouade” seal is refused, at an install as at an update. Only the value true (1) is imposed. On the device: Plugins › “Install verified versions only”, on and grayed.</string>
+      <key>pfm_name</key>
+      <string>plugins.verifiedOnly</string>
+      <key>pfm_range_list</key>
+      <array>
+        <true/>
+      </array>
+      <key>pfm_title</key>
+      <string>Install verified versions only</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>Every project is private: its agents see no other project, and no other project sees it. Only the value true (1) is imposed. On the device: “New projects are private” and each project’s “Private project”, on and grayed.</string>
+      <key>pfm_name</key>
+      <string>projects.forcePrivate</string>
+      <key>pfm_range_list</key>
+      <array>
+        <true/>
+      </array>
+      <key>pfm_title</key>
+      <string>Private projects by default</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>File patterns (the .gitignore way) agents neither read nor write, added to those of the projects. On the device: Read and kept; applied to the agents with a project’s fence of files (to come).</string>
+      <key>pfm_name</key>
+      <string>projects.deniedFiles</string>
+      <key>pfm_subkeys</key>
+      <array>
+        <dict>
+          <key>pfm_name</key>
+          <string>item</string>
+          <key>pfm_type</key>
+          <string>string</string>
+        </dict>
+      </array>
+      <key>pfm_title</key>
+      <string>Denied file patterns</string>
+      <key>pfm_type</key>
+      <string>array</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>The HTTP(S) proxy of the app, the plugins and the agents, for example http://proxy.example.com:3128. On the device: Settings › Advanced › Network, the proxy’s address grayed.</string>
+      <key>pfm_name</key>
+      <string>proxy.url</string>
+      <key>pfm_title</key>
+      <string>Proxy address</string>
+      <key>pfm_type</key>
+      <string>string</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>The hosts reached without the proxy (NO_PROXY), one per line. On the device: Settings › Advanced › Network, the exclusions grayed.</string>
+      <key>pfm_name</key>
+      <string>proxy.exclusions</string>
+      <key>pfm_subkeys</key>
+      <array>
+        <dict>
+          <key>pfm_name</key>
+          <string>item</string>
+          <key>pfm_type</key>
+          <string>string</string>
+        </dict>
+      </array>
+      <key>pfm_title</key>
+      <string>Proxy exclusions</string>
+      <key>pfm_type</key>
+      <string>array</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>“Skip TLS certificate verification” is off and can no longer be turned on. Only the value true (1) is imposed. On the device: Settings › Advanced › Network › “Skip TLS certificate verification”, off and grayed.</string>
+      <key>pfm_name</key>
+      <string>proxy.denyInsecureTls</string>
+      <key>pfm_range_list</key>
+      <array>
+        <true/>
+      </array>
+      <key>pfm_title</key>
+      <string>Deny skipping the TLS check</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>The path of a .pem file of authorities trusted besides the system’s store (a corporate proxy’s root). On the device: Settings › Advanced › Network › “Extra certificate authorities”, grayed.</string>
+      <key>pfm_name</key>
+      <string>proxy.authorities</string>
+      <key>pfm_title</key>
+      <string>Certificate authorities file</string>
+      <key>pfm_type</key>
+      <string>string</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>The anonymous statistics are no longer sent. Only the value false (0) is imposed. On the device: Settings › General › “Usage statistics”, off and grayed.</string>
+      <key>pfm_name</key>
+      <string>telemetry.enabled</string>
+      <key>pfm_range_list</key>
+      <array>
+        <false/>
+      </array>
+      <key>pfm_title</key>
+      <string>Turn the usage statistics off</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>The dictation and the conversation’s voice stay on the device (Whisper and Piper): no online service. Only the value false (0) is imposed. On the device: Settings › Voice, “Online” brought back to local (Whisper, Piper) and refused.</string>
+      <key>pfm_name</key>
+      <string>voice.onlineAllowed</string>
+      <key>pfm_range_list</key>
+      <array>
+        <false/>
+      </array>
+      <key>pfm_title</key>
+      <string>Deny online voices</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>The dictation no longer starts. Only the value false (0) is imposed. On the device: Settings › Voice › Dictation, grayed; the dictation refused.</string>
+      <key>pfm_name</key>
+      <string>voice.dictation</string>
+      <key>pfm_range_list</key>
+      <array>
+        <false/>
+      </array>
+      <key>pfm_title</key>
+      <string>Turn the dictation off</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>No agent is reachable from claude.ai. Only the value false (0) is imposed. On the device: “Remote control for all agents”, a project’s and an agent’s, off and grayed.</string>
+      <key>pfm_name</key>
+      <string>remoteControl.enabled</string>
+      <key>pfm_range_list</key>
+      <array>
+        <false/>
+      </array>
+      <key>pfm_title</key>
+      <string>Deny the Remote Control</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>No beta version is offered. Only the value stable is imposed. On the device: Settings › General › “Receive beta versions”, off and grayed.</string>
+      <key>pfm_name</key>
+      <string>updates.channel</string>
+      <key>pfm_range_list</key>
+      <array>
+        <string>stable</string>
+        <string>beta</string>
+      </array>
+      <key>pfm_title</key>
+      <string>Stable channel only</string>
+      <key>pfm_type</key>
+      <string>string</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>A new version is offered, never installed by itself: the IT department deploys its own. Only the value false (0) is imposed. On the device: Settings › General › “Install updates automatically”, off and grayed.</string>
+      <key>pfm_name</key>
+      <string>updates.automatic</string>
+      <key>pfm_range_list</key>
+      <array>
+        <false/>
+      </array>
+      <key>pfm_title</key>
+      <string>Turn automatic updates off</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>The addresses of the team servers and the servers in server mode the app may reach. Absent, all. On the device: A server outside the list is refused, with the reason.</string>
+      <key>pfm_name</key>
+      <string>servers.allowed</string>
+      <key>pfm_subkeys</key>
+      <array>
+        <dict>
+          <key>pfm_name</key>
+          <string>item</string>
+          <key>pfm_type</key>
+          <string>string</string>
+        </dict>
+      </array>
+      <key>pfm_title</key>
+      <string>Allowed servers</string>
+      <key>pfm_type</key>
+      <string>array</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>Only the spaces of the allowed servers open, not the device’s own. Only the value false (0) is imposed. On the device: Read and kept; applied with the spaces of the server mode (to come).</string>
+      <key>pfm_name</key>
+      <string>servers.personalSpace</string>
+      <key>pfm_range_list</key>
+      <array>
+        <false/>
+      </array>
+      <key>pfm_title</key>
+      <string>Deny the personal space</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>The spaces are not shown together in one view. Only the value false (0) is imposed. On the device: Read and kept; applied with the spaces of the server mode (to come).</string>
+      <key>pfm_name</key>
+      <string>servers.aggregateView</string>
+      <key>pfm_range_list</key>
+      <array>
+        <false/>
+      </array>
+      <key>pfm_title</key>
+      <string>Deny the aggregate view</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>The notifications from a server say something happens, never what. Only the value true (1) is imposed. On the device: Read and kept; applied with the team server’s notifications (to come).</string>
+      <key>pfm_name</key>
+      <string>servers.contentlessNotifications</string>
+      <key>pfm_range_list</key>
+      <array>
+        <true/>
+      </array>
+      <key>pfm_title</key>
+      <string>Notifications without content</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>What Claude outside Escouade (an outside MCP client) may do through Escouade’s MCP server: denied (nothing), readOnly (read only), allowed (everything). Escouade’s own agents are not concerned. On the device: An outside client refused at its connection (denied), or its tools that write refused (readOnly).</string>
+      <key>pfm_name</key>
+      <string>mcp.externalClients</string>
+      <key>pfm_range_list</key>
+      <array>
+        <string>denied</string>
+        <string>readOnly</string>
+        <string>allowed</string>
+      </array>
+      <key>pfm_title</key>
+      <string>Outside MCP clients</string>
+      <key>pfm_type</key>
+      <string>string</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>The address of the company’s team server: the member only has to accept their invitation. On the device: Kept by the app; the screen to join the team will fill it in (to come).</string>
+      <key>pfm_name</key>
+      <string>team.server</string>
+      <key>pfm_title</key>
+      <string>Team server</string>
+      <key>pfm_type</key>
+      <string>string</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>The fingerprint of the team expected on the team server: a team of another fingerprint is refused. On the device: Kept by the app; checked when joining the team (to come).</string>
+      <key>pfm_name</key>
+      <string>team.fingerprint</string>
+      <key>pfm_title</key>
+      <string>Team fingerprint</string>
+      <key>pfm_type</key>
+      <string>string</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
+      <string>Only the team server the policy sets may be joined. Only the value true (1) is imposed. On the device: Another team server is refused, with the reason.</string>
+      <key>pfm_name</key>
+      <string>team.onlyThisServer</string>
+      <key>pfm_range_list</key>
+      <array>
+        <true/>
+      </array>
+      <key>pfm_title</key>
+      <string>Refuse any other team server</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+  </array>
+  <key>pfm_title</key>
+  <string>Escouade</string>
+  <key>pfm_unique</key>
+  <true/>
+  <key>pfm_version</key>
+  <integer>1</integer>
+</dict>
+</plist>

@@ -12,6 +12,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - A project’s editor is VS Code’s, with its file tree and its tabs, in a column like the agents. It reads and writes files through Escouade, reloads a file an agent changed, and shows the conflict when you had changed it too.
 - Scheduled tasks: an agent’s ticket that comes back at fixed times (every day, every week, every month or in cron), project by project, from the new “Scheduled” section of the sidebar. Escouade makes and launches it at its due time, never two at once, once at its return if it was closed.
 - A device managed by an IT department can impose settings through its policies (registry, MDM profile, `/etc`): telemetry, the beta channel, Bypass mode, the modes and harnesses allowed, Remote Control. An imposed setting is greyed with a padlock that says who imposes it, and Escouade refuses it everywhere, the window, the agents and `.escouade.yml` included.
+- Device policies now cover everything an IT department can impose (proxy and certificates, plugins, private projects, voice, updates, models and effort, servers, outside MCP clients), and apply without a restart when it changes them. Escouade comes with its ADMX, an example MDM profile and a documentation page on how to deploy them.
 - An agent that reads a GitHub pull request now gets all of it: its description, its commits, its files and its discussion threads with their answers and their state. It is the first stone of the pull request view in Escouade.
 
 ## [2.2.0] — 2026-11-14

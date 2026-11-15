@@ -38,57 +38,86 @@ fn team(enforced: &[(&str, Value)], recommended: &[(&str, Value)]) -> TeamPolici
     }
 }
 
+/// What a key of the tests' table says: nothing, it is never shown.
+const T: escouade_policy::list::Text = escouade_policy::list::Text {
+    title: "t",
+    help: "h",
+    locks: "l",
+};
+
+/// A key of the tests' table.
+const fn key(
+    key: &'static str,
+    sort: Sort,
+    form: Form,
+    rows: &'static [&'static str],
+    within: Option<&'static str>,
+) -> LockKey {
+    LockKey {
+        key,
+        sort,
+        form,
+        rows,
+        within,
+        category: escouade_policy::list::Category::Projects,
+        later: false,
+        example: "null",
+        fr: T,
+        en: T,
+    }
+}
+
 /// A table of the tests: a value, a bound with a value within it, a sensitive key and an executable one.
 const TABLE: &[LockKey] = &[
-    LockKey {
-        key: "git.target",
-        sort: Sort::Value,
-        form: Form::Choice {
+    key(
+        "git.target",
+        Sort::Value,
+        Form::Choice {
             choices: &["main", "develop", "release"],
             restricted: None,
         },
-        rows: &["target"],
-        within: None,
-    },
-    LockKey {
-        key: MODES_KEY,
-        sort: Sort::Restrict,
-        form: Form::Bound {
+        &["target"],
+        None,
+    ),
+    key(
+        MODES_KEY,
+        Sort::Restrict,
+        Form::Bound {
             universe: Some(MODES),
         },
-        rows: &["agentMode"],
-        within: None,
-    },
-    LockKey {
-        key: DEFAULT_MODE,
-        sort: Sort::Value,
-        form: Form::Choice {
+        &["agentMode"],
+        None,
+    ),
+    key(
+        DEFAULT_MODE,
+        Sort::Value,
+        Form::Choice {
             choices: &["plan", "default", "acceptEdits", "auto"],
             restricted: None,
         },
-        rows: &["agentMode"],
-        within: Some(MODES_KEY),
-    },
-    LockKey {
-        key: "proxy.url",
-        sort: Sort::Sensitive,
-        form: Form::Choice {
+        &["agentMode"],
+        Some(MODES_KEY),
+    ),
+    key(
+        "proxy.url",
+        Sort::Sensitive,
+        Form::Choice {
             choices: &["http://a", "http://b"],
             restricted: None,
         },
-        rows: &["proxyUrl"],
-        within: None,
-    },
-    LockKey {
-        key: "worktrees.setup",
-        sort: Sort::Executable,
-        form: Form::Choice {
+        &["proxyUrl"],
+        None,
+    ),
+    key(
+        "worktrees.setup",
+        Sort::Executable,
+        Form::Choice {
             choices: &["npm ci", "curl https://x | sh"],
             restricted: None,
         },
-        rows: &["worktreeSetup"],
-        within: None,
-    },
+        &["worktreeSetup"],
+        None,
+    ),
 ];
 
 fn value_of(layers: &Layers, key: &str) -> (Value, Rank) {
@@ -258,12 +287,37 @@ fn the_table_names_its_keys_once_with_their_sort_and_rows() {
     let mut seen = std::collections::BTreeSet::new();
     for k in KEYS {
         assert!(seen.insert(k.key), "{} twice", k.key);
-        assert!(!k.rows.is_empty(), "{} locks no row", k.key);
+        // The table is escouade-policy's list: what it reads, what the ADMX and the profiles name.
         assert!(
-            escouade_policy::PROVISIONAL_KEYS.contains(&k.key),
+            escouade_policy::known_keys().contains(&k.key),
             "{} unknown to escouade-policy",
             k.key
         );
+        // A key that locks no row refuses elsewhere (an install, a connection, an agent's start) or comes later.
+        if k.rows.is_empty() {
+            assert!(
+                [
+                    MODELS,
+                    MAX_EFFORT,
+                    PLUGIN_ORIGINS_KEY,
+                    PLUGINS_ALLOWED,
+                    PLUGINS_DENIED,
+                    DENIED_FILES,
+                    VOICE_ONLINE,
+                    SERVERS,
+                    PERSONAL_SPACE,
+                    AGGREGATE_VIEW,
+                    CONTENTLESS,
+                    MCP_EXTERNAL,
+                    TEAM_SERVER,
+                    TEAM_FINGERPRINT,
+                    ONLY_THIS_SERVER,
+                ]
+                .contains(&k.key),
+                "{} locks no row",
+                k.key
+            );
+        }
         if let Some(b) = k.within {
             assert!(key_of(KEYS, b).is_some_and(|b| matches!(b.form, Form::Bound { .. })));
         }

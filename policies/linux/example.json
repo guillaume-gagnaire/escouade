@@ -1,0 +1,60 @@
+{
+  "harnesses.allowed": [
+    "claude",
+    "codex"
+  ],
+  "harnesses.allowedModels": {
+    "claude": [
+      "claude-sonnet-5-5",
+      "claude-opus-5-5"
+    ]
+  },
+  "harnesses.maxEffort": "high",
+  "mcp.externalClients": "readOnly",
+  "permissions.allowBypass": false,
+  "permissions.defaultMode": "default",
+  "permissions.modes": [
+    "plan",
+    "default",
+    "acceptEdits"
+  ],
+  "plugins.allowed": [
+    "dev.escouade.github",
+    "dev.escouade.gitlab"
+  ],
+  "plugins.allowedOrigins": [
+    "store-verified"
+  ],
+  "plugins.denied": [
+    "com.example.unwanted"
+  ],
+  "plugins.verifiedOnly": true,
+  "projects.deniedFiles": [
+    "**/.env",
+    "**/*.pem"
+  ],
+  "projects.forcePrivate": true,
+  "proxy.authorities": "C:\\ProgramData\\Corp\\root-ca.pem",
+  "proxy.denyInsecureTls": true,
+  "proxy.exclusions": [
+    "localhost",
+    "127.0.0.1",
+    ".corp.example.com"
+  ],
+  "proxy.url": "http://proxy.example.com:3128",
+  "remoteControl.enabled": false,
+  "servers.aggregateView": false,
+  "servers.allowed": [
+    "https://escouade.corp.example.com"
+  ],
+  "servers.contentlessNotifications": true,
+  "servers.personalSpace": false,
+  "team.fingerprint": "SHA256:3f9a6c1e8b2d47f0a5c3e9d1b7f2a4c6e8d0b2f4a6c8e0d2b4f6a8c0e2d4b6f8",
+  "team.onlyThisServer": true,
+  "team.server": "https://escouade.corp.example.com",
+  "telemetry.enabled": false,
+  "updates.automatic": false,
+  "updates.channel": "stable",
+  "voice.dictation": false,
+  "voice.onlineAllowed": false
+}

@@ -10,7 +10,7 @@
 </script>
 
 <Group title={t('settings.newProjects.title')}>
-  <Row label={t('settings.newProjects.private')} desc={t('settings.newProjects.privateDesc')}>
+  <Row label={t('settings.newProjects.private')} desc={t('settings.newProjects.privateDesc')} row="privateProjects">
     <Switch label={t('settings.newProjects.private')} bind:on={s.privateProjects} />
   </Row>
 </Group>

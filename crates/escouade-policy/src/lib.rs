@@ -9,11 +9,13 @@
 //!   ([`files`]).
 //!
 //! Each gives the same model: a [`Policy`] is its key, its JSON value and its [`Source`]. Nothing here ever panics on
-//! what an administrator wrote: a malformed value is left out and a [`Warning`] says why. A key outside
-//! [`PROVISIONAL_KEYS`] is kept and reported, until the single list of TS-12 replaces it.
+//! what an administrator wrote: a malformed value is left out and a [`Warning`] says why. A key outside the single list
+//! of the policies ([`list::POLICIES`], TS-12) is kept and reported; a key of it is brought to the type it says
+//! ([`list::convert`]: a `REG_DWORD` 0 or 1 becomes a Boolean).
 //!
-//! Read by the core at its start (`read_known`, with the keys of `locks::KEYS`, TS-11): the rank 6 of the layers of the
-//! settings. TS-12 (the list, the ADMX, the profile, the reading again while the app runs) comes after.
+//! Read by the core at its start, and again whenever a policy changes while the app runs ([`watch`]): the rank 6 of the
+//! layers of the settings (`locks.rs`, TS-11), whose table is the list. The ADMX, its ADML, the macOS manifests, the
+//! example profile, the schema of `/etc` and the page of the site are generated from the list ([`generate`]).
 //! What was verified on each system, and what is left to TS-12's real trials: `README.md`.
 
 use std::collections::BTreeMap;
@@ -24,46 +26,20 @@ use serde::Serialize;
 use serde_json::Value;
 
 pub mod files;
+pub mod generate;
+pub mod list;
 pub mod macos;
+pub mod watch;
 pub mod windows;
 
 /// The application's identifier: its macOS preferences domain.
 pub const APP_ID: &str = "dev.gagnaire.escouade";
 
-/// The keys known so far, from the table of docs/TEAM-SERVER.md §6.4. Provisional: TS-12 makes the single list of
-/// the policies, from which the ADMX, the macOS manifest and the Linux schema are generated. A key outside it is kept
-/// and reported ([`Warning::UnknownKey`]).
-pub const PROVISIONAL_KEYS: &[&str] = &[
-    "permissions.allowBypass",
-    "permissions.modes",
-    "permissions.defaultMode",
-    "harnesses.allowed",
-    "harnesses.allowedModels",
-    "harnesses.maxEffort",
-    "plugins.allowedOrigins",
-    "plugins.allowed",
-    "plugins.denied",
-    "plugins.verifiedOnly",
-    "projects.forcePrivate",
-    "projects.deniedFiles",
-    "proxy.url",
-    "proxy.exclusions",
-    "proxy.denyInsecureTls",
-    "proxy.authorities",
-    "telemetry.enabled",
-    "voice.onlineAllowed",
-    "voice.dictation",
-    "remoteControl.enabled",
-    "updates.channel",
-    "updates.automatic",
-    "servers.allowed",
-    "servers.personalSpace",
-    "servers.aggregateView",
-    "servers.contentlessNotifications",
-    "mcp.externalClients",
-    "team.server",
-    "team.fingerprint",
-];
+/// The keys of the single list ([`list::POLICIES`]): what [`read`] knows. A key outside it is kept and reported
+/// ([`Warning::UnknownKey`]).
+pub fn known_keys() -> Vec<&'static str> {
+    list::keys()
+}
 
 /// Where a policy was read.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -199,6 +175,43 @@ impl Policies {
     pub(crate) fn warn(&mut self, warning: Warning) {
         self.warnings.push(warning);
     }
+
+    /// Each policy of a key of the list brought to the type it says ([`list::convert`]); one that does not fit is left
+    /// out and said. A key outside the list stays as read.
+    pub fn typed(mut self) -> Policies {
+        let mut out = BTreeMap::new();
+        for (key, mut policy) in std::mem::take(&mut self.policies) {
+            if let Some(def) = list::def(&key) {
+                match list::convert(def, &policy.value) {
+                    Ok(value) => policy.value = value,
+                    Err(reason) => {
+                        self.warn(Warning::Malformed {
+                            key,
+                            source: policy.source,
+                            reason,
+                        });
+                        continue;
+                    }
+                }
+            }
+            out.insert(key, policy);
+        }
+        self.policies = out;
+        self
+    }
+
+    /// Policies made in memory (a test's source, the e2e's file): each set as a reader sets it, then typed.
+    pub fn from_values(
+        values: impl IntoIterator<Item = (String, Value)>,
+        source: Source,
+    ) -> Policies {
+        let known = known_keys();
+        let mut policies = Policies::default();
+        for (key, value) in values {
+            policies.set(&key, value, source.clone(), &known);
+        }
+        policies.typed()
+    }
 }
 
 /// A key is dotted words: letters, digits, `_` and `-`, separated by single dots.
@@ -229,9 +242,9 @@ pub(crate) fn string_value(text: &str) -> Result<Value, String> {
     }
 }
 
-/// The policies of this device, read from its system's place with the provisional list of keys.
+/// The policies of this device, read from its system's place, each key of the list brought to its type.
 pub fn read() -> Policies {
-    read_known(PROVISIONAL_KEYS)
+    read_known(&known_keys()).typed()
 }
 
 /// The policies of this device, `known` the keys a reader knows (the core's table, `locks::KEYS` of TS-11): any
@@ -266,19 +279,19 @@ mod tests {
             "telemetry.enabled",
             Value::Bool(true),
             Source::User,
-            PROVISIONAL_KEYS,
+            &known_keys(),
         );
         policies.set(
             "telemetry.enabled",
             Value::Bool(false),
             Source::Machine,
-            PROVISIONAL_KEYS,
+            &known_keys(),
         );
         policies.set(
             "some.future",
             Value::from(1),
             Source::Machine,
-            PROVISIONAL_KEYS,
+            &known_keys(),
         );
 
         assert_eq!(
@@ -303,7 +316,7 @@ mod tests {
     fn an_invalid_key_is_left_out_and_said() {
         let mut policies = Policies::default();
         for key in ["", "a..b", ".a", "a.", "a b", "é"] {
-            policies.set(key, Value::Null, Source::User, PROVISIONAL_KEYS);
+            policies.set(key, Value::Null, Source::User, &known_keys());
         }
         assert!(policies.is_empty());
         assert_eq!(policies.warnings().len(), 6);

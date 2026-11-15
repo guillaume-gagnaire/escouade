@@ -464,6 +464,7 @@ export const en: Catalog = {
       'escouade-yml': '.escouade.yml',
       data: 'Local data',
       updates: 'Updates',
+      'managed-policies': 'Device policies',
       troubleshooting: 'Troubleshooting',
     },
     nav: 'Documentation pages',

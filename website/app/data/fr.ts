@@ -468,6 +468,7 @@ export const fr: Catalog = {
       'escouade-yml': '.escouade.yml',
       data: 'Données locales',
       updates: 'Mises à jour',
+      'managed-policies': 'Stratégies du poste',
       troubleshooting: 'Dépannage',
     },
     nav: 'Pages de la documentation',
