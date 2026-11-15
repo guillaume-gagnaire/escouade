@@ -32,6 +32,9 @@ export default defineZone('editor', {
     what: 'VS Code',
     loading: 'Loading the VS Code view…',
     failed: 'The VS Code view did not start: {error}',
+    langNote: 'VS Code changes language when the window reloads.',
+    reload: 'Reload',
+    reloadTip: 'Reload the window: the modified files are asked about first, the tabs open again.',
   },
 
   /** What is asked before closing what shows files modified in the VS Code view (ESC-464): the view, its pane, a project, the app. */

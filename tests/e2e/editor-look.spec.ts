@@ -1,7 +1,7 @@
 // ESC-447: the project's editor is now the VS Code view (tests/e2e/vscode-view.spec.ts). These tests of the CodeMirror
 // editor of the 2.0 design are fixme until the tickets that bring what they check back in the view: A7 (the marks of
 // the changes from the base, the comparison with the disk, the choice of the source), A3 (its keys, its focus,
-// Ctrl+P, the links of the conversations) and A4 (the theme followed at once, the fonts).
+// Ctrl+P, the links of the conversations); A4 (the theme followed at once, the fonts) has tests of the view, below.
 //
 // The editor in the 2.0 design (ESC-81, lot 9): its bar (back to the conversation, the source, « Enregistré »,
 // « Enregistrer »), the tree with its changed folders marked and its letters, the tabs, the path above the text with
@@ -15,8 +15,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium, type Locator, type Page } from '@playwright/test';
-import { addProject, expect, test } from './fixture';
-import { editorLines, workbench } from './vscode';
+import { addProject, closeSettings, expect, openSettingsPage, test } from './fixture';
+import { editorLines, openInExplorer, vscodeTabs, workbench } from './vscode';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const PREVIEW = path.join(ROOT, 'design', 'app-redesign', 'index.html');
@@ -200,7 +200,8 @@ async function previewAt(preview: Page, route: string, t: 'dark' | 'light') {
   await still(preview);
 }
 
-// A7: the editor of the preview, its marks of the changes from main and its source (A4: its theme and fonts).
+// A7: the editor of the preview, its marks of the changes from main and its source (its theme and fonts are the VS Code
+// view's own since A4, below).
 test.fixme('the editor looks as the preview draws it, in both themes, at both sizes', async ({ app }) => {
   test.setTimeout(240_000);
   const exe = chromium.executablePath();
@@ -410,33 +411,237 @@ test.fixme('the editor looks as the preview draws it, in both themes, at both si
   }
 });
 
-// A4: the theme followed at once (the A7 marks of the preview's project on the way).
-test.fixme('the editor follows the theme at once, CodeMirror’s own base theme included', async ({ app }) => {
+// A4 (ESC-472): the VS Code view takes Escouade's theme at once, from the tokens of app.css (the window's theme, the
+// project's tint, a plugin's), its fonts and its size, and its language; never loaded again for its colours, its tabs
+// kept. The colours are compared as the browser computes them (`toLookLike`, srgb.ts).
+
+/** The colour a token of the app has now, in the root (where the project's tint is). */
+const tokenOf = (page: Page, name: string) =>
+  page.evaluate((name) => {
+    const probe = document.createElement('span');
+    probe.style.color = `var(${name})`;
+    document.documentElement.append(probe);
+    const c = getComputedStyle(probe).color;
+    probe.remove();
+    return c;
+  }, name);
+const bgOf = (el: Locator) => el.evaluate((n) => getComputedStyle(n).backgroundColor);
+const colorOf = (el: Locator) => el.evaluate((n) => getComputedStyle(n).color);
+
+/** The parts of the workbench the theme is checked on. */
+function parts(page: Page) {
+  const wb = workbench(page);
+  const word = (text: string) =>
+    editorLines(page)
+      .locator('span span')
+      .filter({ hasText: new RegExp(`^${text}$`) })
+      .first();
+  return {
+    editor: wb.locator('.editor-instance .monaco-editor-background').first(),
+    side: wb.locator('.part.sidebar').first(),
+    tabs: wb.locator('.editor-group-container > .title').first(),
+    tab: wb.locator('.tabs-container .tab.active').first(),
+    status: wb.locator('.part.statusbar').first(),
+    find: wb.locator('.editor-instance .find-widget').first(),
+    keyword: word('import'),
+    text: word("'express'"),
+  };
+}
+
+/** The view, in the colours of the tokens now: its editor, its tree, its tabs, its bars, its syntax, its search. */
+async function followsTheTokens(page: Page, where: string) {
+  const p = parts(page);
+  const want: [Locator, 'bg' | 'color', string, string][] = [
+    [p.editor, 'bg', '--panel', 'the editor'],
+    [p.side, 'bg', '--frame', 'the tree'],
+    [p.tabs, 'bg', '--frame', 'the tabs’ row'],
+    [p.tab, 'bg', '--panel', 'the tab shown'],
+    [p.status, 'bg', '--frame', 'the status bar'],
+    [p.find, 'bg', '--raise', 'the search'],
+    [p.keyword, 'color', '--syn-k', 'a keyword'],
+    [p.text, 'color', '--syn-s', 'a string'],
+  ];
+  for (const [el, kind, token, label] of want)
+    await expect
+      .poll(() => (kind === 'bg' ? bgOf(el) : colorOf(el)), { message: `${label}, ${where}`, timeout: 10_000 })
+      .toLookLike(await tokenOf(page, token));
+}
+
+/** The view on the preview's project, users.ts shown after index.ts, its search open. */
+async function vscodeOnThePreview(page: Page) {
+  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  await openInExplorer(page, 'src/db/index.ts');
+  await openInExplorer(page, 'src/routes/users.ts');
+  await expect(editorLines(page)).toContainText("import { Router } from 'express';");
+  await editorLines(page).click();
+  await page.keyboard.press('Control+F');
+  await expect(parts(page).find).toBeVisible();
+  await page.keyboard.type('users');
+}
+
+test('the VS Code view follows the theme at once, its fonts the app’s, its tabs kept, at both sizes', async ({ app }) => {
+  test.skip(process.platform !== 'win32', 'WebView2: driven by its DevTools protocol');
+  test.setTimeout(300_000);
   const { page } = app;
-  const write = previewsProject(app.repo);
+  previewsProject(app.repo);
   await addProject(page, app.repo, { worktrees: true });
-  await agentAtWork(app.repo, write);
-  const ed = await editorAsThePreview(page);
-  const cm = ed.locator('.cm-editor');
-  const keyword = cm.locator('.cm-line').first().locator('span').first();
-  const colorOf = (el: Locator) => el.evaluate((n) => getComputedStyle(n).color);
-  const tokenOf = (name: string) =>
-    page.evaluate((name) => {
-      const probe = document.createElement('span');
-      probe.style.color = `var(${name})`;
-      document.body.append(probe);
-      const c = getComputedStyle(probe).color;
-      probe.remove();
-      return c;
-    }, name);
-  const classes: Record<string, string> = {};
-  for (const t of ['light', 'dark'] as const) {
+  await vscodeOnThePreview(page);
+  const wb = workbench(page);
+  const loads: string[] = [];
+  page.on('framenavigated', (f) => {
+    if (f === page.mainFrame()) loads.push(f.url());
+  });
+  for (const t of ['dark', 'light'] as const)
+    for (const size of SIZES) {
+      await page.setViewportSize(size);
+      await theme(page, t);
+      const where = `${t} ${size.width}×${size.height}`;
+      await followsTheTokens(page, where);
+      // The fonts: the app's for its interface, its code font for the text, ligatures as elsewhere.
+      const font = await editorLines(page).evaluate((n) => {
+        const c = getComputedStyle(n);
+        return [c.fontFamily, c.fontFeatureSettings];
+      });
+      expect(font[0], `the code's font, ${where}`).toMatch(/^"?JetBrains Mono/);
+      expect(font[1], `its ligatures, ${where}`).toMatch(/"calt"/);
+      expect(font[1], `its ligatures, ${where}`).not.toMatch(/off/);
+      const ui = await wb
+        .locator('.part.sidebar')
+        .first()
+        .evaluate((n) => getComputedStyle(n).fontFamily);
+      expect(ui, `the tree's font, ${where}`).toMatch(/^"?Inter Variable/);
+      expect(await vscodeTabs(page), `its tabs, ${where}`).toEqual(['index.ts', 'users.ts']);
+      if (SHOTS) {
+        fs.mkdirSync(SHOTS, { recursive: true });
+        await page.screenshot({ path: path.join(SHOTS, `vscode${size.name}${t === 'light' ? '-light' : ''}.png`) });
+      }
+    }
+  // Never loaded again, the search still open.
+  expect(loads).toEqual([]);
+  await expect(parts(page).find).toBeVisible();
+});
+
+test('the VS Code view takes the tint of the project shown, and a plugin’s theme, at once', async ({ app }) => {
+  test.skip(process.platform !== 'win32', 'WebView2: driven by its DevTools protocol');
+  test.setTimeout(300_000);
+  const { page } = app;
+  previewsProject(app.repo);
+  await addProject(page, app.repo, { worktrees: true });
+  // A second project, of the next colour.
+  const other = path.join(app.root, 'studio-web');
+  fs.mkdirSync(other);
+  git(other, 'init', '-q', '-b', 'main');
+  fs.writeFileSync(path.join(other, 'README.md'), '# studio-web\n');
+  git(other, 'add', '-A');
+  git(other, 'commit', '-qm', 'init');
+  await addProject(page, other, { firstAgent: false });
+  const tile = (name: string) => page.getByRole('tab', { name: new RegExp(`^${name}`) });
+  await tile('demo-api').click();
+  await expect(tile('demo-api')).toHaveAttribute('aria-selected', 'true');
+  await vscodeOnThePreview(page);
+  const side = parts(page).side;
+  await followsTheTokens(page, 'demo-api');
+  const first = await bgOf(side);
+  // The other project, its editor: the view in its tint once `--p` has glided, the first project's tabs kept.
+  await tile('studio-web').click();
+  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  await expect(workbench(page)).toBeVisible();
+  await expect.poll(() => bgOf(side), { timeout: 10_000 }).not.toLookLike(first);
+  await followsTheTokens(page, 'studio-web');
+  await tile('demo-api').click();
+  await expect.poll(() => bgOf(side), { timeout: 10_000 }).toLookLike(first);
+  expect(await vscodeTabs(page)).toEqual(['index.ts', 'users.ts']);
+
+  // A plugin's theme, as « Couleurs » lays it (lib/plugin-theme.svelte.ts): its sheet over app.css, its attribute.
+  await page.evaluate(() => {
+    const sheet = document.createElement('style');
+    sheet.id = 'escouade-plugin-theme';
+    sheet.textContent =
+      ":root:root:not([data-theme='light']) { --frame: #000000; --panel: #050505; --raise: #141414; --syn-k: #ffd400; --syn-s: #4dff88; }" +
+      ":root:root[data-theme='light'] { --frame: #ffffff; --panel: #ffffff; --raise: #f2f2f2; --syn-k: #0040c0; --syn-s: #006b2e; }";
+    document.head.append(sheet);
+    document.documentElement.dataset.pluginTheme = 'dev.escouade.high-contrast/high-contrast';
+  });
+  for (const t of ['dark', 'light'] as const) {
     await theme(page, t);
-    await expect.poll(() => colorOf(keyword), `a keyword in the ${t} theme`).toLookLike(await tokenOf('--syn-k'));
-    classes[t] = (await cm.getAttribute('class')) ?? '';
+    await expect.poll(() => bgOf(parts(page).editor), { timeout: 10_000 }).toLookLike(t === 'dark' ? 'rgb(5, 5, 5)' : 'rgb(255, 255, 255)');
+    await followsTheTokens(page, `plugin, ${t}`);
   }
-  // CodeMirror's own base theme, light or dark: its scoping class changes with the window's theme.
-  expect(classes.light).not.toBe(classes.dark);
+  // Escouade's colours back.
+  await page.evaluate(() => {
+    document.getElementById('escouade-plugin-theme')?.remove();
+    delete document.documentElement.dataset.pluginTheme;
+  });
+  await followsTheTokens(page, 'Escouade, light');
+});
+
+test('the VS Code view takes « Taille du texte de l’éditeur » at once', async ({ app }) => {
+  test.skip(process.platform !== 'win32', 'WebView2: driven by its DevTools protocol');
+  test.setTimeout(240_000);
+  const { page } = app;
+  previewsProject(app.repo);
+  await addProject(page, app.repo);
+  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  await openInExplorer(page, 'src/routes/users.ts');
+  const size = () => editorLines(page).evaluate((n) => getComputedStyle(n).fontSize);
+  await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Réglages' });
+  await openSettingsPage(dialog, 'Général');
+  await dialog
+    .locator('#settings-panel')
+    .getByRole('button', { name: /^Avancé/ })
+    .click();
+  const field = dialog.getByRole('spinbutton', { name: 'Taille du texte de l’éditeur' });
+  await expect.poll(size).toBe(`${await field.inputValue()}px`);
+  await field.fill('17');
+  await field.press('Tab');
+  await expect.poll(size).toBe('17px');
+  await closeSettings(dialog);
+  expect(await vscodeTabs(page)).toEqual(['users.ts']);
+});
+
+test('the VS Code view speaks Escouade’s language, and takes a new one when the window reloads, nothing lost', async ({ app }) => {
+  test.skip(process.platform !== 'win32', 'WebView2: driven by its DevTools protocol');
+  test.setTimeout(300_000);
+  const { page } = app;
+  previewsProject(app.repo);
+  await addProject(page, app.repo);
+  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  await openInExplorer(page, 'src/db/index.ts');
+  await openInExplorer(page, 'src/routes/users.ts');
+  const title = () => workbench(page).locator('.part.sidebar .title-label').first();
+  // In French, as the app.
+  await expect(title()).toHaveText(/^explorateur$/i);
+  // A change not saved.
+  await editorLines(page).click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type('// pas encore enregistré');
+  await expect.poll(() => vscodeTabs(page)).toContain('users.ts*');
+
+  // English: the app at once; the view says it changes when the window reloads.
+  await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+  const reglages = page.getByRole('dialog', { name: 'Réglages' });
+  await openSettingsPage(reglages, 'Général');
+  await reglages.getByRole('group', { name: 'Langue de l’interface' }).getByRole('button', { name: 'English', exact: true }).click();
+  await closeSettings(page.getByRole('dialog', { name: 'Settings' }));
+  const view = page.getByTestId('vscode-view');
+  await expect(view.getByTestId('vscode-lang-note')).toHaveText('VS Code changes language when the window reloads.');
+  await expect(title()).toHaveText(/^explorateur$/i);
+  // « Reload »: the file modified is asked about first; « Cancel » keeps everything.
+  await view.getByTestId('vscode-reload').click();
+  const ask = page.getByRole('dialog', { name: 'Save the changes to “users.ts”?' });
+  await expect(ask).toBeVisible();
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await expect.poll(() => vscodeTabs(page)).toContain('users.ts*');
+  // « Save »: written, then the window reloads, the view in English, its tabs open again, the one shown last.
+  await view.getByTestId('vscode-reload').click();
+  await ask.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect.poll(() => fs.readFileSync(path.join(app.repo, 'src/routes/users.ts'), 'utf8')).toContain('// pas encore enregistré');
+  await expect(title()).toHaveText(/^explorer$/i, { timeout: 60_000 });
+  await expect(page.getByTestId('vscode-lang-note')).toHaveCount(0);
+  await expect.poll(() => vscodeTabs(page), { timeout: 30_000 }).toEqual(['index.ts', 'users.ts']);
+  await expect(workbench(page).locator('.tabs-container .tab.active .label-name')).toHaveText('users.ts');
+  await expect(editorLines(page)).toContainText('// pas encore enregistré');
 });
 
 // The VS Code view (ESC-464, A3): its caret, the menu of its source on the worktree, Ctrl+P pressed in it.

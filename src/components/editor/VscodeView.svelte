@@ -3,11 +3,16 @@
   // The workbench is the page's only one (`lib/vscode/workbench.ts`, loaded on the first opening, in chunks of its own):
   // this view lends it its place while it is shown and takes it back when it goes, so that its tabs survive a pane
   // moved, closed and opened again. The source picked (the project's checkout or an agent's worktree) is a folder of its
-  // workspace; the file the editor is asked to show (`app.openEditor`) opens in a tab of it.
+  // workspace; the file the editor is asked to show (`app.openEditor`) opens in a tab of it. It speaks Escouade's
+  // language (`lib/vscode/load.ts`) and takes its theme and fonts as they change (ESC-472): a change of language reaches
+  // it when the window reloads, which its bar offers.
   import { onDestroy, onMount, untrack } from 'svelte';
   import { sourceAgent } from '../../lib/editor/buffers.svelte';
-  import { t } from '../../lib/i18n';
+  import { locale, t } from '../../lib/i18n';
+  import { keepTabs, loadWorkbench, page, reopening, workbenchLang } from '../../lib/vscode/load';
+  import { viewUnsaved } from '../../lib/vscode/unsaved.svelte';
   import { mayFocus, paneCtx } from '../../lib/pane-context';
+  import { tip } from '../../lib/tip';
   import { app } from '../../lib/state.svelte';
   import type { Project } from '../../lib/types';
   import { worktreeLabel } from '../../lib/worktrees';
@@ -28,18 +33,21 @@
   const source = $derived(st?.source ?? 'project');
   const agents = $derived(app.projectAgents.filter((a) => a.worktree));
   const src = $derived({ projectId: project.id, agentId: sourceAgent(source) });
-  /** The name of the source's folder in the workspace. */
-  const name = $derived.by(() => {
-    const a = agents.find((x) => x.id === source);
+  /** The name of a source's folder in the workspace. */
+  function folderName(of: string) {
+    const a = agents.find((x) => x.id === of);
     if (!a) return project.name;
     return a.worktree ? `${a.name} · ${worktreeLabel(project.path, a.worktree.path)}` : a.name;
-  });
+  }
+  const name = $derived(folderName(source));
+  /** Escouade's language changed since the workbench was loaded in this page. */
+  const otherLang = $derived(phase === 'ready' && workbenchLang() !== locale.ui);
   const wanted = $derived(st?.places[source]?.active ?? null);
 
   onMount(() => {
     void (async () => {
       try {
-        const mod = await import('../../lib/vscode/workbench');
+        const mod = await loadWorkbench(locale.ui);
         await mod.workbench(src, name, app.settings.editorFontSize);
         if (!alive) return;
         // In a pane: a press on the workbench makes it active, a hover shows its ×, as anywhere in a pane.
@@ -57,6 +65,7 @@
         );
         wb = mod;
         phase = 'ready';
+        await reopen(mod);
       } catch (e) {
         failure = String(e);
         phase = 'failed';
@@ -98,6 +107,31 @@
       .catch((e) => app.toast(String(e), 'error'));
   });
 
+  /** The tabs of its project kept by a reload for the language, opened again, the one shown last. */
+  async function reopen(mod: NonNullable<typeof wb>) {
+    const tabs = reopening.tabs.filter((x) => x.projectId === project.id);
+    reopening.tabs = [];
+    for (const tab of tabs) {
+      const at = { projectId: tab.projectId, agentId: sourceAgent(tab.source) };
+      await mod.workbench(at, folderName(tab.source), app.settings.editorFontSize);
+      await mod.openFile(at, tab.path);
+    }
+  }
+
+  // « Taille du texte de l'éditeur », changed: at once.
+  $effect(() => {
+    const size = app.settings.editorFontSize;
+    if (phase === 'ready') wb?.setFontSize(size);
+  });
+
+  /** The window reloaded for VS Code to speak Escouade's language: the modified files asked about first, the tabs kept. */
+  function reloadForLanguage() {
+    void app.askUnsaved(viewUnsaved.of(), () => {
+      if (wb) keepTabs(wb.openTabs());
+      page.reload();
+    });
+  }
+
   // Its pane made active from the keyboard (Ctrl+Alt+arrow): the view takes the keyboard.
   $effect(() => {
     if (!app.paneFocus) return;
@@ -122,7 +156,14 @@
       git={app.git[project.id]}
       onpick={(s) => app.openEditor({ projectId: project.id, source: s })}
     />
-    <span class="what">{t('editor.vscode.what')}</span>
+    {#if otherLang}
+      <span class="lang-note" data-testid="vscode-lang-note">{t('editor.vscode.langNote')}</span>
+      <button class="btn reload" data-testid="vscode-reload" use:tip={t('editor.vscode.reloadTip')} onclick={reloadForLanguage}
+        >{t('editor.vscode.reload')}</button
+      >
+    {:else}
+      <span class="what">{t('editor.vscode.what')}</span>
+    {/if}
   </header>
   <div class="vscode-place" bind:this={place}></div>
   {#if phase === 'failed'}
@@ -177,8 +218,17 @@
     display: inline-flex;
     transform: rotate(180deg);
   }
-  .vscode-bar .what {
+  .vscode-bar .what,
+  .vscode-bar .lang-note {
     margin-left: auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .vscode-bar .reload {
+    flex: none;
+    color: var(--p-ink);
   }
   /* In a pane, its × stands at the bar's right end. */
   :global(.pane) .vscode-bar {

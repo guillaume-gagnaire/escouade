@@ -33,6 +33,7 @@
     "@codingame/monaco-vscode-javascript-default-extension": "37.6.1",
     "@codingame/monaco-vscode-json-default-extension": "37.6.1",
     "@codingame/monaco-vscode-keybindings-service-override": "37.6.1",
+    "@codingame/monaco-vscode-language-pack-fr": "37.6.1",
     "@codingame/monaco-vscode-languages-service-override": "37.6.1",
     "@codingame/monaco-vscode-lifecycle-service-override": "37.6.1",
     "@codingame/monaco-vscode-log-service-override": "37.6.1",

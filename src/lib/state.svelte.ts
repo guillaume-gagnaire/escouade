@@ -18,6 +18,7 @@ import { diskChanged } from './disk-changes';
 import type { DocsSpaceId } from './docs';
 import { basename, isAbsPath, relPath } from './format';
 import { setLang, t } from './i18n';
+import { reopening, takeTabs } from './vscode/load';
 import { shownAgents, sidebarItems, type SidebarItem } from './sidebar';
 import { dictation } from './dictation.svelte';
 import { conversation } from './conversation.svelte';
@@ -873,9 +874,22 @@ class AppState {
     this.early = null;
     for (const e of early) this.onEvent(e);
     this.ready = true;
+    void this.reopenView();
     setInterval(() => (this.now = Date.now()), 1000);
     // The conversations out of sight leave the window's memory after a while, read again when shown.
     setInterval(() => releaseIdle(Date.now(), (id) => this.atWork(id)), 60_000);
+  }
+
+  /**
+   * The VS Code view's tabs, kept when the window was reloaded for VS Code to speak Escouade's new language (ESC-472):
+   * the editor opened again on the tab shown last, the view opening the others of its project (`reopening`).
+   */
+  private async reopenView() {
+    const tabs = takeTabs().filter((t) => this.projects.some((p) => p.id === t.projectId));
+    const last = tabs.at(-1);
+    if (!last) return;
+    reopening.tabs = tabs.filter((t) => t.projectId === last.projectId);
+    await this.openEditor({ projectId: last.projectId, source: last.source });
   }
 
   /** The languages the backend resolved: the interface switches to its own at once, without reloading. */

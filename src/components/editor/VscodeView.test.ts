@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
+import { page, REOPEN_KEY, reopening } from '../../lib/vscode/load';
 import { viewUnsaved } from '../../lib/vscode/unsaved.svelte';
 import { agent, fakeBackend, project, resetApp } from '../../test/ipc';
 import VscodeView from './VscodeView.svelte';
@@ -15,8 +16,13 @@ const wb = vi.hoisted(() => ({
   openFile: vi.fn(async () => {}),
   focus: vi.fn(async () => {}),
   hasTabs: vi.fn(() => false),
+  setFontSize: vi.fn(),
+  openTabs: vi.fn(() => [{ projectId: 'p1', source: 'project', path: 'src/app.ts' }]),
 }));
 vi.mock('../../lib/vscode/workbench', () => wb);
+// The French texts of VS Code (lib/vscode/load.ts): not looked at here.
+vi.mock('@codingame/monaco-vscode-language-pack-fr/translations/main.i18n.json.js', () => ({ default: [] }));
+vi.mock('@codingame/monaco-vscode-language-pack-fr', () => ({}));
 
 const PROJECT = { projectId: 'p1', agentId: null };
 
@@ -33,6 +39,8 @@ describe('VscodeView', () => {
     app.settings.editorFontSize = 15;
     for (const f of Object.values(wb)) f.mockClear();
     wb.hasTabs.mockReturnValue(false);
+    viewUnsaved.set([]);
+    app.modal = null;
     // A file opened is a tab, as in the workbench.
     wb.openFile.mockImplementation(async () => void wb.hasTabs.mockReturnValue(true));
   });
@@ -115,5 +123,55 @@ describe('VscodeView', () => {
     render(VscodeView, { project: project() });
     expect(await screen.findByRole('alert')).toHaveTextContent('La vue VS Code n’a pas démarré : Error: boom');
     expect(wb.attach).not.toHaveBeenCalled();
+  });
+
+  it('takes « Taille du texte de l’éditeur » at once', async () => {
+    await app.openEditor({ projectId: 'p1', source: 'project' });
+    render(VscodeView, { project: project() });
+    await waitFor(() => expect(wb.setFontSize).toHaveBeenCalledWith(15));
+    app.settings.editorFontSize = 18;
+    await waitFor(() => expect(wb.setFontSize).toHaveBeenLastCalledWith(18));
+  });
+
+  it('offers to reload the window when Escouade changes language, the files modified asked about first, its tabs kept', async () => {
+    const reload = vi.spyOn(page, 'reload').mockImplementation(() => {});
+    await app.openEditor({ projectId: 'p1', source: 'project' });
+    render(VscodeView, { project: project() });
+    await waitFor(() => expect(wb.attach).toHaveBeenCalled());
+    // Loaded in French: nothing to say.
+    expect(screen.queryByTestId('vscode-lang-note')).toBeNull();
+    setLang('en');
+    expect(await screen.findByTestId('vscode-lang-note')).toHaveTextContent('VS Code changes language when the window reloads.');
+    viewUnsaved.set([{ projectId: 'p1', source: 'project', path: 'src/app.ts', uri: 'file:///c:/code/demo-api/src/app.ts' }]);
+    await userEvent.click(screen.getByTestId('vscode-reload'));
+    // Asked first, as any close: nothing reloaded until it is answered.
+    expect(app.modal).toMatchObject({ kind: 'confirm', confirm: 'Save' });
+    expect(reload).not.toHaveBeenCalled();
+    viewUnsaved.set([]);
+    app.modal = null;
+    await userEvent.click(screen.getByTestId('vscode-reload'));
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(sessionStorage.getItem(REOPEN_KEY) ?? '[]')).toEqual([{ projectId: 'p1', source: 'project', path: 'src/app.ts' }]);
+    sessionStorage.removeItem(REOPEN_KEY);
+    // Back in French: the note goes.
+    setLang('fr');
+    await waitFor(() => expect(screen.queryByTestId('vscode-lang-note')).toBeNull());
+    reload.mockRestore();
+  });
+
+  it('opens again the tabs kept by a reload, the one shown last', async () => {
+    reopening.tabs = [
+      { projectId: 'p1', source: 'a1', path: 'src/b.ts' },
+      { projectId: 'p1', source: 'project', path: 'src/app.ts' },
+    ];
+    await app.openEditor({ projectId: 'p1', source: 'project' });
+    render(VscodeView, { project: project() });
+    await waitFor(() => expect(wb.openFile).toHaveBeenCalledTimes(2));
+    expect(wb.openFile.mock.calls.map((c) => c.slice(0, 2))).toEqual([
+      [{ projectId: 'p1', agentId: 'a1' }, 'src/b.ts'],
+      [PROJECT, 'src/app.ts'],
+    ]);
+    expect(wb.workbench).toHaveBeenCalledWith({ projectId: 'p1', agentId: 'a1' }, expect.stringContaining('refacto-auth'), 15);
+    expect(reopening.tabs).toEqual([]);
   });
 });

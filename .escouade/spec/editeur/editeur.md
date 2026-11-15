@@ -2,8 +2,8 @@
 title: "Éditeur"
 subject: "Éditeur"
 sources: ["docs/SPEC.md","docs/EDITOR-STUDY.md","docs/TODO-2.3.md"]
-tickets: ["ESC-447","ESC-463","ESC-464"]
-decisions: [170,172,176]
+tickets: ["ESC-447","ESC-463","ESC-464","ESC-472"]
+decisions: [170,172,176,182]
 compared: "2026-10-30T05:39:53+01:00"
 gaps: [{"text":"La spec dit que le double-clic sur la poignée ramène la colonne des fichiers à 240 px. Le code revient à 200 px (TREE_NARROW) quand la zone de l'éditeur fait 904 px ou moins, et à 240 px seulement au-delà.","code":["src/lib/editor/layout.ts","src/components/editor/EditorView.svelte"]}]
 order: 25
@@ -11,9 +11,9 @@ order: 25
 
 ## Ce que c'est
 
-Le mode éditeur prend la zone principale d'un projet, ou un volet de l'écran partagé, pour lire et modifier le code d'une source : la branche du projet ou le worktree d'un agent. Depuis la 2.3 (ESC-447), c'est la vue de VS Code : son plan de travail (`@codingame/monaco-vscode-api`, épinglé à une version, VS Code 1.138), avec son explorateur, ses onglets, son éditeur, sa recherche et sa palette, aux couleurs d'Escouade, sur des fichiers lus et écrits par le cœur. Il remplace l'éditeur en CodeMirror des versions précédentes, sans réglage pour choisir.
+Le mode éditeur prend la zone principale d'un projet, ou un volet de l'écran partagé, pour lire et modifier le code d'une source : la branche du projet ou le worktree d'un agent. Depuis la 2.3 (ESC-447), c'est la vue de VS Code : son plan de travail (`@codingame/monaco-vscode-api`, épinglé à une version, VS Code 1.138), avec son explorateur, ses onglets, son éditeur, sa recherche et sa palette, aux couleurs, aux polices et dans la langue d'Escouade, sur des fichiers lus et écrits par le cœur. Il remplace l'éditeur en CodeMirror des versions précédentes, sans réglage pour choisir.
 
-Ce que l'ancien éditeur faisait et que la vue ne fait pas encore revient par les tickets de l'éditeur de la 2.3 (voir `docs/EDITOR-STUDY.md`, §7) : A4 (thème et polices suivis en direct, langue), A5 (extensions), A7 (marques des changements par rapport à la base, comparaison avec le disque), A1 (serveurs de langage). Les pages *Navigation de code*, *Recherche dans les fichiers* et *Voir les changements* décrivent l'ancien éditeur jusqu'à ces tickets.
+Ce que l'ancien éditeur faisait et que la vue ne fait pas encore revient par les tickets de l'éditeur de la 2.3 (voir `docs/EDITOR-STUDY.md`, §7) : A5 (extensions), A7 (marques des changements par rapport à la base, comparaison avec le disque), A1 (serveurs de langage). Les pages *Navigation de code*, *Recherche dans les fichiers* et *Voir les changements* décrivent l'ancien éditeur jusqu'à ces tickets.
 
 ## Comportement
 
@@ -26,6 +26,15 @@ Ce que l'ancien éditeur faisait et que la vue ne fait pas encore revient par le
 - Une seule vue VS Code par fenêtre : seule dans la zone de travail ou dans un volet (voir *Écran partagé*). Elle se déplace, se redimensionne, se ferme et se rouvre en gardant ses onglets et leurs modifications. Ses groupes d'onglets peuvent se mettre côte à côte dans la colonne. Un clic dans la vue, ou le focus qui y entre, active son volet ; son survol montre le ×.
 - La barre au-dessus : « Conversation », le sélecteur de source, « VS Code ». Le menu de la source s'ouvre par-dessus la vue.
 - À la première ouverture dans la fenêtre, « Chargement de la vue VS Code… » ; si elle ne démarre pas : « La vue VS Code n'a pas démarré : <raison> ».
+
+### Le thème, les polices et la langue
+
+- **Le thème** : la vue prend les couleurs d'Escouade, celles de ses jetons (`src/app.css`) tels que la fenêtre les affiche, sur l'éditeur, la coloration du code, l'arborescence, les onglets, les barres, les menus, la palette, les infobulles, la recherche dans le fichier et ses occurrences, les erreurs et les avertissements. Chaque couleur de VS Code vient d'un jeton, parfois à une transparence : la sélection, les occurrences et la ligne de l'occurrence sont à la couleur du projet.
+- Elle suit tout de suite, sans se recharger ni perdre ses onglets, sa recherche ou ses modifications : « Thème » (Clair, Sombre, ou Système et ses changements), la couleur du projet montré (une fois sa transition finie), « Couleurs » (le thème d'un plugin, comme *Contraste élevé*, et le retour à celles d'Escouade). Un jeton dont la valeur change, d'où que ce soit, change la vue.
+- Le contraste reste lisible dans les deux thèmes, pour chaque couleur de projet : le code et sa coloration atteignent 4,5:1 sur l'éditeur, sa ligne courante, une sélection et une occurrence ; un commentaire garde 4,5:1 sur l'éditeur et 3:1 sous une sélection ou une occurrence ; les libellés des onglets, de l'arborescence, des barres, des menus, de la palette et des infobulles 4,5:1 ; le curseur, la bordure de l'occurrence, les traits d'erreur et d'avertissement 3:1.
+- **Les polices** : l'interface de la vue dans celle de l'app (Inter), le code dans celle du code d'Escouade (JetBrains Mono), à l'épaisseur normale, avec ses ligatures comme ailleurs dans l'app. La taille du code est « Taille du texte de l'éditeur », suivie tout de suite quand elle change ; « Zoom de l'interface » agrandit la vue avec le reste.
+- **La langue** : l'interface de VS Code (menus, palette, explorateur, questions, messages) est en français quand Escouade est en français, en anglais sinon. VS Code lit ses textes quand il se charge : la vue se charge dans la langue d'Escouade de ce moment-là, une fois par fenêtre.
+- Quand la langue d'Escouade change, la vue ouverte le dit dans sa barre : « VS Code change de langue au rechargement de la fenêtre. », avec « Recharger ». « Recharger » demande d'abord pour les fichiers modifiés dans la vue (voir *Fermer avec des modifications non enregistrées* ; « Annuler » ne recharge rien), puis recharge la fenêtre : la vue revient dans la nouvelle langue, sur le même projet, ses onglets de ce projet rouverts, celui qui était montré au premier plan. Sans « Recharger », la vue garde sa langue jusqu'au prochain démarrage ou rechargement.
 
 ### Les liens des conversations
 
@@ -43,7 +52,7 @@ Ce que l'ancien éditeur faisait et que la vue ne fait pas encore revient par le
 
 ### Les touches de la vue et celles d'Escouade
 
-Quand la vue a le focus, la règle est : **Escouade garde les touches qui mènent ailleurs dans l'app ou ouvrent une de ses fenêtres ; toutes les autres sont à VS Code.** Une touche n'est jamais aux deux, et ne se perd pas en silence : celles qu'Escouade garde sont retirées des raccourcis de VS Code (ses menus et sa palette ne les affichent plus), et les commandes de VS Code qu'elles lançaient restent dans sa palette (`Ctrl+Maj+P`) par leur nom.
+Quand la vue a le focus, la règle est : **Escouade garde les touches qui mènent ailleurs dans l'app ou ouvrent une de ses fenêtres ; toutes les autres sont à VS Code.** Une touche n'est jamais aux deux, et ne se perd pas en silence : celles qu'Escouade garde sont retirées des raccourcis de VS Code (ses menus et sa palette ne les affichent plus), et les commandes de VS Code qu'elles lançaient restent dans sa palette (`Ctrl+Maj+P`) par leur nom, en français comme en anglais.
 
 Escouade garde :
 
@@ -68,10 +77,11 @@ VS Code garde tout le reste, dont `Ctrl+S` (enregistrer), `Ctrl+F` et `Ctrl+H` (
 
 Rien ne se ferme sans demander quand un fichier est modifié dans la vue, comme VS Code : « Enregistrer » (« Tout enregistrer » pour plusieurs), « Ne pas enregistrer », « Annuler ». Le titre nomme le fichier (« Enregistrer les modifications de « f1.ts » ? ») ou leur nombre, avec leurs noms. « Enregistrer » écrit par le cœur puis ferme ; un fichier qui ne s'enregistre pas (un conflit, un refus du cœur) laisse tout ouvert : « Un fichier n'a pas été enregistré : rien n'est fermé. Regarde-le dans la vue VS Code. » « Ne pas enregistrer » relit les fichiers depuis le disque, puis ferme. « Annuler » ne ferme rien.
 
-- **Un onglet** : la question de VS Code (« Do you want to save the changes you made to f1.ts? », Save, Don't Save, Cancel).
+- **Un onglet** : la question de VS Code, dans sa langue (« Voulez-vous enregistrer les modifications apportées à f1.ts ? », « Enregistrer », « Ne pas enregistrer », « Annuler » ; en anglais, « Do you want to save the changes you made to f1.ts? », Save, Don't Save, Cancel).
 - **La vue**, par « Conversation » : les fichiers du projet modifiés dans la vue. Sans fichier modifié, elle se ferme tout de suite.
 - **Son volet**, par son × ou `Ctrl+Maj+W` : les fichiers du projet modifiés dans la vue.
 - **Un projet**, une fois sa fermeture confirmée : ses fichiers modifiés dans la vue ; « Annuler » le garde. Fermé, ses dossiers et ses onglets quittent la vue.
+- **La fenêtre rechargée pour la langue** (« Recharger » de la barre de la vue) : tous les fichiers modifiés dans la vue.
 - **Escouade**, par « Quitter » : « Quitter Escouade ? », « N fichiers ne sont pas enregistrés dans l'éditeur : leurs modifications seront perdues si tu ne les enregistres pas. », « Enregistrer et quitter », « Quitter sans enregistrer », « Annuler ». Fermer la fenêtre par son × la range dans la barre des tâches : rien ne se perd, la vue garde ses onglets.
 - « Recharger l'interface » (barre des tâches) compte aussi les fichiers modifiés dans la vue : le système demande avant de recharger, la page rechargée les perdant.
 - Passer à un autre contenu (le Kanban, un autre agent, un autre projet) ne ferme pas la vue : elle garde ses modifications, et « Quitter » les compte.
@@ -79,7 +89,7 @@ Rien ne se ferme sans demander quand un fichier est modifié dans la vue, comme 
 
 ### Mouvement réduit
 
-- Avec `prefers-reduced-motion`, le curseur de la vue ne clignote pas, suivi en direct.
+- Avec `prefers-reduced-motion`, le curseur de la vue ne clignote pas, suivi en direct. Le thème change sans transition propre à la vue : elle prend la couleur du projet une fois celle de la fenêtre arrivée.
 
 ### Sources
 
@@ -108,18 +118,19 @@ La règle est vérifiée sur le chemin écrit et sur le chemin réel (liens suiv
 
 - Le cœur pousse à la vue les chemins que son observateur de fichiers a vus changer (plus de 512 entre deux lectures : « tout a pu changer »). Un fichier ouvert et non modifié qu'un agent a changé se relit tout de suite ; les fichiers ajoutés ou supprimés apparaissent ou disparaissent ensuite dans l'explorateur.
 - Cela vaut quel que soit le nom par lequel le dossier du projet a été ouvert : nom court de Windows (`RUNNER~1`), lien ou jonction, `/var` de macOS (lien vers `/private/var`). Le dossier que sert la vue et celui que surveille l'observateur sont tous deux nommés comme le disque les nomme (liens suivis, noms longs, sans le `\\?\` de Windows) ; un dossier qui n'existe pas encore, ou sur un partage, garde le nom donné (ESC-463).
-- Un fichier modifié dans la vue et changé sur le disque n'est pas relu. `Ctrl+S` montre alors le conflit de VS Code (« The content of the file is newer… », avec « Compare » et « Overwrite ») et n'écrit rien. « Overwrite » écrit par-dessus.
+- Un fichier modifié dans la vue et changé sur le disque n'est pas relu. `Ctrl+S` montre alors le conflit de VS Code, dans sa langue (« L'enregistrement de … a échoué : le contenu du fichier est plus récent… », avec « Remplacer » ; en anglais « The content of the file is newer… », « Overwrite ») et n'écrit rien. « Remplacer » écrit par-dessus.
 - Le cœur refuse aussi une écriture quand le fichier a changé entre la vérification de VS Code et l'écriture (`changed`), ou a disparu (`deleted`).
 
 ## Réglages
 
-- Taille du texte : Réglages › Général › Avancé › « Taille du texte de l'éditeur », lue à l'ouverture de la vue (voir *Réglages*).
+- Taille du texte : Réglages › Général › Avancé › « Taille du texte de l'éditeur », suivie tout de suite par la vue ouverte (voir *Réglages*).
+- « Thème », « Couleurs » et « Langue de l'interface » (Réglages › Général) : suivis par la vue, la langue au rechargement de la fenêtre (voir *Le thème, les polices et la langue*).
 - Les « Fichiers copiés dans les worktrees » et le « Dossier des worktrees » du projet décident des fichiers montrés et des dossiers protégés (voir *Git & fichiers*).
 
 ## Limites
 
-- Les messages propres à VS Code sont en anglais (le pack de langue vient avec A4), dont sa question avant de fermer un onglet. Le thème d'Escouade est lu à l'ouverture de la vue.
+- La vue ne change de langue qu'au rechargement de la fenêtre ; rechargée, elle rouvre les onglets du projet montré, pas ceux d'un autre projet.
 - Pas encore de serveurs de langage (A1) ni d'extensions (A5) : la vue n'a que les extensions déclaratives qu'elle embarque (langages, grammaires, thèmes). Une extension qui prendrait des touches (A5) passera par la même règle.
-- Un fichier sans titre (« New Untitled Text File » de la palette de VS Code) n'est compté par aucune question d'Escouade.
-- L'installeur grossit d'environ 3,3 Mo ; ces fichiers ne se chargent qu'à la première ouverture de la vue.
+- Un fichier sans titre (« Nouveau fichier texte sans titre » de la palette de VS Code) n'est compté par aucune question d'Escouade.
+- L'installeur grossit d'environ 3,3 Mo pour la vue, plus 0,35 Mo pour sa traduction française (1,9 Mo avant compression) ; ces fichiers ne se chargent qu'à la première ouverture de la vue, la traduction seulement en français.
 - Sur un partage réseau sans corbeille, Windows peut supprimer pour de bon.

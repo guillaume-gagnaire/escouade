@@ -34,6 +34,10 @@ export default {
     what: 'VS Code',
     loading: 'Chargement de la vue VS Code…',
     failed: 'La vue VS Code n’a pas démarré : {error}',
+    /** The language of Escouade changed after the view started (ESC-472): VS Code takes it when the window reloads. */
+    langNote: 'VS Code change de langue au rechargement de la fenêtre.',
+    reload: 'Recharger',
+    reloadTip: 'Recharger la fenêtre : les fichiers modifiés sont demandés avant, les onglets se rouvrent.',
   },
 
   /** What is asked before closing what shows files modified in the VS Code view (ESC-464): the view, its pane, a project, the app. */

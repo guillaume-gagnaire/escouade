@@ -1226,3 +1226,15 @@ kbd,
   -webkit-user-select: none !important;
   user-select: none !important;
 }
+
+/* The VS Code view (ESC-472): its interface in the app's font (VS Code gives its parts the system's), with Inter's
+   features as the body; its editor takes the app's code font from its settings (lib/vscode/workbench.ts). Its icons keep
+   their own font. */
+#vscode-layer .monaco-workbench,
+#vscode-layer .monaco-workbench-part,
+#vscode-layer .monaco-workbench .monaco-menu,
+#vscode-layer .monaco-workbench .quick-input-widget,
+#vscode-layer .monaco-workbench .monaco-hover {
+  font-family: var(--font);
+  font-feature-settings: 'cv11', 'ss03';
+}

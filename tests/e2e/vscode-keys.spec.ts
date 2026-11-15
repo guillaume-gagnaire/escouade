@@ -86,13 +86,14 @@ test('the keyboard in the VS Code view: the keys of each, Ctrl+P on the core’s
   await expect(quick).toBeVisible();
   await expect(quick.locator('input')).toHaveValue('>');
   // A key the app keeps is no longer VS Code's: its palette runs the command by its name, without showing Ctrl+J.
+  // In French, as the app (ESC-472): its commands are found by their English names too.
   await page.keyboard.type('Toggle Panel Visibility');
-  const row = quick.locator('.monaco-list-row', { hasText: 'Toggle Panel Visibility' }).first();
+  const row = quick.locator('.monaco-list-row', { hasText: 'Activer/désactiver la visibilité du panneau' }).first();
   await expect(row).toBeVisible();
   await expect(row).not.toContainText('Ctrl+J');
   // Ctrl+B, kept by VS Code, still shows on its command.
   await quick.locator('input').fill('>Toggle Primary Side Bar Visibility');
-  await expect(quick.locator('.monaco-list-row', { hasText: 'Toggle Primary Side Bar Visibility' }).first()).toContainText('Ctrl+B');
+  await expect(quick.locator('.monaco-list-row').first()).toContainText('Ctrl+B');
   await page.keyboard.press('Escape');
   await expect(quick).toBeHidden();
 
@@ -173,7 +174,7 @@ test('the closes asked when files are modified: a tab, the view, a project', asy
   await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
   await openInExplorer(page, 'src/f1.ts');
 
-  // A tab: VS Code's own question, « Don't Save » gives up, « Save » writes through the core.
+  // A tab: VS Code's own question, « Ne pas enregistrer » gives up, « Enregistrer » writes through the core.
   await editorLines(page).click();
   await page.keyboard.press('Control+End');
   await page.keyboard.type('// un');
@@ -181,11 +182,8 @@ test('the closes asked when files are modified: a tab, the view, a project', asy
   await page.keyboard.press('Control+F4');
   const vsAsk = workbench(page).locator('.monaco-dialog-box');
   await expect(vsAsk).toBeVisible();
-  await expect(vsAsk).toContainText('Do you want to save the changes you made to f1.ts?');
-  await vsAsk
-    .getByRole('button', { name: 'Don’t Save' })
-    .or(vsAsk.getByRole('button', { name: "Don't Save" }))
-    .click();
+  await expect(vsAsk).toContainText('Voulez-vous enregistrer les modifications apportées à f1.ts ?');
+  await vsAsk.getByRole('button', { name: 'Ne pas enregistrer' }).click();
   await expect.poll(() => vscodeTabs(page)).not.toContain('f1.ts');
   expect(fs.readFileSync(f1, 'utf8')).toBe(before);
   await openInExplorer(page, 'src/f1.ts');
@@ -193,7 +191,7 @@ test('the closes asked when files are modified: a tab, the view, a project', asy
   await page.keyboard.press('Control+End');
   await page.keyboard.type('// deux');
   await page.keyboard.press('Control+F4');
-  await vsAsk.getByRole('button', { name: 'Save', exact: true }).click();
+  await vsAsk.getByRole('button', { name: 'Enregistrer', exact: true }).click();
   await expect.poll(() => fs.readFileSync(f1, 'utf8')).toContain('// deux');
 
   // The view, by « Conversation »: asked, « Annuler » keeps it; « Enregistrer » saves, closes, and the keyboard goes to

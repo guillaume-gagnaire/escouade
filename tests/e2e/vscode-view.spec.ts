@@ -118,10 +118,10 @@ test('the VS Code view: the project’s editor, on the core’s files, a file ch
   const lines = wb.locator('.editor-instance .monaco-editor .view-lines').first();
   await expect(lines).toContainText('export const answer = 42;');
 
-  // A binary file, read in bytes: VS Code shows it as one, without error.
+  // A binary file, read in bytes: VS Code shows it as one, without error (in French, as the app: ESC-472).
   await item('assets').click();
   await item('logo.png').click();
-  await expect(wb.getByText(/is either binary or uses an unsupported text encoding/)).toBeVisible();
+  await expect(wb.getByText(/c’est un fichier binaire ou qu’il utilise un encodage de texte non pris en charge/)).toBeVisible();
 
   // 3. A file an agent changed on disk is read again, pushed by the core's watcher.
   await item('f1.ts').click();
@@ -150,15 +150,15 @@ test('the VS Code view: the project’s editor, on the core’s files, a file ch
   await page.waitForTimeout(1500);
   await expect(lines).toContainText('(mien)');
   await page.keyboard.press('Control+s');
-  const toast = wb.locator('.notifications-toasts .notification-toast', { hasText: 'The content of the file is newer' });
+  const toast = wb.locator('.notifications-toasts .notification-toast', { hasText: 'le contenu du fichier est plus récent' });
   await expect(toast).toBeVisible({ timeout: 15_000 });
   expect(fs.readFileSync(f1, 'utf8')).toBe('export const byTheAgent = true;\n');
   if (SHOTS) {
     fs.mkdirSync(SHOTS, { recursive: true });
     await page.screenshot({ path: path.join(SHOTS, 'vscode-conflict.png') });
   }
-  // « Overwrite »: mine, written over the agent's.
-  await toast.getByRole('button', { name: 'Overwrite' }).click();
+  // « Remplacer » (Overwrite): mine, written over the agent's.
+  await toast.getByRole('button', { name: 'Remplacer' }).click();
   await expect.poll(() => fs.readFileSync(f1, 'utf8')).toContain('(mien)');
   await expect.poll(() => tabs(page)).toContain('f1.ts');
 

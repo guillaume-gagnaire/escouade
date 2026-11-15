@@ -852,13 +852,13 @@ test('a file is created from the editor’s tree, folders included, then written
   await addProject(page, app.repo);
   await page.getByRole('button', { name: 'Parcourir' }).click();
   await expect(workbench(page)).toBeVisible({ timeout: 60_000 });
-  // VS Code's own « New File... », from its explorer's header, at the root (its folder's row selected): the path names
-  // the folders to make.
+  // VS Code's own « Nouveau fichier... » (in French, as the app: ESC-472), from its explorer's header, at the root (its
+  // folder's row selected): the path names the folders to make.
   await explorerRow(page, 'src').waitFor();
   await workbench(page).locator('.explorer-folders-view .monaco-list-row[aria-level="1"]').first().click();
   const header = workbench(page).locator('.explorer-viewlet .pane-header').first();
   await header.hover();
-  await header.locator('.action-label[aria-label^="New File"]').click();
+  await header.locator('.action-label[aria-label^="Nouveau fichier"]').click();
   const field = workbench(page).locator('.explorer-folders-view .monaco-inputbox input');
   // (A name already taken is VS Code's own refusal; the core refuses to write over a file anyway.)
   await field.fill('src/lib/util.ts');

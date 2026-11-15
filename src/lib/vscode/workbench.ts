@@ -7,7 +7,8 @@
 //
 // - The files are the core's (`fs-provider.ts`): each source shown (the project's checkout, an agent's worktree) is a
 //   folder of its workspace, and the changes the core's watcher tells are VS Code's file changes.
-// - The theme is Escouade's (`theme.ts`), read when it starts.
+// - The theme is Escouade's (`theme.ts`), followed as it changes (`followTheme`), and its fonts (`fontSettings`); its
+//   language is the one it was loaded in (`load.ts`).
 // - No extension host of its own: the default extensions it carries are declarative (languages, grammars, themes), so
 //   that the page needs neither `unsafe-eval` nor an iframe. The extensions of Open VSX (A5), the language servers
 //   (A1, ESC-446: `onFolder` tells it each folder) and the Node extension host (N2) come later.
@@ -79,7 +80,7 @@ import { api } from '../ipc';
 import { IS_MAC } from '../platform';
 import { EscouadeFileSystem, type Source } from './fs-provider';
 import { appTakes, utf16Column } from './keys';
-import { isDark, readTokens, vscodeTheme } from './theme';
+import { THEME_IDS, readTokens, themeSettings, vscodeTheme } from './theme';
 import { type Unsaved, viewUnsaved } from './unsaved.svelte';
 
 export type { Source } from './fs-provider';
@@ -183,29 +184,108 @@ function follow() {
   frame = requestAnimationFrame(follow);
 }
 
-/** Escouade's theme as a theme extension. */
+/** Where the tokens are read: the root, which carries the project's tint and the theme. */
+const tokenRoot = () => document.querySelector('.app, #app') ?? document.documentElement;
+
+/**
+ * Escouade's two themes, dark and light, as a theme extension: VS Code's defaults of their kind under the colours they
+ * start with. The colours are then the user's customizations (`themeSettings`), laid again as the tokens change.
+ */
 async function registerTheme() {
-  const tokens = readTokens(document.querySelector('.app, #app') ?? document.documentElement);
-  const dark = isDark(tokens);
+  const tokens = readTokens(tokenRoot());
   const ext = registerExtension(
     {
       name: 'escouade-theme',
       publisher: 'escouade',
       version: '1.0.0',
       engines: { vscode: '*' },
-      contributes: { themes: [{ id: 'Escouade', label: 'Escouade', uiTheme: dark ? 'vs-dark' : 'vs', path: './escouade.json' }] },
+      contributes: {
+        themes: [
+          { id: THEME_IDS.dark, label: THEME_IDS.dark, uiTheme: 'vs-dark', path: './escouade-dark.json' },
+          { id: THEME_IDS.light, label: THEME_IDS.light, uiTheme: 'vs', path: './escouade-light.json' },
+        ],
+      },
     },
     ExtensionHostKind.LocalProcess,
   );
-  const theme = new Blob([JSON.stringify(vscodeTheme(tokens, dark))], { type: 'application/json' });
-  ext.registerFileUrl('./escouade.json', URL.createObjectURL(theme));
+  for (const dark of [true, false]) {
+    const theme = new Blob([JSON.stringify(vscodeTheme(tokens, dark))], { type: 'application/json' });
+    ext.registerFileUrl(dark ? './escouade-dark.json' : './escouade-light.json', URL.createObjectURL(theme));
+  }
   await ext.whenReady();
+}
+
+/** The editor's font: the app's code font (`--mono`), its weight and its ligatures, at `size` (the WebView's zoom over it). */
+export function fontSettings(size: number, root: Element = document.documentElement) {
+  const mono = getComputedStyle(root).getPropertyValue('--mono').trim();
+  return {
+    'editor.fontFamily': mono || "'JetBrains Mono', ui-monospace, Consolas, monospace",
+    'editor.fontSize': size,
+    'editor.fontWeight': 'normal',
+    // As the app's code (its diffs, its terminals' font): JetBrains Mono's contextual ligatures, which the browser shows.
+    'editor.fontLigatures': true,
+  };
+}
+
+/** The settings of the theme and the fonts the view was given last, as written: written again only when they change. */
+let laidLook = '';
+
+/** Lays `settings` on the user's configuration, those that changed. */
+async function laySettings(settings: Record<string, unknown>) {
+  const cfg = vscode.workspace.getConfiguration();
+  for (const [key, value] of Object.entries(settings))
+    if (JSON.stringify(cfg.get(key)) !== JSON.stringify(value)) await cfg.update(key, value, vscode.ConfigurationTarget.Global);
+}
+
+/** The theme read again from the tokens, and laid if it changed: the colours of every part of the view at once. */
+async function retheme() {
+  if (!host) return;
+  const settings = { ...themeSettings(readTokens(tokenRoot())), ...fontSettings(fontSize) };
+  const key = JSON.stringify(settings);
+  if (key === laidLook) return;
+  laidLook = key;
+  await laySettings(settings);
+}
+
+/** How long `--p` glides from a project's colour to the next (src/app.css), after which the view takes it. */
+const GLIDE_MS = 750;
+
+/**
+ * Follows the window's theme (`data-theme`: Réglages, the system's), the tint of the project (`--p` on the root),
+ * a plugin's theme (`data-plugin-theme` and its sheet in the head), at once and once the tint has glided: no reload,
+ * the tabs kept.
+ */
+function followTheme() {
+  let soon = 0;
+  let late: ReturnType<typeof setTimeout> | undefined;
+  const changed = () => {
+    if (!soon) soon = requestAnimationFrame(() => ((soon = 0), void retheme()));
+    clearTimeout(late);
+    late = setTimeout(() => void retheme(), GLIDE_MS);
+  };
+  new MutationObserver(changed).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme', 'data-plugin-theme', 'style', 'class'],
+  });
+  new MutationObserver(changed).observe(document.head, { childList: true, subtree: true, characterData: true });
+  matchMedia('(prefers-color-scheme: light)').addEventListener('change', changed);
+}
+
+/** The editor's text size, « Taille du texte de l'éditeur » of the settings. */
+let fontSize = 13;
+
+/** « Taille du texte de l'éditeur » changed: the view takes it at once. */
+export function setFontSize(size: number) {
+  if (size === fontSize) return;
+  fontSize = size;
+  void retheme();
 }
 
 const fold = /Win|Mac/i.test(navigator.userAgent);
 const stillMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
-async function start(first: Source, name: string, fontSize: number): Promise<void> {
+async function start(first: Source, name: string, size: number): Promise<void> {
+  fontSize = size;
   window.MonacoEnvironment = {
     // Absolute: a worker started from a blob has no base to read a path from.
     getWorkerUrl: (_: string, label: string) =>
@@ -236,7 +316,6 @@ async function start(first: Source, name: string, fontSize: number): Promise<voi
   await initFile(WORKSPACE, JSON.stringify(<IStoredWorkspace>{ folders: [{ uri: uri.toString(), name }] }, null, 2));
   await initUserConfiguration(
     JSON.stringify({
-      'workbench.colorTheme': 'Escouade',
       'workbench.iconTheme': 'vs-seti',
       'workbench.startupEditor': 'none',
       'workbench.editor.enablePreview': false,
@@ -244,8 +323,6 @@ async function start(first: Source, name: string, fontSize: number): Promise<voi
       'window.menuBarVisibility': 'hidden',
       'workbench.layoutControl.enabled': false,
       'window.commandCenter': false,
-      'editor.fontFamily': "'JetBrains Mono', ui-monospace, Consolas, monospace",
-      'editor.fontSize': fontSize,
       'editor.minimap.enabled': false,
       // The caret stays still with prefers-reduced-motion, as the rest of the app (followed below).
       'editor.cursorBlinking': stillMotion.matches ? 'solid' : 'blink',
@@ -254,6 +331,8 @@ async function start(first: Source, name: string, fontSize: number): Promise<voi
       'telemetry.telemetryLevel': 'off',
       'update.mode': 'none',
       'security.workspace.trust.enabled': false,
+      ...themeSettings(readTokens(tokenRoot())),
+      ...fontSettings(fontSize),
     }),
   );
 
@@ -304,6 +383,8 @@ async function start(first: Source, name: string, fontSize: number): Promise<voi
     ExtensionHostKind.LocalProcess,
   ).setAsDefaultApi();
   await themeReady;
+  followTheme();
+  void retheme();
   await keepAppKeys();
   stillMotion.addEventListener('change', () => {
     void vscode.workspace
@@ -467,3 +548,14 @@ export async function forgetProject(projectId: string) {
 
 /** Whether the workbench was started in this page. */
 export const started = () => !!host;
+
+/** The tabs of the view, of the files of a source (its project's, an agent's), the one shown last. */
+export function openTabs(): { projectId: string; source: string; path: string }[] {
+  const tab = (t: vscode.Tab | undefined) => {
+    const at = t?.input instanceof vscode.TabInputText ? files?.sourceOf(t.input.uri) : undefined;
+    return at ? { projectId: at.source.projectId, source: at.source.agentId ?? 'project', path: at.rel } : null;
+  };
+  const active = vscode.window.tabGroups.activeTabGroup?.activeTab;
+  const all = vscode.window.tabGroups.all.flatMap((g) => g.tabs).filter((t) => t !== active);
+  return [...all, active].map(tab).filter((t) => t !== null);
+}

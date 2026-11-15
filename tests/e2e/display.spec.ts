@@ -213,7 +213,7 @@ test('the terminals and the editor have their own font size, set at once and fit
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
 
-  // The editor, VS Code's view (ESC-447), opens at that size. (Following a change of it while open is A4's.)
+  // The editor, VS Code's view (ESC-447), opens at that size (followed while it is open too: editor-look.spec, ESC-472).
   await page.getByRole('button', { name: 'Parcourir' }).click();
   await openInExplorer(page, 'src/app.ts');
   await expect(editorLines(page)).toContainText('const a = 1;');
