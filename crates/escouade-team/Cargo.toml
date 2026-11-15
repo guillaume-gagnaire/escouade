@@ -47,6 +47,8 @@ base64 = "0.22"
 getrandom = "0.3"
 thiserror = "2"
 log = "0.4"
+# The short code of « Ajouter un appareil » (§3.4): a PAKE, SPAKE2 on Ed25519 (RustCrypto), one try per connection.
+spake2 = "0.4"
 zeroize = { version = "1", features = ["derive"] }
 
 [dev-dependencies]

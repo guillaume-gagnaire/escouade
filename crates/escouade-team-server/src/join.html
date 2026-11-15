@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Rejoindre une équipe Escouade</title>
+<style>
+body{font:16px/1.5 system-ui,sans-serif;max-width:34rem;margin:4rem auto;padding:0 1rem;color:#1d1d1f;background:#fafafa}
+a.open{display:inline-block;margin:1rem 0;padding:.6rem 1rem;border-radius:8px;background:#3b5bdb;color:#fff;text-decoration:none}
+code{word-break:break-all}
+@media (prefers-color-scheme:dark){body{color:#ececec;background:#161616}}
+</style>
+</head>
+<body>
+<h1>Rejoindre une équipe Escouade</h1>
+<p>Ce lien d'invitation s'ouvre dans Escouade. Le secret qu'il porte, après le <code>#</code>, n'est jamais envoyé à ce serveur.</p>
+<p><a class="open" id="open" href="escouade://team/join">Ouvrir dans Escouade</a></p>
+<p>Escouade ne s'ouvre pas ? Copie le lien entier de cette page et colle-le dans Escouade, « Rejoindre une équipe ».</p>
+<script nonce="{nonce}">
+(function () {
+  var a = document.getElementById('open');
+  var link = 'escouade://team/join/' + location.host + location.pathname.replace(/^\/join/, '') + location.hash;
+  a.href = link;
+  if (location.hash) location.href = link;
+})();
+</script>
+</body>
+</html>

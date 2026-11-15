@@ -43,20 +43,33 @@ Ce que ça révèle (§3.8) : l'activité (qui écrit quand, sur combien de proj
 | Route | Session | Rôle |
 | --- | --- | --- |
 | `GET /healthz` | non | `ok`, si la base répond |
-| `POST /v1/enroll` `{token, public_key}` | non | inscrit un appareil avec un jeton à usage unique : celui d'`init` crée l'équipe |
+| `POST /v1/enroll` `{token, public_key}` | non | inscrit un appareil avec un jeton à usage unique : celui d'`init` crée l'équipe. Un jeton déjà servi est refusé en 409 `token_used` (« invitation déjà utilisée »), et ce second usage est noté pour les administrateurs |
 | `POST /v1/auth/challenge` `{device}` | non | un défi, pour un appareil connu et non révoqué |
 | `POST /v1/auth/session` `{device, challenge, signature}` | non | un jeton de session (`Authorization: Bearer …`) |
 | `GET /v1/devices` | oui | les appareils de l'équipe : id, clé publique, rôle, révoqué |
-| `POST /v1/devices/enrollments` `{expires_in?}` | administrateur | un jeton d'inscription pour un appareil de plus (24 h par défaut, 7 jours au plus) |
+| `POST /v1/devices/enrollments` `{expires_in?, token_hash?}` | administrateur | un jeton d'inscription pour un appareil de plus (24 h par défaut, 7 jours au plus). Avec `token_hash`, le serveur enregistre le SHA-256 d'un jeton que l'administrateur a fait lui-même (celui d'une invitation, dérivé du secret après le `#`, TS-3) et ne rend que sa durée |
+| `GET /v1/devices/enrollments/alerts` | administrateur | les jetons de l'équipe servis une seconde fois : leur SHA-256, quand ils ont servi, quand ils ont resservi |
+| `POST /v1/devices/{id}/role` `{role}` | administrateur | le rôle d'un appareil sur le serveur, tenu au pas du registre par les appareils des administrateurs ; le dernier administrateur ne devient jamais membre (409 `last_admin`) |
 | `POST /v1/devices/{id}/revoke` | administrateur, ou l'appareil lui-même | révoque : ses sessions et ses connexions en direct se ferment |
 | `POST /v1/team/stream` `{kind, epoch?, payload}` | oui | ajoute au flux d'équipe ; un `commit` doit être pour l'époque suivante |
 | `GET /v1/team/stream?since=n&limit=m` | oui | les entrées après `n`, une page au plus (`more` dit s'il en reste) |
 | `POST`, `GET /v1/projects/{id}/stream` | oui | de même pour un projet (des `message` seulement) |
 | `PUT`, `GET`, `DELETE /v1/files/{id}` | oui | un fichier chiffré, écrit une fois (409 s'il existe) |
 | `GET /v1/files/usage` | oui | les octets gardés, le quota, les tailles maximales |
+| `POST /v1/pair` `{message}` | oui | ouvre un créneau d'appairage (TS-3) avec le premier message du PAKE : ses trois caractères, la tête du code court ; 10 minutes |
+| `GET /v1/pair/{slot}` | non | le premier message, pour le nouvel appareil |
+| `POST /v1/pair/{slot}/try` `{message, confirm}` | non | l'unique essai du nouvel appareil ; un second est refusé en 409 `pair_tried` |
+| `GET /v1/pair/{slot}/try` | l'appareil du créneau | l'essai, 204 tant qu'il n'y en a pas |
+| `POST /v1/pair/{slot}/answer` `{sealed}`, `DELETE /v1/pair/{slot}` | l'appareil du créneau | la réponse scellée sous la clé du PAKE, ou la fermeture sur un mauvais code |
+| `GET /v1/pair/{slot}/answer` | non | la réponse, prise une fois (le créneau part avec) ; 204 tant qu'il n'y en a pas, 404 `pair_gone` quand il est fermé |
+| `GET /join/{id}` | non | la page d'un lien d'invitation ouvert dans un navigateur : son script lit le secret après le `#`, là où il est, et passe le lien entier à Escouade (`escouade://team/join/<serveur>/<id>#…`). Aucune ressource d'ailleurs, un script par son nonce seul (CSP) |
 | `GET /v1/live` (WebSocket) | oui | des trames CBOR `{stream: "team" \| "project" \| "lagged", project?, entry?}` ; fermée en 4001 à la fin de la session, en 4003 à la révocation |
 
 Les ids passent en hexadécimal dans les chemins (32 chiffres), en octets dans les corps.
+
+`escouade-team-server recovery-token --team <id>` affiche un jeton à usage unique (7 jours au plus) qui inscrit un appareil dans une équipe existante comme administrateur du serveur : pour le détenteur de la clé de secours, le jour où tous les administrateurs ont perdu leurs appareils (§3.5). Il ne donne aucune clé : les 24 mots les donnent.
+
+Le relais d'appairage (`pair.rs`) est en mémoire, comme les sessions : un créneau prend un seul essai, et ne porte que les messages du PAKE et une réponse scellée, qui ne permettent pas d'essayer des codes hors ligne.
 
 ## Les défenses (§2.3)
 
@@ -118,16 +131,17 @@ cd src-tauri && cargo nextest run -p escouade-team-server
 
 - `tests/server.rs` lance le vrai serveur sur localhost, sur une base SQLite temporaire : inscription par jeton (une seconde fois refusée), ajout et révocation d'un appareil, défi signé (une mauvaise signature, une signature d'une autre clé, un défi réutilisé ou inventé, un appareil révoqué et une session expirée refusés), flux et reprise depuis n, le premier commit d'une époque qui gagne (aussi à huit en même temps), fichiers et quotas, WebSocket (les entrées en ordre, rien pour une autre équipe, fermeture à la révocation et à la fin de la session), poignée de main des versions, limite de débit par adresse et par appareil, bornes de taille (dont une longueur annoncée de 10 Go et une chaîne CBOR de 2⁶² octets), équipes étanches.
 - `tests/crypto_scenario.rs` rejoue un scénario d'`escouade-team-crypto` à travers le vrai serveur, au lieu de `relay.rs` : création, ajout de deux membres (Welcome et historique lus sur le serveur), retrait d'un membre (qui ne lit plus rien de nouveau, et dont l'appareil est révoqué), rotation, puis deux administrateurs qui committent à la même époque : le serveur garde le premier, refuse le second avec ce qui l'a précédé, et la branche perdante se voit (`Error::Fork`) au premier objet qui passe.
+- `tests/onboarding.rs` (TS-3) : un jeton fait par l'administrateur sert une fois, son second usage est dit à l'invité et aux administrateurs, il expire ; les rôles suivent l'administrateur et le dernier reste ; le jeton de récupération inscrit un administrateur de l'équipe ; le relais d'appairage prend un seul essai ; la page d'un lien d'invitation ne charge rien d'ailleurs.
 - `tests/ops.rs` : `init` puis `serve` par le vrai binaire, le journal sans id, TLS avec un certificat donné, la base en WAL, les métriques sans id.
 - **PostgreSQL** : chaque test de `server.rs` et le scénario ont une variante `postgres::`, qui tourne quand `ESCOUADE_TEST_POSTGRES_URL` est posée (un schéma par test, effacé à la fin). La CI la pose dans le job Linux (`linux-rust`, service `postgres:17`).
 - **S3** : `files_and_quotas` écrit dans S3 quand `ESCOUADE_TEST_S3_ENDPOINT` (et `_BUCKET`, `_REGION`, `_ACCESS_KEY`, `_SECRET_KEY`) est posée. Vérifié sur Garage 1.1.0 ; la signature SigV4 est aussi testée sur l'exemple d'AWS.
 
 ## Ce qui reste
 
-- **TS-3** : les invitations sur le point d'entrée `POST /v1/devices/enrollments` (le secret après le `#`, le lien `escouade://team/join` et le lien de création qu'affichera `init`), l'ajout d'un appareil par QR code et par code court, les rôles propriétaire et lecteur (le serveur refuse alors les écritures d'un lecteur), le changement de rôle.
+- **TS-3** (fait, ESC-461) : le jeton fourni par l'administrateur (celui d'une invitation), le second usage dit et noté, les rôles tenus au pas du registre, le jeton de récupération, le relais d'appairage du code court, la page `/join/<id>`. Restent les rôles propriétaire et lecteur (le serveur refusera alors les écritures d'un lecteur, TS-4) et un lien de création qu'afficherait `init`.
 - **TS-5** : les droits par projet (le serveur ne sert un projet qu'aux appareils qui y ont accès : aujourd'hui, tout appareil de l'équipe), les instantanés et l'élagage des flux, l'horloge hybride côté client.
 - **TS-6** : la prise atomique des tickets (bail et jeton de prise, en clair, §4.2), le compteur des numéros de tickets d'un projet.
-- **TS-2** (fait, ESC-458) : le client, `crates/escouade-team`, parle ce protocole. Il garde les mêmes formes que `api::wire`, testées contre ce serveur. Reste au serveur, pour TS-3 : laisser un membre couper son propre autre appareil (le serveur ne sait pas quels appareils sont à quel membre), et changer le rôle d'un appareil, pour suivre le registre.
+- **TS-2** (fait, ESC-458) : le client, `crates/escouade-team`, parle ce protocole. Il garde les mêmes formes que `api::wire`, testées contre ce serveur. Reste au serveur : laisser un membre couper son propre autre appareil (le serveur ne sait pas quels appareils sont à quel membre ; le commit seul le coupe du groupe).
 - **TS-18** : le fuzzing du décodage des corps et des flux ; l'e2e avec deux clients.
 - **Les limites de cette version** : un seul processus (les sessions, les défis, les limites de débit et la diffusion sont en mémoire : plusieurs serveurs sur une même base PostgreSQL demanderaient `LISTEN/NOTIFY` et des sessions en base) ; une connexion à la base ; un fichier est tenu en mémoire le temps de l'écrire (25 Mio au plus) ; PostgreSQL sans TLS.
 - **Le module `transport`** (CBOR, versions, bornes, débit, TLS) n'utilise rien du reste de la crate : il deviendra une crate commune avec le mode serveur (ESC-451) quand celui-ci aura son transport.

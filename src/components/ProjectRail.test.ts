@@ -310,12 +310,15 @@ describe('ProjectRail', () => {
     render(ProjectRail);
     await userEvent.click(screen.getByRole('button', { name: 'Ajouter un projet' }));
     const items = menu.open!.items.filter((i) => !i.separator);
-    expect(items.map((i) => i.label)).toEqual(['Ajouter un projet…', 'legacy-billing', 'Tous les projets fermés…']);
+    expect(items.map((i) => i.label)).toEqual(['Ajouter un projet…', 'legacy-billing', 'Tous les projets fermés…', 'Équipes…']);
     expect(items[1]).toMatchObject({ swatch: PROJECT_COLORS[6], hint: 'Rouvrir', detail: 'Fermé le 18 octobre 2026' });
     items[1].onClick!();
     expect(app.modal).toEqual({ kind: 'newProject', path: 'C:\\code\\legacy', historyId: 'old' });
     items[2].onClick!();
     expect(app.modal).toEqual({ kind: 'settings', page: 'allProjects' });
+    // The team server's screens (TS-3), until the team has its place (TS-4).
+    items[3].onClick!();
+    expect(app.modal).toEqual({ kind: 'team' });
     items[0].onClick!();
     expect(app.modal).toEqual({ kind: 'newProject' });
   });

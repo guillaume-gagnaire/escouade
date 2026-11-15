@@ -75,6 +75,7 @@ fn outsider_key_package(who: MemberId) -> KeyPackage {
         id: [0; 16],
         secret: [0; 32],
         team: [0; 32],
+        member: None,
     };
     let request = outsider.request_join(&link).unwrap();
     match decode(&request.key_package).unwrap().extract() {
@@ -902,15 +903,33 @@ fn an_invitation_link_round_trips_and_rejects_garbage() {
         id: [1; 16],
         secret: [2; 32],
         team: [3; 32],
+        member: None,
     };
     assert_eq!(InviteLink::parse(&link.to_url()).unwrap(), link);
     assert_eq!(link.team(), TeamFingerprint([3; 32]));
+    // Another device of a member: the member rides along, after the `#` too.
+    let mut own = link.clone();
+    own.member = Some([4; 16]);
+    assert!(own
+        .to_url()
+        .ends_with("&m=04040404040404040404040404040404"));
+    assert_eq!(InviteLink::parse(&own.to_url()).unwrap(), own);
+    // The server's token comes from the secret alone, the same each time, another for another secret, and never the
+    // secret itself.
+    assert_eq!(link.server_token(), own.server_token());
+    assert_ne!(link.server_token(), crate::invite::server_token(&[9; 32]));
+    use base64::Engine as _;
+    let secret = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode([2u8; 32]);
+    assert_ne!(link.server_token(), secret);
     for bad in [
         "http://team.example.org/join/01#s=AA&t=AA",
         "https://team.example.org/join/0101#s=AA&t=AA",
         "https://team.example.org/join/01010101010101010101010101010101",
         "https://team.example.org/join/01010101010101010101010101010101#t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM",
         "https://team.example.org/join/01010101010101010101010101010101#s=AA&t=AA&x=1",
+        "https://team.example.org/join/01010101010101010101010101010101#s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM&m=zz",
+        "https://evil@x/join/01010101010101010101010101010101#s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM",
+        "https://team.example.org/join/01010101010101010101010101010101#s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM",
     ] {
         assert!(InviteLink::parse(bad).is_err(), "{bad}");
     }

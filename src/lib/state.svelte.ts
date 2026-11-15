@@ -2,6 +2,7 @@
 
 import { setLocks } from './locks.svelte';
 import { openUrl } from './opener';
+import { teams } from './teams.svelte';
 import { api } from './ipc';
 import { applyConvOps, dropConversation, releaseIdle } from './conversations.svelte';
 import { buffers } from './editor/buffers.svelte';
@@ -121,6 +122,8 @@ export type Modal =
   | { kind: 'firstMode' }
   /** The first launch's other question (ESC-190): the user's name for the team; `then`, what waited for it (a share). */
   | { kind: 'teamName'; projectId?: string; then?: () => void }
+  /** The teams of the team server (TS-3): at a step (the list by default), on a link opened (`escouade://team/join`). */
+  | { kind: 'team'; step?: import('../components/team/TeamModal.svelte').TeamStep; link?: string; teamId?: string }
   /** ESC-255: what Claude Code remembers of a project, offered once to its shared memory, memory by memory. */
   | { kind: 'claudeMemory'; projectId: string; offered: OfferedMemory[] }
   /**
@@ -957,6 +960,9 @@ class AppState {
         break;
       case 'deepLink':
         this.deepLinks++;
+        break;
+      case 'teams':
+        void teams.load();
         break;
       case 'voice':
         dictation.take(e.voice);

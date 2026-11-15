@@ -119,12 +119,40 @@ pub enum TokenKind {
     Team,
     /// From an administrator: adds a device to the team (the entry point of TS-3's invitations).
     Device,
+    /// From the operator (`escouade-team-server recovery-token`): adds a device to a team as an administrator of the
+    /// server, for the holder of the recovery key the day every administrator lost their devices (TS-3, §3.5).
+    Recovery,
+}
+
+impl TokenKind {
+    pub fn code(self) -> i64 {
+        match self {
+            TokenKind::Team => 0,
+            TokenKind::Device => 1,
+            TokenKind::Recovery => 2,
+        }
+    }
+}
+
+/// A token used again after its first use (a leaked invitation link): what an administrator is told.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TokenAlert {
+    pub hash: [u8; 32],
+    /// When it was used first, and again last.
+    pub used_at: i64,
+    pub reused_at: i64,
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
     #[error("this token is unknown, used or expired")]
     BadToken,
+    /// The token served already: kept used until it expires, so its second user is told so (and its team's
+    /// administrators too).
+    #[error("this token was already used")]
+    TokenUsed,
+    #[error("a team keeps one administrator on the server at least")]
+    LastAdmin,
     #[error("this key already has a device")]
     KeyTaken,
     #[error("a commit already holds epoch {asked}; the next is {expected}")]
@@ -168,7 +196,9 @@ pub trait Store: Send + Sync {
         expires_at: Option<i64>,
         now: i64,
     ) -> Result<()>;
-    /// Uses a token once: a team token makes a team and its administrator, a device token a member of its team.
+    /// Uses a token once: a team token makes a team and its administrator, a device token a member of its team, a
+    /// recovery token an administrator of its team. A used token stays, used, until its time is over (then a week):
+    /// a second use is `TokenUsed`, and noted for the team's administrators (`token_alerts`).
     async fn enroll(
         &self,
         hash: [u8; 32],
@@ -181,6 +211,13 @@ pub trait Store: Send + Sync {
     async fn devices(&self, team: Id) -> Result<Vec<Device>>;
     /// Revokes a device of `team`; false if it is not one.
     async fn revoke(&self, team: Id, device: Id, now: i64) -> Result<bool>;
+    /// Sets the role of a device of `team` on the server; false if it is not one. The last administrator not revoked
+    /// is never made a member (`LastAdmin`).
+    async fn set_role(&self, team: Id, device: Id, role: Role) -> Result<bool>;
+    /// The team's tokens used again after their first use.
+    async fn token_alerts(&self, team: Id) -> Result<Vec<TokenAlert>>;
+    /// Forgets the used tokens whose time is over.
+    async fn sweep_tokens(&self, now: i64) -> Result<()>;
 
     /// Appends an entry and gives it its number. A commit must be for the next epoch.
     async fn append(

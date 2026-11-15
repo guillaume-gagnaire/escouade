@@ -32,7 +32,9 @@ CREATE TABLE IF NOT EXISTS tokens (
     kind INTEGER NOT NULL,
     team_id BLOB,
     created_at INTEGER NOT NULL,
-    expires_at INTEGER
+    expires_at INTEGER,
+    used_at INTEGER,
+    reused_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS team_entries (
     team_id BLOB NOT NULL,
@@ -215,7 +217,20 @@ fn read_entries(
 #[async_trait]
 impl Store for Sqlite {
     async fn migrate(&self) -> Result<()> {
-        self.run(|c| Ok(c.execute_batch(SCHEMA)?)).await
+        self.run(|c| {
+            c.execute_batch(SCHEMA)?;
+            // A base made before the used tokens were kept (TS-3): their columns added.
+            for column in ["used_at", "reused_at"] {
+                let has: bool = c
+                    .prepare("SELECT 1 FROM pragma_table_info('tokens') WHERE name = ?1")?
+                    .exists([column])?;
+                if !has {
+                    c.execute_batch(&format!("ALTER TABLE tokens ADD COLUMN {column} INTEGER"))?;
+                }
+            }
+            Ok(())
+        })
+        .await
     }
 
     async fn ping(&self) -> Result<()> {
@@ -231,10 +246,7 @@ impl Store for Sqlite {
         expires_at: Option<i64>,
         now: i64,
     ) -> Result<()> {
-        let kind = match kind {
-            TokenKind::Team => 0,
-            TokenKind::Device => 1,
-        };
+        let kind = kind.code();
         self.run(move |c| {
             c.execute(
                 "INSERT INTO tokens (hash, kind, team_id, created_at, expires_at) VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -254,16 +266,21 @@ impl Store for Sqlite {
     ) -> Result<Device> {
         self.run(move |c| {
             let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
-            let token: Option<(i64, Option<Vec<u8>>, Option<i64>)> = tx
+            let token: Option<(i64, Option<Vec<u8>>, Option<i64>, Option<i64>)> = tx
                 .query_row(
-                    "SELECT kind, team_id, expires_at FROM tokens WHERE hash = ?1",
+                    "SELECT kind, team_id, expires_at, used_at FROM tokens WHERE hash = ?1",
                     [hash.as_slice()],
-                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
                 )
                 .optional()?;
-            let Some((kind, team, expires_at)) = token else {
+            let Some((kind, team, expires_at, used_at)) = token else {
                 return Err(StoreError::BadToken);
             };
+            if used_at.is_some() {
+                tx.execute("UPDATE tokens SET reused_at = ?2 WHERE hash = ?1", params![hash.as_slice(), now])?;
+                tx.commit()?;
+                return Err(StoreError::TokenUsed);
+            }
             if expires_at.is_some_and(|e| e <= now) {
                 tx.execute("DELETE FROM tokens WHERE hash = ?1", [hash.as_slice()])?;
                 tx.commit()?;
@@ -287,14 +304,15 @@ impl Store for Sqlite {
                 if count >= quotas.devices as i64 {
                     return Err(StoreError::TooMany("devices"));
                 }
-                (team, Role::Member)
+                (team, if kind == TokenKind::Recovery.code() { Role::Admin } else { Role::Member })
             };
             let id: Id = random();
             tx.execute(
                 "INSERT INTO devices (id, team_id, public_key, role, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
                 params![id.as_slice(), team.as_slice(), public_key.as_slice(), role.as_str(), now],
             )?;
-            tx.execute("DELETE FROM tokens WHERE hash = ?1", [hash.as_slice()])?;
+            // Kept used, not deleted: a second use is told apart from an unknown token.
+            tx.execute("UPDATE tokens SET used_at = ?2 WHERE hash = ?1", params![hash.as_slice(), now])?;
             tx.commit()?;
             Ok(Device {
                 id,
@@ -344,6 +362,72 @@ impl Store for Sqlite {
                 params![device.as_slice(), team.as_slice(), now],
             )?;
             Ok(n == 1)
+        })
+        .await
+    }
+
+    async fn set_role(&self, team: Id, device: Id, role: Role) -> Result<bool> {
+        self.run(move |c| {
+            let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let current: Option<(String, Option<i64>)> = tx
+                .query_row(
+                    "SELECT role, revoked_at FROM devices WHERE id = ?1 AND team_id = ?2",
+                    params![device.as_slice(), team.as_slice()],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .optional()?;
+            let Some((current, revoked)) = current else {
+                return Ok(false);
+            };
+            if Role::parse(&current) == Role::Admin && role == Role::Member && revoked.is_none() {
+                let admins: i64 = tx.query_row(
+                    "SELECT COUNT(*) FROM devices WHERE team_id = ?1 AND role = 'admin' AND revoked_at IS NULL",
+                    [team.as_slice()],
+                    |r| r.get(0),
+                )?;
+                if admins <= 1 {
+                    return Err(StoreError::LastAdmin);
+                }
+            }
+            tx.execute(
+                "UPDATE devices SET role = ?3 WHERE id = ?1 AND team_id = ?2",
+                params![device.as_slice(), team.as_slice(), role.as_str()],
+            )?;
+            tx.commit()?;
+            Ok(true)
+        })
+        .await
+    }
+
+    async fn token_alerts(&self, team: Id) -> Result<Vec<TokenAlert>> {
+        self.run(move |c| {
+            let mut stmt = c.prepare_cached(
+                "SELECT hash, used_at, reused_at FROM tokens WHERE team_id = ?1 AND reused_at IS NOT NULL ORDER BY reused_at",
+            )?;
+            let rows = stmt.query_map([team.as_slice()], |r| {
+                Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?))
+            })?;
+            let mut out = Vec::new();
+            for row in rows {
+                let (hash, used_at, reused_at) = row?;
+                out.push(TokenAlert {
+                    hash: hash.try_into().map_err(|_| backend("a hash of the wrong length"))?,
+                    used_at,
+                    reused_at,
+                });
+            }
+            Ok(out)
+        })
+        .await
+    }
+
+    async fn sweep_tokens(&self, now: i64) -> Result<()> {
+        self.run(move |c| {
+            c.execute(
+                "DELETE FROM tokens WHERE expires_at IS NOT NULL AND expires_at + 604800 <= ?1",
+                [now],
+            )?;
+            Ok(())
         })
         .await
     }

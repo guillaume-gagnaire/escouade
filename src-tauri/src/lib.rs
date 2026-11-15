@@ -240,6 +240,9 @@ mod switching;
 mod switching_tests;
 mod syspath;
 mod taskout;
+mod teams;
+#[cfg(test)]
+mod teams_tests;
 mod telemetry;
 #[cfg(test)]
 mod terminal_tests;
@@ -540,6 +543,29 @@ pub fn run() {
                 paths::DataDir::new(paths::default_data_dir()),
             );
             app.manage(core.clone());
+            // The teams of the team server (TS-3): their keys in the app's keychain, the network of the settings, the
+            // data's `teams` folder; read every few seconds, for the invitees an online administrator lets in.
+            let teams = {
+                let settings = Arc::downgrade(&core);
+                let hub = Arc::downgrade(&core);
+                Arc::new(teams::Teams::open(
+                    core.data.root().join("teams"),
+                    core.secrets.clone(),
+                    Arc::new(move || {
+                        settings
+                            .upgrade()
+                            .map(|c| c.settings.read().clone())
+                            .unwrap_or_default()
+                    }),
+                    Arc::new(move || {
+                        if let Some(core) = hub.upgrade() {
+                            core.hub.emit(model::UiEvent::Teams {});
+                        }
+                    }),
+                ))
+            };
+            app.manage(teams.clone());
+            tauri::async_runtime::spawn(teams.watch(teams::watch_every()));
             // The editor's language servers (ESC-446): their messages and states to the window.
             app.manage(lsp::for_app(app.handle().clone()));
             // The dictation: its events to the window, as the core's.
@@ -688,6 +714,22 @@ pub fn run() {
                 commands::plugin_need_engine,
                 commands::store_view,
                 commands::deep_links_take,
+                commands::team_list,
+                commands::team_create,
+                commands::team_escrow_new,
+                commands::team_confirm_words,
+                commands::team_new_recovery,
+                commands::team_invite,
+                commands::team_own_device,
+                commands::team_join_preview,
+                commands::team_join,
+                commands::team_pair_start,
+                commands::team_pair_step,
+                commands::team_pair_cancel,
+                commands::team_pair_join,
+                commands::team_recover,
+                commands::team_sync,
+                commands::team_forget,
                 commands::store_refresh,
                 commands::store_suggestions,
                 commands::plugin_discard,

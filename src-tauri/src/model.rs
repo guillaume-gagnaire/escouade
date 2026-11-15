@@ -357,6 +357,8 @@ pub enum UiEvent {
     },
     /// A link `escouade://` came (STORE-11): the window takes it (`deep_links_take`).
     DeepLink {},
+    /// A team of the team server changed on this device (TS-3): the window reads them again (`team_list`).
+    Teams {},
     /// The download of the vectors' model (ESC-254): bytes so far, of `total`.
     VectorsDownload {
         done: u64,

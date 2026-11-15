@@ -26,6 +26,11 @@ ignore = [
     { id = "RUSTSEC-2026-0370", reason = "zvariant is unmaintained (zbus, Linux); no fixed version, no known flaw" },
     { id = "RUSTSEC-2026-0371", reason = "zbus_names is unmaintained (zbus, Linux); no fixed version, no known flaw" },
     { id = "RUSTSEC-2026-0372", reason = "zvariant_derive is unmaintained (zbus, Linux); no fixed version, no known flaw" },
+    # openmls (the team client, wired into the app by TS-3, ESC-461): its RustCrypto provider compiles every suite's
+    # curves in. The team uses suite 0x0003 alone (X25519, Ed25519, ChaCha20-Poly1305: escouade-team-crypto CIPHERSUITE),
+    # never P-256, P-384 nor K-256, which is what crypto-bigint 0.5 serves; elliptic-curve 0.13 takes no 0.7.
+    { id = "RUSTSEC-2026-0387", reason = "crypto-bigint 0.5 (timing): only through the P-256/P-384/K-256 of openmls_rust_crypto and hpke-rs, which the team suite 0x0003 never uses; fixed in 0.7, which elliptic-curve 0.13 does not take" },
+    { id = "RUSTSEC-2026-0173", reason = "proc-macro-error2 is unmaintained (hax-lib macros of libcrux, through hpke-rs and openmls); no fixed version, build-time only" },
 ]
 
 [sources]

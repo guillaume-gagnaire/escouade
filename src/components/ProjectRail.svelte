@@ -158,6 +158,13 @@
         detail: t('nav.rail.addMenu.allDetail'),
         onClick: () => (app.modal = { kind: 'settings', page: 'allProjects' }),
       },
+      { label: '', separator: true },
+      {
+        label: t('team.entry.menu'),
+        icon: 'team',
+        detail: t('team.entry.menuDetail'),
+        onClick: () => (app.modal = { kind: 'team' }),
+      },
     ];
     const r = button.getBoundingClientRect();
     menu.open = { x: besideRail(r), y: Math.max(8, r.top - 6), items, keyboard: true };

@@ -1727,7 +1727,7 @@ describe('SettingsModal in English', () => {
       within(panel())
         .getAllByRole('heading')
         .map((h) => h.textContent),
-    ).toEqual(['Network', 'Terminals', 'Attachments', 'Search by meaning', 'Local data']);
+    ).toEqual(['Network', 'Terminals', 'Attachments', 'Search by meaning', 'Team server (preview)', 'Local data']);
 
     await userEvent.click(tab('General'));
     expect(screen.getByRole('button', { name: 'Check for updates' })).toBeInTheDocument();

@@ -2888,6 +2888,8 @@ export type UiEvent =
   | { type: 'voice'; voice: VoiceEvent }
   /** A link `escouade://` came (STORE-11): taken by `deep_links_take`. */
   | { type: 'deepLink' }
+  /** A team of the team server changed on this device (TS-3): read again by `team_list`. */
+  | { type: 'teams' }
   /** What a project's docs have to share (the changes not shared yet), and the conflict a « Partager » stopped on. */
   | { type: 'docsShare'; projectId: string; pending: number; conflict: DocsConflict | null }
   /** The pages of a project being compared to the code (ESC-263), told when one starts or ends. */

@@ -84,7 +84,9 @@ impl RecoveryKey {
             })
     }
 
-    fn signing_seed(&self) -> Zeroizing<[u8; 32]> {
+    /// The seed of the recovery leaf's signature key, for the client to keep it in the keychain while the leaf is
+    /// in the group (the day of a recovery), as it keeps a device's.
+    pub fn signing_seed(&self) -> Zeroizing<[u8; 32]> {
         Zeroizing::new(expand(
             &self.entropy,
             b"escouade/recovery/signature/v1",
@@ -137,6 +139,8 @@ impl RecoveryKey {
 pub struct EscrowKey {
     keys: HpkeKeyPair,
     holder: String,
+    /// What the key pair is derived from: what the organisation keeps (written down, in its safe).
+    seed: Zeroizing<[u8; 32]>,
 }
 
 impl EscrowKey {
@@ -145,15 +149,30 @@ impl EscrowKey {
         rand: &impl openmls_traits::random::OpenMlsRand,
         holder: &str,
     ) -> Result<Self, Error> {
-        let ikm: Zeroizing<[u8; 32]> =
-            Zeroizing::new(rand.random_array().map_err(|_| Error::Random)?);
+        let seed: [u8; 32] = rand.random_array().map_err(|_| Error::Random)?;
+        Self::from_seed(crypto, seed, holder)
+    }
+
+    /// The key pair again from its seed (what the organisation kept).
+    pub fn from_seed(
+        crypto: &impl OpenMlsCrypto,
+        seed: [u8; 32],
+        holder: &str,
+    ) -> Result<Self, Error> {
+        let seed = Zeroizing::new(seed);
         let keys = crypto
-            .derive_hpke_keypair(CIPHERSUITE.hpke_config(), ikm.as_slice())
+            .derive_hpke_keypair(CIPHERSUITE.hpke_config(), seed.as_slice())
             .map_err(|e| Error::Mls(format!("escrow HPKE key: {e:?}")))?;
         Ok(Self {
             keys,
             holder: holder.to_string(),
+            seed,
         })
+    }
+
+    /// The seed, for the organisation to keep: it gives the key pair back (`from_seed`), and reads all the content.
+    pub fn seed(&self) -> &[u8; 32] {
+        &self.seed
     }
 
     pub fn public(&self) -> EscrowPublic {

@@ -154,3 +154,31 @@ fn the_installers_register_the_scheme() {
         assert!(desktop.contains("MimeType={{mime_type}}"), "{desktop}");
     }
 }
+
+#[test]
+fn reads_an_invitation_to_a_team_and_keeps_its_secret_out_of_a_bad_one() {
+    let url = "https://team.acme.fr/join/00112233445566778899aabbccddeeff#s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM";
+    let deep = "escouade://team/join/team.acme.fr/00112233445566778899aabbccddeeff#s=AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI&t=AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM";
+    assert_eq!(parse(deep), DeepLink::TeamJoin { link: url.into() });
+    assert_eq!(
+        parse(&deep.replace("escouade://team", "Escouade://Team")),
+        DeepLink::TeamJoin { link: url.into() }
+    );
+    // A server with its port (one on this machine, the tests').
+    let local = deep.replace("team.acme.fr", "127.0.0.1:4121");
+    assert_eq!(
+        parse(&local),
+        DeepLink::TeamJoin {
+            link: url.replace("team.acme.fr", "127.0.0.1:4121")
+        }
+    );
+    // Cut, or without its secret: bad, and said without what it held.
+    for broken in [
+        &deep[..deep.len() - 10],
+        "escouade://team/join/team.acme.fr/00112233445566778899aabbccddeeff",
+    ] {
+        assert_eq!(parse(broken), bad("escouade://team/join/…"));
+    }
+    // Found among a launch's arguments.
+    assert_eq!(links_in(["escouade.exe", deep]), vec![deep.to_string()]);
+}

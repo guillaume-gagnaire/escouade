@@ -191,6 +191,7 @@ fn make(wrap: Option<RecoveryWrap>) -> Vectors {
         id: [0x1d; 16],
         secret: [0x5e; 32],
         team: fingerprint.0,
+        member: None,
     };
     let key_package = [0x6b; 40];
 

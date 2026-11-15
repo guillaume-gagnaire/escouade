@@ -70,6 +70,86 @@ pub mod wire {
     pub struct EnrollmentRequest {
         #[serde(default)]
         pub expires_in: Option<u64>,
+        /// The SHA-256 of a token the client made itself (TS-3: the invitation's, derived from the secret after the
+        /// `#`, which the server never sees). The answer then carries no token.
+        #[serde(default, with = "opt_bytes", skip_serializing_if = "Option::is_none")]
+        pub token_hash: Option<Vec<u8>>,
+    }
+
+    /// The token's SHA-256 the administrator gave, registered.
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct Registered {
+        pub expires_in: u64,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct RoleRequest {
+        pub role: Role,
+    }
+
+    /// A token used again after its first use: the SHA-256 the administrator registered, and when.
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct TokenAlertInfo {
+        #[serde(with = "serde_bytes")]
+        pub token_hash: Vec<u8>,
+        pub used_at: i64,
+        pub reused_at: i64,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct TokenAlerts {
+        pub alerts: Vec<TokenAlertInfo>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct PairOpen {
+        #[serde(with = "serde_bytes")]
+        pub message: Vec<u8>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct PairOpened {
+        pub slot: String,
+        pub expires_in: u64,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct PairMessage {
+        #[serde(with = "serde_bytes")]
+        pub message: Vec<u8>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct PairTry {
+        #[serde(with = "serde_bytes")]
+        pub message: Vec<u8>,
+        #[serde(with = "serde_bytes")]
+        pub confirm: Vec<u8>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct PairAnswer {
+        #[serde(with = "serde_bytes")]
+        pub sealed: Vec<u8>,
+    }
+
+    pub mod opt_bytes {
+        pub fn serialize<S: serde::Serializer>(
+            v: &Option<Vec<u8>>,
+            s: S,
+        ) -> Result<S::Ok, S::Error> {
+            match v {
+                Some(b) => s.serialize_bytes(b),
+                None => s.serialize_none(),
+            }
+        }
+
+        pub fn deserialize<'de, D: serde::Deserializer<'de>>(
+            d: D,
+        ) -> Result<Option<Vec<u8>>, D::Error> {
+            let v: Option<serde_bytes::ByteBuf> = serde::Deserialize::deserialize(d)?;
+            Ok(v.map(|b| b.into_vec()))
+        }
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -140,6 +220,16 @@ fn store_problem(e: StoreError) -> Problem {
             StatusCode::UNAUTHORIZED,
             "bad_token",
             "this token is unknown, used or expired",
+        ),
+        StoreError::TokenUsed => Problem::new(
+            StatusCode::CONFLICT,
+            "token_used",
+            "this token was already used",
+        ),
+        StoreError::LastAdmin => Problem::new(
+            StatusCode::CONFLICT,
+            "last_admin",
+            "a team keeps one administrator on the server at least",
         ),
         StoreError::KeyTaken => Problem::new(
             StatusCode::CONFLICT,
@@ -289,7 +379,7 @@ pub async fn create_enrollment(
     State(app): State<Shared>,
     authed: Authed,
     Cbor(req): Cbor<EnrollmentRequest>,
-) -> Result<Cbor<TokenResponse>, Problem> {
+) -> Result<Response, Problem> {
     if !authed.is_admin() {
         return Err(Problem::forbidden("only an administrator adds a device"));
     }
@@ -299,21 +389,92 @@ pub async fn create_enrollment(
         .map_or(Duration::from_secs(24 * 3600), Duration::from_secs)
         .min(max)
         .max(Duration::from_secs(1));
-    let token = new_token();
+    let given: Option<[u8; 32]> = match &req.token_hash {
+        Some(h) => Some(h.as_slice().try_into().map_err(|_| {
+            Problem::bad_request("bad_hash", "a token's hash is 32 bytes (SHA-256)")
+        })?),
+        None => None,
+    };
+    let token = given.is_none().then(new_token);
+    let hash = given.unwrap_or_else(|| token_hash(token.as_deref().unwrap_or_default()));
     app.store
         .add_token(
-            token_hash(&token),
+            hash,
             crate::db::TokenKind::Device,
             Some(authed.device.team),
             Some(now() + ttl.as_secs() as i64),
             now(),
         )
         .await
+        .map_err(|e| match e {
+            // The hash given is already a token's: never told whose.
+            StoreError::Backend(_) if given.is_some() => Problem::new(
+                StatusCode::CONFLICT,
+                "exists",
+                "this token is known already",
+            ),
+            e => store_problem(e),
+        })?;
+    Ok(match token {
+        Some(token) => Cbor(TokenResponse {
+            token,
+            expires_in: ttl.as_secs(),
+        })
+        .into_response(),
+        None => Cbor(Registered {
+            expires_in: ttl.as_secs(),
+        })
+        .into_response(),
+    })
+}
+
+/// The team's tokens used a second time (a leaked invitation link): for its administrators, who registered them.
+pub async fn token_alerts(
+    State(app): State<Shared>,
+    authed: Authed,
+) -> Result<Cbor<TokenAlerts>, Problem> {
+    if !authed.is_admin() {
+        return Err(Problem::forbidden("only an administrator reads the alerts"));
+    }
+    let alerts = app
+        .store
+        .token_alerts(authed.device.team)
+        .await
         .map_err(store_problem)?;
-    Ok(Cbor(TokenResponse {
-        token,
-        expires_in: ttl.as_secs(),
+    Ok(Cbor(TokenAlerts {
+        alerts: alerts
+            .into_iter()
+            .map(|a| TokenAlertInfo {
+                token_hash: a.hash.to_vec(),
+                used_at: a.used_at,
+                reused_at: a.reused_at,
+            })
+            .collect(),
     }))
+}
+
+/// An administrator sets the role of a device on the server: the server's roles kept in step with the roster
+/// (TS-3). The server does not read the roster: the administrator's device does, and asks.
+pub async fn set_role(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path(device): Path<String>,
+    Cbor(req): Cbor<RoleRequest>,
+) -> Result<StatusCode, Problem> {
+    let device = path_id(&device)?;
+    if !authed.is_admin() {
+        return Err(Problem::forbidden("only an administrator changes a role"));
+    }
+    if app
+        .store
+        .set_role(authed.device.team, device, req.role)
+        .await
+        .map_err(store_problem)?
+    {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err(Problem::not_found())
+    }
 }
 
 pub async fn devices(State(app): State<Shared>, authed: Authed) -> Result<Cbor<Devices>, Problem> {
@@ -360,6 +521,161 @@ pub async fn revoke(
     app.hub.publish(&team, Event::Revoked(device));
     Ok(StatusCode::NO_CONTENT)
 }
+
+// === The pairing relay (`pair.rs`) ===
+
+fn pair_problem(e: crate::pair::PairError) -> Problem {
+    use crate::pair::PairError;
+    match e {
+        PairError::Gone => Problem::new(
+            StatusCode::NOT_FOUND,
+            "pair_gone",
+            "no such code: its time is over, or it served",
+        ),
+        PairError::Tried => Problem::new(
+            StatusCode::CONFLICT,
+            "pair_tried",
+            "this code had its one try: ask for a new one",
+        ),
+        PairError::NotYours => Problem::forbidden("this code is another device's"),
+        PairError::Full => Problem::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "busy",
+            "too many codes open: try again",
+        ),
+    }
+}
+
+fn bounded(bytes: &[u8], max: usize) -> Result<(), Problem> {
+    if bytes.is_empty() || bytes.len() > max {
+        return Err(Problem::bad_request(
+            "bad_size",
+            "a message of the wrong size",
+        ));
+    }
+    Ok(())
+}
+
+pub async fn pair_open(
+    State(app): State<Shared>,
+    authed: Authed,
+    Cbor(req): Cbor<PairOpen>,
+) -> Result<Cbor<PairOpened>, Problem> {
+    bounded(&req.message, crate::pair::MAX_MESSAGE)?;
+    let slot = app
+        .pairs
+        .open(authed.device.team, authed.device.id, req.message)
+        .map_err(pair_problem)?;
+    Ok(Cbor(PairOpened {
+        slot,
+        expires_in: crate::pair::TTL.as_secs(),
+    }))
+}
+
+pub async fn pair_message(
+    State(app): State<Shared>,
+    Path(slot): Path<String>,
+) -> Result<Cbor<PairMessage>, Problem> {
+    let message = app.pairs.message(&slot).map_err(pair_problem)?;
+    Ok(Cbor(PairMessage { message }))
+}
+
+pub async fn pair_try(
+    State(app): State<Shared>,
+    Path(slot): Path<String>,
+    Cbor(req): Cbor<PairTry>,
+) -> Result<StatusCode, Problem> {
+    bounded(&req.message, crate::pair::MAX_MESSAGE)?;
+    bounded(&req.confirm, crate::pair::MAX_MESSAGE)?;
+    app.pairs
+        .try_once(&slot, req.message, req.confirm)
+        .map_err(pair_problem)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn pair_tried(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path(slot): Path<String>,
+) -> Result<Response, Problem> {
+    match app
+        .pairs
+        .tried(&slot, &authed.device.id)
+        .map_err(pair_problem)?
+    {
+        Some((message, confirm)) => Ok(Cbor(PairTry { message, confirm }).into_response()),
+        None => Ok(StatusCode::NO_CONTENT.into_response()),
+    }
+}
+
+pub async fn pair_answer(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path(slot): Path<String>,
+    Cbor(req): Cbor<PairAnswer>,
+) -> Result<StatusCode, Problem> {
+    bounded(&req.sealed, crate::pair::MAX_ANSWER)?;
+    app.pairs
+        .answer(&slot, &authed.device.id, req.sealed)
+        .map_err(pair_problem)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn pair_take(
+    State(app): State<Shared>,
+    Path(slot): Path<String>,
+) -> Result<Response, Problem> {
+    match app.pairs.take_answer(&slot).map_err(pair_problem)? {
+        Some(sealed) => Ok(Cbor(PairAnswer { sealed }).into_response()),
+        None => Ok(StatusCode::NO_CONTENT.into_response()),
+    }
+}
+
+pub async fn pair_close(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path(slot): Path<String>,
+) -> Result<StatusCode, Problem> {
+    app.pairs
+        .close(&slot, &authed.device.id)
+        .map_err(pair_problem)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// === The page of an invitation link ===
+
+/// `/join/<id>`: an invitation link opened in a browser. The secret after the `#` never reaches the server; the
+/// page's script reads it where it is (`location.hash`) and hands the whole link to Escouade
+/// (`escouade://team/join/<server>/<id>#…`). No resource from elsewhere, a script by its nonce alone.
+pub async fn join_page(Path(id): Path<String>) -> Result<Response, Problem> {
+    path_id(&id)?;
+    let nonce = hex::encode(crate::util::random::<16>());
+    let page = JOIN_PAGE.replace("{nonce}", &nonce);
+    let policy = format!(
+        "default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-{nonce}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    );
+    Ok((
+        [
+            (
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("text/html; charset=utf-8"),
+            ),
+            (
+                header::CONTENT_SECURITY_POLICY,
+                HeaderValue::from_str(&policy).expect("a policy is a header value"),
+            ),
+            (
+                header::REFERRER_POLICY,
+                HeaderValue::from_static("no-referrer"),
+            ),
+            (header::CACHE_CONTROL, HeaderValue::from_static("no-store")),
+        ],
+        page,
+    )
+        .into_response())
+}
+
+const JOIN_PAGE: &str = include_str!("join.html");
 
 async fn append(
     app: &Shared,

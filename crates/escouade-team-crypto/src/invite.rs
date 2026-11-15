@@ -3,8 +3,10 @@
 //!
 //! 1. The administrator's device draws an id (16 bytes) and a secret `s` (32 bytes), and keeps the [`Invitation`]:
 //!    role, expiry, single use.
-//! 2. The link: `https://<server>/join/<id>#s=<s>&t=<team fingerprint>` (base64url). Nothing after the `#` reaches
-//!    the server: neither browsers nor HTTP send it.
+//! 2. The link: `https://<server>/join/<id>#s=<s>&t=<team fingerprint>` (base64url), and `&m=<member>` for another
+//!    device of a member already there (the QR code of §3.4). Nothing after the `#` reaches the server: neither
+//!    browsers nor HTTP send it. The invitee's token for the server is derived from `s` ([`server_token`]): the
+//!    administrator registers its SHA-256 with the server, which never sees `s` and lets the token serve once.
 //! 3. The invitee's device makes its keys and an MLS KeyPackage, and sends a [`JoinRequest`]: the KeyPackage and
 //!    `HMAC-SHA256(s, id ‖ KeyPackage)`. The server, without `s`, cannot put its own KeyPackage in its place.
 //! 4. An administrator's device checks the MAC, commits the Add (and the roster's new member), and sends the
@@ -59,17 +61,38 @@ pub struct InviteLink {
     pub id: [u8; 16],
     pub secret: [u8; 32],
     pub team: [u8; 32],
+    /// The member whose other device this is (`Purpose::OwnDevice`); none for a new member, who draws their id.
+    pub member: Option<[u8; 16]>,
+}
+
+/// The invitee's one-use token for the server, derived from the invitation's secret: the administrator registers its
+/// SHA-256 (the server keeps nothing else), the invitee enrols with it. Knowing it does not give `s` back.
+pub fn server_token(secret: &[u8; 32]) -> String {
+    URL_SAFE_NO_PAD.encode(crate::keys::expand(
+        secret,
+        b"escouade/invite/server-token/v1",
+        b"",
+    ))
 }
 
 impl InviteLink {
     pub fn to_url(&self) -> String {
-        format!(
+        let mut url = format!(
             "https://{}/join/{}#s={}&t={}",
             self.server,
             hex::encode(self.id),
             URL_SAFE_NO_PAD.encode(self.secret),
             URL_SAFE_NO_PAD.encode(self.team)
-        )
+        );
+        if let Some(m) = self.member {
+            url.push_str(&format!("&m={}", hex::encode(m)));
+        }
+        url
+    }
+
+    /// The invitee's token for the server ([`server_token`]).
+    pub fn server_token(&self) -> String {
+        server_token(&self.secret)
     }
 
     /// What the server receives of the link: the part before the `#`.
@@ -84,12 +107,21 @@ impl InviteLink {
         let (server, id_hex) = before.split_once("/join/").ok_or_else(bad)?;
         let mut id = [0u8; 16];
         hex::decode_to_slice(id_hex, &mut id).map_err(|_| bad())?;
+        if server.is_empty() || server.contains(['/', '?', '@', ' ']) {
+            return Err(bad());
+        }
         let mut secret = None;
         let mut team = None;
+        let mut member = None;
         for pair in fragment.split('&') {
             match pair.split_once('=') {
-                Some(("s", v)) => secret = Some(decode32(v).ok_or_else(bad)?),
-                Some(("t", v)) => team = Some(decode32(v).ok_or_else(bad)?),
+                Some(("s", v)) if secret.is_none() => secret = Some(decode32(v).ok_or_else(bad)?),
+                Some(("t", v)) if team.is_none() => team = Some(decode32(v).ok_or_else(bad)?),
+                Some(("m", v)) if member.is_none() => {
+                    let mut m = [0u8; 16];
+                    hex::decode_to_slice(v, &mut m).map_err(|_| bad())?;
+                    member = Some(m);
+                }
                 _ => return Err(bad()),
             }
         }
@@ -98,6 +130,7 @@ impl InviteLink {
             id,
             secret: secret.ok_or_else(bad)?,
             team: team.ok_or_else(bad)?,
+            member,
         })
     }
 

@@ -83,6 +83,7 @@ fn key_package(who: MemberId) -> KeyPackage {
         id: [0; 16],
         secret: [0; 32],
         team: [0; 32],
+        member: None,
     };
     let request = device.request_join(&link).expect("a request");
     match MlsMessageIn::tls_deserialize_exact(&request.key_package)

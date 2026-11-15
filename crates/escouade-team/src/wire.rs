@@ -5,6 +5,7 @@
 //!
 //! What the client writes in the team's stream, the server does not read: [`TeamMessage`], beside the MLS commits.
 
+use escouade_team_crypto::content::SealedObject;
 use escouade_team_crypto::history::HistoryLink;
 use escouade_team_crypto::invite::{JoinRequest, WelcomeDelivery};
 use escouade_team_crypto::recovery::{EscrowWrap, RecoveryWrap};
@@ -91,6 +92,64 @@ pub struct TokenResponse {
 pub struct EnrollmentRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expires_in: Option<u64>,
+    /// The SHA-256 of a token this device made (an invitation's, `invite::server_token`): the server registers it.
+    #[serde(default, with = "opt_bytes", skip_serializing_if = "Option::is_none")]
+    pub token_hash: Option<Vec<u8>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Registered {
+    pub expires_in: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RoleRequest {
+    pub role: Role,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TokenAlertInfo {
+    #[serde(with = "serde_bytes")]
+    pub token_hash: Vec<u8>,
+    pub used_at: i64,
+    pub reused_at: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TokenAlerts {
+    pub alerts: Vec<TokenAlertInfo>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PairOpen {
+    #[serde(with = "serde_bytes")]
+    pub message: Vec<u8>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PairOpened {
+    pub slot: String,
+    pub expires_in: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PairMessage {
+    #[serde(with = "serde_bytes")]
+    pub message: Vec<u8>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PairTry {
+    #[serde(with = "serde_bytes")]
+    pub message: Vec<u8>,
+    #[serde(with = "serde_bytes")]
+    pub confirm: Vec<u8>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PairAnswer {
+    #[serde(with = "serde_bytes")]
+    pub sealed: Vec<u8>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -165,6 +224,13 @@ pub struct Frame {
 }
 
 mod opt_bytes {
+    pub fn serialize<S: serde::Serializer>(v: &Option<Vec<u8>>, s: S) -> Result<S::Ok, S::Error> {
+        match v {
+            Some(b) => s.serialize_bytes(b),
+            None => s.serialize_none(),
+        }
+    }
+
     pub fn deserialize<'de, D: serde::Deserializer<'de>>(
         d: D,
     ) -> Result<Option<Vec<u8>>, D::Error> {
@@ -180,7 +246,13 @@ mod opt_bytes {
 #[serde(tag = "t", content = "v", rename_all = "snake_case")]
 pub enum TeamMessage {
     History(HistoryLink),
-    Recovery(RecoveryWrap),
+    /// The recovery wrap of an epoch, with the group's id it is sealed for (the holder of the words reads it back
+    /// from the stream, with nothing but the words: TS-3).
+    Recovery {
+        #[serde(with = "serde_bytes")]
+        group: Vec<u8>,
+        wrap: RecoveryWrap,
+    },
     Escrow(EscrowWrap),
     Beacon(Beacon),
     JoinRequest(JoinRequest),
@@ -189,6 +261,27 @@ pub enum TeamMessage {
         invitation: [u8; 16],
         delivery: WelcomeDelivery,
     },
+    /// A member who is not an administrator on the server asks one to register the token of an invitation for their
+    /// own other device (TS-3): sealed as an object of the team, signed by the member's leaf, so that an
+    /// administrator knows whose it is. It carries the token's SHA-256 alone, never the invitation's secret.
+    TokenRequest(SealedObject),
+    /// An administrator registered the token of this SHA-256 with the server.
+    TokenGranted {
+        #[serde(with = "hex::serde")]
+        hash: [u8; 32],
+    },
+}
+
+/// What a [`TeamMessage::TokenRequest`] holds, once opened.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TokenRequestBody {
+    #[serde(with = "hex::serde")]
+    pub invitation: [u8; 16],
+    #[serde(with = "hex::serde")]
+    pub hash: [u8; 32],
+    pub expires_in: u64,
+    /// What the invitation lets in: the administrator checks that its author may make it.
+    pub purpose: escouade_team_crypto::Purpose,
 }
 
 pub fn encode<T: Serialize>(value: &T) -> Vec<u8> {
@@ -197,6 +290,49 @@ pub fn encode<T: Serialize>(value: &T) -> Vec<u8> {
     out
 }
 
+/// Decodes CBOR. Its text strings are read whole: ciborium's scratch buffer (4 KiB by default) would refuse a longer
+/// one, and the hexadecimal of a GroupInfo (a recovery wrap) or a Welcome is longer as soon as the team grows. The
+/// buffer is the size of what is read, which the server already bounds (an entry, a page).
 pub fn decode<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T, String> {
-    ciborium::from_reader(bytes).map_err(|e| e.to_string())
+    let mut scratch = vec![0u8; bytes.len().max(64)];
+    ciborium::de::from_reader_with_buffer(bytes, &mut scratch).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use escouade_team_crypto::recovery::{RecoveryWrap, Sealed};
+
+    #[test]
+    fn the_team_messages_round_trip() {
+        let m = TeamMessage::Recovery {
+            group: vec![1, 2, 3],
+            wrap: RecoveryWrap {
+                epoch: 4,
+                sealed: Sealed {
+                    kem_output: vec![5; 32],
+                    ciphertext: vec![6; 40],
+                },
+            },
+        };
+        let back: TeamMessage = decode(&encode(&m)).unwrap();
+        assert!(
+            matches!(back, TeamMessage::Recovery { group, wrap } if group == vec![1, 2, 3] && wrap.epoch == 4)
+        );
+        // A long one: the hexadecimal of a GroupInfo is past ciborium's 4 KiB.
+        let long = TeamMessage::Escrow(escouade_team_crypto::recovery::EscrowWrap {
+            epoch: 1,
+            sealed: Sealed {
+                kem_output: vec![1; 32],
+                ciphertext: vec![2; 20_000],
+            },
+        });
+        assert!(
+            matches!(decode::<TeamMessage>(&encode(&long)).unwrap(), TeamMessage::Escrow(w) if w.sealed.ciphertext.len() == 20_000)
+        );
+        let g = TeamMessage::TokenGranted { hash: [7; 32] };
+        assert!(
+            matches!(decode::<TeamMessage>(&encode(&g)).unwrap(), TeamMessage::TokenGranted { hash } if hash == [7; 32])
+        );
+    }
 }

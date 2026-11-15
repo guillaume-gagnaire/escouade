@@ -79,6 +79,8 @@ hyper-util = { version = "0.1", features = ["tokio", "server", "service"] }
 http-body-util = "0.1"
 # Its tokens: 32 bytes from the system's random generator.
 getrandom = "0.4"
+# The ids of the teams, as their folders and the window name them (`teams`).
+hex = "0.4"
 # « Codex peut piloter Escouade »: its entry in each account's `config.toml`, the user's comments and layout kept.
 toml_edit = "0.25"
 # What every part stands on (the languages written in now, the guards of the paths), and the parts of the app cut out of
@@ -108,6 +110,11 @@ escouade-updates = { path = "../crates/escouade-updates" }
 escouade-mcp = { path = "../crates/escouade-mcp" }
 # The policies of a managed device (TS-0b), the rank 6 of the layers of the settings (`locks`, TS-11).
 escouade-policy = { path = "../crates/escouade-policy" }
+# The team server's client (TS-3, docs/TEAM-SERVER.md): the team as an MLS group, its keys in the keychain (the app's
+# `SecretStore`), its state in the data's `teams` folder, its server through the app's proxy and certificates (`teams`).
+escouade-team = { path = "../crates/escouade-team" }
+# The QR code of an invitation of one's own device (§3.4), drawn as SVG: no image library.
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 # The transcription as one speaks (ESC-136): a WebSocket to the service, through the settings' proxy (HTTP CONNECT,
 # opened by hand) and TLS by rustls (ring, as reqwest), the system's roots and Mozilla's.
 tokio-tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
@@ -237,6 +244,9 @@ opt-level = 3
 strip = true
 
 [dev-dependencies]
+# The team server, started by the core's tests of its client (`teams_tests`).
+escouade-team-server = { path = "../crates/escouade-team-server" }
+tempfile = "3"
 # The WAV files of the tests of the voice.
 hound = "3.5"
 # Each test process's temporary folder of its own, given before `main` (`src/test_tmp.rs`).

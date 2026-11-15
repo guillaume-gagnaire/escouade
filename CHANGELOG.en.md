@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Team server: create a team on the server your team hosts, with a 24-word recovery key, invite by a single-use link and add your other devices by a QR code or a short code. Everything stays end-to-end encrypted: the server never sees an invitation’s secret.
 - A pull request can now be read in Escouade, in place of the list of pull requests: its description, its commits, its reviews and threads with their state, its checks and their logs. Open it from the list, the “In review” card, the “PR and CI” tab or an agent’s pull request; it reads itself again when it changes.
 - A project’s editor is VS Code’s, with its file tree and its tabs, in a column like the agents. It reads and writes files through Escouade, reloads a file an agent changed, and shows the conflict when you had changed it too.
 - Scheduled tasks: an agent’s ticket that comes back at fixed times (every day, every week, every month or in cron), project by project, from the new “Scheduled” section of the sidebar. Escouade makes and launches it at its due time, never two at once, once at its return if it was closed.

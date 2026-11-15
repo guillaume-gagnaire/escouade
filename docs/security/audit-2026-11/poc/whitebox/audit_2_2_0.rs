@@ -976,6 +976,13 @@ fn fuzz_the_deep_link_gives_a_plugin_id_or_nothing() {
                 assert!(manifest::is_id(&id), "{url:?} gave the id {id:?}");
                 assert!(!id.contains(['/', '\\', ':', '%', ' ', '"']), "{id:?}");
             }
+            // An invitation to a team (TS-3, after this audit): a link the team client reads again.
+            DeepLink::TeamJoin { link } => {
+                assert!(
+                    crate::teams::parse_link(&link).is_ok(),
+                    "{url:?} gave {link:?}"
+                );
+            }
             DeepLink::Bad { url: shown } => {
                 assert!(shown.chars().count() <= 121 && !shown.chars().any(char::is_control));
             }

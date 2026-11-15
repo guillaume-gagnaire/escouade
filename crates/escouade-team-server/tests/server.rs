@@ -35,10 +35,10 @@ async fn the_init_token_enrols_once(b: Backend) {
     let admin = Device::enroll(&s, &token).await.expect("first use");
     assert_eq!(admin.id.len(), 16);
     assert_eq!(admin.team.len(), 16);
-    // A second time: refused.
+    // A second time: refused, and said used (TS-3), not unknown.
     let (status, p) = Device::enroll(&s, &token).await.err().unwrap();
-    assert_eq!(status, StatusCode::UNAUTHORIZED);
-    assert_eq!(p.error, "bad_token");
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(p.error, "token_used");
     // A made-up token, a key that is not one: refused.
     assert_eq!(
         Device::enroll(&s, "nope").await.err().unwrap().0,
@@ -77,7 +77,7 @@ async fn an_administrator_adds_a_device_and_revokes_it(b: Backend) {
     // The enrolment token is used once.
     assert_eq!(
         Device::enroll(&s, &token).await.err().unwrap().0,
-        StatusCode::UNAUTHORIZED
+        StatusCode::CONFLICT
     );
     bob.sign_in().await.unwrap();
     // A member neither adds a device nor revokes another one.
@@ -115,6 +115,7 @@ async fn an_administrator_adds_a_device_and_revokes_it(b: Backend) {
             "/v1/devices/enrollments",
             &EnrollmentRequest {
                 expires_in: Some(1),
+                token_hash: None,
             },
         )
         .await

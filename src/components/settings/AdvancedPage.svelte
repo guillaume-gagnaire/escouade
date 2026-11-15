@@ -153,6 +153,13 @@
 <!-- Also with no project open: that is when a folder's old history is most worth finding. -->
 <VectorsSection />
 
+<!-- The team server's screens (TS-3), until the team has its place in the window and its settings (TS-4). -->
+<Group title={t('team.entry.group')} note={t('team.entry.groupNote')}>
+  <Row label={t('team.entry.row')}>
+    <button class="btn" onclick={() => (app.modal = { kind: 'team' })}><Icon name="team" size={14} />{t('team.entry.open')}</button>
+  </Row>
+</Group>
+
 <Group title={t('settings.groups.localData')}>
   <Row label={t('common.folder')}>
     {#snippet extra()}<span class="more mono data">{dataDir ? tildify(dataDir) : '~/.escouade'}</span>{/snippet}

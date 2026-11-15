@@ -266,6 +266,33 @@ pub(crate) struct DeviceKeys {
     pub mls: [u8; 32],
     #[serde(with = "hex::serde")]
     pub state_key: [u8; 32],
+    /// The id of the recovery leaf in the group, when this device is the team's recovery key come back (TS-3): its
+    /// MLS identity is then the recovery key's (`RecoveryKey::identity`), not the server's id, and `mls` is the
+    /// seed the 24 words give.
+    #[serde(default, with = "opt_hex", skip_serializing_if = "Option::is_none")]
+    pub recovery_leaf: Option<[u8; 16]>,
+}
+
+/// `Option<[u8; 16]>` in hexadecimal.
+mod opt_hex {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(v: &Option<[u8; 16]>, s: S) -> Result<S::Ok, S::Error> {
+        match v {
+            Some(b) => s.serialize_some(&hex::encode(b)),
+            None => s.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<[u8; 16]>, D::Error> {
+        let text: Option<String> = Option::deserialize(d)?;
+        text.map(|t| {
+            let mut out = [0u8; 16];
+            hex::decode_to_slice(&t, &mut out).map_err(serde::de::Error::custom)?;
+            Ok(out)
+        })
+        .transpose()
+    }
 }
 
 impl std::fmt::Debug for DeviceKeys {
@@ -334,6 +361,7 @@ mod tests {
             auth: [0xaa; 32],
             mls: [0xbb; 32],
             state_key: [0xdd; 32],
+            recovery_leaf: None,
         };
         let shown = format!("{keys:?}");
         assert!(!shown.contains("aaaa") && !shown.contains("bbbb") && !shown.contains("dddd"));

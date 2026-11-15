@@ -381,6 +381,15 @@ describe('the link escouade://plugin/<id> (STORE-11)', () => {
     expect(plugins.page).toEqual({ kind: 'plugin', id: MANIFEST.id, tab: 'overview' });
   });
 
+  it('opens « Rejoindre une équipe » on an invitation to a team (TS-3), the link filled in, nothing joined', async () => {
+    const link = 'https://team.acme.fr/join/00112233445566778899aabbccddeeff#s=AAAA&t=BBBB';
+    const backend = fakeBackend({ deep_links_take: () => [{ kind: 'teamJoin', link }] });
+    app.modal = null;
+    await plugins.takeLinks();
+    expect(app.modal).toEqual({ kind: 'team', step: 'join', link });
+    expect(backend.called('team_join')).toEqual([]);
+  });
+
   it('says an id the store does not have, and a link it cannot read, nothing else done', async () => {
     fakeBackend({
       store_view: () => store(),

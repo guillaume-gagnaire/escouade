@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Serveur d’équipe : crée une équipe sur le serveur que ton équipe héberge, avec une clé de secours de 24 mots, invite par un lien à usage unique et ajoute tes autres appareils par QR code ou par un code court. Tout reste chiffré de bout en bout : le serveur ne voit jamais le secret d’une invitation.
 - Une PR se lit maintenant dans Escouade, à la place de la liste des PR : sa description, ses commits, ses relectures et ses fils avec leur état, ses contrôles et leurs journaux. On l’ouvre depuis la liste, la carte « En revue », l’onglet « PR et CI » ou la PR d’un agent ; elle se relit seule quand elle change.
 - L’éditeur d’un projet est celui de VS Code, avec son arborescence et ses onglets, dans une colonne comme les agents. Il lit et écrit les fichiers par Escouade, recharge un fichier qu’un agent a changé et montre le conflit quand tu l’avais modifié.
 - Les tâches programmées : un ticket d’agent qui revient à heure fixe (chaque jour, chaque semaine, chaque mois ou en cron), projet par projet, depuis la nouvelle section « Programmées » de la barre latérale. Escouade le crée et le lance à l’échéance, jamais deux à la fois, une seule fois au retour s’il était fermé.

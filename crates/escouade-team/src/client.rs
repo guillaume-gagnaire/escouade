@@ -47,6 +47,23 @@ pub enum ClientError {
     Decode(String),
 }
 
+impl ClientError {
+    /// The stable code of a refusal (`token_used`, `pair_tried`…).
+    pub fn code(&self) -> Option<&str> {
+        match self {
+            ClientError::Refused { error, .. } => Some(error),
+            _ => None,
+        }
+    }
+
+    pub fn status(&self) -> Option<u16> {
+        match self {
+            ClientError::Refused { status, .. } => Some(*status),
+            _ => None,
+        }
+    }
+}
+
 /// A request, as a transport sends it.
 #[derive(Clone, Debug)]
 pub struct Call {
@@ -385,6 +402,73 @@ fn ok_cbor<T: serde::de::DeserializeOwned>(reply: Reply) -> Result<T, ClientErro
     wire::decode(&reply.body).map_err(ClientError::Decode)
 }
 
+/// A slot of the pairing relay, as it goes in a path: three characters of its alphabet.
+fn slot_path(slot: &str) -> Result<&str, ClientError> {
+    if slot.len() == 3 && slot.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        Ok(slot)
+    } else {
+        Err(ClientError::Decode(
+            "a code's slot is three characters".into(),
+        ))
+    }
+}
+
+// === The pairing relay, the side of the new device (not enrolled: no session) ===
+
+/// The first message of the slot.
+pub async fn pair_message(transport: &dyn Transport, slot: &str) -> Result<Vec<u8>, ClientError> {
+    let reply = transport
+        .call(Call {
+            method: Method::Get,
+            path: format!("/v1/pair/{}", slot_path(slot)?),
+            content_type: None,
+            body: Vec::new(),
+            token: None,
+        })
+        .await?;
+    Ok(ok_cbor::<PairMessage>(reply)?.message)
+}
+
+/// The new device's one try.
+pub async fn pair_try(
+    transport: &dyn Transport,
+    slot: &str,
+    message: Vec<u8>,
+    confirm: Vec<u8>,
+) -> Result<(), ClientError> {
+    let reply = transport
+        .call(cbor_call(
+            Method::Post,
+            format!("/v1/pair/{}/try", slot_path(slot)?),
+            &PairTry { message, confirm },
+        ))
+        .await?;
+    match reply.status {
+        204 => Ok(()),
+        _ => Err(refusal(&reply)),
+    }
+}
+
+/// The answer, once the device in the team left it (the slot goes with it); None while there is none.
+pub async fn pair_take(
+    transport: &dyn Transport,
+    slot: &str,
+) -> Result<Option<Vec<u8>>, ClientError> {
+    let reply = transport
+        .call(Call {
+            method: Method::Get,
+            path: format!("/v1/pair/{}/answer", slot_path(slot)?),
+            content_type: None,
+            body: Vec::new(),
+            token: None,
+        })
+        .await?;
+    if reply.status == 204 {
+        return Ok(None);
+    }
+    Ok(Some(ok_cbor::<PairAnswer>(reply)?.sealed))
+}
+
 fn cbor_call(method: Method, path: String, body: &impl serde::Serialize) -> Call {
     Call {
         method,
@@ -542,10 +626,124 @@ impl ServerClient {
             .authed(cbor_call(
                 Method::Post,
                 "/v1/devices/enrollments".into(),
-                &EnrollmentRequest { expires_in },
+                &EnrollmentRequest {
+                    expires_in,
+                    token_hash: None,
+                },
             ))
             .await?;
         Ok(ok_cbor::<TokenResponse>(reply)?.token)
+    }
+
+    /// Registers the token whose SHA-256 is `hash` (an invitation's, made by this device) for `expires_in` seconds
+    /// (the server keeps 7 days at most): an administrator's. Gives the time it was kept for.
+    pub async fn register_token(
+        &self,
+        hash: [u8; 32],
+        expires_in: u64,
+    ) -> Result<u64, ClientError> {
+        let reply = self
+            .authed(cbor_call(
+                Method::Post,
+                "/v1/devices/enrollments".into(),
+                &EnrollmentRequest {
+                    expires_in: Some(expires_in),
+                    token_hash: Some(hash.to_vec()),
+                },
+            ))
+            .await?;
+        Ok(ok_cbor::<Registered>(reply)?.expires_in)
+    }
+
+    /// The team's tokens used a second time (an administrator's).
+    pub async fn token_alerts(&self) -> Result<Vec<TokenAlertInfo>, ClientError> {
+        let reply = self
+            .authed(Call {
+                method: Method::Get,
+                path: "/v1/devices/enrollments/alerts".into(),
+                content_type: None,
+                body: Vec::new(),
+                token: None,
+            })
+            .await?;
+        Ok(ok_cbor::<TokenAlerts>(reply)?.alerts)
+    }
+
+    /// Sets a device's role on the server (an administrator's): the server's roles kept in step with the roster.
+    pub async fn set_role(&self, device: &[u8; 16], role: Role) -> Result<(), ClientError> {
+        let reply = self
+            .authed(cbor_call(
+                Method::Post,
+                format!("/v1/devices/{}/role", hex::encode(device)),
+                &RoleRequest { role },
+            ))
+            .await?;
+        match reply.status {
+            204 => Ok(()),
+            _ => Err(refusal(&reply)),
+        }
+    }
+
+    // === The pairing relay (`pairing.rs`), the side of the device in the team ===
+
+    pub async fn pair_open(&self, message: &[u8]) -> Result<PairOpened, ClientError> {
+        let reply = self
+            .authed(cbor_call(
+                Method::Post,
+                "/v1/pair".into(),
+                &PairOpen {
+                    message: message.to_vec(),
+                },
+            ))
+            .await?;
+        ok_cbor(reply)
+    }
+
+    /// The new device's try, once it is there.
+    pub async fn pair_tried(&self, slot: &str) -> Result<Option<PairTry>, ClientError> {
+        let reply = self
+            .authed(Call {
+                method: Method::Get,
+                path: format!("/v1/pair/{}/try", slot_path(slot)?),
+                content_type: None,
+                body: Vec::new(),
+                token: None,
+            })
+            .await?;
+        if reply.status == 204 {
+            return Ok(None);
+        }
+        ok_cbor(reply).map(Some)
+    }
+
+    pub async fn pair_answer(&self, slot: &str, sealed: Vec<u8>) -> Result<(), ClientError> {
+        let reply = self
+            .authed(cbor_call(
+                Method::Post,
+                format!("/v1/pair/{}/answer", slot_path(slot)?),
+                &PairAnswer { sealed },
+            ))
+            .await?;
+        match reply.status {
+            204 => Ok(()),
+            _ => Err(refusal(&reply)),
+        }
+    }
+
+    pub async fn pair_close(&self, slot: &str) -> Result<(), ClientError> {
+        let reply = self
+            .authed(Call {
+                method: Method::Delete,
+                path: format!("/v1/pair/{}", slot_path(slot)?),
+                content_type: None,
+                body: Vec::new(),
+                token: None,
+            })
+            .await?;
+        match reply.status {
+            204 | 404 => Ok(()),
+            _ => Err(refusal(&reply)),
+        }
     }
 
     /// Revokes a device on the server: its sessions and live connections end. True when it was revoked now, false

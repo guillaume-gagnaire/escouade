@@ -68,7 +68,11 @@ export interface Suggestion {
 }
 
 /** What a link `escouade://` asks (STORE-11): the page of a plugin, or nothing for a link the app cannot read. */
-export type DeepLink = { kind: 'plugin'; id: string } | { kind: 'bad'; url: string };
+export type DeepLink =
+  | { kind: 'plugin'; id: string }
+  /** An invitation to a team (TS-3): « Rejoindre une équipe », the link filled in. */
+  | { kind: 'teamJoin'; link: string }
+  | { kind: 'bad'; url: string };
 
 export const storeApi = {
   view: () => invoke<StoreView>('store_view'),

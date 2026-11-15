@@ -225,6 +225,9 @@ class PluginsStore {
       if (link.kind === 'plugin') {
         app.openPlugins();
         this.openStorePlugin(link.id);
+      } else if (link.kind === 'teamJoin') {
+        // Joining stays the user's gesture: the link is shown with its server and the team's six words.
+        app.modal = { kind: 'team', step: 'join', link: link.link };
       } else app.toast(t('plugins.deepLink.bad', { url: link.url }), 'error');
     }
   }

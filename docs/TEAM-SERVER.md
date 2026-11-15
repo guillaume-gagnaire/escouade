@@ -831,7 +831,7 @@ Le socle s'appuie sur la fondation du mode serveur (`docs/REMOTE.md`) pour le tr
 | **Socle** | | | |
 | TS-1 | `escouade-team-server` : axum, SQLite et PostgreSQL, fichiers sur disque et S3, WebSocket, poignée de main des versions, authentification par défi signé, Docker et systemd, `init`, `/healthz` | TS-0a | 6 j |
 | TS-2 | La crate `escouade-team` : clés d'appareil au trousseau, journal signé des membres (vérification, fourche, retour en arrière), clés d'équipe et de projet par époque, rotation, révocation | TS-0a | 8 j |
-| TS-3 | Créer une équipe (genèse, empreinte, clé de secours), inviter (le secret après le `#`, `escouade://team/join`), ajouter un appareil par QR code et par code court (PAKE), séquestre en option | TS-1, TS-2 | 6 j |
+| TS-3 | Créer une équipe (genèse, empreinte, clé de secours), inviter (le secret après le `#`, `escouade://team/join`), ajouter un appareil par QR code et par code court (PAKE), séquestre en option. **Fait (ESC-461)** : dans `crates/escouade-team` (son `README.md`, « L'entrée dans l'équipe »), branché dans le cœur (`src-tauri/src/teams.rs`), les écrans dans `src/components/team` | TS-1, TS-2 | 6 j |
 | TS-4 | L'équipe comme espace dans le client : Réglages › Équipe (membres, appareils, rôles, empreinte) | TS-3, espaces de REMOTE.md | 4 j |
 | **Kanban** | | | |
 | TS-5 | La synchronisation : journal d'opérations chiffrées et signées, copie locale SQLite, file d'envoi hors ligne, horloge hybride, instantanés | TS-2 | 8 j |

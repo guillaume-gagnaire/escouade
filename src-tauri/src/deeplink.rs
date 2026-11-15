@@ -2,6 +2,10 @@
 //! the app (its argv on Windows and Linux, an Apple event on macOS); started already, the second launch hands it over to the
 //! first (`single-instance`). It opens the plugin's page in the view Plugins and never installs anything: installing stays the
 //! user's gesture, with its permissions shown. A link the app cannot read is said, and nothing else is done.
+//!
+//! `escouade://team/join/<server>/<id>#s=…&t=…` (TS-3): an invitation to a team, as the team server's page hands it over
+//! (`/join/<id>`, the secret read after the `#` in the browser). It opens « Rejoindre une équipe » with the link filled in,
+//! its server and the team's six words shown: joining stays the user's gesture.
 
 use crate::core::Core;
 use parking_lot::Mutex;
@@ -12,8 +16,8 @@ use tauri::{AppHandle, Manager, Runtime};
 /// The scheme the app registers (`plugins.deep-link.desktop.schemes` of tauri.conf.json).
 pub const SCHEME: &str = "escouade";
 
-/// The longest link read: an id is 100 characters at most.
-const MAX_LEN: usize = 300;
+/// The longest link read: an id is 100 characters at most, an invitation to a team some 250.
+const MAX_LEN: usize = 600;
 
 /// What a link asks, for the window.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -21,6 +25,8 @@ const MAX_LEN: usize = 300;
 pub enum DeepLink {
     /// The page of the plugin `id`: its page in the store, its own when it is installed.
     Plugin { id: String },
+    /// An invitation to a team (TS-3): the link as `teams::parse_link` reads it, `https://<server>/join/<id>#…`.
+    TeamJoin { link: String },
     /// A link of the scheme the app cannot read: said, nothing done.
     Bad { url: String },
 }
@@ -35,6 +41,17 @@ pub fn parse(url: &str) -> DeepLink {
     let Some(rest) = strip_scheme(url) else {
         return bad();
     };
+    if strip_prefix_ci(rest, "team/join/").is_some() {
+        return match crate::teams::parse_link(url) {
+            Ok(link) => DeepLink::TeamJoin {
+                link: link.to_url(),
+            },
+            // Never shown whole: its secret.
+            Err(_) => DeepLink::Bad {
+                url: "escouade://team/join/…".into(),
+            },
+        };
+    }
     let Some(rest) = strip_prefix_ci(rest, "plugin/") else {
         return bad();
     };
@@ -85,6 +102,14 @@ pub fn deliver<R: Runtime>(app: &AppHandle<R>, urls: impl IntoIterator<Item = St
         let link = parse(&url);
         match &link {
             DeepLink::Plugin { id } => log::info!("deep link: the page of {id}"),
+            // The server's name, never the secret after the `#`.
+            DeepLink::TeamJoin { link } => log::info!(
+                "deep link: an invitation to a team of {}",
+                link.trim_start_matches("https://")
+                    .split('/')
+                    .next()
+                    .unwrap_or("")
+            ),
             DeepLink::Bad { url } => log::warn!("deep link not understood: {url}"),
         }
         if let Some(inbox) = app.try_state::<Inbox>() {

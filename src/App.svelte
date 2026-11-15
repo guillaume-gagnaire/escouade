@@ -55,6 +55,7 @@
   import TelemetryModal from './components/modals/TelemetryModal.svelte';
   import FirstModeModal from './components/modals/FirstModeModal.svelte';
   import TeamNameModal from './components/modals/TeamNameModal.svelte';
+  import TeamModal from './components/team/TeamModal.svelte';
   import UpdateModal from './components/modals/UpdateModal.svelte';
   import ClaudeMemoryModal from './components/modals/ClaudeMemoryModal.svelte';
   import Overview from './components/Overview.svelte';
@@ -355,6 +356,8 @@
   <TelemetryModal />
 {:else if app.modal?.kind === 'teamName'}
   <TeamNameModal projectId={app.modal.projectId} then={app.modal.then} />
+{:else if app.modal?.kind === 'team'}
+  <TeamModal step={app.modal.step} link={app.modal.link} teamId={app.modal.teamId} />
 {:else if app.modal?.kind === 'notes'}
   <UpdateModal version={app.modal.version} notes={app.modal.notes} installed />
 {:else if app.modal?.kind === 'convSearch'}

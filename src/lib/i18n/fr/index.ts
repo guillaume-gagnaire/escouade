@@ -32,6 +32,7 @@ import share from './share';
 import shell from './shell';
 import stats from './stats';
 import subagents from './subagents';
+import team from './team';
 import wizard from './wizard';
 import voice from './voice';
 import plugins from './plugins';
@@ -76,6 +77,7 @@ export const fr = {
   workflow,
   plugins,
   scheduled,
+  team,
 } as const;
 
 export type Catalog = typeof fr;

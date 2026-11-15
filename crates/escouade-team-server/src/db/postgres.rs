@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS tokens (
     created_at BIGINT NOT NULL,
     expires_at BIGINT
 );
+ALTER TABLE tokens ADD COLUMN IF NOT EXISTS used_at BIGINT;
+ALTER TABLE tokens ADD COLUMN IF NOT EXISTS reused_at BIGINT;
 CREATE TABLE IF NOT EXISTS team_entries (
     team_id BYTEA NOT NULL,
     seq BIGINT NOT NULL,
@@ -231,10 +233,7 @@ impl Store for Postgres {
         expires_at: Option<i64>,
         now: i64,
     ) -> Result<()> {
-        let kind: i64 = match kind {
-            TokenKind::Team => 0,
-            TokenKind::Device => 1,
-        };
+        let kind: i64 = kind.code();
         let team = team.map(|t| t.to_vec());
         self.client
             .lock()
@@ -258,7 +257,7 @@ impl Store for Postgres {
         let tx = client.transaction().await?;
         let Some(token) = tx
             .query_opt(
-                "SELECT kind, team_id, expires_at FROM tokens WHERE hash = $1 FOR UPDATE",
+                "SELECT kind, team_id, expires_at, used_at FROM tokens WHERE hash = $1 FOR UPDATE",
                 &[&hash.as_slice()],
             )
             .await?
@@ -268,6 +267,16 @@ impl Store for Postgres {
         let kind: i64 = token.get(0);
         let team: Option<Vec<u8>> = token.get(1);
         let expires_at: Option<i64> = token.get(2);
+        let used_at: Option<i64> = token.get(3);
+        if used_at.is_some() {
+            tx.execute(
+                "UPDATE tokens SET reused_at = $2 WHERE hash = $1",
+                &[&hash.as_slice(), &now],
+            )
+            .await?;
+            tx.commit().await?;
+            return Err(StoreError::TokenUsed);
+        }
         if expires_at.is_some_and(|e| e <= now) {
             tx.execute("DELETE FROM tokens WHERE hash = $1", &[&hash.as_slice()])
                 .await?;
@@ -310,7 +319,12 @@ impl Store for Postgres {
             if count >= quotas.devices as i64 {
                 return Err(StoreError::TooMany("devices"));
             }
-            (team, Role::Member)
+            let role = if kind == TokenKind::Recovery.code() {
+                Role::Admin
+            } else {
+                Role::Member
+            };
+            (team, role)
         };
         let id: Id = random();
         tx.execute(
@@ -318,8 +332,12 @@ impl Store for Postgres {
             &[&id.as_slice(), &team.as_slice(), &public_key.as_slice(), &role.as_str(), &now],
         )
         .await?;
-        tx.execute("DELETE FROM tokens WHERE hash = $1", &[&hash.as_slice()])
-            .await?;
+        // Kept used, not deleted: a second use is told apart from an unknown token.
+        tx.execute(
+            "UPDATE tokens SET used_at = $2 WHERE hash = $1",
+            &[&hash.as_slice(), &now],
+        )
+        .await?;
         tx.commit().await?;
         Ok(Device {
             id,
@@ -368,6 +386,83 @@ impl Store for Postgres {
             )
             .await?;
         Ok(n == 1)
+    }
+
+    async fn set_role(&self, team: Id, device: Id, role: Role) -> Result<bool> {
+        let mut client = self.client.lock().await;
+        let tx = client.transaction().await?;
+        // The team's row, locked: two changes of role count one after the other.
+        tx.query_opt(
+            "SELECT 1 FROM teams WHERE id = $1 FOR UPDATE",
+            &[&team.as_slice()],
+        )
+        .await?;
+        let Some(row) = tx
+            .query_opt(
+                "SELECT role, revoked_at FROM devices WHERE id = $1 AND team_id = $2",
+                &[&device.as_slice(), &team.as_slice()],
+            )
+            .await?
+        else {
+            return Ok(false);
+        };
+        let current: String = row.get(0);
+        let revoked: Option<i64> = row.get(1);
+        if Role::parse(&current) == Role::Admin && role == Role::Member && revoked.is_none() {
+            let admins: i64 = tx
+                .query_one(
+                    "SELECT COUNT(*) FROM devices WHERE team_id = $1 AND role = 'admin' AND revoked_at IS NULL",
+                    &[&team.as_slice()],
+                )
+                .await?
+                .get(0);
+            if admins <= 1 {
+                return Err(StoreError::LastAdmin);
+            }
+        }
+        tx.execute(
+            "UPDATE devices SET role = $3 WHERE id = $1 AND team_id = $2",
+            &[&device.as_slice(), &team.as_slice(), &role.as_str()],
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(true)
+    }
+
+    async fn token_alerts(&self, team: Id) -> Result<Vec<TokenAlert>> {
+        let rows = self
+            .client
+            .lock()
+            .await
+            .query(
+                "SELECT hash, used_at, reused_at FROM tokens WHERE team_id = $1 AND reused_at IS NOT NULL ORDER BY reused_at",
+                &[&team.as_slice()],
+            )
+            .await?;
+        rows.iter()
+            .map(|r| {
+                let hash: Vec<u8> = r.get(0);
+                Ok(TokenAlert {
+                    hash: hash
+                        .try_into()
+                        .map_err(|_| StoreError::Backend("a hash of the wrong length".into()))?,
+                    used_at: r.get(1),
+                    reused_at: r.get(2),
+                })
+            })
+            .collect()
+    }
+
+    async fn sweep_tokens(&self, now: i64) -> Result<()> {
+        self.client
+            .lock()
+            .await
+            .execute(
+                "DELETE FROM tokens WHERE expires_at IS NOT NULL AND expires_at + 604800 <= $1",
+                &[&now],
+            )
+            .await?;
+        Ok(())
     }
 
     async fn append(

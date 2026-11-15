@@ -4650,6 +4650,142 @@ pub fn deep_links_take(inbox: State<'_, crate::deeplink::Inbox>) -> Vec<crate::d
     inbox.take()
 }
 
+// ---------- The team server (TS-3, `teams`) ----------
+
+type TeamsState<'a> = State<'a, Arc<crate::teams::Teams>>;
+
+/// The teams of this data folder, as the window shows them.
+#[tauri::command]
+pub async fn team_list(teams: TeamsState<'_>) -> Res<Vec<crate::teams::TeamView>> {
+    Ok(teams.list().await)
+}
+
+/// Creates a team: the server's address, the token of `escouade-team-server init`, a name, and the organisation's
+/// escrow key if any (its public half and who holds it). Gives the 24 words of the recovery key, shown once.
+#[tauri::command]
+pub async fn team_create(
+    teams: TeamsState<'_>,
+    server: String,
+    token: String,
+    name: String,
+    escrow_public: Option<String>,
+    escrow_holder: Option<String>,
+) -> Res<crate::teams::Created> {
+    let escrow = match (escrow_public, escrow_holder) {
+        (Some(p), Some(h)) if !p.trim().is_empty() => Some((p, h)),
+        (Some(p), None) if !p.trim().is_empty() => {
+            return Err("Dis qui détient la clé de séquestre.".into())
+        }
+        _ => None,
+    };
+    teams.create(&server, &token, &name, escrow).await
+}
+
+/// A new escrow key pair for the organisation: its public half, and its secret to give to whoever holds it.
+#[tauri::command]
+pub fn team_escrow_new(teams: TeamsState<'_>, holder: String) -> Res<crate::teams::EscrowPair> {
+    teams.escrow_new(&holder)
+}
+
+/// Three of the 24 words typed back (their places from 0): true when they are right.
+#[tauri::command]
+pub fn team_confirm_words(
+    teams: TeamsState<'_>,
+    team: String,
+    typed: Vec<(usize, String)>,
+) -> Res<bool> {
+    teams.confirm_words(&team, &typed)
+}
+
+/// A new recovery key for the team (an administrator's): its 24 words, shown once.
+#[tauri::command]
+pub async fn team_new_recovery(teams: TeamsState<'_>, team: String) -> Res<Vec<String>> {
+    teams.new_recovery(&team).await
+}
+
+/// Invites a new member: `member` or `admin`, for `hours` (72 by default), one use.
+#[tauri::command]
+pub async fn team_invite(
+    teams: TeamsState<'_>,
+    team: String,
+    role: String,
+    hours: Option<u64>,
+) -> Res<crate::teams::InviteView> {
+    teams.invite(&team, &role, hours).await
+}
+
+/// The QR code of another device of one's own (an hour).
+#[tauri::command]
+pub async fn team_own_device(teams: TeamsState<'_>, team: String) -> Res<crate::teams::InviteView> {
+    teams.own_device(&team).await
+}
+
+/// What an invitation link says, before joining: its server, the team's six words.
+#[tauri::command]
+pub fn team_join_preview(teams: TeamsState<'_>, link: String) -> Res<crate::teams::JoinPreview> {
+    teams.join_preview(&link)
+}
+
+#[tauri::command]
+pub async fn team_join(
+    teams: TeamsState<'_>,
+    link: String,
+    name: String,
+) -> Res<crate::teams::TeamView> {
+    teams.join(&link, &name).await
+}
+
+/// Shows a short code for another device of one's own.
+#[tauri::command]
+pub async fn team_pair_start(teams: TeamsState<'_>, team: String) -> Res<crate::teams::PairView> {
+    teams.pair_start(&team).await
+}
+
+#[tauri::command]
+pub async fn team_pair_step(teams: TeamsState<'_>, team: String) -> Res<crate::teams::PairView> {
+    teams.pair_step(&team).await
+}
+
+#[tauri::command]
+pub fn team_pair_cancel(teams: TeamsState<'_>, team: String) {
+    teams.pair_cancel(&team)
+}
+
+/// The new device, by the short code shown on the other.
+#[tauri::command]
+pub async fn team_pair_join(
+    teams: TeamsState<'_>,
+    server: String,
+    code: String,
+    name: String,
+) -> Res<crate::teams::TeamView> {
+    teams.pair_join(&server, &code, &name).await
+}
+
+/// Brings a team back by its recovery key: the server's address, the operator's token and the 24 words.
+#[tauri::command]
+pub async fn team_recover(
+    teams: TeamsState<'_>,
+    server: String,
+    token: String,
+    words: String,
+    name: String,
+) -> Res<crate::teams::Created> {
+    teams.recover(&server, &token, &words, &name).await
+}
+
+/// Reads the team's stream now (« Réessayer » under an alarm).
+#[tauri::command]
+pub async fn team_sync(teams: TeamsState<'_>, team: String) -> Res<crate::teams::TeamView> {
+    teams.sync(&team).await
+}
+
+/// Forgets the team on this device.
+#[tauri::command]
+pub async fn team_forget(teams: TeamsState<'_>, team: String) -> Res<()> {
+    teams.forget(&team).await
+}
+
 // ---------- The launches' pages (ESC-311) ----------
 
 /// Whether an address is Escouade's own (`navigation::destination`), never loaded in a page.

@@ -13,6 +13,7 @@ pub mod db;
 pub mod files;
 pub mod live;
 pub mod metrics;
+pub mod pair;
 pub mod transport;
 pub mod util;
 
@@ -44,6 +45,7 @@ pub struct App {
     pub limits: Limits,
     pub sessions: auth::Sessions,
     pub hub: live::Hub,
+    pub pairs: pair::Pairs,
     pub metrics: Metrics,
     pub address_rate: Limiter<IpAddr>,
     pub device_rate: Limiter<Id>,
@@ -75,6 +77,7 @@ impl Server {
             limits: config.limits,
             sessions: auth::Sessions::default(),
             hub: live::Hub::default(),
+            pairs: pair::Pairs::default(),
             metrics: Metrics::default(),
             address_rate: Limiter::new(config.rates.per_address),
             device_rate: Limiter::new(config.rates.per_device),
@@ -103,6 +106,26 @@ impl Server {
         Ok(token)
     }
 
+    /// A one-use token that adds a device to `team` as an administrator of the server
+    /// (`escouade-team-server recovery-token`): for the holder of the team's recovery key, the day every administrator
+    /// lost their devices (TS-3, `docs/TEAM-SERVER.md` §3.5). It gives no key: the words of the recovery key do. It
+    /// lasts `enrollment_ttl_max`.
+    pub async fn new_recovery_token(&self, team: Id) -> Result<String, Error> {
+        let token = util::new_token();
+        let now = util::now();
+        self.app
+            .store
+            .add_token(
+                util::token_hash(&token),
+                TokenKind::Recovery,
+                Some(team),
+                Some(now + self.app.limits.enrollment_ttl_max.as_secs() as i64),
+                now,
+            )
+            .await?;
+        Ok(token)
+    }
+
     /// The exposed routes.
     pub fn router(&self) -> Router {
         let limits = &self.app.limits;
@@ -113,7 +136,22 @@ impl Server {
             .route("/v1/auth/session", post(api::session))
             .route("/v1/devices", get(api::devices))
             .route("/v1/devices/enrollments", post(api::create_enrollment))
+            .route("/v1/devices/enrollments/alerts", get(api::token_alerts))
             .route("/v1/devices/{device}/revoke", post(api::revoke))
+            .route("/v1/devices/{device}/role", post(api::set_role))
+            .route("/v1/pair", post(api::pair_open))
+            .route(
+                "/v1/pair/{slot}",
+                get(api::pair_message).delete(api::pair_close),
+            )
+            .route(
+                "/v1/pair/{slot}/try",
+                get(api::pair_tried).post(api::pair_try),
+            )
+            .route(
+                "/v1/pair/{slot}/answer",
+                get(api::pair_take).post(api::pair_answer),
+            )
             .route(
                 "/v1/team/stream",
                 get(api::read_team)
@@ -137,6 +175,7 @@ impl Server {
             .layer(middleware::from_fn_with_state(PROTOCOL, handshake::layer));
         Router::new()
             .route("/healthz", get(api::healthz))
+            .route("/join/{id}", get(api::join_page))
             .merge(v1)
             .fallback(|| async { transport::Problem::not_found() })
             .layer(middleware::from_fn_with_state(
@@ -155,7 +194,8 @@ impl Server {
             .with_state(self.app.clone())
     }
 
-    /// Forgets the expired challenges and sessions, the full buckets and the teams nobody listens to, every 30 s.
+    /// Forgets the expired challenges and sessions, the full buckets, the teams nobody listens to, the pairing codes and
+    /// the used tokens whose time is over, every 30 s.
     pub fn spawn_sweeper(&self) -> tokio::task::JoinHandle<()> {
         let app = self.app.clone();
         tokio::spawn(async move {
@@ -166,6 +206,10 @@ impl Server {
                 app.address_rate.sweep();
                 app.device_rate.sweep();
                 app.hub.sweep();
+                app.pairs.sweep();
+                if let Err(e) = app.store.sweep_tokens(util::now()).await {
+                    tracing::warn!("tokens: {e}");
+                }
             }
         })
     }

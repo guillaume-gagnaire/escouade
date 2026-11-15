@@ -14,6 +14,10 @@ escouade-team-server: Escouade's team server. It keeps only encrypted bytes and 
 USAGE:
     escouade-team-server init  [OPTIONS]   create the base, print the token that creates the team
     escouade-team-server serve [OPTIONS]   serve
+    escouade-team-server recovery-token --team <ID> [OPTIONS]
+                                           print a one-use token for the holder of a team's recovery key, the
+                                           day every administrator lost their devices: it enrols one device as
+                                           an administrator of the server (the 24 words give the keys, not it)
 
 OPTIONS (and their environment variables):
     --data <DIR>              ESCOUADE_TEAM_DATA            the folder of team.db and files/ [./data]
@@ -165,6 +169,29 @@ async fn run(args: Args) -> Result<(), String> {
             println!("hold only encrypted bytes: back them up, but a backup is useless without the members' keys.");
             Ok(())
         }
+        "recovery-token" => {
+            let team = args
+                .get("--team", "ESCOUADE_TEAM_ID")
+                .and_then(|t| escouade_team_server::util::id_from_hex(t.trim()))
+                .ok_or(
+                    "--team takes the team's id (32 hexadecimal digits, as Escouade shows it)",
+                )?;
+            let server = Server::open(args.config()?)
+                .await
+                .map_err(|e| e.to_string())?;
+            let token = server
+                .new_recovery_token(team)
+                .await
+                .map_err(|e| e.to_string())?;
+            println!(
+                "The token for the holder of the team's recovery key (one use, 7 days at most):"
+            );
+            println!();
+            println!("    {token}");
+            println!();
+            println!("Escouade asks for it with the server's address and the 24 words, in « Récupérer une équipe ».");
+            Ok(())
+        }
         "serve" => {
             let listen: SocketAddr = args
                 .get("--listen", "ESCOUADE_TEAM_LISTEN")
@@ -212,7 +239,9 @@ async fn run(args: Args) -> Result<(), String> {
             print!("{HELP}");
             Ok(())
         }
-        other => Err(format!("unknown command: {other} (init, serve, --help)")),
+        other => Err(format!(
+            "unknown command: {other} (init, serve, recovery-token, --help)"
+        )),
     }
 }
 

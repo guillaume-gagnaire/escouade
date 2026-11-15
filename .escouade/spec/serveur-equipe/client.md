@@ -2,14 +2,14 @@
 title: "Le client de l'équipe"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team-server/README.md"]
-tickets: ["ESC-458"]
-decisions: [168]
+tickets: ["ESC-458","ESC-461"]
+decisions: [168,173]
 compared: null
 ---
 
 # Le client de l'équipe
 
-Ce que fait Escouade, sur chaque appareil, pour être dans une équipe d'un serveur d'équipe : la crate `escouade-team`, sur MLS (RFC 9420). Pas encore branchée dans l'app ni montrée : l'interface viendra avec TS-3 et TS-4, la synchronisation des projets avec TS-5.
+Ce que fait Escouade, sur chaque appareil, pour être dans une équipe d'un serveur d'équipe : la crate `escouade-team`, sur MLS (RFC 9420). Elle est branchée dans l'app : le trousseau de l'app, son réseau (proxy et certificats), le dossier `teams` des données. Créer une équipe, y inviter et y entrer : voir « Entrer dans une équipe ». Les espaces et les réglages de l'équipe viendront avec TS-4, la synchronisation des projets avec TS-5.
 
 ## L'équipe est un groupe MLS
 
@@ -19,20 +19,20 @@ Ce que fait Escouade, sur chaque appareil, pour être dans une équipe d'un serv
 
 ## Les clés au trousseau
 
-- Les clés de l'appareil sont créées sur l'appareil et ne le quittent jamais : sa clé pour le serveur, sa clé de feuille MLS, la clé de son état sur le disque. Elles vont au trousseau du système, le même que celui des comptes de l'app.
+- Les clés de l'appareil sont créées sur l'appareil et ne le quittent jamais : sa clé pour le serveur, sa clé de feuille MLS, la clé de son état sur le disque. Elles vont au trousseau du système, le même que celui des comptes de l'app, sous un préfixe propre au dossier de données.
 - Sans trousseau (Linux sans Secret Service), elles vont dans un fichier lisible de son seul propriétaire, et l'interface le dit, comme pour les comptes. Le fichier passe au trousseau dès que celui-ci les accepte.
 
 ## L'état sur le disque
 
-- Un dossier par équipe, et dans ce dossier l'état d'openmls et celui de l'appareil, en SQLite. Chaque valeur y est chiffrée sous la clé du trousseau : le fichier seul ne donne rien.
+- Un dossier par équipe, sous `teams` des données, et dans ce dossier l'état d'openmls et celui de l'appareil, en SQLite. Chaque valeur y est chiffrée sous la clé du trousseau : le fichier seul ne donne rien.
 - Les clés des époques passées sont effacées du disque, journal compris, dès qu'une nouvelle époque commence.
 - La plus haute époque vue et sa tête (le point de contrôle) sont gardées au trousseau, hors de l'état restaurable. Un état plus ancien qu'elles (une sauvegarde remise, une image disque) est refusé.
 
 ## Le serveur
 
-- L'appareil entre par le jeton à usage unique de `init` (il crée l'équipe), ou par celui qu'un administrateur demande pour lui. Il s'authentifie ensuite par le défi signé, et sa session se renouvelle seule.
+- L'appareil entre par le jeton à usage unique de `init` (il crée l'équipe), par celui d'une invitation (dérivé du secret du lien), ou par celui de récupération. Il s'authentifie ensuite par le défi signé, et sa session se renouvelle seule.
 - Il lit le flux d'équipe depuis le dernier numéro lu, écrit ses commits et ses messages, et garde dans une boîte d'envoi, sur le disque, ce que le serveur n'a pas encore pris.
-- La connexion en direct revient seule après une coupure ou un redémarrage du serveur. À chaque retour, l'appareil relit les flux depuis leur dernier numéro. Elle s'arrête quand l'appareil est révoqué.
+- La connexion en direct revient seule après une coupure ou un redémarrage du serveur. À chaque retour, l'appareil relit les flux depuis leur dernier numéro. Elle s'arrête quand l'appareil est révoqué. L'app, elle, relit chaque équipe toutes les 3 s.
 - Les fichiers (documents, images) partent chiffrés et signés.
 - Tout passe par le proxy et les certificats de l'app (Réglages › Avancé › Réseau).
 
@@ -46,6 +46,7 @@ Ce que fait Escouade, sur chaque appareil, pour être dans une équipe d'un serv
 - **Retirer un membre** : le serveur coupe d'abord tous ses appareils (sessions et connexions en direct), puis un commit le retire du groupe et du registre. La nouvelle époque lui échappe, et l'ancien contenu n'est pas rechiffré.
 - **Révoquer un appareil volé** : de même, le serveur d'abord, puis le commit. Le serveur ne laisse que ses administrateurs couper un autre appareil. Un membre qui révoque son propre autre appareil s'en remet donc au commit seul.
 - **Changer les clés de l'équipe** ouvre une nouvelle époque à la demande.
+- **Les rôles du serveur suivent le registre** : un appareil administrateur du serveur corrige, à chaque nouvelle époque, le rôle sur le serveur des appareils dont le rôle au registre a changé.
 
 ## L'historique
 
@@ -60,6 +61,6 @@ Ce que fait Escouade, sur chaque appareil, pour être dans une équipe d'un serv
   - à un autre commit pour une époque déjà vue ;
   - aux balises de tête que chaque appareil signe à chaque nouvelle époque, et toutes les 6 h.
 
-  L'appareil le dit alors, et s'arrête de lire le flux.
+  L'appareil le dit alors (« Le serveur montre deux versions de l'équipe : contacte un administrateur »), s'arrête de lire le flux et n'envoie plus rien à l'équipe (voir « Entrer dans une équipe », L'alerte de fourche).
 - **Pas de fausse alerte** : une balise ne compte que signée par un membre de l'époque courante (un membre retiré ne peut pas en lever une). Un objet doit être signé par un membre avant qu'on compare sa tête.
 - Un serveur qui partitionne l'équipe pour toujours ne se voit qu'en comparant hors bande les six mots de la tête.

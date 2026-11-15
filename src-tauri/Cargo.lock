@@ -1465,6 +1465,7 @@ dependencies = [
  "curve25519-dalek-derive",
  "digest 0.10.7",
  "fiat-crypto 0.2.9",
+ "rand_core 0.6.4",
  "rustc_version",
  "subtle",
  "zeroize",
@@ -2103,6 +2104,8 @@ dependencies = [
  "escouade-plugin-protocol",
  "escouade-plugins",
  "escouade-policy",
+ "escouade-team",
+ "escouade-team-server",
  "escouade-updates",
  "escouade-vectors",
  "escouade-voice",
@@ -2112,6 +2115,7 @@ dependencies = [
  "getrandom 0.4.3",
  "glob",
  "gtk",
+ "hex",
  "hound",
  "http-body-util",
  "hyper",
@@ -2124,6 +2128,7 @@ dependencies = [
  "parking_lot 0.13.0",
  "pdf-extract",
  "portable-pty",
+ "qrcode",
  "quick-xml",
  "rcgen",
  "reqwest 0.12.28",
@@ -2147,6 +2152,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tauri-plugin-window-state",
  "tauri-winrt-notification",
+ "tempfile",
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite 0.30.0",
@@ -2408,6 +2414,7 @@ dependencies = [
  "serde_bytes",
  "serde_json",
  "sha2 0.11.1",
+ "spake2",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
@@ -6099,6 +6106,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 
 [[package]]
+name = "qrcode"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d68782463e408eb1e668cf6152704bd856c78c5b6417adaee3203d8f4c1fc9ec"
+
+[[package]]
 name = "quick-xml"
 version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7414,6 +7427,18 @@ dependencies = [
  "gobject-sys",
  "libc",
  "system-deps",
+]
+
+[[package]]
+name = "spake2"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5482afe85a0b6ce956c945401598dbc527593c77ba51d0a87a586938b1b893a"
+dependencies = [
+ "curve25519-dalek 4.1.3",
+ "hkdf 0.12.4",
+ "rand_core 0.6.4",
+ "sha2 0.10.9",
 ]
 
 [[package]]

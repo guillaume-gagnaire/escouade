@@ -14,9 +14,11 @@
 //! is done and what is left.
 
 pub mod client;
+pub mod escrow;
 #[cfg(any(test, feature = "fuzzing"))]
 pub mod fuzzing;
 pub mod keychain;
+pub mod pairing;
 pub mod storage;
 pub mod team;
 pub mod wire;
@@ -27,8 +29,9 @@ pub use client::{
 pub use escouade_team_crypto as crypto;
 pub use escouade_team_crypto::Error as CryptoError;
 pub use keychain::{KeyPlace, Keychain, MemoryKeychain, Vault};
+pub use pairing::{PairCode, PairState};
 pub use storage::{SqliteStorage, StorageError, TeamProvider};
-pub use team::{Applied, Options, Setup, Synced, Team};
+pub use team::{Applied, Invited, Options, Served, Setup, Synced, Team};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -58,6 +61,43 @@ pub enum Error {
     Refused(String),
     #[error("other commits keep taking the epoch: try again later")]
     Busy,
+    #[error("this invitation was already used: ask its administrator for a new one")]
+    InvitationUsed,
+    #[error("this invitation is unknown to the server, expired, or not registered yet by an administrator")]
+    InvitationUnknown,
+    #[error("the code does not match: ask for a new one (a code has one try)")]
+    WrongCode,
+    #[error("this code had its one try already: ask for a new one")]
+    CodeTried,
+    #[error("no such code: its time is over, or it served")]
+    CodeGone,
+    #[error("the server holds no recovery wrap of this team")]
+    NoRecoveryWrap,
+}
+
+/// What an error says of the server, for the interface: a fork, a rollback, a rewritten entry are the server showing
+/// what it should not, and the device stops reading the team (« Le serveur montre deux versions de l'équipe »).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Alarm {
+    /// Two versions of the team.
+    Fork { epoch: u64 },
+    /// The server went back, or showed an older state than this device saw.
+    Rollback,
+    /// An entry read changed.
+    Rewritten,
+}
+
+impl Error {
+    pub fn alarm(&self) -> Option<Alarm> {
+        match self {
+            Error::Crypto(CryptoError::Fork { epoch }) => Some(Alarm::Fork { epoch: *epoch }),
+            Error::Crypto(CryptoError::Rollback { .. }) | Error::ServerRollback { .. } => {
+                Some(Alarm::Rollback)
+            }
+            Error::Rewritten { .. } => Some(Alarm::Rewritten),
+            _ => None,
+        }
+    }
 }
 
 impl From<StorageError> for Error {

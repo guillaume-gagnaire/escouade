@@ -826,6 +826,10 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
         let id: [u8; 16] = rand.random_array().map_err(|_| Error::Random)?;
         let secret: [u8; 32] = rand.random_array().map_err(|_| Error::Random)?;
         let team = self.fingerprint()?.0;
+        let member = match &purpose {
+            Purpose::OwnDevice(m) => Some(m.0),
+            Purpose::NewMember(_) => None,
+        };
         self.invitations.insert(
             id,
             Invitation {
@@ -841,6 +845,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
             id,
             secret,
             team,
+            member,
         })
     }
 

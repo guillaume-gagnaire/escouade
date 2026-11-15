@@ -2,34 +2,45 @@
 title: "Le serveur d'équipe"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team/README.md"]
-tickets: ["ESC-456","ESC-458"]
-decisions: [167,168]
+tickets: ["ESC-456","ESC-458","ESC-461"]
+decisions: [167,168,173]
 compared: null
 ---
 
 # Le serveur d'équipe
 
-Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (Docker avec Caddy, ou systemd). Il est distinct du mode serveur, qui lance des agents et ne s'expose pas. Son client est la crate `escouade-team` (TS-2, voir « Le client de l'équipe »), pas encore branchée dans l'app : l'interface viendra avec TS-3. Rien n'est publié avant la 2.3.
+Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (Docker avec Caddy, ou systemd). Il est distinct du mode serveur, qui lance des agents et ne s'expose pas. Son client est la crate `escouade-team` (voir « Le client de l'équipe »), branchée dans l'app : créer une équipe, y inviter et y entrer, voir « Entrer dans une équipe ». Rien n'est publié avant la 2.3.
 
 ## Aveugle
 
-- Il ne garde que des octets chiffrés de bout en bout (seul mode), et les métadonnées que voici : des ids opaques, les clés publiques des appareils, leurs rôles, les tailles, les heures, l'appareil qui a écrit.
-- Il n'exécute rien (aucun agent, commande, plugin ni harness) et n'a aucune clé de contenu.
+- Il ne garde que des octets chiffrés de bout en bout (seul mode), et les métadonnées que voici : des ids opaques, les clés publiques des appareils, leurs rôles, les tailles, les heures, l'appareil qui a écrit, l'empreinte (SHA-256) des jetons d'inscription.
+- Il n'exécute rien (aucun agent, commande, plugin ni harness) et n'a aucune clé de contenu. Il ne voit jamais le secret d'une invitation ni un code court.
 - Son journal et ses métriques Prometheus ne portent aucun id d'équipe, de projet, d'appareil ni de fichier, aucune adresse, aucun jeton : seulement les modèles des routes, les statuts et des compteurs.
 
 ## Les appareils et l'entrée
 
 - Un appareil : un id, une clé publique Ed25519, une équipe, un rôle (administrateur ou membre), révoqué ou non. L'id d'un appareil sur le serveur est aussi celui de son identité dans le groupe MLS de l'équipe, mais sa clé pour le serveur n'est pas sa clé MLS.
-- `escouade-team-server init` crée la base et affiche un jeton à usage unique : le premier appareil qui s'inscrit avec crée l'équipe et en devient administrateur. Une seconde utilisation est refusée.
-- Un administrateur demande un jeton d'inscription par nouvel appareil (24 h par défaut, 7 jours au plus) : c'est le point d'entrée des invitations de TS-3.
+- `escouade-team-server init` crée la base et affiche un jeton à usage unique : le premier appareil qui s'inscrit avec crée l'équipe et en devient administrateur.
+- Un administrateur demande un jeton d'inscription par nouvel appareil (24 h par défaut, 7 jours au plus), ou enregistre l'empreinte d'un jeton qu'il a fait lui-même : celui d'une invitation, dérivé du secret après le `#`.
+- **Un jeton sert une fois** : un second usage est refusé en disant « déjà utilisé » (et non « inconnu »), et noté ; les administrateurs de l'équipe lisent ces seconds usages. Un jeton expiré est inconnu.
+- `escouade-team-server recovery-token --team <id>` affiche un jeton qui inscrit un appareil dans une équipe existante comme administrateur du serveur : pour le détenteur de la clé de secours, le jour où tous les administrateurs ont perdu leurs appareils. Il ne donne aucune clé.
 - Un administrateur révoque un appareil de l'équipe, un appareil se révoque lui-même : ses sessions et ses connexions en direct se ferment aussitôt.
-- Le rôle sur le serveur est celui de l'inscription : un membre nommé administrateur dans le registre de l'équipe ne l'est pas encore sur le serveur (TS-3).
+- Un administrateur change le rôle d'un appareil sur le serveur : c'est ainsi que les rôles du serveur suivent le registre de l'équipe. Le dernier administrateur non révoqué ne devient jamais membre.
+
+## L'appairage par code court
+
+- Un relais en mémoire pour « Ajouter un appareil » par un code de 8 caractères : l'appareil dans l'équipe ouvre un créneau (3 caractères, la tête du code), le nouvel appareil, pas encore inscrit, y fait **un seul essai**, puis prend la réponse scellée. Un créneau dure 10 minutes ; quatre au plus par équipe.
+- Il ne porte que les messages d'un PAKE (SPAKE2) et une réponse scellée : rien qui permette au serveur d'essayer des codes.
+
+## La page d'un lien d'invitation
+
+`/join/<id>`, ouvert dans un navigateur : une page sans ressource d'ailleurs, dont le script (par son nonce seul) lit le secret après le `#` dans le navigateur et passe le lien entier à Escouade (`escouade://team/join/…`). Le secret n'atteint jamais le serveur.
 
 ## L'authentification
 
 - Par défi signé : le serveur donne un défi (60 s, une seule fois), l'appareil le signe avec sa clé, le serveur rend un jeton de session de 15 minutes. Aucun mot de passe.
 - Une mauvaise signature, un appareil révoqué ou une session expirée sont refusés.
-- Toutes les routes demandent une session, sauf `/healthz`, l'inscription par jeton et le défi.
+- Toutes les routes demandent une session, sauf `/healthz`, la page `/join/<id>`, l'inscription par jeton, le défi, et les étapes du nouvel appareil dans le relais d'appairage.
 
 ## Les flux et les fichiers
 

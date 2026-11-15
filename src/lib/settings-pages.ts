@@ -236,6 +236,8 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('attachKeep', 'advanced', 'settings.claude.attachKeep', s('attachKeepDays')),
   row('vectors', 'advanced', 'vectors.label'),
   row('localData', 'advanced', 'settings.about.localData'),
+  // The team server's screens (TS-3), until the team has its own place (TS-4).
+  row('teamServer', 'advanced', 'team.entry.row'),
 
   // À propos.
   row('version', 'about', { raw: 'Escouade' }),
