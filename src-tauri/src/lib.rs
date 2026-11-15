@@ -909,6 +909,7 @@ pub fn run() {
                 commands::agent_pr_fix,
                 commands::agent_pr_detail,
                 commands::pr_contents,
+                commands::pr_commit_files,
                 commands::pr_detail,
                 commands::pr_log,
                 commands::pr_rerun,

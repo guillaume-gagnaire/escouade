@@ -139,12 +139,12 @@ describe('the view of a pull request (ESC-457)', () => {
     expect(within(main).getByRole('button', { name: 'ticket ATL-42' })).toBeInTheDocument();
     expect(main).toHaveTextContent('par l’agent Lien magique');
     expect(main).toHaveTextContent('3 commits');
-    // The tabs: Fichiers there, greyed; the counts.
+    // The tabs and their counts; Fichiers open (ESC-467).
     const tabs = within(main).getByRole('tablist', { name: 'Onglets de la PR' });
     expect(within(tabs).getByRole('tab', { name: 'Conversation 4' })).toHaveAttribute('aria-selected', 'true');
     expect(within(tabs).getByRole('tab', { name: 'Commits 3' })).toBeInTheDocument();
     await waitFor(() => expect(within(tabs).getByRole('tab', { name: 'Contrôles 1/2' })).toBeInTheDocument());
-    expect(within(tabs).getByRole('tab', { name: /^Fichiers/ })).toHaveAttribute('aria-disabled', 'true');
+    expect(within(tabs).getByRole('tab', { name: /^Fichiers/ })).not.toHaveAttribute('aria-disabled');
 
     // The description: marked as a third party's, its image not loaded and no link of its own.
     const desc = within(main).getByRole('region', { name: 'contenu d’un tiers' });

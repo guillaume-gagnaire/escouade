@@ -2174,6 +2174,16 @@ export interface UiState {
   panes?: Record<string, PaneLayout>;
   /** What was seen of each project's pull requests (ESC-403), by project id (`lib/prnew.ts`): the PR tab's badge. */
   prSeen?: Record<string, PrSeen>;
+  /** The files marked « Vu » in each pull request's tab « Fichiers » (ESC-467), by `<project>#<repository>#<number>` (`lib/prfiles.ts`). */
+  prViewed?: Record<string, PrViewed>;
+}
+
+/** What was marked « Vu » of a pull request (ESC-467): of the whole, each file's mark of its lines; of each commit, its paths. */
+export interface PrViewed {
+  /** When it was last marked (ms): the oldest go first past the bound. */
+  at: number;
+  pr: Record<string, string>;
+  commits: Record<string, string[]>;
 }
 
 /** The checkout of an agent's own folder (`GitInfo.agentGit`): the branch HEAD is really on, whatever its worktree was made on. */

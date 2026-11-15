@@ -2223,6 +2223,26 @@ pub async fn pr_contents(
         .await)
 }
 
+/// The files of one commit of a pull request of the project (ESC-467, its tab « Fichiers »): its
+/// diff from its first parent, git's; or why not (a commit the host does not list for it).
+#[tauri::command]
+pub async fn pr_commit_files(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+    host_repo: Option<String>,
+    sha: String,
+) -> Res<crate::prview::Read<Vec<crate::prread::PrFileRead>>> {
+    Ok(core
+        .pr_commit_files(
+            &project_id,
+            number,
+            host_repo.as_deref().unwrap_or(""),
+            &sha,
+        )
+        .await)
+}
+
 /// The view of a pull request (ESC-457): its checks, reviews, comments and deployments, read by
 /// whoever holds it in the project; or why the host did not give them.
 #[tauri::command]

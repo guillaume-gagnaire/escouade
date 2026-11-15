@@ -22,6 +22,7 @@
     timeline,
     type PrTab,
   } from '../../lib/prpage';
+  import { viewedCount, viewedKey, type FilesScope } from '../../lib/prfiles';
   import { openPrPage } from '../../lib/prs';
   import { POLL_MS, stillRunning } from '../../lib/prview';
   import { app } from '../../lib/state.svelte';
@@ -30,12 +31,13 @@
   import CiChecks from '../CiChecks.svelte';
   import Icon from '../Icon.svelte';
   import Markdown from '../conv/Markdown.svelte';
+  import PrFiles from './PrFiles.svelte';
 
   // The view of a pull request (ESC-457, PR-2 of the PR in Escouade, direction A of design/pr-2-3): in the work area, in
   // place of the list « Pull requests », in reading only. Its header (number, title, state, branches, ticket, author,
   // « Ouvrir sur <hébergeur> »), its tabs Conversation (the description, a third party's, then the timeline of the commits,
-  // comments, threads and reviews), Commits, Contrôles (the tab « PR et CI »'s checks, their log and « Relancer les
-  // échecs ») and Fichiers (PR-3's, greyed). The aside says its reviewers, its labels and where it stands; the merge box
+  // comments, threads and reviews), Commits (each one's files a click away), Contrôles (the tab « PR et CI »'s checks,
+  // their log and « Relancer les échecs ») and Fichiers (ESC-467, PR-3: `PrFiles`). The aside says its reviewers, its labels and where it stands; the merge box
   // (PR-8) will go at its foot. Read when shown and again when the host says it changed (`prChanged`).
   let {
     project,
@@ -49,6 +51,8 @@
   let reading = $state(false);
   let readAt = $state<number | null>(null);
   let tab = $state<PrTab>('conversation');
+  /** What the tab « Fichiers » shows: the whole pull request, or one of its commits. */
+  let scope = $state<FilesScope>('pr');
   /** The commits whose whole message is shown, by their hash. */
   let opened = $state<Record<string, boolean>>({});
   /** The resolved or outdated threads unfolded, by their key. */
@@ -71,8 +75,20 @@
     conversation: c ? String(conversationCount(c)) : '',
     commits: c?.reading.commits ? String(c.commits.length) : '',
     checks: checksCount(d),
-    files: c?.reading.files ? String(c.files.length) : '',
+    files:
+      c?.diff && !c.diffFailure
+        ? `${viewedCount(app.ui.prViewed?.[viewedKey(project.id, hostRepo, number)], 'pr', c.files)}/${c.files.length}`
+        : '',
   });
+  // « Ouvrir dans l'éditeur »: in the worktree of the agent that holds the branch (its own, or its ticket's), else the project's folder.
+  const holder = $derived(agent ?? (ticket?.agentId ? (app.agents[ticket.agentId] ?? null) : null));
+  const source = $derived(holder?.worktree?.path && !holder.archived ? holder.id : 'project');
+
+  /** A commit's files: the tab « Fichiers » on it. */
+  function filesOf(sha: string) {
+    scope = { sha };
+    tab = 'files';
+  }
 
   async function loadContents() {
     const at = { id: project.id, n: number };
@@ -126,6 +142,7 @@
       readAt = null;
       opened = {};
       unfolded = {};
+      scope = 'pr';
       void load();
     });
   });
@@ -161,7 +178,7 @@
   }
 
   function onTabKey(e: KeyboardEvent, i: number) {
-    const live: PrTab[] = PR_TABS.filter((x) => x !== 'files');
+    const live: PrTab[] = [...PR_TABS];
     const at = live.indexOf(PR_TABS[i]);
     let next = -1;
     if (e.key === 'ArrowRight') next = (at + 1) % live.length;
@@ -288,17 +305,14 @@
 
   <div class="tabs" role="tablist" aria-label={t('prs.page.tabs.label', { word })}>
     {#each PR_TABS as id, i (id)}
-      {@const off = id === 'files'}
       <button
         role="tab"
         id="pr-tab-{id}"
         aria-selected={tab === id}
         aria-controls="pr-panel"
-        aria-disabled={off || undefined}
         tabindex={tab === id ? 0 : -1}
-        class:off
-        use:tip={off ? t('prs.page.tabs.filesSoon', { word }) : null}
-        onclick={() => !off && (tab = id)}
+        aria-label={id === 'files' && tabCount.files ? t('prs.page.tabs.filesViewed', { count: tabCount.files }) : undefined}
+        onclick={() => (tab = id)}
         onkeydown={(e) => onTabKey(e, i)}
         >{t(`prs.page.tabs.${id}`)}{#if tabCount[id]}<span class="c num">{tabCount[id]}</span>{/if}</button
       >
@@ -314,8 +328,8 @@
   {:else if !c && failure}
     <div class="state">{@render failed(failure, false)}</div>
   {:else if c}
-    <div class="body">
-      <div class="col" id="pr-panel" role="tabpanel" aria-labelledby="pr-tab-{tab}">
+    <div class="body" class:wide={tab === 'files'}>
+      <div class="col" class:flat={tab === 'files'} id="pr-panel" role="tabpanel" aria-labelledby="pr-tab-{tab}">
         {#if failure}{@render failed(failure, true)}{/if}
         {#if missing.length}
           <p class="note" role="note"><Icon name="info" size={14} />{t('prs.page.missing', { host, parts: fList(missing) })}</p>
@@ -402,11 +416,21 @@
                     <span class="mono sha">{shortSha(k.sha)}</span>
                     <span class="t">{ago(k.created)}</span>
                   </button>
+                  {#if c.diff && !c.diffFailure}
+                    <button
+                      class="icon-btn files-of"
+                      aria-label={t('prs.page.commits.files', { sha: shortSha(k.sha) })}
+                      use:tip={t('prs.page.commits.files', { sha: shortSha(k.sha) })}
+                      onclick={() => filesOf(k.sha)}><Icon name="file" size={14} /></button
+                    >
+                  {/if}
                   {#if opened[k.sha]}<pre class="whole third">{k.message}</pre>{/if}
                 </li>
               {/each}
             </ul>
           {/if}
+        {:else if tab === 'files'}
+          <PrFiles projectId={project.id} {number} {hostRepo} contents={c} bind:scope {source} />
         {:else if tab === 'checks'}
           {#if !detail}
             <div class="state" role="status"><span class="spinner" aria-hidden="true"></span></div>
@@ -427,7 +451,7 @@
         {/if}
       </div>
 
-      <aside class="aside">
+      <aside class="aside" class:gone={tab === 'files'}>
         <section class="sec">
           <h3>{t('prs.page.aside.reviewers')}</h3>
           {#each people as r (r.name)}
@@ -621,10 +645,6 @@
     color: var(--text);
     box-shadow: inset 0 -2px 0 var(--text);
   }
-  .tabs .off {
-    opacity: 0.45;
-    cursor: default;
-  }
   .tabs .c {
     color: var(--dim);
     font-size: 11.5px;
@@ -652,6 +672,29 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+  }
+  .body.wide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .aside.gone {
+    display: none;
+  }
+  .col.flat {
+    padding: 0;
+    overflow: hidden;
+    gap: 0;
+  }
+  .col.flat > :global(.err.banner),
+  .col.flat > .note {
+    margin: 10px 14px 0;
+  }
+  .commit {
+    position: relative;
+  }
+  .files-of {
+    position: absolute;
+    top: 5px;
+    right: 6px;
   }
   .aside {
     border-left: 1px solid var(--line);
@@ -977,7 +1020,7 @@
     align-items: center;
     gap: 9px;
     height: 34px;
-    padding: 0 12px;
+    padding: 0 42px 0 12px;
     font-size: 12.5px;
     cursor: pointer;
   }

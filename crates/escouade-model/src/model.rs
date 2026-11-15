@@ -2570,6 +2570,10 @@ pub struct UiState {
     /// What was seen of each project's pull requests (ESC-403), by project id, as the interface wrote
     /// it (`lib/prnew.ts`), kept whole: the PR tab's badge counts the new ones from it.
     pub pr_seen: HashMap<String, Value>,
+    /// The files marked « Vu » in the tab « Fichiers » of each pull request (ESC-467), by
+    /// `<project>#<repository>#<number>`, as the interface wrote it (`lib/prfiles.ts`), kept
+    /// whole: for the pull request, each file's mark of its lines; for each commit, its paths.
+    pub pr_viewed: HashMap<String, Value>,
 }
 
 /// A choice of Claude Code's model picker (`initialize`): an alias or a full id, and the model

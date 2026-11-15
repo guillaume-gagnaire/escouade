@@ -21,6 +21,7 @@ use crate::forge::{
     FileStatus, PrCommit, PrDescription, PrFile, PullRequest, RateLimit, Reading, RepoRef,
     ReviewThread, Unsupported,
 };
+use crate::git;
 use crate::model::{now_ms, UiEvent};
 use crate::prnews::limit_near;
 use crate::prreview::generated;
@@ -315,6 +316,78 @@ pub fn merged(host: Vec<PrFile>, git: Option<Vec<GitFile>>) -> Vec<PrFileRead> {
     out
 }
 
+/// What `.gitattributes` says of the files nobody reads line by line: each pattern that sets
+/// `linguist-generated` (true) or unsets it (`-linguist-generated`, `=false`), the last one that
+/// matches a path saying it, as GitHub reads it. A pattern without a slash matches a name at any
+/// depth; with one, a path from the root.
+pub fn generated_patterns(text: &str) -> Vec<(glob::Pattern, bool, bool)> {
+    let mut out = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let mut words = line.split_whitespace();
+        let Some(pattern) = words.next() else {
+            continue;
+        };
+        let mark = words.find_map(|w| match w {
+            "linguist-generated" | "linguist-generated=true" => Some(true),
+            "-linguist-generated" | "linguist-generated=false" => Some(false),
+            _ => None,
+        });
+        let Some(mark) = mark else {
+            continue;
+        };
+        let anchored = pattern.trim_end_matches('/').contains('/');
+        let pattern = pattern.trim_start_matches('/');
+        if let Ok(p) = glob::Pattern::new(pattern) {
+            out.push((p, anchored, mark));
+        }
+    }
+    out
+}
+
+/// Marks generated the files `.gitattributes` says are (`generated_patterns`), unmarks those it
+/// says are not.
+pub fn mark_generated(files: &mut [PrFileRead], attributes: &str) {
+    let patterns = generated_patterns(attributes);
+    if patterns.is_empty() {
+        return;
+    }
+    let options = glob::MatchOptions {
+        case_sensitive: true,
+        require_literal_separator: true,
+        require_literal_leading_dot: false,
+    };
+    for f in files {
+        let path = f.file.path.as_str();
+        let name = path.rsplit('/').next().unwrap_or(path);
+        let said = patterns
+            .iter()
+            .rev()
+            .find(|(p, anchored, _)| match anchored {
+                true => p.matches_with(path, options),
+                false => p.matches_with(name, options),
+            });
+        if let Some((_, _, mark)) = said {
+            f.generated = *mark;
+        }
+    }
+}
+
+/// A commit's hash as asked by the window: hexadecimal only, never an option of git's.
+fn commit_hash(sha: &str) -> bool {
+    (4..=64).contains(&sha.len()) && sha.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// The `.gitattributes` of the root at commit `sha`, empty when it has none.
+async fn attributes_at(root: &str, sha: &str) -> String {
+    git::text(root, &["show", &format!("{sha}:.gitattributes")])
+        .await
+        .unwrap_or_default()
+}
+
 impl<R: Runtime> Core<R> {
     /// The pull request `number` of the project read whole (through the agent that holds it,
     /// else its ticket, else on the project's target, as `project_pr`), its lines with it when
@@ -404,10 +477,16 @@ impl<R: Runtime> Core<R> {
         let (lines, tip, diff_failure) = match diff {
             false => (None, String::new(), None),
             true => match self.pr_git_diff(project_id, &repo, &pr).await {
-                Ok((sha, text)) => (Some(parse_files(&text)), sha, None),
+                Ok((sha, text, attributes)) => (Some((parse_files(&text), attributes)), sha, None),
                 Err(e) => (None, String::new(), Some(format!("{e:#}"))),
             },
         };
+        let (lines, attributes) = match lines {
+            Some((l, a)) => (Some(l), a),
+            None => (None, String::new()),
+        };
+        let mut files = merged(files, lines);
+        mark_generated(&mut files, &attributes);
         let word = self
             .project_forge(project_id)
             .await
@@ -422,7 +501,7 @@ impl<R: Runtime> Core<R> {
             pr,
             description,
             commits,
-            files: merged(files, lines),
+            files,
             threads,
             reading,
             diff,
@@ -475,7 +554,22 @@ impl<R: Runtime> Core<R> {
         project_id: &str,
         repo: &RepoRef,
         pr: &PullRequest,
-    ) -> Result<(String, String)> {
+    ) -> Result<(String, String, String)> {
+        let (root, plan, name) = self.pr_git_place(project_id, repo, pr).await?;
+        let _one = GIT.lock().await;
+        let (sha, text) = crate::prreview::git_diff(&root, &plan, &name, pr, "read/").await?;
+        let attributes = attributes_at(&root, &sha).await;
+        Ok((sha, text, attributes))
+    }
+
+    /// Where the lines of `pr` are read: the project's repository, how its tip is fetched, the
+    /// remote of its base.
+    async fn pr_git_place(
+        self: &Arc<Self>,
+        project_id: &str,
+        repo: &RepoRef,
+        pr: &PullRequest,
+    ) -> Result<(String, crate::pragent::FetchPlan, String)> {
         let remote = self.project_forge(project_id).await.ok_or_else(|| {
             anyhow!(tr!(
                 "Ce projet n'a pas de dépôt distant chez un hébergeur de code.",
@@ -510,8 +604,96 @@ impl<R: Runtime> Core<R> {
             provider.request_word(),
             false,
         )?;
+        Ok((root, plan, name))
+    }
+
+    /// The files of one commit of pull request `number` (ESC-467, the tab « Fichiers » on a
+    /// commit): its diff from its first parent, from git, with the same bounds and marks as the
+    /// pull request's. Only a commit the host lists for it; its objects fetched again when git
+    /// no longer has them. Nothing moves, nothing is written on the host.
+    pub async fn pr_commit_files(
+        self: &Arc<Self>,
+        project_id: &str,
+        number: u64,
+        host_repo: &str,
+        sha: &str,
+    ) -> Read<Vec<PrFileRead>> {
+        match self
+            .pr_commit_files_read(project_id, number, host_repo, sha)
+            .await
+        {
+            Ok(files) => Read::ok(files),
+            Err(e) => Read::failed(&e, None),
+        }
+    }
+
+    async fn pr_commit_files_read(
+        self: &Arc<Self>,
+        project_id: &str,
+        number: u64,
+        host_repo: &str,
+        sha: &str,
+    ) -> Result<Vec<PrFileRead>> {
+        let not_of = || {
+            anyhow!(tr!(
+                "Le commit {sha} n'est pas dans la #{number}.",
+                "Commit {sha} isn’t in #{number}."
+            ))
+        };
+        if !commit_hash(sha) {
+            return Err(not_of());
+        }
+        let read = self.pr_contents(project_id, number, host_repo, false).await;
+        let contents = match (read.data, read.failure) {
+            (Some(c), _) => c,
+            (None, Some(f)) => anyhow::bail!(f.message),
+            (None, None) => return Err(not_of()),
+        };
+        let listed = contents
+            .commits
+            .iter()
+            .any(|c| c.sha.len() >= sha.len() && c.sha[..sha.len()].eq_ignore_ascii_case(sha));
+        if !listed {
+            return Err(not_of());
+        }
+        let project = self.project(project_id)?;
+        let root = self
+            .toplevel(&project.path)
+            .await
+            .ok_or_else(crate::core::not_a_repo)?;
+        let commit = format!("{sha}^{{commit}}");
+        if git::run(&root, &["cat-file", "-e", &commit]).await.is_err() {
+            // Read again from the host: its tip brings its commits.
+            let (_, repo, _) = self.pr_place(project_id, number, host_repo).await?;
+            self.pr_git_diff(project_id, &repo, &contents.pr).await?;
+        }
         let _one = GIT.lock().await;
-        crate::prreview::git_diff(&root, &plan, &name, pr, "read/").await
+        let full = git::text(&root, &["rev-parse", "--verify", &commit]).await?;
+        let bytes = git::run(
+            &root,
+            &[
+                "-c",
+                "core.quotePath=false",
+                "diff-tree",
+                "-p",
+                "-M",
+                "-m",
+                "--first-parent",
+                "--root",
+                "--no-commit-id",
+                "--no-ext-diff",
+                "--no-textconv",
+                "--no-color",
+                "--src-prefix=a/",
+                "--dst-prefix=b/",
+                &full,
+            ],
+        )
+        .await?;
+        let text = String::from_utf8_lossy(&bytes);
+        let mut files = merged(Vec::new(), Some(parse_files(&text)));
+        mark_generated(&mut files, &attributes_at(&root, &full).await);
+        Ok(files)
     }
 
     /// What the following of the pull requests read of the project's (its list, an agent's, a

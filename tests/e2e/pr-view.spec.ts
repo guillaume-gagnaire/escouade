@@ -177,7 +177,8 @@ test('the view of a pull request opens from the list, reads its three tabs, reru
   await expect(view.getByRole('button', { name: /résolu lien\.ts:2/ })).toBeVisible();
   await expect(view).toContainText('Merci pour la description.');
   await expect(view.locator('aside')).toContainText('auth');
-  await expect(view.getByRole('tab', { name: /^Fichiers/ })).toHaveAttribute('aria-disabled', 'true');
+  // Fichiers open (ESC-467): its diff is git's, the file of the pull request counted, none seen yet.
+  await expect(view.getByRole('tab', { name: 'Fichiers, 0/1 vus' })).not.toHaveAttribute('aria-disabled');
   await shots(page, 'pr-view-conversation');
 
   // Commits: the list, a click shows the whole message.

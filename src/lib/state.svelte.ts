@@ -33,6 +33,7 @@ import { setSources } from './integrations';
 import { applyTheme } from './theme';
 import { hasTab } from './code-host';
 import { newCount, opened, readSeen, seenOf, type PrSeen } from './prnew';
+import { keptViewed } from './prfiles';
 import { workflows } from './workflows.svelte';
 import { modeToAsk } from './first-mode';
 import {
@@ -814,6 +815,7 @@ class AppState {
       selectedAgent: s.ui.selectedAgent ?? {},
       panes: readPanes(s.ui.panes),
       prSeen: readSeens(s.ui.prSeen),
+      prViewed: keptViewed(s.ui.prViewed),
     };
     this.overviewFrom = 'project';
     if (!this.ui.activeProject || !this.projects.some((p) => p.id === this.ui.activeProject)) {
@@ -1709,6 +1711,12 @@ class AppState {
 
   private setPrSeen(projectId: string, seen: PrSeen) {
     this.ui.prSeen = { ...this.ui.prSeen, [projectId]: seen };
+    this.persistUi();
+  }
+
+  /** The files marked « Vu » in a pull request's tab « Fichiers » (ESC-467), by `prfiles.viewedKey`; the oldest go past the bound. */
+  setPrViewed(key: string, viewed: import('./types').PrViewed) {
+    this.ui.prViewed = keptViewed({ ...this.ui.prViewed, [key]: viewed });
     this.persistUi();
   }
 

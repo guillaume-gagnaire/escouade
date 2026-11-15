@@ -153,14 +153,37 @@ function highlighter() {
   return highlighterP;
 }
 
-async function highlightCode(code: string, lang: string): Promise<string | null> {
+/** The highlighter with `lang` loaded, and that language's id; null for one the app does not color. */
+async function withLang(lang: string): Promise<{ hl: any; id: string } | null> {
   const loader = LANGS[lang.toLowerCase()];
   if (!loader) return null;
   const hl = await highlighter();
   const mod = await loader();
   const id = (Array.isArray(mod.default) ? mod.default : [mod.default]).at(-1)?.name;
   if (!hl.getLoadedLanguages().includes(id)) await hl.loadLanguage(mod.default);
-  return hl.codeToHtml(code, { lang: id, theme: THEME });
+  return { hl, id };
+}
+
+async function highlightCode(code: string, lang: string): Promise<string | null> {
+  const w = await withLang(lang);
+  return w ? w.hl.codeToHtml(code, { lang: w.id, theme: THEME }) : null;
+}
+
+/** A piece of a colored line: its text, and the app's syntax token it is drawn in (`var(--shiki-…)`). */
+export interface Piece {
+  text: string;
+  color?: string;
+}
+
+/**
+ * `lines` colored in `lang`, as one text (the grammar follows them): each line's pieces. Null for a language the app does
+ * not color. The diff of a pull request (ESC-467) colors each side of a file so.
+ */
+export async function tokenize(lines: string[], lang: string): Promise<Piece[][] | null> {
+  const w = await withLang(lang);
+  if (!w) return null;
+  const { tokens } = w.hl.codeToTokens(lines.join('\n'), { lang: w.id, theme: THEME });
+  return (tokens as { content: string; color?: string }[][]).map((line) => line.map((p) => ({ text: p.content, color: p.color })));
 }
 
 /** Highlights the not-yet-highlighted code blocks inside `root`. */
