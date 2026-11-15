@@ -27,6 +27,13 @@ export default defineZone('editor', {
     saved: 'Saved',
   },
 
+  /** The VS Code view, the project's editor (ESC-447). */
+  vscode: {
+    what: 'VS Code',
+    loading: 'Loading the VS Code view…',
+    failed: 'The VS Code view did not start: {error}',
+  },
+
   side: {
     viewLabel: 'Column view',
     searchFiles: 'Search in files',

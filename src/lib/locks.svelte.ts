@@ -30,9 +30,7 @@ export function lockLine(by: LockedBy): string {
 
 /** Who denies `choice` of the bound `key` (the device first, then the team); null when every bound allows it. */
 export function deniedBy(key: string, choice: string, l: Locks = locks.current): LockedBy | null {
-  const bounds = [...(l.locks[key]?.bounds ?? [])].sort(
-    (a, b) => Number(b.by.kind === 'device') - Number(a.by.kind === 'device'),
-  );
+  const bounds = [...(l.locks[key]?.bounds ?? [])].sort((a, b) => Number(b.by.kind === 'device') - Number(a.by.kind === 'device'));
   return bounds.find((b) => !b.allowed.includes(choice))?.by ?? null;
 }
 

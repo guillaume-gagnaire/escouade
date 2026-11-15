@@ -167,6 +167,13 @@ pub enum UiEvent {
         project_id: String,
         git: GitInfo,
     },
+    /// Files and folders of a project changed on disk (its own, its agents' worktrees), as its
+    /// watcher saw them (ESC-447): their paths, or none when there were too many to tell.
+    #[serde(rename_all = "camelCase")]
+    FsChanged {
+        project_id: String,
+        paths: Option<Vec<String>>,
+    },
     Usage {
         usage: UsageSnapshot,
     },

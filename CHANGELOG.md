@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- L’éditeur d’un projet est celui de VS Code, avec son arborescence et ses onglets, dans une colonne comme les agents. Il lit et écrit les fichiers par Escouade, recharge un fichier qu’un agent a changé et montre le conflit quand tu l’avais modifié.
 - Les tâches programmées : un ticket d’agent qui revient à heure fixe (chaque jour, chaque semaine, chaque mois ou en cron), projet par projet, depuis la nouvelle section « Programmées » de la barre latérale. Escouade le crée et le lance à l’échéance, jamais deux à la fois, une seule fois au retour s’il était fermé.
 - Un poste géré par un service informatique peut imposer des réglages par ses stratégies (registre, profil MDM, `/etc`) : télémétrie, canal bêta, mode Bypass, modes et harness permis, Remote Control. Un réglage imposé est grisé avec un cadenas qui dit qui l’impose, et Escouade le refuse partout, fenêtre, agents et `.escouade.yml` compris.
 - Un agent qui lit une PR de GitHub en a maintenant tout : sa description, ses commits, ses fichiers et ses fils de discussion avec leurs réponses et leur état. C’est la première pierre de la vue des PR dans Escouade.

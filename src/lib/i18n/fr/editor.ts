@@ -29,6 +29,13 @@ export default {
     saved: 'Enregistré',
   },
 
+  /** The VS Code view, the project's editor (ESC-447). */
+  vscode: {
+    what: 'VS Code',
+    loading: 'Chargement de la vue VS Code…',
+    failed: 'La vue VS Code n’a pas démarré : {error}',
+  },
+
   /** The left column: the files and the search. */
   side: {
     viewLabel: 'Vue de la colonne',

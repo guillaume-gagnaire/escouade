@@ -2428,6 +2428,132 @@ pub async fn fs_write(
     Ok(hash)
 }
 
+/// What is at `path` of the source (`""`: its root), for the VS Code view (ESC-447): its kind, size
+/// and times, which VS Code compares to tell a file changed on disk since it was read.
+#[tauri::command]
+pub async fn fs_stat(
+    core: CoreState<'_>,
+    project_id: String,
+    agent_id: Option<String>,
+    path: String,
+) -> Res<fsedit::Stat> {
+    let (root, _) = core.edit_root(&project_id, agent_id).await.map_err(err)?;
+    fsedit::stat(std::path::Path::new(&root), &path).map_err(|e| {
+        match e.downcast_ref::<fsedit::NotFound>() {
+            Some(missing) => missing.wire(),
+            None => err(e),
+        }
+    })
+}
+
+/// The bytes of a file of the source as they are, text or not, for the VS Code view (ESC-447):
+/// raw, no base64 through JSON.
+#[tauri::command]
+pub async fn fs_read_bytes(
+    core: CoreState<'_>,
+    project_id: String,
+    agent_id: Option<String>,
+    path: String,
+) -> Res<tauri::ipc::Response> {
+    let (root, _) = core.edit_root(&project_id, agent_id).await.map_err(err)?;
+    let bytes =
+        tokio::task::spawn_blocking(move || fsedit::read_bytes(std::path::Path::new(&root), &path))
+            .await
+            .map_err(|e| e.to_string())?
+            .map_err(|e| match e.downcast_ref::<fsedit::NotFound>() {
+                Some(missing) => missing.wire(),
+                None => err(e),
+            })?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+/// One header of a raw call, decoded (`encodeURIComponent` on the window's side: a path may be
+/// any text).
+fn header(request: &tauri::ipc::Request, name: &str) -> Option<String> {
+    let raw = request.headers().get(name)?.to_str().ok()?;
+    percent_decoded(raw)
+}
+
+/// `%XX` decoded, the result UTF-8 or nothing.
+pub(crate) fn percent_decoded(raw: &str) -> Option<String> {
+    let b = raw.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' {
+            let hex = raw.get(i + 1..i + 3)?;
+            out.push(u8::from_str_radix(hex, 16).ok()?);
+            i += 3;
+        } else {
+            out.push(b[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).ok()
+}
+
+/// Writes the bytes of a file of the source as they are, for the VS Code view (ESC-447):
+/// `invoke('fs_write_bytes', bytes, { headers })` with `x-project`, `x-agent` (absent: the
+/// project's checkout), `x-path`, and `x-expect`: `absent` (a new file, refused when something is
+/// there), `any` (VS Code's « Overwrite »), or `<mtime>:<size>` (refused with `changed` when the
+/// file is no longer the one VS Code read). Its new stamp.
+#[tauri::command]
+pub async fn fs_write_bytes(
+    core: CoreState<'_>,
+    request: tauri::ipc::Request<'_>,
+) -> Res<fsedit::Stamp> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err(tr!(
+            "Les octets d’un fichier viennent bruts, pas en JSON.",
+            "The bytes of a file come raw, not as JSON."
+        ));
+    };
+    let (Some(project_id), Some(path)) =
+        (header(&request, "x-project"), header(&request, "x-path"))
+    else {
+        return Err(tr!("Fichier à écrire non dit.", "No file to write said."));
+    };
+    let agent_id = header(&request, "x-agent").filter(|a| !a.is_empty());
+    let expect = header(&request, "x-expect").unwrap_or_default();
+    let stamp = match expect.as_str() {
+        "absent" | "any" => None,
+        s => {
+            let parsed = s.split_once(':').and_then(|(m, z)| {
+                Some(fsedit::Stamp {
+                    mtime: m.parse().ok()?,
+                    size: z.parse().ok()?,
+                })
+            });
+            Some(parsed.ok_or_else(|| format!("x-expect: {s}"))?)
+        }
+    };
+    let (root, worktrees) = core
+        .edit_worktrees(&project_id, agent_id)
+        .await
+        .map_err(err)?;
+    let bytes = bytes.clone();
+    let stamp = tokio::task::spawn_blocking(move || {
+        let check = match (expect.as_str(), stamp) {
+            ("absent", _) => fsedit::Expect::Absent,
+            (_, Some(s)) => fsedit::Expect::Stamp(s),
+            _ => fsedit::Expect::Any,
+        };
+        fsedit::write_bytes(
+            std::path::Path::new(&root),
+            &path,
+            &bytes,
+            check,
+            &worktrees,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(err)?;
+    core.git.refresh(&project_id);
+    core.telemetry.track(Event::FileSaved);
+    Ok(stamp)
+}
+
 #[tauri::command]
 pub async fn fs_create(
     core: CoreState<'_>,

@@ -9549,6 +9549,13 @@ impl<R: Runtime> Core<R> {
                         }
                         last.insert(pid.clone(), now + wait);
                         self.git.take_flag(&pid);
+                        // The paths changed, for the editors that show them (the VS Code view).
+                        if let Some(changed) = self.git.take_changed(&pid) {
+                            self.hub.emit(UiEvent::FsChanged {
+                                project_id: pid.clone(),
+                                paths: (!changed.overflow).then_some(changed.paths),
+                            });
+                        }
                         let c = self.clone();
                         tauri::async_runtime::spawn(async move {
                             c.compute_git(&pid).await;

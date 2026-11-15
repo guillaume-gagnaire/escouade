@@ -14,7 +14,7 @@
   import Conversation from '../Conversation.svelte';
   import DevPage from '../DevPage.svelte';
   import { devpages } from '../../lib/devpage.svelte';
-  import EditorView from '../editor/EditorView.svelte';
+  import VscodeView from '../editor/VscodeView.svelte';
   import Icon from '../Icon.svelte';
   import RunView from '../RunView.svelte';
   import SidePanel from '../SidePanel.svelte';
@@ -82,7 +82,7 @@
   {:else if pageOf}
     <DevPage agent={pageOf} />
   {:else if item.kind === 'editor'}
-    <EditorView {project} />
+    <VscodeView {project} />
   {/if}
   <button
     class="pane-x"
@@ -145,6 +145,8 @@
     transition: opacity 0.12s;
   }
   .pane:hover > .pane-x,
+  /* The VS Code view (ESC-447): its workbench lies over the pane, outside it in the page. */
+  .pane:global(.through) > .pane-x,
   .pane-x:focus-visible {
     opacity: 1;
   }

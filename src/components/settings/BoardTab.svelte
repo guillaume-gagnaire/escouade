@@ -209,8 +209,7 @@
       <!-- « Bypass » once allowed in Réglages › Agents (SEC-09), or kept when the board has it already. -->
       <!-- A mode the policies deny (TS-11) greyed, with the reason. -->
       {#each MODES.filter((m) => m.value !== 'bypassPermissions' || app.settings.allowBypass || b.mode === m.value) as m (m.value)}{@const why =
-          denial(MODES_KEY, m.value)}<option value={m.value} disabled={!!why}>{why ? `${m.label} · ${why}` : m.label}</option
-        >{/each}
+          denial(MODES_KEY, m.value)}<option value={m.value} disabled={!!why}>{why ? `${m.label} · ${why}` : m.label}</option>{/each}
     </select>
   </Row>
 </Group>

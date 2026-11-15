@@ -64,7 +64,9 @@ test('50 to 52: the header of a narrow conversation folds, its path gives up the
   }
 });
 
-test('53 to 56: the editor’s tree, its actions on hover, no file icons, its folds, and what the search finds', async ({ app }) => {
+// ESC-447: the tree and the search of the CodeMirror editor are gone with it (the project's editor is the VS Code view).
+// A7 brings back the marks and the comparison in the view; its tree and its search are VS Code's own.
+test.fixme('53 to 56: the editor’s tree, its actions on hover, no file icons, its folds, and what the search finds', async ({ app }) => {
   const { page } = app;
   await page.setViewportSize(SMALL);
   for (const [file, text] of [

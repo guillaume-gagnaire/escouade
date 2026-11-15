@@ -11,6 +11,7 @@ import { fileSearches } from './editor/search.svelte';
 import { ancestors, movedPath } from './editor/tree';
 import { trees } from './editor/trees.svelte';
 import { bgRow } from './bgtasks';
+import { diskChanged } from './disk-changes';
 import type { DocsSpaceId } from './docs';
 import { basename, isAbsPath, relPath } from './format';
 import { setLang, t } from './i18n';
@@ -991,6 +992,9 @@ class AppState {
         break;
       case 'conv':
         applyConvOps(e.agentId, e.ops);
+        break;
+      case 'fsChanged':
+        diskChanged({ projectId: e.projectId, paths: e.paths });
         break;
       case 'memory':
         this.memoryTicks[e.projectId] = (this.memoryTicks[e.projectId] ?? 0) + 1;

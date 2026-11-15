@@ -31,7 +31,7 @@
   import ConversationOverlay from './components/ConversationOverlay.svelte';
   import ConvSearch from './components/ConvSearch.svelte';
   import DiffModal from './components/DiffModal.svelte';
-  import EditorView from './components/editor/EditorView.svelte';
+  import VscodeView from './components/editor/VscodeView.svelte';
   import QuickOpen from './components/QuickOpen.svelte';
   import SidePanel from './components/SidePanel.svelte';
   import SubagentView from './components/SubagentView.svelte';
@@ -243,7 +243,7 @@
             {/key}
           {:else if app.editorOn}
             {#key project.id}
-              <EditorView {project} />
+              <VscodeView {project} />
             {/key}
           {:else if app.runCommand}
             <RunView cmd={app.runCommand} {project} />

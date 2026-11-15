@@ -200,6 +200,137 @@ pub fn write(
     expected: Option<&str>,
     worktrees: &[String],
 ) -> Result<String> {
+    let bytes = encode(text, eol, bom);
+    let check = match expected {
+        Some(h) => Expect::Hash(h),
+        None => Expect::Any,
+    };
+    put(root, rel, &bytes, check, worktrees)?;
+    Ok(hash(&bytes))
+}
+
+/// What a write checks of the file first: that it is still the one read (by its hash, or by its
+/// time and size), that nothing is there yet, or nothing.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Expect<'a> {
+    Any,
+    Hash(&'a str),
+    Stamp(Stamp),
+    Absent,
+}
+
+/// When a file was last written and its size, as the VS Code view compares them (`fs_stat`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Stamp {
+    /// Milliseconds since 1970.
+    pub mtime: u64,
+    pub size: u64,
+}
+
+/// A file or a folder of a source, for the VS Code view (`fs_stat`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Stat {
+    /// "file" or "dir".
+    pub kind: &'static str,
+    pub size: u64,
+    /// Milliseconds since 1970 (0 when the system does not say).
+    pub mtime: u64,
+    /// When it was made, the same way (its `mtime` when the system does not say).
+    pub ctime: u64,
+    pub readonly: bool,
+}
+
+/// A file bigger than that is not given in bytes to the VS Code view.
+pub const MAX_READ_BYTES: u64 = 64 * 1024 * 1024;
+/// The error of `read_bytes` for a bigger file (`TOO_LARGE:<size>`): the view tells it by this tag.
+pub const TOO_LARGE: &str = "TOO_LARGE";
+
+fn millis(t: std::io::Result<std::time::SystemTime>) -> u64 {
+    t.ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_millis() as u64)
+}
+
+fn stamp_of(meta: &std::fs::Metadata) -> Stamp {
+    Stamp {
+        mtime: millis(meta.modified()),
+        size: meta.len(),
+    }
+}
+
+/// What is at `rel` of the source (`""`: its root), links on the way followed but never out of it.
+pub fn stat(root: &Path, rel: &str) -> Result<Stat> {
+    let path = if rel.is_empty() {
+        root.to_path_buf()
+    } else {
+        validate_rel(rel)?;
+        contained(root, rel)?
+    };
+    let meta = match std::fs::metadata(&path) {
+        Ok(m) => m,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(not_found(rel)),
+        Err(e) => return Err(e.into()),
+    };
+    let Stamp { mtime, size } = stamp_of(&meta);
+    let made = millis(meta.created());
+    Ok(Stat {
+        kind: if meta.is_dir() { "dir" } else { "file" },
+        size,
+        mtime,
+        ctime: if made == 0 { mtime } else { made },
+        readonly: meta.permissions().readonly(),
+    })
+}
+
+/// The bytes of the file `rel`, whatever they are (text or not), up to `MAX_READ_BYTES`.
+pub fn read_bytes(root: &Path, rel: &str) -> Result<Vec<u8>> {
+    read_bytes_up_to(root, rel, MAX_READ_BYTES)
+}
+
+/// `read_bytes`, refused above `max` (a smaller `max` lets the refusal be tested).
+fn read_bytes_up_to(root: &Path, rel: &str, max: u64) -> Result<Vec<u8>> {
+    validate_rel(rel)?;
+    let path = contained(root, rel)?;
+    let meta = match std::fs::metadata(&path) {
+        Ok(m) => m,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(not_found(rel)),
+        Err(e) => return Err(e.into()),
+    };
+    if meta.is_dir() {
+        bail!(tr!("{rel} est un dossier", "{rel} is a folder"));
+    }
+    if meta.len() > max {
+        bail!("{TOO_LARGE}:{}", meta.len());
+    }
+    Ok(std::fs::read(&path)?)
+}
+
+/// Writes `bytes` as they are, as `write` does its text (see `put`). The file's new stamp.
+pub fn write_bytes(
+    root: &Path,
+    rel: &str,
+    bytes: &[u8],
+    check: Expect,
+    worktrees: &[String],
+) -> Result<Stamp> {
+    let path = put(root, rel, bytes, check, worktrees)?;
+    Ok(stamp_of(&std::fs::metadata(path)?))
+}
+
+/// The one way the editors write a file: `rel` inside the root (a link followed only when it stays
+/// in it), what `check` asks verified first (`changed:<hash>`, `changed` or `deleted` when it is no
+/// longer the file read; « already exists » for `Absent`), never a new file in the agents'
+/// worktrees, never over a read-only file nor a folder, then through a temporary file renamed over
+/// it (parent folders made). Where it was written.
+fn put(
+    root: &Path,
+    rel: &str,
+    bytes: &[u8],
+    check: Expect,
+    worktrees: &[String],
+) -> Result<PathBuf> {
     validate_rel(rel)?;
     let mut path = contained(root, rel)?;
 
@@ -216,13 +347,25 @@ pub fn write(
         path = real;
     }
 
-    if let Some(exp) = expected {
-        match std::fs::read(&path) {
-            // The version found named (`changed:<hash>`): « Garder ma version » writes over that one only.
-            Ok(bytes) if hash(&bytes) != exp => bail!("{CHANGED}:{}", hash(&bytes)),
+    match check {
+        Expect::Any => {}
+        // The version found named (`changed:<hash>`): « Garder ma version » writes over that one only.
+        Expect::Hash(exp) => match std::fs::read(&path) {
+            Ok(found) if hash(&found) != exp => bail!("{CHANGED}:{}", hash(&found)),
             Ok(_) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => bail!(DELETED),
             Err(e) => return Err(e.into()),
+        },
+        Expect::Stamp(exp) => match std::fs::metadata(&path) {
+            Ok(m) if stamp_of(&m) != exp => bail!(CHANGED),
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => bail!(DELETED),
+            Err(e) => return Err(e.into()),
+        },
+        Expect::Absent => {
+            if std::fs::symlink_metadata(&path).is_ok() {
+                bail!(exists_already(i18n::ui(), rel));
+            }
         }
     }
     // Never a new file in the agents' worktrees: in one removed since, its folders made again
@@ -231,14 +374,16 @@ pub fn write(
         in_worktrees(root, rel, worktrees)?;
     }
 
-    // Refuse to write to read-only files.
+    // Refuse to write to read-only files, and over a folder.
     if let Ok(meta) = std::fs::metadata(&path) {
         if meta.permissions().readonly() {
             bail!(tr!("{rel} est en lecture seule", "{rel} is read-only"));
         }
+        if meta.is_dir() {
+            bail!(tr!("{rel} est un dossier", "{rel} is a folder"));
+        }
     }
 
-    let bytes = encode(text, eol, bom);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -253,11 +398,11 @@ pub fn write(
     let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     let tmp = path.with_file_name(format!(".{name}.{pid}-{counter}.escouade-tmp"));
 
-    write_via(&path, &tmp, &bytes)?;
-    Ok(hash(&bytes))
+    write_via(&path, &tmp, bytes)?;
+    Ok(path)
 }
 
-/// Refuses on Windows a path with a part it would not keep as typed or keeps for a device.
+// Refuses on Windows a path with a part it would not keep as typed or keeps for a device.
 fn valid_names(rel: &str) -> Result<()> {
     #[cfg(windows)]
     for part in rel.split(['/', '\\']) {
@@ -1210,6 +1355,134 @@ mod tests {
         let missing = read(&dir, "missing.ts").unwrap_err().to_string();
         assert!(missing.contains("introuvable"), "{missing}");
         assert!(read(&dir, "../x").is_err());
+    }
+
+    #[test]
+    fn the_vscode_view_reads_any_file_in_bytes_and_nothing_out_of_its_root() {
+        let dir = test_dir("fsedit-bytes");
+        let png = [0x89, b'P', b'N', b'G', 0, 0, 0xff, 0x00, b'\r', b'\n'];
+        std::fs::write(dir.join("logo.png"), png).unwrap();
+        std::fs::write(dir.join("a.ts"), "\u{feff}x\r\n").unwrap();
+        // Bytes as they are: a binary file, a text with its BOM and its CRLF.
+        assert_eq!(read_bytes(&dir, "logo.png").unwrap(), png);
+        assert_eq!(
+            read_bytes(&dir, "a.ts").unwrap(),
+            "\u{feff}x\r\n".as_bytes()
+        );
+        // Too big: refused, the size said after the tag the view reads.
+        let err = read_bytes_up_to(&dir, "logo.png", 4)
+            .unwrap_err()
+            .to_string();
+        assert_eq!(err, format!("{TOO_LARGE}:10"));
+        // Missing: the error the editors tell apart.
+        let missing = read_bytes(&dir, "nope.bin").unwrap_err();
+        assert!(missing.downcast_ref::<NotFound>().is_some());
+        // A folder, the root, and nothing out of the root, by any spelling.
+        std::fs::create_dir(dir.join("src")).unwrap();
+        assert!(read_bytes(&dir, "src").is_err());
+        assert!(read_bytes(&dir, "").is_err());
+        let outside = test_dir("fsedit-bytes-outside");
+        std::fs::write(outside.join("secret.txt"), "secret").unwrap();
+        let abs = outside.join("secret.txt").to_string_lossy().into_owned();
+        for rel in [
+            "../fsedit-bytes-outside/secret.txt",
+            "src/../../fsedit-bytes-outside/secret.txt",
+            abs.as_str(),
+        ] {
+            assert!(read_bytes(&dir, rel).is_err(), "{rel}");
+            assert!(stat(&dir, rel).is_err(), "{rel}");
+            assert!(
+                write_bytes(&dir, rel, b"x", Expect::Any, &[]).is_err(),
+                "{rel}"
+            );
+        }
+        assert_eq!(
+            std::fs::read_to_string(outside.join("secret.txt")).unwrap(),
+            "secret"
+        );
+    }
+
+    #[test]
+    fn the_vscode_view_stats_a_file_a_folder_and_the_root() {
+        let dir = test_dir("fsedit-stat");
+        std::fs::create_dir(dir.join("src")).unwrap();
+        std::fs::write(dir.join("src/a.ts"), "abc").unwrap();
+        let root = stat(&dir, "").unwrap();
+        assert_eq!(root.kind, "dir");
+        assert_eq!(stat(&dir, "src").unwrap().kind, "dir");
+        let a = stat(&dir, "src/a.ts").unwrap();
+        assert_eq!((a.kind, a.size, a.readonly), ("file", 3, false));
+        assert!(a.mtime > 0 && a.ctime > 0);
+        let modified = std::fs::metadata(dir.join("src/a.ts"))
+            .unwrap()
+            .modified()
+            .unwrap();
+        assert_eq!(a.mtime, millis(Ok(modified)));
+        assert!(stat(&dir, "src/none.ts")
+            .unwrap_err()
+            .downcast_ref::<NotFound>()
+            .is_some());
+    }
+
+    #[test]
+    fn the_vscode_view_writes_bytes_refused_when_the_file_changed_since_its_stamp() {
+        let dir = test_dir("fsedit-write-bytes");
+        let p = dir.join("a.bin");
+        std::fs::write(&p, [1, 2, 3]).unwrap();
+        let read = stat(&dir, "a.bin").unwrap();
+        let seen = Stamp {
+            mtime: read.mtime,
+            size: read.size,
+        };
+        // Still the file read: written as given, its new stamp the one a stat finds.
+        let now = write_bytes(
+            &dir,
+            "a.bin",
+            &[0, 0xff, b'\r', b'\n'],
+            Expect::Stamp(seen),
+            &[],
+        )
+        .unwrap();
+        assert_eq!(std::fs::read(&p).unwrap(), [0, 0xff, b'\r', b'\n']);
+        let after = stat(&dir, "a.bin").unwrap();
+        assert_eq!(
+            now,
+            Stamp {
+                mtime: after.mtime,
+                size: after.size
+            }
+        );
+        // Changed behind its back (an agent): refused, the file left as the agent wrote it.
+        std::fs::write(&p, "written by an agent").unwrap();
+        let err = write_bytes(&dir, "a.bin", b"mine", Expect::Stamp(now), &[]).unwrap_err();
+        assert_eq!(err.to_string(), CHANGED);
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), "written by an agent");
+        // Overwritten on purpose (VS Code's « Overwrite »): no check.
+        write_bytes(&dir, "a.bin", b"mine", Expect::Any, &[]).unwrap();
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), "mine");
+        // Deleted behind its back.
+        std::fs::remove_file(&p).unwrap();
+        let err = write_bytes(&dir, "a.bin", b"x", Expect::Stamp(now), &[]).unwrap_err();
+        assert_eq!(err.to_string(), DELETED);
+        // A new file: made with its folders, refused when something is there already.
+        write_bytes(&dir, "new/deep/b.bin", b"b", Expect::Absent, &[]).unwrap();
+        assert_eq!(std::fs::read(dir.join("new/deep/b.bin")).unwrap(), b"b");
+        let err = write_bytes(&dir, "new/deep/b.bin", b"c", Expect::Absent, &[]).unwrap_err();
+        assert!(err.to_string().contains("existe déjà"), "{err}");
+        assert_eq!(std::fs::read(dir.join("new/deep/b.bin")).unwrap(), b"b");
+        // Never over a folder, never a new file in the agents' worktrees.
+        assert!(write_bytes(&dir, "new", b"x", Expect::Any, &[]).is_err());
+        let err =
+            write_bytes(&dir, ".claude/worktrees/x/a.ts", b"x", Expect::Any, &[]).unwrap_err();
+        assert!(err.to_string().contains("worktrees"), "{err}");
+        assert!(!dir.join(".claude").exists());
+        // No temporary file left behind.
+        let left: Vec<_> = std::fs::read_dir(dir.join("new/deep"))
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name())
+            .collect();
+        assert_eq!(left, vec![std::ffi::OsString::from("b.bin")]);
     }
 
     #[test]

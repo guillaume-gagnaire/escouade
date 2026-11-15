@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { addProject, expect, SHOW, test, openSettingsPage, settingsEntry, windowScale } from './fixture';
+import { editorLines, openInExplorer, workbench } from './vscode';
 
 const STEPS = [80, 90, 100, 110, 125, 150, 175, 200];
 /** The steps the settings offer in segments (the keys reach the others). */
@@ -42,6 +43,9 @@ function overflowing(page: Page) {
       if (!r.width || !r.height || getComputedStyle(el).visibility === 'hidden') continue;
       // The terminals' parking lot is off screen on purpose.
       if (r.left < -1000) continue;
+      // The VS Code view lays out its own surfaces (an editor's lines span its whole virtual height), clipped by its
+      // layer, which is checked as any element.
+      if (el.parentElement?.closest('#vscode-layer .vscode-host')) continue;
       if ((r.right <= innerWidth + 1 || scrolledTo(el, 'x')) && (r.bottom <= innerHeight + 1 || scrolledTo(el, 'y'))) continue;
       if (r.right > innerWidth + 1 || r.bottom > innerHeight + 1) {
         out.push(`${el.tagName.toLowerCase()}.${[...el.classList].join('.')} (${Math.round(r.right)}, ${Math.round(r.bottom)})`);
@@ -209,27 +213,19 @@ test('the terminals and the editor have their own font size, set at once and fit
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
 
+  // The editor, VS Code's view (ESC-447), opens at that size. (Following a change of it while open is A4's.)
   await page.getByRole('button', { name: 'Parcourir' }).click();
-  await page.getByRole('treeitem', { name: /src/ }).click();
-  await page.getByRole('treeitem', { name: /app\.ts/ }).click();
-  await expect(page.locator('.cm-content')).toContainText('const a = 1;');
-  const line = await page
-    .locator('.cm-line')
+  await openInExplorer(page, 'src/app.ts');
+  await expect(editorLines(page)).toContainText('const a = 1;');
+  const font = await editorLines(page)
+    .locator('.view-line')
     .first()
-    .evaluate((el) => {
-      const style = getComputedStyle(el);
-      return { font: style.fontSize, height: el.getBoundingClientRect().height };
-    });
-  expect(line.font).toBe('16px');
-  // The lines grow with the text: 1.75 times its size, as the 2.0 design draws them (ESC-81).
-  expect(Math.round(line.height)).toBe(Math.round(16 * 1.75));
-  // The gutter's line numbers sit on their lines.
-  const gutter = await page
-    .locator('.cm-lineNumbers .cm-gutterElement')
-    .nth(1)
-    .evaluate((el) => el.getBoundingClientRect().height);
-  expect(Math.round(gutter)).toBe(Math.round(line.height));
+    .evaluate((el) => getComputedStyle(el).fontSize);
+  expect(font).toBe('16px');
   expect(await overflowing(page)).toEqual([]);
+  // Back to the conversation, for what follows.
+  await page.getByTestId('vscode-back').click();
+  await expect(workbench(page)).toBeHidden();
 
   // In the smallest window the interface is laid out for, nothing is cut either: the status bar keeps its buttons whole,
   // what it tells gives way, the branch's name cut short; the settings are on the projects' rail (ESC-158).

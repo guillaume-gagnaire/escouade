@@ -7,6 +7,15 @@ import { app } from './lib/state.svelte';
 import type { Agent, InitialState, Project, Settings, Ticket, UiEvent } from './lib/types';
 import { agent, CLAUDE_ENGINE, branchInfo, fakeBackend, gitInfo, project, resetApp, SETTINGS, ticket } from './test/ipc';
 
+// The workbench of VS Code, the project's editor (ESC-447), does not start in jsdom: what is asked of it is looked at.
+const workbench = vi.hoisted(() => ({
+  workbench: vi.fn(async () => {}),
+  attach: vi.fn(),
+  detach: vi.fn(),
+  openFile: vi.fn(async () => {}),
+}));
+vi.mock('./lib/vscode/workbench', () => workbench);
+
 const DIFF = `diff --git a/src/auth.ts b/src/auth.ts
 --- a/src/auth.ts
 +++ b/src/auth.ts
@@ -337,16 +346,13 @@ describe('App layout', () => {
     await userEvent.type(within(dialog).getByRole('combobox'), 'app');
     await within(dialog).findByRole('option', { name: /app/ });
     await userEvent.keyboard('{Enter}');
-    expect(await screen.findByRole('tab', { name: /app\.ts/ })).toHaveAttribute('aria-selected', 'true');
+    // Opened in a tab of the VS Code view, the project's editor.
+    await waitFor(() => expect(workbench.openFile).toHaveBeenCalledWith({ projectId: 'p1', agentId: null }, 'src/app.ts'));
+    expect(screen.getByTestId('vscode-view')).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: 'Ouvrir un fichier' })).not.toBeInTheDocument();
   });
 
   describe('Ctrl+P and the print dialog of the WebView', () => {
-    const FILES = {
-      fs_tree: () => ({ root: 'C:/code/demo-api', files: ['README.md', 'src/app.ts'], truncated: false, ignored: [] }),
-      fs_read: () => ({ kind: 'text', text: 'x', size: 1, hash: 'h', eol: 'lf', bom: false }),
-      fs_base: () => null,
-    };
     /** Ctrl+P (or Ctrl+Shift+P) dispatched from `target`: whether the page may still print. */
     function press(target: Element | Window, shift = false) {
       const e = new KeyboardEvent('keydown', { key: shift ? 'P' : 'p', ctrlKey: true, shiftKey: shift, bubbles: true, cancelable: true });
@@ -366,16 +372,6 @@ describe('App layout', () => {
       field.remove();
     });
 
-    it('is held back from the field naming a new file', async () => {
-      start('', { handlers: FILES });
-      expect(await screen.findByRole('main')).toBeInTheDocument();
-      await app.openEditor({ source: 'project', path: 'README.md' });
-      await userEvent.click(await screen.findByRole('button', { name: 'Nouveau fichier' }));
-      const field = await screen.findByRole('textbox', { name: 'Nom du nouveau fichier' });
-      expect(press(field)).toBe(true);
-      expect(press(field, true)).toBe(true);
-    });
-
     it('is held back from the field renaming an agent', async () => {
       const { container } = start('');
       expect(await screen.findByRole('main')).toBeInTheDocument();
@@ -386,17 +382,8 @@ describe('App layout', () => {
       expect(press(field, true)).toBe(true);
     });
 
-    it('is held back from the code, where it also opens the palette', async () => {
-      const { container } = start('', { handlers: FILES });
-      expect(await screen.findByRole('main')).toBeInTheDocument();
-      await app.openEditor({ source: 'project', path: 'README.md' });
-      await waitFor(() => expect(container.querySelector('.cm-content')).not.toBeNull());
-      const code = container.querySelector('.cm-content')!;
-      expect(press(code, true)).toBe(true);
-      expect(app.modal).toBeNull();
-      expect(press(code)).toBe(true);
-      expect(await screen.findByRole('dialog', { name: 'Ouvrir un fichier' })).toBeInTheDocument();
-    });
+    // In the code of the project's editor, now VS Code's view, the keys shared by Escouade and VS Code are A3's: no
+    // test of them here until then.
 
     it('is held back from the palette itself, from the window, and without a project', async () => {
       start('');

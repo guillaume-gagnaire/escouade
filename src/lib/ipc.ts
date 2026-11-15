@@ -55,6 +55,8 @@ import type {
   DownloadedUpdate,
   ExternalIssue,
   FileBase,
+  FileStamp,
+  FileStat,
   FileChange,
   FileText,
   FileTree,
@@ -685,6 +687,24 @@ export const api = {
   /** Creates an empty folder, its parents with it; refused when something is already there. */
   fsMkdir: (projectId: string, agentId: string | null, path: string) => invoke<void>('fs_mkdir', { projectId, agentId, path }),
   fsBase: (projectId: string, agentId: string | null, path: string) => invoke<FileBase | null>('fs_base', { projectId, agentId, path }),
+  /** What is at `path` of the source (`''`: its root); refused with `NOT_FOUND:<path>` when nothing is (ESC-447). */
+  fsStat: (projectId: string, agentId: string | null, path: string) => invoke<FileStat>('fs_stat', { projectId, agentId, path }),
+  /** The bytes of a file of the source as they are, text or not (64 MB at most: `TOO_LARGE:<size>`). */
+  fsReadBytes: (projectId: string, agentId: string | null, path: string) =>
+    invoke<ArrayBuffer>('fs_read_bytes', { projectId, agentId, path }),
+  /**
+   * Writes the bytes of a file of the source as they are: `expect` 'absent' (a new file), 'any' (over whatever is there),
+   * or the stamp of the file read (refused with `changed` / `deleted` when it is no longer that one). Its new stamp.
+   */
+  fsWriteBytes: (projectId: string, agentId: string | null, path: string, bytes: Uint8Array, expect: 'absent' | 'any' | FileStamp) =>
+    invoke<FileStamp>('fs_write_bytes', bytes, {
+      headers: {
+        'x-project': encodeURIComponent(projectId),
+        'x-agent': encodeURIComponent(agentId ?? ''),
+        'x-path': encodeURIComponent(path),
+        'x-expect': typeof expect === 'string' ? expect : `${expect.mtime}:${expect.size}`,
+      },
+    }),
   /** The lines of the source's files (the ignored ones and the agents' worktrees left out) that match `query`. */
   codeSearch: (projectId: string, agentId: string | null, query: SearchQuery) =>
     invoke<SearchResult>('code_search', { projectId, agentId, query }),

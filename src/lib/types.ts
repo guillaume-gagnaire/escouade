@@ -2293,6 +2293,21 @@ export interface FileText {
   bom: boolean;
 }
 
+/** What is at a path of an editor source, for the VS Code view (`fs_stat`, ESC-447): times in ms since 1970. */
+export interface FileStat {
+  kind: 'file' | 'dir';
+  size: number;
+  mtime: number;
+  ctime: number;
+  readonly: boolean;
+}
+
+/** When a file was written last and its size: what the VS Code view gives back to write over the file it read. */
+export interface FileStamp {
+  mtime: number;
+  size: number;
+}
+
 /**
  * What `code_search` looks for in a source's files: `pattern` as written, or with `regex` an expression as JavaScript
  * writes them (git's Perl expressions when it has them, else translated for its extended ones: what these cannot say
@@ -2817,6 +2832,8 @@ export type UiEvent =
   | { type: 'memory'; projectId: string }
   | { type: 'vectorsDownload'; done: number; total: number }
   | { type: 'git'; projectId: string; git: GitInfo }
+  /** Files and folders of a project changed on disk, by their absolute path as the watcher saw them; null: too many to tell (ESC-447). */
+  | { type: 'fsChanged'; projectId: string; paths: string[] | null }
   | { type: 'usage'; usage: Usage }
   | { type: 'focus'; projectId: string; agentId: string | null }
   | { type: 'terminalExit'; id: string; code: number | null }

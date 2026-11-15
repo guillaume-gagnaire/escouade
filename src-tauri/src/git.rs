@@ -2937,11 +2937,54 @@ pub async fn remote_url(repo: &str, remote: &str) -> Option<String> {
 /// File list of a folder and when it was read.
 type CachedFiles = (Instant, Arc<Vec<String>>);
 
+/// The files and folders of a project changed on disk since the window was last told (ESC-447):
+/// their paths as the watcher gives them, up to `MAX_CHANGED`, past which only `overflow` says so.
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct Changed {
+    pub paths: Vec<String>,
+    pub overflow: bool,
+}
+
+/// More paths changed than that between two refreshes and the window is told « everything ».
+pub const MAX_CHANGED: usize = 512;
+
+impl Changed {
+    /// Adds the paths of an event, those inside `.git` left out (the window shows none of them).
+    pub fn note(&mut self, paths: &[PathBuf], max: usize) {
+        for p in paths {
+            if self.overflow {
+                return;
+            }
+            let s = p.to_string_lossy();
+            if in_git_dir(&s) || self.paths.iter().any(|q| *q == s) {
+                continue;
+            }
+            if self.paths.len() >= max {
+                self.overflow = true;
+                self.paths.clear();
+                return;
+            }
+            self.paths.push(s.into_owned());
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.paths.is_empty() && !self.overflow
+    }
+}
+
+/// Whether a path is the `.git` of a repository or inside it.
+fn in_git_dir(s: &str) -> bool {
+    s.contains("\\.git\\") || s.contains("/.git/") || s.ends_with(".git")
+}
+
 /// Watches project folders and coalesces change notifications per project.
 pub struct GitService {
     tx: mpsc::UnboundedSender<String>,
     watchers: Mutex<HashMap<String, (RecommendedWatcher, Arc<AtomicBool>)>>,
     files: Mutex<HashMap<String, CachedFiles>>,
+    /// What changed in each project's folders since `take_changed`.
+    changed: Arc<Mutex<HashMap<String, Changed>>>,
 }
 
 impl GitService {
@@ -2952,6 +2995,7 @@ impl GitService {
                 tx,
                 watchers: Mutex::default(),
                 files: Mutex::default(),
+                changed: Arc::default(),
             },
             rx,
         )
@@ -2962,11 +3006,17 @@ impl GitService {
     pub fn watch(&self, project_id: &str, paths: &[String]) {
         let flag = Arc::new(AtomicBool::new(false));
         let (tx, pid, f) = (self.tx.clone(), project_id.to_string(), flag.clone());
+        let changed = self.changed.clone();
         let handler = move |res: notify::Result<notify::Event>| {
             let Ok(ev) = res else { return };
             if !is_change(&ev) {
                 return;
             }
+            changed
+                .lock()
+                .entry(pid.clone())
+                .or_default()
+                .note(&ev.paths, MAX_CHANGED);
             if !f.swap(true, Ordering::AcqRel) {
                 let _ = tx.send(pid.clone());
             }
@@ -2993,6 +3043,15 @@ impl GitService {
 
     pub fn unwatch(&self, project_id: &str) {
         self.watchers.lock().remove(project_id);
+        self.changed.lock().remove(project_id);
+    }
+
+    /// What changed in the project's folders since the last call, if anything.
+    pub fn take_changed(&self, project_id: &str) -> Option<Changed> {
+        self.changed
+            .lock()
+            .remove(project_id)
+            .filter(|c| !c.is_empty())
     }
 
     pub fn refresh(&self, project_id: &str) {
@@ -3468,6 +3527,58 @@ mod tests {
             pace.read("p", at(100_001 + i));
         }
         assert_eq!(pace.read("p", at(100_100)), (BUSY, None));
+    }
+
+    #[test]
+    fn the_paths_changed_are_kept_for_the_window_without_git_s_own_and_cut_past_the_most() {
+        let p = |s: &str| PathBuf::from(s);
+        let mut c = Changed::default();
+        c.note(&[p("/p/src/a.ts"), p("/p/.git/index"), p("/p/src/a.ts")], 3);
+        assert_eq!(c.paths, vec!["/p/src/a.ts"]);
+        c.note(&[p("/p/b"), p("/p/c")], 3);
+        assert_eq!((c.paths.len(), c.overflow), (3, false));
+        // One more than the most: « everything », no list.
+        c.note(&[p("/p/d")], 3);
+        assert!(c.overflow && c.paths.is_empty());
+        c.note(&[p("/p/e")], 3);
+        assert!(c.paths.is_empty());
+        let mut w = Changed::default();
+        w.note(&[p(r"C:\p\.git\HEAD"), p(r"C:\p\.git")], 3);
+        assert!(w.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_file_written_in_a_watched_folder_is_told_by_its_path() {
+        let dir = crate::paths::test_dir("git-watch-changed");
+        let root = dir.to_string_lossy().to_string();
+        std::fs::create_dir(dir.join("src")).unwrap();
+        let (service, mut rx) = GitService::new();
+        service.watch("p", std::slice::from_ref(&root));
+        assert_eq!(rx.recv().await.as_deref(), Some("p"));
+        // Nothing changed yet: nothing to tell.
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        while rx.try_recv().is_ok() {}
+        let _ = service.take_changed("p");
+        service.take_flag("p");
+        assert_eq!(service.take_changed("p"), None);
+        std::fs::write(dir.join("src").join("a.ts"), "written by an agent").unwrap();
+        let asked = tokio::time::timeout(Duration::from_secs(5), rx.recv()).await;
+        assert_eq!(asked.ok().flatten().as_deref(), Some("p"));
+        let changed = service.take_changed("p").expect("a change told");
+        assert!(!changed.overflow);
+        let want = std::fs::canonicalize(dir.join("src").join("a.ts")).unwrap();
+        assert!(
+            changed
+                .paths
+                .iter()
+                .any(|f| { std::fs::canonicalize(f).is_ok_and(|f| f == want) }),
+            "{changed:?}"
+        );
+        // Taken: told once. (Windows tells the creation and the write apart: the late ones are let through first.)
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let _ = service.take_changed("p");
+        assert_eq!(service.take_changed("p"), None);
+        service.unwatch("p");
     }
 
     /// The same, from inotify itself: a project watched, `git status` run in it as the refresh

@@ -1,7 +1,6 @@
 // « Ouvrir un fichier » (Ctrl+P): the line typed after a name, the files ranked for what is typed, the files opened
 // last, and the editor's answer to a file picked.
 
-import type { NavTarget } from './goto';
 import { movedPath } from './tree';
 
 /** Files the palette shows. */
@@ -140,6 +139,15 @@ class RecentFiles {
 }
 
 export const recentFiles = new RecentFiles();
+
+/** A place in a file to go to: its line and column (1-based) when known. */
+export interface NavTarget {
+  path: string;
+  line?: number;
+  col?: number;
+  /** The text of that line, for a list of places to show. */
+  text?: string;
+}
 
 let jumper: ((t: NavTarget) => void) | null = null;
 

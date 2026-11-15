@@ -10,9 +10,6 @@ export const ALLOWED: Allowed[] = [
   { file: '*', text: 'Kanban', why: 'nom propre : Kanban reste Kanban (GLOSSARY.md)' },
 
   // L3 — editor
-  { file: 'src/components/editor/EditorView.svelte', text: 'UTF-8', why: 'le nom de l’encodage, écrit pareil dans toutes les langues' },
-  { file: 'src/components/editor/EditorView.svelte', text: 'CRLF', why: 'la fin de ligne Windows, écrite pareil dans toutes les langues' },
-  { file: 'src/components/editor/EditorView.svelte', text: 'LF', why: 'la fin de ligne Unix, écrite pareil dans toutes les langues' },
 
   // L4 — settings
   {

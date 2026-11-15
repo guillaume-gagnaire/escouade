@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Locator } from '@playwright/test';
 import { addProject, expect, send, test, unfoldSections, openSettingsPage, settingsEntry, closeSettings } from './fixture';
+import { editorLines, explorerRow, openInExplorer, vscodeTabs, workbench } from './vscode';
 
 test('a new project opens an agent that streams Claude’s reply', async ({ app }) => {
   const { page } = app;
@@ -519,7 +520,11 @@ test('a project’s worktrees go to the folder and on the branch prefix its sett
   await expect(page.locator('.card').first().locator('.branch')).toHaveText('agent-1');
   await page.locator('.card').first().click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Ouvrir dans l’éditeur' }).click();
-  await expect(page.getByText('../demo-api-worktrees/agent-1', { exact: true })).toBeVisible();
+  // The editor (the VS Code view) names the agent's folder by its place from the project's.
+  await expect(workbench(page).locator('.explorer-folders-view .monaco-list-row[aria-level="1"]')).toHaveText(
+    /· \.\.\/demo-api-worktrees\/agent-1$/,
+    { timeout: 60_000 },
+  );
 });
 
 test('a terminal runs commands in the project folder', async ({ app }) => {
@@ -828,18 +833,16 @@ test('a file is browsed, edited and saved in the embedded editor', async ({ app 
   const { page } = app;
   await addProject(page, app.repo);
   await page.getByRole('button', { name: 'Parcourir' }).click();
-  await page.getByRole('treeitem', { name: /src/ }).click();
-  await page.getByRole('treeitem', { name: /app\.ts/ }).click();
-  await expect(page.getByRole('tab', { name: /app\.ts/ })).toBeVisible();
-  const code = page.locator('.cm-content');
+  await openInExplorer(page, 'src/app.ts');
+  const code = editorLines(page);
   await expect(code).toContainText('const a = 1;');
   await code.click();
   await page.keyboard.press('Control+End');
   await page.keyboard.type('export const b = 2;');
-  await expect(page.getByText('Non enregistré', { exact: true })).toBeVisible();
+  await expect.poll(() => vscodeTabs(page)).toContain('app.ts*');
   await page.keyboard.press('Control+S');
-  await expect(page.getByText('Enregistré', { exact: true })).toBeVisible();
-  expect(fs.readFileSync(path.join(app.repo, 'src', 'app.ts'), 'utf8')).toBe('const a = 1;\nexport const b = 2;');
+  await expect.poll(() => vscodeTabs(page)).toContain('app.ts');
+  await expect.poll(() => fs.readFileSync(path.join(app.repo, 'src', 'app.ts'), 'utf8')).toBe('const a = 1;\nexport const b = 2;');
   await page.getByRole('button', { name: 'Conversation', exact: true }).click();
   await expect(page.locator('main.conv')).toBeVisible();
 });
@@ -848,22 +851,25 @@ test('a file is created from the editor’s tree, folders included, then written
   const { page } = app;
   await addProject(page, app.repo);
   await page.getByRole('button', { name: 'Parcourir' }).click();
-  await page.getByRole('treeitem', { name: /src/ }).click({ button: 'right' });
-  await page.getByRole('menuitem', { name: 'Nouveau fichier…' }).click();
-  const field = page.getByRole('textbox', { name: 'Nom du nouveau fichier' });
-  await field.fill('app.ts');
-  await expect(page.getByRole('alert')).toHaveText('« app.ts » existe déjà à cet endroit.');
-  await field.fill('lib/util.ts');
+  await expect(workbench(page)).toBeVisible({ timeout: 60_000 });
+  // VS Code's own « New File... », from its explorer's header, at the root (its folder's row selected): the path names
+  // the folders to make.
+  await explorerRow(page, 'src').waitFor();
+  await workbench(page).locator('.explorer-folders-view .monaco-list-row[aria-level="1"]').first().click();
+  const header = workbench(page).locator('.explorer-viewlet .pane-header').first();
+  await header.hover();
+  await header.locator('.action-label[aria-label^="New File"]').click();
+  const field = workbench(page).locator('.explorer-folders-view .monaco-inputbox input');
+  // (A name already taken is VS Code's own refusal; the core refuses to write over a file anyway.)
+  await field.fill('src/lib/util.ts');
   await field.press('Enter');
-  await expect(page.getByRole('tab', { name: /util\.ts/ })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('treeitem', { name: /util\.ts/ })).toHaveAttribute('aria-selected', 'true');
+  await expect.poll(() => vscodeTabs(page)).toContain('util.ts');
+  await expect.poll(() => fs.existsSync(path.join(app.repo, 'src', 'lib', 'util.ts'))).toBe(true);
   expect(fs.readFileSync(path.join(app.repo, 'src', 'lib', 'util.ts'), 'utf8')).toBe('');
   // The cursor is in the file created: typing goes there right away.
-  await expect(page.locator('.cm-editor')).toHaveClass(/cm-focused/);
   await page.keyboard.type('export const u = 1;');
   await page.keyboard.press('Control+S');
-  await expect(page.getByText('Enregistré', { exact: true })).toBeVisible();
-  expect(fs.readFileSync(path.join(app.repo, 'src', 'lib', 'util.ts'), 'utf8')).toBe('export const u = 1;');
+  await expect.poll(() => fs.readFileSync(path.join(app.repo, 'src', 'lib', 'util.ts'), 'utf8')).toBe('export const u = 1;');
 });
 
 test('a file of an agent’s worktree opens in the editor from the uncommitted files', async ({ app }) => {
@@ -880,8 +886,9 @@ test('a file of an agent’s worktree opens in the editor from the uncommitted f
   // The row's editor button shows on hover.
   await page.locator('.filerow').filter({ hasText: 'app.ts' }).hover();
   await page.getByRole('button', { name: 'Ouvrir app.ts dans l’éditeur' }).click();
-  await expect(page.locator('.cm-content')).toContainText('const a = 42;');
-  await expect(page.locator('.crumbs .vs')).toHaveText('1 ligne modifiée par rapport à main');
+  // In the VS Code view, on the agent's worktree. (« 1 ligne modifiée par rapport à main », the marks of the changes
+  // from the base, come back with A7.)
+  await expect(editorLines(page)).toContainText('const a = 42;', { timeout: 60_000 });
 });
 
 test('a ticket is taken by an agent that loops until its criteria are met, then merged once validated', async ({ app }) => {

@@ -1,3 +1,8 @@
+// ESC-447: the project's editor is now the VS Code view (tests/e2e/vscode-view.spec.ts). These tests of the CodeMirror
+// editor of the 2.0 design are fixme until the tickets that bring what they check back in the view: A7 (the marks of
+// the changes from the base, the comparison with the disk, the choice of the source), A3 (its keys, its focus,
+// Ctrl+P, the links of the conversations) and A4 (the theme followed at once, the fonts).
+//
 // The editor in the 2.0 design (ESC-81, lot 9): its bar (back to the conversation, the source, « Enregistré »,
 // « Enregistrer »), the tree with its changed folders marked and its letters, the tabs, the path above the text with
 // what changed, the search floating at the top right, the marks of the changes between the numbers and the text, the
@@ -193,7 +198,8 @@ async function previewAt(preview: Page, route: string, t: 'dark' | 'light') {
   await still(preview);
 }
 
-test('the editor looks as the preview draws it, in both themes, at both sizes', async ({ app }) => {
+// A7: the editor of the preview, its marks of the changes from main and its source (A4: its theme and fonts).
+test.fixme('the editor looks as the preview draws it, in both themes, at both sizes', async ({ app }) => {
   test.setTimeout(240_000);
   const exe = chromium.executablePath();
   test.skip(
@@ -402,7 +408,8 @@ test('the editor looks as the preview draws it, in both themes, at both sizes', 
   }
 });
 
-test('the editor follows the theme at once, CodeMirror’s own base theme included', async ({ app }) => {
+// A4: the theme followed at once (the A7 marks of the preview's project on the way).
+test.fixme('the editor follows the theme at once, CodeMirror’s own base theme included', async ({ app }) => {
   const { page } = app;
   const write = previewsProject(app.repo);
   await addProject(page, app.repo, { worktrees: true });
@@ -430,7 +437,8 @@ test('the editor follows the theme at once, CodeMirror’s own base theme includ
   expect(classes.light).not.toBe(classes.dark);
 });
 
-test('the editor stays still with prefers-reduced-motion', async ({ app }) => {
+// A3: the caret, the focus and Ctrl+P in the view; A7: the source's menu on the worktree.
+test.fixme('the editor stays still with prefers-reduced-motion', async ({ app }) => {
   const { page } = app;
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const write = previewsProject(app.repo);
@@ -477,7 +485,8 @@ test('the search through the conversations draws its icons, not characters', asy
 test.describe('in English', () => {
   test.use({ language: 'en' });
 
-  test('the labels of the editor fit in their place, at both sizes', async ({ app }) => {
+  // A7: the bar, the source and the marks of the changes of the editor of the preview.
+  test.fixme('the labels of the editor fit in their place, at both sizes', async ({ app }) => {
     const { page } = app;
     const write = previewsProject(app.repo);
     await addProject(page, app.repo, { worktrees: true, lang: 'en' });
@@ -537,7 +546,10 @@ for (const lang of ['fr', 'en'] as const)
 
     // The editor and the two palettes (Ctrl K, Ctrl P) at 1 028, 1 280 and 1 440 px, the side panel closed, open alone
     // and side by side with the conversation: nothing sticks out, as the folds go by the room of each (@container).
-    test('nothing of the editor or of its searches sticks out, at 1028, 1280 and 1440 px, whatever the side panel', async ({ app }) => {
+    // A3: Ctrl+P and the keys in the view; A7: the source and the marks of the preview's worktree.
+    test.fixme('nothing of the editor or of its searches sticks out, at 1028, 1280 and 1440 px, whatever the side panel', async ({
+      app,
+    }) => {
       test.setTimeout(300_000);
       const { page } = app;
       const write = previewsProject(app.repo);

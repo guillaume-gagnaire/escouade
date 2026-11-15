@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { addProject, expect, test, openSettingsPage, closeSettings } from './fixture';
+import { editorLines } from './vscode';
 
 const SHOTS = process.env.ESCOUADE_E2E_SHOTS;
 
@@ -158,7 +159,7 @@ test('the Docs tab imports the spec found, shows its subjects, a page and its ga
 
   // « Voir le code » opens the file the gap names in the editor.
   await page.getByRole('button', { name: 'Voir le code' }).click();
-  await expect(page.locator('.cm-content')).toContainText('MAX_INSTALMENTS');
+  await expect(editorLines(page)).toContainText('MAX_INSTALMENTS', { timeout: 60_000 });
   await tabs.getByRole('button', { name: 'Docs' }).click();
 
   // « Partager »: the docs alone are committed and pushed, the code changed meanwhile left out.
