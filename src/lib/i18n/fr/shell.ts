@@ -119,10 +119,11 @@ export default {
   quit: {
     title: 'Quitter Escouade ?',
     unsaved: {
-      one: '{count} fichier n’est pas enregistré dans l’éditeur : leurs modifications seront perdues.',
-      other: '{count} fichiers ne sont pas enregistrés dans l’éditeur : leurs modifications seront perdues.',
+      one: '{count} fichier n’est pas enregistré dans l’éditeur : ses modifications seront perdues si tu ne l’enregistres pas.',
+      other: '{count} fichiers ne sont pas enregistrés dans l’éditeur : leurs modifications seront perdues si tu ne les enregistres pas.',
     },
-    confirm: 'Quitter quand même',
+    save: 'Enregistrer et quitter',
+    confirm: 'Quitter sans enregistrer',
   },
   /** A file the editor was asked to open, outside the folder of its source. */
   openFile: {

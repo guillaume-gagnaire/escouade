@@ -12,7 +12,14 @@
 //   that the page needs neither `unsafe-eval` nor an iframe. The extensions of Open VSX (A5), the language servers
 //   (A1, ESC-446: `onFolder` tells it each folder) and the Node extension host (N2) come later.
 
-import { getService, initialize, IWorkbenchLayoutService, LogLevel } from '@codingame/monaco-vscode-api';
+import {
+  getService,
+  IKeybindingService,
+  initialize,
+  IWorkbenchLayoutService,
+  IWorkingCopyService,
+  LogLevel,
+} from '@codingame/monaco-vscode-api';
 import { ExtensionHostKind, registerExtension } from '@codingame/monaco-vscode-api/extensions';
 import getConfigurationServiceOverride, {
   initUserConfiguration,
@@ -29,7 +36,7 @@ import getFilesServiceOverride, {
   initFile,
   registerFileSystemOverlay,
 } from '@codingame/monaco-vscode-files-service-override';
-import getKeybindingsServiceOverride from '@codingame/monaco-vscode-keybindings-service-override';
+import getKeybindingsServiceOverride, { updateUserKeybindings } from '@codingame/monaco-vscode-keybindings-service-override';
 import getLanguagesServiceOverride from '@codingame/monaco-vscode-languages-service-override';
 import getLifecycleServiceOverride from '@codingame/monaco-vscode-lifecycle-service-override';
 import getLogServiceOverride from '@codingame/monaco-vscode-log-service-override';
@@ -69,8 +76,11 @@ import outputWorker from '@codingame/monaco-vscode-output-service-override/worke
 
 import { onDiskChange } from '../disk-changes';
 import { api } from '../ipc';
+import { IS_MAC } from '../platform';
 import { EscouadeFileSystem, type Source } from './fs-provider';
+import { appTakes, utf16Column } from './keys';
 import { isDark, readTokens, vscodeTheme } from './theme';
+import { type Unsaved, viewUnsaved } from './unsaved.svelte';
 
 export type { Source } from './fs-provider';
 
@@ -130,6 +140,8 @@ export interface Through {
 let through: Through = {};
 function listenThrough(el: HTMLElement) {
   el.addEventListener('pointerdown', () => through.down?.(), true);
+  // Come in from the keyboard too (VS Code's F6, a dialog closed): its pane is the active one.
+  el.addEventListener('focusin', () => through.down?.());
   el.addEventListener('pointerenter', () => through.hover?.(true));
   el.addEventListener('pointerleave', () => through.hover?.(false));
 }
@@ -141,6 +153,8 @@ let frame = 0;
 
 function hide() {
   if (!host) return;
+  // The keyboard is never left in a workbench no one sees: what it typed would go in a hidden file.
+  if (host.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
   host.style.visibility = 'hidden';
   host.style.left = '-10000px';
   laid = '';
@@ -189,6 +203,7 @@ async function registerTheme() {
 }
 
 const fold = /Win|Mac/i.test(navigator.userAgent);
+const stillMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
 async function start(first: Source, name: string, fontSize: number): Promise<void> {
   window.MonacoEnvironment = {
@@ -232,6 +247,8 @@ async function start(first: Source, name: string, fontSize: number): Promise<voi
       'editor.fontFamily': "'JetBrains Mono', ui-monospace, Consolas, monospace",
       'editor.fontSize': fontSize,
       'editor.minimap.enabled': false,
+      // The caret stays still with prefers-reduced-motion, as the rest of the app (followed below).
+      'editor.cursorBlinking': stillMotion.matches ? 'solid' : 'blink',
       'files.autoSave': 'off',
       'extensions.ignoreRecommendations': true,
       'telemetry.telemetryLevel': 'off',
@@ -287,7 +304,56 @@ async function start(first: Source, name: string, fontSize: number): Promise<voi
     ExtensionHostKind.LocalProcess,
   ).setAsDefaultApi();
   await themeReady;
+  await keepAppKeys();
+  stillMotion.addEventListener('change', () => {
+    void vscode.workspace
+      .getConfiguration('editor')
+      .update('cursorBlinking', stillMotion.matches ? 'solid' : 'blink', vscode.ConfigurationTarget.Global);
+  });
+  await followUnsaved();
   for (const f of folderListeners) f(folders[0], vscode);
+}
+
+/**
+ * The keys Escouade keeps in the view (`keys.ts`) taken off VS Code's keybindings: they never reach it, and its menus
+ * and its palette show no key that does something else. Its palette still runs those commands by their names.
+ */
+async function keepAppKeys() {
+  const keys = await getService(IKeybindingService);
+  const off = keys
+    .getKeybindings()
+    .filter((k) => k.command && !k.command.startsWith('-') && appTakes(k.resolvedKeybinding?.getUserSettingsLabel(), k.command, IS_MAC))
+    .map((k) => ({ key: k.resolvedKeybinding!.getUserSettingsLabel(), command: `-${k.command}`, when: k.when?.serialize() }));
+  await updateUserKeybindings(JSON.stringify(off));
+}
+
+/** The files modified and not saved, told to the app as they change (`unsaved.svelte.ts`), and what it asks of them. */
+async function followUnsaved() {
+  const copies = await getService(IWorkingCopyService);
+  const tell = () => {
+    const list: Unsaved[] = [];
+    for (const c of copies.dirtyWorkingCopies) {
+      const at = files?.sourceOf(c.resource);
+      if (at)
+        list.push({ projectId: at.source.projectId, source: at.source.agentId ?? 'project', path: at.rel, uri: c.resource.toString() });
+    }
+    viewUnsaved.set(list);
+  };
+  copies.onDidChangeDirty(tell);
+  copies.onDidRegister(tell);
+  copies.onDidUnregister(tell);
+  tell();
+  const those = (uris: string[]) => copies.dirtyWorkingCopies.filter((c) => uris.includes(c.resource.toString()));
+  viewUnsaved.serve({
+    save: async (uris) => {
+      for (const c of those(uris)) await c.save().catch(() => false);
+      return those(uris).length === 0;
+    },
+    revert: async (uris) => {
+      for (const c of those(uris)) await c.revert().catch(() => {});
+    },
+    forget: forgetProject,
+  });
 }
 
 /**
@@ -335,12 +401,68 @@ async function relayout() {
   (await getService(IWorkbenchLayoutService)).layout();
 }
 
-/** Opens the file `rel` of the source in a tab (the source's folder in the workspace first). */
-export async function openFile(src: Source, rel: string) {
+/** Once the workbench is laid out over its place: a hidden element takes no focus. */
+async function shown(): Promise<boolean> {
+  for (let i = 0; i < 30; i++) {
+    if (host && shownIn && host.style.visibility === 'visible') return true;
+    await new Promise((r) => requestAnimationFrame(r));
+  }
+  return false;
+}
+
+/**
+ * Opens the file `rel` of the source in a tab (the source's folder in the workspace first), at `line` and `col` when
+ * given (1-based, the column in characters), the keyboard in it.
+ */
+export async function openFile(src: Source, rel: string, at: { line?: number; col?: number } = {}) {
   const uri = files?.uriOf(src, rel);
   if (!uri) return;
-  const doc = await vscode.workspace.openTextDocument(uri);
-  await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: true });
+  let selection: vscode.Range | undefined;
+  if (at.line) {
+    // A binary file has no line: it opens at its top.
+    const doc = await Promise.resolve(vscode.workspace.openTextDocument(uri)).catch(() => null);
+    if (doc) {
+      const line = Math.min(Math.max(at.line, 1), doc.lineCount) - 1;
+      const pos = new vscode.Position(line, utf16Column(doc.lineAt(line).text, at.col ?? 1));
+      selection = new vscode.Range(pos, pos);
+    }
+  }
+  const focus = await shown();
+  await vscode.commands.executeCommand('vscode.open', uri, <vscode.TextDocumentShowOptions>{
+    preview: false,
+    preserveFocus: !focus,
+    selection,
+  });
+  if (selection) vscode.window.activeTextEditor?.revealRange(selection, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+}
+
+/** The keyboard in the workbench: its editor shown, else its explorer. */
+export async function focus() {
+  if (!(await shown())) return;
+  const editors = vscode.window.tabGroups.all.some((g) => g.tabs.length);
+  await vscode.commands.executeCommand(editors ? 'workbench.action.focusActiveEditorGroup' : 'workbench.explorer.fileView.focus');
+}
+
+/** Whether the workbench has a tab open. */
+export const hasTabs = () => vscode.window.tabGroups.all.some((g) => g.tabs.length);
+
+/**
+ * A closed project's folders leave the workspace, their tabs closed: their changes were saved or given up when the
+ * close was asked (`close-unsaved.ts`).
+ */
+export async function forgetProject(projectId: string) {
+  if (!host) return;
+  const mine = (uri: vscode.Uri | undefined) => !!uri && files?.sourceOf(uri)?.source.projectId === projectId;
+  const tabs = vscode.window.tabGroups.all
+    .flatMap((g) => g.tabs)
+    .filter((t) => t.input instanceof vscode.TabInputText && mine(t.input.uri));
+  if (tabs.length) await vscode.window.tabGroups.close(tabs, true);
+  for (let i = folders.length - 1; i >= 0; i--) {
+    if (folders[i].source.projectId !== projectId) continue;
+    const at = vscode.workspace.workspaceFolders?.findIndex((w) => w.uri.toString() === folders[i].uri.toString()) ?? -1;
+    if (at >= 0) vscode.workspace.updateWorkspaceFolders(at, 1);
+    folders.splice(i, 1);
+  }
 }
 
 /** Whether the workbench was started in this page. */

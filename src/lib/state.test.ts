@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { agent, CLAUDE_ENGINE, board, fakeBackend, gitInfo, project, pullRequest, resetApp, SETTINGS, ticket } from '../test/ipc';
 import { conversationOf } from './conversations.svelte';
 import { buffers } from './editor/buffers.svelte';
+import { viewUnsaved } from './vscode/unsaved.svelte';
 import { navHistory } from './editor/history';
 import { recentFiles } from './editor/quick-open';
 import { fileSearches } from './editor/search.svelte';
@@ -851,8 +852,8 @@ describe('editor', () => {
     fakeBackend({ fs_read: (a: any) => ({ kind: 'text', text: a.path, size: 1, hash: 'h1', eol: 'lf', bom: false }), fs_base: () => null });
     await app.openEditor({ source: 'project', path: 'src/a.ts' });
     await app.openEditor({ source: 'project', path: 'README.md' });
-    await app.openEditor({ source: 'project', path: 'src/lib/x.ts', line: 4 });
     await app.openEditor({ source: 'a2', path: 'src/a.ts' });
+    await app.openEditor({ source: 'project', path: 'src/lib/x.ts', line: 4 });
     await app.openEditor({ source: 'project' });
     const key = (await buffers.open('p1', 'project', 'src/lib/x.ts')).key;
     buffers.edit(key, 'mine');
@@ -963,7 +964,7 @@ describe('editor', () => {
     const read = app.editor.p1;
     const opening = app.openEditor({ source: 'a2', abs: 'C:\\code\\demo-api\\.claude\\worktrees\\wt\\src\\x.ts', line: 3 });
     // The file is not resolved yet, and may turn out to be outside the folder: nothing shows until it is.
-    expect([read.on, read.source, read.places.a2, read.reveal]).toEqual([false, 'project', undefined, null]);
+    expect([read.on, read.source, read.places.a2, read.reveal?.path]).toEqual([false, 'project', undefined, 'a.ts']);
     release();
     await opening;
     expect([read.on, read.source, read.places.a2.active]).toEqual([true, 'a2', 'src/x.ts']);
@@ -1553,8 +1554,31 @@ describe('quitting with unsaved files', () => {
   it('asks before quitting, and quits once confirmed', async () => {
     const { emit, backend } = await start();
     emit({ type: 'quitRequested', unsaved: 2 });
-    expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Quitter Escouade ?', confirm: 'Quitter quand même' });
+    // As VS Code asks (ESC-464): saved first, or not.
+    expect(app.modal).toMatchObject({
+      kind: 'confirm',
+      title: 'Quitter Escouade ?',
+      confirm: 'Enregistrer et quitter',
+      alt: { label: 'Quitter sans enregistrer' },
+    });
     expect((app.modal as any).body).toContain('2 fichiers ne sont pas enregistrés');
+    await (app.modal as any).alt.onClick();
+    expect(backend.called('quit_app')).toHaveLength(1);
+  });
+
+  it('saves the files of the VS Code view before quitting, and stays when one does not save', async () => {
+    const { emit, backend } = await start();
+    const file = { projectId: 'p1', source: 'project', path: 'src/app.ts', uri: 'file:///c:/code/demo-api/src/app.ts' };
+    let saves = 0;
+    let saved = false;
+    viewUnsaved.serve({ save: async () => (saves++, saved), revert: async () => {}, forget: async () => {} });
+    viewUnsaved.set([file]);
+    emit({ type: 'quitRequested', unsaved: 1 });
+    await (app.modal as any).onConfirm(false);
+    expect(saves).toBe(1);
+    expect(backend.called('quit_app')).toHaveLength(0);
+    expect(app.toasts.at(-1)?.text).toContain('rien n’est fermé');
+    saved = true;
     await (app.modal as any).onConfirm(false);
     expect(backend.called('quit_app')).toHaveLength(1);
   });
@@ -1624,12 +1648,17 @@ describe('the window’s own messages in English', () => {
   it('asks before quitting with files unsaved, one or several', async () => {
     const { emit } = await start();
     emit({ type: 'quitRequested', unsaved: 2 });
-    expect(app.modal).toMatchObject({ kind: 'confirm', title: 'Quit Escouade?', confirm: 'Quit anyway' });
-    expect((app.modal as any).body).toBe('2 files in the editor aren’t saved: their changes will be lost.');
+    expect(app.modal).toMatchObject({
+      kind: 'confirm',
+      title: 'Quit Escouade?',
+      confirm: 'Save and quit',
+      alt: { label: 'Quit without saving' },
+    });
+    expect((app.modal as any).body).toBe('2 files in the editor aren’t saved: their changes will be lost if you don’t save them.');
     // Asked again while it asks: the same dialog, found by its title in the language of the interface.
     const first = app.modal as any;
     emit({ type: 'quitRequested', unsaved: 1 });
-    expect((app.modal as any).body).toBe('1 file in the editor isn’t saved: its changes will be lost.');
+    expect((app.modal as any).body).toBe('1 file in the editor isn’t saved: its changes will be lost if you don’t save it.');
     expect(app.modal).not.toBe(first);
   });
 
@@ -1956,6 +1985,94 @@ describe('the split screen when a content goes (ESC-399)', () => {
     emit({ type: 'project', project: project() });
     expect(app.panes).toBeNull();
     expect(app.singleItem).toEqual({ kind: 'agent', id: 'a2' });
+  });
+});
+
+describe('closing what shows files modified in the VS Code view (ESC-464)', () => {
+  const file = (path: string, projectId = 'p1') => ({ projectId, source: 'project', path, uri: `file:///c:/code/demo-api/${path}` });
+  let saved: string[][];
+  let reverted: string[][];
+  let saves: boolean;
+
+  beforeEach(() => {
+    resetApp({ agents: [agent()] });
+    fakeBackend({
+      fs_tree: () => ({ root: 'C:/code/demo-api', files: [], truncated: false }),
+      set_unsaved: () => null,
+      set_ui: () => null,
+    });
+    saved = [];
+    reverted = [];
+    saves = true;
+    viewUnsaved.serve({
+      save: async (uris) => (saved.push(uris), saves),
+      revert: async (uris) => void reverted.push(uris),
+      forget: async () => {},
+    });
+  });
+
+  it('asks before the pane of the view closes, as VS Code: saved, given up, or nothing closed', async () => {
+    await app.openEditor({ projectId: 'p1', source: 'project' });
+    app.openBeside({ kind: 'agent', id: 'a1' }, 'right');
+    expect(app.panesOn).toBe(true);
+    viewUnsaved.set([file('src/app.ts'), file('src/b.ts'), file('x.ts', 'p2')]);
+    app.closePaneOf('editor');
+    // The project's files only, named.
+    expect(app.modal).toMatchObject({
+      kind: 'confirm',
+      title: 'Enregistrer les modifications de 2 fichiers ?',
+      body: 'Tes modifications seront perdues si tu ne les enregistres pas : app.ts, b.ts.',
+      confirm: 'Tout enregistrer',
+      alt: { label: 'Ne pas enregistrer' },
+    });
+    // « Annuler »: nothing closes.
+    (app.modal as any).onCancel?.();
+    app.modal = null;
+    expect(app.panesOn).toBe(true);
+    // A file that does not save: nothing closes, it is said.
+    saves = false;
+    app.closePaneOf('editor');
+    await (app.modal as any).onConfirm(false);
+    expect(saved).toEqual([[file('src/app.ts').uri, file('src/b.ts').uri]]);
+    expect(app.panesOn).toBe(true);
+    expect(app.toasts.at(-1)?.text).toBe('Un fichier n’a pas été enregistré : rien n’est fermé. Regarde-le dans la vue VS Code.');
+    // « Ne pas enregistrer »: read again from the disk, then closed.
+    await (app.modal as any).alt.onClick();
+    expect(reverted).toEqual([[file('src/app.ts').uri, file('src/b.ts').uri]]);
+    expect(app.panes).toBeNull();
+  });
+
+  it('closes the pane at once without a file modified in the project', async () => {
+    await app.openEditor({ projectId: 'p1', source: 'project' });
+    app.openBeside({ kind: 'agent', id: 'a1' }, 'right');
+    viewUnsaved.set([file('x.ts', 'p2')]);
+    app.closePaneOf('editor');
+    expect(app.modal).toBeNull();
+    expect(app.panes).toBeNull();
+  });
+
+  it('saves before « Conversation » leaves the view, then gives the keyboard to the conversation', async () => {
+    await app.openEditor({ projectId: 'p1', source: 'project' });
+    viewUnsaved.set([file('src/app.ts')]);
+    const before = app.focusComposer;
+    app.leaveEditor('p1');
+    expect(app.modal).toMatchObject({ title: 'Enregistrer les modifications de « app.ts » ?', confirm: 'Enregistrer' });
+    expect(app.editor.p1.on).toBe(true);
+    await (app.modal as any).onConfirm(false);
+    expect(saved).toHaveLength(1);
+    expect(app.editor.p1.on).toBe(false);
+    expect(app.focusComposer).toBe(before + 1);
+  });
+
+  it('counts the view’s files with the editor’s, for the warnings and « Quitter »', async () => {
+    const backend = fakeBackend({ set_unsaved: () => null });
+    viewUnsaved.set([file('src/app.ts'), file('x.ts', 'p2')]);
+    expect(buffers.unsaved).toBe(2);
+    expect(buffers.unsavedIn('p1')).toBe(1);
+    expect(buffers.unsavedIn('p1', 'a1')).toBe(0);
+    expect(backend.called('set_unsaved').at(-1)?.args).toEqual({ count: 2 });
+    viewUnsaved.set([]);
+    expect(backend.called('set_unsaved').at(-1)?.args).toEqual({ count: 0 });
   });
 });
 

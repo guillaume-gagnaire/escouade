@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { buffers } from '../lib/editor/buffers.svelte';
+import { viewUnsaved } from '../lib/vscode/unsaved.svelte';
 import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
 import { initials } from '../lib/project-rail';
@@ -249,22 +249,19 @@ describe('ProjectRail', () => {
     expect(app.projects.map((p) => p.id)).toEqual(['p1', 'p3']);
   });
 
-  it('warns that a closed project’s unsaved files are lost, then forgets its editor', async () => {
-    const backend = fakeBackend({
-      fs_read: () => ({ kind: 'text', text: 'a\n', size: 2, hash: 'h1', eol: 'lf', bom: false }),
-      fs_base: () => null,
-      set_unsaved: () => null,
-    });
+  it('asks to save a closed project’s files modified in the VS Code view, then forgets its editor', async () => {
+    const backend = fakeBackend({ set_unsaved: () => null, fs_tree: () => ({ root: 'C:/code/studio-web', files: [], truncated: false }) });
+    viewUnsaved.serve({ save: async () => (viewUnsaved.set([]), true), revert: async () => {}, forget: async () => {} });
     await app.openEditor({ projectId: 'p2', source: 'project', path: 'x.ts' });
-    const k = (await buffers.open('p2', 'project', 'x.ts')).key;
-    buffers.edit(k, 'mine\n');
+    viewUnsaved.set([{ projectId: 'p2', source: 'project', path: 'x.ts', uri: 'file:///c:/code/studio-web/x.ts' }]);
     render(ProjectRail);
     await fireEvent.contextMenu(tile('studio-web'));
     menu.open!.items.find((i) => i.label.startsWith('Fermer le projet'))!.onClick!();
-    expect((app.modal as any).body).toMatch(/ 1 fichier non enregistré dans l’éditeur sera perdu\.$/);
+    await (app.modal as any).onConfirm(false);
+    expect(app.modal).toMatchObject({ title: 'Enregistrer les modifications de « x.ts » ?', confirm: 'Enregistrer' });
     await (app.modal as any).onConfirm(false);
     expect(app.editor.p2).toBeUndefined();
-    expect(buffers.all[k]).toBeUndefined();
+    expect(backend.called('remove_project')[0].args).toEqual({ id: 'p2', erase: false });
     expect(backend.called('set_unsaved').at(-1)?.args).toEqual({ count: 0 });
   });
 

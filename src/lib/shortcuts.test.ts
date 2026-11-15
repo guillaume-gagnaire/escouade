@@ -2,7 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { agent, fakeBackend, project, resetApp } from '../test/ipc';
 import { buffers } from './editor/buffers.svelte';
 import { setFindInFiles } from './editor/search.svelte';
-import { answersHere, ariaEnter, enterAnswer, handleShortcut, holdPrint, isAppShortcut, optionAnswer } from './shortcuts';
+import {
+  answersHere,
+  appWinsInVscode,
+  ariaEnter,
+  enterAnswer,
+  handleShortcut,
+  holdPrint,
+  inVscode,
+  isAppShortcut,
+  optionAnswer,
+} from './shortcuts';
 import { app } from './state.svelte';
 
 const key = (k: string, mods: Partial<KeyboardEventInit> = {}) => new KeyboardEvent('keydown', { key: k, ctrlKey: true, ...mods });
@@ -432,5 +442,96 @@ describe('answersHere', () => {
     app.modal = { kind: 'settings' };
     expect(answersHere(mount('<main class="conv"><textarea id="t"></textarea></main>'))).toBe(false);
     expect(answersHere(document.body)).toBe(false);
+  });
+});
+
+describe('the keys in the VS Code view (ESC-464)', () => {
+  beforeEach(() =>
+    resetApp({ projects: [project(), project({ id: 'p2', name: 'studio' })], agents: [agent(), agent({ id: 'a2', createdAt: 2 })] }),
+  );
+
+  /** `e` pressed in the text of the VS Code view: what the app did with it. */
+  function inView(e: KeyboardEvent): boolean | undefined {
+    const host = document.body.appendChild(document.createElement('div'));
+    host.className = 'vscode-host';
+    const text = host.appendChild(document.createElement('div'));
+    let handled: boolean | undefined;
+    text.addEventListener('keydown', (ev) => (handled = handleShortcut(ev as KeyboardEvent)), { once: true });
+    text.dispatchEvent(e);
+    host.remove();
+    return handled;
+  }
+
+  it('knows the view by its workbench', () => {
+    const host = document.createElement('div');
+    host.className = 'vscode-host';
+    const inside = host.appendChild(document.createElement('textarea'));
+    expect(inVscode(inside)).toBe(true);
+    expect(inVscode(document.createElement('textarea'))).toBe(false);
+    expect(inVscode(window)).toBe(false);
+  });
+
+  it('keeps for the app the keys that go elsewhere in it or open one of its windows', () => {
+    for (const [k, mods] of [
+      ['p', {}],
+      ['1', {}],
+      ['n', {}],
+      ['N', { shiftKey: true }],
+      ['j', {}],
+      ['t', {}],
+      [',', {}],
+      ['A', { shiftKey: true }],
+      ['B', { shiftKey: true }],
+      ['=', {}],
+      ['-', {}],
+      ['0', {}],
+      ['\\', { code: 'Backslash' }],
+    ] as const)
+      expect(appWinsInVscode(key(k, mods), false), `Ctrl+${mods && 'shiftKey' in mods ? 'Shift+' : ''}${k}`).toBe(true);
+    // With Cmd on macOS.
+    expect(appWinsInVscode(key('p', { ctrlKey: false, metaKey: true }), true)).toBe(true);
+  });
+
+  it('leaves VS Code its own: save, the searches, its palette, its chords, its tabs, its selections', () => {
+    for (const [k, mods] of [
+      ['s', {}],
+      ['f', {}],
+      ['h', {}],
+      ['F', { shiftKey: true }],
+      ['P', { shiftKey: true }],
+      ['k', {}],
+      ['b', {}],
+      ['w', {}],
+      ['Tab', {}],
+      ['L', { shiftKey: true }],
+      ['z', {}],
+      ['ArrowUp', { altKey: true }],
+    ] as const)
+      expect(appWinsInVscode(key(k, mods), false), `Ctrl+${k}`).toBe(false);
+  });
+
+  it('takes the split screen’s keys only while the screen is split', () => {
+    const flip = key('|', { shiftKey: true, code: 'Backslash' });
+    const close = key('W', { shiftKey: true, code: 'KeyW' });
+    const left = key('ArrowLeft', { altKey: true });
+    expect([appWinsInVscode(flip, false), appWinsInVscode(close, false), appWinsInVscode(left, false)]).toEqual([false, false, false]);
+    app.ui.panes = {
+      p1: { root: { dir: 'row', ratio: 0.5, a: { leaf: { kind: 'agent', id: 'a1' } }, b: { leaf: { kind: 'editor' } } }, active: 'editor' },
+    };
+    expect([appWinsInVscode(flip, false), appWinsInVscode(close, false), appWinsInVscode(left, false)]).toEqual([true, true, true]);
+  });
+
+  it('does nothing of the app’s with VS Code’s keys pressed in the view, and runs the app’s', () => {
+    fakeBackend();
+    expect(inView(key('k'))).toBe(false);
+    expect(app.modal).toBeNull();
+    expect(inView(key('s'))).toBe(false);
+    expect(inView(key('Tab'))).toBe(false);
+    expect(app.agent?.id).toBe('a1');
+    expect(inView(key(','))).toBe(true);
+    expect(app.modal).toEqual({ kind: 'settings' });
+    app.modal = null;
+    expect(inView(key('2'))).toBe(true);
+    expect(app.project?.id).toBe('p2');
   });
 });

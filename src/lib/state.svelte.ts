@@ -7,6 +7,7 @@ import { api } from './ipc';
 import { overseer } from './overseer.svelte';
 import { applyConvOps, dropConversation, releaseIdle } from './conversations.svelte';
 import { buffers } from './editor/buffers.svelte';
+import { type Unsaved, viewUnsaved } from './vscode/unsaved.svelte';
 import { navHistory } from './editor/history';
 import { recentFiles } from './editor/quick-open';
 import { fileSearches } from './editor/search.svelte';
@@ -324,7 +325,7 @@ export interface EditorState {
   source: string;
   places: Record<string, EditorPlace>;
   /** A line to bring into view, the cursor on its column (in characters) when given (`seq` changes for each request). */
-  reveal: { path: string; line: number; col?: number; seq: number } | null;
+  reveal: { path: string; line?: number; col?: number; seq: number } | null;
 }
 
 /** The split screens read back from the settings, each checked (`parseLayout`): what is malformed is dropped. */
@@ -1082,9 +1083,13 @@ class AppState {
           kind: 'confirm',
           title: quitTitle(),
           body: t('shell.quit.unsaved', { count: e.unsaved }),
-          confirm: t('shell.quit.confirm'),
-          danger: true,
-          onConfirm: () => api.quit(),
+          // As VS Code asks (ESC-464): saved first, the app quits; a file that does not save keeps it open.
+          confirm: t('shell.quit.save'),
+          onConfirm: async () => {
+            if (await viewUnsaved.save(viewUnsaved.files)) await api.quit();
+            else this.toast(t('editor.unsaved.notSaved'), 'error');
+          },
+          alt: { label: t('shell.quit.confirm'), onClick: () => api.quit() },
           onCancel: again
             ? open.onCancel
             : open
@@ -1534,8 +1539,17 @@ class AppState {
     this.dropInPane(target, zone, item);
   }
 
-  /** Closes the pane `key`; the last one left fills the work area alone. */
+  /**
+   * Closes the pane `key`; the last one left fills the work area alone. The VS Code view's pane asks first for the
+   * project's files modified in it (ESC-464).
+   */
   closePaneOf(key: string) {
+    const p = this.project;
+    if (key === 'editor' && p) return void this.askUnsaved(viewUnsaved.of(p.id), () => this.dropPane(key));
+    this.dropPane(key);
+  }
+
+  private dropPane(key: string) {
     const p = this.project;
     const l = this.panes;
     if (!p || !l) return;
@@ -1860,10 +1874,10 @@ class AppState {
       if (!place.open.includes(path)) place.open.push(path);
       place.active = path;
       this.expandEditorDir(projectId, req.source, ancestors(path).at(-1) ?? '');
-      if (req.line) {
-        const seq = (st.reveal?.seq ?? 0) + 1;
-        st.reveal = req.col ? { path, line: req.line, col: req.col, seq } : { path, line: req.line, seq };
-      }
+      // Each file asked for is a request of its own, at its line or not: the VS Code view shows it, even when it is
+      // the one it showed last (ESC-464).
+      const seq = (st.reveal?.seq ?? 0) + 1;
+      st.reveal = req.line ? (req.col ? { path, line: req.line, col: req.col, seq } : { path, line: req.line, seq }) : { path, seq };
     }
     this.paneShow(projectId, { kind: 'editor' });
     this.persistUi();
@@ -1885,6 +1899,46 @@ class AppState {
       return tree.files.find((f) => f.toLowerCase() === lower) ?? path;
     }
     return null;
+  }
+
+  /**
+   * Before closing what shows files modified in the VS Code view (ESC-464): the view, its pane, a project. Asked as
+   * VS Code asks: « Enregistrer », « Ne pas enregistrer », « Annuler ». `close` runs once they are saved or given up
+   * (read again from the disk), at once when there are none; « Annuler », or a file that does not save (a conflict, a
+   * refusal of the core), leaves everything as it was.
+   */
+  askUnsaved(files: Unsaved[], close: () => void | Promise<void>, onCancel?: () => void): void | Promise<void> {
+    if (!files.length) return close();
+    const one = files.length === 1;
+    const name = (f: Unsaved) => f.path.split('/').at(-1) ?? f.path;
+    const names = `${files.slice(0, 5).map(name).join(', ')}${files.length > 5 ? '…' : ''}`;
+    this.modal = {
+      kind: 'confirm',
+      title: one ? t('editor.unsaved.titleOne', { name: name(files[0]) }) : t('editor.unsaved.title', { count: files.length }),
+      body: one ? t('editor.unsaved.bodyOne', { name: name(files[0]) }) : t('editor.unsaved.body', { names }),
+      confirm: one ? t('editor.unsaved.save') : t('editor.unsaved.saveAll'),
+      alt: {
+        label: t('editor.unsaved.dontSave'),
+        onClick: async () => {
+          await viewUnsaved.revert(files);
+          await close();
+        },
+      },
+      onConfirm: async () => {
+        if (await viewUnsaved.save(files)) await close();
+        else this.toast(t('editor.unsaved.notSaved'), 'error');
+      },
+      onCancel,
+    };
+  }
+
+  /** « Conversation » of the VS Code view: the project's files modified in it saved or given up first (ESC-464). */
+  leaveEditor(projectId: string) {
+    this.askUnsaved(viewUnsaved.of(projectId), () => {
+      this.closeEditor(projectId);
+      // The keyboard goes with the eye, to the conversation shown in its place.
+      this.focusComposer++;
+    });
   }
 
   closeEditor(projectId = this.ui.activeProject) {
@@ -1989,6 +2043,7 @@ class AppState {
     delete this.prs[id];
     delete this.boardIssues[id];
     buffers.closeProject(id);
+    void viewUnsaved.forget(id);
     trees.closeProject(id);
     recentFiles.closeProject(id);
     fileSearches.closeProject(id);

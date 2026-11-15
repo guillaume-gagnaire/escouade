@@ -424,7 +424,7 @@
     const target = e.target instanceof Element ? e.target : null;
     if (
       target?.closest(
-        'input, textarea, select, [contenteditable]:not([contenteditable="false"]), .xterm, .cm-editor, [role="menu"], [role="dialog"]',
+        'input, textarea, select, [contenteditable]:not([contenteditable="false"]), .xterm, .cm-editor, .vscode-host, [role="menu"], [role="dialog"]',
       )
     )
       return;

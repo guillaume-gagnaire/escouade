@@ -6,6 +6,7 @@
   import { fDur, fInt, fTok } from '../lib/format';
   import { modelLabel } from '../lib/models';
   import { app } from '../lib/state.svelte';
+  import { inVscode } from '../lib/shortcuts';
   import { menu } from '../lib/menu.svelte';
   import { crumbs, subagentInfo, subDuration, threadOf } from '../lib/subagents';
   import type { Agent, ConvItem, Project, TranscriptCursor } from '../lib/types';
@@ -171,7 +172,7 @@
   // Escape goes back to the agent's conversation. Seen before the others (capture): a dialog or a menu open closes
   // first, alone; a field with text in it keeps its Escape (a draft is not lost to a key).
   function onWindowKey(e: KeyboardEvent) {
-    if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing || app.modal || menu.open) return;
+    if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing || app.modal || menu.open || inVscode(e.target)) return;
     const typed = e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement ? e.target.value.trim() : '';
     if (typed) return;
     app.closeSubagent(agent.id);

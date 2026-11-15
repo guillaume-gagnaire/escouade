@@ -1,12 +1,12 @@
 // Closing a project: from its tab's menu or its settings.
 
-import { buffers, lossNotice } from './editor/buffers.svelte';
 import { t } from './i18n';
 import { api } from './ipc';
 import { expectStops, forgetLaunches, testLaunchIds } from './launch-actions';
 import { app } from './state.svelte';
 import { closeTerminal } from './term-actions';
 import type { Project } from './types';
+import { viewUnsaved } from './vscode/unsaved.svelte';
 
 /**
  * Asks before closing the project: it leaves the app with its agents, its history is kept (unless the box is checked)
@@ -16,17 +16,22 @@ export function askCloseProject(p: Project, back?: () => void) {
   app.modal = {
     kind: 'confirm',
     title: t('nav.project.closeTitle', { name: p.name }),
-    // The notice of unsaved files is a sentence of its own, added after the question's.
-    body: t('nav.project.closeBody') + lossNotice(buffers.unsavedIn(p.id)),
+    body: t('nav.project.closeBody'),
     confirm: t('nav.project.closeConfirm'),
     danger: true,
     // Erasing is never the default: the history is what reopening the folder brings back.
     option: { label: t('nav.project.closeErase'), value: false },
     onCancel: back,
-    onConfirm: async (erase) => {
-      await closeProject(p, erase);
-      back?.();
-    },
+    // Its files modified in the VS Code view are saved or given up first, as VS Code asks (ESC-464).
+    onConfirm: (erase) =>
+      app.askUnsaved(
+        viewUnsaved.of(p.id),
+        async () => {
+          await closeProject(p, erase);
+          back?.();
+        },
+        back,
+      ),
   };
 }
 

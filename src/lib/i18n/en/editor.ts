@@ -34,6 +34,18 @@ export default defineZone('editor', {
     failed: 'The VS Code view did not start: {error}',
   },
 
+  /** What is asked before closing what shows files modified in the VS Code view (ESC-464): the view, its pane, a project, the app. */
+  unsaved: {
+    titleOne: 'Save the changes to “{name}”?',
+    title: { one: 'Save the changes to {count} file?', other: 'Save the changes to {count} files?' },
+    bodyOne: 'Your changes to “{name}” will be lost if you don’t save them.',
+    body: 'Your changes will be lost if you don’t save them: {names}.',
+    save: 'Save',
+    saveAll: 'Save all',
+    dontSave: 'Don’t save',
+    notSaved: 'A file wasn’t saved: nothing is closed. Look at it in the VS Code view.',
+  },
+
   side: {
     viewLabel: 'Column view',
     searchFiles: 'Search in files',

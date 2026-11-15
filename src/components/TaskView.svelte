@@ -17,6 +17,7 @@
   } from '../lib/bgtasks';
   import { menu } from '../lib/menu.svelte';
   import { app } from '../lib/state.svelte';
+  import { inVscode } from '../lib/shortcuts';
   import { tip } from '../lib/tip';
   import type { Agent, TaskOutput } from '../lib/types';
 
@@ -178,7 +179,7 @@
   // alone; a field with text in it keeps its Escape (a draft is not lost to a key). The view has no field of its own: it is
   // one elsewhere in the window (the composer of the agent) that has the focus.
   function onWindowKey(e: KeyboardEvent) {
-    if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing || app.modal || menu.open) return;
+    if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing || app.modal || menu.open || inVscode(e.target)) return;
     const typed = e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement ? e.target.value.trim() : '';
     if (typed) return;
     app.closeTask(agent.id);

@@ -110,10 +110,11 @@ export default defineZone('shell', {
   quit: {
     title: 'Quit Escouade?',
     unsaved: {
-      one: '{count} file in the editor isn’t saved: its changes will be lost.',
-      other: '{count} files in the editor aren’t saved: their changes will be lost.',
+      one: '{count} file in the editor isn’t saved: its changes will be lost if you don’t save it.',
+      other: '{count} files in the editor aren’t saved: their changes will be lost if you don’t save them.',
     },
-    confirm: 'Quit anyway',
+    save: 'Save and quit',
+    confirm: 'Quit without saving',
   },
   /** A file the editor was asked to open, outside the folder of its source. */
   openFile: {

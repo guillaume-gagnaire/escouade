@@ -16,6 +16,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium, type Locator, type Page } from '@playwright/test';
 import { addProject, expect, test } from './fixture';
+import { editorLines, workbench } from './vscode';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const PREVIEW = path.join(ROOT, 'design', 'app-redesign', 'index.html');
@@ -134,9 +135,10 @@ function previewsProject(repo: string) {
 /** The agent's work in its worktree, as the preview's: `users.ts` and its test modified, `paginate.ts` added. */
 async function agentAtWork(repo: string, write: ReturnType<typeof previewsProject>) {
   const worktrees = path.join(repo, '.claude', 'worktrees');
-  await expect.poll(() => (fs.existsSync(worktrees) ? fs.readdirSync(worktrees).length : 0)).toBe(1);
+  // The first agent shows once its worktree is made: on a loaded machine, that takes longer than an expect's 15 s.
+  await expect.poll(() => (fs.existsSync(worktrees) ? fs.readdirSync(worktrees).length : 0), { timeout: 60_000 }).toBe(1);
   const wt = path.join(worktrees, fs.readdirSync(worktrees)[0]);
-  await expect.poll(() => fs.existsSync(path.join(wt, 'src', 'routes', 'users.ts'))).toBe(true);
+  await expect.poll(() => fs.existsSync(path.join(wt, 'src', 'routes', 'users.ts')), { timeout: 30_000 }).toBe(true);
   write(wt, 'src/routes/users.ts', USERS_AFTER);
   write(wt, 'src/db/paginate.ts', 'export async function paginate() {}\n');
   write(wt, 'tests/users.test.ts', "import { it } from 'vitest';\nit('pages', () => {});\n");
@@ -437,36 +439,46 @@ test.fixme('the editor follows the theme at once, CodeMirror’s own base theme 
   expect(classes.light).not.toBe(classes.dark);
 });
 
-// A3: the caret, the focus and Ctrl+P in the view; A7: the source's menu on the worktree.
-test.fixme('the editor stays still with prefers-reduced-motion', async ({ app }) => {
+// The VS Code view (ESC-464, A3): its caret, the menu of its source on the worktree, Ctrl+P pressed in it.
+test('the editor stays still with prefers-reduced-motion', async ({ app }) => {
+  test.skip(process.platform !== 'win32', 'WebView2: driven by its DevTools protocol');
+  test.setTimeout(240_000);
   const { page } = app;
-  await page.emulateMedia({ reducedMotion: 'reduce' });
   const write = previewsProject(app.repo);
   await addProject(page, app.repo, { worktrees: true });
   await agentAtWork(app.repo, write);
-  const ed = await editorAsThePreview(page);
-  await ed.locator('.cm-content').click();
-  // The caret does not blink.
-  const blink = await ed.locator('.cm-cursorLayer').evaluate((n) => getComputedStyle(n).animationDuration);
-  expect(parseFloat(blink), `its blink lasts ${blink}`).toBeLessThan(0.001);
+  // Before the view's first opening: its workbench reads it as it starts.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
+  const view = page.getByTestId('vscode-view');
+  await expect(workbench(page)).toBeVisible({ timeout: 60_000 });
   const motion = (el: Locator) => el.evaluate((e) => getComputedStyle(e).animationName);
-  // The menu of the source, and « Ouvrir un fichier ».
-  await ed.locator('.ed-bar .src').click();
+  // The menu of the source, the worktree picked in it.
+  await view.locator('.vscode-bar .src').click();
   const menu = page.getByRole('menu', { name: 'Parcourir' });
   await expect(menu).toBeVisible();
   expect(await motion(menu)).toBe('none');
-  await page.keyboard.press('Escape');
-  await ed.locator('.ed-bar .src').click();
+  await page.getByRole('menuitemradio').nth(1).click();
   await expect(menu).toBeHidden();
+  // « Ouvrir un fichier », from the view: still, its keys and its close button drawn, no character as an icon.
+  await workbench(page).click({ position: { x: 300, y: 200 } });
   await page.keyboard.press('Control+P');
   const palette = page.getByRole('dialog', { name: 'Ouvrir un fichier' });
   await expect(palette).toBeVisible();
   expect(await motion(palette)).toBe('none');
   expect(await motion(page.locator('.overlay'))).toBe('none');
-  // Its keys and its close button drawn, no character as an icon.
   await expect(palette.getByRole('button', { name: 'Fermer' }).locator('svg[data-icon="close"]')).toBeVisible();
   await expect(palette.locator('.keys svg[data-icon="up"]')).toBeVisible();
-  await page.keyboard.press('Escape');
+  // On the worktree: its users.ts, the agent's.
+  await page.keyboard.type('users.ts');
+  await palette
+    .getByRole('option', { name: /users\.ts/ })
+    .first()
+    .click();
+  await expect(palette).toBeHidden();
+  await expect(editorLines(page)).toContainText('paginate(db.users');
+  // The caret does not blink.
+  await expect(workbench(page).locator('.editor-instance .cursors-layer').first()).toHaveClass(/cursor-solid/);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
 });
 
@@ -544,37 +556,46 @@ for (const lang of ['fr', 'en'] as const)
   test.describe(`its room, ${lang}`, () => {
     test.use({ language: lang });
 
-    // The editor and the two palettes (Ctrl K, Ctrl P) at 1 028, 1 280 and 1 440 px, the side panel closed, open alone
+    // The view and the two palettes (Ctrl K, Ctrl P) at 1 028, 1 280 and 1 440 px, the side panel closed, open alone
     // and side by side with the conversation: nothing sticks out, as the folds go by the room of each (@container).
-    // A3: Ctrl+P and the keys in the view; A7: the source and the marks of the preview's worktree.
-    test.fixme('nothing of the editor or of its searches sticks out, at 1028, 1280 and 1440 px, whatever the side panel', async ({
-      app,
-    }) => {
-      test.setTimeout(300_000);
+    // In the VS Code view (ESC-464, A3), Ctrl+P is pressed in it and opens on the core's index; its search (Ctrl+F) is
+    // VS Code's, within the view. The marks of the preview's worktree are A7's (below).
+    test('nothing of the editor or of its searches sticks out, at 1028, 1280 and 1440 px, whatever the side panel', async ({ app }) => {
+      test.skip(process.platform !== 'win32', 'WebView2: driven by its DevTools protocol');
+      test.setTimeout(400_000);
       const { page } = app;
       const write = previewsProject(app.repo);
       await addProject(page, app.repo, { worktrees: true, lang });
       await agentAtWork(app.repo, write);
       const words =
         lang === 'fr'
-          ? {
-              split: 'Conversation et fichiers côte à côte',
-              classic: 'Disposition classique',
-              conv: 'Rechercher dans les conversations',
-              open: 'Ouvrir un fichier',
-            }
-          : { conv: 'Search conversations', open: 'Open a file' };
-      await editorAsThePreview(page, lang);
-      const back = () => page.locator('main.editor .ed-bar .btn').first().click();
+          ? { conv: 'Rechercher dans les conversations', open: 'Ouvrir un fichier', editor: 'Ouvrir l’éditeur du projet' }
+          : { conv: 'Search conversations', open: 'Open a file', editor: 'Open the project’s editor' };
+      const view = page.getByTestId('vscode-view');
+      const back = () => page.getByTestId('vscode-back').click();
       const sizes = [
         { width: 1028, height: 779 },
         { width: 1280, height: 800 },
         { width: 1440, height: 900 },
       ];
+      /** The palette `name`, opened by `key`: nothing of it sticks out; closed again. */
+      const palette = async (key: string, name: string, where: string) => {
+        await page.keyboard.press(key);
+        const box = page.getByRole('dialog', { name });
+        await expect(box).toBeVisible();
+        expect(await sticksOut(box, ['.search', '.scope', '.foot', '.keys']), `${name}, ${where}`).toEqual([]);
+        return box;
+      };
+      /** `inner` within `outer`, to a pixel. */
+      const within = async (inner: Locator, outer: Locator) => {
+        const [ix, iy, iw, ih] = await place(inner);
+        const [ox, oy, ow, oh] = await place(outer);
+        return ix >= ox - 1 && iy >= oy - 1 && ix + iw <= ox + ow + 1 && iy + ih <= oy + oh + 1;
+      };
       for (const panel of ['closed', 'alone', 'side by side'] as const) {
         // The panel set at the widest, where its buttons all show.
         await page.setViewportSize({ width: 1440, height: 900 });
-        if (await page.locator('main.editor').isVisible()) await back();
+        if (await view.isVisible()) await back();
         await expect(page.locator('main.conv')).toBeVisible();
         // By their shortcuts: the header folds its buttons into « … » once the panel takes room (ESC-166).
         if (panel === 'alone') await page.keyboard.press('Control+Shift+B');
@@ -587,32 +608,36 @@ for (const lang of ['fr', 'en'] as const)
             ['Control+K', words.conv],
             ['Control+P', words.open],
           ]) {
-            await page.keyboard.press(key);
-            const palette = page.getByRole('dialog', { name });
-            await expect(palette).toBeVisible();
-            expect(await sticksOut(palette, ['.search', '.scope', '.foot', '.keys']), `${name}, ${where}`).toEqual([]);
+            const box = await palette(key, name, where);
             await page.keyboard.press('Escape');
-            await expect(palette).toBeHidden();
+            await expect(box).toBeHidden();
           }
-          await page.getByRole('button', { name: lang === 'fr' ? 'Ouvrir l’éditeur du projet' : 'Open the project’s editor' }).click();
-          const ed = page.locator('main.editor');
-          await expect(ed.locator('.cm-content')).toBeVisible();
-          await ed.locator('.cm-content').click();
+          await page.getByRole('button', { name: words.editor }).click();
+          await expect(workbench(page)).toBeVisible({ timeout: 60_000 });
+          // Ctrl+P in the view: the same palette, on the core's index; the file opens in a tab of the view.
+          await workbench(page).click({ position: { x: 400, y: 300 } });
+          const box = await palette('Control+P', words.open, `${where}, in the view`);
+          await page.keyboard.type('users.ts');
+          await box
+            .getByRole('option', { name: /users\.ts/ })
+            .first()
+            .click();
+          await expect(box).toBeHidden();
+          await expect(editorLines(page)).toContainText('router');
+          // VS Code's search in the file, within the view.
+          await editorLines(page).click();
           await page.keyboard.press('Control+F');
-          await expect(ed.locator('.cm-find')).toBeVisible();
+          const find = workbench(page).locator('.find-widget.visible');
+          await expect(find).toBeVisible();
           await page.mouse.move(size.width / 2, 20);
-          expect(
-            await sticksOut(ed, ['.ed-bar', '.tree-h', '.th-row', '.crumbs', '.status', '.cm-find', '.cm-find-row']),
-            `the editor, ${where}`,
-          ).toEqual([]);
-          // The search stays within the text.
-          const [fx, , fw] = await place(ed.locator('.cm-find'));
-          const [px, , pw] = await place(ed.locator('.pane'));
-          expect(fx >= px && fx + fw <= px + pw, `the search within the pane, ${where}`).toBe(true);
+          expect(await sticksOut(view, ['.vscode-bar']), `the view's bar, ${where}`).toEqual([]);
+          expect(await within(workbench(page), view.locator('.vscode-place')), `the workbench within the view, ${where}`).toBe(true);
+          expect(await within(find, view.locator('.vscode-place')), `the search within the view, ${where}`).toBe(true);
           if (SHOTS) {
             fs.mkdirSync(SHOTS, { recursive: true });
             await page.screenshot({ path: path.join(SHOTS, `editor-room-${lang}-${panel.replace(/ /g, '-')}-${size.width}.app.png`) });
           }
+          await page.keyboard.press('Escape');
           await back();
         }
         if (panel !== 'closed') {
@@ -621,5 +646,15 @@ for (const lang of ['fr', 'en'] as const)
           await expect(page.locator('aside.git-side')).toHaveCount(0);
         }
       }
+    });
+
+    // A7: the source and the marks of the changes of the preview's worktree in the view, in their room.
+    test.fixme('the marks of the changes of the worktree in the view fit in their room', async ({ app }) => {
+      const { page } = app;
+      const write = previewsProject(app.repo);
+      await addProject(page, app.repo, { worktrees: true, lang });
+      await agentAtWork(app.repo, write);
+      const ed = await editorAsThePreview(page, lang);
+      expect(await sticksOut(ed, ['.ed-bar', '.tree-h', '.th-row', '.crumbs', '.status'])).toEqual([]);
     });
   });

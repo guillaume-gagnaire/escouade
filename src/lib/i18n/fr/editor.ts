@@ -36,6 +36,18 @@ export default {
     failed: 'La vue VS Code n’a pas démarré : {error}',
   },
 
+  /** What is asked before closing what shows files modified in the VS Code view (ESC-464): the view, its pane, a project, the app. */
+  unsaved: {
+    titleOne: 'Enregistrer les modifications de « {name} » ?',
+    title: { one: 'Enregistrer les modifications de {count} fichier ?', other: 'Enregistrer les modifications de {count} fichiers ?' },
+    bodyOne: 'Tes modifications de « {name} » seront perdues si tu ne les enregistres pas.',
+    body: 'Tes modifications seront perdues si tu ne les enregistres pas : {names}.',
+    save: 'Enregistrer',
+    saveAll: 'Tout enregistrer',
+    dontSave: 'Ne pas enregistrer',
+    notSaved: 'Un fichier n’a pas été enregistré : rien n’est fermé. Regarde-le dans la vue VS Code.',
+  },
+
   /** The left column: the files and the search. */
   side: {
     viewLabel: 'Vue de la colonne',

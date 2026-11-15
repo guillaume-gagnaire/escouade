@@ -13,6 +13,8 @@ const workbench = vi.hoisted(() => ({
   attach: vi.fn(),
   detach: vi.fn(),
   openFile: vi.fn(async () => {}),
+  focus: vi.fn(async () => {}),
+  hasTabs: vi.fn(() => false),
 }));
 vi.mock('./lib/vscode/workbench', () => workbench);
 
@@ -347,7 +349,13 @@ describe('App layout', () => {
     await within(dialog).findByRole('option', { name: /app/ });
     await userEvent.keyboard('{Enter}');
     // Opened in a tab of the VS Code view, the project's editor.
-    await waitFor(() => expect(workbench.openFile).toHaveBeenCalledWith({ projectId: 'p1', agentId: null }, 'src/app.ts'));
+    await waitFor(() =>
+      expect(workbench.openFile).toHaveBeenCalledWith(
+        { projectId: 'p1', agentId: null },
+        'src/app.ts',
+        expect.objectContaining({ line: 1 }),
+      ),
+    );
     expect(screen.getByTestId('vscode-view')).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: 'Ouvrir un fichier' })).not.toBeInTheDocument();
   });
@@ -382,8 +390,30 @@ describe('App layout', () => {
       expect(press(field, true)).toBe(true);
     });
 
-    // In the code of the project's editor, now VS Code's view, the keys shared by Escouade and VS Code are A3's: no
-    // test of them here until then.
+    // In the VS Code view (ESC-464): Ctrl+P is the app's, on the core's index, and VS Code never sees it; Ctrl+Shift+P
+    // prints nothing and is VS Code's palette.
+    it('is the app’s in the VS Code view, VS Code’s handler not reached, and Ctrl+Shift+P left to VS Code', async () => {
+      start('');
+      expect(await screen.findByRole('main')).toBeInTheDocument();
+      const host = document.body.appendChild(document.createElement('div'));
+      host.className = 'vscode-host';
+      const field = host.appendChild(document.createElement('textarea'));
+      // VS Code's own handler, on the window after the app's (the workbench starts after it).
+      const seen: string[] = [];
+      const vscode = (e: KeyboardEvent) => seen.push(`${e.shiftKey ? 'Shift+' : ''}${e.key}`);
+      window.addEventListener('keydown', vscode);
+      try {
+        expect(press(field, true)).toBe(true);
+        expect(app.modal).toBeNull();
+        expect(seen).toEqual(['Shift+P']);
+        expect(press(field)).toBe(true);
+        expect(await screen.findByRole('dialog', { name: 'Ouvrir un fichier' })).toBeInTheDocument();
+        expect(seen).toEqual(['Shift+P']);
+      } finally {
+        window.removeEventListener('keydown', vscode);
+        host.remove();
+      }
+    });
 
     it('is held back from the palette itself, from the window, and without a project', async () => {
       start('');
@@ -684,8 +714,11 @@ describe('App frame', () => {
     ).toBeInTheDocument();
     emit({ type: 'quitRequested', unsaved: 2 });
     const ask = await screen.findByRole('dialog', { name: 'Quit Escouade?' });
-    expect(within(ask).getByText('2 files in the editor aren’t saved: their changes will be lost.')).toBeInTheDocument();
-    expect(within(ask).getByRole('button', { name: 'Quit anyway' })).toBeInTheDocument();
+    expect(
+      within(ask).getByText('2 files in the editor aren’t saved: their changes will be lost if you don’t save them.'),
+    ).toBeInTheDocument();
+    expect(within(ask).getByRole('button', { name: 'Save and quit' })).toBeInTheDocument();
+    expect(within(ask).getByRole('button', { name: 'Quit without saving' })).toBeInTheDocument();
     expect(within(ask).getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
   });
 });

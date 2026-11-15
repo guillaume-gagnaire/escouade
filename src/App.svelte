@@ -9,7 +9,7 @@
   import { app } from './lib/state.svelte';
   import { dictation } from './lib/dictation.svelte';
   import { conversation } from './lib/conversation.svelte';
-  import { dictationKey, handleShortcut, holdPrint } from './lib/shortcuts';
+  import { dictationKey, handleShortcut, holdPrint, inVscode } from './lib/shortcuts';
   import { setTerminalFontSize } from './lib/terminals';
   import { watchForUpdates } from './lib/updater';
   import { watchPresence } from './lib/presence';
@@ -176,7 +176,11 @@
   });
 
   function onKeydown(e: KeyboardEvent) {
-    if (handleShortcut(e)) e.preventDefault();
+    if (!handleShortcut(e)) return;
+    e.preventDefault();
+    // A key the app keeps in the VS Code view (ESC-464) never reaches VS Code too: its handler is on the window, after
+    // this one (the workbench starts after the app).
+    if (inVscode(e.target)) e.stopImmediatePropagation();
   }
 
   // Before any field: the dictation's keys are never typed (a terminal would send them to its program).

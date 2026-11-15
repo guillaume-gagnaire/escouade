@@ -3183,12 +3183,14 @@ function startSession() {
     if (text.includes('edit')) {
       const tuid = `toolu_e${msg}`;
       const file = path.join(process.cwd(), 'src', 'app.ts');
+      // "edit ligne 7": the change is at that line of the file (its link opens there), the first one else.
+      const at = Number(/edit ligne (\d+)/.exec(text)?.[1] ?? 1);
       assistant({ type: 'tool_use', id: tuid, name: 'Edit', input: { file_path: file, old_string: 'a', new_string: 'b' } });
       toolResult(tuid, 'The file has been updated.', {
         tool_use_result: {
           filePath: file,
           structuredPatch: [
-            { oldStart: 1, oldLines: 1, newStart: 1, newLines: 2, lines: ['-const a = 1;', '+const a = 2;', '+const b = 3;'] },
+            { oldStart: at, oldLines: 1, newStart: at, newLines: 2, lines: ['-const a = 1;', '+const a = 2;', '+const b = 3;'] },
           ],
         },
       });

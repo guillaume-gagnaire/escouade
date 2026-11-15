@@ -120,8 +120,33 @@ function openQuickOpen() {
   app.modal = { kind: 'quickOpen', projectId: project.id, source };
 }
 
+/** The key was pressed in the VS Code view (its workbench, ESC-464), out of the page's own elements. */
+export const inVscode = (target: EventTarget | null): boolean => target instanceof Element && !!target.closest('.vscode-host');
+
+/**
+ * The keys Escouade keeps when the VS Code view has the focus (ESC-464), the rule of the spec (Éditeur › Les touches):
+ * those that go elsewhere in the app or open one of its windows. Ctrl+P (« Ouvrir un fichier », on the core's index),
+ * Ctrl+1…9, Ctrl+N, Ctrl+Shift+N, Ctrl+J, Ctrl+T, Ctrl+, , Ctrl+Shift+A, Ctrl+Shift+B, the zoom, Ctrl+\ and, while the
+ * screen is split, Ctrl+Shift+\, Ctrl+Shift+W and Ctrl+Alt+arrows. Every other key is VS Code's: Ctrl+S, Ctrl+F,
+ * Ctrl+Shift+F, Ctrl+Shift+P, Ctrl+K and its chords, Ctrl+B, Ctrl+Tab, Ctrl+Shift+L, Ctrl+W… The view takes the keys
+ * the app keeps off VS Code's keybindings (`lib/vscode/keys.ts`); its palette still runs those commands by their names.
+ */
+export function appWinsInVscode(e: KeyboardEvent, mac = IS_MAC): boolean {
+  if (paneKey(e, mac)) return true;
+  if (e.altKey) return false;
+  if (zoomKey(e, mac) !== null) return true;
+  if (!primaryKey(e, mac)) return false;
+  if (quickOpenKey(e, mac)) return true;
+  if (digit(e) !== null && !e.shiftKey) return true;
+  const k = e.key.toLowerCase();
+  if (e.shiftKey) return k === 'n' || k === 'a' || k === 'b';
+  return k === 'n' || k === 'j' || k === 't' || k === ',';
+}
+
 /** Runs the shortcut matching `e`. Returns true when the event was handled. */
 export function handleShortcut(e: KeyboardEvent, mac = IS_MAC): boolean {
+  // In the VS Code view, its keys are its own: the app only takes those it keeps (`appWinsInVscode`).
+  if (inVscode(e.target) && !appWinsInVscode(e, mac)) return false;
   // Ctrl+Alt+arrows go from pane to pane (ESC-392): an arrow types nothing, even with AltGr.
   if (e.altKey && !app.modal && handlePaneKey(e, mac)) return true;
   // Ctrl+Alt is AltGr on French keyboards (e.g. AltGr+2 = ~): never a shortcut.

@@ -2,14 +2,14 @@
 title: "Raccourcis"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-392","ESC-432"]
-decisions: [128,158]
+tickets: ["ESC-392","ESC-432","ESC-464"]
+decisions: [128,158,176]
 compared: null
 ---
 
 ## Ce que c'est
 
-Les raccourcis clavier d'Escouade, par défaut. Ils couvrent l'app entière, la conversation, la dictée, l'éditeur et les fenêtres. Dans un terminal, les touches du shell lui restent, sauf quelques raccourcis de l'app.
+Les raccourcis clavier d'Escouade, par défaut. Ils couvrent l'app entière, la conversation, la dictée, l'éditeur et les fenêtres. Dans un terminal, les touches du shell lui restent, sauf quelques raccourcis de l'app ; dans la vue VS Code de l'éditeur, celles de VS Code, sauf celles qu'Escouade garde.
 
 ## Comportement
 
@@ -49,19 +49,13 @@ Les raccourcis clavier d'Escouade, par défaut. Ils couvrent l'app entière, la 
 
 ### Vue d'un sous-agent
 
-- `Échap` : revenir à la conversation de l'agent, sauf dans un champ qui contient du texte.
+- `Échap` : revenir à la conversation de l'agent, sauf dans un champ qui contient du texte ou dans la vue VS Code.
 - `Ctrl+Entrée`, dans « Lui écrire » : envoyer le message ; il ne répond à aucune demande qui attend.
 
-### Éditeur
+### Éditeur (la vue VS Code)
 
-- `Ctrl+S` : enregistrer.
-- `Ctrl+F` : chercher dans le fichier.
-- `Ctrl+Maj+F` : rechercher dans les fichiers.
-- `Ctrl+clic` / `F12` : aller à la définition.
-- `Maj+F12` : trouver les références.
-- `Alt+←` / `Alt+→` : revenir / avancer (sous macOS : `⌃-` / `⌃⇧-`, touche Contrôle).
-- `Alt+clic` : ajouter un curseur.
-- `F2` : renommer la ligne de l'arborescence ; `Suppr` (`⌘⌫`) : la supprimer.
+- Les touches de VS Code lui restent : `Ctrl+S`, `Ctrl+F`, `Ctrl+H`, `Ctrl+Maj+F`, `Ctrl+Maj+P` et `F1`, `Ctrl+K` et ses accords, `Ctrl+B`, `Ctrl+Tab`, `Ctrl+Maj+L`, `Ctrl+W`, `F12`, `Alt+clic`…
+- L'app y garde celles qui mènent ailleurs dans l'app ou ouvrent une de ses fenêtres : `Ctrl+P` (sur l'index du cœur, le fichier dans un onglet de la vue), `Ctrl+1..9`, `Ctrl+N`, `Ctrl+Maj+N`, `Ctrl+J`, `Ctrl+T`, `Ctrl+,`, `Ctrl+Maj+A`, `Ctrl+Maj+B`, le zoom, `Ctrl+\`, la dictée et, l'écran partagé ouvert, `Ctrl+Maj+\`, `Ctrl+Maj+W` et `Ctrl+Alt+flèche`. VS Code ne les reçoit pas et ne les affiche plus ; leurs commandes restent dans sa palette. La règle et ce que chaque touche faisait dans VS Code : *Éditeur › Les touches de la vue et celles d'Escouade*.
 
 ### Fenêtres
 

@@ -6,6 +6,7 @@ import { basename } from '../format';
 import { t } from '../i18n';
 import { api } from '../ipc';
 import type { FileBase, FileText } from '../types';
+import { viewUnsaved } from '../vscode/unsaved.svelte';
 import { movedPath } from './tree';
 
 export type BufferKind = 'text' | 'binary' | 'tooLarge' | 'missing' | 'error';
@@ -83,8 +84,14 @@ class Buffers {
     return !!b && b.kind === 'text' && b.text !== b.saved;
   }
 
+  /** The files unsaved, the VS Code view's included (ESC-464). */
   get unsaved(): number {
-    return Object.values(this.all).filter((b) => this.isDirty(b)).length;
+    return Object.values(this.all).filter((b) => this.isDirty(b)).length + viewUnsaved.count();
+  }
+
+  constructor() {
+    // The view's files count for « Quitter » too.
+    viewUnsaved.onChange(() => this.sync());
   }
 
   open(projectId: string, source: string, path: string): Promise<Buffer> {
@@ -385,11 +392,12 @@ class Buffers {
     return left;
   }
 
-  /** Unsaved files of a project, or of one of its sources. */
+  /** Unsaved files of a project, or of one of its sources, the VS Code view's included. */
   unsavedIn(projectId: string, source?: string): number {
-    return Object.values(this.all).filter(
-      (b) => b.projectId === projectId && (source === undefined || b.source === source) && this.isDirty(b),
-    ).length;
+    return (
+      Object.values(this.all).filter((b) => b.projectId === projectId && (source === undefined || b.source === source) && this.isDirty(b))
+        .length + viewUnsaved.count(projectId, source)
+    );
   }
 
   /** Forgets the files of a source that is gone (a deleted agent's worktree), unsaved changes included. */

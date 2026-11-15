@@ -4,9 +4,10 @@
   // this view lends it its place while it is shown and takes it back when it goes, so that its tabs survive a pane
   // moved, closed and opened again. The source picked (the project's checkout or an agent's worktree) is a folder of its
   // workspace; the file the editor is asked to show (`app.openEditor`) opens in a tab of it.
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, untrack } from 'svelte';
   import { sourceAgent } from '../../lib/editor/buffers.svelte';
   import { t } from '../../lib/i18n';
+  import { mayFocus, paneCtx } from '../../lib/pane-context';
   import { app } from '../../lib/state.svelte';
   import type { Project } from '../../lib/types';
   import { worktreeLabel } from '../../lib/worktrees';
@@ -14,6 +15,8 @@
   import SourcePicker from './SourcePicker.svelte';
 
   let { project }: { project: Project } = $props();
+  /** Its pane of the split screen, if it is in one: only the active pane takes the keyboard. */
+  const pane = paneCtx();
   let place: HTMLDivElement;
   let phase = $state<'loading' | 'ready' | 'failed'>('loading');
   let failure = $state('');
@@ -62,17 +65,43 @@
     })();
   });
 
-  // The source picked is a folder of the workspace, its file asked for opened in a tab.
+  /** The keyboard was given to the view once it showed: a file asked for since takes it with it. */
+  let welcomed = false;
+
+  // The source picked is a folder of the workspace. The file asked for (a link of a conversation, « Ouvrir un fichier »,
+  // a file of the side panel) opens in a tab, at its line, the keyboard in it (ESC-464): each request once, so that a
+  // pane moved or opened again does not bring the cursor back to it. A workbench just started shows the file the editor
+  // had on screen; the view shown takes the keyboard.
   $effect(() => {
     const at = src;
     const rel = wanted;
     const folder = name;
+    const asked = st?.reveal ?? null;
+    const pid = project.id;
     if (phase !== 'ready' || !wb) return;
     const mod = wb;
     void mod
       .workbench(at, folder, app.settings.editorFontSize)
-      .then(() => (rel ? mod.openFile(at, rel) : undefined))
+      .then(async () => {
+        if (asked) {
+          untrack(() => {
+            const cur = app.editor[pid];
+            if (cur?.reveal?.seq === asked.seq) cur.reveal = null;
+          });
+          welcomed = true;
+          return mod.openFile(at, asked.path, asked);
+        }
+        if (rel && !mod.hasTabs()) await mod.openFile(at, rel);
+        if (!welcomed && untrack(() => mayFocus(pane))) await mod.focus();
+        welcomed = true;
+      })
       .catch((e) => app.toast(String(e), 'error'));
+  });
+
+  // Its pane made active from the keyboard (Ctrl+Alt+arrow): the view takes the keyboard.
+  $effect(() => {
+    if (!app.paneFocus) return;
+    if (untrack(() => pane?.active) && wb) void wb.focus();
   });
 
   onDestroy(() => {
@@ -83,7 +112,7 @@
 
 <div class="vscode-view" data-testid="vscode-view">
   <header class="vscode-bar">
-    <button class="btn" data-testid="vscode-back" onclick={() => app.closeEditor(project.id)}
+    <button class="btn" data-testid="vscode-back" onclick={() => app.leaveEditor(project.id)}
       ><span class="back"><Icon name="right" size={14} /></span>{t('editor.head.back')}</button
     >
     <SourcePicker

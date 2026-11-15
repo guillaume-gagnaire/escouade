@@ -3,6 +3,7 @@
 import { mockIPC, mockWindows } from '@tauri-apps/api/mocks';
 import { envsView } from '../lib/envs-view.svelte';
 import { buffers } from '../lib/editor/buffers.svelte';
+import { viewUnsaved } from '../lib/vscode/unsaved.svelte';
 import { navHistory } from '../lib/editor/history';
 import { recentFiles } from '../lib/editor/quick-open';
 import { fileSearches } from '../lib/editor/search.svelte';
@@ -487,6 +488,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   // French all along, as the tests (the language itself is put back by the setup).
   app.lang = { ui: 'fr', system: 'fr', claude: 'fr' };
   app.ready = true;
+  viewUnsaved.reset();
   buffers.reset();
   mcp.reset();
   dictation.clear();

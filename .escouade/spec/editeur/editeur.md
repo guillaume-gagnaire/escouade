@@ -2,8 +2,8 @@
 title: "Éditeur"
 subject: "Éditeur"
 sources: ["docs/SPEC.md","docs/EDITOR-STUDY.md","docs/TODO-2.3.md"]
-tickets: ["ESC-447","ESC-463"]
-decisions: [170,172]
+tickets: ["ESC-447","ESC-463","ESC-464"]
+decisions: [170,172,176]
 compared: "2026-10-30T05:39:53+01:00"
 gaps: [{"text":"La spec dit que le double-clic sur la poignée ramène la colonne des fichiers à 240 px. Le code revient à 200 px (TREE_NARROW) quand la zone de l'éditeur fait 904 px ou moins, et à 240 px seulement au-delà.","code":["src/lib/editor/layout.ts","src/components/editor/EditorView.svelte"]}]
 order: 25
@@ -13,7 +13,7 @@ order: 25
 
 Le mode éditeur prend la zone principale d'un projet, ou un volet de l'écran partagé, pour lire et modifier le code d'une source : la branche du projet ou le worktree d'un agent. Depuis la 2.3 (ESC-447), c'est la vue de VS Code : son plan de travail (`@codingame/monaco-vscode-api`, épinglé à une version, VS Code 1.138), avec son explorateur, ses onglets, son éditeur, sa recherche et sa palette, aux couleurs d'Escouade, sur des fichiers lus et écrits par le cœur. Il remplace l'éditeur en CodeMirror des versions précédentes, sans réglage pour choisir.
 
-Ce que l'ancien éditeur faisait et que la vue ne fait pas encore revient par les tickets de l'éditeur de la 2.3 (voir `docs/EDITOR-STUDY.md`, §7) : A3 (raccourcis partagés avec Escouade, focus, liens des conversations vers une ligne, fermeture avec des modifications non enregistrées), A4 (thème et polices suivis en direct, langue), A5 (extensions), A7 (marques des changements par rapport à la base, comparaison avec le disque, choix de la source dans la vue), A1 (serveurs de langage). Les pages *Navigation de code*, *Recherche dans les fichiers* et *Voir les changements* décrivent l'ancien éditeur jusqu'à ces tickets.
+Ce que l'ancien éditeur faisait et que la vue ne fait pas encore revient par les tickets de l'éditeur de la 2.3 (voir `docs/EDITOR-STUDY.md`, §7) : A4 (thème et polices suivis en direct, langue), A5 (extensions), A7 (marques des changements par rapport à la base, comparaison avec le disque), A1 (serveurs de langage). Les pages *Navigation de code*, *Recherche dans les fichiers* et *Voir les changements* décrivent l'ancien éditeur jusqu'à ces tickets.
 
 ## Comportement
 
@@ -21,11 +21,65 @@ Ce que l'ancien éditeur faisait et que la vue ne fait pas encore revient par le
 
 - « Ouvrir dans l'éditeur », au clic droit sur un agent ou dans « … » de l'en-tête de sa conversation : son worktree, ou le projet s'il n'a pas de worktree.
 - « Parcourir » sur la ligne de la branche, dans le pied de la barre latérale, et « Éditeur » dans la barre d'onglets : la branche du projet.
-- Le bouton `</>` d'un fichier non commité, « Voir le code » d'un écart de la spec, un chemin de fichier dans la conversation, « Ouvrir un fichier » (`Ctrl+P`, voir *Ouvrir un fichier*) : le fichier s'ouvre dans un onglet de la vue.
+- Le bouton `</>` d'un fichier non commité, « Voir le code » d'un écart de la spec, un chemin de fichier dans la conversation, « Ouvrir un fichier » (`Ctrl+P`, voir *Ouvrir un fichier*) : le fichier s'ouvre dans un onglet de la vue, le curseur et le clavier dedans.
 - Un fichier hors du dossier de la source ne s'ouvre pas (message).
-- Une seule vue VS Code par fenêtre : seule dans la zone de travail ou dans un volet (voir *Écran partagé*). Elle se déplace, se redimensionne, se ferme et se rouvre en gardant ses onglets et leurs modifications. Ses groupes d'onglets peuvent se mettre côte à côte dans la colonne. Un clic dans la vue active son volet ; son survol montre le ×.
+- Une seule vue VS Code par fenêtre : seule dans la zone de travail ou dans un volet (voir *Écran partagé*). Elle se déplace, se redimensionne, se ferme et se rouvre en gardant ses onglets et leurs modifications. Ses groupes d'onglets peuvent se mettre côte à côte dans la colonne. Un clic dans la vue, ou le focus qui y entre, active son volet ; son survol montre le ×.
 - La barre au-dessus : « Conversation », le sélecteur de source, « VS Code ». Le menu de la source s'ouvre par-dessus la vue.
 - À la première ouverture dans la fenêtre, « Chargement de la vue VS Code… » ; si elle ne démarre pas : « La vue VS Code n'a pas démarré : <raison> ».
+
+### Les liens des conversations
+
+- Le chemin d'un fichier qu'un outil d'un agent a modifié (Edit, Write…) s'ouvre dans la source de l'agent : son worktree s'il en a un, sinon le projet. Le fichier s'ouvre à la première ligne changée, le curseur au début de la ligne (ou à sa colonne quand elle est donnée, comptée en caractères), la ligne amenée au milieu de la vue si elle était hors de vue.
+- Chaque lien cliqué est une demande : le même fichier à la même ligne, redemandé après que le curseur a bougé, y ramène. Une vue redessinée (volet déplacé, rouvert) ne ramène pas le curseur à la dernière ligne demandée.
+- Un fichier binaire s'ouvre en haut, comme VS Code l'affiche.
+
+### Le clavier et le focus
+
+- La vue montrée prend le clavier : son éditeur s'il a un onglet ouvert, sinon son explorateur. Dans un volet qui n'est pas l'actif, elle ne le prend pas.
+- `Ctrl+Alt+flèche` vers le volet de la vue lui donne le clavier ; vers un autre volet, le clavier va à son contenu (le champ de message d'un agent, un terminal). Un clic dans la vue active son volet ; le clavier qui y entre aussi.
+- Une fenêtre d'Escouade ouverte depuis la vue (`Ctrl+P`, `Ctrl+,`…) rend le clavier à la vue en se fermant.
+- La vue cachée (« Conversation », son volet fermé, un autre contenu à sa place) ne garde jamais le clavier : ce qui est tapé ensuite ne va pas dans un fichier qu'on ne voit plus. « Conversation » donne le clavier au champ de message de la conversation qui revient.
+- Les touches tapées dans la vue ne répondent à aucune demande d'agent (`1`, `2`… sur la carte d'une demande, `Échap` d'une vue de sous-agent ou de tâche) : elles restent à la vue.
+
+### Les touches de la vue et celles d'Escouade
+
+Quand la vue a le focus, la règle est : **Escouade garde les touches qui mènent ailleurs dans l'app ou ouvrent une de ses fenêtres ; toutes les autres sont à VS Code.** Une touche n'est jamais aux deux, et ne se perd pas en silence : celles qu'Escouade garde sont retirées des raccourcis de VS Code (ses menus et sa palette ne les affichent plus), et les commandes de VS Code qu'elles lançaient restent dans sa palette (`Ctrl+Maj+P`) par leur nom.
+
+Escouade garde :
+
+| Touche | Escouade | Ce que VS Code en faisait |
+|---|---|---|
+| `Ctrl+P` | Ouvrir un fichier, sur l'index du cœur, dans un onglet de la vue | Go to File (sa palette garde aussi `Ctrl+E`) |
+| `Ctrl+1..9` | Les projets | Focus Editor Group N |
+| `Ctrl+N` / `Ctrl+Maj+N` | Nouvel agent / menu « Harness » | New Untitled Text File / New Window |
+| `Ctrl+J` | Prochain agent en attente | Toggle Panel |
+| `Ctrl+T` | Nouveau terminal | Go to Symbol in Workspace |
+| `Ctrl+,` | Réglages d'Escouade | Open Settings |
+| `Ctrl+Maj+A` | Vue d'ensemble | — |
+| `Ctrl+Maj+B` | Panneau des fichiers | Run Build Task |
+| `Ctrl+=` / `Ctrl+-` / `Ctrl+0` | Zoom de l'interface entière | Zoom du plan de travail |
+| `Ctrl+\` | Partager l'écran | Split Editor |
+| `Ctrl+Maj+\`, `Ctrl+Maj+W`, `Ctrl+Alt+flèche`, l'écran partagé ouvert | Tourner, fermer le volet, passer au volet voisin | Jump to Bracket, Close Window, Add Cursor Above/Below (hors écran partagé, ces touches restent à VS Code) |
+| Le raccourci de la dictée (`Ctrl+Maj+Espace`) | La dictée | Trigger Parameter Hints |
+
+VS Code garde tout le reste, dont `Ctrl+S` (enregistrer), `Ctrl+F` et `Ctrl+H` (chercher et remplacer dans le fichier), `Ctrl+Maj+F` (chercher dans les fichiers), `Ctrl+Maj+P` et `F1` (sa palette ; `Ctrl+Maj+P` n'imprime jamais la page), `Ctrl+K` et ses accords (`Ctrl+K Ctrl+C`…), `Ctrl+B` (sa barre latérale), `Ctrl+Tab` (ses onglets), `Ctrl+Maj+L` (sélectionner toutes les occurrences), `Ctrl+W` / `Ctrl+F4` (fermer l'onglet), `Échap`. Leurs actions d'Escouade (`Ctrl+K` : rechercher dans les conversations, `Ctrl+Tab` : agent suivant, `Ctrl+Maj+L` : disposition) marchent hors de la vue.
+
+### Fermer avec des modifications non enregistrées
+
+Rien ne se ferme sans demander quand un fichier est modifié dans la vue, comme VS Code : « Enregistrer » (« Tout enregistrer » pour plusieurs), « Ne pas enregistrer », « Annuler ». Le titre nomme le fichier (« Enregistrer les modifications de « f1.ts » ? ») ou leur nombre, avec leurs noms. « Enregistrer » écrit par le cœur puis ferme ; un fichier qui ne s'enregistre pas (un conflit, un refus du cœur) laisse tout ouvert : « Un fichier n'a pas été enregistré : rien n'est fermé. Regarde-le dans la vue VS Code. » « Ne pas enregistrer » relit les fichiers depuis le disque, puis ferme. « Annuler » ne ferme rien.
+
+- **Un onglet** : la question de VS Code (« Do you want to save the changes you made to f1.ts? », Save, Don't Save, Cancel).
+- **La vue**, par « Conversation » : les fichiers du projet modifiés dans la vue. Sans fichier modifié, elle se ferme tout de suite.
+- **Son volet**, par son × ou `Ctrl+Maj+W` : les fichiers du projet modifiés dans la vue.
+- **Un projet**, une fois sa fermeture confirmée : ses fichiers modifiés dans la vue ; « Annuler » le garde. Fermé, ses dossiers et ses onglets quittent la vue.
+- **Escouade**, par « Quitter » : « Quitter Escouade ? », « N fichiers ne sont pas enregistrés dans l'éditeur : leurs modifications seront perdues si tu ne les enregistres pas. », « Enregistrer et quitter », « Quitter sans enregistrer », « Annuler ». Fermer la fenêtre par son × la range dans la barre des tâches : rien ne se perd, la vue garde ses onglets.
+- « Recharger l'interface » (barre des tâches) compte aussi les fichiers modifiés dans la vue : le système demande avant de recharger, la page rechargée les perdant.
+- Passer à un autre contenu (le Kanban, un autre agent, un autre projet) ne ferme pas la vue : elle garde ses modifications, et « Quitter » les compte.
+- Supprimer un agent et son worktree, merger son ticket en nettoyant, supprimer un dossier d'agents : leur question dit combien de fichiers modifiés dans la vue seront perdus.
+
+### Mouvement réduit
+
+- Avec `prefers-reduced-motion`, le curseur de la vue ne clignote pas, suivi en direct.
 
 ### Sources
 
@@ -64,8 +118,8 @@ La règle est vérifiée sur le chemin écrit et sur le chemin réel (liens suiv
 
 ## Limites
 
-- Les messages propres à VS Code sont en anglais (le pack de langue vient avec A4). Le thème d'Escouade est lu à l'ouverture de la vue.
-- Pas encore de serveurs de langage (A1) ni d'extensions (A5) : la vue n'a que les extensions déclaratives qu'elle embarque (langages, grammaires, thèmes).
-- Quitter Escouade ou fermer un projet ne prévient pas encore des modifications non enregistrées dans la vue (A3).
+- Les messages propres à VS Code sont en anglais (le pack de langue vient avec A4), dont sa question avant de fermer un onglet. Le thème d'Escouade est lu à l'ouverture de la vue.
+- Pas encore de serveurs de langage (A1) ni d'extensions (A5) : la vue n'a que les extensions déclaratives qu'elle embarque (langages, grammaires, thèmes). Une extension qui prendrait des touches (A5) passera par la même règle.
+- Un fichier sans titre (« New Untitled Text File » de la palette de VS Code) n'est compté par aucune question d'Escouade.
 - L'installeur grossit d'environ 3,3 Mo ; ces fichiers ne se chargent qu'à la première ouverture de la vue.
 - Sur un partage réseau sans corbeille, Windows peut supprimer pour de bon.
