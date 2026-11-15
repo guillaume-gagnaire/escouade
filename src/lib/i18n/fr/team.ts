@@ -76,6 +76,7 @@ export default {
     title: 'Le serveur montre deux versions de l’équipe : contacte un administrateur.',
     rollback: 'Le serveur est revenu en arrière sur ce que cet appareil avait déjà lu.',
     rewritten: 'Le serveur a changé une entrée que cet appareil avait déjà lue.',
+    journal: 'Le serveur a rejoué, réordonné, retiré ou forgé une opération d’un projet de l’équipe.',
     fork: 'Deux membres voient deux histoires différentes de l’équipe (époque {epoch}).',
     blocked:
       'Cet appareil a cessé de lire l’équipe et n’y envoie plus rien : ni invitation, ni entrée d’un invité, ni nouvel appareil, ni nouvelle clé de secours.',

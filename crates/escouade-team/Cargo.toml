@@ -53,6 +53,8 @@ zeroize = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 escouade-team-server = { path = "../escouade-team-server" }
+# The convergence of the copies, whatever the order the operations come in (TS-5).
+proptest = { version = "1", default-features = false, features = ["std"] }
 escouade-team-crypto = { path = "../escouade-team-crypto", features = ["test-door"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time", "io-util"] }
 tempfile = "3"

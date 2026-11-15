@@ -277,6 +277,17 @@ impl Client {
         Self::answer(r).await
     }
 
+    pub async fn put<B: Serialize, R: DeserializeOwned>(&self, path: &str, body: &B) -> Answer<R> {
+        let r = self
+            .request(reqwest::Method::PUT, path)
+            .header("content-type", "application/cbor")
+            .body(cbor::encode(body))
+            .send()
+            .await
+            .unwrap();
+        Self::answer(r).await
+    }
+
     pub async fn get<R: DeserializeOwned>(&self, path: &str) -> Answer<R> {
         let r = self
             .request(reqwest::Method::GET, path)

@@ -10,7 +10,7 @@ use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{self, Authed};
-use crate::db::{Entry, Kind, NewEntry, Page, Quotas, Role, StoreError, Stream};
+use crate::db::{Entry, Kind, NewEntry, Page, Quotas, Role, Snapshot, StoreError, Stream};
 use crate::live::Event;
 use crate::metrics::Metrics;
 use crate::transport::{body, Cbor, Problem};
@@ -192,6 +192,35 @@ pub mod wire {
     pub struct Entries {
         pub entries: Vec<Entry>,
         pub more: bool,
+        /// A project's stream: the number its last snapshot holds up to, when it is after `since` (its messages up
+        /// to there are forgotten: start from the snapshot).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub snapshot: Option<u64>,
+    }
+
+    /// A project's snapshot, as a device sends it.
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct SnapshotPut {
+        pub upto: u64,
+        #[serde(with = "serde_bytes")]
+        pub payload: Vec<u8>,
+    }
+
+    /// A project's snapshot, as the server serves it.
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct SnapshotInfo {
+        pub upto: u64,
+        #[serde(with = "serde_bytes")]
+        pub device: Vec<u8>,
+        pub at: i64,
+        #[serde(with = "serde_bytes")]
+        pub payload: Vec<u8>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct SnapshotKept {
+        /// The messages of the stream forgotten.
+        pub pruned: u64,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -236,6 +265,7 @@ fn store_problem(e: StoreError) -> Problem {
             "key_taken",
             "this key already has a device",
         ),
+        StoreError::Snapshot(why) => Problem::new(StatusCode::CONFLICT, "snapshot_refused", why),
         StoreError::Quota => Problem::new(
             StatusCode::INSUFFICIENT_STORAGE,
             "quota",
@@ -690,15 +720,9 @@ async fn append(
         return Err(Problem::bad_request("empty", "an entry carries bytes"));
     }
     match (stream, req.kind, req.epoch) {
-        (Stream::Team, Kind::Commit, Some(_)) | (_, Kind::Message, None) => {}
-        (Stream::Team, Kind::Commit, None) => {
+        (_, Kind::Commit, Some(_)) | (_, Kind::Message, None) => {}
+        (_, Kind::Commit, None) => {
             return Err(Problem::bad_request("no_epoch", "a commit says its epoch"))
-        }
-        (Stream::Project(_), Kind::Commit, _) => {
-            return Err(Problem::bad_request(
-                "no_commit_here",
-                "a project's stream holds no commit",
-            ))
         }
         (_, Kind::Message, Some(_)) => {
             return Err(Problem::bad_request(
@@ -779,7 +803,11 @@ pub async fn read_team(
         .read(authed.device.team, Stream::Team, q.since, app.page(q.limit))
         .await
         .map_err(store_problem)?;
-    Ok(Cbor(Entries { entries, more }))
+    Ok(Cbor(Entries {
+        entries,
+        more,
+        snapshot: None,
+    }))
 }
 
 pub async fn read_project(
@@ -799,7 +827,70 @@ pub async fn read_project(
         )
         .await
         .map_err(store_problem)?;
-    Ok(Cbor(Entries { entries, more }))
+    let snapshot = app
+        .store
+        .snapshot_upto(authed.device.team, project)
+        .await
+        .map_err(store_problem)?
+        .filter(|upto| *upto > q.since);
+    Ok(Cbor(Entries {
+        entries,
+        more,
+        snapshot,
+    }))
+}
+
+/// Keeps a project's snapshot (TS-5): its messages up to `upto` are forgotten, its commits stay. A snapshot not
+/// after the one kept, or beyond the stream, is refused (409 `snapshot_refused`).
+pub async fn put_snapshot(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path(project): Path<String>,
+    Cbor(req): Cbor<SnapshotPut>,
+) -> Result<Cbor<SnapshotKept>, Problem> {
+    let project = path_id(&project)?;
+    if req.payload.is_empty() {
+        return Err(Problem::bad_request("empty", "a snapshot carries bytes"));
+    }
+    if req.payload.len() > app.limits.max_file {
+        return Err(Problem::too_large(app.limits.max_file));
+    }
+    let pruned = app
+        .store
+        .put_snapshot(
+            authed.device.team,
+            project,
+            Snapshot {
+                upto: req.upto,
+                device: authed.device.id,
+                at: now(),
+                payload: req.payload,
+            },
+            app.quotas(),
+        )
+        .await
+        .map_err(store_problem)?;
+    Ok(Cbor(SnapshotKept { pruned }))
+}
+
+pub async fn get_snapshot(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path(project): Path<String>,
+) -> Result<Cbor<SnapshotInfo>, Problem> {
+    let project = path_id(&project)?;
+    let s = app
+        .store
+        .snapshot(authed.device.team, project)
+        .await
+        .map_err(store_problem)?
+        .ok_or_else(Problem::not_found)?;
+    Ok(Cbor(SnapshotInfo {
+        upto: s.upto,
+        device: s.device.to_vec(),
+        at: s.at,
+        payload: s.payload,
+    }))
 }
 
 pub async fn put_file(

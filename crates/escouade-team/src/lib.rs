@@ -8,10 +8,12 @@
 //!   the **checkpoint** in the keychain, apart from what a backup brings back;
 //! - the **client of the server** (`client.rs`): enrolment, signed challenge and session, streams, files, live;
 //! - the **team** (`team.rs`): reading the stream, committing (and playing again after a 409), the verified journal
-//!   of the members, the rotation, the revocation, the missing history links, the head beacons.
+//!   of the members, the rotation, the revocation, the missing history links, the head beacons;
+//! - the **projects** (`replica.rs`, `team/sync.rs`, TS-5): the journal of operations encrypted and signed, chained by
+//!   device, the local copy in SQLite, the outbox offline, the snapshots, a project's own MLS group when the team keeps
+//!   it to some members.
 //!
-//! Wired into nothing yet: TS-3 and TS-4 show it, TS-5 syncs the projects' operations on it. `README.md` says what
-//! is done and what is left.
+//! The core wires it in (`src-tauri/src/teams.rs`). `README.md` says what is done and what is left.
 
 pub mod client;
 pub mod escrow;
@@ -19,6 +21,7 @@ pub mod escrow;
 pub mod fuzzing;
 pub mod keychain;
 pub mod pairing;
+pub mod replica;
 pub mod storage;
 pub mod team;
 pub mod wire;
@@ -73,6 +76,23 @@ pub enum Error {
     CodeGone,
     #[error("the server holds no recovery wrap of this team")]
     NoRecoveryWrap,
+    // === A project's journal (TS-5) ===
+    #[error("the server plays again an operation of this project (entry {seq}): refused")]
+    Replayed { seq: u64 },
+    #[error("the server reorders or drops the operations of a device of this project (entry {seq}): refused")]
+    Reordered { seq: u64 },
+    #[error("the server dropped an operation this device sent (number {seq}): refused")]
+    Withheld { seq: u64 },
+    #[error(
+        "two operations of one device take the same place in its chain (entry {seq}): refused"
+    )]
+    Equivocation { seq: u64 },
+    #[error("an operation of this project that no member signed (entry {seq}): refused")]
+    Forged { seq: u64 },
+    #[error("this device has no access to this project")]
+    NoAccess,
+    #[error("this project is not on this device")]
+    NoProject,
 }
 
 /// What an error says of the server, for the interface: a fork, a rollback, a rewritten entry are the server showing
@@ -85,6 +105,8 @@ pub enum Alarm {
     Rollback,
     /// An entry read changed.
     Rewritten,
+    /// A project's journal played again, reordered, cut, forged (TS-5).
+    Journal,
 }
 
 impl Error {
@@ -95,6 +117,11 @@ impl Error {
                 Some(Alarm::Rollback)
             }
             Error::Rewritten { .. } => Some(Alarm::Rewritten),
+            Error::Replayed { .. }
+            | Error::Reordered { .. }
+            | Error::Withheld { .. }
+            | Error::Equivocation { .. }
+            | Error::Forged { .. } => Some(Alarm::Journal),
             _ => None,
         }
     }

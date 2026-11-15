@@ -192,6 +192,34 @@ pub struct EpochTaken {
 pub struct Entries {
     pub entries: Vec<Entry>,
     pub more: bool,
+    /// A project's stream: the number its last snapshot holds up to, when it is after `since` (its messages up to
+    /// there are forgotten: start from the snapshot).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snapshot: Option<u64>,
+}
+
+/// A project's snapshot, as a device sends it (TS-5).
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SnapshotPut {
+    pub upto: u64,
+    #[serde(with = "serde_bytes")]
+    pub payload: Vec<u8>,
+}
+
+/// A project's snapshot, as the server serves it.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SnapshotInfo {
+    pub upto: u64,
+    #[serde(with = "serde_bytes")]
+    pub device: Vec<u8>,
+    pub at: i64,
+    #[serde(with = "serde_bytes")]
+    pub payload: Vec<u8>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SnapshotKept {
+    pub pruned: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -269,6 +297,22 @@ pub enum TeamMessage {
     TokenGranted {
         #[serde(with = "hex::serde")]
         hash: [u8; 32],
+    },
+    /// A device's last-resort KeyPackage (TS-5), for the groups of the projects kept to some members: signed by its
+    /// leaf, checked against the team's leaves.
+    KeyPackage(#[serde(with = "serde_bytes")] Vec<u8>),
+    /// The Welcome of the devices added to a project's own group.
+    ProjectWelcome {
+        #[serde(with = "hex::serde")]
+        project: [u8; 16],
+        #[serde(with = "serde_bytes")]
+        welcome: Vec<u8>,
+    },
+    /// A history link of a project's own group.
+    ProjectHistory {
+        #[serde(with = "hex::serde")]
+        project: [u8; 16],
+        link: HistoryLink,
     },
 }
 

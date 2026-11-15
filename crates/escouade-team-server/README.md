@@ -22,7 +22,8 @@ C'est la table du §3.8, et rien de plus.
 | `devices` | un id opaque, l'équipe, la clé publique Ed25519, le rôle, les heures de création et de révocation | un nom, une adresse, le membre derrière l'appareil |
 | `tokens` | le **SHA-256** des jetons d'inscription non utilisés, leur sorte, leur équipe, leur expiration (un jeton utilisé est effacé) | le jeton lui-même |
 | `team_entries`, `project_entries` | le numéro, la sorte (`commit` et son époque, ou `message`), l'appareil auteur, l'heure, **les octets chiffrés** | ce qu'ils disent : un commit MLS part en message privé, une opération est chiffrée par la clé du projet |
-| `projects` | un id opaque choisi par le client, son dernier numéro | le nom du projet, ses dépôts |
+| `projects` | un id opaque choisi par le client, son dernier numéro, le nombre de commits de son groupe (son époque) | le nom du projet, ses dépôts |
+| `project_snapshots` | le dernier instantané de chaque projet : son numéro, l'appareil, l'heure, **les octets chiffrés** | l'état du projet |
 | `files` | un id opaque choisi par le client, la taille, l'appareil auteur, l'heure | le nom du fichier, son type, son contenu |
 | les fichiers (disque ou S3) | les octets chiffrés, sous `<équipe>/<fichier>` en hexadécimal | |
 | la mémoire du processus | les défis en cours (60 s), le SHA-256 des jetons de session (15 min), les seaux des limites de débit (par adresse IP, par appareil) | |
@@ -53,7 +54,9 @@ Ce que ça révèle (§3.8) : l'activité (qui écrit quand, sur combien de proj
 | `POST /v1/devices/{id}/revoke` | administrateur, ou l'appareil lui-même | révoque : ses sessions et ses connexions en direct se ferment |
 | `POST /v1/team/stream` `{kind, epoch?, payload}` | oui | ajoute au flux d'équipe ; un `commit` doit être pour l'époque suivante |
 | `GET /v1/team/stream?since=n&limit=m` | oui | les entrées après `n`, une page au plus (`more` dit s'il en reste) |
-| `POST`, `GET /v1/projects/{id}/stream` | oui | de même pour un projet (des `message` seulement) |
+| `POST`, `GET /v1/projects/{id}/stream` | oui | de même pour un projet : ses opérations (`message`) et les commits du groupe MLS d'un projet gardé à quelques membres (`commit`, le premier d'une époque gagne, TS-5). La lecture dit `snapshot: n` quand le dernier instantané va au-delà de `since` |
+| `PUT /v1/projects/{id}/snapshot` `{upto, payload}` | oui | garde l'instantané chiffré d'un projet (TS-5) : les messages jusqu'à `upto` sont oubliés (les commits restent) et leurs octets rendus au quota. Refusé en 409 `snapshot_refused` s'il n'est pas après celui gardé ou va au-delà du flux |
+| `GET /v1/projects/{id}/snapshot` | oui | le dernier instantané (`upto`, l'appareil, l'heure, les octets), 404 s'il n'y en a pas |
 | `PUT`, `GET`, `DELETE /v1/files/{id}` | oui | un fichier chiffré, écrit une fois (409 s'il existe) |
 | `GET /v1/files/usage` | oui | les octets gardés, le quota, les tailles maximales |
 | `POST /v1/pair` `{message}` | oui | ouvre un créneau d'appairage (TS-3) avec le premier message du PAKE : ses trois caractères, la tête du code court ; 10 minutes |
@@ -132,6 +135,7 @@ cd src-tauri && cargo nextest run -p escouade-team-server
 - `tests/server.rs` lance le vrai serveur sur localhost, sur une base SQLite temporaire : inscription par jeton (une seconde fois refusée), ajout et révocation d'un appareil, défi signé (une mauvaise signature, une signature d'une autre clé, un défi réutilisé ou inventé, un appareil révoqué et une session expirée refusés), flux et reprise depuis n, le premier commit d'une époque qui gagne (aussi à huit en même temps), fichiers et quotas, WebSocket (les entrées en ordre, rien pour une autre équipe, fermeture à la révocation et à la fin de la session), poignée de main des versions, limite de débit par adresse et par appareil, bornes de taille (dont une longueur annoncée de 10 Go et une chaîne CBOR de 2⁶² octets), équipes étanches.
 - `tests/crypto_scenario.rs` rejoue un scénario d'`escouade-team-crypto` à travers le vrai serveur, au lieu de `relay.rs` : création, ajout de deux membres (Welcome et historique lus sur le serveur), retrait d'un membre (qui ne lit plus rien de nouveau, et dont l'appareil est révoqué), rotation, puis deux administrateurs qui committent à la même époque : le serveur garde le premier, refuse le second avec ce qui l'a précédé, et la branche perdante se voit (`Error::Fork`) au premier objet qui passe.
 - `tests/onboarding.rs` (TS-3) : un jeton fait par l'administrateur sert une fois, son second usage est dit à l'invité et aux administrateurs, il expire ; les rôles suivent l'administrateur et le dernier reste ; le jeton de récupération inscrit un administrateur de l'équipe ; le relais d'appairage prend un seul essai ; la page d'un lien d'invitation ne charge rien d'ailleurs.
+- **TS-5** (`tests/server.rs`) : les commits d'un projet (le premier d'une époque gagne), et `a_snapshot_takes_the_place_of_the_start_of_a_projects_stream` (les messages oubliés, les commits gardés, le quota rendu, un instantané plus ancien ou au-delà du flux refusé, rien pour une autre équipe). La synchronisation entière se joue contre ce serveur dans `crates/escouade-team/tests/sync.rs`.
 - `tests/ops.rs` : `init` puis `serve` par le vrai binaire, le journal sans id, TLS avec un certificat donné, la base en WAL, les métriques sans id.
 - **PostgreSQL** : chaque test de `server.rs` et le scénario ont une variante `postgres::`, qui tourne quand `ESCOUADE_TEST_POSTGRES_URL` est posée (un schéma par test, effacé à la fin). La CI la pose dans le job Linux (`linux-rust`, service `postgres:17`).
 - **S3** : `files_and_quotas` écrit dans S3 quand `ESCOUADE_TEST_S3_ENDPOINT` (et `_BUCKET`, `_REGION`, `_ACCESS_KEY`, `_SECRET_KEY`) est posée. Vérifié sur Garage 1.1.0 ; la signature SigV4 est aussi testée sur l'exemple d'AWS.
@@ -139,7 +143,7 @@ cd src-tauri && cargo nextest run -p escouade-team-server
 ## Ce qui reste
 
 - **TS-3** (fait, ESC-461) : le jeton fourni par l'administrateur (celui d'une invitation), le second usage dit et noté, les rôles tenus au pas du registre, le jeton de récupération, le relais d'appairage du code court, la page `/join/<id>`. Restent les rôles propriétaire et lecteur (le serveur refusera alors les écritures d'un lecteur, TS-4) et un lien de création qu'afficherait `init`.
-- **TS-5** : les droits par projet (le serveur ne sert un projet qu'aux appareils qui y ont accès : aujourd'hui, tout appareil de l'équipe), les instantanés et l'élagage des flux, l'horloge hybride côté client.
+- **TS-5** (fait, ESC-466) : les commits du groupe d'un projet dans son flux, les instantanés et l'élagage des messages. Reste : les droits par projet (le serveur ne sert un projet qu'aux appareils qui y ont accès : aujourd'hui, tout appareil de l'équipe ; la clé du groupe du projet seule protège un projet gardé à quelques membres).
 - **TS-6** : la prise atomique des tickets (bail et jeton de prise, en clair, §4.2), le compteur des numéros de tickets d'un projet.
 - **TS-2** (fait, ESC-458) : le client, `crates/escouade-team`, parle ce protocole. Il garde les mêmes formes que `api::wire`, testées contre ce serveur. Reste au serveur : laisser un membre couper son propre autre appareil (le serveur ne sait pas quels appareils sont à quel membre ; le commit seul le coupe du groupe).
 - **TS-18** : le fuzzing du décodage des corps et des flux ; l'e2e avec deux clients.

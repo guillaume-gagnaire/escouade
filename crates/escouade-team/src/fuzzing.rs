@@ -260,6 +260,99 @@ pub fn roster(data: &[u8]) {
     let _ = escouade_team_crypto::keys::EpochRecord::from_bytes(data);
 }
 
+/// A team of one in memory, made once: an epoch's record and an operation sealed under it, to mutate.
+fn sealed_fixture() -> &'static (escouade_team_crypto::keys::EpochRecord, Vec<u8>, Vec<u8>) {
+    use escouade_team_crypto::ops::{OpBody, Operation, Scope, What};
+    static FIXTURE: std::sync::OnceLock<(
+        escouade_team_crypto::keys::EpochRecord,
+        Vec<u8>,
+        Vec<u8>,
+    )> = std::sync::OnceLock::new();
+    FIXTURE.get_or_init(|| {
+        let mut alice = TeamDevice::new(member(1)).expect("a device");
+        alice.create_team(NOW, None).expect("a team");
+        let record = alice.record(0).expect("epoch 0").clone();
+        let op = Operation {
+            project: PROJECT,
+            author: alice.author(),
+            dseq: 1,
+            prev: [0; 32],
+            team_epoch: 0,
+            team_head: record.head,
+            hlc: escouade_team_crypto::hlc::Hlc {
+                wall: NOW * 1000,
+                count: 0,
+                device: alice.identity().device,
+            },
+            body: OpBody::Set {
+                object: escouade_team_crypto::ObjectId([2; 16]),
+                field: "title".into(),
+                value: serde_json::json!("Un titre"),
+                base: None,
+            },
+        };
+        let sealed = alice
+            .seal_for(What::Operation, &PROJECT, Scope::Team, op.to_bytes())
+            .expect("sealed");
+        (record, wire::encode(&sealed), op.to_bytes())
+    })
+}
+
+const PROJECT: escouade_team_crypto::ProjectId = escouade_team_crypto::ProjectId([7; 16]);
+
+/// The decoding of a project's operation (TS-5): what the server serves, sealed, and what it holds once opened.
+/// - The bytes as a sealed operation, an operation, a snapshot, a project roster, a stamp: decoded without a panic,
+///   and what decodes encodes back to the same;
+/// - a sealed operation of the fixture, mutated by the bytes (xor from an offset): it opens to the very operation
+///   sealed, or not at all;
+/// - an operation that decodes, applied to a copy in memory twice: the second time changes nothing.
+pub fn operation(data: &[u8]) {
+    use escouade_team_crypto::ops::{Operation, Sealed, Snapshot};
+    let _ = wire::decode::<Sealed>(data);
+    let _ = escouade_team_crypto::project::ProjectRoster::from_bytes(data);
+    let _ = escouade_team_crypto::hlc::Hlc::from_bytes(data);
+    if let Ok(s) = Snapshot::from_bytes(data) {
+        assert_eq!(Snapshot::from_bytes(&s.to_bytes()).expect("again"), s);
+    }
+    let (record, sealed, plain) = sealed_fixture();
+    if let Ok(s) = wire::decode::<Sealed>(data) {
+        let _ = s.open_operation(record, &PROJECT);
+        let _ = s.open_snapshot(record, &PROJECT);
+    }
+    if let Some((&offset, flips)) = data.split_first() {
+        let mut mutated = sealed.clone();
+        let start = offset as usize % mutated.len().max(1);
+        for (i, b) in flips.iter().enumerate() {
+            if let Some(x) = mutated.get_mut(start + i) {
+                *x ^= b;
+            }
+        }
+        if let Ok(s) = wire::decode::<Sealed>(&mutated) {
+            if let Ok(op) = s.open_operation(record, &PROJECT) {
+                assert_eq!(
+                    op.to_bytes(),
+                    *plain,
+                    "a mutated operation opens only as itself"
+                );
+            }
+        }
+    }
+    if let Ok(op) = Operation::from_bytes(data) {
+        let again = Operation::from_bytes(&op.to_bytes()).expect("an operation encoded decodes");
+        assert_eq!(again, op);
+        let copy = crate::replica::Replica::in_memory().expect("a copy");
+        let digest = Operation::digest_of(data);
+        if copy.apply(&op, &digest, Some(1)).is_ok() {
+            let before = copy.state().expect("its state");
+            assert!(!copy.apply(&op, &digest, Some(1)).expect("again"));
+            assert_eq!(copy.state().expect("its state"), before);
+            let _ = copy.objects(None);
+            let _ = copy.conflicts(&op.body.object());
+            let _ = copy.versions(&op.body.object());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     /// A few inputs of each kind, so that the targets' bodies build and hold in every test run.
@@ -280,7 +373,13 @@ mod tests {
             }
             super::commit(&data);
             super::roster(&data);
+            super::operation(&data);
         }
+        // The sealed operation of the fixture, mutated here and there, and an operation that decodes.
+        for i in 0..8u8 {
+            super::operation(&[i.wrapping_mul(37), 1, 0, 4]);
+        }
+        super::operation(&super::sealed_fixture().2);
         // The rules' refusals, on purpose: a member who makes himself an administrator, an admin who drops all.
         super::commit(&[1, 3, 0]);
         super::commit(&[0, 3, 6]);

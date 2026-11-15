@@ -50,7 +50,8 @@ pub struct Device {
     pub revoked_at: Option<i64>,
 }
 
-/// What a stream entry is, for the server: an MLS commit (ordered by epoch, the first one wins) or anything else.
+/// What a stream entry is, for the server: an MLS commit (ordered by epoch, the first one wins: the team's group in the
+/// team's stream, a project's own group in its stream) or anything else.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
@@ -86,6 +87,15 @@ pub struct Entry {
     pub device: Vec<u8>,
     pub at: i64,
     #[serde(with = "serde_bytes")]
+    pub payload: Vec<u8>,
+}
+
+/// A project's snapshot (TS-5): the encrypted state of the project at `upto`, made by a device of the team.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Snapshot {
+    pub upto: u64,
+    pub device: Id,
+    pub at: i64,
     pub payload: Vec<u8>,
 }
 
@@ -164,6 +174,9 @@ pub enum StoreError {
     },
     #[error("the team's quota is reached")]
     Quota,
+    /// A snapshot older than the one kept, or beyond the stream.
+    #[error("this snapshot is refused: {0}")]
+    Snapshot(&'static str),
     #[error("too many {0}")]
     TooMany(&'static str),
     #[error("it exists already")]
@@ -236,6 +249,20 @@ pub trait Store: Send + Sync {
         since: u64,
         page: Page,
     ) -> Result<(Vec<Entry>, bool)>;
+
+    /// Keeps a project's snapshot in place of the one before, and forgets the stream's messages up to its number
+    /// (the commits stay: a device follows the project's group by them). The bytes forgotten go back to the quota.
+    /// Gives how many entries were forgotten.
+    async fn put_snapshot(
+        &self,
+        team: Id,
+        project: Id,
+        snapshot: Snapshot,
+        quotas: Quotas,
+    ) -> Result<u64>;
+    async fn snapshot(&self, team: Id, project: Id) -> Result<Option<Snapshot>>;
+    /// The number the last snapshot of a project holds up to, if any.
+    async fn snapshot_upto(&self, team: Id, project: Id) -> Result<Option<u64>>;
 
     /// Reserves a file's place before its bytes are written.
     async fn reserve_file(

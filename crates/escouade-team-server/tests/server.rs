@@ -27,7 +27,97 @@ both!(
     the_rates_are_limited,
     the_sizes_are_bounded,
     the_teams_do_not_see_each_other,
+    a_snapshot_takes_the_place_of_the_start_of_a_projects_stream,
 );
+
+/// TS-5: a project's snapshot forgets the messages up to its number (the commits stay), gives their bytes back,
+/// and is never replaced by an older one.
+async fn a_snapshot_takes_the_place_of_the_start_of_a_projects_stream(b: Backend) {
+    let s = TestServer::start(&b).await;
+    let alice = s.new_team().await;
+    let bob = s.add_device(&alice).await;
+    let p = random::<16>();
+    let path = format!("/v1/projects/{}/snapshot", hex::encode(p));
+    let none: Answer<SnapshotInfo> = bob.client.get(&path).await;
+    assert_eq!(none.refused().0, StatusCode::NOT_FOUND);
+    for i in 1..=4u8 {
+        alice.append_project(&p, &[i; 1000]).await.ok();
+    }
+    let r: Answer<Appended> = alice
+        .client
+        .post(
+            &format!("/v1/projects/{}/stream", hex::encode(p)),
+            &AppendRequest {
+                kind: Kind::Commit,
+                epoch: Some(0),
+                payload: vec![9; 10],
+            },
+        )
+        .await;
+    assert_eq!(r.ok().seq, 5);
+    alice.append_project(&p, &[6; 1000]).await.ok();
+    let used = |d: &Device| {
+        let c = d.client.clone();
+        async move {
+            let u: Usage = c.get("/v1/files/usage").await.ok();
+            u.used
+        }
+    };
+    let before = used(&alice).await;
+    // Beyond the stream: refused.
+    let far: Answer<SnapshotKept> = bob
+        .client
+        .put(
+            &path,
+            &SnapshotPut {
+                upto: 7,
+                payload: vec![1; 10],
+            },
+        )
+        .await;
+    assert_eq!(far.refused().1.error, "snapshot_refused");
+    let kept: SnapshotKept = bob
+        .client
+        .put(
+            &path,
+            &SnapshotPut {
+                upto: 5,
+                payload: vec![7; 100],
+            },
+        )
+        .await
+        .ok();
+    assert_eq!(kept.pruned, 4);
+    assert_eq!(used(&alice).await, before - 4000 + 100);
+    // The commit stays, then what came after; the reading from before says where the snapshot is.
+    let read = alice.read_project(&p, 0).await;
+    assert_eq!(
+        read.entries.iter().map(|e| e.seq).collect::<Vec<_>>(),
+        [5, 6]
+    );
+    assert_eq!(read.snapshot, Some(5));
+    assert_eq!(alice.read_project(&p, 5).await.snapshot, None);
+    let got: SnapshotInfo = alice.client.get(&path).await.ok();
+    assert_eq!((got.upto, got.payload), (5, vec![7; 100]));
+    assert_eq!(got.device, bob.id.to_vec());
+    // Not after the one kept: refused.
+    let old: Answer<SnapshotKept> = alice
+        .client
+        .put(
+            &path,
+            &SnapshotPut {
+                upto: 5,
+                payload: vec![1; 10],
+            },
+        )
+        .await;
+    assert_eq!(old.refused().1.error, "snapshot_refused");
+    // Another team sees nothing of it.
+    let eve = s.new_team().await;
+    let theirs: Answer<SnapshotInfo> = eve.client.get(&path).await;
+    assert_eq!(theirs.refused().0, StatusCode::NOT_FOUND);
+    s.finish().await;
+}
 
 async fn the_init_token_enrols_once(b: Backend) {
     let s = TestServer::start(&b).await;
@@ -276,19 +366,33 @@ async fn the_streams_are_numbered_and_read_again_from_n(b: Backend) {
         .is_empty());
     // The team's stream did not move.
     assert_eq!(alice.read_team(5).await.entries.len(), 0);
-    // No commit in a project's stream, no epoch on a message, no commit without one.
-    let r: Answer<Appended> = alice
-        .client
-        .post(
-            &format!("/v1/projects/{}/stream", hex::encode(p1)),
-            &AppendRequest {
-                kind: Kind::Commit,
-                epoch: Some(0),
-                payload: vec![1],
-            },
-        )
-        .await;
-    assert_eq!(r.refused().1.error, "no_commit_here");
+    // A project's own group commits in its stream (TS-5): the first commit of an epoch wins there too.
+    let project_commit = |epoch: u64, payload: Vec<u8>| AppendRequest {
+        kind: Kind::Commit,
+        epoch: Some(epoch),
+        payload,
+    };
+    let path = format!("/v1/projects/{}/stream", hex::encode(p1));
+    let r: Answer<Appended> = alice.client.post(&path, &project_commit(0, vec![1])).await;
+    assert_eq!(r.ok().seq, 3);
+    let r: Answer<Appended> = bob.client.post(&path, &project_commit(0, vec![2])).await;
+    let (status, problem) = r.refused();
+    assert_eq!(
+        (status.as_u16(), problem.error.as_str()),
+        (409, "epoch_taken")
+    );
+    let r: Answer<Appended> = bob.client.post(&path, &project_commit(1, vec![2])).await;
+    assert_eq!(r.ok().seq, 4);
+    let read = alice.read_project(&p1, 2).await;
+    assert_eq!(
+        read.entries
+            .iter()
+            .map(|e| (e.kind, e.epoch))
+            .collect::<Vec<_>>(),
+        vec![(Kind::Commit, Some(0)), (Kind::Commit, Some(1))]
+    );
+    assert!(read.snapshot.is_none());
+    // No epoch on a message, no commit without one.
     assert_eq!(
         alice
             .append_team(Kind::Message, Some(3), b"x")

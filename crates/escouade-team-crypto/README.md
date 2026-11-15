@@ -37,12 +37,14 @@ Ticket ESC-453, ligne TS-0a de `docs/TEAM-SERVER.md` §16. Le choix C9-B (MLS d�
 | Le commit externe (§12.4.3.2) | **La clé de secours** (`recovery.rs`) : 24 mots BIP-39, qui donnent par HKDF une clé Ed25519 et une clé HPKE. À chaque époque, l'enregistrement et le GroupInfo lui sont scellés (HPKE). Elle revient par un commit externe |
 | — | **Le séquestre** (`recovery.rs`) : l'enregistrement de chaque époque est scellé (HPKE) à la clé de l'organisation. Il est inscrit au registre, donc montré à chaque membre. Il lit tout, il n'écrit rien |
 | Un commit rejoué d'une autre époque est refusé | **La fourche et le retour en arrière** (`device.rs`) : chaque objet cite `head = SHA-256(groupe ‖ époque ‖ epoch_authenticator)`, et un appareil qui connaît une autre tête pour cette époque dit « fourche ». Le point de contrôle (la plus haute époque vue et sa tête) refuse un état plus ancien, que ce soit celui du serveur ou une sauvegarde remise |
+| Un groupe par ensemble de feuilles, les KeyPackages de dernier recours | **Le groupe d'un projet gardé à quelques membres** (`project.rs`, TS-5) : un second groupe MLS par projet, ses feuilles les appareils de l'équipe dont le membre a accès, son registre (`ProjectRoster`, extension 0xff01) changé par un administrateur de l'équipe seul, ses règles (`check_project_commit`) vérifiées contre la vue de l'équipe, ses liens d'historique |
+| — | **Les opérations** (`ops.rs`, `hlc.rs`, TS-5) : une opération signée par la feuille, chaînée par appareil (rang et empreinte de la précédente), qui cite la tête du journal des membres et porte son horodatage hybride, puis chiffrée sous la clé du projet de l'époque (de l'équipe ou du groupe du projet). Le serveur n'en voit que l'époque. Les instantanés sont scellés et signés de même, sous un autre label |
 
 `relay.rs` joue le serveur aveugle : il ordonne les commits (le premier pour une époque gagne), garde les liens, les enveloppes, les demandes et les Welcome, et ne lit rien. Ses champs sont publics pour que les tests jouent un serveur qui ment.
 
 ## Les tests et les vecteurs
 
-`cargo nextest run -p escouade-team-crypto` lance 24 tests, en quelques secondes. Les 6 derniers sont venus avec TS-2 : le commit en deux temps (préparé, puis fusionné une fois pris par le serveur, ou abandonné), l'invitation rendue par un commit perdu, l'état sauvegardé, les balises de tête, les liens d'historique écrits par un autre membre, et l'absence de fausse alerte de fourche (ni un membre retiré, ni le serveur).
+`cargo nextest run -p escouade-team-crypto` lance 30 tests (24 de TS-0a et TS-2, 3 de l'horloge hybride et 3 des opérations et des projets, TS-5), en quelques secondes. Les 6 derniers sont venus avec TS-2 : le commit en deux temps (préparé, puis fusionné une fois pris par le serveur, ou abandonné), l'invitation rendue par un commit perdu, l'état sauvegardé, les balises de tête, les liens d'historique écrits par un autre membre, et l'absence de fausse alerte de fourche (ni un membre retiré, ni le serveur).
 
 - **Groupe** : la suite, le registre, la genèse, les six mots ; ajout et retrait d'un membre ; rotation sans rechiffrer l'ancien contenu (C8-A) ; clés différentes par projet et par époque.
 - **Un membre retiré ne lit plus rien de nouveau**, ni par l'API, ni avec aucune des clés qu'il a eues : il n'ouvre ni les objets, ni les liens d'historique, ni les commits suivants.
@@ -68,6 +70,7 @@ Ticket ESC-453, ligne TS-0a de `docs/TEAM-SERVER.md` §16. Le choix C9-B (MLS d�
 8. **Le point de contrôle** doit être gardé hors de l'état restaurable (au trousseau), sinon une sauvegarde ancienne le ramène avec elle.
 9. **La persistance d'openmls** (`MemoryStorage` ici, SQLite chiffré dans `escouade-team`) : son format, son chiffrement au repos, l'effacement des clés passées (avis GHSA-qr9h-x63w-vqfm).
 10. **Les métadonnées** : le serveur voit la taille et l'heure des commits, des liens et des enveloppes, et le nombre d'époques.
+11. **Les opérations et les projets (TS-5)** : le label et les données associées de `Sealed` (`ops.rs`), la signature à l'intérieur du chiffré (un membre qui tient la clé peut rechiffrer l'opération signée d'un autre, sans la changer : la chaîne la dédouble) ; l'horodatage, qu'un membre malveillant peut mettre en avance pour gagner (la dérive bornée à une heure ne vaut que pour les horloges des autres) ; les règles des groupes de projet évaluées contre la vue de l'équipe du vérificateur (un vérificateur en avance sur le committeur peut refuser un ajout que l'autre a fait) ; le KeyPackage de dernier recours, réutilisé d'un groupe de projet à l'autre.
 
 ## Ce que TS-2 a fait, ce qui reste (TS-3, TS-5, TS-18)
 
@@ -78,7 +81,8 @@ Fait par TS-2 (ESC-458), ici et dans `escouade-team` :
 - les balises de tête (`beacon.rs`) et les six mots de la tête (`head_words`) ;
 - le fuzzing de `policy::check_commit` et du décodage (les cibles de `crates/escouade-team/fuzz`).
 
+Fait par TS-5 (ESC-466) : `hlc.rs`, `ops.rs` et `project.rs` (ci-dessus), `TeamDevice::seal_for` et `record_for`, et 3 tests (l'opération liée à son projet, à son époque et à son auteur ; le groupe d'un projet, son retrait au départ d'un membre et son historique ; un commit de projet hors des règles refusé).
+
 Ce qui reste :
-- les projets limités à quelques membres : un groupe MLS par projet, avec le même code (TS-5) ;
 - l'ajout d'un appareil par QR code et par code court (PAKE) : même mécanisme que `Purpose::OwnDevice` (TS-3) ;
 - faire tourner le fuzzing longtemps (TS-18), et l'audit externe (TS-20).

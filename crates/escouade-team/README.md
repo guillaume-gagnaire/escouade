@@ -1,6 +1,6 @@
 # escouade-team : le client du serveur d'équipe (TS-2)
 
-Tickets ESC-458 (TS-2) et ESC-461 (TS-3) de `docs/TEAM-SERVER.md` §16. L'équipe est un groupe MLS (C9-B). Cette crate est le client : elle tient un appareil dans une équipe, avec ses clés au trousseau, son état sur le disque et son serveur, et fait entrer dans l'équipe (création, invitation, autre appareil, récupération). Le cœur la branche (`src-tauri/src/teams.rs`) : le `SecretStore` de l'app pour trousseau, son client HTTP (proxy et certificats des réglages), le dossier `teams` des données. Elle ne synchronise pas encore les opérations des projets (TS-5).
+Tickets ESC-458 (TS-2), ESC-461 (TS-3) et ESC-466 (TS-5) de `docs/TEAM-SERVER.md` §16. L'équipe est un groupe MLS (C9-B). Cette crate est le client : elle tient un appareil dans une équipe, avec ses clés au trousseau, son état sur le disque et son serveur, et fait entrer dans l'équipe (création, invitation, autre appareil, récupération). Le cœur la branche (`src-tauri/src/teams.rs`) : le `SecretStore` de l'app pour trousseau, son client HTTP (proxy et certificats des réglages), le dossier `teams` des données. Elle synchronise les projets de l'équipe (TS-5) : le journal d'opérations chiffrées et signées, la copie locale, la file d'envoi hors ligne, les instantanés.
 
 ## La maquette devient la couche cryptographique
 
@@ -30,6 +30,8 @@ Ce que TS-2 y a changé :
 | `pairing.rs` | Le code court de 8 caractères (TS-3) : SPAKE2 sur le relais du serveur, un seul essai |
 | `escrow.rs` | La clé de séquestre de l'organisation en texte : sa moitié publique, son secret |
 | `wire.rs` | Les corps CBOR du serveur, et `TeamMessage`, ce que le client écrit dans le flux d'équipe à côté des commits (liens, enveloppes, balises, demandes, Welcome) |
+| `replica.rs` | La copie locale d'un projet (TS-5) : SQLite, un fichier par projet, le journal rejoué, la fusion champ par champ, le conflit gardé, les versions des pages, la file d'envoi |
+| `team/sync.rs` | La synchronisation des projets (TS-5) : écrire, envoyer, lire (chaînes, signatures, tête des membres, serveur menteur), les instantanés, les groupes des projets gardés à quelques membres |
 | `fuzzing.rs` | Le corps des cibles de fuzzing (`fuzz/`) |
 
 ### Les clés d'appareil, au trousseau, jamais exportées
@@ -119,6 +121,56 @@ Les mots sont vérifiés avant d'utiliser le jeton : une faute ne le gâche pas.
 
 `wire::decode` lit le CBOR avec un tampon de la taille de ce qu'il lit : celui de ciborium (4 Kio) refusait une chaîne plus longue, comme l'hexadécimal d'un GroupInfo (une enveloppe de récupération) ou d'un Welcome d'une équipe qui grandit.
 
+## La synchronisation des projets (TS-5)
+
+Choix tranchés (§15.2) : C2-A (journal d'opérations, champ par champ, le dernier qui écrit gagne sous une horloge hybride), C9-B (MLS), C10-A (bout en bout seul mode). La page de spec est « La synchronisation des projets ».
+
+### Le journal d'opérations
+
+- **Une opération** (`escouade-team-crypto/src/ops.rs`) : son auteur (membre, appareil, clé de feuille), son rang `dseq` et l'empreinte de l'opération d'avant du même appareil, la tête du journal des membres que l'auteur connaissait (époque et tête de l'équipe), son horodatage (`hlc.rs`), et ce qu'elle fait : `Create`, `Set` (avec la base vue), `Move`, `Delete`, `Version` (une page en version entière, après ses bases).
+- **Signée** par la feuille, puis **scellée** (`Sealed`) sous la clé du projet de l'époque. Le serveur en voit l'époque et la portée (de l'équipe ou du groupe du projet), sa taille, son heure, l'appareil qui l'envoie : rien d'autre (§3.8). Le test `two_devices_share_a_projects_tickets` cherche le titre, le nom du champ, l'id de l'objet et la clé de l'auteur dans ce que garde le serveur, et ne les trouve pas.
+- **Un projet de toute l'équipe** prend la clé de l'équipe ; sa première opération le dit (`Create` de genre `project`), pour qu'un appareil qui le suit le sache avant d'y écrire. Une opération sous l'autre portée que celle du projet est refusée : un membre ne peut pas rendre lisible à toute l'équipe un projet gardé à quelques membres.
+
+### Un groupe MLS par projet gardé à quelques membres
+
+- `Team::create_project(Some(membres))` (un administrateur) : le groupe du projet (`escouade-team-crypto/src/project.rs`), dont les feuilles sont les appareils de ces membres. Ses commits vont dans le flux du projet (le premier d'une époque gagne au serveur, comme pour l'équipe), son Welcome et ses liens d'historique dans le flux de l'équipe.
+- **Les KeyPackages** : chaque appareil publie le sien (de dernier recours, réutilisable d'un projet à l'autre) dans le flux de l'équipe, au premier `serve` puis tous les 30 jours. Il n'est pris que pour un appareil qui est une feuille de l'équipe, avec la même identité et la même clé.
+- **Au pas de l'équipe** : `Team::serve` (et l'envoi d'une opération) tient chaque groupe de projet au pas : les nouveaux appareils des membres ajoutés, les appareils partis de l'équipe retirés. Seul un administrateur change qui a accès (`set_project_members`).
+- **Les projets d'une invitation** (la ligne de TS-3) : `Team::invite_with_projects` ; le membre qui entre avec elle est ajouté aux groupes de ces projets par l'administrateur en ligne, une fois son KeyPackage lu.
+- **Les règles** (`check_project_commit`) : le committeur est une feuille du groupe et de l'équipe ; il garde son identité et sa clé ; un appareil ajouté est une feuille de l'équipe dont le membre a accès ; un appareil est retiré s'il a quitté l'équipe, si son membre n'a plus accès, par son propre membre ou par un administrateur. Le commit dit dans ses données authentifiées l'époque de l'équipe qu'avait son committeur : un appareil en retard lit d'abord l'équipe.
+
+### La fusion, champ par champ
+
+`replica.rs` garde chaque écriture d'un champ avec son horodatage, dont les octets se trient comme les horodatages : la valeur d'un champ est l'écriture la plus récente, calculée en SQL, quel que soit l'ordre d'arrivée. Deux écritures depuis la même base sont concurrentes : la perdante est gardée (`conflicts`), pour que TS-6 la montre. Une suppression est définitive. Les versions d'une page : les têtes (aucune autre ne les cite en base) sont la version courante (la plus récente) et les conflits, que TS-9 fusionnera à trois voies.
+
+### La copie locale et la file d'envoi
+
+- `<teams>/<équipe>/projects/<projet>.sqlite3`, en clair comme le Kanban local de `.escouade/` (les clés restent dans l'état chiffré). Le journal y est gardé ; `Replica::rebuild` rejoue l'état depuis le dernier instantané et le journal.
+- `Team::write` (et `create_ticket`, `set_field`, `move_ticket`, `delete_ticket`, `write_version`) : l'opération s'applique à la copie tout de suite et attend dans la file. `flush_project` l'envoie dans l'ordre, chiffrée à l'époque du moment (un membre parti entre-temps ne la lit pas). Hors ligne, elle attend ; `Team::sync_state` dit « hors ligne » et le nombre de changements en attente, et le cœur l'expose (`team_sync_status`).
+- **Reprise après coupure** : la lecture reprend au dernier numéro vu (`ProjectMeta::cursor`), dans la copie sur le disque.
+
+### Le serveur qui ment
+
+À la lecture (`Team::read_project`), chaque opération est ouverte (une feuille de son époque, sa signature), sa tête des membres vérifiée (la fourche), puis sa place dans la chaîne de son appareil :
+- un rang déjà passé : `Replayed` ; un rang sauté (une opération retirée, ou deux d'un appareil inversées) : `Reordered` ; deux opérations pour un même rang, ou une qui ne cite pas la précédente : `Equivocation` ;
+- une opération de cet appareil que le serveur a prise à un numéro et qui n'y est pas : `Withheld` ;
+- une opération qui ne s'ouvre pas ou n'est signée par aucune feuille : `Forged` ;
+- la dernière entrée lue disparue ou changée : `ServerRollback`, `Rewritten`, comme pour le flux de l'équipe.
+
+Ces erreurs sont des alarmes (`Alarm::Journal`) : le cœur arrête l'équipe sur l'appareil, comme pour une fourche. Une opération renvoyée après une réponse perdue revient en double au même rang, avec la même empreinte : elle compte une fois.
+
+### Les instantanés
+
+Au-delà de `Options::snapshot_every` (10 000) entrées depuis le dernier, l'appareil qui lit écrit un instantané (`Snapshot`) : l'état de la copie et la chaîne de chaque appareil au dernier numéro lu, scellé et signé. Le serveur oublie les opérations d'avant (pas les commits). Un appareil qui arrive, ou qui était absent au-delà, part de l'instantané : sa signature, sa tête et son numéro vérifiés, et chaque chaîne au moins aussi loin que ce qu'il a lu (sinon `ServerRollback`) ; ses propres opérations prises par le serveur doivent y être.
+
+### La rotation (C8-A)
+
+Après le départ d'un membre, les nouvelles opérations sont à l'époque suivante : celle de l'équipe, ou celle du groupe du projet, que le premier appareil du projet en ligne fait tourner. L'ancien membre ne lit plus rien de nouveau ; l'historique n'est pas rechiffré.
+
+### Le direct dans le cœur
+
+`src-tauri/src/teams.rs` tient la connexion en direct de chaque équipe (`LiveFeed`) : une trame (une entrée de l'équipe ou d'un projet, une connexion revenue, des trames perdues) déclenche la lecture de l'équipe puis de ses projets suivis, les trames d'une rafale lues une fois. La relecture de toutes les équipes passe de 3 s à 15 s et ne sert plus que si le direct ne passe pas. Le test du cœur `a_projects_operation_comes_by_the_live_feed` le vérifie avec la relecture à 60 s.
+
 ## Les tests
 
 ```sh
@@ -139,6 +191,9 @@ cd src-tauri && cargo nextest run -p escouade-team -p escouade-team-crypto -p es
 - **L'effacement** des secrets des époques passées sur le disque, et rien de lisible en clair dans les fichiers.
 - **L'entrée** (`tests/onboarding.rs`, TS-3) : création (24 mots, trois retapés, six mots), une invitation qui sert une fois (le second usage dit à l'invité et à l'administrateur), son expiration sur le serveur et dans l'équipe, les rôles du serveur au pas du registre, l'appareil d'un membre par le lien du QR code (son jeton demandé dans le flux), le code court (un mauvais code qui coûte son seul essai, une devinette qui prend l'essai du bon), le séquestre montré à chaque membre et qui lit le contenu, la récupération par les 24 mots à travers le serveur, la fourche comme alerte.
 
+- **La synchronisation** (`tests/sync.rs`, TS-5), chacun sur SQLite puis sur PostgreSQL (`ESCOUADE_TEST_POSTGRES_URL`, comme TS-1 ; la macro `both!` du banc) : deux appareils qui partagent les tickets (créer, changer un champ, déplacer, supprimer ; ce que voit le serveur), trois appareils qui écrivent en même temps sur le même champ et sur des champs différents (les copies pareilles, le conflit gardé), l'écriture hors ligne puis le retour (l'état « hors ligne », l'ordre gardé, une réponse perdue comptée une fois), le serveur qui ment (rejouée, réordonnée, retirée, tue, forgée, réécrite, retour en arrière), une signature fausse, un membre parti qui ne lit plus (projet de toute l'équipe et projet gardé à deux), un instantané puis un nouvel appareil (et un appareil absent au-delà, et un instantané forgé refusé), la reprise après coupure (rouvert depuis le disque, relu depuis le dernier numéro, rejoué depuis le journal), une invitation qui donne un projet. Le transport `Liar` ment aussi sur les flux des projets.
+- **La convergence** (`replica.rs`, proptest) : quel que soit l'ordre d'arrivée des opérations de trois appareils (et rejouées), toutes les copies finissent pareilles, rejouées depuis leur journal aussi ; un instantané puis le reste égale le journal entier.
+
 Les tests unitaires couvrent le trousseau, le chiffrement du stockage (une autre clé n'ouvre rien, une valeur déplacée non plus), les transactions, et un passage des deux cibles de fuzzing sur quelques entrées. La maquette garde ses 18 tests et ses vecteurs, et en gagne 6 (commit en deux temps, invitation rendue, état sauvegardé, balises, liens d'historique, fausses alertes).
 
 ## Le fuzzing
@@ -150,20 +205,25 @@ cargo install cargo-fuzz
 cd crates/escouade-team/fuzz
 cargo +nightly fuzz run commit   # la vérification des commits
 cargo +nightly fuzz run roster   # le décodage du registre, des identités, des messages du flux
+cargo +nightly fuzz run operation   # le décodage d'une opération, scellée et ouverte (TS-5)
 ```
 
 - `commit` : les octets construisent un commit par MLS brut, sur l'appareil d'un administrateur ou d'un membre. Ce commit ajoute des inconnus ou les appareils d'un autre, retire des feuilles, réécrit le registre (y compris par des octets bruts). Un troisième appareil le traite. S'il le prend, l'équipe doit rester saine : la genèse gardée, un administrateur au moins, chaque appareil d'un membre du registre, et rien qu'un membre n'a pas le droit de faire. Les octets bruts passent aussi par le décodeur des commits.
 - `roster` : le registre (et son aller-retour), les identités, `TeamMessage`, les entrées et les trames du serveur, les objets scellés, les enregistrements d'époque.
+- `operation` (TS-5) : les octets comme opération scellée, opération, instantané, registre de projet, horodatage ; une opération scellée du banc, changée par les octets, s'ouvre telle qu'elle a été scellée ou pas du tout ; une opération qui se décode, appliquée deux fois à une copie, ne change rien la seconde.
 
 ## Ce qui reste
 
 - **TS-3** (fait, ESC-461), sauf :
-  - les projets d'une invitation (il n'y a pas encore de projets d'équipe : TS-5) ;
   - une invitation que seul l'appareil qui l'a faite honore : un autre administrateur en ligne ne la connaît pas (il faudrait la sceller pour les seuls administrateurs) ;
-  - le flux en direct dans le cœur : il relit les équipes toutes les 3 s ;
   - `escouade-server team pair` pour une machine en mode serveur.
 - **TS-4** : montrer l'équipe dans les espaces et ses réglages (membres, appareils, rôles, état du trousseau, hors ligne), retirer un appareil de soi qu'on oublie.
-- **TS-5** : la synchronisation des opérations des projets, sur `write_object` et `read_objects`. Il faudra un groupe MLS par projet limité, et les instantanés.
+- **TS-5** (fait, ESC-466, avec les projets d'une invitation et le direct dans le cœur de TS-3), sauf :
+  - les écrans (« Hors ligne · N changements en attente », les conflits, le Kanban) : TS-4 et TS-6 ; la prise d'un ticket : TS-6 ; la fusion à trois voies des pages : TS-9 ;
+  - les droits par projet sur le serveur : il sert un projet à tout appareil de l'équipe, la clé seule protège un projet gardé à quelques membres ;
+  - l'écriture d'un lien d'historique manquant d'un groupe de projet par un autre appareil que son committeur (pour l'équipe, c'est fait) ;
+  - la liste chiffrée des projets de l'équipe : TS-8 (ici, un appareil suit un projet dont on lui donne l'id, `Team::follow`) ;
+  - `write_object` et `read_objects` (l'objet scellé de TS-2) restent pour les fichiers ; les projets passent par les opérations.
 - **TS-18** : faire tourner les cibles de fuzzing longtemps, et l'e2e avec deux clients.
 - **L'audit externe (TS-20)** : les points 1 à 10 du README de la maquette. Pour cette crate, en plus :
   - le format du stockage (les clés en clair, dont l'id du groupe et les époques) ;
@@ -173,3 +233,4 @@ cargo +nightly fuzz run roster   # le décodage du registre, des identités, des
   - le jeton du serveur dérivé du secret de l'invitation, et la demande de jeton d'un membre dans le flux ;
   - le code court : 25 bits de mot de passe, un essai par créneau, SPAKE2 sur Ed25519 sans liaison au créneau ;
   - la graine de la clé de séquestre montrée une fois, en clair, à l'administrateur qui fait la paire.
+  - TS-5 : la copie locale en clair sur le disque ; la confiance faite à un membre pour un instantané (il remplace le début du journal) et pour son horodatage (une horloge en avance gagne) ; les règles d'un groupe de projet évaluées contre la vue de l'équipe du vérificateur ; la tête des membres d'une opération d'une époque que l'appareil ne tient pas, acceptée sans contrôle (`HeadCheck::Unknown`).

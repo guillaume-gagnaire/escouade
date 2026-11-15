@@ -4805,6 +4805,16 @@ pub async fn team_sync(teams: TeamsState<'_>, team: String) -> Res<crate::teams:
     teams.sync(&team).await
 }
 
+/// Whether the team's server answers, and how many changes of this device wait to go (TS-5, §2.5): « Hors ligne · 3
+/// changements en attente ». Shown by TS-4 and TS-6.
+#[tauri::command]
+pub async fn team_sync_status(
+    teams: TeamsState<'_>,
+    team: String,
+) -> Res<crate::teams::SyncStatusView> {
+    teams.status(&team).await
+}
+
 /// Forgets the team on this device.
 #[tauri::command]
 pub async fn team_forget(teams: TeamsState<'_>, team: String) -> Res<()> {

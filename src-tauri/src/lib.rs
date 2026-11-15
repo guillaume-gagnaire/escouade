@@ -733,6 +733,7 @@ pub fn run() {
                 commands::team_pair_join,
                 commands::team_recover,
                 commands::team_sync,
+                commands::team_sync_status,
                 commands::team_forget,
                 commands::store_refresh,
                 commands::store_suggestions,

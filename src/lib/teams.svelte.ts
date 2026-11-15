@@ -5,7 +5,7 @@
 import { invoke } from '@tauri-apps/api/core';
 
 export interface AlarmView {
-  kind: 'fork' | 'rollback' | 'rewritten';
+  kind: 'fork' | 'rollback' | 'rewritten' | 'journal';
   epoch: number | null;
   at: number;
 }

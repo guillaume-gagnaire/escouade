@@ -164,6 +164,12 @@ impl Server {
                     .post(api::append_project)
                     .layer(Extension(entry_max)),
             )
+            .route(
+                "/v1/projects/{project}/snapshot",
+                get(api::get_snapshot)
+                    .put(api::put_snapshot)
+                    .layer(Extension(body::Max(limits.max_file + (4 << 10)))),
+            )
             .route("/v1/files/usage", get(api::usage))
             .route(
                 "/v1/files/{file}",

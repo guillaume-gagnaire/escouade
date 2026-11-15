@@ -51,16 +51,28 @@ CREATE TABLE IF NOT EXISTS projects (
     team_id BLOB NOT NULL,
     id BLOB NOT NULL,
     seq INTEGER NOT NULL DEFAULT 0,
+    commits INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (team_id, id)
 );
 CREATE TABLE IF NOT EXISTS project_entries (
     team_id BLOB NOT NULL,
     project_id BLOB NOT NULL,
     seq INTEGER NOT NULL,
+    kind INTEGER NOT NULL DEFAULT 0,
+    epoch INTEGER,
     device_id BLOB NOT NULL,
     at INTEGER NOT NULL,
     payload BLOB NOT NULL,
     PRIMARY KEY (team_id, project_id, seq)
+);
+CREATE TABLE IF NOT EXISTS project_snapshots (
+    team_id BLOB NOT NULL,
+    project_id BLOB NOT NULL,
+    upto INTEGER NOT NULL,
+    device_id BLOB NOT NULL,
+    at INTEGER NOT NULL,
+    payload BLOB NOT NULL,
+    PRIMARY KEY (team_id, project_id)
 );
 CREATE TABLE IF NOT EXISTS files (
     team_id BLOB NOT NULL,
@@ -190,7 +202,7 @@ fn read_entries(
         }
         Stream::Project(project) => {
             let mut stmt = conn.prepare_cached(&format!(
-                "SELECT seq, device_id, at, payload FROM project_entries
+                "SELECT seq, kind, epoch, device_id, at, payload FROM project_entries
                  WHERE team_id = ?1 AND project_id = ?2 AND seq {op} ?3 ORDER BY seq LIMIT ?4"
             ))?;
             let rows = stmt.query_map(
@@ -198,11 +210,11 @@ fn read_entries(
                 |r| {
                     Ok(Entry {
                         seq: r.get::<_, i64>(0)? as u64,
-                        kind: Kind::Message,
-                        epoch: None,
-                        device: r.get(1)?,
-                        at: r.get(2)?,
-                        payload: r.get(3)?,
+                        kind: Kind::from_code(r.get(1)?),
+                        epoch: r.get::<_, Option<i64>>(2)?.map(|e| e as u64),
+                        device: r.get(3)?,
+                        at: r.get(4)?,
+                        payload: r.get(5)?,
                     })
                 },
             )?;
@@ -228,6 +240,22 @@ impl Store for Sqlite {
                     c.execute_batch(&format!("ALTER TABLE tokens ADD COLUMN {column} INTEGER"))?;
                 }
             }
+            // A base made before the projects' own groups (TS-5): their commits' columns added.
+            for (table, column, kind) in [
+                ("projects", "commits", "INTEGER NOT NULL DEFAULT 0"),
+                ("project_entries", "kind", "INTEGER NOT NULL DEFAULT 0"),
+                ("project_entries", "epoch", "INTEGER"),
+            ] {
+                let has: bool = c
+                    .prepare(&format!("SELECT 1 FROM pragma_table_info('{table}') WHERE name = ?1"))?
+                    .exists([column])?;
+                if !has {
+                    c.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} {kind}"))?;
+                }
+            }
+            c.execute_batch(
+                "CREATE UNIQUE INDEX IF NOT EXISTS project_commits ON project_entries(team_id, project_id, epoch) WHERE kind = 1",
+            )?;
             Ok(())
         })
         .await
@@ -502,14 +530,37 @@ impl Store for Sqlite {
                     }
                 }
                 Stream::Project(project) => {
-                    let current: Option<i64> = tx
+                    let current: Option<(i64, i64)> = tx
                         .query_row(
-                            "SELECT seq FROM projects WHERE team_id = ?1 AND id = ?2",
+                            "SELECT seq, commits FROM projects WHERE team_id = ?1 AND id = ?2",
                             params![team.as_slice(), project.as_slice()],
-                            |r| r.get(0),
+                            |r| Ok((r.get(0)?, r.get(1)?)),
                         )
                         .optional()?;
-                    let current = match current {
+                    let is_commit = entry.kind == Kind::Commit;
+                    let project_commits = current.map_or(0, |c| c.1);
+                    if is_commit {
+                        let asked = entry.epoch.unwrap_or(u64::MAX);
+                        if asked != project_commits as u64 {
+                            let from: Option<i64> = tx
+                                .query_row(
+                                    "SELECT seq FROM project_entries WHERE team_id = ?1 AND project_id = ?2 AND kind = 1 AND epoch = ?3",
+                                    params![team.as_slice(), project.as_slice(), asked.min(i64::MAX as u64) as i64],
+                                    |r| r.get(0),
+                                )
+                                .optional()?;
+                            let preceding = match from {
+                                Some(from) => paginate(read_entries(&tx, &team, stream, from as u64, page, true)?, page).0,
+                                None => Vec::new(),
+                            };
+                            return Err(StoreError::EpochTaken {
+                                asked,
+                                expected: project_commits as u64,
+                                preceding,
+                            });
+                        }
+                    }
+                    let current = match current.map(|c| c.0) {
                         Some(s) => s,
                         None => {
                             let n: i64 = tx.query_row(
@@ -528,20 +579,30 @@ impl Store for Sqlite {
                         }
                     };
                     let seq = current + 1;
+                    let epoch = entry.epoch.filter(|_| is_commit);
                     tx.execute(
-                        "INSERT INTO project_entries (team_id, project_id, seq, device_id, at, payload)
-                         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                        params![team.as_slice(), project.as_slice(), seq, entry.device.as_slice(), entry.at, entry.payload],
+                        "INSERT INTO project_entries (team_id, project_id, seq, kind, epoch, device_id, at, payload)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                        params![
+                            team.as_slice(),
+                            project.as_slice(),
+                            seq,
+                            entry.kind.code(),
+                            epoch.map(|e| e as i64),
+                            entry.device.as_slice(),
+                            entry.at,
+                            entry.payload
+                        ],
                     )?;
                     tx.execute(
-                        "UPDATE projects SET seq = ?3 WHERE team_id = ?1 AND id = ?2",
-                        params![team.as_slice(), project.as_slice(), seq],
+                        "UPDATE projects SET seq = ?3, commits = commits + ?4 WHERE team_id = ?1 AND id = ?2",
+                        params![team.as_slice(), project.as_slice(), seq, is_commit as i64],
                     )?;
                     tx.execute("UPDATE teams SET stored = stored + ?2 WHERE id = ?1", params![team.as_slice(), size])?;
                     Entry {
                         seq: seq as u64,
-                        kind: Kind::Message,
-                        epoch: None,
+                        kind: entry.kind,
+                        epoch,
                         device: entry.device.to_vec(),
                         at: entry.at,
                         payload: entry.payload,
@@ -566,6 +627,115 @@ impl Store for Sqlite {
                 read_entries(c, &team, stream, since, page, false)?,
                 page,
             ))
+        })
+        .await
+    }
+
+    async fn put_snapshot(
+        &self,
+        team: Id,
+        project: Id,
+        snapshot: Snapshot,
+        quotas: Quotas,
+    ) -> Result<u64> {
+        self.run(move |c| {
+            let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let stored: i64 = tx.query_row(
+                "SELECT stored FROM teams WHERE id = ?1",
+                [team.as_slice()],
+                |r| r.get(0),
+            )?;
+            let seq: Option<i64> = tx
+                .query_row(
+                    "SELECT seq FROM projects WHERE team_id = ?1 AND id = ?2",
+                    params![team.as_slice(), project.as_slice()],
+                    |r| r.get(0),
+                )
+                .optional()?;
+            if seq.is_none_or(|s| (s as u64) < snapshot.upto) || snapshot.upto == 0 {
+                return Err(StoreError::Snapshot("beyond the project's stream"));
+            }
+            let old: Option<(i64, i64)> = tx
+                .query_row(
+                    "SELECT upto, length(payload) FROM project_snapshots WHERE team_id = ?1 AND project_id = ?2",
+                    params![team.as_slice(), project.as_slice()],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .optional()?;
+            if old.is_some_and(|(upto, _)| upto as u64 >= snapshot.upto) {
+                return Err(StoreError::Snapshot("not after the one kept"));
+            }
+            let upto = snapshot.upto as i64;
+            let (pruned, freed): (i64, i64) = tx.query_row(
+                "SELECT COUNT(*), COALESCE(SUM(length(payload)), 0) FROM project_entries
+                 WHERE team_id = ?1 AND project_id = ?2 AND kind = 0 AND seq <= ?3",
+                params![team.as_slice(), project.as_slice(), upto],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )?;
+            let size = snapshot.payload.len() as i64;
+            let after = stored - freed - old.map_or(0, |o| o.1) + size;
+            if after as u64 > quotas.team_bytes {
+                return Err(StoreError::Quota);
+            }
+            tx.execute(
+                "DELETE FROM project_entries WHERE team_id = ?1 AND project_id = ?2 AND kind = 0 AND seq <= ?3",
+                params![team.as_slice(), project.as_slice(), upto],
+            )?;
+            tx.execute(
+                "INSERT INTO project_snapshots (team_id, project_id, upto, device_id, at, payload)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                 ON CONFLICT (team_id, project_id) DO UPDATE SET
+                   upto = excluded.upto, device_id = excluded.device_id, at = excluded.at, payload = excluded.payload",
+                params![
+                    team.as_slice(),
+                    project.as_slice(),
+                    upto,
+                    snapshot.device.as_slice(),
+                    snapshot.at,
+                    snapshot.payload
+                ],
+            )?;
+            tx.execute(
+                "UPDATE teams SET stored = ?2 WHERE id = ?1",
+                params![team.as_slice(), after],
+            )?;
+            tx.commit()?;
+            Ok(pruned as u64)
+        })
+        .await
+    }
+
+    async fn snapshot(&self, team: Id, project: Id) -> Result<Option<Snapshot>> {
+        self.run(move |c| {
+            let row: Option<(i64, Vec<u8>, i64, Vec<u8>)> = c
+                .query_row(
+                    "SELECT upto, device_id, at, payload FROM project_snapshots WHERE team_id = ?1 AND project_id = ?2",
+                    params![team.as_slice(), project.as_slice()],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+                )
+                .optional()?;
+            row.map(|(upto, device, at, payload)| {
+                Ok(Snapshot {
+                    upto: upto as u64,
+                    device: id_of(device)?,
+                    at,
+                    payload,
+                })
+            })
+            .transpose()
+        })
+        .await
+    }
+
+    async fn snapshot_upto(&self, team: Id, project: Id) -> Result<Option<u64>> {
+        self.run(move |c| {
+            Ok(c.query_row(
+                "SELECT upto FROM project_snapshots WHERE team_id = ?1 AND project_id = ?2",
+                params![team.as_slice(), project.as_slice()],
+                |r| r.get::<_, i64>(0),
+            )
+            .optional()?
+            .map(|u| u as u64))
         })
         .await
     }

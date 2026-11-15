@@ -73,6 +73,7 @@ export default defineZone('team', {
     title: 'The server shows two versions of the team: contact an administrator.',
     rollback: 'The server went back on what this device had already read.',
     rewritten: 'The server changed an entry this device had already read.',
+    journal: 'The server played again, reordered, dropped or forged an operation of a project of the team.',
     fork: 'Two members see two different histories of the team (epoch {epoch}).',
     blocked:
       'This device stopped reading the team and sends nothing to it any more: no invitation, no invitee let in, no new device, no new recovery key.',

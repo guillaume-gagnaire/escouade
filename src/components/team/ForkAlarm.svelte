@@ -16,7 +16,9 @@
       ? t('team.alarm.rollback')
       : alarm?.kind === 'rewritten'
         ? t('team.alarm.rewritten')
-        : t('team.alarm.fork', { epoch: alarm?.epoch ?? '?' }),
+        : alarm?.kind === 'journal'
+          ? t('team.alarm.journal')
+          : t('team.alarm.fork', { epoch: alarm?.epoch ?? '?' }),
   );
 </script>
 

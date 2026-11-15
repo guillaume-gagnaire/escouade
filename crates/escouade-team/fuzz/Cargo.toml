@@ -2,6 +2,7 @@
 #   cargo install cargo-fuzz
 #   cd crates/escouade-team/fuzz && cargo +nightly fuzz run commit
 #   cargo +nightly fuzz run roster
+#   cargo +nightly fuzz run operation
 # A package of its own, outside the app's workspace (its own lock, its own target).
 [package]
 name = "escouade-team-fuzz"
@@ -23,6 +24,13 @@ members = ["."]
 [[bin]]
 name = "commit"
 path = "fuzz_targets/commit.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "operation"
+path = "fuzz_targets/operation.rs"
 test = false
 doc = false
 bench = false

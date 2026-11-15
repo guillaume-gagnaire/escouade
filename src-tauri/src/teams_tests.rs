@@ -196,3 +196,106 @@ async fn two_data_folders_of_one_machine_a_team_an_invitation_and_its_admission(
     assert!(FORK.contains("deux versions"));
     task.abort();
 }
+
+#[test]
+fn the_status_says_offline_and_the_changes_waiting() {
+    use crate::teams::SyncStatusView;
+    assert_eq!(
+        SyncStatusView::of(Some(false), 3, 1).label,
+        "Hors ligne · 3 changements en attente"
+    );
+    assert_eq!(
+        SyncStatusView::of(Some(false), 1, 1).label,
+        "Hors ligne · 1 changement en attente"
+    );
+    assert_eq!(SyncStatusView::of(Some(false), 0, 1).label, "Hors ligne");
+    assert_eq!(
+        SyncStatusView::of(Some(true), 2, 1).label,
+        "2 changements en attente"
+    );
+    assert_eq!(SyncStatusView::of(Some(true), 0, 1).label, "");
+    assert_eq!(SyncStatusView::of(None, 0, 0).label, "");
+}
+
+/// TS-5: a project's operation reaches the other data folder by the live feed, not by the watch (60 s here).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_projects_operation_comes_by_the_live_feed() {
+    let (server, host, task, dir) = server().await;
+    let store = Arc::new(MemoryStore::default());
+    let alice = teams(&dir.path().join("a"), store.clone());
+    let bob = teams(&dir.path().join("b"), store.clone());
+    let token = server.new_team_token().await.unwrap();
+    let id = alice
+        .create(&host, &token, "ACME", None)
+        .await
+        .unwrap()
+        .team
+        .id;
+    let invite = alice.invite(&id, "member", None).await.unwrap();
+    bob.join(&invite.url, "").await.unwrap();
+    alice.sync(&id).await.unwrap();
+    assert!(bob.sync(&id).await.unwrap().joined);
+
+    // A project of the whole team, followed by Bob's folder.
+    let project = {
+        let team = alice.team(&id).unwrap();
+        let mut t = team.lock().await;
+        let p = t.create_project(None).await.unwrap();
+        t.sync_project(p).await.unwrap();
+        p
+    };
+    {
+        let team = bob.team(&id).unwrap();
+        let mut t = team.lock().await;
+        t.follow(project).unwrap();
+        t.sync_project(project).await.unwrap();
+    }
+    let watch_a = tokio::spawn(alice.clone().watch(Duration::from_secs(60)));
+    let watch_b = tokio::spawn(bob.clone().watch(Duration::from_secs(60)));
+    // Both watches past their first round: the live feeds are up.
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+
+    let ticket = {
+        let team = alice.team(&id).unwrap();
+        let mut t = team.lock().await;
+        let ticket = t
+            .create_ticket(
+                project,
+                [("title".to_string(), serde_json::json!("En direct"))]
+                    .into_iter()
+                    .collect(),
+            )
+            .unwrap();
+        t.flush_project(project).await.unwrap();
+        ticket
+    };
+    let status = alice.status(&id).await.unwrap();
+    assert_eq!(
+        (status.online, status.pending, status.label.as_str()),
+        (Some(true), 0, "")
+    );
+    let mut seen = false;
+    for _ in 0..50 {
+        {
+            let team = bob.team(&id).unwrap();
+            let mut t = team.lock().await;
+            if t.replica(&project)
+                .unwrap()
+                .object(&ticket)
+                .unwrap()
+                .is_some()
+            {
+                seen = true;
+            }
+        }
+        if seen {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    assert!(seen, "the operation came by the live feed within 5 s");
+    watch_a.abort();
+    watch_b.abort();
+    bob.forget(&id).await.unwrap();
+    task.abort();
+}

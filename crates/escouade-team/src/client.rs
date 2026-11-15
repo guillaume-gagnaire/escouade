@@ -847,6 +847,60 @@ impl ServerClient {
         self.read(path).await
     }
 
+    /// A commit of a project's own group (TS-5) for `epoch`: refused with [`ClientError::EpochTaken`] when another
+    /// holds it.
+    pub async fn append_project_commit(
+        &self,
+        project: &[u8; 16],
+        epoch: u64,
+        commit: &[u8],
+    ) -> Result<u64, ClientError> {
+        self.append(
+            format!("/v1/projects/{}/stream", hex::encode(project)),
+            Kind::Commit,
+            Some(epoch),
+            commit,
+        )
+        .await
+    }
+
+    /// Sends a project's snapshot: the server forgets the messages up to `upto`. Gives how many it forgot.
+    pub async fn put_snapshot(
+        &self,
+        project: &[u8; 16],
+        upto: u64,
+        payload: Vec<u8>,
+    ) -> Result<u64, ClientError> {
+        let reply = self
+            .authed(cbor_call(
+                Method::Put,
+                format!("/v1/projects/{}/snapshot", hex::encode(project)),
+                &SnapshotPut { upto, payload },
+            ))
+            .await?;
+        Ok(ok_cbor::<SnapshotKept>(reply)?.pruned)
+    }
+
+    /// A project's last snapshot; None when it has none.
+    pub async fn get_snapshot(
+        &self,
+        project: &[u8; 16],
+    ) -> Result<Option<SnapshotInfo>, ClientError> {
+        let reply = self
+            .authed(Call {
+                method: Method::Get,
+                path: format!("/v1/projects/{}/snapshot", hex::encode(project)),
+                content_type: None,
+                body: Vec::new(),
+                token: None,
+            })
+            .await?;
+        if reply.status == 404 {
+            return Ok(None);
+        }
+        Ok(Some(ok_cbor(reply)?))
+    }
+
     /// Writes an encrypted file, once (refused if it exists).
     pub async fn put_file(&self, id: &[u8; 16], bytes: Vec<u8>) -> Result<(), ClientError> {
         let reply = self

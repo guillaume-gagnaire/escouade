@@ -17,7 +17,7 @@ use escouade_team::wire::{self, Entries, Kind};
 use escouade_team::{
     ClientError, HttpTransport, MemoryKeychain, Options, Setup, Team, Transport, Vault,
 };
-use escouade_team_server::config::Config;
+use escouade_team_server::config::{Config, DatabaseConfig};
 use escouade_team_server::Server;
 
 pub const NOW: u64 = 1_800_000_000;
@@ -144,6 +144,20 @@ pub struct Lies {
     pub flip: Option<u64>,
     /// Answers a network error after sending the next commit (the device does not hear back).
     pub lose_commit_answer: bool,
+    /// The lies on a project's stream (TS-5), on the reads of the project of this hex id only.
+    pub project: Option<String>,
+    /// Drops the entry of this number from the project's reads.
+    pub project_drop: Option<u64>,
+    /// Serves the payloads of these two entries swapped.
+    pub project_swap: Option<(u64, u64)>,
+    /// Serves the entry of this number again, after the last.
+    pub project_replay: Option<u64>,
+    /// Flips a byte of the payload of the entry of this number.
+    pub project_flip: Option<u64>,
+    /// Hides the project's entries after this number.
+    pub project_hide_after: Option<u64>,
+    /// Answers a network error after sending the next operation of a project.
+    pub lose_op_answer: bool,
 }
 
 /// A transport around the real one: honest until the test sets its lies; it can hold the next commit until the
@@ -218,6 +232,66 @@ impl Liar {
     }
 }
 
+impl Liar {
+    fn lie_project(&self, path: &str, reply: &mut Reply) {
+        let lies = self.lies.lock().unwrap();
+        let Some(project) = &lies.project else {
+            return;
+        };
+        if !path.contains(project.as_str()) {
+            return;
+        }
+        let Ok(mut page) = wire::decode::<Entries>(&reply.body) else {
+            return;
+        };
+        if let Some(n) = lies.project_hide_after {
+            page.entries.retain(|e| e.seq <= n);
+            page.more = false;
+        }
+        if let Some(n) = lies.project_drop {
+            page.entries.retain(|e| e.seq != n);
+        }
+        if let Some((a, b)) = lies.project_swap {
+            let pa = page
+                .entries
+                .iter()
+                .find(|e| e.seq == a)
+                .map(|e| e.payload.clone());
+            let pb = page
+                .entries
+                .iter()
+                .find(|e| e.seq == b)
+                .map(|e| e.payload.clone());
+            if let (Some(pa), Some(pb)) = (pa, pb) {
+                for e in &mut page.entries {
+                    if e.seq == a {
+                        e.payload = pb.clone();
+                    } else if e.seq == b {
+                        e.payload = pa.clone();
+                    }
+                }
+            }
+        }
+        if let Some(n) = lies.project_flip {
+            for e in &mut page.entries {
+                if e.seq == n {
+                    let i = e.payload.len() / 2;
+                    e.payload[i] ^= 1;
+                }
+            }
+        }
+        if let Some(n) = lies.project_replay {
+            let again = page.entries.iter().find(|e| e.seq == n).cloned();
+            let last = page.entries.last().map(|e| e.seq);
+            if let (Some(mut again), Some(last), false) = (again, last, page.more) {
+                again.seq = last + 1;
+                page.entries.push(again);
+            }
+        }
+        reply.body = wire::encode(&page);
+    }
+}
+
 #[async_trait]
 impl Transport for Liar {
     async fn call(&self, call: Call) -> Result<Reply, ClientError> {
@@ -233,7 +307,25 @@ impl Transport for Liar {
             }
         }
         let team_read = call.method == Method::Get && call.path.starts_with("/v1/team/stream");
+        let project_path = call.path.clone();
+        let project_read = call.method == Method::Get
+            && call.path.starts_with("/v1/projects/")
+            && call.path.contains("/stream");
+        let project_op = call.method == Method::Post
+            && call.path.starts_with("/v1/projects/")
+            && wire::decode::<wire::AppendRequest>(&call.body)
+                .is_ok_and(|r| r.kind == Kind::Message);
         let mut reply = self.inner.call(call).await?;
+        if project_op {
+            let mut lies = self.lies.lock().unwrap();
+            if lies.lose_op_answer {
+                lies.lose_op_answer = false;
+                return Err(ClientError::Net("the answer was lost".into()));
+            }
+        }
+        if project_read && reply.status == 200 {
+            self.lie_project(&project_path, &mut reply);
+        }
         if commit {
             if reply.status == 409 {
                 self.conflicts.fetch_add(1, Ordering::SeqCst);
@@ -260,6 +352,7 @@ pub struct Place {
     pub folder: tempfile::TempDir,
     pub keychain: Arc<MemoryKeychain>,
     pub liar: Arc<Liar>,
+    pub options: Options,
 }
 
 impl Place {
@@ -274,6 +367,7 @@ impl Place {
             folder: tempfile::tempdir().unwrap(),
             keychain: Arc::new(MemoryKeychain::default()),
             liar: Liar::new(transport),
+            options: Options::default(),
         }
     }
 
@@ -283,7 +377,7 @@ impl Place {
             vault: Vault::new(self.keychain.clone(), self.folder.path().join("data")),
             transport: self.liar.clone(),
             server: "team.example.org".into(),
-            options: Options::default(),
+            options: self.options,
         }
     }
 }
@@ -293,6 +387,55 @@ pub struct World {
     pub server: TestServer,
     pub relay: Relay,
     pub dir: tempfile::TempDir,
+    /// The PostgreSQL schema of the test, dropped by [`World::finish`].
+    pub schema: Option<String>,
+}
+
+/// The server's base: SQLite, or PostgreSQL when `ESCOUADE_TEST_POSTGRES_URL` is set (TS-5, as TS-1).
+#[derive(Clone, Debug)]
+pub enum Backend {
+    Sqlite,
+    Postgres(String),
+}
+
+impl Backend {
+    /// PostgreSQL when its variable is set; `None` (the test is skipped) otherwise.
+    pub fn postgres() -> Option<Backend> {
+        match std::env::var("ESCOUADE_TEST_POSTGRES_URL") {
+            Ok(url) if !url.is_empty() => Some(Backend::Postgres(url)),
+            _ => {
+                eprintln!(
+                    "ESCOUADE_TEST_POSTGRES_URL is not set: the PostgreSQL variant is skipped"
+                );
+                None
+            }
+        }
+    }
+}
+
+/// Each test, once on SQLite and once on PostgreSQL (skipped without its variable).
+#[macro_export]
+macro_rules! both {
+    ($($name:ident),* $(,)?) => {
+        mod sqlite {
+            $(
+                #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+                async fn $name() {
+                    super::$name($crate::common::Backend::Sqlite).await;
+                }
+            )*
+        }
+        mod postgres {
+            $(
+                #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+                async fn $name() {
+                    if let Some(b) = $crate::common::Backend::postgres() {
+                        super::$name(b).await;
+                    }
+                }
+            )*
+        }
+    };
 }
 
 impl World {
@@ -304,7 +447,55 @@ impl World {
         let dir = tempfile::tempdir().unwrap();
         let server = TestServer::start(dir.path().join("server"), change).await;
         let relay = Relay::to(server.addr).await;
-        World { server, relay, dir }
+        World {
+            server,
+            relay,
+            dir,
+            schema: None,
+        }
+    }
+
+    /// A world whose server is on `backend`.
+    pub async fn on(backend: &Backend) -> World {
+        Self::on_with(backend, |_| {}).await
+    }
+
+    pub async fn on_with(backend: &Backend, change: impl FnOnce(&mut Config)) -> World {
+        let schema = match backend {
+            Backend::Sqlite => None,
+            Backend::Postgres(_) => {
+                let mut b = [0u8; 8];
+                getrandom::fill(&mut b).unwrap();
+                Some(format!("c_{}", hex::encode(b)))
+            }
+        };
+        let (b, s) = (backend.clone(), schema.clone());
+        let mut world = Self::with(move |c| {
+            if let (Backend::Postgres(url), Some(s)) = (b, s) {
+                c.database = DatabaseConfig::Postgres {
+                    url,
+                    schema: Some(s),
+                };
+            }
+            change(c)
+        })
+        .await;
+        world.schema = schema;
+        world
+    }
+
+    /// Stops the server, and drops the PostgreSQL schema of the test.
+    pub async fn finish(mut self) {
+        self.server.stop();
+        if let (Some(schema), Ok(url)) = (
+            self.schema.take(),
+            std::env::var("ESCOUADE_TEST_POSTGRES_URL"),
+        ) {
+            if let Ok(pg) = escouade_team_server::db::postgres::Postgres::connect(&url, None).await
+            {
+                let _ = pg.drop_schema(&schema).await;
+            }
+        }
     }
 
     pub fn place(&self) -> Place {

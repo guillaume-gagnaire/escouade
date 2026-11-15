@@ -12,10 +12,13 @@ pub mod beacon;
 pub mod content;
 pub mod device;
 pub mod history;
+pub mod hlc;
 pub mod identity;
 pub mod invite;
 pub mod keys;
+pub mod ops;
 pub mod policy;
+pub mod project;
 pub mod recovery;
 pub mod relay;
 pub mod roster;
@@ -74,6 +77,8 @@ pub enum Error {
     NotAdmin,
     #[error("this device is not in the team")]
     NotInTeam,
+    #[error("this device is not in the project's group")]
+    NotInProject,
     #[error("the server already holds a commit for this epoch")]
     Conflict,
     #[error("encoding: {0}")]

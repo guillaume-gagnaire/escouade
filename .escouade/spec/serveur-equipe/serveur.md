@@ -2,19 +2,20 @@
 title: "Le serveur d'équipe"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team-server/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team/README.md"]
-tickets: ["ESC-456","ESC-458","ESC-461"]
-decisions: [167,168,173]
+tickets: ["ESC-456","ESC-458","ESC-461","ESC-466"]
+decisions: [167,168,173,178]
 compared: null
 ---
 
 # Le serveur d'équipe
 
-Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (Docker avec Caddy, ou systemd). Il est distinct du mode serveur, qui lance des agents et ne s'expose pas. Son client est la crate `escouade-team` (voir « Le client de l'équipe »), branchée dans l'app : créer une équipe, y inviter et y entrer, voir « Entrer dans une équipe ». Rien n'est publié avant la 2.3.
+Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (Docker avec Caddy, ou systemd). Il est distinct du mode serveur, qui lance des agents et ne s'expose pas. Son client est la crate `escouade-team` (voir « Le client de l'équipe »), branchée dans l'app : créer une équipe, y inviter et y entrer, voir « Entrer dans une équipe » ; la synchronisation des projets, voir « La synchronisation des projets ». Rien n'est publié avant la 2.3.
 
 ## Aveugle
 
 - Il ne garde que des octets chiffrés de bout en bout (seul mode), et les métadonnées que voici : des ids opaques, les clés publiques des appareils, leurs rôles, les tailles, les heures, l'appareil qui a écrit, l'empreinte (SHA-256) des jetons d'inscription.
 - Il n'exécute rien (aucun agent, commande, plugin ni harness) et n'a aucune clé de contenu. Il ne voit jamais le secret d'une invitation ni un code court.
+- D'une opération d'un projet, il ne voit que son époque, sa taille, son heure et l'appareil qui l'envoie.
 - Son journal et ses métriques Prometheus ne portent aucun id d'équipe, de projet, d'appareil ni de fichier, aucune adresse, aucun jeton : seulement les modèles des routes, les statuts et des compteurs.
 
 ## Les appareils et l'entrée
@@ -44,9 +45,10 @@ Un binaire à part, `escouade-team-server`, que l'équipe héberge elle-même (D
 
 ## Les flux et les fichiers
 
-- Un flux par équipe (les messages MLS) et un par projet (les opérations chiffrées). Le serveur numérote chaque entrée, la garde et la diffuse ; un appareil relit depuis le numéro n pour reprendre.
-- Les commits MLS : le premier pour une époque gagne. Un second pour la même époque est refusé, avec les entrées depuis le commit gagnant, pour que l'appareil rattrape.
-- Les fichiers chiffrés (documents, images) : sur le disque ou dans un stockage compatible S3 (MinIO, Garage, AWS), écrits une fois, avec une taille maximale par fichier (25 Mio par défaut) et un quota par équipe (2 Gio par défaut) qui compte aussi les flux.
+- Un flux par équipe (les messages MLS) et un par projet (les opérations chiffrées, et les commits du groupe d'un projet gardé à quelques membres). Le serveur numérote chaque entrée, la garde et la diffuse ; un appareil relit depuis le numéro n pour reprendre.
+- Les commits MLS, de l'équipe comme du groupe d'un projet : le premier pour une époque gagne. Un second pour la même époque est refusé, avec les entrées depuis le commit gagnant, pour que l'appareil rattrape.
+- **Les instantanés d'un projet** : un appareil de l'équipe envoie l'état chiffré du projet jusqu'à un numéro ; le serveur garde le dernier, oublie les opérations d'avant (pas les commits) et rend leurs octets au quota. Un instantané qui n'est pas après celui gardé, ou qui va au-delà du flux, est refusé. La lecture d'un projet dit où est l'instantané quand il est après le numéro demandé.
+- Les fichiers chiffrés (documents, images) : sur le disque ou dans un stockage compatible S3 (MinIO, Garage, AWS), écrits une fois, avec une taille maximale par fichier (25 Mio par défaut) et un quota par équipe (2 Gio par défaut) qui compte aussi les flux et les instantanés.
 - La diffusion en direct par WebSocket : un appareil abonné reçoit les nouvelles entrées de tous les flux de son équipe, et rien des autres équipes.
 
 ## Le protocole et les défenses

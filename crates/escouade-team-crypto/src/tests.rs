@@ -1190,3 +1190,258 @@ fn neither_a_removed_member_nor_the_server_raises_a_false_fork() {
     forged.header.head = [7; 32];
     assert!(matches!(bob.open(&forged), Err(Error::BadSignature)));
 }
+
+// === TS-5: the operations, and a project's own group ===
+
+fn op(device: &TeamDevice, project: ProjectId, dseq: u64, prev: [u8; 32]) -> ops::Operation {
+    let record = device.record(device.epoch().unwrap()).unwrap();
+    ops::Operation {
+        project,
+        author: device.author(),
+        dseq,
+        prev,
+        team_epoch: record.epoch,
+        team_head: record.head,
+        hlc: hlc::Hlc {
+            wall: NOW * 1000,
+            count: 0,
+            device: device.identity().device,
+        },
+        body: ops::OpBody::Set {
+            object: object(1),
+            field: "title".into(),
+            value: serde_json::json!("Un titre"),
+            base: None,
+        },
+    }
+}
+
+#[test]
+fn an_operation_is_signed_sealed_and_bound_to_its_project_and_epoch() {
+    let (mut relay, mut alice, _) = new_team(None);
+    let bob = join(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Member),
+        member(2),
+    );
+    let o = op(&alice, project(1), 1, [0; 32]);
+    let sealed = alice
+        .seal_for(
+            ops::What::Operation,
+            &project(1),
+            ops::Scope::Team,
+            o.to_bytes(),
+        )
+        .unwrap();
+    let record = bob
+        .record_for(&project(1), ops::Scope::Team, sealed.epoch)
+        .unwrap();
+    assert_eq!(sealed.open_operation(record, &project(1)).unwrap(), o);
+    // Moved to another project, or passed for a snapshot: it does not open.
+    assert!(sealed.open_operation(record, &project(2)).is_err());
+    assert!(sealed.open_snapshot(record, &project(1)).is_err());
+    // A byte changed: refused.
+    let mut bad = sealed.clone();
+    bad.ciphertext[3] ^= 1;
+    assert!(bad.open_operation(record, &project(1)).is_err());
+    // Bob cannot write in the name of Alice: his signature under her name is refused.
+    let forged = bob
+        .seal_for(
+            ops::What::Operation,
+            &project(1),
+            ops::Scope::Team,
+            o.to_bytes(),
+        )
+        .unwrap();
+    assert!(matches!(
+        forged.open_operation(record, &project(1)),
+        Err(Error::BadSignature)
+    ));
+    // A chain that does not start at 1.
+    let broken = alice
+        .seal_for(
+            ops::What::Operation,
+            &project(1),
+            ops::Scope::Team,
+            op(&alice, project(1), 2, [0; 32]).to_bytes(),
+        )
+        .unwrap();
+    assert!(broken.open_operation(record, &project(1)).is_err());
+}
+
+/// The project's stream as the server orders it: the first commit of an epoch wins.
+fn project_publish(log: &mut Vec<Vec<u8>>, p: &project::ProjectPublication) -> bool {
+    match &p.commit {
+        Some((epoch, commit)) if *epoch as usize == log.len() => {
+            log.push(commit.clone());
+            true
+        }
+        Some(_) => false,
+        None => true,
+    }
+}
+
+fn key_packages(devices: &[&TeamDevice]) -> std::collections::BTreeMap<DeviceId, Vec<u8>> {
+    devices
+        .iter()
+        .map(|d| (d.identity().device, d.key_package().unwrap()))
+        .collect()
+}
+
+#[test]
+fn a_project_kept_to_some_members_has_its_own_group() {
+    let (mut relay, mut alice, _) = new_team(None);
+    let mut bob = join(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Member),
+        member(2),
+    );
+    let mut carol = join(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Member),
+        member(3),
+    );
+    sync(&relay, &mut [&mut alice, &mut bob, &mut carol]);
+    let kps = key_packages(&[&alice, &bob, &carol]);
+    for (device, kp) in &kps {
+        assert_eq!(alice.check_key_package(kp).unwrap(), *device);
+    }
+    // The KeyPackage of Mallory is not a leaf of the team.
+    let mallory = TeamDevice::new(member(9)).unwrap();
+    assert!(alice
+        .check_key_package(&mallory.key_package().unwrap())
+        .is_err());
+
+    let p = project(7);
+    let members = [member(1), member(2)].into_iter().collect();
+    let mut log = Vec::new();
+    // A member who is not an administrator does not make one.
+    assert!(matches!(
+        bob.create_project(p, [member(2)].into_iter().collect(), &kps),
+        Err(Error::NotAdmin)
+    ));
+    let made = alice.create_project(p, members, &kps).unwrap();
+    assert!(project_publish(&mut log, &made));
+    let rest = alice.project_confirm(&p).unwrap();
+    let welcome = rest.welcome.expect("a Welcome for Bob");
+    assert!(bob.project_accept_welcome(&p, &welcome).unwrap());
+    assert!(!carol.project_accept_welcome(&p, &welcome).unwrap());
+    assert_eq!(alice.project_epoch(&p).unwrap(), 1);
+    assert_eq!(bob.project_epoch(&p).unwrap(), 1);
+    assert!(!carol.in_project(&p));
+
+    // Sealed under the group of the project: Bob reads, Carol (in the team) does not.
+    let o = op(&alice, p, 1, [0; 32]);
+    let sealed = alice
+        .seal_for(ops::What::Operation, &p, ops::Scope::Project, o.to_bytes())
+        .unwrap();
+    let opened = bob
+        .record_for(&p, ops::Scope::Project, sealed.epoch)
+        .and_then(|r| sealed.open_operation(r, &p))
+        .unwrap();
+    assert_eq!(opened, o);
+    assert!(carol
+        .record_for(&p, ops::Scope::Project, sealed.epoch)
+        .is_err());
+    let team_record = carol.record(carol.epoch().unwrap()).unwrap().clone();
+    assert!(sealed.open_operation(&team_record, &p).is_err());
+
+    // Bob leaves the team: Alice keeps the group of the project in step, a new epoch Bob never holds.
+    publish(&mut relay, alice.remove_member(member(2)).unwrap());
+    sync(&relay, &mut [&mut carol]);
+    let step = alice
+        .project_stage(&p, None, &kps)
+        .unwrap()
+        .expect("the device of Bob goes");
+    assert!(project_publish(&mut log, &step));
+    alice.project_confirm(&p).unwrap();
+    assert_eq!(alice.project_epoch(&p).unwrap(), 2);
+    assert_eq!(alice.project_leaves(&p).unwrap().len(), 1);
+    let later = alice
+        .seal_for(ops::What::Operation, &p, ops::Scope::Project, o.to_bytes())
+        .unwrap();
+    assert_eq!(later.epoch, 2);
+    assert!(bob.record_for(&p, ops::Scope::Project, 2).is_err());
+
+    // Carol given access by the administrator: added by her KeyPackage, she reads back by the history links.
+    let with_carol = [member(1), member(3)].into_iter().collect();
+    let step = alice
+        .project_stage(&p, Some(with_carol), &kps)
+        .unwrap()
+        .unwrap();
+    assert!(project_publish(&mut log, &step));
+    let rest = alice.project_confirm(&p).unwrap();
+    assert!(carol
+        .project_accept_welcome(&p, &rest.welcome.unwrap())
+        .unwrap());
+    assert_eq!(carol.project_epoch(&p).unwrap(), 3);
+    let link = alice.project_history_link(&p, 3).unwrap();
+    assert!(carol.project_learn_history(&p, &link).unwrap());
+    let r = carol.record_for(&p, ops::Scope::Project, 2).unwrap();
+    assert!(later.open_operation(r, &p).is_ok());
+}
+
+#[test]
+fn a_project_commit_out_of_the_rules_is_refused() {
+    let (mut relay, mut alice, _) = new_team(None);
+    let mut bob = join(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Member),
+        member(2),
+    );
+    let mut carol = join(
+        &mut relay,
+        &mut alice,
+        Purpose::NewMember(Role::Member),
+        member(3),
+    );
+    sync(&relay, &mut [&mut alice, &mut bob, &mut carol]);
+    let kps = key_packages(&[&alice, &bob, &carol]);
+    let p = project(8);
+    let mut log = Vec::new();
+    let made = alice
+        .create_project(p, [member(1), member(2)].into_iter().collect(), &kps)
+        .unwrap();
+    assert!(project_publish(&mut log, &made));
+    let rest = alice.project_confirm(&p).unwrap();
+    assert!(bob
+        .project_accept_welcome(&p, &rest.welcome.unwrap())
+        .unwrap());
+    // Bob, a member, cannot give Carol access.
+    let all = [member(1), member(2), member(3)].into_iter().collect();
+    assert!(matches!(
+        bob.project_stage(&p, Some(all), &kps),
+        Err(Error::NotAdmin)
+    ));
+    // He tries by MLS directly: Alice refuses the commit.
+    let carol_kp = match decode(&kps[&carol.identity().device]).unwrap().extract() {
+        MlsMessageBodyIn::KeyPackage(kp) => kp
+            .validate(
+                OpenMlsRustCrypto::default().crypto(),
+                ProtocolVersion::Mls10,
+            )
+            .unwrap(),
+        _ => unreachable!(),
+    };
+    let provider = &bob.provider;
+    let group = bob.projects.get_mut(&p).unwrap().group.as_mut().unwrap();
+    group.set_aad(0u64.to_be_bytes().to_vec());
+    let bundle = group
+        .commit_builder()
+        .propose_adds(vec![carol_kp])
+        .load_psks(provider.storage())
+        .unwrap()
+        .build(provider.rand(), provider.crypto(), &bob.signer, |_| true)
+        .unwrap()
+        .stage_commit(provider)
+        .unwrap();
+    let commit = encode(bundle.commit()).unwrap();
+    assert!(matches!(
+        alice.project_process_commit(&p, &commit),
+        Err(Error::Policy(_))
+    ));
+}

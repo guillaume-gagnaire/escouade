@@ -246,7 +246,7 @@ pub fn say(e: &TeamError) -> String {
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AlarmView {
-    /// `fork`, `rollback` or `rewritten`.
+    /// `fork`, `rollback`, `rewritten` or `journal` (a project's operations played again, reordered, dropped, forged).
     pub kind: String,
     pub epoch: Option<u64>,
     /// Seconds since the epoch.
@@ -259,6 +259,7 @@ impl AlarmView {
             Alarm::Fork { epoch } => ("fork", Some(epoch)),
             Alarm::Rollback => ("rollback", None),
             Alarm::Rewritten => ("rewritten", None),
+            Alarm::Journal => ("journal", None),
         };
         AlarmView {
             kind: kind.into(),
@@ -450,6 +451,9 @@ pub struct Teams {
     /// key is offered).
     words: Mutex<BTreeMap<String, RecoveryKey>>,
     pairings: Mutex<BTreeMap<String, Arc<tokio::sync::Mutex<Pairing>>>>,
+    /// The live feed of each team (TS-5): a frame of the server reads the team at once, instead of waiting for the
+    /// watch.
+    live: Mutex<BTreeMap<String, tokio::task::JoinHandle<()>>>,
 }
 
 impl Teams {
@@ -495,6 +499,7 @@ impl Teams {
             open: Mutex::default(),
             words: Mutex::default(),
             pairings: Mutex::default(),
+            live: Mutex::default(),
         };
         let known = teams.known.lock().clone();
         for k in known {
@@ -593,7 +598,7 @@ impl Teams {
             .ok_or_else(|| "Cette équipe n’est pas sur cet appareil.".to_string())
     }
 
-    fn team(&self, id: &str) -> Result<Shared, String> {
+    pub(crate) fn team(&self, id: &str) -> Result<Shared, String> {
         self.open
             .lock()
             .get(id)
@@ -1004,7 +1009,10 @@ impl Teams {
         let done = {
             let mut t = team.lock().await;
             match t.sync().await {
-                Ok(_) => t.serve(now()).await.map(|_| ()),
+                Ok(_) => match t.serve(now()).await {
+                    Ok(_) => sync_projects(&mut t).await,
+                    Err(e) => Err(e),
+                },
                 Err(e) => Err(e),
             }
         };
@@ -1035,6 +1043,9 @@ impl Teams {
     /// removes it (TS-4).
     pub async fn forget(&self, id: &str) -> Result<(), String> {
         self.pairings.lock().remove(id);
+        if let Some(live) = self.live.lock().remove(id) {
+            live.abort();
+        }
         self.words.lock().remove(id);
         // Out of the list first: the watch takes it no more. A reading under way holds it a moment: waited for (its
         // state is closed before its folder goes).
@@ -1062,7 +1073,22 @@ impl Teams {
         Ok(())
     }
 
-    /// Reads every team not under an alarm, and does what an online device does: forever, every `every`.
+    /// What the status bar says of a team (§2.5): whether its server answers, and how many changes of this device
+    /// wait to go (« Hors ligne · 3 changements en attente »). TS-4 and TS-6 show it.
+    pub async fn status(&self, id: &str) -> Result<SyncStatusView, String> {
+        let team = self.team(id)?;
+        let mut t = team.lock().await;
+        let state = t.sync_state();
+        Ok(SyncStatusView::of(
+            state.online,
+            state.pending,
+            t.projects().len(),
+        ))
+    }
+
+    /// Reads every team not under an alarm, and does what an online device does: forever, every `every`. Each team
+    /// also has its live feed (TS-5): a frame of the server (an entry of the team or of a project, a connection come
+    /// back, frames dropped) reads it at once; the watch is what is left when the feed cannot connect.
     pub async fn watch(self: Arc<Self>, every: Duration) {
         loop {
             let ids: Vec<String> = self
@@ -1074,22 +1100,106 @@ impl Teams {
                 .collect();
             for id in ids {
                 if self.open.lock().contains_key(&id) {
+                    self.ensure_live(&id).await;
                     let _ = self.sync(&id).await;
                 }
             }
             tokio::time::sleep(every).await;
         }
     }
+
+    /// Starts the live feed of a team, unless it runs. The task holds the feed alone, never the team: forgetting the
+    /// team stops it.
+    async fn ensure_live(self: &Arc<Self>, id: &str) {
+        if self.live.lock().get(id).is_some_and(|h| !h.is_finished()) {
+            return;
+        }
+        let Some(team) = self.open.lock().get(id).cloned() else {
+            return;
+        };
+        let mut feed = team.lock().await.live();
+        drop(team);
+        let me = Arc::downgrade(self);
+        let key = id.to_string();
+        let handle = tokio::spawn(async move {
+            while let Some(event) = feed.next().await {
+                if event == escouade_team::LiveEvent::Revoked {
+                    break;
+                }
+                // A burst of frames is read once.
+                for _ in 0..50 {
+                    match tokio::time::timeout(Duration::from_millis(100), feed.next()).await {
+                        Ok(Some(escouade_team::LiveEvent::Revoked)) | Ok(None) => return,
+                        Ok(Some(_)) => {}
+                        Err(_) => break,
+                    }
+                }
+                let Some(teams) = me.upgrade() else { break };
+                if teams.known(&key).is_ok_and(|k| k.alarm.is_none()) {
+                    let _ = teams.sync(&key).await;
+                }
+            }
+        });
+        self.live.lock().insert(id.to_string(), handle);
+    }
 }
 
-/// How often the watch reads the teams: 3 s, or `ESCOUADE_TEAMS_EVERY_MS` (the end-to-end tests).
+/// How often the watch reads the teams when their live feed brings nothing: 15 s (the live feed reads them within a
+/// second, TS-5), or `ESCOUADE_TEAMS_EVERY_MS` (the end-to-end tests).
 pub fn watch_every() -> Duration {
     std::env::var("ESCOUADE_TEAMS_EVERY_MS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
-        .map_or(Duration::from_secs(3), |ms| {
+        .map_or(Duration::from_secs(15), |ms| {
             Duration::from_millis(ms.max(200))
         })
+}
+
+/// Reads the projects of the team this device follows (TS-5) and sends what waits: the copies the window will read
+/// (TS-6). A project kept to members this device is not among is left aside.
+async fn sync_projects(t: &mut Team) -> Result<(), TeamError> {
+    for project in t.projects() {
+        match t.sync_project(project).await {
+            Ok(_) | Err(TeamError::NoAccess) | Err(TeamError::NoProject) => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(())
+}
+
+/// The synchronization of a team as the status bar says it (§2.5).
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncStatusView {
+    /// The server answered the last call; None before the first.
+    pub online: Option<bool>,
+    /// The changes of this device waiting to go, every project together.
+    pub pending: usize,
+    /// The projects of the team this device follows.
+    pub projects: usize,
+    /// « Hors ligne · 3 changements en attente », « 2 changements en attente », or empty.
+    pub label: String,
+}
+
+impl SyncStatusView {
+    pub fn of(online: Option<bool>, pending: usize, projects: usize) -> SyncStatusView {
+        let waiting = match pending {
+            0 => String::new(),
+            1 => "1 changement en attente".to_string(),
+            n => format!("{n} changements en attente"),
+        };
+        let label = match (online, waiting.is_empty()) {
+            (Some(false), true) => "Hors ligne".to_string(),
+            (Some(false), false) => format!("Hors ligne · {waiting}"),
+            _ => waiting,
+        };
+        SyncStatusView {
+            online,
+            pending,
+            projects,
+            label,
+        }
+    }
 }
 
 fn words_of(w: [&'static str; 6]) -> Vec<String> {

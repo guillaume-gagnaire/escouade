@@ -137,6 +137,10 @@ pub struct SavedState {
     pub joining: Option<String>,
     pub removed: bool,
     pub pending: Option<PendingCommit>,
+    /// The MLS groups of the projects kept to some members, and their commits waiting (their records are kept
+    /// apart, as the team's: [`TeamDevice::project_records`]).
+    #[serde(default)]
+    pub projects: Vec<crate::project::SavedProject>,
 }
 
 /// The leaf capabilities every device of the team announces: the suite, the roster's extension, basic credentials.
@@ -152,7 +156,7 @@ pub fn capabilities() -> Capabilities {
 
 /// No past epoch's message secrets are kept (`max_past_epochs` 0): only commits travel as MLS messages, each of the
 /// epoch it applies to, and the content has its own keys (`keys.rs`). The storage forgets them at each epoch.
-fn join_config() -> MlsGroupJoinConfig {
+pub(crate) fn join_config() -> MlsGroupJoinConfig {
     MlsGroupJoinConfig::builder()
         .wire_format_policy(MIXED_CIPHERTEXT_WIRE_FORMAT_POLICY)
         .use_ratchet_tree_extension(true)
@@ -160,7 +164,7 @@ fn join_config() -> MlsGroupJoinConfig {
         .build()
 }
 
-fn random_nonce(rand: &impl OpenMlsRand) -> Result<[u8; 24], Error> {
+pub(crate) fn random_nonce(rand: &impl OpenMlsRand) -> Result<[u8; 24], Error> {
     rand.random_array().map_err(|_| Error::Random)
 }
 
@@ -173,16 +177,18 @@ pub(crate) fn decode(bytes: &[u8]) -> Result<MlsMessageIn, Error> {
 }
 
 pub struct TeamDevice<P: OpenMlsProvider = OpenMlsRustCrypto> {
-    provider: P,
-    signer: SignatureKeyPair,
-    identity: Identity,
-    group: Option<MlsGroup>,
-    records: BTreeMap<u64, EpochRecord>,
-    checkpoint: Option<Checkpoint>,
+    pub(crate) provider: P,
+    pub(crate) signer: SignatureKeyPair,
+    pub(crate) identity: Identity,
+    pub(crate) group: Option<MlsGroup>,
+    pub(crate) records: BTreeMap<u64, EpochRecord>,
+    pub(crate) checkpoint: Option<Checkpoint>,
     invitations: BTreeMap<[u8; 16], Invitation>,
     joining: Option<InviteLink>,
     removed: bool,
     pending: Option<PendingCommit>,
+    /// The MLS groups of the projects kept to some members (`project.rs`).
+    pub(crate) projects: BTreeMap<ProjectId, crate::project::ProjectGroup>,
 }
 
 impl TeamDevice<OpenMlsRustCrypto> {
@@ -227,6 +233,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
             joining: None,
             removed: false,
             pending: None,
+            projects: BTreeMap::new(),
         }
     }
 
@@ -268,6 +275,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
             });
             device.group = Some(group);
         }
+        device.load_projects(&state.projects)?;
         Ok(device)
     }
 
@@ -282,6 +290,7 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
             joining: self.joining.as_ref().map(InviteLink::to_url),
             removed: self.removed,
             pending: self.pending.clone(),
+            projects: self.saved_projects(),
         }
     }
 
@@ -301,14 +310,14 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
         self.provider.crypto()
     }
 
-    fn credential_with_key(&self) -> CredentialWithKey {
+    pub(crate) fn credential_with_key(&self) -> CredentialWithKey {
         CredentialWithKey {
             credential: self.identity.credential(),
             signature_key: self.signer.public().into(),
         }
     }
 
-    fn group(&self) -> Result<&MlsGroup, Error> {
+    pub(crate) fn group(&self) -> Result<&MlsGroup, Error> {
         if self.removed {
             return Err(Error::NotInTeam);
         }
@@ -704,12 +713,12 @@ impl<P: OpenMlsProvider> TeamDevice<P> {
         Ok(staged.join(rest))
     }
 
-    fn current_record(&self) -> Result<&EpochRecord, Error> {
+    pub(crate) fn current_record(&self) -> Result<&EpochRecord, Error> {
         let epoch = self.epoch()?;
         self.records.get(&epoch).ok_or(Error::UnknownEpoch(epoch))
     }
 
-    fn require_admin(&self) -> Result<(), Error> {
+    pub(crate) fn require_admin(&self) -> Result<(), Error> {
         if self.is_admin()? {
             Ok(())
         } else {
