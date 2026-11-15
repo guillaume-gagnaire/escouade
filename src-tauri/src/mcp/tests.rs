@@ -20,7 +20,7 @@ use serde_json::{json, Value};
 use std::net::Ipv4Addr;
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::test::{mock_app, MockRuntime};
+use tauri::test::mock_app;
 
 /// The tools the server offers, sorted: those that read (`READING`, M2), those that act
 /// (`ACTING`, M4) and those only an agent of Escouade may call (`AGENTS_ONLY`, M4). A tool is added
@@ -387,7 +387,7 @@ async fn claude_outside_escouade_initializes_and_lists_the_tools_with_its_token(
 #[tokio::test]
 async fn the_server_offers_exactly_its_tools_and_only_three_are_named_for_approving_or_deleting() {
     // The router the app ships, without the test's tool.
-    let shipped = names(&Tools::<MockRuntime>::tool_router().list_all());
+    let shipped = names(&Tools::tool_router().list_all());
     assert_eq!(shipped, EXPOSED);
     let h = harness("mcp-tools");
     let (port, token) = started(&h);

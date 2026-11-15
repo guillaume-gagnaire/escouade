@@ -1162,7 +1162,7 @@ fn app_wide(teams: &BTreeMap<String, TeamPolicies>) -> Option<TeamPolicies> {
 
 // ---------- in the core ----------
 
-impl<R: tauri::Runtime> crate::core::Core<R> {
+impl crate::core::Core {
     /// Rank 5 of one team, as a test gives it: it replaces every team's. The locks are made again and applied at once.
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn set_team_policies(self: &std::sync::Arc<Self>, team: Option<TeamPolicies>) {

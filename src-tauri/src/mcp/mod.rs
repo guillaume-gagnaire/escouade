@@ -76,7 +76,6 @@ use parking_lot::{Mutex, MutexGuard};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Weak};
-use tauri::Runtime;
 use tokio::sync::watch;
 
 // Who a request comes from, the server's status, its port and its tokens: `escouade-mcp`.
@@ -96,8 +95,8 @@ struct Running {
 type SyncHeld<'a> = MutexGuard<'a, ()>;
 
 /// The MCP server of the app, held by its core.
-pub struct McpServer<R: Runtime> {
-    core: Weak<Core<R>>,
+pub struct McpServer {
+    core: Weak<Core>,
     /// One start or stop at a time, and one `Core::sync_mcp` from the settings it reads to the
     /// start or stop it does.
     sync: Mutex<()>,
@@ -134,8 +133,8 @@ pub struct McpServer<R: Runtime> {
     limits: Mutex<http::Limits>,
 }
 
-impl<R: Runtime> McpServer<R> {
-    pub fn new(core: Weak<Core<R>>) -> Self {
+impl McpServer {
+    pub fn new(core: Weak<Core>) -> Self {
         Self {
             core,
             sync: Mutex::new(()),
@@ -208,8 +207,8 @@ impl<R: Runtime> McpServer<R> {
         let gate = http::Gate::new(
             port,
             std::sync::Arc::downgrade(&core),
-            tools::Tools::<R>::router(),
-            tools::Tools::<R>::new,
+            tools::Tools::router(),
+            tools::Tools::new,
         );
         let limits = self.limits.lock().clone();
         // On the app's own runtime: never the single-threaded one of a caller, which a stop's
@@ -459,7 +458,7 @@ impl<R: Runtime> McpServer<R> {
     }
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// The MCP server is wanted: « Claude et les agents peuvent piloter Escouade », the one switch
     /// that gives it to Claude outside Escouade and to the agents of every project (ESC-91: a
     /// project no longer lets its agents use it on its own).

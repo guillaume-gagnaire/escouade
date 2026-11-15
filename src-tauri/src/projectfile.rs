@@ -1588,7 +1588,6 @@ pub fn schema() -> Value {
 use crate::core::{project_not_found, Core};
 use crate::model::UiEvent;
 use std::sync::Arc;
-use tauri::Runtime;
 
 /// The file of the project's folder: None when there is none (or it cannot be opened).
 fn file_text(path: &str) -> Option<String> {
@@ -1716,7 +1715,7 @@ pub fn preview(path: &str) -> Option<Project> {
     Some(p)
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// Reads the project's `.escouade.yml` if it changed since last read (always when `opened`, the
     /// project just added), and applies it; says what it did. The project, when anything changed.
     pub fn read_shared(self: &Arc<Self>, project_id: &str, opened: bool) -> Option<Project> {

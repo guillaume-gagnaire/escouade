@@ -8,7 +8,6 @@ use anyhow::{bail, Result};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tauri::Runtime;
 
 /// The model, as « Recherche par le sens » shows it.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -34,7 +33,7 @@ fn base_url() -> String {
         .unwrap_or_else(|| MODEL_URL.to_string())
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     fn vectors_store(&self) -> Store {
         Store {
             dir: self.data.vectors_model(MODEL.id),

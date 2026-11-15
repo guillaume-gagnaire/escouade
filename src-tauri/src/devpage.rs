@@ -591,7 +591,7 @@ fn pages_window<R: Runtime>(
 /// What the title of a « Pages » window says: its project's name and « Pages ».
 fn window_title<R: Runtime>(app: &AppHandle<R>, project_id: &str) -> String {
     let name = app
-        .try_state::<Arc<crate::core::Core<R>>>()
+        .try_state::<Arc<crate::core::Core>>()
         .and_then(|core| core.project(project_id).ok().map(|p| p.name))
         .unwrap_or_else(|| project_id.to_string());
     format!("{name} · Pages")

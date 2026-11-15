@@ -20,7 +20,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
-use tauri::Runtime;
 
 /// What a project closed leaves in `closed-projects/<id>.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -444,7 +443,7 @@ impl ClosedProject {
 /// The index of the histories on the disk, by project id (`Core::closed_index`).
 pub(crate) type ClosedIndex = Mutex<HashMap<String, ClosedEntry>>;
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// The history of the project being closed, written to its file: once before anything stops
     /// (an error then keeps the project open), and again once everything stopped. No turn
     /// survives: an agent at work comes back done, as after a restart.

@@ -20,7 +20,6 @@ use std::time::Duration;
 
 use anyhow::{bail, Result};
 use serde::Serialize;
-use tauri::Runtime;
 
 use crate::core::Core;
 use crate::docs::{Gap, Page, Space};
@@ -305,7 +304,7 @@ impl Drop for Marked {
     }
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     fn docs_tell_compared(&self, project_id: &str) {
         self.hub.emit(UiEvent::DocsCompared {
             project_id: project_id.to_string(),

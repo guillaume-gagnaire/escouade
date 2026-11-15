@@ -13,7 +13,6 @@ use crate::model::*;
 use crate::pace::{self, MeterVerdict};
 use crate::usage::window_name;
 use std::sync::Arc;
-use tauri::Runtime;
 
 /// Why an agent past the threshold has no other account to go on on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -134,15 +133,15 @@ pub(crate) fn stays_line(
 }
 
 /// While it lives, the agent is being looked at for a switch: another look waits for none.
-struct Switching<'a, R: Runtime>(&'a Core<R>, String);
+struct Switching<'a>(&'a Core, String);
 
-impl<R: Runtime> Drop for Switching<'_, R> {
+impl Drop for Switching<'_> {
     fn drop(&mut self) {
         self.0.switching.lock().remove(&self.1);
     }
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// `switch_if_over`, in the background: a reading of the quota of the agent's account just came.
     pub(crate) fn switch_soon(self: &Arc<Self>, id: &str) {
         let (c, id) = (self.clone(), id.to_string());

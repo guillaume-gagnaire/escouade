@@ -204,7 +204,7 @@ struct Place {
     project_id: String,
 }
 
-impl<R: tauri::Runtime> Core<R> {
+impl Core {
     /// The target CI of each project, as last read: what the window starts with.
     pub fn target_cis(&self) -> BTreeMap<String, BranchCi> {
         self.target_ci.read().clone()

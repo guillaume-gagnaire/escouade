@@ -1,4 +1,6 @@
-//! Single event channel towards the webview.
+//! Single event channel towards the interface: the webview's `Channel` in the desktop app, any
+//! function in a process without a window (`host::HeadlessHost`, ESC-451). One subscriber: the last
+//! one to subscribe gets everything (several clients come with the remote API).
 
 use crate::model::UiEvent;
 use parking_lot::{Mutex, RwLock};
@@ -13,9 +15,12 @@ pub const LOUD: u32 = 200;
 /// A loud second is written once in this long.
 const LOUD_EVERY: Duration = Duration::from_secs(30);
 
+/// What receives the events.
+pub type Sink = Box<dyn Fn(UiEvent) + Send + Sync>;
+
 #[derive(Default)]
 pub struct Hub {
-    channel: RwLock<Option<Channel<UiEvent>>>,
+    sink: RwLock<Option<Sink>>,
     meter: Mutex<Meter>,
 }
 
@@ -86,18 +91,26 @@ fn kind_of(event: &UiEvent) -> String {
 }
 
 impl Hub {
+    /// The webview's channel, which gets the events from now on.
     pub fn set_channel(&self, channel: Channel<UiEvent>) {
-        *self.channel.write() = Some(channel);
+        self.subscribe(Box::new(move |event| {
+            if let Err(e) = channel.send(event) {
+                log::debug!("event channel send failed: {e}");
+            }
+        }));
+    }
+
+    /// `sink` gets the events from now on, in place of the subscriber before.
+    pub fn subscribe(&self, sink: Sink) {
+        *self.sink.write() = Some(sink);
     }
 
     pub fn emit(&self, event: UiEvent) {
         if let Some(line) = self.meter.lock().count(&event, Instant::now()) {
             log::warn!("{line}");
         }
-        if let Some(ch) = &*self.channel.read() {
-            if let Err(e) = ch.send(event) {
-                log::debug!("event channel send failed: {e}");
-            }
+        if let Some(sink) = &*self.sink.read() {
+            sink(event);
         }
     }
 }

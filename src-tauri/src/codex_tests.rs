@@ -520,7 +520,7 @@ fn sent(h: &Harness) -> Vec<String> {
 }
 
 /// The menu the account `id` keeps (`Core::account_models`): its models' ids.
-fn menu_of(core: &crate::core::Core<tauri::test::MockRuntime>, id: &str) -> Vec<String> {
+fn menu_of(core: &crate::core::Core, id: &str) -> Vec<String> {
     core.account_models
         .read()
         .get(id)

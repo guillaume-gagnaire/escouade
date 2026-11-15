@@ -29,7 +29,6 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tauri::Runtime;
 
 /// The bytes of a file `get_ticket_file` gives unless asked for more, and the most it gives: those
 /// of `get_background_output` (Claude Code refuses an answer of more than about 25,000 tokens).
@@ -246,8 +245,8 @@ fn read_part(path: &Path, offset: Option<u64>, max: usize) -> std::io::Result<(V
 /// `get_ticket_file`: a part of a file of the ticket, its end by default, as text or base64, with
 /// what it is; and, for Claude outside Escouade, where the file is on this computer, to read it
 /// whole by its own means. Not read, and said so, when its file is gone.
-pub(super) async fn fetch<R: Runtime>(
-    core: &Core<R>,
+pub(super) async fn fetch(
+    core: &Core,
     caller: &Caller,
     a: GetTicketFileArgs,
 ) -> Result<String, ToolError> {
@@ -311,13 +310,13 @@ pub(super) async fn fetch<R: Runtime>(
 
 /// The copies of the drafts a call made: those the core did not move into a ticket (a refusal, a
 /// failure, the call stopped half way) go once it is over, as the form's chip removed does.
-pub(super) struct Drafted<R: Runtime> {
-    core: Arc<Core<R>>,
+pub(super) struct Drafted {
+    core: Arc<Core>,
     paths: Vec<String>,
 }
 
-impl<R: Runtime> Drafted<R> {
-    pub(super) fn new(core: &Arc<Core<R>>) -> Self {
+impl Drafted {
+    pub(super) fn new(core: &Arc<Core>) -> Self {
         Self {
             core: core.clone(),
             paths: Vec::new(),
@@ -325,7 +324,7 @@ impl<R: Runtime> Drafted<R> {
     }
 }
 
-impl<R: Runtime> Drop for Drafted<R> {
+impl Drop for Drafted {
     fn drop(&mut self) {
         for path in &self.paths {
             // One moved into a ticket is gone: nothing to remove.
@@ -339,12 +338,7 @@ impl<R: Runtime> Drop for Drafted<R> {
 /// What `from` holds, `length` bytes, written as a copy of the drafts named `name`, as the form
 /// makes one (`Core::attach_open`, its chunks, its end: the size of the settings is the core's to
 /// check, on what is written). Gives its path; nothing is left of it when it fails.
-fn to_drafts<R: Runtime>(
-    core: &Core<R>,
-    name: &str,
-    from: impl Read,
-    length: u64,
-) -> Result<String, ToolError> {
+fn to_drafts(core: &Core, name: &str, from: impl Read, length: u64) -> Result<String, ToolError> {
     let handle = core
         .attach_open(DRAFT, name, length)
         .map_err(|e| failed(e.to_string()))?;
@@ -440,12 +434,12 @@ fn given(f: FileArg, within: Option<&Path>, cap: Option<u64>) -> Result<Given, T
 /// copied: its count (20 with the files kept), each file's form, and each one's length within the
 /// size the settings allow. The files named by a path are read off the async workers, from where
 /// `caller` may give them (`open_within`); a file that fails says which of the list it is.
-pub(super) async fn drafts<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) async fn drafts(
+    core: &Arc<Core>,
     caller: &Caller,
     files: Vec<FileArg>,
     kept: usize,
-    drafted: &mut Drafted<R>,
+    drafted: &mut Drafted,
 ) -> Result<Vec<DraftFile>, ToolError> {
     if files.is_empty() {
         return Ok(Vec::new());
@@ -512,13 +506,13 @@ pub(super) async fn drafts<R: Runtime>(
 /// and `add` put after them: the files kept (named by their file, as the form keeps them) in their
 /// order, then the new ones. The files not named stay: nothing here replaces the whole list. A
 /// reference that fits no file fails before anything is copied.
-pub(super) async fn amended<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) async fn amended(
+    core: &Arc<Core>,
     caller: &Caller,
     ticket: &Ticket,
     add: Vec<FileArg>,
     remove: &[FileRef],
-    drafted: &mut Drafted<R>,
+    drafted: &mut Drafted,
 ) -> Result<Vec<DraftFile>, ToolError> {
     let gone = select(&ticket.files, remove)?;
     let mut list: Vec<DraftFile> = ticket
@@ -595,12 +589,12 @@ impl Handed {
     /// Copies, in the drafts, of the files `pick` takes, for one ticket: new copies, so that the
     /// core moves files of its own into its folder. A file that cannot be copied now fails the call
     /// when the ticket named it; taken by default, it is left out (its rank given back).
-    pub(super) async fn copies<R: Runtime>(
+    pub(super) async fn copies(
         &self,
-        core: &Arc<Core<R>>,
+        core: &Arc<Core>,
         own: &Ticket,
         pick: &Picks,
-        drafted: &mut Drafted<R>,
+        drafted: &mut Drafted,
     ) -> Result<(Vec<DraftFile>, Vec<usize>), ToolError> {
         let wanted: Vec<(usize, PathBuf, u64, String)> = pick
             .ranks
@@ -685,8 +679,8 @@ impl Handed {
 /// for each) take: there, and within the size the settings allow. One that is not cannot be copied:
 /// a ticket that named it fails the call (its rank in the list, from 0, with the reason); one that
 /// took it by default goes without (`Handed::left_out`).
-pub(super) async fn hand_down<R: Runtime>(
-    core: &Core<R>,
+pub(super) async fn hand_down(
+    core: &Core,
     own: &Ticket,
     picks: &[Picks],
 ) -> Result<Handed, (usize, ToolError)> {

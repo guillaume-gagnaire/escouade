@@ -6,7 +6,6 @@
 
 use crate::core::Core;
 use anyhow::{bail, Result};
-use tauri::Runtime;
 
 /// The mode of no question.
 pub const BYPASS: &str = "bypassPermissions";
@@ -85,7 +84,7 @@ pub fn check(mode: &str, allowed: bool) -> Result<()> {
     }
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// Whether the mode of no question is open to the agents (`Settings::allow_bypass`).
     pub fn bypass_allowed(&self) -> bool {
         self.settings.read().bypass_allowed()

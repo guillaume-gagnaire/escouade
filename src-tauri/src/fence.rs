@@ -20,7 +20,7 @@ pub use escouade_model::fence::*;
 
 use std::path::PathBuf;
 
-impl<R: tauri::Runtime> crate::core::Core<R> {
+impl crate::core::Core {
     /// What the files of project `id` keep out of its index: the fence of its own agents, as the
     /// projects are now (`compute`, with no agent). Nothing without a private project.
     pub(crate) fn project_fence(&self, id: &str) -> Fence {
@@ -122,7 +122,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
     }
 }
 
-impl<R: tauri::Runtime> crate::core::Core<R> {
+impl crate::core::Core {
     /// What the agent `id` is fenced by of the projects' privacy, now (`Privacy`).
     pub(crate) fn agent_privacy(&self, id: &str) -> Privacy {
         let own = self

@@ -44,7 +44,6 @@ pub(crate) fn lost(text: &str) -> bool {
 }
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
-use tauri::Runtime;
 
 /// The restarts of the process for one stopped turn.
 pub(crate) const RETRIES: u8 = 2;
@@ -206,7 +205,7 @@ async fn read(account: &Account, settings: &Settings) -> Option<Stored> {
     }
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// Before a process of Claude Code starts on `account`: its turn, when its token is out of
     /// date (`GATE`). Returns its sign-in then (`Stored::stamp`), None for another harness.
     pub(crate) async fn before_claude(&self, account: &Account) -> Option<String> {

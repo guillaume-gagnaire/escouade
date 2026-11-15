@@ -23,7 +23,6 @@ use std::collections::{BTreeSet, HashMap};
 use std::fs::File;
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
-use tauri::Runtime;
 
 /// The longest name an image has, in characters.
 pub(super) const NAME_MAX: usize = 100;
@@ -182,8 +181,8 @@ pub(super) fn listed(dir: &Path, images: &[TicketImage]) -> Vec<ImageView> {
 
 /// `get_ticket_image`: the image as an image block, then a text block that says which it is. Not
 /// read, and said so, when its file is gone or has no plain name.
-pub(super) async fn fetch<R: Runtime>(
-    core: &Core<R>,
+pub(super) async fn fetch(
+    core: &Core,
     caller: &Caller,
     a: GetTicketImageArgs,
 ) -> Result<Vec<ContentBlock>, ToolError> {
@@ -264,8 +263,8 @@ fn weigh(total: &mut usize, size: usize) -> Result<(), Stop> {
 /// length once it is open and a content by its text, and an image that takes it past what a ticket
 /// takes (18 MB) stops it there: that file is not read, and the ones after it are not even looked
 /// at (the core would refuse the list anyway, after all of them were read and encoded).
-pub(super) async fn drafts<R: Runtime>(
-    core: &Core<R>,
+pub(super) async fn drafts(
+    core: &Core,
     caller: &Caller,
     images: Vec<ImageArg>,
     kept: usize,
@@ -288,7 +287,7 @@ pub(super) async fn drafts<R: Runtime>(
 
 /// The only folder `caller` may give a file from by its path: an agent of Escouade's working folder
 /// (`open_within`); None for Claude outside Escouade, which gives any file of the machine.
-pub(super) fn working_folder<R: Runtime>(core: &Core<R>, caller: &Caller) -> Option<PathBuf> {
+pub(super) fn working_folder(core: &Core, caller: &Caller) -> Option<PathBuf> {
     match caller {
         Caller::External => None,
         // An agent that is gone has no folder: no file is within it.
@@ -568,8 +567,8 @@ fn final_path(_file: &File, given: &Path) -> std::io::Result<PathBuf> {
 /// order, then the new ones. The images not named stay: nothing here replaces the whole list. A
 /// reference that fits no image fails before anything is read or written; what the images kept
 /// weigh counts in the new ones’ limit.
-pub(super) async fn amended<R: Runtime>(
-    core: &Core<R>,
+pub(super) async fn amended(
+    core: &Core,
     caller: &Caller,
     ticket: &Ticket,
     add: Vec<ImageArg>,
@@ -661,8 +660,8 @@ impl Handed {
 /// each) take. One whose file is gone cannot be copied: a ticket that named it fails the call (its
 /// rank in the list, from 0, with the reason); one that took it by default goes without
 /// (`Handed::left_out`).
-pub(super) async fn hand_down<R: Runtime>(
-    core: &Core<R>,
+pub(super) async fn hand_down(
+    core: &Core,
     own: &Ticket,
     picks: &[Picks],
 ) -> Result<Handed, (usize, ToolError)> {

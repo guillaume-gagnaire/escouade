@@ -9,7 +9,7 @@ use crate::paths::{test_dir, DataDir};
 use serde_json::json;
 use tauri::test::mock_app;
 
-fn load(data: &DataDir) -> std::sync::Arc<Core<tauri::test::MockRuntime>> {
+fn load(data: &DataDir) -> std::sync::Arc<Core> {
     let app = mock_app();
     let (core, _rx) = Core::load(app.handle().clone(), data.clone());
     std::mem::forget(app);

@@ -25,7 +25,6 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::Runtime;
 
 /// Why a ticket "En cours" stops when its agent's automatic resume after the usage limit is gone
 /// (turned off, cancelled, never planned): it would otherwise hold its place forever.
@@ -425,7 +424,7 @@ pub struct DraftFile {
     pub path: String,
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     // ---------- tickets ----------
 
     pub fn ticket(&self, id: &str) -> Result<Ticket> {

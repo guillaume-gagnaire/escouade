@@ -17,7 +17,6 @@ use anyhow::Result;
 use serde::Serialize;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tauri::Runtime;
 
 /// How much of a job's log the tab shows: its end, where the failure is told.
 pub const LOG_VIEW: usize = 20_000;
@@ -281,7 +280,7 @@ async fn detail_of(
     })
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// The client, the repository and what the host can do for the agent's pull request
     /// `number` (read in `host_repo`, else on the target), with that pull request.
     async fn pr_of_agent(

@@ -2093,7 +2093,7 @@ pub(crate) fn mark_updated(project_id: &str, id: &str, what: &str) {
         .insert(id.to_string(), what.to_string());
 }
 
-impl<R: tauri::Runtime> crate::core::Core<R> {
+impl crate::core::Core {
     /// The workflows of the project: the last reading kept in the data folder, read again when a
     /// file it read changed (or `force`: « Relire »), and kept when it did. A project that was
     /// never read is read now.

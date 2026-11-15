@@ -19,7 +19,6 @@ use std::path::Path;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::Runtime;
 
 /// What an imported ticket's external one hears of.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -464,7 +463,7 @@ fn missing_field(lang: Lang, service: Service, account: &Account) -> Option<Stri
     None
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     fn save_accounts(&self) -> Result<()> {
         secrets::save_accounts(&self.data, &self.accounts.read())
     }

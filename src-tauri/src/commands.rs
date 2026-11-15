@@ -26,7 +26,7 @@ use tauri::State;
 type Res<T> = Result<T, String>;
 
 /// A command's result, counted in the usage statistics when it went well (`telemetry`).
-fn counted<T, R: tauri::Runtime>(core: &Core<R>, event: Event, r: Res<T>) -> Res<T> {
+fn counted<T>(core: &Core, event: Event, r: Res<T>) -> Res<T> {
     if r.is_ok() {
         core.telemetry.track(event);
     }
@@ -35,7 +35,7 @@ fn counted<T, R: tauri::Runtime>(core: &Core<R>, event: Event, r: Res<T>) -> Res
 
 /// The project a folder was added as, counted as created unless a closed project's history came
 /// back with it (`Core::add_project`): that one is not new.
-fn project_added<R: tauri::Runtime>(core: &Core<R>, r: Res<(Project, bool)>) -> Res<Project> {
+fn project_added(core: &Core, r: Res<(Project, bool)>) -> Res<Project> {
     match r {
         Ok((project, false)) => counted(core, Event::ProjectCreated, Ok(project)),
         other => other.map(|(project, _)| project),
@@ -156,7 +156,7 @@ pub fn subscribe(
     let autopilot_pause = core.autopilot_pause();
     let project_pauses = core.project_pauses();
     let accounts = core.integration_accounts();
-    let version = core.app.package_info().version.to_string();
+    let version = core.host.version();
     let lang = core.lang();
     let claude_path_found = crate::engine::default()
         .locate(&settings.claude_path, &settings.wsl_distro)
@@ -209,19 +209,21 @@ pub fn dismiss_recovery(core: CoreState) -> Res<()> {
 /// A link the window opens outside (the system's browser; Windows' under WSLg, `outside`): the
 /// schemes Tauri's opener allowed it, http, https, mailto and tel.
 #[tauri::command(async)]
-pub fn open_url(url: String) -> Res<()> {
+pub fn open_url(core: CoreState<'_>, url: String) -> Res<()> {
     let scheme = url.split(':').next().unwrap_or("").to_ascii_lowercase();
     if !["http", "https", "mailto", "tel"].contains(&scheme.as_str()) {
         return Err(err(anyhow::anyhow!("not a link Escouade opens: {scheme}:")));
     }
-    crate::outside::open(crate::outside::What::Url(&url)).map_err(err)
+    core.host.open(crate::host::Opened::Url(url)).map_err(err)
 }
 
 /// A file or a folder the window opens outside (its program, the file manager; Windows' under
 /// WSLg, `outside`).
 #[tauri::command(async)]
-pub fn open_path(path: String) -> Res<()> {
-    crate::outside::open(crate::outside::What::Path(std::path::Path::new(&path))).map_err(err)
+pub fn open_path(core: CoreState<'_>, path: String) -> Res<()> {
+    core.host
+        .open(crate::host::Opened::Path(path.into()))
+        .map_err(err)
 }
 
 #[tauri::command]
@@ -1590,8 +1592,9 @@ pub fn attach_origin(core: CoreState, owner: String, id: String) -> Res<Attached
 /// The image on the system's clipboard, as PNG (empty without one), for a paste WebKitGTK leaves
 /// without it.
 #[tauri::command]
-pub async fn clipboard_image(app: tauri::AppHandle) -> Res<tauri::ipc::Response> {
-    crate::clipboard::image_png(&app)
+pub async fn clipboard_image(core: CoreState<'_>) -> Res<tauri::ipc::Response> {
+    core.host
+        .clipboard_image()
         .await
         .map(tauri::ipc::Response::new)
         .map_err(err)

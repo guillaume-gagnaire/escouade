@@ -20,7 +20,6 @@ use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::time::{Duration, Instant};
-use tauri::Runtime;
 
 /// The most tickets one wait watches.
 const TICKETS_MAX: usize = 20;
@@ -76,7 +75,7 @@ struct Seen {
 }
 
 impl Seen {
-    fn of<R: Runtime>(core: &Core<R>, t: &Ticket) -> Self {
+    fn of(core: &Core, t: &Ticket) -> Self {
         // Its agent's requests (counted as `list_agents` does) and whether it is at work.
         let agent = t
             .agent_id
@@ -121,7 +120,7 @@ struct Watch {
 }
 
 impl Watch {
-    fn look<R: Runtime>(&mut self, core: &Core<R>) {
+    fn look(&mut self, core: &Core) {
         match core.ticket(&self.seen.id) {
             Ok(t) => self.seen = Seen::of(core, &t),
             Err(_) => self.gone = true,
@@ -156,7 +155,7 @@ fn cursor(marks: &[Mark]) -> String {
 
 /// The cursor of the ticket `t` as it is now, for a tool that changes it to hand back: a wait that
 /// begins after the change (a quick approval is over before the client waits) is told of it.
-pub(super) fn since<R: Runtime>(core: &Core<R>, t: &Ticket) -> String {
+pub(super) fn since(core: &Core, t: &Ticket) -> String {
     cursor(&[Seen::of(core, t).mark()])
 }
 
@@ -212,8 +211,8 @@ struct Answer {
 
 /// `wait_ticket`: the tickets named, until one changes or the timeout comes, or until `cancelled`
 /// (its client gave up the request): there is then no one to answer, and the wait stops.
-pub(super) async fn wait<R: Runtime>(
-    core: &Core<R>,
+pub(super) async fn wait(
+    core: &Core,
     caller: &Caller,
     a: WaitTicketArgs,
     cancelled: impl Future<Output = ()>,

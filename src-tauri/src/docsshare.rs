@@ -19,7 +19,6 @@ use std::collections::BTreeSet;
 
 use anyhow::{bail, Result};
 use serde::Serialize;
-use tauri::Runtime;
 
 use crate::core::{AgentOptions, Core};
 use crate::git;
@@ -392,7 +391,7 @@ pub fn conflict_message(lang: Lang, target: &str, files: &[String]) -> String {
     )
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// Where the docs of `project_id` are, as git sees them.
     async fn docs_dir(&self, project_id: &str) -> Result<String> {
         Ok(self
@@ -639,7 +638,7 @@ pub fn parse_recent(text: &str) -> Vec<Moved> {
         .collect()
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// The last changes of the project's spec that were committed.
     pub async fn docs_recent(&self, project_id: &str) -> Result<Vec<Moved>> {
         Ok(recent(&self.docs_dir(project_id).await?, 6).await)

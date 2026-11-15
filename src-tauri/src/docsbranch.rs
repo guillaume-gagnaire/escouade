@@ -17,7 +17,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{bail, Result};
-use tauri::Runtime;
 
 use crate::core::Core;
 use crate::docs::{Ref, Register, Space};
@@ -60,7 +59,7 @@ pub fn branch_problem(name: &str) -> Option<String> {
     })
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// Where the extracted text of a project's documents is kept.
     pub(crate) fn docs_text_dir(&self, project_id: &str) -> PathBuf {
         self.data.project_files(project_id).join("docs-text")

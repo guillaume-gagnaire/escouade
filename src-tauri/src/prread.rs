@@ -32,7 +32,6 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tauri::Runtime;
 
 /// How long a pull request read whole is given again without asking the host.
 pub const FRESH: Duration = Duration::from_secs(20);
@@ -388,7 +387,7 @@ async fn attributes_at(root: &str, sha: &str) -> String {
         .unwrap_or_default()
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// The pull request `number` of the project read whole (through the agent that holds it,
     /// else its ticket, else on the project's target, as `project_pr`), its lines with it when
     /// `diff`. Kept: given again while `FRESH`, and after it as long as the host says it did not

@@ -19,7 +19,6 @@ use crate::taskout::{TaskOutput, MAX_OUTPUT};
 use serde::Serialize;
 use std::collections::HashSet;
 use std::sync::Arc;
-use tauri::Runtime;
 
 /// The most bytes of an output `get_background_output` gives: 64 KiB. The window shows up to 256 KiB
 /// of a task that is over (`MAX_FINISHED_OUTPUT`), which JSON-escaped is more than Claude Code takes
@@ -113,8 +112,8 @@ fn unknown(agent: &str, asked: &str) -> ToolError {
 
 /// The status and the plan of the agent `found`: None for an agent that never had a plan. The
 /// agent's lock is released before anything is done with them.
-fn plan_for<R: Runtime>(
-    core: &Core<R>,
+fn plan_for(
+    core: &Core,
     found: &resolve::AgentRef,
 ) -> Result<(AgentStatus, Option<PlanState>), ToolError> {
     let h = core.agent(&found.id).map_err(|_| {
@@ -129,8 +128,8 @@ fn plan_for<R: Runtime>(
 }
 
 /// The agent `asked` names (in `project` when given), its status and its plan.
-fn plan_of<R: Runtime>(
-    core: &Core<R>,
+fn plan_of(
+    core: &Core,
     caller: &Caller,
     asked: &str,
     project: Option<&str>,
@@ -392,8 +391,8 @@ struct Listing {
 /// in it is not: an agent of Escouade is given every field of the agents of the projects it acts on
 /// (`may_act_on`), but of the others only which work there is and how it stands (`outline`): a
 /// command line may hold a secret, and what the work does is that project's own.
-pub(super) fn list<R: Runtime>(
-    core: &Core<R>,
+pub(super) fn list(
+    core: &Core,
     caller: &Caller,
     agent: &str,
     project: Option<&str>,
@@ -461,8 +460,8 @@ fn end_of(mut out: TaskOutput, max: usize) -> TaskOutput {
 /// `get_background_output`: the end of the output of a command or a monitor of the agent (through
 /// the core, which keeps the window's bounds and reads no file but the task's own), or the report
 /// of a subagent; nothing for the others, which write no output of their own.
-pub(super) async fn output<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) async fn output(
+    core: &Arc<Core>,
     caller: &Caller,
     a: GetBackgroundOutputArgs,
 ) -> Result<String, ToolError> {
@@ -541,8 +540,8 @@ struct StopView {
 
 /// `stop_background_work`: Claude Code is asked to stop the subagent, task or workflow of the agent
 /// that `a.id` names, as the window's « Arrêter » asks it. Its end comes with the frames that follow.
-pub(super) async fn stop<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) async fn stop(
+    core: &Arc<Core>,
     caller: &Caller,
     a: StopBackgroundWorkArgs,
 ) -> Result<String, ToolError> {
@@ -600,8 +599,8 @@ struct MessageView {
 /// subagents, with its `SendMessage` tool (Claude Code lets no host write to a subagent). They
 /// reach it headed by the caller's name, never as the user's own; it costs the agent a turn, so
 /// not while its account is held back, as `send_message`. The words are never in the log.
-pub(super) async fn message<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) async fn message(
+    core: &Arc<Core>,
     caller: &Caller,
     a: MessageSubagentArgs,
 ) -> Result<String, ToolError> {

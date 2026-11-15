@@ -6,7 +6,6 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use serde_json::Value;
-use tauri::Runtime;
 
 use crate::core::Core;
 use crate::model::LanguageServerSetting;
@@ -56,7 +55,7 @@ impl Inputs {
     }
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// The inputs of the servers of `project_id`, in the worktree of `agent_id` when given.
     pub async fn lsp_inputs(&self, project_id: &str, agent_id: Option<String>) -> Result<Inputs> {
         let (root, _) = self.edit_root(project_id, agent_id).await?;

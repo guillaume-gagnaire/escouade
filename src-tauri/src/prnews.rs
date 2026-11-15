@@ -15,7 +15,6 @@ use crate::prview::ProjectPrs;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
-use tauri::Runtime;
 
 /// What a reading of a pull request says that may be news.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -168,7 +167,7 @@ impl PrList {
     }
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// The news of a ticket's pull request: its project's board shows it.
     pub(crate) fn tell_ticket_pr(self: &Arc<Self>, id: &str, kinds: &[NotifyKind]) {
         let Ok(t) = self.ticket(id) else { return };

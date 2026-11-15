@@ -166,7 +166,7 @@ pub struct Found {
     pub gone: Vec<String>,
 }
 
-impl<R: tauri::Runtime> crate::core::Core<R> {
+impl crate::core::Core {
     /// Looks for the repositories of the project's folder again (ESC-169): at its opening, when
     /// the window comes back to the front, by « Rechercher à nouveau ». A repository found is told
     /// (unless `quiet`: the first search of a project); one gone is kept as « retiré » until it is
@@ -357,7 +357,7 @@ pub fn prefix_diff(diff: &str, repo: &str) -> String {
     out
 }
 
-impl<R: tauri::Runtime> crate::core::Core<R> {
+impl crate::core::Core {
     /// The git state of a project of several repositories (ESC-169): each one's, and their sums.
     pub(crate) async fn multi_git(&self, project: &crate::model::Project) -> crate::model::GitInfo {
         use crate::model::{GitInfo, RepoGit};
@@ -467,7 +467,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
     }
 }
 
-impl<R: tauri::Runtime> crate::core::Core<R> {
+impl crate::core::Core {
     /// `dirty_files` of a project of several repositories: the project's own changes, each
     /// credited to the agent without a worktree that touched it, then the agents' worktrees'.
     pub(crate) async fn multi_dirty_files(
@@ -539,7 +539,7 @@ pub fn repo_patterns(repos: &[String], patterns: &[String], repo: &str) -> Vec<S
         .collect()
 }
 
-impl<R: tauri::Runtime> crate::core::Core<R> {
+impl crate::core::Core {
     /// The checkouts the files panel reads for `agent_id` in a project of several repositories:
     /// its worktrees, else the project's repositories. None for a project of one.
     pub(crate) fn multi_checkouts(
@@ -659,7 +659,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
     }
 }
 
-impl<R: tauri::Runtime> crate::core::Core<R> {
+impl crate::core::Core {
     /// The folder of the project's repository `repo` (ESC-169): of a project of several, that one
     /// (the first when None); else the project's repository, whatever `repo` says.
     pub(crate) async fn repo_root(
@@ -692,7 +692,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
     }
 }
 
-impl<R: tauri::Runtime> crate::core::Core<R> {
+impl crate::core::Core {
     /// The repositories of the project, as git names their roots: each of a project of several
     /// (ESC-169), else the one its folder is in.
     pub(crate) async fn project_roots_of(&self, project_id: &str) -> Vec<String> {
@@ -711,7 +711,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
     }
 }
 
-impl<R: tauri::Runtime> crate::core::Core<R> {
+impl crate::core::Core {
     /// The editor's file `path` (from `root`, the project's folder or an agent's) in a project of
     /// several repositories (ESC-169): its repository's folder, the base its agent's worktree of
     /// it left, and the path from it. As it is for a project of one, or a file of no repository.

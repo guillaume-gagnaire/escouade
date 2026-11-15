@@ -14,10 +14,9 @@ use crate::model::now_ms;
 use crate::overseer::{Outgoing, Place, Scope};
 use serde_json::json;
 use std::sync::Arc;
-use tauri::Runtime;
 
 /// The Overseer calls, else the refusal.
-fn overseer_only<R: Runtime>(core: &Core<R>, caller: &Caller) -> Result<(), ToolError> {
+fn overseer_only(core: &Core, caller: &Caller) -> Result<(), ToolError> {
     if core.overseer_calls(caller) {
         return Ok(());
     }
@@ -64,11 +63,7 @@ fn until_of(asked: Option<&str>) -> Result<Option<i64>, ToolError> {
 }
 
 /// `add_directive`.
-pub(super) fn add<R: Runtime>(
-    core: &Core<R>,
-    caller: &Caller,
-    a: AddDirectiveArgs,
-) -> Result<String, ToolError> {
+pub(super) fn add(core: &Core, caller: &Caller, a: AddDirectiveArgs) -> Result<String, ToolError> {
     overseer_only(core, caller)?;
     let actions = actions_of(&a.actions)?;
     let project = a
@@ -108,7 +103,7 @@ pub(super) fn add<R: Runtime>(
 }
 
 /// `list_directives`: the active instructions, and the latest actions with what can still be undone.
-pub(super) fn list<R: Runtime>(core: &Core<R>, caller: &Caller) -> Result<String, ToolError> {
+pub(super) fn list(core: &Core, caller: &Caller) -> Result<String, ToolError> {
     overseer_only(core, caller)?;
     let view = core.overseer_view();
     let actions: Vec<_> = view
@@ -127,8 +122,8 @@ pub(super) fn list<R: Runtime>(core: &Core<R>, caller: &Caller) -> Result<String
 }
 
 /// `revoke_directive`: one by its id, or every one that allows the actions given.
-pub(super) fn revoke<R: Runtime>(
-    core: &Core<R>,
+pub(super) fn revoke(
+    core: &Core,
     caller: &Caller,
     a: RevokeDirectiveArgs,
 ) -> Result<String, ToolError> {
@@ -171,8 +166,8 @@ pub(super) fn revoke<R: Runtime>(
 }
 
 /// `undo_action`.
-pub(super) async fn undo<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) async fn undo(
+    core: &Arc<Core>,
     caller: &Caller,
     a: UndoActionArgs,
 ) -> Result<String, ToolError> {
@@ -184,8 +179,8 @@ pub(super) async fn undo<R: Runtime>(
 }
 
 /// `leave_to_user`.
-pub(super) fn leave<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) fn leave(
+    core: &Arc<Core>,
     caller: &Caller,
     a: LeaveToUserArgs,
 ) -> Result<String, ToolError> {
@@ -208,7 +203,7 @@ pub(super) fn leave<R: Runtime>(
 }
 
 /// Where the agent `id` works: its project and its ticket.
-pub(super) fn place_of_agent<R: Runtime>(core: &Core<R>, id: &str) -> Place {
+pub(super) fn place_of_agent(core: &Core, id: &str) -> Place {
     let Ok(h) = core.agent(id) else {
         return Place::default();
     };
@@ -222,8 +217,8 @@ pub(super) fn place_of_agent<R: Runtime>(core: &Core<R>, id: &str) -> Place {
 
 /// The guard of a text the Overseer sends an agent (a message, an answer, a first message): the commands that go out
 /// in it (`git push`, `gh pr merge`…) pass only under an instruction that covers them where the agent works.
-pub(super) fn gate_text<R: Runtime>(
-    core: &Core<R>,
+pub(super) fn gate_text(
+    core: &Core,
     caller: &Caller,
     agent_id: &str,
     project_id: &str,

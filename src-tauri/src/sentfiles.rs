@@ -380,13 +380,13 @@ fn not_run(lang: crate::i18n::Lang, name: &str) -> anyhow::Error {
     ))
 }
 
-/// `path` opened with its application, or shown in its folder (`reveal`).
-fn open_or_reveal(path: PathBuf, reveal: bool) -> anyhow::Result<()> {
-    if reveal {
-        crate::fsedit::reveal(crate::fsedit::Reveal::Select(path))
+/// `path` opened with its application, or shown in its folder (`reveal`), on the host's machine.
+fn open_or_reveal(host: &dyn crate::host::Host, path: PathBuf, reveal: bool) -> anyhow::Result<()> {
+    host.open(if reveal {
+        crate::host::Opened::Reveal(path)
     } else {
-        crate::outside::open(crate::outside::What::Path(&path))
-    }
+        crate::host::Opened::Path(path)
+    })
 }
 
 /// The extensions of what the system runs when it opens it: programs, scripts, installers,
@@ -624,7 +624,7 @@ pub(crate) async fn fetch_image(
     remote_data_url(lang, &buf)
 }
 
-impl<R: tauri::Runtime> crate::core::Core<R> {
+impl crate::core::Core {
     /// An image of the web a message shows, downloaded at the user's click (`fetch_image`).
     pub async fn remote_image(&self, src: &str) -> anyhow::Result<String> {
         let settings = self.settings.read().clone();
@@ -715,7 +715,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
         reveal: bool,
     ) -> anyhow::Result<()> {
         let (folder, cwd, input, sent, fence) = self.sent_call(id, item)?;
-        let lang = crate::i18n::ui();
+        let (lang, host) = (crate::i18n::ui(), self.host.clone());
         tokio::task::spawn_blocking(move || {
             let path = target(
                 &folder,
@@ -727,7 +727,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
                 &fence,
                 lang,
             )?;
-            open_or_reveal(path, reveal)
+            open_or_reveal(&*host, path, reveal)
         })
         .await?
     }
@@ -743,8 +743,13 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
     pub async fn open_local_image(&self, id: &str, src: &str, reveal: bool) -> anyhow::Result<()> {
         let cwd = self.agent(id)?.lock().meta.cwd.clone();
         let (fence, src, lang) = (self.agent_fence(id), src.to_string(), crate::i18n::ui());
+        let host = self.host.clone();
         tokio::task::spawn_blocking(move || {
-            open_or_reveal(local_target(&cwd, &src, reveal, &fence, lang)?, reveal)
+            open_or_reveal(
+                &*host,
+                local_target(&cwd, &src, reveal, &fence, lang)?,
+                reveal,
+            )
         })
         .await?
     }

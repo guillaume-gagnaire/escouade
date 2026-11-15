@@ -5,7 +5,6 @@ use crate::core::{agent_not_found, project_not_found, Core};
 use crate::model::{AgentFolder, AgentStatus, Project};
 use anyhow::{bail, Result};
 use std::collections::HashSet;
-use tauri::Runtime;
 
 /// An agent of the project as the sidebar sees it; `waiting` is computed by the caller.
 pub struct Member<'a> {
@@ -310,7 +309,7 @@ pub fn shown_agents(p: &Project, members: &[Member]) -> Vec<String> {
         .collect()
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// The project's agents, read before any write of `projects`; `as_member` for the rules.
     pub(crate) fn folder_members(&self, project_id: &str) -> Vec<OwnedMember> {
         self.project_agents(project_id)

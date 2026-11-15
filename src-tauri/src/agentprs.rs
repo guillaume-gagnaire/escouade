@@ -22,7 +22,6 @@ use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tauri::Runtime;
 
 /// How often an agent's pull requests may be asked of its host, unless asked by hand.
 pub const READ_EVERY: Duration = Duration::from_secs(20);
@@ -472,7 +471,7 @@ fn no_branch() -> anyhow::Error {
     ))
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// The worktree of the project's repository the agent went into by itself, by the folder its
     /// session was last in (ESC-161): an ordinary agent of Claude Code without a worktree of its
     /// own. None in the project's folder, in a folder of no worktree of the repository, in another
@@ -1182,7 +1181,7 @@ pub struct PrRepo {
     pub commits: u32,
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// The pull requests' targets of an agent of several repositories: one per repository its
     /// branch has commits in, each with its host. None for an agent of one.
     async fn pr_targets_multi(&self, id: &str) -> Result<Option<Vec<(String, Target)>>> {

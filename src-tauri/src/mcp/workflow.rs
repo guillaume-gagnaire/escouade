@@ -15,7 +15,6 @@ use crate::workflow_track::{AgentTrack, Passage};
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use tauri::Runtime;
 
 /// The latest passages of an agent's history `get_agent_summary` gives.
 pub(crate) const HISTORY_MAX: usize = 100;
@@ -58,7 +57,7 @@ pub(crate) struct Tracked {
 }
 
 impl Tracked {
-    pub(crate) fn of<R: Runtime>(core: &Core<R>, project_id: &str) -> Self {
+    pub(crate) fn of(core: &Core, project_id: &str) -> Self {
         Self {
             scan: core.tracking_scan(project_id),
             tracks: core
@@ -118,11 +117,7 @@ impl Tracked {
 
 /// `get_workflow`: the workflows of the project `project` names, read again if a file they read
 /// changed, with the agents on each step.
-pub(super) async fn get<R: Runtime>(
-    core: &Core<R>,
-    caller: &Caller,
-    project: &str,
-) -> Result<String, ToolError> {
+pub(super) async fn get(core: &Core, caller: &Caller, project: &str) -> Result<String, ToolError> {
     let p = resolve::project(core, caller, project)?;
     let read = core
         .refresh_workflows(&p.id, false)

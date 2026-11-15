@@ -437,7 +437,7 @@ pub fn check_all(
 
 // ---------- on the core ----------
 
-impl<R: tauri::Runtime> crate::core::Core<R> {
+impl crate::core::Core {
     /// The workflows « Affiner… » works on: those of the project's files the rules read, as steps
     /// that name each other (a prompt run over and over has none to refine).
     fn refinable(&self, project_id: &str) -> Result<(crate::model::Project, Vec<Workflow>)> {

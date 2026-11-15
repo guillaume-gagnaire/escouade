@@ -23,7 +23,6 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::Runtime;
 
 /// How many due times the form shows ahead (« Prochaines »).
 pub(crate) const PREVIEW: usize = 3;
@@ -341,7 +340,7 @@ fn task_not_found() -> anyhow::Error {
     ))
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// Every scheduled task, with its next due time.
     pub fn scheduled_views(&self) -> Vec<ScheduledView> {
         let now = self.schedule_clock.now();

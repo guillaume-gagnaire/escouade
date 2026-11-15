@@ -13,7 +13,6 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::process::Stdio;
 use std::time::Duration;
-use tauri::Runtime;
 
 /// A project's code host, as the sidebar and the board need it (ESC-390).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -236,7 +235,7 @@ pub struct ForgesView {
 /// How long a CLI may take to give its token.
 const CLI_TOKEN_LIMIT: Duration = Duration::from_secs(15);
 
-impl<R: Runtime> Core<R> {
+impl Core {
     fn http(&self) -> Result<reqwest::Client> {
         crate::usage::http_client(&self.settings.read())
     }

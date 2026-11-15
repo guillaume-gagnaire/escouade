@@ -24,7 +24,6 @@ use crate::plan::PlanState;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
-use tauri::Runtime;
 
 /// The longest last message an agent's summary gives, in characters.
 pub(crate) const LAST_MESSAGE_MAX: usize = 2000;
@@ -193,10 +192,7 @@ impl ColumnCounts {
 }
 
 /// `list_projects`: every project the caller sees (`resolve::Sight`), in the window's order.
-pub(super) async fn projects<R: Runtime>(
-    core: &Core<R>,
-    caller: &Caller,
-) -> Result<String, ToolError> {
+pub(super) async fn projects(core: &Core, caller: &Caller) -> Result<String, ToolError> {
     let sight = Sight::of(core, caller);
     // One lock at a time (the order is projects before tickets, see `Core`).
     let mut projects = core.projects.read().clone();
@@ -315,8 +311,8 @@ impl FolderRef {
 
 /// `list_agents`: the agents not archived, in the sidebar's order, project by project in the
 /// app's order, of every project the caller sees or of `project`.
-pub(super) fn agents<R: Runtime>(
-    core: &Core<R>,
+pub(super) fn agents(
+    core: &Core,
     caller: &Caller,
     project: Option<&str>,
 ) -> Result<String, ToolError> {
@@ -397,7 +393,7 @@ pub(super) struct FolderRow {
 }
 
 /// The folders of `project` in the sidebar's order, archived agents left out.
-pub(super) fn folder_rows<R: Runtime>(core: &Core<R>, project: &Project) -> Vec<FolderRow> {
+pub(super) fn folder_rows(core: &Core, project: &Project) -> Vec<FolderRow> {
     let owned = core.folder_members(&project.id);
     let members: Vec<_> = owned.iter().map(folders::OwnedMember::as_member).collect();
     let member = |id: &str| {
@@ -436,8 +432,8 @@ pub(super) fn folder_rows<R: Runtime>(core: &Core<R>, project: &Project) -> Vec<
 }
 
 /// `list_folders`: the folders of `project`, or of the calling agent's own project without it.
-pub(super) fn folders<R: Runtime>(
-    core: &Core<R>,
+pub(super) fn folders(
+    core: &Core,
     caller: &Caller,
     project: Option<&str>,
 ) -> Result<String, ToolError> {
@@ -451,7 +447,7 @@ fn dollars(cost: f64) -> f64 {
 }
 
 /// Each ticket's key, by id.
-fn ticket_keys<R: Runtime>(core: &Core<R>) -> HashMap<String, String> {
+fn ticket_keys(core: &Core) -> HashMap<String, String> {
     core.tickets
         .read()
         .iter()
@@ -511,7 +507,7 @@ struct TicketRow {
 }
 
 /// The name of the account `id` a ticket is set to, as the tools say it (by its id when gone).
-fn account_name<R: Runtime>(core: &Core<R>, id: &str) -> String {
+fn account_name(core: &Core, id: &str) -> String {
     accounts::find(&core.settings.read(), id).map_or_else(
         || id.to_string(),
         |a| accounts::name_in(crate::i18n::ui(), a),
@@ -519,8 +515,8 @@ fn account_name<R: Runtime>(core: &Core<R>, id: &str) -> String {
 }
 
 /// `list_tickets`: the tickets of `project`, of every column or of `column`, in the board's order.
-pub(super) fn tickets<R: Runtime>(
-    core: &Core<R>,
+pub(super) fn tickets(
+    core: &Core,
     caller: &Caller,
     project: &str,
     column: Option<Column>,
@@ -566,7 +562,7 @@ pub(super) fn tickets<R: Runtime>(
 
 /// The keys of the tickets « À faire » of the project, in the order the board shows them (the one
 /// the autopilot starts them in).
-pub(super) fn todo_keys<R: Runtime>(core: &Core<R>, project_id: &str) -> Vec<String> {
+pub(super) fn todo_keys(core: &Core, project_id: &str) -> Vec<String> {
     let all = core.tickets.read().clone();
     let mut list: Vec<&Ticket> = all
         .iter()
@@ -775,7 +771,7 @@ struct External {
 /// agent: never call it with the tickets' lock held (a write one would deadlock, a read one too
 /// behind a writer waiting for it), nor with that agent's. It also looks at the size of each
 /// image's file (20 at most).
-pub(crate) fn ticket_view<R: Runtime>(core: &Core<R>, t: &Ticket) -> TicketView {
+pub(crate) fn ticket_view(core: &Core, t: &Ticket) -> TicketView {
     let keys = ticket_keys(core);
     let keys: HashMap<&str, &str> = keys
         .iter()
@@ -856,8 +852,8 @@ pub(crate) fn ticket_view<R: Runtime>(core: &Core<R>, t: &Ticket) -> TicketView 
 }
 
 /// `get_ticket`: the ticket `asked` names, or without one, the caller's own (an agent's).
-pub(super) fn ticket<R: Runtime>(
-    core: &Core<R>,
+pub(super) fn ticket(
+    core: &Core,
     caller: &Caller,
     asked: Option<&str>,
 ) -> Result<String, ToolError> {
@@ -912,7 +908,7 @@ struct BoardDefaults {
 
 /// `project`'s Kanban settings as `get_board` answers them. Async for the branch the project is
 /// on, which is the target while the Kanban has none (the first ticket fixes it).
-pub(crate) async fn board_view<R: Runtime>(core: &Core<R>, project: &Project) -> BoardView {
+pub(crate) async fn board_view(core: &Core, project: &Project) -> BoardView {
     let b = &project.board;
     let target = if b.target.is_empty() {
         git::head_branch(&project.path).await
@@ -949,8 +945,8 @@ pub(crate) async fn board_view<R: Runtime>(core: &Core<R>, project: &Project) ->
 }
 
 /// `get_board`: the Kanban settings of `project`.
-pub(super) async fn board<R: Runtime>(
-    core: &Core<R>,
+pub(super) async fn board(
+    core: &Core,
     caller: &Caller,
     project: &str,
 ) -> Result<String, ToolError> {
@@ -959,7 +955,7 @@ pub(super) async fn board<R: Runtime>(
 }
 
 /// The ticket the calling agent works on. Claude outside Escouade has none.
-pub(super) fn own_ticket<R: Runtime>(core: &Core<R>, caller: &Caller) -> Result<Ticket, ToolError> {
+pub(super) fn own_ticket(core: &Core, caller: &Caller) -> Result<Ticket, ToolError> {
     let Caller::Agent(id) = caller else {
         return Err(ToolError::Refused(tr!(
             "Donne la clé ou l’id du ticket : seul un agent d’Escouade lit le sien sans le nommer.",
@@ -1016,7 +1012,7 @@ struct Pause {
 }
 
 /// `get_usage`: each account's quota, of every harness, and the autopilot's pause.
-pub(super) fn usage<R: Runtime>(core: &Core<R>) -> Result<String, ToolError> {
+pub(super) fn usage(core: &Core) -> Result<String, ToolError> {
     let list = core.settings.read().accounts.clone();
     // Each account's windows as last read, and the account new agents go to as the status bar
     // and the autopilot have it (`UsageSnapshot::settle`: the first good one, `pace`, else the
@@ -1078,8 +1074,8 @@ struct Summary {
 }
 
 /// `get_agent_summary`: the agent `agent` names (in `project` when given), summed up.
-pub(super) fn agent_summary<R: Runtime>(
-    core: &Core<R>,
+pub(super) fn agent_summary(
+    core: &Core,
     caller: &Caller,
     agent: &str,
     project: Option<&str>,
@@ -1396,8 +1392,8 @@ fn request_row(agent: RequestAgent, w: Waiting) -> RequestRow {
 /// `list_requests`: the requests waiting for an answer, in the order they came, of the agent
 /// `agent` names (in `project` when given), of the agents of `project`, or of every agent not
 /// archived of the projects the caller sees.
-pub(super) fn requests<R: Runtime>(
-    core: &Core<R>,
+pub(super) fn requests(
+    core: &Core,
     caller: &Caller,
     agent: Option<&str>,
     project: Option<&str>,

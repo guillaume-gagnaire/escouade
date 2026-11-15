@@ -14,7 +14,6 @@ use crate::git;
 use crate::model::AgentView;
 use anyhow::{anyhow, bail, Result};
 use std::sync::Arc;
-use tauri::Runtime;
 
 /// How a pull request's branch is fetched, and the branch the agent's worktree is on.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,7 +91,7 @@ pub fn fetch_plan(
     }
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// « Lancer un agent sur cette PR »: the open pull request `number` of the project's remote,
     /// read again, its branch fetched, and an agent in a worktree on it, merged into the pull
     /// request's base when that branch is here. The refusals of an agent on a branch hold (the

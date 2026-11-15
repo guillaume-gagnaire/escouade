@@ -74,7 +74,6 @@ use crate::tickets::{
 use serde::Serialize;
 use serde_json::json;
 use std::sync::Arc;
-use tauri::Runtime;
 
 /// The longest title a ticket made here has, in characters.
 const TITLE_MAX: usize = 200;
@@ -110,11 +109,7 @@ fn agent_only(caller: &Caller) -> Result<&str, ToolError> {
 /// private on every project that is not private, the agent of a private project on its own alone;
 /// Claude outside Escouade acts on any. An agent the core no longer has acts nowhere. The refusal
 /// names no project: one the agent does not see may be private, and is not said to be.
-pub(super) fn may_act_on<R: Runtime>(
-    core: &Core<R>,
-    caller: &Caller,
-    project_id: &str,
-) -> Result<(), ToolError> {
+pub(super) fn may_act_on(core: &Core, caller: &Caller, project_id: &str) -> Result<(), ToolError> {
     let Caller::Agent(id) = caller else {
         return Ok(());
     };
@@ -272,11 +267,7 @@ pub(super) fn without_origin(description: &str) -> &str {
 
 /// The description of a ticket made through the server: what the caller wrote, then who made it.
 /// The limit of `description` is on what was written, not on this line.
-pub(super) fn described<R: Runtime>(
-    core: &Core<R>,
-    caller: &Caller,
-    written: &str,
-) -> Result<String, ToolError> {
+pub(super) fn described(core: &Core, caller: &Caller, written: &str) -> Result<String, ToolError> {
     let origin = activity::caller_name(core, Some(caller));
     Ok(with_origin(
         &description(written)?,
@@ -296,8 +287,8 @@ fn one_line(text: &str) -> String {
 pub(crate) use escouade_base::text::visible_line;
 
 /// The ids of the tickets of `project` the keys (or ids) name.
-fn after_ids<R: Runtime>(
-    core: &Core<R>,
+fn after_ids(
+    core: &Core,
     caller: &Caller,
     project: &Project,
     asked: &[String],
@@ -309,14 +300,14 @@ fn after_ids<R: Runtime>(
 }
 
 /// The project a ticket is in.
-fn project_of<R: Runtime>(core: &Core<R>, project_id: &str) -> Result<Project, ToolError> {
+fn project_of(core: &Core, project_id: &str) -> Result<Project, ToolError> {
     core.project(project_id).map_err(failure)
 }
 
 // ---------- guardrails ----------
 
 /// A time as the refusals say it: "14:30" today, "2026-10-12 14:30" another day.
-fn when<R: Runtime>(core: &Core<R>, ms: i64) -> String {
+fn when(core: &Core, ms: i64) -> String {
     use chrono::TimeZone;
     let at = chrono::Local.timestamp_millis_opt(ms).single();
     let now = chrono::Local
@@ -333,7 +324,7 @@ fn when<R: Runtime>(core: &Core<R>, ms: i64) -> String {
 
 /// What `held` says, and until when: the pause of the account (or of the first account to be free
 /// again), else an agent waiting for its quota.
-pub(crate) fn why<R: Runtime>(core: &Core<R>, held: &Held) -> String {
+pub(crate) fn why(core: &Core, held: &Held) -> String {
     let p = &held.pause;
     let until = when(core, p.until);
     let pct = p.pct.map_or(0, |pct| pct.round() as i64);
@@ -371,11 +362,7 @@ pub(crate) fn why<R: Runtime>(core: &Core<R>, held: &Held) -> String {
 /// that is free takes it, as the scheduler has it. Asked for by hand, it is not held by « Pause
 /// au-delà du quota » nor by the day's budget, which hold back the autopilot alone. The refusal says
 /// why, and until when.
-fn not_held<R: Runtime>(
-    core: &Core<R>,
-    project_id: &str,
-    engine: EngineId,
-) -> Result<(), ToolError> {
+fn not_held(core: &Core, project_id: &str, engine: EngineId) -> Result<(), ToolError> {
     match core.project_limit(project_id, engine) {
         Some(held) => Err(ToolError::Refused(why(core, &held))),
         None => Ok(()),
@@ -385,10 +372,7 @@ fn not_held<R: Runtime>(
 /// A message to an agent does not go out while the agent's own account is at its usage limit
 /// (`Core::account_limit`; « Pause au-delà du quota » holds back the autopilot alone). An agent on another account is not
 /// held by it. The refusal says why, until when, and which account when there are several.
-pub(super) fn account_not_held<R: Runtime>(
-    core: &Core<R>,
-    agent: &resolve::AgentRef,
-) -> Result<(), ToolError> {
+pub(super) fn account_not_held(core: &Core, agent: &resolve::AgentRef) -> Result<(), ToolError> {
     let Some(account) = core
         .agent(&agent.id)
         .ok()
@@ -418,8 +402,8 @@ pub(super) fn account_not_held<R: Runtime>(
 // ---------- tickets ----------
 
 /// `create_ticket`: a ticket « À faire » at the end of the project's column.
-pub(super) async fn create_ticket<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) async fn create_ticket(
+    core: &Arc<Core>,
     caller: &Caller,
     a: CreateTicketArgs,
 ) -> Result<String, ToolError> {
@@ -476,8 +460,8 @@ pub(super) async fn create_ticket<R: Runtime>(
 
 /// `update_ticket`: the fields given replace the ticket's; the others stay. Its images are added to
 /// (`addImages`) or taken from (`removeImages`), the ones not named kept.
-pub(super) async fn update_ticket<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) async fn update_ticket(
+    core: &Arc<Core>,
     caller: &Caller,
     a: UpdateTicketArgs,
 ) -> Result<String, ToolError> {
@@ -607,8 +591,8 @@ pub(super) async fn update_ticket<R: Runtime>(
 }
 
 /// `move_ticket`: the ticket's place in « À faire »; answers the column's keys in their order.
-pub(super) fn move_ticket<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) fn move_ticket(
+    core: &Arc<Core>,
     caller: &Caller,
     a: MoveTicketArgs,
 ) -> Result<String, ToolError> {
@@ -646,8 +630,8 @@ const START_WAIT: std::time::Duration = std::time::Duration::from_secs(15);
 
 /// `start_ticket`: the window's « Lancer ». Refused where the window would not offer it, or ask
 /// the user first.
-pub(super) async fn start_ticket<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) async fn start_ticket(
+    core: &Arc<Core>,
     caller: &Caller,
     a: StartTicketArgs,
 ) -> Result<String, ToolError> {
@@ -796,8 +780,8 @@ const BRANCHES_LISTED: usize = 20;
 
 /// A model given for a Kanban's agents or a ticket's: `None` when left out, an empty one when it
 /// goes back to the default, else one the app offers (`model`).
-fn model_setting<R: Runtime>(
-    core: &Core<R>,
+fn model_setting(
+    core: &Core,
     on: &Carrier,
     asked: Option<&str>,
 ) -> Result<Option<String>, ToolError> {
@@ -807,8 +791,8 @@ fn model_setting<R: Runtime>(
 }
 
 /// The model and the effort a tool sets, each checked against the harness that carries them.
-pub(super) fn model_and_effort<R: Runtime>(
-    core: &Core<R>,
+pub(super) fn model_and_effort(
+    core: &Core,
     on: &Carrier,
     model: Option<&str>,
     effort: Option<&str>,
@@ -833,7 +817,7 @@ fn auto_off(asked: Option<&str>) -> Option<&str> {
 /// The account a tool names for a ticket (ESC-153): `None` when left out, an empty one for
 /// `auto`, else the id of the account of that name (in any case) or of that id; one there is no
 /// account of is given as it is, for the core to refuse it, saying so.
-pub(super) fn account_setting<R: Runtime>(core: &Core<R>, asked: Option<&str>) -> Option<String> {
+pub(super) fn account_setting(core: &Core, asked: Option<&str>) -> Option<String> {
     let asked = auto_off(asked)?.trim();
     let settings = core.settings.read();
     let named = |a: &&crate::model::Account| {
@@ -1124,8 +1108,8 @@ pub(super) fn board_changes(
 /// `set_board`: the window's Settings › Kanban, through the same function of the core (the window
 /// is told, the board saved and scheduled again). Answers the settings as `get_board` does, and
 /// what changed, for the activity log (`board_changes`).
-pub(super) async fn set_board<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) async fn set_board(
+    core: &Arc<Core>,
     caller: &Caller,
     a: SetBoardArgs,
 ) -> Result<(String, String), ToolError> {
@@ -1156,12 +1140,7 @@ pub(super) async fn set_board<R: Runtime>(
 
 /// An agent does not act on its own ticket: the one it works on (its ticket names it, or its own
 /// record names the ticket). `why` says it, in the words of the tool.
-fn not_own_ticket<R: Runtime>(
-    core: &Core<R>,
-    caller: &Caller,
-    t: &Ticket,
-    why: String,
-) -> Result<(), ToolError> {
+fn not_own_ticket(core: &Core, caller: &Caller, t: &Ticket, why: String) -> Result<(), ToolError> {
     let Caller::Agent(id) = caller else {
         return Ok(());
     };
@@ -1185,14 +1164,14 @@ fn own_ticket_with_this_tool() -> String {
 }
 
 /// The ticket's agent, unless it is gone or archived: the one a message of the flow reaches.
-fn live_agent_of<R: Runtime>(core: &Core<R>, t: &Ticket) -> Option<resolve::AgentRef> {
+fn live_agent_of(core: &Core, t: &Ticket) -> Option<resolve::AgentRef> {
     let h = core.agent(t.agent_id.as_deref()?).ok()?;
     let rt = h.lock();
     (!rt.meta.archived).then(|| resolve::AgentRef::of(&rt.meta))
 }
 
 /// The agent is at work: the core refuses first, in the window's words, held account or not.
-fn at_work<R: Runtime>(core: &Core<R>, agent: &resolve::AgentRef) -> bool {
+fn at_work(core: &Core, agent: &resolve::AgentRef) -> bool {
     core.agent(&agent.id)
         .is_ok_and(|h| h.lock().meta.status.is_active())
 }
@@ -1201,7 +1180,7 @@ fn at_work<R: Runtime>(core: &Core<R>, agent: &resolve::AgentRef) -> bool {
 /// (`Core::send_or_block`): the ticket moves first (sent back, unblocked, handed over), then is
 /// blocked with the reason when the message fails. Once it differs from `before` in its column or
 /// its block, the call is told as taken into account; else it is the refusal it looks like.
-fn unsent<R: Runtime>(core: &Core<R>, before: &Ticket, e: anyhow::Error) -> ToolError {
+fn unsent(core: &Core, before: &Ticket, e: anyhow::Error) -> ToolError {
     let moved = core
         .ticket(&before.id)
         .is_ok_and(|now| now.column != before.column || now.blocked != before.blocked);
@@ -1229,16 +1208,13 @@ struct Answered {
 /// `wait_ticket` cursor of the ticket as it was before (`wait::since`). What the action sets off
 /// may be over before the client waits for it (a quick approval): from this cursor the wait is told
 /// of it all the same.
-fn answer<R: Runtime>(core: &Core<R>, id: &str, since: String) -> Result<String, ToolError> {
+fn answer(core: &Core, id: &str, since: String) -> Result<String, ToolError> {
     let ticket = ticket_view(core, &core.ticket(id).map_err(failure)?);
     json(&Answered { ticket, since })
 }
 
 /// What approving `t` does that goes out (ESC-462): the approval itself, and the merge or the push of its board.
-fn approve_actions<R: Runtime>(
-    core: &Core<R>,
-    t: &crate::model::Ticket,
-) -> Vec<crate::overseer::Outgoing> {
+fn approve_actions(core: &Core, t: &crate::model::Ticket) -> Vec<crate::overseer::Outgoing> {
     use crate::overseer::Outgoing;
     let mut actions = vec![Outgoing::Approve];
     match core
@@ -1255,8 +1231,8 @@ fn approve_actions<R: Runtime>(
 
 /// `approve_ticket`: the window's « Valider… ». Answers once the approval has started: its tests,
 /// commit, merge or push go on in the background, and are followed on the ticket.
-pub(super) fn approve_ticket<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) fn approve_ticket(
+    core: &Arc<Core>,
     caller: &Caller,
     a: ApproveTicketArgs,
 ) -> Result<String, ToolError> {
@@ -1291,8 +1267,8 @@ pub(super) fn approve_ticket<R: Runtime>(
 
 /// `reject_ticket`: the window's « Renvoyer », the comment going to the ticket's agent followed by
 /// who sent the ticket back.
-pub(super) async fn reject_ticket<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) async fn reject_ticket(
+    core: &Arc<Core>,
     caller: &Caller,
     a: RejectTicketArgs,
 ) -> Result<String, ToolError> {
@@ -1333,8 +1309,8 @@ pub(super) async fn reject_ticket<R: Runtime>(
 }
 
 /// `resume_ticket`: the window's « Reprendre » on a blocked ticket « En cours ».
-pub(super) async fn resume_ticket<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) async fn resume_ticket(
+    core: &Arc<Core>,
     caller: &Caller,
     a: ResumeTicketArgs,
 ) -> Result<String, ToolError> {
@@ -1365,8 +1341,8 @@ pub(super) async fn resume_ticket<R: Runtime>(
 
 /// `resolve_conflict`: the window's « L'agent résout » on a ticket « À tester » stopped on a
 /// conflict.
-pub(super) async fn resolve_conflict<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) async fn resolve_conflict(
+    core: &Arc<Core>,
     caller: &Caller,
     a: ResolveConflictArgs,
 ) -> Result<String, ToolError> {
@@ -1397,8 +1373,8 @@ pub(super) async fn resolve_conflict<R: Runtime>(
 }
 
 /// `dismiss_block`: the window's « Annuler » on a blocked ticket « À tester ».
-pub(super) fn dismiss_block<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) fn dismiss_block(
+    core: &Arc<Core>,
     caller: &Caller,
     a: DismissBlockArgs,
 ) -> Result<String, ToolError> {
@@ -1424,8 +1400,8 @@ pub(super) fn dismiss_block<R: Runtime>(
 }
 
 /// `delete_ticket`: the window's « Supprimer », whatever the ticket's column.
-pub(super) async fn delete_ticket<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) async fn delete_ticket(
+    core: &Arc<Core>,
     caller: &Caller,
     a: DeleteTicketArgs,
 ) -> Result<String, ToolError> {
@@ -1469,8 +1445,8 @@ pub(super) struct Carrier {
 
 /// The harness of a model or an effort given for `project`, for its `ticket` when there is one, and
 /// for `account` (`account_setting`: the call's, `Some("")` for auto) when the call names one.
-pub(super) fn carrier<R: Runtime>(
-    core: &Core<R>,
+pub(super) fn carrier(
+    core: &Core,
     project: &Project,
     ticket: Option<&Ticket>,
     account: Option<&str>,
@@ -1505,7 +1481,7 @@ struct Offered {
 
 /// The models of a harness other than Claude Code, for the account that will take them: what it
 /// listed (ESC-124, ESC-186), else what its harness listed for any account, else what it declares.
-fn offered<R: Runtime>(core: &Core<R>, on: &Carrier) -> Vec<Offered> {
+fn offered(core: &Core, on: &Carrier) -> Vec<Offered> {
     let told = |m: &crate::engine::registry::ToldModel| Offered {
         id: m.id.clone(),
         label: m.label.clone(),
@@ -1540,7 +1516,7 @@ fn offered<R: Runtime>(core: &Core<R>, on: &Carrier) -> Vec<Offered> {
 }
 
 /// Where a harness other than Claude Code is named in an error: « Codex (compte Perso) ».
-fn carrier_name<R: Runtime>(core: &Core<R>, on: &Carrier) -> String {
+fn carrier_name(core: &Core, on: &Carrier) -> String {
     let name = crate::engine::by_id(on.engine).name();
     let settings = core.settings.read();
     match on
@@ -1560,8 +1536,8 @@ fn carrier_name<R: Runtime>(core: &Core<R>, on: &Carrier) -> String {
 /// The harness of `project`, and the models and efforts it takes for the account that would carry
 /// a new agent (`list_projects`, ESC-248): what `create_agent`, `set_board` and the tickets check
 /// their `model` and `effort` against.
-pub(super) fn harness_choices<R: Runtime>(
-    core: &Core<R>,
+pub(super) fn harness_choices(
+    core: &Core,
     project: &Project,
 ) -> (EngineId, Vec<String>, Vec<String>) {
     let on = carrier(core, project, None, None);
@@ -1589,11 +1565,7 @@ pub(super) fn harness_choices<R: Runtime>(
 /// what a `claude` last reported, or that of an account told (ESC-124: a model of one account
 /// only); for another harness the catalog of the account that will take it (ESC-248). Its id, in the
 /// case its harness has it.
-fn model<R: Runtime>(
-    core: &Core<R>,
-    on: &Carrier,
-    asked: Option<&str>,
-) -> Result<Option<String>, ToolError> {
+fn model(core: &Core, on: &Carrier, asked: Option<&str>) -> Result<Option<String>, ToolError> {
     let Some(m) = asked.map(str::trim).filter(|m| !m.is_empty()) else {
         return Ok(None);
     };
@@ -1664,8 +1636,8 @@ fn model<R: Runtime>(
 /// An effort given for a harness other than Claude Code checked against its own: the levels the
 /// model takes when its account lists them, else those of the harness (ESC-248). Claude Code's are
 /// checked by `effort_setting`; an empty effort, the default, always fits.
-fn check_effort<R: Runtime>(
-    core: &Core<R>,
+fn check_effort(
+    core: &Core,
     on: &Carrier,
     model: Option<&str>,
     asked: Option<&str>,
@@ -1701,8 +1673,8 @@ fn check_effort<R: Runtime>(
 
 /// `create_agent`: a new agent of the project, and its first message. The window's selection is
 /// the user's: the agent is not selected.
-pub(super) async fn create_agent<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) async fn create_agent(
+    core: &Arc<Core>,
     caller: &Caller,
     a: CreateAgentArgs,
 ) -> Result<String, ToolError> {
@@ -1782,15 +1754,15 @@ pub(super) async fn create_agent<R: Runtime>(
 }
 
 /// The folder holding `agent`, as the tools that file agents say it; null when loose.
-fn folder_ref<R: Runtime>(core: &Core<R>, project_id: &str, agent: &str) -> Option<FolderRef> {
+fn folder_ref(core: &Core, project_id: &str, agent: &str) -> Option<FolderRef> {
     let p = core.project(project_id).ok()?;
     folders::folder_of(&p, agent).map(FolderRef::of)
 }
 
 /// The agent `asked` names (in the project `project` when given), who is not the caller and,
 /// for an agent calling, is in a project it acts on (`may_act_on`).
-pub(super) fn other_agent<R: Runtime>(
-    core: &Core<R>,
+pub(super) fn other_agent(
+    core: &Core,
     caller: &Caller,
     asked: &str,
     project: Option<&str>,
@@ -1809,8 +1781,8 @@ pub(super) fn other_agent<R: Runtime>(
 
 /// `send_message`: a message to an agent, delivered under its author's name (« Message de
 /// <author> : »), never as the user's own words.
-pub(super) async fn send_message<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) async fn send_message(
+    core: &Arc<Core>,
     caller: &Caller,
     a: SendMessageArgs,
 ) -> Result<String, ToolError> {
@@ -1859,8 +1831,8 @@ pub(super) async fn send_message<R: Runtime>(
 }
 
 /// `stop_agent`: the agent's running turn is interrupted, as the window's stop button does.
-pub(super) async fn stop_agent<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) async fn stop_agent(
+    core: &Arc<Core>,
     caller: &Caller,
     a: StopAgentArgs,
 ) -> Result<String, ToolError> {
@@ -1886,8 +1858,8 @@ pub(super) async fn stop_agent<R: Runtime>(
 /// The request `asked` of the agent `found`, still waiting for an answer. Refused when it no longer
 /// waits (the user answered it in the window, or another client did, or the agent stopped), and
 /// for an agent in the Claude Code view, whose requests are in its terminal.
-pub(super) fn waiting_request<R: Runtime>(
-    core: &Core<R>,
+pub(super) fn waiting_request(
+    core: &Core,
     found: &resolve::AgentRef,
     asked: &str,
 ) -> Result<Waiting, ToolError> {
@@ -1929,8 +1901,8 @@ pub(super) fn waiting_request<R: Runtime>(
 
 /// Why the core could not answer `request` of `found`: it no longer waits (the user, or another
 /// client, answered it between the check and the answer), else what the core said.
-pub(super) fn not_answered<R: Runtime>(
-    core: &Core<R>,
+pub(super) fn not_answered(
+    core: &Core,
     found: &resolve::AgentRef,
     request: &str,
     why: anyhow::Error,
@@ -1945,8 +1917,8 @@ pub(super) fn not_answered<R: Runtime>(
 /// Escouade always; an agent as « Les agents peuvent répondre aux questions et aux permissions des
 /// autres agents » says (`Settings::agents_answer`): nobody, the chef the user chose for the
 /// project of the agent that asks (`Project::chef`, never the principal of a folder), or all.
-pub(super) fn may_answer<R: Runtime>(
-    core: &Core<R>,
+pub(super) fn may_answer(
+    core: &Core,
     caller: &Caller,
     found: &resolve::AgentRef,
 ) -> Result<(), ToolError> {
@@ -1979,8 +1951,8 @@ pub(super) fn may_answer<R: Runtime>(
 
 /// `answer_permission`: the window's « Autoriser » or « Refuser » for a permission, or the approval
 /// of a plan. Never « Toujours autoriser ».
-pub(super) fn answer_permission<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) fn answer_permission(
+    core: &Arc<Core>,
     caller: &Caller,
     a: AnswerPermissionArgs,
 ) -> Result<String, ToolError> {
@@ -2043,8 +2015,8 @@ pub(super) fn answer_permission<R: Runtime>(
 
 /// `answer_question`: what the window's question card sends, `{ <question>: <answer> }`, for the
 /// answers given.
-pub(super) fn answer_question<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) fn answer_question(
+    core: &Arc<Core>,
     caller: &Caller,
     a: AnswerQuestionArgs,
 ) -> Result<String, ToolError> {
@@ -2248,8 +2220,8 @@ pub(super) fn answers_summary(answers: &[QuestionAnswer]) -> String {
 // ---------- for the agents of Escouade ----------
 
 /// `report_progress`: the status line on the agent's card and its ticket's, until its next call.
-pub(super) fn report_progress<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) fn report_progress(
+    core: &Arc<Core>,
     caller: &Caller,
     a: ReportProgressArgs,
 ) -> Result<String, ToolError> {
@@ -2273,8 +2245,8 @@ pub(super) fn report_progress<R: Runtime>(
 }
 
 /// One of `split_ticket`'s tickets, checked: its draft.
-fn sub_draft<R: Runtime>(
-    core: &Core<R>,
+fn sub_draft(
+    core: &Core,
     caller: &Caller,
     sub: &SubTicket,
     after: Vec<String>,
@@ -2315,8 +2287,8 @@ fn of_list(n: usize, e: ToolError) -> ToolError {
 /// agent's ticket it asked for, all of them by default: by default an image whose file is gone is
 /// left out and said (the answer is then the keys with a note for each), while one that is named
 /// and cannot be copied fails the call.
-pub(super) async fn split_ticket<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) async fn split_ticket(
+    core: &Arc<Core>,
     caller: &Caller,
     a: SplitTicketArgs,
 ) -> Result<String, ToolError> {
@@ -2421,11 +2393,7 @@ pub(super) async fn split_ticket<R: Runtime>(
 // ---------- the agents' folders ----------
 
 /// The project's folder `id` as `list_folders` gives it.
-fn folder_answer<R: Runtime>(
-    core: &Core<R>,
-    project_id: &str,
-    id: &str,
-) -> Result<String, ToolError> {
+fn folder_answer(core: &Core, project_id: &str, id: &str) -> Result<String, ToolError> {
     let project = core.project(project_id).map_err(failure)?;
     let row = folder_rows(core, &project).into_iter().find(|r| r.id == id);
     json(&row)
@@ -2436,8 +2404,8 @@ fn folder_answer<R: Runtime>(
 /// the agents that wait (they come first, or under the principal) and the folder's principal.
 /// Archived agents are not counted either, and a rank past the end is the bottom. `item_move`
 /// counts the level once `item` is taken out.
-fn stored_index<R: Runtime>(
-    core: &Core<R>,
+fn stored_index(
+    core: &Core,
     project_id: &str,
     folder: Option<&str>,
     item: &str,
@@ -2475,8 +2443,8 @@ fn stored_index<R: Runtime>(
 
 /// `create_folder`: the window's « Nouveau dossier » (a folder at the bottom of the list, holding
 /// `agents`), through the core. Answers the folder as `list_folders` does.
-pub(super) fn create_folder<R: Runtime>(
-    core: &Core<R>,
+pub(super) fn create_folder(
+    core: &Core,
     caller: &Caller,
     a: CreateFolderArgs,
 ) -> Result<(String, String), ToolError> {
@@ -2512,8 +2480,8 @@ pub(super) fn create_folder<R: Runtime>(
 
 /// `update_folder`: the window's rename, principal and drag of a folder. What is asked is checked
 /// before anything changes.
-pub(super) fn update_folder<R: Runtime>(
-    core: &Core<R>,
+pub(super) fn update_folder(
+    core: &Core,
     caller: &Caller,
     a: UpdateFolderArgs,
 ) -> Result<(String, String), ToolError> {
@@ -2575,8 +2543,8 @@ pub(super) fn update_folder<R: Runtime>(
 }
 
 /// `delete_folder`: the window's deletion of a folder; its agents go out of it, none is touched.
-pub(super) fn delete_folder<R: Runtime>(
-    core: &Core<R>,
+pub(super) fn delete_folder(
+    core: &Core,
     caller: &Caller,
     a: DeleteFolderArgs,
 ) -> Result<(String, String), ToolError> {
@@ -2599,8 +2567,8 @@ pub(super) fn delete_folder<R: Runtime>(
 
 /// `move_agent`: the window's drag of an agent into a folder, out of it, or to another rank. Without
 /// `folder` it stays where it is (a folder, or the list).
-pub(super) fn move_agent<R: Runtime>(
-    core: &Core<R>,
+pub(super) fn move_agent(
+    core: &Core,
     caller: &Caller,
     a: MoveAgentArgs,
 ) -> Result<(String, String), ToolError> {

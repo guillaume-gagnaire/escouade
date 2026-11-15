@@ -17,7 +17,6 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::Runtime;
 
 /// How often the window's focus may bring a declaration run (`Core::declare_on_focus`).
 const FOCUS_RUN_EVERY: Duration = Duration::from_secs(60);
@@ -115,7 +114,7 @@ fn declarable() -> Vec<EngineId> {
 // The declaration in each account, kept in step with the settings: « Les agents peuvent piloter
 // Escouade » turned on or off, an account added, switched on or off or removed, a harness found,
 // the server on another port.
-impl<R: Runtime> Core<R> {
+impl Core {
     /// The app's `CLAUDE_CONFIG_DIR` and home folder as the account's `claude` goes by them
     /// (`accounts::claude_home`: the Linux home folder for one of WSL). In unit tests every core
     /// has a home of its own: the fake `claude` is told it and never goes by the real one.

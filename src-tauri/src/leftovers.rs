@@ -16,7 +16,6 @@ use serde::Serialize;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::Runtime;
 
 /// What a worktree holds that its removal would lose: changes not committed, commits of its
 /// branch that are neither in the target branch (merged, squashed too) nor in any other branch,
@@ -125,7 +124,7 @@ pub struct KeptWorktree {
 /// Windows) lets go of its folder a moment later.
 const REMOVE_ATTEMPTS: u32 = 10;
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// Removes `wt` after the project's teardown (`ports`: those its agent held), its branch too
     /// unless `keep_branch`. `proc`, its agent's process, is killed first with all it started: on
     /// Windows a live process keeps the folder. Tried again for a few seconds.

@@ -15,7 +15,6 @@ use anyhow::{anyhow, bail, Result};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use tauri::Runtime;
 
 /// The most files a ticket takes (as many as images): its first message has a line for each, and
 /// « Reprendre » sends that message again.
@@ -384,7 +383,7 @@ pub(crate) fn maintain(tickets: &Path, keep_days: u32) {
     }
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// The folder of the files of the ticket of an agent, which it reads without a question
     /// (`--add-dir` for Claude Code); made here first. None for an agent that has no
     /// ticket, a ticket that has no file (its folder is not made for nothing), or when the folder

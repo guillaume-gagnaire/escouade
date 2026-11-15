@@ -7,12 +7,11 @@ use super::tools::ToolCtx;
 use super::Caller;
 use crate::core::Core;
 use std::sync::Arc;
-use tauri::Runtime;
 
 pub use escouade_mcp::http::*;
 
-impl<R: Runtime> Host for Core<R> {
-    type Ctx = ToolCtx<R>;
+impl Host for Core {
+    type Ctx = ToolCtx;
 
     fn caller(&self, token: &str) -> Option<Caller> {
         let caller = self.mcp.caller(token)?;
@@ -27,7 +26,7 @@ impl<R: Runtime> Host for Core<R> {
         activity::record(self, caller, "", asked, Outcome::Refused(message));
     }
 
-    fn ctx(self: Arc<Self>, caller: Caller) -> ToolCtx<R> {
+    fn ctx(self: Arc<Self>, caller: Caller) -> ToolCtx {
         ToolCtx::new(self, caller)
     }
 }

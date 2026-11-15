@@ -17,7 +17,7 @@ pub struct PageCrash {
     pub agent_id: Option<String>,
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// The page's process ended for `reason`: what it showed is kept and closed (the next page
     /// opens on no project), and the line for the log returned. Ids only, never a name nor a path.
     // macOS: WKWebView tells the end of its process to a delegate wry keeps, nothing calls this there.
@@ -57,7 +57,7 @@ impl<R: Runtime> Core<R> {
 /// The page's process ended for `reason`: written, and the page loaded again.
 #[cfg_attr(not(any(target_os = "linux", windows)), allow(dead_code))]
 pub fn crashed<R: Runtime>(app: &tauri::AppHandle<R>, reason: &str) {
-    let Some(core) = app.try_state::<Arc<Core<R>>>() else {
+    let Some(core) = app.try_state::<Arc<Core>>() else {
         return;
     };
     log::error!("{}", core.page_crashed(reason));

@@ -297,7 +297,7 @@ pub fn split(id: &str, name: &str, view: &View) -> (Option<TeamPolicies>, Layers
     (Some(policies), layers)
 }
 
-impl<R: tauri::Runtime> crate::core::Core<R> {
+impl crate::core::Core {
     /// The version in force of the team `id` (None: the device left it, or the team has none): its policies to the
     /// locks, its keys of a project to each of its projects, read again at once.
     pub(crate) fn apply_team_settings(

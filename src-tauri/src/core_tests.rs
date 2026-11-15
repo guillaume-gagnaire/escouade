@@ -24,7 +24,7 @@ pub(crate) type RestSample<T> = (
 );
 
 pub(crate) struct Harness {
-    pub(crate) core: Arc<Core<MockRuntime>>,
+    pub(crate) core: Arc<Core>,
     pub(crate) events: Arc<parking_lot::Mutex<Vec<Value>>>,
     pub(crate) dir: PathBuf,
     _app: tauri::App<MockRuntime>,
@@ -182,7 +182,7 @@ impl Harness {
     /// nothing of it. Only a test that never sets the flag is cut, after 10 minutes.
     pub(crate) fn sample_rest<T: Send + 'static>(
         &self,
-        mark: impl Fn(&Core<MockRuntime>) -> T + Send + 'static,
+        mark: impl Fn(&Core) -> T + Send + 'static,
     ) -> (Arc<AtomicBool>, std::thread::JoinHandle<Vec<RestSample<T>>>) {
         use crate::updates::{busy, snapshot, Updates};
         let stop = Arc::new(AtomicBool::new(false));
@@ -190,7 +190,7 @@ impl Harness {
         let sampler = std::thread::spawn(move || {
             // No window in tests: only what is under way counts.
             let u = Updates::default();
-            let rest = |c: &Core<MockRuntime>| busy(&snapshot(c, &u, now_ms()));
+            let rest = |c: &Core| busy(&snapshot(c, &u, now_ms()));
             let started = std::time::Instant::now();
             let mut seen = Vec::new();
             while !done.load(Ordering::Acquire) && started.elapsed() < Duration::from_secs(600) {
@@ -9114,11 +9114,7 @@ async fn settings_saved_before_the_languages_stay_in_french_and_a_new_install_fo
 
 /// A core on settings saved by 1.8.0 (`accounts_version` 0) and the state `state`, in the
 /// folder `dir` (`test_dir`), whose `DIR` they may name.
-fn core_saved_by_1_8_0(
-    name: &str,
-    settings: Value,
-    state: Value,
-) -> (Arc<Core<MockRuntime>>, PathBuf) {
+fn core_saved_by_1_8_0(name: &str, settings: Value, state: Value) -> (Arc<Core>, PathBuf) {
     let dir = test_dir(name);
     let shown = serde_json::to_string(&dir.to_string_lossy()).unwrap();
     let shown = &shown[1..shown.len() - 1];
@@ -9136,7 +9132,7 @@ fn core_saved_by_1_8_0(
     (core, dir)
 }
 
-fn core_account_ids(core: &Core<MockRuntime>) -> Vec<String> {
+fn core_account_ids(core: &Core) -> Vec<String> {
     core.settings
         .read()
         .accounts
@@ -10005,7 +10001,7 @@ async fn quota_windows_saved_before_the_accounts_are_principals_and_each_account
     .unwrap();
     let app = mock_app();
     let (core, _rx) = Core::load(app.handle().clone(), data.clone());
-    let pct = |core: &Core<MockRuntime>, id: &str| {
+    let pct = |core: &Core, id: &str| {
         core.usage
             .lock()
             .account(id)

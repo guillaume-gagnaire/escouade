@@ -34,7 +34,6 @@ use std::sync::Arc;
 use anyhow::{bail, Result};
 use parking_lot::Mutex;
 use serde::Serialize;
-use tauri::Runtime;
 
 use crate::core::Core;
 use crate::docs::{DocInfo, Folder, Space, DOCUMENTS, LARGE_FILE, ROOT};
@@ -844,7 +843,7 @@ async fn authors(root: &Path) -> HashMap<String, String> {
 /// the words, the filing by the names and the words).
 static LOADED: Mutex<Option<Arc<dyn Embedder>>> = Mutex::new(None);
 
-impl<R: Runtime> Core<R> {
+impl Core {
     pub(crate) fn vectors_embedder(&self) -> Option<Arc<dyn Embedder>> {
         #[cfg(test)]
         if let Some(e) = self.test_embedder.lock().clone() {

@@ -22,7 +22,6 @@ use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
-use tauri::Runtime;
 
 /// What the core holds of the Overseer.
 pub struct Hub {
@@ -139,9 +138,9 @@ pub struct OverseerView {
 }
 
 /// The facts' sink that wakes it.
-pub struct Sink<R: Runtime>(pub Weak<Core<R>>);
+pub struct Sink(pub Weak<Core>);
 
-impl<R: Runtime> crate::facts::Sink for Sink<R> {
+impl crate::facts::Sink for Sink {
     fn take(&self, fact: &Arc<Fact>) {
         if let Some(core) = self.0.upgrade() {
             core.overseer_fact(fact);
@@ -149,7 +148,7 @@ impl<R: Runtime> crate::facts::Sink for Sink<R> {
     }
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// It is to run: turned on, and Escouade's tools given to the agents.
     pub fn overseer_wanted(&self) -> bool {
         let s = self.settings.read();

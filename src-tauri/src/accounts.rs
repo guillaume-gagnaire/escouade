@@ -26,7 +26,6 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::Runtime;
 
 /// The variable that gives Claude Code its configuration folder.
 pub(crate) use escouade_model::accounts::CONFIG_DIR_VAR;
@@ -1813,7 +1812,7 @@ fn name_taken(name: &str) -> anyhow::Error {
 
 // The accounts' tab: each change saved at once, through `save_settings` (normalized, checked, the
 // quotas settled again), one at a time (`claude_accounts_lock`).
-impl<R: Runtime> Core<R> {
+impl Core {
     /// The settings the window saves, but for the accounts (and « Ordre des harness ») and for « Claude et les agents peuvent
     /// piloter Escouade »: those are the backend's, which their tabs change on their own (the window's copy
     /// may be older).

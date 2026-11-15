@@ -1598,7 +1598,7 @@ async fn an_opencode_agent_gets_its_worktree_at_its_first_message_under_the_name
 async fn the_models_of_an_opencode_account_are_read_without_an_agent_and_kept_after_a_restart() {
     let h = harness("esc186-opencode-models");
     opencode_account(&h);
-    let menu = |core: &crate::core::Core<tauri::test::MockRuntime>| -> Vec<String> {
+    let menu = |core: &crate::core::Core| -> Vec<String> {
         core.account_models
             .read()
             .get("principal-opencode")

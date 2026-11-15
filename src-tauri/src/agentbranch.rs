@@ -10,7 +10,6 @@ use crate::i18n::{self, Lang};
 use crate::model::{AgentGit, BranchMove, RepoGit};
 use anyhow::{bail, Result};
 use std::sync::Arc;
-use tauri::Runtime;
 
 /// What the status bar shows of a checkout of an agent's own, from its `git status`.
 pub fn agent_git_of(st: &git::Status, has_remote: bool) -> AgentGit {
@@ -117,7 +116,7 @@ fn not_switchable_ticket() -> anyhow::Error {
     ))
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// The agent `id` is on `head` in its worktree, as the git pass just read it: when that is
     /// another branch than its worktree's, it switched by itself (`git switch`, `gh pr checkout`),
     /// and its worktree follows: the branch taken is kept as the user's (it may be anyone's), its

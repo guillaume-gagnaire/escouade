@@ -25,7 +25,6 @@ use std::sync::Arc;
 
 use anyhow::{bail, Result};
 use serde::Deserialize;
-use tauri::Runtime;
 
 use crate::core::{AgentOptions, Core};
 use crate::docs::Change;
@@ -176,7 +175,7 @@ fn agent_name(subject: &str) -> String {
     }
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// Changes the discussion of the agent `id` with `edit`, then tells the window and saves.
     pub fn discussion_edit<T>(
         &self,

@@ -22,7 +22,6 @@ use crate::scheduled::{cron_of, ScheduledDraft, ScheduledView};
 use chrono::{Local, TimeZone};
 use serde::Serialize;
 use std::sync::Arc;
-use tauri::Runtime;
 
 /// A task as the tools answer it.
 #[derive(Serialize)]
@@ -64,7 +63,7 @@ fn local(ms: i64) -> Option<String> {
         .map(|d| d.to_rfc3339_opts(chrono::SecondsFormat::Secs, false))
 }
 
-fn row<R: Runtime>(core: &Core<R>, v: &ScheduledView) -> TaskRow {
+fn row(core: &Core, v: &ScheduledView) -> TaskRow {
     let t = &v.task;
     let r = &t.rhythm;
     let simple = r.kind != RhythmKind::Cron;
@@ -122,11 +121,7 @@ fn row<R: Runtime>(core: &Core<R>, v: &ScheduledView) -> TaskRow {
 }
 
 /// The task `asked` names in `project`: its id, else its title in any case.
-fn task<R: Runtime>(
-    core: &Core<R>,
-    project: &Project,
-    asked: &str,
-) -> Result<ScheduledTask, ToolError> {
+fn task(core: &Core, project: &Project, asked: &str) -> Result<ScheduledTask, ToolError> {
     let asked = asked.trim();
     let all: Vec<ScheduledTask> = core
         .scheduled
@@ -214,8 +209,8 @@ fn rhythm_of(had: Option<&Rhythm>, a: &ScheduledFieldsArgs) -> Result<Option<Rhy
 }
 
 /// The draft of what the call gives, checked as `create_ticket` checks a ticket's fields.
-fn draft<R: Runtime>(
-    core: &Core<R>,
+fn draft(
+    core: &Core,
     caller: &Caller,
     project: &Project,
     had: Option<&ScheduledTask>,
@@ -243,8 +238,8 @@ fn draft<R: Runtime>(
 }
 
 /// `list_scheduled_tasks`: the project's tasks, in the order they were made.
-pub(super) fn list<R: Runtime>(
-    core: &Core<R>,
+pub(super) fn list(
+    core: &Core,
     caller: &Caller,
     a: ListScheduledTasksArgs,
 ) -> Result<String, ToolError> {
@@ -259,8 +254,8 @@ pub(super) fn list<R: Runtime>(
 }
 
 /// `create_scheduled_task`: a task of the project, its first due time the next one from now.
-pub(super) fn create<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) fn create(
+    core: &Arc<Core>,
     caller: &Caller,
     a: CreateScheduledTaskArgs,
 ) -> Result<String, ToolError> {
@@ -275,8 +270,8 @@ pub(super) fn create<R: Runtime>(
 }
 
 /// `update_scheduled_task`: what the call gives changes, the rest stays.
-pub(super) fn update<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) fn update(
+    core: &Arc<Core>,
     caller: &Caller,
     a: UpdateScheduledTaskArgs,
 ) -> Result<String, ToolError> {
@@ -296,8 +291,8 @@ pub(super) fn update<R: Runtime>(
 }
 
 /// `pause_scheduled_task`: the switch of its row.
-pub(super) fn pause<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) fn pause(
+    core: &Arc<Core>,
     caller: &Caller,
     a: PauseScheduledTaskArgs,
 ) -> Result<String, ToolError> {
@@ -311,8 +306,8 @@ pub(super) fn pause<R: Runtime>(
 }
 
 /// `delete_scheduled_task`: the task goes, the tickets it made stay.
-pub(super) fn delete<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub(super) fn delete(
+    core: &Arc<Core>,
     caller: &Caller,
     a: DeleteScheduledTaskArgs,
 ) -> Result<String, ToolError> {

@@ -41,7 +41,6 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
-use tauri::Runtime;
 
 /// The path of the hooks' endpoint.
 const PATH: &str = "/hook";
@@ -915,7 +914,7 @@ pub(crate) fn ticket_refusal() -> anyhow::Error {
     ))
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// The port of the hooks' server, once started.
     #[cfg(test)]
     pub(crate) fn hooks_port(&self) -> Option<u16> {
@@ -2810,7 +2809,7 @@ async fn stop_and_wait(p: &crate::engine::Process) {
 }
 
 /// Answers the hooks on `listener` until the app quits.
-async fn serve<R: Runtime>(listener: TcpListener, core: Weak<Core<R>>, port: u16) {
+async fn serve(listener: TcpListener, core: Weak<Core>, port: u16) {
     let listener = match tokio::net::TcpListener::from_std(listener) {
         Ok(l) => l,
         Err(e) => {
@@ -2855,11 +2854,7 @@ async fn serve<R: Runtime>(listener: TcpListener, core: Weak<Core<R>>, port: u16
 /// One hook call: from a program of this machine that holds an interface's token (a browser's
 /// page gives itself away by its `Origin` or its `Host`). Always answered at once, with nothing
 /// decided: the interface goes on as without the hook.
-async fn answer<R: Runtime>(
-    req: Request<Incoming>,
-    core: &Weak<Core<R>>,
-    port: u16,
-) -> Response<Full<Bytes>> {
+async fn answer(req: Request<Incoming>, core: &Weak<Core>, port: u16) -> Response<Full<Bytes>> {
     let reply = |status: StatusCode, body: &str| {
         let mut r = Response::new(Full::new(Bytes::from(body.to_string())));
         *r.status_mut() = status;

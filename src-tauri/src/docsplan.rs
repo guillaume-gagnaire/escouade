@@ -24,7 +24,6 @@ use std::time::Duration;
 
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
-use tauri::Runtime;
 
 use crate::core::Core;
 use crate::docs::{Decision, Page, Ref};
@@ -500,7 +499,7 @@ pub struct Cancelled {
     pub kept: Vec<String>,
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     fn planning_file(&self, project_id: &str) -> PathBuf {
         self.data.project_files(project_id).join("planning.json")
     }

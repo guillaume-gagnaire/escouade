@@ -270,7 +270,7 @@ fn state_before(dir: &std::path::Path) -> serde_json::Value {
     })
 }
 
-fn load(data: &DataDir) -> std::sync::Arc<Core<tauri::test::MockRuntime>> {
+fn load(data: &DataDir) -> std::sync::Arc<Core> {
     let app = mock_app();
     let (core, _rx) = Core::load(app.handle().clone(), data.clone());
     // The mock app lives as long as the test (its handle is the core's).

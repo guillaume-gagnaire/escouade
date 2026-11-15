@@ -31,7 +31,6 @@ use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::Runtime;
 
 // The review and its comments, in `escouade-model` (docs/CRATES.md).
 pub use escouade_model::prreview::{DiffLine, NoteChoice, PrReview, ReviewNote, ReviewPhase};
@@ -495,7 +494,7 @@ fn gone(word: &str, number: u64) -> anyhow::Error {
     ))
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// Who reads, as the settings of the written texts say; refused when it cannot go without
     /// tools.
     fn pr_review_reader(&self) -> Result<String> {

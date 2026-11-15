@@ -803,7 +803,7 @@ pub fn followed(tickets: &[Ticket], project: Option<&str>) -> BTreeMap<Place, Ve
     out
 }
 
-impl<R: tauri::Runtime> Core<R> {
+impl Core {
     /// The pull requests of the tickets « En revue », read by themselves for as long as the app
     /// runs (`IN_FRONT_EVERY`, `BEHIND_EVERY`), and at once when woken (`wake_ticket_prs`).
     pub(crate) fn follow_ticket_prs(self: Arc<Self>) {
@@ -1300,7 +1300,7 @@ impl<R: tauri::Runtime> Core<R> {
     }
 }
 
-impl<R: tauri::Runtime> Core<R> {
+impl Core {
     /// « L'agent corrige » on a ticket « En revue » whose CI failed (ESC-60), by hand or by the
     /// autopilot: its agent gets the failed checks and the end of their logs, restored first with
     /// its worktree made again from its branch when it went at the validation. Refused when there
@@ -1578,7 +1578,7 @@ impl<R: tauri::Runtime> Core<R> {
     }
 }
 
-impl<R: tauri::Runtime> Core<R> {
+impl Core {
     /// What « L'agent corrige les retours » and « L'agent met à jour la branche » ask first: the
     /// ticket « En revue », no fix under way, its agent here and resting.
     fn pr_fix_preflight(&self, id: &str) -> Result<(Ticket, TicketPr, String)> {

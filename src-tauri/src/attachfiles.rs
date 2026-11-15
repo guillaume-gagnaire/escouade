@@ -24,7 +24,6 @@ use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
-use tauri::Runtime;
 
 const MB: u64 = 1 << 20;
 /// The most a chunk of a copy may weigh (the window cuts its files in chunks of 4 MB at most): a
@@ -363,7 +362,7 @@ impl Uploads {
     }
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// The folder the files joined for `owner` go to: an agent's (it must be there), or the
     /// drafts'. Not made here.
     fn owner_folder(&self, owner: &str) -> Result<PathBuf> {

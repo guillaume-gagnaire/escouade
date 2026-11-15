@@ -80,16 +80,12 @@ fn setup_log_of(h: &Harness, agent_id: &str) -> PathBuf {
 }
 
 /// What the window that adds a project is told of the history of the folder `path`.
-async fn history_of(core: &Arc<Core<MockRuntime>>, path: &str) -> Option<ClosedProjectInfo> {
+async fn history_of(core: &Arc<Core>, path: &str) -> Option<ClosedProjectInfo> {
     core.closed_project_info_for(path, None).await
 }
 
 /// `history_of`, the history `id` preferred if it is of that folder.
-async fn history_with(
-    core: &Arc<Core<MockRuntime>>,
-    path: &str,
-    id: &str,
-) -> Option<ClosedProjectInfo> {
+async fn history_with(core: &Arc<Core>, path: &str, id: &str) -> Option<ClosedProjectInfo> {
     core.closed_project_info_for(path, Some(id)).await
 }
 
@@ -962,7 +958,7 @@ async fn an_erased_history_is_erased_by_one_function_whichever_way_it_goes() {
 }
 
 /// The app started again on the data of the harness: what it finds is what was last saved.
-fn restarted(h: &Harness) -> (Arc<Core<MockRuntime>>, tauri::App<MockRuntime>) {
+fn restarted(h: &Harness) -> (Arc<Core>, tauri::App<MockRuntime>) {
     let app = mock_app();
     let (core, _rx) = Core::load(app.handle().clone(), h.core.data.clone());
     (core, app)
@@ -1511,7 +1507,7 @@ fn write_history_by_hand(h: &Harness, closed: &ClosedProject) {
 }
 
 /// The ids of the closed projects, in the order listed.
-fn listed_ids(core: &Arc<Core<MockRuntime>>) -> Vec<String> {
+fn listed_ids(core: &Arc<Core>) -> Vec<String> {
     core.closed_projects().into_iter().map(|c| c.id).collect()
 }
 

@@ -114,6 +114,11 @@ mod handover;
 mod harness_scope;
 #[cfg(test)]
 mod harness_scope_tests;
+/// The core without a window (ESC-451): what `escouade-server` will run.
+pub mod headless;
+#[cfg(test)]
+mod headless_tests;
+pub mod host;
 mod hotkey;
 #[cfg(test)]
 mod hotkey_tests;
@@ -550,10 +555,16 @@ pub fn run() {
                     .root()
                     .join("agent-groups.json"),
             );
-            let (core, git_rx) = Core::load(
-                app.handle().clone(),
-                paths::DataDir::new(paths::default_data_dir()),
-            );
+            let data = paths::DataDir::new(paths::default_data_dir());
+            // The data folder held as a process without a window holds it (`headless`), which then
+            // refuses to start on it; single-instance keeps a second desktop app away already.
+            match headless::InstanceLock::acquire(data.root()) {
+                Ok(lock) => {
+                    app.manage(lock);
+                }
+                Err(e) => log::warn!("data folder not locked: {e:#}"),
+            }
+            let (core, git_rx) = Core::load(app.handle().clone(), data);
             app.manage(core.clone());
             // The teams of the team server (TS-3): their keys in the app's keychain, the network of the settings, the
             // data's `teams` folder; read every few seconds, for the invitees an online administrator lets in.

@@ -20,7 +20,6 @@ use crate::tui::{Forward, TuiOutput};
 use anyhow::{anyhow, bail, Result};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tauri::Runtime;
 
 /// How often an interface is checked against the process it joined.
 const WATCH_EVERY: Duration = Duration::from_millis(300);
@@ -47,7 +46,7 @@ fn watch(launched: &Attach, current: Option<&Attach>, without_since: Option<Dura
     }
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// « Vue <harness> » on or off for an agent whose interface joins its process: on, the window
     /// opens the interface (`open_attached`) and the process starts if it was not running; off,
     /// the interface stops. The process goes on either way, even in the middle of a turn.

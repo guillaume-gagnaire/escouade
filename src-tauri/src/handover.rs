@@ -22,7 +22,6 @@ use crate::plan::{PlanState, TaskStatus};
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Value};
 use std::sync::Arc;
-use tauri::Runtime;
 
 /// Escouade's modes, from the one that allows the least to the one that allows the most.
 pub(crate) const MODES: [&str; 5] = [
@@ -573,7 +572,7 @@ fn separator(from: EngineId, to: EngineId, limited: bool, until: Option<i64>) ->
     })
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// How the account `id` stands for an agent now: out when it may not take one (not signed in,
     /// an agent of it waiting for its reset, a pause after a usage limit, out for its quota:
     /// `pace`, as `account_to_switch_to` has it), else how its quota stands (`accounts::standing`

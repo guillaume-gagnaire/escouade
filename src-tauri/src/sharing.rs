@@ -1206,7 +1206,6 @@ use crate::core::Core;
 use anyhow::{bail, Result};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tauri::Runtime;
 
 /// One reconciliation at a time, whatever the project: the save loop and the folder's watcher may
 /// both ask for one.
@@ -1295,7 +1294,7 @@ fn git_name_now(path: &str) -> String {
         .unwrap_or_default()
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// This machine's user in `project` (choices 113 and 114): the project's name, else the app's,
     /// else the name git knows in the project's folder (ESC-243, never written in `.escouade.yml`);
     /// the id of the settings.

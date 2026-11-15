@@ -9,7 +9,6 @@ use crate::repos::{join, label, repo_patterns};
 use anyhow::{bail, Result};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use tauri::Runtime;
 
 /// What an agent's worktrees are made of.
 #[derive(Debug, Default, Clone)]
@@ -73,7 +72,7 @@ fn copy_root_files(project: &Project, folder: &Path) {
     }
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// Makes an agent's folder with a worktree of each repository of the project that has a
     /// commit and is on a branch, all on one branch. Nothing is left when one fails. Those left
     /// out, and the starting branches not found, are said in `notice`.
@@ -365,7 +364,7 @@ pub struct RepoMerge {
     pub conflicts: Vec<String>,
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// Each repository of the agent's folder, as its merge would find it.
     pub async fn merge_check(&self, project: &Project, wt: &Worktree) -> Vec<RepoMerge> {
         let mut out = Vec::new();
@@ -537,7 +536,7 @@ impl<R: Runtime> Core<R> {
     }
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// The agent's worktree and its project.
     fn agent_wt(&self, id: &str) -> Result<(Project, String, Worktree)> {
         let h = self.agent(id)?;

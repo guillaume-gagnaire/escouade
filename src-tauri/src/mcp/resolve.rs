@@ -13,7 +13,6 @@ use super::Caller;
 use crate::core::Core;
 use crate::model::{AgentFolder, AgentMeta, Project, Ticket};
 use std::collections::{HashMap, HashSet};
-use tauri::Runtime;
 
 /// The projects a caller of the server sees (« Projet privé », ESC-139).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,7 +28,7 @@ pub(crate) enum Sight {
 impl Sight {
     /// What `caller` sees, as the projects are now. An agent the core no longer has sees the
     /// projects that are not private.
-    pub(crate) fn of<R: Runtime>(core: &Core<R>, caller: &Caller) -> Self {
+    pub(crate) fn of(core: &Core, caller: &Caller) -> Self {
         let Caller::Agent(id) = caller else {
             return Self::All;
         };
@@ -70,11 +69,7 @@ pub(crate) const CHOICES: usize = 5;
 const TITLE_MAX: usize = 60;
 
 /// The project `asked` names: its id, else its name in any case.
-pub(crate) fn project<R: Runtime>(
-    core: &Core<R>,
-    caller: &Caller,
-    asked: &str,
-) -> Result<Project, ToolError> {
+pub(crate) fn project(core: &Core, caller: &Caller, asked: &str) -> Result<Project, ToolError> {
     let asked = asked.trim();
     if asked.is_empty() {
         return Err(ToolError::Failed(tr!(
@@ -112,8 +107,8 @@ pub(crate) fn project<R: Runtime>(
 
 /// `asked` as `project` names it; without it, the calling agent's own project (Claude outside
 /// Escouade is asked for one).
-pub(crate) fn project_or_own<R: Runtime>(
-    core: &Core<R>,
+pub(crate) fn project_or_own(
+    core: &Core,
     caller: &Caller,
     asked: Option<&str>,
 ) -> Result<Project, ToolError> {
@@ -129,8 +124,8 @@ pub(crate) fn project_or_own<R: Runtime>(
 }
 
 /// The folder of `project` that `asked` names: its id, else its name in any case.
-pub(crate) fn folder<R: Runtime>(
-    core: &Core<R>,
+pub(crate) fn folder(
+    core: &Core,
     caller: &Caller,
     asked: &str,
     project: &Project,
@@ -199,8 +194,8 @@ impl AgentRef {
 
 /// The agent `asked` names, in `project` when one is given: its id (archived ones too), else its
 /// name in any case among the agents not archived, else among the archived ones.
-pub(crate) fn agent<R: Runtime>(
-    core: &Core<R>,
+pub(crate) fn agent(
+    core: &Core,
     caller: &Caller,
     asked: &str,
     project: Option<&Project>,
@@ -293,18 +288,14 @@ pub(crate) fn agent<R: Runtime>(
 
 /// The ticket `asked` names: its id, else its key in any case (a key may be in two projects whose
 /// keys have the same prefix).
-pub(crate) fn ticket<R: Runtime>(
-    core: &Core<R>,
-    caller: &Caller,
-    asked: &str,
-) -> Result<Ticket, ToolError> {
+pub(crate) fn ticket(core: &Core, caller: &Caller, asked: &str) -> Result<Ticket, ToolError> {
     ticket_in(core, caller, asked, None)
 }
 
 /// `ticket`, among the tickets of `project` when one is given: a ticket comes after, or goes
 /// before, one of its own project.
-pub(crate) fn ticket_in<R: Runtime>(
-    core: &Core<R>,
+pub(crate) fn ticket_in(
+    core: &Core,
     caller: &Caller,
     asked: &str,
     project: Option<&Project>,
@@ -381,7 +372,7 @@ pub(crate) fn ticket_in<R: Runtime>(
 }
 
 /// Each project's name, by id.
-fn project_names<R: Runtime>(core: &Core<R>) -> HashMap<String, String> {
+fn project_names(core: &Core) -> HashMap<String, String> {
     core.projects
         .read()
         .iter()

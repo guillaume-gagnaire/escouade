@@ -78,6 +78,67 @@ C'est faisable, et c'est la même fondation que le téléphone. Rien n'est prêt
    - Un jeton d'appareil s'ajoute, révocable un par un, en défense en profondeur si le tunnel fuit.
    - Le raisonnement est celui du téléphone, plus bas : un serveur qui lance des agents, des terminaux et des commandes ne s'expose pas en HTTP.
 
+### L'inventaire des usages de Tauri (ESC-451, 2026-11-14)
+
+Relevé sur `release/2.3` : chaque usage de Tauri dans le crate de l'app (`src-tauri/src`), et ce qu'il devient. Trois classes :
+- **Bureau** : il reste dans l'app de bureau, et le client distant le garde chez lui ; le cœur n'en a pas besoin.
+- **Événement** : le cœur ne le fait plus lui-même en mode serveur ; il le publie, et le client le rend.
+- **Change de machine** : la table « Ce qui change de machine », plus bas, dit ce qu'il devient.
+
+**Dans le cœur (`Core`), par l'`AppHandle`.** Il passe désormais par le trait `Host` (`host.rs`), dans l'ordre de ses méthodes :
+
+| Usage | Où, avant | Méthode de `Host` | Classe |
+| --- | --- | --- | --- |
+| La version de l'app (`package_info`) | `Core::load` (télémétrie), `commands::initial_state` | `version` | Reste au cœur : le serveur a la sienne, que le client compare à la sienne |
+| Le dossier des ressources (graine des plugins, ESC-338) | `Core::load` | `resource_dir` | Reste au cœur : à côté du binaire du serveur |
+| L'origine des fichiers déposés (`FileOrigins`, Windows) | `Core::load`, par `try_state` | `file_origins` | Change de machine : les fichiers joints sont toujours une copie envoyée |
+| L'utilisateur regarde la fenêtre (visible, au premier plan) | `Core::alert` (`notify::window_attended`) | `attended` | Événement : le client dit s'il est regardé |
+| La fenêtre à l'écran | `updates::snapshot` (redémarrage automatique) | `window_visible` | Événement, de même |
+| Le carillon | `Core::alert` (`notify::play_chime`) | `chime` | Événement |
+| Le clignotement de la barre des tâches, le rebond du Dock | `Core::alert` (`notify::flash`) | `flash` | Événement |
+| La notification système (toast WinRT, `tauri-plugin-notification` sous macOS) ; un clic montre la fenêtre et l'agent | `Core::alert` (`notify::toast`, `notify::show_main`) | `notify` | Événement |
+| Le compte des agents qui attendent, dans le tray (icône, info-bulle) | `Core::update_tray` (`tray_by_id`) | `show_waiting` | Événement |
+| Les menus natifs dans la langue de l'interface | `Core::relabel_menus` (`menus::relabel`) | `relabel` | Bureau |
+| Ouvrir un lien, un fichier, montrer un fichier dans son dossier (opener) | `sentfiles` (fichiers envoyés par un agent, images locales), commandes `open_url`, `open_path` | `open` | Change de machine (fichiers des agents téléchargés, « Afficher » dans le panneau Fichiers) |
+| L'image du presse-papiers (GTK, sous Linux) | commande `clipboard_image` | `clipboard_image` | Change de machine : lue par le client, envoyée |
+| Lâcher le micro en quittant (`Voice`, état de Tauri) | `Core::shutdown` (`try_state`) | `release_devices` | Change de machine : la voix tourne sur le poste |
+
+**Dans le cœur, sans l'`AppHandle`.**
+- `tauri::async_runtime` (`spawn`, `spawn_blocking`, `block_on`), partout : c'est Tokio, sans fenêtre ; il marche tel quel dans un process sans fenêtre. Il deviendra `tokio` quand le cœur sortira du crate de l'app.
+- `tauri::ipc::Channel` dans `hub.rs` : le hub prend désormais n'importe quelle fonction pour abonné (`Hub::subscribe`) ; le `Channel` de la WebView n'en est qu'un (`Hub::set_channel`). Événement : c'est le chemin de l'API distante (fondation 2).
+- `tauri_plugin_opener` en fonctions libres (`outside.rs`, `fsedit::reveal`) : appelées par `TauriHost::open`, et par la commande « Afficher dans l'Explorateur » (Bureau, puis panneau Fichiers à distance).
+- `tauri::webview_version` dans la télémétrie : Bureau (un serveur n'a pas de WebView).
+- Les chemins des données (`paths`, dans `escouade-model`) ne doivent rien à Tauri : `~/.escouade` ou `ESCOUADE_DATA_DIR`, sur toutes les machines.
+
+**Autour du cœur : l'app de bureau** (`lib.rs`, `commands.rs` et les modules de la fenêtre). Rien n'en passe dans le cœur :
+
+| Usage | Où | Classe |
+| --- | --- | --- |
+| Les 347 commandes (`#[tauri::command]`, `State<Arc<Core>>`), leurs `Channel` (événements, terminaux) | `commands.rs`, `windowthread.rs` (leurs voies, hors du fil de la fenêtre) | Restent, et servent aussi l'API distante par une seule liste (fondation 2) |
+| `single-instance` (D-Bus sous Linux) | `lib.rs` | Bureau ; hors bureau, un verrou par fichier (`headless::InstanceLock`, ci-dessous) |
+| `window-state`, la fenêtre et sa navigation, le zoom, le thème | `lib.rs`, `navigation.rs` | Bureau |
+| Le tray et ses menus, le menu de l'app sous macOS | `lib.rs`, `menus.rs` | Bureau ; le compte de ce qui attend lui arrive par événement |
+| Les notifications de mise à jour (`toast_with_button`), `show_main` | `notify.rs`, `updates.rs`, `deeplink.rs` | Bureau |
+| Les liens `escouade://` (`deep-link`) | `deeplink.rs` | Bureau (le client les reçoit) |
+| Les dialogues (`dialog` : enregistrer une image, recharger avec des fichiers non enregistrés ; le sélecteur de dossier est appelé par le front) | `commands.rs`, `navigation.rs` | Change de machine (navigateur des dossiers du serveur) ou reste au client |
+| L'updater et le redémarrage (`updater`, `process`) | `updates.rs` | Change de machine : le client et le serveur, chacun le sien |
+| Les pages des lancements (WebViews à part, ESC-311), la fin du process de la page | `devpage.rs`, `pagecrash.rs` | Change de machine (port relayé vers le serveur de test) ; Bureau pour la page |
+| L'origine des fichiers déposés | `fileorigin.rs` | Change de machine |
+| Les serveurs de langage de l'éditeur (ESC-446) : leur gestionnaire tenu par l'app (`lsp::for_app`, état de Tauri), leurs messages à la fenêtre par `emit` (`TauriSink`) | `lsp/mod.rs`, `lib.rs` | Change de machine : ils tournent sur le serveur, à côté des dépôts ; leurs messages deviennent des événements pour le client (fondation 2) |
+| Le raccourci global de l'Overseer (ESC-468, `tauri-plugin-global-shortcut`) : le cœur tient le raccourci choisi (`hotkey::Hotkey`) et l'inscrit par un `Arc<dyn Keys>` que l'app lui donne (`PluginKeys`, sur l'`AppHandle`) ; une touche pressée ouvre l'écran de l'Overseer par son lien (`escouade://overseer`, `deeplink`) | `hotkey.rs`, `lib.rs`, `overseer_core.rs` | Bureau : le raccourci est celui du poste ; sans fenêtre, aucune touche n'est inscrite ; à distance, le client l'inscrit chez lui et ouvre l'écran de l'espace |
+
+### La fondation 1 (ESC-451, 2026-11-14) : le cœur sans `AppHandle`
+
+- **`Core` n'est plus générique** sur le runtime de Tauri (`Core<R: Runtime>` disparaît, avec `ToolCtx`, `Tools`, `McpServer` du serveur MCP) : il tient un `Arc<dyn Host>` à la place de l'`AppHandle`. `Core::load` prend un `AppHandle` (l'app, et les tests sur `tauri::test::mock_app`) ou un hôte à lui (`IntoHost`).
+- **Deux hôtes** (`host.rs`) :
+  - `TauriHost`, celui du bureau : il fait tout comme avant, par les mêmes fonctions (`notify`, `menus`, `outside`, `clipboard`). Rien de visible ne change.
+  - `HeadlessHost`, sans fenêtre : il publie ce que le bureau montrerait (`HostEvent` : carillon, clignotement, notification, compte de ce qui attend, ce qu'il faudrait ouvrir) à chacun de ses abonnés ; personne ne regarde de fenêtre, il n'a ni presse-papiers ni micro.
+- **Le hub** prend une fonction pour abonné : un process sans fenêtre reçoit les `UiEvent` sans WebView. Il garde un seul abonné ; plusieurs viendront avec la fondation 2.
+- **Le verrou du dossier de données** (`headless::InstanceLock`) : un fichier `instance.lock` verrouillé par le système (`flock` sous Unix, ouvert sans partage sous Windows), lâché avec le process quelle que soit sa fin. Le process sans fenêtre le prend avant de charger le cœur, et refuse un dossier déjà tenu ; l'app de bureau le prend aussi, sans s'arrêter si elle ne l'a pas (`single-instance` l'en garde déjà), pour qu'un process sans fenêtre ne démarre pas sur ses données.
+- **Le cœur sans fenêtre** (`headless::Headless::start`) : le verrou, l'hôte sans fenêtre, `Core::load`, puis `Core::start` comme l'app (Kanban, Git, enregistrements). C'est ce que lancera `escouade-server`.
+- **L'essai court, en test** (`headless_tests.rs`, dans `cargo nextest` sur les trois systèmes, la CI Linux comprise) : sous Linux, sans `DISPLAY` ni `WAYLAND_DISPLAY`, le cœur sans fenêtre crée un projet, lance un agent sur le faux `claude` et le mène à la fin de son tour ; le hub dit l'agent fini, et l'hôte publie le carillon, le clignotement et la notification de fin. Essayé aussi sous WSL, WSLg écarté.
+- **Ce qui reste lié à Tauri** : le crate de l'app lie toujours WebKitGTK et GTK, même sans fenêtre ; `escouade-server` sans WebKit ni GTK demande de sortir le cœur dans un crate à lui (`docs/CRATES.md`), avec `tauri::async_runtime` remplacé par Tokio.
+
 ## Le mode serveur
 
 ### Ce que voit l'utilisateur
@@ -355,8 +416,9 @@ Demandé le 2026-11-14 : « avoir plusieurs serveurs Escouade pilotés par un se
 ## Tâches
 
 **Fondation**
-- [ ] Essais : le cœur sans fenêtre sous Linux sans affichage ; `ssh -L` lancé par l'app sur les trois systèmes.
-- [ ] Le cœur sans Tauri : le trait `Host` à la place de l'`AppHandle` ; un verrou par fichier à la place de `single-instance` hors bureau.
+- [x] Essai : le cœur sans fenêtre sous Linux sans affichage (ESC-451, `headless_tests.rs`).
+- [ ] Essai : `ssh -L` lancé par l'app sur les trois systèmes.
+- [x] Le cœur sans Tauri : le trait `Host` à la place de l'`AppHandle` ; un verrou par fichier à la place de `single-instance` hors bureau (ESC-451).
 - [ ] L'API distante : une seule liste des commandes (macro) pour l'IPC et la WebSocket ; les flux binaires des terminaux multiplexés ; la poignée de main des versions.
 - [ ] `hub.rs` à plusieurs abonnés ; `UiState` par client ; une réponse fermée chez les autres clients.
 - [ ] Un tampon de sortie pour chaque terminal et chaque lancement ; la reprise d'un client après une coupure.

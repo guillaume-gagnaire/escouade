@@ -10,7 +10,6 @@ use crate::repos::{join, label, prefixed, repo_patterns};
 use crate::testlaunch;
 use anyhow::{bail, Result};
 use std::sync::Arc;
-use tauri::Runtime;
 
 /// One repository of the validation.
 struct Step {
@@ -54,7 +53,7 @@ fn joined(parts: Vec<(String, Outcome)>) -> Outcome {
     }
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// The validation's steps between its tests and the ticket done: the outcome, and whether
     /// the branch brought nothing anywhere. None when it stopped on a conflict (handled as the
     /// board says).

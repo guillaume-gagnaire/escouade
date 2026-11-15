@@ -16,7 +16,6 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use anyhow::Result;
-use tauri::Runtime;
 
 use crate::core::Core;
 use crate::docs::{self, Space, DECISIONS, ROOT, SPEC};
@@ -138,7 +137,7 @@ pub fn pour(work: &Space, base: &Space, into: &Space) -> Result<Poured> {
     Ok(out)
 }
 
-impl<R: Runtime> Core<R> {
+impl Core {
     /// Where the copy of the docs of ticket `key` is kept, on a fixed branch.
     pub(crate) fn ticket_docs_dir(&self, project_id: &str, key: &str) -> PathBuf {
         self.data

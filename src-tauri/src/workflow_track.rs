@@ -966,7 +966,7 @@ fn repo_of(root: &str, repos: &[String], cwd: &str) -> String {
         .unwrap_or_default()
 }
 
-impl<R: tauri::Runtime> crate::core::Core<R> {
+impl crate::core::Core {
     /// The last reading of a project's workflows (the file `refresh_workflows` keeps, or the last
     /// one it made), as the user corrected it (ESC-195): none read yet is no workflow.
     pub(crate) fn tracking_scan(&self, project_id: &str) -> std::sync::Arc<Scan> {

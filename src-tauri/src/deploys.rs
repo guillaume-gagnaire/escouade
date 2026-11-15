@@ -267,7 +267,7 @@ async fn known(repo: &str, commit: &str) -> bool {
     .is_ok()
 }
 
-impl<R: tauri::Runtime> Core<R> {
+impl Core {
     /// The environments of the projects followed (a ticket done and merged lately, or their view
     /// open), read with the tickets' pull requests (`follow_ticket_prs`).
     pub async fn deploys_refresh(self: &Arc<Self>, project: Option<&str>) {

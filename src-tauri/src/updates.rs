@@ -965,7 +965,7 @@ pub async fn check<R: Runtime>(
 }
 
 /// What the app is doing now that a restart would cut.
-pub fn snapshot<R: Runtime>(core: &Core<R>, updates: &Updates, now: i64) -> Snapshot {
+pub fn snapshot(core: &Core, updates: &Updates, now: i64) -> Snapshot {
     let mut s = Snapshot::default();
     let held = core.held.lock().clone();
     for h in core.agents.read().values() {
@@ -1002,14 +1002,8 @@ pub fn snapshot<R: Runtime>(core: &Core<R>, updates: &Updates, now: i64) -> Snap
     s.testing = presence.testing;
     s.modal = presence.modal;
     s.inactive = now - presence.active_at;
-    s.visible = window_visible(&core.app);
+    s.visible = core.host.window_visible();
     s
-}
-
-/// The main window is on screen: shown, not minimized.
-fn window_visible<R: Runtime>(app: &AppHandle<R>) -> bool {
-    app.get_webview_window("main")
-        .is_some_and(|w| w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false))
 }
 
 /// Runs `f` on a thread of its own and waits for it `limit` at most: true when it ended in time.
@@ -1120,8 +1114,8 @@ impl AfterUpdate {
 /// closed: `leave` restarts or closes it once the update is in place (`apply`). False when there
 /// is nothing to install, or an install is under way already; an error when it failed with the
 /// app still running.
-pub fn install_ready<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub fn install_ready(
+    core: &Arc<Core>,
     updates: &Updates,
     relaunch: bool,
     window: Window,
@@ -1202,8 +1196,8 @@ fn restart_toast(lang: Lang, version: &str) -> [String; 3] {
 
 /// « Redémarrer maintenant », or the automatic restart: the update ready installs and the app
 /// starts again on it, its `window` as it is now. Never while the editor holds unsaved files.
-pub fn restart<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub fn restart(
+    core: &Arc<Core>,
     updates: &Updates,
     window: Window,
     leave: impl FnOnce(bool),
@@ -1256,8 +1250,8 @@ pub enum Closing {
 /// « Quitter »: the update ready installs without the app starting again. One installing
 /// already (« Redémarrer maintenant », the automatic restart) ends the app itself: waited for,
 /// `wait` at most, never closed under it.
-pub fn closing<R: Runtime>(
-    core: &Arc<Core<R>>,
+pub fn closing(
+    core: &Arc<Core>,
     updates: &Updates,
     wait: Duration,
     leave: impl FnOnce(bool),
@@ -1328,7 +1322,7 @@ fn window_of(visible: bool, minimized: bool, focused: bool, macos: bool) -> Wind
 /// install block).
 pub async fn restart_now<R: Runtime>(app: AppHandle<R>) -> Result<()> {
     tauri::async_runtime::spawn_blocking(move || {
-        let core = app.state::<Arc<Core<R>>>().inner().clone();
+        let core = app.state::<Arc<Core>>().inner().clone();
         let env = app.env();
         let window = window_now(&app);
         restart(&core, &app.state::<Updates>(), window, |relaunch| {
@@ -1344,7 +1338,7 @@ const QUIT_WAIT: Duration = Duration::from_secs(120);
 /// « Quitter »: the app stops; with an update ready, it installs silently and the app stays
 /// closed (`closing`).
 pub fn quit<R: Runtime>(app: &AppHandle<R>) {
-    let core = app.state::<Arc<Core<R>>>().inner().clone();
+    let core = app.state::<Arc<Core>>().inner().clone();
     let updates = app.state::<Updates>();
     if updates.ready().is_none() && !updates.installing.load(Ordering::Acquire) {
         core.shutdown();
@@ -1420,12 +1414,7 @@ fn writable(p: &Path) -> bool {
 /// the plugin only moves on the main thread, which the app's end holds. Else whether the app
 /// stopped for it, not to be stopped again.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn wait_install<R: Runtime>(
-    core: &Core<R>,
-    updates: &Updates,
-    unattended: bool,
-    limit: Duration,
-) -> Option<bool> {
+fn wait_install(core: &Core, updates: &Updates, unattended: bool, limit: Duration) -> Option<bool> {
     if !unattended || !updates.installing.load(Ordering::Acquire) {
         return None;
     }
@@ -1450,7 +1439,7 @@ fn wait_install<R: Runtime>(
 #[cfg(target_os = "macos")]
 pub fn install_at_exit<R: Runtime>(app: &AppHandle<R>) -> bool {
     let updates = app.state::<Updates>();
-    let core = app.state::<Arc<Core<R>>>().inner().clone();
+    let core = app.state::<Arc<Core>>().inner().clone();
     let unattended = unattended();
     if let Some(stopped) = wait_install(&core, &updates, unattended, EXIT_LIMIT) {
         return stopped;
@@ -1478,7 +1467,7 @@ pub fn install_at_exit<R: Runtime>(app: &AppHandle<R>) -> bool {
 /// « Plus tard »: the automatic restart planned is called off, and none comes for a while.
 pub fn postpone<R: Runtime>(app: &AppHandle<R>) {
     if app.state::<Updates>().postpone(now_ms()) {
-        app.state::<Arc<Core<R>>>()
+        app.state::<Arc<Core>>()
             .hub
             .emit(UiEvent::UpdateRestart { at: None });
     }
@@ -1500,7 +1489,7 @@ pub fn watch<R: Runtime>(app: AppHandle<R>) {
 }
 
 async fn tick<R: Runtime>(app: &AppHandle<R>) {
-    let core = app.state::<Arc<Core<R>>>().inner().clone();
+    let core = app.state::<Arc<Core>>().inner().clone();
     let updates = app.state::<Updates>();
     let now = now_ms();
     let ready = updates.ready();
