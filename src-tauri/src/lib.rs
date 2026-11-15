@@ -252,6 +252,8 @@ mod telemetry;
 mod terminal_tests;
 #[cfg(test)]
 mod test_tmp;
+#[cfg(test)]
+mod test_vars_tests;
 mod testlaunch;
 mod text;
 #[cfg(test)]

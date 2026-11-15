@@ -1428,3 +1428,27 @@ async fn a_request_without_image_or_file_is_capped_far_below_the_one_of_a_ticket
     refused_for_size(port, &headers, &call_of("create_ticket", MAX_BODY), None).await;
     h.core.mcp.stop();
 }
+
+/// SEC-17 of the 2.2.0 audit: by default, a connection that sends no headers is closed after 2 seconds (a local client
+/// sends its request at once), not 10: muted connections hold the server back no longer than that.
+#[tokio::test]
+async fn by_default_a_connection_without_headers_is_cut_off_after_two_seconds() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    assert_eq!(
+        super::http::Limits::default().header_read,
+        Duration::from_secs(2)
+    );
+    let h = harness("mcp-default-headers");
+    let (port, _) = started(&h);
+    let mut s = tokio::net::TcpStream::connect((Ipv4Addr::LOCALHOST, port))
+        .await
+        .unwrap();
+    s.write_all(format!("POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n").as_bytes())
+        .await
+        .unwrap();
+    let start = std::time::Instant::now();
+    let mut out = Vec::new();
+    let closed = tokio::time::timeout(Duration::from_secs(4), s.read_to_end(&mut out)).await;
+    assert!(closed.is_ok(), "still open after {:?}", start.elapsed());
+    h.core.mcp.stop();
+}

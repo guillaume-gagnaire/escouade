@@ -106,6 +106,9 @@ pub struct Hooks {
     port: Mutex<Option<u16>>,
     /// Each running interface's token, and its agent.
     tokens: Mutex<HashMap<String, String>>,
+    /// What a client may take of it, read when it starts: 2 s to send its headers, 64 connections at once (SEC-17 of
+    /// the 2.2.0 audit), as the MCP server.
+    pub(crate) limits: Mutex<escouade_mcp::http::Limits>,
 }
 
 impl Hooks {
@@ -125,8 +128,16 @@ impl Hooks {
         self.tokens.lock().retain(|_, a| a != agent_id);
     }
 
+    /// The agent of `token`: every token compared in constant time, each time (SEC-17): how long the answer takes says
+    /// nothing of how close a token came.
     fn agent_of(&self, token: &str) -> Option<String> {
-        self.tokens.lock().get(token).cloned()
+        let mut found = None;
+        for (t, agent) in self.tokens.lock().iter() {
+            if escouade_mcp::same_token(t, token) {
+                found = Some(agent.clone());
+            }
+        }
+        found
     }
 
     /// The agent has an interface's token.
@@ -2807,7 +2818,15 @@ async fn serve<R: Runtime>(listener: TcpListener, core: Weak<Core<R>>, port: u16
             return;
         }
     };
+    let Some(limits) = core.upgrade().map(|c| c.hooks.limits.lock().clone()) else {
+        return;
+    };
+    // So many connections at once: the next ones wait in the system's queue until one closes (SEC-17).
+    let slots = Arc::new(tokio::sync::Semaphore::new(limits.connections.max(1)));
     loop {
+        let Ok(slot) = slots.clone().acquire_owned().await else {
+            return;
+        };
         let Ok((stream, _)) = listener.accept().await else {
             tokio::time::sleep(Duration::from_millis(50)).await;
             continue;
@@ -2816,14 +2835,17 @@ async fn serve<R: Runtime>(listener: TcpListener, core: Weak<Core<R>>, port: u16
             return;
         }
         let core = core.clone();
+        let header_read = limits.header_read;
         tauri::async_runtime::spawn(async move {
+            // Its slot is free again once the connection closes.
+            let _slot = slot;
             let service = service_fn(move |req| {
                 let core = core.clone();
                 async move { Ok::<_, Infallible>(answer(req, &core, port).await) }
             });
             let _ = http1::Builder::new()
                 .timer(TokioTimer::new())
-                .header_read_timeout(Duration::from_secs(10))
+                .header_read_timeout(header_read)
                 .serve_connection(TokioIo::new(stream), service)
                 .await;
         });

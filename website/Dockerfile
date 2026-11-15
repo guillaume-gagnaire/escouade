@@ -11,5 +11,6 @@ RUN npm ci && npm run generate && npm test
 
 FROM nginx:1.29-alpine
 COPY website/nginx.conf /etc/nginx/conf.d/default.conf
+COPY website/security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY --from=build /repo/website/.output/public /usr/share/nginx/html
 EXPOSE 80

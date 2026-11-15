@@ -913,9 +913,10 @@ impl ProcessEngine {
                     true => read_frame(&mut out)
                         .await?
                         .map(|b| String::from_utf8_lossy(&b).into_owned()),
+                    // A line `MESSAGE_MAX` bytes at most: past it, an error (SEC-08).
                     false => {
                         let mut buf = Vec::new();
-                        match out.read_until(b'\n', &mut buf).await? {
+                        match read_line_within(&mut out, MESSAGE_MAX, &mut buf).await? {
                             0 => None,
                             _ => Some(String::from_utf8_lossy(&buf).trim_end().to_string()),
                         }
@@ -1242,7 +1243,8 @@ fn refused_var(name: &str, var: &str) -> String {
     )
 }
 
-/// A file a plugin wants written: in the agent's own folder alone.
+/// A file a plugin wants written: in the agent's own folder alone, where it lands as much as where it is written (its
+/// links and junctions followed, as `fs/*` judge a path: SEC-06).
 fn check_file(name: &str, home: Option<&str>, file: &str) -> std::result::Result<(), String> {
     let path = Path::new(file);
     let inside = home.is_some_and(|home| {
@@ -1250,17 +1252,39 @@ fn check_file(name: &str, home: Option<&str>, file: &str) -> std::result::Result
             && path.starts_with(home)
             && !path.components().any(|c| matches!(c, Component::ParentDir))
     });
-    if inside {
-        return Ok(());
+    if !inside {
+        return Err(tr!(
+            "Le plugin de {name} veut écrire {file}, hors du dossier de l’agent : l’agent ne démarre pas.",
+            "The plugin of {name} wants to write {file}, outside the agent’s folder: the agent doesn’t start."
+        ));
     }
-    Err(tr!(
-        "Le plugin de {name} veut écrire {file}, hors du dossier de l’agent : l’agent ne démarre pas.",
-        "The plugin of {name} wants to write {file}, outside the agent’s folder: the agent doesn’t start."
-    ))
+    if !home.is_some_and(|home| lands_in(Path::new(home), path)) {
+        return Err(tr!(
+            "Le plugin de {name} veut écrire {file}, qu’un lien du dossier de l’agent mène ailleurs : l’agent ne démarre pas.",
+            "The plugin of {name} wants to write {file}, which a link of the agent’s folder leads elsewhere: the agent doesn’t start."
+        ));
+    }
+    Ok(())
 }
 
+/// Whether `path`, its links and junctions followed as far as it exists, lands under `dir`, its own links followed too. A
+/// link that leads nowhere lands nowhere: writing through it would land where nothing was judged.
+fn lands_in(dir: &Path, path: &Path) -> bool {
+    match (super::files::resolved(path), super::files::resolved(dir)) {
+        (Some(real), Some(root)) => real.starts_with(&root),
+        _ => false,
+    }
+}
+
+/// The extensions of what an interface's plugin may write beside its private file (SEC-06): settings, rules, a lock;
+/// never a program's (`settings.cmd` beside `settings.json`).
+const BESIDE_EXTENSIONS: &[&str] = &[
+    "json", "jsonc", "json5", "toml", "yaml", "yml", "md", "txt", "lock",
+];
+
 /// Whether `file` is the private file `private` of an interface, or beside it under a name that starts with its own
-/// (`<file>.<anything>`, `<stem>.<anything>`): what its plugin may write of its own (`terminal/launch`).
+/// (`<file>.<anything>`, `<stem>.<anything>`, a file or a folder) and ends with an extension of `BESIDE_EXTENSIONS`: what its
+/// plugin may write of its own (`terminal/launch`). Where it lands is judged too, its links followed (SEC-06).
 pub(crate) fn beside(private: &Path, file: &str) -> bool {
     let path = Path::new(file);
     let (Some(dir), Some(name), Some(stem)) = (
@@ -1279,16 +1303,27 @@ pub(crate) fn beside(private: &Path, file: &str) -> bool {
     let Ok(rest) = path.strip_prefix(dir) else {
         return false;
     };
-    let Some(first) = rest
+    let parts: Vec<&str> = rest
         .components()
-        .next()
-        .and_then(|c| c.as_os_str().to_str())
-    else {
+        .map(|c| c.as_os_str().to_str().unwrap_or(""))
+        .collect();
+    let Some(first) = parts.first() else {
         return false;
     };
-    first == name
-        || first.starts_with(&format!("{name}."))
-        || first.starts_with(&format!("{stem}."))
+    let named = match *first == name {
+        // The private file itself, not a folder under its name.
+        true => parts.len() == 1,
+        false => {
+            let expected = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| BESIDE_EXTENSIONS.iter().any(|x| x.eq_ignore_ascii_case(e)));
+            expected
+                && (first.starts_with(&format!("{name}."))
+                    || first.starts_with(&format!("{stem}.")))
+        }
+    };
+    named && lands_in(dir, path)
 }
 
 /// The files of a launch, written.
@@ -1303,28 +1338,133 @@ pub(crate) fn write_files(launch: &proto::Launch) -> Result<()> {
     Ok(())
 }
 
+/// The longest message a harness may write, framed or on a line (SEC-08): 64 MiB. What a harness says in one message is
+/// a turn's event, an answer, or a conversation given back whole at its load (ACP's `session/load`), with what its tools
+/// read: a file, an image in base64 (a ticket's are 18 MB at most, `escouade_mcp::http::MAX_BODY`). The largest are a
+/// few MiB; 64 MiB leaves them room and stays a size any machine allocates. Past it the message is an error, never an
+/// allocation on the word of the harness (one that fails ends the process).
+pub(crate) const MESSAGE_MAX: usize = 64 << 20;
+
+/// The longest line of a framed stream's headers (`Content-Length: <n>` and the like).
+const HEADER_MAX: usize = 8 << 10;
+
+/// The error of a message or a line past `max` bytes.
+fn too_long(what: &str, max: usize) -> std::io::Error {
+    std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        format!("{what} past the {max} bytes a harness may write"),
+    )
+}
+
+/// One line of `r`, its `\n` kept, added to `buf`: how many bytes it took, 0 once `r` ends. A line past `max` bytes is
+/// an error (`InvalidData`), `r` left in its middle: what came of it is in `buf`, nothing more is read for it.
+pub(crate) async fn read_line_within<R: tokio::io::AsyncBufRead + Unpin>(
+    r: &mut R,
+    max: usize,
+    buf: &mut Vec<u8>,
+) -> std::io::Result<usize> {
+    let mut read = 0;
+    loop {
+        let available = r.fill_buf().await?;
+        if available.is_empty() {
+            return Ok(read);
+        }
+        let (ends, used) = match available.iter().position(|b| *b == b'\n') {
+            Some(i) => (true, i + 1),
+            None => (false, available.len()),
+        };
+        if read + used > max {
+            return Err(too_long("a line", max));
+        }
+        buf.extend_from_slice(&available[..used]);
+        r.consume(used);
+        read += used;
+        if ends {
+            return Ok(read);
+        }
+    }
+}
+
+/// The next line of `r` without its end of line, `max` bytes at most: None once `r` ends. A longer one is read to its
+/// end and left out, `Err` of how many bytes it had: the stream goes on at the next line.
+pub(crate) async fn next_line_within<R: tokio::io::AsyncBufRead + Unpin>(
+    r: &mut R,
+    max: usize,
+) -> std::io::Result<Option<std::result::Result<Vec<u8>, usize>>> {
+    let mut line = Vec::new();
+    match read_line_within(r, max, &mut line).await {
+        Ok(0) => Ok(None),
+        Ok(_) => {
+            if line.last() == Some(&b'\n') {
+                line.pop();
+            }
+            Ok(Some(Ok(line)))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::InvalidData => {
+            let mut skipped = line.len();
+            loop {
+                let available = r.fill_buf().await?;
+                if available.is_empty() {
+                    break;
+                }
+                match available.iter().position(|b| *b == b'\n') {
+                    Some(i) => {
+                        r.consume(i + 1);
+                        skipped += i + 1;
+                        break;
+                    }
+                    None => {
+                        let n = available.len();
+                        r.consume(n);
+                        skipped += n;
+                    }
+                }
+            }
+            Ok(Some(Err(skipped)))
+        }
+        Err(e) => Err(e),
+    }
+}
+
 /// One message of a stream framed by `Content-Length` headers (`HarnessDecl::framing`), read from `r`: None once it ends.
+/// A length past `MESSAGE_MAX`, or a header line past `HEADER_MAX`, is an error (SEC-08); the body is read as it comes,
+/// its buffer grown by what came, never made on the word of the length.
 pub(crate) async fn read_frame<R: tokio::io::AsyncBufRead + Unpin>(
     r: &mut R,
 ) -> std::io::Result<Option<Vec<u8>>> {
     let mut len: Option<usize> = None;
     loop {
-        let mut line = String::new();
-        if r.read_line(&mut line).await? == 0 {
+        let mut bytes = Vec::new();
+        if read_line_within(r, HEADER_MAX, &mut bytes).await? == 0 {
             return Ok(None);
         }
+        let line = String::from_utf8_lossy(&bytes);
         let line = line.trim_end_matches(['\r', '\n']);
         if line.is_empty() {
             if let Some(n) = len {
-                let mut body = vec![0; n];
-                r.read_exact(&mut body).await?;
+                let mut body = Vec::with_capacity(n.min(64 << 10));
+                (&mut *r).take(n as u64).read_to_end(&mut body).await?;
+                if body.len() < n {
+                    return Err(std::io::ErrorKind::UnexpectedEof.into());
+                }
                 return Ok(Some(body));
             }
             continue;
         }
         if let Some((k, v)) = line.split_once(':') {
             if k.trim().eq_ignore_ascii_case("content-length") {
-                len = v.trim().parse().ok();
+                let v = v.trim();
+                len = match v.parse::<u64>() {
+                    Ok(n) if n > MESSAGE_MAX as u64 => {
+                        return Err(too_long("a message", MESSAGE_MAX))
+                    }
+                    Ok(n) => Some(n as usize),
+                    // A number too long for any memory.
+                    Err(_) if !v.is_empty() && v.bytes().all(|b| b.is_ascii_digit()) => {
+                        return Err(too_long("a message", MESSAGE_MAX))
+                    }
+                    Err(_) => None,
+                };
             }
         }
     }
@@ -2671,10 +2811,12 @@ impl ProcessEngineProcess {
         if let Some(stderr) = child.stderr.take() {
             let me = Arc::downgrade(self);
             tokio::spawn(async move {
-                // As bytes: a line that is not UTF-8 (a message of `wsl.exe`) must not stop the reading.
-                let mut lines = BufReader::new(stderr).split(b'\n');
-                while let Ok(Some(line)) = lines.next_segment().await {
+                // As bytes: a line that is not UTF-8 (a message of `wsl.exe`) must not stop the reading. A line past
+                // `MESSAGE_MAX` is left out (SEC-08).
+                let mut reader = BufReader::new(stderr);
+                while let Ok(Some(line)) = next_line_within(&mut reader, MESSAGE_MAX).await {
                     let Some(p) = me.upgrade() else { break };
+                    let Ok(line) = line else { continue };
                     let line = String::from_utf8_lossy(&line).replace('\0', "");
                     if p.leaves_out.iter().any(|t| line.contains(t.as_str())) {
                         continue;
@@ -2685,11 +2827,21 @@ impl ProcessEngineProcess {
         }
         let stdout = child.stdout.take();
         let by_length = self.framed;
+        let key = self.key.clone();
         tokio::spawn(async move {
             let Some(stdout) = stdout else { return };
+            let mut reader = BufReader::new(stdout);
             if by_length {
-                let mut reader = BufReader::new(stdout);
-                while let Ok(Some(body)) = read_frame(&mut reader).await {
+                loop {
+                    let body = match read_frame(&mut reader).await {
+                        Ok(Some(body)) => body,
+                        Ok(None) => break,
+                        // Past `MESSAGE_MAX` (SEC-08): what follows has no frame to be read by.
+                        Err(e) => {
+                            log::warn!("{key}: its harness's output is no longer read: {e}");
+                            break;
+                        }
+                    };
                     let text = String::from_utf8_lossy(&body).into_owned();
                     if lines_tx.send(Heard::Line(text)).await.is_err() {
                         break;
@@ -2697,8 +2849,14 @@ impl ProcessEngineProcess {
                 }
                 return;
             }
-            let mut lines = BufReader::new(stdout).split(b'\n');
-            while let Ok(Some(bytes)) = lines.next_segment().await {
+            while let Ok(Some(bytes)) = next_line_within(&mut reader, MESSAGE_MAX).await {
+                let bytes = match bytes {
+                    Ok(bytes) => bytes,
+                    Err(n) => {
+                        log::warn!("{key}: a line of {n} bytes of its harness left out (SEC-08)");
+                        continue;
+                    }
+                };
                 let text = String::from_utf8_lossy(&bytes);
                 let text = text.trim();
                 if !text.is_empty() && lines_tx.send(Heard::Line(text.to_string())).await.is_err() {

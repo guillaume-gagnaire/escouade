@@ -19,9 +19,10 @@ pub const CLOUD: &str = "dev.azure.com";
 pub const RESOURCE: &str = "499b84ac-1321-427f-aa17-267ca6975798";
 
 /// Where dev.azure.com's API is, when `ESCOUADE_AZURE_DEVOPS_API` says (a fake one): in place of
-/// `https://dev.azure.com` (and of its profiles' and identities' hosts).
+/// `https://dev.azure.com` (and of its profiles' and identities' hosts). In a build of development alone: a
+/// published app sends the account's token to dev.azure.com whatever its environment says (SEC-13).
 pub fn api_override(url: &str) -> Option<String> {
-    if host_of(url) != CLOUD {
+    if !cfg!(debug_assertions) || host_of(url) != CLOUD {
         return None;
     }
     std::env::var("ESCOUADE_AZURE_DEVOPS_API")

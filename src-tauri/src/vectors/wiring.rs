@@ -24,10 +24,12 @@ pub struct VectorsModelInfo {
     pub downloading: bool,
 }
 
-/// Where the model comes from: `ESCOUADE_VECTORS_MODEL_URL` (a fake server of the end-to-end tests), else Hugging Face.
+/// Where the model comes from: in a build of development, `ESCOUADE_VECTORS_MODEL_URL` (a fake server of the end-to-end
+/// tests); else, and always in a published app, Hugging Face (SEC-13).
 fn base_url() -> String {
     std::env::var("ESCOUADE_VECTORS_MODEL_URL")
         .ok()
+        .filter(|_| cfg!(debug_assertions))
         .filter(|u| !u.trim().is_empty())
         .unwrap_or_else(|| MODEL_URL.to_string())
 }

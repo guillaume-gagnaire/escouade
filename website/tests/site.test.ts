@@ -99,6 +99,30 @@ describe('the server', () => {
     expect(DOC_SLUGS).not.toContain('code-index');
   });
 
+  it('sends its security headers on every answer, and no version of nginx (SEC-16)', () => {
+    const headers = readFileSync(new URL('../security-headers.conf', import.meta.url), 'utf8');
+    for (const header of [
+      'add_header Strict-Transport-Security "max-age=31536000" always;',
+      'add_header X-Content-Type-Options "nosniff" always;',
+      'add_header Referrer-Policy "strict-origin-when-cross-origin" always;',
+      'add_header X-Frame-Options "DENY" always;',
+    ])
+      expect(headers).toContain(header);
+    expect(headers).toMatch(/add_header Content-Security-Policy "[^"]*frame-ancestors 'none'[^"]*" always;/);
+    expect(conf).toMatch(/^server_tokens off;$/m);
+    // nginx drops the server's add_header in a location that has one of its own: each of them includes them again.
+    const site = conf.slice(conf.indexOf('listen 80 default_server;'));
+    const include = 'include /etc/nginx/snippets/security-headers.conf;';
+    expect(site.split('\n    location')[0]).toContain(include);
+    for (const block of site
+      .split('\n    location')
+      .slice(1)
+      .filter((b) => b.includes('add_header')))
+      expect(block.split('\n    }')[0]).toContain(include);
+    const docker = readFileSync(new URL('../Dockerfile', import.meta.url), 'utf8');
+    expect(docker).toContain('COPY website/security-headers.conf /etc/nginx/snippets/security-headers.conf');
+  });
+
   it('answers an unknown address with the generated 404 page', () => {
     expect(conf).toContain('error_page 404 /404.html;');
   });

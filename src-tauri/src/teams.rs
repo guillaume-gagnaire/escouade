@@ -1145,10 +1145,11 @@ impl Teams {
 }
 
 /// How often the watch reads the teams when their live feed brings nothing: 15 s (the live feed reads them within a
-/// second, TS-5), or `ESCOUADE_TEAMS_EVERY_MS` (the end-to-end tests).
+/// second, TS-5), or `ESCOUADE_TEAMS_EVERY_MS` (the end-to-end tests) in a build of development (SEC-13).
 pub fn watch_every() -> Duration {
     std::env::var("ESCOUADE_TEAMS_EVERY_MS")
         .ok()
+        .filter(|_| cfg!(debug_assertions))
         .and_then(|v| v.parse::<u64>().ok())
         .map_or(Duration::from_secs(15), |ms| {
             Duration::from_millis(ms.max(200))

@@ -199,6 +199,16 @@ fn handle(me: &mut Reactor, line: &str, lines: usize, out: &mut String) {
                 n = std::hint::black_box(n + 1);
             }
         }
+        // Writes without end, a line of 64 KiB at a time (SEC-11): the host stops it past its ceiling.
+        "probe/flood" => {
+            let line = [b'x'; 64 << 10];
+            let mut stdout = std::io::stdout();
+            loop {
+                if stdout.write_all(&line).is_err() {
+                    return;
+                }
+            }
+        }
         "probe/grow" => {
             let mut all = Vec::new();
             loop {

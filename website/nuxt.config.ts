@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { DOC_SLUGS, docPath } from './app/data/docs';
 import { legalPath, privacyPath } from './app/data/privacy';
+import { withPolicy } from './csp';
 
 // The app's version, read from the repo: the one its next release carries.
 const tauri = JSON.parse(readFileSync(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8')) as { version: string };
@@ -35,6 +36,12 @@ export default defineNuxtConfig({
       ],
       // The language switch's French links (`?lang=fr`) are the French pages, already generated.
       ignore: [(route: string) => route.includes('?lang=')],
+    },
+    hooks: {
+      // Each page carries its content security policy, its own inline scripts named by their hashes (csp.ts).
+      'prerender:generate'(route) {
+        if (route.fileName?.endsWith('.html') && typeof route.contents === 'string') route.contents = withPolicy(route.contents);
+      },
     },
   },
 });

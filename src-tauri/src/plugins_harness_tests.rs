@@ -782,6 +782,105 @@ fn an_interface_writes_its_private_file_and_what_is_beside_it_by_its_name_alone(
     assert!(!harness::beside(private, "a1.json"));
 }
 
+/// SEC-06: beside the private file, an expected extension alone (no program of the same stem), and no folder under the
+/// private file's own name.
+#[test]
+fn beside_the_private_file_a_program_is_refused() {
+    let private = if cfg!(windows) {
+        Path::new(r"C:\data\tui\settings.json")
+    } else {
+        Path::new("/data/tui/settings.json")
+    };
+    let at = |rel: &str| {
+        private
+            .parent()
+            .unwrap()
+            .join(rel)
+            .to_string_lossy()
+            .into_owned()
+    };
+    for ok in [
+        "settings.json",
+        "settings.local.json",
+        "settings.json.lock",
+        "settings.rules.toml",
+        "settings.copilot-plugin/hooks/hooks.json",
+    ] {
+        assert!(harness::beside(private, &at(ok)), "{ok}");
+    }
+    for no in [
+        "settings.cmd",
+        "settings.bat",
+        "settings.ps1",
+        "settings.sh",
+        "settings.exe",
+        "settings.CMD",
+        "settings.json.cmd",
+        "settings.copilot-plugin/hooks/run.cmd",
+        "settings.copilot-plugin/hook",
+        "settings.json/inside.json",
+    ] {
+        assert!(!harness::beside(private, &at(no)), "{no}");
+    }
+}
+
+/// A folder of the test, new, its links followed (no `\\?\`).
+fn real_dir(name: &str) -> PathBuf {
+    let d = std::env::temp_dir().join(format!("sec06-{name}-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir_all(&d).unwrap();
+    let real = d.canonicalize().unwrap().to_string_lossy().into_owned();
+    PathBuf::from(real.strip_prefix(r"\\?\").unwrap_or(&real))
+}
+
+/// SEC-06 (W-02 of the audit): the files of a launch are judged where they land. Through a link of the agent's folder (a
+/// junction under Windows, a symbolic link elsewhere), a file out of it is refused, beside the private file as under the
+/// home; the same file through no link is taken.
+#[test]
+fn a_launch_file_through_a_link_out_of_the_agent_folder_is_refused() {
+    let base = real_dir("link");
+    let (home, outside) = (base.join("home"), base.join("outside"));
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    crate::accounts::link_dir(&outside, &home.join("cache")).unwrap();
+    let launch_of = |path: PathBuf| proto::Launch {
+        files: vec![FileToWrite {
+            path: path.to_string_lossy().into_owned(),
+            text: "x".into(),
+        }],
+        ..proto::Launch::default()
+    };
+    let h = home.to_string_lossy().into_owned();
+    let judged = |path: PathBuf| {
+        check_launch(
+            "Minimal",
+            false,
+            None,
+            &[],
+            false,
+            Some(&h),
+            &launch_of(path),
+        )
+    };
+    assert!(judged(home.join("own").join("config.toml")).is_ok());
+    let why = judged(home.join("cache").join("marker.txt")).unwrap_err();
+    assert!(why.contains("lien") || why.contains("link"), "{why}");
+    assert!(judged(home.join("cache").join("deep").join("marker.txt")).is_err());
+    // Beside a private file whose folder holds a link out of it: refused as well.
+    let private = home.join("settings.json");
+    let through = home.join("settings.copilot-plugin");
+    crate::accounts::link_dir(&outside, &through).unwrap();
+    assert!(!harness::beside(
+        &private,
+        &through.join("hooks.json").to_string_lossy()
+    ));
+    assert!(harness::beside(
+        &private,
+        &home.join("settings.local.json").to_string_lossy()
+    ));
+    assert!(std::fs::read_dir(&outside).unwrap().next().is_none());
+    let _ = std::fs::remove_dir_all(&base);
+}
+
 /// ESC-429: the arguments a read « before » gives back are judged as those of `terminal/launch` are.
 #[tokio::test(flavor = "multi_thread")]
 async fn the_arguments_a_before_read_gives_back_are_checked_again() {
@@ -915,4 +1014,78 @@ fn the_attach_of_a_shared_process_sets_only_the_variables_its_plugin_may_set() {
         let err = harness::joining("Outil", &declared_alone(), odd).unwrap_err();
         assert!(err.to_string().contains(refused), "{refused}: {err}");
     }
+}
+
+/// SEC-08 (W-14 and W-15 of the audit): the length a framed harness announces is no allocation on its word. Past
+/// `MESSAGE_MAX` it is an error, not an end of the process; within it, a message shorter than announced ends in an
+/// error once the stream ends, its buffer grown by what came.
+#[tokio::test]
+async fn a_frame_longer_than_its_ceiling_is_an_error() {
+    for len in [1u64 << 62, harness::MESSAGE_MAX as u64 + 1, 256 << 20] {
+        let bytes = format!("Content-Length: {len}\r\n\r\n{{}}").into_bytes();
+        let mut reader = tokio::io::BufReader::new(bytes.as_slice());
+        let got = harness::read_frame(&mut reader).await;
+        let e = got.expect_err("a frame past the ceiling");
+        assert_eq!(e.kind(), std::io::ErrorKind::InvalidData, "{e}");
+    }
+    let bytes = format!(
+        "Content-Length: {}\r\n\r\nonly twelve!",
+        harness::MESSAGE_MAX
+    )
+    .into_bytes();
+    let mut reader = tokio::io::BufReader::new(bytes.as_slice());
+    let e = harness::read_frame(&mut reader).await.unwrap_err();
+    assert_eq!(e.kind(), std::io::ErrorKind::UnexpectedEof, "{e}");
+    // Within it, read as ever.
+    let bytes = b"Content-Length: 2\r\n\r\n{}Content-Length: 4\r\n\r\ntrue".to_vec();
+    let mut reader = tokio::io::BufReader::new(bytes.as_slice());
+    assert_eq!(
+        harness::read_frame(&mut reader).await.unwrap().unwrap(),
+        b"{}"
+    );
+    assert_eq!(
+        harness::read_frame(&mut reader).await.unwrap().unwrap(),
+        b"true"
+    );
+    assert!(harness::read_frame(&mut reader).await.unwrap().is_none());
+}
+
+/// SEC-08: a header line without an end is no line read without a ceiling.
+#[tokio::test]
+async fn a_header_line_without_an_end_is_an_error() {
+    let bytes = vec![b'x'; 1 << 20];
+    let mut reader = tokio::io::BufReader::new(bytes.as_slice());
+    let e = harness::read_frame(&mut reader).await.unwrap_err();
+    assert_eq!(e.kind(), std::io::ErrorKind::InvalidData, "{e}");
+}
+
+/// SEC-08: the lines of a harness (those of `account/read`, those of its output) have a ceiling: past it, an error for
+/// a line that must be read whole, a line left out for a stream that goes on.
+#[tokio::test]
+async fn a_line_longer_than_its_ceiling_is_an_error_or_left_out() {
+    let bytes = b"short\nmuch longer than ten\nlast".to_vec();
+    let mut reader = tokio::io::BufReader::new(bytes.as_slice());
+    let mut line = Vec::new();
+    assert_eq!(
+        harness::read_line_within(&mut reader, 10, &mut line)
+            .await
+            .unwrap(),
+        6
+    );
+    assert_eq!(line, b"short\n");
+    let mut line = Vec::new();
+    let e = harness::read_line_within(&mut reader, 10, &mut line)
+        .await
+        .unwrap_err();
+    assert_eq!(e.kind(), std::io::ErrorKind::InvalidData, "{e}");
+
+    let mut reader = tokio::io::BufReader::new(bytes.as_slice());
+    let mut got = Vec::new();
+    while let Some(line) = harness::next_line_within(&mut reader, 10).await.unwrap() {
+        got.push(line.map(|l| String::from_utf8(l).unwrap()));
+    }
+    assert_eq!(
+        got,
+        [Ok("short".to_string()), Err(21), Ok("last".to_string())]
+    );
 }

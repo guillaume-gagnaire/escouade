@@ -2,7 +2,7 @@
 title: "Le contrat des harness en process"
 subject: "plugins"
 sources: ["docs/PLUGINS-DESIGN.md §4.5 et §4.6","docs/PLUGINS-DESIGN.md §8.29 (ESC-352)","docs/PLUGINS-DESIGN.md §8.34 (ESC-359)","docs/PLUGINS.md §2.2 et §8","docs/TODO-2.2.md (INT-9)","crates/escouade-plugin-protocol/src/engine.rs","crates/escouade-acp/src/terminal.rs","src-tauri/src/plugins/harness.rs","src-tauri/src/plugins/shared.rs","src-tauri/src/plugins/view.rs","src-tauri/src/tui.rs","Revue de dev.escouade.copilot-cli@2.2.5 (~/.escouade-review)","Revue de dev.escouade.antigravity-cli@2.2.7 (~/.escouade-review)","Essai de cmd sous Windows 11, ESC-430 (2026-11-12)"]
-tickets: ["ESC-221","ESC-223","ESC-225","ESC-224","ESC-283","ESC-226","ESC-352","ESC-362","ESC-359","ESC-430","ESC-433"]
+tickets: ["ESC-221","ESC-223","ESC-225","ESC-224","ESC-283","ESC-226","ESC-352","ESC-362","ESC-359","ESC-430","ESC-433","ESC-470"]
 decisions: [34,68,101,146]
 compared: null
 ---
@@ -136,3 +136,11 @@ Trouvé à la relecture de Copilot CLI 2.2.5 et d'Antigravity CLI 2.2.7 ; le cœ
 
 - **Un dossier entier en tête du `PATH`** (ESC-433). Le dossier d'`escouade-hook` ne va en tête du `PATH` d'une interface que s'il est entier : un lecteur et sa racine (`C:\`, jamais `C:`, le dossier courant de ce lecteur) ou un partage (`\\hôte\partage`), sans `;` ni `"`, qui le couperaient ou en feraient un autre. Sinon le `PATH` reste tel quel : un dossier qui n'est pas entier remettrait un dossier courant devant (escouade-acp 0.1.6 `path_first`, pour Gemini CLI et Mistral Vibe ; Antigravity CLI a le même garde).
 - **Le jeton des hooks reste dans l'environnement** (ESC-433). Les commandes d'une interface héritent d'`ESCOUADE_HOOK_TOKEN`, que le cœur pose : Copilot CLI retire à ses hooks aussi une variable de `--secret-env-vars` (essayé sur 1.0.98), et sans sandbox, tout ce qu'`escouade-hook` lit, une commande de l'agent peut le lire. Ce jeton ne sert qu'à dire l'état de cet agent.
+
+## Depuis ESC-470 : les fichiers d'un lancement, la longueur d'un message
+
+SEC-06 et SEC-08 de l'audit de la 2.2.0 ; ce qui suit l'emporte sur les lignes plus haut qui en disent moins.
+
+- **Un fichier d'un lancement est jugé là où il atterrit.** Sous le dossier de l'agent comme à côté du fichier privé d'une interface, le chemin est d'abord jugé tel qu'il est écrit (absolu, sous le dossier, sans `..`), puis ses liens et ses jonctions sont suivis aussi loin qu'il existe, comme pour les capacités `fs/*` : un fichier qu'un lien du dossier mènerait ailleurs est refusé (« … qu'un lien du dossier de l'agent mène ailleurs : l'agent ne démarre pas »), un lien qui ne mène nulle part aussi. Vaut pour le lancement d'un agent, de son interface, d'une question ponctuelle, d'une lecture de compte, et pour un fichier écrit pendant qu'il tourne.
+- **À côté du fichier privé d'une interface**, un plugin écrit le fichier lui-même, ou un nom qui commence par le sien (`<fichier>.<…>`, `<radical>.<…>`, fichier ou dossier comme `a1.copilot-plugin/hooks/hooks.json`) **qui finit par une extension de réglages** : `json`, `jsonc`, `json5`, `toml`, `yaml`, `yml`, `md`, `txt`, `lock`. Un nom de programme (`settings.cmd`, `.bat`, `.ps1`, `.sh`, `.exe` à côté de `settings.json`) est refusé, comme un dossier sous le nom du fichier privé lui-même.
+- **Un message d'un harness fait 64 Mio au plus**, encadré par `Content-Length` ou sur une ligne. Au-delà, ou pour une ligne d'en-tête de plus de 8 Kio, la lecture s'arrête sur une erreur, jamais sur une allocation faite sur la foi de la longueur annoncée (qui arrêtait l'app) ; en deçà, le corps est lu au fil de ce qui arrive. Une lecture de compte (`account/read`) dont une ligne dépasse échoue avec cette erreur ; une ligne trop longue de la sortie d'un agent est laissée de côté et notée au journal, et la lecture continue. 64 Mio : un message porte au plus un événement, une réponse, ou une conversation rendue entière à son chargement avec ce que ses outils ont lu (un fichier, une image en base64) ; les plus gros font quelques Mio.

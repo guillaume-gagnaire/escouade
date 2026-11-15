@@ -27,10 +27,12 @@ const LIST_FRESH: Duration = Duration::from_secs(55);
 /// How often the list of the project on screen is read in the background, for the PR tab's badge
 /// of the new ones (ESC-403): never sooner after any other reading of it.
 pub const WATCH_EVERY: Duration = Duration::from_secs(120);
-/// `WATCH_EVERY`, unless `ESCOUADE_PR_WATCH_EVERY_MS` says otherwise (the end-to-end tests).
+/// `WATCH_EVERY`, unless `ESCOUADE_PR_WATCH_EVERY_MS` says otherwise (the end-to-end tests), in a build of development
+/// alone (SEC-13).
 fn watch_every() -> Duration {
     std::env::var("ESCOUADE_PR_WATCH_EVERY_MS")
         .ok()
+        .filter(|_| cfg!(debug_assertions))
         .and_then(|v| v.parse().ok())
         .map_or(WATCH_EVERY, Duration::from_millis)
 }

@@ -28,10 +28,11 @@ use tauri::Runtime;
 pub const READ_EVERY: Duration = Duration::from_secs(20);
 
 /// `READ_EVERY`, unless `ESCOUADE_PR_READ_EVERY_MS` says otherwise (the end-to-end tests, which
-/// read them again at each selection).
+/// read them again at each selection), in a build of development alone (SEC-13).
 fn read_every() -> Duration {
     std::env::var("ESCOUADE_PR_READ_EVERY_MS")
         .ok()
+        .filter(|_| cfg!(debug_assertions))
         .and_then(|v| v.parse().ok())
         .map_or(READ_EVERY, Duration::from_millis)
 }

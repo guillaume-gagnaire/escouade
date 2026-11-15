@@ -195,3 +195,83 @@ async fn the_hook_says_nothing_of_a_search_for_a_symbol_since_the_index_is_gone(
     assert!(settings.contains("PreToolUse"), "{settings}");
     assert!(!settings.contains("index"), "{settings}");
 }
+
+/// SEC-17 of the 2.2.0 audit: a program of the machine that opens a connection to the hooks' server and sends nothing
+/// holds it 2 seconds at most (a local client sends its request at once), not 10.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_silent_connection_to_the_hooks_server_is_closed_within_two_seconds() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let h = harness("hooks-silent");
+    let port = h.core.hook_port().unwrap();
+    let mut s = tokio::net::TcpStream::connect(("127.0.0.1", port))
+        .await
+        .unwrap();
+    s.write_all(format!("POST /hook HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n").as_bytes())
+        .await
+        .unwrap();
+    let start = std::time::Instant::now();
+    let mut out = Vec::new();
+    let closed =
+        tokio::time::timeout(std::time::Duration::from_secs(4), s.read_to_end(&mut out)).await;
+    assert!(closed.is_ok(), "still open after {:?}", start.elapsed());
+    assert!(start.elapsed() < std::time::Duration::from_secs(4));
+}
+
+/// SEC-17: the hooks' server serves so many connections at once (`Hooks::limits`), the next one waits until one
+/// closes; and a token is known by the whole of it alone.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_hooks_server_serves_so_many_connections_at_once() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let h = harness("hooks-cap");
+    {
+        let mut limits = h.core.hooks.limits.lock();
+        limits.connections = 2;
+        limits.header_read = std::time::Duration::from_secs(3);
+    }
+    let port = h.core.hook_port().unwrap();
+    let mut silent = Vec::new();
+    for _ in 0..2 {
+        silent.push(
+            tokio::net::TcpStream::connect(("127.0.0.1", port))
+                .await
+                .unwrap(),
+        );
+    }
+    // Both slots taken: a request is not answered while they are held.
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    let mut third = tokio::net::TcpStream::connect(("127.0.0.1", port))
+        .await
+        .unwrap();
+    let request = format!(
+        "POST /hook HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer nope\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}"
+    );
+    third.write_all(request.as_bytes()).await.unwrap();
+    let mut out = Vec::new();
+    let waited = tokio::time::timeout(
+        std::time::Duration::from_millis(800),
+        third.read_to_end(&mut out),
+    )
+    .await;
+    assert!(
+        waited.is_err(),
+        "answered while every slot was held: {out:?}"
+    );
+    // One closes: the waiting one is served.
+    drop(silent.pop());
+    let served = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        third.read_to_end(&mut out),
+    )
+    .await;
+    assert!(served.is_ok());
+    assert!(
+        String::from_utf8_lossy(&out).starts_with("HTTP/1.1 401"),
+        "{out:?}"
+    );
+    // A token is the whole of it.
+    let id = "agent-x";
+    let token = h.core.hooks.grant(id);
+    assert!(h.core.hooks.holds(id));
+    let (status, _) = post_hook(port, &token[..token.len() - 1], &serde_json::json!({}));
+    assert!(status.contains("401"), "{status}");
+}

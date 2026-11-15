@@ -9,7 +9,7 @@ L'état de la sécurité d'Escouade 2.2.0 (étiquette `v2.2.0`, commit `ab351a00
 | `build.mjs` | Produit le PDF (Markdown → HTML → PDF par le Chromium de Playwright) ; `--check` cherche ce qui ne doit pas sortir |
 | `annexes/` | Sorties brutes des outils sur la 2.2.0 (`cargo audit`, `npm audit`), résumés de `cargo deny`, `cargo geiger` et `semgrep`, dépendances directes |
 | `annexes/essais/` | Résultats des essais : boîte blanche, boîte noire (une note JSON par scénario), plugin malveillant seul, tests du projet rejoués, contrôle des binaires publiés (signatures, attestation de provenance) |
-| `poc/whitebox/audit_2_2_0.rs` | 38 tests Rust d'attaque, compilés avec les tests de l'app (`src-tauri/src/plugins/mod.rs` les nomme), tous ignorés par défaut |
+| `poc/whitebox/audit_2_2_0.rs` | 38 tests Rust d'attaque, compilés avec les tests de l'app (`src-tauri/src/plugins/mod.rs` les nomme), ignorés par défaut ; ceux des constats corrigés depuis (SEC-06, SEC-08) affirment le refus et tournent avec les autres tests |
 | `poc/blackbox/` | 16 scénarios Playwright contre l'app lancée isolée (la fixture des tests de bout en bout) |
 | `poc/malicious-plugin/` | Le plugin d'essai malveillant : il tente ce que ses permissions ne couvrent pas, puis un déni de service |
 | `tools/annexes.mjs` | Fait `annexes/` à partir des sorties brutes des outils et des essais |

@@ -17,6 +17,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Un poste géré par un service informatique peut imposer des réglages par ses stratégies (registre, profil MDM, `/etc`) : télémétrie, canal bêta, mode Bypass, modes et harness permis, Remote Control. Un réglage imposé est grisé avec un cadenas qui dit qui l’impose, et Escouade le refuse partout, fenêtre, agents et `.escouade.yml` compris.
 - Les stratégies du poste couvrent maintenant tout ce qu’un service informatique peut imposer (proxy et certificats, plugins, projets privés, voix, mises à jour, modèles et effort, serveurs, clients MCP extérieurs), et s’appliquent sans redémarrer quand il les change. Escouade est livré avec son ADMX, un profil MDM d’exemple et une page de la doc qui dit comment les déployer.
 - Un agent qui lit une PR de GitHub en a maintenant tout : sa description, ses commits, ses fichiers et ses fils de discussion avec leurs réponses et leur état. C’est la première pierre de la vue des PR dans Escouade.
+- Sécurité : sept constats faibles de l’audit de la 2.2.0 corrigés. Un plugin de harness n’écrit plus à travers un lien hors du dossier de l’agent ni un script à côté de ses réglages, un harness ne peut plus arrêter l’app par une longueur de message absurde, la sortie d’un plugin est plafonnée à sa mémoire par tour, les variables des tests ne sont plus lues par l’app publiée, les serveurs locaux coupent plus tôt une connexion muette, la fenêtre et le site ont des politiques de sécurité plus strictes.
 
 ## [2.2.0] — 2026-11-14
 

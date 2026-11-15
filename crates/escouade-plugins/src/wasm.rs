@@ -12,8 +12,9 @@
 //! - **Its instance.** One per plugin, which keeps its state from a call to the next, as its process did: the same
 //!   JSON-RPC lines, carried by the module's standard input and output, held in memory ([`Instance`]). The input
 //!   never blocks; a turn (`escouade-turn`) hands the plugin what came, and ends when QuickJS has nothing left to
-//!   run. 64 MiB of memory; 2 s a turn, 500 ms when it holds a decision (the epoch, ticked every 10 ms): past them
-//!   the instance is done, and the runtime makes a new one with its budget of restarts (`runtime.rs`).
+//!   run. 64 MiB of memory; 2 s a turn, 500 ms when it holds a decision (the epoch, ticked every 10 ms); what a turn
+//!   writes, no more than its memory (SEC-11): past them the instance is done, and the runtime makes a new one with
+//!   its budget of restarts (`runtime.rs`).
 //! - **What it is served.** The runtime's methods (`secrets/get`, `settings/get`, `log`), and two that Node gave
 //!   before: the JSON files at the root of its folder (the first line, `escouade/boot`), and `net/fetch`
 //!   ([`Fetcher`]): https only, to a host of `permissions.network` or one of its subdomains, no redirection followed,
@@ -382,10 +383,25 @@ pub fn reactor(bytes: &[u8]) -> Result<Module, String> {
 
 #[derive(Clone, Default)]
 struct Inbox(Arc<Mutex<VecDeque<u8>>>);
-#[derive(Clone, Default)]
-struct Outbox(Arc<Mutex<Vec<u8>>>);
+/// What the module writes on a stream until the host takes it, `.1` bytes at most (its memory): past them the write is a
+/// trap that stops the turn, and `.2` says why (SEC-11 of the 2.2.0 audit).
+#[derive(Clone)]
+struct Outbox(
+    Arc<Mutex<Vec<u8>>>,
+    usize,
+    Arc<std::sync::atomic::AtomicBool>,
+);
 
 impl Outbox {
+    fn within(max: usize) -> Self {
+        Self(Arc::default(), max, Arc::default())
+    }
+
+    /// Whether a write went past its ceiling.
+    fn over(&self) -> bool {
+        self.2.load(std::sync::atomic::Ordering::Acquire)
+    }
+
     fn take(&self) -> Vec<u8> {
         std::mem::take(&mut *self.0.lock().unwrap_or_else(|e| e.into_inner()))
     }
@@ -429,10 +445,14 @@ impl InputStream for Inbox {
 #[wasmtime_wasi::async_trait]
 impl OutputStream for Outbox {
     fn write(&mut self, bytes: bytes::Bytes) -> StreamResult<()> {
-        self.0
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .extend_from_slice(&bytes);
+        let mut kept = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        if kept.len().saturating_add(bytes.len()) > self.1 {
+            self.2.store(true, std::sync::atomic::Ordering::Release);
+            return Err(wasmtime_wasi::p2::StreamError::trap(
+                "a turn wrote past its ceiling",
+            ));
+        }
+        kept.extend_from_slice(&bytes);
         Ok(())
     }
     fn flush(&mut self) -> StreamResult<()> {
@@ -586,6 +606,8 @@ pub enum Fault {
     Timeout(Duration),
     /// A trap, a memory refused, an exception QuickJS did not catch.
     Crashed(String),
+    /// A turn that wrote more than its ceiling (its memory, in bytes) on its output or its error output, stopped there.
+    Flooded(usize),
 }
 
 impl std::fmt::Display for Fault {
@@ -597,6 +619,11 @@ impl std::fmt::Display for Fault {
                 d.as_millis()
             ),
             Fault::Crashed(why) => write!(f, "its instance crashed: {why}"),
+            Fault::Flooded(max) => write!(
+                f,
+                "a turn wrote more than {} MiB: Escouade stopped its instance",
+                max >> 20
+            ),
         }
     }
 }
@@ -629,8 +656,10 @@ impl Instance {
         .map_err(crashed)?;
         w(linker.func_wrap("escouade", "call", escouade_call)).map_err(crashed)?;
         let inbox = Inbox::default();
-        let outbox = Outbox::default();
-        let errbox = Outbox::default();
+        // What a turn writes is held until its end: no more than the memory the module is given (SEC-11), which
+        // no answer of a plugin, made in that memory, goes past.
+        let outbox = Outbox::within(limits.memory);
+        let errbox = Outbox::within(limits.memory);
         // No folder, no network, no environment, no argument: only the three streams.
         let wasi = WasiCtxBuilder::new()
             .stdin(inbox.clone())
@@ -723,6 +752,9 @@ impl Instance {
                     .is_some_and(|x| x.0 == 0) =>
             {
                 Ok(())
+            }
+            Err(_) if self.outbox.over() || self.errbox.over() => {
+                Err(Fault::Flooded(self.limits.memory))
             }
             Err(e) => Err(match e.downcast_ref::<wasmtime::Trap>() {
                 Some(wasmtime::Trap::Interrupt) => Fault::Timeout(within),

@@ -55,8 +55,9 @@ pub struct Limits {
 impl Default for Limits {
     fn default() -> Self {
         Self {
-            // A client opens a connection to send its request at once.
-            header_read: Duration::from_secs(10),
+            // A client of this machine opens a connection to send its request at once: 2 s is plenty, and a
+            // program that holds connections without a word holds each no longer (SEC-17 of the 2.2.0 audit).
+            header_read: Duration::from_secs(2),
             // Each Claude Code (a terminal, every agent) keeps one or two open.
             connections: 64,
         }

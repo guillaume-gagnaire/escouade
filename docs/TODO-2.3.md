@@ -82,3 +82,9 @@ Demandé le 2026-11-14 : l'éditeur (CodeMirror 6, avec son arborescence et ses 
 - [ ] Les essais réels de Gitea, de Forgejo et d'Azure DevOps (`docs/TODO-2.2.md`, chapitre « Hébergeurs de code »).
 - [ ] `ort` à monter à la main sur les deux cibles ensemble (la PR Dependabot #36 ne montait que l'une), après vérification de la bibliothèque de Microsoft pour Linux.
 - [ ] Les 18 constats de l'audit de sécurité d'Escouade 2.2.0 (`docs/security/audit-2026-11/rapport.md`, SEC-01 à SEC-18), à trier : trois moyens (SEC-01 à SEC-03, dont SEC-03 connu et laissé en l'état), quatorze faibles (SEC-04 à SEC-17) et des observations (SEC-18).
+  - [x] Lot 1 (ESC-470) : SEC-06 (liens et jonctions résolus, `beside` restreint aux extensions de réglages), SEC-08 (64 Mio par message ou ligne d'un harness, une erreur au-delà), SEC-11 (ce qu'un plugin écrit par tour plafonné à sa mémoire), SEC-13 (six variables de test lues par un binaire de développement seul), SEC-16 (en-têtes du site, politique de contenu à empreintes page par page), SEC-17 (2 s pour les en-têtes, 64 connexions au serveur de hooks, jetons comparés en temps constant).
+  - [x] SEC-05, en partie (ESC-470) : `form-action`, `base-uri`, `object-src` et `frame-ancestors` à `'none'`.
+  - [ ] SEC-05, le reste : `'unsafe-inline'` des styles (l'interface et la vue VS Code en écrivent).
+  - [ ] SEC-16, le reste : publier les empreintes des installateurs. Le site garde `'unsafe-inline'` pour ses styles (Vue écrit un `<style>` par composant et des attributs `style`).
+  - [ ] Lus en version publiée et laissés, à trancher : `ESCOUADE_JAVY` (le compilateur des plugins JS, dont l'image du store a besoin par `escouade-plugin`), `ESCOUADE_ORT_DYLIB` (la bibliothèque d'ONNX Runtime d'un build `ort-dynamic`), `ESCOUADE_TERM_TRACE` (temps et tailles des écritures d'un terminal).
+  - [ ] Les autres, qui demandent un choix : SEC-01 à SEC-04, SEC-07, SEC-09, SEC-10, SEC-12, SEC-14, SEC-15, SEC-18.

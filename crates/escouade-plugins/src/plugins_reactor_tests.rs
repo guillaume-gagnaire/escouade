@@ -1067,3 +1067,36 @@ async fn the_bench_serves_the_folders_and_the_programs_as_the_app() {
     assert_eq!(no["code"], -32003, "{no}");
     s.kill();
 }
+
+/// SEC-11 of the 2.2.0 audit: what a turn writes is held until its end, no more than the module's memory. A module that
+/// writes without end is stopped there, by an error that says so, not by the end of its time after hundreds of MiB.
+#[test]
+fn a_turn_that_writes_past_its_memory_is_stopped() {
+    let limits = wasm::Limits {
+        memory: 8 << 20,
+        turn: Duration::from_secs(10),
+        ..wasm::Limits::default()
+    };
+    let s = Served::plain(limits, None);
+    let start = Instant::now();
+    s.send(1, "probe/flood", json!({}));
+    let fault = s.fault();
+    assert!(
+        fault.to_string().contains("wrote more than 8 MiB"),
+        "{fault:?} after {:?}",
+        start.elapsed()
+    );
+    assert!(start.elapsed() < Duration::from_secs(10));
+    // Within it, what a turn writes comes whole: an answer of a few MiB is no flood.
+    let s = Served::plain(wasm::Limits::default(), Some(echo()));
+    let big = "y".repeat(4 << 20);
+    let r = s.call(
+        2,
+        "probe/sync",
+        json!({ "method": "probe/big", "params": { "text": big } }),
+    );
+    assert_eq!(
+        r["result"]["params"]["text"].as_str().map(str::len),
+        Some(4 << 20)
+    );
+}

@@ -82,6 +82,11 @@ impl Tokens {
     }
 }
 
+/// Whether `presented` is `token`, compared in constant time (the hooks' server of the app compares its own so, SEC-17).
+pub fn same_token(token: &str, presented: &str) -> bool {
+    bool::from(token.as_bytes().ct_eq(presented.as_bytes()))
+}
+
 /// 32 bytes from the system's random generator, in base64url (43 characters).
 pub fn new_token() -> String {
     let mut bytes = [0u8; 32];

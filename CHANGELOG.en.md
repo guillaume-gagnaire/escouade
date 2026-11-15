@@ -17,6 +17,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - A device managed by an IT department can impose settings through its policies (registry, MDM profile, `/etc`): telemetry, the beta channel, Bypass mode, the modes and harnesses allowed, Remote Control. An imposed setting is greyed with a padlock that says who imposes it, and Escouade refuses it everywhere, the window, the agents and `.escouade.yml` included.
 - Device policies now cover everything an IT department can impose (proxy and certificates, plugins, private projects, voice, updates, models and effort, servers, outside MCP clients), and apply without a restart when it changes them. Escouade comes with its ADMX, an example MDM profile and a documentation page on how to deploy them.
 - An agent that reads a GitHub pull request now gets all of it: its description, its commits, its files and its discussion threads with their answers and their state. It is the first stone of the pull request view in Escouade.
+- Security: seven low findings of the 2.2.0 audit fixed. A harness’s plugin no longer writes through a link out of the agent’s folder nor a script beside its settings, a harness can no longer stop the app with an absurd message length, a plugin’s output is capped at its memory per turn, the tests’ variables are no longer read by the published app, the local servers cut a silent connection sooner, and the window and the website have stricter security policies.
 
 ## [2.2.0] — 2026-11-14
 

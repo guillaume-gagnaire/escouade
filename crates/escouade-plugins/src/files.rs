@@ -603,8 +603,9 @@ fn named_path(path: &str) -> Option<PathBuf> {
 }
 
 /// `path`, its links followed as far as it exists: what is left of it is what `fs/write` would make. A link that leads
-/// nowhere gives none: writing through it would land where nothing was judged.
-fn resolved(path: &Path) -> Option<PathBuf> {
+/// nowhere gives none: writing through it would land where nothing was judged. The core judges the files of a launch by
+/// it too (SEC-06).
+pub fn resolved(path: &Path) -> Option<PathBuf> {
     let mut rest: Vec<&std::ffi::OsStr> = Vec::new();
     let mut at = path;
     loop {

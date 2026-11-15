@@ -1,5 +1,7 @@
 //! The attack tests of the security audit of Escouade 2.2.0 (2026-11, ESC-418), on the code of the tag v2.2.0.
-//! `src-tauri/src/plugins/mod.rs` names this file: the app's tests compile it, and none runs unless asked (all ignored).
+//! `src-tauri/src/plugins/mod.rs` names this file: the app's tests compile it, and none runs unless asked (ignored), but
+//! those of the findings corrected since (SEC-06 and SEC-08, ESC-470): turned into tests of non-regression, they say the
+//! refusal and run with the others.
 //!
 //! The host of the plugins is a crate of its own (`escouade-plugins`, docs/CRATES.md): a test here reaches it by what
 //! it makes public alone. Two tests go through another door for it: the check of a `version.json`, by the seed's; the
@@ -15,7 +17,7 @@
 //! No payload here does anything but write a marker file in a folder of the test.
 
 use super::files::{Access, AgentPlace, Agents, REFUSED as FS_REFUSED};
-use super::harness::{check_launch, read_frame, write_files, Vars};
+use super::harness::{check_launch, read_frame, Vars};
 use super::journal::Kind;
 use super::manifest::{self, Hand};
 use super::procs::{allowed, forbidden_var, var_refused, Procs, ProcsOf, REFUSED as PROC_REFUSED};
@@ -248,11 +250,11 @@ fn holds_a_launch_file_out_of_the_agent_folder_is_refused() {
     assert!(check_launch("poc", false, None, &[], false, None, &launch).is_err());
 }
 
-/// SEC-06. The path of a launch's file is judged as it is written, its links not followed: through a link of the
-/// agent's folder, the file is written outside it.
+/// SEC-06, corrected by ESC-470 and kept as a test of non-regression (run by default): the path of a launch's file was
+/// judged as it is written, its links not followed, and through a link of the agent's folder the file was written
+/// outside it. It is now judged where it lands: refused, and nothing is written.
 #[test]
-#[ignore = "audit 2026-11"]
-fn finding_a_launch_file_is_written_through_a_link_out_of_the_agent_folder() {
+fn holds_a_launch_file_through_a_link_out_of_the_agent_folder_is_refused() {
     let base = dir("launch-link");
     let (home, outside) = (base.join("home"), base.join("outside"));
     std::fs::create_dir_all(&home).unwrap();
@@ -263,17 +265,8 @@ fn finding_a_launch_file_is_written_through_a_link_out_of_the_agent_folder() {
         home.join("cache").join("audit-marker.txt"),
         "AUDIT-POC",
     )];
-    assert_eq!(judged(&home, files.clone()), Ok(()));
-    write_files(&proto::Launch {
-        files,
-        ..proto::Launch::default()
-    })
-    .unwrap();
-    assert_eq!(
-        std::fs::read_to_string(outside.join("audit-marker.txt")).unwrap(),
-        "AUDIT-POC",
-        "the file went through the link, out of the agent's folder"
-    );
+    assert!(judged(&home, files).is_err(), "accepted through the link");
+    assert!(!outside.join("audit-marker.txt").exists());
 }
 
 /// SEC-02. The fence of a private project is « in the launch » as soon as each of its paths is a piece of any of its
@@ -1276,11 +1269,11 @@ async fn fuzz_the_frames_of_a_harness_are_read_or_refused() {
     );
 }
 
-/// SEC-08. A frame's length is taken on the word of the harness: the buffer is made before a byte of it is read. Shown
-/// with 256 MiB, which a machine has; a length past its memory ends the app (an allocation that fails aborts).
+/// SEC-08, corrected by ESC-470 and kept as a test of non-regression (run by default): a frame's length was taken on
+/// the word of the harness, the buffer made before a byte of it was read (256 MiB for a header of 29 bytes). Past the
+/// ceiling of a message it is now an error, and nothing is allocated for it.
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "audit 2026-11"]
-async fn finding_a_frame_is_allocated_on_the_word_of_its_length() {
+async fn holds_a_frame_is_not_allocated_on_the_word_of_its_length() {
     const ASKED: usize = 256 << 20;
     let header = format!("Content-Length: {ASKED}\r\n\r\n");
     // Twelve bytes follow, not 256 MiB.
@@ -1288,24 +1281,23 @@ async fn finding_a_frame_is_allocated_on_the_word_of_its_length() {
     let mut reader = tokio::io::BufReader::new(bytes.as_slice());
     let before = Instant::now();
     let got = read_frame(&mut reader).await;
-    // It fails at the end of the input, once the 256 MiB were allocated and zeroed.
-    assert!(got.is_err(), "{:?}", got.map(|f| f.map(|f| f.len())));
+    let e = got.expect_err("a frame past the ceiling");
+    assert_eq!(e.kind(), std::io::ErrorKind::InvalidData, "{e}");
     eprintln!(
-        "AUDIT read_frame: a header of {} bytes made the reader allocate {ASKED} bytes ({:.0} ms)",
+        "AUDIT read_frame: a header of {} bytes asking for {ASKED} bytes refused ({:.0} ms): {e}",
         header.len(),
         before.elapsed().as_secs_f64() * 1000.0
     );
 }
 
-/// SEC-08, to its end: a length past the machine's memory. The allocation fails, which aborts the process: neither an
-/// error nor a panic the app could catch. Played in a process of its own (this test binary, asked for the test below),
-/// whose end is read.
+/// SEC-08, to its end, corrected by ESC-470 and kept as a test of non-regression (run by default): a length past the
+/// machine's memory aborted the process. It is now an error, and the process goes on. Played in a process of its own
+/// (this test binary, asked for the test below), whose end is read.
 #[test]
-#[ignore = "audit 2026-11"]
-fn finding_a_frame_longer_than_the_memory_ends_the_process() {
+fn holds_a_frame_longer_than_the_memory_does_not_end_the_process() {
     let child = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
-            "--ignored",
+            "--include-ignored",
             "--exact",
             "plugins::audit_2_2_0::inner_a_frame_longer_than_the_memory",
             "--nocapture",
@@ -1314,28 +1306,25 @@ fn finding_a_frame_longer_than_the_memory_ends_the_process() {
         .output()
         .unwrap();
     let stderr = String::from_utf8_lossy(&child.stderr);
-    eprintln!(
-        "AUDIT read_frame: the process that read the frame ended with {:?}; it said: {}",
-        child.status.code(),
-        stderr
-            .lines()
-            .find(|l| l.contains("memory allocation"))
-            .unwrap_or("(nothing about its memory)")
+    let stdout = String::from_utf8_lossy(&child.stdout);
+    assert!(
+        child.status.success(),
+        "{:?}: {stderr}",
+        child.status.code()
     );
-    assert!(!child.status.success(), "the process went on");
-    assert!(stderr.contains("memory allocation of"), "{stderr}");
+    assert!(!stderr.contains("memory allocation of"), "{stderr}");
+    assert!(stdout.contains("1 passed"), "{stdout}");
 }
 
-/// What `finding_a_frame_longer_than_the_memory_ends_the_process` plays in its own process; nothing otherwise.
+/// What `holds_a_frame_longer_than_the_memory_does_not_end_the_process` plays in its own process; nothing otherwise.
 #[tokio::test]
-#[ignore = "audit 2026-11"]
 async fn inner_a_frame_longer_than_the_memory() {
     if std::env::var_os("AUDIT_INNER_HUGE_FRAME").is_none() {
         return;
     }
     let bytes = format!("Content-Length: {}\r\n\r\n{{}}", 1u64 << 62).into_bytes();
     let mut reader = tokio::io::BufReader::new(bytes.as_slice());
-    let _ = read_frame(&mut reader).await;
+    assert!(read_frame(&mut reader).await.is_err());
 }
 
 /// `.escouade.yml` and a shared ticket are files of a repository anyone may have written: read without a panic.
@@ -2417,9 +2406,9 @@ fn holds_a_hook_never_runs_a_program_of_the_agents_folder() {
     }
 }
 
-/// What an interface's plugin may write beside its private file: the file itself, and names that start with its own.
+/// What an interface's plugin may write beside its private file: the file itself, and names that start with its own and
+/// end with an expected extension (SEC-06, corrected by ESC-470: a test of non-regression, run by default).
 #[test]
-#[ignore = "audit 2026-11"]
 fn holds_beside_takes_the_private_file_and_names_that_start_with_it_alone() {
     let base = dir("beside");
     let private = base.join("agents").join("a1").join("settings.json");
@@ -2447,8 +2436,16 @@ fn holds_beside_takes_the_private_file_and_names_that_start_with_it_alone() {
     ] {
         assert!(!super::harness::beside(&private, &no), "{no}");
     }
-    // Noted in the report (SEC-06): a name that starts with the stem may be a program's.
-    assert!(super::harness::beside(&private, &at("settings.cmd")));
+    // Noted in the report (SEC-06): a name that started with the stem could be a program's. Corrected by ESC-470: an
+    // expected extension alone.
+    for no in [
+        "settings.cmd",
+        "settings.bat",
+        "settings.ps1",
+        "settings.sh",
+    ] {
+        assert!(!super::harness::beside(&private, &at(no)), "{no}");
+    }
 }
 
 /// What the manifest of anyone's plugin says of the harness it describes,

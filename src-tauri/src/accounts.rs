@@ -1364,7 +1364,7 @@ fn share_items(
 
 /// `dst` made a symbolic link to the folder `src`.
 #[cfg(unix)]
-fn link_dir(src: &Path, dst: &Path) -> Result<()> {
+pub(crate) fn link_dir(src: &Path, dst: &Path) -> Result<()> {
     std::os::unix::fs::symlink(std::path::absolute(src)?, dst)?;
     Ok(())
 }
@@ -1401,7 +1401,7 @@ const CMD_SWITCHES: [&str; 3] = ["/v:off", "/d", "/c"];
 /// `dst` made a junction to the folder `src`: unlike a symbolic link, it needs no administrator
 /// rights (nor the developer mode).
 #[cfg(windows)]
-fn link_dir(src: &Path, dst: &Path) -> Result<()> {
+pub(crate) fn link_dir(src: &Path, dst: &Path) -> Result<()> {
     use std::os::windows::process::CommandExt;
     let cmd = std::env::var_os("ComSpec").unwrap_or_else(|| "cmd.exe".into());
     // The line as cmd.exe reads it, not as Rust would quote it (only what has a space).

@@ -50,11 +50,12 @@ use tauri::Runtime;
 pub(crate) const RETRIES: u8 = 2;
 
 /// How long before the restart after `done` of them: 3 s, then 10 s. The variable
-/// `ESCOUADE_SIGNIN_RETRY_MS` sets the first (the second three times as long), for the e2e; the
-/// unit tests wait 50 ms.
+/// `ESCOUADE_SIGNIN_RETRY_MS` sets the first (the second three times as long), for the e2e, in a build of
+/// development alone (SEC-13); the unit tests wait 50 ms.
 pub(crate) fn retry_delay(done: u8) -> Duration {
     let base = std::env::var("ESCOUADE_SIGNIN_RETRY_MS")
         .ok()
+        .filter(|_| cfg!(debug_assertions))
         .and_then(|v| v.parse::<u64>().ok())
         .or(cfg!(test).then_some(50));
     delay_of(base, done)
