@@ -224,7 +224,9 @@ async function compareTerm(box: Locator, pterm: Locator, where: string) {
   expect.soft((await look(box)).background, `its well, ${where}`).toLookLike((await look(pterm)).background);
   // xterm.js paints it in the same colour, and starts its text where the preview's does.
   const well = await backgroundOf(pterm);
-  await expect.poll(async () => sameSrgb(await xtermBackground(box), well), { message: `xterm's background, ${where}, ${well}` }).toBe(true);
+  await expect
+    .poll(async () => sameSrgb(await xtermBackground(box), well), { message: `xterm's background, ${where}, ${well}` })
+    .toBe(true);
   const [sx, sy] = await place(box.locator('.xterm-screen'));
   const pad = await pterm.evaluate((e) => [parseFloat(getComputedStyle(e).paddingLeft), parseFloat(getComputedStyle(e).paddingTop)]);
   expect.soft([sx, sy], `where its text starts, ${where}`).toEqual([px + pad[0], py + pad[1]]);

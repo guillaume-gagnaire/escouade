@@ -91,7 +91,12 @@ test('« Thème » is the system’s by default, applies at once with the window
       document.fonts.check('13px "Inter Variable"'),
     ]);
   const [pale, ink, inter] = await colours();
-  expect(toSrgb(pale as string)!.slice(0, 3).every((c) => c >= 220), `a pale surface, not ${pale}`).toBe(true);
+  expect(
+    toSrgb(pale as string)!
+      .slice(0, 3)
+      .every((c) => c >= 220),
+    `a pale surface, not ${pale}`,
+  ).toBe(true);
   expect([ink, inter]).toLookLike(['rgb(21, 23, 28)', true]);
   // Saved by itself, nothing to « Enregistrer ».
   await expect.poll(() => settingsOf(app.data).theme).toBe('light');

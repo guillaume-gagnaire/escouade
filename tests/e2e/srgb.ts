@@ -56,9 +56,9 @@ function labToLinear(L: number, a: number, b: number): number[] {
   const e = 216 / 24389;
   const k = 24389 / 27;
   const f = (t: number) => (t ** 3 > e ? t ** 3 : (116 * t - 16) / k);
-  const X = f(fx) * 0.3457 / 0.3585;
+  const X = (f(fx) * 0.3457) / 0.3585;
   const Y = L > 8 ? fy ** 3 : L / k;
-  const Z = f(fz) * (1 - 0.3457 - 0.3585) / 0.3585;
+  const Z = (f(fz) * (1 - 0.3457 - 0.3585)) / 0.3585;
   // D50 to D65.
   const x = 0.955473421488075 * X - 0.02309845494876471 * Y + 0.06325924320057072 * Z;
   const y = -0.0283697093338637 * X + 1.0099953980813041 * Y + 0.021041441191917323 * Z;
@@ -108,7 +108,8 @@ function convert(name: string, args: string): Srgb | null {
   if (name === 'color') {
     const space = words[0].toLowerCase();
     const c = words.slice(1, 4).map((w) => part(w, 1));
-    if (space === 'srgb') return [...(c.map((v) => Math.round(clamp(v, 0, 1) * 255)) as [number, number, number]), Math.round(clamp(alpha, 0, 1) * 255)];
+    if (space === 'srgb')
+      return [...(c.map((v) => Math.round(clamp(v, 0, 1) * 255)) as [number, number, number]), Math.round(clamp(alpha, 0, 1) * 255)];
     if (space === 'srgb-linear') return toBytes(c, alpha);
     if (space === 'display-p3') {
       const [r, g, b] = c.map(decode);

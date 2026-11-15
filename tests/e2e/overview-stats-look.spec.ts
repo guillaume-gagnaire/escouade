@@ -166,7 +166,9 @@ test('the overview looks as the preview draws it, in both themes, at both sizes'
         expect.soft(await place(head), `header's place, ${where}`).toLookLike(await place(phead));
         expect.soft(await look(head), `header, ${where}`).toLookLike(await look(phead));
         expect.soft(await lookBut(head.locator('h1'), 'width'), `title, ${where}`).toLookLike(await lookBut(phead.locator('h1'), 'width'));
-        expect.soft(await lookBut(head.locator('.sub'), 'width'), `count, ${where}`).toLookLike(await lookBut(phead.locator('.sub'), 'width'));
+        expect
+          .soft(await lookBut(head.locator('.sub'), 'width'), `count, ${where}`)
+          .toLookLike(await lookBut(phead.locator('.sub'), 'width'));
         expect
           .soft(await lookBut(head.locator('.keys kbd').first(), 'width'), `a key, ${where}`)
           .toLookLike(await lookBut(phead.locator('.keys kbd').first(), 'width'));
@@ -183,7 +185,9 @@ test('the overview looks as the preview draws it, in both themes, at both sizes'
 
         // « Attend ta réponse » and a project's group.
         const gh = (el: Locator, waiting: boolean) => el.locator(waiting ? '.waiting h2' : 'section:not(.waiting) h2').first();
-        expect.soft(await lookBut(gh(ov, true), 'width'), `« Attend ta réponse », ${where}`).toLookLike(await lookBut(gh(pv, true), 'width'));
+        expect
+          .soft(await lookBut(gh(ov, true), 'width'), `« Attend ta réponse », ${where}`)
+          .toLookLike(await lookBut(gh(pv, true), 'width'));
         expect.soft(await lookBut(gh(ov, false), 'width'), `a project's group, ${where}`).toLookLike(await lookBut(gh(pv, false), 'width'));
         expect
           .soft(await lookBut(ov.locator('.gh .n').first(), 'width'), `a group's count, ${where}`)
@@ -336,7 +340,9 @@ test('the statistics look as the preview draws them, in both themes, at both siz
           .toEqual(
             await pkpis.locator('.kpi .lb, .kpi .vl').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().height))),
           );
-        expect.soft(await look(kpis.locator('.kpi').nth(1)), `a figure's box, ${where}`).toLookLike(await look(pkpis.locator('.kpi').nth(1)));
+        expect
+          .soft(await look(kpis.locator('.kpi').nth(1)), `a figure's box, ${where}`)
+          .toLookLike(await look(pkpis.locator('.kpi').nth(1)));
 
         // The chart: its heading, legend, « Tableau », its place and its axis.
         const sec = st.locator('section').filter({ has: page.locator('.chart') });

@@ -114,7 +114,9 @@ test('the conversation looks as the preview draws it, in both themes, at both si
         const phead = pv.locator('.conv > .head').first();
         expect.soft(await place(head), `header's place, ${where}`).toLookLike(await place(phead));
         expect.soft(await look(head), `header, ${where}`).toLookLike(await look(phead));
-        expect.soft(await lookBut(head.locator('.name'), 'width'), `name, ${where}`).toLookLike(await lookBut(pv.locator('#h-name'), 'width'));
+        expect
+          .soft(await lookBut(head.locator('.name'), 'width'), `name, ${where}`)
+          .toLookLike(await lookBut(pv.locator('#h-name'), 'width'));
         expect
           .soft(await lookBut(head.locator('.state'), 'width'), `state, ${where}`)
           .toLookLike(await lookBut(pv.locator('#h-pill'), 'width'));
@@ -187,7 +189,9 @@ test('the conversation looks as the preview draws it, in both themes, at both si
         expect
           .soft(await lookBut(composer.locator('.bar .trigger').first(), 'width'), `the model's chip, ${where}`)
           .toLookLike(await lookBut(pv.locator('#chip-model'), 'width'));
-        expect.soft(await look(composer.locator('.attach')), `join a file, ${where}`).toLookLike(await look(pc.locator('.chip.ic').first()));
+        expect
+          .soft(await look(composer.locator('.attach')), `join a file, ${where}`)
+          .toLookLike(await look(pc.locator('.chip.ic').first()));
         expect
           .soft(await lookBut(composer.locator('.btn.stop'), 'width'), `Stop, ${where}`)
           .toLookLike(await lookBut(pc.locator('.btn.stop'), 'width'));
