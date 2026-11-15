@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from './i18n';
-import { bounded, denial, deniedBy, lockedBy, lockLine, locks, setLocks } from './locks.svelte';
+import { bounded, denial, deniedBy, lockedBy, lockLine, locks, locksFor, NO_LOCKS, setLocks } from './locks.svelte';
 import { SETTINGS_ROWS } from './settings-pages';
 import type { Locks } from './types';
 
@@ -86,5 +86,18 @@ describe('the locks of the settings (TS-11)', () => {
       'dictation',
     ])
       expect(SETTINGS_ROWS.some((r) => r.id === id)).toBe(true);
+  });
+});
+
+describe('the locks of a team’s projects (TS-13)', () => {
+  it('gives a project of the team its team’s locks, and the others the app’s', () => {
+    setLocks(NO_LOCKS, { acme: LOCKS });
+    expect(locksFor({ team: 'acme' })).toBe(locks.teams.acme);
+    expect(locksFor({ team: null })).toBe(locks.current);
+    expect(locksFor({ team: 'other' })).toBe(locks.current);
+    expect(denial('permissions.modes', 'auto', locksFor({ team: 'acme' }))).toBe('non permis par l’équipe Acme');
+    expect(denial('permissions.modes', 'auto', locksFor({}))).toBeNull();
+    setLocks(undefined);
+    expect(locks.teams).toEqual({});
   });
 });

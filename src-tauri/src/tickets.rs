@@ -728,7 +728,7 @@ impl<R: Runtime> Core<R> {
             let engine = d.engine.unwrap_or(had.engine).unwrap_or(project.engine());
             // A harness the policies do not allow (TS-11), given or the one an account is asked on.
             if d.engine.is_some_and(|e| e != had.engine) || d.account.is_some() {
-                self.locks.read().check_engine(engine.as_str())?;
+                self.locks_for(&project.id).check_engine(engine.as_str())?;
             }
             match d.account.as_deref() {
                 Some(asked) => Some(self.ticket_account(&project, engine, Some(asked))?),
@@ -1187,11 +1187,11 @@ impl<R: Runtime> Core<R> {
         };
         // A mode the policies do not allow (TS-11): refused, and said.
         if self.project(project_id)?.board.mode != s.mode {
-            self.locks.read().check_mode(&s.mode)?;
+            self.locks_for(project_id).check_mode(&s.mode)?;
         }
         // An effort above the policies' ceiling (TS-12).
         if self.project(project_id)?.board.effort != s.effort {
-            self.locks.read().check_effort(&s.effort)?;
+            self.locks_for(project_id).check_effort(&s.effort)?;
         }
         let project = {
             let mut projects = self.projects.write();

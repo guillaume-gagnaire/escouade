@@ -100,10 +100,15 @@ impl LockedBy {
     }
 }
 
-/// What a team sets (ranks 2 and 5): injectable, none in the app until the team server comes.
+/// What a team sets (ranks 2 and 5): from its signed `.escouade.yml` (TS-13, `team_settings.rs`).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TeamPolicies {
+    /// The team's id on this device: its projects name it (`Project::team`).
+    pub id: String,
+    /// Its name, as the locks say it (« par l'équipe Acme »).
     pub team: String,
+    /// Who signed the version in force, and when (seconds): « signé par Claire Martin le 12 novembre ».
+    pub signed: Option<(String, u64)>,
     /// `defaults`: recommended, changed by the repository and the device (rank 2).
     pub recommended: BTreeMap<String, Value>,
     /// `enforced`: imposed (rank 5).
@@ -402,11 +407,9 @@ impl Locks {
                             "“{key}” of the team {name} ignored: a command is never imposed by the team",
                             key = k.key
                         )),
-                        (Sort::Sensitive, _) => out.warnings.push(tr!(
-                            "« {key} » de l’équipe {name} en attente : il demande l’accord de ce poste",
-                            "“{key}” of the team {name} pending: it needs this device’s consent",
-                            key = k.key
-                        )),
+                        // What is sensitive comes here once this device consented to it (TS-13: `team_settings.rs`
+                        // gives only those); a value, the managed device's wins.
+                        (Sort::Sensitive, Ok(v)) => layers.push((by, v)),
                         (_, Ok(v)) if restricts(k, &v) => layers.push((by, v)),
                         (_, Ok(_)) => out.warnings.push(tr!(
                             "« {key} » de l’équipe {name} ignoré : il ne peut que restreindre",
@@ -1118,15 +1121,91 @@ fn within(k: &LockKey, locks: &Locks, value: Value) -> Value {
         .unwrap_or(value)
 }
 
+// ---------- a team's keys: its projects, or the app ----------
+
+/// Whether a key of the team holds for the team's projects alone (§6.1: « une stratégie d'équipe ne vaut que dans son
+/// espace »): the modes, the harnesses, the projects' closure, a project's remote control. The other keys (the
+/// network, the telemetry, the voice, the updates, the plugins, the outside MCP clients) are of the app: with no
+/// spaces yet (TS-4), they hold for the app while the device is in the team.
+pub fn project_scoped(key: &str) -> bool {
+    ["permissions.", "harnesses.", "projects."]
+        .iter()
+        .any(|p| key.starts_with(p))
+        || key == REMOTE
+}
+
+/// The keys of the app of every team, as one rank 5 (the first team that sets a key holds it).
+fn app_wide(teams: &BTreeMap<String, TeamPolicies>) -> Option<TeamPolicies> {
+    let mut out: Option<TeamPolicies> = None;
+    for t in teams.values() {
+        let keep = |m: &BTreeMap<String, Value>| -> BTreeMap<String, Value> {
+            m.iter()
+                .filter(|(k, _)| !project_scoped(k))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect()
+        };
+        let o = out.get_or_insert_with(|| TeamPolicies {
+            id: t.id.clone(),
+            team: t.team.clone(),
+            signed: t.signed.clone(),
+            ..Default::default()
+        });
+        for (k, v) in keep(&t.enforced) {
+            o.enforced.entry(k).or_insert(v);
+        }
+        for (k, v) in keep(&t.recommended) {
+            o.recommended.entry(k).or_insert(v);
+        }
+    }
+    out.filter(|o| !o.enforced.is_empty() || !o.recommended.is_empty())
+}
+
 // ---------- in the core ----------
 
 impl<R: tauri::Runtime> crate::core::Core<R> {
-    /// Rank 5, as a team sets it: none in the app until the team server comes (TS-13). The locks are made again and
-    /// applied at once.
+    /// Rank 5 of one team, as a test gives it: it replaces every team's. The locks are made again and applied at once.
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn set_team_policies(self: &std::sync::Arc<Self>, team: Option<TeamPolicies>) {
-        *self.team_policies.write() = team;
+        {
+            let mut all = self.team_policies.write();
+            all.clear();
+            if let Some(t) = team {
+                all.insert(t.id.clone(), t);
+            }
+        }
         self.apply_locks();
+    }
+
+    /// Rank 5 and rank 2 of the team `id`, from its signed file (TS-13); None when the device leaves it. Applied at once
+    /// when they changed.
+    pub(crate) fn set_team_policies_of(
+        self: &std::sync::Arc<Self>,
+        id: &str,
+        team: Option<TeamPolicies>,
+    ) {
+        {
+            let mut all = self.team_policies.write();
+            if all.get(id) == team.as_ref() {
+                return;
+            }
+            match team {
+                Some(t) => all.insert(id.to_owned(), t),
+                None => all.remove(id),
+            };
+        }
+        self.apply_locks();
+    }
+
+    /// The locks of a project: its team's when it is of one (ranks 5 and 6), the app's otherwise.
+    pub(crate) fn locks_for(&self, project_id: &str) -> Locks {
+        let team = self
+            .projects
+            .read()
+            .iter()
+            .find(|p| p.id == project_id)
+            .and_then(|p| p.team.clone());
+        team.and_then(|t| self.team_locks.read().get(&t).cloned())
+            .unwrap_or_else(|| self.locks.read().clone())
     }
 
     /// Rank 6, as read (`Managed::read` at the start, `watch_policies` at each change; a test gives its own). The locks
@@ -1157,15 +1236,18 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
     /// The locks made again from ranks 5 and 6, and what they lock brought within them: the settings, the projects, the
     /// agents (each at the end of its turn). The window is told.
     pub(crate) fn apply_locks(self: &std::sync::Arc<Self>) {
-        let locks = Locks::compute(
-            KEYS,
-            self.team_policies.read().as_ref(),
-            &self.managed.read(),
-        );
+        let teams = self.team_policies.read().clone();
+        let managed = self.managed.read().clone();
+        let locks = Locks::compute(KEYS, app_wide(&teams).as_ref(), &managed);
         for w in &locks.warnings {
             log::warn!("policies: {w}");
         }
+        let by_team: BTreeMap<String, Locks> = teams
+            .iter()
+            .map(|(id, t)| (id.clone(), Locks::compute(KEYS, Some(t), &managed)))
+            .collect();
         *self.locks.write() = locks;
+        *self.team_locks.write() = by_team;
         let changed = {
             let locks = self.locks.read();
             locks.clamp_settings(&mut self.settings.write())
@@ -1180,6 +1262,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
         self.settle_locks();
         self.hub.emit(crate::model::UiEvent::Locks {
             locks: self.locks.read().clone(),
+            teams: self.team_locks.read().clone(),
             settings,
         });
     }
@@ -1187,16 +1270,25 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
     /// The projects brought within the locks, and each agent whose mode is no longer allowed moved to the nearest one
     /// that is: at once when it is not at work, at the end of its turn otherwise (`settle_locked_mode`).
     pub(crate) fn settle_locks(self: &std::sync::Arc<Self>) {
-        if self.locks.read().locks.is_empty() {
+        if self.locks.read().locks.is_empty()
+            && self.team_locks.read().values().all(|l| l.locks.is_empty())
+        {
             return;
         }
         // Taken apart, never held under the projects' lock.
-        let locks = self.locks.read().clone();
+        let base = self.locks.read().clone();
+        let teams = self.team_locks.read().clone();
+        let of = |team: &Option<String>| -> &Locks {
+            team.as_ref().and_then(|t| teams.get(t)).unwrap_or(&base)
+        };
         let projects: Vec<Project> = {
             let mut projects = self.projects.write();
             projects
                 .iter_mut()
-                .filter_map(|p| (!locks.clamp_project(p).is_empty()).then(|| p.clone()))
+                .filter_map(|p| {
+                    let locks = of(&p.team);
+                    (!locks.clamp_project(p).is_empty()).then(|| p.clone())
+                })
                 .collect()
         };
         for project in projects {
@@ -1204,12 +1296,19 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             self.hub.emit(crate::model::UiEvent::Project { project });
             self.request_save();
         }
+        let team_of: BTreeMap<String, Option<String>> = self
+            .projects
+            .read()
+            .iter()
+            .map(|p| (p.id.clone(), p.team.clone()))
+            .collect();
         let idle: Vec<String> = self
             .agents
             .read()
             .iter()
             .filter(|(_, h)| {
                 let rt = h.lock();
+                let locks = of(team_of.get(&rt.meta.project_id).unwrap_or(&None));
                 !rt.meta.status.is_active()
                     && (locks.agent_mode_after(&rt.meta).is_some()
                         || rt.proc.is_some()
@@ -1227,12 +1326,12 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
     /// Called once its turn is over (`turn_ended`), and at once for an agent not at work.
     pub(crate) async fn settle_locked_mode(self: &std::sync::Arc<Self>, id: &str) {
         let Ok(h) = self.agent(id) else { return };
+        let locks = self.locks_for(&h.lock().meta.project_id.clone());
         // A harness no longer allowed: its process stops between two turns, and the agent says why (§6.2). Its next
         // message is refused at the start of a process (`check_engine`).
         let denied = {
             let rt = h.lock();
-            self.locks
-                .read()
+            locks
                 .check_engine(rt.meta.engine.as_str())
                 .err()
                 .map(|e| e.to_string())
@@ -1262,10 +1361,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
         }
         let (from, to) = {
             let rt = h.lock();
-            (
-                rt.meta.mode.clone(),
-                self.locks.read().agent_mode_after(&rt.meta),
-            )
+            (rt.meta.mode.clone(), locks.agent_mode_after(&rt.meta))
         };
         let Some(to) = to else { return };
         if let Err(e) = self
@@ -1275,11 +1371,9 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             log::warn!("policies: agent {id} not moved to {to}: {e:#}");
             return;
         }
-        let why = self
-            .locks
-            .read()
+        let why = locks
             .denial(MODES_KEY, &from)
-            .unwrap_or_else(|| self.locks.read().imposed(ALLOW_BYPASS));
+            .unwrap_or_else(|| locks.imposed(ALLOW_BYPASS));
         let text = tr!(
             "{why} L’agent passe en mode « {to} », le plus proche permis.",
             "{why} The agent goes to the mode “{to}”, the nearest allowed."

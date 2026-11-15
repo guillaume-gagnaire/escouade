@@ -184,6 +184,9 @@ struct Meta {
     alerts: Vec<ReuseAlert>,
     /// The epoch whose roster the server's roles were last put in step with.
     roles_epoch: Option<u64>,
+    /// The administrators of each epoch this device lived through, as its roster said (TS-13: a version of the team's
+    /// settings counts the signature of an administrator of the epoch it was sealed at).
+    admins: BTreeMap<u64, BTreeSet<MemberId>>,
     /// The last-resort KeyPackage of each device, read in the stream (TS-5): the groups of the projects kept to some
     /// members add a device by it. Checked against the team's leaves when used.
     key_packages: BTreeMap<DeviceId, Vec<u8>>,
@@ -594,6 +597,38 @@ impl Team {
     }
 
     /// The administrators of the roster.
+    /// The administrators of `epoch`, when this device lived through it (None for an epoch before it joined).
+    pub fn admins_at(&self, epoch: u64) -> Option<&BTreeSet<MemberId>> {
+        self.meta.admins.get(&epoch)
+    }
+
+    /// Who signed with `signature_key` at `epoch`: a leaf of that epoch's record, None when this device does not hold
+    /// the epoch or no leaf has the key.
+    pub fn signer_at(&self, epoch: u64, signature_key: &[u8]) -> Option<Identity> {
+        self.device
+            .record(epoch)?
+            .members
+            .iter()
+            .find(|m| m.signature_key == signature_key)
+            .and_then(|m| Identity::from_bytes(&m.identity).ok())
+    }
+
+    /// A value of this device's own beside the team's state (the team's settings, TS-13): in the same encrypted base.
+    pub fn load_extra<T: serde::de::DeserializeOwned>(
+        &self,
+        name: &str,
+    ) -> Result<Option<T>, Error> {
+        Ok(self
+            .storage()
+            .get_ours(format!("extra/{name}").as_bytes())?)
+    }
+
+    pub fn save_extra<T: Serialize>(&self, name: &str, value: &T) -> Result<(), Error> {
+        Ok(self
+            .storage()
+            .put_ours(format!("extra/{name}").as_bytes(), value)?)
+    }
+
     pub fn admins(&self) -> Result<usize, Error> {
         Ok(self.device.roster()?.admins())
     }
@@ -697,6 +732,16 @@ impl Team {
     }
 
     fn save(&mut self) -> Result<(), Error> {
+        if let (Ok(epoch), Ok(roster)) = (self.device.epoch(), self.device.roster()) {
+            self.meta.admins.entry(epoch).or_insert_with(|| {
+                roster
+                    .members
+                    .iter()
+                    .filter(|(_, r)| **r == Role::Admin)
+                    .map(|(m, _)| *m)
+                    .collect()
+            });
+        }
         let storage = self.device.provider().storage();
         storage.put_ours(b"state", &self.device.saved_state())?;
         storage.put_ours(b"meta", &self.meta)?;

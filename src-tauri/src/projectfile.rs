@@ -1612,10 +1612,26 @@ fn text_fingerprint(text: Option<&str>) -> String {
     .unwrap_or_default()
 }
 
-/// Reads the file into the project: what it sets applied, or why it cannot be read.
-fn read_into(p: &mut Project, text: Option<&str>, locks: &crate::locks::Locks) -> Applied {
-    p.shared.seen = Some(text_fingerprint(text));
-    match text.map(read) {
+/// What a project's reading compares: its file, and what its team sets on it (TS-13).
+fn seen_of(text: Option<&str>, team: Option<&crate::team_settings::Layers>) -> String {
+    let file = text_fingerprint(text);
+    match team.map(|t| t.fingerprint()).filter(|t| !t.is_empty()) {
+        Some(t) => format!("{file}+{t}"),
+        None => file,
+    }
+}
+
+/// Reads the file into the project: what it sets applied, or why it cannot be read. Then what the project's team sets
+/// (TS-13, §6.1): its `defaults` and the commands this device accepted under the file and the device (rank 2), its
+/// `enforced` over them (rank 5).
+fn read_into(
+    p: &mut Project,
+    text: Option<&str>,
+    locks: &crate::locks::Locks,
+    team: Option<&crate::team_settings::Layers>,
+) -> Applied {
+    p.shared.seen = Some(seen_of(text, team));
+    let mut applied = match text.map(read) {
         None => {
             p.shared.file = None;
             Applied::default()
@@ -1629,7 +1645,65 @@ fn read_into(p: &mut Project, text: Option<&str>, locks: &crate::locks::Locks) -
             });
             Applied::default()
         }
+    };
+    if let Some(team) = team {
+        apply_team(p, team, locks, &mut applied);
     }
+    applied
+}
+
+/// What a team sets on its project: rank 2 where the repository's file and the device set nothing, rank 5 over all.
+fn apply_team(
+    p: &mut Project,
+    team: &crate::team_settings::Layers,
+    locks: &crate::locks::Locks,
+    applied: &mut Applied,
+) {
+    let in_file: Vec<String> = p
+        .shared
+        .file
+        .as_ref()
+        .map(|f| f.keys.clone())
+        .unwrap_or_default();
+    let mut put = |p: &mut Project, k: &String, v: &Value| {
+        if key_of(k).is_none() || file_only(k) || locks.file_refusal(k, v).is_some() {
+            return;
+        }
+        if get(p, k) != *v {
+            set(p, k, v);
+            applied.changed.push(k.clone());
+        }
+    };
+    for (k, v) in team.defaults.iter().chain(team.accepted.iter()) {
+        if !in_file.contains(k) && !p.shared.local.contains(k) {
+            put(p, k, v);
+        }
+    }
+    for (k, v) in &team.enforced {
+        // A command is never imposed (refused at the reading by escouade-team): a key that runs is left out here too.
+        if key_of(k).is_some_and(|x| x.command) {
+            continue;
+        }
+        p.shared.local.retain(|l| l != k);
+        put(p, k, v);
+    }
+}
+
+/// Why a change of a project is refused: a key its team imposes (rank 5), changed.
+pub fn team_refusal(
+    after: &Project,
+    team: &str,
+    layers: &crate::team_settings::Layers,
+) -> Option<String> {
+    let key = layers
+        .enforced
+        .iter()
+        .find(|(k, v)| key_of(k).is_some_and(|x| !x.command) && get(after, k) != **v)?
+        .0;
+    Some(tr!(
+        "Ce réglage est imposé par l’équipe {team} ({key}) : il ne se change pas sur ce poste.",
+        "This setting is imposed by the team {team} ({key}): it cannot be changed on this device."
+    ))
 }
 
 /// A project as `blank_project` makes it, with the file of its folder applied: what the new
@@ -1638,7 +1712,7 @@ pub fn preview(path: &str) -> Option<Project> {
     let path = path.trim().trim_end_matches(['\\', '/']);
     let text = file_text(path)?;
     let mut p = crate::core::blank_project(path);
-    read_into(&mut p, Some(&text), &crate::locks::Locks::default());
+    read_into(&mut p, Some(&text), &crate::locks::Locks::default(), None);
     Some(p)
 }
 
@@ -1649,15 +1723,17 @@ impl<R: Runtime> Core<R> {
         let path = self.project(project_id).ok()?.path;
         let text = file_text(&path);
         // Taken before the projects, never under their lock.
-        let locks = self.locks.read().clone();
+        let locks = self.locks_for(project_id);
+        let team = self.team_layers_for(project_id).map(|(_, l)| l);
         let (before, after, applied) = {
             let mut projects = self.projects.write();
             let p = projects.iter_mut().find(|p| p.id == project_id)?;
-            if !opened && p.shared.seen.as_deref() == Some(&text_fingerprint(text.as_deref())) {
+            if !opened && p.shared.seen.as_deref() == Some(&seen_of(text.as_deref(), team.as_ref()))
+            {
                 return None;
             }
             let before = p.clone();
-            let applied = read_into(p, text.as_deref(), &locks);
+            let applied = read_into(p, text.as_deref(), &locks, team.as_ref());
             (before, p.clone(), applied)
         };
         let file = after.shared.file.as_ref();
@@ -1789,7 +1865,7 @@ impl<R: Runtime> Core<R> {
         if let Some(k) = keys
             .iter()
             .flatten()
-            .find(|k| self.locks.read().bounds_file_key(k))
+            .find(|k| self.locks_for(project_id).bounds_file_key(k))
         {
             bail!(tr!(
                 "{k} n'est pas écrit dans {FILE} : sa valeur est bornée par la stratégie de ce poste.",
@@ -1797,7 +1873,7 @@ impl<R: Runtime> Core<R> {
             ));
         }
         let values: Vec<(&str, Value)> = match &keys {
-            None => export_values_locked(&p, &self.locks.read()),
+            None => export_values_locked(&p, &self.locks_for(project_id)),
             Some(keys) => keys
                 .iter()
                 .filter_map(|k| key_of(k))

@@ -948,6 +948,10 @@ pub struct Project {
     /// window see every project.
     #[serde(default)]
     pub private: bool,
+    /// The team this project is of (TS-13): its id on this device. What the team imposes (rank 5) and recommends (rank 2)
+    /// holds for its projects alone (`docs/TEAM-SERVER.md` §6.1); none for a project of one's own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub team: Option<String>,
     /// « Chef d’escouade » (ESC-423): the agent the user chose, by id, the only one that answers
     /// the other agents' permissions and questions when `Settings::agents_answer` is `Chef`.
     /// Set by the window alone (`update_project`), never by a tool of the MCP server; the

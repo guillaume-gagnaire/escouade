@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Serveur d’équipe : une équipe impose ou recommande des réglages à ses projets par son `.escouade.yml` d’équipe, signé par ses administrateurs (deux pour un proxy ou un certificat) ; une bande dit chaque changement et qui l’a signé, et rien qui touche le réseau ou lance une commande ne s’applique sans ton accord sur ce poste.
 - L’onglet Fichiers d’une PR : le diff coloré de chaque fichier, venu de git, un arbre filtrable qui suit le défilement, « Vu » par fichier qui revient quand un commit le change, les fichiers générés, gros ou binaires repliés, un commit à la fois, et l’ouverture d’un fichier à sa ligne dans l’éditeur.
 - L’Overseer, un agent qui pilote tous tes projets (sauf les privés) : allume-le dans Réglages › Overseer et parle-lui depuis son bouton de la barre de titre. Il ne fusionne, ne pousse et ne publie que sur une consigne donnée dans un de tes messages, retirable d’un mot ou d’un clic, et ce qu’il fait s’annule tant que c’est possible.
 - L’Overseer a son écran : les tâches de tous tes projets en orbite autour de lui, et à côté votre discussion, où ses nouvelles arrivent en cartes avec des réponses toutes prêtes. Parle-lui en maintenant Espace et il te répond à voix haute ; un raccourci global l’ouvre de n’importe où, et une phrase niée comme « ne merge surtout pas » ne lui donne jamais de consigne.

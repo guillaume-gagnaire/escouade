@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Team server: a team imposes or recommends settings to its projects through its team `.escouade.yml`, signed by its administrators (two for a proxy or a certificate); a band tells each change and who signed it, and nothing that touches the network or runs a command applies without your consent on this device.
 - A pull request’s Files tab: each file’s colored diff, from git, a filterable tree that follows the scrolling, “Viewed” per file that comes back when a commit changes it, generated, large or binary files folded, one commit at a time, and opening a file at its line in the editor.
 - The Overseer, an agent that drives all your projects (but the private ones): turn it on in Settings › Overseer and talk to it from its button in the title bar. It merges, pushes and publishes only on an instruction given in one of your messages, removed by a word or a click, and what it does can be undone while it still can.
 - The Overseer has its screen: the tasks of all your projects orbiting around it, and beside them your discussion, where its news comes as cards with ready answers. Talk to it by holding Space and it answers aloud; a global shortcut opens it from anywhere, and a denied sentence such as “don’t merge it” never gives it an instruction.

@@ -1,15 +1,15 @@
 ---
 title: "Réglages imposés"
 subject: "fenetre"
-sources: ["docs/TEAM-SERVER.md §6.1, §6.2, §6.3, §6.4, §6.5, §16 (TS-11, TS-12)","crates/escouade-policy/README.md (TS-0b ESC-454, TS-12 ESC-465)","crates/escouade-policy/src/list.rs (la liste unique)"]
-tickets: ["ESC-455","ESC-465"]
-decisions: [169,175]
+sources: ["docs/TEAM-SERVER.md §6.1, §6.2, §6.3, §6.4, §6.5, §16 (TS-11, TS-12, TS-13)","crates/escouade-policy/README.md (TS-0b ESC-454, TS-12 ESC-465)","crates/escouade-policy/src/list.rs (la liste unique)","src-tauri/src/team_settings.rs (TS-13)"]
+tickets: ["ESC-455","ESC-465","ESC-471"]
+decisions: [169,175,183]
 compared: null
 ---
 
 # Réglages imposés
 
-Un service informatique, ou plus tard une équipe, peut **imposer** un réglage : il ne se change plus sur le poste. Ça sert même sans serveur d'équipe, à une entreprise qui gère sa flotte par ses propres outils (stratégies de groupe, Intune, un MDM, `/etc`).
+Un service informatique, ou une équipe, peut **imposer** un réglage : il ne se change plus sur le poste. Ça sert même sans serveur d'équipe, à une entreprise qui gère sa flotte par ses propres outils (stratégies de groupe, Intune, un MDM, `/etc`). L'équipe impose par son `.escouade.yml` signé (voir « Le .escouade.yml d'équipe »).
 
 ## Les six rangs
 
@@ -18,10 +18,10 @@ Un réglage prend sa valeur du rang le plus fort qui la donne :
 | Rang | Source | Peut |
 | --- | --- | --- |
 | 1 | Les valeurs par défaut d'Escouade | tout |
-| 2 | L'équipe, recommandé | proposer une valeur, que le dépôt et le poste changent |
+| 2 | L'équipe, recommandé (`defaults` du fichier d'équipe) | proposer une valeur, que le dépôt et le poste changent |
 | 3 | Le dépôt (`.escouade.yml`) | comme avant |
 | 4 | Le poste (Réglages, « Réglage local ») | passer devant le fichier, comme avant |
-| 5 | L'équipe, imposé | verrouiller une valeur ou une borne, dans l'espace de l'équipe |
+| 5 | L'équipe, imposé (`enforced` du fichier d'équipe) | verrouiller une valeur ou une borne, pour les projets de l'équipe |
 | 6 | Le poste géré (stratégies du poste) | verrouiller pour toute l'app |
 
 - Les rangs 2 à 4 gardent l'ordre d'avant. Les rangs 5 et 6 passent devant tout.
@@ -30,11 +30,11 @@ Un réglage prend sa valeur du rang le plus fort qui la donne :
   - un **plafond** (l'effort au plus, ce que peuvent les clients MCP extérieurs) : le plus bas tient ;
   - une **liste d'interdits** (plugins interdits, motifs de fichiers) : les deux s'ajoutent ;
   - une **valeur** : celle du poste géré gagne.
+- **Ce qu'impose une équipe ne vaut que pour ses projets** : les modes, les harness, les modèles, l'effort, la clôture et le Remote Control d'un projet de l'équipe ; un projet perso garde les seuls verrous du poste géré. Les clés de l'app (réseau, télémétrie, voix, mises à jour, plugins, clients MCP extérieurs) valent pour l'app tant que le poste est dans l'équipe, en attendant les espaces (TS-4).
 - **Chaque clé a sa sorte** : restreindre, valeur, sensible ou exécutable.
   - Une clé qui *restreint* ne s'impose que dans son sens : « Statistiques d'usage » éteintes, jamais allumées ; le canal stable, jamais la bêta. Une autre valeur est ignorée et dite.
-  - Une clé *exécutable* (commande, hook, lancement) n'est **jamais** imposée par l'équipe, même signée ; seul le poste géré le peut. Aucune clé de la liste n'est exécutable aujourd'hui.
-  - Une clé *sensible* (adresse du proxy, exclusions, fichier d'autorités) s'applique quand elle vient du poste géré ; venue de l'équipe, elle attend l'accord du poste (à venir avec le fichier d'équipe).
-- Le rang 5 n'a pas encore de source : aucune équipe n'impose rien.
+  - Une clé *exécutable* (commande, hook, lancement) n'est **jamais** imposée par l'équipe, même signée ; seul le poste géré le peut. L'équipe peut la proposer : chaque poste la relit et l'accepte à son empreinte.
+  - Une clé *sensible* (adresse du proxy, exclusions, fichier d'autorités) s'applique quand elle vient du poste géré ; venue de l'équipe, elle attend l'accord de ce poste, puis s'applique comme une valeur (celle du poste géré gagne).
 
 ## La liste unique des stratégies
 
@@ -78,6 +78,7 @@ Un `REG_DWORD` 0 ou 1 devient un booléen quand la liste le dit ; une chaîne se
 | `team.server`, `team.fingerprint`, `team.onlyThisServer` | valeur ; restreindre | l'enrôlement (ci-dessous) |
 
 - Une clé inconnue, ou une valeur mal formée, est ignorée. Ce que la lecture a dit va au journal et dans **Réglages › Général › « Stratégies de ce poste »** (le groupe n'apparaît que s'il y a quelque chose à dire).
+- L'équipe impose aussi, sur ses projets, les clés du `.escouade.yml` d'un projet qui ne s'exécutent pas (`board.on_approve`, `git.agent_branch_prefix`…) : appliquées par-dessus le fichier du dépôt, refusées quand on les change dans la fenêtre (« Ce réglage est imposé par l'équipe Acme (git.agent_branch_prefix) »).
 
 ## L'enrôlement
 
@@ -89,8 +90,8 @@ Un `REG_DWORD` 0 ou 1 devient un booléen quand la liste le dit ; une chaîne se
 ## Dans la fenêtre
 
 - Un réglage imposé est **grisé**, son contrôle inerte, avec un cadenas et la ligne « **Imposé par la stratégie de ce poste** » (ou « Imposé par l'équipe Acme » pour le rang 5) sous ce qu'il fait.
-- Une **borne** ne grise pas la ligne mais ses choix interdits : un mode non permis est grisé, sa bulle dit « Auto · non permis par la stratégie de ce poste » ; dans une liste déroulante (le mode du Kanban), le choix porte la même raison.
-- Chaque ligne du registre des réglages a son `locked_by` : qui impose sa valeur, ou rien.
+- Une **borne** ne grise pas la ligne mais ses choix interdits : un mode non permis est grisé, sa bulle dit « Auto · non permis par la stratégie de ce poste » ; dans une liste déroulante (le mode du Kanban), le choix porte la même raison. Dans les réglages d'un projet de l'équipe, la raison est son équipe : « Auto · non permis par l'équipe Acme ».
+- Chaque ligne du registre des réglages a son `locked_by` : qui impose sa valeur, ou rien. La fenêtre reçoit les verrous de l'app et ceux des projets de chaque équipe.
 
 ## C'est le cœur qui refuse
 
@@ -101,6 +102,7 @@ L'interface ne fait que montrer. Une écriture de ce qui est imposé est refusé
 - **par le `.escouade.yml` du dépôt** : `agents.engine`, `board.mode` ou `board.effort` interdits ne sont pas appliqués, et un avertissement le dit dans Réglages › Équipe, le reste du fichier lu comme avant ;
 - **par « Exporter vers .escouade.yml »** : `board.mode`, `agents.engine` et `board.effort`, bornés sur ce poste, ne sont pas écrits ; demandés un à un, l'écriture est refusée et dite.
 - Un agent ne démarre pas sur un harness, dans un mode, sur un modèle ou à un effort non permis.
+- Pour un projet de l'équipe, chacun de ces refus lit les verrous de son équipe (rangs 5 et 6) ; pour un autre projet, ceux du poste.
 
 ## Relu à chaud
 
@@ -108,6 +110,7 @@ L'interface ne fait que montrer. Une écriture de ce qui est imposé est refusé
   - Windows : `RegNotifyChangeKeyValue` sur `HKLM\SOFTWARE\Policies` et `HKCU\SOFTWARE\Policies` (tout leur sous-arbre : la clé `Escouade` peut ne pas exister encore) ;
   - macOS : les fichiers de `/Library/Managed Preferences` ; Linux : ceux de `/etc/escouade` (noms, tailles et dates, regardés chaque seconde) ;
   - partout, tout est relu toutes les 30 secondes en plus.
+- Le rang 5 suit le fichier d'équipe : une version qui entre en vigueur, un accord donné ou retiré refait les verrous de l'équipe et relit le `.escouade.yml` de ses projets.
 - Un changement refait les verrous et les applique comme au démarrage : les réglages sont ramenés dans ce qui est imposé et réécrits, la fenêtre reçoit les verrous **et les réglages ramenés** (le formulaire des Réglages ouvert les reprend, sans rien réenregistrer par-dessus) ; une stratégie retirée libère le réglage, qui garde la valeur où elle l'avait laissé.
 
 ## Ce qui est déjà en cours
@@ -118,4 +121,4 @@ L'interface ne fait que montrer. Une écriture de ce qui est imposé est refusé
 
 ## Pour les essais
 
-Un build de développement (jamais une version publiée) lit, à la place des stratégies du système, le fichier JSON que nomme `ESCOUADE_TEST_POLICIES` (`{"telemetry.enabled": false}`), et le **surveille** comme le système. C'est la source des e2e `tests/e2e/policies.spec.ts` et `tests/e2e/policies-live.spec.ts` (une stratégie posée puis retirée pendant que l'app tourne). Un test vérifie que ce code n'existe que sous `cfg(debug_assertions)` : une variable d'environnement ne doit ni lever ni poser une stratégie dans une version publiée (constat SEC-13 de l'audit de la 2.2.0).
+Un build de développement (jamais une version publiée) lit, à la place des stratégies du système, le fichier JSON que nomme `ESCOUADE_TEST_POLICIES` (`{"telemetry.enabled": false}`), et le **surveille** comme le système. C'est la source des e2e `tests/e2e/policies.spec.ts` et `tests/e2e/policies-live.spec.ts` (une stratégie posée puis retirée pendant que l'app tourne). Un test vérifie que ce code n'existe que sous `cfg(debug_assertions)` : une variable d'environnement ne doit ni lever ni poser une stratégie dans une version publiée (constat SEC-13 de l'audit de la 2.2.0). Le rang 5 s'essaie dans `tests/e2e/team-settings.spec.ts`, contre un vrai serveur d'équipe et deux clients.

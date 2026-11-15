@@ -282,6 +282,10 @@ struct Known {
     recovery_confirmed: bool,
     alarm: Option<AlarmView>,
     last_error: Option<String>,
+    /// The last version of the team's settings the member saw (« Voir » on the band, TS-13).
+    settings_seen: Option<u64>,
+    /// The name this device signs the team's settings with (« Claire Martin »).
+    signer_name: String,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -454,7 +458,19 @@ pub struct Teams {
     /// The live feed of each team (TS-5): a frame of the server reads the team at once, instead of waiting for the
     /// watch.
     live: Mutex<BTreeMap<String, tokio::task::JoinHandle<()>>>,
+    /// What each team's signed `.escouade.yml` says on this device, as last read (TS-13).
+    settings_views: Mutex<BTreeMap<String, escouade_team::settings::View>>,
+    /// Told the version in force of a team's settings (None: the device left it): the core applies it.
+    on_settings: Mutex<Option<SettingsSink>>,
 }
+
+/// Where a team's settings go: the team's id, its name, what applies.
+pub type SettingsSink =
+    Arc<dyn Fn(&str, &str, Option<&escouade_team::settings::View>) + Send + Sync>;
+
+#[path = "teams_settings.rs"]
+mod team_files;
+pub use team_files::{SettingsDraft, TeamSettingsView};
 
 impl Teams {
     /// The teams of the data folder's `teams` (made if needed), each opened from its state and the keychain.
@@ -500,6 +516,8 @@ impl Teams {
             words: Mutex::default(),
             pairings: Mutex::default(),
             live: Mutex::default(),
+            settings_views: Mutex::default(),
+            on_settings: Mutex::default(),
         };
         let known = teams.known.lock().clone();
         for k in known {
@@ -1010,7 +1028,13 @@ impl Teams {
             let mut t = team.lock().await;
             match t.sync().await {
                 Ok(_) => match t.serve(now()).await {
-                    Ok(_) => sync_projects(&mut t).await,
+                    Ok(_) => match sync_projects(&mut t).await {
+                        Ok(()) => {
+                            self.read_settings(id, &mut t).await;
+                            Ok(())
+                        }
+                        Err(e) => Err(e),
+                    },
                     Err(e) => Err(e),
                 },
                 Err(e) => Err(e),
@@ -1067,6 +1091,7 @@ impl Teams {
             self.open.lock().insert(id.to_string(), team);
             return Err("L’équipe est en cours d’usage : réessaie.".to_string());
         }
+        self.forget_settings(id);
         self.known.lock().retain(|k| k.id != id);
         self.save();
         (self.changed)();

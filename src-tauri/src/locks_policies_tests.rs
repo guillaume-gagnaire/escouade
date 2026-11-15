@@ -23,7 +23,9 @@ fn managed(pairs: &[(&str, Value)]) -> Managed {
 
 fn team(enforced: &[(&str, Value)]) -> TeamPolicies {
     TeamPolicies {
+        id: "acme".into(),
         team: "Acme".into(),
+        signed: None,
         recommended: BTreeMap::new(),
         enforced: enforced
             .iter()

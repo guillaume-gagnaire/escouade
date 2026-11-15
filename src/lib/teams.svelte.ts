@@ -3,6 +3,7 @@
 // when one changed (`teams`), and the list is read again.
 
 import { invoke } from '@tauri-apps/api/core';
+import { teamSettingsApi, type TeamSettingsView } from './team-settings';
 
 export interface AlarmView {
   kind: 'fork' | 'rollback' | 'rewritten' | 'journal';
@@ -104,6 +105,8 @@ export function errorText(e: unknown): string {
 class Teams {
   list = $state<TeamView[]>([]);
   loaded = $state(false);
+  /** The signed settings of each team this device is in (TS-13), by team id: the band and the screen read them. */
+  settings = $state<Record<string, TeamSettingsView>>({});
 
   async load() {
     try {
@@ -112,6 +115,23 @@ class Teams {
       this.list = [];
     }
     this.loaded = true;
+    await this.loadSettings();
+  }
+
+  async loadSettings() {
+    const next: Record<string, TeamSettingsView> = {};
+    for (const team of this.list.filter((x) => x.joined)) {
+      try {
+        next[team.id] = await teamSettingsApi.get(team.id);
+      } catch {
+        // A team that does not open: its card says why.
+      }
+    }
+    this.settings = next;
+  }
+
+  putSettings(s: TeamSettingsView) {
+    this.settings = { ...this.settings, [s.team]: s };
   }
 
   byId(id: string | null | undefined): TeamView | undefined {

@@ -22,6 +22,7 @@ pub mod fuzzing;
 pub mod keychain;
 pub mod pairing;
 pub mod replica;
+pub mod settings;
 pub mod storage;
 pub mod team;
 pub mod wire;

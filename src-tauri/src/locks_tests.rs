@@ -32,7 +32,9 @@ fn managed(pairs: &[(&str, Value)]) -> Managed {
 
 fn team(enforced: &[(&str, Value)], recommended: &[(&str, Value)]) -> TeamPolicies {
     TeamPolicies {
+        id: "acme".into(),
         team: "Acme".into(),
+        signed: None,
         recommended: map(recommended),
         enforced: map(enforced),
     }
@@ -206,7 +208,9 @@ fn the_bounds_of_the_team_and_of_the_managed_device_cross() {
 }
 
 #[test]
-fn a_command_is_never_imposed_by_the_team_and_a_sensitive_key_waits() {
+fn a_command_is_never_imposed_by_the_team_and_a_sensitive_key_holds_once_consented() {
+    // A team's sensitive key reaches the locks once this device consented to it (TS-13: `team_settings::split` gives
+    // the consented ones alone, `escouade-team::settings` keeps the others waiting).
     let layers = Layers {
         device: map(&[
             ("worktrees.setup", json!("npm ci")),
@@ -227,23 +231,15 @@ fn a_command_is_never_imposed_by_the_team_and_a_sensitive_key_waits() {
     );
     assert_eq!(
         value_of(&layers, "proxy.url"),
-        (json!("http://a"), Rank::Device)
+        (json!("http://b"), Rank::TeamEnforced)
     );
     let locks = Locks::compute(TABLE, layers.team.as_ref(), &layers.managed);
-    assert!(locks.locks.is_empty());
+    assert_eq!(locks.locks.keys().collect::<Vec<_>>(), ["proxy.url"]);
     assert!(
         locks
             .warnings
             .iter()
             .any(|w| w.contains("jamais imposée par l’équipe")),
-        "{:?}",
-        locks.warnings
-    );
-    assert!(
-        locks
-            .warnings
-            .iter()
-            .any(|w| w.contains("demande l’accord")),
         "{:?}",
         locks.warnings
     );
@@ -602,6 +598,14 @@ async fn an_agent_in_a_mode_no_longer_allowed_goes_to_the_nearest_and_says_it() 
     let mut b = h.core.project(&p.id).unwrap().board;
     b.mode = "auto".into();
     h.core.board_set(&p.id, b).unwrap();
+    // A project of the team: what the team imposes holds for it (§6.1).
+    h.core
+        .projects
+        .write()
+        .iter_mut()
+        .find(|x| x.id == p.id)
+        .unwrap()
+        .team = Some("acme".into());
 
     h.core.set_team_policies(Some(team(
         &[(MODES_KEY, json!(["plan", "default", "acceptEdits"]))],

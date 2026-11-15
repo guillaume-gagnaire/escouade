@@ -212,11 +212,28 @@ cargo +nightly fuzz run operation   # le décodage d'une opération, scellée et
 - `roster` : le registre (et son aller-retour), les identités, `TeamMessage`, les entrées et les trames du serveur, les objets scellés, les enregistrements d'époque.
 - `operation` (TS-5) : les octets comme opération scellée, opération, instantané, registre de projet, horodatage ; une opération scellée du banc, changée par les octets, s'ouvre telle qu'elle a été scellée ou pas du tout ; une opération qui se décode, appliquée deux fois à une copie, ne change rien la seconde.
 
+## Le .escouade.yml d’équipe (TS-13)
+
+`settings.rs` tient le fichier de réglages de l’équipe (docs/TEAM-SERVER.md §6.5, §6.6, C12-B). Le cœur lui donne la sorte de chaque clé (trait `Classify`, `src-tauri/src/team_settings.rs`) et l’applique ; la crate dit ce qui est en vigueur et ce qui attend.
+
+- **Où** : le flux de projet `SETTINGS_STREAM` (`b"escouade/setting"`, un id qu’aucun client ne tire), sur ce que TS-1 offre déjà. Chaque entrée est un `SealedObject` sous la clé d’équipe de son époque, signé par la feuille de son auteur : `Entry::Version { body }` (le `Version` encodé : numéro, empreinte de la précédente, fichier en JSON, nom de l’auteur, heure, note) ou `Entry::Cosign { number, digest }`. L’empreinte d’une version est `digest(body)`, sur les octets signés, jamais sur un réencodage.
+- **Qui signe** : un administrateur de l’époque de son scellement (`Team::admins_at`, que `team.rs` garde pour chaque époque vécue) et d’aujourd’hui, dans `signers` quand la version d’avant en nomme. Chaque membre compte une fois.
+- **La chaîne** : au numéro `k`, la première candidate (dans l’ordre du flux) qui cite la version `k − 1` choisie et a ses signatures ; la chaîne choisie est gardée (`chosen`) et jamais défaite. Les autres : `Lost`, `Behind`, `BadChain`, `Replayed` (même empreinte), `NotAdmin`, `RemovedAdmin`, `Never`, `Unreadable` ; une entrée qui n’ouvre pas : `Unsigned`.
+- **Le quorum** : 2 signatures quand le quorum de la version en vigueur tient (`quorum`, sinon deux administrateurs ou plus) et que la version change une clé sensible, `signers` ou `quorum` (`needs_quorum`).
+- **Ce qui n’entre jamais** (`never`) : la liste en dur, avec des clés qui s’exécutent connues ici même si le cœur ne les a pas (`RUNS`). Une ligne trouvée refuse la version entière.
+- **Ce qui s’applique** (`Effective`) : `enforced` et `defaults`, sauf le sensible qui attend l’accord de cet appareil ; `proposed` accepté (`accepted`). Un accord (`consent`) nomme `fingerprint(part, clé, valeur)` : une valeur changée redemande l’accord. `withdraw` le retire.
+- **Le serveur menteur** : comme le flux d’équipe, la dernière entrée lue est relue avant de lire plus loin (`Alarm::Rollback`, `Rewritten`, `Server`, `Fork`) ; sous l’alarme, rien n’est lu jusqu’à `retry`.
+- **`serve`** : un appareil d’administrateur cosigne les versions de la chaîne dont les signatures ne comptent plus (leur auteur est parti), pour qu’un appareil qui arrive après lise toute la chaîne.
+- L’état (`State`) va dans la base chiffrée de l’équipe (`Team::save_extra`, `extra/settings`).
+
+Les tests (`tests/settings.rs`, contre le vrai serveur) : version signée appliquée, chaîne et historique ; un membre qui signe ; une entrée forgée ou non signée ; un administrateur retiré depuis (et l’appareil venu après, servi par la cosignature) ; une version rejouée, qui recule, ou dont le numéro est pris ; un serveur qui cache ou change une version ; le quorum (une signature ne suffit pas, deux fois le même membre non plus, deux oui ; les signataires et le quorum gardés de même) ; un seul administrateur ; chaque sorte ; chaque ligne de ce qui n’entre jamais.
+
 ## Ce qui reste
 
 - **TS-3** (fait, ESC-461), sauf :
   - une invitation que seul l'appareil qui l'a faite honore : un autre administrateur en ligne ne la connaît pas (il faudrait la sceller pour les seuls administrateurs) ;
   - `escouade-server team pair` pour une machine en mode serveur.
+- **TS-13** (fait, ESC-471), sauf : le fichier d’un projet d’équipe par-dessus celui de l’équipe (il passera par le groupe du projet gardé de TS-5) ; un serveur qui cache une version à un appareil qui ne l’a jamais vue (à croiser avec les balises de tête) ; le flux des réglages pourrait passer par le journal d’opérations de TS-5 (copie locale, direct) plutôt que par une lecture à chaque relecture.
 - **TS-4** : montrer l'équipe dans les espaces et ses réglages (membres, appareils, rôles, état du trousseau, hors ligne), retirer un appareil de soi qu'on oublie.
 - **TS-5** (fait, ESC-466, avec les projets d'une invitation et le direct dans le cœur de TS-3), sauf :
   - les écrans (« Hors ligne · N changements en attente », les conflits, le Kanban) : TS-4 et TS-6 ; la prise d'un ticket : TS-6 ; la fusion à trois voies des pages : TS-9 ;

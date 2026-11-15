@@ -74,6 +74,7 @@
   import TitleBar from './components/TitleBar.svelte';
   import TlsBanner from './components/TlsBanner.svelte';
   import RecoveryBanner from './components/RecoveryBanner.svelte';
+  import TeamSettingsBand from './components/team/TeamSettingsBand.svelte';
   import Toasts from './components/Toasts.svelte';
   import Welcome from './components/Welcome.svelte';
   import PaneDrop from './components/panes/PaneDrop.svelte';
@@ -215,10 +216,12 @@
 <div class="root" style:--rail="{railWidth.shown}px" style:--side="{sideWidth.shown}px">
   <TitleBar />
   {#if app.ready}
-    <!-- The bands across the window: the files recovered at the start (ESC-469), the certificates not checked (SEC-07). -->
+    <!-- The bands across the window: the files recovered at the start (ESC-469), the certificates not checked (SEC-07),
+         a team’s settings (TS-13). -->
     <div class="bands">
       <RecoveryBanner />
       <TlsBanner />
+      <TeamSettingsBand />
     </div>
   {/if}
   <ProjectRail />

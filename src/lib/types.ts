@@ -941,6 +941,8 @@ export interface Project {
   engine: EngineId | null;
   /** « Projet privé »: the agents of the other projects do not see it through the MCP server, and its own see it alone. */
   private: boolean;
+  /** The team this project is of (TS-13): what the team imposes and recommends holds for it alone. */
+  team?: string | null;
   /** « Chef d’escouade » (ESC-423): the agent, by id, that answers the other agents' requests when `Settings.agentsAnswer` is `chef`; set by the window alone. */
   chef?: string | null;
   /** « Branche des docs » (ESC-256): the branch that holds `.escouade/spec`, `decisions` and `documents`; empty is the branch checked out. */
@@ -2890,7 +2892,7 @@ export type UiEvent =
   /** The settings changed a language: the window switches to it at once. */
   | { type: 'language'; lang: LangInfo }
   /** What the policies of this device or a team lock changed (TS-11). */
-  | { type: 'locks'; locks: Locks; settings?: Settings }
+  | { type: 'locks'; locks: Locks; teams?: Record<string, Locks>; settings?: Settings }
   /** The MCP server started, stopped, could not start, or listens on another port. */
   | { type: 'mcpStatus'; status: McpStatus }
   /** A call to the MCP server, or a request refused. */
@@ -3013,6 +3015,8 @@ export interface InitialState {
   pageCrash?: { projectId: string | null; agentId: string | null } | null;
   /** What the policies of this device and a team lock (TS-11); absent before it. */
   locks?: Locks;
+  /** The locks of each team's projects, by team id (TS-13). */
+  teamLocks?: Record<string, Locks>;
   /** The files found unreadable at a start and recovered from their copies (ESC-469), until the notice is closed. */
   recovered?: Recovery[];
 }

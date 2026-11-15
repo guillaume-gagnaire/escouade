@@ -7,11 +7,20 @@ import type { LockedBy, Locks } from './types';
 
 export const NO_LOCKS: Locks = { locks: {}, rows: {}, warnings: [] };
 
-/** The locks the window knows: `InitialState.locks`, then each `locks` event. */
-export const locks = $state<{ current: Locks }>({ current: NO_LOCKS });
+/** The locks the window knows: `InitialState.locks`, then each `locks` event; `teams`, those of each team's projects
+ *  (TS-13), by team id. */
+export const locks = $state<{ current: Locks; teams: Record<string, Locks> }>({ current: NO_LOCKS, teams: {} });
 
-export function setLocks(l: Locks | undefined): void {
+export function setLocks(l: Locks | undefined, teams?: Record<string, Locks>): void {
   locks.current = l ?? NO_LOCKS;
+  locks.teams = teams ?? {};
+}
+
+/** The locks of a project: its team's when it is of one (what a team imposes holds for its projects alone), the app's
+ *  otherwise. */
+export function locksFor(project: { team?: string | null } | null | undefined): Locks {
+  const team = project?.team;
+  return (team && locks.teams[team]) || locks.current;
 }
 
 /** Who imposes the value of a row of `SETTINGS_ROWS` (its `locked_by`); null when nothing does. */

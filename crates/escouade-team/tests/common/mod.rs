@@ -158,6 +158,8 @@ pub struct Lies {
     pub project_hide_after: Option<u64>,
     /// Answers a network error after sending the next operation of a project.
     pub lose_op_answer: bool,
+    /// Serves these payloads as entries of their numbers, beside the real ones (a forged entry, a replay: TS-13).
+    pub project_inject: Vec<(u64, Vec<u8>)>,
 }
 
 /// A transport around the real one: honest until the test sets its lies; it can hold the next commit until the
@@ -278,6 +280,34 @@ impl Liar {
                     let i = e.payload.len() / 2;
                     e.payload[i] ^= 1;
                 }
+            }
+        }
+        if !lies.project_inject.is_empty() {
+            let since: u64 = path
+                .split("since=")
+                .nth(1)
+                .and_then(|s| s.split('&').next())
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0);
+            for (seq, payload) in &lies.project_inject {
+                if *seq > since && !page.entries.iter().any(|e| e.seq == *seq) {
+                    page.entries.push(wire::Entry {
+                        seq: *seq,
+                        kind: Kind::Message,
+                        epoch: None,
+                        device: vec![0; 16],
+                        at: 0,
+                        payload: payload.clone(),
+                    });
+                }
+            }
+            page.entries.sort_by_key(|e| e.seq);
+            if let Some(l) = path
+                .split("limit=")
+                .nth(1)
+                .and_then(|s| s.parse::<usize>().ok())
+            {
+                page.entries.truncate(l);
             }
         }
         if let Some(n) = lies.project_replay {

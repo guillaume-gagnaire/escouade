@@ -919,8 +919,13 @@ pub struct Core<R: Runtime = Wry> {
     pub managed: RwLock<crate::locks::Managed>,
     /// The watch of the policies of this device, while the app runs; stopped when dropped.
     pub(crate) policy_watch: Mutex<Option<escouade_policy::watch::Watch>>,
-    /// What a team imposes (rank 5): none until the team server comes; injectable (`set_team_policies`).
-    pub team_policies: RwLock<Option<crate::locks::TeamPolicies>>,
+    /// What each team of this device imposes (rank 5) and recommends (rank 2), by team id: its signed `.escouade.yml`
+    /// (TS-13, `team_settings.rs`); injectable (`set_team_policies`).
+    pub team_policies: RwLock<BTreeMap<String, crate::locks::TeamPolicies>>,
+    /// The locks of each team's projects (ranks 5 and 6), by team id: `locks_for` gives a project its own.
+    pub team_locks: RwLock<BTreeMap<String, crate::locks::Locks>>,
+    /// What each team sets on its projects, of the keys of a project's file (TS-13): by team id.
+    pub team_layers: RwLock<BTreeMap<String, crate::team_settings::Layers>>,
     /// The usage statistics, once the user agreed to them (`telemetry`).
     pub telemetry: Arc<Telemetry>,
     pub projects: RwLock<Vec<Project>>,
@@ -1704,6 +1709,7 @@ pub(crate) fn blank_project(path: &str) -> Project {
         remote_control: false,
         engine: None,
         private: false,
+        team: None,
         chef: None,
         docs_branch: String::new(),
         shared: Default::default(),
@@ -2124,7 +2130,9 @@ impl<R: Runtime> Core<R> {
             locks: RwLock::new(locks),
             managed: RwLock::new(managed),
             policy_watch: Mutex::new(None),
-            team_policies: RwLock::new(None),
+            team_policies: RwLock::new(BTreeMap::new()),
+            team_locks: RwLock::new(BTreeMap::new()),
+            team_layers: RwLock::new(BTreeMap::new()),
             projects: RwLock::new(state.projects),
             tickets: RwLock::new(tickets),
             ui: RwLock::new(state.ui),
@@ -3786,15 +3794,15 @@ impl<R: Runtime> Core<R> {
         // The mode of no question without « Autoriser le mode Bypass » (SEC-09).
         crate::bypass::check(&h.lock().meta.mode, self.bypass_allowed())?;
         // A harness or a mode the policies do not allow (TS-11).
-        self.locks.read().check_engine(engine.as_str())?;
-        self.locks.read().check_mode(&h.lock().meta.mode)?;
+        let locks = self.locks_for(&project_id);
+        locks.check_engine(engine.as_str())?;
+        locks.check_mode(&h.lock().meta.mode)?;
         // A model or an effort the policies do not allow (TS-12).
         {
             let (model, effort) = {
                 let rt = h.lock();
                 (rt.meta.model.clone(), rt.meta.effort.clone())
             };
-            let locks = self.locks.read();
             locks.check_model(engine.as_str(), &model)?;
             locks.check_effort(&effort)?;
         }
@@ -6574,7 +6582,8 @@ impl<R: Runtime> Core<R> {
         // A model or an effort the policies do not allow (TS-12).
         {
             let engine = h.lock().meta.engine;
-            let locks = self.locks.read();
+            let project_id = h.lock().meta.project_id.clone();
+            let locks = self.locks_for(&project_id);
             if let Some(m) = model.as_deref() {
                 locks.check_model(engine.as_str(), m)?;
             }
@@ -6586,7 +6595,8 @@ impl<R: Runtime> Core<R> {
         if let Some(m) = mode.as_deref() {
             crate::bypass::check(m, self.bypass_allowed())?;
             // A mode the policies do not allow (TS-11).
-            self.locks.read().check_mode(m)?;
+            let project_id = h.lock().meta.project_id.clone();
+            self.locks_for(&project_id).check_mode(m)?;
             if h.lock().meta.discussion.is_some() && !crate::discussion::MODES.contains(&m) {
                 bail!(tr!(
                     "Une discussion ne modifie jamais le code : elle reste en mode « Demander » ou « Plan ».",
@@ -6765,7 +6775,8 @@ impl<R: Runtime> Core<R> {
         // project; a tool, the Kanban or the app itself never turns it on.
         self.check_harness_in(engine, project_id)?;
         // Nor on one the policies do not allow (TS-11).
-        self.locks.read().check_engine(engine.as_str())?;
+        let locks = self.locks_for(project_id);
+        locks.check_engine(engine.as_str())?;
         // Whatever the agent is (ticket, discussion, planner…), a spec in Escouade is the one to follow.
         let follow = self.docs_follow(&project, self.lang().claude).await;
         let mut meta = AgentMeta {
@@ -6825,18 +6836,15 @@ impl<R: Runtime> Core<R> {
         meta.model = self.model_for(engine, o.model.unwrap_or(defaults.model));
         meta.effort = o.effort.unwrap_or(defaults.effort);
         // A model the policies do not allow is refused; an effort above their ceiling comes down to it (TS-12).
-        self.locks
-            .read()
-            .check_model(engine.as_str(), &meta.model)?;
-        meta.effort = self.locks.read().effort_within(&meta.effort);
+        locks.check_model(engine.as_str(), &meta.model)?;
+        meta.effort = locks.effort_within(&meta.effort);
         // A mode asked that the policies do not allow is refused; its account's goes to the nearest allowed (TS-11).
         meta.mode = match o.mode {
             Some(m) => {
-                self.locks.read().check_mode(&m)?;
+                locks.check_mode(&m)?;
                 m
             }
             None => {
-                let locks = self.locks.read();
                 if locks.check_mode(&defaults.mode).is_err() {
                     locks.nearest_mode(&defaults.mode)
                 } else {
@@ -9142,7 +9150,13 @@ impl<R: Runtime> Core<R> {
             bail!(why);
         }
         // A harness, a mode or the remote control the policies lock (TS-11): refused, and said.
-        self.locks.read().check_project(&before, &p)?;
+        self.locks_for(&before.id).check_project(&before, &p)?;
+        // A key of the project its team imposes (TS-13, rank 5).
+        if let Some((team, layers)) = self.team_layers_for(&before.id) {
+            if let Some(why) = crate::projectfile::team_refusal(&p, &team, &layers) {
+                bail!(why);
+            }
+        }
         // A source of tickets chosen, a harness by default: their plugin from the seed if it is not installed (ESC-373).
         for l in &p.integrations.links {
             if before.integrations.link(l.service).is_none() {

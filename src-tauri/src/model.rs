@@ -332,6 +332,8 @@ pub enum UiEvent {
     /// brought the app's settings within them (a policy changed while the app runs, TS-12): the window takes them.
     Locks {
         locks: crate::locks::Locks,
+        /// The locks of each team's projects, by team id (TS-13).
+        teams: std::collections::BTreeMap<String, crate::locks::Locks>,
         #[serde(skip_serializing_if = "Option::is_none")]
         settings: Option<Box<Settings>>,
     },

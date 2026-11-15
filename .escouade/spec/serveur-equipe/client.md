@@ -2,7 +2,7 @@
 title: "Le client de l'équipe"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team-server/README.md"]
-tickets: ["ESC-458","ESC-461","ESC-466"]
+tickets: ["ESC-458","ESC-461","ESC-466","ESC-471"]
 decisions: [168,173,178]
 compared: null
 ---
@@ -68,3 +68,8 @@ Ce que fait Escouade, sur chaque appareil, pour être dans une équipe d'un serv
 - **Pas de fausse alerte** : une balise ne compte que signée par un membre de l'époque courante (un membre retiré ne peut pas en lever une). Un objet doit être signé par un membre avant qu'on compare sa tête.
 - Un serveur qui partitionne l'équipe pour toujours ne se voit qu'en comparant hors bande les six mots de la tête.
 - Les mensonges sur le journal d'un projet (une opération rejouée, réordonnée, retirée, forgée) : voir « La synchronisation des projets ».
+
+## Le .escouade.yml d'équipe
+
+- Le client tient aussi le fichier de réglages de l'équipe (voir « Le .escouade.yml d'équipe ») : un flux du serveur à part, des versions scellées sous la clé d'équipe et signées par la feuille d'un administrateur, chaînées, au quorum pour le sensible. Il le relit après chaque lecture du flux d'équipe et des projets.
+- Pour savoir qui était administrateur quand une version a été scellée, chaque appareil garde le rôle des membres à chaque époque qu'il a vécue ; pour une époque d'avant son arrivée, il s'en tient aux administrateurs d'aujourd'hui.

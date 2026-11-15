@@ -116,6 +116,8 @@ pub struct InitialState {
     page_crash: Option<crate::pagecrash::PageCrash>,
     /// What the policies of this device and a team lock (TS-11): the window greys what they impose.
     locks: crate::locks::Locks,
+    /// The locks of each team's projects, by team id (TS-13).
+    team_locks: std::collections::BTreeMap<String, crate::locks::Locks>,
     /// The files found unreadable at a start and recovered from their copies (ESC-469), until the user closes the
     /// notice that tells them.
     recovered: Vec<escouade_model::backups::Recovery>,
@@ -192,6 +194,7 @@ pub fn subscribe(
         setup_output,
         page_crash: core.take_page_crash(),
         locks: core.locks.read().clone(),
+        team_locks: core.team_locks.read().clone(),
         recovered: escouade_model::backups::notices(core.data.root()),
     }
 }
@@ -4874,6 +4877,100 @@ pub async fn team_sync_status(
 #[tauri::command]
 pub async fn team_forget(teams: TeamsState<'_>, team: String) -> Res<()> {
     teams.forget(&team).await
+}
+
+// ---------- The team's signed .escouade.yml (TS-13) ----------
+
+/// The team's settings as this device read them: the version in force, the history, what waits for this device.
+#[tauri::command]
+pub async fn team_settings(
+    teams: TeamsState<'_>,
+    team: String,
+) -> Res<crate::teams::TeamSettingsView> {
+    teams.settings(&team).await
+}
+
+/// A version written in the window, read before it is signed: its file, what refuses it, the signatures it needs.
+#[tauri::command]
+pub fn team_settings_check(
+    teams: TeamsState<'_>,
+    team: String,
+    yaml: String,
+) -> crate::teams::SettingsDraft {
+    teams.settings_check(&team, &yaml)
+}
+
+/// An administrator signs a version, chained to the one in force.
+#[tauri::command]
+pub async fn team_settings_propose(
+    teams: TeamsState<'_>,
+    team: String,
+    yaml: String,
+    note: String,
+    by: String,
+) -> Res<crate::teams::TeamSettingsView> {
+    teams.settings_propose(&team, &yaml, &note, &by).await
+}
+
+/// An administrator cosigns another's version (the quorum's second signature).
+#[tauri::command]
+pub async fn team_settings_cosign(
+    teams: TeamsState<'_>,
+    team: String,
+    digest: String,
+) -> Res<crate::teams::TeamSettingsView> {
+    teams.settings_cosign(&team, &digest).await
+}
+
+/// This device accepts a sensitive key or a command proposed, at the fingerprint the member read.
+#[tauri::command]
+pub async fn team_settings_consent(
+    teams: TeamsState<'_>,
+    team: String,
+    part: String,
+    key: String,
+    fingerprint: String,
+) -> Res<crate::teams::TeamSettingsView> {
+    teams
+        .settings_consent(&team, &part, &key, &fingerprint)
+        .await
+}
+
+/// This device takes its consent back.
+#[tauri::command]
+pub async fn team_settings_withdraw(
+    teams: TeamsState<'_>,
+    team: String,
+    part: String,
+    key: String,
+) -> Res<crate::teams::TeamSettingsView> {
+    teams.settings_withdraw(&team, &part, &key).await
+}
+
+/// « Voir » on the band: the member saw the version `number`.
+#[tauri::command]
+pub fn team_settings_seen(teams: TeamsState<'_>, team: String, number: u64) {
+    teams.settings_seen(&team, number)
+}
+
+/// « Réessayer » after an alarm of the settings.
+#[tauri::command]
+pub async fn team_settings_retry(
+    teams: TeamsState<'_>,
+    team: String,
+) -> Res<crate::teams::TeamSettingsView> {
+    teams.settings_retry(&team).await
+}
+
+/// « Projet de l'équipe »: what the team imposes and recommends holds for this project (or no longer).
+#[tauri::command]
+pub fn project_set_team(
+    core: CoreState,
+    project: String,
+    team: Option<String>,
+) -> Res<crate::model::Project> {
+    core.set_project_team(&project, team)
+        .map_err(|e| format!("{e:#}"))
 }
 
 // ---------- The launches' pages (ESC-311) ----------

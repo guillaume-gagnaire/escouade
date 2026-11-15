@@ -840,7 +840,7 @@ class AppState {
     this.claudeFound = s.claudeFound;
     this.claudePathFound = s.claudePathFound ?? s.claudeFound;
     this.version = s.version;
-    setLocks(s.locks);
+    setLocks(s.locks, s.teamLocks);
     this.models = s.models;
     this.engines = s.engines ?? [];
     this.engineModels = s.engineModels ?? {};
@@ -989,7 +989,7 @@ class AppState {
         this.takeLang(e.lang);
         break;
       case 'locks':
-        setLocks(e.locks);
+        setLocks(e.locks, e.teams);
         // A policy changed while the app runs brought the settings within it (TS-12): taken, and by an open form.
         if (e.settings) {
           this.settings = e.settings;

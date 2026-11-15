@@ -249,6 +249,7 @@ mod switching;
 mod switching_tests;
 mod syspath;
 mod taskout;
+mod team_settings;
 mod teams;
 #[cfg(test)]
 mod teams_tests;
@@ -576,6 +577,17 @@ pub fn run() {
                 ))
             };
             app.manage(teams.clone());
+            // The team's signed settings (TS-13): the version in force of each team to the core's locks and projects.
+            {
+                let core = Arc::downgrade(&core);
+                teams.set_settings_sink(Arc::new(move |id, name, view| {
+                    if let Some(core) = core.upgrade() {
+                        core.apply_team_settings(id, name, view);
+                    }
+                }));
+                let started = teams.clone();
+                tauri::async_runtime::spawn(async move { started.start_settings().await });
+            }
             tauri::async_runtime::spawn(teams.watch(teams::watch_every()));
             // The editor's language servers (ESC-446): their messages and states to the window.
             app.manage(lsp::for_app(app.handle().clone()));
@@ -766,6 +778,15 @@ pub fn run() {
                 commands::team_sync,
                 commands::team_sync_status,
                 commands::team_forget,
+                commands::team_settings,
+                commands::team_settings_check,
+                commands::team_settings_propose,
+                commands::team_settings_cosign,
+                commands::team_settings_consent,
+                commands::team_settings_withdraw,
+                commands::team_settings_seen,
+                commands::team_settings_retry,
+                commands::project_set_team,
                 commands::store_refresh,
                 commands::store_suggestions,
                 commands::plugin_discard,
