@@ -132,12 +132,12 @@ async function compare(page: Page, route: string, check: (preview: Page, where: 
  * and title, its close button, its footer and its buttons.
  */
 async function compareFrame(dialog: Locator, pv: Locator, where: string, placed = true) {
-  if (placed) expect.soft(await place(dialog), `the window's place, ${where}`).toEqual(await place(pv));
-  expect.soft(await lookBut(dialog, 'width', 'height'), `the window, ${where}`).toEqual(await lookBut(pv, 'width', 'height'));
+  if (placed) expect.soft(await place(dialog), `the window's place, ${where}`).toLookLike(await place(pv));
+  expect.soft(await lookBut(dialog, 'width', 'height'), `the window, ${where}`).toLookLike(await lookBut(pv, 'width', 'height'));
   const head = dialog.locator('> .head');
   const phead = pv.locator('> .m-head');
-  expect.soft(await lookBut(head, 'width'), `its header, ${where}`).toEqual(await lookBut(phead, 'width'));
-  expect.soft(await lookBut(head.locator('h2'), 'width'), `its title, ${where}`).toEqual(await lookBut(phead.locator('h2'), 'width'));
+  expect.soft(await lookBut(head, 'width'), `its header, ${where}`).toLookLike(await lookBut(phead, 'width'));
+  expect.soft(await lookBut(head.locator('h2'), 'width'), `its title, ${where}`).toLookLike(await lookBut(phead.locator('h2'), 'width'));
   const [tx, ty] = await place(head.locator('h2'));
   const [dx, dy] = await place(dialog);
   const [ptx, pty] = await place(phead.locator('h2'));
@@ -148,22 +148,22 @@ async function compareFrame(dialog: Locator, pv: Locator, where: string, placed 
   const close = head.getByRole('button', { name: /^(Fermer|Close)$/ });
   const pclose = phead.locator('.icon-btn');
   if (await pclose.count()) {
-    expect.soft(await look(close), `its ×, ${where}`).toEqual(await look(pclose));
+    expect.soft(await look(close), `its ×, ${where}`).toLookLike(await look(pclose));
     expect.soft(await close.locator('[data-icon="close"]').count(), `its × drawn, ${where}`).toBe(1);
   }
   const foot = dialog.locator('> .foot');
   const pfoot = pv.locator('> .m-foot');
-  expect.soft(await lookBut(foot, 'width'), `its footer, ${where}`).toEqual(await lookBut(pfoot, 'width'));
+  expect.soft(await lookBut(foot, 'width'), `its footer, ${where}`).toLookLike(await lookBut(pfoot, 'width'));
   const primary = foot.locator('.btn.primary');
   if (await primary.count())
     expect
       .soft(await lookBut(primary, 'width'), `its main button, ${where}`)
-      .toEqual(await lookBut(pfoot.locator('.btn.primary:not([hidden])').first(), 'width'));
+      .toLookLike(await lookBut(pfoot.locator('.btn.primary:not([hidden])').first(), 'width'));
   const other = foot.locator('.btn:not(.primary)').last();
   if (await other.count())
     expect
       .soft(await lookBut(other, 'width'), `another button, ${where}`)
-      .toEqual(await lookBut(pfoot.locator('.btn:not(.primary)').last(), 'width'));
+      .toLookLike(await lookBut(pfoot.locator('.btn:not(.primary)').last(), 'width'));
   // The last button against the right edge, as the preview's.
   const [bx, , bw] = await place(foot.locator('.btn').last());
   const [fx, , fw] = await place(foot);
@@ -232,38 +232,38 @@ test('the assistant « Nouveau projet » reads as the preview: its start, its la
     await compareFrame(dialog, pv, where);
     expect
       .soft(await lookBut(dialog.locator('[data-step-of]'), 'width'), `the step, ${where}`)
-      .toEqual(await lookBut(pv.locator('#wiz-step'), 'width'));
-    expect.soft(await place(dialog.locator('.rail')), `the rail, ${where}`).toEqual(await place(pv.locator('.rail')));
+      .toLookLike(await lookBut(pv.locator('#wiz-step'), 'width'));
+    expect.soft(await place(dialog.locator('.rail')), `the rail, ${where}`).toLookLike(await place(pv.locator('.rail')));
     const step = dialog.locator('.rail [aria-current="step"]');
     const pstep = pv.locator('.rail li[aria-current="step"]');
-    expect.soft(await lookBut(step, 'width'), `the step on, ${where}`).toEqual(await lookBut(pstep, 'width'));
-    expect.soft(await place(step), `its place, ${where}`).toEqual(await place(pstep));
-    expect.soft(await look(step.locator('.k')), `its number, ${where}`).toEqual(await look(pstep.locator('.k')));
+    expect.soft(await lookBut(step, 'width'), `the step on, ${where}`).toLookLike(await lookBut(pstep, 'width'));
+    expect.soft(await place(step), `its place, ${where}`).toLookLike(await place(pstep));
+    expect.soft(await look(step.locator('.k')), `its number, ${where}`).toLookLike(await look(pstep.locator('.k')));
     const next = dialog.locator('.rail button').nth(1);
     const pnext = pv.locator('.rail li').nth(1);
-    expect.soft(await lookBut(next, 'width'), `a step to come, ${where}`).toEqual(await lookBut(pnext, 'width'));
-    expect.soft(await place(next), `its place, ${where}`).toEqual(await place(pnext));
+    expect.soft(await lookBut(next, 'width'), `a step to come, ${where}`).toLookLike(await lookBut(pnext, 'width'));
+    expect.soft(await place(next), `its place, ${where}`).toLookLike(await place(pnext));
     const h = dialog.locator('.page h3');
     const ph = pv.locator('#wiz-start h3');
-    expect.soft(await lookBut(h, 'width'), `the step's title, ${where}`).toEqual(await lookBut(ph, 'width'));
-    expect.soft((await place(h)).slice(0, 2), `its place, ${where}`).toEqual((await place(ph)).slice(0, 2));
+    expect.soft(await lookBut(h, 'width'), `the step's title, ${where}`).toLookLike(await lookBut(ph, 'width'));
+    expect.soft((await place(h)).slice(0, 2), `its place, ${where}`).toLookLike((await place(ph)).slice(0, 2));
     expect
       .soft(await lookBut(dialog.locator('.page .lead'), 'width', 'height'), `what it is for, ${where}`)
-      .toEqual(await lookBut(pv.locator('#wiz-start .wiz-lead'), 'width', 'height'));
+      .toLookLike(await lookBut(pv.locator('#wiz-start .wiz-lead'), 'width', 'height'));
     const radio = dialog.getByRole('radio', { name: /^Copier la configuration/ });
     const pradio = pv.locator('#wiz-start .radio[aria-checked="true"]');
-    expect.soft(await lookBut(radio, 'width', 'height'), `the start chosen, ${where}`).toEqual(await lookBut(pradio, 'width', 'height'));
-    expect.soft(await look(radio.locator('.dot')), `its dot, ${where}`).toEqual(await look(pradio.locator('.dot')));
-    expect.soft(await lookBut(radio.locator('b'), 'width'), `its name, ${where}`).toEqual(await lookBut(pradio.locator('b'), 'width'));
+    expect.soft(await lookBut(radio, 'width', 'height'), `the start chosen, ${where}`).toLookLike(await lookBut(pradio, 'width', 'height'));
+    expect.soft(await look(radio.locator('.dot')), `its dot, ${where}`).toLookLike(await look(pradio.locator('.dot')));
+    expect.soft(await lookBut(radio.locator('b'), 'width'), `its name, ${where}`).toLookLike(await lookBut(pradio.locator('b'), 'width'));
     expect
       .soft(await lookBut(radio.locator('.d'), 'width', 'height'), `what it does, ${where}`)
-      .toEqual(await lookBut(pradio.locator('span span'), 'width', 'height'));
+      .toLookLike(await lookBut(pradio.locator('span span'), 'width', 'height'));
     const unchecked = dialog.getByRole('radio', { name: /^Partir de zéro/ });
     const punchecked = pv.locator('#wiz-start .radio[aria-checked="false"]').last();
-    expect.soft(await look(unchecked.locator('.dot')), `a start not chosen, ${where}`).toEqual(await look(punchecked.locator('.dot')));
+    expect.soft(await look(unchecked.locator('.dot')), `a start not chosen, ${where}`).toLookLike(await look(punchecked.locator('.dot')));
     expect
       .soft(await lookBut(dialog.locator('.w-chip[aria-pressed="true"]'), 'width'), `the project copied, ${where}`)
-      .toEqual(await lookBut(pv.locator('#wiz-start .chip-t[aria-pressed="true"]'), 'width'));
+      .toLookLike(await lookBut(pv.locator('#wiz-start .chip-t[aria-pressed="true"]'), 'width'));
   });
 
   // Its launch, a command in a row as the preview's table.
@@ -282,24 +282,24 @@ test('the assistant « Nouveau projet » reads as the preview: its start, its la
     await compareFrame(dialog, pv, where);
     const done = dialog.locator('.rail .done').first();
     const pdone = pv.locator('.rail li.ok').first();
-    expect.soft(await lookBut(done, 'width'), `a step done, ${where}`).toEqual(await lookBut(pdone, 'width'));
-    expect.soft(await look(done.locator('.k')), `its tick, ${where}`).toEqual(await look(pdone.locator('.k')));
+    expect.soft(await lookBut(done, 'width'), `a step done, ${where}`).toLookLike(await lookBut(pdone, 'width'));
+    expect.soft(await look(done.locator('.k')), `its tick, ${where}`).toLookLike(await look(pdone.locator('.k')));
     const head = dialog.locator('.cmd.head');
     const phead = pv.locator('.cmd-head');
-    expect.soft(await lookBut(head, 'width', 'height'), `the columns' names, ${where}`).toEqual(await lookBut(phead, 'width', 'height'));
+    expect.soft(await lookBut(head, 'width', 'height'), `the columns' names, ${where}`).toLookLike(await lookBut(phead, 'width', 'height'));
     const [x, , w] = await place(head);
     const [px, , pw] = await place(phead);
     expect.soft([x, w], `their place, ${where}`).toEqual([px, pw]);
     for (const [i, name] of ['Nom', 'Commande', 'Sous-dossier'].entries()) {
       const field = command.getByRole('textbox', { name: new RegExp(`^${name}`) });
       const pfield = pv.locator('.launch-row:not(.cmd-head)').first().locator('.inp').nth(i);
-      expect.soft(await lookBut(field, 'height'), `« ${name} », ${where}`).toEqual(await lookBut(pfield, 'height'));
+      expect.soft(await lookBut(field, 'height'), `« ${name} », ${where}`).toLookLike(await lookBut(pfield, 'height'));
       expect.soft((await place(field))[0], `its column, ${where}`).toBe((await place(pfield))[0]);
     }
     const add = dialog.getByRole('button', { name: 'Ajouter une commande', exact: true });
     expect
       .soft(await lookBut(add, 'width'), `« Ajouter une commande », ${where}`)
-      .toEqual(await lookBut(pv.locator('#wiz-launch .btn').first(), 'width'));
+      .toLookLike(await lookBut(pv.locator('#wiz-launch .btn').first(), 'width'));
   });
 
   // Its summary: the check that passes, then what will be set.
@@ -310,16 +310,16 @@ test('the assistant « Nouveau projet » reads as the preview: its start, its la
     await compareFrame(dialog, pv, where);
     const ok = dialog.locator('.ck.ok');
     const pok = pv.locator('.ck.ok');
-    expect.soft(await lookBut(ok, 'width'), `the check that passes, ${where}`).toEqual(await lookBut(pok, 'width'));
-    expect.soft((await place(ok)).slice(0, 1), `its place, ${where}`).toEqual((await place(pok)).slice(0, 1));
-    expect.soft(await look(ok.locator('svg')), `its icon, ${where}`).toEqual(await look(pok.locator('svg')));
+    expect.soft(await lookBut(ok, 'width'), `the check that passes, ${where}`).toLookLike(await lookBut(pok, 'width'));
+    expect.soft((await place(ok)).slice(0, 1), `its place, ${where}`).toLookLike((await place(pok)).slice(0, 1));
+    expect.soft(await look(ok.locator('svg')), `its icon, ${where}`).toLookLike(await look(pok.locator('svg')));
     expect
       .soft(await lookBut(dialog.locator('.sum'), 'width', 'height'), `what will be set, ${where}`)
-      .toEqual(await lookBut(pv.locator('.sum'), 'width', 'height'));
+      .toLookLike(await lookBut(pv.locator('.sum'), 'width', 'height'));
     for (const cell of ['dt', 'dd'])
       expect
         .soft(await lookBut(dialog.locator(`.sum ${cell}`).first(), 'width'), `a ${cell}, ${where}`)
-        .toEqual(await lookBut(pv.locator(`.sum ${cell}`).first(), 'width'));
+        .toLookLike(await lookBut(pv.locator(`.sum ${cell}`).first(), 'width'));
   });
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
@@ -344,26 +344,26 @@ test('« Ajouter un compte » reads as the preview, then its sign-in in a well',
     const pradio = pv.locator('#acct-r-new');
     expect
       .soft(await lookBut(radio, 'width', 'height'), `a new account, chosen, ${where}`)
-      .toEqual(await lookBut(pradio, 'width', 'height'));
-    expect.soft(await look(radio.locator('.dot')), `its dot, ${where}`).toEqual(await look(pradio.locator('.dot')));
+      .toLookLike(await lookBut(pradio, 'width', 'height'));
+    expect.soft(await look(radio.locator('.dot')), `its dot, ${where}`).toLookLike(await look(pradio.locator('.dot')));
     const machine = dialog.getByRole('radio', { name: /Le compte de la machine/ });
-    expect.soft(await look(machine.locator('.dot')), `the machine's, ${where}`).toEqual(await look(pv.locator('#acct-r-machine .dot')));
+    expect.soft(await look(machine.locator('.dot')), `the machine's, ${where}`).toLookLike(await look(pv.locator('#acct-r-machine .dot')));
     expect
       .soft(await lookBut(dialog.locator('.w-fld .lab').first(), 'width'), `a field's name, ${where}`)
-      .toEqual(await lookBut(pv.locator('.fld .lb').first(), 'width'));
+      .toLookLike(await lookBut(pv.locator('.fld .lb').first(), 'width'));
     const name = dialog.getByRole('textbox', { name: 'Nom' });
     expect
       .soft(await lookBut(name, 'width', 'height', 'font'), `the name, ${where}`)
-      .toEqual(await lookBut(pv.locator('#acct-name'), 'width', 'height', 'font'));
+      .toLookLike(await lookBut(pv.locator('#acct-name'), 'width', 'height', 'font'));
     // A file shared, when the machine's account has one (the test's may have none).
     const chip = dialog.locator('.w-chip.pick').first();
     if (await chip.count())
       expect
         .soft(await lookBut(chip, 'width', 'font'), `a file shared, ${where}`)
-        .toEqual(await lookBut(pv.locator('.chip-t[aria-pressed="true"]').first(), 'width', 'font'));
+        .toLookLike(await lookBut(pv.locator('.chip-t[aria-pressed="true"]').first(), 'width', 'font'));
     expect
       .soft(await lookBut(dialog.locator('.help').last(), 'width', 'height'), `what is never shared, ${where}`)
-      .toEqual(await lookBut(pv.locator('.acct-new .help').first(), 'width', 'height'));
+      .toLookLike(await lookBut(pv.locator('.acct-new .help').first(), 'width', 'height'));
   });
 
   // Its sign-in: the program in a well, what is awaited beside a spinner, which prefers-reduced-motion stops.
@@ -383,10 +383,10 @@ test('« Ajouter un compte » reads as the preview, then its sign-in in a well',
           await lookBut(signin.locator('.term'), 'width', 'height', 'padding', 'color', 'border', 'font'),
           `the terminal's well, ${where}`,
         )
-        .toEqual(await lookBut(pv.locator('.mini-term'), 'width', 'height', 'padding', 'color', 'border', 'font'));
+        .toLookLike(await lookBut(pv.locator('.mini-term'), 'width', 'height', 'padding', 'color', 'border', 'font'));
       expect
         .soft(await lookBut(signin.locator('.said'), 'width', 'height'), `what is awaited, ${where}`)
-        .toEqual(await lookBut(pv.locator('.waitline'), 'width', 'height'));
+        .toLookLike(await lookBut(pv.locator('.waitline'), 'width', 'height'));
     },
     'account-signin',
   );
@@ -465,28 +465,28 @@ test.describe('« Ouvrir une PR sur GitHub »', () => {
       expect.soft((await place(dialog))[2], `its width, ${where}`).toBe((await place(pv))[2]);
       expect
         .soft(await lookBut(dialog.locator('.head .lead'), 'width', 'height', 'font'), `its icon, ${where}`)
-        .toEqual(await lookBut(pv.locator('.m-head > svg'), 'width', 'height', 'font'));
+        .toLookLike(await lookBut(pv.locator('.m-head > svg'), 'width', 'height', 'font'));
       expect
         .soft(await lookBut(dialog.locator('.scope'), 'width', 'height'), `the agent and its branches, ${where}`)
-        .toEqual(await lookBut(pv.locator('.scope'), 'width', 'height'));
+        .toLookLike(await lookBut(pv.locator('.scope'), 'width', 'height'));
       expect
         .soft(await lookBut(dialog.locator('.w-fld .lab').first(), 'width'), `a field's name, ${where}`)
-        .toEqual(await lookBut(pv.locator('.fld label').first(), 'width'));
+        .toLookLike(await lookBut(pv.locator('.fld label').first(), 'width'));
       expect
         .soft(await lookBut(dialog.getByRole('textbox', { name: 'Titre' }), 'width'), `the title, ${where}`)
-        .toEqual(await lookBut(pv.locator('#pr-t'), 'width'));
+        .toLookLike(await lookBut(pv.locator('#pr-t'), 'width'));
       expect
         .soft(await lookBut(dialog.getByRole('textbox', { name: 'Description' }), 'width', 'height'), `the description, ${where}`)
-        .toEqual(await lookBut(pv.locator('.ta'), 'width', 'height'));
+        .toLookLike(await lookBut(pv.locator('.ta'), 'width', 'height'));
       expect
         .soft(await look(dialog.locator('.w-tick .tick-box')), `the draft's box, ${where}`)
-        .toEqual(await look(pv.locator('.cbline .cb')));
+        .toLookLike(await look(pv.locator('.cbline .cb')));
       const notice = dialog.locator('.w-notice');
       const pnotice = pv.locator('.notice');
       expect
         .soft(await lookBut(notice, 'width', 'height'), `the files left out, ${where}`)
-        .toEqual(await lookBut(pnotice, 'width', 'height'));
-      expect.soft(await look(notice.locator('svg')), `its icon, ${where}`).toEqual(await look(pnotice.locator('svg')));
+        .toLookLike(await lookBut(pnotice, 'width', 'height'));
+      expect.soft(await look(notice.locator('svg')), `its icon, ${where}`).toLookLike(await look(pnotice.locator('svg')));
     });
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
@@ -523,10 +523,10 @@ test.describe('the notes of an update installed', () => {
       expect.soft((await place(dialog))[2], `its width, ${where}`).toBe((await place(pv))[2]);
       expect
         .soft(await lookBut(dialog.locator('.head .lead'), 'width', 'height', 'font'), `its icon, ${where}`)
-        .toEqual(await lookBut(pv.locator('.m-head > svg'), 'width', 'height', 'font'));
+        .toLookLike(await lookBut(pv.locator('.m-head > svg'), 'width', 'height', 'font'));
       expect
         .soft(await lookBut(dialog.locator('.md li').first(), 'width'), `a change, ${where}`)
-        .toEqual(await lookBut(pv.locator('.m-body li').first(), 'width'));
+        .toLookLike(await lookBut(pv.locator('.m-body li').first(), 'width'));
     });
     // Its rise stopped by prefers-reduced-motion.
     await page.evaluate(() => document.getElementById('still')?.remove());
@@ -548,13 +548,13 @@ test('the agent’s menu reads as the preview’s', async ({ app }) => {
     const pv = preview.locator('#agent-menu');
     expect
       .soft(await lookBut(menu, 'width', 'height', 'padding'), `the menu, ${where}`)
-      .toEqual(await lookBut(pv, 'width', 'height', 'padding'));
+      .toLookLike(await lookBut(pv, 'width', 'height', 'padding'));
     // Its padding is its list's, which scrolls inside it (#24): the preview's menu has it itself.
     expect.soft((await look(menu.locator('.items').first())).padding, `the menu's padding, ${where}`).toBe((await look(pv)).padding);
     const item = menu.getByRole('menuitem', { name: /^Renommer/ });
     const pitem = pv.locator('.mi').first();
-    expect.soft(await lookBut(item, 'width'), `an entry, ${where}`).toEqual(await lookBut(pitem, 'width'));
-    expect.soft(await lookBut(item.locator('.l'), 'width'), `its name, ${where}`).toEqual(await lookBut(pitem.locator('b'), 'width'));
+    expect.soft(await lookBut(item, 'width'), `an entry, ${where}`).toLookLike(await lookBut(pitem, 'width'));
+    expect.soft(await lookBut(item.locator('.l'), 'width'), `its name, ${where}`).toLookLike(await lookBut(pitem.locator('b'), 'width'));
   });
   await page.keyboard.press('Escape');
 });

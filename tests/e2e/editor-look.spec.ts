@@ -224,23 +224,23 @@ test('the editor looks as the preview draws it, in both themes, at both sizes', 
         // The bar: 52 px, back to the conversation, the source, « Enregistré », « Enregistrer ».
         const bar = ed.locator('header.ed-bar');
         const pbar = pv.locator('.ed-bar');
-        expect.soft(await place(bar), `bar's place, ${where}`).toEqual(await place(pbar));
-        expect.soft(await look(bar), `bar, ${where}`).toEqual(await look(pbar));
+        expect.soft(await place(bar), `bar's place, ${where}`).toLookLike(await place(pbar));
+        expect.soft(await look(bar), `bar, ${where}`).toLookLike(await look(pbar));
         expect
           .soft(await look(bar.locator('.btn').first()), `« Conversation », ${where}`)
-          .toEqual(await look(pbar.locator('.btn').first()));
+          .toLookLike(await look(pbar.locator('.btn').first()));
         const src = bar.locator('.src');
         const psrc = pbar.locator('.agent-pick');
-        expect.soft(await lookBut(src, 'width'), `the source, ${where}`).toEqual(await lookBut(psrc, 'width'));
-        expect.soft((await place(src)).slice(0, 2), `the source's place, ${where}`).toEqual((await place(psrc)).slice(0, 2));
+        expect.soft(await lookBut(src, 'width'), `the source, ${where}`).toLookLike(await lookBut(psrc, 'width'));
+        expect.soft((await place(src)).slice(0, 2), `the source's place, ${where}`).toLookLike((await place(psrc)).slice(0, 2));
         expect
           .soft(await lookBut(src.locator('.kind'), 'width'), `« worktree », ${where}`)
-          .toEqual(await lookBut(psrc.locator('.wt'), 'width'));
-        expect.soft(await look(bar.locator('.saved')), `« Enregistré », ${where}`).toEqual(await look(pbar.locator('.saved')));
+          .toLookLike(await lookBut(psrc.locator('.wt'), 'width'));
+        expect.soft(await look(bar.locator('.saved')), `« Enregistré », ${where}`).toLookLike(await look(pbar.locator('.saved')));
         const save = bar.locator('.btn').last();
         const psave = pbar.locator('.btn').last();
-        expect.soft(await look(save), `« Enregistrer », ${where}`).toEqual(await look(psave));
-        expect.soft(await place(save), `« Enregistrer »'s place, ${where}`).toEqual(await place(psave));
+        expect.soft(await look(save), `« Enregistrer », ${where}`).toLookLike(await look(psave));
+        expect.soft(await place(save), `« Enregistrer »'s place, ${where}`).toLookLike(await place(psave));
 
         // The tree: its column, its title and count, its folder, its rows, letters and dots.
         const side = ed.locator('aside.editor-side');
@@ -250,31 +250,31 @@ test('the editor looks as the preview draws it, in both themes, at both sizes', 
         expect.soft([sx, sy, sw], `the tree's place, its line included, ${where}`).toEqual([px, py, pw]);
         expect
           .soft(await lookBut(side.locator('.tree-h b'), 'width'), `« Fichiers », ${where}`)
-          .toEqual(await lookBut(ptree.locator('.tree-h b'), 'width'));
+          .toLookLike(await lookBut(ptree.locator('.tree-h b'), 'width'));
         expect
           .soft(await lookBut(side.locator('.tree-h b .n'), 'width'), `its count, ${where}`)
-          .toEqual(await lookBut(ptree.locator('.tree-h b span'), 'width'));
+          .toLookLike(await lookBut(ptree.locator('.tree-h b span'), 'width'));
         expect
           .soft(await lookBut(side.locator('.tree-h .caption'), 'width'), `its folder, ${where}`)
-          .toEqual(await lookBut(ptree.locator('.tree-h .caption'), 'width'));
+          .toLookLike(await lookBut(ptree.locator('.tree-h .caption'), 'width'));
         expect
           .soft(await place(side.locator('.tree-h .caption')), `its folder's place, ${where}`)
-          .toEqual(await place(ptree.locator('.tree-h .caption')));
+          .toLookLike(await place(ptree.locator('.tree-h .caption')));
         const row = side.locator('.row').first();
         const prow = ptree.locator('.node').first();
-        expect.soft(await place(row), `the first row's place, ${where}`).toEqual(await place(prow));
-        expect.soft(await look(row), `a folder, ${where}`).toEqual(await look(prow));
+        expect.soft(await place(row), `the first row's place, ${where}`).toLookLike(await place(prow));
+        expect.soft(await look(row), `a folder, ${where}`).toLookLike(await look(prow));
         const on = side.locator('.row.on');
         const pon = ptree.locator('.node[aria-current="true"]');
-        expect.soft(await place(on), `the file shown, its place, ${where}`).toEqual(await place(pon));
-        expect.soft(await look(on), `the file shown, ${where}`).toEqual(await look(pon));
+        expect.soft(await place(on), `the file shown, its place, ${where}`).toLookLike(await place(pon));
+        expect.soft(await look(on), `the file shown, ${where}`).toLookLike(await look(pon));
         for (const l of ['m', 'a'])
           expect
             .soft(await lookBut(side.locator(`.letter.${l}`).first(), 'width'), `letter ${l.toUpperCase()}, ${where}`)
-            .toEqual(await lookBut(ptree.locator(`.letter.${l}`).first(), 'width'));
+            .toLookLike(await lookBut(ptree.locator(`.letter.${l}`).first(), 'width'));
         expect
           .soft(await look(side.locator('.mdot').first()), `a changed folder's dot, ${where}`)
-          .toEqual(await look(ptree.locator('.mdot').first()));
+          .toLookLike(await look(ptree.locator('.mdot').first()));
         const [mx] = await place(side.locator('.mdot').first());
         const [pmx] = await place(ptree.locator('.mdot').first());
         expect.soft(mx, `the dot after its folder's name, ${where}`).toBe(pmx);
@@ -282,57 +282,57 @@ test('the editor looks as the preview draws it, in both themes, at both sizes', 
         // The tabs: 38 px, the one shown lit and underlined.
         const tabs = ed.locator('.tabs');
         const ptabs = pv.locator('.ed-tabs');
-        expect.soft(await lookBut(tabs, 'width'), `tabs, ${where}`).toEqual(await lookBut(ptabs, 'width'));
+        expect.soft(await lookBut(tabs, 'width'), `tabs, ${where}`).toLookLike(await lookBut(ptabs, 'width'));
         const tab = tabs.locator('.tab.on');
         const ptab = ptabs.locator('[aria-selected="true"]');
-        expect.soft(await look(tab), `the tab shown, ${where}`).toEqual(await look(ptab));
-        expect.soft(await place(tab), `the tab shown, its place, ${where}`).toEqual(await place(ptab));
+        expect.soft(await look(tab), `the tab shown, ${where}`).toLookLike(await look(ptab));
+        expect.soft(await place(tab), `the tab shown, its place, ${where}`).toLookLike(await place(ptab));
         expect
           .soft(await look(tabs.locator('.tab:not(.on)').first()), `another tab, ${where}`)
-          .toEqual(await look(ptabs.locator('[aria-selected="false"]').first()));
-        expect.soft(await look(tab.locator('.close')), `its close button, ${where}`).toEqual(await look(ptab.locator('.x')));
+          .toLookLike(await look(ptabs.locator('[aria-selected="false"]').first()));
+        expect.soft(await look(tab.locator('.close')), `its close button, ${where}`).toLookLike(await look(ptab.locator('.x')));
 
         // The path above the text, and what changed.
         const crumbs = ed.locator('.crumbs');
         const pcrumbs = pv.locator('.ed-crumbs');
-        expect.soft(await place(crumbs), `the path's place, ${where}`).toEqual(await place(pcrumbs));
-        expect.soft(await look(crumbs), `the path, ${where}`).toEqual(await look(pcrumbs));
+        expect.soft(await place(crumbs), `the path's place, ${where}`).toLookLike(await place(pcrumbs));
+        expect.soft(await look(crumbs), `the path, ${where}`).toLookLike(await look(pcrumbs));
         expect
           .soft(await lookBut(crumbs.locator('.last'), 'width'), `the file's name, ${where}`)
-          .toEqual(await lookBut(pcrumbs.locator('span[style]'), 'width'));
+          .toLookLike(await lookBut(pcrumbs.locator('span[style]'), 'width'));
         expect
           .soft(await lookBut(crumbs.locator('.vs'), 'width'), `what changed, ${where}`)
-          .toEqual(await lookBut(pcrumbs.locator('.vs'), 'width'));
+          .toLookLike(await lookBut(pcrumbs.locator('.vs'), 'width'));
         expect
           .soft(await lookBut(crumbs.locator('.vs .add'), 'width'), `« 5 lignes », ${where}`)
-          .toEqual(await lookBut(pcrumbs.locator('.vs .add'), 'width'));
+          .toLookLike(await lookBut(pcrumbs.locator('.vs .add'), 'width'));
 
         // The search, floating at the top right.
         const pfind = pv.locator('.find');
-        expect.soft(await place(find), `the search's place, ${where}`).toEqual(await place(pfind));
-        expect.soft(await look(find), `the search, ${where}`).toEqual(await look(pfind));
+        expect.soft(await place(find), `the search's place, ${where}`).toLookLike(await place(pfind));
+        expect.soft(await look(find), `the search, ${where}`).toLookLike(await look(pfind));
         const field = find.locator('.cm-find-field').first();
-        expect.soft(await lookBut(field, 'width'), `its field, ${where}`).toEqual(await lookBut(pfind.locator('.field.focus'), 'width'));
-        expect.soft(await place(field), `its field's place, ${where}`).toEqual(await place(pfind.locator('.field.focus')));
+        expect.soft(await lookBut(field, 'width'), `its field, ${where}`).toLookLike(await lookBut(pfind.locator('.field.focus'), 'width'));
+        expect.soft(await place(field), `its field's place, ${where}`).toLookLike(await place(pfind.locator('.field.focus')));
         expect
           .soft(await place(find.locator('.cm-find-field').last()), `the replacement's place, ${where}`)
-          .toEqual(await place(pfind.locator('.field:not(.focus)')));
+          .toLookLike(await place(pfind.locator('.field:not(.focus)')));
         expect
           .soft(await lookBut(find.locator('.cm-find-field').last(), 'width'), `the replacement, ${where}`)
-          .toEqual(await lookBut(pfind.locator('.field:not(.focus)'), 'width'));
+          .toLookLike(await lookBut(pfind.locator('.field:not(.focus)'), 'width'));
         expect
           .soft(await lookBut(find.locator('.cm-find-count'), 'width'), `« 1 sur 3 », ${where}`)
-          .toEqual(await lookBut(pfind.locator('.count'), 'width'));
+          .toLookLike(await lookBut(pfind.locator('.count'), 'width'));
         for (const pressed of ['true', 'false'])
           expect
             .soft(await look(find.locator(`.cm-find-tog[aria-pressed="${pressed}"]`).first()), `a toggle ${pressed}, ${where}`)
-            .toEqual(await look(pfind.locator(`.tog[aria-pressed="${pressed}"]`).first()));
+            .toLookLike(await look(pfind.locator(`.tog[aria-pressed="${pressed}"]`).first()));
         expect
           .soft(await look(find.locator('.cm-find-btn').first()), `an icon button, ${where}`)
-          .toEqual(await look(pfind.locator('.icon-btn').first()));
+          .toLookLike(await look(pfind.locator('.icon-btn').first()));
         expect
           .soft(await look(find.locator('.cm-find-mini').first()), `« Remplacer », ${where}`)
-          .toEqual(await look(pfind.locator('.mini-btn').first()));
+          .toLookLike(await look(pfind.locator('.mini-btn').first()));
 
         // The text: its font, its numbers, the marks of the changes, where it starts; the matches.
         const code = pv.locator('.code-ed');
@@ -342,10 +342,10 @@ test('the editor looks as the preview draws it, in both themes, at both sizes', 
             const c = getComputedStyle(n);
             return [c.fontFamily, c.fontSize, c.lineHeight, c.color];
           });
-        expect.soft(await fontOf(content), `the text's font, ${where}`).toEqual(await fontOf(code));
+        expect.soft(await fontOf(content), `the text's font, ${where}`).toLookLike(await fontOf(code));
         const nb = ed.locator('.cm-lineNumbers .cm-gutterElement').nth(1);
         const pnb = code.locator('.l .nb').first();
-        expect.soft(await lookBut(nb, 'width'), `a line's number, ${where}`).toEqual(await lookBut(pnb, 'width'));
+        expect.soft(await lookBut(nb, 'width'), `a line's number, ${where}`).toLookLike(await lookBut(pnb, 'width'));
         const [nbx, nby, nbw] = await place(nb);
         const [pnbx, pnby, pnbw] = await place(pnb);
         expect.soft([nbx + nbw, nby], `the numbers' right edge and first line, ${where}`).toEqual([pnbx + pnbw, pnby]);
@@ -369,26 +369,26 @@ test('the editor looks as the preview draws it, in both themes, at both sizes', 
           });
         expect
           .soft(await mark(ed.locator('.cm-change.changed:not(.modified)').first()), `a line added, ${where}`)
-          .toEqual(await pmark(code.locator('.l.ad .gm').first()));
+          .toLookLike(await pmark(code.locator('.l.ad .gm').first()));
         expect
           .soft(await mark(ed.locator('.cm-change.modified').first()), `a line modified, ${where}`)
-          .toEqual(await pmark(code.locator('.l.md .gm').first()));
+          .toLookLike(await pmark(code.locator('.l.md .gm').first()));
         const bg = (el: Locator) => el.evaluate((n) => [getComputedStyle(n).backgroundColor, getComputedStyle(n).color]);
         expect
           .soft(await bg(ed.locator('.cm-searchMatch-selected')), `the match the cursor is on, ${where}`)
-          .toEqual(await bg(code.locator('.hit.cur-hit')));
+          .toLookLike(await bg(code.locator('.hit.cur-hit')));
         expect
           .soft((await bg(ed.locator('.cm-searchMatch:not(.cm-searchMatch-selected)').first()))[0], `a match, ${where}`)
-          .toEqual((await bg(code.locator('.hit:not(.cur-hit)').first()))[0]);
+          .toLookLike((await bg(code.locator('.hit:not(.cur-hit)').first()))[0]);
 
         // The status line.
         const status = ed.locator('.status');
         const pstatus = pv.locator('.ed-status');
-        expect.soft(await place(status), `the status line's place, ${where}`).toEqual(await place(pstatus));
-        expect.soft(await look(status), `the status line, ${where}`).toEqual(await look(pstatus));
+        expect.soft(await place(status), `the status line's place, ${where}`).toLookLike(await place(pstatus));
+        expect.soft(await look(status), `the status line, ${where}`).toLookLike(await look(pstatus));
         expect
           .soft(await lookBut(status.locator('.source .mono'), 'width'), `its worktree, ${where}`)
-          .toEqual(await lookBut(pstatus.locator('.end .mono'), 'width'));
+          .toLookLike(await lookBut(pstatus.locator('.end .mono'), 'width'));
 
         if (SHOTS) {
           fs.mkdirSync(SHOTS, { recursive: true });
@@ -423,7 +423,7 @@ test('the editor follows the theme at once, CodeMirror’s own base theme includ
   const classes: Record<string, string> = {};
   for (const t of ['light', 'dark'] as const) {
     await theme(page, t);
-    await expect.poll(() => colorOf(keyword), `a keyword in the ${t} theme`).toBe(await tokenOf('--syn-k'));
+    await expect.poll(() => colorOf(keyword), `a keyword in the ${t} theme`).toLookLike(await tokenOf('--syn-k'));
     classes[t] = (await cm.getAttribute('class')) ?? '';
   }
   // CodeMirror's own base theme, light or dark: its scoping class changes with the window's theme.

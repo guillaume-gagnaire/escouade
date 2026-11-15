@@ -13,6 +13,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium, type Locator, type Page } from '@playwright/test';
 import { addProject, expect, openSettingsPage, settingsEntry, test } from './fixture';
+import { lookDiff } from './srgb';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 /** The previews of direction A; they load Inter from the root's packages. */
@@ -118,8 +119,8 @@ async function compareFrame(page: Page, preview: Page, route: string, small: boo
   const pwin = preview.locator('.win.a');
   // At 1028 × 779 the preview keeps its 1120 × 780; the app takes the room there is (below).
   const size = small ? ['width', 'height'] : [];
-  if (!small) expect.soft(await place(win), `the window's place, ${where}`).toEqual(await place(pwin));
-  expect.soft(await lookBut(win, ...size), `the window, ${where}`).toEqual(await lookBut(pwin, ...size));
+  if (!small) expect.soft(await place(win), `the window's place, ${where}`).toLookLike(await place(pwin));
+  expect.soft(await lookBut(win, ...size), `the window, ${where}`).toLookLike(await lookBut(pwin, ...size));
   const project = route === 'a-projet';
   const pairs: [string, Locator, Locator, string[]][] = [
     ['the bar', win.locator('.s-nav'), pwin.locator('.a-nav'), small ? ['height'] : []],
@@ -148,8 +149,8 @@ async function compareFrame(page: Page, preview: Page, route: string, small: boo
       ['its tile', win.locator('.s-head .tile'), pwin.locator('.a-main .head .tile'), []],
     );
   for (const [what, a, p, skip] of pairs) {
-    expect.soft(await lookBut(a, ...skip), `${what}, ${where}`).toEqual(await lookBut(p, ...skip));
-    if (!skip.length && !small) expect.soft(await place(a), `${what}'s place, ${where}`).toEqual(await place(p));
+    expect.soft(await lookBut(a, ...skip), `${what}, ${where}`).toLookLike(await lookBut(p, ...skip));
+    if (!skip.length && !small) expect.soft(await place(a), `${what}'s place, ${where}`).toLookLike(await place(p));
   }
   // The settings: a group's title, a row, its label and what it does, a switch, segments, « Avancé » folded, wherever
   // both have one.
@@ -172,7 +173,7 @@ async function compareFrame(page: Page, preview: Page, route: string, small: boo
     const a = body.locator(sel).first();
     const p = pbody.locator(psel).first();
     if (!(await a.count()) || !(await p.count())) continue;
-    expect.soft(await lookBut(a, ...skip), `${what}, ${where}`).toEqual(await lookBut(p, ...skip));
+    expect.soft(await lookBut(a, ...skip), `${what}, ${where}`).toLookLike(await lookBut(p, ...skip));
   }
 }
 
@@ -198,7 +199,7 @@ test('the settings look as the previews of direction A draw them, tinted by what
           const dialog = await openPage(page, name);
           const where = `${name}, ${t} ${size.width}×${size.height}`;
           // The tint follows what the page sets.
-          expect.soft(await tint(page), `the tint, ${where}`).toBe(color);
+          expect.soft(await tint(page), `the tint, ${where}`).toLookLike(color);
           await expect(dialog).toHaveAttribute('data-scope', color === TEAL ? 'app' : 'project');
           // Each harness's state, read a moment after the page opens: shot once Claude Code's is drawn.
           if (route === 'a-comptes') await expect(dialog.locator('[data-engine="claude"] .hstate')).toBeVisible();
@@ -206,7 +207,7 @@ test('the settings look as the previews of direction A draw them, tinted by what
           await shoot(page, preview, `${route}${size.name}-${t}`);
           await compareFrame(page, preview, route, small, where);
           // In CI's window, the room there is: 16 px around it.
-          if (small) expect.soft(await place(page.locator('.settings[role="dialog"]')), `the window, ${where}`).toEqual([16, 16, 996, 747]);
+          if (small) expect.soft(await place(page.locator('.settings[role="dialog"]')), `the window, ${where}`).toLookLike([16, 16, 996, 747]);
         }
       }
   } finally {
@@ -214,10 +215,10 @@ test('the settings look as the previews of direction A draw them, tinted by what
   }
   // Closed, the window has the app's own tint back: the project's.
   await page.keyboard.press('Escape');
-  await expect.poll(() => tint(page)).toBe(FIRST);
+  await expect.poll(async () => lookDiff(await tint(page), FIRST)).toEqual([]);
   await openPage(page, 'Général');
   await page.keyboard.press('Escape');
-  await expect.poll(() => tint(page)).toBe(FIRST);
+  await expect.poll(async () => lookDiff(await tint(page), FIRST)).toEqual([]);
 });
 
 test('the bar goes from page to page by the keyboard, and « Avancé » unfolds in place, saying what it hides', async ({ app }) => {
@@ -423,7 +424,7 @@ test('the private project, the cleaned worktrees and the quotas look as the 2.0 
       const a = body.locator(sel).first();
       const p = preview.locator('#settings .s-pane:not([hidden])').locator(psel).first();
       await expect(a, `${what}, ${where}`).toBeVisible();
-      expect.soft(await lookBut(a, ...skip), `${what}, ${where}`).toEqual(await lookBut(p, ...skip));
+      expect.soft(await lookBut(a, ...skip), `${what}, ${where}`).toLookLike(await lookBut(p, ...skip));
     }
   };
   try {

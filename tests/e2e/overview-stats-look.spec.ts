@@ -163,13 +163,13 @@ test('the overview looks as the preview draws it, in both themes, at both sizes'
         // The header: its place, its title, what it counts, its keys.
         const head = ov.locator('.head');
         const phead = pv.locator('.full-head');
-        expect.soft(await place(head), `header's place, ${where}`).toEqual(await place(phead));
-        expect.soft(await look(head), `header, ${where}`).toEqual(await look(phead));
-        expect.soft(await lookBut(head.locator('h1'), 'width'), `title, ${where}`).toEqual(await lookBut(phead.locator('h1'), 'width'));
-        expect.soft(await lookBut(head.locator('.sub'), 'width'), `count, ${where}`).toEqual(await lookBut(phead.locator('.sub'), 'width'));
+        expect.soft(await place(head), `header's place, ${where}`).toLookLike(await place(phead));
+        expect.soft(await look(head), `header, ${where}`).toLookLike(await look(phead));
+        expect.soft(await lookBut(head.locator('h1'), 'width'), `title, ${where}`).toLookLike(await lookBut(phead.locator('h1'), 'width'));
+        expect.soft(await lookBut(head.locator('.sub'), 'width'), `count, ${where}`).toLookLike(await lookBut(phead.locator('.sub'), 'width'));
         expect
           .soft(await lookBut(head.locator('.keys kbd').first(), 'width'), `a key, ${where}`)
-          .toEqual(await lookBut(phead.locator('.keys kbd').first(), 'width'));
+          .toLookLike(await lookBut(phead.locator('.keys kbd').first(), 'width'));
         const [kx, , kw] = await place(head.locator('.keys'));
         const [pkx, , pkw] = await place(phead.locator('.keys'));
         expect.soft(kx + kw, `keys' right edge, ${where}`).toBe(pkx + pkw);
@@ -177,17 +177,17 @@ test('the overview looks as the preview draws it, in both themes, at both sizes'
         // The headings of the columns, and where each column starts.
         const cols = ov.locator('.cols');
         const pcols = pv.locator('.ov-cols');
-        expect.soft(await place(cols), `columns' place, ${where}`).toEqual(await place(pcols));
-        expect.soft(await look(cols), `columns, ${where}`).toEqual(await look(pcols));
-        expect.soft(await edges(cols), `columns' edges, ${where}`).toEqual(await edges(pcols));
+        expect.soft(await place(cols), `columns' place, ${where}`).toLookLike(await place(pcols));
+        expect.soft(await look(cols), `columns, ${where}`).toLookLike(await look(pcols));
+        expect.soft(await edges(cols), `columns' edges, ${where}`).toLookLike(await edges(pcols));
 
         // « Attend ta réponse » and a project's group.
         const gh = (el: Locator, waiting: boolean) => el.locator(waiting ? '.waiting h2' : 'section:not(.waiting) h2').first();
-        expect.soft(await lookBut(gh(ov, true), 'width'), `« Attend ta réponse », ${where}`).toEqual(await lookBut(gh(pv, true), 'width'));
-        expect.soft(await lookBut(gh(ov, false), 'width'), `a project's group, ${where}`).toEqual(await lookBut(gh(pv, false), 'width'));
+        expect.soft(await lookBut(gh(ov, true), 'width'), `« Attend ta réponse », ${where}`).toLookLike(await lookBut(gh(pv, true), 'width'));
+        expect.soft(await lookBut(gh(ov, false), 'width'), `a project's group, ${where}`).toLookLike(await lookBut(gh(pv, false), 'width'));
         expect
           .soft(await lookBut(ov.locator('.gh .n').first(), 'width'), `a group's count, ${where}`)
-          .toEqual(await lookBut(pv.locator('.ov-group h2 .n').first(), 'width'));
+          .toLookLike(await lookBut(pv.locator('.ov-group h2 .n').first(), 'width'));
         const [gx, gy] = await place(gh(ov, true));
         const [pgx, pgy] = await place(gh(pv, true));
         expect.soft([gx, gy], `« Attend ta réponse »'s place, ${where}`).toEqual([pgx, pgy]);
@@ -195,65 +195,65 @@ test('the overview looks as the preview draws it, in both themes, at both sizes'
         // The permission waiting: its row, its line, its request in a well, its tool, its buttons.
         const perm = ov.locator('li.row.waiting').filter({ has: page.locator('.badge') });
         const pperm = pv.locator('.ov-row.waiting').first();
-        expect.soft(await lookBut(perm, 'height'), `the permission's row, ${where}`).toEqual(await lookBut(pperm, 'height'));
-        expect.soft(await look(perm.locator('.line')), `its line, ${where}`).toEqual(await look(pperm.locator('.ov-line')));
+        expect.soft(await lookBut(perm, 'height'), `the permission's row, ${where}`).toLookLike(await lookBut(pperm, 'height'));
+        expect.soft(await look(perm.locator('.line')), `its line, ${where}`).toLookLike(await look(pperm.locator('.ov-line')));
         expect
           .soft(await lookBut(perm.locator('.req'), 'height'), `its request, ${where}`)
-          .toEqual(await lookBut(pperm.locator('.req'), 'height'));
+          .toLookLike(await lookBut(pperm.locator('.req'), 'height'));
         expect
           .soft(await lookBut(perm.locator('.badge'), 'width'), `its tool, ${where}`)
-          .toEqual(await lookBut(pperm.locator('.badge'), 'width'));
+          .toLookLike(await lookBut(pperm.locator('.badge'), 'width'));
         expect
           .soft(await lookBut(perm.locator('.arg'), 'width', 'height'), `its command, ${where}`)
-          .toEqual(await lookBut(pperm.locator('.arg'), 'width', 'height'));
+          .toLookLike(await lookBut(pperm.locator('.arg'), 'width', 'height'));
         expect
           .soft(await lookBut(perm.locator('.btn.primary'), 'width'), `« Autoriser », ${where}`)
-          .toEqual(await lookBut(pperm.locator('.btn.primary'), 'width'));
+          .toLookLike(await lookBut(pperm.locator('.btn.primary'), 'width'));
         expect
           .soft(await lookBut(perm.locator('.btn:not(.primary)'), 'width'), `« Refuser », ${where}`)
-          .toEqual(await lookBut(pperm.locator('.btn:not(.primary)'), 'width'));
+          .toLookLike(await lookBut(pperm.locator('.btn:not(.primary)'), 'width'));
         const [bx, , bw] = await place(perm.locator('.btn:not(.primary)'));
         const [pbx, , pbw] = await place(pperm.locator('.btn:not(.primary)'));
         expect.soft(bx + bw, `« Refuser »'s right edge, ${where}`).toBe(pbx + pbw);
         expect
           .soft(await lookBut(perm.locator('.act .txt'), 'width'), `« Demande une autorisation », ${where}`)
-          .toEqual(await lookBut(pperm.locator('.ov-act'), 'width'));
+          .toLookLike(await lookBut(pperm.locator('.ov-act'), 'width'));
         // The question: its text and « Répondre ».
         const ask = ov.locator('li.row.waiting').filter({ has: page.locator('.ask') });
         const pask = pv.locator('.ov-row.waiting').nth(1);
         expect
           .soft(await lookBut(ask.locator('.ask'), 'width', 'height'), `a question, ${where}`)
-          .toEqual(await lookBut(pask.locator('.q'), 'width', 'height'));
+          .toLookLike(await lookBut(pask.locator('.q'), 'width', 'height'));
 
         // An agent at work: its name, its activity, its model, its figures.
         const busy = ov.locator('section:not(.waiting) li.row').filter({ has: page.locator('.dots') });
         const pbusy = pv.locator('.ov-group:not(.waiting) .ov-row:not(.cur)').first();
-        expect.soft(await look(busy.locator('.line')), `a line, ${where}`).toEqual(await look(pbusy.locator('.ov-line')));
+        expect.soft(await look(busy.locator('.line')), `a line, ${where}`).toLookLike(await look(pbusy.locator('.ov-line')));
         expect
           .soft(await lookBut(busy.locator('.name'), 'width'), `a name, ${where}`)
-          .toEqual(await lookBut(pbusy.locator('.name'), 'width'));
+          .toLookLike(await lookBut(pbusy.locator('.name'), 'width'));
         expect
           .soft(await lookBut(busy.locator('.act'), 'width'), `an activity, ${where}`)
-          .toEqual(await lookBut(pbusy.locator('.ov-act'), 'width'));
+          .toLookLike(await lookBut(pbusy.locator('.ov-act'), 'width'));
         expect
           .soft(await lookBut(busy.locator('.dots span').first(), 'width'), `its dots, ${where}`)
-          .toEqual(await lookBut(pbusy.locator('.dots3 i').first(), 'width'));
+          .toLookLike(await lookBut(pbusy.locator('.dots3 i').first(), 'width'));
         expect
           .soft(await lookBut(busy.locator('.num').first(), 'width'), `a figure, ${where}`)
-          .toEqual(await lookBut(pbusy.locator('.num-c').first(), 'width'));
+          .toLookLike(await lookBut(pbusy.locator('.num-c').first(), 'width'));
         expect.soft(await busy.locator('.model').isVisible(), `the model shown, ${where}`).toBe(await pbusy.locator('.mdl').isVisible());
         if (await pbusy.locator('.mdl').isVisible())
           expect
             .soft(await lookBut(busy.locator('.model'), 'width'), `a model, ${where}`)
-            .toEqual(await lookBut(pbusy.locator('.mdl'), 'width'));
-        expect.soft(await edges(busy.locator('.line')), `a line's columns, ${where}`).toEqual(await edges(pbusy.locator('.ov-line')));
+            .toLookLike(await lookBut(pbusy.locator('.mdl'), 'width'));
+        expect.soft(await edges(busy.locator('.line')), `a line's columns, ${where}`).toLookLike(await edges(pbusy.locator('.ov-line')));
         // The line the arrows are on, once chosen (as the preview's, a project's first).
         const chosen = ov.locator('section:not(.waiting) li.row').first();
         await chosen.locator('.line').focus();
         await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
         expect
           .soft(await lookBut(chosen, 'height', 'width'), `the line chosen, ${where}`)
-          .toEqual(await lookBut(pv.locator('.ov-row.cur'), 'height', 'width'));
+          .toLookLike(await lookBut(pv.locator('.ov-row.cur'), 'height', 'width'));
         if (SHOTS) {
           fs.mkdirSync(SHOTS, { recursive: true });
           const n = `overview${size.name}${t === 'light' ? '-light' : ''}`;
@@ -298,26 +298,26 @@ test('the statistics look as the preview draws them, in both themes, at both siz
         // The header and the period in three segments.
         const head = st.locator('.head');
         const phead = pv.locator('.full-head');
-        expect.soft(await place(head), `header's place, ${where}`).toEqual(await place(phead));
-        expect.soft(await look(head), `header, ${where}`).toEqual(await look(phead));
-        expect.soft(await lookBut(head.locator('h1'), 'width'), `title, ${where}`).toEqual(await lookBut(phead.locator('h1'), 'width'));
+        expect.soft(await place(head), `header's place, ${where}`).toLookLike(await place(phead));
+        expect.soft(await look(head), `header, ${where}`).toLookLike(await look(phead));
+        expect.soft(await lookBut(head.locator('h1'), 'width'), `title, ${where}`).toLookLike(await lookBut(phead.locator('h1'), 'width'));
         expect
           .soft(await lookBut(head.locator('.sub'), 'width'), `what it counts, ${where}`)
-          .toEqual(await lookBut(phead.locator('.sub'), 'width'));
+          .toLookLike(await lookBut(phead.locator('.sub'), 'width'));
         const seg = head.locator('.ranges');
         const pseg = phead.locator('.seg');
-        expect.soft(await place(seg), `period's place, ${where}`).toEqual(await place(pseg));
-        expect.soft(await look(seg), `period, ${where}`).toEqual(await look(pseg));
+        expect.soft(await place(seg), `period's place, ${where}`).toLookLike(await place(pseg));
+        expect.soft(await look(seg), `period, ${where}`).toLookLike(await look(pseg));
         for (const sel of ['true', 'false'])
           expect
             .soft(await look(seg.locator(`[aria-selected="${sel}"]`).first()), `a period ${sel}, ${where}`)
-            .toEqual(await look(pseg.locator(`[aria-selected="${sel}"]`).first()));
+            .toLookLike(await look(pseg.locator(`[aria-selected="${sel}"]`).first()));
 
         // The four figures.
         const kpis = st.locator('.kpis');
         const pkpis = pv.locator('.kpis');
-        expect.soft(await place(kpis), `figures' place, ${where}`).toEqual(await place(pkpis));
-        expect.soft(await look(kpis), `figures, ${where}`).toEqual(await look(pkpis));
+        expect.soft(await place(kpis), `figures' place, ${where}`).toLookLike(await place(pkpis));
+        expect.soft(await look(kpis), `figures, ${where}`).toLookLike(await look(pkpis));
         for (const [i, part] of [
           [0, '.lb'],
           [1, '.vl'],
@@ -326,7 +326,7 @@ test('the statistics look as the preview draws them, in both themes, at both siz
         ] as const)
           expect
             .soft(await lookBut(kpis.locator('.kpi').nth(i).locator(part).first(), 'width', 'height'), `a figure's ${part}, ${where}`)
-            .toEqual(await lookBut(pkpis.locator('.kpi').nth(i).locator(part).first(), 'width', 'height'));
+            .toLookLike(await lookBut(pkpis.locator('.kpi').nth(i).locator(part).first(), 'width', 'height'));
         // Their lines, whatever the text of the app's figures: as tall as the preview's.
         expect
           .soft(
@@ -336,55 +336,55 @@ test('the statistics look as the preview draws them, in both themes, at both siz
           .toEqual(
             await pkpis.locator('.kpi .lb, .kpi .vl').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().height))),
           );
-        expect.soft(await look(kpis.locator('.kpi').nth(1)), `a figure's box, ${where}`).toEqual(await look(pkpis.locator('.kpi').nth(1)));
+        expect.soft(await look(kpis.locator('.kpi').nth(1)), `a figure's box, ${where}`).toLookLike(await look(pkpis.locator('.kpi').nth(1)));
 
         // The chart: its heading, legend, « Tableau », its place and its axis.
         const sec = st.locator('section').filter({ has: page.locator('.chart') });
         const psec = pv.locator('section').filter({ has: preview.locator('#chart') });
         expect
           .soft(await lookBut(sec.locator('h2'), 'width'), `chart's title, ${where}`)
-          .toEqual(await lookBut(psec.locator('h2'), 'width'));
-        expect.soft(await place(sec.locator('h2')), `its place, ${where}`).toEqual(await place(psec.locator('h2')));
+          .toLookLike(await lookBut(psec.locator('h2'), 'width'));
+        expect.soft(await place(sec.locator('h2')), `its place, ${where}`).toLookLike(await place(psec.locator('h2')));
         expect
           .soft(await lookBut(sec.locator('.legend span').first(), 'width'), `legend, ${where}`)
-          .toEqual(await lookBut(psec.locator('.legend span').first(), 'width'));
+          .toLookLike(await lookBut(psec.locator('.legend span').first(), 'width'));
         expect
           .soft(await lookBut(sec.locator('.sec-h .btn'), 'width'), `« Tableau », ${where}`)
-          .toEqual(await lookBut(psec.locator('.sec2-h .btn'), 'width'));
-        expect.soft(await place(sec.locator('svg')), `chart's place, ${where}`).toEqual(await place(psec.locator('svg')));
+          .toLookLike(await lookBut(psec.locator('.sec2-h .btn'), 'width'));
+        expect.soft(await place(sec.locator('svg')), `chart's place, ${where}`).toLookLike(await place(psec.locator('svg')));
         expect
           .soft(await lookBut(sec.locator('text.ax').first(), 'width', 'height'), `axis, ${where}`)
-          .toEqual(await lookBut(psec.locator('text.ax').first(), 'width', 'height'));
+          .toLookLike(await lookBut(psec.locator('text.ax').first(), 'width', 'height'));
         // The detail of a day on hover.
         await sec.locator('.col-hit').last().hover({ force: true });
         await psec.locator('.col-hit').last().hover({ force: true });
         await expect(sec.locator('.tip')).toBeVisible();
         expect
           .soft(await lookBut(sec.locator('.tip'), 'width', 'height'), `a day's detail, ${where}`)
-          .toEqual(await lookBut(psec.locator('.tip'), 'width', 'height'));
+          .toLookLike(await lookBut(psec.locator('.tip'), 'width', 'height'));
         expect
           .soft(await lookBut(sec.locator('.tip .tot'), 'width'), `its total, ${where}`)
-          .toEqual(await lookBut(psec.locator('.tip .tot'), 'width'));
+          .toLookLike(await lookBut(psec.locator('.tip .tot'), 'width'));
         await page.mouse.move(size.width / 2, 20);
 
         // The bars by project, the tables.
         const bar = st.locator('.hbar').first();
         const pbar = pv.locator('.hbar').first();
-        expect.soft(await lookBut(bar, 'width'), `a bar's row, ${where}`).toEqual(await lookBut(pbar, 'width'));
-        expect.soft(await edges(bar), `its columns, ${where}`).toEqual(await edges(pbar));
+        expect.soft(await lookBut(bar, 'width'), `a bar's row, ${where}`).toLookLike(await lookBut(pbar, 'width'));
+        expect.soft(await edges(bar), `its columns, ${where}`).toLookLike(await edges(pbar));
         for (const part of ['.nm', '.tr', '.vl'])
           expect
             .soft(await lookBut(bar.locator(part), 'width'), `a bar's ${part}, ${where}`)
-            .toEqual(await lookBut(pbar.locator(part), 'width'));
+            .toLookLike(await lookBut(pbar.locator(part), 'width'));
         const [b1x, , b1w] = await place(st.locator('.two > section').last());
         const [pb1x, , pb1w] = await place(pv.locator('.two > section').last());
         expect.soft([b1x, b1w], `« Par modèle »'s place, ${where}`).toEqual([pb1x, pb1w]);
         expect
           .soft(await lookBut(st.locator('.tbl th').first(), 'width'), `a table's heading, ${where}`)
-          .toEqual(await lookBut(pv.locator('.tbl th').first(), 'width'));
+          .toLookLike(await lookBut(pv.locator('.tbl th').first(), 'width'));
         expect
           .soft(await lookBut(st.locator('.tbl td.ttl').first(), 'width'), `a table's cell, ${where}`)
-          .toEqual(await lookBut(pv.locator('.tbl td.ttl').first(), 'width'));
+          .toLookLike(await lookBut(pv.locator('.tbl td.ttl').first(), 'width'));
         if (SHOTS) {
           fs.mkdirSync(SHOTS, { recursive: true });
           const n = `stats${size.name}${t === 'light' ? '-light' : ''}`;

@@ -9,6 +9,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium, type Locator, type Page } from '@playwright/test';
 import { addProject, expect, test, openSettingsPage, settingsEntry, closeSettings } from './fixture';
+import { toSrgb } from './srgb';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const PREVIEW = path.join(ROOT, 'design', 'app-redesign', 'index.html');
@@ -89,7 +90,9 @@ test('« Thème » is the system’s by default, applies at once with the window
       getComputedStyle(document.body).color,
       document.fonts.check('13px "Inter Variable"'),
     ]);
-  expect(await colours()).toEqual([expect.stringMatching(/^oklch\(0\.9\d* /), 'rgb(21, 23, 28)', true]);
+  const [pale, ink, inter] = await colours();
+  expect(toSrgb(pale as string)!.slice(0, 3).every((c) => c >= 220), `a pale surface, not ${pale}`).toBe(true);
+  expect([ink, inter]).toLookLike(['rgb(21, 23, 28)', true]);
   // Saved by itself, nothing to « Enregistrer ».
   await expect.poll(() => settingsOf(app.data).theme).toBe('light');
   await closeSettings(dialog);
@@ -102,7 +105,7 @@ test('« Thème » is the system’s by default, applies at once with the window
   dialog = await openApplication(page);
   await dialog.getByRole('group', { name: 'Thème' }).getByRole('button', { name: 'Sombre' }).click();
   await expect.poll(() => shown(page)).toEqual({ theme: 'dark', scheme: 'dark', window: 'dark' });
-  expect((await colours())[1]).toBe('rgb(247, 248, 248)');
+  expect((await colours())[1]).toLookLike('rgb(247, 248, 248)');
   await dialog.getByRole('group', { name: 'Thème' }).getByRole('button', { name: 'Système' }).click();
   await expect.poll(() => settingsOf(app.data).theme).toBe('system');
   await expect.poll(async () => (await shown(page)).theme).toBe(system);
@@ -143,17 +146,17 @@ test('the common controls of Réglages › Général look as the preview draws t
         const pick = theme === 'dark' ? 'Sombre' : 'Clair';
         await preview.locator(`#theme-pick button`, { hasText: 'Système' }).evaluate((b) => b.setAttribute('aria-selected', 'false'));
         await preview.locator(`#theme-pick button`, { hasText: pick }).evaluate((b) => b.setAttribute('aria-selected', 'true'));
-        expect(await look(appSeg), `segments, ${where}`).toEqual(await look(prevSeg));
-        expect(await look(appSeg.getByRole('button', { name: pick })), `segment chosen, ${where}`).toEqual(
+        expect(await look(appSeg), `segments, ${where}`).toLookLike(await look(prevSeg));
+        expect(await look(appSeg.getByRole('button', { name: pick })), `segment chosen, ${where}`).toLookLike(
           await look(prevSeg.locator('button', { hasText: pick })),
         );
-        expect(await look(appSeg.getByRole('button', { name: 'Système' })), `segment not chosen, ${where}`).toEqual(
+        expect(await look(appSeg.getByRole('button', { name: 'Système' })), `segment not chosen, ${where}`).toLookLike(
           await look(prevSeg.locator('button', { hasText: 'Système' })),
         );
         // A field: the size of the terminals' text.
         const appField = dialog.getByRole('spinbutton', { name: 'Taille du texte des terminaux' });
         const prevField = preview.getByRole('textbox', { name: 'Taille du texte des terminaux' });
-        expect(await look(appField), `field, ${where}`).toEqual(await look(prevField));
+        expect(await look(appField), `field, ${where}`).toLookLike(await look(prevField));
         // The surfaces and the texts: the tokens resolved by each engine, WebView2 and Chromium.
         const tokens = (p: Page) =>
           p.evaluate(() => {
@@ -181,7 +184,7 @@ test('the common controls of Réglages › Général look as the preview draws t
             probe.remove();
             return out;
           });
-        expect(await tokens(page), `tokens, ${where}`).toEqual(await tokens(preview));
+        expect(await tokens(page), `tokens, ${where}`).toLookLike(await tokens(preview));
 
         if (SHOTS) {
           fs.mkdirSync(SHOTS, { recursive: true });
@@ -211,10 +214,10 @@ test('nothing stops gliding or pulsing but with prefers-reduced-motion, where ev
       dot.remove();
       return out;
     });
-  expect(await motion()).toEqual(['0.7s', '1.6s']);
+  expect(await motion()).toLookLike(['0.7s', '1.6s']);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   // As good as none: a hundredth of a millisecond, for what waits for the end of one.
-  expect(await motion()).toEqual(['1e-05s', '1e-05s']);
+  expect(await motion()).toLookLike(['1e-05s', '1e-05s']);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
 });
 

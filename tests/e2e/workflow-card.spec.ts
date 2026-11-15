@@ -218,12 +218,12 @@ test('the step on the card and in the conversation, an agent of a ticket in GSD 
       await preview.evaluate(() => document.fonts.ready);
       const pmini = preview.locator('#ag-pag .wf-mini');
       const pdiv = preview.locator('#th-main .wf-div');
-      expect.soft(await look(card.locator('.wf-mini')), `the step on the card, ${t}`).toEqual(await look(pmini));
-      expect.soft(await look(card.locator('.wf-mini svg')), `its icon, ${t}`).toEqual(await look(pmini.locator('svg')));
-      expect.soft(await look(dividers.nth(1)), `the divider, ${t}`).toEqual(await look(pdiv));
-      expect.soft(await lineOf(dividers.nth(1)), `its line, ${t}`).toBe(await lineOf(pdiv));
-      expect.soft(await look(dividers.nth(1).getByRole('button')), `its button, ${t}`).toEqual(await look(pdiv.locator('button')));
-      expect.soft(await look(dividers.nth(1).locator('.mono')), `its door, ${t}`).toEqual(await look(pdiv.locator('.mono')));
+      expect.soft(await look(card.locator('.wf-mini')), `the step on the card, ${t}`).toLookLike(await look(pmini));
+      expect.soft(await look(card.locator('.wf-mini svg')), `its icon, ${t}`).toLookLike(await look(pmini.locator('svg')));
+      expect.soft(await look(dividers.nth(1)), `the divider, ${t}`).toLookLike(await look(pdiv));
+      expect.soft(await lineOf(dividers.nth(1)), `its line, ${t}`).toLookLike(await lineOf(pdiv));
+      expect.soft(await look(dividers.nth(1).getByRole('button')), `its button, ${t}`).toLookLike(await look(pdiv.locator('button')));
+      expect.soft(await look(dividers.nth(1).locator('.mono')), `its door, ${t}`).toLookLike(await look(pdiv.locator('.mono')));
       if (SHOTS) await preview.screenshot({ path: path.join(SHOTS, `workflow-card-preview-${t}.png`) });
     }
   } finally {

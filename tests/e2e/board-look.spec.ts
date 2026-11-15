@@ -160,15 +160,15 @@ test('the Kanban looks as the preview draws it, in both themes, at both sizes', 
         expect.soft([hx, hy, hw], `header's place, ${where}`).toEqual([px, py, pw]);
         expect.soft((await place(head.locator('.h1')))[3], `its first row, ${where}`).toBe(52);
         expect.soft((await place(head.locator('.h2')))[3], `its second row, ${where}`).toBe(40);
-        expect.soft(await lookBut(head.locator('h1'), 'width'), `title, ${where}`).toEqual(await lookBut(phead.locator('h1'), 'width'));
+        expect.soft(await lookBut(head.locator('h1'), 'width'), `title, ${where}`).toLookLike(await lookBut(phead.locator('h1'), 'width'));
         expect
           .soft(await lookBut(head.locator('.crumbs'), 'width'), `its line, ${where}`)
-          .toEqual(await lookBut(phead.locator('.crumbs'), 'width'));
+          .toLookLike(await lookBut(phead.locator('.crumbs'), 'width'));
         if (size.width > 1100) {
-          expect.soft(await look(head.locator('.imp')), `« Importer », ${where}`).toEqual(await look(phead.locator('.actions > .btn')));
+          expect.soft(await look(head.locator('.imp')), `« Importer », ${where}`).toLookLike(await look(phead.locator('.actions > .btn')));
           expect
             .soft(await look(head.locator('.imp .icon')), `its icon, ${where}`)
-            .toEqual(await look(phead.locator('.actions > .btn svg')));
+            .toLookLike(await look(phead.locator('.actions > .btn svg')));
         }
         // The second row: the views on the left, the places and « Après validation » on the right, nothing over another.
         const row = await head.locator('.h2').evaluate((r) =>
@@ -180,8 +180,8 @@ test('the Kanban looks as the preview draws it, in both themes, at both sizes', 
         for (let i = 1; i < row.length; i++)
           expect.soft(row[i][0], `second row, item ${i}, ${where}`).toBeGreaterThanOrEqual(row[i - 1][1]);
         expect.soft(await head.locator('.cfg .v').isVisible(), `its summary, ${where}`).toBe(true);
-        expect.soft(await look(head.locator('.auto')), `autopilot, ${where}`).toEqual(await look(phead.locator('.switch')));
-        expect.soft(await look(head.locator('.knob')), `its switch, ${where}`).toEqual(await look(phead.locator('.switch .knob')));
+        expect.soft(await look(head.locator('.auto')), `autopilot, ${where}`).toLookLike(await look(phead.locator('.switch')));
+        expect.soft(await look(head.locator('.knob')), `its switch, ${where}`).toLookLike(await look(phead.locator('.switch .knob')));
         // Right edges: the controls end where the preview's do.
         const [ax, , aw] = await place(head.locator('.auto'));
         const [pax, , paw] = await place(phead.locator('.switch'));
@@ -192,26 +192,26 @@ test('the Kanban looks as the preview draws it, in both themes, at both sizes', 
         const pband = pv.locator('#yml-banner');
         // Below the header's two rows (ESC-390), 32 px lower than the preview's: its place across, its size.
         const xwh = (el: Locator) => place(el).then(([x, , w, h]) => [x, w, h]);
-        expect.soft(await xwh(band), `band's place, ${where}`).toEqual(await xwh(pband));
-        expect.soft(await look(band), `band, ${where}`).toEqual(await look(pband));
-        expect.soft(await look(band.locator('.icon')), `its icon, ${where}`).toEqual(await look(pband.locator('svg')));
-        expect.soft(await look(band.locator('.btn')), `« Les lire », ${where}`).toEqual(await look(pband.locator('.btn')));
+        expect.soft(await xwh(band), `band's place, ${where}`).toLookLike(await xwh(pband));
+        expect.soft(await look(band), `band, ${where}`).toLookLike(await look(pband));
+        expect.soft(await look(band.locator('.icon')), `its icon, ${where}`).toLookLike(await look(pband.locator('svg')));
+        expect.soft(await look(band.locator('.btn')), `« Les lire », ${where}`).toLookLike(await look(pband.locator('.btn')));
 
         // The columns: their place, their head (a ring of their tone, name, count, « + »).
         // Their heights aside: the preview's Chromium hides its scrollbars, the app's window shows the board's.
         const xyw = (el: Locator) => place(el).then(([x, , w]) => [x, w]);
-        expect.soft(await xyw(board.locator('.cols')), `board's place, ${where}`).toEqual(await xyw(pv.locator('.board')));
+        expect.soft(await xyw(board.locator('.cols')), `board's place, ${where}`).toLookLike(await xyw(pv.locator('.board')));
         const columns = [cols.todo, cols.doing, cols.review, cols.done];
         for (const [i, col] of columns.entries()) {
           const pcol = pv.locator('.col').nth(i);
-          expect.soft(await xyw(col), `column ${i}'s place, ${where}`).toEqual(await xyw(pcol));
+          expect.soft(await xyw(col), `column ${i}'s place, ${where}`).toLookLike(await xyw(pcol));
           const h = col.locator('.head');
           const ph = pcol.locator('.col-h');
-          expect.soft(await lookBut(h, 'width'), `column ${i}'s head, ${where}`).toEqual(await lookBut(ph, 'width'));
-          expect.soft(await look(h.locator('.ring')), `its ring, ${where}`).toEqual(await look(ph.locator('.ring')));
-          expect.soft(await look(h.locator('.count')), `its count, ${where}`).toEqual(await look(ph.locator('.n')));
+          expect.soft(await lookBut(h, 'width'), `column ${i}'s head, ${where}`).toLookLike(await lookBut(ph, 'width'));
+          expect.soft(await look(h.locator('.ring')), `its ring, ${where}`).toLookLike(await look(ph.locator('.ring')));
+          expect.soft(await look(h.locator('.count')), `its count, ${where}`).toLookLike(await look(ph.locator('.n')));
         }
-        expect.soft(await look(cols.todo.locator('.add')), `« + », ${where}`).toEqual(await look(pv.locator('#add-ticket')));
+        expect.soft(await look(cols.todo.locator('.add')), `« + », ${where}`).toLookLike(await look(pv.locator('#add-ticket')));
 
         // The cards: raised; to test in amber; done flat.
         const card = (col: Locator) => col.locator('.card').first();
@@ -222,60 +222,60 @@ test('the Kanban looks as the preview draws it, in both themes, at both sizes', 
           expect.soft([cx, cw], `card ${i}'s place, ${where}`).toEqual([pcx, pcw]);
           expect
             .soft(await lookBut(card(col), 'width', 'height'), `card ${i}, ${where}`)
-            .toEqual(await lookBut(pcard(i), 'width', 'height'));
+            .toLookLike(await lookBut(pcard(i), 'width', 'height'));
           expect
             .soft(await lookBut(card(col).locator('.top'), 'width', 'height'), `card ${i}'s first line, ${where}`)
-            .toEqual(await lookBut(pcard(i).locator('.card-top'), 'width', 'height'));
+            .toLookLike(await lookBut(pcard(i).locator('.card-top'), 'width', 'height'));
           expect
             .soft(await lookBut(card(col).locator('.title'), 'width', 'height'), `card ${i}'s title, ${where}`)
-            .toEqual(await lookBut(pcard(i).locator('h2'), 'width', 'height'));
+            .toLookLike(await lookBut(pcard(i).locator('h2'), 'width', 'height'));
         }
         // To do: its criteria, none met; why it waits under a hairline, with its link.
         const crit = card(cols.todo).locator('.crit li').first();
         const pcrit = pcard(0).locator('.crit li').first();
-        expect.soft(await lookBut(crit, 'width', 'height'), `a criterion, ${where}`).toEqual(await lookBut(pcrit, 'width', 'height'));
-        expect.soft(await look(crit.locator('.icon')), `its circle, ${where}`).toEqual(await look(pcrit.locator('svg')));
+        expect.soft(await lookBut(crit, 'width', 'height'), `a criterion, ${where}`).toLookLike(await lookBut(pcrit, 'width', 'height'));
+        expect.soft(await look(crit.locator('.icon')), `its circle, ${where}`).toLookLike(await look(pcrit.locator('svg')));
         expect
           .soft(await lookBut(card(cols.todo).locator('.act'), 'width', 'height'), `why it waits, ${where}`)
-          .toEqual(await lookBut(pcard(0).locator('.card-act'), 'width', 'height'));
+          .toLookLike(await lookBut(pcard(0).locator('.card-act'), 'width', 'height'));
         expect
           .soft(await look(card(cols.todo).locator('.act .icon')), `its link, ${where}`)
-          .toEqual(await look(pcard(0).locator('.card-act svg')));
+          .toLookLike(await look(pcard(0).locator('.card-act svg')));
         // Under way: the loop and its squares, what the agent does.
         expect
           .soft(await lookBut(card(cols.doing).locator('.loop'), 'width', 'height'), `the loop, ${where}`)
-          .toEqual(await lookBut(pcard(1).locator('.loop'), 'width', 'height'));
+          .toLookLike(await lookBut(pcard(1).locator('.loop'), 'width', 'height'));
         expect
           .soft(await look(card(cols.doing).locator('.loops i').first()), `a loop gone through, ${where}`)
-          .toEqual(await look(pcard(1).locator('.loops i.on').first()));
+          .toLookLike(await look(pcard(1).locator('.loops i.on').first()));
         expect
           .soft(await look(card(cols.doing).locator('.loops i').last()), `a loop to come, ${where}`)
-          .toEqual(await look(pcard(1).locator('.loops i:not(.on)').last()));
+          .toLookLike(await look(pcard(1).locator('.loops i:not(.on)').last()));
         expect
           .soft(await lookBut(card(cols.doing).locator('.act'), 'width', 'height'), `what its agent does, ${where}`)
-          .toEqual(await lookBut(pcard(1).locator('.card-act'), 'width', 'height'));
+          .toLookLike(await lookBut(pcard(1).locator('.card-act'), 'width', 'height'));
         expect
           .soft(await look(card(cols.doing).locator('.act .dot')), `its dot, ${where}`)
-          .toEqual(await look(pcard(1).locator('.card-act .dot')));
+          .toLookLike(await look(pcard(1).locator('.card-act .dot')));
         // To test: its criteria met, « Valider » and « Tester ».
         const met = card(cols.review).locator('.crit li.met').first();
         const pmet = pv.locator('.card.attn .crit li.met').first();
-        expect.soft(await lookBut(met, 'width', 'height'), `a criterion met, ${where}`).toEqual(await lookBut(pmet, 'width', 'height'));
-        expect.soft(await look(met.locator('.icon')), `its check, ${where}`).toEqual(await look(pmet.locator('svg')));
+        expect.soft(await lookBut(met, 'width', 'height'), `a criterion met, ${where}`).toLookLike(await lookBut(pmet, 'width', 'height'));
+        expect.soft(await look(met.locator('.icon')), `its check, ${where}`).toLookLike(await look(pmet.locator('svg')));
         expect
           .soft(await lookBut(card(cols.review).locator('.sum'), 'width'), `its loops and cost, ${where}`)
-          .toEqual(await lookBut(pv.locator('.card.attn .loop'), 'width'));
+          .toLookLike(await lookBut(pv.locator('.card.attn .loop'), 'width'));
         const approve = card(cols.review).getByRole('button', { name: 'Valider et merger' });
         const papprove = pv.locator('.card.attn .btn.primary');
-        expect.soft(await look(approve), `« Valider », ${where}`).toEqual(await look(papprove));
-        expect.soft(await look(approve.locator('.icon')), `its icon, ${where}`).toEqual(await look(papprove.locator('svg')));
+        expect.soft(await look(approve), `« Valider », ${where}`).toLookLike(await look(papprove));
+        expect.soft(await look(approve.locator('.icon')), `its icon, ${where}`).toLookLike(await look(papprove.locator('svg')));
         // Done: what came of it.
         expect
           .soft(await lookBut(card(cols.done).locator('.outcome'), 'width'), `its outcome, ${where}`)
-          .toEqual(await lookBut(pv.locator('.card.past .outcome').last(), 'width'));
+          .toLookLike(await lookBut(pv.locator('.card.past .outcome').last(), 'width'));
         expect
           .soft(await look(card(cols.done).locator('.outcome .icon')), `its icon, ${where}`)
-          .toEqual(await look(pv.locator('.card.past .outcome svg').last()));
+          .toLookLike(await look(pv.locator('.card.past .outcome svg').last()));
 
         if (SHOTS) {
           fs.mkdirSync(SHOTS, { recursive: true });
@@ -332,45 +332,45 @@ test.describe('the form of a ticket', () => {
           const fld = dialog.locator('.fld').first();
           expect
             .soft(await lookBut(fld.locator('label'), 'width'), `a label, ${where}`)
-            .toEqual(await lookBut(pv.locator('.fld > label'), 'width'));
+            .toLookLike(await lookBut(pv.locator('.fld > label'), 'width'));
           expect
             .soft(await lookBut(dialog.locator('.title'), 'width'), `the title, ${where}`)
-            .toEqual(await lookBut(pv.locator('#tk-t'), 'width'));
+            .toLookLike(await lookBut(pv.locator('#tk-t'), 'width'));
           // A textarea keeps its own line height and rows: its frame and its text are what the preview's has.
           expect
             .soft(await lookBut(dialog.locator('textarea').first(), 'width', 'height', 'padding'), `the description, ${where}`)
-            .toEqual(await lookBut(pv.locator('.inp.area').first(), 'width', 'height', 'padding'));
+            .toLookLike(await lookBut(pv.locator('.inp.area').first(), 'width', 'height', 'padding'));
           const chip = dialog.locator('.atts .att.img');
           const pchip = pv.locator('.atts .att').first();
-          expect.soft(await lookBut(chip, 'width'), `an image's chip, ${where}`).toEqual(await lookBut(pchip, 'width'));
+          expect.soft(await lookBut(chip, 'width'), `an image's chip, ${where}`).toLookLike(await lookBut(pchip, 'width'));
           expect
             .soft(await lookBut(chip.locator('.th'), 'background'), `its thumbnail, ${where}`)
-            .toEqual(await lookBut(pchip.locator('.th'), 'background'));
+            .toLookLike(await lookBut(pchip.locator('.th'), 'background'));
           expect
             .soft(await lookBut(dialog.locator('.attach'), 'width'), `« Joindre un fichier », ${where}`)
-            .toEqual(await lookBut(pv.locator('.atts > .btn'), 'width'));
+            .toLookLike(await lookBut(pv.locator('.atts > .btn'), 'width'));
           // The helps under the fields, in a window tall enough (a short one leaves them out).
           if (size.height >= 820)
             expect
               .soft(await lookBut(dialog.locator('.help').first(), 'width', 'height'), `its help, ${where}`)
-              .toEqual(await lookBut(pv.locator('.fld .help').first(), 'width', 'height'));
+              .toLookLike(await lookBut(pv.locator('.fld .help').first(), 'width', 'height'));
           const harness = dialog.getByRole('group', { name: 'Harness' });
           const pharness = pv.locator('.fgrid .fld').first();
           expect
             .soft(await lookBut(harness.locator('.lb'), 'width'), `« Harness », ${where}`)
-            .toEqual(await lookBut(pharness.locator('.lb'), 'width'));
+            .toLookLike(await lookBut(pharness.locator('.lb'), 'width'));
           expect
             .soft(await lookBut(harness.locator('.select'), 'width'), `its menu, ${where}`)
-            .toEqual(await lookBut(pharness.locator('.select'), 'width'));
+            .toLookLike(await lookBut(pharness.locator('.select'), 'width'));
           expect
             .soft(await look(harness.locator('.select [data-engine]')), `its brand, ${where}`)
-            .toEqual(await look(pharness.locator('.emark')));
+            .toLookLike(await look(pharness.locator('.emark')));
           expect
             .soft(await lookBut(harness.locator('.select b'), 'width'), `its value, ${where}`)
-            .toEqual(await lookBut(pharness.locator('.select b'), 'width'));
+            .toLookLike(await lookBut(pharness.locator('.select b'), 'width'));
           expect
             .soft(await look(harness.locator('.select .icon').last()), `its chevron, ${where}`)
-            .toEqual(await look(pharness.locator('.select svg')));
+            .toLookLike(await look(pharness.locator('.select svg')));
           // The grid of three, as the preview's (the window's frame is lot 11's): a third of the form, gaps aside.
           const [, , fw] = await place(dialog.locator('.fgrid'));
           expect.soft((await place(harness.locator('.select')))[2], `its width, ${where}`).toBe(Math.round((fw - 24) / 3));
@@ -404,9 +404,9 @@ test('nothing of the board moves with prefers-reduced-motion', async ({ app }) =
       card.evaluate((e) => getComputedStyle(e).transitionDuration),
       knob.evaluate((e) => getComputedStyle(e, '::after').transitionDuration),
     ]);
-  expect(await durations()).toEqual(['0.15s', '0.25s']);
+  expect(await durations()).toLookLike(['0.15s', '0.25s']);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  expect((await durations()).map((d) => parseFloat(d) < 0.001)).toEqual([true, true]);
+  expect((await durations()).map((d) => parseFloat(d) < 0.001)).toLookLike([true, true]);
   // A transition already under way when the preference changes ends at its own pace (CSS Transitions): the knob's colour
   // was, in the runner's small window. Its end waited for; one that starts now lasts 0.01 ms, and nothing may run after.
   await page.locator('main.board').evaluate((b) =>

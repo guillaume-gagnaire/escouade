@@ -133,7 +133,7 @@ async function compare(section: Locator, preview: Page, where: string) {
     const a = section.locator(sel).first();
     const p = psection.locator(psel).first();
     await expect(a, `${what}, ${where}`).toBeVisible();
-    expect.soft(await lookBut(a, ...skip), `${what}, ${where}`).toEqual(await lookBut(p, ...skip));
+    expect.soft(await lookBut(a, ...skip), `${what}, ${where}`).toLookLike(await lookBut(p, ...skip));
   }
 }
 

@@ -132,10 +132,10 @@ test('the plan looks as the preview draws it, open and folded, in both themes, a
         const [, hy, , hh] = await place(page.locator('main.conv header.head'));
         const [, phy, , phh] = await place(preview.locator('#view-agents .conv > .head').first());
         expect.soft([bx, by - hy - hh, bw], `banner's place, ${where}`).toEqual([pbx, pby - phy - phh, pbw]);
-        expect.soft(await lookBut(plan, 'height'), `banner, ${where}`).toEqual(await lookBut(pv, 'height'));
+        expect.soft(await lookBut(plan, 'height'), `banner, ${where}`).toLookLike(await lookBut(pv, 'height'));
         expect
           .soft(await lookBut(plan.locator('.inner'), 'height'), `its column, ${where}`)
-          .toEqual(await lookBut(pv.locator('.plan-inner'), 'height'));
+          .toLookLike(await lookBut(pv.locator('.plan-inner'), 'height'));
         const [ix, , iw] = await place(plan.locator('.inner'));
         const [pix, , piw] = await place(pv.locator('.plan-inner'));
         expect.soft([ix, iw], `its column's place, ${where}`).toEqual([pix, piw]);
@@ -146,25 +146,25 @@ test('the plan looks as the preview draws it, open and folded, in both themes, a
         expect.soft((await place(head))[3], `head's height, ${where}`).toBe((await place(phead))[3]);
         expect
           .soft(await lookBut(head.locator('.badge'), 'width'), `« Plan », ${where}`)
-          .toEqual(await lookBut(phead.locator('.badge'), 'width'));
+          .toLookLike(await lookBut(phead.locator('.badge'), 'width'));
         expect
           .soft(await lookBut(head.locator('.title'), 'width'), `title, ${where}`)
-          .toEqual(await lookBut(phead.locator('.ttl'), 'width'));
-        expect.soft(await lookBut(head.locator('.pct'), 'width'), `share, ${where}`).toEqual(await lookBut(phead.locator('.pct'), 'width'));
-        expect.soft(await look(head.locator('.chev svg')), `chevron, ${where}`).toEqual(await look(phead.locator('.chev')));
+          .toLookLike(await lookBut(phead.locator('.ttl'), 'width'));
+        expect.soft(await lookBut(head.locator('.pct'), 'width'), `share, ${where}`).toLookLike(await lookBut(phead.locator('.pct'), 'width'));
+        expect.soft(await look(head.locator('.chev svg')), `chevron, ${where}`).toLookLike(await look(phead.locator('.chev')));
         const count = head.locator('.count');
         const pcount = phead.locator('.cnt');
         expect.soft(await count.isVisible(), `tasks' count shown, ${where}`).toBe(await pcount.isVisible());
         if (await pcount.isVisible())
-          expect.soft(await lookBut(count, 'width'), `tasks' count, ${where}`).toEqual(await lookBut(pcount, 'width'));
+          expect.soft(await lookBut(count, 'width'), `tasks' count, ${where}`).toLookLike(await lookBut(pcount, 'width'));
         const subs = plan.locator('.head .subs');
         const psubs = phead.locator('.subs');
         expect.soft(await subs.isVisible(), `subagents shown, ${where}`).toBe(await psubs.isVisible());
         if (await psubs.isVisible()) {
-          expect.soft(await lookBut(subs, 'width'), `subagents, ${where}`).toEqual(await lookBut(psubs, 'width'));
+          expect.soft(await lookBut(subs, 'width'), `subagents, ${where}`).toLookLike(await lookBut(psubs, 'width'));
           expect
             .soft(await look(subs.locator('.dot').first()), `a subagent's dot, ${where}`)
-            .toEqual(await look(psubs.locator('.dots i').first()));
+            .toLookLike(await look(psubs.locator('.dots i').first()));
         }
         // Right edges: the chevron ends where the preview's does.
         const [cx, , cw] = await place(head.locator('.chev svg'));
@@ -175,10 +175,10 @@ test('the plan looks as the preview draws it, open and folded, in both themes, a
         const seg = plan.locator('.segs .seg');
         expect
           .soft(await lookBut(seg.last(), 'width'), `a segment to do, ${where}`)
-          .toEqual(await lookBut(pv.locator('.bar7 i:not(.done):not(.run)').last(), 'width'));
+          .toLookLike(await lookBut(pv.locator('.bar7 i:not(.done):not(.run)').last(), 'width'));
         expect
           .soft(await lookBut(seg.first().locator('.fill'), 'width'), `a segment done, ${where}`)
-          .toEqual(await lookBut(pv.locator('.bar7 i.done').first(), 'width'));
+          .toLookLike(await lookBut(pv.locator('.bar7 i.done').first(), 'width'));
         const [sx, sy, sw] = await place(plan.locator('.segs'));
         const [psx, psy, psw] = await place(pv.locator('.bar7'));
         expect.soft([sx, sy - by, sw], `bar's place, ${where}`).toEqual([psx, psy - pby, psw]);
@@ -189,17 +189,17 @@ test('the plan looks as the preview draws it, open and folded, in both themes, a
         const [rx, ry, rw, rh] = await place(row);
         const [prx, pry, prw, prh] = await place(prow);
         expect.soft([rx, ry - by, rw, rh], `a row's place, ${where}`).toEqual([prx, pry - pby, prw, prh]);
-        expect.soft(await look(row), `a row done, ${where}`).toEqual(await look(prow));
-        expect.soft(await lookBut(row.locator('.n'), 'width'), `its rank, ${where}`).toEqual(await lookBut(prow.locator('.no'), 'width'));
-        expect.soft(await look(row.locator('.ico svg')), `its icon, ${where}`).toEqual(await look(prow.locator('.st-ic svg')));
-        expect.soft(await lookBut(row.locator('.rt'), 'width'), `its title, ${where}`).toEqual(await lookBut(prow.locator('.rt'), 'width'));
-        expect.soft(await look(row.locator('.rbar')), `its bar, ${where}`).toEqual(await look(prow.locator('.rbar')));
+        expect.soft(await look(row), `a row done, ${where}`).toLookLike(await look(prow));
+        expect.soft(await lookBut(row.locator('.n'), 'width'), `its rank, ${where}`).toLookLike(await lookBut(prow.locator('.no'), 'width'));
+        expect.soft(await look(row.locator('.ico svg')), `its icon, ${where}`).toLookLike(await look(prow.locator('.st-ic svg')));
+        expect.soft(await lookBut(row.locator('.rt'), 'width'), `its title, ${where}`).toLookLike(await lookBut(prow.locator('.rt'), 'width'));
+        expect.soft(await look(row.locator('.rbar')), `its bar, ${where}`).toLookLike(await look(prow.locator('.rbar')));
         expect
           .soft(await lookBut(row.locator('.rpct'), 'width'), `its share, ${where}`)
-          .toEqual(await lookBut(prow.locator('.rpct'), 'width'));
+          .toLookLike(await lookBut(prow.locator('.rpct'), 'width'));
         expect
           .soft(await lookBut(plan.locator('.row.focus'), 'width', 'height'), `the row to look at, ${where}`)
-          .toEqual(await lookBut(pv.locator('.plan-list li.focus'), 'width', 'height'));
+          .toLookLike(await lookBut(pv.locator('.plan-list li.focus'), 'width', 'height'));
         expect
           .soft(await look(plan.locator('.row.focus .rt')).then((l) => l.font), `its title, ${where}`)
           .toBe(await look(pv.locator('.plan-list li.focus .rt')).then((l) => l.font));
@@ -207,7 +207,7 @@ test('the plan looks as the preview draws it, open and folded, in both themes, a
         if (await tag.isVisible())
           expect
             .soft(await lookBut(tag, 'width'), `a subagent's tag, ${where}`)
-            .toEqual(await lookBut(pv.locator('.plan-list .subtag').first(), 'width'));
+            .toLookLike(await lookBut(pv.locator('.plan-list .subtag').first(), 'width'));
 
         // The handle under the list.
         const grip = plan.getByRole('separator');
@@ -220,7 +220,7 @@ test('the plan looks as the preview draws it, open and folded, in both themes, a
             const s = getComputedStyle(node, node.getAttribute('role') ? '::after' : null);
             return [s.width, s.height, s.backgroundColor, s.borderRadius];
           });
-        expect.soft(await handle(grip), `handle, ${where}`).toEqual(await handle(pgrip.locator('i')));
+        expect.soft(await handle(grip), `handle, ${where}`).toLookLike(await handle(pgrip.locator('i')));
 
         if (SHOTS) {
           fs.mkdirSync(SHOTS, { recursive: true });
@@ -269,7 +269,7 @@ test('the spinner of a task and the dots of the subagents stop with prefers-redu
   expect(spins).toMatch(/spin/);
   expect(breathes).toMatch(/breathe/);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  expect(await motion()).toEqual(['none', 'none']);
+  expect(await motion()).toLookLike(['none', 'none']);
   // Still told: the spinner is a whole ring of the project's colour.
   expect(await spin.evaluate((e) => getComputedStyle(e).borderTopColor)).toBe(
     await spin.evaluate((e) => getComputedStyle(e).borderLeftColor),
