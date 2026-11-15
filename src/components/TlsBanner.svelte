@@ -30,12 +30,10 @@
 
 <style>
   .tls-band {
-    grid-column: 2;
-    grid-row: 2;
     display: flex;
     align-items: center;
     gap: 10px;
-    margin: 0 8px 6px 0;
+    margin-bottom: 6px;
     padding: 6px 12px;
     border-radius: 8px;
     font-size: 12.5px;

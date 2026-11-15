@@ -250,10 +250,10 @@ impl Modules {
         let module = w(Module::new(engine(), &bytes))?;
         std::fs::create_dir_all(&self.cache).map_err(|e| e.to_string())?;
         if made == Made::Compiled {
-            crate::paths::write_atomic(&wasm, &bytes).map_err(|e| e.to_string())?;
+            crate::paths::write_cache(&wasm, &bytes).map_err(|e| e.to_string())?;
         }
         let pre = w(module.serialize())?;
-        crate::paths::write_atomic(&native, &pre).map_err(|e| e.to_string())?;
+        crate::paths::write_cache(&native, &pre).map_err(|e| e.to_string())?;
         Ok((module, made))
     }
 
@@ -275,11 +275,11 @@ impl Modules {
         match shared {
             // Another process may be writing the same bytes: it is only a cache.
             Some(_) => {
-                let _ = crate::paths::write_atomic(&native, &pre);
+                let _ = crate::paths::write_cache(&native, &pre);
             }
             None => {
                 std::fs::create_dir_all(&self.cache).map_err(|e| e.to_string())?;
-                crate::paths::write_atomic(&native, &pre).map_err(|e| e.to_string())?;
+                crate::paths::write_cache(&native, &pre).map_err(|e| e.to_string())?;
             }
         }
         Ok((module, Made::Precompiled))
@@ -317,7 +317,7 @@ impl Modules {
                 }
             }
         }
-        crate::paths::write_atomic(&self.cache.join(format!("{key}.wasm")), bytes)
+        crate::paths::write_cache(&self.cache.join(format!("{key}.wasm")), bytes)
             .map_err(|e| e.to_string())
     }
 

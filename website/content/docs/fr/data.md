@@ -31,7 +31,9 @@ Escouade range ses données dans `~/.escouade/` (`C:\Users\<toi>\.escouade` sous
 | `stats.db` | Les statistiques (une base SQLite, avec ses fichiers `stats.db-wal` et `stats.db-shm` tant qu’Escouade tourne). |
 | `telemetry-id` | L’identifiant tiré au hasard de cette installation, pour les statistiques d’usage. Créé quand tu les acceptes, supprimé quand tu les refuses ou les désactives. |
 | `app.log` | Le journal de l’application. Au démarrage, s’il dépasse environ 5 Mo, il devient `app.old.log`. |
-| `settings.broken.json`, `state.broken.json`… | Les copies des fichiers que l’app n’a pas pu lire (voir [Un fichier illisible](#un-fichier-illisible)). |
+| `backups/` | Les copies de secours de `state.json`, `settings.json`, `plugins.json` et `integrations.json`, un sous-dossier par fichier (voir [Les copies de secours](#les-copies-de-secours)). |
+| `state.unreadable-<date>.json`, `settings.unreadable-<date>.json`… | Un fichier trouvé illisible au démarrage, gardé tel quel sous un nom daté (voir [Un fichier illisible](#un-fichier-illisible)). |
+| `recovered.json` | Ce que le démarrage a repris d’une copie, tant que tu n’as pas fermé l’annonce qui le dit. |
 
 ## L’ancien dossier de Claude Code Manager
 
@@ -116,6 +118,28 @@ Quitte Escouade d’abord, puis :
 
 Les fichiers de tes projets, les worktrees des agents et les sessions de Claude Code ne sont jamais touchés par une remise à zéro : supprime les worktrees dont tu ne veux plus avec git.
 
+## Les copies de secours
+
+Escouade écrit ses fichiers jusque sur le disque avant de s’en servir : après une coupure de courant ou un arrêt brutal du poste, un fichier garde son contenu d’avant ou le nouveau, jamais un fichier vide ou rempli de zéros. Seuls les caches, qu’elle refait d’elle-même, sont écrits sans attendre le disque.
+
+Elle garde aussi des copies de `state.json`, `settings.json`, `plugins.json` et `integrations.json` dans `backups/` : une au démarrage, puis toutes les 10 minutes pour un fichier qui a changé. Une copie n’est faite que d’un fichier relu et trouvé entier ; elle est compressée (`backups/state/state-20261115T093600Z.json.gz`, l’heure en UTC, à ouvrir avec n’importe quel outil qui lit le gzip). Elle garde :
+
+- les 6 dernières copies ;
+- la première de chaque heure, sur 48 heures ;
+- la première de chaque jour, sur 30 jours.
+
+Au plus 84 copies par fichier, et jamais plus de 256 Mo pour un même fichier (les plus anciennes partent d’abord) : pour un état de 9 Mo, environ 1 Mo par copie. Comme une heure ou un jour garde sa première copie, un état vidé par erreur et copié encore et encore ne chasse jamais les copies des heures et des jours d’avant.
+
+Les copies de `integrations.json` peuvent contenir un jeton que le trousseau du système a refusé : elles ne sont lisibles que par toi sous macOS et Linux.
+
 ## Un fichier illisible
 
-Quand `settings.json`, `state.json`, `integrations.json` ou `sync-queue.json` n’est pas du JSON valide, Escouade écrit l’erreur dans `app.log`, garde une copie du fichier sous un nom comme `state.broken.json`, et démarre avec les valeurs par défaut pour ce fichier. La copie permet de retrouver à la main ce qui y était, par exemple la liste des projets. Voir le [dépannage](troubleshooting).
+Au démarrage, avant de lire quoi que ce soit, Escouade vérifie `state.json`, `settings.json`, `plugins.json` et `integrations.json`. Un fichier absent n’est pas illisible : c’est une installation neuve. Un fichier illisible (rien que des zéros, coupé avant sa fin, ou qui n’est pas du JSON qu’Escouade lit) est :
+
+1. gardé tel quel, sous un nom daté qui n’écrase jamais un précédent (`state.unreadable-20261115T103600Z.json`) ;
+2. remplacé par sa copie lisible la plus récente : une copie elle aussi illisible est sautée ;
+3. dit dans la fenêtre, par une annonce qui reste jusqu’à ce que tu la fermes, même après un redémarrage : le fichier, ce qui lui est arrivé, la copie reprise et son heure, ce qui a pu se perdre depuis, et où sont le fichier gardé et les copies. `app.log` le dit aussi.
+
+S’il n’a aucune copie lisible, Escouade démarre sans lui, avec les valeurs par défaut, le garde de la même façon et le dit dans la même annonce : jamais en silence.
+
+Pour reprendre une autre copie à la main : quitte Escouade, décompresse la copie choisie de `backups/<fichier>/` et mets-la à la place du fichier. Un journal de conversation (`conversations/<agent>.jsonl`) n’a pas de copie : il est écrit ligne à ligne et forcé sur le disque à la fin de chaque tour, si bien qu’une coupure peut en perdre au plus la fin du tour en cours ; sa dernière ligne coupée est sautée et le journal se poursuit sur une ligne propre. Voir le [dépannage](troubleshooting).

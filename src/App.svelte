@@ -70,6 +70,7 @@
   import TerminalView from './components/TerminalView.svelte';
   import TitleBar from './components/TitleBar.svelte';
   import TlsBanner from './components/TlsBanner.svelte';
+  import RecoveryBanner from './components/RecoveryBanner.svelte';
   import Toasts from './components/Toasts.svelte';
   import Welcome from './components/Welcome.svelte';
   import PaneDrop from './components/panes/PaneDrop.svelte';
@@ -206,7 +207,13 @@
      sidebar on the frame and the work on its panel. -->
 <div class="root" style:--rail="{railWidth.shown}px" style:--side="{sideWidth.shown}px">
   <TitleBar />
-  {#if app.ready}<TlsBanner />{/if}
+  {#if app.ready}
+    <!-- The bands across the window: the files recovered at the start (ESC-469), the certificates not checked (SEC-07). -->
+    <div class="bands">
+      <RecoveryBanner />
+      <TlsBanner />
+    </div>
+  {/if}
   <ProjectRail />
   <div class="body">
     {#if initError}
@@ -409,6 +416,13 @@
     z-index: -1;
     background: radial-gradient(80% 100% at 18% 0%, color-mix(in oklch, var(--p) var(--glow), transparent), transparent 75%);
     pointer-events: none;
+  }
+  .bands {
+    grid-column: 2;
+    grid-row: 2;
+    display: flex;
+    flex-direction: column;
+    margin: 0 8px 0 0;
   }
   .body {
     grid-column: 2;

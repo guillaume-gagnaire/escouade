@@ -138,6 +138,8 @@ mod pace;
 mod pagecrash;
 mod paths;
 #[cfg(test)]
+mod recovery_tests;
+#[cfg(test)]
 mod remote_tests;
 // What an agent is getting through, and the plan files it follows: the crate `escouade-plan`.
 use escouade_plan::{plan, planfiles};
@@ -649,6 +651,7 @@ pub fn run() {
             lanes,
             tauri::generate_handler![
                 commands::subscribe,
+                commands::dismiss_recovery,
                 commands::set_held,
                 commands::set_ui,
                 commands::open_url,

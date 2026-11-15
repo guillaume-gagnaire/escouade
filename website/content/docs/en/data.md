@@ -31,7 +31,9 @@ Escouade keeps its data in `~/.escouade/` (`C:\Users\<you>\.escouade` on Windows
 | `stats.db` | The statistics (a SQLite database, with its `stats.db-wal` and `stats.db-shm` files while Escouade runs). |
 | `telemetry-id` | The random id of this install, for the usage statistics. Created when you accept them, deleted when you refuse or turn them off. |
 | `app.log` | The app’s log. At startup, if it is over about 5 MB, it becomes `app.old.log`. |
-| `settings.broken.json`, `state.broken.json`… | Copies of files the app couldn’t read (see [An unreadable file](#an-unreadable-file)). |
+| `backups/` | The backup copies of `state.json`, `settings.json`, `plugins.json` and `integrations.json`, one subfolder per file (see [Backup copies](#backup-copies)). |
+| `state.unreadable-<date>.json`, `settings.unreadable-<date>.json`… | A file found unreadable at startup, kept as it was under a dated name (see [An unreadable file](#an-unreadable-file)). |
+| `recovered.json` | What the start took back from a copy, until you close the notice that says so. |
 
 ## The old Claude Code Manager folder
 
@@ -116,6 +118,28 @@ Quit Escouade first, then:
 
 Your projects’ files, the agents’ worktrees, and Claude Code’s sessions are never touched by a reset: remove the worktrees you no longer want with git.
 
+## Backup copies
+
+Escouade writes its files all the way to the disk before relying on them: after a power cut or a hard shutdown, a file holds its former content or the new one, never an empty file or one full of zeros. Only the caches, which it makes again by itself, are written without waiting for the disk.
+
+It also keeps copies of `state.json`, `settings.json`, `plugins.json` and `integrations.json` in `backups/`: one at startup, then every 10 minutes for a file that changed. A copy is only made of a file read back and found whole; it is compressed (`backups/state/state-20261115T093600Z.json.gz`, the time in UTC, to open with any tool that reads gzip). It keeps:
+
+- the 6 latest copies;
+- the first of each hour, over 48 hours;
+- the first of each day, over 30 days.
+
+At most 84 copies per file, and never more than 256 MB for one file (the oldest go first): for a 9 MB state, about 1 MB per copy. Since an hour or a day keeps its first copy, a state emptied by mistake and copied again and again never pushes out the copies of the hours and days before.
+
+The copies of `integrations.json` may hold a token the system keychain refused: only you can read them on macOS and Linux.
+
 ## An unreadable file
 
-When `settings.json`, `state.json`, `integrations.json`, or `sync-queue.json` isn’t valid JSON, Escouade writes the error to `app.log`, keeps a copy of the file under a name like `state.broken.json`, and starts with the defaults for that file. The copy lets you recover by hand what was in it, such as the list of projects. See [troubleshooting](troubleshooting).
+At startup, before reading anything, Escouade checks `state.json`, `settings.json`, `plugins.json` and `integrations.json`. A missing file isn’t unreadable: it’s a new installation. An unreadable file (nothing but zeros, cut short, or not JSON Escouade reads) is:
+
+1. kept as it is, under a dated name that never overwrites an earlier one (`state.unreadable-20261115T103600Z.json`);
+2. replaced by its newest readable copy: a copy that doesn’t read either is skipped;
+3. told in the window, by a notice that stays until you close it, even across a restart: the file, what happened to it, the copy taken back and its time, what may have been lost since, and where the kept file and the copies are. `app.log` says it too.
+
+If no copy reads, Escouade starts without it, with the defaults, keeps it the same way and says so in the same notice: never silently.
+
+To take back another copy by hand: quit Escouade, decompress the copy you choose from `backups/<file>/` and put it in place of the file. A conversation log (`conversations/<agent>.jsonl`) has no copy: it is written line by line and forced to the disk at the end of each turn, so a power cut can lose at most the end of the turn under way; its last cut line is skipped and the log goes on from a clean line. See [troubleshooting](troubleshooting).

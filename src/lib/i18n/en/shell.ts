@@ -70,6 +70,37 @@ export default defineZone('shell', {
     other: 'The interface stopped: it was reloaded.',
     reopen: 'Reopen',
   },
+  /** A file of the data folder unreadable at a start (ESC-469): its copy taken back, or none; the band stays until closed. */
+  recovery: {
+    title: 'Some of Escouade’s data could not be read at startup',
+    what: {
+      state: 'your projects, tickets and agents',
+      settings: 'your settings',
+      plugins: 'your installed plugins',
+      integrations: 'your ticket and code host accounts',
+    },
+    restored: {
+      zeros: 'The file {file} ({what}) held nothing but zeros, as after a power cut: Escouade took back its copy of {at}.',
+      cut: 'The file {file} ({what}) was cut short: Escouade took back its copy of {at}.',
+      invalid: 'The file {file} ({what}) could not be read: Escouade took back its copy of {at}.',
+    },
+    lost: {
+      zeros:
+        'The file {file} ({what}) held nothing but zeros, as after a power cut, and no readable copy exists: Escouade started without it.',
+      cut: 'The file {file} ({what}) was cut short and no readable copy exists: Escouade started without it.',
+      invalid: 'The file {file} ({what}) could not be read and no readable copy exists: Escouade started without it.',
+    },
+    since: 'What changed between {from} and {to} is lost.',
+    sinceOpen: 'What changed after {from} is lost.',
+    skipped: {
+      one: '{count} newer copy, unreadable too, was skipped.',
+      other: '{count} newer copies, unreadable too, were skipped.',
+    },
+    kept: 'The unreadable file is kept as {path}.',
+    where: 'The copies are in {path}: the latest ones, one per hour over 48 hours, one per day over 30 days.',
+    open: 'Open the copies’ folder',
+    close: 'Close',
+  },
   /** The update downloaded, its notes once installed, and the toasts about it. */
   update: {
     betaVersion: '{version} (beta)',

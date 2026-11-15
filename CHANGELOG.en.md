@@ -4,6 +4,10 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
+## [Unreleased]
+
+- A power cut no longer loses Escouade’s state: its files are written all the way to the disk, copies of them are kept (the latest, one per hour, one per day), and a file unreadable at startup is replaced by its last good copy, in a notice that says so.
+
 ## [2.2.0] — 2026-11-14
 
 - Security: installing a plugin also shows the commands that install and update its harness, and the variables it takes off its launch. Those of a third-party plugin are said to come from it wherever Escouade shows them, and it can no longer take off the proxy or the certificates you set.

@@ -39,7 +39,7 @@ impl CatalogStore {
         if let Some(dir) = self.path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        Ok(crate::paths::write_atomic(
+        Ok(crate::paths::write_cache(
             &self.path,
             serde_json::to_string_pretty(&all)?.as_bytes(),
         )?)

@@ -2838,6 +2838,27 @@ export interface InitialState {
   lang?: LangInfo;
   /** What the page showed when its process last ended (ESC-290): offered again, never reopened by itself. */
   pageCrash?: { projectId: string | null; agentId: string | null } | null;
+  /** The files found unreadable at a start and recovered from their copies (ESC-469), until the notice is closed. */
+  recovered?: Recovery[];
+}
+
+/** A file of the data folder found unreadable at a start, and what was done (`backups::Recovery`, ESC-469). */
+export interface Recovery {
+  /** As named in the data folder: `state.json`, `settings.json`, `plugins.json`, `integrations.json`. */
+  file: string;
+  damage: 'zeros' | 'cut' | 'invalid';
+  /** RFC 3339 times. */
+  foundAt: string;
+  writtenAt: string | null;
+  /** Where the unreadable file was set aside. */
+  keptAs: string | null;
+  /** The copy put in its place, and its time; null when no copy read (the app started without it). */
+  restored: string | null;
+  restoredAt: string | null;
+  /** Newer copies that did not read either, passed over. */
+  skipped: number;
+  /** The folder of the file's copies. */
+  copies: string;
 }
 
 /** An update installed: its version and its release notes (markdown). */

@@ -112,6 +112,9 @@ pub struct InitialState {
     lang: crate::i18n::LangInfo,
     /// What the page showed when its process last ended, for it to offer to open it again.
     page_crash: Option<crate::pagecrash::PageCrash>,
+    /// The files found unreadable at a start and recovered from their copies (ESC-469), until the user closes the
+    /// notice that tells them.
+    recovered: Vec<escouade_model::backups::Recovery>,
 }
 
 // Off the main thread: finding a `claude` of WSL may start its distribution (seconds).
@@ -182,7 +185,15 @@ pub fn subscribe(
         accounts,
         setup_output,
         page_crash: core.take_page_crash(),
+        recovered: escouade_model::backups::notices(core.data.root()),
     }
+}
+
+/// The notice of the files recovered at a start, closed by the user (ESC-469): forgotten, the files set aside and the
+/// copies left as they are.
+#[tauri::command(async)]
+pub fn dismiss_recovery(core: CoreState) -> Res<()> {
+    escouade_model::backups::dismiss(core.data.root()).map_err(|e| err(e.into()))
 }
 
 /// A link the window opens outside (the system's browser; Windows' under WSLg, `outside`): the
