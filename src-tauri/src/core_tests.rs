@@ -175,9 +175,11 @@ impl Harness {
         self.core.agent(id).unwrap().lock().meta.clone()
     }
 
-    /// Samples, about every millisecond until the flag returned is set (30 s at most), what an
-    /// automatic restart would find (`updates::busy`) just before and just after what `mark`
-    /// says of that moment.
+    /// Samples, about every millisecond until the flag returned is set, what an automatic restart
+    /// would find (`updates::busy`) just before and just after what `mark` says of that moment.
+    /// The flag is the end of the sampling, not a delay: under load the step sampled (a
+    /// validation, a start) can take minutes, and a sampler gone before its cleanup would see
+    /// nothing of it. Only a test that never sets the flag is cut, after 10 minutes.
     pub(crate) fn sample_rest<T: Send + 'static>(
         &self,
         mark: impl Fn(&Core<MockRuntime>) -> T + Send + 'static,
@@ -191,7 +193,7 @@ impl Harness {
             let rest = |c: &Core<MockRuntime>| busy(&snapshot(c, &u, now_ms()));
             let started = std::time::Instant::now();
             let mut seen = Vec::new();
-            while !done.load(Ordering::Acquire) && started.elapsed() < Duration::from_secs(30) {
+            while !done.load(Ordering::Acquire) && started.elapsed() < Duration::from_secs(600) {
                 let before = rest(&core);
                 let m = mark(&core);
                 seen.push((before, m, rest(&core)));
@@ -210,21 +212,66 @@ impl Harness {
         self.core.agent(id).unwrap().lock().proc.is_some()
     }
 
+    /// What moves while a test waits (the tickets' column, step and block, each agent's status,
+    /// its archive and its process): as long as it changes, the wait goes on.
+    fn progress(&self, with_conversation: bool) -> String {
+        let mut out = String::new();
+        for t in self.core.tickets.read().iter() {
+            out.push_str(&format!(
+                "{} {:?} {:?} {:?} {:?};",
+                t.id, t.column, t.step, t.blocked, t.agent_id
+            ));
+        }
+        let mut agents: Vec<AgentHandle> = self.core.agents.read().values().cloned().collect();
+        agents.sort_by_key(|a| a.lock().meta.id.clone());
+        for a in agents {
+            let mut rt = a.lock();
+            out.push_str(&format!(
+                "{} {:?} {} {};",
+                rt.meta.id,
+                rt.meta.status,
+                rt.meta.archived,
+                rt.proc.is_some()
+            ));
+            if with_conversation {
+                for i in rt.conv.items().iter().rev().take(4) {
+                    out.push_str(&format!("\n  {}", clip(&i.to_string(), 400)));
+                }
+                out.push('\n');
+            }
+        }
+        out
+    }
+
     pub(crate) async fn wait(&self, what: &str, pred: impl Fn(&Self) -> bool) {
-        // A wall-clock deadline, generous: the whole suite runs hundreds of fake `claude`
-        // processes at once, and a ticket's loop can take well over 15 s under that load. A real
-        // hang still fails, only later.
-        let deadline = std::time::Instant::now() + Duration::from_secs(60);
-        while std::time::Instant::now() < deadline {
+        // No fixed delay: the whole suite runs hundreds of fake `claude` processes at once, and on
+        // a loaded machine a ticket's loop (a worktree, a process, a turn) takes minutes, not
+        // seconds. The wait fails when nothing it waits on has moved for a while (a real hang),
+        // or, at the very most, after 10 minutes.
+        const STALLED: Duration = Duration::from_secs(90);
+        const AT_MOST: Duration = Duration::from_secs(600);
+        let started = std::time::Instant::now();
+        let mut seen = self.progress(false);
+        let mut moved = started;
+        loop {
             if pred(self) {
                 return;
             }
+            let now = std::time::Instant::now();
+            if now.duration_since(moved) > STALLED || now.duration_since(started) > AT_MOST {
+                break;
+            }
             tokio::time::sleep(Duration::from_millis(20)).await;
+            let state = self.progress(false);
+            if state != seen {
+                seen = state;
+                moved = std::time::Instant::now();
+            }
         }
         if pred(self) {
             return;
         }
-        panic!("{}", self.timed_out(what));
+        panic!("{}\nstate: {}", self.timed_out(what), self.progress(true));
     }
 
     /// What a wait for `what` that timed out says.
