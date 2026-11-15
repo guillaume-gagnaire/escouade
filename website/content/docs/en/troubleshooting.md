@@ -208,11 +208,11 @@ See [notifications](notifications).
 
 ### A data file is unreadable
 
-**Symptom.** Escouade starts without its projects, or with its default settings.
+**Symptom.** At startup, a notice at the top of the window says “Some of Escouade’s data could not be read at startup”, for instance after a power cut.
 
-**Cause.** `state.json` or `settings.json` (or `integrations.json`, `sync-queue.json`) wasn’t valid JSON. Escouade kept a copy under a name like `state.broken.json` and started with the defaults for that file.
+**Cause.** `state.json`, `settings.json`, `plugins.json` or `integrations.json` didn’t read (nothing but zeros, cut short, or not valid JSON). Escouade kept it under a dated name (`state.unreadable-<date>.json`) and replaced it with its newest readable copy, or, with no copy, started without it.
 
-**Fix.** Open the copy to recover what it held, such as the list of projects. `app.log` says which file was the problem. See [local data](data).
+**Fix.** The notice says which copy was taken back, its time and what may have been lost since; close it once read. To take back another copy, quit Escouade and put a decompressed copy from `backups/` in place of the file. See [An unreadable file](data#an-unreadable-file).
 
 ### The system keychain is unreadable
 

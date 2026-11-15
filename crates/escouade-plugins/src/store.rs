@@ -617,7 +617,7 @@ impl Store {
             Ok(new) => {
                 if let Some((etag, bytes, _)) = &new {
                     let _ = std::fs::create_dir_all(&self.dir);
-                    let _ = crate::paths::write_atomic(&self.dir.join("catalog.json"), bytes);
+                    let _ = crate::paths::write_cache(&self.dir.join("catalog.json"), bytes);
                     self.cache.write().etag = etag.clone();
                 }
                 let mut c = self.cache.write();

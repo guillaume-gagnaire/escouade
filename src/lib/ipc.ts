@@ -173,6 +173,8 @@ export const api = {
     return invoke<InitialState>('subscribe', { channel });
   },
   setUi: (ui: UiState) => invoke<void>('set_ui', { ui }),
+  /** The notice of the files recovered at a start, closed (ESC-469). */
+  dismissRecovery: () => invoke<void>('dismiss_recovery'),
   mcpStatus: () => invoke<McpStatus>('mcp_status'),
   /** The MCP server's activity log, oldest first (the last 200). */
   mcpActivity: () => invoke<McpActivityEntry[]>('mcp_activity'),

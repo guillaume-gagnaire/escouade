@@ -29,6 +29,8 @@ serde_json = "1"
 anyhow = "1"
 parking_lot = "0.13"
 chrono = { version = "0.4", features = ["serde"] }
+# The copies of the files that are not made again, compressed (`backups`, ESC-469).
+flate2 = "1"
 uuid = { version = "1", features = ["v4"] }
 dirs = "7"
 log = "0.4"

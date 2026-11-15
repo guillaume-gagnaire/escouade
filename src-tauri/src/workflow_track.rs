@@ -1014,7 +1014,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             let _ = std::fs::create_dir_all(dir);
         }
         if let Ok(json) = serde_json::to_vec_pretty(&scan) {
-            let _ = crate::paths::write_atomic(&file, &json);
+            let _ = crate::paths::write_cache(&file, &json);
         }
         // Into the files of the workflows (ESC-195), as `refresh_workflows` puts them: what is followed.
         let places = crate::workflowfiles::places(&p, &self.data);

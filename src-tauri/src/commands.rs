@@ -116,6 +116,9 @@ pub struct InitialState {
     page_crash: Option<crate::pagecrash::PageCrash>,
     /// What the policies of this device and a team lock (TS-11): the window greys what they impose.
     locks: crate::locks::Locks,
+    /// The files found unreadable at a start and recovered from their copies (ESC-469), until the user closes the
+    /// notice that tells them.
+    recovered: Vec<escouade_model::backups::Recovery>,
 }
 
 // Off the main thread: finding a `claude` of WSL may start its distribution (seconds).
@@ -189,7 +192,15 @@ pub fn subscribe(
         setup_output,
         page_crash: core.take_page_crash(),
         locks: core.locks.read().clone(),
+        recovered: escouade_model::backups::notices(core.data.root()),
     }
+}
+
+/// The notice of the files recovered at a start, closed by the user (ESC-469): forgotten, the files set aside and the
+/// copies left as they are.
+#[tauri::command(async)]
+pub fn dismiss_recovery(core: CoreState) -> Res<()> {
+    escouade_model::backups::dismiss(core.data.root()).map_err(|e| err(e.into()))
 }
 
 /// A link the window opens outside (the system's browser; Windows' under WSLg, `outside`): the

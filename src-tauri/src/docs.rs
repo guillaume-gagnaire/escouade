@@ -1471,7 +1471,7 @@ impl Space {
         if let Some(dir) = cache.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        let _ = crate::paths::write_atomic(&cache.with_extension(ext), body.as_bytes());
+        let _ = crate::paths::write_cache(&cache.with_extension(ext), body.as_bytes());
     }
 
     /// What Escouade reads of a document (`docsextract`), read once and kept in Escouade's folder,

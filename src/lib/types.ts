@@ -3013,6 +3013,8 @@ export interface InitialState {
   pageCrash?: { projectId: string | null; agentId: string | null } | null;
   /** What the policies of this device and a team lock (TS-11); absent before it. */
   locks?: Locks;
+  /** The files found unreadable at a start and recovered from their copies (ESC-469), until the notice is closed. */
+  recovered?: Recovery[];
 }
 
 /** Who imposes a lock (TS-11): the policy of this device (rank 6), or a team (rank 5). */
@@ -3037,6 +3039,25 @@ export interface Locks {
   locks: Record<string, Lock>;
   rows: Record<string, string[]>;
   warnings: string[];
+}
+
+/** A file of the data folder found unreadable at a start, and what was done (`backups::Recovery`, ESC-469). */
+export interface Recovery {
+  /** As named in the data folder: `state.json`, `settings.json`, `plugins.json`, `integrations.json`. */
+  file: string;
+  damage: 'zeros' | 'cut' | 'invalid';
+  /** RFC 3339 times. */
+  foundAt: string;
+  writtenAt: string | null;
+  /** Where the unreadable file was set aside. */
+  keptAs: string | null;
+  /** The copy put in its place, and its time; null when no copy read (the app started without it). */
+  restored: string | null;
+  restoredAt: string | null;
+  /** Newer copies that did not read either, passed over. */
+  skipped: number;
+  /** The folder of the file's copies. */
+  copies: string;
 }
 
 /** An update installed: its version and its release notes (markdown). */

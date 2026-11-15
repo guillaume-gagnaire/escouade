@@ -90,6 +90,7 @@ import type {
   UiState,
   Usage,
   OfferedMemory,
+  Recovery,
 } from './types';
 
 /** What an agent's header, too narrow, no longer shows (ESC-166): « … » offers it in its menu. */
@@ -447,6 +448,8 @@ class AppState {
   restartAt = $state<number | null>(null);
   /** A version that did not install at the last try: told of once it is downloaded again. */
   failedUpdate = $state<string | null>(null);
+  /** The files found unreadable at a start and recovered from their copies (ESC-469): told by a band until closed. */
+  recovered = $state<Recovery[]>([]);
   /** The last download of an update that failed, until one goes through: Réglages › À propos says it (choice 13). */
   updateTrouble = $state<{ version: string; message: string; page: string | null } | null>(null);
   focusComposer = $state(0);
@@ -788,6 +791,12 @@ class AppState {
   private early: UiEvent[] | null = null;
   private toastId = 0;
 
+  /** The band of the recovered files closed: forgotten here and in the data folder (the files set aside stay). */
+  dismissRecovery() {
+    this.recovered = [];
+    api.dismissRecovery().catch((e) => this.toast(errorText(e), 'error'));
+  }
+
   async init() {
     this.early = [];
     const s = await api.subscribe((e) => (this.early ? this.early.push(e) : this.onEvent(e)));
@@ -840,6 +849,7 @@ class AppState {
     if (s.sources) setSources(s.sources);
     this.restartAt = s.restartAt ?? null;
     this.failedUpdate = s.failedUpdate ?? null;
+    this.recovered = s.recovered ?? [];
     if (s.pageCrash) this.tellPageCrash(s.pageCrash);
     // The mode of new agents, then the statistics: not answered yet (closed without a choice: asked again at the next
     // start). An installation that existed before the first has `auto` (SEC-09).

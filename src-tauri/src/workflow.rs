@@ -2138,7 +2138,7 @@ impl<R: tauri::Runtime> crate::core::Core<R> {
             if let Some(dir) = file.parent() {
                 std::fs::create_dir_all(dir)?;
             }
-            crate::paths::write_atomic(&file, &serde_json::to_vec_pretty(&scan)?)?;
+            crate::paths::write_cache(&file, &serde_json::to_vec_pretty(&scan)?)?;
         }
         // The files of the workflows (ESC-195): what this reading found added or updated there,
         // never removed; then the workflows of the files are those the project shows and follows.

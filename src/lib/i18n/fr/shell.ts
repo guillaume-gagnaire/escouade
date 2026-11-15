@@ -78,6 +78,38 @@ export default {
     other: 'L’interface s’est arrêtée : elle a été rechargée.',
     reopen: 'Rouvrir',
   },
+  /** A file of the data folder unreadable at a start (ESC-469): its copy taken back, or none; the band stays until closed. */
+  recovery: {
+    title: 'Des données d’Escouade étaient illisibles au démarrage',
+    what: {
+      state: 'tes projets, tickets et agents',
+      settings: 'tes réglages',
+      plugins: 'tes plugins installés',
+      integrations: 'tes comptes de tickets et d’hébergeurs',
+    },
+    restored: {
+      zeros:
+        'Le fichier {file} ({what}) ne contenait que des zéros, comme après une coupure du poste : Escouade a repris sa copie du {at}.',
+      cut: 'Le fichier {file} ({what}) était coupé : Escouade a repris sa copie du {at}.',
+      invalid: 'Le fichier {file} ({what}) n’était pas lisible : Escouade a repris sa copie du {at}.',
+    },
+    lost: {
+      zeros:
+        'Le fichier {file} ({what}) ne contenait que des zéros, comme après une coupure du poste, et aucune copie lisible n’existe : Escouade est partie sans.',
+      cut: 'Le fichier {file} ({what}) était coupé et aucune copie lisible n’existe : Escouade est partie sans.',
+      invalid: 'Le fichier {file} ({what}) n’était pas lisible et aucune copie lisible n’existe : Escouade est partie sans.',
+    },
+    since: 'Ce qui a changé entre le {from} et le {to} est perdu.',
+    sinceOpen: 'Ce qui a changé après le {from} est perdu.',
+    skipped: {
+      one: '{count} copie plus récente, illisible elle aussi, a été sautée.',
+      other: '{count} copies plus récentes, illisibles elles aussi, ont été sautées.',
+    },
+    kept: 'Le fichier illisible est gardé sous {path}.',
+    where: 'Les copies sont dans {path} : les dernières, une par heure sur 48 heures, une par jour sur 30 jours.',
+    open: 'Ouvrir le dossier des copies',
+    close: 'Fermer',
+  },
   /** The update downloaded, its notes once installed, and the toasts about it. */
   update: {
     /** A beta's version, wherever the app says it (ESC-374). */

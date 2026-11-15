@@ -208,11 +208,11 @@ Voir les [notifications](notifications).
 
 ### Un fichier de données est illisible
 
-**Symptôme.** Escouade démarre sans ses projets, ou avec ses réglages par défaut.
+**Symptôme.** Au démarrage, une annonce en haut de la fenêtre dit « Des données d’Escouade étaient illisibles au démarrage », par exemple après une coupure de courant.
 
-**Cause.** `state.json` ou `settings.json` (ou `integrations.json`, `sync-queue.json`) n’était pas du JSON valide. Escouade en a gardé une copie sous un nom comme `state.broken.json` et a démarré avec les valeurs par défaut pour ce fichier.
+**Cause.** `state.json`, `settings.json`, `plugins.json` ou `integrations.json` ne se lisait pas (rien que des zéros, coupé, ou pas du JSON valide). Escouade l’a gardé sous un nom daté (`state.unreadable-<date>.json`) et l’a remplacé par sa copie lisible la plus récente, ou, sans copie, a démarré sans lui.
 
-**Solution.** Ouvre la copie pour retrouver ce qu’elle contenait, par exemple la liste des projets. `app.log` dit quel fichier posait problème. Voir les [données locales](data).
+**Solution.** L’annonce dit quelle copie a été reprise, son heure et ce qui a pu se perdre depuis ; ferme-la quand tu l’as lue. Pour reprendre une autre copie, quitte Escouade et mets à la place du fichier une copie décompressée de `backups/`. Voir [Un fichier illisible](data#un-fichier-illisible).
 
 ### Le trousseau du système est illisible
 

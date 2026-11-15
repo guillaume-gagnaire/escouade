@@ -100,9 +100,17 @@ impl Conv {
             match OpenOptions::new()
                 .create(true)
                 .append(true)
+                .read(true)
                 .open(self.path())
             {
-                Ok(f) => self.writer = Some(BufWriter::new(f)),
+                Ok(mut f) => {
+                    // A log a power cut ended with zeros, or a line cut short: the next operation goes on a line of
+                    // its own, which reads (ESC-469); the damaged end is skipped by `replay`.
+                    if ends_mid_line(&mut f) {
+                        let _ = f.write_all(b"\n");
+                    }
+                    self.writer = Some(BufWriter::new(f));
+                }
                 Err(e) => {
                     log::warn!("cannot open conversation log: {e}");
                     return;
@@ -113,6 +121,20 @@ impl Conv {
             let _ = w.write_all(line.as_bytes());
             let _ = w.write_all(b"\n");
             let _ = w.flush();
+        }
+    }
+
+    /// The log forced onto the disk, at the end of each turn (ESC-469): written line by line, a power cut costs it at
+    /// most what the turn under way wrote. A few milliseconds once a turn (one `fsync` of what the turn appended).
+    pub fn sync(&mut self) {
+        if let Some(w) = self.writer.as_mut() {
+            let _ = w.flush();
+            if let Err(e) = w.get_ref().sync_data() {
+                log::warn!(
+                    "conversation of {} not forced onto the disk: {e}",
+                    self.agent_id
+                );
+            }
         }
     }
 
@@ -181,6 +203,16 @@ impl Conv {
     pub(crate) fn is_loaded(&self) -> bool {
         self.loaded
     }
+}
+
+/// Whether the file `f` holds something and its last byte ends no line.
+fn ends_mid_line(f: &mut File) -> bool {
+    use std::io::{Read, Seek, SeekFrom};
+    if f.metadata().map_or(true, |m| m.len() == 0) {
+        return false;
+    }
+    let mut last = [0u8];
+    f.seek(SeekFrom::End(-1)).is_ok() && f.read_exact(&mut last).is_ok() && last[0] != b'\n'
 }
 
 /// The log of an agent's conversation in the conversations' folder `dir`.
@@ -397,5 +429,71 @@ mod tests {
         assert!(!replay(&path).unwrap().partial);
         assert_eq!(Conv::new(&dir, "a1").items().len(), 2);
         assert_eq!(replay(&path).unwrap().ops, 2);
+    }
+
+    /// A log as a power cut leaves it (ESC-469): its end in zeros, or its last line cut short.
+    #[test]
+    fn a_log_whose_end_is_zeros_or_cut_reads_to_its_last_whole_line_and_goes_on_cleanly() {
+        let dir = test_dir("conv-damaged-end");
+        let op = |id: &str| {
+            format!(
+                "{}\n",
+                json!({ "op": "append", "item": { "kind": "user", "id": id, "text": id } })
+            )
+        };
+        let ids = |items: &[Value]| -> Vec<String> {
+            items
+                .iter()
+                .map(|i| i["id"].as_str().unwrap().to_string())
+                .collect()
+        };
+        let zeros = {
+            let mut b = format!("{}{}", op("u1"), op("u2")).into_bytes();
+            b.extend(vec![0u8; 4096]);
+            b
+        };
+        let cut = {
+            let mut b = format!("{}{}", op("u1"), op("u2")).into_bytes();
+            b.extend_from_slice(br#"{"op":"append","item":{"kind":"user","id":"u3","te"#);
+            b
+        };
+        for (name, bytes) in [("zeros", zeros), ("cut", cut)] {
+            let path = log_path(&dir, name);
+            std::fs::write(&path, &bytes).unwrap();
+            let log = replay(&path).unwrap();
+            assert!(!log.partial, "{name}");
+            assert_eq!(
+                ids(&log.items),
+                ["u1", "u2"],
+                "{name}: up to its last whole line"
+            );
+            // Written on: the next operation is on a line of its own.
+            let mut conv = Conv::new(&dir, name);
+            assert_eq!(ids(&conv.items()), ["u1", "u2"]);
+            conv.apply(&ConvOp::Append {
+                item: json!({ "kind": "user", "id": "u4", "text": "après" }),
+            });
+            conv.sync();
+            conv.close_log();
+            assert_eq!(
+                ids(&replay(&path).unwrap().items),
+                ["u1", "u2", "u4"],
+                "{name}: the operation after the damage reads"
+            );
+            assert_eq!(ids(&Conv::new(&dir, name).items()), ["u1", "u2", "u4"]);
+        }
+        // A log that ends whole gets no empty line.
+        let path = log_path(&dir, "whole");
+        std::fs::write(&path, op("u1")).unwrap();
+        let mut conv = Conv::new(&dir, "whole");
+        conv.apply(&ConvOp::Append {
+            item: json!({ "kind": "user", "id": "u2", "text": "x" }),
+        });
+        conv.close_log();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.starts_with(&op("u1")) && text.ends_with('\n'));
+        assert_eq!(text.lines().count(), 2, "{text}");
+        assert!(text.lines().all(|l| !l.is_empty()));
+        assert_eq!(ids(&replay(&path).unwrap().items), ["u1", "u2"]);
     }
 }

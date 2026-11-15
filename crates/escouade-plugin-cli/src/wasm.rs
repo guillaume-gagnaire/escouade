@@ -308,7 +308,7 @@ impl Compiler {
         if std::fs::read(&exe).map(|b| sha256(&b)).ok().as_deref() != Some(sum.as_str()) {
             return Err(format!("could not keep Javy at {}", exe.display()));
         }
-        crate::paths::write_atomic(&noted, sum.as_bytes()).map_err(|e| e.to_string())?;
+        crate::paths::write_cache(&noted, sum.as_bytes()).map_err(|e| e.to_string())?;
         Ok(exe)
     }
 
@@ -320,7 +320,7 @@ impl Compiler {
             .join(format!("escouade-js-{}.wasm", &escouade_js_sha256()[..16]));
         if std::fs::read(&path).ok().as_deref() != Some(bytes) {
             std::fs::create_dir_all(&self.tools).map_err(|e| e.to_string())?;
-            crate::paths::write_atomic(&path, bytes).map_err(|e| e.to_string())?;
+            crate::paths::write_cache(&path, bytes).map_err(|e| e.to_string())?;
         }
         Ok(path)
     }

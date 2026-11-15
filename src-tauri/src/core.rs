@@ -1257,8 +1257,12 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
     match serde_json::from_str(&text) {
         Ok(v) => Some(v),
         Err(e) => {
+            // `backups::recover` has put a file that does not read aside before: set aside here all the same, under
+            // a name of its own, never over another (ESC-469).
             log::error!("invalid {}: {e}", path.display());
-            let _ = std::fs::copy(path, path.with_extension("broken.json"));
+            if let Err(e) = escouade_model::backups::set_aside(path, chrono::Utc::now()) {
+                log::error!("{}: cannot be set aside: {e}", path.display());
+            }
             None
         }
     }
@@ -1885,6 +1889,10 @@ impl<R: Runtime> Core<R> {
         if let Err(e) = data.ensure() {
             log::error!("cannot create data dir: {e}");
         }
+        // Before anything reads them (ESC-469): a state, settings, plugins' list or accounts' file that does not read
+        // (zeros after a power cut, cut short, no JSON) is set aside under a dated name and its newest copy that reads
+        // takes its place; the window tells it (`backups::notices`) until the user closes the notice.
+        escouade_model::backups::recover_all(data.root(), chrono::Utc::now());
         // What the index retired by ESC-310 left in the projects' folders, erased once.
         let erased = data.erase_retired();
         if erased > 0 {
@@ -2539,6 +2547,18 @@ impl<R: Runtime> Core<R> {
                 }
             });
         }
+        // The copies of the files that are not made again (ESC-469): now, then every 10 minutes, of those that changed.
+        let root = self.data.root().to_path_buf();
+        tauri::async_runtime::spawn(async move {
+            loop {
+                let r = root.clone();
+                let _ = tauri::async_runtime::spawn_blocking(move || {
+                    escouade_model::backups::back_up_all(&r, chrono::Utc::now())
+                })
+                .await;
+                tokio::time::sleep(escouade_model::backups::EVERY).await;
+            }
+        });
         let c = self.clone();
         tauri::async_runtime::spawn(async move { c.git_loop(git_rx).await });
         tauri::async_runtime::spawn(self.clone().conv_flusher());
@@ -3239,6 +3259,10 @@ impl<R: Runtime> Core<R> {
             self.notify_agent_now(alert, id, project_id, name);
         }
         if let Some(end) = fx.turn_end {
+            // What the turn wrote in the conversation's log, on the disk (ESC-469).
+            if let Ok(h) = self.agent(id) {
+                h.lock().conv.sync();
+            }
             self.facts.emit(
                 crate::facts::turn_ended(&end),
                 crate::facts::About::agent(id, name, project_id),

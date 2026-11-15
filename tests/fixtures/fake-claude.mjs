@@ -3283,11 +3283,14 @@ function startSession() {
             }),
           );
         case 'get_usage':
-          if (configDir !== null)
+          if (configDir !== null) {
+            // The account's folder may not be there yet: nothing makes Principal's before the plugin reads its quota.
+            fs.mkdirSync(configDir, { recursive: true });
             fs.appendFileSync(
               path.join(configDir, 'fake-get-usage.jsonl'),
               JSON.stringify({ pid: process.pid, alone: argv.includes('--no-session-persistence') }) + '\n',
             );
+          }
           // While a <dir>/fake-usage.json file is there, its body is the rate_limits told (ESC-312: the rows limits[]).
           if (configDir !== null && fs.existsSync(path.join(configDir, 'fake-usage.json')))
             return ok(m.request_id, { rate_limits: JSON.parse(fs.readFileSync(path.join(configDir, 'fake-usage.json'), 'utf8')) });
