@@ -207,7 +207,8 @@ test('the settings look as the previews of direction A draw them, tinted by what
           await shoot(page, preview, `${route}${size.name}-${t}`);
           await compareFrame(page, preview, route, small, where);
           // In CI's window, the room there is: 16 px around it.
-          if (small) expect.soft(await place(page.locator('.settings[role="dialog"]')), `the window, ${where}`).toLookLike([16, 16, 996, 747]);
+          if (small)
+            expect.soft(await place(page.locator('.settings[role="dialog"]')), `the window, ${where}`).toLookLike([16, 16, 996, 747]);
         }
       }
   } finally {

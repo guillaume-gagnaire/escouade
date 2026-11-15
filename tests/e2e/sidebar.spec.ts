@@ -121,7 +121,9 @@ test('the sidebar looks as the preview draws it, in both themes, at both sizes',
         expect.soft(fit, `the tabs fill their row, ${where}`).toEqual({ cut: [], gapLeft: 3, gapRight: 3 });
 
         // « Nouvel agent Ctrl N » and the arrow of its menu « Harness ».
-        expect.soft(await place(side.locator('.new-agent')), `new agent's place, ${where}`).toLookLike(await place(ps.locator('.new-agent')));
+        expect
+          .soft(await place(side.locator('.new-agent')), `new agent's place, ${where}`)
+          .toLookLike(await place(ps.locator('.new-agent')));
         expect.soft(await look(side.locator('.new-agent')), `new agent, ${where}`).toLookLike(await look(ps.locator('.new-agent')));
         expect.soft(await look(side.locator('.new-agent kbd')), `its key, ${where}`).toLookLike(await look(ps.locator('.new-agent kbd')));
         expect.soft(await place(side.locator('.new-more')), `its arrow, ${where}`).toLookLike(await place(ps.locator('#new-more')));

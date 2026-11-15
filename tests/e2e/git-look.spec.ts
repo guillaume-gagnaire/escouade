@@ -152,12 +152,16 @@ test('git beside the conversation looks as the preview draws it, in both themes,
         const ptabs = pv.locator('.utabs');
         expect.soft(await lookBut(tabs, 'width'), `tabs, ${where}`).toLookLike(await lookBut(ptabs, 'width'));
         const tab = (el: Locator, sel: boolean) => el.locator(`[role="tab"][aria-selected="${sel}"]`).first();
-        expect.soft(await lookBut(tab(tabs, true), 'width'), `the tab chosen, ${where}`).toLookLike(await lookBut(tab(ptabs, true), 'width'));
+        expect
+          .soft(await lookBut(tab(tabs, true), 'width'), `the tab chosen, ${where}`)
+          .toLookLike(await lookBut(tab(ptabs, true), 'width'));
         expect.soft(await lookBut(tab(tabs, false), 'width'), `a tab, ${where}`).toLookLike(await lookBut(tab(ptabs, false), 'width'));
         const [tx, , , th] = await place(tab(tabs, true));
         const [ptx, , , pth] = await place(tab(ptabs, true));
         expect.soft([tx, th], `the first tab's place, ${where}`).toEqual([ptx, pth]);
-        expect.soft(await lookBut(tabs.locator('.n'), 'width'), `the count, ${where}`).toLookLike(await lookBut(ptabs.locator('.n'), 'width'));
+        expect
+          .soft(await lookBut(tabs.locator('.n'), 'width'), `the count, ${where}`)
+          .toLookLike(await lookBut(ptabs.locator('.n'), 'width'));
 
         // The scope and the caption.
         const seg = side.locator('.scope');

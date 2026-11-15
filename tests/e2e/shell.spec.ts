@@ -95,7 +95,9 @@ test('the title bar, the projects’ rail and the status bar look as the preview
         // the sidebar beside the rail.
         expect(await place(page.locator('header.bar')), `title bar, ${where}`).toLookLike(await place(preview.locator('header.titlebar')));
         expect(await place(page.locator('nav.rail')), `rail, ${where}`).toLookLike(await place(preview.locator('nav.prail')));
-        expect(await place(page.locator('footer.bar')), `status bar, ${where}`).toLookLike(await place(preview.locator('footer.statusbar')));
+        expect(await place(page.locator('footer.bar')), `status bar, ${where}`).toLookLike(
+          await place(preview.locator('footer.statusbar')),
+        );
         expect(await place(page.locator('aside.side')), `sidebar, ${where}`).toLookLike(await place(preview.locator('aside.sidebar')));
 
         // The tiles: the active project's, « + », the overview's and the settings', in their places.
@@ -176,7 +178,9 @@ test('at the first start the rail keeps « + » and the settings, the title bar 
       expect(await place(page.getByRole('button', { name: 'Ajouter un projet', exact: true }))).toLookLike(
         await place(preview.locator('#r-add')),
       );
-      expect(await place(page.getByRole('button', { name: 'Réglages (Ctrl+,)' }))).toLookLike(await place(preview.locator('#btn-settings')));
+      expect(await place(page.getByRole('button', { name: 'Réglages (Ctrl+,)' }))).toLookLike(
+        await place(preview.locator('#btn-settings')),
+      );
       await expect(page.locator('header .search')).toHaveCount(0);
       // The panel of the work, alone, where the preview has it.
       expect(await place(page.locator('.work'))).toLookLike(await place(preview.locator('main.panel')));

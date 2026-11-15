@@ -150,7 +150,9 @@ test('the plan looks as the preview draws it, open and folded, in both themes, a
         expect
           .soft(await lookBut(head.locator('.title'), 'width'), `title, ${where}`)
           .toLookLike(await lookBut(phead.locator('.ttl'), 'width'));
-        expect.soft(await lookBut(head.locator('.pct'), 'width'), `share, ${where}`).toLookLike(await lookBut(phead.locator('.pct'), 'width'));
+        expect
+          .soft(await lookBut(head.locator('.pct'), 'width'), `share, ${where}`)
+          .toLookLike(await lookBut(phead.locator('.pct'), 'width'));
         expect.soft(await look(head.locator('.chev svg')), `chevron, ${where}`).toLookLike(await look(phead.locator('.chev')));
         const count = head.locator('.count');
         const pcount = phead.locator('.cnt');
@@ -190,9 +192,13 @@ test('the plan looks as the preview draws it, open and folded, in both themes, a
         const [prx, pry, prw, prh] = await place(prow);
         expect.soft([rx, ry - by, rw, rh], `a row's place, ${where}`).toEqual([prx, pry - pby, prw, prh]);
         expect.soft(await look(row), `a row done, ${where}`).toLookLike(await look(prow));
-        expect.soft(await lookBut(row.locator('.n'), 'width'), `its rank, ${where}`).toLookLike(await lookBut(prow.locator('.no'), 'width'));
+        expect
+          .soft(await lookBut(row.locator('.n'), 'width'), `its rank, ${where}`)
+          .toLookLike(await lookBut(prow.locator('.no'), 'width'));
         expect.soft(await look(row.locator('.ico svg')), `its icon, ${where}`).toLookLike(await look(prow.locator('.st-ic svg')));
-        expect.soft(await lookBut(row.locator('.rt'), 'width'), `its title, ${where}`).toLookLike(await lookBut(prow.locator('.rt'), 'width'));
+        expect
+          .soft(await lookBut(row.locator('.rt'), 'width'), `its title, ${where}`)
+          .toLookLike(await lookBut(prow.locator('.rt'), 'width'));
         expect.soft(await look(row.locator('.rbar')), `its bar, ${where}`).toLookLike(await look(prow.locator('.rbar')));
         expect
           .soft(await lookBut(row.locator('.rpct'), 'width'), `its share, ${where}`)
