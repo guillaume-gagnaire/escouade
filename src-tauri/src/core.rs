@@ -9942,7 +9942,11 @@ impl<R: Runtime> Core<R> {
         } else {
             sub_prefix(&root, &project.path)
         };
-        Ok(fsedit::tree(&root, &project.worktree_copy, &below).await)
+        let mut tree = fsedit::tree(&root, &project.worktree_copy, &below).await;
+        // Named as the watcher names what it tells (`GitService::watch`): the view finds the
+        // changed paths under it by their start (ESC-463). Its paths are relative: they stay.
+        tree.root = paths::on_disk(&tree.root);
+        Ok(tree)
     }
 
     /// Where a terminal opens: the agent's worktree, else the project's folder, or the folder

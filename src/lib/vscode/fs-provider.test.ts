@@ -310,6 +310,45 @@ describe('the file system provider of the VS Code view', () => {
     ]);
   });
 
+  it('reads again a file told by its root’s name on disk, and nothing for another name of the folder (ESC-463)', async () => {
+    // The CI's runner: the folder's long name, the one the core gives both the tree's root and the watcher.
+    const long = '/c:/Users/runneradmin/AppData/Local/Temp/e2e/demo';
+    const disk = fakeCore({ 'p1/project': long });
+    disk.put(`${long}/src/f1.ts`, 'export const f = 1;\n');
+    const fs = new EscouadeFileSystem(disk.core, kit, true);
+    await fs.addSource({ projectId: 'p1', agentId: null });
+    const fired: { type: number; resource: UriLike }[][] = [];
+    fs.onDidChangeFile((c) => fired.push(c.filter((x) => x.resource.path.startsWith('/c:'))));
+    await fs.readFile(file(`${long}/src/f1.ts`));
+    disk.put(`${long}/src/f1.ts`, '// Écrit par un agent\n');
+    const updated = [{ type: FileChangeType.UPDATED, resource: file(`${long}/src/f1.ts`) }];
+    // The short name (8.3) the project was registered by: no root starts so, nothing is told. The core names the
+    // watched folder on disk for that (`paths::on_disk`).
+    await fs.diskChanged({ projectId: 'p1', paths: ['C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\e2e\\demo\\src\\f1.ts'] });
+    expect(fired).toEqual([]);
+    // The long name, in Windows's backslashes as the watcher tells it, or in git's slashes: read again.
+    await fs.diskChanged({ projectId: 'p1', paths: ['C:\\Users\\runneradmin\\AppData\\Local\\Temp\\e2e\\demo\\src\\f1.ts'] });
+    expect(fired).toEqual([updated]);
+    await fs.diskChanged({ projectId: 'p1', paths: ['C:/Users/runneradmin/AppData/Local/Temp/e2e/demo/src/f1.ts'] });
+    expect(fired).toEqual([updated, updated]);
+  });
+
+  it('reads again a file of macOS’s temporary folder told by its real path only (ESC-463)', async () => {
+    const real = '/private/var/folders/x1/T/e2e/demo';
+    const disk = fakeCore({ 'p1/project': real });
+    disk.put(`${real}/src/f1.ts`, 'export const f = 1;\n');
+    const fs = new EscouadeFileSystem(disk.core, kit, false);
+    await fs.addSource({ projectId: 'p1', agentId: null });
+    const fired: { type: number; resource: UriLike }[][] = [];
+    fs.onDidChangeFile((c) => fired.push([...c]));
+    await fs.readFile(file(`${real}/src/f1.ts`));
+    // `/var` is a link to `/private/var`: another name of the folder, no root of it.
+    await fs.diskChanged({ projectId: 'p1', paths: ['/var/folders/x1/T/e2e/demo/src/f1.ts'] });
+    expect(fired).toEqual([]);
+    await fs.diskChanged({ projectId: 'p1', paths: [`${real}/src/f1.ts`] });
+    expect(fired).toEqual([[{ type: FileChangeType.UPDATED, resource: file(`${real}/src/f1.ts`) }]]);
+  });
+
   it('keeps the case of paths on Linux', async () => {
     const disk = fakeCore({ 'p1/project': '/home/me/demo' });
     disk.put('/home/me/demo/README.md', '# demo');

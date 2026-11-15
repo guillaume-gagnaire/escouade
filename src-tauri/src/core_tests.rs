@@ -7109,6 +7109,96 @@ async fn the_editor_tree_shows_the_files_the_project_copies_into_its_worktrees()
     assert!(t.ignored.is_empty() && !t.files.contains(&".env".to_string()));
 }
 
+/// A second name of the folder `target` at `link`: a junction under Windows (`mklink /J`, no
+/// rights needed), a symbolic link elsewhere.
+fn second_name(target: &Path, link: &Path) -> bool {
+    #[cfg(windows)]
+    {
+        Command::new("cmd")
+            .args(["/d", "/c", "mklink", "/J"])
+            .arg(link)
+            .arg(target)
+            .output()
+            .is_ok_and(|o| o.status.success())
+    }
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(target, link).is_ok()
+    }
+}
+
+/// The short name (8.3) of the folder `dir`, when its volume gives one that differs.
+#[cfg(windows)]
+fn short_name(dir: &Path) -> Option<String> {
+    use std::os::windows::process::CommandExt;
+    let out = Command::new("cmd")
+        .raw_arg(format!(
+            "/d /c for %I in (\"{}\") do @echo %~sI",
+            dir.display()
+        ))
+        .output()
+        .ok()?;
+    let short = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    let long = dir.to_string_lossy();
+    (out.status.success() && !short.is_empty() && !short.eq_ignore_ascii_case(&long))
+        .then_some(short)
+}
+
+/// The project opened at `spelled`, another name of the repository at `repo`: a file written
+/// there is told (what `FsChanged` carries) by a path under the root the editor's tree gives.
+async fn told_under_the_tree_root(h: &Harness, repo: &Path, spelled: &str) {
+    assert_ne!(
+        crate::paths::folder_key(spelled),
+        crate::paths::folder_key(&repo.to_string_lossy())
+    );
+    let p = h
+        .core
+        .create_project(spelled, "demo", "oklch(0.72 0.12 48)", false, None, true)
+        .await
+        .unwrap();
+    assert_eq!(p.path, spelled);
+    let root = h.core.fs_tree(&p.id, None).await.unwrap().root;
+    assert!(!root.starts_with(r"\\?\"), "{root}");
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let _ = h.core.git.take_changed(&p.id);
+    std::fs::write(repo.join("src").join("f1.ts"), "// Écrit par un agent\n").unwrap();
+    let want = format!("{}/src/f1.ts", root.replace('\\', "/"));
+    let mut seen = Vec::new();
+    for _ in 0..50 {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        if let Some(c) = h.core.git.take_changed(&p.id) {
+            assert!(!c.overflow);
+            seen.extend(c.paths);
+        }
+        // Found by its start, as the view finds it (`FsProvider.diskChanged`).
+        if seen.iter().any(|f| f.replace('\\', "/") == want) {
+            return;
+        }
+    }
+    panic!("{want} not told by {spelled}: {seen:?}");
+}
+
+#[tokio::test]
+async fn a_file_written_in_a_project_opened_by_a_link_is_told_under_the_editor_root() {
+    let h = harness("core-fs-changed-link");
+    let r = repo(&h.dir);
+    let link = h.dir.join("link");
+    assert!(second_name(&r, &link), "no junction or link made");
+    told_under_the_tree_root(&h, &r, &link.to_string_lossy()).await;
+}
+
+#[cfg(windows)]
+#[tokio::test]
+async fn a_file_written_in_a_project_opened_by_its_short_name_is_told_under_the_editor_root() {
+    let h = harness("core-fs-changed-short-name");
+    let r = repo(&h.dir);
+    let Some(short) = short_name(&r) else {
+        eprintln!("no short name on this volume: skipped");
+        return;
+    };
+    told_under_the_tree_root(&h, &r, &short).await;
+}
+
 #[tokio::test]
 async fn the_editor_tree_of_a_project_in_a_subfolder_shows_the_files_copied_from_that_folder() {
     let h = harness("core-edit-tree-copied-below");

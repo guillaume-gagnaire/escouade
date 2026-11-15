@@ -2,8 +2,8 @@
 title: "Éditeur"
 subject: "Éditeur"
 sources: ["docs/SPEC.md","docs/EDITOR-STUDY.md","docs/TODO-2.3.md"]
-tickets: ["ESC-447"]
-decisions: [170]
+tickets: ["ESC-447","ESC-463"]
+decisions: [170,172]
 compared: "2026-10-30T05:39:53+01:00"
 gaps: [{"text":"La spec dit que le double-clic sur la poignée ramène la colonne des fichiers à 240 px. Le code revient à 200 px (TREE_NARROW) quand la zone de l'éditeur fait 904 px ou moins, et à 240 px seulement au-delà.","code":["src/lib/editor/layout.ts","src/components/editor/EditorView.svelte"]}]
 order: 25
@@ -53,6 +53,7 @@ La règle est vérifiée sur le chemin écrit et sur le chemin réel (liens suiv
 ### Changements sur le disque et conflit
 
 - Le cœur pousse à la vue les chemins que son observateur de fichiers a vus changer (plus de 512 entre deux lectures : « tout a pu changer »). Un fichier ouvert et non modifié qu'un agent a changé se relit tout de suite ; les fichiers ajoutés ou supprimés apparaissent ou disparaissent ensuite dans l'explorateur.
+- Cela vaut quel que soit le nom par lequel le dossier du projet a été ouvert : nom court de Windows (`RUNNER~1`), lien ou jonction, `/var` de macOS (lien vers `/private/var`). Le dossier que sert la vue et celui que surveille l'observateur sont tous deux nommés comme le disque les nomme (liens suivis, noms longs, sans le `\\?\` de Windows) ; un dossier qui n'existe pas encore, ou sur un partage, garde le nom donné (ESC-463).
 - Un fichier modifié dans la vue et changé sur le disque n'est pas relu. `Ctrl+S` montre alors le conflit de VS Code (« The content of the file is newer… », avec « Compare » et « Overwrite ») et n'écrit rien. « Overwrite » écrit par-dessus.
 - Le cœur refuse aussi une écriture quand le fichier a changé entre la vérification de VS Code et l'écriture (`changed`), ou a disparu (`deleted`).
 

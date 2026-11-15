@@ -3023,8 +3023,12 @@ impl GitService {
         };
         match notify::recommended_watcher(handler) {
             Ok(mut w) => {
-                for (i, path) in paths.iter().enumerate() {
-                    if let Err(e) = w.watch(Path::new(path), RecursiveMode::Recursive) {
+                // Each folder by its name on disk, as `Core::fs_tree` roots the editor there: the
+                // paths the watcher tells are those of the watched folder (Windows, Linux) or the
+                // real ones (macOS), and the window finds them under its root by their start
+                // (ESC-463: a short name, a link, macOS's `/var`).
+                for (i, path) in paths.iter().map(|p| crate::paths::on_disk(p)).enumerate() {
+                    if let Err(e) = w.watch(Path::new(&path), RecursiveMode::Recursive) {
                         log::warn!("cannot watch {path}: {e}");
                         // Without the project's own folder, there is nothing to refresh by.
                         if i == 0 {

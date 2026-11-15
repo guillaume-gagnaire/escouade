@@ -674,6 +674,29 @@ pub fn find_folder<'a, T>(
         .find(|i| spelt(folder_of(i)).is_some_and(|key| key == typed))
 }
 
+/// The name the disk gives the file or folder `path`, so that two spellings of it read the same
+/// (ESC-463): links and junctions followed, the long names of Windows for its short ones
+/// (`RUNNER~1`), `/private/var` for macOS's `/var`, without the `\\?\` form Windows gives back.
+/// The path as given when it is not there (yet), and for a share (WSL's included): asking the disk
+/// about one that is down, or a distribution not started, can block for long.
+pub fn on_disk(path: &str) -> String {
+    if !is_local_key(&folder_key(path)) {
+        return path.to_string();
+    }
+    match std::fs::canonicalize(path) {
+        Ok(real) => plain_path(&real.to_string_lossy()),
+        Err(_) => path.to_string(),
+    }
+}
+
+/// `path` without the extended form Windows gives back (`\\?\C:\…`, `\\?\UNC\host\…`).
+pub fn plain_path(path: &str) -> String {
+    match path.strip_prefix(r"\\?\UNC\") {
+        Some(rest) => format!(r"\\{rest}"),
+        None => path.strip_prefix(r"\\?\").unwrap_or(path).to_string(),
+    }
+}
+
 /// Whether the paths `a` and `b` name one folder (`find_folder` of one).
 pub fn same_folder(a: &str, b: &str) -> bool {
     find_folder(&[b], a, |p| *p).is_some()
@@ -1203,6 +1226,36 @@ mod tests {
         let (x, y) = (dir.join("x"), dir.join("y"));
         assert!(!same_folder(&x.to_string_lossy(), &y.to_string_lossy()));
         assert!(same_folder(&x.to_string_lossy(), &x.to_string_lossy()));
+    }
+
+    #[test]
+    fn a_folder_is_named_on_disk_as_the_disk_names_it_whatever_the_spelling() {
+        let dir = test_dir("paths-on-disk");
+        let app = dir.join("app");
+        std::fs::create_dir_all(&app).unwrap();
+        let real = on_disk(&app.to_string_lossy());
+        assert!(!real.starts_with(r"\\?\"), "{real}");
+        assert!(same_folder(&real, &app.to_string_lossy()));
+        // Its spellings are one: separators, a trailing one, the extended form, a link.
+        let s = app.to_string_lossy().to_string();
+        assert_eq!(on_disk(&format!("{s}{}", std::path::MAIN_SEPARATOR)), real);
+        if cfg!(windows) {
+            assert_eq!(on_disk(&format!(r"\\?\{s}")), real);
+            assert_eq!(on_disk(&s.to_uppercase()), real);
+        }
+        let link = dir.join("link");
+        assert!(make_dir_link(&app, &link), "no link made");
+        assert_eq!(on_disk(&link.to_string_lossy()), real);
+        // Not there (yet), or on a share: as given.
+        let gone = dir.join("gone").to_string_lossy().to_string();
+        assert_eq!(on_disk(&gone), gone);
+        assert_eq!(
+            on_disk(r"\\wsl.localhost\Ubuntu\home\x"),
+            r"\\wsl.localhost\Ubuntu\home\x"
+        );
+        assert_eq!(plain_path(r"\\?\UNC\host\share\x"), r"\\host\share\x");
+        assert_eq!(plain_path(r"\\?\C:\x"), r"C:\x");
+        assert_eq!(plain_path("/private/var/x"), "/private/var/x");
     }
 
     #[test]
