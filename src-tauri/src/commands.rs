@@ -4050,18 +4050,19 @@ pub async fn docs_decisions(core: CoreState<'_>, id: String) -> Res<Vec<crate::d
     Ok(core.docs_space(&id, None).await.map_err(err)?.decisions())
 }
 
-/// A decision proposed from the window, or a proposal still open revised (`reference`: its id).
+/// A decision proposed from the window, or a proposal still open revised (`reference`: its id):
+/// the fields the call leaves out keep their value, the ones it gives replace it, empty included.
 #[tauri::command]
 pub async fn docs_decision_propose(
     core: CoreState<'_>,
     id: String,
     reference: Option<crate::docs::Ref>,
-    decision: crate::docs::Decision,
+    decision: crate::docs::DecisionPatch,
 ) -> Res<crate::docs::Decision> {
     let out = core
         .docs_space(&id, None)
         .await
-        .and_then(|s| s.decision_propose(reference.as_ref(), decision))
+        .and_then(|s| s.decision_revise(reference.as_ref(), decision))
         .map_err(err);
     if let Ok(d) = &out {
         core.docs_to_plan(&id, &[], &[d.reference()]);

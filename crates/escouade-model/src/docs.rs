@@ -184,7 +184,92 @@ pub struct Decision {
     pub consequences: String,
 }
 
+/// What a call gives of a decision (ESC-475): a field left out (`None`) is not touched, a field
+/// given replaces it, empty included. Read from the window and from the tools.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DecisionPatch {
+    pub title: Option<String>,
+    pub context: Option<String>,
+    pub decision: Option<String>,
+    pub consequences: Option<String>,
+    pub origin: Option<String>,
+    pub origin_ref: Option<String>,
+    pub pages: Option<Vec<String>>,
+    pub tickets: Option<Vec<String>>,
+    pub documents: Option<Vec<String>>,
+    pub changes: Option<Vec<Change>>,
+    /// Set by the tool that replaces an accepted decision; never by a revision.
+    pub supersedes: Option<Vec<u32>>,
+}
+
+impl DecisionPatch {
+    /// The names (camelCase, as the tools spell them) of the fields it gives.
+    pub fn given(&self) -> Vec<&'static str> {
+        [
+            ("title", self.title.is_some()),
+            ("context", self.context.is_some()),
+            ("decision", self.decision.is_some()),
+            ("consequences", self.consequences.is_some()),
+            ("origin", self.origin.is_some()),
+            ("originRef", self.origin_ref.is_some()),
+            ("pages", self.pages.is_some()),
+            ("tickets", self.tickets.is_some()),
+            ("documents", self.documents.is_some()),
+            ("changes", self.changes.is_some()),
+        ]
+        .into_iter()
+        .filter(|(_, on)| *on)
+        .map(|(n, _)| n)
+        .collect()
+    }
+}
+
 impl Decision {
+    /// Puts what `p` gives over this decision: what it leaves out stays as it is.
+    pub fn apply(&mut self, p: DecisionPatch) {
+        if let Some(v) = p.title {
+            self.title = v.trim().to_string();
+        }
+        if let Some(v) = p.context {
+            self.context = v;
+        }
+        if let Some(v) = p.decision {
+            self.decision = v;
+        }
+        if let Some(v) = p.consequences {
+            self.consequences = v;
+        }
+        if let Some(v) = p.origin {
+            self.origin = v;
+        }
+        if let Some(v) = p.origin_ref {
+            self.origin_ref = v;
+        }
+        if let Some(v) = p.pages {
+            self.pages = v;
+        }
+        if let Some(v) = p.tickets {
+            self.tickets = v;
+        }
+        if let Some(v) = p.documents {
+            self.documents = v;
+        }
+        if let Some(v) = p.supersedes {
+            self.supersedes = v;
+        }
+        if let Some(v) = p.changes {
+            self.changes = v;
+        }
+    }
+
+    /// A decision made of what `p` gives alone.
+    pub fn from_patch(p: DecisionPatch) -> Decision {
+        let mut d = Decision::default();
+        d.apply(p);
+        d
+    }
+
     /// The name of its file: `<id>.md` for a proposal, `NNNN-<id>.md` once it has a number.
     pub fn file_name(&self) -> String {
         match (self.number, self.id.is_empty()) {

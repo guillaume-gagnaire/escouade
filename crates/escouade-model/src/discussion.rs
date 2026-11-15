@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::docs::{Decision, Gap, Page};
+use crate::docs::{Decision, DecisionPatch, Gap, Page};
 
 /// Its role.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -112,6 +112,20 @@ impl Discussion {
         c.added = added;
         c.removed = removed;
         c
+    }
+
+    /// Keeps what `p` gives of a decision of this discussion (ESC-475): the one of the same title is
+    /// revised, keeping the fields `p` leaves out; else a new one is made of `p`. Its place in the
+    /// list, from 1, and whether it revised one.
+    pub fn revise_decision(&mut self, p: DecisionPatch) -> (usize, bool) {
+        let title = p.title.clone().unwrap_or_default().trim().to_lowercase();
+        let at = self
+            .decisions
+            .iter()
+            .position(|o| o.title.trim().to_lowercase() == title);
+        let mut d = at.map(|i| self.decisions[i].clone()).unwrap_or_default();
+        d.apply(p);
+        (self.propose_decision(d), at.is_some())
     }
 
     /// Keeps the decision `d`, from this discussion: one of the same title is revised. Its place

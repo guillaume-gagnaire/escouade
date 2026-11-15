@@ -7,6 +7,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 ## [Unreleased]
 
 - A power cut no longer loses Escouade’s state: its files are written all the way to the disk, copies of them are kept (the latest, one per hour, one per day), and a file unreadable at startup is replaced by its last good copy, in a notice that says so.
+- Revising a decision proposal no longer empties what you did not give again: a field left out of the call keeps its value, a field given replaces it, empty included, and the answer says what changed.
 
 ## [2.2.0] — 2026-11-14
 

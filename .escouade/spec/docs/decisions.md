@@ -27,7 +27,7 @@ Le registre des décisions sur le produit : une décision par fichier, datée, q
 
 ### Ses états
 
-- **Proposée** : un agent ou quelqu'un de l'équipe la propose ; elle ne vaut décision qu'une fois acceptée. Une proposition encore ouverte se révise sous son id. « Accepter », sur sa ligne ou dans son détail, l'accepte d'un clic, au nom de l'utilisateur de la machine.
+- **Proposée** : un agent ou quelqu'un de l'équipe la propose ; elle ne vaut décision qu'une fois acceptée. Une proposition encore ouverte se révise sous son id : un champ absent de l'appel garde sa valeur, un champ donné la remplace, vide compris, et l'origine d'un ticket reste celle du ticket. « Accepter », sur sa ligne ou dans son détail, l'accepte d'un clic, au nom de l'utilisateur de la machine.
 - **Acceptée** : à l'acceptation, elle reçoit le numéro qui suit le plus haut du registre de la branche où elle va ; son fichier prend ce numéro, et les pages de spec et les tickets qui la citaient par son id citent son numéro ; la validation d'un ticket ajoute ce ticket à ses `tickets`. Elle ne se réécrit plus. « La remplacer » propose une nouvelle décision qui la nomme dans `supersedes` ; l'ancienne tient jusqu'à ce que la nouvelle soit acceptée.
 - **Remplacée** : la nouvelle a été acceptée ; l'ancienne reste dans le registre telle quelle, et dit par laquelle (`superseded_by`, le numéro que la nouvelle a reçu).
 - Une proposition écrite avant, qui a déjà un numéro, le garde à l'acceptation tant qu'aucune autre décision ne l'a, ici ni sur la branche où elle va ; sinon elle prend le suivant, et les pages qu'elle nomme suivent.
@@ -48,7 +48,7 @@ Le registre des décisions sur le produit : une décision par fichier, datée, q
 
 ### Pour les agents (MCP)
 
-`list_decisions` (filtrées par état au besoin ; chaque décision avec son `number`, `null` pour une proposition, et son `id`), `read_decision` (par `number` ou par `id`), `propose_decision` (une nouvelle proposition, sans numéro, ou la révision d'une proposition ouverte par son `id` ; la réponse rappelle de la citer par son id), `replace_decision` (une proposition qui remplace une décision acceptée, nommée par son numéro). Ils écrivent dans la branche des docs, sans rien commiter ; les formats sont dans `docs/PROTOCOL.md`. Les événements des plugins `decision.proposed` portent son `id`, `decision.accepted` son `number` et son `id`.
+`list_decisions` (filtrées par état au besoin ; chaque décision avec son `number`, `null` pour une proposition, et son `id`), `read_decision` (par `number` ou par `id`), `propose_decision` (une nouvelle proposition, sans numéro, ou la révision d'une proposition ouverte par son `id`, qui ne redonne que ce qui change : la réponse dit `revised`, `replaced` et `kept` ; la réponse rappelle de la citer par son id), `replace_decision` (une proposition qui remplace une décision acceptée, nommée par son numéro). Ils écrivent dans la branche des docs, sans rien commiter ; les formats sont dans `docs/PROTOCOL.md`. Les événements des plugins `decision.proposed` portent son `id`, `decision.accepted` son `number` et son `id`.
 
 ## Limites
 

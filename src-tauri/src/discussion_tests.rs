@@ -295,3 +295,33 @@ async fn a_discussion_whose_first_message_is_refused_leaves_no_agent() {
     assert_eq!(removed.len(), 1, "{events:?}");
     assert!(h.core.agent(removed[0]["id"].as_str().unwrap()).is_err());
 }
+
+#[test]
+fn a_decision_of_a_discussion_revised_by_its_title_keeps_what_the_revision_does_not_give() {
+    let mut d = Discussion {
+        kind: Kind::Brainstorm,
+        subject: "Relances".into(),
+        ..Default::default()
+    };
+    let (n, revised) = d.revise_decision(crate::docs::DecisionPatch {
+        title: Some("E-mail seulement".into()),
+        context: Some("Le contexte.".into()),
+        decision: Some("a".into()),
+        pages: Some(vec!["notif/n".into()]),
+        ..Default::default()
+    });
+    assert_eq!((n, revised), (1, false));
+    let (n, revised) = d.revise_decision(crate::docs::DecisionPatch {
+        title: Some(" e-mail SEULEMENT".into()),
+        decision: Some(String::new()),
+        ..Default::default()
+    });
+    assert_eq!((n, revised), (1, true));
+    assert_eq!(d.decisions.len(), 1);
+    let one = &d.decisions[0];
+    assert_eq!(
+        (one.context.as_str(), one.decision.as_str(), one.pages.len()),
+        ("Le contexte.", "", 1)
+    );
+    assert_eq!(one.origin_ref, "Relances");
+}

@@ -7,6 +7,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 ## [Non publié]
 
 - Une coupure du poste ne fait plus perdre l’état d’Escouade : ses fichiers sont écrits jusque sur le disque, des copies en sont gardées (les dernières, une par heure, une par jour), et un fichier illisible au démarrage est remplacé par sa dernière bonne copie, dans une annonce qui le dit.
+- Réviser une proposition de décision ne vide plus ce qu’on n’a pas redonné : un champ absent de l’appel garde sa valeur, un champ donné la remplace, vide compris, et la réponse dit ce qui a changé.
 
 ## [2.2.0] — 2026-11-14
 
