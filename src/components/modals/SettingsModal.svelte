@@ -18,6 +18,7 @@
   import LaunchPage from '../settings/LaunchPage.svelte';
   import NewProjects from '../settings/NewProjects.svelte';
   import NotificationsPage from '../settings/NotificationsPage.svelte';
+  import OverseerPage from '../settings/OverseerPage.svelte';
   import PluginsPage from '../settings/PluginsPage.svelte';
   import PrivacyPage from '../settings/PrivacyPage.svelte';
   import ProjectPage from '../settings/ProjectPage.svelte';
@@ -201,6 +202,8 @@
             <AccountsTab />
           {:else if info.id === 'services'}
             <ServicesPage />
+          {:else if info.id === 'overseer'}
+            <OverseerPage />
           {:else if info.id === 'voice'}
             <VoiceTab />
           {:else if info.id === 'notifications'}

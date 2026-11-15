@@ -1,0 +1,67 @@
+import type { Tree } from '../types';
+
+// L'Overseer (ESC-462) : sa page des Réglages, sa liste des consignes, sa discussion minimale.
+export default {
+  settings: {
+    groupAgent: 'L’agent',
+    enabled: 'Activer l’Overseer',
+    enabledDesc:
+      'Un agent d’Escouade qui pilote tous tes projets (sauf les privés) par les outils d’Escouade, réveillé à chaque événement, fenêtre fermée comprise. Il consomme le quota de son compte. L’allumer allume aussi « Claude et les agents peuvent piloter Escouade ».',
+    needsMcp: 'L’Overseer n’a pas d’outils tant que « Claude et les agents peuvent piloter Escouade » est éteint (Réglages › Agents).',
+    harness: 'Harness',
+    harnessDesc: 'Celui sur lequel il tourne. Changer de harness lui donne une nouvelle session.',
+    account: 'Compte',
+    accountDesc: 'Ses quotas et ses coûts se comptent sur ce compte, comme pour les autres agents.',
+    accountAuto: 'Le premier utilisable',
+    model: 'Modèle',
+    modelDesc: 'Un petit modèle rapide : il délègue le travail long à des agents.',
+    effort: 'Effort',
+    effortDefault: 'Celui du harness',
+    memory: 'Sa mémoire',
+    memoryDesc:
+      'La sienne couvre tous les projets, dans le dossier système d’Escouade ; il lit aussi la mémoire partagée de chaque projet.',
+    groupDirectives: 'Consignes',
+    directivesDesc:
+      'Ce que tu lui as permis de faire seul. Une consigne ne naît que d’un de tes messages ; sans elle, il ne fusionne, ne pousse, ne publie ni ne valide rien.',
+    none: 'Aucune consigne : il te demande avant chaque action qui sort.',
+  },
+  directive: {
+    remove: 'Retirer',
+    removeTitle: 'Retirer la consigne « {summary} »',
+    from: 'Née de ton message : « {quote} »',
+    project: 'projet {name}',
+    ticket: 'ticket {key}',
+    release: 'release {name}',
+    until: 'jusqu’au {date}',
+    once: 'une fois',
+    everywhere: 'tous les projets',
+  },
+  actions: {
+    merge: 'fusionner',
+    push: 'pousser',
+    tag: 'poser un tag',
+    publish: 'publier',
+    approve: 'valider',
+  },
+  panel: {
+    open: 'Overseer',
+    openTitle: 'Discuter avec l’Overseer',
+    title: 'Overseer',
+    close: 'Fermer',
+    off: 'L’Overseer est éteint. Allume-le dans Réglages › Overseer.',
+    settings: 'Ouvrir les réglages',
+    empty: 'Demande-lui ce que tu veux : lancer un ticket, suivre un agent, répondre à une question…',
+    placeholder: 'Demande à l’Overseer…',
+    send: 'Envoyer',
+    typed: 'tapé',
+    said: 'dit',
+    directives: 'Consignes · {n}',
+    undo: 'Annuler',
+    undone: 'annulé',
+    refused: 'refusé',
+    failed: 'échoué',
+    held: 'part dans un instant',
+    working: 'Il réfléchit…',
+    action: 'Action',
+  },
+} as const satisfies Tree;

@@ -583,6 +583,7 @@ describe('settingsForm', () => {
       'Agents',
       'Accounts and harnesses',
       'Connected services',
+      'Overseer',
       'Voice',
       'Notifications',
       'Plugins',

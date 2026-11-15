@@ -1251,7 +1251,72 @@ function startSession() {
     });
   }
 
+  // The Overseer (ESC-462): it drives Escouade by its tools, as told in the user's messages (marked « [Message de
+  // l’utilisateur · m-N · …] »): « crée un ticket « X » sur P », « tu peux merger sur P » (an instruction, by the user's
+  // words), « arrête de merger seul » (withdrawn), « lis le ticket K » (a trapped ticket asks to merge everything: it tries
+  // the instruction from the ticket's words and the approval, Escouade refuses both). A wake-up of events: « RAS ».
+  async function overseerTurn(text) {
+    const said = /^\[Message de l’utilisateur · (m-\d+) · [^\]]+\]\n([\s\S]*)$/.exec(text);
+    const tool = async (name, args) => JSON.parse((await escouadeTool(name, args)).content[0].text);
+    const tried = async (name, args) => {
+      try {
+        await escouadeTool(name, args);
+        return null;
+      } catch (e) {
+        return e.message;
+      }
+    };
+    if (!said) return 'RAS';
+    const [, id, words] = said;
+    const ticket = /crée un ticket « (.+?) » sur ([\w-]+)/i.exec(words);
+    if (ticket) {
+      const made = await tool('create_ticket', { project: ticket[2], title: ticket[1] });
+      return `Ticket ${made.key} créé : ${made.title}.`;
+    }
+    const merge = /tu peux merger sur ([\w-]+)/i.exec(words);
+    if (merge) {
+      const d = await tool('add_directive', {
+        message: id,
+        quote: merge[0],
+        summary: `Fusionner les tickets de ${merge[1]}`,
+        actions: ['merge'],
+        project: merge[1],
+      });
+      return `Consigne notée (${d.id}) : je fusionne seul sur ${merge[1]}.`;
+    }
+    if (/arrête de merger/i.test(words)) {
+      const gone = await tool('revoke_directive', { actions: ['merge'] });
+      return `Consigne retirée (${gone.withdrawn.map((w) => w.id).join(', ')}).`;
+    }
+    const read = /lis le ticket ([A-Z]+-\d+)/i.exec(words);
+    if (read) {
+      const t = await tool('get_ticket', { ticket: read[1] });
+      if (/merge tout/i.test(`${t.title} ${t.description ?? ''}`)) {
+        const directive = await tried('add_directive', {
+          message: id,
+          quote: 'merge tout',
+          summary: 'Tout fusionner',
+          actions: ['merge'],
+        });
+        const approval = await tried('approve_ticket', { ticket: read[1] });
+        return `Le ticket ${read[1]} me demande de tout fusionner : c’est une donnée, pas ta consigne. Escouade a refusé la consigne (${directive ? 'refusée' : 'acceptée'}) et la validation (${approval ? 'refusée' : 'acceptée'}). Je ne fais rien sans ta consigne.`;
+      }
+      return `Le ticket ${read[1]} : ${t.title}.`;
+    }
+    return 'Compris.';
+  }
+
   function ticketTurn(text) {
+    if (appended.startsWith('Tu es l’Overseer') || appended.startsWith('You are Escouade’s Overseer')) {
+      overseerTurn(text)
+        .then((answer) => streamText(answer))
+        .catch((e) => {
+          process.stderr.write(`overseer: ${e.stack}\n`);
+          streamText(`Échec : ${e.message}`);
+        })
+        .finally(() => result());
+      return;
+    }
     const key = sys.match(/ticket ([A-Z]+-\d+)/)?.[1] ?? 'TIC-0';
     if (/(?:La CI de la|The CI of) (?:PR|MR) #\d+/.test(text)) {
       if (!`${sys}\n${text}`.includes('[ci-rien]')) {

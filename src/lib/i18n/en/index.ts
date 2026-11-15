@@ -27,6 +27,7 @@ import envs from './envs';
 import repos from './repos';
 import runs from './runs';
 import scheduled from './scheduled';
+import overseer from './overseer';
 import devpage from './devpage';
 import settings from './settings';
 import share from './share';
@@ -78,5 +79,6 @@ export const en = defineCatalog({
   workflow,
   plugins,
   scheduled,
+  overseer,
   team,
 });

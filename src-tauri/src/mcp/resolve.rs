@@ -50,8 +50,11 @@ impl Sight {
         }
     }
 
-    /// Whether the project `project_id` is seen.
+    /// Whether the project `project_id` is seen. The Overseer's agent (ESC-462) is in none: no tool lists it, nor acts on it.
     pub(crate) fn sees(&self, project_id: &str) -> bool {
+        if project_id == crate::overseer::PROJECT {
+            return false;
+        }
         match self {
             Self::All => true,
             Self::Shared { private } => !private.contains(project_id),

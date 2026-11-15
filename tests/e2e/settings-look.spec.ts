@@ -403,7 +403,7 @@ test('the settings open still with prefers-reduced-motion, their icons drawn', a
     .evaluate((e) => getComputedStyle(e, '::after').transitionDuration);
   expect(Number.parseFloat(knob)).toBeLessThan(0.01);
   // Each page of Escouade its icon, « Tous les projets » and « À propos » too, and « Fermer ».
-  await expect(win.locator('.s-i svg[data-icon]')).toHaveCount(10);
+  await expect(win.locator('.s-i svg[data-icon]')).toHaveCount(11);
   await expect(win.getByRole('button', { name: 'Fermer' }).locator('svg[data-icon="close"]')).toBeVisible();
   await page.emulateMedia({ reducedMotion: 'no-preference' });
 });

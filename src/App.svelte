@@ -68,6 +68,8 @@
   import PluginsSide from './components/plugins/PluginsSide.svelte';
   import PluginsView from './components/plugins/PluginsView.svelte';
   import StatusBar from './components/StatusBar.svelte';
+  import OverseerPanel from './components/overseer/OverseerPanel.svelte';
+  import { overseer } from './lib/overseer.svelte';
   import TerminalView from './components/TerminalView.svelte';
   import TitleBar from './components/TitleBar.svelte';
   import TlsBanner from './components/TlsBanner.svelte';
@@ -295,6 +297,10 @@
   </div>
   <StatusBar />
 </div>
+
+{#if overseer.open}
+  <OverseerPanel />
+{/if}
 
 {#if app.modal?.kind === 'newProject'}
   <NewProjectModal />

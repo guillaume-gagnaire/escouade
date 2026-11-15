@@ -8,6 +8,7 @@
   import { IS_MAC, keyLabel } from '../lib/platform';
   import { projectMenu } from '../lib/project-rail';
   import { app } from '../lib/state.svelte';
+  import { overseer } from '../lib/overseer.svelte';
   import { tip } from '../lib/tip';
   import Icon from './Icon.svelte';
   import PrivateMark from './PrivateMark.svelte';
@@ -90,6 +91,21 @@
     <span data-tauri-drag-region></span>
   {/if}
   <div class="right" data-tauri-drag-region>
+    {#if app.settings.overseer?.enabled && !first}
+      <!-- The Overseer's discussion (ESC-462): its screen comes with OV-2. -->
+      <button
+        class="btn-bar"
+        class:on={overseer.open}
+        aria-pressed={overseer.open}
+        aria-label={t('overseer.panel.openTitle')}
+        use:tip={t('overseer.panel.openTitle')}
+        onclick={() => (overseer.open = !overseer.open)}
+        data-overseer-button
+      >
+        <Icon name="sparkle" />
+        <span class="lbl">{t('overseer.panel.open')}</span>
+      </button>
+    {/if}
     {#if activeProject && !first}
       <button
         class="btn-bar"

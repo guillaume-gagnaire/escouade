@@ -136,6 +136,10 @@ mod notify;
 #[cfg(test)]
 mod opencode_tests;
 mod outside;
+mod overseer;
+mod overseer_core;
+#[cfg(test)]
+mod overseer_tests;
 mod pace;
 mod pagecrash;
 mod paths;
@@ -975,6 +979,10 @@ pub fn run() {
                 commands::scheduled_pause,
                 commands::scheduled_delete,
                 commands::scheduled_preview,
+                commands::overseer_view,
+                commands::overseer_send,
+                commands::overseer_undo,
+                commands::overseer_revoke,
                 commands::ticket_update,
                 commands::ticket_delete,
                 commands::clean_worktrees,

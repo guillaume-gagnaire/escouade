@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- L’Overseer, un agent qui pilote tous tes projets (sauf les privés) : allume-le dans Réglages › Overseer et parle-lui depuis son bouton de la barre de titre. Il ne fusionne, ne pousse et ne publie que sur une consigne donnée dans un de tes messages, retirable d’un mot ou d’un clic, et ce qu’il fait s’annule tant que c’est possible.
 - Serveur d’équipe : crée une équipe sur le serveur que ton équipe héberge, avec une clé de secours de 24 mots, invite par un lien à usage unique et ajoute tes autres appareils par QR code ou par un code court. Tout reste chiffré de bout en bout : le serveur ne voit jamais le secret d’une invitation.
 - Une PR se lit maintenant dans Escouade, à la place de la liste des PR : sa description, ses commits, ses relectures et ses fils avec leur état, ses contrôles et leurs journaux. On l’ouvre depuis la liste, la carte « En revue », l’onglet « PR et CI » ou la PR d’un agent ; elle se relit seule quand elle change.
 - L’éditeur d’un projet est celui de VS Code, avec son arborescence et ses onglets, dans une colonne comme les agents. Il lit et écrit les fichiers par Escouade, recharge un fichier qu’un agent a changé et montre le conflit quand tu l’avais modifié.

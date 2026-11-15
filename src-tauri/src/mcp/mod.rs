@@ -39,6 +39,9 @@ mod install_tests;
 pub(crate) mod memory;
 #[cfg(test)]
 mod memory_tests;
+mod overseer;
+#[cfg(test)]
+mod overseer_tests;
 #[cfg(test)]
 mod private_tests;
 mod prs;

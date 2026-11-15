@@ -13,6 +13,10 @@ export default defineZone('settings', {
       label: 'Connected services',
       desc: 'Code hosts and ticket sources (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards)',
     },
+    overseer: {
+      label: 'Overseer',
+      desc: 'The agent that drives all your projects: its harness, its account, its model and your instructions',
+    },
     voice: { label: 'Voice', desc: 'Dictation and voice conversation, on your machine or online' },
     notifications: { label: 'Notifications', desc: 'What alerts you, and how' },
     plugins: { label: 'Plugins', desc: 'What they add to Escouade, where they come from and what they can do' },

@@ -17,6 +17,10 @@ export default {
       label: 'Services connectés',
       desc: 'Hébergeurs de code et sources de tickets (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards)',
     },
+    overseer: {
+      label: 'Overseer',
+      desc: 'L’agent qui pilote tous tes projets : son harness, son compte, son modèle et tes consignes',
+    },
     voice: { label: 'Voix', desc: 'Dictée et conversation vocale, sur ta machine ou en ligne' },
     notifications: { label: 'Notifications', desc: 'Ce qui te prévient, et comment' },
     plugins: { label: 'Plugins', desc: 'Ce qu’ils ajoutent à Escouade, d’où ils viennent et ce qu’ils peuvent faire' },

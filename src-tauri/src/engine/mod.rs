@@ -220,7 +220,8 @@ impl Spawn {
             label: format!("agent {}", meta.id),
             account: meta.account.clone(),
             takes_effort: None,
-            read_only: meta.discussion.is_some(),
+            // A discussion of the Docs tab, and the Overseer (ESC-462): they write nothing.
+            read_only: meta.discussion.is_some() || meta.project_id == crate::overseer::PROJECT,
             agents_mcp: crate::model::AgentsMcp::All,
             bypass: false,
         }

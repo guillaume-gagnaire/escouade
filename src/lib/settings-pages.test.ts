@@ -90,6 +90,7 @@ const SETTINGS_KEYS: Record<keyof Settings, true> = {
   voice: true,
   languageServers: true,
   languageServersTrusted: true,
+  overseer: true,
 };
 
 const PROJECT_KEYS: Record<Exclude<keyof ProjectDraft, 'board'>, true> = {
@@ -165,6 +166,7 @@ describe('the register of the settings pages', () => {
       'agents',
       'accounts',
       'services',
+      'overseer',
       'voice',
       'notifications',
       'plugins',
@@ -198,6 +200,7 @@ describe('the register of the settings pages', () => {
       'Agents',
       'Accounts and harnesses',
       'Connected services',
+      'Overseer',
       'Voice',
       'Notifications',
       'Plugins',

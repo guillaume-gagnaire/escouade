@@ -777,6 +777,15 @@ pub(super) async fn share<R: Runtime>(
             "Sharing the docs is the user’s gesture (the “Share” button): only do it if they told you to, passing userAskedForIt."
         )));
     }
+    // The Overseer pushes the docs under an instruction of the user alone (ESC-462).
+    core.overseer_gate(
+        caller,
+        &[crate::overseer::Outgoing::Push],
+        &crate::overseer::Place {
+            project_id: Some(p.id.clone()),
+            ..Default::default()
+        },
+    )?;
     let shared = core
         .docs_share(&p.id, args.message.as_deref(), args.with_code == Some(true))
         .await

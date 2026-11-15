@@ -37,6 +37,35 @@ pub(super) fn project_of<R: Runtime>(
     resolve::project(core, caller, &own)
 }
 
+/// The memory a call reads or writes: a project's, or the Overseer's own when it names no project (ESC-462).
+struct Place {
+    /// The project's name, or the Overseer's.
+    name: String,
+    dir: std::path::PathBuf,
+    /// The project's id (its vectors' index, the facts, the window's list); the Overseer's: none.
+    project_id: Option<String>,
+}
+
+fn place_of<R: Runtime>(
+    core: &Core<R>,
+    caller: &Caller,
+    asked: Option<&str>,
+) -> Result<Place, ToolError> {
+    if core.overseer_calls(caller) && asked.is_none_or(|a| a.trim().is_empty()) {
+        return Ok(Place {
+            name: crate::overseer::NAME.into(),
+            dir: core.overseer.memory_dir(),
+            project_id: None,
+        });
+    }
+    let p = project_of(core, caller, asked)?;
+    Ok(Place {
+        name: p.name.clone(),
+        dir: memory::dir_of(&p),
+        project_id: Some(p.id),
+    })
+}
+
 fn failed(e: anyhow::Error) -> ToolError {
     ToolError::Failed(format!("{e:#}"))
 }
@@ -54,9 +83,11 @@ pub(super) async fn search<R: Runtime>(
     query: &str,
     limit: Option<usize>,
 ) -> Result<String, ToolError> {
-    let p = project_of(core, caller, project)?;
-    let dir = memory::dir_of(&p);
-    let index = core.data.vectors_index(&p.id);
+    let p = place_of(core, caller, project)?;
+    let dir = p.dir.clone();
+    let index = core
+        .data
+        .vectors_index(p.project_id.as_deref().unwrap_or(crate::overseer::PROJECT));
     let vectors = embedder(core);
     let query = query.to_string();
     let (found, how) = tokio::task::spawn_blocking(move || {
@@ -80,8 +111,8 @@ pub(super) fn read<R: Runtime>(
     project: Option<&str>,
     name: &str,
 ) -> Result<String, ToolError> {
-    let p = project_of(core, caller, project)?;
-    let m = memory::read(&memory::dir_of(&p), name).map_err(failed)?;
+    let p = place_of(core, caller, project)?;
+    let m = memory::read(&p.dir, name).map_err(failed)?;
     json(&json!({ "project": p.name, "memory": m }))
 }
 
@@ -92,16 +123,22 @@ pub(crate) fn write<R: Runtime>(
     project: Option<&str>,
     draft: Draft,
 ) -> Result<(String, String), ToolError> {
-    let p = project_of(core, caller, project)?;
-    super::act::may_act_on(core, caller, &p.id)?;
-    let (m, new) = memory::write(&memory::dir_of(&p), draft).map_err(failed)?;
-    core.facts.emit(
-        crate::facts::Body::MemoryWritten {
-            memory: m.name.clone(),
-            new,
-        },
-        crate::facts::About::project(&p.id),
-    );
+    let p = place_of(core, caller, project)?;
+    if let Some(id) = &p.project_id {
+        super::act::may_act_on(core, caller, id)?;
+    } else {
+        std::fs::create_dir_all(&p.dir).map_err(|e| failed(e.into()))?;
+    }
+    let (m, new) = memory::write(&p.dir, draft).map_err(failed)?;
+    if let Some(id) = &p.project_id {
+        core.facts.emit(
+            crate::facts::Body::MemoryWritten {
+                memory: m.name.clone(),
+                new,
+            },
+            crate::facts::About::project(id),
+        );
+    }
     let changed = if new {
         tr!("souvenir « {n} » noté", "memory “{n}” noted", n = m.name)
     } else {
@@ -111,7 +148,9 @@ pub(crate) fn write<R: Runtime>(
             n = m.name
         )
     };
-    core.memory_changed(&p.id);
+    if let Some(id) = &p.project_id {
+        core.memory_changed(id);
+    }
     Ok((
         json(&json!({ "project": p.name, "memory": m, "new": new }))?,
         changed,
@@ -125,22 +164,26 @@ pub(crate) fn forget<R: Runtime>(
     project: Option<&str>,
     name: &str,
 ) -> Result<(String, String), ToolError> {
-    let p = project_of(core, caller, project)?;
-    super::act::may_act_on(core, caller, &p.id)?;
+    let p = place_of(core, caller, project)?;
+    if let Some(id) = &p.project_id {
+        super::act::may_act_on(core, caller, id)?;
+    }
     let name = memory::name_of(name).map_err(failed)?;
-    if !memory::forget(&memory::dir_of(&p), &name).map_err(failed)? {
+    if !memory::forget(&p.dir, &name).map_err(failed)? {
         return Err(ToolError::Failed(tr!(
             "Aucun souvenir « {name} » dans la mémoire du projet.",
             "No memory “{name}” in the project's memory."
         )));
     }
-    core.facts.emit(
-        crate::facts::Body::MemoryForgotten {
-            memory: name.clone(),
-        },
-        crate::facts::About::project(&p.id),
-    );
-    core.memory_changed(&p.id);
+    if let Some(id) = &p.project_id {
+        core.facts.emit(
+            crate::facts::Body::MemoryForgotten {
+                memory: name.clone(),
+            },
+            crate::facts::About::project(id),
+        );
+        core.memory_changed(id);
+    }
     Ok((
         json(&json!({ "project": p.name, "forgotten": name }))?,
         tr!("souvenir « {name} » oublié", "memory “{name}” forgotten"),

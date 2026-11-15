@@ -96,6 +96,7 @@ import type {
   TicketDraft,
   Rhythm,
   ScheduledDraft,
+  OverseerView,
   ScheduledTask,
   TicketImageData,
   TranscriptCursor,
@@ -733,6 +734,11 @@ export const api = {
   scheduledPause: (id: string, paused: boolean) => invoke<ScheduledTask>('scheduled_pause', { id, paused }),
   scheduledDelete: (id: string) => invoke<void>('scheduled_delete', { id }),
   scheduledPreview: (rhythm: Rhythm) => invoke<number[]>('scheduled_preview', { rhythm }),
+  /** The Overseer (ESC-462): what the window reads of it, a message of the user, « Annuler » of an action, « Retirer » of an instruction. */
+  overseerView: () => invoke<OverseerView>('overseer_view'),
+  overseerSend: (text: string, said: boolean) => invoke<string>('overseer_send', { text, said }),
+  overseerUndo: (id: string) => invoke<void>('overseer_undo', { id }),
+  overseerRevoke: (id: string) => invoke<void>('overseer_revoke', { id }),
   cleanWorktrees: (projectId: string) => invoke<LeftoverReport>('clean_worktrees', { projectId }),
   /** The images of a ticket with their content, for its form; those whose file is gone are left out. */
   ticketImages: (id: string) => invoke<TicketImageData[]>('ticket_images', { id }),

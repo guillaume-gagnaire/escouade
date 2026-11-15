@@ -177,6 +177,13 @@ impl<R: Runtime> Core<R> {
             .project(&t.project_id)
             .map(|p| p.name)
             .unwrap_or_default();
+        // The Overseer is told of them too (ESC-462).
+        let news: Vec<String> = kinds
+            .iter()
+            .map(|k| text(crate::i18n::claude(), *k, &tp.word, tp.number, None))
+            .filter(|t| !t.is_empty())
+            .collect();
+        self.overseer_pr_news(id, &news);
         for kind in kinds {
             self.alert(
                 *kind,

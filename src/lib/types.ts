@@ -138,6 +138,8 @@ export interface Settings {
   userNameCleared?: boolean;
   /** « Voix »: the dictation. */
   voice: VoiceSettings;
+  /** « Overseer » (ESC-462): the agent that drives every project but the private ones. Absent from the tests made before it. */
+  overseer?: OverseerSettings;
   /** « Serveurs de langage » (ESC-446), by the id of the server: on or off, its path, its arguments. */
   languageServers?: Record<string, LanguageServerSetting>;
   /** The projects trusted with their own language servers: the backend’s (`lsp_trust`), never saved from the window. */
@@ -2825,6 +2827,7 @@ export interface WorkflowTrack {
 }
 
 export type UiEvent =
+  | { type: 'overseer'; view: OverseerView }
   | { type: 'workflowTrack'; track: WorkflowTrack }
   | { type: 'agent'; agent: Agent }
   | { type: 'agentRemoved'; id: string; projectId: string }
@@ -3753,4 +3756,67 @@ export interface CacheHeat {
 export interface HarnessScope {
   off: EngineId[];
   asks: EngineId[];
+}
+
+// ---------- the Overseer (ESC-462) ----------
+
+/** Réglages › Overseer: whether it runs, and on what (Haiku on Claude Code by default). */
+export interface OverseerSettings {
+  enabled: boolean;
+  engine: EngineId;
+  /** Its account: empty, the first usable one of its harness. */
+  account: string;
+  model: string;
+  /** Empty: its harness's own. */
+  effort: string;
+}
+
+/** An action that goes out, which needs an instruction of the user. */
+export type Outgoing = 'merge' | 'push' | 'tag' | 'publish' | 'approve';
+
+/** A durable instruction of the user (« consigne »), with where it comes from and what it covers. */
+export interface OverseerDirective {
+  id: string;
+  summary: string;
+  actions: Outgoing[];
+  scope: { projectId?: string; ticketId?: string; release?: string; until?: number; once?: boolean };
+  source: { message: string; quote: string; at: number };
+  createdAt: number;
+  /** Its project's name and its ticket's key, when its scope names them; the message it was born of. */
+  project: string | null;
+  ticket: string | null;
+  message: string | null;
+}
+
+export type OverseerOutcome = 'done' | 'refused' | 'failed' | 'held' | 'undone';
+
+/** One of its actions, as its discussion shows it. */
+export interface OverseerAction {
+  id: string;
+  at: number;
+  tool: string;
+  text: string;
+  outcome: OverseerOutcome;
+  why?: string;
+  undo?: { what: { kind: string }; until: number };
+  undoable: boolean;
+}
+
+export interface OverseerMessage {
+  id: string;
+  text: string;
+  said: boolean;
+  at: number;
+}
+
+/** What the window reads of the Overseer. */
+export interface OverseerView {
+  enabled: boolean;
+  running: boolean;
+  /** Turned on while « Claude et les agents peuvent piloter Escouade » is off: it has no tool. */
+  needsMcp: boolean;
+  agentId: string | null;
+  directives: OverseerDirective[];
+  actions: OverseerAction[];
+  messages: OverseerMessage[];
 }

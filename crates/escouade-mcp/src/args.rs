@@ -1060,3 +1060,73 @@ pub struct DeleteScheduledTaskArgs {
     #[schemars(description = "The scheduled task: its id, or its title in any case.")]
     pub task: String,
 }
+
+// ---------- the Overseer's (ESC-462) ----------
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct AddDirectiveArgs {
+    #[schemars(
+        description = "The id of the user's message that gives the instruction, as it came marked: m-3 for “[User’s message · m-3 · typed]”. Only a message of the user gives one."
+    )]
+    pub message: String,
+    #[schemars(
+        description = "The user's exact words in that message that give it (“you may merge on the portal”): they must be in the message, and name each action."
+    )]
+    pub quote: String,
+    #[schemars(
+        description = "What it says, in a few words, as the list of instructions shows it."
+    )]
+    pub summary: String,
+    #[schemars(
+        description = "The actions it allows: merge, push, tag, publish, approve (approve a ticket)."
+    )]
+    pub actions: Vec<String>,
+    #[schemars(description = "Only on this project: its id, or its name in any case.")]
+    pub project: Option<String>,
+    #[schemars(description = "Only for this ticket: its key or its id.")]
+    pub ticket: Option<String>,
+    #[schemars(
+        description = "Only for this release (a version, v2.3.0): a tag or a publication that names it."
+    )]
+    pub release: Option<String>,
+    #[schemars(
+        description = "Its end: a date and time in RFC 3339, or a date (YYYY-MM-DD, until the end of that day)."
+    )]
+    pub until: Option<String>,
+    #[schemars(description = "true for one action only: used once, it is over.")]
+    pub once: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct RevokeDirectiveArgs {
+    #[schemars(
+        description = "The instruction to withdraw: its id (c-4). Or leave it out and give actions: every active instruction that allows one of them is withdrawn."
+    )]
+    pub directive: Option<String>,
+    #[schemars(
+        description = "The actions no instruction is to allow any more: merge, push, tag, publish, approve."
+    )]
+    pub actions: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct UndoActionArgs {
+    #[schemars(
+        description = "The action to undo: its id (a-7), as list_directives lists the latest actions."
+    )]
+    pub action: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct LeaveToUserArgs {
+    #[schemars(description = "The agent whose request it is: its id, or its name in any case.")]
+    pub agent: String,
+    #[schemars(
+        description = "Its project, when the agent's name is not enough: its id, or its name in any case."
+    )]
+    pub project: Option<String>,
+    #[schemars(description = "The request's id, as list_requests gives it.")]
+    pub request: String,
+    #[schemars(description = "Why you leave it to the user, in one sentence.")]
+    pub why: String,
+}

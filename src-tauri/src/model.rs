@@ -136,6 +136,10 @@ pub enum SignInProblem {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum UiEvent {
+    /// The Overseer's instructions, journal and messages, once they changed (ESC-462).
+    Overseer {
+        view: Box<crate::overseer_core::OverseerView>,
+    },
     /// The scheduled tasks of every project, all of them, once one changed (ESC-448).
     Scheduled {
         tasks: Vec<crate::scheduled::ScheduledView>,

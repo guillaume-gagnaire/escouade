@@ -2,7 +2,7 @@
 title: "Serveur MCP"
 subject: "Harness"
 sources: ["docs/SPEC.md","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","docs/security/audit-2026-11/rapport.md (branche ticket/esc-418, fiche SEC-03)"]
-tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422","ESC-448"]
+tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422","ESC-448","ESC-462"]
 decisions: [153]
 compared: null
 ---
@@ -285,3 +285,9 @@ Cinq outils gèrent les tâches programmées d'un projet comme leur section de l
 - `delete_scheduled_task` (destructif) : la tâche part, les tickets qu'elle a créés restent. Nommé pour ce qu'il fait, comme `delete_ticket`.
 
 Chacun répond la tâche comme `list_scheduled_tasks` (`delete_scheduled_task` : `id`, `title`, `deleted`).
+
+### L'Overseer (ESC-462)
+
+- Ses outils, refusés à tout autre appelant (« Cet outil est réservé à l'Overseer d'Escouade. ») : `add_directive` (une consigne née d'un message de l'utilisateur, par son id et ses mots exacts), `list_directives` (les consignes actives et ses dernières actions), `revoke_directive` (par son id, ou toutes celles qui permettent des actions), `undo_action` (« Annuler » d'une de ses actions) et `leave_to_user` (une demande d'agent laissée à l'utilisateur). Aucun n'a de mot interdit dans son nom.
+- Quand il appelle : ses lectures sont suivies d'un bloc qui dit que ce sont des données ; ses actions et ses refus vont dans son journal ; `approve_ticket`, `share_docs`, `answer_permission` (allow d'une commande qui sort), `send_message`, `create_agent` et `answer_question` (un texte qui contient une commande qui sort) passent par la garde des consignes ; `send_message` retient le message 15 s (`held`, `action`, `sendsInSeconds`) ; il répond aux demandes des agents quel que soit « Les agents peuvent répondre… ». `search_memory`, `read_memory`, `write_memory` et `forget_memory` sans projet sont sa mémoire, dans le dossier système (voir *L'Overseer*).
+- Son agent n'est dans aucun projet : aucun appelant ne le liste ni ne le nomme.

@@ -29,6 +29,7 @@ use tauri::test::{mock_app, MockRuntime};
 /// deleting deletes). The only two that answer for the user (`ANSWERING`) never give a lasting
 /// permission.
 pub(super) const EXPOSED: &[&str] = &[
+    "add_directive",
     "add_document",
     "answer_permission",
     "answer_question",
@@ -53,9 +54,11 @@ pub(super) const EXPOSED: &[&str] = &[
     "get_ticket_image",
     "get_usage",
     "get_workflow",
+    "leave_to_user",
     "list_agents",
     "list_background_work",
     "list_decisions",
+    "list_directives",
     "list_documents",
     "list_folders",
     "list_projects",
@@ -77,6 +80,7 @@ pub(super) const EXPOSED: &[&str] = &[
     "report_progress",
     "resolve_conflict",
     "resume_ticket",
+    "revoke_directive",
     "search_documents",
     "search_memory",
     "search_spec",
@@ -87,6 +91,7 @@ pub(super) const EXPOSED: &[&str] = &[
     "start_ticket",
     "stop_agent",
     "stop_background_work",
+    "undo_action",
     "update_folder",
     "update_scheduled_task",
     "update_ticket",
@@ -179,6 +184,15 @@ const NAMED_FOR_IT: &[(&str, &str)] = &[
 
 /// Those an external Claude is refused.
 pub(super) const AGENTS_ONLY: &[&str] = &["report_progress", "split_ticket"];
+
+/// The Overseer's alone (ESC-462): refused to every other caller.
+pub(super) const OVERSEER_ONLY: &[&str] = &[
+    "add_directive",
+    "leave_to_user",
+    "list_directives",
+    "revoke_directive",
+    "undo_action",
+];
 
 /// The test's own tool, beside them in tests (`tools::Tools::test_router`).
 pub(super) const TEST_TOOL: &str = "whoami";

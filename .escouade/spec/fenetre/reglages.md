@@ -2,7 +2,7 @@
 title: "Réglages"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/index.html","design/settings-2-2/captures/a-plugins.png","design/settings-2-2/captures/a-projet.png","design/settings-2-2/captures/a-comptes.png"]
-tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417"]
+tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-462"]
 decisions: [118,119,120,121,123,124,126,145,147]
 compared: null
 ---
@@ -173,3 +173,10 @@ Le tableau des plugins, côté réglages, et le seul endroit des réglages où l
 - Ignorer la vérification des certificats ne vaut pour un process `claude` qu'à son prochain démarrage.
 - La page Plugins n'active pas un plugin projet par projet : c'est la page Confidentialité de chaque projet, ou l'onglet Projets de la page du plugin, dans la vue Plugins.
 - Les textes des plugins publiés à part (Jira, ClickUp, Azure DevOps, Copilot) disent encore les anciens noms d'onglets jusqu'à leur prochaine version (ESC-387) ; le test des chemins ne lit pas `plugins/`.
+
+### La page Overseer (ESC-462)
+
+- Dans « Escouade », entre Services connectés et Voix : « Overseer », « L'agent qui pilote tous tes projets : son harness, son compte, son modèle et tes consignes ».
+- « L'agent » : « Activer l'Overseer » (éteint par défaut ; l'allumer allume aussi « Claude et les agents peuvent piloter Escouade », et la page dit quand celui-ci est éteint), « Harness » (dès deux harness offerts), « Compte » (« Le premier utilisable » par défaut), « Modèle » (Haiku sur Claude Code par défaut), « Effort » (« Celui du harness »), et une ligne qui dit où est sa mémoire.
+- « Consignes » : la liste des consignes de l'utilisateur, chacune retirée par « Retirer » (voir *L'Overseer*).
+- Le registre a deux rangées pour elle : `overseerAgent` (la clé `overseer` des réglages) et `overseerDirectives`.

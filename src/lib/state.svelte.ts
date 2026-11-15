@@ -4,6 +4,7 @@ import { setLocks } from './locks.svelte';
 import { openUrl } from './opener';
 import { teams } from './teams.svelte';
 import { api } from './ipc';
+import { overseer } from './overseer.svelte';
 import { applyConvOps, dropConversation, releaseIdle } from './conversations.svelte';
 import { buffers } from './editor/buffers.svelte';
 import { navHistory } from './editor/history';
@@ -789,6 +790,7 @@ class AppState {
     this.agents = Object.fromEntries(s.agents.map((a) => [a.id, a]));
     this.tickets = Object.fromEntries((s.tickets ?? []).map((t) => [t.id, t]));
     this.scheduled = s.scheduled ?? [];
+    void overseer.load();
     this.boardIssues = { ...s.boardIssues };
     // Read by the loop of the pull requests a little after the start: what it read already, those the events bring after.
     api
@@ -914,6 +916,9 @@ class AppState {
         break;
       case 'scheduled':
         this.scheduled = e.tasks;
+        break;
+      case 'overseer':
+        overseer.take(e.view);
         break;
       case 'project':
         this.replaceProject(e.project);

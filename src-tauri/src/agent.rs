@@ -1480,6 +1480,44 @@ impl AgentRt {
         if self.meta.discussion.is_some() && !self.pending.is_empty() {
             self.discussion_answers(fx);
         }
+        if self.meta.project_id == crate::overseer::PROJECT && !self.pending.is_empty() {
+            self.overseer_answers(fx);
+        }
+    }
+
+    /// The Overseer (ESC-462) drives Escouade through its tools alone: they go through without a question (the core
+    /// guards what goes out, `Core::overseer_gate`); what it would read of the files goes too; anything else (a write,
+    /// a command, a page of the web) is refused on the spot. Nothing of it waits for the user.
+    fn overseer_answers(&mut self, fx: &mut Effects) {
+        let answers: Vec<(String, &str)> = self
+            .pending
+            .iter()
+            .filter(|p| p.view.kind == "permission")
+            .map(|p| {
+                let tool = p.view.tool.as_str();
+                let reads = ["Read", "Grep", "Glob", "LS", "TodoWrite"].contains(&tool);
+                if tool.starts_with(ESCOUADE_TOOLS) || reads {
+                    (p.item_id.clone(), "allow")
+                } else {
+                    (p.item_id.clone(), "deny")
+                }
+            })
+            .collect();
+        for (id, decision) in answers {
+            let message = (decision == "deny").then(|| {
+                tr_in!(
+                    i18n::claude(),
+                    "Escouade refuse : l’Overseer ne modifie aucun fichier, ne lance aucune commande et ne lit pas le web. Agis par les outils d’Escouade, ou lance un agent.",
+                    "Escouade refuses: the Overseer changes no file, runs no command and does not read the web. Act through Escouade’s tools, or launch an agent."
+                )
+            });
+            if let Err(e) = self.answer_permission_by(&id, decision, message, None, fx) {
+                log::warn!("overseer: answer to {id} not given: {e:#}");
+            }
+        }
+        if self.pending.is_empty() {
+            fx.notify = None;
+        }
     }
 
     /// A discussion of the Docs tab (ESC-261) never changes a file nor runs a command: what it asks

@@ -18,6 +18,7 @@ export type SettingsPage =
   | 'agents'
   | 'accounts'
   | 'services'
+  | 'overseer'
   | 'voice'
   | 'notifications'
   | 'plugins'
@@ -64,6 +65,7 @@ export const SETTINGS_PAGES: PageInfo[] = [
   page('agents', 'app', 'agents'),
   page('accounts', 'app', 'user'),
   page('services', 'app', 'link'),
+  page('overseer', 'app', 'sparkle'),
   page('voice', 'app', 'mic'),
   page('notifications', 'app', 'bell'),
   page('plugins', 'app', 'puzzle'),
@@ -205,6 +207,10 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('ticketAccounts', 'services', 'integrations.accounts.title'),
   row('sync', 'services', 'integrations.sync.title', s('integrations')),
   row('autoImport', 'services', 'integrations.autoImport.title', s('integrations')),
+
+  // Overseer › L'agent, Consignes (ESC-462).
+  row('overseerAgent', 'overseer', 'overseer.settings.enabled', s('overseer')),
+  row('overseerDirectives', 'overseer', 'overseer.settings.groupDirectives'),
 
   // Voix › Dictée, Conversation.
   row('dictation', 'voice', 'voice.settings.transcription', s('voice')),

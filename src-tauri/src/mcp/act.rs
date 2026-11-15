@@ -1234,6 +1234,25 @@ fn answer<R: Runtime>(core: &Core<R>, id: &str, since: String) -> Result<String,
     json(&Answered { ticket, since })
 }
 
+/// What approving `t` does that goes out (ESC-462): the approval itself, and the merge or the push of its board.
+fn approve_actions<R: Runtime>(
+    core: &Core<R>,
+    t: &crate::model::Ticket,
+) -> Vec<crate::overseer::Outgoing> {
+    use crate::overseer::Outgoing;
+    let mut actions = vec![Outgoing::Approve];
+    match core
+        .project(&t.project_id)
+        .map(|p| p.board.action)
+        .as_deref()
+    {
+        Ok("merge") => actions.push(Outgoing::Merge),
+        Ok("pr" | "push") => actions.push(Outgoing::Push),
+        _ => {}
+    }
+    actions
+}
+
 /// `approve_ticket`: the window's « Valider… ». Answers once the approval has started: its tests,
 /// commit, merge or push go on in the background, and are followed on the ticket.
 pub(super) fn approve_ticket<R: Runtime>(
@@ -1252,6 +1271,16 @@ pub(super) fn approve_ticket<R: Runtime>(
             "Un agent ne valide pas son propre ticket : il fusionnerait son travail sans relecture.",
             "An agent does not approve its own ticket: it would merge its work without a review."
         ),
+    )?;
+    // The Overseer approves under an instruction of the user alone (ESC-462): to approve, or what its board then does.
+    core.overseer_gate(
+        caller,
+        &approve_actions(core, &t),
+        &crate::overseer::Place {
+            project_id: Some(t.project_id.clone()),
+            ticket_id: Some(t.id.clone()),
+            release: None,
+        },
     )?;
     let since = wait::since(core, &t);
     core.ticket_approve_detached(&t.id).map_err(refusal)?;
@@ -1686,6 +1715,7 @@ pub(super) async fn create_agent<R: Runtime>(
             "Write the message that starts the agent."
         )));
     }
+    super::overseer::gate_text(core, caller, "", &project.id, message)?;
     let on = carrier(core, &project, None, None);
     let model = model(core, &on, a.model.as_deref())?;
     not_held(core, &project.id, project.engine())?;
@@ -1803,6 +1833,19 @@ pub(super) async fn send_message<R: Runtime>(
     }
     let text = message_text(&a.text)?;
     account_not_held(core, &found)?;
+    // The Overseer's (ESC-462): what goes out in it under an instruction alone, then held a moment, « Annuler » meanwhile.
+    if core.overseer_calls(caller) {
+        super::overseer::gate_text(core, caller, &found.id, &found.project_id, text)?;
+        let action = core.overseer_hold(&found.id, &found.name, text);
+        let secs = core
+            .overseer
+            .hold_ms
+            .load(std::sync::atomic::Ordering::Relaxed)
+            / 1000;
+        return json(
+            &json!({ "id": found.id, "name": found.name, "held": true, "action": action, "sendsInSeconds": secs }),
+        );
+    }
     // A message sent to an agent at work waits for the end of its turn.
     let queued = core
         .agent(&found.id)
@@ -1843,7 +1886,7 @@ pub(super) async fn stop_agent<R: Runtime>(
 /// The request `asked` of the agent `found`, still waiting for an answer. Refused when it no longer
 /// waits (the user answered it in the window, or another client did, or the agent stopped), and
 /// for an agent in the Claude Code view, whose requests are in its terminal.
-fn waiting_request<R: Runtime>(
+pub(super) fn waiting_request<R: Runtime>(
     core: &Core<R>,
     found: &resolve::AgentRef,
     asked: &str,
@@ -1910,6 +1953,10 @@ pub(super) fn may_answer<R: Runtime>(
     let Caller::Agent(id) = caller else {
         return Ok(());
     };
+    // The Overseer answers in the user's place (ESC-462): what it lets go out is guarded apart.
+    if core.overseer_calls(caller) {
+        return Ok(());
+    }
     let chef = || {
         core.project(&found.project_id)
             .ok()
@@ -1974,6 +2021,16 @@ pub(super) fn answer_permission<R: Runtime>(
             "A message only goes with a refusal (decision deny): the agent gets none when you allow."
         )));
     }
+    // The Overseer lets an agent do what goes out under an instruction alone (ESC-462).
+    if a.decision == DecisionArg::Allow {
+        super::overseer::gate_text(
+            core,
+            caller,
+            &found.id,
+            &found.project_id,
+            &waiting.view.arg,
+        )?;
+    }
     // Under its author's name: the card and, for a refusal, Claude are told who answered.
     let origin = activity::caller_name(core, Some(caller));
     let decision = a.decision.name();
@@ -2011,6 +2068,12 @@ pub(super) fn answer_question<R: Runtime>(
         )));
     }
     let answers = question_answers(&waiting.input, &a.answers)?;
+    // An answer of the Overseer that tells the agent to push, merge or publish goes under an instruction alone (ESC-462).
+    let said: Vec<String> = answers
+        .values()
+        .map(|v| v.as_str().map_or_else(|| v.to_string(), str::to_string))
+        .collect();
+    super::overseer::gate_text(core, caller, &found.id, &found.project_id, &said.join("\n"))?;
     let origin = activity::caller_name(core, Some(caller));
     core.answer_question_by(
         &found.id,

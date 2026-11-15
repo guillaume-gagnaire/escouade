@@ -600,6 +600,7 @@ impl<R: Runtime> Core<R> {
                     match self.scheduled_run(&task).await {
                         Ok(ticket) => {
                             log::info!("scheduled task {}: ticket {} made", task.id, ticket.key);
+                            self.overseer_scheduled(&task.title, &task.project_id, &ticket.key);
                             self.scheduled_edit(&task.id, |t| {
                                 t.last_ticket = Some(ticket.id.clone())
                             });

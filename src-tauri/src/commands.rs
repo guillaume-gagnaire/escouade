@@ -5094,3 +5094,29 @@ pub async fn lsp_trust(
     }
     Ok(())
 }
+
+// ---------- the Overseer (ESC-462) ----------
+
+/// What the window reads of the Overseer: whether it runs, its instructions, its journal.
+#[tauri::command]
+pub fn overseer_view(core: CoreState) -> Res<crate::overseer_core::OverseerView> {
+    Ok(core.overseer_view())
+}
+
+/// A message of the user to the Overseer (its discussion), typed or said: answers its id.
+#[tauri::command]
+pub async fn overseer_send(core: CoreState<'_>, text: String, said: bool) -> Res<String> {
+    core.overseer_send(&text, said).await.map_err(err)
+}
+
+/// « Annuler » of one of its actions.
+#[tauri::command]
+pub async fn overseer_undo(core: CoreState<'_>, id: String) -> Res<()> {
+    core.overseer_undo(&id).await.map_err(err)
+}
+
+/// « Retirer » of one of its instructions.
+#[tauri::command]
+pub fn overseer_revoke(core: CoreState, id: String) -> Res<()> {
+    core.overseer_revoke(&id).map(|_| ()).map_err(err)
+}

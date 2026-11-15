@@ -224,6 +224,36 @@ pub struct Settings {
     pub user_id: String,
     /// The first launch's window asking the name was shown (answered or put off).
     pub name_asked: bool,
+    /// « Overseer » (Réglages › Overseer, ESC-462): the agent that drives every project but the private ones.
+    pub overseer: OverseerSettings,
+}
+
+/// The Overseer's settings (ESC-462, docs/OVERSEER.md § « Comment il est fait »): whether it runs, and on what. Off
+/// until the user turns it on: it spends the quota of its account at every event that wakes it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct OverseerSettings {
+    pub enabled: bool,
+    /// Its harness: Claude Code by default.
+    pub engine: EngineId,
+    /// Its account, of its harness: empty, the first usable one.
+    pub account: String,
+    /// Its model: a small and quick one, Haiku on Claude Code.
+    pub model: String,
+    /// Its effort: empty, its harness's own.
+    pub effort: String,
+}
+
+impl Default for OverseerSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            engine: EngineId::CLAUDE,
+            account: String::new(),
+            model: "haiku".into(),
+            effort: String::new(),
+        }
+    }
 }
 
 /// The widths the projects' rail is dragged to (ESC-168): its tiles alone, up to a list of names.
@@ -800,6 +830,7 @@ impl Default for Settings {
             user_id: String::new(),
             name_asked: false,
             user_name_cleared: false,
+            overseer: OverseerSettings::default(),
         }
     }
 }

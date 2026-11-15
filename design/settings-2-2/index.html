@@ -623,6 +623,10 @@
         background: rgba(0, 0, 0, calc(0.2 * var(--shade)));
         overflow: hidden;
       }
+      /* As the app's bar: nothing shrinks when its entries run past its foot (ESC-462 added « Overseer »). */
+      .a-nav > * {
+        flex-shrink: 0;
+      }
       .a-nav .field.search {
         width: 100%;
         margin-bottom: 8px;
@@ -679,6 +683,9 @@
         margin-top: auto;
         padding-top: 8px;
         border-top: 1px solid var(--line);
+        /* At the foot of the bar whatever its entries, as the app's (their list scrolls above it). */
+        position: sticky;
+        bottom: 0;
       }
       .a-bot .ver {
         margin-left: auto;
@@ -1251,6 +1258,7 @@
         ['agents', 'agents', 'Agents'],
         ['comptes', 'user', 'Comptes et harness', true],
         ['services', 'link', 'Services connectés', true],
+        ['overseer', 'sparkle', 'Overseer'],
         ['voix', 'mic', 'Voix'],
         ['notifs', 'bell', 'Notifications'],
         ['plugins', 'puzzle', 'Plugins'],

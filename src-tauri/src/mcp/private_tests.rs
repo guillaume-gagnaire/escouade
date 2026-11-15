@@ -384,11 +384,18 @@ fn sorted(mut ids: Vec<&str>) -> Vec<String> {
 #[tokio::test]
 async fn every_tool_that_names_something_is_in_the_tests_of_the_private_projects() {
     // A tool added to the server is named here, or said to name nothing.
+    // The Overseer's own tools (ESC-462) are refused to every other caller: `overseer_tests` checks that they see no
+    // private project.
     let names_nothing = [
         "list_projects",
         "get_usage",
         "report_progress",
         "split_ticket",
+        "add_directive",
+        "list_directives",
+        "revoke_directive",
+        "undo_action",
+        "leave_to_user",
     ];
     let named: Vec<&str> = naming_calls().iter().map(|(t, _, _)| *t).collect();
     for tool in EXPOSED {

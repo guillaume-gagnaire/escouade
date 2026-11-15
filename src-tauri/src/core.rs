@@ -980,6 +980,8 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) scheduled_lock: tokio::sync::Mutex<()>,
     /// The time the scheduled tasks go by, and when this run of the app began on it.
     pub(crate) schedule_clock: crate::scheduled::Clock,
+    /// The Overseer (ESC-462): its instructions, its journal, the events that wake it.
+    pub(crate) overseer: crate::overseer_core::Hub,
     /// Serializes agent creation so that concurrent creations get distinct names.
     create_lock: tokio::sync::Mutex<()>,
     conv_buffer: Mutex<HashMap<String, Vec<ConvOp>>>,
@@ -2092,6 +2094,7 @@ impl<R: Runtime> Core<R> {
             secrets.clone(),
             crate::plugins::events::QUEUE,
         );
+        let overseer = crate::overseer_core::Hub::load(&data);
         let facts = crate::facts::Bus::new();
         facts.subscribe(plugin_events.clone());
         let core = Arc::new_cyclic(|me| Self {
@@ -2149,6 +2152,7 @@ impl<R: Runtime> Core<R> {
             scheduled: RwLock::new(scheduled),
             scheduled_lock: tokio::sync::Mutex::new(()),
             schedule_clock: crate::scheduled::Clock::from_env(),
+            overseer,
             create_lock: tokio::sync::Mutex::new(()),
             conv_buffer: Mutex::default(),
             conv_flush: tokio::sync::Notify::new(),
@@ -2254,6 +2258,9 @@ impl<R: Runtime> Core<R> {
         let resolver: std::sync::Weak<dyn crate::facts::Resolve> =
             Arc::downgrade(&(core.clone() as Arc<dyn crate::facts::Resolve>));
         core.facts.resolve_with(resolver);
+        // The Overseer is woken by the facts too (ESC-462).
+        core.facts
+            .subscribe(Arc::new(crate::overseer_core::Sink(Arc::downgrade(&core))));
         let place: std::sync::Weak<dyn crate::plugins::events::Place> =
             Arc::downgrade(&(core.clone() as Arc<dyn crate::plugins::events::Place>));
         core.plugin_events.place_with(place.clone());
@@ -2582,6 +2589,9 @@ impl<R: Runtime> Core<R> {
         });
         // The pull requests of the tickets « En revue » (ESC-59), without a webhook.
         self.clone().follow_ticket_prs();
+        // The Overseer (ESC-462): its agent made when it is to run, then woken by the events.
+        self.overseer_sync();
+        tauri::async_runtime::spawn(self.clone().overseer_loop());
         let c = self.clone();
         tauri::async_runtime::spawn(async move {
             let mut shown = false;
@@ -2833,6 +2843,12 @@ impl<R: Runtime> Core<R> {
         self.schedule();
         // « Claude et les agents peuvent piloter Escouade » may have changed.
         self.sync_mcp();
+        // The Overseer's settings may have changed (ESC-462).
+        if before_settings.overseer != self.settings.read().overseer
+            || mcp_was_enabled != mcp_enabled
+        {
+            self.overseer_sync();
+        }
         // A program of a plugin gets the network of now.
         self.plugin_runtime
             .set_agent_env(self.settings.read().network_env());
@@ -3559,6 +3575,27 @@ impl<R: Runtime> Core<R> {
         agent_id: &str,
         agent_name: &str,
     ) {
+        // The Overseer's news (ESC-462): under its name, and never « Rien à signaler ».
+        if project_id == crate::overseer::PROJECT {
+            let quiet = ["RAS", "Nothing new"].iter().any(|q| {
+                alert
+                    .body
+                    .trim()
+                    .trim_end_matches('.')
+                    .eq_ignore_ascii_case(q)
+            });
+            if !quiet {
+                self.alert(
+                    alert.kind,
+                    crate::overseer::NAME.to_string(),
+                    alert.body,
+                    UiEvent::Overseer {
+                        view: Box::new(self.overseer_view()),
+                    },
+                );
+            }
+            return;
+        }
         let project = self.project(project_id).map(|p| p.name).unwrap_or_default();
         self.alert(
             alert.kind,

@@ -13,6 +13,7 @@ import { conversation } from '../lib/conversation.svelte';
 import { clearDrafts } from '../lib/question-answers.svelte';
 import { trees } from '../lib/editor/trees.svelte';
 import { app } from '../lib/state.svelte';
+import { overseer } from '../lib/overseer.svelte';
 import { workflows } from '../lib/workflows.svelte';
 import type {
   AccountUsage,
@@ -422,6 +423,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   app.attention = {};
   app.tickets = Object.fromEntries((over.tickets ?? []).map((t) => [t.id, t]));
   app.scheduled = [];
+  overseer.reset();
   app.board = {};
   app.prReviews = {};
   app.prReviewOpen = {};
