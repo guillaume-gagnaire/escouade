@@ -101,13 +101,13 @@ test('the sidebar looks as the preview draws it, in both themes, at both sizes',
         const ps = preview.locator('aside.sidebar');
 
         // Agents | Kanban: the segments, the one shown, their places.
-        expect.soft(await place(side.locator('.seg')), `segments' place, ${where}`).toEqual(await place(ps.locator('.seg')));
+        expect.soft(await place(side.locator('.seg')), `segments' place, ${where}`).toLookLike(await place(ps.locator('.seg')));
         // Since ESC-390 (direction A of design/kanban-envs-2-2): words alone, no icon, the one shown raised; each word
         // whole, the tabs filling the row from one end to the other.
         const shown = side.locator('.seg button[aria-pressed="true"]');
         const drawn = ps.locator('.seg button[aria-selected="true"]');
         const face = (l: Record<string, unknown>) => String(l.font).replace(/ [\d.]+px /, ' ');
-        expect.soft(face(await look(shown)), `Agents' face, ${where}`).toEqual(face(await look(drawn)));
+        expect.soft(face(await look(shown)), `Agents' face, ${where}`).toLookLike(face(await look(drawn)));
         expect.soft(await side.locator('.seg [data-icon]').count(), `no icon in the tabs, ${where}`).toBe(0);
         const fit = await side.locator('.seg').evaluate((seg) => {
           const tabs = [...seg.querySelectorAll('button')];
@@ -121,10 +121,10 @@ test('the sidebar looks as the preview draws it, in both themes, at both sizes',
         expect.soft(fit, `the tabs fill their row, ${where}`).toEqual({ cut: [], gapLeft: 3, gapRight: 3 });
 
         // « Nouvel agent Ctrl N » and the arrow of its menu « Harness ».
-        expect.soft(await place(side.locator('.new-agent')), `new agent's place, ${where}`).toEqual(await place(ps.locator('.new-agent')));
-        expect.soft(await look(side.locator('.new-agent')), `new agent, ${where}`).toEqual(await look(ps.locator('.new-agent')));
-        expect.soft(await look(side.locator('.new-agent kbd')), `its key, ${where}`).toEqual(await look(ps.locator('.new-agent kbd')));
-        expect.soft(await place(side.locator('.new-more')), `its arrow, ${where}`).toEqual(await place(ps.locator('#new-more')));
+        expect.soft(await place(side.locator('.new-agent')), `new agent's place, ${where}`).toLookLike(await place(ps.locator('.new-agent')));
+        expect.soft(await look(side.locator('.new-agent')), `new agent, ${where}`).toLookLike(await look(ps.locator('.new-agent')));
+        expect.soft(await look(side.locator('.new-agent kbd')), `its key, ${where}`).toLookLike(await look(ps.locator('.new-agent kbd')));
+        expect.soft(await place(side.locator('.new-more')), `its arrow, ${where}`).toLookLike(await place(ps.locator('#new-more')));
 
         // A card: the agent never written to, as « fix-login »; the one open in relief, as « pagination-users ».
         const card = side.locator('.agent').first();
@@ -132,32 +132,32 @@ test('the sidebar looks as the preview draws it, in both themes, at both sizes',
         for (const part of ['.a-top', '.a-meta'])
           expect
             .soft(await lookBut(card.locator(part), 'width'), `card ${part}, ${where}`)
-            .toEqual(await lookBut(idle.locator(part), 'width'));
+            .toLookLike(await lookBut(idle.locator(part), 'width'));
         expect
           .soft(await lookBut(card.locator('.name'), 'width'), `card's name, ${where}`)
-          .toEqual(await lookBut(idle.locator('.a-name'), 'width'));
+          .toLookLike(await lookBut(idle.locator('.a-name'), 'width'));
         expect
           .soft(await lookBut(card.locator('.a-state'), 'width'), `card's state, ${where}`)
-          .toEqual(await lookBut(idle.locator('.a-state'), 'width'));
-        expect.soft(await look(card.locator('.state-dot')), `card's dot, ${where}`).toEqual(await look(idle.locator('.state-dot')));
-        expect.soft(await lookBut(card, 'height'), `the card open, ${where}`).toEqual(await lookBut(ps.locator('#ag-pag'), 'height'));
+          .toLookLike(await lookBut(idle.locator('.a-state'), 'width'));
+        expect.soft(await look(card.locator('.state-dot')), `card's dot, ${where}`).toLookLike(await look(idle.locator('.state-dot')));
+        expect.soft(await lookBut(card, 'height'), `the card open, ${where}`).toLookLike(await lookBut(ps.locator('#ag-pag'), 'height'));
         expect
           .soft((await place(card)).slice(0, 3), `the card's place, ${where}`)
-          .toEqual((await place(ps.locator('#ask-agent'))).slice(0, 3));
+          .toLookLike((await place(ps.locator('#ask-agent'))).slice(0, 3));
 
         // Lancement, Terminaux, the folder and the branch at the bottom: the headers fold in the short window.
-        expect.soft(await place(side.locator('.side-foot')), `footer's place, ${where}`).toEqual(await place(ps.locator('.side-foot')));
+        expect.soft(await place(side.locator('.side-foot')), `footer's place, ${where}`).toLookLike(await place(ps.locator('.side-foot')));
         expect
           .soft(await lookBut(side.locator('.side-foot .foot-row').first(), 'width'), `folder, ${where}`)
-          .toEqual(await lookBut(ps.locator('.side-foot .foot-row').first(), 'width'));
+          .toLookLike(await lookBut(ps.locator('.side-foot .foot-row').first(), 'width'));
         for (const [name, sel] of [
           ['Lancement', '.runs'],
           ['Terminaux', '.terms'],
         ]) {
           const a = side.locator(`${sel} .sec-h`);
           const p = ps.locator(`section[aria-label="${name}"] .sec-h`);
-          expect.soft(await lookBut(a, 'width'), `${name}'s header, ${where}`).toEqual(await lookBut(p, 'width'));
-          if (size.height < 820) expect.soft(await place(a), `${name}'s place, ${where}`).toEqual(await place(p));
+          expect.soft(await lookBut(a, 'width'), `${name}'s header, ${where}`).toLookLike(await lookBut(p, 'width'));
+          if (size.height < 820) expect.soft(await place(a), `${name}'s place, ${where}`).toLookLike(await place(p));
         }
         if (size.height < 820) {
           await expect(side.locator('.runs .rows')).toBeHidden();
@@ -480,18 +480,18 @@ test.describe('what the agent does, on its card', () => {
           const pact = pc.locator('.a-act');
           expect
             .soft(await lookBut(card.locator('.a-state'), 'width'), `« Attend », ${where}`)
-            .toEqual(await lookBut(pc.locator('.a-state'), 'width'));
-          expect.soft(await lookBut(act, 'width'), `the line of what it did, ${where}`).toEqual(await lookBut(pact, 'width'));
-          expect.soft(await look(act.locator('.ok svg')), `its check, ${where}`).toEqual(await look(pact.locator('svg.ok')));
+            .toLookLike(await lookBut(pc.locator('.a-state'), 'width'));
+          expect.soft(await lookBut(act, 'width'), `the line of what it did, ${where}`).toLookLike(await lookBut(pact, 'width'));
+          expect.soft(await look(act.locator('.ok svg')), `its check, ${where}`).toLookLike(await look(pact.locator('svg.ok')));
           expect
             .soft(await lookBut(act.locator('.tgt'), 'width'), `« Tour fini · … », ${where}`)
-            .toEqual(await lookBut(pact.locator('.tgt'), 'width'));
+            .toLookLike(await lookBut(pact.locator('.tgt'), 'width'));
           expect
             .soft(await lookBut(act.locator('.spend'), 'width'), `its tokens and cost, ${where}`)
-            .toEqual(await lookBut(pact.locator('.spend'), 'width'));
+            .toLookLike(await lookBut(pact.locator('.spend'), 'width'));
           expect
             .soft(await within(card, [act.locator('.ok svg'), act.locator('.tgt')]), `its parts' place, ${where}`)
-            .toEqual(await within(pc, [pact.locator('svg.ok'), pact.locator('.tgt')]));
+            .toLookLike(await within(pc, [pact.locator('svg.ok'), pact.locator('.tgt')]));
           // Its background task's long command is cut short in the sidebar, never past its edge (ESC-84).
           const sideRight = await page.locator('aside.side').evaluate((n) => n.getBoundingClientRect().right);
           for (const row of await page.locator('aside.side .subl .sub').all())
@@ -503,17 +503,17 @@ test.describe('what the agent does, on its card', () => {
           // #pr: the pull request under the card, its CI failed, « L’agent corrige ».
           await both('pr', t, size);
           const pp = preview.locator('#prs-refacto');
-          expect.soft(await lookBut(prs, 'width', 'height'), `the group, ${where}`).toEqual(await lookBut(pp, 'width', 'height'));
+          expect.soft(await lookBut(prs, 'width', 'height'), `the group, ${where}`).toLookLike(await lookBut(pp, 'width', 'height'));
           expect
             .soft(await lookBut(prs.locator('.prnum'), 'width'), `its number, ${where}`)
-            .toEqual(await lookBut(pp.locator('.prnum'), 'width'));
-          expect.soft(await look(prs.locator('.prnum svg')), `its icon, ${where}`).toEqual(await look(pp.locator('.prnum svg')));
+            .toLookLike(await lookBut(pp.locator('.prnum'), 'width'));
+          expect.soft(await look(prs.locator('.prnum svg')), `its icon, ${where}`).toLookLike(await look(pp.locator('.prnum svg')));
           expect
             .soft(await lookBut(prs.locator('.prfix'), 'width'), `its correction, ${where}`)
-            .toEqual(await lookBut(pp.locator('.prfix'), 'width'));
+            .toLookLike(await lookBut(pp.locator('.prfix'), 'width'));
           expect
             .soft(await under(card, prs), `its place under the card, ${where}`)
-            .toEqual(await under(preview.locator('#ag-refacto'), pp));
+            .toLookLike(await under(preview.locator('#ag-refacto'), pp));
           await shot(`card-pr${size.name}${light}`);
         }
 
@@ -526,13 +526,13 @@ test.describe('what the agent does, on its card', () => {
           const where = `${t} ${size.width}×${size.height}`;
           await both('', t, size);
           const pa = preview.locator('#ag-pag .a-act');
-          expect.soft(await lookBut(act.locator('b'), 'width'), `its verb, ${where}`).toEqual(await lookBut(pa.locator('b'), 'width'));
+          expect.soft(await lookBut(act.locator('b'), 'width'), `its verb, ${where}`).toLookLike(await lookBut(pa.locator('b'), 'width'));
           expect
             .soft(await lookBut(act.locator('.tgt'), 'width'), `what it acts on, ${where}`)
-            .toEqual(await lookBut(pa.locator('.tgt'), 'width'));
+            .toLookLike(await lookBut(pa.locator('.tgt'), 'width'));
           expect
             .soft(await lookBut(act.locator('.spend'), 'width'), `its spending, ${where}`)
-            .toEqual(await lookBut(pa.locator('.spend'), 'width'));
+            .toLookLike(await lookBut(pa.locator('.spend'), 'width'));
           await shot(`card-running${size.name}${t === 'light' ? '-light' : ''}`);
         }
     } finally {

@@ -93,16 +93,16 @@ test('the title bar, the projects’ rail and the status bar look as the preview
 
         // The places: the title bar across the window, the rail under it on the left, the status bar at the bottom,
         // the sidebar beside the rail.
-        expect(await place(page.locator('header.bar')), `title bar, ${where}`).toEqual(await place(preview.locator('header.titlebar')));
-        expect(await place(page.locator('nav.rail')), `rail, ${where}`).toEqual(await place(preview.locator('nav.prail')));
-        expect(await place(page.locator('footer.bar')), `status bar, ${where}`).toEqual(await place(preview.locator('footer.statusbar')));
-        expect(await place(page.locator('aside.side')), `sidebar, ${where}`).toEqual(await place(preview.locator('aside.sidebar')));
+        expect(await place(page.locator('header.bar')), `title bar, ${where}`).toLookLike(await place(preview.locator('header.titlebar')));
+        expect(await place(page.locator('nav.rail')), `rail, ${where}`).toLookLike(await place(preview.locator('nav.prail')));
+        expect(await place(page.locator('footer.bar')), `status bar, ${where}`).toLookLike(await place(preview.locator('footer.statusbar')));
+        expect(await place(page.locator('aside.side')), `sidebar, ${where}`).toLookLike(await place(preview.locator('aside.sidebar')));
 
         // The tiles: the active project's, « + », the overview's and the settings', in their places.
         const appTile = page.getByRole('tab', { name: /^demo-api/ });
         const prevTile = preview.locator('.prail .tile.proj[aria-selected="true"]');
-        expect(await look(appTile), `active tile, ${where}`).toEqual(await look(prevTile));
-        expect((await place(appTile)).slice(0, 1), `active tile's x, ${where}`).toEqual((await place(prevTile)).slice(0, 1));
+        expect(await look(appTile), `active tile, ${where}`).toLookLike(await look(prevTile));
+        expect((await place(appTile)).slice(0, 1), `active tile's x, ${where}`).toLookLike((await place(prevTile)).slice(0, 1));
         for (const [name, sel] of [
           ['Vue d’ensemble', '#btn-overview'],
           ['Ajouter un projet', '#r-add'],
@@ -110,30 +110,30 @@ test('the title bar, the projects’ rail and the status bar look as the preview
         ]) {
           const a = page.getByRole('button', { name, exact: true });
           const p = preview.locator(sel);
-          expect(await look(a), `${name}, ${where}`).toEqual(await look(p));
-          if (name !== 'Ajouter un projet') expect(await place(a), `${name}'s place, ${where}`).toEqual(await place(p));
+          expect(await look(a), `${name}, ${where}`).toLookLike(await look(p));
+          if (name !== 'Ajouter un projet') expect(await place(a), `${name}'s place, ${where}`).toLookLike(await place(p));
         }
 
         // The title bar: the project's name (its button), the search in the middle, the editor.
         const appName = page.locator('header .proj');
         const prevName = preview.locator('#tb-proj');
         const name = (l: Locator) => look(l).then(({ width, ...rest }) => (void width, rest));
-        expect(await name(appName), `project's name, ${where}`).toEqual(await name(prevName));
-        expect((await place(appName)).slice(0, 2), `project's name's place, ${where}`).toEqual((await place(prevName)).slice(0, 2));
+        expect(await name(appName), `project's name, ${where}`).toLookLike(await name(prevName));
+        expect((await place(appName)).slice(0, 2), `project's name's place, ${where}`).toLookLike((await place(prevName)).slice(0, 2));
         const appSearch = page.locator('header .search');
         const prevSearch = preview.locator('.titlebar .search');
-        expect(await look(appSearch), `search, ${where}`).toEqual(await look(prevSearch));
-        expect(await place(appSearch), `search's place, ${where}`).toEqual(await place(prevSearch));
+        expect(await look(appSearch), `search, ${where}`).toLookLike(await look(prevSearch));
+        expect(await place(appSearch), `search's place, ${where}`).toLookLike(await place(prevSearch));
         const editor = (l: Locator) => look(l).then(({ width, ...rest }) => (void width, rest));
-        expect(await editor(page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' })), `editor, ${where}`).toEqual(
+        expect(await editor(page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' })), `editor, ${where}`).toLookLike(
           await editor(preview.locator('.titlebar [data-go="editor"]')),
         );
 
         // The status bar: its text, the waiting button, a gauge.
         const bar = (l: Locator) => look(l).then(({ width, ...rest }) => (void width, rest));
-        expect(await bar(page.locator('footer.bar')), `status bar, ${where}`).toEqual(await bar(preview.locator('footer.statusbar')));
+        expect(await bar(page.locator('footer.bar')), `status bar, ${where}`).toLookLike(await bar(preview.locator('footer.statusbar')));
         const gauge = (l: Locator) => look(l).then(({ font, color, ...rest }) => (void font, void color, rest));
-        expect(await gauge(page.locator('footer .quotas .gauge').first()), `gauge, ${where}`).toEqual(
+        expect(await gauge(page.locator('footer .quotas .gauge').first()), `gauge, ${where}`).toLookLike(
           await gauge(preview.locator('#sb-q .meter').first()),
         );
 
@@ -169,17 +169,17 @@ test('at the first start the rail keeps « + » and the settings, the title bar 
       await still(preview);
       const rail = page.getByRole('navigation', { name: 'Projets' });
       await expect(rail.getByRole('button')).toHaveCount(2);
-      expect(await rail.getByRole('button').evaluateAll((b) => b.map((x) => x.getAttribute('aria-label')))).toEqual([
+      expect(await rail.getByRole('button').evaluateAll((b) => b.map((x) => x.getAttribute('aria-label')))).toLookLike([
         'Ajouter un projet',
         'Réglages (Ctrl+,)',
       ]);
-      expect(await place(page.getByRole('button', { name: 'Ajouter un projet', exact: true }))).toEqual(
+      expect(await place(page.getByRole('button', { name: 'Ajouter un projet', exact: true }))).toLookLike(
         await place(preview.locator('#r-add')),
       );
-      expect(await place(page.getByRole('button', { name: 'Réglages (Ctrl+,)' }))).toEqual(await place(preview.locator('#btn-settings')));
+      expect(await place(page.getByRole('button', { name: 'Réglages (Ctrl+,)' }))).toLookLike(await place(preview.locator('#btn-settings')));
       await expect(page.locator('header .search')).toHaveCount(0);
       // The panel of the work, alone, where the preview has it.
-      expect(await place(page.locator('.work'))).toEqual(await place(preview.locator('main.panel')));
+      expect(await place(page.locator('.work'))).toLookLike(await place(preview.locator('main.panel')));
       if (SHOTS) {
         fs.mkdirSync(SHOTS, { recursive: true });
         await page.screenshot({ path: path.join(SHOTS, `welcome${size.name}.app.png`) });

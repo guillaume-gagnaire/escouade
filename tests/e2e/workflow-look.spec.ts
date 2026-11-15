@@ -48,7 +48,7 @@ const lookBut = (el: Locator, ...keys: string[]) =>
 async function same(what: string, a: Locator, p: Locator, but: string[]) {
   const [na, np] = [await a.count(), await p.count()];
   if (!na || !np) return expect.soft([na, np], `${what}: in the app, in the preview`).toEqual([1, 1]);
-  expect.soft(await lookBut(a.first(), ...but), what).toEqual(await lookBut(p.first(), ...but));
+  expect.soft(await lookBut(a.first(), ...but), what).toLookLike(await lookBut(p.first(), ...but));
 }
 const place = (el: Locator) =>
   el.evaluate((node) => {
@@ -210,13 +210,13 @@ test('the Workflow tab looks as the preview draws it, in both themes, at both si
         const pv = preview.locator('#side-loop');
         const pside = preview.locator('#side');
         await shot('loops');
-        expect.soft(await place(side), `panel's place, ${where}`).toEqual(await place(pside));
+        expect.soft(await place(side), `panel's place, ${where}`).toLookLike(await place(pside));
         const tabs = side.locator('.utabs');
         const ptabs = pside.locator('.utabs');
-        expect.soft(await lookBut(tabs, 'width'), `tabs, ${where}`).toEqual(await lookBut(ptabs, 'width'));
+        expect.soft(await lookBut(tabs, 'width'), `tabs, ${where}`).toLookLike(await lookBut(ptabs, 'width'));
         const sel = side.getByRole('tab', { name: /^Workflow/ });
         const psel = preview.locator('#tab-loop');
-        expect.soft(await lookBut(sel, 'width'), `the Workflow tab, ${where}`).toEqual(await lookBut(psel, 'width'));
+        expect.soft(await lookBut(sel, 'width'), `the Workflow tab, ${where}`).toLookLike(await lookBut(psel, 'width'));
         expect.soft(await sel.locator('.n').isVisible(), `its count shown, ${where}`).toBe(await psel.locator('.n').isVisible());
         expect.soft((await place(sel))[0], `the Workflow tab's place, ${where}`).toBe((await place(psel))[0]);
 
@@ -293,10 +293,10 @@ test('the Workflow tab looks as the preview draws it, in both themes, at both si
         for (const [what, a, p, but] of pairs) await same(`${what}, ${where}`, a, p, but);
         expect
           .soft(await stroke(tab.locator('.wf-edges path:not(.outer)')), `the way back drawn, ${where}`)
-          .toEqual(await stroke(pv.locator('.wf-edges path.inner')));
+          .toLookLike(await stroke(pv.locator('.wf-edges path.inner')));
         expect
           .soft(await stroke(tab.locator('.wf-edges path.outer')), `the next round drawn, ${where}`)
-          .toEqual(await stroke(pv.locator('.wf-edges path.outer')));
+          .toLookLike(await stroke(pv.locator('.wf-edges path.outer')));
         // The pills under their step when the panel is narrow, beside it when it is wide: as the preview lays them.
         const under = async (root: Locator) => {
           const p = (await root.locator('.wf-step.here .who').first().boundingBox())!;
@@ -335,10 +335,10 @@ test('the Workflow tab looks as the preview draws it, in both themes, at both si
         await shot('loops-history');
         expect
           .soft(await lookBut(tab.locator('.wf-graph.folded .wf-step.here'), 'width'), `a folded step, ${where}`)
-          .toEqual(await lookBut(pv.locator('.wf-graph.folded .wf-step.here'), 'width'));
+          .toLookLike(await lookBut(pv.locator('.wf-graph.folded .wf-step.here'), 'width'));
         expect
           .soft(await lookBut(tab.locator('.wf-graph.folded .wf-step').first(), 'width'), `an idle folded step, ${where}`)
-          .toEqual(await lookBut(pv.locator('.wf-graph.folded .wf-step').first(), 'width'));
+          .toLookLike(await lookBut(pv.locator('.wf-graph.folded .wf-step').first(), 'width'));
         expect.soft(await tab.locator('.wf-gates').count(), `no doors folded, ${where}`).toBe(await pv.locator('.wf-gates').count());
         await tab.getByRole('button', { name: 'Déplier les étapes' }).click();
 
@@ -409,7 +409,7 @@ test('the Workflow tab looks as the preview draws it, in both themes, at both si
     await expect(side.getByTestId('workflow').locator('.wf-top, .wf-empty').first()).toBeVisible();
     for (const t of ['dark', 'light'] as const) {
       await theme(page, t);
-      expect.soft(await outside(), `nothing out of ${project}'s tab, ${t} 1024×728`).toEqual({ out: [], scrolls: false });
+      expect.soft(await outside(), `nothing out of ${project}'s tab, ${t} 1024×728`).toLookLike({ out: [], scrolls: false });
     }
   }
 });

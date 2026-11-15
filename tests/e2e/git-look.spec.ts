@@ -144,57 +144,57 @@ test('git beside the conversation looks as the preview draws it, in both themes,
         await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
         await previewAt(preview, 'git', t);
         const pv = preview.locator('#side');
-        expect.soft(await place(side), `panel's place, ${where}`).toEqual(await place(pv));
-        expect.soft(await lookBut(side, 'width', 'height'), `panel, ${where}`).toEqual(await lookBut(pv, 'width', 'height'));
+        expect.soft(await place(side), `panel's place, ${where}`).toLookLike(await place(pv));
+        expect.soft(await lookBut(side, 'width', 'height'), `panel, ${where}`).toLookLike(await lookBut(pv, 'width', 'height'));
 
         // The tabs, underlined.
         const tabs = side.locator('.utabs');
         const ptabs = pv.locator('.utabs');
-        expect.soft(await lookBut(tabs, 'width'), `tabs, ${where}`).toEqual(await lookBut(ptabs, 'width'));
+        expect.soft(await lookBut(tabs, 'width'), `tabs, ${where}`).toLookLike(await lookBut(ptabs, 'width'));
         const tab = (el: Locator, sel: boolean) => el.locator(`[role="tab"][aria-selected="${sel}"]`).first();
-        expect.soft(await lookBut(tab(tabs, true), 'width'), `the tab chosen, ${where}`).toEqual(await lookBut(tab(ptabs, true), 'width'));
-        expect.soft(await lookBut(tab(tabs, false), 'width'), `a tab, ${where}`).toEqual(await lookBut(tab(ptabs, false), 'width'));
+        expect.soft(await lookBut(tab(tabs, true), 'width'), `the tab chosen, ${where}`).toLookLike(await lookBut(tab(ptabs, true), 'width'));
+        expect.soft(await lookBut(tab(tabs, false), 'width'), `a tab, ${where}`).toLookLike(await lookBut(tab(ptabs, false), 'width'));
         const [tx, , , th] = await place(tab(tabs, true));
         const [ptx, , , pth] = await place(tab(ptabs, true));
         expect.soft([tx, th], `the first tab's place, ${where}`).toEqual([ptx, pth]);
-        expect.soft(await lookBut(tabs.locator('.n'), 'width'), `the count, ${where}`).toEqual(await lookBut(ptabs.locator('.n'), 'width'));
+        expect.soft(await lookBut(tabs.locator('.n'), 'width'), `the count, ${where}`).toLookLike(await lookBut(ptabs.locator('.n'), 'width'));
 
         // The scope and the caption.
         const seg = side.locator('.scope');
         const pseg = pv.locator('#side-files .seg');
-        expect.soft(await place(seg), `scope's place, ${where}`).toEqual(await place(pseg));
-        expect.soft(await look(seg), `scope, ${where}`).toEqual(await look(pseg));
+        expect.soft(await place(seg), `scope's place, ${where}`).toLookLike(await place(pseg));
+        expect.soft(await look(seg), `scope, ${where}`).toLookLike(await look(pseg));
         expect
           .soft(await look(seg.locator('[aria-pressed="true"]')), `the scope chosen, ${where}`)
-          .toEqual(await look(pseg.locator('[aria-selected="true"]')));
+          .toLookLike(await look(pseg.locator('[aria-selected="true"]')));
         const caption = side.locator('.files .caption');
         const pcaption = pv.locator('#side-files .caption');
-        expect.soft(await lookBut(caption, 'width'), `caption, ${where}`).toEqual(await lookBut(pcaption, 'width'));
-        expect.soft(await place(caption), `caption's place, ${where}`).toEqual(await place(pcaption));
+        expect.soft(await lookBut(caption, 'width'), `caption, ${where}`).toLookLike(await lookBut(pcaption, 'width'));
+        expect.soft(await place(caption), `caption's place, ${where}`).toLookLike(await place(pcaption));
 
         // The files: the one shown, another, their letters, names and counts.
         const file = side.locator('.file[aria-current="true"]');
         const pfile = pv.locator('#side-files .file[aria-current="true"]');
-        expect.soft(await place(file), `the file shown, its place, ${where}`).toEqual(await place(pfile));
-        expect.soft(await look(file), `the file shown, ${where}`).toEqual(await look(pfile));
+        expect.soft(await place(file), `the file shown, its place, ${where}`).toLookLike(await place(pfile));
+        expect.soft(await look(file), `the file shown, ${where}`).toLookLike(await look(pfile));
         const other = side.locator('.file:not([aria-current])').first();
         expect
           .soft(await look(other), `another file, ${where}`)
-          .toEqual(await look(pv.locator('#side-files .file:not([aria-current])').first()));
+          .toLookLike(await look(pv.locator('#side-files .file:not([aria-current])').first()));
         for (const l of ['m', 'a'])
           expect
             .soft(await lookBut(side.locator(`.letter.${l}`).first(), 'width'), `letter ${l.toUpperCase()}, ${where}`)
-            .toEqual(await lookBut(pv.locator(`#side-files .letter.${l}`).first(), 'width'));
+            .toLookLike(await lookBut(pv.locator(`#side-files .letter.${l}`).first(), 'width'));
         expect
           .soft(await lookBut(file.locator('.fn b'), 'width'), `a file's name, ${where}`)
-          .toEqual(await lookBut(pfile.locator('.fn b'), 'width'));
+          .toLookLike(await lookBut(pfile.locator('.fn b'), 'width'));
         expect
           .soft(await lookBut(file.locator('.fn .dir'), 'width'), `its folder, ${where}`)
-          .toEqual(await lookBut(pfile.locator('.fn span'), 'width'));
+          .toLookLike(await lookBut(pfile.locator('.fn span'), 'width'));
         for (const c of ['add', 'del'])
           expect
             .soft(await lookBut(file.locator(`.cnt .${c}`), 'width'), `its count ${c}, ${where}`)
-            .toEqual(await lookBut(pfile.locator(`.cnt .${c}`), 'width'));
+            .toLookLike(await lookBut(pfile.locator(`.cnt .${c}`), 'width'));
 
         // The diff, in a well; its lines added and removed.
         const well = side.locator('.side-diff .code');
@@ -202,21 +202,21 @@ test('git beside the conversation looks as the preview draws it, in both themes,
         const [wx, , ww] = await place(well);
         const [pwx, , pww] = await place(pwell);
         expect.soft([wx, ww], `the well's place, ${where}`).toEqual([pwx, pww]);
-        expect.soft(await lookBut(well, 'width', 'height'), `the well, ${where}`).toEqual(await lookBut(pwell, 'width', 'height'));
+        expect.soft(await lookBut(well, 'width', 'height'), `the well, ${where}`).toLookLike(await lookBut(pwell, 'width', 'height'));
         for (const [k, pk] of [
           ['add', 'a'],
           ['del', 'd'],
         ])
           expect
             .soft(await lookBut(well.locator(`.urow.${k}`).first(), 'width'), `a line ${k}, ${where}`)
-            .toEqual(await lookBut(pwell.locator(`.ln.${pk}`).first(), 'width'));
+            .toLookLike(await lookBut(pwell.locator(`.ln.${pk}`).first(), 'width'));
         // Their number and their sign (the preview's are inline, as high as their text: the app's fill the line).
         expect
           .soft(await lookBut(well.locator('.urow .no').first(), 'width', 'height'), `a line's number, ${where}`)
-          .toEqual(await lookBut(pwell.locator('.ln .lno').first(), 'width', 'height'));
+          .toLookLike(await lookBut(pwell.locator('.ln .lno').first(), 'width', 'height'));
         expect
           .soft(await lookBut(well.locator('.urow.add .sign').first(), 'width', 'height'), `a line's sign, ${where}`)
-          .toEqual(await lookBut(pwell.locator('.ln.a .sig').first(), 'width', 'height'));
+          .toLookLike(await lookBut(pwell.locator('.ln.a .sig').first(), 'width', 'height'));
         const [nx] = await place(well.locator('.urow .no').first());
         const [pnx] = await place(pwell.locator('.ln .lno').first());
         expect.soft(nx, `a line's number, its place, ${where}`).toBe(pnx);
@@ -227,23 +227,23 @@ test('git beside the conversation looks as the preview draws it, in both themes,
         const [fx, fy, fw, fh] = await place(foot);
         const [pfx, pfy, pfw, pfh] = await place(pfoot);
         expect.soft([fx, fy + fh, fw, fh], `foot's place, ${where}`).toEqual([pfx, pfy + pfh, pfw, pfh]);
-        expect.soft(await lookBut(foot, 'width', 'height'), `foot, ${where}`).toEqual(await lookBut(pfoot, 'width', 'height'));
+        expect.soft(await lookBut(foot, 'width', 'height'), `foot, ${where}`).toLookLike(await lookBut(pfoot, 'width', 'height'));
         const btn = (el: Locator, sel: string) => el.locator(sel).first();
         expect
           .soft(await lookBut(btn(foot, '.rowb .btn:not(.primary)'), 'width'), `« Voir le diff », ${where}`)
-          .toEqual(await lookBut(btn(pfoot, '.rowb .btn:not(.primary)'), 'width'));
+          .toLookLike(await lookBut(btn(pfoot, '.rowb .btn:not(.primary)'), 'width'));
         expect
           .soft(await lookBut(btn(foot, '.btn.primary'), 'width'), `« Commit… », ${where}`)
-          .toEqual(await lookBut(btn(pfoot, '.btn.primary'), 'width'));
+          .toLookLike(await lookBut(btn(pfoot, '.btn.primary'), 'width'));
         const [cx, , cw] = await place(btn(foot, '.btn.primary'));
         const [pcx, , pcw] = await place(btn(pfoot, '.btn.primary'));
         expect.soft(cx + cw, `« Commit… »'s right edge, ${where}`).toBe(pcx + pcw);
         expect
           .soft(await lookBut(btn(foot, '.btn.wide'), 'width'), `the merge, ${where}`)
-          .toEqual(await lookBut(btn(pfoot, '.btn.wide'), 'width'));
+          .toLookLike(await lookBut(btn(pfoot, '.btn.wide'), 'width'));
         expect
           .soft(await lookBut(btn(foot, '.btn.wide b'), 'width'), `the merge's branch, ${where}`)
-          .toEqual(await lookBut(btn(pfoot, '.btn.wide b'), 'width'));
+          .toLookLike(await lookBut(btn(pfoot, '.btn.wide b'), 'width'));
         if (SHOTS) {
           fs.mkdirSync(SHOTS, { recursive: true });
           const n = `git${size.name}${t === 'light' ? '-light' : ''}`;
@@ -260,23 +260,23 @@ test('git beside the conversation looks as the preview draws it, in both themes,
         await expect(graph.locator('.commit')).toHaveCount(4);
         const hcap = side.locator('.caption');
         const phcap = pv.locator('#side-history .caption');
-        expect.soft(await lookBut(hcap, 'width'), `history's caption, ${where}`).toEqual(await lookBut(phcap, 'width'));
-        expect.soft(await place(hcap), `its place, ${where}`).toEqual(await place(phcap));
+        expect.soft(await lookBut(hcap, 'width'), `history's caption, ${where}`).toLookLike(await lookBut(phcap, 'width'));
+        expect.soft(await place(hcap), `its place, ${where}`).toLookLike(await place(phcap));
         const commit = graph.locator('.commit').first();
         const pcommit = pgraph.locator('.commit').first();
-        expect.soft(await place(commit), `the first commit's place, ${where}`).toEqual(await place(pcommit));
-        expect.soft(await look(commit), `a commit, ${where}`).toEqual(await look(pcommit));
+        expect.soft(await place(commit), `the first commit's place, ${where}`).toLookLike(await place(pcommit));
+        expect.soft(await look(commit), `a commit, ${where}`).toLookLike(await look(pcommit));
         expect
           .soft(await lookBut(commit.locator('.subject'), 'width'), `its message, ${where}`)
-          .toEqual(await lookBut(pcommit.locator('.msg span:first-child'), 'width'));
+          .toLookLike(await lookBut(pcommit.locator('.msg span:first-child'), 'width'));
         expect
           .soft(await lookBut(commit.locator('.who'), 'width'), `who and when, ${where}`)
-          .toEqual(await lookBut(pcommit.locator('.who'), 'width'));
+          .toLookLike(await lookBut(pcommit.locator('.who'), 'width'));
         const ref = graph.locator('.ref').first();
         const pref = pgraph.locator('.ref').first();
         expect
           .soft(await lookBut(ref, 'width', 'shadow', 'background'), `a branch on it, ${where}`)
-          .toEqual(await lookBut(pref, 'width', 'shadow', 'background'));
+          .toLookLike(await lookBut(pref, 'width', 'shadow', 'background'));
         // The dot of a commit: its size and its ring.
         const dot = (el: Locator) =>
           el
@@ -286,7 +286,7 @@ test('git beside the conversation looks as the preview draws it, in both themes,
               const s = getComputedStyle(c);
               return [c.getAttribute('r'), s.strokeWidth, s.stroke];
             });
-        expect.soft(await dot(commit), `a commit's dot, ${where}`).toEqual(await dot(pv.locator('#side-history svg.lanes')));
+        expect.soft(await dot(commit), `a commit's dot, ${where}`).toLookLike(await dot(pv.locator('#side-history svg.lanes')));
         if (SHOTS) {
           const n = `history${size.name}${t === 'light' ? '-light' : ''}`;
           await page.screenshot({ path: path.join(SHOTS, `${n}.app.png`) });

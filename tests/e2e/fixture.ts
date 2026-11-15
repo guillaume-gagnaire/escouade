@@ -1,13 +1,14 @@
 // Launches the real app on a throwaway data folder, with the fake `claude` CLI, and connects
 // Playwright to its WebView2 through the DevTools protocol.
 
-import { test as base, chromium, expect, type Browser, type Locator, type Page } from '@playwright/test';
+import { test as base, chromium, expect as baseExpect, type Browser, type Locator, type Page } from '@playwright/test';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { waitForPortToClose } from './port';
+import { lookDiff } from './srgb';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const EXE = process.env.ESCOUADE_E2E_EXE ?? path.join(ROOT, 'src-tauri', 'target', 'debug', 'escouade.exe');
@@ -343,6 +344,22 @@ function accountsFor(given: Record<string, unknown>, appEnv: Record<string, stri
   const machine = engines.map(machineAccount).filter((m) => !own.some((a) => a.id === m.id));
   return [...machine, ...own];
 }
+
+/**
+ * `expect`, with `toLookLike(expected)`: what the « look » specs compare an element of the app with the preview's by. Both
+ * looks (strings, numbers, arrays, objects of them) are the same when every colour in them is, in sRGB, within a unit of a
+ * channel (`oklch()` here, `lab()` there, one colour), and everything else is equal to the letter (srgb.ts, ESC-459).
+ */
+const expect = baseExpect.extend({
+  toLookLike(received: unknown, expected: unknown) {
+    const diff = lookDiff(received, expected);
+    return {
+      pass: diff.length === 0,
+      name: 'toLookLike',
+      message: () => (diff.length ? `the looks differ (colours in sRGB):\n  ${diff.join('\n  ')}` : 'the looks are the same'),
+    };
+  },
+});
 
 export const test = base.extend<{
   app: App;

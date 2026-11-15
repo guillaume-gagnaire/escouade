@@ -112,24 +112,24 @@ test('the conversation looks as the preview draws it, in both themes, at both si
         // The header: 60 px, the name over the path, the state in a pill, the figures, the actions.
         const head = conv.locator('header.head');
         const phead = pv.locator('.conv > .head').first();
-        expect.soft(await place(head), `header's place, ${where}`).toEqual(await place(phead));
-        expect.soft(await look(head), `header, ${where}`).toEqual(await look(phead));
-        expect.soft(await lookBut(head.locator('.name'), 'width'), `name, ${where}`).toEqual(await lookBut(pv.locator('#h-name'), 'width'));
+        expect.soft(await place(head), `header's place, ${where}`).toLookLike(await place(phead));
+        expect.soft(await look(head), `header, ${where}`).toLookLike(await look(phead));
+        expect.soft(await lookBut(head.locator('.name'), 'width'), `name, ${where}`).toLookLike(await lookBut(pv.locator('#h-name'), 'width'));
         expect
           .soft(await lookBut(head.locator('.state'), 'width'), `state, ${where}`)
-          .toEqual(await lookBut(pv.locator('#h-pill'), 'width'));
+          .toLookLike(await lookBut(pv.locator('#h-pill'), 'width'));
         expect
           .soft(await lookBut(head.locator('.crumbs'), 'width'), `path, ${where}`)
-          .toEqual(await lookBut(pv.locator('.crumbs').first(), 'width'));
+          .toLookLike(await lookBut(pv.locator('.crumbs').first(), 'width'));
         expect
           .soft(await lookBut(head.locator('.fig dt').first(), 'width'), `figure's label, ${where}`)
-          .toEqual(await lookBut(pv.locator('.fig dt').first(), 'width'));
+          .toLookLike(await lookBut(pv.locator('.fig dt').first(), 'width'));
         expect
           .soft(await lookBut(head.locator('.fig dd').first(), 'width'), `figure's value, ${where}`)
-          .toEqual(await lookBut(pv.locator('.fig dd').first(), 'width'));
+          .toLookLike(await lookBut(pv.locator('.fig dd').first(), 'width'));
         expect
           .soft(await lookBut(head.locator('.ctx-meter'), 'width'), `context's gauge, ${where}`)
-          .toEqual(await lookBut(pv.locator('.ctx-meter'), 'width'));
+          .toLookLike(await lookBut(pv.locator('.ctx-meter'), 'width'));
         expect
           // The cache's degrees (ESC-398) are not in the 2.0 preview.
           .soft(await head.locator('.fig:visible:not(.fig-heat)').count(), `figures shown, ${where}`)
@@ -138,12 +138,12 @@ test('the conversation looks as the preview draws it, in both themes, at both si
         if (await launch.count())
           expect
             .soft(await lookBut(launch, 'width'), `« Préparer le lancement », ${where}`)
-            .toEqual(await lookBut(pv.locator('#h-launch'), 'width'));
-        expect.soft(await look(head.locator('.vseg')), `the views, ${where}`).toEqual(await look(pv.locator('#vseg')));
-        expect.soft(await look(head.locator('.actions .more')), `« … », ${where}`).toEqual(await look(pv.locator('#h-more')));
+            .toLookLike(await lookBut(pv.locator('#h-launch'), 'width'));
+        expect.soft(await look(head.locator('.vseg')), `the views, ${where}`).toLookLike(await look(pv.locator('#vseg')));
+        expect.soft(await look(head.locator('.actions .more')), `« … », ${where}`).toLookLike(await look(pv.locator('#h-more')));
         expect
           .soft(await look(head.locator('.layout-seg')), `the layouts, ${where}`)
-          .toEqual(await look(pv.locator('.layout-seg').first()));
+          .toLookLike(await look(pv.locator('.layout-seg').first()));
         const [hx, , hw] = await place(head.locator('.actions'));
         const [px, , pw] = await place(pv.locator('.conv > .head .actions').first());
         expect.soft(hx + hw, `actions' right edge, ${where}`).toBe(px + pw);
@@ -154,22 +154,22 @@ test('the conversation looks as the preview draws it, in both themes, at both si
         expect.soft([tx, tw], `thread's column, ${where}`).toEqual([ptx, ptw]);
         expect
           .soft(await lookBut(conv.locator('.bubble').first(), 'width', 'height'), `user's bubble, ${where}`)
-          .toEqual(await lookBut(pv.locator('#th-main .msg-user'), 'width', 'height'));
+          .toLookLike(await lookBut(pv.locator('#th-main .msg-user'), 'width', 'height'));
         expect
           .soft(await lookBut(conv.locator('.tool .row').first(), 'width'), `a call, ${where}`)
-          .toEqual(await lookBut(pv.locator('#th-main .trace .tool').first(), 'width'));
+          .toLookLike(await lookBut(pv.locator('#th-main .trace .tool').first(), 'width'));
         expect
           .soft(await look(conv.locator('.tool .ic').first()), `a call's icon, ${where}`)
-          .toEqual(await look(pv.locator('#th-main .trace .tool .ic').first()));
+          .toLookLike(await look(pv.locator('#th-main .trace .tool .ic').first()));
         expect
           .soft(await lookBut(conv.locator('.tool .badge').first(), 'width'), `a call's verb, ${where}`)
-          .toEqual(await lookBut(pv.locator('#th-main .trace .tool .verb').first(), 'width'));
+          .toLookLike(await lookBut(pv.locator('#th-main .trace .tool .verb').first(), 'width'));
         expect
           .soft(await lookBut(conv.locator('.md p').first(), 'width', 'height'), `the agent's text, ${where}`)
-          .toEqual(await lookBut(pv.locator('#th-main .msg-ai p').first(), 'width', 'height'));
+          .toLookLike(await lookBut(pv.locator('#th-main .msg-ai p').first(), 'width', 'height'));
         expect
           .soft(await lookBut(conv.locator('.working .shimmer'), 'width'), `« Claude travaille… », ${where}`)
-          .toEqual(await lookBut(pv.locator('#th-main .working .shimmer'), 'width'));
+          .toLookLike(await lookBut(pv.locator('#th-main .working .shimmer'), 'width'));
 
         // The composer: floating, the width of the thread; chips, Stop with Échap, Envoyer in white.
         const composer = conv.locator('.composer');
@@ -177,23 +177,23 @@ test('the conversation looks as the preview draws it, in both themes, at both si
         const [cx, cy, cw, ch] = await place(composer);
         const [pcx, pcy, pcw, pch] = await place(pc);
         expect.soft([cx, cw, cy + ch], `composer's place, ${where}`).toEqual([pcx, pcw, pcy + pch]);
-        expect.soft(await lookBut(composer, 'height'), `composer, ${where}`).toEqual(await lookBut(pc, 'height'));
+        expect.soft(await lookBut(composer, 'height'), `composer, ${where}`).toLookLike(await lookBut(pc, 'height'));
         expect
           .soft(await lookBut(composer.locator('textarea'), 'height'), `its field, ${where}`)
-          .toEqual(await lookBut(pv.locator('#c-text'), 'height'));
+          .toLookLike(await lookBut(pv.locator('#c-text'), 'height'));
         expect
           .soft(await lookBut(composer.locator('.bar'), 'height'), `its bar, ${where}`)
-          .toEqual(await lookBut(pc.locator('.c-bar'), 'height'));
+          .toLookLike(await lookBut(pc.locator('.c-bar'), 'height'));
         expect
           .soft(await lookBut(composer.locator('.bar .trigger').first(), 'width'), `the model's chip, ${where}`)
-          .toEqual(await lookBut(pv.locator('#chip-model'), 'width'));
-        expect.soft(await look(composer.locator('.attach')), `join a file, ${where}`).toEqual(await look(pc.locator('.chip.ic').first()));
+          .toLookLike(await lookBut(pv.locator('#chip-model'), 'width'));
+        expect.soft(await look(composer.locator('.attach')), `join a file, ${where}`).toLookLike(await look(pc.locator('.chip.ic').first()));
         expect
           .soft(await lookBut(composer.locator('.btn.stop'), 'width'), `Stop, ${where}`)
-          .toEqual(await lookBut(pc.locator('.btn.stop'), 'width'));
+          .toLookLike(await lookBut(pc.locator('.btn.stop'), 'width'));
         expect
           .soft(await lookBut(composer.locator('.btn.send'), 'width'), `Envoyer, ${where}`)
-          .toEqual(await lookBut(pc.locator('.btn.send'), 'width'));
+          .toLookLike(await lookBut(pc.locator('.btn.send'), 'width'));
 
         if (SHOTS) {
           fs.mkdirSync(SHOTS, { recursive: true });
@@ -240,7 +240,7 @@ test('« Claude travaille… » and the spark stop with prefers-reduced-motion',
   expect(spin).toMatch(/spin/);
   expect(shimmer).toMatch(/shimmer/);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  expect(await motion()).toEqual(['none', 'none']);
+  expect(await motion()).toLookLike(['none', 'none']);
   // Still read: its words in the muted grey, no reflection over them.
   expect(await working.locator('.shimmer').evaluate((e) => getComputedStyle(e).backgroundImage)).toBe('none');
   await page.emulateMedia({ reducedMotion: 'no-preference' });

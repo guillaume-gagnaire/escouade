@@ -13,6 +13,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium, type Browser, type Locator, type Page } from '@playwright/test';
 import { addProject, expect, FAKE_COPILOT, FAKE_OPENCODE, test, unfoldSections, closeSettings } from './fixture';
+import { sameSrgb, toSrgb } from './srgb';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const PREVIEW = path.join(ROOT, 'design', 'app-redesign', 'index.html');
@@ -121,21 +122,18 @@ async function commands(page: Page, list: { name: string; command: string; dir?:
   await unfoldSections(page);
 }
 
-/** A colour as `page` paints it, in 8-bit sRGB (an oklch() of the preview as an rgb() of xterm.js). */
+/** A colour as `page` resolves it (a token, var(--well)), in 8-bit sRGB, whatever its writing (srgb.ts). */
 const rgbIn = (page: Page, css: string) =>
-  page.evaluate((css) => {
-    const c = document.createElement('canvas');
-    c.width = c.height = 1;
-    const ctx = c.getContext('2d', { willReadFrequently: true })!;
-    // A token (var(--well)) is resolved by the page first.
-    const probe = document.createElement('div');
-    probe.style.color = css;
-    document.body.append(probe);
-    ctx.fillStyle = getComputedStyle(probe).color;
-    probe.remove();
-    ctx.fillRect(0, 0, 1, 1);
-    return [...ctx.getImageData(0, 0, 1, 1).data.slice(0, 3)];
-  }, css);
+  page
+    .evaluate((css) => {
+      const probe = document.createElement('div');
+      probe.style.color = css;
+      document.body.append(probe);
+      const resolved = getComputedStyle(probe).color;
+      probe.remove();
+      return resolved;
+    }, css)
+    .then((c) => toSrgb(c)!.slice(0, 3));
 
 /** The colour xterm.js paints its terminal with (set on its scroll container from its theme, since xterm.js 6), in 8-bit sRGB. */
 const xtermBackground = async (el: Locator) =>
@@ -162,8 +160,8 @@ async function paintedCorner(el: Locator): Promise<number[]> {
   }, png.toString('base64'));
 }
 
-/** Whether two sRGB colours are the same but for rounding (a capture's colour management). */
-const near = (a: number[], b: number[]) => a.every((v, i) => Math.abs(v - b[i]) <= 3);
+/** Whether the capture's colour is the one asked for: a capture goes through the window's colour management, a few units. */
+const near = (a: number[], b: number[]) => sameSrgb(a, b, 3);
 
 /** The background of `el`, in 8-bit sRGB. */
 const backgroundOf = async (el: Locator) => rgbIn(el.page(), (await look(el)).background);
@@ -192,15 +190,15 @@ const under = async (el: Locator, head: Locator) => {
 
 /** The header of a log or a terminal, beside the preview's: its place, its title, its crumbs, its buttons. */
 async function compareHead(head: Locator, phead: Locator, where: string) {
-  expect.soft(await place(head), `header's place, ${where}`).toEqual(await place(phead));
-  expect.soft(await lookBut(head, 'width'), `header, ${where}`).toEqual(await lookBut(phead, 'width'));
-  expect.soft(await lookBut(head.locator('h1'), 'width'), `its title, ${where}`).toEqual(await lookBut(phead.locator('h1'), 'width'));
+  expect.soft(await place(head), `header's place, ${where}`).toLookLike(await place(phead));
+  expect.soft(await lookBut(head, 'width'), `header, ${where}`).toLookLike(await lookBut(phead, 'width'));
+  expect.soft(await lookBut(head.locator('h1'), 'width'), `its title, ${where}`).toLookLike(await lookBut(phead.locator('h1'), 'width'));
   const [hx, hy] = await place(head.locator('h1'));
   const [phx, phy] = await place(phead.locator('h1'));
   expect.soft([hx, hy], `its title's place, ${where}`).toEqual([phx, phy]);
   expect
     .soft(await lookBut(head.locator('.crumbs'), 'width'), `its crumbs, ${where}`)
-    .toEqual(await lookBut(phead.locator('.crumbs'), 'width'));
+    .toLookLike(await lookBut(phead.locator('.crumbs'), 'width'));
   const [cx, cy] = await place(head.locator('.crumbs'));
   const [pcx, pcy] = await place(phead.locator('.crumbs'));
   expect.soft([cx, cy], `its crumbs' place, ${where}`).toEqual([pcx, pcy]);
@@ -210,7 +208,7 @@ async function compareHead(head: Locator, phead: Locator, where: string) {
   expect.soft(await btns.count(), `its buttons, ${where}`).toBe(n);
   for (let i = 0; i < n; i++) {
     const [b, pb] = [btns.nth(i), pbtns.nth(i)];
-    expect.soft(await lookBut(b, 'width'), `button ${i + 1}, ${where}`).toEqual(await lookBut(pb, 'width'));
+    expect.soft(await lookBut(b, 'width'), `button ${i + 1}, ${where}`).toLookLike(await lookBut(pb, 'width'));
     expect.soft(await b.locator('svg').count(), `button ${i + 1}'s icon, ${where}`).toBe(await pb.locator('svg').count());
   }
   const [lx, , lw] = await place(btns.last());
@@ -223,10 +221,10 @@ async function compareTerm(box: Locator, pterm: Locator, where: string) {
   const [x, y, w] = await place(box);
   const [px, py, pw] = await place(pterm);
   expect.soft([x, y, w], `the terminal's place, ${where}`).toEqual([px, py, pw]);
-  expect.soft((await look(box)).background, `its well, ${where}`).toBe((await look(pterm)).background);
+  expect.soft((await look(box)).background, `its well, ${where}`).toLookLike((await look(pterm)).background);
   // xterm.js paints it in the same colour, and starts its text where the preview's does.
   const well = await backgroundOf(pterm);
-  await expect.poll(() => xtermBackground(box), { message: `xterm's background, ${where}` }).toEqual(well);
+  await expect.poll(async () => sameSrgb(await xtermBackground(box), well), { message: `xterm's background, ${where}, ${well}` }).toBe(true);
   const [sx, sy] = await place(box.locator('.xterm-screen'));
   const pad = await pterm.evaluate((e) => [parseFloat(getComputedStyle(e).paddingLeft), parseFloat(getComputedStyle(e).paddingTop)]);
   expect.soft([sx, sy], `where its text starts, ${where}`).toEqual([px + pad[0], py + pad[1]]);
@@ -254,7 +252,7 @@ test('the log of a launch command, a crash and a terminal look as the preview dr
     await previewAt(preview, 'run', 'dark');
     expect
       .soft(await lookBut(toast.locator('.act'), 'width'), 'the button of the notification')
-      .toEqual(await lookBut(preview.locator('#toast .link'), 'width'));
+      .toLookLike(await lookBut(preview.locator('#toast .link'), 'width'));
   });
   await toast.getByRole('button', { name: 'Voir le log' }).click();
   const view = page.locator('main.rv');
@@ -275,13 +273,13 @@ test('the log of a launch command, a crash and a terminal look as the preview dr
         await compareHead(view.locator('> .head'), pv.locator('.head'), where);
         expect
           .soft(await lookBut(view.locator('.state'), 'width'), `its state, ${where}`)
-          .toEqual(await lookBut(pv.locator('.pill'), 'width'));
+          .toLookLike(await lookBut(pv.locator('.pill'), 'width'));
         expect
           .soft(await lookBut(view.locator('.since'), 'width'), `since when, ${where}`)
-          .toEqual(await lookBut(pv.locator('.since'), 'width'));
+          .toLookLike(await lookBut(pv.locator('.since'), 'width'));
         expect
           .soft(await lookBut(view.locator('.crumbs .cmdline'), 'width'), `its command, ${where}`)
-          .toEqual(await lookBut(pv.locator('.crumbs .mono').first(), 'width'));
+          .toLookLike(await lookBut(pv.locator('.crumbs .mono').first(), 'width'));
         await compareTerm(view.locator('.box'), pv.locator('pre.term'), where);
         await shots(page, preview, 'run', size, t);
       }
@@ -301,7 +299,7 @@ test('the log of a launch command, a crash and a terminal look as the preview dr
         await compareHead(tv.locator('> .head'), pv.locator('.head'), where);
         expect
           .soft(await lookBut(tv.locator('.chip'), 'width'), `its shell, ${where}`)
-          .toEqual(await lookBut(pv.locator('.chip-sm'), 'width'));
+          .toLookLike(await lookBut(pv.locator('.chip-sm'), 'width'));
         await compareTerm(tv.locator('.box'), pv.locator('pre.term'), where);
         await shots(page, preview, 'terminal', size, t);
       }
@@ -318,7 +316,7 @@ test('xterm takes the theme at once, the terminal kept open, with colours read i
   for (const t of ['light', 'dark', 'light'] as const) {
     await theme(page, t);
     const well = await rgbIn(page, 'var(--well)');
-    await expect.poll(() => xtermBackground(box), { message: t }).toEqual(well);
+    await expect.poll(async () => sameSrgb(await xtermBackground(box), well), { message: `${t}: xterm's background, ${well}` }).toBe(true);
     // What the WebGL renderer draws takes it too, not only its scroll container.
     await expect.poll(async () => near(await paintedCorner(box), well), { message: `${t}, drawn` }).toBe(true);
   }
@@ -352,38 +350,38 @@ test.describe('the window of « Tester »', () => {
           const pv = preview.locator('#test-modal');
           expect
             .soft(await lookBut(dialog.locator('.phase'), 'width'), `« À relire », ${where}`)
-            .toEqual(await lookBut(pv.locator('#test-state'), 'width'));
+            .toLookLike(await lookBut(pv.locator('#test-state'), 'width'));
           // The window's frame is lot 11's: what is inside it is this lot's.
           const notice = dialog.locator('.notice');
           const pnotice = pv.locator('.notice');
           expect
             .soft(await lookBut(notice, 'width', 'height'), `who wrote them, ${where}`)
-            .toEqual(await lookBut(pnotice, 'width', 'height'));
+            .toLookLike(await lookBut(pnotice, 'width', 'height'));
           expect
             .soft(await lookBut(notice.locator('b'), 'width'), `the agent, in bold, ${where}`)
-            .toEqual(await lookBut(pnotice.locator('b'), 'width'));
-          expect.soft(await look(notice.locator('svg')), `its shield, ${where}`).toEqual(await look(pnotice.locator('svg')));
+            .toLookLike(await lookBut(pnotice.locator('b'), 'width'));
+          expect.soft(await look(notice.locator('svg')), `its shield, ${where}`).toLookLike(await look(pnotice.locator('svg')));
           expect
             .soft(await lookBut(dialog.locator('h3').first(), 'width'), `a section's title, ${where}`)
-            .toEqual(await lookBut(pv.locator('.m-sec h3').first(), 'width'));
+            .toLookLike(await lookBut(pv.locator('.m-sec h3').first(), 'width'));
           expect
             .soft(await lookBut(dialog.locator('ul.steps'), 'width', 'height'), `the processes, ${where}`)
-            .toEqual(await lookBut(pv.locator('ul.steps'), 'width', 'height'));
+            .toLookLike(await lookBut(pv.locator('ul.steps'), 'width', 'height'));
           const step = dialog.locator('ul.steps li').first();
           const pstep = pv.locator('ul.steps li').first();
-          expect.soft(await lookBut(step, 'width', 'height'), `a process, ${where}`).toEqual(await lookBut(pstep, 'width', 'height'));
+          expect.soft(await lookBut(step, 'width', 'height'), `a process, ${where}`).toLookLike(await lookBut(pstep, 'width', 'height'));
           expect
             .soft(await lookBut(step.locator('.name'), 'width'), `its name, ${where}`)
-            .toEqual(await lookBut(pstep.locator('.sname'), 'width'));
+            .toLookLike(await lookBut(pstep.locator('.sname'), 'width'));
           expect
             .soft(await lookBut(step.locator('.cmd'), 'width'), `its command, ${where}`)
-            .toEqual(await lookBut(pstep.locator('.cmd'), 'width'));
+            .toLookLike(await lookBut(pstep.locator('.cmd'), 'width'));
           expect
             .soft(await lookBut(step.locator('dt').first(), 'width'), `a fact, ${where}`)
-            .toEqual(await lookBut(pstep.locator('dt').first(), 'width'));
+            .toLookLike(await lookBut(pstep.locator('dt').first(), 'width'));
           expect
             .soft(await lookBut(step.locator('dd').first(), 'width'), `its value, ${where}`)
-            .toEqual(await lookBut(pstep.locator('dd').first(), 'width'));
+            .toLookLike(await lookBut(pstep.locator('dd').first(), 'width'));
           const launch = dialog.getByRole('button', { name: 'Lancer' });
           expect.soft(await launch.locator('[data-icon="play"]').count(), `« Lancer »'s icon, ${where}`).toBe(1);
           await shots(page, preview, 'test', size, t);
@@ -403,13 +401,13 @@ test.describe('the window of « Tester »', () => {
           const pv = preview.locator('#test-modal');
           const line = dialog.locator('.lines li').first();
           const pline = pv.locator('.flow li').first();
-          expect.soft(await lookBut(line, 'width'), `a step, ${where}`).toEqual(await lookBut(pline, 'width'));
+          expect.soft(await lookBut(line, 'width'), `a step, ${where}`).toLookLike(await lookBut(pline, 'width'));
           expect
             .soft(await lookBut(line.locator('.label'), 'width'), `its name, ${where}`)
-            .toEqual(await lookBut(pline.locator('.lbl'), 'width'));
+            .toLookLike(await lookBut(pline.locator('.lbl'), 'width'));
           expect
             .soft(await lookBut(line.locator('.detail'), 'width', 'color', 'border'), `its state, ${where}`)
-            .toEqual(await lookBut(pline.locator('.det'), 'width', 'color', 'border'));
+            .toLookLike(await lookBut(pline.locator('.det'), 'width', 'color', 'border'));
           // Its mark in the first column, its name in the second, as the preview's.
           const [mx] = await place(line.locator('.mark'));
           const [lx] = await place(line.locator('.label'));
@@ -458,7 +456,7 @@ test('a launch command that runs in a worktree already asks first, « Arrêter l
         const pv = preview.locator('#run-modal');
         expect
           .soft(await lookBut(confirm.locator('.head .lead'), 'width', 'height', 'font'), `its icon, ${where}`)
-          .toEqual(await lookBut(pv.locator('.m-head svg'), 'width', 'height', 'font'));
+          .toLookLike(await lookBut(pv.locator('.m-head svg'), 'width', 'height', 'font'));
         await shots(page, preview, 'run-conflict', size, t);
       }
   });
@@ -495,12 +493,12 @@ test.describe('the bands above a harness’s terminal', () => {
           const pband = preview.locator('#tt-band');
           const head = page.locator('main.conv header.head').first();
           const phead = preview.locator('#view-tterm .head');
-          expect.soft(await under(band, head), `the band's place, ${where}`).toEqual(await under(pband, phead));
-          expect.soft(await look(band), `the band, ${where}`).toEqual(await look(pband));
+          expect.soft(await under(band, head), `the band's place, ${where}`).toLookLike(await under(pband, phead));
+          expect.soft(await look(band), `the band, ${where}`).toLookLike(await look(pband));
           expect
             .soft(await lookBut(band.locator('b'), 'width'), `its question, ${where}`)
-            .toEqual(await lookBut(pband.locator('b'), 'width'));
-          expect.soft(await look(band.locator('svg')), `its shield, ${where}`).toEqual(await look(pband.locator('svg')));
+            .toLookLike(await lookBut(pband.locator('b'), 'width'));
+          expect.soft(await look(band.locator('svg')), `its shield, ${where}`).toLookLike(await look(pband.locator('svg')));
           const [, ty] = await under(tui.locator('.box'), head);
           const [, pty] = await under(preview.locator('#tt-cp'), phead);
           expect.soft(ty, `the terminal under it, ${where}`).toBe(pty);
@@ -528,12 +526,12 @@ test.describe('the bands above a harness’s terminal', () => {
           const pkeep = preview.locator('#tt-keep');
           const head = page.locator('main.conv header.head').first();
           const phead = preview.locator('#view-tterm .head');
-          expect.soft(await under(keeps, head), `the band's place, ${where}`).toEqual(await under(pkeep, phead));
-          expect.soft(await look(keeps), `the band, ${where}`).toEqual(await look(pkeep));
+          expect.soft(await under(keeps, head), `the band's place, ${where}`).toLookLike(await under(pkeep, phead));
+          expect.soft(await look(keeps), `the band, ${where}`).toLookLike(await look(pkeep));
           expect
             .soft(await lookBut(keeps.locator('b'), 'width'), `« Escouade garde le fil », ${where}`)
-            .toEqual(await lookBut(pkeep.locator('b'), 'width'));
-          expect.soft(await look(keeps.locator('svg')), `its mark, ${where}`).toEqual(await look(pkeep.locator('svg')));
+            .toLookLike(await lookBut(pkeep.locator('b'), 'width'));
+          expect.soft(await look(keeps.locator('svg')), `its mark, ${where}`).toLookLike(await look(pkeep.locator('svg')));
           await shots(page, preview, 'opencode-view', size, t);
         }
     });
