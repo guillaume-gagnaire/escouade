@@ -112,21 +112,24 @@ async fn an_administrator_keeps_the_list_and_a_member_reads_it(backend: Backend)
     assert_eq!(list.projects[0].project.name, "Acme API");
 
     // The server reads nothing of it: no name, no address, no branch, no host in what it keeps.
-    let disk = server_bytes(&w);
-    assert!(!disk.is_empty());
-    for clear in [
-        "Acme API",
-        "Plateforme",
-        "acme/api",
-        "github.com",
-        "gitlab.com",
-        "develop",
-        "#3b82f6",
-    ] {
-        assert!(
-            !holds(&disk, clear),
-            "the server keeps « {clear} » in the clear"
-        );
+    // The base is read as a file: SQLite's (PostgreSQL keeps the same rows, out of the server's folder).
+    if matches!(backend, Backend::Sqlite) {
+        let disk = server_bytes(&w);
+        assert!(!disk.is_empty());
+        for clear in [
+            "Acme API",
+            "Plateforme",
+            "acme/api",
+            "github.com",
+            "gitlab.com",
+            "develop",
+            "#3b82f6",
+        ] {
+            assert!(
+                !holds(&disk, clear),
+                "the server keeps « {clear} » in the clear"
+            );
+        }
     }
 
     // Changed: the whole project, by its id.
