@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Sécurité : un harness qui ne tourne qu’en Bypass, ou dont le plugin ne déclare aucun mode, ne démarre plus sans « Autoriser le mode Bypass ». Un agent montre le mode où son harness tourne vraiment, et un mode que ce harness n’a pas ne devient jamais un mode plus permissif en silence.
 - Dans Réglages › Comptes et harness, deux choix faits coup sur coup pour un même compte (un modèle, puis un effort) ne s’écrasent plus.
 
 ## [2.2.1] — 2026-11-15

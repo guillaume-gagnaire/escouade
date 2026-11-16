@@ -310,6 +310,18 @@ export function askOf(word: string, m: Manifest | null, lang: string): Ask {
         red: false,
         note: t('plugins.perms.harnessUnsetApplied'),
       };
+    case 'harnessBypass':
+    case 'harnessNoMode':
+      // A harness whose agents never ask before they act, or that says nothing of it (ESC-489): held for Bypass.
+      return {
+        word,
+        icon: 'shield',
+        text: t(kind === 'harnessBypass' ? 'plugins.ask.harnessBypass' : 'plugins.ask.harnessNoMode'),
+        detail: what,
+        strong: true,
+        red: true,
+        note: t('plugins.perms.harnessBypassApplied'),
+      };
     case 'commands':
       return {
         word,

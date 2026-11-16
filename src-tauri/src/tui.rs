@@ -1190,7 +1190,8 @@ impl<R: Runtime> Core<R> {
             (rt.meta.engine, rt.meta.project_id.clone())
         };
         self.check_harness_in(engine, &project_id)?;
-        crate::bypass::check(&h.lock().meta.mode, self.bypass_allowed())?;
+        // The mode its harness runs it in, judged (SEC-09, ESC-489).
+        self.settle_mode(id)?;
         if crate::engine::of(&h.lock().meta).attaches() {
             return self.open_attached(&h, id, size, Box::new(on_data)).await;
         }

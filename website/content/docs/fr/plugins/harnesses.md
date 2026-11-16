@@ -86,7 +86,7 @@ Chaque entrée de `contributes.harnesses` avec un objet `acp` est un harness dé
 - `id`, `name`, `speaker` (le nom de ses agents dans les textes), `writer` (qui rédige les textes) ;
 - `locate.names` : les noms de son programme, cherchés dans le PATH ; un plugin déclaratif ne donne jamais de chemin, ni un shell ou un interpréteur (`sh`, `bash`, `cmd`, `powershell`, `pwsh`, `python*`, `node`, `ruby`, `perl`, `osascript`, `wscript`…) : le manifeste est refusé (code `interpreter`) ;
 - `versionArgs` (par défaut `--version`) et `tested` : la version lue et les versions essayées, comme pour les harness d’Escouade. La version d’un harness décrit par un autre qu’Escouade n’est lue qu’après un premier geste de l’utilisateur sur lui (un agent ou un terminal lancé), jamais à l’installation ni au démarrage ;
-- `caps` : ses modes, chacun par son id ou avec son sens (`meaning`, ce que dit le menu des modes), et ce qu’il sait faire (`images`, `pdf`, `readOnly`…) ; ce qui n’est pas dit, il ne le fait pas ;
+- `caps` : ses modes, chacun par son id ou avec son sens (`meaning`, ce que dit le menu des modes), et ce qu’il sait faire (`images`, `pdf`, `readOnly`…) ; ce qui n’est pas dit, il ne le fait pas ; seuls comptent les modes d’Escouade (`plan`, `default`, `acceptEdits`, `auto`, `bypassPermissions`) : un harness qui n’en déclare aucun est tenu pour Bypass, et un harness qui n’en a qu’un fait tourner ses agents dans ce mode (si c’est Bypass, ils ne démarrent qu’avec « Autoriser le mode Bypass », et l’installation le dit) ;
 - `models` : les modèles de son menu (`id`, `label`) ;
 - `accountVar` : la variable qui donne à chaque compte son dossier de configuration ;
 - `install` et `updateCommand` : sa commande d’installation (Windows, Unix) et de mise à jour.

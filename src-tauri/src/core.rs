@@ -863,6 +863,10 @@ pub struct AgentOptions {
     pub cwd: Option<String>,
     /// A discussion of the Docs tab (ESC-261).
     pub discussion: Option<crate::discussion::Discussion>,
+    /// Refused before anything is made when the mode its harness would run it in is (`modes::judge`, ESC-489): an
+    /// agent the Kanban or a tool of the MCP server makes, which no one watches start. The window's is made, its mode
+    /// shown as its harness runs it, and its start says why it does not.
+    pub judge: bool,
 }
 
 /// What a copy takes of its original, read while no turn of the original ran.
@@ -3675,8 +3679,9 @@ impl<R: Runtime> Core<R> {
         // Its harness's plugin off for its project (ESC-404): the plugin would get all it does.
         let project_id = h.lock().meta.project_id.clone();
         self.check_harness_in(engine, &project_id)?;
-        // The mode of no question without « Autoriser le mode Bypass » (SEC-09).
-        crate::bypass::check(&h.lock().meta.mode, self.bypass_allowed())?;
+        // The mode its harness runs it in, judged: a mode it does not have is never taken for true, and the mode of no
+        // question goes only with « Autoriser le mode Bypass » (SEC-09, ESC-489).
+        self.settle_mode(id)?;
         // In the Claude Code view, its interface has the session (`tui`).
         if h.lock().meta.terminal {
             bail!(tr!(
@@ -6448,7 +6453,12 @@ impl<R: Runtime> Core<R> {
         let h = self.agent(id)?;
         // A discussion of the Docs tab stays in a mode that asks before a write (ESC-261).
         if let Some(m) = mode.as_deref() {
-            crate::bypass::check(m, self.bypass_allowed())?;
+            // One of its harness's modes, judged (SEC-09, ESC-489): never one it would run as another.
+            let harness = engine::of(&h.lock().meta);
+            if !crate::modes::offered(harness).contains(&m) {
+                bail!(crate::modes::missing(i18n::ui(), harness.name(), m));
+            }
+            crate::modes::check(harness, m, self.bypass_allowed(), i18n::ui())?;
             if h.lock().meta.discussion.is_some() && !crate::discussion::MODES.contains(&m) {
                 bail!(tr!(
                     "Une discussion ne modifie jamais le code : elle reste en mode « Demander » ou « Plan ».",
@@ -6685,6 +6695,29 @@ impl<R: Runtime> Core<R> {
         meta.model = self.model_for(engine, o.model.unwrap_or(defaults.model));
         meta.effort = o.effort.unwrap_or(defaults.effort);
         meta.mode = o.mode.unwrap_or_else(|| defaults.mode.clone());
+        // Its mode as its harness runs it (ESC-489): one it does not have is not taken for true, the one it runs in is
+        // its mode, said. A discussion keeps its own: its harness, without one of its modes, does not start it.
+        let harness = engine::by_id(engine);
+        let offered = crate::modes::offered(harness);
+        let mut mode_notice = None;
+        if let Some(m) = crate::modes::runs_in(&meta.mode, &offered).filter(|m| *m != meta.mode) {
+            if o.discussion.is_none() || crate::discussion::MODES.contains(&m.as_str()) {
+                let alone = offered.len() == 1;
+                let lang = i18n::ui();
+                mode_notice = Some(crate::modes::settled(
+                    lang,
+                    harness.name(),
+                    &meta.mode,
+                    &m,
+                    alone,
+                ));
+                meta.mode = m;
+            }
+        }
+        // Made by the Kanban or a tool, which no one watches start: refused before anything is made.
+        if o.judge {
+            crate::modes::judge(harness, &meta.mode, self.bypass_allowed(), i18n::ui())?;
+        }
         // Started in Plan: its plan approved, it goes on in its mode of departure, the ticket's or
         // the board's (`o.mode`), else its account's, else the app's (ESC-277).
         if meta.mode == "plan" {
@@ -6909,6 +6942,10 @@ impl<R: Runtime> Core<R> {
         {
             let mut fx = Effects::default();
             h.lock().notice("warn", text, &mut fx);
+        }
+        if let Some(text) = mode_notice {
+            let mut fx = Effects::default();
+            h.lock().notice("info", text, &mut fx);
         }
         self.agents.write().insert(id.clone(), h.clone());
         {

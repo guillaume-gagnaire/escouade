@@ -1,0 +1,44 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.example.unharnessed",
+  "name": "Unharnessed",
+  "version": "1.0.0",
+  "description": {
+    "fr": "Un harness décrit par ACP qui ne déclare qu'un mode, Bypass : il ne demande jamais avant d'agir. Pour les tests d'ESC-489.",
+    "en": "A harness described over ACP that declares one mode, Bypass: it never asks before it acts. For the tests of ESC-489."
+  },
+  "author": { "name": "Escouade" },
+  "license": "MIT",
+  "escouade": { "api": "1", "min": "2.2.0" },
+  "contributes": {
+    "harnesses": [
+      {
+        "id": "unharnessed",
+        "name": "Unharnessed",
+        "speaker": "Unharnessed",
+        "writer": "Unharnessed",
+        "locate": { "names": ["unharnessed"] },
+        "tested": { "oldest": "0.9.8", "newest": "0.9.8" },
+        "caps": {
+          "modes": [
+            {
+              "id": "bypassPermissions",
+              "meaning": {
+                "fr": "Unharnessed ne demande jamais : son code et ses commandes tournent avec tes droits, sans bac à sable.",
+                "en": "Unharnessed never asks: its code and its commands run with your rights, with no sandbox."
+              }
+            }
+          ]
+        },
+        "accountVar": "UNHARNESSED_CODING_AGENT_DIR",
+        "acp": {
+          "args": ["--mode", "acp"],
+          "fs": false,
+          "modelOption": "model",
+          "questionsInText": true,
+          "tools": { "Python cell": "Python" }
+        }
+      }
+    ]
+  }
+}

@@ -2179,6 +2179,16 @@ impl<R: Runtime> Core<R> {
         );
         let (model, effort, mode) =
             ticket_agent_options(t, s, &defaults, &|m| self.takes_auto(engine, &account, m));
+        // The mode its harness would run it in, judged before anything is made (SEC-09, ESC-489): a mode of the board its
+        // harness does not have is never taken for true, and a harness that runs in Bypass alone blocks the ticket, with
+        // why, while Bypass is not allowed.
+        // The agent made says in its conversation the mode it runs in, when it is another.
+        crate::modes::judge(
+            crate::engine::by_id(engine),
+            &mode,
+            self.bypass_allowed(),
+            i18n::ui(),
+        )?;
         // The branch it takes up may still be in the worktree of its earlier agent, archived.
         if !t.branch.is_empty() {
             self.release_archived_holder(project, t).await?;
@@ -2238,6 +2248,7 @@ impl<R: Runtime> Core<R> {
                     remote_off: t.remote_off,
                     cwd: None,
                     discussion: None,
+                    judge: true,
                 },
             )
             .await;

@@ -40,6 +40,8 @@ pub(crate) mod memory;
 #[cfg(test)]
 mod memory_tests;
 #[cfg(test)]
+mod modes_tests;
+#[cfg(test)]
 mod private_tests;
 mod prs;
 #[cfg(test)]

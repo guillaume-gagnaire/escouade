@@ -70,6 +70,8 @@ Le mode décide de ce que Claude fait sans te demander.
 | Édits auto | Les modifications de fichiers sont acceptées sans demander. |
 | Bypass | Aucune demande de permission, proposé seulement une fois « Autoriser le mode Bypass » allumé dans [Réglages › Agents](settings-claude-code#permissions). À réserver aux environnements sûrs : en le choisissant, un message te rappelle que Claude agira sans aucune demande, et le menu passe en rouge tant qu’il est actif. |
 
+Un harness n’offre que ses modes : les autres sont grisés, avec la raison. Celui qui n’en a qu’un tourne dans ce mode, et l’agent le montre ; si ce mode est Bypass, ses agents ne démarrent qu’avec « Autoriser le mode Bypass ». Un mode qu’un harness n’a pas n’est jamais remplacé en silence par un mode plus permissif : l’agent prend le plus proche qui n’autorise pas plus, et sa conversation le dit.
+
 ### Changer en cours de conversation
 
 Les menus de modèle, d’effort et de mode restent utilisables pendant toute la vie de l’agent, même pendant qu’il travaille. Le choix s’applique à l’agent tout de suite, la conversation continue, et il vaut pour cet agent seulement. Si le processus de l’agent est arrêté (voir [plus bas](managing-agents#fermer-la-fenetre-quitter-et-redemarrer)), le choix est pris en compte à son prochain démarrage.

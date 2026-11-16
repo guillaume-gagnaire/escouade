@@ -22,6 +22,8 @@ export default {
     /** A mode its harness lacks, greyed in its place (choice 17): `{harness}`, `{mode}`. */
     missing: '{harness} n’a pas de mode {mode}.',
     missingAuto: '{harness} n’a pas de mode Auto : rien ne décide à ta place.',
+    /** A harness of one mode alone (ESC-489): the others greyed with it. */
+    only: '{harness} ne tourne qu’en {mode}.',
     bypassToast: 'Mode Bypass : {engine} agira sans aucune demande de permission.',
     bypassNotAllowed: 'Le mode Bypass est coupé : à permettre dans Réglages › Agents.',
   },

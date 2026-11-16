@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Security: a harness that only runs in Bypass, or whose plugin declares no mode, no longer starts without “Allow Bypass mode”. An agent shows the mode its harness really runs in, and a mode that harness lacks never silently becomes a more permissive one.
 - In Settings › Accounts and harnesses, two choices made in a row for the same account (a model, then an effort) no longer write over each other.
 
 ## [2.2.1] — 2026-11-15

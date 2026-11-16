@@ -2,8 +2,8 @@
 title: "Les harness ACP décrits"
 subject: "plugins"
 sources: ["docs/PLUGINS-DESIGN.md §1.1, §4.4, §4.12, §8.27, §8.31","docs/TODO-2.2.md, PLG-6","Essai réel de Goose 1.57.0 sur Ollama, 2026-11-01 (ESC-178)","Audit de sécurité 2026-11 (ESC-418), fiches SEC-05, SEC-06 et SEC-30 : docs/security/audit-2026-11/rapport.md","docs/PLUGINS.md §1.3, §2.2"]
-tickets: ["ESC-178","ESC-222","ESC-281","ESC-282","ESC-347","ESC-361","ESC-362","ESC-424","ESC-428","ESC-442","ESC-443"]
-decisions: [152,"les-corrections-de-l-audit-dans-la-2-2-v",161,162]
+tickets: ["ESC-178","ESC-222","ESC-281","ESC-282","ESC-347","ESC-361","ESC-362","ESC-424","ESC-428","ESC-442","ESC-443","ESC-489"]
+decisions: [152,"les-corrections-de-l-audit-dans-la-2-2-v",161,162,"le-mode-juge-est-celui-ou-le-harness-tou"]
 compared: null
 ---
 
@@ -97,3 +97,13 @@ Ceci complète « L'installation montre tout ce qui tournera » et la liste des 
 - **Le cœur ne retire jamais, pour un tiers, ce qu'il pose lui-même.** Sur chaque lancement d'un plugin tiers (`engine/launch`, la relance, `terminal/launch`, `engine/oneShot`, `account/read`), une variable à retirer qui est d'une famille refusée, ou que le cœur donne (le proxy et le fichier d'autorités des réglages, `accountVar`, `keyVar`, l'adresse des hooks), reste posée ; le journal le dit. La première main retire ce qu'elle dit (Copilot CLI, ses jetons).
 - **L'installation montre ce que le harness dit sans le lancer.** Avec ce qu'il lance, la fenêtre d'installation et de mise à jour d'un plugin, et celle de l'accord d'un projet privé, montrent sa commande d'installation (`harnessInstall:`, une fois si elle est la même sur tous les systèmes), sa commande de mise à jour (`harnessUpdate:`), notées « écrites par le plugin : Escouade l'affiche sans la lancer », et chaque variable qu'il retire (`harnessUnset:`). Ces lignes ne se retirent pas ; une mise à jour qui en change redemande l'accord.
 - **La commande d'un tiers est dite la sienne.** Là où Escouade affiche la commande d'installation ou de mise à jour d'un harness décrit par un plugin tiers (l'accueil « Aucun harness trouvé », Réglages › Comptes et harness, le refus d'une version trop ancienne), elle est dite « donnée par le plugin <id>, pas par Escouade », le plugin nommé par son identifiant, qu'un tiers ne peut pas prendre à la première main. Les plugins `dev.escouade.*` gardent l'affichage d'avant.
+
+## Ajouts d'ESC-489 : les modes déclarés sont ceux qui sont jugés
+
+Ceci complète « Ce que le manifeste décrit » (`caps.modes`). La règle est dans *Comptes*, « Le mode où tourne vraiment le harness ».
+
+- **Seuls les modes d'Escouade comptent** : `plan`, `default`, `acceptEdits`, `auto`, `bypassPermissions`. Un mode d'un autre nom est ignoré (aucun menu ne l'offre, rien ne le jugerait).
+- **Aucun mode déclaré, ou aucun qu'Escouade connaisse** : le harness est tenu pour Bypass, son seul mode, dont le sens dit « X ne déclare aucun mode : rien ne dit qu’il demande avant d’agir, Escouade le tient pour Bypass. ». Ses agents ne démarrent qu'avec « Autoriser le mode Bypass ».
+- **Un seul mode** : c'est le mode de ses agents, montré et jugé ; un harness à un seul mode Bypass ne démarre pas sans « Autoriser le mode Bypass », et le refus dit d'autoriser le mode ou de choisir un autre harness.
+- **L'installation le montre** : avec ce que le harness lance, une ligne forte et non révocable `harnessBypass:<nom>` (« Ses agents ne tournent qu’en Bypass : ils ne demandent jamais avant d’agir ») ou `harnessNoMode:<nom>` (« Ne déclare aucun mode : Escouade tient ses agents pour Bypass »), notée « appliqué par Escouade : ils ne démarrent qu’avec « Autoriser le mode Bypass » (Réglages › Agents) ». Un harness de plusieurs modes n'a pas de ligne de plus.
+- Un manifeste qui ment sur ses modes ne se détecte pas : ce qu'il déclare est ce qui est jugé.

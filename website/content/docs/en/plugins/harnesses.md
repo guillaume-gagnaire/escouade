@@ -86,7 +86,7 @@ Each entry of `contributes.harnesses` with an `acp` object is a described harnes
 - `id`, `name`, `speaker` (the name of its agents in the texts), `writer` (who drafts the texts);
 - `locate.names`: the names of its program, looked for on the PATH; a declarative plugin never gives a path, nor a shell or an interpreter (`sh`, `bash`, `cmd`, `powershell`, `pwsh`, `python*`, `node`, `ruby`, `perl`, `osascript`, `wscript`…): the manifest is refused (code `interpreter`);
 - `versionArgs` (`--version` by default) and `tested`: the version read and the versions tried, as for Escouade’s harnesses. The version of a harness described by anyone but Escouade is read only after a first gesture of the user’s on it (an agent or a terminal started), never at the install nor at a start;
-- `caps`: its modes, each by its id or with its meaning (`meaning`, what the menu of modes says), and what it can do (`images`, `pdf`, `readOnly`…); what is not said, it does not do;
+- `caps`: its modes, each by its id or with its meaning (`meaning`, what the menu of modes says), and what it can do (`images`, `pdf`, `readOnly`…); what is not said, it does not do; only Escouade’s modes count (`plan`, `default`, `acceptEdits`, `auto`, `bypassPermissions`): a harness that declares none is held as Bypass, and one that has a single mode runs its agents in it (if that is Bypass, they start only with “Allow Bypass mode”, and the installation says so);
 - `models`: the models of its menu (`id`, `label`);
 - `accountVar`: the variable that gives each account its configuration folder;
 - `install` and `updateCommand`: its install command (Windows, Unix) and its update command.
