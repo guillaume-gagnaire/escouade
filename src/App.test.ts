@@ -15,6 +15,8 @@ const workbench = vi.hoisted(() => ({
   openFile: vi.fn(async () => {}),
   focus: vi.fn(async () => {}),
   hasTabs: vi.fn(() => false),
+  setFontSize: vi.fn(),
+  openTabs: vi.fn(() => []),
 }));
 vi.mock('./lib/vscode/workbench', () => workbench);
 
