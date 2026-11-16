@@ -335,11 +335,27 @@
     return !!list;
   }
 
+  /**
+   * A change of an account from one of its choices (a default of its new agents, a project reserved). The saves go one
+   * after the other, each made from the account as the save before left it: two choices in a row (a model, then an
+   * effort) never write over each other, however long a save takes (the settings are forced to the disk, ESC-469).
+   */
+  let saving: Promise<unknown> = Promise.resolve();
+  function edit(id: string, change: (now: Account) => Partial<Account>): Promise<boolean> {
+    const next = saving.then(() => {
+      const now = accounts.find((x) => x.id === id);
+      return now ? save({ ...plain(now), ...change(now) }) : false;
+    });
+    saving = next.catch(() => false);
+    return next;
+  }
+
   /** The project ticked or unticked in « Réservé aux projets ». */
   function reserve(a: Account, project: string, on: boolean) {
-    const now = a.projects ?? [];
-    const projects = on ? [...now, project] : now.filter((p) => p !== project);
-    void save({ ...plain(a), projects });
+    void edit(a.id, (now) => {
+      const others = (now.projects ?? []).filter((p) => p !== project);
+      return { projects: on ? [...others, project] : others };
+    });
   }
 
   /** A field left: what it says saved when it changed, else (or refused) as it was. */
@@ -427,7 +443,7 @@
 
   /** One of the defaults of its new agents chosen; empty: its harness's. */
   function setDefault(a: Account, field: 'defaultModel' | 'defaultEffort' | 'defaultMode', value: string) {
-    void save({ ...plain(a), [field]: value });
+    void edit(a.id, () => ({ [field]: value }));
   }
 
   /** An account of Cursor CLI other than its machine's: signed in by its API key (ESC-43). */

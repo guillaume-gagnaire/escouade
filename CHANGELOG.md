@@ -4,6 +4,10 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [Non publié]
+
+- Dans Réglages › Comptes et harness, deux choix faits coup sur coup pour un même compte (un modèle, puis un effort) ne s’écrasent plus.
+
 ## [2.2.1] — 2026-11-15
 
 - Une coupure du poste ne fait plus perdre l’état d’Escouade : ses fichiers sont écrits jusque sur le disque et des copies en sont gardées. Un fichier illisible au démarrage est remplacé par sa dernière bonne copie, et une annonce le dit.

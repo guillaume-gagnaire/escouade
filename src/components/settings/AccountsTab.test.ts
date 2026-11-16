@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -927,6 +927,28 @@ describe('AccountsTab with two harnesses (ESC-30)', () => {
     expect(within(claude.getByRole('combobox', { name: 'Modèle' })).getByRole('option', { name: 'Sonnet' })).toBeInTheDocument();
     expect(claude.getByRole('combobox', { name: 'Effort' })).toBeInTheDocument();
     expect(within(claude.getByRole('combobox', { name: 'Mode' })).getByRole('option', { name: 'Auto' })).toBeInTheDocument();
+  });
+
+  it('keeps a choice made while the save of the one before is still on its way (a slow disk)', async () => {
+    // The save answers late, as on a disk slow to force its writes (ESC-469): the second choice is made before it does.
+    const b = fakeBackend({
+      account_status: statuses,
+      save_settings: () => [],
+      account_update: (a: { account: Account }) =>
+        new Promise<Account[]>((done) =>
+          setTimeout(() => done(app.settings.accounts.map((x) => (x.id === a.account.id ? a.account : x))), 40),
+        ),
+    });
+    render(SettingsModal, { page: 'accounts' });
+    const work = within(list('Comptes Harness nu')).getByRole('listitem', { name: 'Travail' });
+    const defaults = within(within(work).getByRole('group', { name: 'Nouveaux agents' }));
+    await fireEvent.change(defaults.getByRole('combobox', { name: 'Modèle' }), { target: { value: 'gpt-5.5-mini' } });
+    await fireEvent.change(defaults.getByRole('combobox', { name: 'Mode' }), { target: { value: 'plan' } });
+    await waitFor(() => expect(b.called('account_update')).toHaveLength(2));
+    expect(b.called('account_update')[1].args.account).toMatchObject({ id: 'work', defaultModel: 'gpt-5.5-mini', defaultMode: 'plan' });
+    await waitFor(() =>
+      expect(app.settings.accounts.find((a) => a.id === 'work')).toMatchObject({ defaultModel: 'gpt-5.5-mini', defaultMode: 'plan' }),
+    );
   });
 
   it('keeps one account of each harness active, whatever the other harness has', () => {
