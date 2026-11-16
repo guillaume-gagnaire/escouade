@@ -90,6 +90,7 @@ Chaque stratégie a une clé, le même nom partout : la valeur du registre, la c
 | Interdire l’espace perso | `servers.personalSpace` · booléen `false` (`0`) · restreindre | Seuls les espaces des serveurs permis s’ouvrent, pas celui du poste seul. Seule la valeur false (0) s’impose. | Lu et gardé ; appliqué avec les espaces du mode serveur (à venir). |
 | Interdire la vue agrégée | `servers.aggregateView` · booléen `false` (`0`) · restreindre | Les espaces ne se montrent pas ensemble dans une même vue. Seule la valeur false (0) s’impose. | Lu et gardé ; appliqué avec les espaces du mode serveur (à venir). |
 | Notifications sans contenu | `servers.contentlessNotifications` · booléen `true` (`1`) · restreindre | Les notifications venues d’un serveur disent qu’il se passe quelque chose, jamais quoi. Seule la valeur true (1) s’impose. | Lu et gardé ; appliqué avec les notifications du serveur d’équipe (à venir). |
+| Interdire l’API distante | `servers.remoteApi` · booléen `false` (`0`) · restreindre | L’API distante du cœur (le mode serveur, le téléphone) ne s’allume pas sur ce poste : aucun autre appareil ne le pilote. Seule la valeur false (0) s’impose. | L’API distante refusée à son démarrage et à chaque connexion. |
 
 ### Clients MCP extérieurs
 

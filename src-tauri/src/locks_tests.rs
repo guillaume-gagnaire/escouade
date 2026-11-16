@@ -304,6 +304,7 @@ fn the_table_names_its_keys_once_with_their_sort_and_rows() {
                     PERSONAL_SPACE,
                     AGGREGATE_VIEW,
                     CONTENTLESS,
+                    REMOTE_API,
                     MCP_EXTERNAL,
                     TEAM_SERVER,
                     TEAM_FINGERPRINT,

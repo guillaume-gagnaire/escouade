@@ -201,6 +201,14 @@
       "title": "Deny the personal space",
       "type": "boolean"
     },
+    "servers.remoteApi": {
+      "description": "The core’s remote API (the server mode, the phone) does not turn on on this device: no other device drives it. Only the value false (0) is imposed. The remote API refused at its start and at each connection.",
+      "enum": [
+        false
+      ],
+      "title": "Deny the remote API",
+      "type": "boolean"
+    },
     "team.fingerprint": {
       "description": "The fingerprint of the team expected on the team server: a team of another fingerprint is refused. Kept by the app; checked when joining the team (to come).",
       "title": "Team fingerprint",

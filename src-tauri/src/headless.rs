@@ -6,6 +6,8 @@
 use crate::core::Core;
 use crate::host::HeadlessHost;
 use crate::paths::DataDir;
+use crate::remoteapi::server::RemoteApi;
+use crate::remoteapi::Services;
 use anyhow::{anyhow, Result};
 use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
@@ -75,6 +77,8 @@ impl InstanceLock {
 pub struct Headless {
     pub core: Arc<Core>,
     pub host: Arc<HeadlessHost>,
+    /// The remote API, once served (`serve_remote`).
+    remote: parking_lot::Mutex<Option<Arc<RemoteApi>>>,
     _lock: InstanceLock,
 }
 
@@ -89,12 +93,25 @@ impl Headless {
         Ok(Self {
             core,
             host,
+            remote: parking_lot::Mutex::new(None),
             _lock: lock,
         })
     }
 
-    /// The core stopped as when the app quits: its agents, terminals and plugins, its state saved.
+    /// The remote API of this core served on 127.0.0.1:`port` (0: a free port), off until then (ESC-478): what
+    /// `escouade-server` will turn on. Refused when the policies of the device forbid it.
+    pub async fn serve_remote(&self, port: u16) -> Result<Arc<RemoteApi>> {
+        let services = Arc::new(Services::new(self.core.clone()));
+        let api = RemoteApi::start(services, port).await?;
+        *self.remote.lock() = Some(api.clone());
+        Ok(api)
+    }
+
+    /// The core stopped as when the app quits: its remote API, its agents, terminals and plugins, its state saved.
     pub fn stop(self) {
+        if let Some(api) = self.remote.lock().take() {
+            api.stop();
+        }
         self.core.shutdown();
     }
 }

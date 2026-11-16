@@ -287,6 +287,13 @@
         <decimal value="1" />
       </enabledValue>
     </policy>
+    <policy name="servers_remoteApi" class="Both" displayName="$(string.servers_remoteApi)" explainText="$(string.servers_remoteApi_Explain)" key="Software\Policies\Escouade" valueName="servers.remoteApi">
+      <parentCategory ref="servers" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="0" />
+      </enabledValue>
+    </policy>
     <policy name="mcp_externalClients" class="Both" displayName="$(string.mcp_externalClients)" explainText="$(string.mcp_externalClients_Explain)" presentation="$(presentation.mcp_externalClients)" key="Software\Policies\Escouade">
       <parentCategory ref="mcp" />
       <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />

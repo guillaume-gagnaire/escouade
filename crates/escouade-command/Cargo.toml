@@ -1,0 +1,21 @@
+[package]
+name = "escouade-command"
+version = "0.1.0"
+description = "The single list of the app's commands: each one registered once, for Tauri's IPC and for the remote API"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../src-tauri"
+# A part of the app (docs/REMOTE.md, « La fondation commune », point 2): never published.
+publish = false
+
+[lib]
+proc-macro = true
+
+[dependencies]
+# Already in the tree through Tauri's own macros: nothing new to vet.
+heck = "0.5"
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full"] }

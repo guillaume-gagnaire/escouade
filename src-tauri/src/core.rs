@@ -931,7 +931,11 @@ pub struct Core {
     /// taking projects. Guards that end with their statement do not nest; mind the temporaries of
     /// a struct literal or a tail expression, which live until its end.
     pub tickets: RwLock<Vec<Ticket>>,
+    /// The window's state of the interface (saved with the state). Each client of the remote API has its own,
+    /// in `client_ui` (ESC-478): read and written by `ui_of`, `set_ui_of`, `with_my_ui`, `with_every_ui`.
     pub ui: RwLock<UiState>,
+    /// The state of the interface of each client of the remote API, while it is connected (never saved).
+    pub client_ui: RwLock<HashMap<crate::remoteapi::Client, UiState>>,
     pub agents: RwLock<HashMap<String, AgentHandle>>,
     pub stats: Stats,
     pub usage: Mutex<UsageSnapshot>,
@@ -2135,6 +2139,7 @@ impl Core {
             projects: RwLock::new(state.projects),
             tickets: RwLock::new(tickets),
             ui: RwLock::new(state.ui),
+            client_ui: RwLock::new(HashMap::new()),
             agents: RwLock::new(agents),
             usage: Mutex::new(usage),
             models: RwLock::new(state.models),
@@ -2735,6 +2740,56 @@ impl Core {
         if let Err(e) = self.save_state() {
             log::error!("{e:#}");
         }
+    }
+
+    /// The state of the interface of `client`: the window's, or a client's of the remote API (its own, empty at first).
+    pub fn ui_of(&self, client: &crate::remoteapi::Client) -> UiState {
+        match client {
+            crate::remoteapi::Client::Window => self.ui.read().clone(),
+            other => self
+                .client_ui
+                .read()
+                .get(other)
+                .cloned()
+                .unwrap_or_default(),
+        }
+    }
+
+    /// `client`'s state of the interface, as it gives it: the window's is saved with the state.
+    pub fn set_ui_of(&self, client: &crate::remoteapi::Client, ui: UiState) {
+        match client {
+            crate::remoteapi::Client::Window => {
+                *self.ui.write() = ui;
+                self.request_save();
+            }
+            other => {
+                self.client_ui.write().insert(other.clone(), ui);
+            }
+        }
+    }
+
+    /// `f` on the state of the interface of the client whose call runs now (`remoteapi::current`): what it chose
+    /// (the agent it made, the project it added) is its own.
+    pub fn with_my_ui(&self, f: impl FnOnce(&mut UiState)) {
+        match crate::remoteapi::current() {
+            crate::remoteapi::Client::Window => f(&mut self.ui.write()),
+            other => f(self.client_ui.write().entry(other).or_default()),
+        }
+    }
+
+    /// `f` on the state of the interface of every client, the window's first: what is gone (an agent, a project) is
+    /// forgotten by all of them.
+    pub fn with_every_ui(&self, mut f: impl FnMut(&mut UiState)) {
+        f(&mut self.ui.write());
+        for ui in self.client_ui.write().values_mut() {
+            f(ui);
+        }
+    }
+
+    /// The client `client` of the remote API gone: its state of the interface with it.
+    pub fn forget_client(&self, client: &crate::remoteapi::Client) {
+        self.client_ui.write().remove(client);
+        self.hub.unsubscribe(client);
     }
 
     pub fn request_save(&self) {
@@ -7101,10 +7156,9 @@ impl Core {
             .as_ref()
             .is_some_and(|wt| self.start_setup(&h, &project, wt));
         if o.select {
-            self.ui
-                .write()
-                .selected_agent
-                .insert(project_id.to_string(), id.clone());
+            self.with_my_ui(|ui| {
+                ui.selected_agent.insert(project_id.to_string(), id.clone());
+            });
         }
         self.layout_hook(project_id, |p| {
             crate::folders::add_agent(p, &id, o.folder.as_deref())
@@ -8522,12 +8576,11 @@ impl Core {
         // The files joined to its messages (the copies; never a file of the user's own).
         self.forget_attachments(id);
         self.forget_sidechains(id);
-        {
-            let mut ui = self.ui.write();
+        self.with_every_ui(|ui| {
             if ui.selected_agent.get(&pid).map(String::as_str) == Some(id) {
                 ui.selected_agent.remove(&pid);
             }
-        }
+        });
         self.hub.emit(UiEvent::AgentRemoved {
             id: id.to_string(),
             project_id: pid.clone(),
@@ -9078,11 +9131,10 @@ impl Core {
             Some(closed) => self.give_back(closed, &project),
             None => Vec::new(),
         };
-        {
-            let mut ui = self.ui.write();
+        self.with_my_ui(|ui| {
             ui.active_project = Some(project.id.clone());
             ui.view = "project".into();
-        }
+        });
         if reopened {
             // Saved before its file goes, and only if it is: a stop in between, or a state that
             // cannot be written, loses nothing (the file is ignored while its project is open,
@@ -9619,13 +9671,12 @@ impl Core {
         }
         // Read before taking the ui lock: never hold ui while waiting on projects.
         let fallback = self.projects.read().first().map(|p| p.id.clone());
-        {
-            let mut ui = self.ui.write();
+        self.with_every_ui(|ui| {
             ui.selected_agent.remove(id);
             if ui.active_project.as_deref() == Some(id) {
-                ui.active_project = fallback;
+                ui.active_project = fallback.clone();
             }
-        }
+        });
         self.request_save();
         self.update_tray();
         // Its agents are gone: one of them may have held the board waiting for its quota.

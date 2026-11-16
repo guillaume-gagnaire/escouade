@@ -1,8 +1,10 @@
-//! Single event channel towards the interface: the webview's `Channel` in the desktop app, any
-//! function in a process without a window (`host::HeadlessHost`, ESC-451). One subscriber: the last
-//! one to subscribe gets everything (several clients come with the remote API).
+//! The events towards the interface: the webview's `Channel` in the desktop app, any function in a process
+//! without a window (`host::HeadlessHost`, ESC-451), and the clients of the remote API (ESC-478). One subscriber per
+//! client (`remoteapi::Client`): each one gets every event, and a client that subscribes again (a page that loads
+//! again) takes the place of its subscriber before, never another client's.
 
 use crate::model::UiEvent;
+use crate::remoteapi::Client;
 use parking_lot::{Mutex, RwLock};
 use std::collections::HashMap;
 use std::mem::Discriminant;
@@ -20,7 +22,8 @@ pub type Sink = Box<dyn Fn(UiEvent) + Send + Sync>;
 
 #[derive(Default)]
 pub struct Hub {
-    sink: RwLock<Option<Sink>>,
+    /// The subscribers, by client: the window's first when it has one.
+    sinks: RwLock<Vec<(Client, Sink)>>,
     meter: Mutex<Meter>,
 }
 
@@ -91,26 +94,53 @@ fn kind_of(event: &UiEvent) -> String {
 }
 
 impl Hub {
-    /// The webview's channel, which gets the events from now on.
+    /// The channel of the client whose call runs now (the webview's, or a client's of the remote API), which gets
+    /// the events from now on.
     pub fn set_channel(&self, channel: Channel<UiEvent>) {
-        self.subscribe(Box::new(move |event| {
-            if let Err(e) = channel.send(event) {
-                log::debug!("event channel send failed: {e}");
-            }
-        }));
+        self.subscribe_as(
+            crate::remoteapi::current(),
+            Box::new(move |event| {
+                if let Err(e) = channel.send(event) {
+                    log::debug!("event channel send failed: {e}");
+                }
+            }),
+        );
     }
 
-    /// `sink` gets the events from now on, in place of the subscriber before.
+    /// `sink` gets the events from now on, as the window, in place of its subscriber before.
     pub fn subscribe(&self, sink: Sink) {
-        *self.sink.write() = Some(sink);
+        self.subscribe_as(Client::Window, sink);
+    }
+
+    /// `sink` gets the events from now on, for `client`, in place of that client's subscriber before.
+    pub fn subscribe_as(&self, client: Client, sink: Sink) {
+        let mut sinks = self.sinks.write();
+        sinks.retain(|(c, _)| *c != client);
+        sinks.push((client, sink));
+        sinks.sort_by(|a, b| a.0.cmp(&b.0));
+    }
+
+    /// `client` gets no more events.
+    pub fn unsubscribe(&self, client: &Client) {
+        self.sinks.write().retain(|(c, _)| c != client);
+    }
+
+    /// How many clients get the events.
+    pub fn subscribers(&self) -> usize {
+        self.sinks.read().len()
     }
 
     pub fn emit(&self, event: UiEvent) {
         if let Some(line) = self.meter.lock().count(&event, Instant::now()) {
             log::warn!("{line}");
         }
-        if let Some(sink) = &*self.sink.read() {
-            sink(event);
+        let sinks = self.sinks.read();
+        // The last one takes the event, the others a copy: one subscriber (the window alone) copies nothing.
+        if let Some(((_, last), others)) = sinks.split_last() {
+            for (_, sink) in others {
+                sink(event.clone());
+            }
+            last(event);
         }
     }
 }

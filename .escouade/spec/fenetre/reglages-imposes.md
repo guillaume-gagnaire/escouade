@@ -2,8 +2,8 @@
 title: "Réglages imposés"
 subject: "fenetre"
 sources: ["docs/TEAM-SERVER.md §6.1, §6.2, §6.3, §6.4, §6.5, §16 (TS-11, TS-12, TS-13)","crates/escouade-policy/README.md (TS-0b ESC-454, TS-12 ESC-465)","crates/escouade-policy/src/list.rs (la liste unique)","src-tauri/src/team_settings.rs (TS-13)"]
-tickets: ["ESC-455","ESC-465","ESC-471"]
-decisions: [169,175,183]
+tickets: ["ESC-455","ESC-465","ESC-471","ESC-478"]
+decisions: [169,175,183,189]
 compared: null
 ---
 
@@ -74,6 +74,7 @@ Un `REG_DWORD` 0 ou 1 devient un booléen quand la liste le dit ; une chaîne se
 | `updates.automatic` | restreindre (éteint seulement) | Réglages › Général › « Installer les mises à jour automatiquement » |
 | `servers.allowed` | restreindre, une borne (adresses) | un serveur hors de la liste, refusé |
 | `servers.personalSpace`, `servers.aggregateView`, `servers.contentlessNotifications` | restreindre | lus et gardés ; appliqués avec les espaces et le serveur d'équipe (à venir) |
+| `servers.remoteApi` | restreindre (éteint seulement) | l'API distante du cœur (« Escouade à distance › L'API distante ») : refusée à son démarrage et à chaque nouvelle connexion |
 | `mcp.externalClients` | restreindre, un plafond (`denied`, `readOnly`, `allowed`) | Claude hors d'Escouade : refusé à la connexion (`denied`), ou ses outils qui écrivent refusés (`readOnly` : seuls `get_*`, `list_*`, `read_*`, `search_*`, `wait_*` passent) |
 | `team.server`, `team.fingerprint`, `team.onlyThisServer` | valeur ; restreindre | l'enrôlement (ci-dessous) |
 
@@ -99,6 +100,7 @@ L'interface ne fait que montrer. Une écriture de ce qui est imposé est refusé
 
 - **par la fenêtre** : l'enregistrement des réglages de l'app, les réglages d'un projet (harness, Remote Control, projet privé), le Kanban (son mode, son effort), le mode, le modèle et l'effort d'un agent, son Remote Control, l'installation d'un plugin, la dictée ;
 - **par le MCP** : `set_board` avec un mode ou un effort interdits, `create_agent` dans un projet dont le harness n'est pas permis, `update_ticket` qui met un compte sur un harness interdit ; un client extérieur selon `mcp.externalClients` ;
+- **par l'API distante** : son démarrage et chaque nouvelle connexion, selon `servers.remoteApi` ;
 - **par le `.escouade.yml` du dépôt** : `agents.engine`, `board.mode` ou `board.effort` interdits ne sont pas appliqués, et un avertissement le dit dans Réglages › Équipe, le reste du fichier lu comme avant ;
 - **par « Exporter vers .escouade.yml »** : `board.mode`, `agents.engine` et `board.effort`, bornés sur ce poste, ne sont pas écrits ; demandés un à un, l'écriture est refusée et dite.
 - Un agent ne démarre pas sur un harness, dans un mode, sur un modèle ou à un effort non permis.
@@ -118,6 +120,7 @@ L'interface ne fait que montrer. Une écriture de ce qui est imposé est refusé
 - Au démarrage comme à chaud, les réglages sont ramenés dans ce qui est imposé : la télémétrie éteinte, la bêta coupée, le mode par défaut ramené au **mode permis le plus proche** (celui qui ne permet jamais plus), le mode du Kanban et des comptes de même, l'effort du Kanban ramené au plafond, chaque projet rendu privé quand c'est imposé.
 - **Un agent dans un mode devenu interdit** finit son tour, puis passe au mode permis le plus proche, et le dit dans sa conversation : « Le mode « auto » n'est pas permis par la stratégie de ce poste. L'agent passe en mode « acceptEdits », le plus proche permis. » Un agent qui ne travaille pas y passe aussitôt.
 - **Un agent d'un harness devenu interdit** s'arrête entre deux tours : son process est fermé à la fin de son tour (aussitôt s'il ne travaille pas), il le dit (« Le harness « claude » n'est pas permis par la stratégie de ce poste. L'agent s'arrête à la fin de son tour. »), et son message suivant est refusé.
+- **Une connexion de l'API distante déjà ouverte** quand `servers.remoteApi` passe à `false` continue ; la suivante est refusée.
 
 ## Pour les essais
 

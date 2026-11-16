@@ -37,8 +37,8 @@ pub use escouade_policy::list::{
     CONTENTLESS, DEFAULT_MODE, DENIED_FILES, DENY_INSECURE_TLS, DICTATION, FORCE_PRIVATE,
     HARNESSES, MAX_EFFORT, MCP_EXTERNAL, MODELS, MODES_KEY, ONLY_THIS_SERVER, PERSONAL_SPACE,
     PLUGINS_ALLOWED, PLUGINS_DENIED, PLUGIN_ORIGINS_KEY, POLICIES as KEYS, PROXY_EXCLUSIONS,
-    PROXY_URL, REMOTE, SERVERS, TEAM_FINGERPRINT, TEAM_SERVER, TELEMETRY, VERIFIED_ONLY,
-    VOICE_ONLINE,
+    PROXY_URL, REMOTE, REMOTE_API, SERVERS, TEAM_FINGERPRINT, TEAM_SERVER, TELEMETRY,
+    VERIFIED_ONLY, VOICE_ONLINE,
 };
 
 /// The modes a bound of modes may name, from the one that allows the least to the one that allows the most
@@ -693,6 +693,18 @@ impl Locks {
     pub fn check_dictation(&self) -> Result<()> {
         if self.off(DICTATION) {
             bail!(self.imposed(DICTATION));
+        }
+        Ok(())
+    }
+
+    /// Whether the remote API may serve (ESC-478): at its start and at each connection.
+    pub fn check_remote_api(&self) -> Result<()> {
+        if self.off(REMOTE_API) {
+            bail!(tr!(
+                "L’API distante est interdite {by} ({REMOTE_API}).",
+                "The remote API is denied {by} ({REMOTE_API}).",
+                by = self.by_line(REMOTE_API)
+            ));
         }
         Ok(())
     }

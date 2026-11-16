@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /// A data folder with the settings of the core's tests: the fake `claude`, Claude Code's Principal.
-fn data(name: &str) -> (std::path::PathBuf, DataDir) {
+pub(crate) fn data(name: &str) -> (std::path::PathBuf, DataDir) {
     let dir = test_dir(name);
     let data = DataDir::new(dir.join("data"));
     data.ensure().unwrap();
@@ -30,7 +30,7 @@ fn data(name: &str) -> (std::path::PathBuf, DataDir) {
 }
 
 /// Waits for `pred`, 60 s at most (the whole suite runs hundreds of fakes at once).
-async fn wait(what: &str, pred: impl Fn() -> bool) {
+pub(crate) async fn wait(what: &str, pred: impl Fn() -> bool) {
     let deadline = Instant::now() + Duration::from_secs(60);
     while Instant::now() < deadline {
         if pred() {

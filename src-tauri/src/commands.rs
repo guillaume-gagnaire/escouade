@@ -1,4 +1,5 @@
-//! Tauri commands invoked by the frontend.
+//! Tauri commands invoked by the frontend, and by the remote API (`remoteapi`): each one is in the single list of
+//! `remoteapi::list`, in its class.
 
 use crate::accounts::{AccountStatus, MachineAccount, ShareMode};
 use crate::attachfiles::AttachedFile;
@@ -12,16 +13,24 @@ use crate::integrations::{
 use crate::model::Account as ClaudeAccount;
 use crate::model::*;
 use crate::pty::{self, ShellInfo, TermInfo, TermReport};
+use crate::remoteapi::{Maybe, State};
 use crate::search;
 use crate::stats::StatsView;
 use crate::telemetry::{self, Event};
 use crate::tickets::TicketDraft;
+use ::tauri::ipc::{Channel, InvokeResponseBody};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
-use tauri::ipc::{Channel, InvokeResponseBody};
-use tauri::State;
+
+/// Tauri, as this file names it: `#[tauri::command]` is `escouade_command::command`, which gives each command to
+/// Tauri's own attribute as it is and writes beside it its call by the remote API (`__remote_<name>`). A command is
+/// written here as it always was; it goes in the list of `remoteapi::list`.
+mod tauri {
+    pub use ::tauri::*;
+    pub use escouade_command::command;
+}
 
 type Res<T> = Result<T, String>;
 
@@ -127,15 +136,24 @@ pub struct InitialState {
 #[tauri::command(async)]
 pub fn subscribe(
     core: CoreState,
-    updates: State<crate::updates::Updates>,
-    voice: VoiceState,
+    updates: Maybe<crate::updates::Updates>,
+    voice: Maybe<Arc<crate::voice::Voice>>,
     channel: Channel<UiEvent>,
 ) -> InitialState {
+    // The window, or a client of the remote API (ESC-478): each gets the events, and its own state of the interface.
+    let client = crate::remoteapi::current();
+    let window = client == crate::remoteapi::Client::Window;
     core.hub.set_channel(channel);
-    // A page that loads again has no dictation under way: the one of the page before stops.
-    voice.cancel();
-    core.reset_unsaved();
-    core.held.lock().clear();
+    if window {
+        // A page that loads again has no dictation under way: the one of the page before stops.
+        if let Some(voice) = voice.get() {
+            voice.cancel();
+        }
+        core.reset_unsaved();
+        core.held.lock().clear();
+    }
+    // The updates are the window's: a client has its own (`docs/REMOTE.md`, « Ce qui change de machine »).
+    let updates = updates.get().filter(|_| window);
     // One lock at a time, each guard ending with its statement: in a struct literal the guards
     // would live together (the lock order is projects before tickets, see `Core`).
     let settings = core.settings.read().clone();
@@ -144,7 +162,7 @@ pub fn subscribe(
     let agents = core.agent_views();
     let scheduled = core.scheduled_views();
     let setup_output = core.setup_outputs();
-    let ui = core.ui.read().clone();
+    let ui = core.ui_of(&client);
     let usage = core.usage.lock().clone();
     let git = core.git_cache.read().clone();
     let terminals = core.pty.list();
@@ -175,9 +193,9 @@ pub fn subscribe(
         usage,
         git,
         terminals,
-        installed: updates.take_installed(),
-        restart_at: updates.restart_at(),
-        failed_update: updates.failed(),
+        installed: updates.and_then(|u| u.take_installed()),
+        restart_at: updates.and_then(|u| u.restart_at()),
+        failed_update: updates.and_then(|u| u.failed()),
         version,
         models,
         engine_models,
@@ -192,7 +210,7 @@ pub fn subscribe(
         project_pauses,
         accounts,
         setup_output,
-        page_crash: core.take_page_crash(),
+        page_crash: if window { core.take_page_crash() } else { None },
         locks: core.locks.read().clone(),
         team_locks: core.team_locks.read().clone(),
         recovered: escouade_model::backups::notices(core.data.root()),
@@ -228,8 +246,8 @@ pub fn open_path(core: CoreState<'_>, path: String) -> Res<()> {
 
 #[tauri::command]
 pub fn set_ui(core: CoreState, ui: UiState) {
-    *core.ui.write() = ui;
-    core.request_save();
+    // The window's, or a client's of the remote API: each keeps its own (ESC-478).
+    core.set_ui_of(&crate::remoteapi::current(), ui);
 }
 
 /// The settings as the window saves them; the Claude accounts are left as they are (their tab
@@ -237,7 +255,7 @@ pub fn set_ui(core: CoreState, ui: UiState) {
 #[tauri::command(async)]
 pub fn save_settings(
     core: CoreState,
-    voice: VoiceState,
+    voice: Maybe<Arc<crate::voice::Voice>>,
     settings: Settings,
 ) -> Res<Vec<ShellInfo>> {
     let remote_was_on = core.settings.read().remote_control_all;
@@ -245,7 +263,11 @@ pub fn save_settings(
     // An account saved (a code host's among them): the CI of the targets read at once (ESC-63).
     core.wake_ticket_prs();
     // A conversation under way takes the voice, its language, pace and volume (ESC-115).
-    voice.conversation_tune(&conv_choice(&core.settings.read(), &*core.secrets, &voice.catalog).0);
+    if let Some(voice) = voice.get() {
+        voice.conversation_tune(
+            &conv_choice(&core.settings.read(), &*core.secrets, &voice.catalog).0,
+        );
+    }
     if settings.remote_control_all && !remote_was_on {
         core.telemetry
             .track(Event::RemoteControlEnabled { from: "global" });
@@ -4636,16 +4658,14 @@ mod tests {
 
     #[test]
     fn the_commands_of_the_background_tasks_are_in_the_handler_the_window_calls() {
-        // A command that is written and not listed there is never reachable from the window.
-        let lib = include_str!("lib.rs");
-        let handler = lib
-            .split_once("generate_handler![")
-            .and_then(|(_, rest)| rest.split_once(']'))
-            .map(|(list, _)| list)
-            .expect("the handler list");
+        // A command that is written and not listed there is never reachable from the window: the single list of
+        // the commands (`remoteapi::list`, ESC-478) makes the IPC's handler.
         for name in ["stop_bg_task", "task_output"] {
             assert_eq!(
-                handler.matches(&format!("commands::{name},")).count(),
+                crate::remoteapi::list::IPC
+                    .iter()
+                    .filter(|n| **n == name)
+                    .count(),
                 1,
                 "{name}"
             );
@@ -5150,7 +5170,7 @@ pub async fn team_project_logo(
 
 /// Whether an address is Escouade's own (`navigation::destination`), never loaded in a page.
 fn own_of(app: &tauri::AppHandle) -> crate::devpage::Own {
-    use tauri::Manager;
+    use ::tauri::Manager;
     let dev = app
         .try_state::<crate::navigation::Home>()
         .and_then(|h| h.dev.clone());

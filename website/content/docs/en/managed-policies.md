@@ -90,6 +90,7 @@ Each policy has a key, the same name everywhere: the registry value, the profile
 | Deny the personal space | `servers.personalSpace` · Boolean `false` (`0`) · restrict | Only the spaces of the allowed servers open, not the device’s own. Only the value false (0) is imposed. | Read and kept; applied with the spaces of the server mode (to come). |
 | Deny the aggregate view | `servers.aggregateView` · Boolean `false` (`0`) · restrict | The spaces are not shown together in one view. Only the value false (0) is imposed. | Read and kept; applied with the spaces of the server mode (to come). |
 | Notifications without content | `servers.contentlessNotifications` · Boolean `true` (`1`) · restrict | The notifications from a server say something happens, never what. Only the value true (1) is imposed. | Read and kept; applied with the team server’s notifications (to come). |
+| Deny the remote API | `servers.remoteApi` · Boolean `false` (`0`) · restrict | The core’s remote API (the server mode, the phone) does not turn on on this device: no other device drives it. Only the value false (0) is imposed. | The remote API refused at its start and at each connection. |
 
 ### Outside MCP clients
 

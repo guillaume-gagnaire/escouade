@@ -141,7 +141,7 @@ pub(crate) fn parse_message(message: &str) -> Option<String> {
 /// The path of the file on the disk that the page sent as `id`, as the host read it: nothing
 /// where the system gives none, or if it did not arrive in time. What it answers is kept for
 /// `attach_origin`, which takes the id (`take_handed`) and never a path the page makes up.
-#[tauri::command]
+#[escouade_command::command]
 pub async fn file_origin<R: Runtime>(app: tauri::AppHandle<R>, id: String) -> Option<String> {
     if !cfg!(windows) || !valid_id(&id) {
         return None;

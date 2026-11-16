@@ -266,6 +266,7 @@ pub const AUTO_UPDATE: &str = "updates.automatic";
 pub const SERVERS: &str = "servers.allowed";
 pub const PERSONAL_SPACE: &str = "servers.personalSpace";
 pub const AGGREGATE_VIEW: &str = "servers.aggregateView";
+pub const REMOTE_API: &str = "servers.remoteApi";
 pub const CONTENTLESS: &str = "servers.contentlessNotifications";
 pub const MCP_EXTERNAL: &str = "mcp.externalClients";
 pub const TEAM_SERVER: &str = "team.server";
@@ -823,6 +824,26 @@ pub const POLICIES: &[Def] = &[
             title: "Notifications without content",
             help: "The notifications from a server say something happens, never what. Only the value true (1) is imposed.",
             locks: "Read and kept; applied with the team server’s notifications (to come).",
+        },
+    },
+    Def {
+        key: REMOTE_API,
+        sort: Sort::Restrict,
+        form: off(),
+        rows: &[],
+        within: None,
+        category: Category::Servers,
+        later: false,
+        example: "false",
+        fr: Text {
+            title: "Interdire l’API distante",
+            help: "L’API distante du cœur (le mode serveur, le téléphone) ne s’allume pas sur ce poste : aucun autre appareil ne le pilote. Seule la valeur false (0) s’impose.",
+            locks: "L’API distante refusée à son démarrage et à chaque connexion.",
+        },
+        en: Text {
+            title: "Deny the remote API",
+            help: "The core’s remote API (the server mode, the phone) does not turn on on this device: no other device drives it. Only the value false (0) is imposed.",
+            locks: "The remote API refused at its start and at each connection.",
         },
     },
     // ---------- MCP ----------

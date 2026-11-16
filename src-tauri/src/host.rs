@@ -24,7 +24,9 @@ use tauri::{AppHandle, Manager, Runtime};
 pub type HostFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// What is opened outside Escouade, on the machine of the host.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Sent to the clients of the remote API as `{"kind": "url", "target": …}`.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "kind", content = "target", rename_all = "camelCase")]
 pub enum Opened {
     /// A link, in the browser.
     Url(String),
@@ -64,6 +66,11 @@ pub trait Host: Send + Sync + 'static {
     fn clipboard_image(&self) -> HostFuture<'_, anyhow::Result<Vec<u8>>>;
     /// The devices the app holds (the microphone) let go of, as the core stops.
     fn release_devices(&self);
+    /// What it publishes from now on, for a client of the remote API to render (ESC-478): a host without a window's
+    /// (`HeadlessHost`); none for the desktop's, which shows it itself.
+    fn events(&self) -> Option<tokio::sync::mpsc::UnboundedReceiver<HostEvent>> {
+        None
+    }
 }
 
 /// What `Core::load` takes for its host: a Tauri app's handle (the desktop's and most tests'), or a
@@ -183,7 +190,9 @@ impl<R: Runtime> Host for TauriHost<R> {
 
 /// What a host without a window was asked to show or open, published for its subscribers: the
 /// client renders it on its own machine (`docs/REMOTE.md`, « Ce qui change de machine »).
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Sent to the clients of the remote API as `{"type": "notify", "title": …}`.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
 pub enum HostEvent {
     Chime,
     Flash,
@@ -290,4 +299,8 @@ impl Host for HeadlessHost {
     }
 
     fn release_devices(&self) {}
+
+    fn events(&self) -> Option<tokio::sync::mpsc::UnboundedReceiver<HostEvent>> {
+        Some(self.subscribe())
+    }
 }

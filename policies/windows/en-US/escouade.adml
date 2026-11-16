@@ -185,6 +185,12 @@ Key: servers.aggregateView (Boolean, false (0)). Sort: restrict. “Disabled” 
 On the device: Read and kept; applied with the team server’s notifications (to come).
 
 Key: servers.contentlessNotifications (Boolean, true (1)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+      <string id="servers_remoteApi">Deny the remote API</string>
+      <string id="servers_remoteApi_Explain">The core’s remote API (the server mode, the phone) does not turn on on this device: no other device drives it. Only the value false (0) is imposed.
+
+On the device: The remote API refused at its start and at each connection.
+
+Key: servers.remoteApi (Boolean, false (0)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
       <string id="mcp_externalClients">Outside MCP clients</string>
       <string id="mcp_externalClients_Explain">What Claude outside Escouade (an outside MCP client) may do through Escouade’s MCP server: denied (nothing), readOnly (read only), allowed (everything). Escouade’s own agents are not concerned.
 

@@ -110,6 +110,9 @@ escouade-updates = { path = "../crates/escouade-updates" }
 # The parts of the MCP server that stand without the app: its transport, the tokens and the port, the tools' arguments
 # (docs/CRATES.md, § 13).
 escouade-mcp = { path = "../crates/escouade-mcp" }
+# The single list of the commands (`remoteapi::list`): `#[tauri::command]` and the remote API's call of each one
+# (docs/REMOTE.md, « La fondation commune », point 2).
+escouade-command = { path = "../crates/escouade-command" }
 # The policies of a managed device (TS-0b), the rank 6 of the layers of the settings (`locks`, TS-11).
 escouade-policy = { path = "../crates/escouade-policy" }
 # The team server's client (TS-3, docs/TEAM-SERVER.md): the team as an MLS group, its keys in the keychain (the app's
@@ -179,6 +182,7 @@ members = [
     "../crates/escouade-policy",
     "../crates/escouade-team-server",
     "../crates/escouade-team",
+    "../crates/escouade-command",
 ]
 default-members = [
     ".",

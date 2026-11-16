@@ -767,10 +767,9 @@ impl Core {
             .selected_agent
             .filter(|a| handles.iter().any(|h| h.lock().meta.id == *a));
         if let Some(agent) = selected {
-            self.ui
-                .write()
-                .selected_agent
-                .insert(project.id.clone(), agent);
+            self.with_my_ui(|ui| {
+                ui.selected_agent.insert(project.id.clone(), agent);
+            });
         }
         for h in &handles {
             self.emit_agent(h);
