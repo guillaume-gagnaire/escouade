@@ -1,6 +1,7 @@
 <script lang="ts" module>
   /** Where the window of the teams is (TS-3). */
-  export type TeamStep = 'home' | 'create' | 'words' | 'created' | 'invite' | 'join' | 'device' | 'pairJoin' | 'recover' | 'settings';
+  export type TeamStep =
+    'home' | 'create' | 'words' | 'created' | 'invite' | 'join' | 'device' | 'pairJoin' | 'recover' | 'settings' | 'projects';
 </script>
 
 <script lang="ts">
@@ -18,6 +19,7 @@
   import TeamJoin from './TeamJoin.svelte';
   import TeamPairJoin from './TeamPairJoin.svelte';
   import TeamRecover from './TeamRecover.svelte';
+  import TeamProjects from './TeamProjects.svelte';
   import TeamSettings from './TeamSettings.svelte';
 
   let { step: first = 'home', link = '', teamId: firstTeam = null }: { step?: TeamStep; link?: string; teamId?: string | null } = $props();
@@ -52,10 +54,12 @@
   }
 
   const team = $derived(teams.byId(teamId));
-  const wide = $derived(step === 'home' || step === 'words' || step === 'device' || step === 'invite' || step === 'settings');
+  const wide = $derived(
+    step === 'home' || step === 'words' || step === 'device' || step === 'invite' || step === 'settings' || step === 'projects',
+  );
 </script>
 
-<Modal title={t(`team.title.${step}`)} width={wide ? 640 : 520} onclose={close}>
+<Modal title={step === 'projects' ? t('teamProjects.title') : t(`team.title.${step}`)} width={wide ? 640 : 520} onclose={close}>
   {#if step === 'home'}
     <TeamHome
       onstep={(s, id) => go(s, id ?? null)}
@@ -83,6 +87,8 @@
     <TeamCreated team={(team ?? made)!} oninvite={() => go('invite')} ondone={close} />
   {:else if step === 'invite' && teamId}
     <TeamInvite {teamId} onback={() => go('home')} />
+  {:else if step === 'projects' && teamId}
+    <TeamProjects {teamId} onback={() => go('home')} />
   {:else if step === 'settings' && teamId}
     <TeamSettings {teamId} onback={() => go('home')} />
   {:else if step === 'device' && teamId}

@@ -15,6 +15,7 @@
 //!
 //! The core wires it in (`src-tauri/src/teams.rs`). `README.md` says what is done and what is left.
 
+pub mod catalog;
 pub mod client;
 pub mod escrow;
 #[cfg(any(test, feature = "fuzzing"))]

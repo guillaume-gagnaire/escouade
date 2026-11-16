@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Team server: “Team projects” lists your team’s projects, encrypted so that the server reads none of it. “Clone” opens the “New project” wizard with the repository filled in and goes through your own git accounts; a project already cloned is known by the address of its repository and attached without a new clone.
 - In the VS Code editor, images, PDFs (pages, zoom, search), Word documents and Markdown open in a preview, Markdown also beside its source. No script of a file runs there, and an image from the web loads only when you click it.
 - Team server: a team imposes or recommends settings to its projects through its team `.escouade.yml`, signed by its administrators (two for a proxy or a certificate); a band tells each change and who signed it, and nothing that touches the network or runs a command applies without your consent on this device.
 - A pull request’s Files tab: each file’s colored diff, from git, a filterable tree that follows the scrolling, “Viewed” per file that comes back when a commit changes it, generated, large or binary files folded, one commit at a time, and opening a file at its line in the editor.

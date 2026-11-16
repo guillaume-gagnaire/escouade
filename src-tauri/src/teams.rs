@@ -472,6 +472,10 @@ pub type SettingsSink =
 mod team_files;
 pub use team_files::{SettingsDraft, TeamSettingsView};
 
+#[path = "teams_catalog.rs"]
+mod team_catalog;
+pub use team_catalog::{CatalogOf, MemberView};
+
 impl Teams {
     /// The teams of the data folder's `teams` (made if needed), each opened from its state and the keychain.
     pub fn open(
@@ -1031,6 +1035,7 @@ impl Teams {
                     Ok(_) => match sync_projects(&mut t).await {
                         Ok(()) => {
                             self.read_settings(id, &mut t).await;
+                            self.read_catalog(&mut t).await;
                             Ok(())
                         }
                         Err(e) => Err(e),

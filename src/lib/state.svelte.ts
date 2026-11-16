@@ -121,7 +121,14 @@ export type Modal =
    * projects, the one « Rouvrir » was clicked on; it holds only while the path typed is `path`. `projectId`: the assistant
    * opened again on an existing project (Réglages › Projets › Projet), to set it up anew.
    */
-  | { kind: 'newProject'; path?: string; historyId?: string; projectId?: string }
+  | {
+      kind: 'newProject';
+      path?: string;
+      historyId?: string;
+      projectId?: string;
+      /** « Cloner » of « Projets de l'équipe » (TS-8): the project of the team's list, its repositories to clone. */
+      clone?: import('./team-projects').CloneFrom;
+    }
   /** The question of the first start: the usage statistics. */
   | { kind: 'telemetry' }
   /** The first start's question of the mode of new agents (SEC-09). */

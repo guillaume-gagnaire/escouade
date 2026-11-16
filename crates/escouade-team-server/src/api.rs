@@ -707,6 +707,10 @@ pub async fn join_page(Path(id): Path<String>) -> Result<Response, Problem> {
 
 const JOIN_PAGE: &str = include_str!("join.html");
 
+/// The stream of the team's list of projects (`escouade_team::catalog::CATALOG_STREAM`): its content is encrypted,
+/// only its writers are known here.
+pub const CATALOG_STREAM: Id = *b"escouade/project";
+
 async fn append(
     app: &Shared,
     authed: &Authed,
@@ -782,6 +786,13 @@ pub async fn append_project(
     Cbor(req): Cbor<AppendRequest>,
 ) -> Result<Cbor<Appended>, Problem> {
     let project = path_id(&project)?;
+    // The team's list of projects (TS-8) is its administrators': the clients refuse a member's entry at the reading,
+    // and the server, which knows the roles, does not even keep one (defense in depth).
+    if project == CATALOG_STREAM && !authed.is_admin() {
+        return Err(Problem::forbidden(
+            "only an administrator writes the team's list of projects",
+        ));
+    }
     append(&app, &authed, Stream::Project(project), req).await
 }
 

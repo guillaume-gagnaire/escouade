@@ -21,6 +21,9 @@
   import SummaryStep from '../wizard/SummaryStep.svelte';
   import WorktreesStep from '../wizard/WorktreesStep.svelte';
   import Icon from '../Icon.svelte';
+  import TeamClone from '../team/TeamClone.svelte';
+  import { teamProjectsApi } from '../../lib/team-projects';
+  import { teamSettingsApi } from '../../lib/team-settings';
   import Modal from './Modal.svelte';
 
   // The new project's assistant, in steps: the folder, its name and color and where its settings start from, then its
@@ -34,15 +37,21 @@
   /** The history asked for holds for the folder it was asked for: another path typed, it is forgotten. */
   const historyFor = (p: string) => (p === startPath ? from?.historyId : undefined);
 
+  /** « Cloner » of « Projets de l'équipe » (TS-8): the project of the team's list whose repositories are cloned first. */
+  const cloneFrom = existing ? null : (from?.clone ?? null);
+  /** Its repositories are there: the wizard goes on with their folder. */
+  let cloned = $state(false);
+
   const used = new Set(app.projects.map((p) => p.color));
   form.path = startPath;
-  let name = $state(existing?.name ?? '');
-  let nameTouched = !!existing;
+  // The list's name, colour and logo are proposed, changeable here.
+  let name = $state(existing?.name ?? cloneFrom?.project.name ?? '');
+  let nameTouched = !!existing || !!cloneFrom;
   /** The project colours offered: those of the plugin's theme shown (PLG-7), else Escouade's. */
   const palette = projectPalette();
   const freeColor = palette.find((c) => !used.has(c)) ?? palette[0];
-  let color = $state(existing?.color ?? freeColor);
-  let colorTouched = !!existing;
+  let color = $state(existing?.color ?? (cloneFrom?.project.color || freeColor));
+  let colorTouched = !!existing || !!cloneFrom?.project.color;
   /** « Lettres de la tuile » (ESC-167): empty is the initials of the name. */
   let letters = $state(existing?.tileLetters ?? '');
   /** « Libellé sous la tuile » (ESC-168): off by default; its text, empty for the name. */
@@ -53,6 +62,17 @@
   let logoRemoved = $state(false);
   const logo = $derived(logoPick?.url ?? (existing && !logoRemoved ? logoUrl(existing) : null));
   const hasLogo = $derived(!!logoPick || (!!existing?.logo && !logoRemoved));
+
+  // The list's logo, as « Choisir une image… » would take it: a file the backend writes from it.
+  if (cloneFrom?.project.logo) {
+    const url = cloneFrom.project.logo;
+    void teamProjectsApi
+      .logo(cloneFrom.team, cloneFrom.project.id)
+      .then((path) => {
+        if (path && !logoPick) logoPick = { path, url };
+      })
+      .catch(() => {});
+  }
 
   async function chooseLogo() {
     const picked = await pickLogo();
@@ -220,7 +240,7 @@
       const path = form.path.trim();
       const historyId = historyFor(path);
       const agent = !restoring && form.firstAgent ? form.model : null;
-      const p = await app.run(
+      let p = await app.run(
         api.createProject({
           path,
           name: name.trim(),
@@ -234,6 +254,8 @@
         }),
       );
       if (!p) return;
+      // Cloned from the team's list: a project of the team (its `team`) from the start.
+      if (cloneFrom) p = ((await app.run(teamSettingsApi.setProjectTeam(p.id, cloneFrom.team))) as typeof p | null) ?? p;
       // Its history's letters, logo and label come back unless others were set here.
       if (restoring) return void show(letters.trim() || logoPick || labelOn || labelText.trim() ? await saveTile(p) : p, null);
       if (!withSettings) return void show(await saveTile(p), null);
@@ -292,7 +314,18 @@
       {#if form.step === 'start'}
         <h3 class="h">{t('wizard.start.label')}</h3>
         <p class="lead">{t('wizard.leads.start', { name: name.trim() || t('shell.newProject.untitled') })}</p>
-        {#if !existing}
+        {#if cloneFrom && !cloned}
+          <TeamClone
+            from={cloneFrom}
+            oncloned={(path) => {
+              form.path = path;
+              cloned = true;
+            }}
+          />
+        {:else if !existing}
+          {#if cloneFrom}<p class="lead">
+              {t('teamProjects.clone.cloned', { path: tildify(form.path.trim()), team: cloneFrom.teamName })}
+            </p>{/if}
           <div class="w-fld">
             <span class="lab">{t('common.folder')}</span>
             <div class="row">

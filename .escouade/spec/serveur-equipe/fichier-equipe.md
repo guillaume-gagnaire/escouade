@@ -2,8 +2,8 @@
 title: "Le .escouade.yml d'équipe"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md §6.1, §6.2, §6.5, §6.6, §15.2 (C12-B), §16 (TS-13)","crates/escouade-team/src/settings.rs","src-tauri/src/team_settings.rs, src-tauri/src/teams_settings.rs"]
-tickets: ["ESC-471"]
-decisions: [183]
+tickets: ["ESC-471","ESC-480"]
+decisions: [183,186]
 compared: null
 ---
 
@@ -81,7 +81,7 @@ Une liste écrite dans l'app (`escouade-team::settings::never`), que l'équipe n
 - `enforced` alimente le **rang 5** du verrou, `defaults` le **rang 2** (page « Réglages imposés »). Une borne se croise avec celle du poste géré (il reste ce que les deux permettent), une valeur du poste géré gagne.
 - **Une stratégie d'équipe ne vaut que pour les projets de l'équipe** : les modes, les harness, les modèles, l'effort, la clôture et le Remote Control d'un projet, ainsi que les clés du `.escouade.yml` d'un projet (rang 2 sous le fichier du dépôt et le poste, rang 5 par-dessus, refusé quand on le change). Un projet perso n'en reçoit rien.
 - Les clés **de l'app** (le réseau, la télémétrie, la voix, les mises à jour, les plugins, les clients MCP extérieurs) n'ont pas de projet : tant que les espaces n'existent pas (TS-4), elles valent pour l'app pendant que le poste est dans l'équipe.
-- **Projets de l'équipe sur ce poste** : dans l'écran des réglages de l'équipe, une case par projet. La rattache par le dépôt (`team:` du `.escouade.yml`) viendra avec TS-7.
+- **Projets de l'équipe sur ce poste** : un projet dont un dépôt est dans la liste des projets de l'équipe se rattache dans « Projets de l'équipe » (page « Les projets de l'équipe »), reconnu à l'adresse de son dépôt ; l'écran des réglages de l'équipe le dit. Pour les autres projets, une case par projet. La rattache par le dépôt (`team:` du `.escouade.yml`) viendra avec TS-7.
 
 ## Ce que voit le membre
 

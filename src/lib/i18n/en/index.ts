@@ -35,6 +35,7 @@ import shell from './shell';
 import stats from './stats';
 import subagents from './subagents';
 import team from './team';
+import teamProjects from './teamProjects';
 import wizard from './wizard';
 import voice from './voice';
 import plugins from './plugins';
@@ -81,4 +82,5 @@ export const en = defineCatalog({
   scheduled,
   overseer,
   team,
+  teamProjects,
 });

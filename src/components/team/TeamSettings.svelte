@@ -22,8 +22,19 @@
     type TeamSettingsView,
   } from '../../lib/team-settings';
   import { errorText, teams } from '../../lib/teams.svelte';
+  import { listedHere, teamProjectsApi } from '../../lib/team-projects';
 
   let { teamId, onback }: { teamId: string; onback: () => void } = $props();
+
+  /** The projects of this device whose repository is in the team's list (TS-8): attached in « Projets de l'équipe », not by a box here. */
+  let listed = $state<Set<string>>(new Set());
+  onMount(() => {
+    teamProjectsApi
+      .get(teamId)
+      .then((v) => (listed = listedHere(v)))
+      .catch(() => {});
+  });
+  const boxed = $derived(app.projects.filter((p) => !listed.has(p.id)));
 
   const s = $derived<TeamSettingsView | undefined>(teams.settings[teamId]);
   const now = $derived(s ? applied(s.view) : null);
@@ -214,8 +225,9 @@
     <section aria-label={t('team.settings.projects.title')}>
       <h4>{t('team.settings.projects.title')}</h4>
       <p class="muted small">{t('team.settings.projects.lead')}</p>
-      {#if app.projects.length === 0}<p class="muted">{t('team.settings.projects.none')}</p>{/if}
-      {#each app.projects as p (p.id)}
+      {#if listed.size}<p class="muted small">{t('teamProjects.settingsNote', { count: listed.size })}</p>{/if}
+      {#if boxed.length === 0 && listed.size === 0}<p class="muted">{t('team.settings.projects.none')}</p>{/if}
+      {#each boxed as p (p.id)}
         <label class="check">
           <input
             type="checkbox"

@@ -254,6 +254,7 @@ mod switching;
 mod switching_tests;
 mod syspath;
 mod taskout;
+mod team_projects;
 mod team_settings;
 mod teams;
 #[cfg(test)]
@@ -797,6 +798,12 @@ pub fn run() {
                 commands::team_settings_withdraw,
                 commands::team_settings_seen,
                 commands::team_settings_retry,
+                commands::team_projects,
+                commands::team_project_put,
+                commands::team_project_remove,
+                commands::team_projects_retry,
+                commands::team_project_clone,
+                commands::team_project_logo,
                 commands::project_set_team,
                 commands::store_refresh,
                 commands::store_suggestions,

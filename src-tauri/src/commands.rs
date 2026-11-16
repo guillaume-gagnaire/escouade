@@ -4977,6 +4977,112 @@ pub fn project_set_team(
         .map_err(|e| format!("{e:#}"))
 }
 
+// ---------- The team's projects (TS-8) ----------
+
+async fn team_projects_of(
+    core: &Core,
+    team: &str,
+    of: crate::teams::CatalogOf,
+) -> crate::team_projects::TeamProjectsView {
+    let projects = core.projects.read().clone();
+    let locals = crate::team_projects::locals(projects).await;
+    crate::team_projects::combine(of, team, &locals)
+}
+
+/// « Projets de l'équipe »: the team's list, read from the server, next to the projects of this device.
+#[tauri::command]
+pub async fn team_projects(
+    core: CoreState<'_>,
+    teams: TeamsState<'_>,
+    team: String,
+) -> Res<crate::team_projects::TeamProjectsView> {
+    let of = teams.catalog(&team).await?;
+    Ok(team_projects_of(&core, &team, of).await)
+}
+
+/// An administrator adds a project to the team's list (`project` null) or changes it, whole.
+#[tauri::command]
+pub async fn team_project_put(
+    core: CoreState<'_>,
+    teams: TeamsState<'_>,
+    team: String,
+    project: Option<String>,
+    listed: escouade_team::catalog::Listed,
+) -> Res<crate::team_projects::TeamProjectsView> {
+    let (_, of) = teams.catalog_put(&team, project.as_deref(), listed).await?;
+    Ok(team_projects_of(&core, &team, of).await)
+}
+
+/// An administrator takes a project out of the team's list (its clones stay).
+#[tauri::command]
+pub async fn team_project_remove(
+    core: CoreState<'_>,
+    teams: TeamsState<'_>,
+    team: String,
+    project: String,
+) -> Res<crate::team_projects::TeamProjectsView> {
+    let of = teams.catalog_remove(&team, &project).await?;
+    Ok(team_projects_of(&core, &team, of).await)
+}
+
+/// « Réessayer » after an alarm of the team's list.
+#[tauri::command]
+pub async fn team_projects_retry(
+    core: CoreState<'_>,
+    teams: TeamsState<'_>,
+    team: String,
+) -> Res<crate::team_projects::TeamProjectsView> {
+    let of = teams.catalog_retry(&team).await?;
+    Ok(team_projects_of(&core, &team, of).await)
+}
+
+/// « Cloner » in the wizard: the repositories of the project `project` of the team's list (read from the list, never
+/// from the window) into `parent/folder`, by the member's own accounts on the host of code.
+#[tauri::command]
+pub async fn team_project_clone(
+    teams: TeamsState<'_>,
+    team: String,
+    project: String,
+    parent: String,
+    folder: String,
+) -> Res<crate::team_projects::CloneView> {
+    let of = teams.catalog(&team).await?;
+    let item = of.catalog.get(&project).ok_or_else(|| {
+        tr!(
+            "Ce projet n’est plus dans la liste de l’équipe.",
+            "This project is no longer in the team’s list."
+        )
+    })?;
+    crate::team_projects::clone_listed(
+        &item.project,
+        std::path::Path::new(parent.trim()),
+        &folder,
+        &[],
+    )
+    .await
+}
+
+/// The logo of a project of the team's list as a file, for the wizard to take it as « Choisir une image… » does.
+#[tauri::command]
+pub async fn team_project_logo(
+    core: CoreState<'_>,
+    teams: TeamsState<'_>,
+    team: String,
+    project: String,
+) -> Res<Option<String>> {
+    let of = teams.catalog(&team).await?;
+    let Some(logo) = of
+        .catalog
+        .get(&project)
+        .and_then(|i| i.project.logo.clone())
+    else {
+        return Ok(None);
+    };
+    let dir = core.data.root().join("teams").join("logos");
+    Ok(crate::team_projects::logo_file(&dir, &project, &logo)
+        .map(|p| p.to_string_lossy().to_string()))
+}
+
 // ---------- The launches' pages (ESC-311) ----------
 
 /// Whether an address is Escouade's own (`navigation::destination`), never loaded in a page.
