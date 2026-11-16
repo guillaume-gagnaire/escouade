@@ -4,7 +4,8 @@ name: Advisories
 # the app (src-tauri) and the plugins' workspace (plugins), `npm audit --omit=dev` for the app, the store and the site. On
 # every pull request and every push on main, and every night: an advisory published after the last merge fails the night's
 # run. Its own workflow, so that the CI's concurrency and path filters do not touch it. The rules (and the advisories
-# ignored, each with its reason) are in deny.toml at the root.
+# ignored, each with its reason) are in deny.toml at the root. The nightly run is only in guillaume-gagnaire/escouade: a
+# copy runs the push and the pull requests, not a nightly run it would pay (ESC-483).
 on:
   push:
     branches: [main, 'release/**']
@@ -23,6 +24,7 @@ permissions:
 jobs:
   cargo-deny:
     name: cargo deny (${{ matrix.dir }})
+    if: github.event_name != 'schedule' || github.repository == 'guillaume-gagnaire/escouade'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -48,6 +50,7 @@ jobs:
 
   npm-audit:
     name: npm audit (${{ matrix.dir }})
+    if: github.event_name != 'schedule' || github.repository == 'guillaume-gagnaire/escouade'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:

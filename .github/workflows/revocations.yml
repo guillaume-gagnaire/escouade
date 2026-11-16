@@ -21,6 +21,8 @@ concurrency:
 jobs:
   copy:
     name: Copy the revocation list
+    # Only in the origin repository: a copy would commit the list on its own main (ESC-483).
+    if: github.repository == 'guillaume-gagnaire/escouade'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # The commit on main is all it writes.

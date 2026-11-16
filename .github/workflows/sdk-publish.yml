@@ -27,6 +27,8 @@ concurrency:
 
 jobs:
   publish:
+    # Only in the origin repository: the npm trust names it (ESC-483).
+    if: github.repository == 'guillaume-gagnaire/escouade'
     runs-on: ubuntu-latest
     environment: npm
     # The OIDC token of the trusted publishing, for this job alone.
