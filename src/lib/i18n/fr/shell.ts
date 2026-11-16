@@ -109,6 +109,11 @@ export default {
     where: 'Les copies sont dans {path} : les dernières, une par heure sur 48 heures, une par jour sur 30 jours.',
     open: 'Ouvrir le dossier des copies',
     close: 'Fermer',
+    /** A copy taken back by hand from the screen of the copies (ESC-487), told after the start that put it in place. */
+    titleByHand: 'Une copie de tes données a été reprise',
+    byHand: 'Escouade a repris la copie du {at} de {file} ({what}), comme tu l’as demandé.',
+    byHandKept: 'Le fichier d’avant est gardé sous {path}.',
+    byHandFailed: 'La copie du {at} de {file} n’a pas pu être reprise ({error}) : le fichier est resté tel quel.',
   },
   /** The update downloaded, its notes once installed, and the toasts about it. */
   update: {

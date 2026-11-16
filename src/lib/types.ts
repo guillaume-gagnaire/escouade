@@ -3071,6 +3071,8 @@ export interface InitialState {
   teamLocks?: Record<string, Locks>;
   /** The files found unreadable at a start and recovered from their copies (ESC-469), until the notice is closed. */
   recovered?: Recovery[];
+  /** The copies taken back by hand from the screen of the copies at the last starts (ESC-487), told by the same band. */
+  restored?: Restored[];
 }
 
 /** Who imposes a lock (TS-11): the policy of this device (rank 6), or a team (rank 5). */
@@ -3114,6 +3116,105 @@ export interface Recovery {
   skipped: number;
   /** The folder of the file's copies. */
   copies: string;
+}
+
+/** What a copy (or today's file) holds, in counts (`backup_view::Summary`, ESC-487): never a value of a field. */
+export interface BackupSummary {
+  readable: boolean;
+  projects?: number;
+  agents?: number;
+  tickets?: number;
+  accounts?: number;
+  plugins?: number;
+  entries?: number;
+  /** The name of the project a closed project's history is of. */
+  name?: string;
+}
+
+/** A copy of a file of the data folder. */
+export interface BackupCopy {
+  /** Its name in its folder: what « Comparer » and « Reprendre » name it by. */
+  name: string;
+  /** RFC 3339. */
+  at: string;
+  size: number;
+  summary: BackupSummary;
+}
+
+/** A file of the data folder and its copies, newest first. */
+export interface BackupFile {
+  /** As named in the data folder: `state.json`, `closed-projects/<id>.json`… */
+  file: string;
+  exists: boolean;
+  today: BackupSummary;
+  folder: string;
+  copies: BackupCopy[];
+}
+
+/** A closed project's history the disk no longer has, a copy of it left. */
+export interface LostHistory {
+  id: string;
+  file: string;
+  name: string;
+  agents: number;
+  tickets: number;
+  copy: string;
+  at: string;
+}
+
+/** The copy chosen to be taken back at the next start. */
+export interface PendingRestore {
+  file: string;
+  copy: string;
+  copyAt: string;
+  askedAt: string;
+}
+
+/** A file set aside by a start that found it unreadable, or by a copy taken back in its place. */
+export interface SetAsideFile {
+  path: string;
+  file: string;
+  why: 'unreadable' | 'before-restore';
+  size: number;
+  at: string | null;
+}
+
+/** The screen of the copies (`copies::BackupsView`). */
+export interface BackupsView {
+  data: string;
+  folder: string;
+  total: number;
+  max: number;
+  files: BackupFile[];
+  pending: PendingRestore | null;
+  setAside: SetAsideFile[];
+  lost: LostHistory[];
+  /** The agents at work: a copy of a file the app holds is not taken back while there are. */
+  atWork: number;
+}
+
+/** What taking a copy back would change, by name. */
+export interface BackupDiff {
+  copy: BackupSummary;
+  today: BackupSummary;
+  kinds: { kind: 'projects' | 'tickets' | 'agents' | 'accounts' | 'plugins'; gained: string[]; lost: string[] }[];
+}
+
+/** What « Reprendre » did. */
+export interface RestoreOutcome {
+  done: boolean;
+  restart: boolean;
+  setAside: string | null;
+  closedId: string | null;
+}
+
+/** A copy taken back by hand, told after the start that put it in place. */
+export interface Restored {
+  file: string;
+  copyAt: string;
+  doneAt: string;
+  setAside: string | null;
+  error: string | null;
 }
 
 /** An update installed: its version and its release notes (markdown). */

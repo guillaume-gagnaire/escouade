@@ -643,6 +643,8 @@ describe('SettingsModal', () => {
             'plugins_list',
             'plugin_seed_offers',
             'data_dir',
+            // The copies of the data (ESC-487): only read.
+            'backups_view',
             // The amber dots of the bar (R8): the code hosts' accounts as last checked, each plugin's process.
             'forges',
             'plugin_run',
@@ -1729,7 +1731,7 @@ describe('SettingsModal in English', () => {
       within(panel())
         .getAllByRole('heading')
         .map((h) => h.textContent),
-    ).toEqual(['Network', 'Terminals', 'Attachments', 'Search by meaning', 'Team server (preview)', 'Local data']);
+    ).toEqual(['Network', 'Terminals', 'Attachments', 'Search by meaning', 'Team server (preview)', 'Local data', 'Copies of the data']);
 
     await userEvent.click(tab('General'));
     expect(screen.getByRole('button', { name: 'Check for updates' })).toBeInTheDocument();

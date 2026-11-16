@@ -31,7 +31,10 @@ Escouade keeps its data in `~/.escouade/` (`C:\Users\<you>\.escouade` on Windows
 | `stats.db` | The statistics (a SQLite database, with its `stats.db-wal` and `stats.db-shm` files while Escouade runs). |
 | `telemetry-id` | The random id of this install, for the usage statistics. Created when you accept them, deleted when you refuse or turn them off. |
 | `app.log` | The app’s log. At startup, if it is over about 5 MB, it becomes `app.old.log`. |
-| `backups/` | The backup copies of `state.json`, `settings.json`, `plugins.json` and `integrations.json`, one subfolder per file (see [Backup copies](#backup-copies)). |
+| `backups/` | The backup copies of what can’t be made again (`state.json`, `settings.json`, `plugins.json`, `integrations.json`, `ticket-accounts.json`, `sync-queue.json`, the closed projects’ histories and the workflow tracking), one subfolder per file (see [Backup copies](#backup-copies)). |
+| `state.before-restore-<date>.json`, `closed-projects/<project>.before-restore-<date>.json`… | The file from before a copy was taken back, kept as it was under a dated name (see [Taking a copy back](#taking-a-copy-back)). Escouade never deletes it. |
+| `restore-pending.json` | The copy chosen for the next start, until it is put in place or you call it off. |
+| `restored.json` | The copies taken back by hand at the last starts, until you close the notice that tells it. |
 | `state.unreadable-<date>.json`, `settings.unreadable-<date>.json`… | A file found unreadable at startup, kept as it was under a dated name (see [An unreadable file](#an-unreadable-file)). |
 | `recovered.json` | What the start took back from a copy, until you close the notice that says so. |
 
@@ -122,7 +125,7 @@ Your projects’ files, the agents’ worktrees, and Claude Code’s sessions ar
 
 Escouade writes its files all the way to the disk before relying on them: after a power cut or a hard shutdown, a file holds its former content or the new one, never an empty file or one full of zeros. Only the caches, which it makes again by itself, are written without waiting for the disk.
 
-It also keeps copies of `state.json`, `settings.json`, `plugins.json` and `integrations.json` in `backups/`: one at startup, then every 10 minutes for a file that changed. A copy is only made of a file read back and found whole; it is compressed (`backups/state/state-20261115T093600Z.json.gz`, the time in UTC, to open with any tool that reads gzip). It keeps:
+It also keeps copies of what it can’t make again in `backups/`: one at startup, then every 10 minutes for a file that changed. A copy is only made of a file read back and found whole; it is compressed (`backups/state/state-20261115T093600Z.json.gz`, the time in UTC, to open with any tool that reads gzip). It keeps:
 
 - the 6 latest copies;
 - the first of each hour, over 48 hours;
@@ -130,7 +133,37 @@ It also keeps copies of `state.json`, `settings.json`, `plugins.json` and `integ
 
 At most 84 copies per file, and never more than 256 MB for one file (the oldest go first): for a 9 MB state, about 1 MB per copy. Since an hour or a day keeps its first copy, a state emptied by mistake and copied again and again never pushes out the copies of the hours and days before.
 
-The copies of `integrations.json` may hold a token the system keychain refused: only you can read them on macOS and Linux.
+What has copies, and why:
+
+| File | Copies | Why |
+|---|---|---|
+| `state.json` | yes | Your projects, tickets and agents: nothing makes them again. |
+| `settings.json`, `plugins.json`, `integrations.json` | yes | Your settings, your installed plugins, your ticket and code host accounts. |
+| `ticket-accounts.json` | yes | Your other ticket accounts (after the first of each service). |
+| `sync-queue.json` | yes | The ticket syncs still waiting for their service. |
+| `closed-projects/<project>.json` | yes | A closed project’s history: its tickets and agents exist nowhere else. |
+| `projects/<project>/workflow-tracks.json` | yes | Where each agent is in its workflows. |
+| `conversations/<agent>.jsonl` | no | Written line by line and forced to the disk at each turn; too big to copy every 10 minutes. |
+| The shared memory | no | It lives in the project’s folder (`.escouade/memory/`) and is shared through git. |
+| `stats.db` | no | The statistics: an SQLite database with its own journal. |
+| The caches (compiled plugins, store catalog, workflows’ reading, documents’ text, voices) | no | Escouade makes them again when they are missing. |
+
+The other files have at most 32 MB of copies each, and all the copies together at most 512 MB: past that, the oldest go first, never the newest of a file. The copies of a file that is gone (a closed project reopened or erased) stay 30 days after the last one, time to find it again.
+
+The copies of `integrations.json` and `ticket-accounts.json` may hold a token the system keychain refused: only you can read them on macOS and Linux.
+
+## Taking a copy back
+
+“Copies of the data”, in Settings › Advanced, shows each file with what it holds today, then its copies, newest first: their date, their size and what they hold in clear (how many projects, agents and tickets for the state, accounts for the settings, plugins…), or “Unreadable”. Never the value of a setting nor a token: only counts and names. It also has “Make a copy now”, “Open the folder of the copies”, the total size of the copies and the files set aside, with their path on the disk.
+
+- **Compare** says, by name, what the copy would bring back (projects, tickets, agents, accounts, plugins it has and today has no longer) and what would be lost. Nothing is written.
+- **Take back** asks you to confirm first, saying what will be replaced and what would be lost. The copy is read again and must read; today’s file is set aside under a dated name, beside it (`state.before-restore-20261116T100000Z.json`), never lost nor overwritten.
+- Escouade holds the state, the settings, the plugins and the accounts in memory: their copy is put in place **at the next start**. “Restart now” does it at once, “Call off” gives it up. While an agent is working (a turn under way, a question, a worktree being set up, an approval, a background task), taking a copy back is refused: a restart would cut its work. After the restart, a notice says which copy was taken back and where the file from before is kept.
+- A closed project’s history is taken back at once, with no restart.
+
+A closed project whose history is gone from the disk, but with a copy left, shows under “Closed projects to find again”: “Find again” puts it back among the closed projects, and “Reopen” reopens it with its tickets and agents. If the state taken back from a copy still has open a project closed since, Escouade joins the closed project’s history and the open project at the start: its tickets and agents aren’t lost.
+
+The MCP server has only a reading tool for the copies (`list_backups`): taking a copy back stays your gesture in the window.
 
 ## An unreadable file
 
@@ -142,4 +175,4 @@ At startup, before reading anything, Escouade checks `state.json`, `settings.jso
 
 If no copy reads, Escouade starts without it, with the defaults, keeps it the same way and says so in the same notice: never silently.
 
-To take back another copy by hand: quit Escouade, decompress the copy you choose from `backups/<file>/` and put it in place of the file. A conversation log (`conversations/<agent>.jsonl`) has no copy: it is written line by line and forced to the disk at the end of each turn, so a power cut can lose at most the end of the turn under way; its last cut line is skipped and the log goes on from a clean line. See [troubleshooting](troubleshooting).
+To take back another copy, use [Taking a copy back](#taking-a-copy-back); failing that, quit Escouade, decompress the copy you choose from `backups/<file>/` and put it in place of the file. A conversation log (`conversations/<agent>.jsonl`) has no copy: it is written line by line and forced to the disk at the end of each turn, so a power cut can lose at most the end of the turn under way; its last cut line is skipped and the log goes on from a clean line. See [troubleshooting](troubleshooting).

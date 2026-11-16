@@ -861,6 +861,15 @@ impl Tools {
     }
 
     #[tool(
+        description = "List the copies Escouade keeps of the files of its data folder that are not made again (ESC-487): for each file (state.json: the projects, tickets and agents; settings.json; plugins.json; integrations.json; ticket-accounts.json; sync-queue.json) whether it is there now and its copies, newest first, each with its time (at, RFC 3339), its size in bytes compressed, whether it reads (readable) and the counts of what it holds (projects, agents, tickets, accounts, plugins, entries, as they apply); the closed projects' histories and the projects' workflow tracks summed up (files, copies, size), never named; how many closed projects' histories are gone from the disk with a copy left (lostClosedProjects); the copy chosen to be taken back at the next start (pending: file, copy, copyAt, askedAt; null when none); what all the copies take (total) and their bound (max), in bytes. Never a value of a field nor a path. Only reads: no tool takes a copy back, which stays the user's gesture in Réglages › Avancé › Copies des données.",
+        annotations(read_only_hint = true, open_world_hint = false)
+    )]
+    async fn list_backups(&self, ctx: ToolCtx) -> CallToolResult {
+        let result = read::backups(&ctx.core);
+        ctx.reply("list_backups", "", result)
+    }
+
+    #[tool(
         description = "Sum up an agent without reading its conversation: its id, name, status, its harness (engine, as list_agents gives it), the key of its ticket (null when none), its last message (null before its first; 2,000 characters at most, a longer one given by its start and its end, where it says what it concluded or asks, joined by \" … \"), the files it edited (the latest 100 at most, relative to its folder), and how many requests wait for the user's answer (requests) and of which type, in the order they came (waitingFor: permission, question or plan), how many subagents and background tasks it has running (subagentsRunning and backgroundTasksRunning, as list_agents gives them; list_background_work lists them), its Remote Control as list_agents gives it (remoteControl, remoteSource, remoteState, interfaceRemote), and its workflow as list_agents gives it (workflow: name, step, turn, since, outside), with the steps it went through (history, the latest 100, oldest first: step, door, version, pass, at, ended, ms, cost, did, outcome running, done, back, failed, stopped or left, reason and backTo for a way back; ms and cost for its whole stay in the workflow). Remote Control is only read here: no tool turns Remote Control on or off, since it exposes a session on the internet and stays the user's choice in the window.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]

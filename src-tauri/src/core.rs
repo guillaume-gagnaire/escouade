@@ -1911,6 +1911,9 @@ impl Core {
         // Before anything reads them (ESC-469): a state, settings, plugins' list or accounts' file that does not read
         // (zeros after a power cut, cut short, no JSON) is set aside under a dated name and its newest copy that reads
         // takes its place; the window tells it (`backups::notices`) until the user closes the notice.
+        // First of all, the copy the user chose to take back from the screen of the copies (ESC-487): the file of
+        // now set aside, the copy read back and put in its place, what happened told by the notice.
+        escouade_model::backups::apply_pending(data.root(), chrono::Utc::now());
         escouade_model::backups::recover_all(data.root(), chrono::Utc::now());
         // What the index retired by ESC-310 left in the projects' folders, erased once.
         let erased = data.erase_retired();

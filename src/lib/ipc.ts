@@ -1,5 +1,8 @@
 import { Channel, invoke } from '@tauri-apps/api/core';
 import type {
+  BackupDiff,
+  BackupsView,
+  RestoreOutcome,
   CodeHost,
   MergeHow,
   EngineDecl,
@@ -175,6 +178,16 @@ export const api = {
   setUi: (ui: UiState) => invoke<void>('set_ui', { ui }),
   /** The notice of the files recovered at a start, closed (ESC-469). */
   dismissRecovery: () => invoke<void>('dismiss_recovery'),
+  /** The screen of the copies (ESC-487). */
+  backupsView: () => invoke<BackupsView>('backups_view'),
+  /** What a copy gains and loses against today's file; nothing written. */
+  compareBackup: (file: string, name: string) => invoke<BackupDiff>('compare_backup', { file, name }),
+  backUpNow: () => invoke<BackupsView>('back_up_now'),
+  /** A closed project's history at once, any other file at the next start (refused while an agent works). */
+  restoreBackup: (file: string, name: string) => invoke<RestoreOutcome>('restore_backup', { file, name }),
+  cancelRestore: () => invoke<void>('cancel_restore'),
+  /** « Redémarrer maintenant », to put the copy chosen in place. */
+  restartForRestore: () => invoke<void>('restart_for_restore'),
   mcpStatus: () => invoke<McpStatus>('mcp_status'),
   /** The MCP server's activity log, oldest first (the last 200). */
   mcpActivity: () => invoke<McpActivityEntry[]>('mcp_activity'),

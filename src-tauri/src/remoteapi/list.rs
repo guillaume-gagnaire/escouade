@@ -20,6 +20,12 @@ escouade_command::commands! {
     served {
         commands::subscribe,
         commands::dismiss_recovery,
+        // The screen of the copies (ESC-487).
+        commands::backups_view,
+        commands::compare_backup,
+        commands::back_up_now,
+        commands::restore_backup,
+        commands::cancel_restore,
         commands::set_ui,
         commands::save_settings,
         commands::claude_update_status,
@@ -362,6 +368,7 @@ escouade_command::commands! {
         commands::save_image,
         commands::play_chime,
         commands::quit_app,
+        commands::restart_for_restore,
         commands::set_unsaved,
         commands::overseer_shortcut_set,
         commands::overseer_voice_start,

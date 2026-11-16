@@ -389,6 +389,8 @@ async fn every_tool_that_names_something_is_in_the_tests_of_the_private_projects
     let names_nothing = [
         "list_projects",
         "get_usage",
+        // Counts only; the closed projects summed up, never by name nor id (`list_backups_gives_the_copies_and_their_counts_never_a_name_nor_a_path`).
+        "list_backups",
         "report_progress",
         "split_ticket",
         "add_directive",

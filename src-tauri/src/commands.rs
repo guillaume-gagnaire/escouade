@@ -130,6 +130,9 @@ pub struct InitialState {
     /// The files found unreadable at a start and recovered from their copies (ESC-469), until the user closes the
     /// notice that tells them.
     recovered: Vec<escouade_model::backups::Recovery>,
+    /// The copies taken back by hand from the screen of the copies at the last starts (ESC-487), until the same notice
+    /// closes.
+    restored: Vec<escouade_model::backups::Restored>,
 }
 
 // Off the main thread: finding a `claude` of WSL may start its distribution (seconds).
@@ -214,6 +217,7 @@ pub fn subscribe(
         locks: core.locks.read().clone(),
         team_locks: core.team_locks.read().clone(),
         recovered: escouade_model::backups::notices(core.data.root()),
+        restored: core.restored_backups(),
     }
 }
 
@@ -221,7 +225,58 @@ pub fn subscribe(
 /// copies left as they are.
 #[tauri::command(async)]
 pub fn dismiss_recovery(core: CoreState) -> Res<()> {
-    escouade_model::backups::dismiss(core.data.root()).map_err(|e| err(e.into()))
+    escouade_model::backups::dismiss(core.data.root()).map_err(|e| err(e.into()))?;
+    escouade_model::backups::dismiss_restored(core.data.root()).map_err(|e| err(e.into()))
+}
+
+/// The screen of the copies (ESC-487): each file's copies, what they hold, the copy chosen for the next start, the
+/// files set aside and the closed projects' histories to find again.
+#[tauri::command(async)]
+pub fn backups_view(core: CoreState) -> crate::copies::BackupsView {
+    core.backups_view()
+}
+
+/// « Comparer »: what a copy gains and loses against the file of today; nothing written.
+#[tauri::command(async)]
+pub fn compare_backup(
+    core: CoreState,
+    file: String,
+    name: String,
+) -> Res<escouade_model::backup_view::Diff> {
+    core.compare_backup(&file, &name).map_err(err)
+}
+
+/// « Faire une copie maintenant ».
+#[tauri::command(async)]
+pub fn back_up_now(core: CoreState) -> crate::copies::BackupsView {
+    core.back_up_now();
+    core.backups_view()
+}
+
+/// « Reprendre »: a closed project's history at once, any other file at the next start.
+#[tauri::command(async)]
+pub fn restore_backup(
+    core: CoreState,
+    file: String,
+    name: String,
+) -> Res<crate::copies::RestoreOutcome> {
+    core.restore_backup(&file, &name).map_err(err)
+}
+
+/// The copy chosen for the next start called off.
+#[tauri::command(async)]
+pub fn cancel_restore(core: CoreState) -> Res<()> {
+    core.cancel_restore().map_err(err)
+}
+
+/// « Redémarrer maintenant » to put the copy chosen in place: refused while an agent works.
+#[tauri::command]
+pub async fn restart_for_restore(app: tauri::AppHandle, core: CoreState<'_>) -> Res<()> {
+    let busy = core.agents_at_work();
+    if busy > 0 {
+        return Err(crate::copies::at_work(core.lang().ui, busy));
+    }
+    crate::updates::relaunch(app).await.map_err(err)
 }
 
 /// A link the window opens outside (the system's browser; Windows' under WSLg, `outside`): the

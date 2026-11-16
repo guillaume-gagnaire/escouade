@@ -73,6 +73,7 @@ export default {
     getTicketImage: 'Lire une image d’un ticket',
     getTicketFile: 'Lire un fichier d’un ticket',
     getUsage: 'Lire le quota',
+    listBackups: 'Lister les copies des données',
     getBoard: 'Lire les réglages du Kanban',
     getWorkflow: 'Lire les workflows',
     getSpecTree: 'Lire l’arbre de la spec',

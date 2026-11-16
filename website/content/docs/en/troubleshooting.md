@@ -212,7 +212,23 @@ See [notifications](notifications).
 
 **Cause.** `state.json`, `settings.json`, `plugins.json` or `integrations.json` didn’t read (nothing but zeros, cut short, or not valid JSON). Escouade kept it under a dated name (`state.unreadable-<date>.json`) and replaced it with its newest readable copy, or, with no copy, started without it.
 
-**Fix.** The notice says which copy was taken back, its time and what may have been lost since; close it once read. To take back another copy, quit Escouade and put a decompressed copy from `backups/` in place of the file. See [An unreadable file](data#an-unreadable-file).
+**Fix.** The notice says which copy was taken back, its time and what may have been lost since; close it once read. To take back another copy, open Settings › Advanced › “Copies of the data”: compare it to today, then “Take back”. See [An unreadable file](data#an-unreadable-file) and [Taking a copy back](data#taking-a-copy-back).
+
+### Projects or tickets are gone
+
+**Symptom.** A project, tickets or agents are no longer there, after a mistake, a power cut or a state that started wrong.
+
+**Cause.** `state.json` lost what it held, but its copies kept it: the last hour, one per hour over 48 hours, one per day over 30 days.
+
+**Fix.** In Settings › Advanced › “Copies of the data”, “Show the copies” of “Projects, tickets and agents”: each copy says how many projects, agents and tickets it holds. “Compare” says by name what it would bring back and what would be lost, writing nothing. “Take back” puts it in place at the next start (“Restart now”), today’s file set aside under a dated name. It is refused while an agent works: wait for the end of its turn or stop it. See [Taking a copy back](data#taking-a-copy-back).
+
+### A closed project is gone from the list
+
+**Symptom.** A closed project is no longer in All projects › “Closed projects”.
+
+**Cause.** Its history (`closed-projects/<project>.json`) is no longer on the disk.
+
+**Fix.** If a copy of it is left (kept 30 days), it shows in Settings › Advanced › “Copies of the data”, under “Closed projects to find again”: “Find again” puts it back among the closed projects, then “Reopen” reopens it with its tickets and agents.
 
 ### The system keychain is unreadable
 

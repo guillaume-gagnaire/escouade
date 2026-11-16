@@ -61,6 +61,7 @@ export default defineZone('mcp', {
     getTicketImage: 'Read a ticket image',
     getTicketFile: 'Read a ticket file',
     getUsage: 'Read the quota',
+    listBackups: 'List the copies of the data',
     getBoard: 'Read the Kanban settings',
     getWorkflow: 'Read the workflows',
     getSpecTree: 'Read the spec tree',

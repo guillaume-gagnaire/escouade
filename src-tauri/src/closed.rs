@@ -76,7 +76,7 @@ pub(crate) struct ClosedEntry {
 
 impl ClosedEntry {
     /// The entry of a history just written or read from its file.
-    fn of(closed: &ClosedProject, data: &DataDir) -> Self {
+    pub(crate) fn of(closed: &ClosedProject, data: &DataDir) -> Self {
         let conversations = data.conversations();
         // The logs of its agents, and the copies of the files joined to their messages (they stay
         // with the history: closing a project does not remove them).
@@ -272,6 +272,11 @@ pub(crate) fn scan(data: &DataDir, hidden: &[String]) -> Scan {
             continue;
         };
         if hidden.iter().any(|id| id == name) {
+            continue;
+        }
+        // A history set aside by a copy taken back in its place, or found unreadable (ESC-487): kept for the user,
+        // never read as a history.
+        if name.contains(".before-restore-") || name.contains(".unreadable-") {
             continue;
         }
         let read = std::fs::read_to_string(&path)

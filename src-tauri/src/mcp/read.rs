@@ -1607,3 +1607,92 @@ mod tests {
         );
     }
 }
+
+/// A copy as `list_backups` gives it: its time, its size and what it holds, in counts.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupCopy {
+    at: chrono::DateTime<chrono::Utc>,
+    size: u64,
+    #[serde(flatten)]
+    summary: escouade_model::backup_view::Summary,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupFile {
+    file: String,
+    exists: bool,
+    copies: Vec<BackupCopy>,
+}
+
+/// The closed projects' histories and the projects' workflow tracks, together: one per project, never named.
+#[derive(Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct BackupGroup {
+    files: usize,
+    copies: usize,
+    size: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Backups {
+    total: u64,
+    max: u64,
+    files: Vec<BackupFile>,
+    closed_projects: BackupGroup,
+    /// The closed projects' histories the disk no longer has, a copy of them left.
+    lost_closed_projects: usize,
+    workflow_tracks: BackupGroup,
+    pending: Option<escouade_model::backups::Pending>,
+}
+
+/// `list_backups` (ESC-487): the copies of each file of the data folder that is not made again, their times, sizes
+/// and counts of what they hold; the closed projects' histories and the workflow tracks summed up, one per project and
+/// never named (a private project's stays its own). Never a value of a field, never a path; nothing to take a copy
+/// back: that stays the user's gesture in the window.
+pub(super) fn backups(core: &Core) -> Result<String, ToolError> {
+    let view = core.backups_view();
+    let mut closed = BackupGroup::default();
+    let mut tracks = BackupGroup::default();
+    let mut files = Vec::new();
+    for f in view.files {
+        let group = if f.file.starts_with("closed-projects/") {
+            Some(&mut closed)
+        } else if f.file.ends_with("/workflow-tracks.json") {
+            Some(&mut tracks)
+        } else {
+            None
+        };
+        match group {
+            Some(g) => {
+                g.files += 1;
+                g.copies += f.copies.len();
+                g.size += f.copies.iter().map(|c| c.size).sum::<u64>();
+            }
+            None => files.push(BackupFile {
+                file: f.file,
+                exists: f.exists,
+                copies: f
+                    .copies
+                    .into_iter()
+                    .map(|c| BackupCopy {
+                        at: c.at,
+                        size: c.size,
+                        summary: c.summary,
+                    })
+                    .collect(),
+            }),
+        }
+    }
+    json(&Backups {
+        total: view.total,
+        max: view.max,
+        files,
+        closed_projects: closed,
+        lost_closed_projects: view.lost.len(),
+        workflow_tracks: tracks,
+        pending: view.pending,
+    })
+}

@@ -100,6 +100,10 @@ export default defineZone('shell', {
     where: 'The copies are in {path}: the latest ones, one per hour over 48 hours, one per day over 30 days.',
     open: 'Open the copies’ folder',
     close: 'Close',
+    titleByHand: 'A copy of your data was taken back',
+    byHand: 'Escouade took back the copy of {at} of {file} ({what}), as you asked.',
+    byHandKept: 'The file from before is kept as {path}.',
+    byHandFailed: 'The copy of {at} of {file} couldn’t be taken back ({error}): the file stayed as it was.',
   },
   /** The update downloaded, its notes once installed, and the toasts about it. */
   update: {

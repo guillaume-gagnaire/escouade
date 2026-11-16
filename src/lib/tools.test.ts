@@ -143,6 +143,7 @@ describe('the tools of Escouade’s own server', () => {
     expect(toolLabel('mcp__escouade__set_board')).toBe('Escouade · Régler le Kanban');
     // The subagents and background tasks of an agent: list, read, stop, write.
     expect(toolLabel('mcp__escouade__list_background_work')).toBe('Escouade · Lister les sous-agents et tâches de fond d’un agent');
+    expect(toolLabel('mcp__escouade__list_backups')).toBe('Escouade · Lister les copies des données');
     expect(toolLabel('mcp__escouade__get_background_output')).toBe(
       'Escouade · Lire la sortie d’une tâche de fond ou le rapport d’un sous-agent',
     );

@@ -1332,6 +1332,19 @@ pub async fn restart_now<R: Runtime>(app: AppHandle<R>) -> Result<()> {
     .await?
 }
 
+/// « Redémarrer maintenant » of a copy chosen to be taken back (ESC-487): the app stops as « Quitter » stops it, its
+/// state saved, and starts again, which puts the copy in place; no update is installed on the way.
+pub async fn relaunch<R: Runtime>(app: AppHandle<R>) -> Result<()> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let core = app.state::<Arc<Core>>().inner().clone();
+        let env = app.env();
+        core.shutdown();
+        leave(&app, &env, true);
+    })
+    .await?;
+    Ok(())
+}
+
 /// How long « Quitter » waits for an install under way to end the app.
 const QUIT_WAIT: Duration = Duration::from_secs(120);
 

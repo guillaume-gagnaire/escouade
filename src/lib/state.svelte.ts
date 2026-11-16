@@ -94,6 +94,7 @@ import type {
   Usage,
   OfferedMemory,
   Recovery,
+  Restored,
 } from './types';
 
 /** What an agent's header, too narrow, no longer shows (ESC-166): « … » offers it in its menu. */
@@ -460,6 +461,8 @@ class AppState {
   failedUpdate = $state<string | null>(null);
   /** The files found unreadable at a start and recovered from their copies (ESC-469): told by a band until closed. */
   recovered = $state<Recovery[]>([]);
+  /** The copies taken back by hand from the screen of the copies (ESC-487): told by the same band until closed. */
+  restored = $state<Restored[]>([]);
   /** The last download of an update that failed, until one goes through: Réglages › À propos says it (choice 13). */
   updateTrouble = $state<{ version: string; message: string; page: string | null } | null>(null);
   focusComposer = $state(0);
@@ -805,6 +808,7 @@ class AppState {
   /** The band of the recovered files closed: forgotten here and in the data folder (the files set aside stay). */
   dismissRecovery() {
     this.recovered = [];
+    this.restored = [];
     api.dismissRecovery().catch((e) => this.toast(errorText(e), 'error'));
   }
 
@@ -861,6 +865,7 @@ class AppState {
     this.restartAt = s.restartAt ?? null;
     this.failedUpdate = s.failedUpdate ?? null;
     this.recovered = s.recovered ?? [];
+    this.restored = s.restored ?? [];
     if (s.pageCrash) this.tellPageCrash(s.pageCrash);
     // The mode of new agents, then the statistics: not answered yet (closed without a choice: asked again at the next
     // start). An installation that existed before the first has `auto` (SEC-09).

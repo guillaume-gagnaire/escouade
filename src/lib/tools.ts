@@ -29,6 +29,7 @@ const ESCOUADE_TOOLS: Record<string, Key> = {
   get_ticket_image: 'mcp.tools.getTicketImage',
   get_ticket_file: 'mcp.tools.getTicketFile',
   get_usage: 'mcp.tools.getUsage',
+  list_backups: 'mcp.tools.listBackups',
   get_workflow: 'mcp.tools.getWorkflow',
   get_spec_tree: 'mcp.tools.getSpecTree',
   read_spec_page: 'mcp.tools.readSpecPage',

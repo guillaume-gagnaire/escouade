@@ -36,6 +36,7 @@ mod codex_tui_tests;
 mod commands;
 mod conv;
 mod convsearch;
+mod copies;
 #[cfg(test)]
 mod copilot_tests;
 #[cfg(test)]

@@ -212,7 +212,23 @@ Voir les [notifications](notifications).
 
 **Cause.** `state.json`, `settings.json`, `plugins.json` ou `integrations.json` ne se lisait pas (rien que des zéros, coupé, ou pas du JSON valide). Escouade l’a gardé sous un nom daté (`state.unreadable-<date>.json`) et l’a remplacé par sa copie lisible la plus récente, ou, sans copie, a démarré sans lui.
 
-**Solution.** L’annonce dit quelle copie a été reprise, son heure et ce qui a pu se perdre depuis ; ferme-la quand tu l’as lue. Pour reprendre une autre copie, quitte Escouade et mets à la place du fichier une copie décompressée de `backups/`. Voir [Un fichier illisible](data#un-fichier-illisible).
+**Solution.** L’annonce dit quelle copie a été reprise, son heure et ce qui a pu se perdre depuis ; ferme-la quand tu l’as lue. Pour reprendre une autre copie, ouvre Réglages › Avancé › « Copies des données » : compare-la à aujourd’hui, puis « Reprendre ». Voir [Un fichier illisible](data#un-fichier-illisible) et [Reprendre une copie](data#reprendre-une-copie).
+
+### Des projets ou des tickets ont disparu
+
+**Symptôme.** Un projet, des tickets ou des agents ne sont plus là, après une erreur, une coupure ou un état reparti de travers.
+
+**Cause.** `state.json` a perdu ce qu’il contenait, mais ses copies l’ont gardé : la dernière heure, une par heure sur 48 heures, une par jour sur 30 jours.
+
+**Solution.** Dans Réglages › Avancé › « Copies des données », « Voir les copies » de « Projets, tickets et agents » : chaque copie dit combien de projets, d’agents et de tickets elle contient. « Comparer » dit par nom ce qu’elle ramènerait et ce qui serait perdu, sans rien écrire. « Reprendre » la pose au prochain démarrage (« Redémarrer maintenant »), le fichier d’aujourd’hui mis de côté sous un nom daté. Elle est refusée tant qu’un agent travaille : attends la fin de son tour ou arrête-le. Voir [Reprendre une copie](data#reprendre-une-copie).
+
+### Un projet fermé a disparu de la liste
+
+**Symptôme.** Un projet fermé n’est plus dans Tous les projets › « Projets fermés ».
+
+**Cause.** Son historique (`closed-projects/<projet>.json`) n’est plus sur le disque.
+
+**Solution.** S’il en reste une copie (gardée 30 jours), il apparaît dans Réglages › Avancé › « Copies des données », sous « Projets fermés à retrouver » : « Retrouver » le remet parmi les projets fermés, puis « Rouvrir » le rouvre avec ses tickets et ses agents.
 
 ### Le trousseau du système est illisible
 

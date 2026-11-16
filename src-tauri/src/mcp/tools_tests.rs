@@ -1995,3 +1995,52 @@ async fn a_boards_settings_are_read_whole_with_its_accounts_defaults_and_the_bra
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }
+
+#[tokio::test]
+async fn list_backups_gives_the_copies_and_their_counts_never_a_name_nor_a_path() {
+    let h = harness("mcp-list-backups");
+    let (p, _) = h.project(false).await;
+    h.core.save_now();
+    // A closed project's history and its copy: summed up, its id never given.
+    let closed = h.core.data.closed_projects();
+    std::fs::create_dir_all(&closed).unwrap();
+    std::fs::write(
+        closed.join("zz9secret.json"),
+        serde_json::to_vec(&json!({
+            "project": { "id": "zz9secret", "name": "Coffre", "path": "/tmp/coffre", "color": "#888" },
+            "agents": [], "tickets": []
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    h.core.back_up_now();
+    let c = external(&h).await;
+    let got = read(&c, "list_backups", json!({})).await;
+    let state = got["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["file"] == "state.json")
+        .unwrap();
+    assert_eq!(state["exists"], true);
+    assert_eq!(state["copies"][0]["readable"], true);
+    assert_eq!(state["copies"][0]["projects"], 1);
+    assert!(state["copies"][0]["at"].is_string());
+    assert_eq!(got["closedProjects"]["files"], 1);
+    assert_eq!(got["closedProjects"]["copies"], 1);
+    assert_eq!(got["lostClosedProjects"], 0);
+    assert_eq!(got["pending"], Value::Null);
+    assert!(got["max"].as_u64().unwrap() > 0);
+    let text = got.to_string();
+    for hidden in [
+        "zz9secret",
+        "Coffre",
+        &p.name,
+        h.core.data.root().to_str().unwrap(),
+    ] {
+        assert!(!text.contains(hidden), "{hidden} in {text}");
+    }
+    // Only reads: no tool takes a copy back.
+    assert!(READING.contains(&"list_backups"));
+    assert!(!EXPOSED.iter().any(|t| t.contains("restore")));
+}

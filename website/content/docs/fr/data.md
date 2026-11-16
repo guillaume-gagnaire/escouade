@@ -31,7 +31,10 @@ Escouade range ses données dans `~/.escouade/` (`C:\Users\<toi>\.escouade` sous
 | `stats.db` | Les statistiques (une base SQLite, avec ses fichiers `stats.db-wal` et `stats.db-shm` tant qu’Escouade tourne). |
 | `telemetry-id` | L’identifiant tiré au hasard de cette installation, pour les statistiques d’usage. Créé quand tu les acceptes, supprimé quand tu les refuses ou les désactives. |
 | `app.log` | Le journal de l’application. Au démarrage, s’il dépasse environ 5 Mo, il devient `app.old.log`. |
-| `backups/` | Les copies de secours de `state.json`, `settings.json`, `plugins.json` et `integrations.json`, un sous-dossier par fichier (voir [Les copies de secours](#les-copies-de-secours)). |
+| `backups/` | Les copies de secours de ce qui ne se refait pas (`state.json`, `settings.json`, `plugins.json`, `integrations.json`, `ticket-accounts.json`, `sync-queue.json`, les historiques des projets fermés et le suivi des workflows), un sous-dossier par fichier (voir [Les copies de secours](#les-copies-de-secours)). |
+| `state.before-restore-<date>.json`, `closed-projects/<projet>.before-restore-<date>.json`… | Le fichier d’avant une reprise de copie, gardé tel quel sous un nom daté (voir [Reprendre une copie](#reprendre-une-copie)). Escouade ne l’efface jamais. |
+| `restore-pending.json` | La copie choisie pour le prochain démarrage, tant qu’elle n’est pas posée ou que tu n’as pas annulé. |
+| `restored.json` | Les copies reprises à la main aux derniers démarrages, tant que tu n’as pas fermé l’annonce qui le dit. |
 | `state.unreadable-<date>.json`, `settings.unreadable-<date>.json`… | Un fichier trouvé illisible au démarrage, gardé tel quel sous un nom daté (voir [Un fichier illisible](#un-fichier-illisible)). |
 | `recovered.json` | Ce que le démarrage a repris d’une copie, tant que tu n’as pas fermé l’annonce qui le dit. |
 
@@ -122,7 +125,7 @@ Les fichiers de tes projets, les worktrees des agents et les sessions de Claude 
 
 Escouade écrit ses fichiers jusque sur le disque avant de s’en servir : après une coupure de courant ou un arrêt brutal du poste, un fichier garde son contenu d’avant ou le nouveau, jamais un fichier vide ou rempli de zéros. Seuls les caches, qu’elle refait d’elle-même, sont écrits sans attendre le disque.
 
-Elle garde aussi des copies de `state.json`, `settings.json`, `plugins.json` et `integrations.json` dans `backups/` : une au démarrage, puis toutes les 10 minutes pour un fichier qui a changé. Une copie n’est faite que d’un fichier relu et trouvé entier ; elle est compressée (`backups/state/state-20261115T093600Z.json.gz`, l’heure en UTC, à ouvrir avec n’importe quel outil qui lit le gzip). Elle garde :
+Elle garde aussi des copies de ce qu’elle ne peut pas refaire dans `backups/` : une au démarrage, puis toutes les 10 minutes pour un fichier qui a changé. Une copie n’est faite que d’un fichier relu et trouvé entier ; elle est compressée (`backups/state/state-20261115T093600Z.json.gz`, l’heure en UTC, à ouvrir avec n’importe quel outil qui lit le gzip). Elle garde :
 
 - les 6 dernières copies ;
 - la première de chaque heure, sur 48 heures ;
@@ -130,7 +133,37 @@ Elle garde aussi des copies de `state.json`, `settings.json`, `plugins.json` et 
 
 Au plus 84 copies par fichier, et jamais plus de 256 Mo pour un même fichier (les plus anciennes partent d’abord) : pour un état de 9 Mo, environ 1 Mo par copie. Comme une heure ou un jour garde sa première copie, un état vidé par erreur et copié encore et encore ne chasse jamais les copies des heures et des jours d’avant.
 
-Les copies de `integrations.json` peuvent contenir un jeton que le trousseau du système a refusé : elles ne sont lisibles que par toi sous macOS et Linux.
+Ce qui a des copies, et pourquoi :
+
+| Fichier | Copies | Pourquoi |
+|---|---|---|
+| `state.json` | oui | Tes projets, tickets et agents : rien ne les refait. |
+| `settings.json`, `plugins.json`, `integrations.json` | oui | Tes réglages, tes plugins installés, tes comptes de tickets et d’hébergeurs. |
+| `ticket-accounts.json` | oui | Tes autres comptes de tickets (après le premier de chaque service). |
+| `sync-queue.json` | oui | Les synchronisations de tickets qui attendent encore leur service. |
+| `closed-projects/<projet>.json` | oui | L’historique d’un projet fermé : ses tickets et ses agents n’existent nulle part ailleurs. |
+| `projects/<projet>/workflow-tracks.json` | oui | Où en est chaque agent dans ses workflows. |
+| `conversations/<agent>.jsonl` | non | Écrit ligne à ligne et forcé sur le disque à chaque tour ; trop gros pour être copié toutes les 10 minutes. |
+| La mémoire partagée | non | Elle vit dans le dossier du projet (`.escouade/memory/`) et se partage par git. |
+| `stats.db` | non | Les statistiques : une base SQLite qui a son propre journal. |
+| Les caches (plugins compilés, catalogue du store, lecture des workflows, texte des documents, voix) | non | Escouade les refait quand ils manquent. |
+
+Les autres fichiers ont au plus 32 Mo de copies chacun, et toutes les copies ensemble au plus 512 Mo : au-delà, les plus anciennes partent d’abord, jamais la plus récente d’un fichier. Les copies d’un fichier qui n’est plus là (un projet fermé rouvert ou effacé) restent 30 jours après la dernière, le temps de le retrouver.
+
+Les copies de `integrations.json` et de `ticket-accounts.json` peuvent contenir un jeton que le trousseau du système a refusé : elles ne sont lisibles que par toi sous macOS et Linux.
+
+## Reprendre une copie
+
+« Copies des données », dans Réglages › Avancé, montre chaque fichier avec ce qu’il contient aujourd’hui, puis ses copies, de la plus récente à la plus ancienne : leur date, leur taille et ce qu’elles contiennent en clair (combien de projets, d’agents et de tickets pour l’état, de comptes pour les réglages, de plugins…), ou « Illisible ». Jamais la valeur d’un réglage ni un jeton : seulement des comptes et des noms. On y trouve aussi « Faire une copie maintenant », « Ouvrir le dossier des copies », la place totale des copies et les fichiers mis de côté, avec leur chemin sur le disque.
+
+- **Comparer** dit, par nom, ce que la copie ramènerait (projets, tickets, agents, comptes, plugins qu’elle a et qu’aujourd’hui n’a plus) et ce qui serait perdu. Rien n’est écrit.
+- **Reprendre** demande d’abord ta confirmation, en disant ce qui sera remplacé et ce qui serait perdu. La copie est relue et doit être lisible ; le fichier d’aujourd’hui est mis de côté sous un nom daté, à côté de lui (`state.before-restore-20261116T100000Z.json`), jamais perdu ni écrasé.
+- L’état, les réglages, les plugins et les comptes sont tenus en mémoire par Escouade : leur copie est posée **au prochain démarrage**. « Redémarrer maintenant » le fait aussitôt, « Annuler la reprise » y renonce. Tant qu’un agent travaille (un tour en cours, une question, un worktree qui se prépare, une validation, une tâche de fond), la reprise est refusée : un redémarrage couperait son travail. Après le redémarrage, une annonce dit quelle copie a été reprise et où est gardé le fichier d’avant.
+- L’historique d’un projet fermé est repris tout de suite, sans redémarrer.
+
+Un projet fermé dont l’historique a disparu du disque, mais dont une copie reste, apparaît sous « Projets fermés à retrouver » : « Retrouver » le remet parmi les projets fermés, et « Rouvrir » le rouvre avec ses tickets et ses agents. Si l’état repris d’une copie a encore ouvert un projet fermé depuis, Escouade réunit au démarrage l’historique du projet fermé et le projet ouvert : ses tickets et ses agents ne se perdent pas.
+
+Le serveur MCP n’a qu’un outil de lecture pour les copies (`list_backups`) : reprendre une copie reste ton geste dans la fenêtre.
 
 ## Un fichier illisible
 
@@ -142,4 +175,4 @@ Au démarrage, avant de lire quoi que ce soit, Escouade vérifie `state.json`, `
 
 S’il n’a aucune copie lisible, Escouade démarre sans lui, avec les valeurs par défaut, le garde de la même façon et le dit dans la même annonce : jamais en silence.
 
-Pour reprendre une autre copie à la main : quitte Escouade, décompresse la copie choisie de `backups/<fichier>/` et mets-la à la place du fichier. Un journal de conversation (`conversations/<agent>.jsonl`) n’a pas de copie : il est écrit ligne à ligne et forcé sur le disque à la fin de chaque tour, si bien qu’une coupure peut en perdre au plus la fin du tour en cours ; sa dernière ligne coupée est sautée et le journal se poursuit sur une ligne propre. Voir le [dépannage](troubleshooting).
+Pour reprendre une autre copie, passe par [Reprendre une copie](#reprendre-une-copie) ; à défaut, quitte Escouade, décompresse la copie choisie de `backups/<fichier>/` et mets-la à la place du fichier. Un journal de conversation (`conversations/<agent>.jsonl`) n’a pas de copie : il est écrit ligne à ligne et forcé sur le disque à la fin de chaque tour, si bien qu’une coupure peut en perdre au plus la fin du tour en cours ; sa dernière ligne coupée est sautée et le journal se poursuit sur une ligne propre. Voir le [dépannage](troubleshooting).

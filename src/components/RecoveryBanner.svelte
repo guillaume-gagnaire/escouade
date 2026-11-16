@@ -4,13 +4,14 @@
   import { openPath } from '../lib/opener';
   import { errorText } from '../lib/refusal';
   import { app } from '../lib/state.svelte';
-  import type { Recovery } from '../lib/types';
+  import { whatOf } from '../lib/backups';
+  import type { Recovery, Restored } from '../lib/types';
   import Icon from './Icon.svelte';
 
   // ESC-469: a file of the data folder that did not read at the start (zeros after a power cut, cut short, no JSON) was
   // set aside and its newest readable copy put back, or none was there. The band says it, file by file, until the user
-  // closes it: never a start that loses something in silence. Choosing a copy by hand comes later (2.3): it says where
-  // the copies are.
+  // closes it: never a start that loses something in silence. A copy taken back by hand from the screen of the copies
+  // (ESC-487) is told here too, after the start that put it in place.
   type Known = 'state' | 'settings' | 'plugins' | 'integrations';
   const KNOWN: Known[] = ['state', 'settings', 'plugins', 'integrations'];
   const known = (file: string): Known => (KNOWN.find((k) => `${k}.json` === file) ?? 'state') as Known;
@@ -34,18 +35,29 @@
     return out;
   }
 
+  function byHand(r: Restored): string[] {
+    const at = time(r.copyAt);
+    if (r.error) return [t('shell.recovery.byHandFailed', { at, file: r.file, error: r.error })];
+    const out = [t('shell.recovery.byHand', { at, file: r.file, what: whatOf({ file: r.file }).toLowerCase() })];
+    if (r.setAside) out.push(t('shell.recovery.byHandKept', { path: r.setAside }));
+    return out;
+  }
+
   /** The folder of every file's copies: the parent of the first one's own. */
   const where = $derived(app.recovered[0]?.copies.replace(/[\\/][^\\/]+[\\/]?$/, '') ?? '');
   const open = () => openPath(where).catch((e) => app.toast(errorText(e), 'error'));
 </script>
 
-{#if app.recovered.length}
+{#if app.recovered.length || app.restored.length}
   <div class="recovery-band" role="alert" data-testid="recovery-band">
     <Icon name="restore" size={14} />
     <div class="msg">
-      <strong>{t('shell.recovery.title')}</strong>
+      <strong>{app.recovered.length ? t('shell.recovery.title') : t('shell.recovery.titleByHand')}</strong>
       {#each app.recovered as r, i (i)}
         <p data-testid="recovery-item">{lines(r).join(' ')}</p>
+      {/each}
+      {#each app.restored as r, i (i)}
+        <p data-testid="restored-item">{byHand(r).join(' ')}</p>
       {/each}
       {#if where}<p class="where">{t('shell.recovery.where', { path: where })}</p>{/if}
     </div>

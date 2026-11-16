@@ -14,6 +14,7 @@
   import Row from './Row.svelte';
   import Switch from './Switch.svelte';
   import VectorsSection from './VectorsSection.svelte';
+  import BackupsSection from './BackupsSection.svelte';
 
   // The page « Avancé » (PROPOSITION.md §2): « Réseau » and its certificates (the 2.0 tab), « Terminaux » (the 2.0 tab),
   // « Pièces jointes » (from « Harness »), « Recherche par le sens » (from « Projets › Tous les projets ») and « Données
@@ -172,6 +173,9 @@
     {/if}
   </Row>
 </Group>
+
+<!-- The copies of what is not made again (ESC-487): see them, compare them, take one back. -->
+<BackupsSection />
 
 <style>
   .input {

@@ -311,3 +311,228 @@ fn a_state_saved_after_a_recovery_pushes_out_no_copy() {
     }
     assert!(left.iter().all(|t| now - *t <= Duration::days(30)));
 }
+
+// ESC-487: the copies of what else is not made again, their bound, and a copy taken back by hand.
+
+/// A closed project's history that reads, of the project `id`, with `tickets` tickets.
+fn history(id: &str, tickets: usize) -> Vec<u8> {
+    let tickets: Vec<_> = (0..tickets)
+        .map(|i| serde_json::json!({ "id": format!("t{i}"), "key": format!("ATL-{i}"), "title": "x" }))
+        .collect();
+    serde_json::to_vec(&serde_json::json!({
+        "project": { "id": id, "name": "atelier", "path": "/tmp", "color": "#888" },
+        "agents": [], "tickets": tickets, "closedAt": 1
+    }))
+    .unwrap()
+}
+
+#[test]
+fn the_closed_projects_histories_and_the_workflow_tracks_are_copied_with_their_own_rotation() {
+    let data = test_dir("backups-more");
+    std::fs::create_dir_all(data.join("closed-projects")).unwrap();
+    std::fs::write(data.join("closed-projects/abc.json"), history("abc", 2)).unwrap();
+    // Set aside or not named by a plain id: never copied.
+    std::fs::write(
+        data.join("closed-projects/abc.before-restore-20261116T100000Z.json"),
+        history("abc", 1),
+    )
+    .unwrap();
+    std::fs::create_dir_all(data.join("projects/p1")).unwrap();
+    std::fs::write(data.join("projects/p1/workflow-tracks.json"), b"{}").unwrap();
+    std::fs::write(data.join("sync-queue.json"), b"[]").unwrap();
+    let files = copied(&data);
+    assert!(files.contains(&"closed-projects/abc.json".to_string()));
+    assert!(files.contains(&"projects/p1/workflow-tracks.json".to_string()));
+    assert_eq!(
+        files
+            .iter()
+            .filter(|f| f.starts_with("closed-projects/"))
+            .count(),
+        1
+    );
+    let now = at("2026-11-16T10:00:00Z");
+    back_up_all(&data, now);
+    let copies = list(&data, "closed-projects/abc.json");
+    assert_eq!(copies.len(), 1);
+    assert_eq!(
+        copies[0].0,
+        data.join("backups")
+            .join("closed-projects")
+            .join("abc")
+            .join("abc-20261116T100000Z.json.gz")
+    );
+    assert_eq!(read_copy(&copies[0].0).unwrap(), history("abc", 2));
+    assert_eq!(list(&data, "projects/p1/workflow-tracks.json").len(), 1);
+    assert_eq!(list(&data, "sync-queue.json").len(), 1);
+    // A history that does not read as its project's is not copied.
+    std::fs::write(data.join("closed-projects/abc.json"), history("other", 3)).unwrap();
+    assert_eq!(
+        back_up(
+            &data,
+            "closed-projects/abc.json",
+            now + Duration::minutes(10)
+        )
+        .unwrap(),
+        BackedUp::Unreadable
+    );
+    // The same rotation as the four others, 32 MB at most per file.
+    assert_eq!(policy("closed-projects/abc.json").max_bytes, 32 << 20);
+    assert_eq!(policy("state.json"), POLICY);
+    assert!(!is_copied("closed-projects/../state.json"));
+    assert!(!is_copied("projects/../../x/workflow-tracks.json"));
+    assert!(!is_copied("conversations/a.jsonl"));
+}
+
+#[test]
+fn the_copies_of_a_history_gone_stay_thirty_days_and_are_known_meanwhile() {
+    let data = test_dir("backups-orphans");
+    let now = at("2026-11-16T10:00:00Z");
+    put_copy(
+        &data,
+        "closed-projects/lost.json",
+        now - Duration::days(2),
+        &history("lost", 4),
+    );
+    put_copy(
+        &data,
+        "closed-projects/old.json",
+        now - Duration::days(31),
+        &history("old", 1),
+    );
+    let found = known(&data);
+    assert!(found.contains(&"closed-projects/lost.json".to_string()));
+    assert!(found.contains(&"closed-projects/old.json".to_string()));
+    prune_orphans(&data, now);
+    assert_eq!(list(&data, "closed-projects/lost.json").len(), 1);
+    assert!(list(&data, "closed-projects/old.json").is_empty());
+    assert!(!copies_dir(&data, "closed-projects/old.json").exists());
+    // The four files' copies always stay, their file gone or not.
+    put_copy(&data, "state.json", now - Duration::days(40), &state(1));
+    prune_orphans(&data, now);
+    assert_eq!(list(&data, "state.json").len(), 1);
+}
+
+#[test]
+fn all_the_copies_together_stay_under_their_bound_the_newest_of_each_file_kept() {
+    let data = test_dir("backups-total");
+    let now = at("2026-11-16T10:00:00Z");
+    for h in 0..5 {
+        put_copy(
+            &data,
+            "state.json",
+            now - Duration::hours(h),
+            &state(h as usize + 1),
+        );
+        put_copy(
+            &data,
+            "closed-projects/abc.json",
+            now - Duration::hours(h),
+            &history("abc", h as usize),
+        );
+    }
+    let total = total_size(&data);
+    // A bound under the newest two: only the newest of each file stays.
+    prune_total(&data, 1);
+    assert_eq!(list(&data, "state.json").len(), 1);
+    assert_eq!(list(&data, "closed-projects/abc.json").len(), 1);
+    assert_eq!(list(&data, "state.json")[0].1.at, now);
+    assert!(total_size(&data) < total);
+    // Under the bound, nothing goes.
+    put_copy(&data, "state.json", now - Duration::hours(9), &state(9));
+    let before = all_copies(&data).len();
+    prune_total(&data, TOTAL_MAX);
+    assert_eq!(all_copies(&data).len(), before);
+}
+
+#[test]
+fn a_copy_taken_back_sets_the_file_of_now_aside_and_one_that_does_not_read_touches_nothing() {
+    let data = test_dir("backups-restore");
+    let now = at("2026-11-16T10:00:00Z");
+    std::fs::write(data.join("state.json"), state(1)).unwrap();
+    let good = put_copy(&data, "state.json", now - Duration::hours(2), &state(3));
+    let bad = put_copy(&data, "state.json", now - Duration::hours(1), b"\0\0\0");
+    let good_name = good.file_name().unwrap().to_str().unwrap().to_string();
+    let bad_name = bad.file_name().unwrap().to_str().unwrap().to_string();
+    // A copy that does not read: refused, the file as it was.
+    assert!(matches!(
+        restore(&data, "state.json", &bad_name, now),
+        Err(RestoreError::Unreadable)
+    ));
+    assert!(matches!(
+        plan(&data, "state.json", &bad_name, now),
+        Err(RestoreError::Unreadable)
+    ));
+    assert_eq!(std::fs::read(data.join("state.json")).unwrap(), state(1));
+    // Not a copy of the file (another name, a path out of the folder): refused.
+    assert!(matches!(
+        restore(&data, "state.json", "../state.json", now),
+        Err(RestoreError::Unknown)
+    ));
+    assert!(matches!(
+        restore(&data, "../x.json", &good_name, now),
+        Err(RestoreError::Unknown)
+    ));
+    // The good one: the file of now beside it under a dated name, the copy in its place.
+    let aside = restore(&data, "state.json", &good_name, now)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        aside.file_name().unwrap(),
+        "state.before-restore-20261116T100000Z.json"
+    );
+    assert_eq!(std::fs::read(&aside).unwrap(), state(1));
+    assert_eq!(std::fs::read(data.join("state.json")).unwrap(), state(3));
+    // Again in the same second: never over the one before.
+    let again = restore(&data, "state.json", &good_name, now)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        again.file_name().unwrap(),
+        "state.before-restore-20261116T100000Z-2.json"
+    );
+    let set = set_aside_files(&data);
+    assert_eq!(set.len(), 2);
+    assert!(set
+        .iter()
+        .all(|s| s.file == "state.json" && s.why == BEFORE_RESTORE));
+}
+
+#[test]
+fn a_copy_chosen_is_put_in_place_at_the_next_start_once_and_told() {
+    let data = test_dir("backups-pending");
+    let now = at("2026-11-16T10:00:00Z");
+    std::fs::write(data.join("settings.json"), b"{}").unwrap();
+    let copy = put_copy(
+        &data,
+        "settings.json",
+        now - Duration::days(1),
+        br#"{"accounts":[{"id":"principal","name":"Principal"}]}"#,
+    );
+    let name = copy.file_name().unwrap().to_str().unwrap();
+    assert!(apply_pending(&data, now).is_none(), "nothing chosen");
+    let p = plan(&data, "settings.json", name, now).unwrap();
+    assert_eq!(pending(&data), Some(p.clone()));
+    // Called off, then chosen again.
+    cancel(&data).unwrap();
+    assert_eq!(pending(&data), None);
+    plan(&data, "settings.json", name, now).unwrap();
+    let r = apply_pending(&data, now + Duration::minutes(1)).unwrap();
+    assert!(r.error.is_none());
+    assert_eq!(r.copy_at, now - Duration::days(1));
+    assert!(r.set_aside.as_ref().unwrap().exists());
+    assert!(std::fs::read_to_string(data.join("settings.json"))
+        .unwrap()
+        .contains("Principal"));
+    assert_eq!(pending(&data), None, "once");
+    assert_eq!(restored(&data), vec![r]);
+    dismiss_restored(&data).unwrap();
+    assert!(restored(&data).is_empty());
+    // A copy gone meanwhile: told, the file left as it is.
+    plan(&data, "settings.json", name, now).unwrap();
+    std::fs::remove_file(&copy).unwrap();
+    let r = apply_pending(&data, now).unwrap();
+    assert!(r.error.is_some());
+    assert!(std::fs::read_to_string(data.join("settings.json"))
+        .unwrap()
+        .contains("Principal"));
+}
