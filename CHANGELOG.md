@@ -4,7 +4,7 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
-## [Non publié]
+## [2.2.2] — 2026-11-16
 
 - Sécurité : un harness qui ne tourne qu’en Bypass, ou dont le plugin ne déclare aucun mode, ne démarre plus sans « Autoriser le mode Bypass ». Un agent montre le mode où son harness tourne vraiment, et un mode que ce harness n’a pas ne devient jamais un mode plus permissif en silence.
 - Dans Réglages › Comptes et harness, deux choix faits coup sur coup pour un même compte (un modèle, puis un effort) ne s’écrasent plus.
