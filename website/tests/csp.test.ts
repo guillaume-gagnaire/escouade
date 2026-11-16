@@ -57,5 +57,6 @@ describe('the content security policy of a page (SEC-16)', () => {
       for (const [directive, values] of p)
         for (const v of values) expect(v.startsWith("'") || v === 'data:', `${file}: ${directive} ${v}`).toBe(true);
     }
-  });
+    // Every page of the site, read cold right after `nuxt generate`: past 5 s on a loaded Windows machine.
+  }, 30_000);
 });

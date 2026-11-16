@@ -392,6 +392,10 @@ export const en: Catalog = {
         title: 'Plugins',
         text: 'Add features to Escouade: a plugin’s manifest, how it is installed, its protocol, its extension points.',
       },
+      team: {
+        title: 'Team server',
+        text: 'Join a team, install its server, what it sees and what it does not, and where your data goes.',
+      },
       reference: { title: 'Reference', text: 'Shortcuts, local data, updates and troubleshooting.' },
     },
     pages: {
@@ -460,6 +464,10 @@ export const en: Catalog = {
       'plugins/store-mcp': 'The store from an agent',
       'plugins/security': 'Plugin security',
       'plugins/examples': 'Example plugins',
+      'team/join': 'Join a team',
+      'team/install': 'Install the server',
+      'team/security': 'The security officer’s guide',
+      'team/data': 'Where does my data go?',
       shortcuts: 'Keyboard shortcuts',
       'escouade-yml': '.escouade.yml',
       data: 'Local data',

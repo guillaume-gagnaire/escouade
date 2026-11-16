@@ -396,6 +396,10 @@ export const fr: Catalog = {
         title: 'Plugins',
         text: 'Ajouter des fonctionnalités à Escouade : le manifeste d’un plugin, son installation, son protocole, ses points d’extension.',
       },
+      team: {
+        title: 'Serveur d’équipe',
+        text: 'Rejoindre une équipe, installer son serveur, ce qu’il voit et ce qu’il ne voit pas, et où vont tes données.',
+      },
       reference: { title: 'Référence', text: 'Les raccourcis, les données locales, les mises à jour et le dépannage.' },
     },
     pages: {
@@ -464,6 +468,10 @@ export const fr: Catalog = {
       'plugins/store-mcp': 'Le store depuis un agent',
       'plugins/security': 'La sécurité des plugins',
       'plugins/examples': 'Les plugins d’exemple',
+      'team/join': 'Rejoindre une équipe',
+      'team/install': 'Installer le serveur',
+      'team/security': 'Le guide du RSSI',
+      'team/data': 'Où vont mes données ?',
       shortcuts: 'Raccourcis clavier',
       'escouade-yml': '.escouade.yml',
       data: 'Données locales',

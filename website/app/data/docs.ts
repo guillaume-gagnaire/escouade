@@ -66,6 +66,7 @@ export const DOC_GROUPS = [
       'plugins/faq',
     ],
   },
+  { id: 'team', pages: ['team/join', 'team/install', 'team/security', 'team/data'] },
   { id: 'reference', pages: ['shortcuts', 'escouade-yml', 'managed-policies', 'data', 'updates', 'troubleshooting'] },
 ] as const;
 
