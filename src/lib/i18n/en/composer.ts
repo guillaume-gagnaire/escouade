@@ -20,6 +20,8 @@ export default defineZone('composer', {
     /** A mode its harness lacks, greyed in its place (choice 17): `{harness}`, `{mode}`. */
     missing: '{harness} has no {mode} mode.',
     missingAuto: '{harness} has no Auto mode: nothing decides for you.',
+    /** A harness of one mode alone (ESC-489): the others greyed with it. */
+    only: '{harness} only runs in {mode}.',
     bypassToast: 'Bypass mode: {engine} will act without any permission request.',
     bypassNotAllowed: 'Bypass mode is off: turn it on in Settings › Agents.',
   },

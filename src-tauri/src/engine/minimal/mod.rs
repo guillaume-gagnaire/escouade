@@ -10,7 +10,7 @@
 
 use super::bench::{bench_dir, replay, run, Scenario, Target};
 use super::registry::{
-    CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind, Tested,
+    CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModelDecl, QuotaKind, Tested,
 };
 use super::{
     BoxFuture, Engine, EngineProcess, Message, OneShot, PermissionAnswer, Process, Program, Ready,
@@ -30,31 +30,81 @@ use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-pub(crate) struct Minimal;
+/// The minimal fake, under an id and a name, with the modes it declares (ESC-489: the core's tests of a harness whose
+/// one mode is Bypass, of one of several modes without « Demander », of one that declares none).
+pub(crate) struct Minimal {
+    /// None: `EngineId::BENCH`, the one of the bench and of the tests of the handover.
+    id: Option<&'static str>,
+    name: &'static str,
+    modes: &'static [&'static str],
+    /// It holds a read-only launch (a discussion may be made on it).
+    read_only: bool,
+}
 
-pub(crate) static MINIMAL: Minimal = Minimal;
+pub(crate) static MINIMAL: Minimal = Minimal {
+    id: None,
+    name: "Minimal",
+    modes: &["default"],
+    read_only: false,
+};
+
+/// Its one mode is Bypass: it never asks before it acts (as Unharnessed, ESC-484).
+pub(crate) static ONE_BYPASS: Minimal = Minimal {
+    id: Some("bench-bypass"),
+    name: "Sans Filet",
+    modes: &[crate::bypass::BYPASS],
+    read_only: true,
+};
+
+/// Several modes, without « Demander » nor Auto.
+pub(crate) static NO_ASK: Minimal = Minimal {
+    id: Some("bench-noask"),
+    name: "Sans Question",
+    modes: &["plan", "acceptEdits", crate::bypass::BYPASS],
+    read_only: true,
+};
+
+/// No mode declared.
+pub(crate) static UNDECLARED: Minimal = Minimal {
+    id: Some("bench-undeclared"),
+    name: "Sans Mode",
+    modes: &[],
+    read_only: false,
+};
+
+/// The fake `id` names among the variants above but the bench's own.
+pub(crate) fn variant(id: EngineId) -> Option<&'static Minimal> {
+    [&ONE_BYPASS, &NO_ASK, &UNDECLARED]
+        .into_iter()
+        .find(|m| m.id == Some(id.as_str()))
+}
 
 impl Engine for Minimal {
     /// The id the tests of the handover run it under, beside Claude Code's fake (the bench reads
     /// none).
     fn id(&self) -> EngineId {
-        EngineId::BENCH
+        self.id.map_or(EngineId::BENCH, EngineId::new)
     }
 
     fn name(&self) -> &'static str {
-        "Minimal"
+        self.name
     }
 
     fn speaker(&self) -> &'static str {
-        "Minimal"
+        self.name
+    }
+
+    fn declares_modes(&self) -> bool {
+        !self.modes.is_empty()
     }
 
     fn caps(&self) -> EngineCaps {
         EngineCaps {
-            modes: vec![ModeCap {
-                id: "default",
-                meaning: None,
-            }],
+            modes: crate::modes::declared(
+                self.name,
+                self.modes.iter().map(|m| (*m, None)),
+                crate::i18n::ui(),
+            ),
             effort: false,
             images: false,
             pdf: false,
@@ -73,7 +123,7 @@ impl Engine for Minimal {
             sandbox: false,
             usage_page: None,
             accounts_by_key: false,
-            read_only: false,
+            read_only: self.read_only,
         }
     }
 

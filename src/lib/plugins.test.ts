@@ -63,3 +63,16 @@ describe('what a harness of a plugin says beside what it runs', () => {
     expect(unset.note).toContain('jamais le proxy');
   });
 });
+
+describe('the modes of a harness, at its installation (ESC-489)', () => {
+  it('says that its agents run in Bypass alone, or that it declares no mode, and what Escouade does of it', () => {
+    const bypass = askOf('harnessBypass:Unharnessed', null, 'fr');
+    expect(bypass.text).toBe('Ses agents ne tournent qu’en Bypass : ils ne demandent jamais avant d’agir');
+    expect(bypass.detail).toBe('Unharnessed');
+    expect(bypass.red).toBe(true);
+    expect(bypass.note).toContain('Autoriser le mode Bypass');
+    const none = askOf('harnessNoMode:Outil', null, 'fr');
+    expect(none.text).toBe('Ne déclare aucun mode : Escouade tient ses agents pour Bypass');
+    expect(none.note).toContain('Autoriser le mode Bypass');
+  });
+});

@@ -4,6 +4,7 @@
 use super::*;
 use crate::core_tests::{agent_on, harness, repo, Harness};
 use crate::model::{Account, AgentMeta, Project};
+use crate::modes::{rank, ORDER as MODES};
 use crate::plan::PlanTask;
 use crate::stats::{EngineShare, Labels};
 use std::path::Path;

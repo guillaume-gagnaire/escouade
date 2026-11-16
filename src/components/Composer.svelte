@@ -28,7 +28,7 @@
   import { basename, dirname, fSize } from '../lib/format';
   import { t } from '../lib/i18n';
   import { api } from '../lib/ipc';
-  import { EFFORTS, MODES, modeTitle, modelOptions } from '../lib/models';
+  import { EFFORTS, MODES, modeLabel, modeTitle, modelOptions } from '../lib/models';
   import {
     can,
     capsOf,
@@ -157,8 +157,13 @@
         return { value: md.value, label: md.label, disabled: true, reason: t('composer.mode.bypassNotAllowed') };
       if (!takes.has(md.value)) {
         const harness = engineName(agent.engine);
-        const reason =
-          md.value === 'auto' ? t('composer.mode.missingAuto', { harness }) : t('composer.mode.missing', { harness, mode: md.label });
+        // A harness of one mode alone runs in it, whatever is asked (ESC-489): the others say so.
+        const only = caps?.modes.length === 1 ? caps.modes[0].id : null;
+        const reason = only
+          ? t('composer.mode.only', { harness, mode: modeLabel(only) })
+          : md.value === 'auto'
+            ? t('composer.mode.missingAuto', { harness })
+            : t('composer.mode.missing', { harness, mode: md.label });
         return { value: md.value, label: md.label, disabled: true, reason };
       }
       const unavailable = md.value === 'auto' && !modelTakes(agent, agent.model, 'auto');

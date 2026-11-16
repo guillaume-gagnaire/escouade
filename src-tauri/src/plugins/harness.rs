@@ -31,8 +31,8 @@ use super::shared::{self, Shared};
 use crate::agent::{AgentRt, Effects};
 use crate::core::Attachment;
 use crate::engine::registry::{
-    AccountStore, CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModeCap, ModelDecl, QuotaKind,
-    Tested, ToldModel,
+    AccountStore, CostKind, EngineCaps, ForkPoint, Install, MidTurn, ModelDecl, QuotaKind, Tested,
+    ToldModel,
 };
 use crate::engine::{
     terminal, BoxFuture, Engine, EngineProcess, Escouade, Message, OnExit, OnFrame, OneShot,
@@ -509,14 +509,17 @@ impl ProcessEngine {
     pub fn new(rt: Arc<Runtime>, plugin: &str, decl: proto::HarnessDecl) -> Self {
         let c = &decl.caps;
         let caps = EngineCaps {
-            modes: c
-                .modes
-                .iter()
-                .map(|m| ModeCap {
-                    id: leak(&m.id),
-                    meaning: m.meaning.as_ref().map(|t| t.get(crate::i18n::ui().tag())),
-                })
-                .collect(),
+            // Those Escouade knows; none: held for Bypass (ESC-489).
+            modes: crate::modes::declared(
+                &decl.name,
+                c.modes.iter().map(|m| {
+                    (
+                        leak(&m.id),
+                        m.meaning.as_ref().map(|t| t.get(crate::i18n::ui().tag())),
+                    )
+                }),
+                crate::i18n::ui(),
+            ),
             effort: !decl.efforts.is_empty(),
             images: c.images,
             pdf: c.pdf,
@@ -1450,11 +1453,22 @@ impl Engine for ProcessEngine {
     fn caps(&self) -> EngineCaps {
         let mut caps = self.caps.clone();
         // The meanings in the app's language of now.
-        let lang = crate::i18n::ui().tag();
-        for (m, d) in caps.modes.iter_mut().zip(&self.decl.caps.modes) {
-            m.meaning = d.meaning.as_ref().map(|t| t.get(lang));
+        let lang = crate::i18n::ui();
+        let declares = self.declares_modes();
+        for m in caps.modes.iter_mut() {
+            m.meaning = match self.decl.caps.modes.iter().find(|d| d.id == m.id) {
+                Some(d) if declares => d.meaning.as_ref().map(|t| t.get(lang.tag())),
+                _ => Some(crate::modes::undeclared(lang, self.name)),
+            };
         }
         caps
+    }
+    fn declares_modes(&self) -> bool {
+        self.decl
+            .caps
+            .modes
+            .iter()
+            .any(|m| crate::modes::rank(&m.id).is_some())
     }
     fn accounts(&self) -> AccountStore {
         AccountStore::ConfigDir {
