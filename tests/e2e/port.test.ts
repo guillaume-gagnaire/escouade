@@ -1,7 +1,7 @@
 // @vitest-environment node
 import net from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
-import { waitForPortToClose } from './port';
+import { freePort, waitForPortToClose } from './port';
 
 const servers: net.Server[] = [];
 
@@ -41,5 +41,25 @@ describe('waitForPortToClose', () => {
     const started = Date.now();
     expect(await waitForPortToClose(taken.port, { timeoutMs: 300, intervalMs: 50 })).toBe(false);
     expect(Date.now() - started).toBeGreaterThanOrEqual(300);
+  });
+});
+
+describe('freePort', () => {
+  it('draws another port while the one drawn, or the next one, is taken', async () => {
+    const a = await listen();
+    const b = await listen();
+    const free = await listen();
+    await free.close();
+    // Taken; free but its next one taken (a second app's port); free with its next one.
+    const draws = [a.port, b.port - 1, free.port];
+    let n = 0;
+    const port = await freePort(() => draws[n++], { tries: 5, span: 2 });
+    expect(port).toBe(free.port);
+    expect(n).toBe(3);
+  });
+
+  it('says how many ports it tried when all are taken', async () => {
+    const a = await listen();
+    await expect(freePort(() => a.port, { tries: 3 })).rejects.toThrow(/3 ports/);
   });
 });

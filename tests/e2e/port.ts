@@ -38,3 +38,19 @@ export async function waitForPortToClose(
   }
   return true;
 }
+
+/**
+ * A port nothing listens on, nor on the `span - 1` after it (a second app's): drawn by `draw` again while it is taken, at
+ * most `tries` times (20 by default). Outside CI, the DevTools port of a test is drawn at random, and another worktree's
+ * e2e may run an app on it: waiting for that one to stop would be waiting for nothing (ESC-496).
+ */
+export async function freePort(draw: () => number, { tries = 20, span = 1 }: { tries?: number; span?: number } = {}): Promise<number> {
+  const taken: number[] = [];
+  for (let i = 0; i < tries; i++) {
+    const port = draw();
+    const busy = await Promise.all(Array.from({ length: span }, (_, k) => isListening(port + k)));
+    if (!busy.some(Boolean)) return port;
+    taken.push(port);
+  }
+  throw new Error(`no free DevTools port: ${tries} ports tried, all taken (${taken.join(', ')})`);
+}

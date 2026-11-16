@@ -249,6 +249,22 @@ fn window_size_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<
     (w > 0 && h > 0).then(|| (f64::from(w), f64::from(h)))
 }
 
+/// The folder of the main window's WebView2 data (its local storage, cookies, cache) in a sandboxed run:
+/// `$ESCOUADE_WEBVIEW_DIR`, which only a sandboxed run hears; else Tauri's, the app's local data folder, one for the
+/// whole machine. Given to WebView2 by its API, which an elevated process still follows, where it ignores
+/// `WEBVIEW2_USER_DATA_FOLDER` (WebView2 150+, a CI runner): two apps of an end-to-end test (two colleagues of a team)
+/// keep apart there too, and each test has its own (ESC-496).
+pub fn webview_dir() -> Option<PathBuf> {
+    webview_dir_from(|k| std::env::var_os(k))
+}
+
+fn webview_dir_from(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<PathBuf> {
+    sandbox_dir_from(&var)?;
+    var("ESCOUADE_WEBVIEW_DIR")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+}
+
 /// The data folder in `home`. A development build never moves the user's data (the installed app
 /// may still be the old one): it uses the folder under the new name if there is one.
 fn data_dir_in(home: &Path, debug: bool, notes: &mut Vec<String>) -> PathBuf {
@@ -1109,6 +1125,31 @@ mod tests {
                 Box::leak(vec![SANDBOX, ("ESCOUADE_WINDOW_SIZE", v)].into_boxed_slice());
             assert_eq!(window_size_from(env(pairs)), None, "{wrong}");
         }
+    }
+
+    #[test]
+    fn only_a_sandboxed_run_may_place_its_webview_data() {
+        let env = |pairs: &'static [(&'static str, &'static str)]| {
+            move |k: &str| {
+                pairs
+                    .iter()
+                    .find(|(n, _)| *n == k)
+                    .map(|(_, v)| std::ffi::OsString::from(v))
+            }
+        };
+        const SANDBOX: (&str, &str) = ("ESCOUADE_DATA_DIR", "C:/e");
+        const DIR: (&str, &str) = ("ESCOUADE_WEBVIEW_DIR", "C:/e/webview");
+        assert_eq!(
+            webview_dir_from(env(&[SANDBOX, DIR])),
+            Some(PathBuf::from("C:/e/webview"))
+        );
+        // The user's own app keeps WebView2's folder, whatever its environment.
+        assert_eq!(webview_dir_from(env(&[DIR])), None);
+        assert_eq!(webview_dir_from(env(&[SANDBOX])), None);
+        assert_eq!(
+            webview_dir_from(env(&[SANDBOX, ("ESCOUADE_WEBVIEW_DIR", "")])),
+            None
+        );
     }
 
     #[test]

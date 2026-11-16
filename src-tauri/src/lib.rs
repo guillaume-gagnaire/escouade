@@ -456,11 +456,12 @@ fn build_window(app: &tauri::App) -> tauri::Result<()> {
         url: navigation::home(dev.as_ref(), window.use_https_scheme),
         dev: dev.clone(),
     });
-    let main = navigation::guard(
-        WebviewWindowBuilder::from_config(app.handle(), &window)?,
-        dev,
-    )
-    .build()?;
+    let mut builder = WebviewWindowBuilder::from_config(app.handle(), &window)?;
+    // The WebView2 folder an end-to-end test gives it: by the API, which a CI runner (elevated) follows (ESC-496).
+    if let Some(dir) = paths::webview_dir() {
+        builder = builder.data_directory(dir);
+    }
+    let main = navigation::guard(builder, dev).build()?;
     // The paths of the files the page hands the window (a reload keeps the WebView, and the listener).
     let origins = fileorigin::FileOrigins::default();
     app.manage(origins.clone());

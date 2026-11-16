@@ -465,12 +465,19 @@ jobs:
       # WebView2 150+ ignores the WEBVIEW2_* variables (and the per-user policy) in elevated processes,
       # and CI runners are elevated: open the app's DevTools port through the machine policy instead,
       # with the options that keep its window drawing out of sight (RENDER_UNSEEN in tests/e2e/fixture.ts).
+      # The policy goes by the program's name only: the second app of a test of two live clients
+      # (`second()` of the fixture) runs from a copy, escouade-second.exe, to get a port of its own
+      # (9223, ESCOUADE_E2E_CDP_PORT + 1); under the same name, it would be given 9222, already the
+      # first app's, and open none (ESC-496). Each app's WebView2 folder is given by the app's API
+      # (ESCOUADE_WEBVIEW_DIR, which an elevated process follows), one per app and per test.
       - name: Open the app's WebView2 DevTools port
         shell: pwsh
         run: |
           $key = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
+          $unseen = '--disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling'
           New-Item -Path $key -Force | Out-Null
-          New-ItemProperty -Path $key -Name 'escouade.exe' -Value '--remote-debugging-port=9222 --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling' -PropertyType String -Force | Out-Null
+          New-ItemProperty -Path $key -Name 'escouade.exe' -Value "--remote-debugging-port=9222 $unseen" -PropertyType String -Force | Out-Null
+          New-ItemProperty -Path $key -Name 'escouade-second.exe' -Value "--remote-debugging-port=9223 $unseen" -PropertyType String -Force | Out-Null
 
       # A test that fails runs again twice (playwright.config.ts): the one that passes then is reported
       # as flaky, and its trace is kept. Each runner takes a fifth of the tests (Playwright's shards): in 3, a part took

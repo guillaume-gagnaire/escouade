@@ -2,16 +2,30 @@
 // Playwright to its WebView2 through the DevTools protocol.
 
 import { test as base, chromium, expect as baseExpect, type Browser, type Locator, type Page } from '@playwright/test';
-import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { execFile, execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { waitForPortToClose } from './port';
+import { freePort, waitForPortToClose } from './port';
 import { lookDiff } from './srgb';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const EXE = process.env.ESCOUADE_E2E_EXE ?? path.join(ROOT, 'src-tauri', 'target', 'debug', 'escouade.exe');
+/**
+ * The program of `second()`: a copy of the app under another name, beside it (made by `secondProgram()`). On an elevated CI
+ * runner, WebView2 takes its arguments from the machine policy, by the program's name only (ci.yml): under the app's own
+ * name, the second app would get the first one's DevTools port, which it cannot open (ESC-496). Under its own, it has a
+ * line of its own there.
+ */
+const SECOND_EXE = path.join(path.dirname(EXE), `escouade-second${path.extname(EXE)}`);
+/**
+ * `ESCOUADE_E2E_POLICY_LIKE=1`: the WebView2 of each launch as an elevated runner starts it (ESC-496), without elevation.
+ * There, WebView2 ignores the `WEBVIEW2_*` variables: its folder is the one the app gives by its API
+ * (`ESCOUADE_WEBVIEW_DIR`, as always), and its arguments are the machine policy's line for the program's name, whoever
+ * launches it (`POLICY_PORTS`, the same as ci.yml's), not the ones `second()` would choose for it.
+ */
+const POLICY_LIKE = !!process.env.ESCOUADE_E2E_POLICY_LIKE && process.env.ESCOUADE_E2E_POLICY_LIKE !== '0';
 const FAKE = path.join(ROOT, 'tests', 'fixtures', 'fake-claude.cmd');
 /** The fake `codex app-server` (tests/fixtures/fake-codex.mjs), for a test that runs agents on Codex. */
 const FAKE_CODEX = path.join(ROOT, 'tests', 'fixtures', 'fake-codex.cmd');
@@ -42,8 +56,10 @@ export interface App {
    */
   restartAs: (data: string) => Promise<Page>;
   /**
-   * A second app at the same time as the first, on another data folder (TS-6: two clients of a team, live): its window. Its
-   * DevTools port is `ESCOUADE_E2E_SECOND_CDP_PORT`, else the first one's plus one; it is killed with the test.
+   * A second app at the same time as the first, on another data folder (TS-6: two clients of a team, live): its window. It
+   * runs from a copy of the program (`escouade-second.exe`), with a WebView2 folder of its own (`webview-2` of the test's);
+   * its DevTools port is `ESCOUADE_E2E_SECOND_CDP_PORT`, else the first one's plus one (on CI, the machine policy's line for
+   * that copy, ci.yml); it is killed with the test (ESC-496).
    */
   second: (data: string) => Promise<Page>;
   /** When the launch the test is on was started (ms since the epoch, just before its process): the startup bench's origin (INT-0). */
@@ -152,10 +168,10 @@ function cursorAuth(root: string): string {
  * Starts the app with `env` and `args` (a link `escouade://`, as the system gives it); its stderr is appended to `stderr` (a
  * restart keeps what the launch before wrote).
  */
-function startApp(env: NodeJS.ProcessEnv, stderr: string, args: string[] = []): Instance {
+function startApp(env: NodeJS.ProcessEnv, stderr: string, args: string[] = [], program = EXE): Instance {
   const errFd = fs.openSync(stderr, 'a');
   const at = Date.now();
-  const child = spawn(EXE, args, { env, stdio: ['ignore', 'ignore', errFd] });
+  const child = spawn(program, args, { env, stdio: ['ignore', 'ignore', errFd] });
   fs.closeSync(errFd);
   const instance: Instance = { child, at, stopped: null, browser: null };
   child.on('exit', (code, signal) => {
@@ -175,6 +191,52 @@ async function killApp(instance: Instance) {
     } catch {
       // already gone
     }
+  }
+}
+
+/** The DevTools port CI gives (`ESCOUADE_E2E_CDP_PORT`, the machine policy's), else 0: one drawn free by each test. */
+const FIXED_PORT = Number(process.env.ESCOUADE_E2E_CDP_PORT) || 0;
+
+/** WebView2's « the requested resource is in use » as an app that cannot have its WebView2 folder logs it (0x800700AA). */
+const FOLDER_IN_USE = '0x800700AA';
+
+function sizeOf(file: string): number {
+  return fs.existsSync(file) ? fs.statSync(file).size : 0;
+}
+
+/** What `file` got after its first `from` bytes. */
+function since(file: string, from: number): string {
+  if (!fs.existsSync(file)) return '';
+  const buf = fs.readFileSync(file);
+  return buf.subarray(Math.min(from, buf.length)).toString('utf8');
+}
+
+/**
+ * How many WebView2 processes have `folder` (an app's WebView2 folder) in their command line: its `EBWebView`, WebView2's
+ * own, so that `webview` is not taken for a prefix of `webview-2`.
+ */
+async function webviewProcessesOn(folder: string): Promise<number> {
+  const needle = path.join(folder, 'EBWebView').toLowerCase().replace(/'/g, "''");
+  const script =
+    `@(Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | ` +
+    `Where-Object { $_.CommandLine -and $_.CommandLine.ToLower().Contains('${needle}') }).Count`;
+  return new Promise((resolve) =>
+    execFile('powershell', ['-NoProfile', '-Command', script], { encoding: 'utf8', timeout: 20_000 }, (err, out) =>
+      resolve(err ? 0 : Number(out.trim()) || 0),
+    ),
+  );
+}
+
+/**
+ * Waits until no WebView2 process of a killed app holds its folder any more (`taskkill /T` returns before they are all
+ * gone; the next start on the folder would stop at 0x800700AA): the number still there after `timeoutMs`, 0 when none is.
+ */
+async function waitForWebviewGone(folder: string, timeoutMs = 20_000): Promise<number> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const left = await webviewProcessesOn(folder);
+    if (left === 0 || Date.now() >= deadline) return left;
+    await new Promise((r) => setTimeout(r, 250));
   }
 }
 
@@ -220,10 +282,30 @@ async function connect(port: number, stopped: () => string | null): Promise<{ br
   );
 }
 
-/** How the app's WebView2 was started, when its DevTools endpoint cannot be reached (CI diagnostics). */
-function webviewDiagnostics(root: string): string {
-  const webviewDir = path.join(root, 'webview');
-  const out = [`webview data folder: ${fs.existsSync(webviewDir) ? fs.readdirSync(webviewDir).join(', ') || '(empty)' : '(missing)'}`];
+/** The pages a DevTools port lists (`/json/list`): their id and address, or why it does not answer. */
+async function targetsOn(port: number): Promise<string> {
+  return fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(5000) })
+    .then((r) => r.json())
+    .then((list: { id: string; type: string; url: string }[]) => {
+      const pages = list.filter((t) => t.type === 'page');
+      return `${pages.length} page(s)${pages.map((t) => `\n    ${t.id.slice(0, 8)} ${t.url}`).join('')}`;
+    })
+    .catch((e) => `unreachable (${(e as { cause?: { code?: string } }).cause?.code ?? (e as Error).message})`);
+}
+
+/**
+ * How the WebView2 of the test's apps were started, when an app's DevTools endpoint cannot be reached or gives another
+ * app's page (CI diagnostics): each app's WebView2 folder, each browser process of the test with its folder and port, the
+ * pages each port lists. Two apps on one browser (one folder), or a port opened by none, show there (ESC-496).
+ */
+async function webviewDiagnostics(root: string, ports: number[]): Promise<string> {
+  const out: string[] = [];
+  for (const name of ['webview', 'webview-2']) {
+    const dir = path.join(root, name);
+    if (name === 'webview' || fs.existsSync(dir)) {
+      out.push(`${name} folder: ${fs.existsSync(dir) ? fs.readdirSync(dir).join(', ') || '(empty)' : '(missing)'}`);
+    }
+  }
   try {
     const ours = execFileSync(
       'powershell',
@@ -232,18 +314,74 @@ function webviewDiagnostics(root: string): string {
     )
       .split('\n')
       .filter((l) => l.includes(path.basename(root)));
-    const browser = ours.find((l) => !l.includes('--type='));
-    out.push(`WebView2 processes of this app: ${ours.length}`);
-    if (browser) {
-      out.push(`  remote debugging: ${browser.match(/--remote-debugging-port=\d+/)?.[0] ?? '(not passed)'}`);
-      out.push(`  browser flags: ${[...new Set(browser.match(/--[a-z][a-z0-9-]*/g) ?? [])].join(' ')}`);
+    const browsers = ours.filter((l) => !l.includes('--type='));
+    out.push(`WebView2 processes of this test: ${ours.length}, of which browsers: ${browsers.length}`);
+    for (const browser of browsers) {
+      const folder = browser.match(/--user-data-dir="?([^"]+?)"?(\s--|$)/)?.[1] ?? '(not passed)';
+      out.push(`  browser on ${path.relative(root, folder) || folder}`);
+      out.push(`    remote debugging: ${browser.match(/--remote-debugging-port=\d+/g)?.join(' ') ?? '(not passed)'}`);
+      out.push(`    browser flags: ${[...new Set(browser.match(/--[a-z][a-z0-9-]*/g) ?? [])].join(' ')}`);
     }
   } catch (e) {
     out.push(`WebView2 processes: ${(e as Error).message.split('\n')[0]}`);
   }
+  for (const port of ports) out.push(`port ${port}: ${await targetsOn(port)}`);
   const vars = Object.entries(process.env).filter(([k]) => k.startsWith('WEBVIEW2'));
   out.push(`WEBVIEW2_* in the test environment: ${vars.map(([k, v]) => `${k}=${v}`).join(' ') || '(none)'}`);
+  if (POLICY_LIKE) out.push('ESCOUADE_E2E_POLICY_LIKE: arguments by the program’s name, as the machine policy of an elevated runner');
   return out.join('\n');
+}
+
+/**
+ * The WebView2 of a launch of `program`, its DevTools on `port`, its data in `folder`: the folder by the app's API
+ * (`ESCOUADE_WEBVIEW_DIR`, followed by an elevated process too), the arguments by `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`
+ * (ignored there: ci.yml gives the same ones by the machine policy). `WEBVIEW2_USER_DATA_FOLDER` is never given: it would
+ * override the app's folder here and not on CI, where it is ignored. With `POLICY_LIKE`, the arguments are the ones the
+ * policy gives the program, whatever `port` the test asked for.
+ */
+function webviewEnv(program: string, port: number, folder: string, firstPort: number): NodeJS.ProcessEnv {
+  const policyPort = POLICY_LIKE ? policyPortOf(program, firstPort) : port;
+  return {
+    ESCOUADE_WEBVIEW_DIR: folder,
+    WEBVIEW2_USER_DATA_FOLDER: undefined,
+    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:
+      policyPort === null ? undefined : `--remote-debugging-port=${policyPort} ${RENDER_UNSEEN} ${FIXED_SCALE}`,
+  };
+}
+
+/**
+ * The DevTools port the machine policy of ci.yml opens for a program, by its name: the app's own (`escouade.exe`) on the
+ * first port, its copy for `second()` (`escouade-second.exe`) on the next one; none for another name.
+ */
+function policyPortOf(program: string, firstPort: number): number | null {
+  const name = path.basename(program).toLowerCase();
+  if (name === path.basename(EXE).toLowerCase()) return firstPort;
+  if (name === path.basename(SECOND_EXE).toLowerCase()) return firstPort + 1;
+  return null;
+}
+
+/**
+ * The copy of the app `second()` runs (`SECOND_EXE`), made again when the app was built since: the same size and time as
+ * the app's program. A copy still running (an app of a test interrupted) cannot be replaced: said so.
+ */
+function secondProgram(): string {
+  const same = () => {
+    const [a, b] = [EXE, SECOND_EXE].map((p) => (fs.existsSync(p) ? fs.statSync(p) : null));
+    return !!a && !!b && b.size === a.size && Math.abs(b.mtimeMs - a.mtimeMs) < 2000;
+  };
+  if (same()) return SECOND_EXE;
+  // Copied aside, then put in place at once: two workers may make it at the same time.
+  const part = `${SECOND_EXE}.${process.pid}.part`;
+  try {
+    fs.copyFileSync(EXE, part);
+    const { atime, mtime } = fs.statSync(EXE);
+    fs.utimesSync(part, atime, mtime);
+    fs.renameSync(part, SECOND_EXE);
+  } catch (e) {
+    fs.rmSync(part, { force: true });
+    if (!same()) throw new Error(`could not copy the app to ${SECOND_EXE} for a second app (still running?): ${(e as Error).message}`);
+  }
+  return SECOND_EXE;
 }
 
 export type Language = 'fr' | 'en';
@@ -387,13 +525,16 @@ export const test = base.extend<{
   app: async ({ appEnv, appArgs, language, preStart }, use, testInfo) => {
     if (!fs.existsSync(EXE)) throw new Error(`build the app first: npx tauri build --debug --no-bundle (missing ${EXE})`);
     // CI runs elevated, where WebView2 ignores WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: the workflow
-    // opens a fixed port through the machine policy instead (tests run one at a time).
-    const port = process.env.ESCOUADE_E2E_CDP_PORT
-      ? Number(process.env.ESCOUADE_E2E_CDP_PORT)
-      : 9400 + (testInfo.workerIndex * 50 + Math.floor(Math.random() * 50));
-    // The instance of the test before may still be dying, and answering on this port (always the same on CI):
-    // connect() would attach to it. Wait for it to be gone.
-    if (!(await waitForPortToClose(port))) {
+    // opens a fixed port through the machine policy instead (tests run one at a time), by the program's name
+    // (`second()` runs a copy under another name for that, ESC-496; ESCOUADE_E2E_POLICY_LIKE=1 does the same here).
+    // Outside CI, a port drawn at random, free with the next one (`second()`'s): another worktree's e2e may run an app on
+    // the one drawn, which would never close; another is drawn then (ESC-496).
+    const port = FIXED_PORT
+      ? FIXED_PORT
+      : await freePort(() => 9400 + (testInfo.workerIndex * 50 + Math.floor(Math.random() * 50)), { span: 2 });
+    // The instance of the test before may still be dying, and answering on the fixed port of CI: connect() would attach to
+    // it. Wait for it to be gone.
+    if (FIXED_PORT && !(await waitForPortToClose(port))) {
       throw new Error(`something still listens on port ${port} after 30 s: the app of the test before is not gone`);
     }
     const root = testRoot();
@@ -436,8 +577,7 @@ export const test = base.extend<{
       FAKE_CLAUDE_LOG: log,
       // Sent "from claude.ai" to an agent once its Remote Control is on.
       FAKE_CLAUDE_REMOTE_MESSAGE: 'Message depuis le téléphone',
-      WEBVIEW2_USER_DATA_FOLDER: path.join(root, 'webview'),
-      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port} ${RENDER_UNSEEN} ${FIXED_SCALE}`,
+      ...webviewEnv(EXE, port, path.join(root, 'webview'), port),
       ESCOUADE_HIDDEN_WINDOW: SHOW ? undefined : '1',
       // The window itself at that size, not only its page: the app holds its zoom to the window's size (ESC-440).
       ESCOUADE_WINDOW_SIZE: VIEWPORT ? `${VIEWPORT[1]}x${VIEWPORT[2]}` : undefined,
@@ -503,28 +643,71 @@ export const test = base.extend<{
       ...appEnv,
     };
     // The launch the test is on (the last one, after a restart): the one the end of the test must kill.
-    let instance = startApp(env, stderr, appArgs);
+    let instance: Instance | null = null;
+    const current = () => instance as Instance;
+    // The first app's WebView2 folder, which its browser holds until its last process is gone.
+    const webviewFolder = path.join(root, 'webview');
     /** The second app of a test of two live clients, and its port. */
-    const others: { instance: Instance; port: number }[] = [];
-    // Attaches Playwright to the WebView2 of a launch.
-    const attach = async (launch: Instance): Promise<Page> => {
+    const others: { instance: Instance; port: number; data: string }[] = [];
+    // The ports of the test's apps, for the diagnostics.
+    const ports = () => [port, ...others.map((o) => o.port)];
+    // Attaches Playwright to the WebView2 of a launch: the first app's (on `port`), or a second one's (`on`).
+    const attach = async (launch: Instance, on = { port, data: env.ESCOUADE_DATA_DIR ?? data, stderr }): Promise<Page> => {
       try {
-        const { browser, page } = await connect(port, () => launch.stopped);
+        const { browser, page } = await connect(on.port, () => launch.stopped);
         if (VIEWPORT) await page.setViewportSize({ width: Number(VIEWPORT[1]), height: Number(VIEWPORT[2]) });
         launch.browser = browser;
         return page;
       } catch (e) {
-        const appLog = tail(path.join(data, 'app.log'));
-        const errLog = tail(stderr);
-        throw new Error(
-          `${(e as Error).message}\n--- app.log ---\n${appLog}\n` +
-            (errLog === appLog ? '' : `--- stderr ---\n${errLog}\n`) +
-            `--- WebView2 ---\n${webviewDiagnostics(root)}`,
-        );
+        throw new Error(`${(e as Error).message}\n${await launchLogs(on.data, on.stderr)}`);
       }
     };
+    const mainOn = () => ({ port, data: env.ESCOUADE_DATA_DIR ?? data, stderr });
+    /**
+     * Starts a launch (`start`, given to `set`) and attaches to it. A launch that stops as it starts because its WebView2
+     * folder is still held (0x800700AA, « resource in use »: the browser of the instance killed just before, not quite gone)
+     * is started once more, after that browser is gone, and the test says so; any other stop is the test's failure.
+     */
+    const startAttached = async (
+      start: () => Instance,
+      set: (launch: Instance) => void,
+      on: { port: number; data: string; stderr: string },
+      folder: string,
+    ): Promise<Page> => {
+      const marks = [on.stderr, path.join(on.data, 'app.log')].map((file) => ({ file, from: sizeOf(file) }));
+      let launch = start();
+      set(launch);
+      try {
+        return await attach(launch, on);
+      } catch (e) {
+        if (!launch.stopped || !marks.some((m) => since(m.file, m.from).includes(FOLDER_IN_USE))) throw e;
+        const note = `the app stopped as it started, its WebView2 folder still in use (${FOLDER_IN_USE}, ${launch.stopped}): started once more`;
+        console.warn(`${testInfo.title}: ${note}`);
+        testInfo.annotations.push({ type: 'webview-in-use', description: note });
+        await killApp(launch);
+        const left = await waitForWebviewGone(folder);
+        if (left) console.warn(`${testInfo.title}: ${left} WebView2 process(es) still on ${folder}`);
+        launch = start();
+        set(launch);
+        return attach(launch, on);
+      }
+    };
+    const launchLogs = async (dataDir: string, errFile: string) => {
+      const appLog = tail(path.join(dataDir, 'app.log'));
+      const errLog = tail(errFile);
+      return (
+        `--- app.log ---\n${appLog}\n` +
+        (errLog === appLog ? '' : `--- stderr ---\n${errLog}\n`) +
+        `--- WebView2 ---\n${await webviewDiagnostics(root, ports())}`
+      );
+    };
     try {
-      const page = await attach(instance);
+      const page = await startAttached(
+        () => startApp(env, stderr, appArgs),
+        (launch) => (instance = launch),
+        mainOn(),
+        webviewFolder,
+      );
       const launches = () =>
         fs.existsSync(log)
           ? fs
@@ -544,21 +727,33 @@ export const test = base.extend<{
         opencodeJson: path.join(root, 'xdg', 'opencode', 'opencode.json'),
         copilotJson: path.join(root, 'copilot', 'mcp-config.json'),
         launches,
-        launchedAt: () => instance.at,
+        launchedAt: () => current().at,
         restart: async () => {
           // The app saves what it shows a moment after a change: not killed in the middle of it.
           await new Promise((r) => setTimeout(r, SAVE_MS));
-          await killApp(instance);
+          await killApp(current());
           if (!(await waitForPortToClose(port))) {
             throw new Error(`something still listens on port ${port} 30 s after the app was killed: it cannot be started again`);
           }
-          instance = startApp(env, stderr);
-          app.page = await appReady(await attach(instance));
+          // Nor its WebView2 browser, which holds the folder a while after the port is closed: the next start would stop
+          // there (0x800700AA, « resource in use »).
+          const left = await waitForWebviewGone(webviewFolder);
+          if (left) console.warn(`${testInfo.title}: ${left} WebView2 process(es) still on ${webviewFolder} after the restart's wait`);
+          app.page = await appReady(
+            await startAttached(
+              () => startApp(env, stderr),
+              (launch) => (instance = launch),
+              mainOn(),
+              webviewFolder,
+            ),
+          );
           return app.page;
         },
         reconnect: async () => {
-          await instance.browser?.close().catch(() => {});
-          app.page = await appReady(await attach(instance));
+          await current()
+            .browser?.close()
+            .catch(() => {});
+          app.page = await appReady(await attach(current()));
           return app.page;
         },
         restartAs: (dataDir: string) => {
@@ -566,20 +761,42 @@ export const test = base.extend<{
           return app.restart();
         },
         second: async (dataDir: string) => {
-          const port2 = process.env.ESCOUADE_E2E_SECOND_CDP_PORT ? Number(process.env.ESCOUADE_E2E_SECOND_CDP_PORT) : port + 1;
-          if (!(await waitForPortToClose(port2))) throw new Error(`something still listens on port ${port2}: no second app`);
+          // The next port (checked free with the first one's, outside CI), or the one given; with POLICY_LIKE, always the
+          // next one, as ci.yml's policy.
+          let port2 = process.env.ESCOUADE_E2E_SECOND_CDP_PORT ? Number(process.env.ESCOUADE_E2E_SECOND_CDP_PORT) : port + 1;
+          if (!FIXED_PORT && !POLICY_LIKE && !process.env.ESCOUADE_E2E_SECOND_CDP_PORT) {
+            let next = port2;
+            port2 = await freePort(() => next++);
+          } else if (!(await waitForPortToClose(port2))) throw new Error(`something still listens on port ${port2}: no second app`);
+          // Its own program (the policy's line of an elevated runner is by name), WebView2 folder and port: nothing shared
+          // with the first app but what the test gives both (a team's server), not even a local storage (ESC-496).
+          const program = secondProgram();
           const env2: NodeJS.ProcessEnv = {
             ...env,
             ESCOUADE_DATA_DIR: dataDir,
-            WEBVIEW2_USER_DATA_FOLDER: path.join(root, 'webview-2'),
-            WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port2} ${RENDER_UNSEEN} ${FIXED_SCALE}`,
+            ...webviewEnv(program, port2, path.join(root, 'webview-2'), port),
           };
-          const launch = startApp(env2, path.join(root, 'app-2-stderr.log'));
-          others.push({ instance: launch, port: port2 });
-          const { browser, page: p } = await connect(port2, () => launch.stopped);
-          if (VIEWPORT) await p.setViewportSize({ width: Number(VIEWPORT[1]), height: Number(VIEWPORT[2]) });
-          launch.browser = browser;
-          await appReady(p);
+          const errFile = path.join(root, 'app-2-stderr.log');
+          const other = { instance: null as unknown as Instance, port: port2, data: dataDir };
+          others.push(other);
+          const p = await appReady(
+            await startAttached(
+              () => startApp(env2, errFile, [], program),
+              (launch) => (other.instance = launch),
+              { port: port2, data: dataDir, stderr: errFile },
+              path.join(root, 'webview-2'),
+            ),
+          );
+          // The page attached is the second app's, not the first one's seen through another port: the app says its data folder.
+          const shown = await p.evaluate(() =>
+            (window as unknown as { __TAURI_INTERNALS__: { invoke(c: string): Promise<string> } }).__TAURI_INTERNALS__.invoke('data_dir'),
+          );
+          if (path.resolve(shown).toLowerCase() !== path.resolve(dataDir).toLowerCase()) {
+            throw new Error(
+              `the page on port ${port2} is not the second app's: its data folder is ${shown}, not ${dataDir}\n` +
+                (await launchLogs(dataDir, errFile)),
+            );
+          }
           await expect(p.getByRole('button', { name: LABELS[language].addProject }).first()).toBeVisible({ timeout: 45_000 });
           return p;
         },
@@ -594,7 +811,13 @@ export const test = base.extend<{
             .catch((e) => `page unreachable: ${(e as Error).message.split('\n')[0]}`),
           new Promise<string>((r) => setTimeout(() => r('page not answering'), 5000)),
         ]);
-        return `--- page ---\n${shown}\n--- app (${instance.stopped ?? 'running'}) ---\n${tail(path.join(data, 'app.log'), 25)}`;
+        const second = others.map(
+          (o) => `\n--- second app (${o.instance.stopped ?? 'running'}, port ${o.port}) ---\n${tail(path.join(o.data, 'app.log'), 25)}`,
+        );
+        return (
+          `--- page ---\n${shown}\n--- app (${current().stopped ?? 'running'}) ---\n` +
+          `${tail(path.join(env.ESCOUADE_DATA_DIR ?? data, 'app.log'), 25)}${second.join('')}`
+        );
       };
       try {
         // A runner's window thread stops for 7 to 10 s at times while the app starts (« window thread: paused 9725 ms » in
@@ -608,10 +831,10 @@ export const test = base.extend<{
       if (testInfo.status !== testInfo.expectedStatus) throw new Error(`the app after the failure\n${await state()}`);
     } finally {
       for (const other of others) {
-        await killApp(other.instance);
+        if (other.instance) await killApp(other.instance);
         await waitForPortToClose(other.port);
       }
-      await killApp(instance);
+      if (instance) await killApp(instance);
       // The next test must not find this instance still answering on the port (it waits for that too, before it
       // starts; a test that passed does not fail for it).
       if (!(await waitForPortToClose(port))) console.warn(`port ${port} is still taken 30 s after the app was killed`);
