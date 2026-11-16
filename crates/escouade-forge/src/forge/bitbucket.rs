@@ -28,6 +28,8 @@ impl Provider for BitbucketProvider {
             rerun: false,
             // Not read yet (PR-9): its client says `unsupported`.
             reading: Reading::default(),
+            // Its client comments, answers and resolves (PR-9 tries it for real).
+            writing: Writing::ANSWERS,
             draft: true,
             // No call merges once the checks pass (BCLOUD-22055, BCLOUD-22062): Escouade waits for the checks and
             // merges itself.

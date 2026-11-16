@@ -197,7 +197,7 @@ pub trait Forge: Send + Sync {
         unsupported("review")
     }
 
-    /// Answer under a comment of a line (`ReviewComment::id`).
+    /// Answer under a comment of a line (`ReviewComment::id`, or the first `ThreadComment::id` of a thread read).
     fn reply<'a>(
         &'a self,
         _repo: &'a RepoRef,
@@ -208,7 +208,8 @@ pub trait Forge: Send + Sync {
         unsupported("reply")
     }
 
-    /// Resolves the thread of a comment of a line (`ReviewComment::id`).
+    /// Resolves a thread: a host that reads threads takes its `ReviewThread::id`, the others the `ReviewComment::id` of
+    /// its first comment.
     fn resolve<'a>(
         &'a self,
         _repo: &'a RepoRef,
@@ -216,6 +217,26 @@ pub trait Forge: Send + Sync {
         _comment: &'a str,
     ) -> BoxFuture<'a, Result<()>> {
         unsupported("resolve")
+    }
+
+    /// Opens a resolved thread again (`ReviewThread::id`), ESC-474.
+    fn unresolve<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _number: u64,
+        _thread: &'a str,
+    ) -> BoxFuture<'a, Result<()>> {
+        unsupported("unresolve")
+    }
+
+    /// Comments lines of the diff (or one), a thread of its own (ESC-474).
+    fn line_comment<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _number: u64,
+        _comment: &'a LineComment,
+    ) -> BoxFuture<'a, Result<()>> {
+        unsupported("line_comment")
     }
 
     /// The description of a pull request, with its tip's commit and when it last changed (ESC-452).

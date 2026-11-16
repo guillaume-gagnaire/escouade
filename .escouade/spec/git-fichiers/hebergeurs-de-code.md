@@ -1,9 +1,9 @@
 ---
 title: "Hébergeurs de code"
 subject: "Git & fichiers"
-sources: ["docs/SPEC.md","plugins/gitlab/README.fr.md","plugins/gitlab/docs/fr/","tests/fixtures/forges/gitlab/README.md","docs/TODO-2.2.md (Hébergeurs de code)","plugins/gitea/README.fr.md","plugins/gitea/docs/fr/","tests/fixtures/forges/gitea/README.md","docs/TODO-1.8.md","src-tauri/src/telemetry.rs","design/pr-2-3/README.md","docs/TODO-2.3.md (Les PR dans Escouade)"]
-tickets: ["ESC-54","ESC-55","ESC-56","ESC-58","ESC-70","ESC-241","ESC-212","ESC-57","ESC-67","ESC-345","ESC-69","ESC-367","ESC-383","ESC-452"]
-decisions: [104,166]
+sources: ["docs/SPEC.md","plugins/gitlab/README.fr.md","plugins/gitlab/docs/fr/","tests/fixtures/forges/gitlab/README.md","docs/TODO-2.2.md (Hébergeurs de code)","plugins/gitea/README.fr.md","plugins/gitea/docs/fr/","tests/fixtures/forges/gitea/README.md","docs/TODO-1.8.md","src-tauri/src/telemetry.rs","design/pr-2-3/README.md","docs/TODO-2.3.md (Les PR dans Escouade)","src-tauri/src/prwrite.rs","plugins/github/src/pulls.rs"]
+tickets: ["ESC-54","ESC-55","ESC-56","ESC-58","ESC-70","ESC-241","ESC-212","ESC-57","ESC-67","ESC-345","ESC-69","ESC-367","ESC-383","ESC-452","ESC-474"]
+decisions: [104,166,187]
 compared: null
 ---
 
@@ -147,3 +147,13 @@ Premier ticket des PR dans Escouade (2.3, direction A : `design/pr-2-3/README.md
 - **Le diff vient de git**, pas de l'hébergeur : la tête et la base sont récupérées dans `refs/escouade/review/<n>/read/…`, supprimées aussitôt ; aucune branche ne bouge, rien n'est poussé. Chaque ligne a son numéro dans la base et dans la tête ; un fichier binaire le dit ; un fichier généré (verrou, minifié) est marqué ; au-delà de 3 000 lignes par fichier et 30 000 par PR, le fichier est coupé et le dit. Une PR d'un autre dépôt que celui du projet est lue sans lignes, avec la raison.
 - **Gardée** : redonnée telle quelle pendant 20 s ; ensuite, deux appels (la PR et sa description) disent si elle a changé (son état, sa CI, ses relectures, ses fils ouverts, son commit de tête, sa date de mise à jour) ; sinon tout est relu. Le suivi des PR (la liste du projet, les PR des agents, celles des tickets) la marque à relire dès qu'il la voit changer, et le dit à la fenêtre. Une lecture qui échoue n'est pas gardée ; près de la limite d'appels de l'hébergeur, la dernière lecture reste.
 - **Données d'un tiers** : titre, description, messages de commit, chemins, fils et noms sont écrits par quiconque peut ouvrir une PR. La lecture le dit (`thirdParty`), la fenêtre les montre comme du texte, et `get_pull_request` les donne dans sa balise de données d'un tiers, avec la description, les commits, les fichiers (sans lignes) et les fils et leur état, jamais comme une consigne. Rien n'est écrit chez l'hébergeur.
+
+## Écrire sur une PR (ESC-474)
+
+PR-4 des PR dans Escouade. Ce que la vue de la PR écrit chez l'hébergeur, sous le compte de l'utilisateur et à son clic seulement (voir *Pull requests*, « Les fils »). La lecture d'une PR entière (ci-dessus), elle, n'écrit rien.
+
+- **Cinq écritures d'un hébergeur**, déclarées par ses capacités (`writing` : commenter la PR, commenter une ligne, répondre, résoudre, rouvrir) : `forge/comment` (un commentaire de la conversation), `forge/lineComment` (un commentaire sur une ligne ou une plage du diff, du côté de la tête ou de la base pour une ligne supprimée, sur le commit lu : un nouveau fil), `forge/reply` (une réponse sous le premier commentaire d'un fil), `forge/resolve` (un fil résolu, par son identifiant chez un hébergeur qui lit les fils) et `forge/unresolve` (un fil rouvert). La fenêtre ne montre que les boutons que l'hébergeur déclare, et dit ce qu'il ne sait pas faire.
+- **GitHub les sert toutes** (plugin `dev.escouade.github` 2.3.0, kit 0.1.3) : les commentaires et réponses en REST, la résolution et la réouverture en GraphQL (`resolveReviewThread`, `unresolveReviewThread`). Un fil qu'il ne connaît plus (supprimé entre-temps) se dit en 404. **GitLab, Gitea / Forgejo, Bitbucket Cloud et Azure DevOps** déclarent commenter la PR, répondre et résoudre, ce que leur plugin faisait déjà, sans essai réel ici (PR-9) ; ni commenter une ligne seule ni rouvrir.
+- **Au clic seulement** : le cœur n'écrit que par la commande `pr_write` de la fenêtre ; aucun outil du serveur MCP ne commente, ne répond ni ne résout, et un agent ne le demande jamais. Un texte vide ou de plus de 65 536 caractères, une ligne ou un fil manquant, une écriture que l'hébergeur ne déclare pas sont refusés avant de partir.
+- **Les refus** se nomment pour la fenêtre : jeton refusé (401), jeton sans le droit d'écrire (403 qui n'est pas la limite), fil ou commentaire disparu (404), limite d'appels, hébergeur injoignable ; sinon les mots de l'hébergeur.
+- **Écrit**, la lecture gardée de la PR est marquée à relire : la vue la relit aussitôt.

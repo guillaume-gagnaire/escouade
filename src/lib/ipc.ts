@@ -513,6 +513,9 @@ export const api = {
   /** The files of one commit of a pull request (ESC-467, the tab « Fichiers »): its diff from its first parent, git's. */
   prCommitFiles: (projectId: string, number: number, sha: string, hostRepo?: string) =>
     invoke<PrRead<PrContentsFile[]>>('pr_commit_files', { projectId, number, sha, ...(hostRepo ? { hostRepo } : {}) }),
+  /** A write on a pull request (ESC-474), on the user's click only, in their name on its host: done, or why not. */
+  prWrite: (projectId: string, number: number, write: import('./prthreads').PrWrite, hostRepo?: string) =>
+    invoke<PrRead<boolean>>('pr_write', { projectId, number, write, ...(hostRepo ? { hostRepo } : {}) }),
   /** The view of a pull request (ESC-457): its checks, reviews and comments, read by whoever holds it in the project. */
   prDetail: (projectId: string, number: number, hostRepo?: string) =>
     invoke<PrRead<PrDetail>>('pr_detail', { projectId, number, ...(hostRepo ? { hostRepo } : {}) }),

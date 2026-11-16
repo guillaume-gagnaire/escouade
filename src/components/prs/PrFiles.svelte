@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte';
+  import { tick, untrack, type Snippet } from 'svelte';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
   import { failureTitle } from '../../lib/prview';
@@ -26,7 +26,9 @@
   // changed on the left, filtered, following the scrolling; their diffs on the right, git's, each « Vu » kept by pull
   // request and by commit (`ui.prViewed`): a file marked in the whole pull request is no longer once a commit changes it.
   // « Ouvrir dans l'éditeur » opens a file, at a line, in the VS Code view of `source` (the agent's worktree that holds the
-  // branch, else the project's folder; null: none). `under` draws what goes under a line (PR-4, PR-5).
+  // branch, else the project's folder; null: none). `under` draws what goes under a line (PR-4, PR-5); `above` what goes
+  // above a file's lines, `head` above the list (ESC-474: the threads apart). `threads` gives a file's open threads and its
+  // lines that have one; `reveal` brings a thread into view (« Suivante »); `onComment` offers « + » on the lines.
   let {
     projectId,
     number,
@@ -35,6 +37,11 @@
     scope = $bindable('pr'),
     source,
     under,
+    above,
+    head,
+    threads,
+    reveal = null,
+    onComment,
   }: {
     projectId: string;
     number: number;
@@ -43,6 +50,11 @@
     scope?: FilesScope;
     source: string | null;
     under?: Snippet<[PrContentsFile, PrLine, number]>;
+    above?: Snippet<[PrContentsFile]>;
+    head?: Snippet;
+    threads?: (f: PrContentsFile) => { open: number; marked: Record<number, boolean> };
+    reveal?: { key: string; path: string | null; index: number; seq: number } | null;
+    onComment?: (f: PrContentsFile, line: PrLine, index: number, extend: boolean) => void;
   } = $props();
 
   let filter = $state('');
@@ -131,6 +143,33 @@
   });
 
   const scopeValue = $derived(sha ?? 'pr');
+
+  // « Suivante » (ESC-474): its file shown (the filter emptied when it hides it), then the thread brought into view and
+  // focused once its part is drawn.
+  let seenReveal = 0;
+  $effect(() => {
+    const r = reveal;
+    if (!r || r.seq === seenReveal) return;
+    seenReveal = r.seq;
+    untrack(() => {
+      if (r.path && !ordered.some((f) => f.path === r.path)) filter = '';
+      if (r.path) current = r.path;
+      void bring(r.key);
+    });
+  });
+
+  async function bring(key: string) {
+    for (let i = 0; i < 20; i++) {
+      await tick();
+      const el = listBox?.querySelector<HTMLElement>(`[data-thread-key="${quoted(key)}"]`);
+      if (el) {
+        el.scrollIntoView?.({ block: 'center' });
+        el.focus?.({ preventScroll: true });
+        return;
+      }
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+    }
+  }
 </script>
 
 <div class="files" bind:clientWidth={width}>
@@ -228,6 +267,7 @@
         </nav>
       {/if}
       <div class="list" bind:this={listBox} onscroll={onScroll}>
+        {#if head && scope === 'pr'}{@render head()}{/if}
         {#each ordered as f (f.path)}
           <PrFileDiff
             file={f}
@@ -236,7 +276,12 @@
             canOpen={!!source}
             onViewed={(on) => mark(f, on)}
             onOpen={(line) => openIn(f, line)}
-            {under}
+            under={scope === 'pr' ? under : undefined}
+            above={scope === 'pr' ? above : undefined}
+            openThreads={threads?.(f).open ?? 0}
+            marked={threads?.(f).marked}
+            reveal={reveal && reveal.path === f.path ? reveal : null}
+            onComment={onComment && scope === 'pr' ? (l, i, extend) => onComment(f, l, i, extend) : undefined}
           />
         {:else}
           <p class="msg">{files.length ? t('prs.page.files.noMatch') : t('prs.page.files.none')}</p>

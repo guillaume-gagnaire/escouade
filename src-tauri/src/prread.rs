@@ -19,7 +19,7 @@
 use crate::core::Core;
 use crate::forge::{
     FileStatus, PrCommit, PrDescription, PrFile, PullRequest, RateLimit, Reading, RepoRef,
-    ReviewThread, Unsupported,
+    ReviewThread, Unsupported, Writing,
 };
 use crate::git;
 use crate::model::{now_ms, UiEvent};
@@ -94,6 +94,8 @@ pub struct PrContents {
     pub threads: Vec<ReviewThread>,
     /// What the host reads: what is missing from the rest is not there, not empty.
     pub reading: Reading,
+    /// What it writes in the user's name, on a click (ESC-474): the window shows no button for the rest.
+    pub writing: Writing,
     /// The diff was asked: its lines are git's, or `diff_failure` says why there are none.
     pub diff: bool,
     /// The commit the lines are of.
@@ -503,6 +505,7 @@ impl Core {
             files,
             threads,
             reading,
+            writing: can.writing,
             diff,
             tip,
             diff_failure,
@@ -693,6 +696,29 @@ impl Core {
         let mut files = merged(Vec::new(), Some(parse_files(&text)));
         mark_generated(&mut files, &attributes_at(&root, &full).await);
         Ok(files)
+    }
+
+    /// The commit the lines kept of a pull request are of: what a comment on lines is written on (ESC-474); empty when
+    /// none is kept.
+    pub(crate) fn pr_contents_tip(&self, project_id: &str, number: u64, host_repo: &str) -> String {
+        self.pr_contents
+            .lock()
+            .get(&key_of(project_id, host_repo, number))
+            .map(|k| k.contents.tip.clone())
+            .unwrap_or_default()
+    }
+
+    /// Something was written on a pull request (ESC-474): what is kept of it is read again at the next ask.
+    pub(crate) fn pr_contents_stale(&self, project_id: &str, number: u64, host_repo: &str) {
+        if let Some(k) = self
+            .pr_contents
+            .lock()
+            .get_mut(&key_of(project_id, host_repo, number))
+        {
+            k.stale = true;
+        }
+        let whole = format!("{project_id}|{}|{number}", host_repo.to_lowercase());
+        self.pr_wholes.lock().remove(&whole);
     }
 
     /// What the following of the pull requests read of the project's (its list, an agent's, a

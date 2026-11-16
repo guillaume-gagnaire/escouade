@@ -38,9 +38,10 @@ pub use escouade_plugin_kit::forge::BoxFuture;
 
 // The data of the hosts, shared with the plugins that serve them (docs/PLUGINS-DESIGN.md §4.5).
 pub use escouade_plugin_protocol::forge::{
-    Check, CheckState, Deployment, DiffSide, FileStatus, Identity, MergeOptions, MergeStrategy,
-    PrCommit, PrDescription, PrFile, PrState, PullRequest, PullRequestDraft, RateLimit, Review,
-    ReviewComment, ReviewDraft, ReviewLine, ReviewState, ReviewThread, ThreadComment, ThreadState,
+    Check, CheckState, Deployment, DiffSide, FileStatus, Identity, LineComment, MergeOptions,
+    MergeStrategy, PrCommit, PrDescription, PrFile, PrState, PullRequest, PullRequestDraft,
+    RateLimit, Review, ReviewComment, ReviewDraft, ReviewLine, ReviewState, ReviewThread,
+    ThreadComment, ThreadState,
 };
 
 /// What a host reads of a pull request whole (ESC-452): each `true` is a call its client serves.
@@ -60,6 +61,43 @@ impl Reading {
         commits: true,
         files: true,
         threads: true,
+    };
+}
+
+/// What a host writes on a pull request in the user's name, on a click of theirs only (ESC-474): each `true` is a call
+/// its client serves. A host without one says it cannot, and the window shows no button for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Writing {
+    /// A comment of the conversation (`Forge::comment`).
+    pub comment: bool,
+    /// A comment on lines of the diff, a thread of its own (`Forge::line_comment`).
+    pub line_comment: bool,
+    /// An answer in a thread (`Forge::reply`).
+    pub reply: bool,
+    /// A thread resolved (`Forge::resolve`).
+    pub resolve: bool,
+    /// A resolved thread opened again (`Forge::unresolve`).
+    pub reopen: bool,
+}
+
+impl Writing {
+    /// All five: GitHub's.
+    pub const ALL: Self = Self {
+        comment: true,
+        line_comment: true,
+        reply: true,
+        resolve: true,
+        reopen: true,
+    };
+    /// What the clients of GitLab, Bitbucket Cloud, Gitea and Azure DevOps do: comment, answer and resolve, not on a
+    /// line nor open again (PR-9 tries them for real).
+    pub const ANSWERS: Self = Self {
+        comment: true,
+        line_comment: false,
+        reply: true,
+        resolve: true,
+        reopen: false,
     };
 }
 
@@ -91,6 +129,8 @@ pub struct Capabilities {
     /// (`Forge::description`), its commits, its files (their lines are git's) and its threads with
     /// their lines, their answers and their state. A host without one says it cannot.
     pub reading: Reading,
+    /// What it writes on a pull request in the user's name (ESC-474).
+    pub writing: Writing,
     pub merge_strategies: Vec<MergeStrategy>,
 }
 

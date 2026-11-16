@@ -2,7 +2,9 @@
 
 ## 2.3.0
 
-- A pull request read whole, for Escouade 2.3 (ESC-452): its description (`forge/description`, with its tip's commit and when it last changed), its commits (`forge/commits`), its files and their counts (`forge/files`; their lines are git's, read by Escouade) and its threads (`forge/threads`), with their lines, their answers and their state: open, resolved or outdated. Read only: nothing is written on GitHub. It stands on escouade-plugin-kit 0.1.3.
+- Writing on a pull request, on the user's click in Escouade 2.3 (ESC-474): a comment on lines of its diff, one or a range, on the commit read (`forge/lineComment`), a thread resolved (`forge/resolve`, by its id) and opened again (`forge/unresolve`), beside the answers and comments it already wrote. A thread deleted meanwhile says 404.
+
+- A pull request read whole, for Escouade 2.3 (ESC-452): its description (`forge/description`, with its tip's commit and when it last changed), its commits (`forge/commits`), its files and their counts (`forge/files`; their lines are git's, read by Escouade) and its threads (`forge/threads`), with their lines, their answers and their state: open, resolved or outdated. It stands on escouade-plugin-kit 0.1.3.
 
 ## 2.2.3
 

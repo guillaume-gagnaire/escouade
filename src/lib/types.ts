@@ -3379,7 +3379,7 @@ export interface PrDetail {
 
 /** Why the host's answer is missing (`prview::Failure`). */
 export interface PrFailure {
-  kind: 'refused' | 'rateLimit' | 'unreachable' | 'other' | 'unavailable';
+  kind: 'refused' | 'rateLimit' | 'unreachable' | 'other' | 'unavailable' | 'forbidden' | 'gone';
   message: string;
   /** When the host's limit starts over (Unix seconds). */
   reset?: number;
@@ -3415,6 +3415,8 @@ export interface PrContents {
   threads: PrThread[];
   /** What the host reads: a part it does not is missing, not empty. */
   reading: { description: boolean; commits: boolean; files: boolean; threads: boolean };
+  /** What the host writes in the user's name, on a click (ESC-474): no button for the rest. */
+  writing?: import('./prthreads').PrWriting;
   diff: boolean;
   tip?: string;
   diffFailure?: string;

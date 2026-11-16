@@ -16,6 +16,8 @@ The plugin serves two things of Escouade on the same account: the GitHub code ho
 
 **A pull request whole** (Escouade 2.3). The plugin also reads a pull request's description, its commits, its changed files and its discussion threads, with their lines, their answers and their state (open, resolved, outdated), and the comments of the conversation. Escouade reads the lines of the diff from git, not from GitHub. Nothing is written on GitHub for it.
 
+**The threads** (Escouade 2.3). From a pull request's view, and on your click only, the plugin comments on a line or a range of the diff (on the commit you read), replies in a thread, resolves a thread and reopens it, and comments on the pull request's conversation, under your account. An agent never asks it to.
+
 **Deployments.** The plugin reads the deployments of a commit and those of the repository's environments: a done ticket's card says where it runs, and the "Environments" view shows one lane per environment.
 
 **The "Pull requests" view.** It shows the 30 most recently updated open pull requests of the repository, yours or others'.

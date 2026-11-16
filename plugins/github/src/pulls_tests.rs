@@ -450,3 +450,125 @@ async fn the_four_reads_ask_github_where_they_should() {
     // Nothing written: a read is a read.
     assert!(server.writes().iter().all(|r| r.path() == "/graphql"));
 }
+
+#[tokio::test]
+async fn a_line_comment_a_resolution_and_a_reopening_ask_github_where_they_should() {
+    let server = FakeServer::start().await;
+    server.on(
+        "GET",
+        "/repos/cli/cli/pulls/7",
+        200,
+        json!({ "head": { "sha": "tip" } }),
+    );
+    server.on(
+        "POST",
+        "/repos/cli/cli/pulls/7/comments",
+        201,
+        json!({ "id": 9 }),
+    );
+    server.on(
+        "POST",
+        "/graphql#ResolveThread",
+        200,
+        json!({ "data": { "resolveReviewThread": { "thread": { "id": "T", "isResolved": true } } } }),
+    );
+    server.on(
+        "POST",
+        "/graphql#UnresolveThread",
+        200,
+        json!({ "data": { "unresolveReviewThread": { "thread": { "id": "T", "isResolved": false } } } }),
+    );
+    let github = Github::new(reqwest::Client::new(), server.url.clone(), "t".into());
+    // A range of lines removed, on the tip read.
+    let range = LineComment {
+        path: "a.ts".into(),
+        line: 12,
+        start_line: Some(10),
+        side: DiffSide::Left,
+        commit: "abc".into(),
+        body: "Pourquoi ?".into(),
+    };
+    github.line_comment(&repo(), 7, &range).await.unwrap();
+    // One line, on the tip now.
+    let one = LineComment {
+        path: "a.ts".into(),
+        line: 3,
+        body: "Ici".into(),
+        ..Default::default()
+    };
+    github.line_comment(&repo(), 7, &one).await.unwrap();
+    let posted: Vec<Value> = server
+        .writes()
+        .iter()
+        .filter(|r| r.path() == "/repos/cli/cli/pulls/7/comments")
+        .map(|r| r.json())
+        .collect();
+    assert_eq!(posted[0]["commit_id"], "abc");
+    assert_eq!(
+        (
+            &posted[0]["line"],
+            &posted[0]["start_line"],
+            &posted[0]["side"],
+            &posted[0]["start_side"]
+        ),
+        (&json!(12), &json!(10), &json!("LEFT"), &json!("LEFT"))
+    );
+    assert_eq!(
+        posted[1]["commit_id"], "tip",
+        "the tip now, asked of GitHub"
+    );
+    assert_eq!(posted[1]["side"], "RIGHT");
+    assert!(posted[1].get("start_line").is_none());
+
+    github.resolve(&repo(), 7, "T").await.unwrap();
+    github.unresolve(&repo(), 7, "T").await.unwrap();
+    let mutations: Vec<Value> = server
+        .writes()
+        .iter()
+        .filter(|r| r.path() == "/graphql")
+        .map(|r| r.json())
+        .collect();
+    assert_eq!(mutations.len(), 2);
+    assert_eq!(mutations[0]["variables"]["id"], "T");
+    assert!(mutations[0]["query"]
+        .as_str()
+        .unwrap()
+        .contains("resolveReviewThread"));
+    assert!(mutations[1]["query"]
+        .as_str()
+        .unwrap()
+        .contains("unresolveReviewThread"));
+}
+
+#[tokio::test]
+async fn a_thread_deleted_since_it_was_read_is_a_404() {
+    let server = FakeServer::start().await;
+    server.on(
+        "POST",
+        "/graphql#ResolveThread",
+        200,
+        json!({ "data": { "resolveReviewThread": null }, "errors": [{ "type": "NOT_FOUND", "message": "Could not resolve to a node with the global id of 'T'" }] }),
+    );
+    let github = Github::new(reqwest::Client::new(), server.url.clone(), "t".into());
+    let e = github.resolve(&repo(), 7, "T").await.unwrap_err();
+    assert_eq!(
+        e.downcast_ref::<escouade_plugin_kit::errors::HttpError>()
+            .map(|h| h.status),
+        Some(404),
+        "{e:#}"
+    );
+}
+
+#[test]
+fn a_line_comment_on_one_line_says_no_first_line() {
+    let c = LineComment {
+        path: "a".into(),
+        line: 4,
+        start_line: Some(4),
+        body: "x".into(),
+        ..Default::default()
+    };
+    let b = line_comment_body(&c, "s");
+    assert!(b.get("start_line").is_none(), "{b}");
+    assert_eq!(b["side"], "RIGHT");
+}

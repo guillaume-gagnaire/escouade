@@ -378,6 +378,36 @@ impl Github {
         Ok(v["data"].clone())
     }
 
+    /// A thread resolved (`resolve`), else opened again (ESC-474). A thread GitHub no longer knows (deleted since it was
+    /// read) is a 404, as REST says it.
+    async fn thread_state(&self, thread: &str, resolve: bool) -> Result<()> {
+        let (operation, field) = match resolve {
+            true => ("ResolveThread", "resolveReviewThread"),
+            false => ("UnresolveThread", "unresolveReviewThread"),
+        };
+        let query = format!(
+            "mutation {operation}($id: ID!) {{ {field}(input: {{threadId: $id}}) {{ thread {{ id isResolved }} }} }}"
+        );
+        let data = match self
+            .graphql(operation, &query, json!({ "id": thread }))
+            .await
+        {
+            Ok(d) => d,
+            Err(e) if format!("{e}").contains("Could not resolve to a node") => {
+                return Err(gone(thread));
+            }
+            Err(e) => return Err(e),
+        };
+        match data[field]["thread"]["isResolved"].as_bool() {
+            Some(r) if r == resolve => Ok(()),
+            Some(_) => Err(anyhow!(tr!(
+                "{NAME} n'a pas changé l'état du fil",
+                "{NAME} did not change the thread's state"
+            ))),
+            None => Err(gone(thread)),
+        }
+    }
+
     fn repo_path(repo: &RepoRef) -> String {
         format!("/repos/{}/{}", enc(&repo.namespace), enc(&repo.name))
     }
@@ -597,6 +627,38 @@ const THREADS_QUERY: &str = "query PrThreads($owner: String!, $name: String!, $n
     repository(owner: $owner, name: $name) { pullRequest(number: $number) { \
     reviewThreads(first: 100) { nodes { id isResolved isOutdated path line startLine originalLine diffSide \
     comments(first: 100) { nodes { databaseId author { login } body createdAt lastEditedAt diffHunk } } } } } } }";
+
+/// A thread GitHub no longer knows: a 404, as REST says a comment deleted.
+fn gone(thread: &str) -> anyhow::Error {
+    anyhow::Error::new(escouade_plugin_kit::errors::HttpError {
+        status: 404,
+        message: tr!(
+            "{NAME} : fil {thread} introuvable",
+            "{NAME}: thread {thread} not found"
+        ),
+    })
+}
+
+/// What `POST /pulls/<n>/comments` takes for a comment on lines (ESC-474): its last line and its side, and its first
+/// when it holds several, on the commit it was written on.
+pub fn line_comment_body(c: &LineComment, commit: &str) -> Value {
+    let side = match c.side {
+        DiffSide::Left => "LEFT",
+        DiffSide::Right => "RIGHT",
+    };
+    let mut body = json!({
+        "body": c.body,
+        "commit_id": commit,
+        "path": c.path,
+        "line": c.line,
+        "side": side,
+    });
+    if let Some(start) = c.start_line.filter(|s| *s < c.line) {
+        body["start_line"] = json!(start);
+        body["start_side"] = json!(side);
+    }
+    body
+}
 
 /// A login, else « ? » for a user since deleted (GitHub's « ghost »).
 fn login(v: &Value) -> String {
@@ -1349,6 +1411,45 @@ impl Forge for Github {
                     enc(comment)
                 ),
                 json!({ "body": body }),
+            )
+            .await?;
+            Ok(())
+        })
+    }
+
+    fn resolve<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _number: u64,
+        thread: &'a str,
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move { self.thread_state(thread, true).await })
+    }
+
+    fn unresolve<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _number: u64,
+        thread: &'a str,
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move { self.thread_state(thread, false).await })
+    }
+
+    fn line_comment<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+        comment: &'a LineComment,
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move {
+            let commit = match comment.commit.is_empty() {
+                true => self.head_sha(repo, number).await?,
+                false => comment.commit.clone(),
+            };
+            self.write(
+                reqwest::Method::POST,
+                &format!("{}/pulls/{number}/comments", Self::repo_path(repo)),
+                line_comment_body(comment, &commit),
             )
             .await?;
             Ok(())

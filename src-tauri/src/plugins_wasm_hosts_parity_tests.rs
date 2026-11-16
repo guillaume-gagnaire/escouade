@@ -72,6 +72,25 @@ fn github_routes(s: &FakeServer) {
         fx("graphql-branch.json"),
     );
     s.on("POST", "/graphql#Threads", 200, fx("graphql-threads.json"));
+    // A thread resolved and opened again, a comment on lines (ESC-474, `SINCE_THE_PORT`).
+    s.on(
+        "POST",
+        "/graphql#ResolveThread",
+        200,
+        json!({ "data": { "resolveReviewThread": { "thread": { "id": "4335329893", "isResolved": true } } } }),
+    );
+    s.on(
+        "POST",
+        "/graphql#UnresolveThread",
+        200,
+        json!({ "data": { "unresolveReviewThread": { "thread": { "id": "4335329893", "isResolved": false } } } }),
+    );
+    s.on(
+        "POST",
+        &format!("{repo}/pulls/14768/comments"),
+        201,
+        json!({ "id": 9 }),
+    );
     s.on("POST", "/graphql#OpenPulls", 200, fx("graphql-pulls.json"));
     s.on("POST", "/graphql#RepoParent", 200, json!({ "data": { "repository": { "parent": { "name": "cli", "owner": { "login": "upstream" } } } } }));
     s.on(
@@ -627,7 +646,7 @@ fn forge_steps(h: &'static Host, api: &str) -> Vec<Step> {
     let strategy = json!({ "number": h.number, "strategy": "squash" });
     let moved = format!("{api}/moved");
     let elsewhere = format!("{api}/moved-comment");
-    vec![
+    let mut steps = vec![
         Call("account/me", me.clone()),
         Call("forge/pullRequest", call(n.clone())),
         Call(
@@ -721,7 +740,29 @@ fn forge_steps(h: &'static Host, api: &str) -> Vec<Step> {
             );
         })),
         Call("account/me", me),
-    ]
+    ];
+    // What a host does since the port (`SINCE_THE_PORT`), after its resolution: played by the module alone.
+    let at = steps
+        .iter()
+        .position(|s| matches!(s, Call("forge/resolve", _)))
+        .unwrap()
+        + 1;
+    let since: Vec<Step> = SINCE_THE_PORT
+        .iter()
+        .filter(|(name, method, _)| *name == h.name && *method != "forge/resolve")
+        .map(|(_, method, _)| match *method {
+            "forge/unresolve" => Call(method, call(json!({ "number": h.number, "thread": h.comment }))),
+            "forge/lineComment" => Call(
+                method,
+                call(json!({ "number": h.number, "comment": {
+                    "path": "src/main.rs", "line": 4, "startLine": 2, "side": "left", "commit": "abc", "body": "Pourquoi ?",
+                } })),
+            ),
+            other => panic!("no step for {other}"),
+        })
+        .collect();
+    steps.splice(at..at, since);
+    steps
 }
 
 /// A source of the Kanban that a code host's plugin serves.
@@ -1087,16 +1128,63 @@ async fn parity(
     }
     let was: Value =
         serde_json::from_str(&std::fs::read_to_string(&recording).unwrap()).expect("a recording");
-    for (a, b) in played
+    // What changed on purpose since the port is compared with what the module was recorded doing then, reviewed by hand;
+    // every other step with the process of before, as it was.
+    // Only a host's recording: its source of the Kanban (`<name>-source.json`) did not change.
+    let of_host = file.ends_with("-host.json");
+    let changed = |s: &&Value| {
+        of_host
+            && SINCE_THE_PORT
+                .iter()
+                .any(|(n, m, _)| *n == name && s["method"] == *m)
+    };
+    let (since, played): (Vec<Value>, Vec<Value>) = played
         .as_array()
         .unwrap()
         .iter()
-        .zip(was.as_array().unwrap())
-    {
+        .cloned()
+        .partition(|s| changed(&s));
+    let was: Vec<Value> = was
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|s| !changed(s))
+        .cloned()
+        .collect();
+    for (a, b) in played.iter().zip(&was) {
         assert_eq!(a, b, "{name}: {}", a["method"]);
     }
     assert_eq!(played, was, "{name}");
+    let expected = match of_host {
+        true => SINCE_THE_PORT.iter().filter(|(n, _, _)| *n == name).count(),
+        false => 0,
+    };
+    assert_eq!(
+        since.len(),
+        expected,
+        "{name}: the steps changed since the port"
+    );
+    if since.is_empty() {
+        return;
+    }
+    let file = recording.with_file_name(file.replace(".json", "-since.json"));
+    if std::env::var_os("ESCOUADE_PARITY_RECORD_SINCE").is_some() {
+        std::fs::write(&file, serde_json::to_string_pretty(&since).unwrap()).unwrap();
+    }
+    let then: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&file).unwrap())
+        .expect("a recording of the steps changed since the port");
+    assert_eq!(since, then, "{name}: since the port");
 }
+
+/// What a host does on purpose otherwise than its process did before the port (ESC-345), by ticket: the recording of the
+/// port cannot learn it (its program is gone), so those steps are compared with `<name>-host-since.json`, recorded from
+/// the module (`ESCOUADE_PARITY_RECORD_SINCE=1`) and reviewed. GitHub resolves a thread (it said it could not), opens one
+/// again and comments lines since ESC-474; the other hosts' plugins did not change.
+const SINCE_THE_PORT: [(&str, &str, &str); 3] = [
+    ("github", "forge/resolve", "ESC-474"),
+    ("github", "forge/unresolve", "ESC-474"),
+    ("github", "forge/lineComment", "ESC-474"),
+];
 
 async fn host(i: usize) {
     let h: &'static Host = &HOSTS[i];
@@ -1160,4 +1248,58 @@ async fn gitlab_issues_answer_as_their_native_plugin() {
 #[tokio::test(flavor = "multi_thread")]
 async fn azure_boards_answer_as_their_native_plugin() {
     source(2).await;
+}
+
+/// What each host declares it writes (`Capabilities::writing`, ESC-474) is what its plugin answers in the recordings:
+/// a write declared is served (no -32601), one not declared is refused as such, so that the window never offers a button
+/// the plugin cannot press.
+#[test]
+fn each_hosts_declared_writes_are_the_ones_its_plugin_serves() {
+    let registry = crate::forge::Registry::standard();
+    for h in &HOSTS {
+        let w = registry
+            .get(h.forge)
+            .unwrap_or_else(|| panic!("no provider {}", h.forge))
+            .capabilities()
+            .writing;
+        let dir = root().join("tests/fixtures/plugins/parity");
+        let mut steps: Vec<Value> = Vec::new();
+        for file in [
+            format!("{}-host.json", h.name),
+            format!("{}-host-since.json", h.name),
+        ] {
+            if let Ok(text) = std::fs::read_to_string(dir.join(&file)) {
+                steps.extend(serde_json::from_str::<Vec<Value>>(&text).unwrap());
+            }
+        }
+        let since = |m: &str| {
+            SINCE_THE_PORT
+                .iter()
+                .any(|(n, x, _)| *n == h.name && *x == m)
+        };
+        // A step changed since the port answers as its `-since` recording says (read after the port's), not as the port's.
+        let served = |m: &str| -> Option<bool> {
+            let of = |s: &&Value| s["method"] == m;
+            let step = match since(m) {
+                true => steps.iter().rev().find(of),
+                false => steps.iter().find(of),
+            }?;
+            Some(step["error"]["code"] != -32601)
+        };
+        for (method, declared) in [
+            ("forge/comment", w.comment),
+            ("forge/reply", w.reply),
+            ("forge/resolve", w.resolve),
+            ("forge/unresolve", w.reopen),
+            ("forge/lineComment", w.line_comment),
+        ] {
+            // Not played: a write the plugin does not know yet (the kit's `unsupported`), so not declared.
+            let served = served(method).unwrap_or(false);
+            assert_eq!(
+                declared, served,
+                "{}: {method} declared {declared}, served {served}",
+                h.name
+            );
+        }
+    }
 }

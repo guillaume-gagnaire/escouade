@@ -103,6 +103,8 @@ impl Provider for AzureProvider {
             rerun: true,
             // Not read yet (PR-9): its client says `unsupported`.
             reading: Reading::default(),
+            // Its client comments, answers and resolves (PR-9 tries it for real).
+            writing: Writing::ANSWERS,
             merge_strategies: vec![
                 MergeStrategy::Merge,
                 MergeStrategy::Squash,

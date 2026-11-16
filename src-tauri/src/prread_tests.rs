@@ -142,7 +142,7 @@ fn node(threads: usize) -> Value {
     })
 }
 
-fn routes(server: &FakeServer, updated: &str) {
+pub(crate) fn routes(server: &FakeServer, updated: &str) {
     server.on(
         "POST",
         "/graphql#Pulls",

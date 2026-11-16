@@ -160,7 +160,7 @@ describe('the « PR et CI » tab', () => {
     expect(reviews).toHaveTextContent('eve a approuvé');
     expect(reviews).not.toHaveTextContent('zed');
     expect(reviews).toHaveTextContent('src/app.ts:12');
-    expect(reviews).toHaveTextContent('En lecture : Escouade ne publie rien en ton nom.');
+    expect(reviews).toHaveTextContent('En lecture ici : réponds et résous dans la vue de la PR, où rien ne part sans ton clic.');
     // Nothing to answer with: no field, no reply.
     expect(within(reviews).queryByRole('textbox')).toBeNull();
     expect(within(reviews).queryByRole('button')).toBeNull();
@@ -314,6 +314,8 @@ describe('the « PR et CI » tab', () => {
     expect(screen.getByText('Conflicts with main')).toBeInTheDocument();
     expect(await screen.findByText('1 failure out of 4')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Re-run failed jobs' })).toBeInTheDocument();
-    expect(screen.getByText('Read only: Escouade publishes nothing in your name.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Read only here: reply and resolve in the PR’s view, where nothing is sent without your click.'),
+    ).toBeInTheDocument();
   });
 });

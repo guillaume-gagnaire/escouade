@@ -26,6 +26,7 @@ Il écrit, quand Escouade le lui demande :
 - son merge, ou la demande d'auto-merge ;
 - la relance des jobs en échec d'un run d'Actions ;
 - une relecture que tu as validée, une réponse sous un commentaire, un commentaire ;
+- depuis la vue d'une PR dans Escouade, à ton clic seulement : un commentaire sur des lignes de son diff, une réponse dans un fil, un fil résolu ou rouvert, un commentaire de sa conversation ;
 - pour une issue : un commentaire, sa fermeture ou sa réouverture, ses étiquettes de la correspondance des statuts.
 
 Il ne pousse aucun code : c'est `git`, lancé par Escouade, qui pousse les branches. Il ne supprime ni branche, ni dépôt, ni issue.

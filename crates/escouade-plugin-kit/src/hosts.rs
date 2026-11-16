@@ -423,6 +423,11 @@ async fn forge_call(f: &dyn Forge, name: &str, p: &Value) -> Result<Value, Refus
                 .await,
         ),
         "resolve" => done(f.resolve(&repo()?, number()?, &text("comment")?).await),
+        "unresolve" => done(f.unresolve(&repo()?, number()?, &text("thread")?).await),
+        "lineComment" => done(
+            f.line_comment(&repo()?, number()?, &arg(p, "comment")?)
+                .await,
+        ),
         "deployments" => to_value(
             f.deployments(&repo()?, &text("ref")?)
                 .await

@@ -505,6 +505,9 @@ class AppState {
   prOpen = $state<Record<string, { number: number; hostRepo?: string } | null>>({});
   /** How many times each pull request changed on the host (`prChanged`), by `<project>#<number>`: its view reads it again. */
   prChanges = $state<Record<string, number>>({});
+  /** The drafts of the comments and answers of the pull requests' views, by `prthreads.draftKey` (ESC-474): kept until sent,
+   * whatever tab or pull request is shown. */
+  prDrafts = $state<Record<string, string>>({});
   /** The word of each project's code host for a pull request (« PR », « MR » on GitLab), once read (ESC-65). */
   prWords = $state<Record<string, string>>({});
   /**

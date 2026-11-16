@@ -227,6 +227,9 @@ mod prreview;
 mod prview;
 #[cfg(test)]
 mod prview_tests;
+mod prwrite;
+#[cfg(test)]
+mod prwrite_tests;
 mod pty;
 mod repos;
 #[cfg(test)]
@@ -981,6 +984,7 @@ pub fn run() {
                 commands::agent_pr_detail,
                 commands::pr_contents,
                 commands::pr_commit_files,
+                commands::pr_write,
                 commands::pr_detail,
                 commands::pr_log,
                 commands::pr_rerun,

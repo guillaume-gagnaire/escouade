@@ -26,6 +26,7 @@ It writes, when Escouade asks it to:
 - its merge, or the request for auto-merge;
 - rerunning the failed jobs of an Actions run;
 - a review you approved, a reply under a comment, a comment;
+- from a pull request's view in Escouade, on your click only: a comment on lines of its diff, a reply in a thread, a thread resolved or reopened, a comment of its conversation;
 - for an issue: a comment, closing or reopening it, its labels from the status mapping.
 
 It pushes no code: `git`, run by Escouade, pushes the branches. It deletes no branch, repository or issue.

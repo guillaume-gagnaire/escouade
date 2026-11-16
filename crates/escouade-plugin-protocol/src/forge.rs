@@ -415,6 +415,24 @@ pub struct ReviewThread {
     pub excerpt: Option<String>,
 }
 
+/// A comment on lines of a pull request's diff, to publish as the user wrote it (`forge/lineComment`, ESC-474): a
+/// thread of its own on the host.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LineComment {
+    pub path: String,
+    /// Its last line on `side`, and its first when it holds several.
+    pub line: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_line: Option<u32>,
+    /// The base's side for a line removed, else the tip's.
+    pub side: DiffSide,
+    /// The commit whose diff it was written on (the tip the user read); empty: the pull request's tip now.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub commit: String,
+    pub body: String,
+}
+
 impl ReviewThread {
     /// On lines of a file, not of the conversation.
     pub fn on_lines(&self) -> bool {
@@ -457,6 +475,25 @@ mod read_tests {
                 .unwrap();
         assert_eq!(back.state, ThreadState::Resolved);
         assert!(!back.on_lines());
+    }
+
+    #[test]
+    fn a_line_comment_travels_in_camel_case() {
+        let c = LineComment {
+            path: "src/a.rs".into(),
+            line: 12,
+            start_line: Some(10),
+            side: DiffSide::Left,
+            commit: String::new(),
+            body: "Pourquoi ?".into(),
+        };
+        let v = serde_json::to_value(&c).unwrap();
+        assert_eq!(v["startLine"], 10);
+        assert_eq!(v["side"], "left");
+        assert!(v.get("commit").is_none());
+        let back: LineComment =
+            serde_json::from_value(json!({ "path": "a", "line": 3, "body": "x" })).unwrap();
+        assert_eq!((back.side, back.start_line), (DiffSide::Right, None));
     }
 
     #[test]

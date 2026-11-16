@@ -2,6 +2,8 @@
 
 ## 0.1.3
 
+- `Forge`: two writes more (`unsupported` by default), `unresolve` (`forge/unresolve`, a thread opened again) and `line_comment` (`forge/lineComment`, a comment on lines of the diff, `LineComment` of escouade-plugin-protocol 0.1.3); `resolve` takes the thread's id of a host that reads threads.
+
 - `Forge`: a pull request read whole, four calls more a host serves or refuses (`unsupported` by default): `description`, `commits`, `files` and `threads` (`forge/description`, `forge/commits`, `forge/files`, `forge/threads`), on the types of escouade-plugin-protocol 0.1.3 (`PrDescription`, `PrCommit`, `PrFile`, `ReviewThread` and its `ThreadComment`s).
 
 ## 0.1.2

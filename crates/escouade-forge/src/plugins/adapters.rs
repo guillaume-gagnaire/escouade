@@ -20,9 +20,9 @@
 
 use super::runtime::{CallError, Runtime, METHOD_NOT_FOUND};
 use crate::forge::{
-    BoxFuture, Check, Credentials, Deployment, Forge, Identity, MergeOptions, MergeStrategy,
-    PrCommit, PrDescription, PrFile, PullRequest, PullRequestDraft, RateLimit, RepoRef, Review,
-    ReviewComment, ReviewDraft, ReviewThread, Unsupported,
+    BoxFuture, Check, Credentials, Deployment, Forge, Identity, LineComment, MergeOptions,
+    MergeStrategy, PrCommit, PrDescription, PrFile, PullRequest, PullRequestDraft, RateLimit,
+    RepoRef, Review, ReviewComment, ReviewDraft, ReviewThread, Unsupported,
 };
 use crate::integrations::source::{TicketSource, TicketSourceKind};
 use crate::integrations::{
@@ -720,6 +720,40 @@ impl Forge for ProcessForge {
             self.ask::<Value>(
                 "forge/resolve",
                 "resolve",
+                json!({ "repo": repo, "number": number, "comment": comment }),
+            )
+            .await
+            .map(|_| ())
+        })
+    }
+
+    fn unresolve<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+        thread: &'a str,
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move {
+            self.ask::<Value>(
+                "forge/unresolve",
+                "unresolve",
+                json!({ "repo": repo, "number": number, "thread": thread }),
+            )
+            .await
+            .map(|_| ())
+        })
+    }
+
+    fn line_comment<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+        comment: &'a LineComment,
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move {
+            self.ask::<Value>(
+                "forge/lineComment",
+                "line_comment",
                 json!({ "repo": repo, "number": number, "comment": comment }),
             )
             .await

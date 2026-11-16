@@ -29,6 +29,8 @@ impl Provider for GiteaProvider {
             rerun: true,
             // Not read yet (PR-9): its client says `unsupported`.
             reading: Reading::default(),
+            // Its client comments, answers and resolves (PR-9 tries it for real).
+            writing: Writing::ANSWERS,
             // A title that starts with `WIP:`.
             draft: true,
             // `merge_when_checks_succeed`, on a protected branch only.

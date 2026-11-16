@@ -8,7 +8,7 @@ use crate::agentprs::log_tail;
 use crate::core::Core;
 use crate::forge::{
     Capabilities, Check, Deployment, Forge, PullRequest, RateLimit, Reading, RepoRef, Review,
-    ReviewComment, Unsupported,
+    ReviewComment, Unsupported, Writing,
 };
 use crate::integrations::HttpError;
 use crate::model::now_ms;
@@ -54,6 +54,10 @@ pub enum FailureKind {
     Other,
     /// Not the host's say but the project's: no remote, no client yet, no account.
     Unavailable,
+    /// A write the token has not the right of (403 that is not the limit, ESC-474).
+    Forbidden,
+    /// A write on what the host no longer has: a thread or a comment deleted since it was read (404, ESC-474).
+    Gone,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -149,6 +153,9 @@ pub struct Can {
     /// What it reads of a pull request whole (ESC-452, `prread`): not the tab's.
     #[serde(skip)]
     pub reading: Reading,
+    /// What it writes on a pull request in the user's name (ESC-474, `prwrite`): not the tab's.
+    #[serde(skip)]
+    pub writing: Writing,
 }
 
 impl From<&Capabilities> for Can {
@@ -160,6 +167,7 @@ impl From<&Capabilities> for Can {
             reviews: c.reviews,
             deployments: c.deployments,
             reading: c.reading,
+            writing: c.writing,
         }
     }
 }

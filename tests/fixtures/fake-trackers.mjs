@@ -781,6 +781,31 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       pull.mergedWith = json()?.merge_method;
       return send(200, { merged: true, message: 'Pull Request successfully merged' });
     }
+    // A pull request's threads, as a test sets them (`threadsWhole`), else the one a request for changes opens: kept on
+    // it once written to (`kept`), so that the writes of ESC-474 change them.
+    const threadsOf = (x, kept = false) => {
+      const ts =
+        x.threadsWhole ??
+        (x.changesRequested
+          ? [{ id: 'PRRT_1', path: 'src/app.ts', line: 1, comments: [{ id: 1, author: 'bob', body: 'Ce nom est peu clair.' }] }]
+          : []);
+      if (kept) x.threadsWhole = ts;
+      return ts;
+    };
+    // A write refused as GitHub says it (`writeStatus`: 403 without the right, 429 the limit, 503 out of reach).
+    const writeRefusal = (x) => {
+      const status = x.writeStatus;
+      if (!status) return null;
+      const message =
+        status === 403
+          ? 'Resource not accessible by personal access token'
+          : status === 429
+            ? 'API rate limit exceeded for user ID 1.'
+            : status === 404
+              ? 'Not Found'
+              : 'Service Unavailable';
+      return { status, body: { message } };
+    };
     const node = (x) => ({
       number: x.number,
       url: `https://github.com/${x.repo ?? 'acme/demo'}/pull/${x.number}`,
@@ -897,11 +922,7 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       // author, body }] }]); by default the one a request for changes opens.
       if (q.operationName === 'PrThreads') {
         const x = g.pulls.find((y) => y.number === q.variables.number);
-        const asked =
-          x?.threadsWhole ??
-          (x?.changesRequested
-            ? [{ id: 'PRRT_1', path: 'src/app.ts', line: 1, comments: [{ id: 1, author: 'bob', body: 'Ce nom est peu clair.' }] }]
-            : []);
+        const asked = x ? threadsOf(x) : [];
         const at = (s) => new Date(Date.parse('2026-11-14T09:00:00Z') + s * 60_000).toISOString();
         const nodes = asked.map((t) => ({
           id: t.id,
@@ -925,7 +946,61 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
         }));
         return send(200, { data: { repository: { pullRequest: x ? { reviewThreads: { nodes } } : null } } });
       }
+      // A thread resolved or opened again (ESC-474), in the name of the token's account; a thread it does not know is
+      // GitHub's NOT_FOUND.
+      if (q.operationName === 'ResolveThread' || q.operationName === 'UnresolveThread') {
+        const field = q.operationName === 'ResolveThread' ? 'resolveReviewThread' : 'unresolveReviewThread';
+        const x = g.pulls.find((y) => threadsOf(y).some((t) => t.id === q.variables.id));
+        const refused = x && writeRefusal(x);
+        if (refused) return send(refused.status, refused.body);
+        const t = x && threadsOf(x, true).find((y) => y.id === q.variables.id);
+        if (!t)
+          return send(200, {
+            data: { [field]: null },
+            errors: [{ type: 'NOT_FOUND', message: `Could not resolve to a node with the global id of '${q.variables.id}'` }],
+          });
+        t.resolved = field === 'resolveReviewThread';
+        return send(200, { data: { [field]: { thread: { id: t.id, isResolved: t.resolved } } } });
+      }
       return send(200, { data: null, errors: [{ message: `unknown operation ${q.operationName}` }] });
+    }
+    // A comment on lines of a pull request, and an answer in a thread (ESC-474): a thread of `threadsWhole` more, an
+    // answer under it, as the token's account (`ada`). `writeStatus` on the pull request refuses them (403, 429, 503).
+    m = p.match(/^\/github\/repos\/acme\/demo\/pulls\/(\d+)\/comments(?:\/(\d+)\/replies)?$/);
+    if (m && method === 'POST') {
+      const pull = g.pulls.find((x) => x.number === Number(m[1]));
+      if (!pull) return send(404, { message: 'Not Found' });
+      const refused = writeRefusal(pull);
+      if (refused) return send(refused.status, refused.body);
+      const b = json() ?? {};
+      const threads = threadsOf(pull, true);
+      const id = 1000 + db.writes.length;
+      if (m[2]) {
+        const t = threads.find((y) => y.comments.some((c) => c.id === Number(m[2])));
+        if (!t) return send(404, { message: 'Not Found' });
+        t.comments.push({ id, author: 'ada', body: b.body });
+        return send(201, { id });
+      }
+      threads.push({
+        id: `PRRT_${id}`,
+        path: b.path,
+        line: b.line,
+        startLine: b.start_line ?? null,
+        side: b.side ?? 'RIGHT',
+        commit: b.commit_id,
+        comments: [{ id, author: 'ada', body: b.body }],
+      });
+      return send(201, { id });
+    }
+    // A comment of a pull request's conversation (ESC-474).
+    m = p.match(/^\/github\/repos\/acme\/demo\/issues\/(\d+)\/comments$/);
+    if (m && method === 'POST' && g.pulls.some((x) => x.number === Number(m[1]))) {
+      const pull = g.pulls.find((x) => x.number === Number(m[1]));
+      const refused = writeRefusal(pull);
+      if (refused) return send(refused.status, refused.body);
+      const id = 1000 + db.writes.length;
+      pull.conversation = [...(pull.conversation ?? []), { id, author: 'ada', body: json()?.body ?? '' }];
+      return send(201, { id });
     }
     if (p === '/github/repos/acme/demo/pulls' && method === 'POST') {
       const b = json();

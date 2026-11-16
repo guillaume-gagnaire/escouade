@@ -35,6 +35,8 @@ impl Provider for GitlabProvider {
             rerun: true,
             // Not read yet (PR-9): its client says `unsupported`.
             reading: Reading::default(),
+            // Its client comments, answers and resolves (PR-9 tries it for real).
+            writing: Writing::ANSWERS,
             // `Draft:` before the title.
             draft: true,
             // `merge_when_pipeline_succeeds` (`auto_merge` in later versions).

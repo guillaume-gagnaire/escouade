@@ -46,6 +46,7 @@ impl Provider for GithubProvider {
             deployments: true,
             rerun: true,
             reading: Reading::ALL,
+            writing: Writing::ALL,
             merge_strategies: vec![
                 MergeStrategy::Merge,
                 MergeStrategy::Squash,

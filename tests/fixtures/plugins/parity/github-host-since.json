@@ -1,0 +1,60 @@
+[
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"ResolveThread\",\"query\":\"mutation ResolveThread($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { id isResolved } } }\",\"variables\":{\"id\":\"4335329893\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "forge/resolve",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"UnresolveThread\",\"query\":\"mutation UnresolveThread($id: ID!) { unresolveReviewThread(input: {threadId: $id}) { thread { id isResolved } } }\",\"variables\":{\"id\":\"4335329893\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "forge/unresolve",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"body\":\"Pourquoi ?\",\"commit_id\":\"abc\",\"line\":4,\"path\":\"src/main.rs\",\"side\":\"LEFT\",\"start_line\":2,\"start_side\":\"LEFT\"}",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "POST",
+        "target": "/repos/cli/cli/pulls/14768/comments"
+      }
+    ],
+    "error": null,
+    "method": "forge/lineComment",
+    "result": {
+      "value": null
+    }
+  }
+]

@@ -22,16 +22,34 @@
     timeline,
     type PrTab,
   } from '../../lib/prpage';
-  import { viewedCount, viewedKey, type FilesScope } from '../../lib/prfiles';
+  import { treeOrder, viewedCount, viewedKey, type FilesScope } from '../../lib/prfiles';
+  import {
+    NO_WRITING,
+    draftKey,
+    extendPick,
+    lineTarget,
+    nextStop,
+    openOrder,
+    pickOf,
+    pickPlace,
+    placeThreads,
+    threadCounts,
+    threadKey,
+    writeFailure,
+    type LinePick,
+    type PrWrite,
+  } from '../../lib/prthreads';
   import { openPrPage } from '../../lib/prs';
   import { POLL_MS, stillRunning } from '../../lib/prview';
   import { app } from '../../lib/state.svelte';
   import { tip } from '../../lib/tip';
-  import type { PrContents, PrDetail, PrFailure, PrRead, PrThread, Project, PullRequest } from '../../lib/types';
+  import type { PrContents, PrContentsFile, PrDetail, PrFailure, PrLine, PrRead, PrThread, Project, PullRequest } from '../../lib/types';
   import CiChecks from '../CiChecks.svelte';
   import Icon from '../Icon.svelte';
   import Markdown from '../conv/Markdown.svelte';
+  import PrComposer from './PrComposer.svelte';
   import PrFiles from './PrFiles.svelte';
+  import PrThreadView from './PrThread.svelte';
 
   // The view of a pull request (ESC-457, PR-2 of the PR in Escouade, direction A of design/pr-2-3): in the work area, in
   // place of the list « Pull requests », in reading only. Its header (number, title, state, branches, ticket, author,
@@ -90,6 +108,131 @@
     tab = 'files';
   }
 
+  // ---------- The threads (ESC-474, PR-4) ----------
+
+  /** What the host writes in the user's name, on a click: no button for the rest. */
+  const writing = $derived(c?.writing ?? NO_WRITING);
+  /** The threads under their line in the whole pull request's diff, the others apart. */
+  const placed = $derived(c ? placeThreads(c.files, c.threads) : { under: {}, stale: {}, elsewhere: [] });
+  const stops = $derived(c ? openOrder(treeOrder(c.files, ''), placed) : []);
+  const counts = $derived(c ? threadCounts(c.threads) : { open: 0, resolved: 0 });
+  /** Each file's open threads (under its lines and apart) and its lines that have one. */
+  const NO_THREADS = { open: 0, marked: {} as Record<number, boolean> };
+  const fileThreads = $derived.by(() => {
+    const out: Record<string, { open: number; marked: Record<number, boolean> }> = {};
+    for (const [path, lines] of Object.entries(placed.under)) {
+      const it = (out[path] ??= { open: 0, marked: {} });
+      for (const [i, ts] of Object.entries(lines)) {
+        it.marked[Number(i)] = true;
+        it.open += ts.filter((th) => th.state !== 'resolved').length;
+      }
+    }
+    for (const [path, ts] of Object.entries(placed.stale)) {
+      const it = (out[path] ??= { open: 0, marked: {} });
+      it.open += ts.filter((th) => th.state !== 'resolved').length;
+    }
+    return out;
+  });
+  /** The lines a comment is being written on. */
+  let composing = $state<LinePick | null>(null);
+  let composeBusy = $state(false);
+  let composeFailure = $state<string | null>(null);
+  let convBusy = $state(false);
+  let convFailure = $state<string | null>(null);
+  /** The thread « Suivante » reached last, and what brings it into view. */
+  let currentThread = $state<string | null>(null);
+  let reveal = $state<{ key: string; path: string | null; index: number; seq: number } | null>(null);
+
+  const keyOf = (target: string) => draftKey(project.id, hostRepo, number, target);
+
+  /** A write the user clicked, on the host: null when done (the pull request read again), else why not. */
+  async function send(w: PrWrite): Promise<PrFailure | null> {
+    let r: PrRead<boolean>;
+    try {
+      r = await api.prWrite(project.id, number, w, hostRepo);
+    } catch (e) {
+      return { kind: 'other', message: String(e) };
+    }
+    if (r.failure) return r.failure;
+    await loadContents();
+    return null;
+  }
+
+  /** « Suivante » (or the previous one): the next open thread, in the tab « Fichiers ». */
+  function next(step: 1 | -1 = 1) {
+    const stop = nextStop(stops, currentThread, step);
+    if (!stop) return;
+    show(stop.key, stop.path, stop.index);
+  }
+
+  function show(key: string, path: string | null, index: number) {
+    currentThread = key;
+    scope = 'pr';
+    tab = 'files';
+    reveal = { key, path, index, seq: (reveal?.seq ?? 0) + 1 };
+  }
+
+  /** A thread of the conversation, in the tab « Fichiers » under its line. */
+  function showThread(th: PrThread) {
+    const key = threadKey(th);
+    const path = th.path ?? null;
+    const at = path ? Object.entries(placed.under[path] ?? {}).find(([, ts]) => ts.some((x) => threadKey(x) === key)) : undefined;
+    show(key, path && c?.files.some((f) => f.path === path) ? path : null, at ? Number(at[0]) : -1);
+  }
+
+  /** « + » on a line: a comment on it, or (Maj+clic) up to it from the line picked. */
+  function onComment(f: PrContentsFile, l: PrLine, i: number, extend: boolean) {
+    const pick = pickOf(f.path, l, i);
+    if (!pick || !writing.lineComment) return;
+    const was = composing;
+    composing = extend ? extendPick(was, pick) : pick;
+    // A range made from a line picked: its draft goes with it.
+    if (was && composing !== pick) {
+      const from = keyOf(lineTarget(was.path, was.side, was.line));
+      const to = keyOf(lineTarget(composing.path, composing.side, composing.line));
+      if (from !== to && app.prDrafts[from] && !app.prDrafts[to]) {
+        app.prDrafts[to] = app.prDrafts[from];
+        delete app.prDrafts[from];
+      }
+    }
+    composeFailure = null;
+  }
+
+  async function sendLine(body: string) {
+    const p = composing;
+    if (!p) return;
+    composeBusy = true;
+    composeFailure = null;
+    const f = await send({ kind: 'lineComment', path: p.path, line: p.line, startLine: p.startLine, side: p.side, body });
+    composeBusy = false;
+    if (f) {
+      composeFailure = writeFailure(f, host, online);
+      return;
+    }
+    delete app.prDrafts[keyOf(lineTarget(p.path, p.side, p.line))];
+    composing = null;
+  }
+
+  async function sendConversation(body: string) {
+    convBusy = true;
+    convFailure = null;
+    const f = await send({ kind: 'comment', body });
+    convBusy = false;
+    if (f) convFailure = writeFailure(f, host, online);
+    else delete app.prDrafts[keyOf('pr')];
+  }
+
+  /** N and P go from an open thread to the next, outside a field. */
+  function onKey(e: KeyboardEvent) {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
+    const el = e.target as HTMLElement | null;
+    if (el?.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]')) return;
+    if (e.key !== 'n' && e.key !== 'p') return;
+    if (!stops.length) return;
+    e.preventDefault();
+    next(e.key === 'n' ? 1 : -1);
+  }
+
   async function loadContents() {
     const at = { id: project.id, n: number };
     let next: PrRead<PrContents>;
@@ -143,6 +286,11 @@
       opened = {};
       unfolded = {};
       scope = 'pr';
+      composing = null;
+      composeFailure = null;
+      convFailure = null;
+      currentThread = null;
+      reveal = null;
       void load();
     });
   });
@@ -232,6 +380,68 @@
   </div>
 {/snippet}
 
+{#snippet lineThread(th: PrThread, showPlace: boolean)}
+  <PrThreadView
+    thread={th}
+    {host}
+    {writing}
+    replyKey={keyOf(`reply:${threadKey(th)}`)}
+    {send}
+    {showPlace}
+    current={currentThread === threadKey(th)}
+  />
+{/snippet}
+
+{#snippet lineComposer(p: LinePick)}
+  <div class="new-comment">
+    <p class="nc-head"><Icon name="edit" size={12} />{t('prs.page.threads.commentOn', { place: pickPlace(p) })}</p>
+    {#if composeFailure}<p class="fail" role="alert"><Icon name="info" size={13} />{composeFailure}</p>{/if}
+    <PrComposer
+      draftKey={keyOf(lineTarget(p.path, p.side, p.line))}
+      label={t('prs.page.threads.commentOn', { place: `${p.path} · ${pickPlace(p)}` })}
+      submit={t('prs.page.threads.send')}
+      {host}
+      busy={composeBusy}
+      autofocus
+      onSend={sendLine}
+      onCancel={() => (composing = null)}
+    />
+  </div>
+{/snippet}
+
+<!-- Under a line of the tab « Fichiers » (ESC-474): its threads, then the comment being written on it. -->
+{#snippet under(file: PrContentsFile, _l: PrLine, i: number)}
+  {@const here = placed.under[file.path]?.[i]}
+  {@const writingHere = !!composing && composing.path === file.path && composing.index === i}
+  {#if here || writingHere}
+    <div class="under">
+      {#each here ?? [] as th (threadKey(th))}{@render lineThread(th, false)}{/each}
+      {#if writingHere && composing}{@render lineComposer(composing)}{/if}
+    </div>
+  {/if}
+{/snippet}
+
+<!-- Above a file's lines: its threads whose line is no longer in the diff. -->
+{#snippet above(file: PrContentsFile)}
+  {@const apart = placed.stale[file.path]}
+  {#if apart?.length}
+    <div class="apart" role="group" aria-label={t('prs.page.threads.stale', { count: apart.length })}>
+      <p class="apart-h"><Icon name="clock" size={12} />{t('prs.page.threads.stale', { count: apart.length })}</p>
+      {#each apart as th (threadKey(th))}{@render lineThread(th, true)}{/each}
+    </div>
+  {/if}
+{/snippet}
+
+<!-- Above the files: the threads on files the diff does not change. -->
+{#snippet head()}
+  {#if placed.elsewhere.length}
+    <div class="apart top" role="group" aria-label={t('prs.page.threads.elsewhere', { count: placed.elsewhere.length })}>
+      <p class="apart-h"><Icon name="clock" size={12} />{t('prs.page.threads.elsewhere', { count: placed.elsewhere.length })}</p>
+      {#each placed.elsewhere as th (threadKey(th))}{@render lineThread(th, true)}{/each}
+    </div>
+  {/if}
+{/snippet}
+
 {#snippet threadCard(th: PrThread, key: string)}
   {@const place = threadPlace(th)}
   {#if th.state !== 'open' && !unfolded[key]}
@@ -248,6 +458,9 @@
           ><Icon name={th.state === 'open' ? 'circle' : th.state === 'resolved' ? 'check-c' : 'clock'} size={13} />{threadState(th)}</span
         >
         {#if place}<span class="mono place">{place}</span>{/if}
+        {#if th.path && c?.diff && !c.diffFailure}
+          <button class="link to-files" onclick={() => showThread(th)}>{t('prs.page.threads.showInFiles')}</button>
+        {/if}
         {#if th.state !== 'open'}
           <button class="icon-btn fold" aria-label={threadState(th)} aria-expanded="true" onclick={() => (unfolded[key] = false)}
             ><Icon name="up" size={12} /></button
@@ -262,7 +475,8 @@
   {/if}
 {/snippet}
 
-<main class="pr" aria-busy={reading} aria-label={t('prs.page.label', { word, number })}>
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<main class="pr" aria-busy={reading} aria-label={t('prs.page.label', { word, number })} onkeydown={onKey}>
   <header class="hd">
     <button
       class="icon-btn back"
@@ -303,21 +517,44 @@
     </div>
   </header>
 
-  <div class="tabs" role="tablist" aria-label={t('prs.page.tabs.label', { word })}>
-    {#each PR_TABS as id, i (id)}
-      <button
-        role="tab"
-        id="pr-tab-{id}"
-        aria-selected={tab === id}
-        aria-controls="pr-panel"
-        tabindex={tab === id ? 0 : -1}
-        aria-label={id === 'files' && tabCount.files ? t('prs.page.tabs.filesViewed', { count: tabCount.files }) : undefined}
-        onclick={() => (tab = id)}
-        onkeydown={(e) => onTabKey(e, i)}
-        >{t(`prs.page.tabs.${id}`)}{#if tabCount[id]}<span class="c num">{tabCount[id]}</span>{/if}</button
-      >
-    {/each}
-    <span class="ro">{t('prs.page.readOnly')}</span>
+  <div class="tabs">
+    <div class="tl" role="tablist" aria-label={t('prs.page.tabs.label', { word })}>
+      {#each PR_TABS as id, i (id)}
+        <button
+          role="tab"
+          id="pr-tab-{id}"
+          aria-selected={tab === id}
+          aria-controls="pr-panel"
+          tabindex={tab === id ? 0 : -1}
+          aria-label={id === 'files' && tabCount.files ? t('prs.page.tabs.filesViewed', { count: tabCount.files }) : undefined}
+          onclick={() => (tab = id)}
+          onkeydown={(e) => onTabKey(e, i)}
+          >{t(`prs.page.tabs.${id}`)}{#if tabCount[id]}<span class="c num">{tabCount[id]}</span>{/if}</button
+        >
+      {/each}
+    </div>
+    {#if c?.reading.threads && counts.open + counts.resolved > 0}
+      <div class="nav-th" role="group" aria-label={t('prs.page.threads.open', { count: counts.open })}>
+        <span class="cnt"
+          >{t('prs.page.threads.open', { count: counts.open })}{#if counts.resolved}{' · '}{t('prs.page.threads.resolvedCount', {
+              count: counts.resolved,
+            })}{/if}</span
+        >
+        {#if counts.open}
+          <button
+            class="icon-btn"
+            aria-label={t('prs.page.threads.previous')}
+            use:tip={t('prs.page.threads.previous')}
+            onclick={() => next(-1)}><Icon name="up" size={13} /></button
+          >
+          <button class="btn small" aria-keyshortcuts="N" use:tip={t('prs.page.threads.nextHint')} onclick={() => next(1)}
+            >{t('prs.page.threads.next')}<Icon name="down" size={12} /></button
+          >
+        {/if}
+      </div>
+    {:else}
+      <span class="ro">{t('prs.page.writesOnClick', { host })}</span>
+    {/if}
   </div>
 
   {#if !contents}
@@ -393,6 +630,19 @@
             {:else}
               {#if c.reading.threads}<p class="muted empty">{t('prs.page.emptyConversation')}</p>{/if}
             {/each}
+            {#if writing.comment}
+              <section class="thread conv-new" aria-label={t('prs.page.threads.commentPr', { word })}>
+                {#if convFailure}<p class="fail" role="alert"><Icon name="info" size={13} />{convFailure}</p>{/if}
+                <PrComposer
+                  draftKey={keyOf('pr')}
+                  label={t('prs.page.threads.commentPr', { word })}
+                  submit={t('prs.page.threads.send')}
+                  {host}
+                  busy={convBusy}
+                  onSend={sendConversation}
+                />
+              </section>
+            {/if}
           </div>
         {:else if tab === 'commits'}
           {#if !c.commits.length}
@@ -430,7 +680,20 @@
             </ul>
           {/if}
         {:else if tab === 'files'}
-          <PrFiles projectId={project.id} {number} {hostRepo} contents={c} bind:scope {source} />
+          <PrFiles
+            projectId={project.id}
+            {number}
+            {hostRepo}
+            contents={c}
+            bind:scope
+            {source}
+            {under}
+            {above}
+            {head}
+            threads={(f) => fileThreads[f.path] ?? NO_THREADS}
+            {reveal}
+            onComment={writing.lineComment ? onComment : undefined}
+          />
         {:else if tab === 'checks'}
           {#if !detail}
             <div class="state" role="status"><span class="spinner" aria-hidden="true"></span></div>
@@ -649,6 +912,97 @@
     color: var(--dim);
     font-size: 11.5px;
     font-weight: 500;
+  }
+  .tl {
+    display: flex;
+    gap: 2px;
+    align-items: stretch;
+    min-width: 0;
+  }
+  .nav-th {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--soft);
+    white-space: nowrap;
+  }
+  .nav-th .cnt {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .btn.small {
+    height: 26px;
+    padding: 0 9px;
+    font-size: 12px;
+  }
+  /* Under a line of the tab « Fichiers »: kept in the width of the diff's box while its lines scroll sideways. */
+  .under {
+    position: sticky;
+    left: 0;
+    width: var(--under-w, 100%);
+    box-sizing: border-box;
+    padding: 2px 0;
+    font-family: var(--font);
+    line-height: 1.5;
+    white-space: normal;
+  }
+  .apart {
+    display: grid;
+    gap: 2px;
+    padding: 6px 0 4px;
+    border-bottom: 1px solid var(--line);
+    font-family: var(--font);
+  }
+  .apart.top {
+    margin-bottom: 10px;
+    border: none;
+    border-radius: 10px;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    background: var(--well);
+  }
+  .apart-h {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 12px;
+    color: var(--dim);
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+  .new-comment {
+    margin: 6px 12px 8px 44px;
+    border-radius: 10px;
+    background: var(--raise);
+    box-shadow:
+      inset 0 0 0 1px var(--brain),
+      0 0 0 1px oklch(from var(--brain) l c h / 0.3);
+  }
+  .nc-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    padding: 7px 12px 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--brain);
+  }
+  .fail {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin: 8px 12px 0;
+    padding: 6px 9px;
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--del);
+    background: oklch(from var(--del) l c h / 0.07);
+    box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.35);
+  }
+  .to-files {
+    font-size: 11.5px;
   }
   .ro {
     margin-left: auto;

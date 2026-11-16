@@ -1,9 +1,9 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte';
+  import { untrack, type Snippet } from 'svelte';
   import { t } from '../../lib/i18n';
   import { tokenize, type Piece } from '../../lib/markdown';
   import { nearView } from '../../lib/nearview';
-  import { LINE_PX, chunks, editorLine, foldReason, langOf, sides, statusLetter } from '../../lib/prfiles';
+  import { CHUNK_LINES, LINE_PX, chunks, editorLine, foldReason, langOf, sides, statusLetter } from '../../lib/prfiles';
   import { tip } from '../../lib/tip';
   import type { PrContentsFile, PrLine } from '../../lib/types';
   import Icon from '../Icon.svelte';
@@ -12,7 +12,9 @@
   // l'éditeur », « Vu ») kept at the top while it scrolls, then its unified diff colored by its language. A binary, a
   // generated or a large file is folded until « Afficher »; a file marked « Vu » folds itself. Its lines are drawn by
   // parts as they come near the screen (`root`, the list's scrolling box), each part keeping its height before. `under`
-  // draws what goes under a line (the threads of PR-4 and PR-5), after it, in the flow.
+  // draws what goes under a line (the threads of PR-4 and PR-5), after it, in the flow; `above` what goes above its lines
+  // (its threads apart, ESC-474). `onComment` offers « + » on each line to comment it (Maj+clic: up to it). `reveal` opens
+  // it and draws the part of a line, for « Suivante » to reach its thread.
   let {
     file,
     viewed,
@@ -21,6 +23,11 @@
     onViewed,
     onOpen,
     under,
+    above,
+    openThreads = 0,
+    marked,
+    reveal = null,
+    onComment,
   }: {
     file: PrContentsFile;
     viewed: boolean;
@@ -29,6 +36,11 @@
     onViewed: (on: boolean) => void;
     onOpen: (line: number | null) => void;
     under?: Snippet<[PrContentsFile, PrLine, number]>;
+    above?: Snippet<[PrContentsFile]>;
+    openThreads?: number;
+    marked?: Record<number, boolean>;
+    reveal?: { index: number; seq: number } | null;
+    onComment?: (line: PrLine, index: number, extend: boolean) => void;
   } = $props();
 
   const reason = $derived(foldReason(file));
@@ -52,15 +64,17 @@
 
   /** Each line's colored pieces, once its file came near: null before, or for a language the app does not color. */
   let colored = $state<(Piece[] | null)[] | null>(null);
-  let coloring = false;
+  /** The lines colored (or being colored): another diff of the file (a commit pushed) is colored again. */
+  let coloring: PrLine[] | null = null;
   async function color() {
     const lang = langOf(file.path);
-    if (coloring || !lang || file.lines.length > 3000) return;
-    coloring = true;
-    const s = sides(file.lines);
+    const lines = file.lines;
+    if (coloring === lines || !lang || lines.length > 3000) return;
+    coloring = lines;
+    const s = sides(lines);
     try {
       const [tip, base] = await Promise.all([tokenize(s.tip, lang), s.base.length ? tokenize(s.base, lang) : Promise.resolve([])]);
-      if (!tip || !base) return;
+      if (!tip || !base || coloring !== lines) return;
       colored = s.at.map((a) => (a.i < 0 ? null : ((a.side === 'tip' ? tip : base)[a.i] ?? null)));
     } catch (e) {
       console.warn('diff colouring failed', e);
@@ -71,6 +85,32 @@
     near[i] = true;
     void color();
   }
+
+  // Its lines changed (read again after a push): the old colours go, the new lines are colored once drawn.
+  let seenText: string | null = null;
+  $effect.pre(() => {
+    const text = file.lines.map((l) => l.kind + l.text).join('\n');
+    if (seenText !== null && text !== seenText) {
+      colored = null;
+      if (untrack(() => Object.keys(near).length)) void color();
+    }
+    seenText = text;
+  });
+
+  // « Suivante » reached a thread of this file: unfolded, the part of its line drawn, then the thread brought into view.
+  let linesW = $state(0);
+  let seenReveal = 0;
+  $effect(() => {
+    const r = reveal;
+    if (!r || r.seq === seenReveal) return;
+    seenReveal = r.seq;
+    closed = false;
+    shown = true;
+    if (r.index >= 0) {
+      const pi = Math.floor(r.index / CHUNK_LINES);
+      if (!near[pi]) partNear(pi);
+    }
+  });
 
   const shownPath = $derived(file.previousPath && file.previousPath !== file.path ? `${file.previousPath} → ${file.path}` : file.path);
 </script>
@@ -88,6 +128,9 @@
     {#if !file.binary}<span class="stat mono"><span class="add">+{file.additions}</span><span class="del">−{file.deletions}</span></span
       >{/if}
     {#if file.generated}<span class="tag">{t('prs.page.files.generatedTag')}</span>{/if}
+    {#if openThreads}<span class="thc" aria-label={t('prs.page.threads.fileOpen', { count: openThreads, path: file.path })}
+        ><Icon name="edit" size={11} />{openThreads}</span
+      >{/if}
     <span class="sp"></span>
     {#if canOpen && file.status !== 'removed'}
       <button
@@ -109,6 +152,7 @@
   </header>
 
   {#if !closed}
+    {#if above}{@render above(file)}{/if}
     {#if reason && !shown}
       <div class="fold">
         <span>{t(`prs.page.files.folded.${reason}`, { count: changedLines })}</span>
@@ -119,7 +163,13 @@
     {:else if !file.lines.length}
       <div class="fold">{t(file.binary ? 'prs.page.files.folded.binary' : 'prs.page.files.noLines')}</div>
     {:else if open}
-      <div class="lines" role="table" aria-label={t('prs.page.files.linesOf', { path: file.path })}>
+      <div
+        class="lines"
+        role="table"
+        aria-label={t('prs.page.files.linesOf', { path: file.path })}
+        bind:clientWidth={linesW}
+        style:--under-w="{linesW}px"
+      >
         {#each parts as part, pi (pi)}
           {#if near[pi]}
             <div class="part">
@@ -129,7 +179,13 @@
                   <div class="row hunk" role="row"><span class="hh" role="cell">{l.text}</span></div>
                 {:else}
                   {@const at = canOpen ? editorLine(file, i) : null}
-                  <div class="row {l.kind === '+' ? 'add' : l.kind === '-' ? 'del' : 'ctx'}" role="row" data-new={l.new} data-old={l.old}>
+                  <div
+                    class="row {l.kind === '+' ? 'add' : l.kind === '-' ? 'del' : 'ctx'}"
+                    class:marked={marked?.[i]}
+                    role="row"
+                    data-new={l.new}
+                    data-old={l.old}
+                  >
                     <span class="no" role="cell">{l.old ?? ''}</span>
                     {#if at}
                       <span class="no" role="cell"
@@ -143,7 +199,17 @@
                     {:else}
                       <span class="no" role="cell">{l.new ?? ''}</span>
                     {/if}
-                    <span class="sg" role="cell">{l.kind === '+' ? '+' : l.kind === '-' ? '−' : ''}</span>
+                    <span class="sg" role="cell"
+                      >{#if onComment}<button
+                          class="plus"
+                          tabindex="-1"
+                          aria-label={l.kind === '-'
+                            ? t('prs.page.threads.commentLineRemoved', { line: l.old ?? '' })
+                            : t('prs.page.threads.commentLine', { line: l.new ?? '' })}
+                          use:tip={t('prs.page.threads.commentLineHint')}
+                          onclick={(e) => onComment(l, i, e.shiftKey)}><Icon name="plus" size={11} /></button
+                        >{/if}<span class="sgn">{l.kind === '+' ? '+' : l.kind === '-' ? '−' : ''}</span></span
+                    >
                     <span class="tx" role="cell"
                       >{#if colored?.[i]}{#each colored[i]! as p, pi2 (pi2)}<span style:color={p.color}>{p.text}</span
                           >{/each}{:else}{l.text}{/if}</span
@@ -348,8 +414,41 @@
     background: oklch(from var(--del) l c h / 0.09);
   }
   .sg {
+    position: relative;
     text-align: center;
     user-select: none;
+  }
+  /* « + » to comment a line: shown on the row hovered, over its sign. */
+  .plus {
+    all: unset;
+    position: absolute;
+    inset: 1px 0;
+    display: none;
+    place-items: center;
+    border-radius: 4px;
+    color: var(--brain);
+    background: oklch(from var(--brain) l c h / 0.22);
+    box-shadow: inset 0 0 0 1px oklch(from var(--brain) l c h / 0.6);
+    cursor: pointer;
+  }
+  .row:hover .plus,
+  .plus:focus-visible {
+    display: grid;
+  }
+  .row.marked {
+    box-shadow: inset 2px 0 0 var(--brain);
+  }
+  .thc {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 650;
+    color: var(--wait);
+    box-shadow: inset 0 0 0 1px oklch(from var(--wait) l c h / 0.45);
   }
   .tx {
     padding-right: 16px;

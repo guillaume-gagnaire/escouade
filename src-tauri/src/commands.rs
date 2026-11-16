@@ -2260,6 +2260,27 @@ pub async fn pr_commit_files(
         .await)
 }
 
+/// A write on a pull request of the project, on the user's click in its view (ESC-474): a comment of the
+/// conversation or on lines, an answer, a thread resolved or opened again, in the user's name on its host. Only the
+/// window calls it: no tool of the MCP server, no agent.
+#[tauri::command]
+pub async fn pr_write(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+    host_repo: Option<String>,
+    write: crate::prwrite::PrWrite,
+) -> Res<crate::prview::Read<bool>> {
+    Ok(core
+        .pr_write(
+            &project_id,
+            number,
+            host_repo.as_deref().unwrap_or(""),
+            write,
+        )
+        .await)
+}
+
 /// The view of a pull request (ESC-457): its checks, reviews, comments and deployments, read by
 /// whoever holds it in the project; or why the host did not give them.
 #[tauri::command]
