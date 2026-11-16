@@ -121,7 +121,9 @@ async fn the_acting_tools_say_what_they_take_and_that_they_change_things() {
         );
         // And of the board's flow, only an approval and a deletion cannot be taken back.
         let destructive = match *name {
-            "approve_ticket" | "delete_ticket" | "stop_background_work" => Some(true),
+            "approve_ticket" | "delete_ticket" | "delete_agent" | "stop_background_work" => {
+                Some(true)
+            }
             // No agent is touched by a folder's deletion: it only puts its agents out of it.
             "delete_folder" | "create_folder" | "update_folder" | "move_agent" => Some(false),
             "reject_ticket" | "resume_ticket" | "resolve_conflict" | "dismiss_block"
@@ -966,8 +968,17 @@ async fn an_agent_is_created_in_a_project_with_its_first_message_and_the_user_s_
     .await;
     let id = v["id"].as_str().unwrap().to_string();
     assert_eq!(v["name"], "agent-1");
-    assert_eq!(v.as_object().unwrap().len(), 3);
+    assert_eq!(v.as_object().unwrap().len(), 6);
     assert_eq!(v["folder"], serde_json::Value::Null);
+    // What it took, its account's defaults when nothing was asked.
+    let took = h.agent(&id);
+    assert_eq!(v["account"], "Principal");
+    // Made from outside Escouade: no agent may ask for its deletion.
+    assert_eq!(took.created_by, None);
+    assert_eq!(
+        (v["model"].as_str(), v["effort"].as_str()),
+        (Some(took.model.as_str()), Some(took.effort.as_str()))
+    );
     // Made as the window makes one, but the sidebar's selection is the user's. Its first message
     // names it, in the background: its name is waited for, then read as it is.
     h.wait("its name", |h| h.agent(&id).named).await;
@@ -1402,6 +1413,58 @@ async fn a_running_turn_is_interrupted_by_another_and_never_by_the_agent_itself(
     let unknown = refused(&from_b, "stop_agent", json!({ "agent": "zzz" })).await;
     assert!(unknown.contains("Aucun agent « zzz »"), "{unknown}");
     from_b.cancel().await.unwrap();
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn an_agent_asks_the_user_to_delete_an_agent_it_made_and_no_other() {
+    let h = harness("mcp-act-delete-agent");
+    let p = project(&h).await;
+    let chef = put_agent(&h, &p, "chef", 1);
+    let aide = put_agent(&h, &p, "aide", 2);
+    let autre = put_agent(&h, &p, "autre", 3);
+    h.core.agent(&aide.id).unwrap().lock().meta.created_by = Some(chef.id.clone());
+    let asked = |h: &Harness| {
+        h.events
+            .lock()
+            .iter()
+            .filter(|e| e["type"] == "agentDeleteAsked")
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    let c = as_agent(&h, &chef.id).await;
+
+    // One it made: the user is asked, under its name; nothing is deleted here.
+    let v = read(
+        &c,
+        "delete_agent",
+        json!({ "agent": "aide", "worktree": false }),
+    )
+    .await;
+    assert_eq!(
+        (v["id"].as_str(), v["asked"].as_bool()),
+        (Some(aide.id.as_str()), Some(true))
+    );
+    assert_eq!(
+        asked(&h),
+        [json!({ "type": "agentDeleteAsked", "id": aide.id, "by": "chef", "worktree": false })]
+    );
+    assert!(h.core.agent(&aide.id).is_ok());
+    assert_eq!(entry(&h).outcome, "ok");
+
+    // Not one it did not make, not itself: refused, and the user is not asked.
+    let other = refused(&c, "delete_agent", json!({ "agent": autre.id })).await;
+    assert!(other.contains("que tu as créés"), "{other}");
+    let itself = refused(&c, "delete_agent", json!({ "agent": "chef" })).await;
+    assert!(itself.contains("propre suppression"), "{itself}");
+    assert_eq!(asked(&h).len(), 1);
+
+    // Claude outside Escouade made none.
+    let out = external(&h).await;
+    refused(&out, "delete_agent", json!({ "agent": aide.id })).await;
+    assert_eq!(asked(&h).len(), 1);
+    out.cancel().await.unwrap();
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }
@@ -2259,6 +2322,84 @@ async fn a_ticket_is_started_while_an_account_is_free_for_its_project_and_refuse
         ),
         ("start_ticket", "refused", Some(none.as_str()))
     );
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn an_agent_is_created_on_the_account_and_with_the_effort_asked_for_and_refused_those_it_may_not_take(
+) {
+    let h = harness("mcp-act-create-agent-account-effort");
+    h.project(false).await;
+    with_pro(&h);
+    let c = external(&h).await;
+
+    // Its project's accounts are listed, for the caller to choose.
+    let rows = read(&c, "list_projects", json!({})).await;
+    let names: Vec<&str> = rows[0]["accounts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["Principal", "Pro"]);
+
+    // Named in any case, with an effort: taken, and said.
+    let v = read(
+        &c,
+        "create_agent",
+        json!({ "project": "demo", "message": "Sur Pro", "account": "PRO", "effort": "High" }),
+    )
+    .await;
+    let id = v["id"].as_str().unwrap().to_string();
+    let meta = h.agent(&id);
+    assert_eq!(
+        (meta.account.as_str(), meta.effort.as_str()),
+        ("pro", "high")
+    );
+    assert_eq!(
+        (&v["account"], &v["effort"]),
+        (&json!("Pro"), &json!("high"))
+    );
+    turn_over(&h, &id).await;
+
+    // Auto is the automatic choice and its account's effort, not an empty one.
+    let v = read(
+        &c,
+        "create_agent",
+        json!({ "project": "demo", "message": "Auto", "account": "auto", "effort": "auto" }),
+    )
+    .await;
+    let auto = h.agent(v["id"].as_str().unwrap());
+    assert_eq!(auto.account, PRINCIPAL);
+    assert!(!auto.effort.is_empty());
+    turn_over(&h, &auto.id).await;
+
+    let count = h.core.agents.read().len();
+    let ask = |account: &str| json!({ "project": "demo", "message": "Non", "account": account });
+    // Unknown, reserved to another project, switched off, past its quota: refused, with why.
+    let unknown = refused(&c, "create_agent", ask("Nulle")).await;
+    assert!(unknown.contains("Nulle"), "{unknown}");
+    h.core.settings.write().accounts[1].projects = vec!["ailleurs".into()];
+    let reserved = refused(&c, "create_agent", ask("pro")).await;
+    assert!(reserved.contains("réservé"), "{reserved}");
+    h.core.settings.write().accounts[1].projects.clear();
+    h.core.settings.write().accounts[1].active = false;
+    refused(&c, "create_agent", ask("pro")).await;
+    h.core.settings.write().accounts[1].active = true;
+    let end = h.core.pause_now() + 3_600_000;
+    used_up(&h, "pro", end);
+    let held = refused(&c, "create_agent", ask("pro")).await;
+    assert!(held.contains(&clock(end + RESUME_MARGIN_MS)), "{held}");
+    // An effort no harness takes.
+    let effort = refused(
+        &c,
+        "create_agent",
+        json!({ "project": "demo", "message": "Non", "effort": "extreme" }),
+    )
+    .await;
+    assert!(effort.contains("extreme"), "{effort}");
+    assert_eq!(h.core.agents.read().len(), count);
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }
@@ -5740,6 +5881,9 @@ async fn a_named_folder_is_made_or_reused() {
     let f = folder_holding(&h, &p.id, &boss.id).unwrap();
     assert_eq!((f.name.as_str(), f.named), ("Front", true));
     assert_eq!(f.principal.as_deref(), Some(boss.id.as_str()));
+    // Its maker is kept: the one agent that may ask for its deletion (`delete_agent`).
+    let made = h.agent(v["id"].as_str().unwrap());
+    assert_eq!(made.created_by.as_deref(), Some(boss.id.as_str()));
     assert_eq!(v["folder"], json!({ "id": f.id, "name": "Front" }));
     // Reused by its name in any case, then by its id.
     let v = read(

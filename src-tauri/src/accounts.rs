@@ -1633,9 +1633,9 @@ fn reserved(account: &Account) -> anyhow::Error {
 }
 
 /// Why the account `id` may not be the one a ticket of `project` on `engine` is set to (« Compte »
-/// in its form, ESC-153): one the settings do not know, of another harness, switched off, reserved
-/// to other projects, or shared while the private project goes to its own accounts alone. None
-/// when it may.
+/// in its form, ESC-153), or the one `create_agent` asks for a new agent: one the settings do not
+/// know, of another harness, switched off, reserved to other projects, or shared while the private
+/// project goes to its own accounts alone. None when it may.
 pub(crate) fn ticket_refusal(
     settings: &Settings,
     project: &Project,
@@ -1651,8 +1651,8 @@ pub(crate) fn ticket_refusal(
         let (theirs, ours) = (engine::by_name(account.engine), engine::by_name(engine));
         return Some(anyhow::anyhow!(tr_in!(
             lang,
-            "Le compte « {name} » est un compte {theirs}, et ce ticket tourne sur {ours}.",
-            "The account “{name}” is a {theirs} account, and this ticket runs on {ours}."
+            "Le compte « {name} » est un compte {theirs}, pas {ours}.",
+            "The account “{name}” is a {theirs} account, not a {ours} one."
         )));
     }
     if !account.active {

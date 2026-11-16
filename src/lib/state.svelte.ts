@@ -415,6 +415,8 @@ class AppState {
   /** The list of an agent's background tasks under its card, unfolded or folded by the reader, by agent (absent: unfolded while one runs). */
   bgOpen = $state<Record<string, boolean>>({});
   modal = $state<Modal | null>(null);
+  /** The deletions agents asked for (`delete_agent`), each confirmed in its own modal, one after another (the sidebar's). */
+  deleteAsks = $state<{ id: string; by: string; worktree: boolean | null }[]>([]);
   toasts = $state<Toast[]>([]);
   now = $state(Date.now());
   gitTick = $state(0);
@@ -878,6 +880,10 @@ class AppState {
         if (e.agent.archived && !prev?.archived) this.settlePanes();
         break;
       }
+      case 'agentDeleteAsked':
+        // Asked twice before the user answers: one modal.
+        if (!this.deleteAsks.some((x) => x.id === e.id)) this.deleteAsks.push({ id: e.id, by: e.by, worktree: e.worktree });
+        break;
       case 'agentRemoved':
         this.runHooks(this.removalHooks, e.id);
         workflows.drop(e.projectId, e.id);
@@ -1287,6 +1293,8 @@ class AppState {
   selectAgent(id: string) {
     const a = this.agents[id];
     if (!a) return;
+    // Opened is seen, even under the editor that stays open over it (`markSeen` sees nothing then).
+    delete this.attention[id];
     if (this.subView[id]) this.subView[id] = null;
     if (this.taskView[id]) this.taskView[id] = null;
     this.subFocus = { from: null, back: null };

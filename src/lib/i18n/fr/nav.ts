@@ -151,6 +151,7 @@ export default {
     archiveBody: 'Son ticket {key} repartira « À faire ».',
     archiveConfirm: 'Archiver',
     deleteTitle: "Supprimer l'agent « {name} » ?",
+    deleteAskedTitle: "L'agent « {by} » demande de supprimer l'agent « {name} ». Le supprimer ?",
     deleteBody:
       'Le processus de {engine} est arrêté et la conversation est retirée de l’application (la session {harness} reste sur le disque).',
     deleteWorktree: 'Supprimer aussi le worktree et la branche {branch}',

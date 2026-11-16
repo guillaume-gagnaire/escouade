@@ -125,6 +125,7 @@ export default defineZone('nav', {
     archiveBody: 'Its ticket {key} goes back to “To do”.',
     archiveConfirm: 'Archive',
     deleteTitle: 'Delete the agent “{name}”?',
+    deleteAskedTitle: 'The agent “{by}” asks to delete the agent “{name}”. Delete it?',
     deleteBody: 'The {engine} process is stopped and the conversation is removed from the app (the {harness} session stays on disk).',
     deleteWorktree: 'Also delete the worktree and the branch {branch}',
   },

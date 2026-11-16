@@ -839,6 +839,8 @@ pub struct AgentOptions {
     pub copy_of: Option<CopyOf>,
     /// The Claude account it runs on (an `Account`'s id); None: Principal.
     pub account: Option<String>,
+    /// The agent that asks for it through `create_agent` (`AgentMeta::created_by`).
+    pub created_by: Option<String>,
     /// A worktree of its own (true) or the project's folder (false), whatever the project does by
     /// default; None: as the project does. `worktree` and `copy_of` name theirs and win.
     pub isolated: Option<bool>,
@@ -6664,6 +6666,7 @@ impl<R: Runtime> Core<R> {
             ),
             port_base: o.port_base,
             discussion: o.discussion.clone(),
+            created_by: o.created_by.clone(),
             ..Default::default()
         };
         // The one asked for if the settings know it as an account of the agent's harness

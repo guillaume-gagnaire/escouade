@@ -254,6 +254,7 @@ fn naming_calls() -> Vec<(&'static str, Names, Value)> {
             json!({ "agent": "{}", "text": "Bonjour" }),
         ),
         ("stop_agent", Names::Agent, json!({ "agent": "{}" })),
+        ("delete_agent", Names::Agent, json!({ "agent": "{}" })),
         (
             "move_agent",
             Names::Agent,

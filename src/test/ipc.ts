@@ -474,6 +474,7 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   workflows.reset();
   app.diffSplit = false;
   app.modal = null;
+  app.deleteAsks = [];
   app.toasts = [];
   app.update = null;
   app.restartAt = null;

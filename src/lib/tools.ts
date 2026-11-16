@@ -55,6 +55,7 @@ const ESCOUADE_TOOLS: Record<string, Key> = {
   create_agent: 'mcp.tools.createAgent',
   send_message: 'mcp.tools.sendMessage',
   stop_agent: 'mcp.tools.stopAgent',
+  delete_agent: 'mcp.tools.deleteAgent',
   list_background_work: 'mcp.tools.listBackgroundWork',
   get_background_output: 'mcp.tools.getBackgroundOutput',
   stop_background_work: 'mcp.tools.stopBackgroundWork',
