@@ -65,7 +65,8 @@ CREATE TABLE IF NOT EXISTS versions (
 CREATE TABLE IF NOT EXISTS outbox (
     n INTEGER PRIMARY KEY AUTOINCREMENT,
     digest BLOB NOT NULL,
-    op BLOB NOT NULL
+    op BLOB NOT NULL,
+    fence BLOB
 );
 ";
 
@@ -96,6 +97,31 @@ pub struct ProjectMeta {
     pub clock: Clock,
 }
 
+/// A write of a ticket's holder: the claim's opaque id and the token it holds it under (TS-6).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Fence {
+    pub claim: [u8; 16],
+    pub token: u64,
+}
+
+impl Fence {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut out = self.claim.to_vec();
+        out.extend_from_slice(&self.token.to_be_bytes());
+        out
+    }
+
+    pub fn from_bytes(b: &[u8]) -> Option<Fence> {
+        if b.len() != 24 {
+            return None;
+        }
+        Some(Fence {
+            claim: b[..16].try_into().ok()?,
+            token: u64::from_be_bytes(b[16..].try_into().ok()?),
+        })
+    }
+}
+
 /// An object as the interface reads it: its fields, each the last write.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct ObjectView {
@@ -114,6 +140,8 @@ pub struct Conflict {
     /// The value that won.
     pub winner: Value,
     pub winner_stamp: Hlc,
+    /// The value both writes were made from (their base), when the copy has it: the three-way merge's base.
+    pub base: Option<Value>,
 }
 
 /// A version of a document.
@@ -140,6 +168,10 @@ pub type WriteRow = (Vec<u8>, String, Vec<u8>, Option<Vec<u8>>, String);
 pub type VersionRow = (Vec<u8>, Vec<u8>, String, Vec<u8>, String);
 /// An operation of the outbox: its place, its digest, its bytes.
 pub type Waiting = (i64, [u8; 32], Vec<u8>);
+/// An operation of the outbox taken back: its bytes, its fence.
+pub type Unsent = (Vec<u8>, Option<Fence>);
+/// A row of the outbox read whole: digest, bytes, fence.
+type OutboxRow = (Vec<u8>, Vec<u8>, Option<Vec<u8>>);
 
 /// The state, as a snapshot holds it and as two copies compare: every row of the state, in order.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -191,6 +223,15 @@ impl Replica {
 
     fn with(conn: Connection) -> Result<Self, Error> {
         conn.execute_batch(SCHEMA).map_err(db)?;
+        // A copy made before the claims (TS-6): the outbox's fence added.
+        let has: bool = conn
+            .prepare("SELECT 1 FROM pragma_table_info('outbox') WHERE name = 'fence'")
+            .and_then(|mut s| s.exists([]))
+            .map_err(db)?;
+        if !has {
+            conn.execute_batch("ALTER TABLE outbox ADD COLUMN fence BLOB")
+                .map_err(db)?;
+        }
         Ok(Self {
             inner: Mutex::new(conn),
         })
@@ -674,6 +715,17 @@ impl Replica {
                 .map_err(db)?
                 .collect::<Result<_, _>>()
                 .map_err(db)?;
+            let base_value: Option<String> = match &base {
+                Some(b) => c
+                    .query_row(
+                        "SELECT value FROM writes WHERE object = ?1 AND field = ?2 AND stamp = ?3",
+                        params![id.0.as_slice(), field, b],
+                        |r| r.get(0),
+                    )
+                    .optional()
+                    .map_err(db)?,
+                None => None,
+            };
             for (s, v) in losers {
                 out.push(Conflict {
                     field: field.clone(),
@@ -681,6 +733,7 @@ impl Replica {
                     stamp: stamp_of(&s)?,
                     winner: value_of(&value),
                     winner_stamp: stamp_of(&stamp)?,
+                    base: base_value.as_deref().map(value_of),
                 });
             }
         }
@@ -734,13 +787,68 @@ impl Replica {
 
     /// Puts an operation of this device in the outbox, after it.
     pub fn queue(&self, digest: &[u8; 32], op: &[u8]) -> Result<(), Error> {
+        self.queue_fenced(digest, op, None)
+    }
+
+    /// The same, for a write of a ticket's holder (TS-6): it goes with the claim's id and token, and the server
+    /// refuses it once another device took the ticket over.
+    pub fn queue_fenced(
+        &self,
+        digest: &[u8; 32],
+        op: &[u8],
+        fence: Option<&Fence>,
+    ) -> Result<(), Error> {
         self.conn()
             .execute(
-                "INSERT INTO outbox (digest, op) VALUES (?1, ?2)",
-                params![digest.as_slice(), op],
+                "INSERT INTO outbox (digest, op, fence) VALUES (?1, ?2, ?3)",
+                params![digest.as_slice(), op, fence.map(Fence::to_bytes)],
             )
             .map_err(db)?;
         Ok(())
+    }
+
+    /// The fence of an operation of the outbox, if it has one.
+    pub fn outbox_fence(&self, n: i64) -> Result<Option<Fence>, Error> {
+        let bytes: Option<Option<Vec<u8>>> = self
+            .conn()
+            .query_row("SELECT fence FROM outbox WHERE n = ?1", [n], |r| r.get(0))
+            .optional()
+            .map_err(db)?;
+        Ok(bytes.flatten().and_then(|b| Fence::from_bytes(&b)))
+    }
+
+    /// Takes every operation of the outbox back, in order, with its fence: they leave the journal too (not sent, they
+    /// are this device's alone), and the state is replayed without them. The caller writes again those it keeps.
+    pub fn take_unsent(&self) -> Result<Vec<Unsent>, Error> {
+        self.atomically(|r| {
+            let rows: Vec<OutboxRow> = {
+                let c = r.conn();
+                let mut stmt = c
+                    .prepare("SELECT digest, op, fence FROM outbox ORDER BY n")
+                    .map_err(db)?;
+                let rows = stmt
+                    .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+                    .map_err(db)?;
+                rows.collect::<Result<_, _>>().map_err(db)?
+            };
+            for (digest, _, _) in &rows {
+                r.conn()
+                    .execute(
+                        "DELETE FROM ops WHERE digest = ?1 AND seq IS NULL",
+                        [digest.as_slice()],
+                    )
+                    .map_err(db)?;
+            }
+            r.conn().execute("DELETE FROM outbox", []).map_err(db)?;
+            Ok(rows
+                .into_iter()
+                .map(|(_, op, fence)| (op, fence.and_then(|f| Fence::from_bytes(&f))))
+                .collect())
+        })
+        .and_then(|taken| {
+            self.rebuild()?;
+            Ok(taken)
+        })
     }
 
     /// The first operation waiting: its place, its digest and its bytes.

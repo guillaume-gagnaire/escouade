@@ -19,6 +19,12 @@ pub struct Metrics {
     pub project_entries: AtomicU64,
     pub entry_bytes: AtomicU64,
     pub epoch_conflicts: AtomicU64,
+    /// Tickets taken or given back (TS-6).
+    pub claims: AtomicU64,
+    /// Claims refused: another device held the ticket.
+    pub claims_refused: AtomicU64,
+    /// Calls refused: the device had no access to the project.
+    pub refused_access: AtomicU64,
     pub files_written: AtomicU64,
     pub file_bytes: AtomicU64,
     pub live_connections: AtomicI64,
@@ -60,7 +66,7 @@ impl Metrics {
                 escape(route)
             );
         }
-        let counters: [(&str, &str, &AtomicU64); 9] = [
+        let counters: [(&str, &str, &AtomicU64); 12] = [
             (
                 "escouade_team_auth_failures_total",
                 "Refused sign-ins and sessions.",
@@ -90,6 +96,21 @@ impl Metrics {
                 "escouade_team_epoch_conflicts_total",
                 "Commits refused: their epoch had one already.",
                 &self.epoch_conflicts,
+            ),
+            (
+                "escouade_team_claims_total",
+                "Tickets taken or given back.",
+                &self.claims,
+            ),
+            (
+                "escouade_team_claims_refused_total",
+                "Claims refused: another device held the ticket.",
+                &self.claims_refused,
+            ),
+            (
+                "escouade_team_access_refused_total",
+                "Calls refused: no access to the project.",
+                &self.refused_access,
             ),
             (
                 "escouade_team_files_written_total",

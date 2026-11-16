@@ -165,6 +165,24 @@ impl Server {
                     .layer(Extension(entry_max)),
             )
             .route(
+                "/v1/projects/{project}/access",
+                get(api::get_access).put(api::put_access),
+            )
+            .route("/v1/projects/{project}/claims", get(api::list_claims))
+            .route(
+                "/v1/projects/{project}/claims/{ticket}",
+                post(api::take_claim),
+            )
+            .route(
+                "/v1/projects/{project}/claims/{ticket}/renew",
+                post(api::renew_claim),
+            )
+            .route(
+                "/v1/projects/{project}/claims/{ticket}/release",
+                post(api::release_claim),
+            )
+            .route("/v1/projects/{project}/keys", post(api::next_key))
+            .route(
                 "/v1/projects/{project}/snapshot",
                 get(api::get_snapshot)
                     .put(api::put_snapshot)

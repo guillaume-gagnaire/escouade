@@ -378,6 +378,8 @@ pub struct TicketDraft {
     /// « Partager avec l'équipe » (ESC-190): shared, or no longer; None, absent: as it is (a new
     /// ticket: as « Partager chaque nouveau ticket » of its project says).
     pub shared: Option<bool>,
+    /// « Ne pas partager » of a new ticket of a team's Kanban (TS-6): it stays on this machine. None: shared.
+    pub team_local: Option<bool>,
     /// The pages and decisions it implements (« Planifier », ESC-262); None: as they are.
     pub pages: Option<Vec<String>>,
     pub decisions: Option<Vec<crate::docs::Ref>>,
@@ -517,9 +519,11 @@ impl Core {
         let project = self.project(project_id)?;
         // Shared from the start (ESC-190): asked, or the project's « Partager chaque nouveau
         // ticket » when this machine's user gave a name. Asked without a name: refused first.
-        let share = d
-            .shared
-            .unwrap_or(project.share_new && !self.me_in(&project).name.is_empty());
+        // A team's Kanban shares through its journal, never by files (C5-A).
+        let team_board = project.team.is_some() && project.team_project.is_some();
+        let share = !team_board
+            && d.shared
+                .unwrap_or(project.share_new && !self.me_in(&project).name.is_empty());
         if d.shared == Some(true) && self.me_in(&project).name.is_empty() {
             return Err(crate::sharing::name_missing());
         }
@@ -588,6 +592,10 @@ impl Core {
             }
             let n = p.board.next_number.max(1);
             p.board.next_number = n + 1;
+            // A team's: its key comes from the server's counter (TS-6); this one is of this machine until then.
+            if team_board {
+                return Ok(crate::teamboard::provisional_key(&p.board.prefix, n));
+            }
             Ok(format!("{}-{n}", p.board.prefix))
         })();
         let key = match key {
@@ -618,8 +626,14 @@ impl Core {
             decisions: d.decisions.clone().unwrap_or_default(),
             forced: d.scheduled.is_some(),
             scheduled: d.scheduled.clone(),
+            team_local: team_board && d.team_local.unwrap_or(false),
             ..Default::default()
         };
+        // The team's from the start (TS-6): its object comes at the next reading, and until then the autopilot leaves it
+        // as any ticket of the team it was not given.
+        if team_board && !ticket.team_local {
+            ticket.team = Some(TeamTicket::default());
+        }
         let pushed = {
             // Lock order: projects, then tickets. The project is checked again while both are
             // held (the rank and the push in one go): `remove_project`'s write of the projects
@@ -1110,6 +1124,9 @@ impl Core {
             id: id.to_string(),
             project_id: t.project_id.clone(),
         });
+        // Of a team's Kanban: it leaves the journal too (TS-6).
+        self.team_forget_ticket(&t);
+        self.team_boards_soon();
         // Shared: its file goes too, to be committed (« Supprimer pour l'équipe », ESC-190).
         if let (Some(s), Ok(p)) = (&t.shared, self.project(&t.project_id)) {
             crate::sharing::remove_file_of(&crate::sharing::dir_of(&p), &s.id);
@@ -1859,6 +1876,16 @@ impl Core {
     async fn start_ticket(self: &Arc<Self>, project: &Project, id: &str) {
         // From "En cours" to its agent's first turn, with no agent at work for a while.
         let _working = self.working();
+        // A ticket of the team is taken through its server first (TS-6): held elsewhere, or offline, it does not
+        // start, and one launched by hand says why (the autopilot's waits).
+        if let Err(why) = self.team_take(project, id).await {
+            if self.ticket(id).is_ok_and(|t| t.forced) {
+                self.refuse_start(project, id, StartRefusal::Text(why));
+            } else {
+                log::debug!("ticket {id}: not taken: {why}");
+            }
+            return;
+        }
         let started = self.edit_ticket(id, |t| {
             if t.column != Column::Todo {
                 bail!(tr!(

@@ -424,9 +424,17 @@ pub fn to_start(
         .collect();
     let waits = |t: &Ticket| t.after.iter().any(|a| unfinished.contains(a.as_str()));
     let theirs = crate::sharing::theirs;
+    // A ticket of the team (TS-6, C11-A): the autopilot takes it when it is given it alone (assigned to this machine's
+    // member, or « À faire » taken by this board), never one a teammate holds or held (« interrompu »).
+    let given = |t: &Ticket| {
+        t.team.as_ref().is_none_or(|x| {
+            x.holder.as_ref().is_none_or(|h| h.mine) && (x.assigned_me || s.team_take_todo)
+        })
+    };
     let mut todo: Vec<&Ticket> = mine()
         .filter(|t| {
-            t.column == Column::Todo && (t.forced || (s.autopilot && !waits(t) && !theirs(t)))
+            t.column == Column::Todo
+                && (t.forced || (s.autopilot && !waits(t) && !theirs(t) && given(t)))
         })
         // A shared ticket whose file cannot be read, or hidden here, never starts (ESC-190).
         .filter(|t| {

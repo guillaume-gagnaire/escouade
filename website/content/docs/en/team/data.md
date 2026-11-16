@@ -17,12 +17,12 @@ The team server is installed by your team, on a machine it chooses (see [Install
 | The team | its members and their roles, each one’s devices, the invitations, the envelopes of the recovery key and of the escrow key | your devices’ keys, in the keychain; the name you give the team | there |
 | The team’s settings | its team `.escouade.yml`, signed, and its history | your consent to sensitive keys and proposed commands, your device’s policies | there |
 | The project list | for each project: its name, color, logo, repositories (their addresses), default branch, who has access | the project’s folder, its worktrees, its settings on this machine | there |
-| The team’s tickets | title, description, criteria, column, “After”, people, attached images and files | loops, cost, progress, checked criteria, account, model, agent, branch | coming |
-| Taking a ticket | which device holds it, until when: in clear, without saying which ticket it is | | coming |
+| The tickets of a Kanban shared with the team | key, title, description, criteria and their state, column, place, loops, progress, assignment, each device’s name | attached images and files, account, model, harness, agent, branch, cost; the “Do not share” tickets | there |
+| Taking a ticket | which device holds it, until when, its token, the counter of the keys: in clear, without saying which ticket it is | | there |
 | The spec, decisions, documents | the pages, the decisions, the uploaded files | the extracted text, the index, the vectors | coming |
 | The shared memory | the memories and their provenance | the index and the vectors | coming |
 
-Until the “coming” rows are there, your projects’ tickets, spec, decisions, documents and memory stay where they are today: on your machine and in your repository.
+Until the “coming” rows are there, your projects’ spec, decisions, documents and memory stay where they are today: on your machine and in your repository. A project’s tickets go only if its Kanban is shared with the team.
 
 ## What never goes there
 

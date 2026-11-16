@@ -35,6 +35,7 @@ import shell from './shell';
 import stats from './stats';
 import subagents from './subagents';
 import team from './team';
+import teamBoard from './teamBoard';
 import teamProjects from './teamProjects';
 import wizard from './wizard';
 import voice from './voice';
@@ -82,5 +83,6 @@ export const en = defineCatalog({
   scheduled,
   overseer,
   team,
+  teamBoard,
   teamProjects,
 });

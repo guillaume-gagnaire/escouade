@@ -419,6 +419,7 @@ impl Device {
             .post(
                 "/v1/team/stream",
                 &AppendRequest {
+                    fence: None,
                     kind,
                     epoch,
                     payload: payload.to_vec(),
@@ -443,6 +444,7 @@ impl Device {
             .post(
                 &format!("/v1/projects/{}/stream", hex::encode(project)),
                 &AppendRequest {
+                    fence: None,
                     kind: Kind::Message,
                     epoch: None,
                     payload: payload.to_vec(),
@@ -546,8 +548,11 @@ pub struct Frame {
     pub project: Option<Vec<u8>>,
     #[serde(default)]
     pub entry: Option<escouade_team_server::db::Entry>,
+    #[serde(default)]
+    pub claim: Option<escouade_team_server::db::Claim>,
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum LiveEvent {
     Frame(Frame),
     Closed(Option<u16>),

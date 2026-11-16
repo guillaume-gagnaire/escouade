@@ -2,7 +2,7 @@
 title: "Kanban"
 subject: "Kanban"
 sources: ["docs/SPEC.md","design/kanban-envs-2-2/README.md"]
-tickets: ["ESC-95","ESC-123","ESC-141","ESC-143","ESC-153","ESC-190","ESC-243","ESC-59","ESC-63","ESC-390","ESC-393"]
+tickets: ["ESC-95","ESC-123","ESC-141","ESC-143","ESC-153","ESC-190","ESC-243","ESC-59","ESC-63","ESC-390","ESC-393","ESC-479"]
 decisions: [129]
 compared: null
 order: 30
@@ -67,3 +67,7 @@ Ailleurs :
 - « Préfixe des branches des tickets » du projet (`ticket/`) ;
 - les fichiers ignorés par git copiés dans le worktree, `.env*` par défaut ;
 - « Pause au-delà du quota », réglage de l'app (voir *Pilote auto*).
+
+## Le Kanban d'un projet d'équipe (TS-6)
+
+Un projet coché comme celui d'une équipe peut partager son Kanban avec elle (voir *Le Kanban d'équipe*) : ses tickets sont ceux de l'équipe, en direct, avec des clés tirées d'un compteur du serveur ; un ticket se prend par le serveur avant que son agent démarre, et sa carte dit qui le tient et depuis quand. Un ticket « Ne pas partager » reste sur ce poste. Les tickets partagés par fichiers (*Tickets partagés*, ESC-190) restent pour les projets hors équipe.

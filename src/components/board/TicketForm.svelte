@@ -38,6 +38,7 @@
   import Modal from '../modals/Modal.svelte';
   import { tip } from '../../lib/tip';
   import { authorName, isTheirs, sharedFile } from '../../lib/sharing';
+  import { isTeamBoard } from '../../lib/teamboard';
   import Switch from '../settings/Switch.svelte';
   import { DEFAULT_TICKET_PREFIX } from '../../lib/worktrees';
 
@@ -88,6 +89,9 @@
     ticket ? !!ticket.shared && !ticket.shared.gone : !!app.projects.find((p) => p.id === projectId)?.shareNew,
   );
   let shared = $state(sharedStart);
+  /** A team's Kanban (TS-6): its tickets are the team's, unless « Ne pas partager » keeps a new one on this machine. */
+  const teamBoard = $derived(isTeamBoard(app.projects.find((p) => p.id === projectId)));
+  let teamLocal = $state(untrack(() => !!ticket?.teamLocal));
   /** Another one's ticket: not ours to share or not, what changes goes into its file for the team. */
   const theirs = $derived(!!ticket && isTheirs(ticket));
 
@@ -727,7 +731,9 @@
         // The same for the files: the whole list, those kept by their file and the copies by their path.
         ...(filesChanged(files, start.files) ? { files: draftFiles(files) } : {}),
         // Shared or no longer (ESC-190): a new ticket says it always, an edited one when it changed.
-        ...(!theirs && (!ticket || shared !== sharedStart) ? { shared } : {}),
+        ...(!teamBoard && !theirs && (!ticket || shared !== sharedStart) ? { shared } : {}),
+        // « Ne pas partager » of a new ticket of a team's Kanban (TS-6).
+        ...(teamBoard && !ticket ? { teamLocal } : {}),
       });
     } finally {
       busy = false;
@@ -1071,6 +1077,20 @@
          its file is, what goes with it and who commits it, in its tooltip. -->
     {#if scheduling}
       <!-- A scheduled task is this machine's alone: never shared (docs/OVERSEER.md). -->
+    {:else if teamBoard && !ticket}
+      <span class="share-foot" use:tip={t('teamBoard.form.localHelp')} data-team-local-switch
+        ><Switch label={t('teamBoard.form.local')} bind:on={teamLocal} describedby="{uid}-team" /><span aria-hidden="true"
+          >{t('teamBoard.form.local')}</span
+        ><span class="sr" id="{uid}-team">{t('teamBoard.form.localHelp')}</span></span
+      >
+    {:else if teamBoard && ticket?.team}
+      <span class="share-foot" use:tip={t('teamBoard.form.teamHelp')}
+        ><Icon name="team" size={14} /><span class="sr">{t('teamBoard.form.teamHelp')}</span><span aria-hidden="true"
+          >{t('teamBoard.form.team')}</span
+        ></span
+      >
+    {:else if teamBoard}
+      <!-- Of this machine alone: « Partager avec l'équipe » is in its card's menu. -->
     {:else if theirs && ticket?.shared}
       <span class="share-foot" use:tip={t('share.form.theirs', { name: authorName(ticket) })}
         ><Icon name="team" size={14} /><span class="sr">{t('share.form.theirs', { name: authorName(ticket) })}</span><span

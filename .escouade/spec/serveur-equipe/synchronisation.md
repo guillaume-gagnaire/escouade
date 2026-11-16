@@ -2,7 +2,7 @@
 title: "La synchronisation des projets"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team-server/README.md"]
-tickets: ["ESC-466"]
+tickets: ["ESC-466","ESC-479"]
 decisions: [168,173,178]
 compared: null
 ---
@@ -69,3 +69,7 @@ Après le départ d'un membre de l'équipe, les nouvelles opérations sont à l'
 ## Le direct
 
 L'app tient pour chaque équipe sa connexion en direct au serveur. Une entrée nouvelle de l'équipe ou d'un projet, une connexion revenue ou des trames perdues déclenchent une lecture de l'équipe, puis de ses projets suivis, en moins d'une seconde. La relecture de l'app toutes les 15 s ne sert plus que si la connexion en direct ne passe pas.
+
+## Les droits par projet sur le serveur (TS-6)
+
+Jusqu'à TS-6, le serveur servait un projet à tout appareil de l'équipe, et seule la clé protégeait un projet gardé à quelques membres. Il sait désormais quels appareils ont accès à chaque projet, et ne sert, ne prend une écriture, une prise ou une clé, ni ne diffuse une trame qu'à ceux-là ; un appareil sans accès reçoit `403 no_access`, et le client le dit « Cet appareil n'a pas accès à ce projet de l'équipe ». Un projet de toute l'équipe est ouvert à tous ses appareils ; un administrateur dit au serveur les appareils d'un projet gardé avant d'y écrire, puis à chaque changement de son groupe. Ce qui reste de confiance est dit dans *Le Kanban d'équipe*.

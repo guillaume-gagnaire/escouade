@@ -943,6 +943,8 @@ export interface Project {
   private: boolean;
   /** The team this project is of (TS-13): what the team imposes and recommends holds for it alone. */
   team?: string | null;
+  /** The journal of the team its Kanban is (TS-6), hex; absent: a Kanban of this machine. */
+  teamProject?: string | null;
   /** « Chef d’escouade » (ESC-423): the agent, by id, that answers the other agents' requests when `Settings.agentsAnswer` is `chef`; set by the window alone. */
   chef?: string | null;
   /** « Branche des docs » (ESC-256): the branch that holds `.escouade/spec`, `decisions` and `documents`; empty is the branch checked out. */
@@ -1234,6 +1236,10 @@ export interface Ticket {
   files: TicketFile[];
   /** Shared with the team (ESC-190): its file `.escouade/tickets/<id>.yml`. Absent or null: this machine's alone. */
   shared?: Shared | null;
+  /** A ticket of a team's Kanban (TS-6): who holds it, its conflicts. Absent: of this machine. */
+  team?: TeamTicket | null;
+  /** « Ne pas partager » (TS-6): a ticket of a team's Kanban that stays on this machine. */
+  teamLocal?: boolean;
   /** The pages of the spec and the decisions it implements, as « Planifier » made it (ESC-262). */
   pages?: string[];
   decisions?: DecisionRef[];
@@ -1498,6 +1504,48 @@ export interface Shared {
   hidden: boolean;
 }
 
+/** Who holds a ticket of the team (TS-6). */
+export interface TeamHolder {
+  name: string;
+  device: string;
+  mine: boolean;
+  /** Since when, until when its lease runs (ms). */
+  since: number;
+  until: number;
+  /** Its lease ran out: free, « interrompu chez Alice ». */
+  interrupted: boolean;
+  /** Its machine renewed nothing for so many minutes. */
+  unreachableMin: number | null;
+}
+
+/** A write of this machine that lost to a teammate's (TS-6, §4.3). */
+export interface TeamConflict {
+  field: string;
+  by: string;
+  stamp: string;
+  mine: unknown;
+  theirs: unknown;
+  /** A description changed on both sides that did not merge three ways. */
+  unmerged: boolean;
+}
+
+/** A ticket of a team's Kanban (TS-6). */
+export interface TeamTicket {
+  object: string;
+  claim: string;
+  keyed: boolean;
+  holder: TeamHolder | null;
+  token: number | null;
+  version: number;
+  assignee: string | null;
+  assigneeName: string | null;
+  assignedMe: boolean;
+  teammate: boolean;
+  conflicts: TeamConflict[];
+  dismissed: string[];
+  refused: string | null;
+}
+
 /** A file of a ticket other than an image: a copy in the ticket's folder, `files/<file>`. */
 export interface TicketFile {
   name: string;
@@ -1567,6 +1615,8 @@ export interface BoardSettings {
   autopilot: boolean;
   /** « Pause quand la CI de la cible est rouge » (ESC-63): off by default. */
   pauseOnRedTarget?: boolean;
+  /** A team's Kanban (TS-6, C11-A): the autopilot takes the team's « À faire » too, not only what is assigned to me. */
+  teamTakeTodo?: boolean;
   prefix: string;
   nextNumber: number;
 }
@@ -1592,6 +1642,8 @@ export interface TicketDraft {
   effort?: string;
   /** « Partager avec l’équipe » (ESC-190): absent, as it is (a new ticket: as the project’s « Partager chaque nouveau ticket »). */
   shared?: boolean;
+  /** « Ne pas partager » of a new ticket of a team's Kanban (TS-6). */
+  teamLocal?: boolean;
 }
 
 export interface RecipeStep {

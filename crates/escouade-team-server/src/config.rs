@@ -51,6 +51,8 @@ pub struct Limits {
     pub session_ttl: Duration,
     /// The longest life of an enrolment token an administrator asks for.
     pub enrollment_ttl_max: Duration,
+    /// The lease of a ticket's claim (TS-6, §4.2): 10 minutes, renewed every 3 while its agent runs.
+    pub claim_lease: Duration,
 }
 
 impl Default for Limits {
@@ -67,6 +69,7 @@ impl Default for Limits {
             challenge_ttl: Duration::from_secs(60),
             session_ttl: Duration::from_secs(15 * 60),
             enrollment_ttl_max: Duration::from_secs(7 * 24 * 3600),
+            claim_lease: Duration::from_secs(10 * 60),
         }
     }
 }

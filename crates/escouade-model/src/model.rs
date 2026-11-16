@@ -952,6 +952,10 @@ pub struct Project {
     /// holds for its projects alone (`docs/TEAM-SERVER.md` §6.1); none for a project of one's own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub team: Option<String>,
+    /// The project of the team its Kanban is (TS-6): the opaque id (hex) of its journal on the team's server. Its tickets
+    /// are the team's, live, unless one stays on this machine (`Ticket::team_local`). None: a Kanban of this machine.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub team_project: Option<String>,
     /// « Chef d’escouade » (ESC-423): the agent the user chose, by id, the only one that answers
     /// the other agents' permissions and questions when `Settings::agents_answer` is `Chef`.
     /// Set by the window alone (`update_project`), never by a tool of the MCP server; the
@@ -1510,6 +1514,13 @@ pub struct Ticket {
     /// folder, written by Escouade and committed by the user (`sharing`). None: this machine's
     /// alone, and for a ticket saved before.
     pub shared: Option<Shared>,
+    /// A ticket of the team's Kanban (TS-6): its object in the project's journal, who holds it, its conflicts. None: of
+    /// this machine (a project of no team, or « Ne pas partager »).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team: Option<TeamTicket>,
+    /// « Ne pas partager » (TS-6): a ticket of a team's project that stays on this machine, of which nothing leaves.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub team_local: bool,
     /// The pages of the spec it implements (`subject/page`), as « Planifier » made it (ESC-262);
     /// each of them names it in its `tickets`. Empty for a ticket made otherwise.
     pub pages: Vec<String>,
@@ -1791,6 +1802,77 @@ pub struct Shared {
     pub hidden: bool,
 }
 
+/// A ticket of a team's Kanban (TS-6, `docs/TEAM-SERVER.md` §4): how it stands with the project's journal and with
+/// the server's claim.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TeamTicket {
+    /// Its object in the journal (hex, 128 bits).
+    pub object: String,
+    /// Its claim's opaque id on the server (hex, 128 bits): a field of the encrypted ticket, never its object's id.
+    pub claim: String,
+    /// The fields as they were last in step with the journal: one that differs here was changed on this machine (it
+    /// is written), one that differs there by a teammate (it is taken).
+    pub seen: std::collections::BTreeMap<String, serde_json::Value>,
+    /// Its key was formed with the server's counter (§4.1); false: its key is this machine's until it is reached.
+    pub keyed: bool,
+    /// Who holds it, as the server last said.
+    pub holder: Option<TeamHolder>,
+    /// This machine holds it: under this token (every write of its column carries it), and the claim's version seen.
+    pub token: Option<u64>,
+    pub version: u64,
+    /// The member it is assigned to (hex of the member's id), and their name: the autopilot of that member alone takes it
+    /// (C11-A).
+    pub assignee: Option<String>,
+    pub assignee_name: Option<String>,
+    /// It is assigned to this machine's member: its autopilot may take it.
+    pub assigned_me: bool,
+    /// Its title, description or criteria were last written on a teammate's machine: the tools of the MCP server give
+    /// them as a third party's data.
+    pub teammate: bool,
+    /// The writes of this machine that lost to a teammate's at the same moment, to show to it (§4.3).
+    pub conflicts: Vec<TeamConflict>,
+    /// The stamps of the conflicts set aside (« Garder le sien »): not shown again.
+    pub dismissed: Vec<String>,
+    /// The server refused a move of this machine: a teammate took the ticket over meanwhile (the fencing token).
+    pub refused: Option<String>,
+}
+
+/// Who holds a ticket of the team (§4.2).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TeamHolder {
+    /// The holder's name as its member wrote it in the project; empty when it did not yet.
+    pub name: String,
+    /// The device, hex.
+    pub device: String,
+    /// This machine.
+    pub mine: bool,
+    /// Since when (ms), until when its lease runs (ms).
+    pub since: i64,
+    pub until: i64,
+    /// Its lease ran out (the machine asleep, cut): the ticket is free, « interrompu chez Alice ».
+    pub interrupted: bool,
+    /// Its machine renews nothing for so many minutes (past twice the renewal): « injoignable depuis 12 min ».
+    pub unreachable_min: Option<u32>,
+}
+
+/// A write of this machine that lost to a teammate's, field by field (C2-A): the last writer won.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TeamConflict {
+    /// `title`, `description`, `column`…
+    pub field: String,
+    /// Who won (their name), and the stamp of this machine's write that lost (hex).
+    pub by: String,
+    pub stamp: String,
+    /// This machine's value, and theirs.
+    pub mine: serde_json::Value,
+    pub theirs: serde_json::Value,
+    /// The description changed on both sides did not merge three ways: « Garder le mien » / « Prendre le sien ».
+    pub unmerged: bool,
+}
+
 /// A file of a ticket that is no image the chat reads: a copy in the ticket's `files` folder
 /// (`ticketfiles`), never in the JSON of the tickets.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -1861,6 +1943,10 @@ pub struct BoardSettings {
     /// « Pause quand la CI de la cible est rouge » (ESC-63): the autopilot starts no ticket while
     /// the target's CI is red as last read (one launched by hand starts). Off by default.
     pub pause_on_red_target: bool,
+    /// A project of the team (TS-6, C11-A): the autopilot takes, besides the team's tickets assigned to this machine's
+    /// member, those of « À faire » (the column « À prendre »). Off by default: of this machine and its member alone,
+    /// never in `.escouade.yml`.
+    pub team_take_todo: bool,
     /// The tickets' key prefix, fixed by the first ticket.
     pub prefix: String,
     /// The next ticket's number (never reused).
@@ -1890,6 +1976,7 @@ impl Default for BoardSettings {
             mode: String::new(),
             autopilot: true,
             pause_on_red_target: false,
+            team_take_todo: false,
             prefix: String::new(),
             next_number: 1,
         }

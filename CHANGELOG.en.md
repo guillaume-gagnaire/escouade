@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Team server: a project’s Kanban is shared with the team, live. A ticket is taken through the server, once, and each card says who holds it and since when; two changes of the same field at the same time show to the one who lost, and a description changed on both sides merges by itself.
 - A pull request’s threads under their line in the Files tab, resolved ones folded and outdated ones apart, with “Next” (N) from one open thread to the next. Comment on a line or the pull request, reply, resolve and reopen a thread on the code host under your account, in one click: your draft stays until it is sent.
 - Team server: “Team projects” lists your team’s projects, encrypted so that the server reads none of it. “Clone” opens the “New project” wizard with the repository filled in and goes through your own git accounts; a project already cloned is known by the address of its repository and attached without a new clone.
 - In the VS Code editor, images, PDFs (pages, zoom, search), Word documents and Markdown open in a preview, Markdown also beside its source. No script of a file runs there, and an image from the web loads only when you click it.

@@ -37,6 +37,11 @@ pub enum ClientError {
     /// Another commit holds the epoch: process it first.
     #[error("a commit already holds epoch {}", .0.expected_epoch.saturating_sub(1))]
     EpochTaken(EpochTaken),
+    /// A claim refused (TS-6): `taken` (another device holds the ticket), `stale_version` (it changed since),
+    /// `claim_lost` (no longer this device's), `stale_token` (a holder's write under a token taken over); the claim as
+    /// it is.
+    #[error("the claim is refused ({code})")]
+    Claim { code: String, claim: Box<Claim> },
     #[error("the server refused ({status} {error}): {message}")]
     Refused {
         status: u16,
@@ -380,6 +385,20 @@ fn refusal(reply: &Reply) -> ClientError {
             match p.detail.and_then(|d| d.deserialized::<EpochTaken>().ok()) {
                 Some(detail) => ClientError::EpochTaken(detail),
                 None => ClientError::Decode("an epoch_taken without its detail".into()),
+            }
+        }
+        (409, Some(p))
+            if matches!(
+                p.error.as_str(),
+                "taken" | "stale_version" | "claim_lost" | "stale_token"
+            ) =>
+        {
+            match p.detail.and_then(|d| d.deserialized::<Claim>().ok()) {
+                Some(claim) => ClientError::Claim {
+                    code: p.error,
+                    claim: Box::new(claim),
+                },
+                None => ClientError::Decode("a refused claim without its detail".into()),
             }
         }
         (status, Some(p)) => ClientError::Refused {
@@ -772,6 +791,17 @@ impl ServerClient {
         epoch: Option<u64>,
         payload: &[u8],
     ) -> Result<u64, ClientError> {
+        self.append_with(path, kind, epoch, payload, None).await
+    }
+
+    async fn append_with(
+        &self,
+        path: String,
+        kind: Kind,
+        epoch: Option<u64>,
+        payload: &[u8],
+        fence: Option<FenceWire>,
+    ) -> Result<u64, ClientError> {
         let reply = self
             .authed(cbor_call(
                 Method::Post,
@@ -780,10 +810,152 @@ impl ServerClient {
                     kind,
                     epoch,
                     payload: payload.to_vec(),
+                    fence,
                 },
             ))
             .await?;
         Ok(ok_cbor::<Appended>(reply)?.seq)
+    }
+
+    /// A write of a ticket's holder in a project's stream (TS-6): refused with `ClientError::Claim` (`stale_token`)
+    /// once another device took the ticket over.
+    pub async fn append_project_fenced(
+        &self,
+        project: &[u8; 16],
+        payload: &[u8],
+        fence: Option<FenceWire>,
+    ) -> Result<u64, ClientError> {
+        self.append_with(
+            format!("/v1/projects/{}/stream", hex::encode(project)),
+            Kind::Message,
+            None,
+            payload,
+            fence,
+        )
+        .await
+    }
+
+    /// Who has access to a project on the server (TS-6).
+    pub async fn access(&self, project: &[u8; 16]) -> Result<AccessWire, ClientError> {
+        let reply = self
+            .authed(Call {
+                method: Method::Get,
+                path: format!("/v1/projects/{}/access", hex::encode(project)),
+                content_type: None,
+                body: Vec::new(),
+                token: None,
+            })
+            .await?;
+        ok_cbor(reply)
+    }
+
+    /// Sets who has access to a project: any device for a project the server does not know yet, an administrator
+    /// afterwards.
+    pub async fn set_access(
+        &self,
+        project: &[u8; 16],
+        access: &AccessWire,
+    ) -> Result<(), ClientError> {
+        let reply = self
+            .authed(cbor_call(
+                Method::Put,
+                format!("/v1/projects/{}/access", hex::encode(project)),
+                access,
+            ))
+            .await?;
+        if (200..300).contains(&reply.status) {
+            Ok(())
+        } else {
+            Err(refusal(&reply))
+        }
+    }
+
+    /// Takes a ticket (§4.2), as it was at `expected` when given.
+    pub async fn claim(
+        &self,
+        project: &[u8; 16],
+        ticket: &[u8; 16],
+        expected: Option<u64>,
+    ) -> Result<ClaimAnswer, ClientError> {
+        let reply = self
+            .authed(cbor_call(
+                Method::Post,
+                format!(
+                    "/v1/projects/{}/claims/{}",
+                    hex::encode(project),
+                    hex::encode(ticket)
+                ),
+                &ClaimRequest { expected },
+            ))
+            .await?;
+        ok_cbor(reply)
+    }
+
+    async fn claim_token(
+        &self,
+        project: &[u8; 16],
+        ticket: &[u8; 16],
+        what: &str,
+        token: u64,
+    ) -> Result<ClaimAnswer, ClientError> {
+        let reply = self
+            .authed(cbor_call(
+                Method::Post,
+                format!(
+                    "/v1/projects/{}/claims/{}/{what}",
+                    hex::encode(project),
+                    hex::encode(ticket)
+                ),
+                &ClaimToken { token },
+            ))
+            .await?;
+        ok_cbor(reply)
+    }
+
+    /// Renews a lease, under its token.
+    pub async fn renew_claim(
+        &self,
+        project: &[u8; 16],
+        ticket: &[u8; 16],
+        token: u64,
+    ) -> Result<ClaimAnswer, ClientError> {
+        self.claim_token(project, ticket, "renew", token).await
+    }
+
+    /// Gives a ticket back.
+    pub async fn release_claim(
+        &self,
+        project: &[u8; 16],
+        ticket: &[u8; 16],
+        token: u64,
+    ) -> Result<ClaimAnswer, ClientError> {
+        self.claim_token(project, ticket, "release", token).await
+    }
+
+    /// A project's claims, with the server's time.
+    pub async fn claims(&self, project: &[u8; 16]) -> Result<Claims, ClientError> {
+        let reply = self
+            .authed(Call {
+                method: Method::Get,
+                path: format!("/v1/projects/{}/claims", hex::encode(project)),
+                content_type: None,
+                body: Vec::new(),
+                token: None,
+            })
+            .await?;
+        ok_cbor(reply)
+    }
+
+    /// The next number of a project's tickets (§4.1).
+    pub async fn next_key(&self, project: &[u8; 16]) -> Result<u64, ClientError> {
+        let reply = self
+            .authed(cbor_call(
+                Method::Post,
+                format!("/v1/projects/{}/keys", hex::encode(project)),
+                &(),
+            ))
+            .await?;
+        Ok(ok_cbor::<KeyNumber>(reply)?.n)
     }
 
     async fn read(&self, path: String) -> Result<Entries, ClientError> {
@@ -987,6 +1159,8 @@ pub enum LiveEvent {
     Connected,
     Team(Entry),
     Project([u8; 16], Entry),
+    /// A ticket of a project taken, renewed or given back (TS-6).
+    Claim([u8; 16], Claim),
     /// The server dropped frames for this device (it fell behind): read the streams again.
     Lagged,
     /// The device is revoked: the feed stops.
@@ -1073,6 +1247,10 @@ impl LiveFeed {
             let event = match message {
                 Ok(LiveMessage::Binary(bytes)) => match wire::decode::<Frame>(&bytes) {
                     Ok(f) => match (f.stream.as_str(), f.project, f.entry) {
+                        ("claim", Some(p), _) => match (p.as_slice().try_into(), f.claim) {
+                            (Ok(p), Some(c)) => LiveEvent::Claim(p, c),
+                            _ => continue,
+                        },
                         ("team", _, Some(entry)) => LiveEvent::Team(entry),
                         ("project", Some(p), Some(entry)) => match p.as_slice().try_into() {
                             Ok(p) => LiveEvent::Project(p, entry),

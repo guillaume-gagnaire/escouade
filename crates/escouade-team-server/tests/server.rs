@@ -48,6 +48,7 @@ async fn a_snapshot_takes_the_place_of_the_start_of_a_projects_stream(b: Backend
         .post(
             &format!("/v1/projects/{}/stream", hex::encode(p)),
             &AppendRequest {
+                fence: None,
                 kind: Kind::Commit,
                 epoch: Some(0),
                 payload: vec![9; 10],
@@ -368,6 +369,7 @@ async fn the_streams_are_numbered_and_read_again_from_n(b: Backend) {
     assert_eq!(alice.read_team(5).await.entries.len(), 0);
     // A project's own group commits in its stream (TS-5): the first commit of an epoch wins there too.
     let project_commit = |epoch: u64, payload: Vec<u8>| AppendRequest {
+        fence: None,
         kind: Kind::Commit,
         epoch: Some(epoch),
         payload,
@@ -463,6 +465,7 @@ async fn the_first_commit_of_an_epoch_wins(b: Backend) {
                 .post(
                     "/v1/team/stream",
                     &AppendRequest {
+                        fence: None,
                         kind: Kind::Commit,
                         epoch: Some(2),
                         payload: vec![i; 8],

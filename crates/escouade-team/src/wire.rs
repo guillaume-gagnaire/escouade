@@ -174,6 +174,71 @@ pub struct AppendRequest {
     pub epoch: Option<u64>,
     #[serde(with = "serde_bytes")]
     pub payload: Vec<u8>,
+    /// A write of a ticket's holder (TS-6): the claim's opaque id and its token.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fence: Option<FenceWire>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FenceWire {
+    #[serde(with = "serde_bytes")]
+    pub ticket: Vec<u8>,
+    pub token: u64,
+}
+
+/// Who has access to a project on the server (TS-6).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AccessWire {
+    pub everyone: bool,
+    #[serde(default)]
+    pub devices: Vec<serde_bytes::ByteBuf>,
+}
+
+/// The claim of a ticket, as the server keeps it (TS-6): its opaque id, the device that holds it, until when, under
+/// which token. Seconds of the server's clock.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Claim {
+    #[serde(with = "serde_bytes")]
+    pub ticket: Vec<u8>,
+    #[serde(default, with = "opt_bytes", skip_serializing_if = "Option::is_none")]
+    pub holder: Option<Vec<u8>>,
+    pub until: i64,
+    pub token: u64,
+    pub version: u64,
+    pub claimed_at: i64,
+    pub renewed_at: i64,
+    #[serde(default, with = "opt_bytes", skip_serializing_if = "Option::is_none")]
+    pub last_holder: Option<Vec<u8>>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct ClaimRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ClaimToken {
+    pub token: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Claims {
+    pub claims: Vec<Claim>,
+    pub now: i64,
+    pub lease: i64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ClaimAnswer {
+    pub claim: Claim,
+    pub now: i64,
+    pub lease: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct KeyNumber {
+    pub n: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -249,6 +314,9 @@ pub struct Frame {
     pub project: Option<Vec<u8>>,
     #[serde(default)]
     pub entry: Option<Entry>,
+    /// A `claim` frame (TS-6): a ticket taken, renewed or given back.
+    #[serde(default)]
+    pub claim: Option<Claim>,
 }
 
 mod opt_bytes {

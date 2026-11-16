@@ -44,9 +44,10 @@ use crate::storage::{SqliteStorage, TeamProvider, STATE_FILE};
 use crate::wire::{self, Entry, Kind, TeamMessage};
 use crate::{CryptoError, Error};
 
+mod claims;
 mod sync;
 
-pub use sync::{ProjectSynced, SyncState};
+pub use sync::{ProjectSynced, Refused, SyncState};
 
 /// How many times a change is staged again after losing its epoch, before giving up for now.
 const TRIES: usize = 8;
@@ -283,6 +284,9 @@ pub struct Team {
     replicas: BTreeMap<ProjectId, crate::replica::Replica>,
     /// Whether the server answered the last call: « Hors ligne » otherwise.
     online: Option<bool>,
+    /// The writes of a ticket's holder the server refused since the last [`Team::take_refused`]: another device took
+    /// the ticket over (TS-6).
+    refused: Vec<sync::Refused>,
 }
 
 impl Team {
@@ -514,6 +518,7 @@ impl Team {
             saved,
             project_stored: BTreeSet::new(),
             replicas: BTreeMap::new(),
+            refused: Vec::new(),
             online: None,
         }
     }

@@ -21,6 +21,7 @@ pub mod escrow;
 #[cfg(any(test, feature = "fuzzing"))]
 pub mod fuzzing;
 pub mod keychain;
+pub mod merge;
 pub mod pairing;
 pub mod replica;
 pub mod settings;

@@ -10,7 +10,9 @@ use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{self, Authed};
-use crate::db::{Entry, Kind, NewEntry, Page, Quotas, Role, Snapshot, StoreError, Stream};
+use crate::db::{
+    Claim, ClaimAsk, Entry, Fence, Kind, NewEntry, Page, Quotas, Role, Snapshot, StoreError, Stream,
+};
 use crate::live::Event;
 use crate::metrics::Metrics;
 use crate::transport::{body, Cbor, Problem};
@@ -174,6 +176,61 @@ pub mod wire {
         pub epoch: Option<u64>,
         #[serde(with = "serde_bytes")]
         pub payload: Vec<u8>,
+        /// A write of a ticket's holder (TS-6): the claim's opaque id and the token it holds it under. Refused (409
+        /// `stale_token`) when the token is no longer the current one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub fence: Option<FenceWire>,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct FenceWire {
+        #[serde(with = "serde_bytes")]
+        pub ticket: Vec<u8>,
+        pub token: u64,
+    }
+
+    /// Who has access to a project (TS-6): every device of the team, or those listed.
+    #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+    pub struct AccessWire {
+        pub everyone: bool,
+        #[serde(default)]
+        pub devices: Vec<serde_bytes::ByteBuf>,
+    }
+
+    /// Takes a ticket as it was at `expected` (its claim's version), when given.
+    #[derive(Debug, Default, Serialize, Deserialize)]
+    pub struct ClaimRequest {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub expected: Option<u64>,
+    }
+
+    /// Renews or gives back a claim, under its token.
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct TokenRequest {
+        pub token: u64,
+    }
+
+    /// A project's claims, and the server's time (seconds), which the leases are counted in.
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct Claims {
+        pub claims: Vec<Claim>,
+        pub now: i64,
+        /// The length of a lease (seconds).
+        pub lease: i64,
+    }
+
+    /// A claim, with the server's time.
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct ClaimAnswer {
+        pub claim: Claim,
+        pub now: i64,
+        pub lease: i64,
+    }
+
+    /// The next number of a project's tickets.
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct KeyNumber {
+        pub n: u64,
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -290,11 +347,59 @@ fn store_problem(e: StoreError) -> Problem {
             expected_epoch: expected,
             preceding,
         }),
+        StoreError::NoAccess => Problem::new(
+            StatusCode::FORBIDDEN,
+            "no_access",
+            "this device has no access to this project",
+        ),
+        StoreError::NotAdmin => Problem::new(
+            StatusCode::FORBIDDEN,
+            "not_admin",
+            "only an administrator changes who has access to a project",
+        ),
+        StoreError::Taken(c) => Problem::new(
+            StatusCode::CONFLICT,
+            "taken",
+            "another device holds this ticket",
+        )
+        .with_detail(&c),
+        StoreError::StaleVersion(c) => Problem::new(
+            StatusCode::CONFLICT,
+            "stale_version",
+            "the ticket changed since the version expected",
+        )
+        .with_detail(&c),
+        StoreError::ClaimLost(c) => Problem::new(
+            StatusCode::CONFLICT,
+            "claim_lost",
+            "this claim is no longer this device's",
+        )
+        .with_detail(&c),
+        StoreError::StaleToken(c) => Problem::new(
+            StatusCode::CONFLICT,
+            "stale_token",
+            "a write under a claim token that is no longer the current one",
+        )
+        .with_detail(&c),
         StoreError::Backend(e) => {
             tracing::error!("base: {e}");
             Problem::internal()
         }
     }
+}
+
+/// Whether the device may read and write the project (TS-6): one the server never heard of is open to the team.
+async fn may(app: &Shared, authed: &Authed, project: &Id) -> Result<(), Problem> {
+    let access = app
+        .store
+        .access(authed.device.team, *project)
+        .await
+        .map_err(store_problem)?;
+    if access.is_some_and(|a| !a.admits(&authed.device.id)) {
+        Metrics::inc(&app.metrics.refused_access);
+        return Err(store_problem(StoreError::NoAccess));
+    }
+    Ok(())
 }
 
 impl crate::App {
@@ -737,12 +842,26 @@ async fn append(
     }
     let team = authed.device.team;
     let size = req.payload.len() as u64;
+    let fence = match (&stream, req.fence) {
+        (_, None) => None,
+        (Stream::Team, Some(_)) => {
+            return Err(Problem::bad_request(
+                "fence_on_team",
+                "only a project's write carries a claim",
+            ))
+        }
+        (Stream::Project(_), Some(f)) => Some(Fence {
+            ticket: device_id(&f.ticket)?,
+            token: f.token,
+        }),
+    };
     let entry = NewEntry {
         kind: req.kind,
         epoch: req.epoch,
         device: authed.device.id,
         at: now(),
         payload: req.payload,
+        fence,
     };
     let entry = app
         .store
@@ -786,6 +905,7 @@ pub async fn append_project(
     Cbor(req): Cbor<AppendRequest>,
 ) -> Result<Cbor<Appended>, Problem> {
     let project = path_id(&project)?;
+    may(&app, &authed, &project).await?;
     // The team's list of projects (TS-8) is its administrators': the clients refuse a member's entry at the reading,
     // and the server, which knows the roles, does not even keep one (defense in depth).
     if project == CATALOG_STREAM && !authed.is_admin() {
@@ -793,7 +913,223 @@ pub async fn append_project(
             "only an administrator writes the team's list of projects",
         ));
     }
-    append(&app, &authed, Stream::Project(project), req).await
+    let appended = append(&app, &authed, Stream::Project(project), req).await?;
+    // Its first write makes a project the server never heard of open to the whole team: from then on, only an
+    // administrator restricts it.
+    app.store
+        .open_access(authed.device.team, project)
+        .await
+        .map_err(store_problem)?;
+    Ok(appended)
+}
+
+/// Who has access to a project (TS-6).
+pub async fn get_access(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path(project): Path<String>,
+) -> Result<Cbor<AccessWire>, Problem> {
+    let project = path_id(&project)?;
+    may(&app, &authed, &project).await?;
+    let access = app
+        .store
+        .access(authed.device.team, project)
+        .await
+        .map_err(store_problem)?
+        .unwrap_or(crate::db::Access {
+            everyone: true,
+            devices: Vec::new(),
+        });
+    Ok(Cbor(AccessWire {
+        everyone: access.everyone,
+        devices: access
+            .devices
+            .iter()
+            .map(|d| serde_bytes::ByteBuf::from(d.to_vec()))
+            .collect(),
+    }))
+}
+
+/// Sets who has access to a project: any device of the team for a project the server does not know yet (its
+/// creation), an administrator afterwards. Every device listed is one of the team's.
+pub async fn put_access(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path(project): Path<String>,
+    Cbor(req): Cbor<AccessWire>,
+) -> Result<StatusCode, Problem> {
+    let project = path_id(&project)?;
+    if req.devices.len() > app.limits.max_devices as usize {
+        return Err(Problem::bad_request("too_many", "too many devices"));
+    }
+    let team_devices: Vec<Id> = app
+        .store
+        .devices(authed.device.team)
+        .await
+        .map_err(store_problem)?
+        .into_iter()
+        .map(|d| d.id)
+        .collect();
+    let mut devices = Vec::new();
+    for d in &req.devices {
+        let id = device_id(d)?;
+        if !team_devices.contains(&id) {
+            return Err(Problem::bad_request(
+                "unknown_device",
+                "a device listed is not of this team",
+            ));
+        }
+        devices.push(id);
+    }
+    app.store
+        .set_access(
+            authed.device.team,
+            project,
+            crate::db::Access {
+                everyone: req.everyone,
+                devices,
+            },
+            authed.is_admin(),
+        )
+        .await
+        .map_err(store_problem)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+fn claim_lease(app: &Shared) -> i64 {
+    app.limits.claim_lease.as_secs().max(1) as i64
+}
+
+async fn claim_ask(
+    app: &Shared,
+    authed: &Authed,
+    project: &str,
+    ticket: &str,
+    ask: ClaimAsk,
+) -> Result<Cbor<ClaimAnswer>, Problem> {
+    let project = path_id(project)?;
+    let ticket = path_id(ticket)?;
+    may(app, authed, &project).await?;
+    let lease = claim_lease(app);
+    let at = now();
+    let claim = app
+        .store
+        .claim(
+            authed.device.team,
+            project,
+            ticket,
+            authed.device.id,
+            ask,
+            at,
+            lease,
+        )
+        .await
+        .map_err(|e| {
+            if matches!(e, StoreError::Taken(_)) {
+                Metrics::inc(&app.metrics.claims_refused);
+            }
+            store_problem(e)
+        })?;
+    if !matches!(ask, ClaimAsk::Renew { .. }) {
+        Metrics::inc(&app.metrics.claims);
+    }
+    app.hub
+        .publish(&authed.device.team, Event::Claim(project, claim.clone()));
+    Ok(Cbor(ClaimAnswer {
+        claim,
+        now: at,
+        lease,
+    }))
+}
+
+/// Takes a ticket (§4.2): one demand passes, the others are told who holds it (409 `taken`, the claim as detail).
+pub async fn take_claim(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path((project, ticket)): Path<(String, String)>,
+    Cbor(req): Cbor<ClaimRequest>,
+) -> Result<Cbor<ClaimAnswer>, Problem> {
+    claim_ask(
+        &app,
+        &authed,
+        &project,
+        &ticket,
+        ClaimAsk::Take {
+            expected: req.expected,
+        },
+    )
+    .await
+}
+
+/// Renews a lease (every 3 minutes while the agent runs).
+pub async fn renew_claim(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path((project, ticket)): Path<(String, String)>,
+    Cbor(req): Cbor<TokenRequest>,
+) -> Result<Cbor<ClaimAnswer>, Problem> {
+    claim_ask(
+        &app,
+        &authed,
+        &project,
+        &ticket,
+        ClaimAsk::Renew { token: req.token },
+    )
+    .await
+}
+
+/// Gives a ticket back (its agent stopped, or it went « À tester »).
+pub async fn release_claim(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path((project, ticket)): Path<(String, String)>,
+    Cbor(req): Cbor<TokenRequest>,
+) -> Result<Cbor<ClaimAnswer>, Problem> {
+    claim_ask(
+        &app,
+        &authed,
+        &project,
+        &ticket,
+        ClaimAsk::Release { token: req.token },
+    )
+    .await
+}
+
+/// A project's claims, with the server's time.
+pub async fn list_claims(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path(project): Path<String>,
+) -> Result<Cbor<Claims>, Problem> {
+    let project = path_id(&project)?;
+    may(&app, &authed, &project).await?;
+    let claims = app
+        .store
+        .claims(authed.device.team, project)
+        .await
+        .map_err(store_problem)?;
+    Ok(Cbor(Claims {
+        claims,
+        now: now(),
+        lease: claim_lease(&app),
+    }))
+}
+
+/// The next number of a project's tickets (§4.1): the server sees the counter alone, the prefix is encrypted and the
+/// device forms the key.
+pub async fn next_key(
+    State(app): State<Shared>,
+    authed: Authed,
+    Path(project): Path<String>,
+) -> Result<Cbor<KeyNumber>, Problem> {
+    let project = path_id(&project)?;
+    may(&app, &authed, &project).await?;
+    let n = app
+        .store
+        .next_key(authed.device.team, project)
+        .await
+        .map_err(store_problem)?;
+    Ok(Cbor(KeyNumber { n }))
 }
 
 #[derive(Debug, Deserialize)]
@@ -828,6 +1164,7 @@ pub async fn read_project(
     Query(q): Query<Since>,
 ) -> Result<Cbor<Entries>, Problem> {
     let project = path_id(&project)?;
+    may(&app, &authed, &project).await?;
     let (entries, more) = app
         .store
         .read(
@@ -860,6 +1197,7 @@ pub async fn put_snapshot(
     Cbor(req): Cbor<SnapshotPut>,
 ) -> Result<Cbor<SnapshotKept>, Problem> {
     let project = path_id(&project)?;
+    may(&app, &authed, &project).await?;
     if req.payload.is_empty() {
         return Err(Problem::bad_request("empty", "a snapshot carries bytes"));
     }
@@ -890,6 +1228,7 @@ pub async fn get_snapshot(
     Path(project): Path<String>,
 ) -> Result<Cbor<SnapshotInfo>, Problem> {
     let project = path_id(&project)?;
+    may(&app, &authed, &project).await?;
     let s = app
         .store
         .snapshot(authed.device.team, project)

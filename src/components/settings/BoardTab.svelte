@@ -185,6 +185,12 @@
   <Row label={t('boardSettings.tab.redTargetPause')} desc={t('boardSettings.tab.redTargetPauseDesc')}>
     <Switch label={t('boardSettings.tab.redTargetPause')} bind:on={() => !!b.pauseOnRedTarget, (v) => (b.pauseOnRedTarget = v)} />
   </Row>
+  {#if project.team && project.teamProject}
+    <!-- TS-6, C11-A: the team's tickets assigned to me, and « À faire » when checked; of this machine, never shared. -->
+    <Row label={t('teamBoard.settings.takeTodo')} desc={t('teamBoard.settings.takeTodoDesc')}>
+      <Switch label={t('teamBoard.settings.takeTodo')} bind:on={() => !!b.teamTakeTodo, (v) => (b.teamTakeTodo = v)} />
+    </Row>
+  {/if}
 </Group>
 
 <Group title={t('common.agents')}>

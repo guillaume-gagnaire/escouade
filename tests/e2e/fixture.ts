@@ -41,6 +41,11 @@ export interface App {
    * on, every start is on it. Its `settings.json` is the test's to write first.
    */
   restartAs: (data: string) => Promise<Page>;
+  /**
+   * A second app at the same time as the first, on another data folder (TS-6: two clients of a team, live): its window. Its
+   * DevTools port is `ESCOUADE_E2E_SECOND_CDP_PORT`, else the first one's plus one; it is killed with the test.
+   */
+  second: (data: string) => Promise<Page>;
   /** When the launch the test is on was started (ms since the epoch, just before its process): the startup bench's origin (INT-0). */
   launchedAt: () => number;
   /** Attaches Playwright again to the running app's window (after its page's process crashed): gives it, also in `app.page`. */
@@ -499,6 +504,8 @@ export const test = base.extend<{
     };
     // The launch the test is on (the last one, after a restart): the one the end of the test must kill.
     let instance = startApp(env, stderr, appArgs);
+    /** The second app of a test of two live clients, and its port. */
+    const others: { instance: Instance; port: number }[] = [];
     // Attaches Playwright to the WebView2 of a launch.
     const attach = async (launch: Instance): Promise<Page> => {
       try {
@@ -554,9 +561,27 @@ export const test = base.extend<{
           app.page = await appReady(await attach(instance));
           return app.page;
         },
-        restartAs: (other: string) => {
-          env.ESCOUADE_DATA_DIR = other;
+        restartAs: (dataDir: string) => {
+          env.ESCOUADE_DATA_DIR = dataDir;
           return app.restart();
+        },
+        second: async (dataDir: string) => {
+          const port2 = process.env.ESCOUADE_E2E_SECOND_CDP_PORT ? Number(process.env.ESCOUADE_E2E_SECOND_CDP_PORT) : port + 1;
+          if (!(await waitForPortToClose(port2))) throw new Error(`something still listens on port ${port2}: no second app`);
+          const env2: NodeJS.ProcessEnv = {
+            ...env,
+            ESCOUADE_DATA_DIR: dataDir,
+            WEBVIEW2_USER_DATA_FOLDER: path.join(root, 'webview-2'),
+            WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port2} ${RENDER_UNSEEN} ${FIXED_SCALE}`,
+          };
+          const launch = startApp(env2, path.join(root, 'app-2-stderr.log'));
+          others.push({ instance: launch, port: port2 });
+          const { browser, page: p } = await connect(port2, () => launch.stopped);
+          if (VIEWPORT) await p.setViewportSize({ width: Number(VIEWPORT[1]), height: Number(VIEWPORT[2]) });
+          launch.browser = browser;
+          await appReady(p);
+          await expect(p.getByRole('button', { name: LABELS[language].addProject }).first()).toBeVisible({ timeout: 45_000 });
+          return p;
         },
       };
       // What the app showed and logged, for a failure on CI (annotations are all we get there).
@@ -582,6 +607,10 @@ export const test = base.extend<{
       await use(app);
       if (testInfo.status !== testInfo.expectedStatus) throw new Error(`the app after the failure\n${await state()}`);
     } finally {
+      for (const other of others) {
+        await killApp(other.instance);
+        await waitForPortToClose(other.port);
+      }
       await killApp(instance);
       // The next test must not find this instance still answering on the port (it waits for that too, before it
       // starts; a test that passed does not fail for it).

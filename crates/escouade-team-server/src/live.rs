@@ -15,7 +15,7 @@ use serde::Serialize;
 use tokio::sync::broadcast;
 
 use crate::auth::Authed;
-use crate::db::Entry;
+use crate::db::{Claim, Entry};
 use crate::metrics::Metrics;
 use crate::transport::{cbor, Problem};
 use crate::util::Id;
@@ -28,18 +28,22 @@ pub const CLOSE_REVOKED: u16 = 4003;
 pub enum Event {
     Team(Entry),
     Project(Id, Entry),
+    /// A ticket of a project taken, renewed or given back (TS-6).
+    Claim(Id, Claim),
     Revoked(Id),
 }
 
 /// A frame to a device.
 #[derive(Serialize)]
 pub struct Frame<'a> {
-    /// `team`, `project` or `lagged`.
+    /// `team`, `project`, `claim` or `lagged`.
     pub stream: &'static str,
     #[serde(skip_serializing_if = "Option::is_none", with = "opt_bytes")]
     pub project: Option<&'a [u8]>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entry: Option<&'a Entry>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub claim: Option<&'a Claim>,
 }
 
 mod opt_bytes {
@@ -156,6 +160,14 @@ async fn close(socket: &mut WebSocket, code: u16, reason: &'static str) {
         .await;
 }
 
+/// Whether a device has access to a project (one the server does not know is the team's).
+async fn admitted(app: &Shared, team: Id, project: Id, device: Id) -> bool {
+    match app.store.access(team, project).await {
+        Ok(a) => a.is_none_or(|a| a.admits(&device)),
+        Err(_) => false,
+    }
+}
+
 async fn run(app: &Shared, mut socket: WebSocket, authed: Authed) {
     let me = authed.device.id;
     let mut rx = app.hub.subscribe(authed.device.team);
@@ -170,13 +182,18 @@ async fn run(app: &Shared, mut socket: WebSocket, authed: Authed) {
                             return;
                         }
                         Event::Revoked(_) => continue,
-                        Event::Team(entry) => cbor::encode(&Frame { stream: "team", project: None, entry: Some(entry) }),
+                        Event::Team(entry) => cbor::encode(&Frame { stream: "team", project: None, entry: Some(entry), claim: None }),
+                        // A project's frames go to the devices that have access to it alone (TS-6).
+                        Event::Project(p, _) | Event::Claim(p, _) if !admitted(app, authed.device.team, *p, me).await => continue,
                         Event::Project(p, entry) => {
-                            cbor::encode(&Frame { stream: "project", project: Some(p), entry: Some(entry) })
+                            cbor::encode(&Frame { stream: "project", project: Some(p), entry: Some(entry), claim: None })
+                        }
+                        Event::Claim(p, claim) => {
+                            cbor::encode(&Frame { stream: "claim", project: Some(p), entry: None, claim: Some(claim) })
                         }
                     },
                     Err(broadcast::error::RecvError::Lagged(_)) => {
-                        cbor::encode(&Frame { stream: "lagged", project: None, entry: None })
+                        cbor::encode(&Frame { stream: "lagged", project: None, entry: None, claim: None })
                     }
                     Err(broadcast::error::RecvError::Closed) => return,
                 };

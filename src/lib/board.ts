@@ -193,7 +193,12 @@ export function canStart(
   // Another one's shared ticket (ESC-190) is launched by hand whatever the autopilot: it never starts it. One whose file
   // cannot be read never starts. Held by a red target (ESC-63), the autopilot starts none: « Lancer » does.
   if (ticket.shared?.problem) return false;
-  return !issue && !pause && (!s.autopilot || isTheirs(ticket) || redTarget) && !ticket.forced && !quota && busyCount < s.maxParallel;
+  // A ticket of the team the autopilot was not given (TS-6, C11-A: neither assigned to me nor « À faire » taken by this
+  // board) is launched by hand too.
+  const notGiven = !!ticket.team && !ticket.team.assignedMe && !s.teamTakeTodo;
+  return (
+    !issue && !pause && (!s.autopilot || isTheirs(ticket) || notGiven || redTarget) && !ticket.forced && !quota && busyCount < s.maxParallel
+  );
 }
 
 /** As the backend fixes it: the first three letters of the project's name (accents folded), TIC without any. */

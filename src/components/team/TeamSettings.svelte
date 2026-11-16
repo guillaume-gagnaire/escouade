@@ -22,6 +22,7 @@
     type TeamSettingsView,
   } from '../../lib/team-settings';
   import { errorText, teams } from '../../lib/teams.svelte';
+  import { teamBoardApi } from '../../lib/teamboard';
   import { listedHere, teamProjectsApi } from '../../lib/team-projects';
 
   let { teamId, onback }: { teamId: string; onback: () => void } = $props();
@@ -110,6 +111,18 @@
     const what = t(`team.settings.change.${c.kind}`);
     if (c.kind === 'changed') return `${what} : ${shown(c.before)} → ${shown(c.after)}`;
     return `${what} : ${shown(c.kind === 'added' ? c.after : c.before)}`;
+  }
+
+  /** The id typed to join a teammate's Kanban, by project. */
+  let joining = $state<Record<string, string>>({});
+
+  async function linkBoard(id: string, journal: string | null) {
+    failure = '';
+    try {
+      await teamBoardApi.link(id, journal);
+    } catch (e) {
+      failure = errorText(e);
+    }
   }
 
   async function toggleProject(id: string, on: boolean) {
@@ -237,6 +250,27 @@
           />
           {p.name}
         </label>
+        {#if p.team === teamId}
+          <!-- TS-6: the project's Kanban made the team's, a new one or a teammate's by its id (TS-8 lists them). -->
+          <div class="board-link" data-team-board-link={p.id}>
+            {#if p.teamProject}
+              <span class="muted small mono" data-team-board-id={p.teamProject}>{t('teamBoard.link.linked', { id: p.teamProject })}</span>
+            {:else}
+              <button class="btn small" onclick={() => linkBoard(p.id, null)}>{t('teamBoard.link.create')}</button>
+              <input
+                class="field mono"
+                aria-label={t('teamBoard.link.idLabel')}
+                placeholder={t('teamBoard.link.idPlaceholder')}
+                bind:value={() => joining[p.id] ?? '', (v) => (joining[p.id] = v)}
+              />
+              <button
+                class="btn small"
+                disabled={!/^[0-9a-f]{32}$/i.test((joining[p.id] ?? '').trim())}
+                onclick={() => linkBoard(p.id, (joining[p.id] ?? '').trim().toLowerCase())}>{t('teamBoard.link.join')}</button
+              >
+            {/if}
+          </div>
+        {/if}
       {/each}
     </section>
 
@@ -304,6 +338,17 @@
 </div>
 
 <style>
+  .board-link {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 2px 0 8px 24px;
+  }
+  .board-link .field {
+    width: 22em;
+    max-width: 100%;
+  }
   .settings {
     display: flex;
     flex-direction: column;

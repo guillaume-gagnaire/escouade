@@ -1174,7 +1174,8 @@ pub fn reconcile(
 /// Under way or to test on another machine of the team, as its file says (ESC-190): never started here. This machine
 /// neither takes it up at its start nor counts it among its places.
 pub fn elsewhere(t: &Ticket) -> bool {
-    t.shared.is_some()
+    // A ticket of a team's Kanban too (TS-6): its holder's machine runs it.
+    (t.shared.is_some() || t.team.is_some())
         && t.started_at.is_none()
         && matches!(t.column, Column::Doing | Column::Review)
 }

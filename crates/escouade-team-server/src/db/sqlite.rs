@@ -82,7 +82,116 @@ CREATE TABLE IF NOT EXISTS files (
     at INTEGER NOT NULL,
     PRIMARY KEY (team_id, id)
 );
+CREATE TABLE IF NOT EXISTS project_access (
+    team_id BLOB NOT NULL,
+    project_id BLOB NOT NULL,
+    everyone INTEGER NOT NULL,
+    devices BLOB NOT NULL,
+    PRIMARY KEY (team_id, project_id)
+);
+CREATE TABLE IF NOT EXISTS claims (
+    team_id BLOB NOT NULL,
+    project_id BLOB NOT NULL,
+    ticket_id BLOB NOT NULL,
+    holder BLOB,
+    until INTEGER NOT NULL,
+    token INTEGER NOT NULL,
+    version INTEGER NOT NULL,
+    claimed_at INTEGER NOT NULL,
+    renewed_at INTEGER NOT NULL,
+    last_holder BLOB,
+    PRIMARY KEY (team_id, project_id, ticket_id)
+);
+CREATE TABLE IF NOT EXISTS project_keys (
+    team_id BLOB NOT NULL,
+    project_id BLOB NOT NULL,
+    n INTEGER NOT NULL,
+    PRIMARY KEY (team_id, project_id)
+);
 ";
+
+const CLAIM_COLUMNS: &str =
+    "ticket_id, holder, until, token, version, claimed_at, renewed_at, last_holder";
+
+fn claim_row(r: &rusqlite::Row) -> rusqlite::Result<Claim> {
+    let id = |v: Option<Vec<u8>>| v.and_then(|v| <Id>::try_from(v).ok());
+    Ok(Claim {
+        ticket: r.get(0)?,
+        holder: id(r.get(1)?),
+        until: r.get(2)?,
+        token: r.get::<_, i64>(3)? as u64,
+        version: r.get::<_, i64>(4)? as u64,
+        claimed_at: r.get(5)?,
+        renewed_at: r.get(6)?,
+        last_holder: id(r.get(7)?),
+    })
+}
+
+fn claim_of(c: &Connection, team: &Id, project: &Id, ticket: &[u8]) -> Result<Option<Claim>> {
+    Ok(c.query_row(
+        &format!(
+            "SELECT {CLAIM_COLUMNS} FROM claims WHERE team_id = ?1 AND project_id = ?2 AND ticket_id = ?3"
+        ),
+        params![team.as_slice(), project.as_slice(), ticket],
+        claim_row,
+    )
+    .optional()?)
+}
+
+fn put_claim(c: &Connection, team: &Id, project: &Id, claim: &Claim) -> Result<()> {
+    c.execute(
+        "INSERT INTO claims (team_id, project_id, ticket_id, holder, until, token, version, claimed_at, renewed_at, last_holder)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+         ON CONFLICT (team_id, project_id, ticket_id) DO UPDATE SET holder = excluded.holder, until = excluded.until,
+           token = excluded.token, version = excluded.version, claimed_at = excluded.claimed_at,
+           renewed_at = excluded.renewed_at, last_holder = excluded.last_holder",
+        params![
+            team.as_slice(),
+            project.as_slice(),
+            claim.ticket,
+            claim.holder.as_ref().map(|h| h.as_slice()),
+            claim.until,
+            claim.token as i64,
+            claim.version as i64,
+            claim.claimed_at,
+            claim.renewed_at,
+            claim.last_holder.as_ref().map(|h| h.as_slice())
+        ],
+    )?;
+    Ok(())
+}
+
+fn access_of(c: &Connection, team: &Id, project: &Id) -> Result<Option<Access>> {
+    Ok(c.query_row(
+        "SELECT everyone, devices FROM project_access WHERE team_id = ?1 AND project_id = ?2",
+        params![team.as_slice(), project.as_slice()],
+        |r| {
+            Ok(Access::from_parts(
+                r.get::<_, i64>(0)? != 0,
+                &r.get::<_, Vec<u8>>(1)?,
+            ))
+        },
+    )
+    .optional()?)
+}
+
+/// Whether a holder still holds: a device of the team not revoked, with access to the project.
+fn holder_ok(c: &Connection, team: &Id, project: &Id, holder: Option<Id>) -> Result<bool> {
+    let Some(holder) = holder else {
+        return Ok(true);
+    };
+    let revoked: Option<Option<i64>> = c
+        .query_row(
+            "SELECT revoked_at FROM devices WHERE id = ?1 AND team_id = ?2",
+            params![holder.as_slice(), team.as_slice()],
+            |r| r.get(0),
+        )
+        .optional()?;
+    if !matches!(revoked, Some(None)) {
+        return Ok(false);
+    }
+    Ok(access_of(c, team, project)?.is_none_or(|a| a.admits(&holder)))
+}
 
 pub struct Sqlite {
     conn: Arc<Mutex<Connection>>,
@@ -538,6 +647,12 @@ impl Store for Sqlite {
                         )
                         .optional()?;
                     let is_commit = entry.kind == Kind::Commit;
+                    // A holder's write passes under the claim's current token alone (TS-6).
+                    if let Some(fence) = &entry.fence {
+                        let claim = claim_of(&tx, &team, &project, &fence.ticket)?;
+                        let moved = fenced(claim, fence, entry.device)?;
+                        put_claim(&tx, &team, &project, &moved)?;
+                    }
                     let project_commits = current.map_or(0, |c| c.1);
                     if is_commit {
                         let asked = entry.epoch.unwrap_or(u64::MAX);
@@ -854,6 +969,105 @@ impl Store for Sqlite {
                 devices: devices as u64,
                 revoked_devices: revoked as u64,
             })
+        })
+        .await
+    }
+
+    async fn access(&self, team: Id, project: Id) -> Result<Option<Access>> {
+        self.run(move |c| access_of(c, &team, &project)).await
+    }
+
+    async fn set_access(&self, team: Id, project: Id, access: Access, admin: bool) -> Result<()> {
+        self.run(move |c| {
+            let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            if access_of(&tx, &team, &project)?.is_some() && !admin {
+                return Err(StoreError::NotAdmin);
+            }
+            tx.execute(
+                "INSERT INTO project_access (team_id, project_id, everyone, devices) VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT (team_id, project_id) DO UPDATE SET everyone = excluded.everyone, devices = excluded.devices",
+                params![team.as_slice(), project.as_slice(), access.everyone as i64, access.devices_bytes()],
+            )?;
+            tx.commit()?;
+            Ok(())
+        })
+        .await
+    }
+
+    async fn open_access(&self, team: Id, project: Id) -> Result<()> {
+        self.run(move |c| {
+            c.execute(
+                "INSERT OR IGNORE INTO project_access (team_id, project_id, everyone, devices) VALUES (?1, ?2, 1, x'')",
+                params![team.as_slice(), project.as_slice()],
+            )?;
+            Ok(())
+        })
+        .await
+    }
+
+    async fn claim(
+        &self,
+        team: Id,
+        project: Id,
+        ticket: Id,
+        device: Id,
+        ask: ClaimAsk,
+        now: i64,
+        lease: i64,
+    ) -> Result<Claim> {
+        self.run(move |c| {
+            let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let current = claim_of(&tx, &team, &project, &ticket)?;
+            if current.is_none() {
+                let n: i64 = tx.query_row(
+                    "SELECT COUNT(*) FROM claims WHERE team_id = ?1 AND project_id = ?2",
+                    params![team.as_slice(), project.as_slice()],
+                    |r| r.get(0),
+                )?;
+                if n >= MAX_CLAIMS {
+                    return Err(StoreError::TooMany("claims"));
+                }
+            }
+            let ok = holder_ok(
+                &tx,
+                &team,
+                &project,
+                current.as_ref().and_then(|c| c.holder),
+            )?;
+            let claim = decide(current, ticket, device, ask, now, lease, ok)?;
+            put_claim(&tx, &team, &project, &claim)?;
+            tx.commit()?;
+            Ok(claim)
+        })
+        .await
+    }
+
+    async fn claims(&self, team: Id, project: Id) -> Result<Vec<Claim>> {
+        self.run(move |c| {
+            let mut stmt = c.prepare_cached(&format!(
+                "SELECT {CLAIM_COLUMNS} FROM claims WHERE team_id = ?1 AND project_id = ?2 ORDER BY ticket_id"
+            ))?;
+            let rows = stmt.query_map(params![team.as_slice(), project.as_slice()], claim_row)?;
+            Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+        })
+        .await
+    }
+
+    async fn next_key(&self, team: Id, project: Id) -> Result<u64> {
+        self.run(move |c| {
+            let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            tx.execute(
+                "INSERT INTO project_keys (team_id, project_id, n) VALUES (?1, ?2, 1)
+                 ON CONFLICT (team_id, project_id) DO UPDATE SET n = n + 1",
+                params![team.as_slice(), project.as_slice()],
+            )?;
+            let n: i64 = tx.query_row(
+                "SELECT n FROM project_keys WHERE team_id = ?1 AND project_id = ?2",
+                params![team.as_slice(), project.as_slice()],
+                |r| r.get(0),
+            )?;
+            tx.commit()?;
+            Ok(n as u64)
         })
         .await
     }

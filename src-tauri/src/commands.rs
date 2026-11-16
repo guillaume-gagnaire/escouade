@@ -3189,6 +3189,48 @@ pub fn ticket_share(core: CoreState, id: String, on: bool) -> Res<Ticket> {
     core.ticket_share(&id, on).map_err(err)
 }
 
+/// « Kanban de l'équipe » (TS-6): the project's Kanban made its team's, a new journal (`team_project` null) or a
+/// teammate's (its id).
+#[tauri::command]
+pub async fn project_link_team_board(
+    core: CoreState<'_>,
+    project: String,
+    team_project: Option<String>,
+) -> Res<crate::model::Project> {
+    core.link_team_board(&project, team_project)
+        .await
+        .map_err(err)
+}
+
+/// « Reprendre » a ticket of the team whose holder's lease ran out (TS-6).
+#[tauri::command(async)]
+pub fn ticket_team_resume(core: CoreState, id: String) -> Res<Ticket> {
+    core.team_resume(&id).map_err(err)
+}
+
+/// « Reprendre le mien » (`keepMine`) or « Prendre le sien » of a conflict of a ticket of the team (TS-6).
+#[tauri::command(async)]
+pub fn ticket_team_settle(
+    core: CoreState,
+    id: String,
+    field: String,
+    keep_mine: bool,
+) -> Res<Ticket> {
+    core.team_settle(&id, &field, keep_mine).map_err(err)
+}
+
+/// « Me l'assigner », « Ne plus me l'assigner » (TS-6).
+#[tauri::command]
+pub async fn ticket_team_assign(core: CoreState<'_>, id: String, me: bool) -> Res<Ticket> {
+    core.team_assign(&id, me).await.map_err(err)
+}
+
+/// « Ne pas partager », « Partager avec l'équipe » of a ticket of a team's Kanban (TS-6).
+#[tauri::command(async)]
+pub fn ticket_team_local(core: CoreState, id: String, local: bool) -> Res<Ticket> {
+    core.team_set_local(&id, local).map_err(err)
+}
+
 /// « Masquer chez moi », or back on the board (ESC-190).
 #[tauri::command(async)]
 pub fn ticket_hide(core: CoreState, id: String, hidden: bool) -> Res<Ticket> {

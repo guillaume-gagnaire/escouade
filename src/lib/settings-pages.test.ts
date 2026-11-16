@@ -148,6 +148,7 @@ const BOARD_KEYS: Record<keyof BoardSettings, true> = {
   mode: true,
   autopilot: true,
   pauseOnRedTarget: true,
+  teamTakeTodo: true,
   prefix: true,
   nextNumber: true,
 };

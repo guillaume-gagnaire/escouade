@@ -22,7 +22,7 @@ use escouade_team_crypto::{DeviceId, HeadCheck, MemberId, ObjectId, Processed, P
 
 use super::{project_link_prefix, random, Team, TRIES};
 use crate::client::ClientError;
-use crate::replica::{ProjectMeta, Replica};
+use crate::replica::{Fence, ProjectMeta, Replica};
 use crate::wire::{self, Entry, Kind, TeamMessage};
 use crate::{CryptoError, Error};
 
@@ -41,6 +41,17 @@ pub struct ProjectSynced {
     pub sent: usize,
     /// This device wrote a snapshot.
     pub snapshot_made: bool,
+}
+
+/// Writes of a ticket's holder the server refused (TS-6): another device took the ticket over meanwhile (a device
+/// back from a cut). They are dropped from the outbox and from the copy, which goes back to what the journal says.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Refused {
+    pub project: ProjectId,
+    /// The claim as the server holds it now (its holder, its token).
+    pub claim: wire::Claim,
+    /// The operations dropped.
+    pub dropped: usize,
 }
 
 /// What the status bar says (§2.5): « Hors ligne · 3 changements en attente ».
@@ -95,7 +106,7 @@ impl Team {
         out.into_iter().collect()
     }
 
-    fn open_replica(&mut self, project: &ProjectId) -> Result<&Replica, Error> {
+    pub(super) fn open_replica(&mut self, project: &ProjectId) -> Result<&Replica, Error> {
         if !self.replicas.contains_key(project) {
             let r = Replica::open(&self.replica_path(project))?;
             self.replicas.insert(*project, r);
@@ -144,7 +155,7 @@ impl Team {
     }
 
     /// Notes whether the server answered.
-    fn heard<T>(&mut self, r: Result<T, ClientError>) -> Result<T, Error> {
+    pub(super) fn heard<T>(&mut self, r: Result<T, ClientError>) -> Result<T, Error> {
         match r {
             Ok(t) => {
                 self.online = Some(true);
@@ -153,6 +164,11 @@ impl Team {
             Err(e @ ClientError::Net(_)) => {
                 self.online = Some(false);
                 Err(e.into())
+            }
+            // The server keeps the project to other devices (TS-6).
+            Err(e) if e.code() == Some("no_access") => {
+                self.online = Some(true);
+                Err(Error::NoAccess)
             }
             Err(e) => {
                 self.online = Some(true);
@@ -197,6 +213,9 @@ impl Team {
                 let mut meta = r.meta()?;
                 meta.scope = Some(Scope::Project);
                 r.set_meta(&meta)?;
+                // Kept to its members on the server before anything is written in it (TS-6): its first write would
+                // open it to the whole team.
+                self.sync_access(project).await?;
                 if let Some((epoch, commit)) = publication.commit {
                     self.send_project_commit(project, epoch, commit).await?;
                 }
@@ -247,6 +266,10 @@ impl Team {
                 .commit
                 .ok_or_else(|| Error::Server("a staged commit without its commit".into()))?;
             if self.send_project_commit(project, epoch, commit).await? {
+                // Who has access on the server follows the group (TS-6): an administrator's device says it.
+                if self.device.is_admin().unwrap_or(false) {
+                    self.sync_access(project).await?;
+                }
                 return Ok(true);
             }
         }
@@ -346,6 +369,17 @@ impl Team {
     /// Writes an operation on this device: applied to its copy at once, put in the outbox (sent by
     /// [`Team::flush_project`] or the next [`Team::sync_project`]). Offline, it waits.
     pub fn write(&mut self, project: ProjectId, body: OpBody) -> Result<(), Error> {
+        self.write_fenced(project, body, None)
+    }
+
+    /// The same, for a write of a ticket's holder (TS-6): it carries the claim and its token, and the server refuses
+    /// it once another device took the ticket over ([`Team::take_refused`] then says so).
+    pub fn write_fenced(
+        &mut self,
+        project: ProjectId,
+        body: OpBody,
+        fence: Option<Fence>,
+    ) -> Result<(), Error> {
         let Some(scope) = self.scope_of(&project)? else {
             // Nothing read of it yet says whose key seals it: read it first ([`Team::sync_project`]).
             return Err(if self.open_replica(&project)?.meta()?.cursor > 0 {
@@ -380,7 +414,7 @@ impl Team {
             let bytes = op.to_bytes();
             let digest = Operation::digest_of(&bytes);
             r.apply(&op, &digest, None)?;
-            r.queue(&digest, &bytes)?;
+            r.queue_fenced(&digest, &bytes, fence.as_ref())?;
             meta.own = Some(Chain {
                 dseq: op.dseq,
                 digest,
@@ -494,16 +528,29 @@ impl Team {
                 return Ok(sent);
             };
             let op = Operation::from_bytes(&bytes)?;
+            let fence = self.open_replica(&project)?.outbox_fence(n)?;
             let sealed = self
                 .device
                 .seal_for(What::Operation, &project, scope, bytes)?;
             let answer = self
                 .client
-                .append_project(&project.0, &wire::encode(&sealed))
+                .append_project_fenced(
+                    &project.0,
+                    &wire::encode(&sealed),
+                    fence.map(|f| wire::FenceWire {
+                        ticket: f.claim.to_vec(),
+                        token: f.token,
+                    }),
+                )
                 .await;
             let seq = match self.heard(answer) {
                 Ok(seq) => seq,
                 Err(Error::Client(ClientError::Net(_))) => return Ok(sent),
+                Err(Error::Client(ClientError::Claim { code, claim })) if code == "stale_token" => {
+                    let stale = fence.expect("a refused fence was sent");
+                    self.drop_stale(project, stale, *claim)?;
+                    continue;
+                }
                 Err(e) => return Err(e),
             };
             self.open_replica(&project)?.atomically(|r| {
@@ -521,6 +568,47 @@ impl Team {
             })?;
             sent += 1;
         }
+    }
+
+    /// A holder's write refused: the outbox written again without the writes under that stale token (the device's
+    /// chain has no hole: what is kept is made again after the last operation the server took), the copy replayed.
+    fn drop_stale(
+        &mut self,
+        project: ProjectId,
+        stale: Fence,
+        claim: wire::Claim,
+    ) -> Result<(), Error> {
+        let device = self.device.author().device;
+        let r = self.open_replica(&project)?;
+        let taken = r.take_unsent()?;
+        let mut meta = r.meta()?;
+        meta.own = [meta.chains.get(&device).copied()]
+            .into_iter()
+            .chain(meta.sent.values().copied().map(Some))
+            .flatten()
+            .max_by_key(|c| c.dseq);
+        r.set_meta(&meta)?;
+        let mut dropped = 0;
+        for (bytes, fence) in taken {
+            if fence.is_some_and(|f| f.claim == stale.claim && f.token <= stale.token) {
+                dropped += 1;
+                continue;
+            }
+            let op = Operation::from_bytes(&bytes)?;
+            self.write_fenced(project, op.body, fence)?;
+        }
+        log::info!("team: {dropped} write(s) of a ticket taken over dropped");
+        self.refused.push(Refused {
+            project,
+            claim,
+            dropped,
+        });
+        Ok(())
+    }
+
+    /// The writes of a holder the server refused since the last call (TS-6): the interface says so.
+    pub fn take_refused(&mut self) -> Vec<Refused> {
+        std::mem::take(&mut self.refused)
     }
 
     // === Reading ===

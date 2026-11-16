@@ -2,7 +2,7 @@
 title: "Pilote auto"
 subject: "Kanban"
 sources: ["docs/SPEC.md","src-tauri/src/mcp/act_tests.rs","website/content/docs/fr/autopilot.md"]
-tickets: ["ESC-312","ESC-63","ESC-382"]
+tickets: ["ESC-312","ESC-63","ESC-382","ESC-479"]
 decisions: [20,24,123]
 compared: "2026-10-31T17:27:51+01:00"
 gaps: [{"text":"La page dit que les cartes « À faire » en attente d'un autre ticket affichent « ⏸ après … » et que ce texte passe avant « En attente : pilote auto en pause ». Le code affiche « Après {keys} » (en anglais « After {keys} »), sans le symbole ⏸.","code":["src/lib/i18n/fr/boardSettings.ts","src/lib/board.ts"]}]
@@ -69,3 +69,9 @@ L'agent d'un ticket arrêté par la limite sans reprise prévue (reprise automat
 
 - Une fenêtre de quota dont la fin n'est pas connue ne met jamais en pause.
 - Un ticket « À faire » d'un modèle retenu par sa fenêtre propre dit « En attente : pilote auto en pause » seulement quand tout le pilote auto l'est : sinon sa carte ne dit pas encore pourquoi il attend.
+
+## Les tickets d'un Kanban d'équipe (TS-6, C11-A)
+
+- Le pilote auto ne prend que les tickets de l'équipe qu'on lui confie : ceux assignés au membre de ce poste (« Me l'assigner »), et ceux de « À faire » quand « Prendre aussi « À faire » de l'équipe » est coché (Réglages › *projet* › Kanban, éteint par défaut, de ce poste seul, jamais dans `.escouade.yml`).
+- Il ne prend jamais un ticket qu'un collègue tient, ni un ticket interrompu chez un collègue (son bail expiré) : « Reprendre » le fait à la main. Il ne prend aucun ticket de l'équipe sans le serveur : sa prise échoue en silence et il le retente à la passe suivante.
+- Un ticket de l'équipe qu'il ne prendra pas garde « Lancer » sur sa carte, pilote auto allumé. Voir *Le Kanban d'équipe*.

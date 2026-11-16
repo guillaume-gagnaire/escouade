@@ -1,6 +1,6 @@
 # escouade-team : le client du serveur d'équipe (TS-2)
 
-Tickets ESC-458 (TS-2), ESC-461 (TS-3), ESC-466 (TS-5), ESC-471 (TS-13) et ESC-480 (TS-8) de `docs/TEAM-SERVER.md` §16. L'équipe est un groupe MLS (C9-B). Cette crate est le client : elle tient un appareil dans une équipe, avec ses clés au trousseau, son état sur le disque et son serveur, et fait entrer dans l'équipe (création, invitation, autre appareil, récupération). Le cœur la branche (`src-tauri/src/teams.rs`) : le `SecretStore` de l'app pour trousseau, son client HTTP (proxy et certificats des réglages), le dossier `teams` des données. Elle synchronise les projets de l'équipe (TS-5) : le journal d'opérations chiffrées et signées, la copie locale, la file d'envoi hors ligne, les instantanés. Elle tient la liste chiffrée des projets de l'équipe (TS-8).
+Tickets ESC-458 (TS-2), ESC-461 (TS-3), ESC-466 (TS-5), ESC-471 (TS-13), ESC-480 (TS-8) et ESC-479 (TS-6) de `docs/TEAM-SERVER.md` §16. L'équipe est un groupe MLS (C9-B). Cette crate est le client : elle tient un appareil dans une équipe, avec ses clés au trousseau, son état sur le disque et son serveur, et fait entrer dans l'équipe (création, invitation, autre appareil, récupération). Le cœur la branche (`src-tauri/src/teams.rs`) : le `SecretStore` de l'app pour trousseau, son client HTTP (proxy et certificats des réglages), le dossier `teams` des données. Elle synchronise les projets de l'équipe (TS-5) : le journal d'opérations chiffrées et signées, la copie locale, la file d'envoi hors ligne, les instantanés. Elle tient la liste chiffrée des projets de l'équipe (TS-8).
 
 ## La maquette devient la couche cryptographique
 
@@ -171,6 +171,27 @@ Après le départ d'un membre, les nouvelles opérations sont à l'époque suiva
 
 `src-tauri/src/teams.rs` tient la connexion en direct de chaque équipe (`LiveFeed`) : une trame (une entrée de l'équipe ou d'un projet, une connexion revenue, des trames perdues) déclenche la lecture de l'équipe puis de ses projets suivis, les trames d'une rafale lues une fois. La relecture de toutes les équipes passe de 3 s à 15 s et ne sert plus que si le direct ne passe pas. Le test du cœur `a_projects_operation_comes_by_the_live_feed` le vérifie avec la relecture à 60 s.
 
+## Le Kanban d'équipe (TS-6)
+
+Choix tranchés (§15.2) : C2-A, C11-A (le pilote auto ne prend que ce qu'on lui confie), C5-A (pas de passerelle `.yml`). La page de spec est « Le Kanban d'équipe » ; le cœur le branche dans `src-tauri/src/teamboard.rs`.
+
+### La prise d'un ticket (`team/claims.rs`)
+
+- `Team::take_claim`, `renew_claim`, `release_claim`, `claims` : la prise d'un ticket par son **id opaque** (16 octets tirés par le cœur, champ `claim` du ticket chiffré, jamais son `ObjectId`), par le serveur. Hors ligne, `ClientError::Net` : un ticket de l'équipe ne se prend jamais sans le serveur. Un refus est `ClientError::Claim { code, claim }` (`taken`, `stale_version`, `claim_lost`, `stale_token`), la prise du serveur en détail.
+- **Le jeton** : `Team::write_fenced(projet, opération, Some(Fence { claim, token }))` met l'opération dans la file avec sa garde (colonne `fence` de l'`outbox`, ajoutée à une copie plus ancienne). À l'envoi, le serveur refuse celle d'un jeton dépassé : `drop_stale` reprend toute la file (`Replica::take_unsent`, qui retire ces opérations du journal local et rejoue l'état), remet la chaîne de l'appareil à sa dernière opération prise par le serveur, et réécrit les autres dans l'ordre, sans celles de ce jeton ; `Team::take_refused` dit au cœur ce qui a été retiré. La chaîne de l'appareil n'a jamais de trou : un autre appareil la lit sans `Reordered`.
+- **Les droits** : `Team::sync_access` dit au serveur qui a accès à un projet (toute l'équipe, ou les appareils des membres d'un projet gardé), à sa création (avant le premier commit de son groupe : sa première écriture l'ouvrirait à toute l'équipe) et après chaque commit de son groupe par un administrateur. Un refus `no_access` du serveur devient `Error::NoAccess`.
+- **Les clés** : `Team::next_key`, le compteur du serveur ; le préfixe est un champ (`prefix`) de l'objet du projet dans le journal.
+- **Les noms** : `Team::set_name` écrit dans le projet un objet de genre `person` dont l'id est celui de l'appareil (son nom, son membre), chiffré comme le reste ; `name_of` traduit l'appareil d'une prise en nom (ou celui d'un autre appareil du même membre). C'est l'annuaire de TS-6, projet par projet, en attendant celui de l'équipe (TS-4).
+
+### Les conflits et la fusion à trois voies
+
+- `replica::Conflict` porte désormais la valeur de la base des deux écritures (`base`), lue dans `writes` à son horodatage.
+- `merge::merge3(base, mien, sien)` : une fusion ligne par ligne (plus longue sous-suite commune contre la base, puis morceaux entre lignes stables) ; `None` quand les deux côtés changent les mêmes lignes autrement, ou au-delà de 4 000 lignes. Le cœur réécrit la description fusionnée ; sinon la carte offre « Garder le mien » et « Prendre le sien ».
+
+### Les tests (`tests/claims.rs`, SQLite puis PostgreSQL)
+
+Deux prises en même temps (une passe, l'autre apprend le nom du preneur), le bail renouvelé puis fini (« interrompu », repris sous un nouveau jeton, le renouvellement trop tard refusé, le rendu), une écriture d'un jeton repris refusée et retirée sans trou dans la chaîne (les autres écritures parties), un membre retiré qui ne prend plus rien et un appareil hors d'un projet gardé (ni lecture, ni prise, ni clé), ce que garde le serveur (sa base lue : ni titre, ni préfixe, ni nom, ni objet), les numéros du compteur, et hors ligne puis retour (aucune prise, la file qui part, le titre au dernier, la description fusionnée à trois voies, « Reprendre le mien »). `merge.rs` a ses tests.
+
 ## Les tests
 
 ```sh
@@ -253,12 +274,13 @@ Les tests (`tests/catalog.rs`, contre le vrai serveur, sur SQLite puis PostgreSQ
 - **TS-4** : montrer l'équipe dans les espaces et ses réglages (membres, appareils, rôles, état du trousseau, hors ligne), retirer un appareil de soi qu'on oublie.
 - **TS-5** (fait, ESC-466, avec les projets d'une invitation et le direct dans le cœur de TS-3), sauf :
   - les écrans (« Hors ligne · N changements en attente », les conflits, le Kanban) : TS-4 et TS-6 ; la prise d'un ticket : TS-6 ; la fusion à trois voies des pages : TS-9 ;
-  - les droits par projet sur le serveur : il sert un projet à tout appareil de l'équipe, la clé seule protège un projet gardé à quelques membres ;
+  - les droits par projet sur le serveur : faits par TS-6 ;
   - l'écriture d'un lien d'historique manquant d'un groupe de projet par un autre appareil que son committeur (pour l'équipe, c'est fait) ;
   - la liste chiffrée des projets de l'équipe est faite (TS-8, ESC-480), mais elle ne porte pas encore l'id du projet synchronisé (TS-5) d'un projet de la liste : « Rattacher à l'équipe » avec ses tickets est TS-7 (ici, un appareil suit un projet dont on lui donne l'id, `Team::follow`) ;
 - **TS-8** (fait, ESC-480), sauf : la barre des projets par espace (avec les espaces d'Escouade à distance) ; un serveur qui cache une entrée de la liste à un appareil qui ne l'a jamais vue (comme pour TS-13) ; le choix des membres d'un accès par leur nom (l'annuaire chiffré est TS-4) ; l'accès d'un projet de la liste n'est pas encore celui de son groupe MLS (TS-7).
   - `write_object` et `read_objects` (l'objet scellé de TS-2) restent pour les fichiers ; les projets passent par les opérations.
-- **TS-18** : faire tourner les cibles de fuzzing longtemps, et l'e2e avec deux clients.
+- **TS-6** (fait, ESC-479), sauf : la liste des Kanbans de l'équipe (TS-8 : ici, on rejoint un Kanban par son identifiant) ; l'import des tickets existants (TS-7) ; passer l'agent d'un ticket interrompu (TS-17) ; l'annuaire des noms de toute l'équipe (TS-4 : ici, chaque projet porte les noms de ses appareils) ; un administrateur qui rend la prise d'un autre ; la règle de colonne d'un ticket pris est tenue par les clients (le serveur ne voit pas les déplacements).
+- **TS-18** : faire tourner les cibles de fuzzing longtemps ; l'e2e à deux clients en CI (`tests/e2e/team-board.spec.ts` en lance deux en même temps).
 - **L'audit externe (TS-20)** : les points 1 à 10 du README de la maquette. Pour cette crate, en plus :
   - le format du stockage (les clés en clair, dont l'id du groupe et les époques) ;
   - l'ordre état puis trousseau du point de contrôle ;

@@ -259,6 +259,7 @@ mod syspath;
 mod taskout;
 mod team_projects;
 mod team_settings;
+mod teamboard;
 mod teams;
 #[cfg(test)]
 mod teams_tests;
@@ -592,6 +593,8 @@ pub fn run() {
                 ))
             };
             app.manage(teams.clone());
+            // The Kanban of the teams' projects (TS-6): their journals, their claims.
+            core.set_teams(teams.clone());
             // The team's signed settings (TS-13): the version in force of each team to the core's locks and projects.
             {
                 let core = Arc::downgrade(&core);
@@ -1068,6 +1071,11 @@ pub fn run() {
                 commands::ticket_images,
                 commands::ticket_prioritize,
                 commands::ticket_share,
+                commands::project_link_team_board,
+                commands::ticket_team_resume,
+                commands::ticket_team_settle,
+                commands::ticket_team_assign,
+                commands::ticket_team_local,
                 commands::ticket_hide,
                 commands::shared_resolve,
                 commands::git_user_name,

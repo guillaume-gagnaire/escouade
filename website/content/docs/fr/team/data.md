@@ -17,12 +17,12 @@ Le serveur d’équipe est installé par ton équipe, sur une machine qu’elle 
 | L’équipe | ses membres et leurs rôles, les appareils de chacun, les invitations, les enveloppes de la clé de secours et de la clé de séquestre | les clés de tes appareils, au trousseau ; le nom que tu donnes à l’équipe | là |
 | Les réglages de l’équipe | son `.escouade.yml` d’équipe, signé, et son historique | tes accords aux clés sensibles et aux commandes proposées, les stratégies de ton poste | là |
 | La liste des projets | pour chaque projet : son nom, sa couleur, son logo, ses dépôts (leurs adresses), sa branche par défaut, qui y a accès | le dossier du projet, ses worktrees, ses réglages sur ce poste | là |
-| Les tickets de l’équipe | titre, description, critères, colonne, « Après », personnes, images et fichiers joints | boucles, coût, avancement, critères cochés, compte, modèle, agent, branche | à venir |
-| La prise d’un ticket | quel appareil le tient, jusqu’à quand : en clair, sans dire quel ticket c’est | | à venir |
+| Les tickets d’un Kanban partagé avec l’équipe | clé, titre, description, critères et leur état, colonne, place, boucles, avancement, assignation, le nom de chaque appareil | images et fichiers joints, compte, modèle, harness, agent, branche, coût ; les tickets « Ne pas partager » | là |
+| La prise d’un ticket | quel appareil le tient, jusqu’à quand, son jeton, le compteur des clés : en clair, sans dire quel ticket c’est | | là |
 | La spec, les décisions, les documents | les pages, les décisions, les fichiers déposés | le texte extrait, l’index, les vecteurs | à venir |
 | La mémoire partagée | les souvenirs et leur provenance | l’index et les vecteurs | à venir |
 
-Tant que les lignes « à venir » ne sont pas là, les tickets, la spec, les décisions, les documents et la mémoire de tes projets restent où ils sont aujourd’hui : sur ton poste et dans ton dépôt.
+Tant que les lignes « à venir » ne sont pas là, la spec, les décisions, les documents et la mémoire de tes projets restent où ils sont aujourd’hui : sur ton poste et dans ton dépôt. Les tickets d’un projet ne partent que si son Kanban est partagé avec l’équipe.
 
 ## Ce qui n’y part jamais
 

@@ -113,6 +113,186 @@ pub struct NewEntry {
     pub device: Id,
     pub at: i64,
     pub payload: Vec<u8>,
+    /// A write of a ticket's holder (TS-6): refused when its claim token is no longer the current one.
+    pub fence: Option<Fence>,
+}
+
+/// Who reads and writes a project on the server (TS-6, `docs/TEAM-SERVER.md` §2.6): every device of the team, or
+/// those listed. A project the server never heard of is open to every device of the team until its first write,
+/// which makes it so (an administrator restricts it).
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct Access {
+    pub everyone: bool,
+    pub devices: Vec<Id>,
+}
+
+impl Access {
+    pub fn admits(&self, device: &Id) -> bool {
+        self.everyone || self.devices.contains(device)
+    }
+
+    pub(crate) fn devices_bytes(&self) -> Vec<u8> {
+        self.devices.concat()
+    }
+
+    pub(crate) fn from_parts(everyone: bool, bytes: &[u8]) -> Access {
+        Access {
+            everyone,
+            devices: bytes.as_chunks::<16>().0.to_vec(),
+        }
+    }
+}
+
+/// The claim of a ticket (TS-6, §4.2), by its opaque id: which device holds it, until when, under which token. The
+/// server knows nothing else of the ticket: neither its title, nor its key, nor its column.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Claim {
+    #[serde(with = "serde_bytes")]
+    pub ticket: Vec<u8>,
+    /// The device that holds it; still there once its lease is over, until another one takes it (« interrompu »).
+    #[serde(default, with = "opt_id", skip_serializing_if = "Option::is_none")]
+    pub holder: Option<Id>,
+    /// The end of the lease (seconds); 0 when it was given back.
+    pub until: i64,
+    /// Grows at each claim: a write of the holder carries it, and one under an older token is refused.
+    pub token: u64,
+    /// Grows at each claim, release and write of the holder: what a claim expects, to take a ticket as it saw it.
+    pub version: u64,
+    pub claimed_at: i64,
+    /// The holder's last renewal: its device no longer answers when it is long past.
+    pub renewed_at: i64,
+    /// The device that held it last, after a release or a take-over.
+    #[serde(default, with = "opt_id", skip_serializing_if = "Option::is_none")]
+    pub last_holder: Option<Id>,
+}
+
+mod opt_id {
+    pub fn serialize<S: serde::Serializer>(v: &Option<[u8; 16]>, s: S) -> Result<S::Ok, S::Error> {
+        match v {
+            Some(b) => s.serialize_bytes(b),
+            None => s.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D: serde::Deserializer<'de>>(
+        d: D,
+    ) -> Result<Option<[u8; 16]>, D::Error> {
+        let v: Option<serde_bytes::ByteBuf> = serde::Deserialize::deserialize(d)?;
+        v.map(|b| {
+            b.into_vec()
+                .try_into()
+                .map_err(|_| serde::de::Error::custom("an id is 16 bytes"))
+        })
+        .transpose()
+    }
+}
+
+impl Claim {
+    pub fn free(ticket: Id) -> Claim {
+        Claim {
+            ticket: ticket.to_vec(),
+            holder: None,
+            until: 0,
+            token: 0,
+            version: 0,
+            claimed_at: 0,
+            renewed_at: 0,
+            last_holder: None,
+        }
+    }
+}
+
+/// A holder's write: the ticket's claim and the token it holds it under.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Fence {
+    pub ticket: Id,
+    pub token: u64,
+}
+
+/// What a device asks of a ticket's claim.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ClaimAsk {
+    /// Take it (free, its lease over, its holder gone, or already this device's: a new token), as it was at
+    /// `expected` (its version) when given.
+    Take { expected: Option<u64> },
+    /// Keep it a lease longer, under its token (also once its lease is over, while nobody took it).
+    Renew { token: u64 },
+    /// Give it back.
+    Release { token: u64 },
+}
+
+/// The most claims a project keeps (one per ticket ever taken).
+pub const MAX_CLAIMS: i64 = 100_000;
+
+/// What a claim becomes (the same for both bases): `holder_ok` says its holder is still a device of the project (not
+/// revoked, still with access); a holder gone holds nothing.
+pub(crate) fn decide(
+    current: Option<Claim>,
+    ticket: Id,
+    device: Id,
+    ask: ClaimAsk,
+    now: i64,
+    lease: i64,
+    holder_ok: bool,
+) -> Result<Claim> {
+    let c = current.unwrap_or_else(|| Claim::free(ticket));
+    let held_by_other = c.holder.is_some_and(|h| h != device) && c.until > now && holder_ok;
+    match ask {
+        ClaimAsk::Take { expected } => {
+            if held_by_other {
+                return Err(StoreError::Taken(c));
+            }
+            if expected.is_some_and(|v| v != c.version) {
+                return Err(StoreError::StaleVersion(c));
+            }
+            Ok(Claim {
+                holder: Some(device),
+                until: now + lease,
+                token: c.token + 1,
+                version: c.version + 1,
+                claimed_at: now,
+                renewed_at: now,
+                last_holder: c.holder.filter(|h| *h != device).or(c.last_holder),
+                ..c
+            })
+        }
+        ClaimAsk::Renew { token } => {
+            if c.holder != Some(device) || c.token != token {
+                return Err(StoreError::ClaimLost(c));
+            }
+            Ok(Claim {
+                until: now + lease,
+                renewed_at: now,
+                ..c
+            })
+        }
+        ClaimAsk::Release { token } => {
+            if c.holder != Some(device) || c.token != token {
+                return Err(StoreError::ClaimLost(c));
+            }
+            Ok(Claim {
+                holder: None,
+                until: 0,
+                version: c.version + 1,
+                renewed_at: now,
+                last_holder: Some(device),
+                ..c
+            })
+        }
+    }
+}
+
+/// Whether a holder's write passes: its token is the claim's current one, and it is its holder's. It moves the
+/// claim's version on.
+pub(crate) fn fenced(current: Option<Claim>, fence: &Fence, device: Id) -> Result<Claim> {
+    let c = current.unwrap_or_else(|| Claim::free(fence.ticket));
+    if c.holder != Some(device) || c.token != fence.token {
+        return Err(StoreError::StaleToken(c));
+    }
+    Ok(Claim {
+        version: c.version + 1,
+        ..c
+    })
 }
 
 /// The bounds a write is checked against, in its transaction.
@@ -181,6 +361,24 @@ pub enum StoreError {
     TooMany(&'static str),
     #[error("it exists already")]
     Exists,
+    /// The device has no access to the project (TS-6).
+    #[error("no access to this project")]
+    NoAccess,
+    /// Only an administrator changes who has access to a project.
+    #[error("an administrator's")]
+    NotAdmin,
+    /// Another device holds the ticket.
+    #[error("the ticket is taken")]
+    Taken(Claim),
+    /// The ticket moved on since the version the claim expected.
+    #[error("the ticket changed meanwhile")]
+    StaleVersion(Claim),
+    /// The claim is no longer this device's (renewed or given back).
+    #[error("the claim was lost")]
+    ClaimLost(Claim),
+    /// A holder's write under a token that is no longer the current one.
+    #[error("the claim token is stale")]
+    StaleToken(Claim),
     #[error("the base: {0}")]
     Backend(String),
 }
@@ -280,6 +478,30 @@ pub trait Store: Send + Sync {
     async fn used_bytes(&self, team: Id) -> Result<u64>;
 
     async fn counts(&self) -> Result<Counts>;
+
+    /// Who has access to a project, if the server knows it (TS-6).
+    async fn access(&self, team: Id, project: Id) -> Result<Option<Access>>;
+    /// Sets who has access to a project: anyone of the team the first time, an administrator afterwards
+    /// (`NotAdmin`).
+    async fn set_access(&self, team: Id, project: Id, access: Access, admin: bool) -> Result<()>;
+    /// Makes a project open to the whole team if the server never heard of it (its first write).
+    async fn open_access(&self, team: Id, project: Id) -> Result<()>;
+    /// Takes, renews or gives back a ticket's claim, in one transaction (§4.2).
+    #[allow(clippy::too_many_arguments)]
+    async fn claim(
+        &self,
+        team: Id,
+        project: Id,
+        ticket: Id,
+        device: Id,
+        ask: ClaimAsk,
+        now: i64,
+        lease: i64,
+    ) -> Result<Claim>;
+    /// A project's claims.
+    async fn claims(&self, team: Id, project: Id) -> Result<Vec<Claim>>;
+    /// The next number of a project's tickets (§4.1): 1, 2, 3…, one at a time, never twice.
+    async fn next_key(&self, team: Id, project: Id) -> Result<u64>;
 }
 
 /// The bound of a page of entries.
@@ -336,6 +558,103 @@ mod tests {
             at: 0,
             payload: vec![0; size],
         }
+    }
+
+    const T: Id = [1; 16];
+    const A: Id = [2; 16];
+    const B: Id = [3; 16];
+
+    #[test]
+    fn a_claim_passes_once_and_its_token_grows() {
+        let take = ClaimAsk::Take { expected: None };
+        let a = decide(None, T, A, take, 100, 600, true).unwrap();
+        assert_eq!((a.holder, a.token, a.until), (Some(A), 1, 700));
+        assert!(matches!(
+            decide(Some(a.clone()), T, B, take, 200, 600, true),
+            Err(StoreError::Taken(_))
+        ));
+        // Its lease over: B takes it, under a new token; A's write under the old one is refused.
+        let b = decide(Some(a.clone()), T, B, take, 701, 600, true).unwrap();
+        assert_eq!((b.holder, b.token, b.last_holder), (Some(B), 2, Some(A)));
+        let f = Fence {
+            ticket: T,
+            token: 1,
+        };
+        assert!(matches!(
+            fenced(Some(b.clone()), &f, A),
+            Err(StoreError::StaleToken(_))
+        ));
+        assert!(matches!(
+            decide(
+                Some(b.clone()),
+                T,
+                A,
+                ClaimAsk::Renew { token: 1 },
+                702,
+                600,
+                true
+            ),
+            Err(StoreError::ClaimLost(_))
+        ));
+        let f = Fence {
+            ticket: T,
+            token: 2,
+        };
+        assert_eq!(
+            fenced(Some(b.clone()), &f, B).unwrap().version,
+            b.version + 1
+        );
+        // A holder gone (revoked, out of the project) holds nothing.
+        assert!(decide(Some(b.clone()), T, A, take, 702, 600, false).is_ok());
+    }
+
+    #[test]
+    fn a_claim_expects_the_version_it_saw_and_is_given_back() {
+        let a = decide(
+            None,
+            T,
+            A,
+            ClaimAsk::Take { expected: Some(0) },
+            0,
+            600,
+            true,
+        )
+        .unwrap();
+        let back = decide(
+            Some(a.clone()),
+            T,
+            A,
+            ClaimAsk::Release { token: 1 },
+            10,
+            600,
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            (back.holder, back.until, back.last_holder),
+            (None, 0, Some(A))
+        );
+        assert!(matches!(
+            decide(
+                Some(back.clone()),
+                T,
+                B,
+                ClaimAsk::Take {
+                    expected: Some(a.version)
+                },
+                11,
+                600,
+                true
+            ),
+            Err(StoreError::StaleVersion(_))
+        ));
+        let take = ClaimAsk::Take {
+            expected: Some(back.version),
+        };
+        let b = decide(Some(back.clone()), T, B, take, 11, 600, true).unwrap();
+        assert_eq!(b.token, 2);
+        let renewed = decide(Some(b), T, B, ClaimAsk::Renew { token: 2 }, 400, 600, true).unwrap();
+        assert_eq!((renewed.until, renewed.renewed_at), (1000, 400));
     }
 
     #[test]

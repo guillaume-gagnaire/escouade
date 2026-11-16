@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Serveur d’équipe : le Kanban d’un projet se partage avec l’équipe, en direct. Un ticket se prend par le serveur, une seule fois, et chaque carte dit qui le tient et depuis quand ; deux changements du même champ en même temps se montrent à celui qui a perdu, et une description changée des deux côtés se fusionne seule.
 - Les fils d’une PR sous leur ligne dans l’onglet Fichiers, les résolus repliés et les périmés à part, avec « Suivante » (N) d’un fil ouvert à l’autre. Commente une ligne ou la PR, réponds, résous et rouvre un fil chez l’hébergeur sous ton compte, d’un clic : ton brouillon reste tant qu’il n’est pas parti.
 - Serveur d’équipe : « Projets de l’équipe » liste les projets de ton équipe, chiffrés pour que le serveur n’en lise rien. « Cloner » ouvre l’assistant « Nouveau projet » avec le dépôt rempli et passe par tes propres comptes git ; un projet déjà cloné est reconnu à l’adresse de son dépôt et se rattache sans nouveau clone.
 - Dans l’éditeur VS Code, les images, les PDF (pages, zoom, recherche), les documents Word et le Markdown s’ouvrent en aperçu, le Markdown aussi à côté de son source. Aucun script d’un fichier ne s’y exécute, et une image du web ne se charge que si tu cliques dessus.

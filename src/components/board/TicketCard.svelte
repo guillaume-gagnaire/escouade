@@ -35,6 +35,8 @@
   import { harnessHeld } from '../../lib/engines';
   import { isMulti, repoLabel, touchedRepos } from '../../lib/repos';
   import { alsoOn, authorName, hueOf, initialOf, isMine, isTheirs, sharedFile, theirsLine } from '../../lib/sharing';
+  import { heldElsewhere, isTeamBoard, teamBoardApi, teamElsewhere } from '../../lib/teamboard';
+  import TeamTicketBand from './TeamTicketBand.svelte';
   import { shareTicket } from '../../lib/share-actions';
   import { docsStore } from '../../lib/docs.svelte';
   import { pageTitle } from '../../lib/planning';
@@ -141,6 +143,8 @@
   /** Shared with the team (ESC-190): another one's ticket, the line it says, someone else on it too. */
   const theirs = $derived(isTheirs(ticket));
   const theirLine = $derived(theirsLine(ticket));
+  /** A ticket of the team under way, to test or in review on its holder's machine (TS-6): validated there, not here. */
+  const teamAway = $derived(teamElsewhere(ticket));
   const other = $derived(alsoOn(ticket, app.settings.userId));
   let rejecting = $state(false);
   /** The ⚠ of a failed sync shows its reason and « Resynchroniser ». */
@@ -239,6 +243,18 @@
   /** « Partager avec l'équipe », « Arrêter le partage » (ESC-190), for a ticket of ours. */
   function shareItems(): MenuItem[] {
     if (theirs) return [];
+    // A team's Kanban (TS-6): assigned to me or not, kept on this machine or shared; never by a file (C5-A).
+    if (isTeamBoard(project)) {
+      if (ticket.teamLocal) return [{ label: t('teamBoard.menu.share'), onClick: () => app.run(teamBoardApi.local(ticket.id, false)) }];
+      return [
+        ticket.team?.assignedMe
+          ? { label: t('teamBoard.menu.unassign'), onClick: () => app.run(teamBoardApi.assign(ticket.id, false)) }
+          : { label: t('teamBoard.menu.assignMe'), onClick: () => app.run(teamBoardApi.assign(ticket.id, true)) },
+        ...(heldElsewhere(ticket)
+          ? []
+          : [{ label: t('teamBoard.menu.local'), onClick: () => app.run(teamBoardApi.local(ticket.id, true)) }]),
+      ];
+    }
     const on = !!ticket.shared && !ticket.shared.gone;
     return [
       on
@@ -356,6 +372,7 @@
   class:attn={ticket.column === 'review'}
   class:past={ticket.column === 'done'}
   class:waiting
+  data-ticket-id={ticket.id}
   role="button"
   tabindex="0"
   aria-label={`${ticket.key} ${ticket.title}`}
@@ -486,6 +503,10 @@
     </div>
   {:else if ticket.shared?.newer}
     <div class="clash quiet" role="status"><Icon name="info" size={14} /><span>{t('share.card.newer')}</span></div>
+  {/if}
+  {#if ticket.team || ticket.teamLocal}
+    <!-- A ticket of a team's Kanban (TS-6): who holds it, its conflicts, « Sur ce poste seulement ». -->
+    <TeamTicketBand {ticket} {project} />
   {/if}
   {#if changedRepos.length}
     <span class="repos-line"
@@ -767,13 +788,17 @@
         class="grow"
         use:tip={{ text: why, cut: true }}>{why}</span
       >
-      {#if canStart(ticket, s, busyCount, quota, issue, pause, redTarget)}
+      {#if canStart(ticket, s, busyCount, quota, issue, pause, redTarget) && !heldElsewhere(ticket)}
         <button class="btn small" onclick={(e) => act(e, launch)}><Icon name="play" size={14} />{t('board.card.launch')}</button>
       {/if}
     </div>
   {:else if theirLine}
     <!-- Another one's ticket, under way, to test or done at theirs: who has it (choice 117). -->
     <div class="act theirs"><Icon name="team" size={14} /><span class="grow">{theirLine}</span></div>
+  {:else if teamAway && ticket.column !== 'doing'}
+    <div class="act theirs" data-team-away>
+      <Icon name="team" size={14} /><span class="grow">{t('teamBoard.card.reviewElsewhere')}</span>
+    </div>
   {:else if ticket.column === 'doing' && !ticket.blocked && (waiting || agent?.resumeAt || agent?.setup || activity || used)}
     <div class="act" class:wait={waiting}>
       {#if waiting}
@@ -821,7 +846,7 @@
     </div>
   {/if}
 
-  {#if ticket.column === 'review' && !ticket.step && !ticket.conflict && !theirLine}
+  {#if ticket.column === 'review' && !ticket.step && !ticket.conflict && !theirLine && !teamAway}
     {#if rejecting}
       <RejectForm onsubmit={reject} oncancel={() => (rejecting = false)} />
     {:else}

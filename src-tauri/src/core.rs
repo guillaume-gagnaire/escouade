@@ -1026,6 +1026,12 @@ pub struct Core {
     /// Why a ticket launched by hand was not started by the pass that took it up (`StartRefusal`),
     /// until it is launched again: the tool that launched it says it.
     pub(crate) start_refusals: Mutex<HashMap<String, crate::tickets::StartRefusal>>,
+    /// The teams of this data folder (TS-6): the Kanban of their projects reads and writes their journals.
+    pub(crate) team_link: RwLock<Option<Arc<crate::teams::Teams>>>,
+    /// The tickets of a team's Kanban deleted here, by project and object: they leave the journal at its next reading.
+    pub(crate) team_deleted: Mutex<Vec<(String, String)>>,
+    /// When each team's Kanban last read its claims from the server (TS-6).
+    pub(crate) team_claims_at: Mutex<HashMap<String, std::time::Instant>>,
     /// Agents whose turn the app's previous stop cut (active when saved): their tickets go on.
     pub(crate) cut_turns: Mutex<Vec<String>>,
     /// The GitHub CLI, when installed (pull requests).
@@ -1708,6 +1714,7 @@ pub(crate) fn blank_project(path: &str) -> Project {
         engine: None,
         private: false,
         team: None,
+        team_project: None,
         chef: None,
         docs_branch: String::new(),
         shared: Default::default(),
@@ -2185,6 +2192,9 @@ impl Core {
             works: AtomicUsize::new(0),
             board_lock: tokio::sync::Mutex::new(()),
             start_refusals: Mutex::new(HashMap::new()),
+            team_link: RwLock::new(None),
+            team_deleted: Mutex::default(),
+            team_claims_at: Mutex::default(),
             cut_turns: Mutex::new(cut_turns),
             gh: RwLock::new(locate_gh()),
             test_runs: Mutex::default(),
@@ -2570,6 +2580,8 @@ impl Core {
                     c.save_now();
                     // A ticket shared with the team writes its file at each change (ESC-190).
                     c.sync_all_shared();
+                    // And a ticket of a team's Kanban its operations (TS-6).
+                    c.team_boards_soon();
                 }
             }
         });

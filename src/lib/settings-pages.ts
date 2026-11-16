@@ -304,6 +304,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('onConflict', 'board', 'boardSettings.tab.onConflict', { board: ['conflict'] }),
   row('autoAssign', 'board', 'boardSettings.tab.autoAssign', { board: ['autopilot'] }),
   row('redTargetPause', 'board', 'boardSettings.tab.redTargetPause', { board: ['pauseOnRedTarget'] }),
+  row('teamTakeTodo', 'board', 'teamBoard.settings.takeTodo', { board: ['teamTakeTodo'] }),
   row('parallel', 'board', 'boardSettings.tab.parallel', { board: ['maxParallel'] }),
   row('model', 'board', 'common.model', { board: ['model'] }),
   row('effort', 'board', 'boardSettings.tab.effort', { board: ['effort'] }),

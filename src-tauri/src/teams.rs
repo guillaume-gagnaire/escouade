@@ -462,7 +462,15 @@ pub struct Teams {
     settings_views: Mutex<BTreeMap<String, escouade_team::settings::View>>,
     /// Told the version in force of a team's settings (None: the device left it): the core applies it.
     on_settings: Mutex<Option<SettingsSink>>,
+    /// Told a team was read (its projects too): the core brings the Kanban of its projects in step (TS-6).
+    on_projects: Mutex<Option<ProjectsSink>>,
+    /// The teams whose live feed told of a claim (a ticket taken, renewed, given back) since their Kanban last read the
+    /// claims (TS-6).
+    claim_frames: Mutex<std::collections::BTreeSet<String>>,
 }
+
+/// Where a reading of a team is told: its id (the core's Kanban of its projects, TS-6).
+pub type ProjectsSink = Arc<dyn Fn(&str) + Send + Sync>;
 
 /// Where a team's settings go: the team's id, its name, what applies.
 pub type SettingsSink =
@@ -522,6 +530,8 @@ impl Teams {
             live: Mutex::default(),
             settings_views: Mutex::default(),
             on_settings: Mutex::default(),
+            on_projects: Mutex::default(),
+            claim_frames: Mutex::default(),
         };
         let known = teams.known.lock().clone();
         for k in known {
@@ -1045,6 +1055,12 @@ impl Teams {
                 Err(e) => Err(e),
             }
         };
+        if done.is_ok() {
+            let sink = self.on_projects.lock().clone();
+            if let Some(sink) = sink {
+                sink(id);
+            }
+        }
         match done {
             Ok(()) => {
                 if self
@@ -1116,6 +1132,16 @@ impl Teams {
         ))
     }
 
+    /// Whether a claim of the team came by its live feed since the last call (the Kanban reads the claims again then).
+    pub fn take_claim_frame(&self, id: &str) -> bool {
+        self.claim_frames.lock().remove(id)
+    }
+
+    /// Where a reading of a team is told (the core's Kanban of its projects, TS-6).
+    pub fn set_projects_sink(&self, sink: ProjectsSink) {
+        *self.on_projects.lock() = Some(sink);
+    }
+
     /// Reads every team not under an alarm, and does what an online device does: forever, every `every`. Each team
     /// also has its live feed (TS-5): a frame of the server (an entry of the team or of a project, a connection come
     /// back, frames dropped) reads it at once; the watch is what is left when the feed cannot connect.
@@ -1156,17 +1182,37 @@ impl Teams {
                 if event == escouade_team::LiveEvent::Revoked {
                     break;
                 }
+                let claim =
+                    |e: &escouade_team::LiveEvent| matches!(e, escouade_team::LiveEvent::Claim(..));
+                let mut claims = claim(&event);
+                let mut others = !claims;
                 // A burst of frames is read once.
                 for _ in 0..50 {
                     match tokio::time::timeout(Duration::from_millis(100), feed.next()).await {
                         Ok(Some(escouade_team::LiveEvent::Revoked)) | Ok(None) => return,
-                        Ok(Some(_)) => {}
+                        Ok(Some(e)) => {
+                            let c = claim(&e);
+                            claims |= c;
+                            others |= !c;
+                        }
                         Err(_) => break,
                     }
                 }
                 let Some(teams) = me.upgrade() else { break };
-                if teams.known(&key).is_ok_and(|k| k.alarm.is_none()) {
+                if claims {
+                    teams.claim_frames.lock().insert(key.clone());
+                }
+                if !teams.known(&key).is_ok_and(|k| k.alarm.is_none()) {
+                    continue;
+                }
+                if others {
                     let _ = teams.sync(&key).await;
+                } else {
+                    // Claims alone: nothing to read of the streams, the Kanban reads the claims (TS-6).
+                    let sink = teams.on_projects.lock().clone();
+                    if let Some(sink) = sink {
+                        sink(&key);
+                    }
                 }
             }
         });

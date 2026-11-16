@@ -447,6 +447,7 @@ pub(super) async fn create_ticket(
         model,
         effort,
         shared: a.shared,
+        team_local: None,
         pages: None,
         decisions: None,
         scheduled: None,
@@ -559,6 +560,7 @@ pub(super) async fn update_ticket(
         model,
         effort,
         shared: a.shared,
+        team_local: None,
         pages: None,
         decisions: None,
         scheduled: None,
@@ -639,6 +641,10 @@ pub(super) async fn start_ticket(
     may_act_on(core, caller, &t.project_id)?;
     // Another one's shared ticket is started by hand alone (ESC-190, choice 130).
     if let Some(why) = crate::sharing::start_refusal(i18n::ui(), &t) {
+        return Err(ToolError::Refused(why));
+    }
+    // A ticket of the team a teammate holds (TS-6): refused with their name; else the start goes through the claim.
+    if let Some(why) = crate::teamboard::start_refusal(&t) {
         return Err(ToolError::Refused(why));
     }
     // Before anything: a model or an effort that does not fit starts nothing, writes nothing.
@@ -2266,6 +2272,7 @@ fn sub_draft(
         model: None,
         effort: None,
         shared: None,
+        team_local: None,
         pages: None,
         decisions: None,
         scheduled: None,

@@ -82,7 +82,134 @@ CREATE TABLE IF NOT EXISTS files (
     at BIGINT NOT NULL,
     PRIMARY KEY (team_id, id)
 );
+CREATE TABLE IF NOT EXISTS project_access (
+    team_id BYTEA NOT NULL,
+    project_id BYTEA NOT NULL,
+    everyone BOOLEAN NOT NULL,
+    devices BYTEA NOT NULL,
+    PRIMARY KEY (team_id, project_id)
+);
+CREATE TABLE IF NOT EXISTS claims (
+    team_id BYTEA NOT NULL,
+    project_id BYTEA NOT NULL,
+    ticket_id BYTEA NOT NULL,
+    holder BYTEA,
+    until BIGINT NOT NULL,
+    token BIGINT NOT NULL,
+    version BIGINT NOT NULL,
+    claimed_at BIGINT NOT NULL,
+    renewed_at BIGINT NOT NULL,
+    last_holder BYTEA,
+    PRIMARY KEY (team_id, project_id, ticket_id)
+);
+CREATE TABLE IF NOT EXISTS project_keys (
+    team_id BYTEA NOT NULL,
+    project_id BYTEA NOT NULL,
+    n BIGINT NOT NULL,
+    PRIMARY KEY (team_id, project_id)
+);
 ";
+
+const CLAIM_COLUMNS: &str =
+    "ticket_id, holder, until, token, version, claimed_at, renewed_at, last_holder";
+
+fn claim_row(r: &tokio_postgres::Row) -> Claim {
+    let id = |v: Option<Vec<u8>>| v.and_then(|v| <Id>::try_from(v).ok());
+    Claim {
+        ticket: r.get(0),
+        holder: id(r.get(1)),
+        until: r.get(2),
+        token: r.get::<_, i64>(3) as u64,
+        version: r.get::<_, i64>(4) as u64,
+        claimed_at: r.get(5),
+        renewed_at: r.get(6),
+        last_holder: id(r.get(7)),
+    }
+}
+
+async fn claim_of(
+    c: &impl tokio_postgres::GenericClient,
+    team: &Id,
+    project: &Id,
+    ticket: &[u8],
+) -> Result<Option<Claim>> {
+    Ok(c
+        .query_opt(
+            &format!(
+                "SELECT {CLAIM_COLUMNS} FROM claims WHERE team_id = $1 AND project_id = $2 AND ticket_id = $3"
+            ),
+            &[&team.as_slice(), &project.as_slice(), &ticket],
+        )
+        .await?
+        .map(|r| claim_row(&r)))
+}
+
+async fn put_claim(
+    c: &impl tokio_postgres::GenericClient,
+    team: &Id,
+    project: &Id,
+    claim: &Claim,
+) -> Result<()> {
+    c.execute(
+        "INSERT INTO claims (team_id, project_id, ticket_id, holder, until, token, version, claimed_at, renewed_at, last_holder)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (team_id, project_id, ticket_id) DO UPDATE SET holder = excluded.holder, until = excluded.until,
+           token = excluded.token, version = excluded.version, claimed_at = excluded.claimed_at,
+           renewed_at = excluded.renewed_at, last_holder = excluded.last_holder",
+        &[
+            &team.as_slice(),
+            &project.as_slice(),
+            &claim.ticket.as_slice(),
+            &claim.holder.as_ref().map(|h| h.as_slice()),
+            &claim.until,
+            &(claim.token as i64),
+            &(claim.version as i64),
+            &claim.claimed_at,
+            &claim.renewed_at,
+            &claim.last_holder.as_ref().map(|h| h.as_slice()),
+        ],
+    )
+    .await?;
+    Ok(())
+}
+
+async fn access_of(
+    c: &impl tokio_postgres::GenericClient,
+    team: &Id,
+    project: &Id,
+) -> Result<Option<Access>> {
+    Ok(c.query_opt(
+        "SELECT everyone, devices FROM project_access WHERE team_id = $1 AND project_id = $2",
+        &[&team.as_slice(), &project.as_slice()],
+    )
+    .await?
+    .map(|r| Access::from_parts(r.get(0), &r.get::<_, Vec<u8>>(1))))
+}
+
+/// Whether a holder still holds: a device of the team not revoked, with access to the project.
+async fn holder_ok(
+    c: &impl tokio_postgres::GenericClient,
+    team: &Id,
+    project: &Id,
+    holder: Option<Id>,
+) -> Result<bool> {
+    let Some(holder) = holder else {
+        return Ok(true);
+    };
+    let revoked = c
+        .query_opt(
+            "SELECT revoked_at FROM devices WHERE id = $1 AND team_id = $2",
+            &[&holder.as_slice(), &team.as_slice()],
+        )
+        .await?
+        .map(|r| r.get::<_, Option<i64>>(0));
+    if !matches!(revoked, Some(None)) {
+        return Ok(false);
+    }
+    Ok(access_of(c, team, project)
+        .await?
+        .is_none_or(|a| a.admits(&holder)))
+}
 
 pub struct Postgres {
     client: Mutex<Client>,
@@ -557,6 +684,12 @@ impl Store for Postgres {
                     .await?
                     .map(|r| (r.get::<_, i64>(0), r.get::<_, i64>(1)));
                 let is_commit = entry.kind == Kind::Commit;
+                // A holder's write passes under the claim's current token alone (TS-6); the team's row is locked.
+                if let Some(fence) = &entry.fence {
+                    let claim = claim_of(&tx, &team, &project, &fence.ticket).await?;
+                    let moved = fenced(claim, fence, entry.device)?;
+                    put_claim(&tx, &team, &project, &moved).await?;
+                }
                 let project_commits = current.map_or(0, |c| c.1);
                 if is_commit {
                     let asked = entry.epoch.unwrap_or(u64::MAX);
@@ -884,5 +1017,115 @@ impl Store for Postgres {
             devices: row.get::<_, i64>(0) as u64,
             revoked_devices: row.get::<_, i64>(1) as u64,
         })
+    }
+
+    async fn access(&self, team: Id, project: Id) -> Result<Option<Access>> {
+        let client = self.client.lock().await;
+        access_of(&*client, &team, &project).await
+    }
+
+    async fn set_access(&self, team: Id, project: Id, access: Access, admin: bool) -> Result<()> {
+        let mut client = self.client.lock().await;
+        let tx = client.transaction().await?;
+        tx.query_one(
+            "SELECT 1 FROM teams WHERE id = $1 FOR UPDATE",
+            &[&team.as_slice()],
+        )
+        .await?;
+        if access_of(&tx, &team, &project).await?.is_some() && !admin {
+            return Err(StoreError::NotAdmin);
+        }
+        tx.execute(
+            "INSERT INTO project_access (team_id, project_id, everyone, devices) VALUES ($1, $2, $3, $4)
+             ON CONFLICT (team_id, project_id) DO UPDATE SET everyone = excluded.everyone, devices = excluded.devices",
+            &[&team.as_slice(), &project.as_slice(), &access.everyone, &access.devices_bytes()],
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    async fn open_access(&self, team: Id, project: Id) -> Result<()> {
+        let client = self.client.lock().await;
+        client
+            .execute(
+                "INSERT INTO project_access (team_id, project_id, everyone, devices) VALUES ($1, $2, TRUE, '')
+                 ON CONFLICT (team_id, project_id) DO NOTHING",
+                &[&team.as_slice(), &project.as_slice()],
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn claim(
+        &self,
+        team: Id,
+        project: Id,
+        ticket: Id,
+        device: Id,
+        ask: ClaimAsk,
+        now: i64,
+        lease: i64,
+    ) -> Result<Claim> {
+        let mut client = self.client.lock().await;
+        let tx = client.transaction().await?;
+        // The team's row locked: claims and holders' writes go one at a time, as on SQLite.
+        tx.query_one(
+            "SELECT 1 FROM teams WHERE id = $1 FOR UPDATE",
+            &[&team.as_slice()],
+        )
+        .await?;
+        let current = claim_of(&tx, &team, &project, &ticket).await?;
+        if current.is_none() {
+            let n: i64 = tx
+                .query_one(
+                    "SELECT COUNT(*) FROM claims WHERE team_id = $1 AND project_id = $2",
+                    &[&team.as_slice(), &project.as_slice()],
+                )
+                .await?
+                .get(0);
+            if n >= MAX_CLAIMS {
+                return Err(StoreError::TooMany("claims"));
+            }
+        }
+        let ok = holder_ok(
+            &tx,
+            &team,
+            &project,
+            current.as_ref().and_then(|c| c.holder),
+        )
+        .await?;
+        let claim = decide(current, ticket, device, ask, now, lease, ok)?;
+        put_claim(&tx, &team, &project, &claim).await?;
+        tx.commit().await?;
+        Ok(claim)
+    }
+
+    async fn claims(&self, team: Id, project: Id) -> Result<Vec<Claim>> {
+        let client = self.client.lock().await;
+        Ok(client
+            .query(
+                &format!(
+                    "SELECT {CLAIM_COLUMNS} FROM claims WHERE team_id = $1 AND project_id = $2 ORDER BY ticket_id"
+                ),
+                &[&team.as_slice(), &project.as_slice()],
+            )
+            .await?
+            .iter()
+            .map(claim_row)
+            .collect())
+    }
+
+    async fn next_key(&self, team: Id, project: Id) -> Result<u64> {
+        let client = self.client.lock().await;
+        let n: i64 = client
+            .query_one(
+                "INSERT INTO project_keys (team_id, project_id, n) VALUES ($1, $2, 1)
+                 ON CONFLICT (team_id, project_id) DO UPDATE SET n = project_keys.n + 1 RETURNING n",
+                &[&team.as_slice(), &project.as_slice()],
+            )
+            .await?
+            .get(0);
+        Ok(n as u64)
     }
 }
