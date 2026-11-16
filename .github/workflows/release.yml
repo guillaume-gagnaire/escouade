@@ -8,7 +8,8 @@ name: Release
 # the in-app updater reads the latest release, so it never meets a half-built one. A failed build
 # just leaves the draft, and the previous release stays the latest.
 # It only builds: the tests run on each push to main (ci.yml), and a tag is put on a commit whose
-# CI is green.
+# CI is green. Every job runs in guillaume-gagnaire/escouade only: a fork or a copy has not the secrets,
+# and a private one would pay the build's minutes (ESC-483, scripts/workflows-origin.test.ts).
 on:
   push:
     tags: ['v*']
@@ -20,6 +21,7 @@ permissions:
 jobs:
   create:
     name: Create the release
+    if: github.repository == 'guillaume-gagnaire/escouade'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -92,6 +94,7 @@ jobs:
   # pinned Javy (scripts/escouade-js.sh), its SHA-256 noted, then handed to every job that builds the app, which embeds it.
   escouade-js:
     name: escouade-js (the JS/TS plugins' engine)
+    if: github.repository == 'guillaume-gagnaire/escouade'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -128,6 +131,7 @@ jobs:
   build:
     name: Build and upload (${{ matrix.name }})
     needs: [create, escouade-js]
+    if: github.repository == 'guillaume-gagnaire/escouade'
     strategy:
       fail-fast: false
       matrix:
@@ -343,6 +347,7 @@ jobs:
   publish:
     name: Publish the release once every system is in
     needs: [create, build]
+    if: github.repository == 'guillaume-gagnaire/escouade'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -530,7 +535,7 @@ jobs:
   announce:
     name: Announce on Discord
     needs: publish
-    if: ${{ !contains(github.ref_name, '-') }}
+    if: ${{ github.repository == 'guillaume-gagnaire/escouade' && !contains(github.ref_name, '-') }}
     permissions:
       contents: read
     uses: ./.github/workflows/discord.yml
@@ -549,6 +554,7 @@ jobs:
   attest:
     name: Attest the provenance of the binaries
     needs: [create, publish]
+    if: github.repository == 'guillaume-gagnaire/escouade'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

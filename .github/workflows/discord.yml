@@ -40,6 +40,7 @@ permissions:
 jobs:
   post:
     name: Post the notes on Discord (${{ matrix.lang }})
+    if: github.repository == 'guillaume-gagnaire/escouade'
     runs-on: ubuntu-latest
     strategy:
       # Each channel on its own: one refused does not keep the other from being posted.
