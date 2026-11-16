@@ -46,6 +46,7 @@
     "@codingame/monaco-vscode-preferences-service-override": "37.6.1",
     "@codingame/monaco-vscode-quickaccess-service-override": "37.6.1",
     "@codingame/monaco-vscode-rust-default-extension": "37.6.1",
+    "@codingame/monaco-vscode-scm-service-override": "37.6.1",
     "@codingame/monaco-vscode-search-service-override": "37.6.1",
     "@codingame/monaco-vscode-shellscript-default-extension": "37.6.1",
     "@codingame/monaco-vscode-storage-service-override": "37.6.1",

@@ -5,6 +5,7 @@ import { setLang } from '../../lib/i18n';
 import { app } from '../../lib/state.svelte';
 import { page, REOPEN_KEY, reopening } from '../../lib/vscode/load';
 import { viewUnsaved } from '../../lib/vscode/unsaved.svelte';
+import { viewShown } from '../../lib/vscode/shown.svelte';
 import { agent, fakeBackend, project, resetApp } from '../../test/ipc';
 import VscodeView from './VscodeView.svelte';
 
@@ -173,5 +174,31 @@ describe('VscodeView', () => {
     ]);
     expect(wb.workbench).toHaveBeenCalledWith({ projectId: 'p1', agentId: 'a1' }, expect.stringContaining('refacto-auth'), 15);
     expect(reopening.tabs).toEqual([]);
+  });
+
+  it('says how the file shown differs from its base, and compares it from its bar (ESC-476)', async () => {
+    const compare = vi.fn(async () => {});
+    viewShown.serve(compare);
+    viewShown.set(null);
+    render(VscodeView, { project: project() });
+    await waitFor(() => expect(wb.attach).toHaveBeenCalled());
+    expect(screen.queryByTestId('vscode-changes')).toBeNull();
+    const file = { projectId: 'p1', source: 'a1', path: 'src/app.ts', count: 5, reference: 'main', isNew: false };
+    viewShown.set(file);
+    await waitFor(() => expect(screen.getByTestId('vscode-changes').textContent?.trim()).toBe('5 lignes modifiées par rapport à main'));
+    await userEvent.click(screen.getByTestId('vscode-compare'));
+    expect(compare).toHaveBeenCalledTimes(1);
+    viewShown.set({ ...file, count: 1 });
+    await waitFor(() => expect(screen.getByTestId('vscode-changes').textContent?.trim()).toBe('1 ligne modifiée par rapport à main'));
+    viewShown.set({ ...file, isNew: true });
+    await waitFor(() => expect(screen.getByTestId('vscode-changes').textContent?.trim()).toBe('Nouveau fichier · absent de main'));
+    // The same as its base: said, nothing to compare.
+    viewShown.set({ ...file, count: 0, reference: 'HEAD' });
+    await waitFor(() => expect(screen.getByTestId('vscode-changes').textContent?.trim()).toBe('Identique à HEAD'));
+    expect(screen.queryByTestId('vscode-compare')).toBeNull();
+    // A file of another project: not this view's to tell.
+    viewShown.set({ ...file, projectId: 'p2' });
+    await waitFor(() => expect(screen.queryByTestId('vscode-changes')).toBeNull());
+    viewShown.set(null);
   });
 });

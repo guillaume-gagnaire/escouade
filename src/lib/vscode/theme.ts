@@ -210,6 +210,21 @@ export const COLORS = {
   'toolbar.activeBackground': 'p-soft',
   'diffEditor.insertedTextBackground': ['add', 0.18],
   'diffEditor.removedTextBackground': ['del', 0.18],
+  // The changes from the base (ESC-476): the comparison's lines, its gutter and the overview ruler, as the marks.
+  'diffEditor.insertedLineBackground': ['add', 0.1],
+  'diffEditor.removedLineBackground': ['del', 0.1],
+  'diffEditor.border': 'line',
+  'diffEditor.diagonalFill': ['line-2', 0.6],
+  'diffEditorGutter.insertedLineBackground': ['add', 0.14],
+  'diffEditorGutter.removedLineBackground': ['del', 0.14],
+  'diffEditorOverview.insertedForeground': ['add', 0.6],
+  'diffEditorOverview.removedForeground': ['del', 0.6],
+  'editorOverviewRuler.addedForeground': ['add', 0.6],
+  'editorOverviewRuler.modifiedForeground': ['git-m', 0.6],
+  'editorOverviewRuler.deletedForeground': ['del', 0.6],
+  'minimapGutter.addedBackground': 'add',
+  'minimapGutter.modifiedBackground': 'git-m',
+  'minimapGutter.deletedBackground': 'del',
 } as const satisfies Record<string, string | readonly [string, number]>;
 
 /** The syntax: TextMate scopes, each from a token. */

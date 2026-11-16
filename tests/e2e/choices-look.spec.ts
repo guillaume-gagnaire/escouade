@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { addProject, expect, FAKE_CODEX, send, test, openAdvanced, openSettingsPage } from './fixture';
+import { editorLines, explorerRow, openInExplorer, workbench } from './vscode';
 
 const SHOTS = process.env.ESCOUADE_E2E_SHOTS;
 const SMALL = { width: 1028, height: 779 };
@@ -65,8 +66,13 @@ test('50 to 52: the header of a narrow conversation folds, its path gives up the
 });
 
 // ESC-447: the tree and the search of the CodeMirror editor are gone with it (the project's editor is the VS Code view).
-// A7 brings back the marks and the comparison in the view; its tree and its search are VS Code's own.
-test.fixme('53 to 56: the editor’s tree, its actions on hover, no file icons, its folds, and what the search finds', async ({ app }) => {
+// ESC-476 (A7) keeps of 53 to 56 what has a meaning in the view: its tree, with the letters of the files changed and
+// their folders marked, and what its search finds (VS Code's, in Escouade's language). Retired with the old tree: its
+// actions over its count (53), no file icons (54: VS Code draws those of its icon theme) and its 200 px in a narrow
+// editor (55: VS Code's side bar keeps the width the user gives it).
+test('53 and 56: the view’s tree with its files changed marked, and what its search finds', async ({ app }) => {
+  test.skip(process.platform !== 'win32', 'WebView2: driven by its DevTools protocol');
+  test.setTimeout(240_000);
   const { page } = app;
   await page.setViewportSize(SMALL);
   for (const [file, text] of [
@@ -78,52 +84,46 @@ test.fixme('53 to 56: the editor’s tree, its actions on hover, no file icons, 
     fs.writeFileSync(path.join(app.repo, file), text);
   }
   git(app.repo, 'add', '-A');
-  git(app.repo, 'commit', '-qm', 'files');
+  git(app.repo, '-c', 'user.email=e2e@test', '-c', 'user.name=e2e', 'commit', '-qm', 'files');
   await addProject(page, app.repo);
+  // Changed since HEAD: marked in the tree.
+  fs.writeFileSync(
+    path.join(app.repo, 'src', 'routes', 'users.ts'),
+    'export const users = [];\nexport const paginate = () => users.slice(0, 50);\n// paginate\n',
+  );
   await page.getByRole('button', { name: 'Ouvrir l’éditeur du projet' }).click();
-  const ed = page.locator('main.editor');
-  const tree = ed.getByRole('tree', { name: 'Fichiers' });
-  for (const name of ['src', 'routes']) {
-    const dir = tree.getByRole('treeitem', { name: new RegExp(`^${name}`) });
-    if ((await dir.getAttribute('aria-expanded')) === 'false') await dir.click();
-  }
-  await tree.getByRole('treeitem', { name: /^users\.ts/ }).click();
-  await expect(ed.locator('.cm-content')).toContainText('paginate');
-  // 55: the tree is 200 px in an editor of 904 px or less.
-  expect(Math.round((await ed.locator('.tree').boundingBox())!.width)).toBeLessThanOrEqual(201);
-  // 54: no icon of a file's type in the tree.
-  await expect(tree.locator('.tree-row .ficon, .tree-row .ext-icon')).toHaveCount(0);
+  await openInExplorer(page, 'src/routes/users.ts');
+  await expect(editorLines(page)).toContainText('paginate');
+  const wb = workbench(page);
+  const badge = (name: string) =>
+    explorerRow(page, name).evaluate(
+      (el) => [el, ...el.querySelectorAll('*')].map((n) => getComputedStyle(n, '::after').content).find((c) => /^"\S+"$/.test(c)) ?? null,
+    );
   for (const t of THEMES) {
     await theme(page, t);
-    // 53: the tree's actions over its count while it is hovered.
-    await tree.hover();
-    await expect(ed.locator('.tree-h .actions')).toHaveCSS('opacity', '1');
-    // The title stays whole: in a narrow column, the actions go over the folder's line under it.
-    const title = ed.locator('.tree-h b');
-    const [titleRight, actions] = await Promise.all([
-      title.evaluate((n) => n.getBoundingClientRect().left + n.scrollWidth),
-      ed.locator('.tree-h .actions').evaluate((n) => n.getBoundingClientRect()),
-    ]);
-    const titleBox = (await title.boundingBox())!;
-    expect(actions.top >= titleBox.y + titleBox.height - 1 || actions.left >= titleRight, 'the title under the actions').toBe(true);
-    expect(await title.evaluate((n) => n.scrollWidth <= n.clientWidth + 1), 'the title whole').toBe(true);
-    await shot(page, 'choice-53-54-55-tree', t);
-    // 56: « 1 sur 3 » on a match, then a regular expression that is not one, in red.
-    await ed.locator('.cm-content').click();
+    await page.mouse.move(SMALL.width / 2, 400);
+    // 53: the file changed has its letter, its folders a mark.
+    await expect.poll(() => badge('users.ts'), { timeout: 30_000 }).toBe('"M"');
+    expect(await badge('routes')).not.toBeNull();
+    expect(await badge('README.md')).toBeNull();
+    await shot(page, 'choice-53-tree', t);
+    // 56: « 1 sur 2 » on a match, then a regular expression that is not one, in error.
+    await editorLines(page).click();
     await page.keyboard.press('Control+Home');
     await page.keyboard.press('Control+F');
-    const find = ed.locator('.cm-find');
+    const find = wb.locator('.editor-instance .find-widget.visible');
     await expect(find).toBeVisible();
-    const field = find.locator('.cm-find-field input').first();
-    await field.fill('paginate');
+    await page.keyboard.press('Control+A');
+    await page.keyboard.type('paginate');
     await page.keyboard.press('Enter');
-    await expect(find.locator('.cm-find-count')).toHaveText(/^\d+ sur \d+$/);
+    await expect(find.locator('.matchesCount')).toHaveText(/^\d+ sur 2$/);
     await shot(page, 'choice-56-count', t);
-    await find.locator('.cm-find-tog').nth(1).click();
-    await field.fill('pagin(');
-    await expect(find).toHaveClass(/cm-find-invalid/);
+    await page.keyboard.press('Alt+R');
+    await page.keyboard.press('Control+A');
+    await page.keyboard.type('pagin(');
+    await expect(find.locator('.monaco-findInput .monaco-inputbox.error')).toBeVisible();
     await shot(page, 'choice-56-invalid', t);
-    await find.locator('.cm-find-tog').nth(1).click();
+    await page.keyboard.press('Alt+R');
     await page.keyboard.press('Escape');
   }
 });

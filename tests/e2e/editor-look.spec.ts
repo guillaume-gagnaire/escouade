@@ -1,14 +1,12 @@
-// ESC-447: the project's editor is now the VS Code view (tests/e2e/vscode-view.spec.ts). These tests of the CodeMirror
-// editor of the 2.0 design are fixme until the tickets that bring what they check back in the view: A7 (the marks of
-// the changes from the base, the comparison with the disk, the choice of the source), A3 (its keys, its focus,
-// Ctrl+P, the links of the conversations); A4 (the theme followed at once, the fonts) has tests of the view, below.
-//
-// The editor in the 2.0 design (ESC-81, lot 9): its bar (back to the conversation, the source, « Enregistré »,
-// « Enregistrer »), the tree with its changed folders marked and its letters, the tabs, the path above the text with
-// what changed, the search floating at the top right, the marks of the changes between the numbers and the text, the
-// status line. Compared to the preview (design/app-redesign/index.html, `#editor`) in both themes at 1440 × 900 and at
-// CI's 1028 × 779; the English labels in their room; the motion stopped by prefers-reduced-motion. The captures of the
-// app and of the preview go to ESCOUADE_E2E_SHOTS when it is set.
+// The project's editor is the VS Code view (ESC-447, tests/e2e/vscode-view.spec.ts), checked against the editor of the
+// 2.0 design (ESC-81, lot 9: design/app-redesign/index.html, `#editor`) where the view draws what it drew: since A7
+// (ESC-476), the marks of the changes from main between the numbers and the text, the letters of the files changed and
+// their folders marked, « 5 lignes modifiées par rapport à main » in the view's bar, on the agent's worktree picked as
+// the source (tests/e2e/vscode-changes.spec.ts: the comparisons, the sources, the base that moves); since A4
+// (ESC-472), its theme followed at once, its fonts, its language; since A3 (ESC-464), its keys and Ctrl+P. Its tree,
+// tabs, search and status line are VS Code's own, not the preview's. In both themes at 1440 × 900 and at CI's
+// 1028 × 779; the English labels in their room; the motion stopped by prefers-reduced-motion. The captures of the app
+// and of the preview go to ESCOUADE_E2E_SHOTS when it is set.
 
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -16,7 +14,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium, type Locator, type Page } from '@playwright/test';
 import { addProject, closeSettings, expect, openSettingsPage, test } from './fixture';
-import { editorLines, openInExplorer, vscodeTabs, workbench } from './vscode';
+import { editorLines, explorerRow, openInExplorer, unfold, vscodeTabs, workbench } from './vscode';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..');
 const PREVIEW = path.join(ROOT, 'design', 'app-redesign', 'index.html');
@@ -145,52 +143,69 @@ async function agentAtWork(repo: string, write: ReturnType<typeof previewsProjec
   return wt;
 }
 
+/** The view's words, in each language. */
+const VIEW_WORDS = {
+  fr: { editor: 'Ouvrir l’éditeur du projet', five: '5 lignes modifiées par rapport à main' },
+  en: { editor: 'Open the project’s editor', five: '5 lines changed from main' },
+};
+
 /**
- * Opens the editor on the agent's worktree, the preview's folders open, the preview's three tabs in its order with
- * `users.ts` shown.
+ * Opens the VS Code view on the agent's worktree (ESC-476, A7), the project's folder folded and the preview's folders
+ * of the worktree open, the preview's three files in tabs with `users.ts` shown, its marks drawn and counted.
  */
 async function editorAsThePreview(page: Page, lang: 'fr' | 'en' = 'fr') {
-  await page.getByRole('button', { name: lang === 'fr' ? 'Ouvrir l’éditeur du projet' : 'Open the project’s editor' }).click();
-  const ed = page.locator('main.editor');
-  await ed.locator('.ed-bar .src').click();
+  const words = VIEW_WORDS[lang];
+  await page.getByRole('button', { name: words.editor }).click();
+  const view = page.getByTestId('vscode-view');
+  const wb = workbench(page);
+  await expect(wb).toBeVisible({ timeout: 60_000 });
+  await view.locator('.vscode-bar .src').click();
   await page.getByRole('menuitemradio').nth(1).click();
-  await expect(ed.locator('.status .source')).toContainText('worktree');
-  const tree = ed.getByRole('tree', { name: lang === 'fr' ? 'Fichiers' : 'Files' });
-  const dir = (name: string) => tree.getByRole('treeitem', { name: new RegExp(`^${name}`) });
-  for (const name of ['src', 'db', 'routes', 'tests']) {
-    await expect(dir(name)).toBeVisible();
-    if ((await dir(name).getAttribute('aria-expanded')) === 'false') await dir(name).click();
-    await expect(dir(name)).toHaveAttribute('aria-expanded', 'true');
+  const explorer = wb.locator('.explorer-folders-view');
+  const roots = explorer.locator('.monaco-list-row[aria-level="1"]');
+  await expect(roots).toHaveCount(2, { timeout: 30_000 });
+  await unfold(roots.nth(0), false);
+  await unfold(roots.nth(1), true);
+  for (const name of ['src', 'db', 'routes', 'tests']) await unfold(explorerRow(page, name));
+  for (const name of ['users.ts', 'paginate.ts', 'users.test.ts']) {
+    await explorerRow(page, name).click();
+    await expect.poll(() => vscodeTabs(page)).toContain(name);
   }
-  // Every tab closed, then the preview's three opened in its order.
-  const tabs = ed.getByRole('tablist');
-  while ((await tabs.getByRole('tab').count()) > 0) await tabs.getByRole('tab').first().getByRole('button').click();
-  // A file's name, then its letter when git has one for it.
-  const file = (name: string) => tree.getByRole('treeitem', { name: new RegExp(`^${name.replaceAll('.', '\\.')}( [MAD])?$`) });
-  for (const name of ['users.ts', 'paginate.ts', 'users.test.ts']) await file(name).click();
-  // A tab is named by its file and its close button: found by its file's name alone.
-  await tabs
-    .locator('.tab')
-    .filter({ has: page.getByText('users.ts', { exact: true }) })
-    .click();
-  await expect(ed.locator('.cm-content')).toContainText('paginate(db.users');
-  await expect(ed.locator('.crumbs .vs')).toHaveText(lang === 'fr' ? '5 lignes modifiées par rapport à main' : '5 lines changed from main');
-  return ed;
+  await explorerRow(page, 'users.ts').click();
+  await expect(editorLines(page)).toContainText('paginate(db.users');
+  // The keyboard in the text, as the preview draws it: the row of the file shown is not the explorer's focused one.
+  await editorLines(page).click();
+  await expect(view.getByTestId('vscode-changes')).toHaveText(words.five, { timeout: 30_000 });
+  await expect.poll(() => quickDiffMarks(page), { timeout: 30_000 }).toEqual(['added', 'added', 'modified', 'modified', 'modified']);
+  return view;
 }
 
-/** The search in the file, as the preview shows it: « paginate », whole word, on its first match. */
-async function findAsThePreview(page: Page, ed: Locator) {
-  await ed.locator('.cm-content').click();
-  await page.keyboard.press('Control+Home');
-  await page.keyboard.press('Control+F');
-  const find = ed.locator('.cm-find');
-  await expect(find).toBeVisible();
-  await page.keyboard.type('paginate');
-  await find.locator('.cm-find-tog').nth(2).click();
-  await page.keyboard.press('Enter');
-  await expect(find.locator('.cm-find-count')).toHaveText(/^1 (sur|of) 3$/);
-  return find;
-}
+/** The marks of VS Code's quick diff in the editor's margin, by kind, one per line, top to bottom. */
+const quickDiffMarks = (page: Page) =>
+  workbench(page)
+    .locator('.editor-instance .monaco-editor .margin-view-overlays .dirty-diff-glyph')
+    .evaluateAll((els) =>
+      els
+        .map((e) => ({ top: e.getBoundingClientRect().top, kind: /dirty-diff-(added|modified|deleted)/.exec(e.className)?.[1] ?? '' }))
+        .sort((a, b) => a.top - b.top)
+        .map((m) => m.kind),
+    );
+
+/** The letter VS Code draws after a row of its explorer (a badge, in a `::after`), its colour, and the colour of its name. */
+const explorerLetter = (row: Locator) =>
+  row.evaluate((el) => {
+    let letter: string | null = null;
+    let color = '';
+    for (const n of [el, ...el.querySelectorAll('*')]) {
+      const s = getComputedStyle(n, '::after');
+      const m = /^"(.+)"$/.exec(s.content);
+      if (m && m[1].trim()) {
+        letter = m[1].trim();
+        color = s.color;
+      }
+    }
+    return { letter, color, name: getComputedStyle(el.querySelector('.label-name') ?? el).color };
+  });
 
 /** The preview at `#route`, in theme `t`: from a blank page, for its script to open the route. */
 async function previewAt(preview: Page, route: string, t: 'dark' | 'light') {
@@ -200,10 +215,13 @@ async function previewAt(preview: Page, route: string, t: 'dark' | 'light') {
   await still(preview);
 }
 
-// A7: the editor of the preview, its marks of the changes from main and its source (its theme and fonts are the VS Code
-// view's own since A4, below).
-test.fixme('the editor looks as the preview draws it, in both themes, at both sizes', async ({ app }) => {
-  test.setTimeout(240_000);
+// A7 (ESC-476): the marks of the changes from main in the VS Code view, as the preview draws those of its editor: the
+// count of the lines changed in the view's bar (the preview's « 5 lignes modifiées par rapport à main »), the marks of
+// the lines added and changed between the numbers and the text, the letters of the files and the mark of their folders.
+// The tree, the tabs, the search and the status line are VS Code's own (their theme and fonts are A4's, below).
+test('the marks of the changes in the view look as the preview draws them, in both themes, at both sizes', async ({ app }) => {
+  test.skip(process.platform !== 'win32', 'WebView2: driven by its DevTools protocol');
+  test.setTimeout(300_000);
   const exe = chromium.executablePath();
   test.skip(
     !fs.existsSync(exe) || !fs.existsSync(PREVIEW_FONT),
@@ -213,8 +231,8 @@ test.fixme('the editor looks as the preview draws it, in both themes, at both si
   const write = previewsProject(app.repo);
   await addProject(page, app.repo, { worktrees: true });
   await agentAtWork(app.repo, write);
-  const ed = await editorAsThePreview(page);
-  const find = await findAsThePreview(page, ed);
+  const view = await editorAsThePreview(page);
+  const wb = workbench(page);
   const browser = await chromium.launch();
   const preview = await browser.newPage();
   try {
@@ -230,174 +248,56 @@ test.fixme('the editor looks as the preview draws it, in both themes, at both si
         const where = `${t} ${size.width}×${size.height}`;
         const pv = preview.locator('#view-editor');
 
-        // The bar: 52 px, back to the conversation, the source, « Enregistré », « Enregistrer ».
-        const bar = ed.locator('header.ed-bar');
-        const pbar = pv.locator('.ed-bar');
-        expect.soft(await place(bar), `bar's place, ${where}`).toLookLike(await place(pbar));
-        expect.soft(await look(bar), `bar, ${where}`).toLookLike(await look(pbar));
-        expect
-          .soft(await look(bar.locator('.btn').first()), `« Conversation », ${where}`)
-          .toLookLike(await look(pbar.locator('.btn').first()));
-        const src = bar.locator('.src');
-        const psrc = pbar.locator('.agent-pick');
-        expect.soft(await lookBut(src, 'width'), `the source, ${where}`).toLookLike(await lookBut(psrc, 'width'));
-        expect.soft((await place(src)).slice(0, 2), `the source's place, ${where}`).toLookLike((await place(psrc)).slice(0, 2));
-        expect
-          .soft(await lookBut(src.locator('.kind'), 'width'), `« worktree », ${where}`)
-          .toLookLike(await lookBut(psrc.locator('.wt'), 'width'));
-        expect.soft(await look(bar.locator('.saved')), `« Enregistré », ${where}`).toLookLike(await look(pbar.locator('.saved')));
-        const save = bar.locator('.btn').last();
-        const psave = pbar.locator('.btn').last();
-        expect.soft(await look(save), `« Enregistrer », ${where}`).toLookLike(await look(psave));
-        expect.soft(await place(save), `« Enregistrer »'s place, ${where}`).toLookLike(await place(psave));
+        // « 5 lignes modifiées par rapport à main »: its text, its colour, its font, « 5 lignes » in green.
+        const vs = view.getByTestId('vscode-changes');
+        const pvs = pv.locator('.ed-crumbs .vs');
+        await expect(vs).toHaveText((await pvs.textContent())!.trim());
+        const text = (l: Locator) => lookBut(l, 'width', 'height', 'padding', 'border', 'background', 'shadow', 'radius');
+        expect.soft(await text(vs), `the count, ${where}`).toLookLike(await text(pvs));
+        expect.soft(await text(vs.locator('.add')), `« 5 lignes », ${where}`).toLookLike(await text(pvs.locator('.add')));
+        await expect(view.getByTestId('vscode-compare')).toBeVisible();
 
-        // The tree: its column, its title and count, its folder, its rows, letters and dots.
-        const side = ed.locator('aside.editor-side');
-        const ptree = pv.locator('.tree');
-        const [sx, sy, sw] = await place(side);
-        const [px, py, pw] = await place(ptree);
-        expect.soft([sx, sy, sw], `the tree's place, its line included, ${where}`).toEqual([px, py, pw]);
-        expect
-          .soft(await lookBut(side.locator('.tree-h b'), 'width'), `« Fichiers », ${where}`)
-          .toLookLike(await lookBut(ptree.locator('.tree-h b'), 'width'));
-        expect
-          .soft(await lookBut(side.locator('.tree-h b .n'), 'width'), `its count, ${where}`)
-          .toLookLike(await lookBut(ptree.locator('.tree-h b span'), 'width'));
-        expect
-          .soft(await lookBut(side.locator('.tree-h .caption'), 'width'), `its folder, ${where}`)
-          .toLookLike(await lookBut(ptree.locator('.tree-h .caption'), 'width'));
-        expect
-          .soft(await place(side.locator('.tree-h .caption')), `its folder's place, ${where}`)
-          .toLookLike(await place(ptree.locator('.tree-h .caption')));
-        const row = side.locator('.row').first();
-        const prow = ptree.locator('.node').first();
-        expect.soft(await place(row), `the first row's place, ${where}`).toLookLike(await place(prow));
-        expect.soft(await look(row), `a folder, ${where}`).toLookLike(await look(prow));
-        const on = side.locator('.row.on');
-        const pon = ptree.locator('.node[aria-current="true"]');
-        expect.soft(await place(on), `the file shown, its place, ${where}`).toLookLike(await place(pon));
-        expect.soft(await look(on), `the file shown, ${where}`).toLookLike(await look(pon));
-        for (const l of ['m', 'a'])
-          expect
-            .soft(await lookBut(side.locator(`.letter.${l}`).first(), 'width'), `letter ${l.toUpperCase()}, ${where}`)
-            .toLookLike(await lookBut(ptree.locator(`.letter.${l}`).first(), 'width'));
-        expect
-          .soft(await look(side.locator('.mdot').first()), `a changed folder's dot, ${where}`)
-          .toLookLike(await look(ptree.locator('.mdot').first()));
-        const [mx] = await place(side.locator('.mdot').first());
-        const [pmx] = await place(ptree.locator('.mdot').first());
-        expect.soft(mx, `the dot after its folder's name, ${where}`).toBe(pmx);
+        // The marks: the lines added and changed, in the preview's colours.
+        await expect
+          .poll(() => quickDiffMarks(page), { message: `the marks, ${where}` })
+          .toEqual(['added', 'added', 'modified', 'modified', 'modified']);
+        const glyph = (kind: string) =>
+          wb.locator(`.editor-instance .monaco-editor .margin-view-overlays .dirty-diff-glyph.dirty-diff-${kind}`).first();
+        const markColor = (l: Locator) => l.evaluate((n) => getComputedStyle(n).borderLeftColor);
+        const pmark = (cls: string) =>
+          pv
+            .locator(`.code-ed .l.${cls} .gm`)
+            .first()
+            .evaluate((n) => getComputedStyle(n).backgroundColor);
+        const added = await pmark('ad');
+        const changed = await pmark('md');
+        await expect.poll(() => markColor(glyph('added')), { message: `an added line's mark, ${where}` }).toLookLike(added);
+        await expect.poll(() => markColor(glyph('modified')), { message: `a changed line's mark, ${where}` }).toLookLike(changed);
 
-        // The tabs: 38 px, the one shown lit and underlined.
-        const tabs = ed.locator('.tabs');
-        const ptabs = pv.locator('.ed-tabs');
-        expect.soft(await lookBut(tabs, 'width'), `tabs, ${where}`).toLookLike(await lookBut(ptabs, 'width'));
-        const tab = tabs.locator('.tab.on');
-        const ptab = ptabs.locator('[aria-selected="true"]');
-        expect.soft(await look(tab), `the tab shown, ${where}`).toLookLike(await look(ptab));
-        expect.soft(await place(tab), `the tab shown, its place, ${where}`).toLookLike(await place(ptab));
-        expect
-          .soft(await look(tabs.locator('.tab:not(.on)').first()), `another tab, ${where}`)
-          .toLookLike(await look(ptabs.locator('[aria-selected="false"]').first()));
-        expect.soft(await look(tab.locator('.close')), `its close button, ${where}`).toLookLike(await look(ptab.locator('.x')));
-
-        // The path above the text, and what changed.
-        const crumbs = ed.locator('.crumbs');
-        const pcrumbs = pv.locator('.ed-crumbs');
-        expect.soft(await place(crumbs), `the path's place, ${where}`).toLookLike(await place(pcrumbs));
-        expect.soft(await look(crumbs), `the path, ${where}`).toLookLike(await look(pcrumbs));
-        expect
-          .soft(await lookBut(crumbs.locator('.last'), 'width'), `the file's name, ${where}`)
-          .toLookLike(await lookBut(pcrumbs.locator('span[style]'), 'width'));
-        expect
-          .soft(await lookBut(crumbs.locator('.vs'), 'width'), `what changed, ${where}`)
-          .toLookLike(await lookBut(pcrumbs.locator('.vs'), 'width'));
-        expect
-          .soft(await lookBut(crumbs.locator('.vs .add'), 'width'), `« 5 lignes », ${where}`)
-          .toLookLike(await lookBut(pcrumbs.locator('.vs .add'), 'width'));
-
-        // The search, floating at the top right.
-        const pfind = pv.locator('.find');
-        expect.soft(await place(find), `the search's place, ${where}`).toLookLike(await place(pfind));
-        expect.soft(await look(find), `the search, ${where}`).toLookLike(await look(pfind));
-        const field = find.locator('.cm-find-field').first();
-        expect.soft(await lookBut(field, 'width'), `its field, ${where}`).toLookLike(await lookBut(pfind.locator('.field.focus'), 'width'));
-        expect.soft(await place(field), `its field's place, ${where}`).toLookLike(await place(pfind.locator('.field.focus')));
-        expect
-          .soft(await place(find.locator('.cm-find-field').last()), `the replacement's place, ${where}`)
-          .toLookLike(await place(pfind.locator('.field:not(.focus)')));
-        expect
-          .soft(await lookBut(find.locator('.cm-find-field').last(), 'width'), `the replacement, ${where}`)
-          .toLookLike(await lookBut(pfind.locator('.field:not(.focus)'), 'width'));
-        expect
-          .soft(await lookBut(find.locator('.cm-find-count'), 'width'), `« 1 sur 3 », ${where}`)
-          .toLookLike(await lookBut(pfind.locator('.count'), 'width'));
-        for (const pressed of ['true', 'false'])
-          expect
-            .soft(await look(find.locator(`.cm-find-tog[aria-pressed="${pressed}"]`).first()), `a toggle ${pressed}, ${where}`)
-            .toLookLike(await look(pfind.locator(`.tog[aria-pressed="${pressed}"]`).first()));
-        expect
-          .soft(await look(find.locator('.cm-find-btn').first()), `an icon button, ${where}`)
-          .toLookLike(await look(pfind.locator('.icon-btn').first()));
-        expect
-          .soft(await look(find.locator('.cm-find-mini').first()), `« Remplacer », ${where}`)
-          .toLookLike(await look(pfind.locator('.mini-btn').first()));
-
-        // The text: its font, its numbers, the marks of the changes, where it starts; the matches.
-        const code = pv.locator('.code-ed');
-        const content = ed.locator('.cm-content');
-        const fontOf = (el: Locator) =>
-          el.evaluate((n) => {
-            const c = getComputedStyle(n);
-            return [c.fontFamily, c.fontSize, c.lineHeight, c.color];
-          });
-        expect.soft(await fontOf(content), `the text's font, ${where}`).toLookLike(await fontOf(code));
-        const nb = ed.locator('.cm-lineNumbers .cm-gutterElement').nth(1);
-        const pnb = code.locator('.l .nb').first();
-        expect.soft(await lookBut(nb, 'width'), `a line's number, ${where}`).toLookLike(await lookBut(pnb, 'width'));
-        const [nbx, nby, nbw] = await place(nb);
-        const [pnbx, pnby, pnbw] = await place(pnb);
-        expect.soft([nbx + nbw, nby], `the numbers' right edge and first line, ${where}`).toEqual([pnbx + pnbw, pnby]);
-        const line = ed.locator('.cm-line').first();
-        const startOf = (el: Locator) =>
-          el.evaluate((n) => Math.round(n.getBoundingClientRect().x + parseFloat(getComputedStyle(n).paddingLeft)));
-        expect
-          .soft(await startOf(line), `where the text starts, ${where}`)
-          .toBe(await startOf(code.locator('.l').first().locator('> span').nth(2)));
-        const mark = (el: Locator) =>
-          el.evaluate((n) => {
-            const s = getComputedStyle(n, '::before');
-            const r = n.getBoundingClientRect();
-            return { x: Math.round(r.x), width: Math.round(r.width), background: s.backgroundColor, radius: s.borderRadius };
-          });
-        const pmark = (el: Locator) =>
-          el.evaluate((n) => {
-            const s = getComputedStyle(n);
-            const r = n.getBoundingClientRect();
-            return { x: Math.round(r.x), width: Math.round(r.width), background: s.backgroundColor, radius: s.borderRadius };
-          });
-        expect
-          .soft(await mark(ed.locator('.cm-change.changed:not(.modified)').first()), `a line added, ${where}`)
-          .toLookLike(await pmark(code.locator('.l.ad .gm').first()));
-        expect
-          .soft(await mark(ed.locator('.cm-change.modified').first()), `a line modified, ${where}`)
-          .toLookLike(await pmark(code.locator('.l.md .gm').first()));
-        const bg = (el: Locator) => el.evaluate((n) => [getComputedStyle(n).backgroundColor, getComputedStyle(n).color]);
-        expect
-          .soft(await bg(ed.locator('.cm-searchMatch-selected')), `the match the cursor is on, ${where}`)
-          .toLookLike(await bg(code.locator('.hit.cur-hit')));
-        expect
-          .soft((await bg(ed.locator('.cm-searchMatch:not(.cm-searchMatch-selected)').first()))[0], `a match, ${where}`)
-          .toLookLike((await bg(code.locator('.hit:not(.cur-hit)').first()))[0]);
-
-        // The status line.
-        const status = ed.locator('.status');
-        const pstatus = pv.locator('.ed-status');
-        expect.soft(await place(status), `the status line's place, ${where}`).toLookLike(await place(pstatus));
-        expect.soft(await look(status), `the status line, ${where}`).toLookLike(await look(pstatus));
-        expect
-          .soft(await lookBut(status.locator('.source .mono'), 'width'), `its worktree, ${where}`)
-          .toLookLike(await lookBut(pstatus.locator('.end .mono'), 'width'));
+        // The letters of the files changed, and their folders marked, in the preview's colours.
+        for (const [name, cls, letter] of [
+          ['users.ts', 'm', 'M'],
+          ['paginate.ts', 'a', 'A'],
+          ['users.test.ts', 'm', 'M'],
+        ] as const) {
+          const got = await explorerLetter(explorerRow(page, name));
+          expect.soft(got.letter, `${name}'s letter, ${where}`).toBe(letter);
+          const want = await pv
+            .locator(`.node .letter.${cls}`)
+            .first()
+            .evaluate((n) => getComputedStyle(n).color);
+          expect.soft(got.color, `${name}'s letter's colour, ${where}`).toLookLike(want);
+          expect.soft(got.name, `${name}'s name in its colour, ${where}`).toLookLike(want);
+        }
+        const dot = await pv
+          .locator('.node .mdot')
+          .first()
+          .evaluate((n) => getComputedStyle(n).backgroundColor);
+        for (const name of ['src', 'routes']) {
+          const got = await explorerLetter(explorerRow(page, name));
+          expect.soft(got.letter, `${name} marked, ${where}`).not.toBeNull();
+          expect.soft(got.color, `${name}'s mark in the colour of the preview's dot, ${where}`).toLookLike(dot);
+        }
 
         if (SHOTS) {
           fs.mkdirSync(SHOTS, { recursive: true });
@@ -702,43 +602,52 @@ test('the search through the conversations draws its icons, not characters', asy
 test.describe('in English', () => {
   test.use({ language: 'en' });
 
-  // A7: the bar, the source and the marks of the changes of the editor of the preview.
-  test.fixme('the labels of the editor fit in their place, at both sizes', async ({ app }) => {
+  // A7 (ESC-476): the view's bar on the agent's worktree, its count of the lines changed and « Compare », in English;
+  // VS Code's commands of the comparison too.
+  test('the labels of the view’s bar fit in their place, at both sizes', async ({ app }) => {
+    test.skip(process.platform !== 'win32', 'WebView2: driven by its DevTools protocol');
+    test.setTimeout(240_000);
     const { page } = app;
     const write = previewsProject(app.repo);
     await addProject(page, app.repo, { worktrees: true, lang: 'en' });
     await agentAtWork(app.repo, write);
-    const ed = await editorAsThePreview(page, 'en');
-    const find = await findAsThePreview(page, ed);
+    const view = await editorAsThePreview(page, 'en');
     for (const size of SIZES) {
       await page.setViewportSize(size);
       await page.mouse.move(size.width / 2, 20);
-      // What is cut short, or overflows its box: none of it, but the names of the user's files and folders, cut by design.
-      const cut = await ed.evaluate((root) =>
-        [...root.querySelectorAll<HTMLElement>('.ed-bar *, .tree-h *, .tabs *, .crumbs *, .status *, .cm-find *')]
-          .filter(
-            (el) =>
-              el.offsetParent &&
-              el.children.length === 0 &&
-              !el.closest('.caption, .src .nm, .path, .source') &&
-              (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1),
-          )
-          .map((el) => `${el.tagName.toLowerCase()}.${el.className} « ${el.textContent?.trim().slice(0, 40)} »`),
-      );
+      // What is cut short, or overflows its box: none of it, but the name of the source, cut by design.
+      const cut = await view
+        .locator('.vscode-bar')
+        .evaluate((root) =>
+          [...root.querySelectorAll<HTMLElement>('*')]
+            .filter(
+              (el) =>
+                el.offsetParent &&
+                el.children.length === 0 &&
+                !el.closest('.src .nm, .src') &&
+                (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1),
+            )
+            .map((el) => `${el.tagName.toLowerCase()}.${el.className} « ${el.textContent?.trim().slice(0, 40)} »`),
+        );
       expect(cut, `${size.width}×${size.height}`).toEqual([]);
-      await expect(ed.getByRole('button', { name: 'Conversation' })).toBeVisible();
-      await expect(ed.getByText('Saved', { exact: true })).toBeVisible();
-      await expect(find.getByRole('button', { name: 'Replace all' })).toHaveText('All');
-      await expect(find.locator('.cm-find-count')).toHaveText('1 of 3');
-      await expect(ed.locator('.status')).toContainText('Spaces: 2');
-      // The status line, the bar and the search hold on one line.
-      for (const sel of ['.status', '.ed-bar', '.crumbs'])
-        expect((await ed.locator(sel).boundingBox())!.height, sel).toBeLessThanOrEqual(52);
+      await expect(view.getByRole('button', { name: 'Conversation' })).toBeVisible();
+      await expect(view.getByTestId('vscode-changes')).toHaveText('5 lines changed from main');
+      await expect(view.getByTestId('vscode-compare')).toHaveText('Compare');
+      // The bar holds on one line.
+      expect((await view.locator('.vscode-bar').boundingBox())!.height).toBeLessThanOrEqual(37);
       if (SHOTS) {
         fs.mkdirSync(SHOTS, { recursive: true });
         await page.screenshot({ path: path.join(SHOTS, `editor${size.name}-en.app.png`) });
       }
     }
+    // VS Code's menu of the tab, in English: « Compare with Base », « Compare with Saved » once modified.
+    const wb = workbench(page);
+    await editorLines(page).click();
+    await page.keyboard.type('x');
+    await wb.locator('.tabs-container .tab', { hasText: /^users\.ts/ }).click({ button: 'right' });
+    await expect(wb.locator('.context-view .action-item', { hasText: 'Compare with Base' })).toBeVisible();
+    await expect(wb.locator('.context-view .action-item', { hasText: 'Compare with Saved' })).toBeVisible();
+    await page.keyboard.press('Escape');
   });
 });
 
@@ -853,13 +762,25 @@ for (const lang of ['fr', 'en'] as const)
       }
     });
 
-    // A7: the source and the marks of the changes of the preview's worktree in the view, in their room.
-    test.fixme('the marks of the changes of the worktree in the view fit in their room', async ({ app }) => {
+    // A7 (ESC-476): the view on the preview's worktree, its count of the lines changed and « Comparer » in its bar, in
+    // their room at both sizes.
+    test('the marks of the changes of the worktree in the view fit in their room', async ({ app }) => {
+      test.skip(process.platform !== 'win32', 'WebView2: driven by its DevTools protocol');
+      test.setTimeout(240_000);
       const { page } = app;
       const write = previewsProject(app.repo);
       await addProject(page, app.repo, { worktrees: true, lang });
       await agentAtWork(app.repo, write);
-      const ed = await editorAsThePreview(page, lang);
-      expect(await sticksOut(ed, ['.ed-bar', '.tree-h', '.th-row', '.crumbs', '.status'])).toEqual([]);
+      const view = await editorAsThePreview(page, lang);
+      for (const size of SIZES) {
+        await page.setViewportSize(size);
+        await page.mouse.move(size.width / 2, 20);
+        expect(await sticksOut(view, ['.vscode-bar']), `${size.width}×${size.height}`).toEqual([]);
+        await expect(view.getByTestId('vscode-compare')).toBeVisible();
+        if (SHOTS) {
+          fs.mkdirSync(SHOTS, { recursive: true });
+          await page.screenshot({ path: path.join(SHOTS, `vscode-changes-room-${lang}${size.name}.app.png`) });
+        }
+      }
     });
   });

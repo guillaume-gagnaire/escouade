@@ -38,6 +38,24 @@ export default {
     langNote: 'VS Code change de langue au rechargement de la fenêtre.',
     reload: 'Recharger',
     reloadTip: 'Recharger la fenêtre : les fichiers modifiés sont demandés avant, les onglets se rouvrent.',
+    /** The changes from the base in the view (ESC-476): its button in the bar, VS Code's commands, its list of the changes. */
+    compare: 'Comparer',
+    compareTip: 'Comparer « {name} » avec {reference} dans l’éditeur de diff de VS Code',
+    compareBase: 'Comparer avec la base',
+    compareSaved: 'Comparer avec le fichier enregistré',
+    category: 'Escouade',
+    changes: 'Changements',
+    /** In the list of the changes, when the source has none: `reference` « main », « HEAD »… */
+    noChanges: 'Aucun fichier modifié par rapport à la base.',
+    /** The tooltip of a letter of the explorer. */
+    letter: {
+      added: 'Ajouté par rapport à {reference}',
+      modified: 'Modifié par rapport à {reference}',
+      deleted: 'Supprimé par rapport à {reference}',
+      folder: 'Des fichiers modifiés par rapport à {reference}',
+    },
+    /** The base when its name is not known yet. */
+    theBase: 'la base',
   },
 
   /** The previews of the VS Code view (ESC-473): images, audio and video, PDF, Word, Markdown, tables. */

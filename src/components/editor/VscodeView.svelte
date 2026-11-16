@@ -11,6 +11,8 @@
   import { locale, t } from '../../lib/i18n';
   import { keepTabs, loadWorkbench, page, reopening, workbenchLang } from '../../lib/vscode/load';
   import { viewUnsaved } from '../../lib/vscode/unsaved.svelte';
+  import { viewShown } from '../../lib/vscode/shown.svelte';
+  import { fInt } from '../../lib/format';
   import { mayFocus, paneCtx } from '../../lib/pane-context';
   import { tip } from '../../lib/tip';
   import { app } from '../../lib/state.svelte';
@@ -43,6 +45,13 @@
   /** Escouade's language changed since the workbench was loaded in this page. */
   const otherLang = $derived(phase === 'ready' && workbenchLang() !== locale.ui);
   const wanted = $derived(st?.places[source]?.active ?? null);
+  /**
+   * The file of VS Code's active editor, when it is of this project: how it differs from its base (ESC-476), as the
+   * old editor said it above its text, and « Comparer ».
+   */
+  const shown = $derived(phase === 'ready' && viewShown.file?.projectId === project.id ? viewShown.file : null);
+  const shownName = $derived(shown ? (shown.path.split('/').pop() ?? shown.path) : '');
+  const reference = $derived(shown?.reference ?? t('editor.vscode.theBase'));
 
   onMount(() => {
     void (async () => {
@@ -156,6 +165,26 @@
       git={app.git[project.id]}
       onpick={(s) => app.openEditor({ projectId: project.id, source: s })}
     />
+    {#if shown}
+      <span class="vs" data-testid="vscode-changes">
+        {#if shown.isNew}
+          {t('editor.diff.newFile', { reference })}
+        {:else if shown.count}
+          <span class="add">{t('editor.diff.changedCount', { count: shown.count, n: fInt(shown.count) })}</span>
+          {t('editor.diff.changedVs', { count: shown.count, reference })}
+        {:else}
+          {t('editor.diff.same', { reference })}
+        {/if}
+      </span>
+      {#if shown.isNew || shown.count}
+        <button
+          class="btn compare"
+          data-testid="vscode-compare"
+          use:tip={t('editor.vscode.compareTip', { name: shownName, reference })}
+          onclick={() => void viewShown.compare().catch((e) => app.toast(String(e), 'error'))}>{t('editor.vscode.compare')}</button
+        >
+      {/if}
+    {/if}
     {#if otherLang}
       <span class="lang-note" data-testid="vscode-lang-note">{t('editor.vscode.langNote')}</span>
       <button class="btn reload" data-testid="vscode-reload" use:tip={t('editor.vscode.reloadTip')} onclick={reloadForLanguage}
@@ -229,6 +258,26 @@
   .vscode-bar .reload {
     flex: none;
     color: var(--p-ink);
+  }
+  /* How the file shown differs from its base, as the old editor said it above its text (ESC-476). */
+  .vscode-bar .vs {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--muted);
+  }
+  .vscode-bar .vs .add {
+    color: var(--add);
+  }
+  .vscode-bar .compare {
+    flex: none;
+    padding: 2px 8px;
+    border-radius: 6px;
+  }
+  .vscode-bar .compare:hover {
+    background: var(--hover);
+    color: var(--text);
   }
   /* In a pane, its × stands at the bar's right end. */
   :global(.pane) .vscode-bar {

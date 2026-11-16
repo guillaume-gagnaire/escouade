@@ -886,9 +886,9 @@ test('a file of an agent’s worktree opens in the editor from the uncommitted f
   // The row's editor button shows on hover.
   await page.locator('.filerow').filter({ hasText: 'app.ts' }).hover();
   await page.getByRole('button', { name: 'Ouvrir app.ts dans l’éditeur' }).click();
-  // In the VS Code view, on the agent's worktree. (« 1 ligne modifiée par rapport à main », the marks of the changes
-  // from the base, come back with A7.)
+  // In the VS Code view, on the agent's worktree, its change from main counted in the view's bar (ESC-476, A7).
   await expect(editorLines(page)).toContainText('const a = 42;', { timeout: 60_000 });
+  await expect(page.getByTestId('vscode-changes')).toHaveText('1 ligne modifiée par rapport à main', { timeout: 30_000 });
 });
 
 test('a ticket is taken by an agent that loops until its criteria are met, then merged once validated', async ({ app }) => {

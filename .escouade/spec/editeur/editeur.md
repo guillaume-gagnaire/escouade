@@ -2,8 +2,8 @@
 title: "Éditeur"
 subject: "Éditeur"
 sources: ["docs/SPEC.md","docs/EDITOR-STUDY.md","docs/TODO-2.3.md"]
-tickets: ["ESC-447","ESC-463","ESC-464","ESC-472","ESC-473"]
-decisions: [170,172,176,182,184]
+tickets: ["ESC-447","ESC-463","ESC-464","ESC-472","ESC-473","ESC-476"]
+decisions: [170,172,176,182,184,185]
 compared: "2026-10-30T05:39:53+01:00"
 gaps: [{"text":"La spec dit que le double-clic sur la poignée ramène la colonne des fichiers à 240 px. Le code revient à 200 px (TREE_NARROW) quand la zone de l'éditeur fait 904 px ou moins, et à 240 px seulement au-delà.","code":["src/lib/editor/layout.ts","src/components/editor/EditorView.svelte"]}]
 order: 25
@@ -15,7 +15,7 @@ Le mode éditeur prend la zone principale d'un projet, ou un volet de l'écran p
 
 Les images, l'audio et la vidéo, le Markdown, les tableaux, les PDF et les documents Word s'ouvrent dans des aperçus d'Escouade, en onglets de la vue (ESC-473, voir *Aperçus*).
 
-Ce que l'ancien éditeur faisait et que la vue ne fait pas encore revient par les tickets de l'éditeur de la 2.3 (voir `docs/EDITOR-STUDY.md`, §7) : A5 (extensions), A7 (marques des changements par rapport à la base, comparaison avec le disque), A1 (serveurs de langage). Les pages *Navigation de code*, *Recherche dans les fichiers* et *Voir les changements* décrivent l'ancien éditeur jusqu'à ces tickets.
+Ce que l'ancien éditeur faisait et que la vue ne fait pas encore revient par les tickets de l'éditeur de la 2.3 (voir `docs/EDITOR-STUDY.md`, §7) : A5 (extensions), A1 (serveurs de langage). Les pages *Navigation de code* et *Recherche dans les fichiers* décrivent l'ancien éditeur jusqu'à ces tickets. Les marques des changements par rapport à la base, leur compte, la comparaison avec la base et avec le disque et les fichiers changés de l'arbre sont revenus par A7 (ESC-476) : voir *Voir les changements*.
 
 ## Comportement
 
@@ -26,7 +26,7 @@ Ce que l'ancien éditeur faisait et que la vue ne fait pas encore revient par le
 - Le bouton `</>` d'un fichier non commité, « Voir le code » d'un écart de la spec, un chemin de fichier dans la conversation, « Ouvrir un fichier » (`Ctrl+P`, voir *Ouvrir un fichier*) : le fichier s'ouvre dans un onglet de la vue, le curseur et le clavier dedans ; un fichier qui a un aperçu s'ouvre dans son aperçu (voir *Aperçus*).
 - Un fichier hors du dossier de la source ne s'ouvre pas (message).
 - Une seule vue VS Code par fenêtre : seule dans la zone de travail ou dans un volet (voir *Écran partagé*). Elle se déplace, se redimensionne, se ferme et se rouvre en gardant ses onglets et leurs modifications. Ses groupes d'onglets peuvent se mettre côte à côte dans la colonne. Un clic dans la vue, ou le focus qui y entre, active son volet ; son survol montre le ×.
-- La barre au-dessus : « Conversation », le sélecteur de source, « VS Code ». Le menu de la source s'ouvre par-dessus la vue.
+- La barre au-dessus : « Conversation », le sélecteur de source, ce que le fichier montré a changé par rapport à sa base (« 5 lignes modifiées par rapport à main ») et « Comparer » (voir *Voir les changements*), « VS Code ». Le menu de la source s'ouvre par-dessus la vue.
 - À la première ouverture dans la fenêtre, « Chargement de la vue VS Code… » ; si elle ne démarre pas : « La vue VS Code n'a pas démarré : <raison> ».
 
 ### Le thème, les polices et la langue
@@ -82,7 +82,7 @@ Rien ne se ferme sans demander quand un fichier est modifié dans la vue, comme 
 - **Un onglet** : la question de VS Code, dans sa langue (« Voulez-vous enregistrer les modifications apportées à f1.ts ? », « Enregistrer », « Ne pas enregistrer », « Annuler » ; en anglais, « Do you want to save the changes you made to f1.ts? », Save, Don't Save, Cancel).
 - **La vue**, par « Conversation » : les fichiers du projet modifiés dans la vue. Sans fichier modifié, elle se ferme tout de suite.
 - **Son volet**, par son × ou `Ctrl+Maj+W` : les fichiers du projet modifiés dans la vue.
-- **Un projet**, une fois sa fermeture confirmée : ses fichiers modifiés dans la vue ; « Annuler » le garde. Fermé, ses dossiers et ses onglets quittent la vue, aperçus compris.
+- **Un projet**, une fois sa fermeture confirmée : ses fichiers modifiés dans la vue ; « Annuler » le garde. Fermé, ses dossiers, ses onglets et ses comparaisons quittent la vue, aperçus compris.
 - **La fenêtre rechargée pour la langue** (« Recharger » de la barre de la vue) : tous les fichiers modifiés dans la vue.
 - **Escouade**, par « Quitter » : « Quitter Escouade ? », « N fichiers ne sont pas enregistrés dans l'éditeur : leurs modifications seront perdues si tu ne les enregistres pas. », « Enregistrer et quitter », « Quitter sans enregistrer », « Annuler ». Fermer la fenêtre par son × la range dans la barre des tâches : rien ne se perd, la vue garde ses onglets.
 - « Recharger l'interface » (barre des tâches) compte aussi les fichiers modifiés dans la vue : le système demande avant de recharger, la page rechargée les perdant.
@@ -95,7 +95,7 @@ Rien ne se ferme sans demander quand un fichier est modifié dans la vue, comme 
 
 ### Sources
 
-- Sélecteur de source : la branche du projet ou le worktree d'un agent, avec son nombre de modifications. Chaque source choisie devient un dossier de l'espace de travail de VS Code, nommé d'après le projet, ou d'après l'agent et son worktree (« agent-1 · .claude/worktrees/agent-1 »).
+- Sélecteur de source : la branche du projet ou le worktree d'un agent, avec son nombre de modifications. Chaque source choisie devient un dossier de l'espace de travail de VS Code, nommé d'après le projet, ou d'après l'agent et son worktree (« agent-1 · .claude/worktrees/agent-1 »), avec sa base (voir *Voir les changements*). Choisie juste après l'ouverture de la vue, elle s'ajoute aux dossiers déjà là, sans en prendre la place.
 - L'éditeur et les terminaux refusent un agent d'un autre projet. Un worktree supprimé : « Le worktree de l'agent n'existe plus ».
 
 ### Les fichiers, par le cœur
@@ -120,7 +120,7 @@ La règle est vérifiée sur le chemin écrit et sur le chemin réel (liens suiv
 
 - Le cœur pousse à la vue les chemins que son observateur de fichiers a vus changer (plus de 512 entre deux lectures : « tout a pu changer »). Un fichier ouvert et non modifié qu'un agent a changé se relit tout de suite ; les fichiers ajoutés ou supprimés apparaissent ou disparaissent ensuite dans l'explorateur.
 - Cela vaut quel que soit le nom par lequel le dossier du projet a été ouvert : nom court de Windows (`RUNNER~1`), lien ou jonction, `/var` de macOS (lien vers `/private/var`). Le dossier que sert la vue et celui que surveille l'observateur sont tous deux nommés comme le disque les nomme (liens suivis, noms longs, sans le `\\?\` de Windows) ; un dossier qui n'existe pas encore, ou sur un partage, garde le nom donné (ESC-463).
-- Un fichier modifié dans la vue et changé sur le disque n'est pas relu. `Ctrl+S` montre alors le conflit de VS Code, dans sa langue (« L'enregistrement de … a échoué : le contenu du fichier est plus récent… », avec « Remplacer » ; en anglais « The content of the file is newer… », « Overwrite ») et n'écrit rien. « Remplacer » écrit par-dessus.
+- Un fichier modifié dans la vue et changé sur le disque n'est pas relu. `Ctrl+S` montre alors le conflit de VS Code, dans sa langue (« L'enregistrement de … a échoué : le contenu du fichier est plus récent… », avec « Comparer » et « Remplacer » ; en anglais « The content of the file is newer… », « Compare », « Overwrite ») et n'écrit rien. « Remplacer » écrit par-dessus ; « Comparer » montre la version du disque à côté de la mienne (voir *Voir les changements*).
 - Le cœur refuse aussi une écriture quand le fichier a changé entre la vérification de VS Code et l'écriture (`changed`), ou a disparu (`deleted`).
 
 ### Aperçus

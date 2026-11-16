@@ -35,6 +35,20 @@ export default defineZone('editor', {
     langNote: 'VS Code changes language when the window reloads.',
     reload: 'Reload',
     reloadTip: 'Reload the window: the modified files are asked about first, the tabs open again.',
+    compare: 'Compare',
+    compareTip: 'Compare “{name}” with {reference} in VS Code’s diff editor',
+    compareBase: 'Compare with Base',
+    compareSaved: 'Compare with Saved',
+    category: 'Escouade',
+    changes: 'Changes',
+    noChanges: 'No file changed from the base.',
+    letter: {
+      added: 'Added from {reference}',
+      modified: 'Modified from {reference}',
+      deleted: 'Deleted from {reference}',
+      folder: 'Files changed from {reference}',
+    },
+    theBase: 'the base',
   },
 
   /** The previews of the VS Code view (ESC-473): images, audio and video, PDF, Word, Markdown, tables. */

@@ -48,6 +48,7 @@ import getOutlineServiceOverride from '@codingame/monaco-vscode-outline-service-
 import getOutputServiceOverride from '@codingame/monaco-vscode-output-service-override';
 import getPreferencesServiceOverride from '@codingame/monaco-vscode-preferences-service-override';
 import getQuickAccessServiceOverride from '@codingame/monaco-vscode-quickaccess-service-override';
+import getScmServiceOverride from '@codingame/monaco-vscode-scm-service-override';
 import getSearchServiceOverride from '@codingame/monaco-vscode-search-service-override';
 import getStorageServiceOverride from '@codingame/monaco-vscode-storage-service-override';
 import getTextmateServiceOverride from '@codingame/monaco-vscode-textmate-service-override';
@@ -56,6 +57,8 @@ import getWorkbenchServiceOverride from '@codingame/monaco-vscode-workbench-serv
 import getWorkingCopyServiceOverride from '@codingame/monaco-vscode-working-copy-service-override';
 import * as vscode from 'vscode';
 import 'vscode/localExtensionHost';
+import { IPaneCompositePartService } from '@codingame/monaco-vscode-api/vscode/vs/workbench/services/panecomposite/browser/panecomposite.service';
+import { VIEWLET_ID as SCM_VIEWLET_ID } from '@codingame/monaco-vscode-api/vscode/vs/workbench/contrib/scm/common/scm';
 
 import '@codingame/monaco-vscode-theme-defaults-default-extension';
 import '@codingame/monaco-vscode-theme-seti-default-extension';
@@ -82,10 +85,31 @@ import { EscouadeFileSystem, type Source } from './fs-provider';
 import { appTakes, utf16Column } from './keys';
 import { closePreviews, registerPreviews } from './previews/panes';
 import { previewOf } from './previews/kinds';
+import { addSource, contributions, followChanges, removeProject } from './scm';
 import { THEME_IDS, readTokens, themeSettings, vscodeTheme } from './theme';
 import { type Unsaved, viewUnsaved } from './unsaved.svelte';
 
 export type { Source } from './fs-provider';
+
+/**
+ * VS Code's view of the source control (its commit, push and sync buttons) is never shown (ESC-476): the service
+ * override of the source control brings it with the quick diff, which does not work without the rest of it (its
+ * container or its views taken out of the registry, the marks are gone too). So its entry of the activity bar is hidden
+ * (`SCM_HIDDEN`), its keys are taken off (`keepAppKeys`), and opening it any other way (its palette's « Afficher »)
+ * shows the explorer instead. Escouade's own commits and pushes stay.
+ */
+async function withoutSourceControlView() {
+  const sheet = document.createElement('style');
+  sheet.textContent = SCM_HIDDEN;
+  document.head.append(sheet);
+  const panes = await getService(IPaneCompositePartService);
+  panes.onDidPaneCompositeOpen(({ composite, viewContainerLocation }) => {
+    if (composite.getId() === SCM_VIEWLET_ID) void panes.openPaneComposite(EXPLORER_VIEWLET_ID, viewContainerLocation, true);
+  });
+}
+const EXPLORER_VIEWLET_ID = 'workbench.view.explorer';
+/** The sheet that hides the source control's entry of the activity bar. */
+const SCM_HIDDEN = '.vscode-host .activitybar .action-item:has(.codicon-source-control-view-icon) { display: none !important; }';
 
 /** The element the workbench lives in, lent to the view that shows it. */
 let host: HTMLElement | null = null;
@@ -367,6 +391,8 @@ async function start(first: Source, name: string, size: number): Promise<void> {
       ...getLifecycleServiceOverride(),
       ...getEnvironmentServiceOverride(),
       ...getWorkingCopyServiceOverride(),
+      // VS Code's quick diff (the marks of the changes from the base), without its view of the source control (ESC-476).
+      ...getScmServiceOverride(),
       ...getFilesServiceOverride(),
       ...getWorkbenchServiceOverride(),
       ...getQuickAccessServiceOverride({ isKeybindingConfigurationVisible: () => true, shouldUseGlobalPicker: () => true }),
@@ -376,14 +402,30 @@ async function start(first: Source, name: string, size: number): Promise<void> {
       enableWorkspaceTrust: false,
       developmentOptions: { logLevel: LogLevel.Warning },
       workspaceProvider: { trusted: true, open: async () => false, workspace: { workspaceUri: WORKSPACE } },
-      productConfiguration: { nameShort: 'Escouade', nameLong: 'Escouade' },
+      productConfiguration: {
+        nameShort: 'Escouade',
+        nameLong: 'Escouade',
+        // The page's own extension reads the diff information of an editor (ESC-476: the lines changed, in the view's bar).
+        extensionEnabledApiProposals: { 'escouade.escouade': ['textEditorDiffInformation'] },
+      },
     },
     { userHome: vscode.Uri.file('/') },
   );
   await registerExtension(
-    { name: 'escouade', publisher: 'escouade', version: '1.0.0', engines: { vscode: '*' } },
+    {
+      name: 'escouade',
+      publisher: 'escouade',
+      version: '1.0.0',
+      engines: { vscode: '*' },
+      // The diff information of an editor: the lines its quick diff found changed, counted in the view's bar (ESC-476).
+      enabledApiProposals: ['textEditorDiffInformation'],
+      contributes: contributions(),
+    },
     ExtensionHostKind.LocalProcess,
   ).setAsDefaultApi();
+  followChanges(files, fold);
+  await withoutSourceControlView();
+  addSource(first, uri, name);
   await themeReady;
   // The previews (ESC-473): their editors registered, what they draw loaded when a file of theirs opens.
   await registerPreviews({
@@ -411,7 +453,13 @@ async function keepAppKeys() {
   const keys = await getService(IKeybindingService);
   const off = keys
     .getKeybindings()
-    .filter((k) => k.command && !k.command.startsWith('-') && appTakes(k.resolvedKeybinding?.getUserSettingsLabel(), k.command, IS_MAC))
+    .filter(
+      (k) =>
+        k.command &&
+        !k.command.startsWith('-') &&
+        // The view of the source control's key goes too: the view is never shown (`withoutSourceControlView`).
+        (k.command === SCM_VIEWLET_ID || appTakes(k.resolvedKeybinding?.getUserSettingsLabel(), k.command, IS_MAC)),
+    )
     .map((k) => ({ key: k.resolvedKeybinding!.getUserSettingsLabel(), command: `-${k.command}`, when: k.when?.serialize() }));
   await updateUserKeybindings(JSON.stringify(off));
 }
@@ -459,8 +507,14 @@ export async function workbench(src: Source, name: string, fontSize: number): Pr
   const uri = await files!.addSource(src);
   if (folders.some((f) => sameSource(f.source, src))) return;
   const folder = { source: src, uri, name };
+  // The extension host writes the whole list of folders from the one it knows: until it knows those already there (a
+  // source picked right after the workbench started), a folder added would take their place (ESC-476).
+  for (let i = 0; i < 200 && (vscode.workspace.workspaceFolders?.length ?? 0) < folders.length; i++)
+    await new Promise((r) => setTimeout(r, 25));
+  if (folders.some((f) => sameSource(f.source, src))) return;
   folders.push(folder);
   vscode.workspace.updateWorkspaceFolders(vscode.workspace.workspaceFolders?.length ?? 0, 0, { uri, name });
+  addSource(src, uri, name);
   for (const f of folderListeners) f(folder, vscode);
 }
 
@@ -548,7 +602,12 @@ export async function forgetProject(projectId: string) {
   const mine = (uri: vscode.Uri | undefined) => !!uri && files?.sourceOf(uri)?.source.projectId === projectId;
   const tabs = vscode.window.tabGroups.all
     .flatMap((g) => g.tabs)
-    .filter((t) => t.input instanceof vscode.TabInputText && mine(t.input.uri));
+    .filter(
+      (t) =>
+        (t.input instanceof vscode.TabInputText && mine(t.input.uri)) ||
+        // Its comparisons with the base (the file, or its base for a file deleted).
+        (t.input instanceof vscode.TabInputTextDiff && mine(t.input.original.with({ scheme: 'file', query: '' }))),
+    );
   if (tabs.length) await vscode.window.tabGroups.close(tabs, true);
   await closePreviews(mine);
   for (let i = folders.length - 1; i >= 0; i--) {
@@ -557,6 +616,7 @@ export async function forgetProject(projectId: string) {
     if (at >= 0) vscode.workspace.updateWorkspaceFolders(at, 1);
     folders.splice(i, 1);
   }
+  removeProject(projectId);
 }
 
 /** Whether the workbench was started in this page. */

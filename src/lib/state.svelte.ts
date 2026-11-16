@@ -14,7 +14,7 @@ import { fileSearches } from './editor/search.svelte';
 import { ancestors, movedPath } from './editor/tree';
 import { trees } from './editor/trees.svelte';
 import { bgRow } from './bgtasks';
-import { diskChanged } from './disk-changes';
+import { diskChanged, gitChanged } from './disk-changes';
 import type { DocsSpaceId } from './docs';
 import { basename, isAbsPath, relPath } from './format';
 import { setLang, t } from './i18n';
@@ -1065,6 +1065,7 @@ class AppState {
       case 'git': {
         const had = this.git[e.projectId]?.hasRemote;
         this.git[e.projectId] = e.git;
+        gitChanged(e.projectId);
         // A remote added or removed (`git remote add` in a terminal): its code host read again (ESC-390).
         if (had !== undefined && had !== e.git.hasRemote && e.projectId in this.codeHosts) void this.readCodeHost(e.projectId);
         if (e.projectId === this.ui.activeProject) this.gitTick++;
