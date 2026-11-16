@@ -3214,6 +3214,24 @@ function startSession() {
       result();
       return;
     }
+    if (/lien-apercu (\S+)/.test(text)) {
+      // "lien-apercu docs/plan.md ligne 3": an Edit of that file of its folder (left as it is), at that line: the link
+      // of its tool opens it in the VS Code view, in its preview for a file that has one (ESC-473).
+      const rel = /lien-apercu (\S+)/.exec(text)[1];
+      const at = Number(/ligne (\d+)/.exec(text)?.[1] ?? 1);
+      const tuid = `toolu_p${msg}`;
+      const file = path.join(process.cwd(), ...rel.split('/'));
+      assistant({ type: 'tool_use', id: tuid, name: 'Edit', input: { file_path: file, old_string: 'a', new_string: 'b' } });
+      toolResult(tuid, 'The file has been updated.', {
+        tool_use_result: {
+          filePath: file,
+          structuredPatch: [{ oldStart: at, oldLines: 1, newStart: at, newLines: 1, lines: ['-a', '+b'] }],
+        },
+      });
+      streamText('Fichier modifié.');
+      result();
+      return;
+    }
     if (text.includes('edit')) {
       const tuid = `toolu_e${msg}`;
       const file = path.join(process.cwd(), 'src', 'app.ts');

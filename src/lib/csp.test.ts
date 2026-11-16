@@ -23,6 +23,15 @@ describe('the content security policy of the window', () => {
     for (const name of ['form-action', 'base-uri', 'object-src', 'frame-ancestors']) expect(directives.get(name), name).toEqual(["'none'"]);
   });
 
+  it('lets the previews of the VS Code view play sound and video from the core’s bytes only, and load no image or media of the web (ESC-473)', () => {
+    expect(directives.get('media-src')).toEqual(["'self'", 'blob:']);
+    for (const name of ['img-src', 'media-src', 'connect-src', 'default-src'])
+      expect(
+        directives.get(name)!.filter((v) => /^(https?:|\*$)/.test(v) && !v.endsWith('.localhost')),
+        name,
+      ).toEqual([]);
+  });
+
   it('still refuses inline scripts and eval', () => {
     const scripts = directives.get('script-src')!;
     expect(scripts).not.toContain("'unsafe-inline'");

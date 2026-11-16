@@ -77,7 +77,7 @@ function writeProject(repo: string) {
   };
   write('src/app.ts', 'export const answer = 42;\n');
   write('src/f1.ts', '// Fichier 1\r\nexport function f1(x: number): number {\r\n  return x;\r\n}\r\n');
-  write('assets/logo.png', Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d, 0x49, 0x48, 0x44, 0x52, 0xff, 0]));
+  write('assets/data.bin', Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d, 0x49, 0x48, 0x44, 0x52, 0xff, 0]));
   const git = (...args: string[]) => execFileSync('git', args, { cwd: repo });
   git('add', '-A');
   git('commit', '-qm', 'Projet de test');
@@ -118,9 +118,10 @@ test('the VS Code view: the project’s editor, on the core’s files, a file ch
   const lines = wb.locator('.editor-instance .monaco-editor .view-lines').first();
   await expect(lines).toContainText('export const answer = 42;');
 
-  // A binary file, read in bytes: VS Code shows it as one, without error (in French, as the app: ESC-472).
+  // A binary file without preview (ESC-473 shows the images in theirs), read in bytes: VS Code shows it as one, without
+  // error (in French, as the app: ESC-472).
   await item('assets').click();
-  await item('logo.png').click();
+  await item('data.bin').click();
   await expect(wb.getByText(/c’est un fichier binaire ou qu’il utilise un encodage de texte non pris en charge/)).toBeVisible();
 
   // 3. A file an agent changed on disk is read again, pushed by the core's watcher.

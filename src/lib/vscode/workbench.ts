@@ -80,6 +80,8 @@ import { api } from '../ipc';
 import { IS_MAC } from '../platform';
 import { EscouadeFileSystem, type Source } from './fs-provider';
 import { appTakes, utf16Column } from './keys';
+import { closePreviews, registerPreviews } from './previews/panes';
+import { previewOf } from './previews/kinds';
 import { THEME_IDS, readTokens, themeSettings, vscodeTheme } from './theme';
 import { type Unsaved, viewUnsaved } from './unsaved.svelte';
 
@@ -383,6 +385,12 @@ async function start(first: Source, name: string, size: number): Promise<void> {
     ExtensionHostKind.LocalProcess,
   ).setAsDefaultApi();
   await themeReady;
+  // The previews (ESC-473): their editors registered, what they draw loaded when a file of theirs opens.
+  await registerPreviews({
+    sourceOf: (uri) => files?.sourceOf(uri) ?? null,
+    uriOf: (src, rel) => files?.uriOf(src, rel) ?? null,
+    openFile: (src, rel, at) => openFile(src, rel, at),
+  });
   followTheme();
   void retheme();
   await keepAppKeys();
@@ -499,7 +507,9 @@ export async function openFile(src: Source, rel: string, at: { line?: number; co
   const uri = files?.uriOf(src, rel);
   if (!uri) return;
   let selection: vscode.Range | undefined;
-  if (at.line) {
+  // A file shown in its preview has no text to put a caret in; a Markdown one is brought to its line by its preview.
+  const kind = previewOf(rel)?.kind;
+  if (at.line && (!kind || kind === 'markdown' || kind === 'csv')) {
     // A binary file has no line: it opens at its top.
     const doc = await Promise.resolve(vscode.workspace.openTextDocument(uri)).catch(() => null);
     if (doc) {
@@ -514,7 +524,9 @@ export async function openFile(src: Source, rel: string, at: { line?: number; co
     preserveFocus: !focus,
     selection,
   });
-  if (selection) vscode.window.activeTextEditor?.revealRange(selection, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+  const editor = vscode.window.activeTextEditor;
+  if (selection && editor?.document.uri.toString() === uri.toString())
+    editor.revealRange(selection, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
 }
 
 /** The keyboard in the workbench: its editor shown, else its explorer. */
@@ -538,6 +550,7 @@ export async function forgetProject(projectId: string) {
     .flatMap((g) => g.tabs)
     .filter((t) => t.input instanceof vscode.TabInputText && mine(t.input.uri));
   if (tabs.length) await vscode.window.tabGroups.close(tabs, true);
+  await closePreviews(mine);
   for (let i = folders.length - 1; i >= 0; i--) {
     if (folders[i].source.projectId !== projectId) continue;
     const at = vscode.workspace.workspaceFolders?.findIndex((w) => w.uri.toString() === folders[i].uri.toString()) ?? -1;
