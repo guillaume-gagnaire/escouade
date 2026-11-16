@@ -487,39 +487,39 @@ fn which(number: Option<u32>, id: Option<&str>) -> Option<docs::Ref> {
     id.and_then(docs::Ref::of).or(number.map(docs::Ref::Number))
 }
 
-fn decision_of(f: DecisionFields) -> Decision {
-    Decision {
-        title: f.title.trim().to_string(),
-        context: f.context.unwrap_or_default(),
-        decision: f.decision.unwrap_or_default(),
-        consequences: f.consequences.unwrap_or_default(),
-        origin: f.origin.unwrap_or_default(),
-        origin_ref: f.origin_ref.unwrap_or_default(),
-        pages: f.pages.unwrap_or_default(),
-        tickets: f.tickets.unwrap_or_default(),
-        documents: f.documents.unwrap_or_default(),
-        changes: f
-            .changes
-            .unwrap_or_default()
-            .into_iter()
-            .map(|c| Change {
-                page: docs::page_path(&c.page).unwrap_or(c.page),
-                added: c.added,
-                removed: c.removed,
-            })
-            .collect(),
-        ..Default::default()
+/// What a call gives: a field it leaves out stays `None`, so a revision keeps it (ESC-475).
+fn patch_of(f: DecisionFields) -> docs::DecisionPatch {
+    docs::DecisionPatch {
+        title: Some(f.title),
+        context: f.context,
+        decision: f.decision,
+        consequences: f.consequences,
+        origin: f.origin,
+        origin_ref: f.origin_ref,
+        pages: f.pages,
+        tickets: f.tickets,
+        documents: f.documents,
+        supersedes: None,
+        changes: f.changes.map(|cs| {
+            cs.into_iter()
+                .map(|c| Change {
+                    page: docs::page_path(&c.page).unwrap_or(c.page),
+                    added: c.added,
+                    removed: c.removed,
+                })
+                .collect()
+        }),
     }
 }
 
 /// The decision a ticket's agent leaves comes from its ticket, in this project: its validation
 /// accepts it (`docs_accept_ticket_decisions`).
-fn from_ticket(core: &Core, caller: &Caller, project: &Project, d: &mut Decision) {
+fn from_ticket(core: &Core, caller: &Caller, project: &Project, d: &mut docs::DecisionPatch) {
     let Caller::Agent(id) = caller else { return };
     let key = core.ticket_key_of_agent(&project.id, id);
     if let Some(key) = key {
-        d.origin = "ticket".into();
-        d.origin_ref = key;
+        d.origin = Some("ticket".into());
+        d.origin_ref = Some(key);
     }
 }
 
@@ -529,22 +529,60 @@ pub(super) async fn propose(
     args: ProposeDecisionArgs,
 ) -> Result<String, ToolError> {
     let (project, space) = open(core, caller, &args.project).await?;
-    let mut d = decision_of(args.fields);
+    let mut p = patch_of(args.fields);
     if let Some((id, _)) = discussion_of(core, caller, &project) {
-        return keep_proposal(core, &id, d);
+        return keep_proposal(core, &id, p);
     }
-    from_ticket(core, caller, &project, &mut d);
+    let given = p.given();
+    from_ticket(core, caller, &project, &mut p);
     let r = which(args.number, args.id.as_deref());
-    let d = space.decision_propose(r.as_ref(), d).map_err(failed)?;
+    let d = space.decision_revise(r.as_ref(), p).map_err(failed)?;
     core.docs_changed(&project.id).await;
-    json(&json!({
+    let mut out = json!({
         "id": d.id,
         "number": d.number,
         "title": d.title,
         "state": d.state,
         "date": d.date,
+        "revised": r.is_some(),
         "note": numbered_note(),
-    }))
+    });
+    if r.is_some() {
+        out["replaced"] = json!(given);
+        out["kept"] = json!(kept_of(&given));
+        out["note"] = json!(format!("{} {}", revised_note(), numbered_note()));
+    }
+    json(&out)
+}
+
+const FIELDS: [&str; 10] = [
+    "title",
+    "context",
+    "decision",
+    "consequences",
+    "origin",
+    "originRef",
+    "pages",
+    "tickets",
+    "documents",
+    "changes",
+];
+
+/// The fields of a decision a revision did not give, so kept as they were.
+fn kept_of(given: &[&str]) -> Vec<&'static str> {
+    FIELDS
+        .iter()
+        .copied()
+        .filter(|f| !given.contains(f))
+        .collect()
+}
+
+/// What an agent is told of a revision (ESC-475).
+fn revised_note() -> String {
+    tr!(
+        "Révision : les champs donnés (replaced) remplacent ceux de la proposition, vides compris ; les autres (kept) sont gardés tels quels.",
+        "Revision: the fields you gave (replaced) replace the proposal's, empty ones included; the others (kept) stay as they were."
+    )
 }
 
 /// What an agent is told of a proposal's number (ESC-303).
@@ -556,24 +594,32 @@ fn numbered_note() -> String {
 }
 
 /// A discussion's decision, kept on it until poured.
-fn keep_proposal(core: &Core, id: &str, d: Decision) -> Result<String, ToolError> {
-    if d.title.trim().is_empty() {
+fn keep_proposal(core: &Core, id: &str, p: docs::DecisionPatch) -> Result<String, ToolError> {
+    if p.title.as_deref().unwrap_or_default().trim().is_empty() {
         return Err(failed(anyhow::anyhow!(tr!(
             "Une décision a un titre.",
             "A decision needs a title."
         ))));
     }
-    let title = d.title.clone();
-    let place = core
-        .discussion_edit(id, |disc| disc.propose_decision(d))
+    let title = p.title.clone().unwrap_or_default().trim().to_string();
+    let given = p.given();
+    let (place, revised) = core
+        .discussion_edit(id, |disc| disc.revise_decision(p))
         .map_err(failed)?;
-    json(&json!({
+    let mut out = json!({
         "proposal": place,
         "title": title,
         "state": "proposed",
         "proposed": true,
+        "revised": revised,
         "note": proposed_note(),
-    }))
+    });
+    if revised {
+        out["replaced"] = json!(given);
+        out["kept"] = json!(kept_of(&given));
+        out["note"] = json!(format!("{} {}", revised_note(), proposed_note()));
+    }
+    json(&out)
 }
 
 pub(super) async fn replace(
@@ -582,7 +628,7 @@ pub(super) async fn replace(
     args: ReplaceDecisionArgs,
 ) -> Result<String, ToolError> {
     let (project, space) = open(core, caller, &args.project).await?;
-    let mut d = decision_of(args.fields);
+    let mut d = patch_of(args.fields);
     if let Some((id, _)) = discussion_of(core, caller, &project) {
         // Checked now (an accepted decision only), replaced when poured.
         let was = space
@@ -595,11 +641,13 @@ pub(super) async fn replace(
                 args.number
             ))));
         }
-        d.supersedes = vec![args.number];
+        d.supersedes = Some(vec![args.number]);
         return keep_proposal(core, &id, d);
     }
     from_ticket(core, caller, &project, &mut d);
-    let d = space.decision_replace(args.number, d).map_err(failed)?;
+    let d = space
+        .decision_replace(args.number, Decision::from_patch(d))
+        .map_err(failed)?;
     core.docs_changed(&project.id).await;
     json(&json!({
         "id": d.id,

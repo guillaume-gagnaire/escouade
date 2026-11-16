@@ -35,7 +35,9 @@ use sha2::{Digest, Sha256};
 use crate::workflowfiles::{reserved_stem, unsafe_dir};
 
 // The data of the spec and the decisions, in `escouade-model` (docs/CRATES.md): what the agents and the tickets keep.
-pub use escouade_model::docs::{line_delta, slug, Change, Decision, Gap, Page, Ref, State};
+pub use escouade_model::docs::{
+    line_delta, slug, Change, Decision, DecisionPatch, Gap, Page, Ref, State,
+};
 
 pub const ROOT: &str = ".escouade";
 pub const SPEC: &str = "spec";
@@ -1219,6 +1221,20 @@ impl Space {
             title: d.title.clone(),
         });
         Ok(d)
+    }
+
+    /// What `p` gives of a proposal (ESC-475): a new one made of it, or, with `r`, the proposal still
+    /// open revised: the fields `p` leaves out keep their value, the ones it gives replace it, empty
+    /// included.
+    pub fn decision_revise(&self, r: Option<&Ref>, p: DecisionPatch) -> Result<Decision> {
+        match r {
+            Some(r) => {
+                let mut d = self.decision(r)?;
+                d.apply(p);
+                self.decision_propose(Some(r), d)
+            }
+            None => self.decision_propose(None, Decision::from_patch(p)),
+        }
     }
 
     /// A proposal that replaces the accepted decision `old`: it takes its place once accepted.

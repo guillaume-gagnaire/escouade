@@ -1035,3 +1035,93 @@ async fn the_gap_a_discussion_was_opened_on_goes_when_its_page_is_poured() {
         .unwrap();
     assert!(d.settles.is_none());
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn propose_decision_with_an_id_keeps_what_it_does_not_give() {
+    let h = harness("mcp-docs-revise");
+    let p = project(&h).await;
+    let t = put(&h, ticket(&p, "DEM-1", "Le sien", Column::Doing, 1));
+    let worker = put_agent(&h, &p, "dem-1-le-sien", 1);
+    link(&h, &worker.id, &t.id);
+    let c = as_agent(&h, &worker.id).await;
+    let first = read(
+        &c,
+        "propose_decision",
+        json!({
+            "project": p.id, "title": "Trois échéances", "context": "Le contexte.",
+            "decision": "Trois.", "consequences": "Un suivi.",
+            "pages": ["paiement/echeances"], "tickets": ["DEM-1"], "documents": ["cahier.md"]
+        }),
+    )
+    .await;
+    assert_eq!(first["revised"], json!(false));
+    // Only the title and a change: the rest and the ticket's origin stay.
+    let again = read(
+        &c,
+        "propose_decision",
+        json!({
+            "project": p.id, "id": "trois-echeances", "title": "Trois échéances",
+            "changes": [{ "page": "paiement/echeances", "added": 3, "removed": 1 }]
+        }),
+    )
+    .await;
+    assert_eq!(again["revised"], json!(true));
+    assert_eq!(again["replaced"], json!(["title", "changes"]));
+    assert!(again["kept"]
+        .as_array()
+        .unwrap()
+        .contains(&json!("context")));
+    let d = read(
+        &c,
+        "read_decision",
+        json!({ "project": p.id, "id": "trois-echeances" }),
+    )
+    .await;
+    assert_eq!(
+        (
+            d["context"].clone(),
+            d["decision"].clone(),
+            d["consequences"].clone(),
+            d["pages"].clone(),
+            d["tickets"].clone(),
+            d["documents"].clone(),
+            d["origin"].clone(),
+            d["originRef"].clone(),
+            d["changes"][0]["added"].clone(),
+        ),
+        (
+            json!("Le contexte."),
+            json!("Trois."),
+            json!("Un suivi."),
+            json!(["paiement/echeances"]),
+            json!(["DEM-1"]),
+            json!(["cahier.md"]),
+            json!("ticket"),
+            json!("DEM-1"),
+            json!(3),
+        )
+    );
+    // A field given empty empties it; the others stay.
+    read(
+        &c,
+        "propose_decision",
+        json!({ "project": p.id, "id": "trois-echeances", "title": "Trois échéances", "context": "", "pages": [] }),
+    )
+    .await;
+    let d = read(
+        &c,
+        "read_decision",
+        json!({ "project": p.id, "id": "trois-echeances" }),
+    )
+    .await;
+    assert_eq!(
+        (
+            d["context"].clone(),
+            d["pages"].clone(),
+            d["decision"].clone(),
+            d["originRef"].clone()
+        ),
+        (json!(""), json!([]), json!("Trois."), json!("DEM-1"))
+    );
+    c.cancel().await.unwrap();
+}

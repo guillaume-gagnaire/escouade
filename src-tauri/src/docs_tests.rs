@@ -1383,3 +1383,107 @@ fn a_decision_from_the_window_needs_only_its_fields() {
         ("Tarif famille", State::Proposed, None, 0)
     );
 }
+
+#[test]
+fn a_revision_keeps_what_it_does_not_give_and_replaces_what_it_gives_empty_included() {
+    let (s, _) = space("docs-revise");
+    // The first proposal is made of what it gives, as before.
+    let first = s
+        .decision_revise(
+            None,
+            DecisionPatch {
+                title: Some("Trois échéances".into()),
+                context: Some("Le contexte.".into()),
+                decision: Some("Trois échéances.".into()),
+                consequences: Some("Un échéancier.".into()),
+                origin: Some("ticket".into()),
+                origin_ref: Some("ESC-9".into()),
+                pages: Some(vec!["paiement/echeances".into()]),
+                tickets: Some(vec!["ESC-9".into()]),
+                documents: Some(vec!["cahier.md".into()]),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        (first.context.as_str(), first.pages.len(), first.number),
+        ("Le contexte.", 1, None)
+    );
+    let r = Ref::Id(first.id.clone());
+    // Only the changes given: all the rest stays.
+    let change = Change {
+        page: "paiement/echeances".into(),
+        added: 2,
+        removed: 1,
+    };
+    let kept = s
+        .decision_revise(
+            Some(&r),
+            DecisionPatch {
+                title: Some("Trois échéances".into()),
+                changes: Some(vec![change.clone()]),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    let read = s.decision(&r).unwrap();
+    assert_eq!(read, kept);
+    assert_eq!(
+        (
+            read.context.as_str(),
+            read.decision.as_str(),
+            read.consequences.as_str(),
+            read.pages.clone(),
+            read.tickets.clone(),
+            read.documents.clone(),
+            read.origin.as_str(),
+            read.origin_ref.as_str(),
+            read.changes.clone(),
+        ),
+        (
+            "Le contexte.",
+            "Trois échéances.",
+            "Un échéancier.",
+            vec!["paiement/echeances".to_string()],
+            vec!["ESC-9".to_string()],
+            vec!["cahier.md".to_string()],
+            "ticket",
+            "ESC-9",
+            vec![change],
+        )
+    );
+    // A field given empty empties it; the others stay.
+    let emptied = s
+        .decision_revise(
+            Some(&r),
+            DecisionPatch {
+                title: Some("Trois échéances".into()),
+                context: Some(String::new()),
+                pages: Some(Vec::new()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        (
+            emptied.context.as_str(),
+            emptied.pages.len(),
+            emptied.decision.as_str(),
+            emptied.tickets.len(),
+            emptied.origin_ref.as_str()
+        ),
+        ("", 0, "Trois échéances.", 1, "ESC-9")
+    );
+    // Accepted, it is not revised.
+    s.decision_accept(&r, "Léa", &Register::default(), None)
+        .unwrap();
+    assert!(s
+        .decision_revise(
+            Some(&Ref::Number(1)),
+            DecisionPatch {
+                title: Some("Trois échéances".into()),
+                ..Default::default()
+            }
+        )
+        .is_err());
+}
