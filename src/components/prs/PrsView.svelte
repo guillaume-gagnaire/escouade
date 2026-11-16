@@ -29,7 +29,6 @@
   import { tip } from '../../lib/tip';
   import type { PrFailure, PrRead, Project, ProjectPrs, PullRequest } from '../../lib/types';
   import Icon from '../Icon.svelte';
-  import PrReviewView from './PrReviewView.svelte';
   import PrView from './PrView.svelte';
 
   // The project's « Pull requests » view (ESC-65, direction A of design/esc-65): beside the Kanban, its open pull requests
@@ -59,11 +58,6 @@
   const fresh = $derived(freshIn(app.ui.prSeen?.[project.id]));
   /** The pull request whose view fills this one, in place of the list (ESC-457). */
   const viewing = $derived(app.prOpen[project.id] ?? null);
-  /** The review that fills the view, in place of the list (ESC-66). */
-  const reviewing = $derived.by(() => {
-    const n = app.prReviewOpen[project.id];
-    return n == null ? null : (reviews[n] ?? null);
-  });
 
   async function load() {
     const id = project.id;
@@ -160,11 +154,10 @@
       {project}
       number={viewing.number}
       hostRepo={viewing.hostRepo}
+      initialTab={viewing.tab}
       listed={all.find((p) => p.number === viewing.number && (p.hostRepo ?? '') === (viewing.hostRepo ?? '')) ?? null}
     />
   {/key}
-{:else if reviewing}
-  <PrReviewView {project} review={reviewing} {me} />
 {:else}
   <main class="prs" aria-busy={reading}>
     <header class="head">

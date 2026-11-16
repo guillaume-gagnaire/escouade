@@ -429,7 +429,6 @@ export function resetApp(over: { projects?: Project[]; agents?: Agent[]; tickets
   overseerVoice.clear();
   app.board = {};
   app.prReviews = {};
-  app.prReviewOpen = {};
   app.prDrafts = {};
   app.docs = {};
   app.docsSpace = {};

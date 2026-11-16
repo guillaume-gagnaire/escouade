@@ -456,16 +456,16 @@ test.describe('the code hosts', () => {
     await expect(list.getByRole('listitem')).toHaveCount(6, { timeout: 30_000 });
     await shot('prs');
 
-    // « pr-review »: an agent's review, one comment kept, the other still to decide.
+    // « pr-review »: an agent's review, its remarks threads under their line, one kept, the others still open.
     const row = list.getByRole('listitem').filter({ hasText: H.pulls[0][1] });
     await row.hover();
     await row.getByRole('button', { name: L.prs.review.ask, exact: true }).click();
-    const view = page.locator('main.rv');
-    const first = view.getByRole('article').first();
+    const view = page.locator('main.pr');
+    const first = view.locator('article.agent').first();
     await expect(first, 'the review is written').toBeVisible({ timeout: 60_000 });
     await first.getByRole('button', { name: L.prs.review.keep, exact: true }).click();
     await shot('pr-review');
-    await view.getByRole('button', { name: L.prs.review.back.replace('{word}', 'PR') }).click();
+    await view.getByRole('button', { name: L.prs.page.back.replace('{word}', 'PR') }).click();
 
     // « board-review »: the column « En revue » with its pull request.
     await page

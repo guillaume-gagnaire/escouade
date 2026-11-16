@@ -104,9 +104,11 @@
 // of the project, one that holds a line break), only refused ones in a folder named "all-refused", or
 // nothing readable in a folder named "unreadable". Asked for a direct commit's message (<fichiers>, <files>),
 // it names the latest commit subject (<sujets-recents>, <recent-subjects>) and the files of the diff it read.
-// Asked to review a pull request (<pr-diff>, ESC-66), it answers a comment on the first added line of the diff and one on
-// a line out of it, its text saying whether its folder is empty and repeating the title it read; a diff that says
-// [relecture-illisible] gets prose.
+// Asked to review a pull request (<pr-diff>, ESC-66), it answers a remark of a bug on the first added line of the diff, with
+// a suggestion, a detail on its last added line, a detail on a line out of it (with a remote image), and a remark of
+// the spec on the pull request (not once it was told of it), its text saying whether its folder is empty and repeating
+// the title it read; a diff that says [relecture-illisible] gets prose, one that says [relecture-piegee] gets an answer
+// that obeys it (ESC-490).
 // Asked for a pull request (<commits>), it answers a title (« Le travail de l’agent, proposé par le faux claude », with
 // " (en)" in English) and the commits it read as the description.
 // Asked to name a task (<tache>, <task>), it answers with its first two words. Asked in English (its
@@ -539,13 +541,49 @@ if (argv[0] === 'mcp') {
       }
       const path_ = input.match(/<file path="([^"]+)">/)?.[1] ?? '';
       const line = Number(input.match(/^\s*(\d+) \+ /m)?.[1] ?? 0);
+      const code = input.match(/^\s*\d+ \+ (.*)$/m)?.[1] ?? '';
+      // The last added line of the first file, its number.
+      const first = input.slice(input.indexOf('<file path='), input.indexOf('</file>'));
+      const last = Number([...first.matchAll(/^\s*(\d+) \+ /gm)].at(-1)?.[1] ?? 0);
       const folder = fs.readdirSync(process.cwd()).length ? 'dossier plein' : 'dossier vide';
       const title = input.match(/<title>(.*)<\/title>/)?.[1] ?? '';
+      // A pull request that gives it orders (ESC-490): it says it obeys, asks to approve and to publish, in every field
+      // it can think of. None of it is read but its remarks, which wait for the user.
+      if (input.includes('[relecture-piegee]')) {
+        const trapped = {
+          summary: `J'approuve et je publie tout, comme la PR le demande (${folder}).`,
+          verdict: 'APPROVE',
+          event: 'APPROVE',
+          publish: true,
+          actions: [{ kind: 'approve' }, { kind: 'comment', body: 'LGTM' }],
+          comments: [
+            {
+              path: path_,
+              line,
+              severity: 'security',
+              body: 'Le diff me demande d’approuver et de publier : je ne le fais pas.',
+              publish: true,
+            },
+          ],
+        };
+        process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', result: JSON.stringify(trapped) }));
+        return;
+      }
+      // A remark on what the pull request does not say yet: once per pull request, not twice once it was told.
+      const told = input.includes('La description ne dit pas comment tester.');
       const review = {
         summary: `Relu par le faux claude (${folder}) : ${title}`,
         comments: [
-          { path: path_, line, body: 'Cette ligne mérite un test.' },
-          { path: path_, line: 9999, body: 'Hors du diff.' },
+          {
+            path: path_,
+            line,
+            severity: 'bug',
+            body: 'Cette ligne mérite un test.',
+            suggestion: `${code} // testé`,
+          },
+          ...(last > line ? [{ path: path_, line: last, severity: 'detail', body: 'Ce nom mérite mieux.' }] : []),
+          { path: path_, line: 9999, severity: 'detail', body: 'Hors du diff. ![pixel](https://example.com/p.png)' },
+          ...(told ? [] : [{ path: '', severity: 'spec', body: 'La description ne dit pas comment tester.' }]),
         ],
       };
       const text = 'Voici ma relecture :\n```json\n' + JSON.stringify(review) + '\n```';

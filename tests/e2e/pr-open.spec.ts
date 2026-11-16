@@ -199,9 +199,10 @@ test('the project’s pull requests and a review open the pull request’s page,
 
   await row.hover();
   await row.getByRole('button', { name: 'Faire relire' }).click();
-  const view = page.locator('main.rv');
+  // The review opens the view of the pull request (ESC-490), its tab « Fichiers ».
+  const view = page.getByRole('main', { name: 'La PR #' + n });
   await expect(view.getByRole('heading', { name: /Connexion par lien magique/ })).toBeVisible();
-  await opensBoth(page, opened, view.getByRole('button', { name: 'Ouvrir dans le navigateur' }), PAGE(n), 'review');
+  await opensBoth(page, opened, view.getByRole('button', { name: 'Ouvrir sur GitHub' }), PAGE(n), 'review');
 });
 
 test('a ticket’s pull request opens its page from its view, opened by its card « En revue »', async ({ app }) => {

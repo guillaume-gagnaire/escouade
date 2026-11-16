@@ -40,13 +40,43 @@
     type PrWrite,
   } from '../../lib/prthreads';
   import { openPrPage } from '../../lib/prs';
+  import {
+    SEVERITIES,
+    isLive,
+    keptNotes,
+    mergeStops,
+    noteKey,
+    noteOrder,
+    notePlace,
+    onItsLine,
+    placeNotes,
+    severityCounts,
+    shownBy,
+    sortNotes,
+    type NextScope,
+    type SeverityFilter,
+  } from '../../lib/prreview';
+  import { readPref, writePref } from '../../lib/prefs';
   import { POLL_MS, stillRunning } from '../../lib/prview';
   import { app } from '../../lib/state.svelte';
   import { tip } from '../../lib/tip';
-  import type { PrContents, PrContentsFile, PrDetail, PrFailure, PrLine, PrRead, PrThread, Project, PullRequest } from '../../lib/types';
+  import type {
+    PrContents,
+    PrContentsFile,
+    PrDetail,
+    PrFailure,
+    PrLine,
+    PrRead,
+    PrThread,
+    Project,
+    PullRequest,
+    ReviewNote,
+    Severity,
+  } from '../../lib/types';
   import CiChecks from '../CiChecks.svelte';
   import Icon from '../Icon.svelte';
   import Markdown from '../conv/Markdown.svelte';
+  import PrAgentNote from './PrAgentNote.svelte';
   import PrComposer from './PrComposer.svelte';
   import PrFiles from './PrFiles.svelte';
   import PrThreadView from './PrThread.svelte';
@@ -62,13 +92,14 @@
     number,
     hostRepo,
     listed = null,
-  }: { project: Project; number: number; hostRepo?: string; listed?: PullRequest | null } = $props();
+    initialTab = 'conversation',
+  }: { project: Project; number: number; hostRepo?: string; listed?: PullRequest | null; initialTab?: PrTab } = $props();
 
   let contents = $state<PrRead<PrContents> | null>(null);
   let detail = $state<PrRead<PrDetail> | null>(null);
   let reading = $state(false);
   let readAt = $state<number | null>(null);
-  let tab = $state<PrTab>('conversation');
+  let tab = $state<PrTab>(untrack(() => initialTab));
   /** What the tab « Fichiers » shows: the whole pull request, or one of its commits. */
   let scope = $state<FilesScope>('pr');
   /** The commits whose whole message is shown, by their hash. */
@@ -114,9 +145,30 @@
   const writing = $derived(c?.writing ?? NO_WRITING);
   /** The threads under their line in the whole pull request's diff, the others apart. */
   const placed = $derived(c ? placeThreads(c.files, c.threads) : { under: {}, stale: {}, elsewhere: [] });
-  const stops = $derived(c ? openOrder(treeOrder(c.files, ''), placed) : []);
   const counts = $derived(c ? threadCounts(c.threads) : { open: 0, resolved: 0 });
-  /** Each file's open threads (under its lines and apart) and its lines that have one. */
+
+  // ---------- The reviewer agent's remarks (ESC-490, PR-5) ----------
+
+  /** The review of this pull request by an agent: one of the project's own pull requests. */
+  const review = $derived(hostRepo ? null : (app.prReviews[project.id]?.[number] ?? null));
+  const notes = $derived(review?.notes ?? []);
+  /** The severities shown (all when none is chosen), and the order of the summary. */
+  let sevFilter = $state<SeverityFilter>({});
+  let noteSort = $state<'severity' | 'place'>('severity');
+  const NEXT_SCOPES: NextScope[] = ['both', 'host', 'agent'];
+  const savedScope = readPref('prNextScope');
+  let nextScope = $state<NextScope>(NEXT_SCOPES.includes(savedScope as NextScope) ? (savedScope as NextScope) : 'both');
+  const shownNotes = $derived(notes.filter(shownBy(sevFilter)));
+  const sevCounts = $derived(severityCounts(notes));
+  const liveCount = $derived(notes.filter(isLive).length);
+  const kept = $derived(keptNotes(notes, c ? treeOrder(c.files, '').map((f) => f.path) : []));
+  const notePlaced = $derived(c ? placeNotes(c.files, shownNotes) : { under: {}, onFile: {}, stale: {}, top: [] });
+  const stops = $derived.by(() => {
+    if (!c) return [];
+    const ordered = treeOrder(c.files, '');
+    return mergeStops(ordered, openOrder(ordered, placed), noteOrder(ordered, notePlaced), nextScope);
+  });
+  /** Each file's open threads and remarks (under its lines and apart) and its lines that have one. */
   const NO_THREADS = { open: 0, marked: {} as Record<number, boolean> };
   const fileThreads = $derived.by(() => {
     const out: Record<string, { open: number; marked: Record<number, boolean> }> = {};
@@ -131,8 +183,97 @@
       const it = (out[path] ??= { open: 0, marked: {} });
       it.open += ts.filter((th) => th.state !== 'resolved').length;
     }
+    for (const [path, lines] of Object.entries(notePlaced.under)) {
+      const it = (out[path] ??= { open: 0, marked: {} });
+      for (const [i, ns] of Object.entries(lines)) {
+        it.marked[Number(i)] = true;
+        it.open += ns.filter(isLive).length;
+      }
+    }
+    for (const group of [notePlaced.onFile, notePlaced.stale])
+      for (const [path, ns] of Object.entries(group)) {
+        const it = (out[path] ??= { open: 0, marked: {} });
+        it.open += ns.filter(isLive).length;
+      }
     return out;
   });
+  let starting = $state(false);
+  let batchOpen = $state(false);
+  let batchBusy = $state(false);
+  let batchFailure = $state<string | null>(null);
+
+  function setNextScope(s: NextScope) {
+    nextScope = s;
+    writePref('prNextScope', s);
+  }
+
+  function toggleSeverity(s: Severity) {
+    sevFilter = { ...sevFilter, [s]: !sevFilter[s] };
+  }
+
+  /** « Faire relire par un agent », or read again: the remarks before stay. */
+  async function askReview() {
+    starting = true;
+    try {
+      await api.prReviewStart(project.id, number);
+    } catch (e) {
+      app.toast(String(e), 'error');
+    } finally {
+      starting = false;
+    }
+  }
+
+  /** A remark kept, dropped or opened again: null when done, else why not. */
+  async function decide(n: ReviewNote, choice: 'open' | 'kept' | 'dropped'): Promise<string | null> {
+    try {
+      const r = await api.prReviewNote(project.id, number, n.id, choice);
+      (app.prReviews[project.id] ??= {})[number] = r;
+      return null;
+    } catch (e) {
+      return String(e);
+    }
+  }
+
+  /** Remarks published on the host, as the user's comments, in order: null when all went, else why it stopped. */
+  async function sendNotes(items: { n: ReviewNote; body?: string }[]): Promise<string | null> {
+    let out: Awaited<ReturnType<typeof api.prReviewSend>>;
+    try {
+      out = await api.prReviewSend(
+        project.id,
+        number,
+        items.map(({ n, body }) => ({ id: n.id, body, onLine: !!c && onItsLine(c.files, n) })),
+      );
+    } catch (e) {
+      return String(e);
+    }
+    (app.prReviews[project.id] ??= {})[number] = out.review;
+    if (out.sent.length) {
+      app.toast(t('prs.review.published', { count: out.sent.length, host }), 'ok');
+      // Published, each one is the host's thread now: read again to show it.
+      await loadContents();
+    }
+    return out.failure ? writeFailure(out.failure, host, online) : null;
+  }
+
+  const publishNote = (n: ReviewNote, body: string) => sendNotes([{ n, body }]);
+
+  async function publishKept() {
+    batchBusy = true;
+    batchFailure = null;
+    const why = await sendNotes(kept.map((n) => ({ n })));
+    batchBusy = false;
+    if (why) batchFailure = t('prs.review.batch.stopped', { why });
+    else batchOpen = false;
+  }
+
+  /** A remark of the summary, in the tab « Fichiers » under its line. */
+  function showNote(n: ReviewNote) {
+    sevFilter = {};
+    const files = c?.files ?? [];
+    const all = placeNotes(files, notes);
+    const at = n.path ? Object.entries(all.under[n.path] ?? {}).find(([, ns]) => ns.some((x) => x.id === n.id)) : undefined;
+    show(noteKey(n), n.path && files.some((f) => f.path === n.path) ? n.path : null, at ? Number(at[0]) : -1);
+  }
   /** The lines a comment is being written on. */
   let composing = $state<LinePick | null>(null);
   let composeBusy = $state(false);
@@ -291,7 +432,11 @@
       convFailure = null;
       currentThread = null;
       reveal = null;
+      sevFilter = {};
+      batchOpen = false;
+      batchFailure = null;
       void load();
+      if (!hostRepo) app.loadPrReviews(project.id).catch(() => {});
     });
   });
 
@@ -409,37 +554,161 @@
   </div>
 {/snippet}
 
-<!-- Under a line of the tab « Fichiers » (ESC-474): its threads, then the comment being written on it. -->
+{#snippet agentNote(n: ReviewNote, showPlace: boolean)}
+  <PrAgentNote
+    note={n}
+    {host}
+    {word}
+    onLine={!!c && onItsLine(c.files, n)}
+    current={currentThread === noteKey(n)}
+    {showPlace}
+    {decide}
+    publish={publishNote}
+  />
+{/snippet}
+
+<!-- Under a line of the tab « Fichiers » (ESC-474): its threads, the agent's remarks (ESC-490), then the comment being written on it. -->
 {#snippet under(file: PrContentsFile, _l: PrLine, i: number)}
   {@const here = placed.under[file.path]?.[i]}
+  {@const mine = notePlaced.under[file.path]?.[i]}
   {@const writingHere = !!composing && composing.path === file.path && composing.index === i}
-  {#if here || writingHere}
+  {#if here || mine || writingHere}
     <div class="under">
       {#each here ?? [] as th (threadKey(th))}{@render lineThread(th, false)}{/each}
+      {#each mine ?? [] as n (n.id)}{@render agentNote(n, false)}{/each}
       {#if writingHere && composing}{@render lineComposer(composing)}{/if}
     </div>
   {/if}
 {/snippet}
 
-<!-- Above a file's lines: its threads whose line is no longer in the diff. -->
+<!-- Above a file's lines: the agent's remarks on the whole file, then its threads and remarks whose line is no longer in the diff. -->
 {#snippet above(file: PrContentsFile)}
   {@const apart = placed.stale[file.path]}
+  {@const onFile = notePlaced.onFile[file.path]}
+  {@const staleNotes = notePlaced.stale[file.path]}
+  {#if onFile?.length}
+    <div class="apart" role="group" aria-label={t('prs.review.onFile')}>
+      <p class="apart-h"><Icon name="file" size={12} />{t('prs.review.onFile')}</p>
+      {#each onFile as n (n.id)}{@render agentNote(n, false)}{/each}
+    </div>
+  {/if}
   {#if apart?.length}
     <div class="apart" role="group" aria-label={t('prs.page.threads.stale', { count: apart.length })}>
       <p class="apart-h"><Icon name="clock" size={12} />{t('prs.page.threads.stale', { count: apart.length })}</p>
       {#each apart as th (threadKey(th))}{@render lineThread(th, true)}{/each}
     </div>
   {/if}
+  {#if staleNotes?.length}
+    <div class="apart" role="group" aria-label={t('prs.review.stale', { count: staleNotes.length })}>
+      <p class="apart-h"><Icon name="clock" size={12} />{t('prs.review.stale', { count: staleNotes.length })}</p>
+      {#each staleNotes as n (n.id)}{@render agentNote(n, true)}{/each}
+    </div>
+  {/if}
 {/snippet}
 
-<!-- Above the files: the threads on files the diff does not change. -->
+<!-- Above the files: the threads on files the diff does not change, the agent's remarks on the whole pull request. -->
 {#snippet head()}
+  {#if review && (review.phase === 'reading' || review.phase === 'failed')}{@render reviewState()}{/if}
+  {#if notePlaced.top.length}
+    <div class="apart top" role="group" aria-label={t('prs.review.elsewhere', { count: notePlaced.top.length, word })}>
+      <p class="apart-h"><Icon name="sparkle" size={12} />{t('prs.review.elsewhere', { count: notePlaced.top.length, word })}</p>
+      {#each notePlaced.top as n (n.id)}{@render agentNote(n, true)}{/each}
+    </div>
+  {/if}
   {#if placed.elsewhere.length}
     <div class="apart top" role="group" aria-label={t('prs.page.threads.elsewhere', { count: placed.elsewhere.length })}>
       <p class="apart-h"><Icon name="clock" size={12} />{t('prs.page.threads.elsewhere', { count: placed.elsewhere.length })}</p>
       {#each placed.elsewhere as th (threadKey(th))}{@render lineThread(th, true)}{/each}
     </div>
   {/if}
+{/snippet}
+
+<!-- The reading under way, or failed (its remarks before stay). -->
+{#snippet reviewState()}
+  {#if review?.phase === 'reading'}
+    <div class="rv-state" role="status">
+      <span class="spinner" aria-hidden="true"></span>
+      <div><b>{t('prs.review.reading', { word, number })}</b><span class="muted">{t('prs.review.readingHint')}</span></div>
+    </div>
+  {:else if review?.phase === 'failed'}
+    <div class="rv-state ko" role="alert">
+      <Icon name="info" size={15} />
+      <div><b>{t('prs.review.failed', { why: review.error ?? '' })}</b></div>
+      <button class="btn small" disabled={starting} onclick={askReview}><Icon name="restart" size={13} />{t('prs.review.again')}</button>
+    </div>
+  {/if}
+{/snippet}
+
+<!-- The agent's review in the conversation: what it read, at which commit, its remarks by severity, its view, a link to each. -->
+{#snippet reviewSummary()}
+  {#if review}
+    <section class="rv-sum" aria-label={t('prs.review.summary.label')}>
+      <div class="dh">
+        <span class="av agentic" aria-hidden="true"><Icon name="sparkle" size={12} /></span>
+        <b>{t('prs.review.reviewer')}</b>
+        <span class="tag agent-tag" use:tip={t('prs.review.tagHint', { host })}>{t('prs.review.tag')}</span>
+        {#if review.headSha}<span class="muted">{t('prs.review.summary.read', { word, sha: shortSha(review.headSha) })}</span>{/if}
+        {#if review.readAt}<span class="t">· {ago(Math.floor(review.readAt / 1000))}</span>{/if}
+        <span class="muted by">{review.by}</span>
+      </div>
+      {@render reviewState()}
+      <div class="db">
+        <p class="sum-counts">
+          {t('prs.review.summary.counts', { count: notes.length })}{#each SEVERITIES as s (s)}{#if sevCounts[s]}{' · '}<span
+                class="sevc {s}">{sevCounts[s]} {t(`prs.review.severity.${s}`)}</span
+              >{/if}{/each}
+        </p>
+        {#if review.summary.trim()}
+          <h4>{t('prs.review.summary.view')}</h4>
+          <div class="third"><Markdown text={review.summary} /></div>
+        {/if}
+        {#if review.leftOut.length}
+          <p class="muted small" use:tip={review.leftOut.join('\n')}>{t('prs.review.summary.leftOut', { count: review.leftOut.length })}</p>
+        {/if}
+        {#if notes.length}
+          <div class="sum-bar">
+            <h4>{t('prs.review.summary.remarks')}</h4>
+            {@render severityChips()}
+            <label class="sort"
+              ><select bind:value={noteSort} aria-label={t('prs.review.sort')}>
+                <option value="severity">{t('prs.review.sorts.severity')}</option>
+                <option value="place">{t('prs.review.sorts.place')}</option>
+              </select></label
+            >
+          </div>
+          <ul class="sum-list">
+            {#each sortNotes(shownNotes, noteSort, c ? treeOrder(c.files, '').map((f) => f.path) : []) as n (n.id)}
+              <li data-choice={n.choice}>
+                <span class="sev-dot {n.severity}">{t(`prs.review.severity.${n.severity}`)}</span>
+                <button class="link go" onclick={() => showNote(n)} aria-label={t('prs.review.summary.go', { place: notePlace(n, word) })}
+                  ><span class="mono">{notePlace(n, word)}</span></button
+                >
+                <span class="ell">{n.body}</span>
+                <span class="st">{t(`prs.review.summary.state.${n.choice}`)}</span>
+              </li>
+            {:else}
+              <li class="muted">{t('prs.review.summary.noneShown')}</li>
+            {/each}
+          </ul>
+        {:else if review.phase !== 'reading'}
+          <p class="muted">{t('prs.review.summary.none')}</p>
+        {/if}
+      </div>
+    </section>
+  {/if}
+{/snippet}
+
+{#snippet severityChips()}
+  <div class="chips" role="group" aria-label={t('prs.review.filter')}>
+    {#each SEVERITIES as s (s)}
+      <button
+        class="chip {s}"
+        aria-pressed={!!sevFilter[s]}
+        use:tip={t('prs.review.filterHint', { severity: t(`prs.review.severity.${s}`) })}
+        onclick={() => toggleSeverity(s)}>{t(`prs.review.severity.${s}`)}<span class="num">{sevCounts[s]}</span></button
+      >
+    {/each}
+  </div>
 {/snippet}
 
 {#snippet threadCard(th: PrThread, key: string)}
@@ -512,6 +781,14 @@
         use:tip={t('prs.page.refresh', { word })}
         onclick={() => void load()}><Icon name="restart" size={15} /></button
       >
+      {#if !hostRepo && pr?.state === 'open'}
+        <button
+          class="btn agentic"
+          disabled={starting || review?.phase === 'reading'}
+          use:tip={review ? t('prs.review.againHint', { word }) : t('prs.review.askHint', { word })}
+          onclick={askReview}><Icon name="sparkle" size={14} />{review ? t('prs.review.again') : t('prs.review.ask')}</button
+        >
+      {/if}
       <!-- The place of « Ta relecture » (PR-7) and of the merge (PR-8). -->
       <button class="btn" disabled={!pr} onclick={openOnHost}><Icon name="ext" size={14} />{t('prs.page.openOnHost', { host })}</button>
     </div>
@@ -533,14 +810,16 @@
         >
       {/each}
     </div>
-    {#if c?.reading.threads && counts.open + counts.resolved > 0}
+    {#if (c?.reading.threads && counts.open + counts.resolved > 0) || liveCount}
       <div class="nav-th" role="group" aria-label={t('prs.page.threads.open', { count: counts.open })}>
         <span class="cnt"
           >{t('prs.page.threads.open', { count: counts.open })}{#if counts.resolved}{' · '}{t('prs.page.threads.resolvedCount', {
               count: counts.resolved,
-            })}{/if}</span
+            })}{/if}{#if liveCount}{' · '}<span class="agent-cnt"
+              ><Icon name="sparkle" size={11} />{t('prs.review.summary.counts', { count: liveCount })}</span
+            >{/if}</span
         >
-        {#if counts.open}
+        {#if stops.length}
           <button
             class="icon-btn"
             aria-label={t('prs.page.threads.previous')}
@@ -595,6 +874,8 @@
                 </div>
               </section>
             {/if}
+
+            {@render reviewSummary()}
 
             {#each items as it (it.key)}
               {#if it.kind === 'commits'}
@@ -680,6 +961,49 @@
             </ul>
           {/if}
         {:else if tab === 'files'}
+          {#if review && (notes.length || review.phase !== 'ready')}
+            <div class="agent-bar" role="region" aria-label={t('prs.review.head')}>
+              <span class="ab-h"><Icon name="sparkle" size={13} />{t('prs.review.head')}</span>
+              {@render severityChips()}
+              {#if kept.length}
+                <button class="btn small primary" disabled={batchBusy} onclick={() => ((batchOpen = true), (batchFailure = null))}
+                  ><Icon name="push" size={12} />{t('prs.review.batch.button', { count: kept.length })}</button
+                >
+              {/if}
+              <label class="scope"
+                ><span class="muted">{t('prs.page.threads.next')}</span>
+                <select
+                  aria-label={t('prs.review.nextScope')}
+                  value={nextScope}
+                  onchange={(e) => setNextScope((e.currentTarget as HTMLSelectElement).value as NextScope)}
+                >
+                  {#each NEXT_SCOPES as s (s)}<option value={s}>{t(`prs.review.nextScopes.${s}`, { host })}</option>{/each}
+                </select></label
+              >
+            </div>
+            {#if batchOpen && kept.length}
+              <div class="batch" role="dialog" aria-modal="false" aria-label={t('prs.review.batch.title', { count: kept.length })}>
+                <p class="b-t">{t('prs.review.batch.title', { count: kept.length })}</p>
+                <p class="muted">{t('prs.review.batch.body', { host })}</p>
+                <ol>
+                  {#each kept as n (n.id)}
+                    <li>
+                      <span class="sev-dot {n.severity}">{t(`prs.review.severity.${n.severity}`)}</span>
+                      <span class="mono">{notePlace(n, word)}</span>
+                      <span class="ell">{n.body}</span>
+                    </li>
+                  {/each}
+                </ol>
+                {#if batchFailure}<p class="fail" role="alert"><Icon name="info" size={13} />{batchFailure}</p>{/if}
+                <div class="b-acts">
+                  <button class="btn small primary" disabled={batchBusy} onclick={publishKept}
+                    >{batchBusy ? t('prs.review.publishing') : t('prs.review.batch.confirm', { count: kept.length })}</button
+                  >
+                  <button class="btn small" disabled={batchBusy} onclick={() => (batchOpen = false)}>{t('prs.review.cancel')}</button>
+                </div>
+              </div>
+            {/if}
+          {/if}
           <PrFiles
             projectId={project.id}
             {number}
@@ -914,13 +1238,17 @@
     font-weight: 500;
   }
   .tl {
+    flex: none;
     display: flex;
     gap: 2px;
     align-items: stretch;
     min-width: 0;
   }
+  /* Its count gives way to the tabs: cut, never over them. */
   .nav-th {
     margin-left: auto;
+    min-width: 0;
+    padding-left: 10px;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -929,6 +1257,7 @@
     white-space: nowrap;
   }
   .nav-th .cnt {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
   }
@@ -1436,5 +1765,247 @@
   .why {
     color: var(--muted);
     font-size: 12px;
+  }
+  /* The reviewer agent (ESC-490): its colour is the brain's, its tag and its icon say it without the colour. */
+  .btn.agentic {
+    color: var(--brain);
+    box-shadow: inset 0 0 0 1px oklch(from var(--brain) l c h / 0.45);
+  }
+  .agent-cnt {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--brain);
+  }
+  .av.agentic {
+    color: var(--brain);
+    background: oklch(from var(--brain) l c h / 0.14);
+    box-shadow: inset 0 0 0 1px oklch(from var(--brain) l c h / 0.45);
+  }
+  .agent-tag {
+    color: var(--brain);
+    background: oklch(from var(--brain) l c h / 0.12);
+  }
+  .agent-bar {
+    flex: none;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    padding: 7px 14px;
+    border-bottom: 1px solid var(--line);
+    font-size: 12px;
+  }
+  .ab-h {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--brain);
+    font-weight: 600;
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .chip {
+    all: unset;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 11px;
+    font-size: 11.5px;
+    font-weight: 550;
+    color: var(--soft);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    cursor: pointer;
+  }
+  .chip .num {
+    color: var(--muted);
+  }
+  .chip:hover {
+    background: var(--raise);
+  }
+  .chip:focus-visible {
+    outline: 2px solid var(--brain);
+  }
+  .chip[aria-pressed='true'] {
+    color: var(--text);
+    background: var(--raise-2);
+    box-shadow: inset 0 0 0 1px var(--text);
+  }
+  .chip.security {
+    color: var(--del);
+  }
+  .chip.bug {
+    color: var(--wait);
+  }
+  .scope {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .scope select,
+  .sort select {
+    height: 24px;
+    font: inherit;
+    font-size: 12px;
+    color: var(--text);
+    background: var(--raise);
+    border: none;
+    border-radius: 6px;
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    padding: 0 6px;
+  }
+  .batch {
+    flex: none;
+    margin: 8px 14px 4px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--raise);
+    box-shadow:
+      inset 0 0 0 1px var(--brain),
+      0 6px 18px oklch(0 0 0 / 0.18);
+    display: grid;
+    gap: 6px;
+    font-size: 12.5px;
+  }
+  .batch p {
+    margin: 0;
+  }
+  .b-t {
+    font-weight: 620;
+  }
+  .batch ol {
+    margin: 0;
+    padding-left: 20px;
+    display: grid;
+    gap: 3px;
+    max-height: 180px;
+    overflow: auto;
+  }
+  .batch li,
+  .sum-list li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .b-acts {
+    display: flex;
+    gap: 6px;
+  }
+  .sev-dot {
+    flex: none;
+    font-size: 10.5px;
+    font-weight: 650;
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: var(--muted);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+  }
+  .sev-dot.security {
+    color: var(--del);
+    background: oklch(from var(--del) l c h / 0.1);
+    box-shadow: none;
+  }
+  .sev-dot.bug {
+    color: var(--wait);
+    background: var(--wait-bg);
+    box-shadow: none;
+  }
+  .rv-sum {
+    border-radius: 10px;
+    box-shadow:
+      inset 3px 0 0 var(--brain),
+      inset 0 0 0 1px oklch(from var(--brain) l c h / 0.45);
+    overflow: hidden;
+  }
+  .rv-sum .by {
+    margin-left: auto;
+    font-size: 11.5px;
+  }
+  .rv-sum h4 {
+    margin: 10px 0 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .sum-counts {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--soft);
+  }
+  .sevc.security {
+    color: var(--del);
+  }
+  .sevc.bug {
+    color: var(--wait);
+  }
+  .sum-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .sum-bar h4 {
+    margin-right: 4px;
+  }
+  .sort {
+    margin-left: auto;
+  }
+  .sum-list {
+    list-style: none;
+    margin: 6px 0 0;
+    padding: 0;
+    display: grid;
+    gap: 4px;
+    font-size: 12.5px;
+  }
+  .sum-list li[data-choice='dropped'],
+  .sum-list li[data-choice='published'] {
+    color: var(--muted);
+  }
+  .sum-list .st {
+    margin-left: auto;
+    flex: none;
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+  .go {
+    flex: none;
+    color: var(--soft);
+    font-size: 12px;
+  }
+  .small {
+    font-size: 12px;
+  }
+  .rv-state {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 12px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    background: oklch(from var(--brain) l c h / 0.07);
+    box-shadow: inset 0 0 0 1px oklch(from var(--brain) l c h / 0.35);
+  }
+  .rv-state > div {
+    display: grid;
+    gap: 2px;
+    margin-right: auto;
+  }
+  .rv-state.ko {
+    color: var(--del);
+    background: oklch(from var(--del) l c h / 0.07);
+    box-shadow: inset 0 0 0 1px oklch(from var(--del) l c h / 0.35);
+  }
+  .rv-state.ko b {
+    color: var(--text);
   }
 </style>

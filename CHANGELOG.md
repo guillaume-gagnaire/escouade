@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- L’agent relecteur commente maintenant comme un humain, à côté du code : ses remarques sont des fils sous leur ligne, marqués « agent, pas publié », avec leur sévérité, leurs suggestions de code et un résumé dans la Conversation. Écarte-en une, ou publie-la sous ton compte d’un clic, une à une ou toutes celles gardées ; relancée après un commit, la relecture garde ce qui tient et dit ce qui est périmé.
 - Serveur d’équipe : `init --help`, `serve --help` et `recovery-token --help` affichent l’aide de la commande au lieu de l’exécuter, et une option inconnue est refusée au lieu d’être ignorée.
 - Serveur d’équipe : le Kanban d’un projet se partage avec l’équipe, en direct. Un ticket se prend par le serveur, une seule fois, et chaque carte dit qui le tient et depuis quand ; deux changements du même champ en même temps se montrent à celui qui a perdu, et une description changée des deux côtés se fusionne seule.
 - Les fils d’une PR sous leur ligne dans l’onglet Fichiers, les résolus repliés et les périmés à part, avec « Suivante » (N) d’un fil ouvert à l’autre. Commente une ligne ou la PR, réponds, résous et rouvre un fil chez l’hébergeur sous ton compte, d’un clic : ton brouillon reste tant qu’il n’est pas parti.

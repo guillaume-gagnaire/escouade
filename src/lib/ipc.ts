@@ -28,10 +28,10 @@ import type {
   ProjectPrs,
   NoteChoice,
   AgentReview,
-  ReviewVerdict,
   PrContents,
   PrContentsFile,
   PrDetail,
+  PrFailure,
   PrRead,
   ProjectEnvironments,
   BranchCi,
@@ -537,16 +537,16 @@ export const api = {
   createAgentOnPr: (projectId: string, number: number) => invoke<Agent>('create_agent_on_pr', { projectId, number }),
   /** The reviews written by an agent of the project (ESC-66). */
   prReviews: (projectId: string) => invoke<AgentReview[]>('pr_reviews', { projectId }),
-  /** « Faire relire par un agent »: the review starts in the background; nothing leaves for the host. */
+  /** « Faire relire par un agent », or read again: the reading starts in the background, the remarks before kept; nothing
+   * leaves for the host. */
   prReviewStart: (projectId: string, number: number) => invoke<AgentReview>('pr_review_start', { projectId, number }),
-  /** A comment of a review kept, edited (`body`) or dropped. */
-  prReviewNote: (projectId: string, number: number, id: number, choice: NoteChoice, body?: string) =>
+  /** A remark of a review kept, dropped (its thread resolved), opened again or corrected (`body`). */
+  prReviewNote: (projectId: string, number: number, id: number, choice: Exclude<NoteChoice, 'published'>, body?: string) =>
     invoke<AgentReview>('pr_review_note', { projectId, number, id, choice, body }),
-  prReviewSummary: (projectId: string, number: number, summary: string) =>
-    invoke<AgentReview>('pr_review_summary', { projectId, number, summary }),
-  /** « Publier »: the only way a review reaches the host; `moved`, nothing left: commits landed since the agent read. */
-  prReviewPublish: (projectId: string, number: number, verdict: ReviewVerdict, acceptMoved: boolean) =>
-    invoke<{ review: AgentReview; moved: boolean }>('pr_review_publish', { projectId, number, verdict, acceptMoved }),
+  /** « Publier » (ESC-490): the only way remarks of an agent reach the host, as comments of the user, in order; `onLine`,
+   * on their lines in the diff read, else in the conversation. The first refusal stops the rest (`failure`). */
+  prReviewSend: (projectId: string, number: number, notes: { id: number; body?: string; onLine: boolean }[]) =>
+    invoke<{ review: AgentReview; sent: number[]; failure?: PrFailure }>('pr_review_send', { projectId, number, notes }),
   prReviewDiscard: (projectId: string, number: number) => invoke<void>('pr_review_discard', { projectId, number }),
   /** The environments of the project's host as last read (ESC-67); the project is followed while its view is open. */
   projectEnvironments: (projectId: string) => invoke<ProjectEnvironments | null>('project_environments', { projectId }),

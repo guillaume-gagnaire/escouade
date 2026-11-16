@@ -2100,7 +2100,7 @@ pub async fn pr_review_start(
     core.pr_review_start(&project_id, number).await.map_err(err)
 }
 
-/// A comment of a review kept, edited or dropped.
+/// A remark of an agent's review kept, dropped (its thread resolved), opened again or corrected.
 #[tauri::command]
 pub fn pr_review_note(
     core: CoreState<'_>,
@@ -2114,28 +2114,16 @@ pub fn pr_review_note(
         .map_err(err)
 }
 
-/// The text of a review, edited.
+/// « Publier » (ESC-490): the only way a remark of an agent reaches the host, as a comment of the
+/// user, on their click.
 #[tauri::command]
-pub fn pr_review_summary(
+pub async fn pr_review_send(
     core: CoreState<'_>,
     project_id: String,
     number: u64,
-    summary: String,
-) -> Res<crate::prreview::PrReview> {
-    core.pr_review_summary(&project_id, number, summary)
-        .map_err(err)
-}
-
-/// « Publier la relecture »: the only way a review reaches the host, on the user's click.
-#[tauri::command]
-pub async fn pr_review_publish(
-    core: CoreState<'_>,
-    project_id: String,
-    number: u64,
-    verdict: crate::forge::ReviewState,
-    accept_moved: bool,
-) -> Res<crate::prreview::Published> {
-    core.pr_review_publish(&project_id, number, verdict, accept_moved)
+    notes: Vec<crate::prreview::NoteSend>,
+) -> Res<crate::prreview::Sent> {
+    core.pr_review_send(&project_id, number, notes)
         .await
         .map_err(err)
 }

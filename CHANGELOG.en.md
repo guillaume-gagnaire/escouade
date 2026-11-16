@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- The reviewer agent now comments like a human, next to the code: its remarks are threads under their line, marked « agent, not published », with their severity, their code suggestions and a summary in the Conversation. Drop one, or publish it under your account in one click, one by one or all those kept; run again after a commit, the review keeps what still holds and says what is stale.
 - Team server: `init --help`, `serve --help` and `recovery-token --help` print the command’s help instead of running it, and an unknown option is refused instead of ignored.
 - Team server: a project’s Kanban is shared with the team, live. A ticket is taken through the server, once, and each card says who holds it and since when; two changes of the same field at the same time show to the one who lost, and a description changed on both sides merges by itself.
 - A pull request’s threads under their line in the Files tab, resolved ones folded and outdated ones apart, with “Next” (N) from one open thread to the next. Comment on a line or the pull request, reply, resolve and reopen a thread on the code host under your account, in one click: your draft stays until it is sent.

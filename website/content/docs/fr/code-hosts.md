@@ -70,11 +70,11 @@ La liste n’écrit rien chez l’hébergeur.
 
 ## Faire relire une PR par un agent
 
-« Faire relire », ou « Faire relire par un agent » dans l’onglet « PR et CI », donne le diff d’une PR ouverte à un agent, qui rédige un texte et des commentaires par fichier et par ligne. La relecture tourne en arrière-plan ; tu peux quitter la vue.
+« Faire relire », ou « Faire relire par un agent » dans l’onglet « PR et CI », donne le diff d’une PR ouverte à un agent. Ses remarques arrivent comme des fils sous leur ligne, dans l’onglet Fichiers de la PR, marqués « agent, pas publié » : chacune a sa sévérité (Sécurité, Bogue, Spec, Détail) et parfois une suggestion de code, à copier. Son avis d’ensemble est en tête de la Conversation. La relecture tourne en arrière-plan ; tu peux quitter la vue.
 
-![Une relecture par un agent : son texte, un commentaire gardé et un autre à trancher, sous les lignes du diff](/images/pr-review.jpg)
+![Une relecture par un agent : ses remarques sous les lignes du diff, l’une gardée](/images/pr-review.jpg)
 
-Sur chaque commentaire : « Garder », « Corriger » ou « Écarter ». Puis tu choisis ce que dit la relecture (« Commenter », « Demander des changements », « Approuver ») et « Publier sur GitHub » envoie d’un coup ce que tu as gardé. Rien ne part avant ce clic, et aucun outil du serveur MCP ne publie à ta place.
+Sur chaque remarque : « Écarter » résout son fil, sans rien publier ; « Publier » te montre son texte à corriger, puis l’envoie sur GitHub comme ton commentaire ; « Garder » la met de côté pour « Publier les remarques gardées », qui les liste avant de les envoyer. Rien ne part avant ton clic, et aucun outil du serveur MCP ne publie à ta place. « Relire à nouveau » après un commit garde les remarques qui tiennent encore et met à part celles dont le code a changé.
 
 ### Ce que l’agent lit
 

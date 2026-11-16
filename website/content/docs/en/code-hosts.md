@@ -70,11 +70,11 @@ The list writes nothing on the host.
 
 ## Get a review from an agent
 
-“Get a review”, or “Get a review from an agent” in the “PR and CI” tab, gives the diff of an open PR to an agent, which writes a text and comments by file and by line. The review runs in the background; you can leave the view.
+“Get a review”, or “Get a review from an agent” in the “PR and CI” tab, gives the diff of an open PR to an agent. Its remarks come as threads under their line, in the PR’s Files tab, marked “agent, not published”: each has its severity (Security, Bug, Spec, Detail) and sometimes a code suggestion, to copy. Its overall view heads the Conversation. The review runs in the background; you can leave the view.
 
-![A review by an agent: its text, one comment kept and another to decide, under the lines of the diff](/images/en/pr-review.jpg)
+![A review by an agent: its remarks under the lines of the diff, one kept](/images/en/pr-review.jpg)
 
-On each comment: “Keep”, “Edit”, or “Drop”. Then you choose what the review says (“Comment”, “Request changes”, “Approve”) and “Publish on GitHub” sends what you kept in one go. Nothing leaves before that click, and no tool of the MCP server publishes for you.
+On each remark: “Drop” resolves its thread, publishing nothing; “Publish” shows you its text to edit, then sends it to GitHub as your comment; “Keep” sets it aside for “Publish the kept remarks”, which lists them before sending them. Nothing leaves before your click, and no tool of the MCP server publishes for you. “Review again” after a commit keeps the remarks that still hold and sets apart those whose code changed.
 
 ### What the agent reads
 

@@ -10,6 +10,7 @@ import { buffers } from './editor/buffers.svelte';
 import { type Unsaved, viewUnsaved } from './vscode/unsaved.svelte';
 import { navHistory } from './editor/history';
 import { recentFiles } from './editor/quick-open';
+import type { PrTab } from './prpage';
 import { fileSearches } from './editor/search.svelte';
 import { ancestors, movedPath } from './editor/tree';
 import { trees } from './editor/trees.svelte';
@@ -498,11 +499,9 @@ class AppState {
   prs = $state<Record<string, boolean>>({});
   /** The reviews written by an agent (ESC-66), by project then by pull request. */
   prReviews = $state<Record<string, Record<number, AgentReview>>>({});
-  /** The pull request whose review fills the « Pull requests » view, by project. */
-  prReviewOpen = $state<Record<string, number | null>>({});
-  /** The pull request whose view (ESC-457) fills the « Pull requests » view, by project: its number, and its repository
-   * when not the target's. */
-  prOpen = $state<Record<string, { number: number; hostRepo?: string } | null>>({});
+  /** The pull request whose view (ESC-457) fills the « Pull requests » view, by project: its number, its repository when
+   * not the target's, and the tab it opens on (« Fichiers » for an agent's review, ESC-490). */
+  prOpen = $state<Record<string, { number: number; hostRepo?: string; tab?: PrTab } | null>>({});
   /** How many times each pull request changed on the host (`prChanged`), by `<project>#<number>`: its view reads it again. */
   prChanges = $state<Record<string, number>>({});
   /** The drafts of the comments and answers of the pull requests' views, by `prthreads.draftKey` (ESC-474): kept until sent,
@@ -1787,7 +1786,8 @@ class AppState {
   private gotPrReview(r: AgentReview) {
     const was = this.prReviews[r.projectId]?.[r.number];
     (this.prReviews[r.projectId] ??= {})[r.number] = r;
-    const shown = this.prs[r.projectId] && this.prReviewOpen[r.projectId] === r.number;
+    const open = this.prOpen[r.projectId];
+    const shown = this.prs[r.projectId] && open?.number === r.number && !open.hostRepo;
     if (was?.phase !== 'reading' || r.phase === 'reading' || shown) return;
     const params = { word: r.word, number: r.number };
     const action = { label: t('prs.review.open'), onClick: () => this.showPrReview(r.projectId, r.number) };
@@ -1801,28 +1801,23 @@ class AppState {
     this.prReviews[projectId] = Object.fromEntries(all.map((r) => [r.number, r]));
   }
 
+  /** The review of a pull request (ESC-490): its view, on the tab « Fichiers » where the agent's remarks are threads. */
   showPrReview(projectId: string, number: number) {
-    this.prOpen[projectId] = null;
-    this.prReviewOpen[projectId] = number;
+    this.prOpen[projectId] = { number, tab: 'files' };
     this.openPrs(projectId);
   }
 
   /**
-   * Shows the view of a pull request of a project (ESC-457), in its « Pull requests » view in place of its list and of a
-   * review: from the list, the Kanban's card « En revue », the tab « PR et CI » and an agent's pull request.
+   * Shows the view of a pull request of a project (ESC-457), in its « Pull requests » view in place of its list: from the
+   * list, the Kanban's card « En revue », the tab « PR et CI » and an agent's pull request.
    */
   openPrView(projectId: string, pr: { number: number; hostRepo?: string }) {
-    this.prReviewOpen[projectId] = null;
     this.prOpen[projectId] = { number: pr.number, ...(pr.hostRepo ? { hostRepo: pr.hostRepo } : {}) };
     this.openPrs(projectId);
   }
 
   closePrView(projectId: string) {
     this.prOpen[projectId] = null;
-  }
-
-  closePrReview(projectId: string) {
-    this.prReviewOpen[projectId] = null;
   }
 
   /** « Faire relire par un agent »: the review, started by a click, in place of the one before. */

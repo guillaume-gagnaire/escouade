@@ -3333,11 +3333,12 @@ export interface ProjectPrs {
   me?: string;
 }
 
-/** What the user decided of a comment of a review (`prreview::NoteChoice`). */
-export type NoteChoice = 'open' | 'kept' | 'dropped';
+/** What the user decided of a remark of an agent's review (`prreview::NoteChoice`, ESC-490): still open, kept to publish
+ * with the others, dropped (its thread resolved here), published (its thread is the host's). */
+export type NoteChoice = 'open' | 'kept' | 'dropped' | 'published';
 
-/** What a published review says (`forge::ReviewState`). */
-export type ReviewVerdict = 'approved' | 'changesRequested' | 'commented';
+/** How much a remark of an agent weighs, the heaviest first (`prreview::Severity`). */
+export type Severity = 'security' | 'bug' | 'spec' | 'detail';
 
 /** A line of the diff above a comment (`prreview::DiffLine`). */
 export interface ReviewDiffLine {
@@ -3347,26 +3348,37 @@ export interface ReviewDiffLine {
   text: string;
 }
 
-/** A comment of a review, on a file and a line (`prreview::ReviewNote`). */
+/** A remark of an agent's review (`prreview::ReviewNote`): on a line (from `startLine` for a range), on a file (`line` 0)
+ * or on the pull request (`path` empty). */
 export interface ReviewNote {
   id: number;
   path: string;
   line: number;
+  startLine?: number;
+  severity: Severity;
   body: string;
   /** What the agent wrote. */
   proposed: string;
   choice: NoteChoice;
   excerpt: ReviewDiffLine[];
-  /** Its line is not in the diff: it goes in the review's text. */
+  /** Its line is not in the diff it was read on: it goes in the conversation. */
   outside: boolean;
+  /** What the agent proposes in place of its lines, whole: read and copied, never run. */
+  suggestion?: string;
+  /** The text of its lines when it was written. */
+  code: string[];
+  /** Its code changed since (a reading after a push). */
+  stale: boolean;
+  publishedAt?: number;
 }
 
-/** The review of a pull request written by an agent (`prreview::PrReview`, ESC-66). */
+/** The review of a pull request written by an agent (`prreview::PrReview`, ESC-66, ESC-490). */
 export interface AgentReview {
   projectId: string;
   number: number;
   word: string;
   host: string;
+  kind: string;
   author: string;
   title: string;
   head: string;
@@ -3380,6 +3392,7 @@ export interface AgentReview {
   leftOut: string[];
   by: string;
   at: number;
+  readAt?: number;
   publishedAt?: number;
 }
 

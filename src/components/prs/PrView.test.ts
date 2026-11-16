@@ -202,7 +202,9 @@ describe('the view of a pull request (ESC-457)', () => {
     await userEvent.click(within(main).getByRole('button', { name: /Relancer/ }));
     await waitFor(() => expect(backend.called('pr_rerun').map((c) => c.args)).toEqual([{ projectId: 'p1', number: 214 }]));
     // Nothing else written: the view reads.
-    expect(backend.calls.map((c) => c.cmd).filter((c) => !['pr_contents', 'pr_detail', 'pr_log', 'pr_rerun'].includes(c))).toEqual([]);
+    expect(
+      backend.calls.map((c) => c.cmd).filter((c) => !['pr_contents', 'pr_detail', 'pr_log', 'pr_rerun', 'pr_reviews'].includes(c)),
+    ).toEqual([]);
   });
 
   it('reads again when the host says it changed, and says what the host does not give', async () => {
@@ -261,13 +263,11 @@ describe('opening the view', () => {
     expect(await screen.findByRole('heading', { name: 'Pull requests' })).toBeInTheDocument();
   });
 
-  it('openPrView shows it in the project’s « Pull requests » in place of a review', () => {
-    app.prReviewOpen.p1 = 214;
+  it('openPrView shows it in the project’s « Pull requests », and a review opens it on its tab « Fichiers »', () => {
     app.openPrView('p1', { number: 214, hostRepo: 'acme/up' });
     expect(app.prOpen.p1).toEqual({ number: 214, hostRepo: 'acme/up' });
-    expect(app.prReviewOpen.p1).toBeNull();
     expect(app.prsOn).toBe(true);
     app.showPrReview('p1', 214);
-    expect(app.prOpen.p1).toBeNull();
+    expect(app.prOpen.p1).toEqual({ number: 214, tab: 'files' });
   });
 });

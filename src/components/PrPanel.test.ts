@@ -78,10 +78,10 @@ describe('« Faire relire par un agent » from the tab (ESC-66)', () => {
     });
     await app.askPrReview('p1', 7);
     expect(started).toEqual([]);
-    expect(app.prReviewOpen.p1).toBe(7);
+    expect(app.prOpen.p1).toEqual({ number: 7, tab: 'files' });
     await app.askPrReview('p1', 8);
     expect(started).toEqual([8]);
-    expect(app.prReviewOpen.p1).toBe(8);
+    expect(app.prOpen.p1).toEqual({ number: 8, tab: 'files' });
   });
 });
 
