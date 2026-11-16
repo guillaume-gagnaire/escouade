@@ -8,7 +8,44 @@ use std::process::ExitCode;
 use escouade_team_server::config::{Config, DatabaseConfig, FilesConfig, S3Config};
 use escouade_team_server::{transport, Server};
 
-const HELP: &str = "\
+macro_rules! storage_options {
+    () => {
+        "    --data <DIR>              ESCOUADE_TEAM_DATA            the folder of team.db and files/ [./data]
+    --database <URL>          ESCOUADE_TEAM_DATABASE_URL    postgres://… instead of SQLite
+    --files <DIR>             ESCOUADE_TEAM_FILES           the files' folder [<data>/files]
+    --s3-endpoint <URL>       ESCOUADE_TEAM_S3_ENDPOINT     the files in S3 (MinIO, Garage, AWS), path-style
+    --s3-bucket <NAME>        ESCOUADE_TEAM_S3_BUCKET
+    --s3-region <NAME>        ESCOUADE_TEAM_S3_REGION       [us-east-1]
+    --s3-prefix <TEXT>        ESCOUADE_TEAM_S3_PREFIX       []
+                              ESCOUADE_TEAM_S3_ACCESS_KEY, ESCOUADE_TEAM_S3_SECRET_KEY (environment only)
+    --max-file <BYTES>        ESCOUADE_TEAM_MAX_FILE        [26214400]
+    --team-quota <BYTES>      ESCOUADE_TEAM_QUOTA           [2147483648]
+"
+    };
+}
+
+macro_rules! serve_options {
+    () => {
+        "    --listen <ADDR>           ESCOUADE_TEAM_LISTEN          [127.0.0.1:8443]
+    --tls-cert <PEM>          ESCOUADE_TEAM_TLS_CERT        TLS by rustls; without, put a reverse proxy in front
+    --tls-key <PEM>           ESCOUADE_TEAM_TLS_KEY
+    --trust-proxy             ESCOUADE_TEAM_TRUST_PROXY=1   the client is the last hop of X-Forwarded-For
+    --metrics-listen <ADDR>   ESCOUADE_TEAM_METRICS_LISTEN  Prometheus on /metrics, on its own address [off]
+"
+    };
+}
+
+macro_rules! tail_options {
+    () => {
+        "    RUST_LOG                  the log's level [info]
+    -h, --help                print this help and exit: nothing is created, nothing listens
+    -V, --version             print the version and exit
+"
+    };
+}
+
+const HELP: &str = concat!(
+    "\
 escouade-team-server: Escouade's team server. It keeps only encrypted bytes and runs nothing.
 
 USAGE:
@@ -18,51 +55,180 @@ USAGE:
                                            print a one-use token for the holder of a team's recovery key, the
                                            day every administrator lost their devices: it enrols one device as
                                            an administrator of the server (the 24 words give the keys, not it)
+    escouade-team-server help [COMMAND]    this help, or a command's
+
+`escouade-team-server <COMMAND> --help` lists the options of one command.
 
 OPTIONS (and their environment variables):
-    --data <DIR>              ESCOUADE_TEAM_DATA            the folder of team.db and files/ [./data]
-    --database <URL>          ESCOUADE_TEAM_DATABASE_URL    postgres://… instead of SQLite
-    --files <DIR>             ESCOUADE_TEAM_FILES           the files' folder [<data>/files]
-    --s3-endpoint <URL>       ESCOUADE_TEAM_S3_ENDPOINT     the files in S3 (MinIO, Garage, AWS), path-style
-    --s3-bucket <NAME>        ESCOUADE_TEAM_S3_BUCKET
-    --s3-region <NAME>        ESCOUADE_TEAM_S3_REGION       [us-east-1]
-    --s3-prefix <TEXT>        ESCOUADE_TEAM_S3_PREFIX       []
-                              ESCOUADE_TEAM_S3_ACCESS_KEY, ESCOUADE_TEAM_S3_SECRET_KEY (environment only)
-    --listen <ADDR>           ESCOUADE_TEAM_LISTEN          [127.0.0.1:8443]
-    --tls-cert <PEM>          ESCOUADE_TEAM_TLS_CERT        TLS by rustls; without, put a reverse proxy in front
-    --tls-key <PEM>           ESCOUADE_TEAM_TLS_KEY
-    --trust-proxy             ESCOUADE_TEAM_TRUST_PROXY=1   the client is the last hop of X-Forwarded-For
-    --metrics-listen <ADDR>   ESCOUADE_TEAM_METRICS_LISTEN  Prometheus on /metrics, on its own address [off]
-    --max-file <BYTES>        ESCOUADE_TEAM_MAX_FILE        [26214400]
-    --team-quota <BYTES>      ESCOUADE_TEAM_QUOTA           [2147483648]
-    RUST_LOG                  the log's level [info]
-";
+",
+    storage_options!(),
+    serve_options!(),
+    "    --team <ID>               ESCOUADE_TEAM_ID              recovery-token only: the team's id\n",
+    tail_options!(),
+);
+
+const HELP_INIT: &str = concat!(
+    "\
+escouade-team-server init: create the base (and the files' folder) if they do not exist, then print the
+one-use token that creates a team. Run again, it prints another token, for another team on the same server.
+
+USAGE:
+    escouade-team-server init [OPTIONS]
+
+OPTIONS (and their environment variables):
+",
+    storage_options!(),
+    tail_options!(),
+);
+
+const HELP_SERVE: &str = concat!(
+    "\
+escouade-team-server serve: serve the team server until it is stopped (Ctrl-C or SIGTERM).
+
+USAGE:
+    escouade-team-server serve [OPTIONS]
+
+OPTIONS (and their environment variables):
+",
+    storage_options!(),
+    serve_options!(),
+    tail_options!(),
+);
+
+const HELP_RECOVERY: &str = concat!(
+    "\
+escouade-team-server recovery-token: print a one-use token (7 days at most) for the holder of a team's
+recovery key, the day every administrator lost their devices: it enrols one device as an administrator of
+the server (the 24 words give the keys, not it).
+
+USAGE:
+    escouade-team-server recovery-token --team <ID> [OPTIONS]
+
+OPTIONS (and their environment variables):
+    --team <ID>               ESCOUADE_TEAM_ID              the team's id (32 hexadecimal digits) [required]
+",
+    storage_options!(),
+    tail_options!(),
+);
 
 struct Args {
     command: String,
     flags: Vec<(String, Option<String>)>,
 }
 
-const SWITCHES: &[&str] = &["--trust-proxy", "--help", "-h"];
+/// What the command line asks for.
+enum Action {
+    /// Print this text on stdout and exit 0, having done nothing else.
+    Print(String),
+    Run(Args),
+}
 
-fn parse() -> Result<Args, String> {
-    let mut it = std::env::args().skip(1);
+/// The options that take a value, for every command that opens the base.
+const STORAGE: &[&str] = &[
+    "--data",
+    "--database",
+    "--files",
+    "--s3-endpoint",
+    "--s3-bucket",
+    "--s3-region",
+    "--s3-prefix",
+    "--max-file",
+    "--team-quota",
+];
+const SERVE: &[&str] = &["--listen", "--tls-cert", "--tls-key", "--metrics-listen"];
+
+fn command_help(command: &str) -> Option<&'static str> {
+    match command {
+        "init" => Some(HELP_INIT),
+        "serve" => Some(HELP_SERVE),
+        "recovery-token" => Some(HELP_RECOVERY),
+        _ => None,
+    }
+}
+
+/// The options a command takes: (with a value, switches).
+fn command_options(command: &str) -> (Vec<&'static str>, &'static [&'static str]) {
+    let mut valued = STORAGE.to_vec();
+    let mut switches: &[&str] = &[];
+    match command {
+        "serve" => {
+            valued.extend(SERVE);
+            switches = &["--trust-proxy"];
+        }
+        "recovery-token" => valued.push("--team"),
+        _ => {}
+    }
+    (valued, switches)
+}
+
+fn version_line() -> String {
+    format!("escouade-team-server {}\n", env!("CARGO_PKG_VERSION"))
+}
+
+fn parse_from(argv: Vec<String>) -> Result<Action, String> {
+    let mut it = argv.into_iter();
     let command = it.next().unwrap_or_else(|| "--help".into());
+    match command.as_str() {
+        "--help" | "-h" => return Ok(Action::Print(HELP.into())),
+        "--version" | "-V" => return Ok(Action::Print(version_line())),
+        "help" => {
+            return match it.next() {
+                None => Ok(Action::Print(HELP.into())),
+                Some(c) => match command_help(&c) {
+                    Some(h) if it.next().is_none() => Ok(Action::Print(h.into())),
+                    Some(_) => Err("help takes one command at most".into()),
+                    None => Err(format!(
+                        "unknown command: {c} (init, serve, recovery-token)"
+                    )),
+                },
+            }
+        }
+        _ => {}
+    }
+    let Some(help) = command_help(&command) else {
+        return Err(format!(
+            "unknown command: {command} (init, serve, recovery-token, help)"
+        ));
+    };
+    let rest: Vec<String> = it.collect();
+    // Help and version win over everything, so asking for them never runs the command.
+    if rest.iter().any(|a| a == "--help" || a == "-h") {
+        return Ok(Action::Print(help.into()));
+    }
+    if rest.iter().any(|a| a == "--version" || a == "-V") {
+        return Ok(Action::Print(version_line()));
+    }
+    let (valued, switches) = command_options(&command);
     let mut flags = Vec::new();
+    let mut it = rest.into_iter();
     while let Some(a) = it.next() {
         if !a.starts_with('-') {
-            return Err(format!("unexpected: {a}"));
+            return Err(format!("unexpected argument for {command}: {a}"));
         }
-        if let Some((k, v)) = a.split_once('=') {
-            flags.push((k.to_string(), Some(v.to_string())));
-        } else if SWITCHES.contains(&a.as_str()) {
-            flags.push((a, None));
+        let (name, inline) = match a.split_once('=') {
+            Some((k, v)) => (k.to_string(), Some(v.to_string())),
+            None => (a.clone(), None),
+        };
+        if switches.contains(&name.as_str()) {
+            if inline.is_some() {
+                return Err(format!("{name} takes no value"));
+            }
+            flags.push((name, None));
+        } else if valued.contains(&name.as_str()) {
+            let v = match inline {
+                Some(v) => v,
+                None => it.next().ok_or_else(|| format!("{name} needs a value"))?,
+            };
+            flags.push((name, Some(v)));
         } else {
-            let v = it.next().ok_or_else(|| format!("{a} needs a value"))?;
-            flags.push((a, Some(v)));
+            return Err(format!("unknown option for {command}: {name}"));
         }
     }
-    Ok(Args { command, flags })
+    Ok(Action::Run(Args { command, flags }))
+}
+
+fn parse() -> Result<Action, String> {
+    parse_from(std::env::args().skip(1).collect())
 }
 
 impl Args {
@@ -235,13 +401,7 @@ async fn run(args: Args) -> Result<(), String> {
                 .await
                 .map_err(|e| e.to_string())
         }
-        "--help" | "-h" | "help" => {
-            print!("{HELP}");
-            Ok(())
-        }
-        other => Err(format!(
-            "unknown command: {other} (init, serve, recovery-token, --help)"
-        )),
+        other => Err(format!("unknown command: {other}")),
     }
 }
 
@@ -253,9 +413,14 @@ fn main() -> ExitCode {
         .with_target(false)
         .init();
     let args = match parse() {
-        Ok(a) => a,
+        Ok(Action::Print(text)) => {
+            print!("{text}");
+            return ExitCode::SUCCESS;
+        }
+        Ok(Action::Run(a)) => a,
         Err(e) => {
-            eprintln!("{e}\n\n{HELP}");
+            eprintln!("escouade-team-server: {e}");
+            eprintln!("Usage error: `escouade-team-server --help` lists the commands, `escouade-team-server <command> --help` the options of one.");
             return ExitCode::from(2);
         }
     };

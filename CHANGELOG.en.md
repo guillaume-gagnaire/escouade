@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Team server: `init --help`, `serve --help` and `recovery-token --help` print the command’s help instead of running it, and an unknown option is refused instead of ignored.
 - Team server: a project’s Kanban is shared with the team, live. A ticket is taken through the server, once, and each card says who holds it and since when; two changes of the same field at the same time show to the one who lost, and a description changed on both sides merges by itself.
 - A pull request’s threads under their line in the Files tab, resolved ones folded and outdated ones apart, with “Next” (N) from one open thread to the next. Comment on a line or the pull request, reply, resolve and reopen a thread on the code host under your account, in one click: your draft stays until it is sent.
 - Team server: “Team projects” lists your team’s projects, encrypted so that the server reads none of it. “Clone” opens the “New project” wizard with the repository filled in and goes through your own git accounts; a project already cloned is known by the address of its repository and attached without a new clone.

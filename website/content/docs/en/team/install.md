@@ -28,10 +28,7 @@ cd src-tauri && cargo build --release -p escouade-team-server
 # the binary: src-tauri/target/release/escouade-team-server
 ```
 
-`escouade-team-server --help`, or the program run with no argument, lists the commands and the options.
-
-> [!WARNING]
-> The subcommands don’t read `--help`: `escouade-team-server init --help` runs a real `init` in `./data`. Ask for help without a subcommand.
+`escouade-team-server --help`, or the program run with no argument, lists the commands; `escouade-team-server init --help` (likewise `serve --help`, `recovery-token --help`, or `help serve`) gives a command’s options, their environment variables and their defaults, without creating or listening to anything. `--version` prints the version. An unknown option, or one that isn’t the command’s, is refused (exit code 2).
 
 ## The commands
 

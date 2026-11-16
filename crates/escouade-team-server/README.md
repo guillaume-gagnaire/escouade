@@ -108,10 +108,12 @@ Le §14 proposait sqlx pour les deux. Mais `libsqlite3-sys` déclare `links = "s
 cd src-tauri && cargo build --release -p escouade-team-server   # target/release/escouade-team-server
 escouade-team-server init  --data /var/lib/escouade-team-server  # crée la base, affiche le jeton de création
 escouade-team-server serve --data /var/lib/escouade-team-server --listen 127.0.0.1:8443 --trust-proxy
-escouade-team-server --help                                       # toutes les options, et leurs variables
+escouade-team-server --help                                       # les commandes ; `<commande> --help` : ses options et leurs variables
 ```
 
 `init` affiche un jeton à usage unique : le premier administrateur le donne à Escouade avec l'adresse du serveur, et crée ainsi l'équipe (le lien de création viendra avec TS-3). Relancer `init` donne un autre jeton, pour une autre équipe sur le même serveur.
+
+`init --help`, `serve --help` et `recovery-token --help` affichent l’aide de la commande, sans rien créer ni écouter ; `--version` la version. Une option inconnue, ou d’une autre commande, est refusée avec le code de sortie 2.
 
 PostgreSQL : `--database postgres://user:pass@host/base` (ou `ESCOUADE_TEAM_DATABASE_URL`). S3 : `--s3-endpoint`, `--s3-bucket`, `--s3-region`, `--s3-prefix`, et les clés par `ESCOUADE_TEAM_S3_ACCESS_KEY` et `ESCOUADE_TEAM_S3_SECRET_KEY`, jamais en argument.
 
