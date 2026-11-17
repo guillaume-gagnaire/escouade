@@ -229,6 +229,19 @@ Under `plugins.<id>`, the settings the project gives the plugin: those it declar
 
 These keys stay the file’s: they are no settings of the project, are not marked in the window, and “Export to .escouade.yml” keeps them as they are written.
 
+### team
+
+Written by Escouade when the project is attached to a [team](team/join), and taken out when it leaves it: which team the project belongs to. Nothing secret.
+
+| Key | Type | What it says |
+| --- | --- | --- |
+| `team.server` | text | The address of the team server (`https://`). |
+| `team.id` | text | The team’s id on its server (32 hexadecimal digits). |
+| `team.project` | text | The project’s id in the team’s list, when it is in it. |
+| `team.name` | text | The team’s name, which the band shows. |
+
+A machine that opens the repository without being in that team sees a band, “This project belongs to the team Acme on team.acme.fr, according to the repository”, with “Ask for an invitation”; a machine of the team sees “Attach to the team” there. Escouade never connects to that address by itself; an address that is not a team server’s, or an id that is not one, shows no band and the file says so.
+
 ## Worktree steps
 
 Each item of `worktrees.setup` and `worktrees.teardown` is a step, in one of these two forms:

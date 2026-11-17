@@ -229,6 +229,19 @@ Sous `plugins.<id>`, les réglages que le projet donne au plugin : ceux qu’il 
 
 Ces clés restent celles du fichier : elles ne sont pas des réglages du projet, ne sont pas marquées dans la fenêtre, et « Exporter vers .escouade.yml » les garde telles qu’elles sont écrites.
 
+### team
+
+Écrite par Escouade quand le projet est rattaché à une [équipe](team/join), et retirée quand il la quitte : à quelle équipe le projet appartient. Rien de secret.
+
+| Clé | Type | Ce qu’elle dit |
+| --- | --- | --- |
+| `team.server` | texte | L’adresse du serveur d’équipe (`https://`). |
+| `team.id` | texte | L’id de l’équipe sur son serveur (32 chiffres hexadécimaux). |
+| `team.project` | texte | L’id du projet dans la liste de l’équipe, s’il y est. |
+| `team.name` | texte | Le nom de l’équipe, que montre la bande. |
+
+Un poste qui ouvre le dépôt sans être dans cette équipe voit une bande, « Ce projet appartient à l’équipe Acme sur team.acme.fr, d’après le dépôt », avec « Demander une invitation » ; un poste de l’équipe y voit « Rattacher à l’équipe ». Escouade ne se connecte jamais seul à cette adresse ; une adresse qui n’est pas celle d’un serveur d’équipe, ou un id qui n’en est pas un, ne montre aucune bande et le fichier le signale.
+
 ## Les étapes de worktree
 
 Chaque élément de `worktrees.setup` et de `worktrees.teardown` est une étape, de l’une de ces deux formes :

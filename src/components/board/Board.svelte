@@ -19,6 +19,7 @@
   import { arrange, notInProduction } from '../../lib/environments';
   import { envsView } from '../../lib/envs-view.svelte';
   import EnvsMenu from './EnvsMenu.svelte';
+  import { isTeamBoard } from '../../lib/teamboard';
 
   let { project: given }: { project: Project } = $props();
 
@@ -93,6 +94,16 @@
           onclick={() => (app.modal = { kind: 'import', projectId: project.id })}
           ><Icon name="import" size={14} /><span class="l">{t('common.import')}</span></button
         >
+        {#if isTeamBoard(project)}
+          <button
+            class="btn imp"
+            aria-label={t('teamBoard.pour.button')}
+            use:tip={t('teamBoard.pour.buttonTitle')}
+            data-testid="team-pour-open"
+            onclick={() => (app.modal = { kind: 'teamPour', projectId: project.id })}
+            ><Icon name="team" size={14} /><span class="l">{t('teamBoard.pour.button')}</span></button
+          >
+        {/if}
         <button
           class="auto"
           role="switch"

@@ -63,6 +63,35 @@ struct ProjectRow {
     engine: Value,
     models: Vec<String>,
     efforts: Vec<String>,
+    /// Whether it is attached to a team (TS-7), and its Kanban the team's. Read only: attaching and pouring are the
+    /// user's gestures in the window, no tool does them.
+    team: TeamOf,
+}
+
+/// What the tools say of a project's team (TS-7).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TeamOf {
+    /// It is a project of a team of this device.
+    attached: bool,
+    /// Its Kanban is the team's (its tickets, live).
+    board: bool,
+    /// Its `.escouade.yml` names a team this device has not attached it to (the band of the invitation): its host.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    named_by_repository: Option<String>,
+}
+
+pub(crate) fn team_of(p: &Project) -> TeamOf {
+    TeamOf {
+        attached: p.team.is_some(),
+        board: p.team.is_some() && p.team_project.is_some(),
+        named_by_repository: p
+            .shared
+            .team
+            .as_ref()
+            .filter(|h| p.team.as_deref() != Some(h.team.as_str()))
+            .map(|h| h.host.clone()),
+    }
 }
 
 /// A repository of a project of several, and its branch (ESC-169).
@@ -251,6 +280,7 @@ pub(super) async fn projects(core: &Core, caller: &Caller) -> Result<String, Too
             remote_control: p.remote_control,
             remote_control_all: remote_all,
             repos,
+            team: team_of(&p),
             id: p.id,
             name: p.name,
             path: p.path,
@@ -960,6 +990,8 @@ pub(crate) struct BoardView {
     tests_first: bool,
     test_command: String,
     prefix: String,
+    /// Whether the project is attached to a team and its Kanban the team's (TS-7).
+    team: TeamOf,
 }
 
 /// What the tickets' agents go with when the Kanban sets nothing: those of the account a new agent
@@ -1006,6 +1038,7 @@ pub(crate) async fn board_view(core: &Core, project: &Project) -> BoardView {
         tests_first: b.tests_first_on(),
         test_command: b.test_command.clone(),
         prefix: b.prefix.clone(),
+        team: team_of(project),
     }
 }
 

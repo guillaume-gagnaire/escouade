@@ -1,9 +1,9 @@
 ---
 title: "Les docs d'un projet d'équipe"
 subject: "serveur-equipe"
-sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","src-tauri/src/teamdocs.rs","src/lib/i18n/fr/teamDocs.ts"]
-tickets: ["ESC-482"]
-decisions: [192]
+sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","src-tauri/src/teamdocs.rs","src-tauri/src/teampour.rs","src/lib/i18n/fr/teamDocs.ts"]
+tickets: ["ESC-482","ESC-493"]
+decisions: [192,194]
 compared: null
 ---
 
@@ -13,7 +13,7 @@ La spec, les décisions et les documents d'un projet d'équipe vivent sur le ser
 
 ## Où ils vont
 
-- **Dans le journal du projet** : celui de son Kanban d'équipe (`Project::team_project`, voir « La synchronisation des projets »). Le projet qui n'a pas encore de journal en reçoit un en choisissant « Sur le serveur d'équipe » ; un collègue suit le même journal par son identifiant (32 caractères, montré dans les réglages).
+- **Dans le journal du projet** : celui de son Kanban d'équipe (`Project::team_project`, voir « La synchronisation des projets »). Le projet qui n'a pas encore de journal en reçoit un en choisissant « Sur le serveur d'équipe » ; un collègue suit le même journal par son identifiant (32 caractères, montré dans les réglages), ou sans le copier quand le projet est dans la liste de l'équipe (TS-7).
 - **Une page de la spec** va en versions entières : son chemin et son texte, chiffrés et signés comme une opération.
 - **Une décision** est faite de petits champs (titre, contexte, décision, conséquences, état, liens…) : le dernier qui écrit gagne, champ par champ.
 - **Un document déposé** est un fichier de l'équipe, chiffré sous une clé à lui, tirée sur le poste ; la clé, son chemin, sa taille et son empreinte vont dans le journal. **20 Mo au plus** : un document plus lourd reste sur ce poste, et la fenêtre le dit (« … dépasse 20 Mo : il reste sur ce poste, l'équipe ne le voit pas »).
@@ -54,6 +54,8 @@ C'est un choix de l'équipe, gardé dans le journal : le même pour tous ses mem
 
 - **Passer sur le serveur** importe la spec, les décisions et les documents de `.escouade/` du dépôt, ids et numéros gardés (la prochaine décision acceptée prend le numéro d'après). L'import se fait une fois pour l'équipe ; revenir sur le serveur après un passage par le dépôt y verse ce que le dépôt a changé, en nouvelles versions. **Rien n'est supprimé du dépôt** : l'onglet Docs nomme les fichiers restés dans `.escouade/` et propose « Retirer du dépôt », qui les retire du dossier ; l'utilisateur commite.
 - **Revenir au dépôt** écrit dans son `.escouade/` les docs du serveur (git montre ce qui change, l'utilisateur commite) ; le serveur les garde aussi. Rien n'est perdu.
+
+**Rien ne part sans un geste (TS-7).** Rattacher un projet à l'équipe, partager son Kanban ou rejoindre celui de la liste ne versent pas ses docs : tant que l'équipe n'a rien choisi ni rien importé, les docs du projet restent celles de son dépôt, sur chaque poste. Elles partent par ce réglage, ou par **« Verser à l'équipe »** du Kanban, dont l'aperçu les nomme (« Spec, décisions et documents (.escouade/) » : le nombre de pages, de décisions et de documents, chaque fichier, et « Verser aussi la spec, les décisions et les documents », coché) avec les tickets ; l'aperçu dit aussi quand elles ne partent pas (déjà sur le serveur : ce poste les lit de là ; gardées dans le dépôt par l'équipe ; projet privé ; aucune). La mémoire partagée (`.escouade/memory`) reste dans le dépôt. Une fois l'import fait par un poste, ceux qui suivent le journal lisent les docs du serveur.
 
 « Branche des docs » ne s'affiche plus pour un projet dont les docs sont sur le serveur : elles ne suivent aucune branche.
 

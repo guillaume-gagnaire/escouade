@@ -19,6 +19,8 @@ export interface Listed {
   repos: ListedRepo[];
   branch: string;
   access: Access;
+  /** The journal of its Kanban (TS-7), kept as it is by the form; empty: none known. */
+  board: string;
 }
 
 export interface RepoView {
@@ -37,6 +39,10 @@ export interface Here {
   otherTeam: boolean;
   repos: number[];
   nameDiffers: boolean;
+  /** Its Kanban is the one the list names (TS-7). */
+  boardJoined: boolean;
+  /** Its Kanban is a team's, another than the list's. */
+  boardOther: boolean;
 }
 
 export interface TeamProjectView {
@@ -50,6 +56,10 @@ export interface TeamProjectView {
   by: string;
   openToMe: boolean;
   here: Here | null;
+  /** The journal of its Kanban (TS-7); empty while the list names none. */
+  board: string;
+  /** A Kanban a member proposed for it, shown to an administrator. */
+  proposed: { board: string; by: string } | null;
 }
 
 export interface MemberView {
@@ -100,6 +110,8 @@ export const teamProjectsApi = {
   clone: (team: string, project: string, parent: string, folder: string) =>
     invoke<CloneView>('team_project_clone', { team, project, parent, folder }),
   logo: (team: string, project: string) => invoke<string | null>('team_project_logo', { team, project }),
+  /** An administrator's « Inscrire le Kanban » a member proposed (TS-7). */
+  acceptBoard: (team: string, project: string) => invoke<TeamProjectsView>('team_project_accept_board', { team, project }),
 };
 
 /** The projects of the list already on this device, and the others (« Cloner »). */
@@ -142,7 +154,7 @@ export function parentOf(paths: string[]): string {
 
 /** A draft of the administrator's form, from a project of the list (or empty). */
 export function draftOf(p: TeamProjectView | null): Listed {
-  if (!p) return { name: '', color: '', logo: null, repos: [{ url: '', folder: '' }], branch: '', access: { kind: 'team' } };
+  if (!p) return { name: '', color: '', logo: null, repos: [{ url: '', folder: '' }], branch: '', access: { kind: 'team' }, board: '' };
   return {
     name: p.name,
     color: p.color,
@@ -150,6 +162,7 @@ export function draftOf(p: TeamProjectView | null): Listed {
     repos: p.repos.map((r) => ({ url: r.url, folder: p.repos.length > 1 ? r.folder : '' })),
     branch: p.branch,
     access: JSON.parse(JSON.stringify(p.access)) as Access,
+    board: p.board ?? '',
   };
 }
 

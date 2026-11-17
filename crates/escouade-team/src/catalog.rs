@@ -333,6 +333,10 @@ pub struct Listed {
     /// Its default branch; empty: the repository's.
     pub branch: String,
     pub access: Access,
+    /// The journal of its Kanban (TS-7): the opaque id of the team's project, 32 hexadecimal digits. Empty: no Kanban
+    /// known (and for an entry written before TS-7). A clone, or a project attached on a device, joins it without an
+    /// id to copy.
+    pub board: String,
 }
 
 fn folder_ok(f: &str) -> bool {
@@ -375,6 +379,13 @@ fn logo_ok(logo: &str) -> bool {
 }
 
 impl Listed {
+    /// The id of its Kanban's journal, when the entry names one.
+    pub fn board_id(&self) -> Option<ProjectId> {
+        let mut b = [0u8; 16];
+        hex::decode_to_slice(self.board.trim(), &mut b).ok()?;
+        Some(ProjectId(b))
+    }
+
     /// The folder of each repository in the project (its own, else the last part of its address).
     pub fn folders(&self) -> Vec<String> {
         self.repos
@@ -442,6 +453,13 @@ pub fn check(listed: &Listed) -> Result<(), String> {
                 MAX_LOGO / 1024
             ));
         }
+    }
+    let board = listed.board.trim();
+    if !board.is_empty() && (board.len() != 32 || !board.chars().all(|c| c.is_ascii_hexdigit())) {
+        return Err(
+            "the Kanban of a project of the list is the id of its journal, 32 hexadecimal digits"
+                .into(),
+        );
     }
     if !branch_ok(listed.branch.trim()) {
         return Err(format!("{}: not a branch", listed.branch.trim()));
@@ -760,6 +778,7 @@ pub async fn put(
     project.name = project.name.trim().to_owned();
     project.branch = project.branch.trim().to_owned();
     project.color = project.color.trim().to_owned();
+    project.board = project.board.trim().to_ascii_lowercase();
     for r in &mut project.repos {
         r.url = r.url.trim().to_owned();
         r.folder = r.folder.trim().to_owned();
@@ -1002,6 +1021,68 @@ mod tests {
         assert!(check(&p).is_ok());
         assert!(p.open_to(&MemberId([1; 16])));
         assert!(!p.open_to(&MemberId([2; 16])));
+    }
+
+    /// An entry as a device before TS-7 sealed it: no `board`.
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase", tag = "kind")]
+    enum OldEntry {
+        Put {
+            id: [u8; 16],
+            project: OldListed,
+            at: u64,
+        },
+    }
+
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct OldListed {
+        name: String,
+        color: String,
+        logo: Option<String>,
+        repos: Vec<Repo>,
+        branch: String,
+        access: Access,
+    }
+
+    #[test]
+    fn an_entry_written_before_the_kanban_is_read_without_one() {
+        let old = OldEntry::Put {
+            id: [3; 16],
+            project: OldListed {
+                name: "API".into(),
+                color: String::new(),
+                logo: None,
+                repos: listed().repos,
+                branch: String::new(),
+                access: Access::Team,
+            },
+            at: 1,
+        };
+        let entry: Entry = wire::decode(&wire::encode(&old)).expect("an old entry decodes");
+        let Entry::Put { project, .. } = entry else {
+            panic!("a put")
+        };
+        assert_eq!(project.board, "");
+        assert_eq!(project.board_id(), None);
+        assert_eq!(check(&project), Ok(()));
+    }
+
+    #[test]
+    fn the_kanban_of_an_entry_is_the_id_of_a_journal() {
+        let mut p = listed();
+        p.board = "ab".repeat(16);
+        assert_eq!(check(&p), Ok(()));
+        assert_eq!(p.board_id(), Some(ProjectId([0xab; 16])));
+        for bad in [
+            "ab",
+            "zz".repeat(16).as_str(),
+            "--upload-pack=x",
+            &"ab".repeat(17),
+        ] {
+            p.board = bad.to_string();
+            assert!(check(&p).is_err(), "{bad} is no journal");
+        }
     }
 
     #[test]

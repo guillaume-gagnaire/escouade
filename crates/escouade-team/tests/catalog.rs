@@ -12,6 +12,8 @@ use escouade_team::catalog::{
     self, Access, Alarm, Catalog, Entry, Listed, Refused, Repo, CATALOG_STREAM,
 };
 use escouade_team::crypto::Role;
+use escouade_team::proposals::{self, PROPOSAL_STREAM};
+use escouade_team::settings::SETTINGS_STREAM;
 use escouade_team::{CryptoError, Error, Team};
 
 fn lies(p: &Place) -> std::sync::MutexGuard<'_, Lies> {
@@ -31,6 +33,7 @@ fn api() -> Listed {
         }],
         branch: "main".into(),
         access: Access::Team,
+        board: String::new(),
     }
 }
 
@@ -349,7 +352,97 @@ async fn a_lying_server_that_hides_or_changes_an_entry_is_caught() {
     assert_eq!(catalog::retry(&mut bob).await.unwrap().alarm, None);
 }
 
+/// TS-7: an entry without a Kanban (as before), then with one; a member proposes the Kanban of a project of the list,
+/// an administrator reads the proposal and writes the entry; the server reads neither the board nor the proposal; the
+/// team's own streams cannot be restricted by a member.
+async fn an_entry_gains_its_kanban_by_an_administrator_or_a_proposal(backend: Backend) {
+    let w = World::on(&backend).await;
+    let (pa, mut alice, _pb, mut bob) = two(&w).await;
+    let id = put(&mut alice, None, api()).await;
+    let read = sync(&mut bob).await;
+    assert_eq!(read.get(&id).unwrap().project.board, "", "no Kanban known");
+    assert_eq!(read.get(&id).unwrap().project.board_id(), None);
+
+    // Bob, a member, cannot write it: he proposes it.
+    let board = "5a".repeat(16);
+    let mut with = api();
+    with.board = board.clone();
+    assert!(matches!(
+        catalog::put(&mut bob, Some(&id), with.clone(), NOW).await,
+        Err(Error::Crypto(CryptoError::NotAdmin))
+    ));
+    let mine = proposals::propose(&mut bob, &id, &board, NOW)
+        .await
+        .unwrap();
+    assert_eq!(mine.of(&id).map(|p| p.board.as_str()), Some(board.as_str()));
+    let seen = proposals::sync(&mut alice).await.unwrap();
+    let p = seen.of(&id).expect("Alice reads Bob's proposal");
+    assert_eq!(
+        (p.board.as_str(), p.by.clone()),
+        (board.as_str(), member(2).to_string())
+    );
+
+    // A proposal no leaf of the team signed (forged by the server): refused at the reading.
+    let at = alice
+        .client()
+        .read_project(&PROPOSAL_STREAM.0, 0, None)
+        .await
+        .unwrap()
+        .entries
+        .last()
+        .unwrap()
+        .seq;
+    {
+        let mut l = pa.liar.lies.lock().unwrap();
+        l.project = Some(hex::encode(PROPOSAL_STREAM.0));
+        l.project_inject = vec![(at + 1, b"not a sealed object".to_vec())];
+    }
+    let seen = proposals::sync(&mut alice).await.unwrap();
+    assert_eq!(seen.refused, 1);
+    assert_eq!(seen.proposals.len(), 1);
+    pa.liar.lies.lock().unwrap().project_inject.clear();
+
+    // Alice writes it: Bob reads the entry with its Kanban.
+    put(&mut alice, Some(&id), with.clone()).await;
+    let read = sync(&mut bob).await;
+    let got = &read.get(&id).unwrap().project;
+    assert_eq!(got.board, board);
+    assert_eq!(
+        got.board_id().map(|b| hex::encode(b.0)),
+        Some(board.clone())
+    );
+
+    // What the server keeps holds neither the board nor the proposal in clear (its folder is empty under PostgreSQL).
+    if matches!(backend, Backend::Sqlite) {
+        let disk = server_bytes(&w);
+        for clear in [board.as_bytes().to_vec(), vec![0x5a; 16]] {
+            assert!(
+                !disk.windows(clear.len()).any(|x| x == clear.as_slice()),
+                "the board is not on the server's disk"
+            );
+        }
+    }
+
+    // The team's own streams stay the whole team's: a member cannot shut the others out of them.
+    for stream in [CATALOG_STREAM, PROPOSAL_STREAM, SETTINGS_STREAM] {
+        let refused = bob
+            .client()
+            .set_access(
+                &stream.0,
+                &escouade_team::wire::AccessWire {
+                    everyone: false,
+                    devices: vec![serde_bytes::ByteBuf::from(bob.client().device().to_vec())],
+                },
+            )
+            .await
+            .expect_err("nobody restricts the team's streams");
+        assert_eq!(refused.status(), Some(403));
+    }
+    w.finish().await;
+}
+
 both!(
+    an_entry_gains_its_kanban_by_an_administrator_or_a_proposal,
     an_administrator_keeps_the_list_and_a_member_reads_it,
     a_member_cannot_write_the_list,
     a_dangerous_address_is_refused_even_signed,

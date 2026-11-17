@@ -75,6 +75,8 @@
   import TlsBanner from './components/TlsBanner.svelte';
   import RecoveryBanner from './components/RecoveryBanner.svelte';
   import TeamSettingsBand from './components/team/TeamSettingsBand.svelte';
+  import TeamHintBand from './components/team/TeamHintBand.svelte';
+  import TeamPourModal from './components/board/TeamPourModal.svelte';
   import ConnectionBand from './components/ConnectionBand.svelte';
   import Toasts from './components/Toasts.svelte';
   import Welcome from './components/Welcome.svelte';
@@ -224,6 +226,7 @@
       <RecoveryBanner />
       <TlsBanner />
       <TeamSettingsBand />
+      <TeamHintBand />
     </div>
   {/if}
   <ProjectRail />
@@ -379,7 +382,9 @@
 {:else if app.modal?.kind === 'teamName'}
   <TeamNameModal projectId={app.modal.projectId} then={app.modal.then} />
 {:else if app.modal?.kind === 'team'}
-  <TeamModal step={app.modal.step} link={app.modal.link} teamId={app.modal.teamId} />
+  <TeamModal step={app.modal.step} link={app.modal.link} teamId={app.modal.teamId} expected={app.modal.expected} />
+{:else if app.modal?.kind === 'teamPour'}
+  <TeamPourModal projectId={app.modal.projectId} />
 {:else if app.modal?.kind === 'notes'}
   <UpdateModal version={app.modal.version} notes={app.modal.notes} installed />
 {:else if app.modal?.kind === 'convSearch'}

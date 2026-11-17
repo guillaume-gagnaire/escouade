@@ -118,6 +118,19 @@
   <p class="muted small">
     {[p.branch ? t('teamProjects.repo.branch', { branch: p.branch }) : '', accessLabel(p)].filter(Boolean).join(' · ')}
   </p>
+  <!-- The Kanban the list names (TS-7): a clone, or a project attached here, joins it without an id to copy. -->
+  <p class="muted small" data-testid="team-project-board">
+    {p.here?.boardJoined ? t('teamProjects.here.boardJoined') : p.board ? t('teamProjects.board.listed') : t('teamProjects.board.none')}
+  </p>
+  {#if p.here?.boardOther}<p class="advice small">{t('teamProjects.here.boardOther')}</p>{/if}
+  {#if view?.admin && p.proposed}
+    <div class="acts" data-testid="team-project-proposed">
+      <span class="small">{t('teamProjects.board.proposed', { id: p.proposed.board })}</span>
+      <button class="btn" disabled={busy} onclick={() => act(() => teamProjectsApi.acceptBoard(teamId, p.id))}
+        >{t('teamProjects.board.accept')}</button
+      >
+    </div>
+  {/if}
 {/snippet}
 
 {#snippet adminActs(p: TeamProjectView)}

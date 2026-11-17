@@ -18,7 +18,16 @@ describe('the team’s projects (TS-8)', () => {
   it('splits the list into the projects here and the others, and knows the local ones it holds', () => {
     const here = listedProject({
       id: 'h',
-      here: { project: 'p1', name: 'x', attached: true, otherTeam: false, repos: [0], nameDiffers: false },
+      here: {
+        project: 'p1',
+        name: 'x',
+        attached: true,
+        otherTeam: false,
+        repos: [0],
+        nameDiffers: false,
+        boardJoined: false,
+        boardOther: false,
+      },
     });
     const view = teamProjects([listedProject(), here]);
     expect(split(view).here.map((p) => p.id)).toEqual(['h']);

@@ -153,6 +153,9 @@ export default defineZone('team', {
     working: 'Asking…',
     waiting: 'Request sent. An administrator online lets you in: this window will say it.',
     joined: 'You are in the team “{name}”.',
+    expected:
+      'According to the repository, the team is on {host}: ask one of its administrators for an invitation link, then paste it here.',
+    otherServer: 'This link leads to {server}, not to {host} that the repository names: check it with whoever invites you.',
   },
   device: {
     qrTab: 'QR code',

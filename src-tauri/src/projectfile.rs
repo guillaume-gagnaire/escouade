@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 
 // What a project keeps of its file, in `escouade-model` (docs/CRATES.md).
-pub use escouade_model::projectfile::{Pending, SharedFile, Warning};
+pub use escouade_model::projectfile::{Pending, SharedFile, TeamHint, Warning};
 
 use anyhow::{bail, Result};
 use serde_json::{json, Map, Value};
@@ -102,6 +102,10 @@ const fn file_key(path: &'static str, kind: Kind, about: &'static str) -> Key {
     }
 }
 
+/// The team's group (TS-7): `team.server`, `team.id`, `team.project`, `team.name`. The file's alone: written at the
+/// attachment to a team, read at the opening (the band of the invitation, `team_hint`).
+pub const TEAM: &str = "team";
+
 /// The plugins' group (PLG-14): `plugins.recommended`, and each plugin's settings under its id.
 pub const PLUGINS: &str = "plugins";
 /// The plugins the project proposes.
@@ -111,7 +115,7 @@ pub const RECOMMENDED: &str = "plugins.recommended";
 pub fn file_only(path: &str) -> bool {
     matches!(
         path.split('.').next(),
-        Some(PLUGINS | crate::lsp::FILE_GROUP)
+        Some(PLUGINS | crate::lsp::FILE_GROUP | TEAM)
     )
 }
 
@@ -271,6 +275,26 @@ pub const KEYS: &[Key] = &[
         WORKFLOWS,
         Kind::Bool,
         "The project has workflows (true when absent). false: « Pas de workflow pour ce projet », Escouade neither reads nor writes its workflows (.escouade/workflows/ left as it is) and follows its agents in none.",
+    ),
+    file_key(
+        "team.server",
+        Kind::Text,
+        "The address of the server of the project's team (https). Nothing secret: a device of the team attaches the project by its member's gesture; any other device is offered to ask for an invitation, and never reaches this address by itself.",
+    ),
+    file_key(
+        "team.id",
+        Kind::Text,
+        "The team's id on its server (32 hexadecimal digits).",
+    ),
+    file_key(
+        "team.project",
+        Kind::Text,
+        "The project's id in the team's list of projects (32 hexadecimal digits), when it is in the list.",
+    ),
+    file_key(
+        "team.name",
+        Kind::Text,
+        "The team's name, as the band of the invitation shows it, said to come from the repository.",
     ),
     file_key(
         RECOMMENDED,
@@ -1648,6 +1672,14 @@ fn read_into(
     if let Some(team) = team {
         apply_team(p, team, locks, &mut applied);
     }
+    // The key `team` (TS-7): checked, never reached; one that does not pass is told and shows no band.
+    p.shared.team = None;
+    if let Some(file) = p.shared.file.as_mut() {
+        match team_hint(&file.values) {
+            Ok(hint) => p.shared.team = hint,
+            Err(why) => file.warnings.push(warn(None, why)),
+        }
+    }
     applied
 }
 
@@ -1703,6 +1735,138 @@ pub fn team_refusal(
         "Ce réglage est imposé par l’équipe {team} ({key}) : il ne se change pas sur ce poste.",
         "This setting is imposed by the team {team} ({key}): it cannot be changed on this device."
     ))
+}
+
+/// The longest name of a team the band shows.
+const TEAM_NAME_MAX: usize = 60;
+
+/// A character that changes the direction of the text, or hides itself (`U+202E` makes « moc.emca » read « acme.com »):
+/// never shown from a repository.
+fn hidden_char(c: char) -> bool {
+    c.is_control()
+        || matches!(c,
+            '\u{061C}' | '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}'..='\u{2069}' | '\u{FEFF}')
+}
+
+/// A team's name as a repository gives it, made safe to show: no control, direction or hidden character, the spaces
+/// made one, `TEAM_NAME_MAX` characters at most (an ellipsis after).
+pub fn clean_team_name(raw: &str) -> String {
+    let plain: String = raw
+        .chars()
+        .map(|c| if c.is_whitespace() { ' ' } else { c })
+        .filter(|c| !hidden_char(*c))
+        .collect();
+    let words: Vec<&str> = plain.split(' ').filter(|w| !w.is_empty()).collect();
+    let joined = words.join(" ");
+    if joined.chars().count() <= TEAM_NAME_MAX {
+        return joined;
+    }
+    let cut: String = joined.chars().take(TEAM_NAME_MAX - 1).collect();
+    format!("{}…", cut.trim_end())
+}
+
+fn hex32(v: Option<&Value>) -> Option<String> {
+    let s = v?.as_str()?.trim().to_ascii_lowercase();
+    (s.len() == 32 && s.chars().all(|c| c.is_ascii_hexdigit())).then_some(s)
+}
+
+/// The key `team` of a file, as read (TS-7), checked: none when the file has none, Err with why when it does not pass
+/// (its address is not one of a team server, its id is not one). Its address is checked as the app checks one typed
+/// (https, http on this machine only, no path, no user nor password in it), never reached here.
+pub fn team_hint(values: &BTreeMap<String, Value>) -> Result<Option<TeamHint>, String> {
+    let any = values.keys().any(|k| k.starts_with("team."));
+    if !any {
+        return Ok(None);
+    }
+    let server = values
+        .get("team.server")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let (base, host) = crate::teams::address(server).map_err(|e| format!("team.server : {e}"))?;
+    let team = hex32(values.get("team.id")).ok_or_else(|| {
+        tr!(
+            "team.id : l’id d’une équipe s’écrit en 32 chiffres hexadécimaux",
+            "team.id: a team’s id is 32 hexadecimal digits"
+        )
+    })?;
+    let project = match values.get("team.project") {
+        None => None,
+        Some(v) => Some(hex32(Some(v)).ok_or_else(|| {
+            tr!(
+                "team.project : l’id d’un projet de la liste s’écrit en 32 chiffres hexadécimaux",
+                "team.project: the id of a project of the list is 32 hexadecimal digits"
+            )
+        })?),
+    };
+    let name = clean_team_name(
+        values
+            .get("team.name")
+            .and_then(Value::as_str)
+            .unwrap_or_default(),
+    );
+    let name = if name.is_empty() { host.clone() } else { name };
+    let fingerprint: String = Sha256::digest(format!("{base}\n{team}").as_bytes())
+        .iter()
+        .take(12)
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    Ok(Some(TeamHint {
+        server: base,
+        host,
+        team,
+        project,
+        name,
+        fingerprint,
+    }))
+}
+
+/// What the key `team` of a file holds, as the attachment writes it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TeamKey {
+    pub server: String,
+    pub id: String,
+    pub project: Option<String>,
+    pub name: String,
+}
+
+/// The file with its key `team` set (`Some`) or taken out (`None`), the rest of it kept.
+pub fn write_team(existing: Option<&str>, key: Option<&TeamKey>) -> Result<String> {
+    let Some(k) = key else {
+        let Some(text) = existing.filter(|t| !t.trim().is_empty()) else {
+            return Ok(String::new());
+        };
+        let doc = Document::from_str(text).map_err(|e| anyhow::anyhow!("{e}"))?;
+        if let Some(root) = doc.as_mapping() {
+            root.remove(TEAM);
+        }
+        let mut out = doc.to_string();
+        if !out.ends_with('\n') {
+            out.push('\n');
+        }
+        return Ok(out);
+    };
+    let mut values = vec![
+        ("team.server", json!(k.server)),
+        ("team.id", json!(k.id)),
+        ("team.name", json!(clean_team_name(&k.name))),
+    ];
+    if let Some(p) = &k.project {
+        values.push(("team.project", json!(p)));
+    }
+    let text = write(existing, &values)?;
+    if k.project.is_some() {
+        return Ok(text);
+    }
+    // No project of the list: the one an earlier attachment wrote goes.
+    let doc = Document::from_str(&text).map_err(|e| anyhow::anyhow!("{e}"))?;
+    if let Some(g) = doc.as_mapping().and_then(|r| r.get_mapping(TEAM)) {
+        g.remove("project");
+    }
+    let mut out = doc.to_string();
+    if !out.ends_with('\n') {
+        out.push('\n');
+    }
+    Ok(out)
 }
 
 /// A project as `blank_project` makes it, with the file of its folder applied: what the new

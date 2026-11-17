@@ -1251,8 +1251,38 @@ pub fn dir_of(project: &Project) -> PathBuf {
     base.join(DIR)
 }
 
+/// The line a file of a project that joined a team server starts with (TS-7, C5-A): a comment, which every version of
+/// the reader takes as one. Escouade no longer writes such a file.
+pub const FROZEN: &str = "# Frozen: this project joined a team server. Escouade 2.3 and later no longer write this file; its ticket is on the team's Kanban. You may remove this folder from the repository.";
+
+/// Whether a file's text is frozen (`FROZEN` at its head).
+pub fn is_frozen(text: &str) -> bool {
+    text.starts_with(FROZEN)
+}
+
+/// Puts `FROZEN` at the head of every file of the folder that lacks it (never through a link, nor out of the project):
+/// the names of all the files of the folder, frozen now or before. Nothing is removed nor committed.
+pub fn freeze(dir: &Path) -> Vec<String> {
+    let mut names = Vec::new();
+    if crate::workflowfiles::unsafe_dir(dir).is_some() {
+        return names;
+    }
+    for (id, text) in read_dir(dir) {
+        let name = format!("{id}.yml");
+        if !is_frozen(&text) {
+            let path = dir.join(&name);
+            if let Err(e) = std::fs::write(&path, format!("{FROZEN}\n{text}")) {
+                log::warn!("shared ticket {id}: not frozen: {e}");
+                continue;
+            }
+        }
+        names.push(name);
+    }
+    names
+}
+
 /// The files of the folder: id → text. None of them when the folder is not there.
-fn read_dir(dir: &Path) -> BTreeMap<String, String> {
+pub(crate) fn read_dir(dir: &Path) -> BTreeMap<String, String> {
     let mut out = BTreeMap::new();
     if crate::workflowfiles::unsafe_dir(dir).is_some() {
         return out;
@@ -1399,6 +1429,10 @@ impl Core {
         let Ok(project) = self.project(project_id) else {
             return;
         };
+        // Its Kanban is a team's (TS-7, C5-A): the files are frozen, neither read nor written again.
+        if project.team.is_some() && project.team_project.is_some() {
+            return;
+        }
         let dir = dir_of(&project);
         // A folder that is a link, or leaves the project: neither read (its files would look removed)
         // nor written.

@@ -23,6 +23,7 @@ pub mod fuzzing;
 pub mod keychain;
 pub mod merge;
 pub mod pairing;
+pub mod proposals;
 pub mod replica;
 pub mod settings;
 pub mod storage;

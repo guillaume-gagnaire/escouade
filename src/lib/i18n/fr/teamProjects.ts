@@ -24,11 +24,14 @@ export default {
     title: 'Sur ce poste',
     attached: 'Projet de l’équipe',
     attach: 'Rattacher à l’équipe',
-    attachHint: 'Ce projet est un clone de ce dépôt : il devient un projet de l’équipe, sans nouveau clone.',
+    attachHint:
+      'Ce projet est un clone de ce dépôt : il devient un projet de l’équipe, sans nouveau clone, et rejoint le Kanban de la liste. Rien ne part encore : ses tickets et ses docs restent sur ce poste jusqu’à « Verser à l’équipe », qui les montre avant.',
     attachedNote: 'Ce que l’équipe impose et recommande vaut pour lui.',
     otherTeam: 'Projet d’une autre équipe sur ce poste.',
     nameDiffers: 'Ici « {local} », dans la liste « {listed} » : ton nom et ton logo restent.',
     open: 'Ouvrir',
+    boardJoined: 'Kanban de l’équipe rejoint',
+    boardOther: 'Ce poste suit un autre Kanban que celui de la liste.',
   },
   elsewhere: {
     title: 'À cloner',
@@ -43,6 +46,12 @@ export default {
   access: {
     team: 'Toute l’équipe',
     members: { one: '{count} membre', other: '{count} membres' },
+  },
+  board: {
+    listed: 'Kanban de l’équipe inscrit',
+    none: 'Pas encore de Kanban de l’équipe',
+    proposed: 'Un membre propose son Kanban pour ce projet : {id}',
+    accept: 'Inscrire le Kanban',
   },
   admin: {
     add: 'Ajouter un projet',

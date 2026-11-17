@@ -60,6 +60,11 @@ workflows:
   enabled: false
 plugins:
   recommended: [dev.exemple.slack]
+team:
+  server: https://team.acme.fr
+  id: 0123456789abcdef0123456789abcdef
+  project: ffffffffffffffffffffffffffffffff
+  name: Acme
 ";
 
 fn read(text: &str) -> pf::Read {
@@ -1530,4 +1535,171 @@ fn writing_the_file_again_takes_the_key_of_the_retired_index_away() {
     assert!(out.contains("# ours") && out.contains("dir: wt") && out.contains("per_agent: true"));
     let all = pf::export_values(&project());
     assert!(all.iter().all(|(k, _)| !k.contains("index")));
+}
+
+// === The key `team` (TS-7): from the repository, so never trusted ===
+
+fn hint_of(text: &str) -> (Option<crate::projectfile::TeamHint>, Vec<Warning>) {
+    let r = pf::read(text).unwrap();
+    let mut p = project();
+    pf::apply(&mut p, &r);
+    let mut warnings = Vec::new();
+    let hint = match pf::team_hint(&r.values) {
+        Ok(h) => h,
+        Err(w) => {
+            warnings.push(Warning {
+                line: None,
+                text: w,
+            });
+            None
+        }
+    };
+    (hint, warnings)
+}
+
+const TEAM_ID: &str = "0123456789abcdef0123456789abcdef";
+
+#[test]
+fn the_key_team_names_a_team_and_is_never_applied() {
+    let text = format!(
+        "version: 1\nteam:\n  server: https://team.acme.fr\n  id: {TEAM_ID}\n  project: {}\n  name: Acme\n",
+        "f".repeat(32)
+    );
+    let r = pf::read(&text).unwrap();
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    let mut p = project();
+    let before = p.clone();
+    pf::apply(&mut p, &r);
+    p.shared = before.shared.clone();
+    assert_eq!(
+        serde_json::to_value(&p).unwrap(),
+        serde_json::to_value(&before).unwrap(),
+        "the file's alone: nothing of the project changes"
+    );
+    let (hint, _) = hint_of(&text);
+    let h = hint.unwrap();
+    assert_eq!(
+        (
+            h.server.as_str(),
+            h.host.as_str(),
+            h.team.as_str(),
+            h.name.as_str()
+        ),
+        ("https://team.acme.fr", "team.acme.fr", TEAM_ID, "Acme")
+    );
+    assert_eq!(h.project.as_deref(), Some("f".repeat(32).as_str()));
+    // No key: no band.
+    assert_eq!(hint_of("version: 1\n").0, None);
+}
+
+#[test]
+fn a_hostile_address_shows_no_band() {
+    for server in [
+        "file:///c/team",
+        "http://team.acme.fr",
+        "https://user:secret@team.acme.fr",
+        "https://ghp_token@team.acme.fr",
+        "https://team.acme.fr/join/abc",
+        "https://team.acme.fr/?next=evil",
+        "https://team.acme.fr/#s=secret",
+        "javascript:alert(1)",
+        "ssh://team.acme.fr",
+        "",
+    ] {
+        let text =
+            format!("version: 1\nteam:\n  server: \"{server}\"\n  id: {TEAM_ID}\n  name: Acme\n");
+        let (hint, warnings) = hint_of(&text);
+        assert!(hint.is_none(), "{server} is refused");
+        assert!(!warnings.is_empty(), "{server}: said");
+    }
+    // http on this machine only (a server under test); its host is what the band names.
+    let (hint, _) = hint_of(&format!(
+        "version: 1\nteam:\n  server: http://127.0.0.1:4158\n  id: {TEAM_ID}\n"
+    ));
+    let h = hint.unwrap();
+    assert_eq!(h.server, "http://127.0.0.1:4158");
+    assert_eq!(h.name, "127.0.0.1:4158", "no name: its host");
+    // A host of other letters is shown as the address it is (punycode), never as the letters it imitates.
+    let (hint, _) = hint_of(&format!(
+        "version: 1\nteam:\n  server: https://tеam.acme.fr\n  id: {TEAM_ID}\n"
+    ));
+    assert!(hint.unwrap().host.starts_with("xn--"));
+}
+
+#[test]
+fn a_hostile_id_shows_no_band() {
+    for id in ["", "acme", "../../etc", &"g".repeat(32), &"a".repeat(33)] {
+        let text = format!("version: 1\nteam:\n  server: https://team.acme.fr\n  id: \"{id}\"\n");
+        assert!(hint_of(&text).0.is_none(), "{id}");
+    }
+    let text = format!(
+        "version: 1\nteam:\n  server: https://team.acme.fr\n  id: {TEAM_ID}\n  project: \"--upload-pack=x\"\n"
+    );
+    assert!(hint_of(&text).0.is_none());
+}
+
+#[test]
+fn a_hostile_name_is_cleaned() {
+    // A direction override would show « Acme » reversed over the rest; control characters, a new line, a zero width.
+    let raw = "Ac\u{202E}me\u{200B} \u{0007}Corp\u{2066}\n\tsupport\u{FEFF}";
+    assert_eq!(pf::clean_team_name(raw), "Acme Corp support");
+    let long = "A".repeat(500);
+    let cleaned = pf::clean_team_name(&long);
+    assert_eq!(cleaned.chars().count(), 60);
+    assert!(cleaned.ends_with('…'));
+    let text = format!(
+        "version: 1\nteam:\n  server: https://team.acme.fr\n  id: {TEAM_ID}\n  name: \"Acme\\u202Eevil\"\n"
+    );
+    assert_eq!(hint_of(&text).0.unwrap().name, "Acmeevil");
+}
+
+#[test]
+fn the_band_follows_the_file_from_one_reading_to_the_next() {
+    // The fingerprint « Ne plus proposer » keeps: another server or another team is another band.
+    let of = |server: &str, id: &str| {
+        hint_of(&format!(
+            "version: 1\nteam:\n  server: {server}\n  id: {id}\n"
+        ))
+        .0
+        .unwrap()
+        .fingerprint
+    };
+    let a = of("https://team.acme.fr", TEAM_ID);
+    assert_eq!(a, of("https://team.acme.fr", TEAM_ID));
+    assert_ne!(a, of("https://team.evil.fr", TEAM_ID));
+    assert_ne!(a, of("https://team.acme.fr", &"1".repeat(32)));
+}
+
+#[test]
+fn the_key_team_is_written_over_the_file_and_taken_out() {
+    let existing = "# Nos réglages\nversion: 1\nboard:\n  autopilot: true\n";
+    let key = pf::TeamKey {
+        server: "https://team.acme.fr".into(),
+        id: TEAM_ID.into(),
+        project: Some("f".repeat(32)),
+        name: "Acme\u{202E}".into(),
+    };
+    let text = pf::write_team(Some(existing), Some(&key)).unwrap();
+    assert!(text.starts_with("# Nos réglages"), "{text}");
+    assert!(text.contains("autopilot: true"));
+    let h = hint_of(&text).0.unwrap();
+    assert_eq!((h.team.as_str(), h.name.as_str()), (TEAM_ID, "Acme"));
+    // Again without a project of the list: its id goes.
+    let text = pf::write_team(
+        Some(&text),
+        Some(&pf::TeamKey {
+            project: None,
+            ..key.clone()
+        }),
+    )
+    .unwrap();
+    assert_eq!(hint_of(&text).0.unwrap().project, None);
+    // Taken out: the rest stays.
+    let text = pf::write_team(Some(&text), None).unwrap();
+    assert!(hint_of(&text).0.is_none());
+    assert!(text.contains("autopilot: true"));
+    // A new file.
+    let text = pf::write_team(None, Some(&key)).unwrap();
+    assert!(text.contains("version: 1"));
+    assert!(hint_of(&text).0.is_some());
 }

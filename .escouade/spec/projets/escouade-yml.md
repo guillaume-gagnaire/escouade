@@ -2,8 +2,8 @@
 title: ".escouade.yml"
 subject: "Projets"
 sources: ["docs/SPEC.md","docs/PLUGINS.md","docs/STORE.md"]
-tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288","ESC-309","ESC-446"]
-decisions: [165]
+tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288","ESC-309","ESC-446","ESC-493"]
+decisions: [165,194]
 compared: "2026-10-31T10:05:41+01:00"
 ---
 
@@ -129,3 +129,27 @@ Chaque cas est tranché :
 - Les commandes écrites sont celles du projet : approuvées d'office.
 - « Écrire dans .escouade.yml » d'un mode `bypassPermissions` gardé sur la machine n'écrit rien et le garde.
 - Un fichier illisible ou d'une version plus récente n'est pas réécrit : « modifie-le à la main ».
+
+### La clé `team` (TS-7)
+
+```yaml
+team:
+  server: https://team.acme.fr
+  id: 0123456789abcdef0123456789abcdef      # l'id de l'équipe sur son serveur
+  project: ffffffffffffffffffffffffffffffff # l'id du projet dans la liste de l'équipe, s'il y est
+  name: Acme                                 # le nom de l'équipe, pour la bande
+```
+
+- **Ce qu'elle dit** : à quelle équipe le projet appartient. Rien de secret : ni lien d'invitation, ni jeton, ni clé. Elle est du fichier seul (elle ne s'applique à aucun réglage du projet) et figure au schéma.
+- **Écrite au rattachement** (« Rattacher à l'équipe », la case de l'écran de l'équipe, le clone depuis la liste), au-dessus du reste du fichier gardé tel quel ; un toast dit de la commiter, Escouade ne commite rien. Retirée quand le projet quitte l'équipe qu'elle nomme.
+- **Lue à l'ouverture** et à chaque relecture du fichier. Elle vient du dépôt, donc **rien d'elle n'est de confiance** :
+  - l'adresse est vérifiée comme une adresse de serveur tapée dans l'app : `https://` (`http://` seulement vers cette machine), sans chemin, sans requête, sans fragment, sans utilisateur ni mot de passe ; un hôte d'autres lettres s'affiche dans sa forme punycode (`xn--…`). Une adresse ou un id qui ne passe pas ne montre aucune bande, et l'avertissement du fichier le dit ;
+  - le nom est nettoyé (caractères de contrôle, de direction du texte comme `U+202E`, invisibles ; 60 caractères au plus) et la bande dit qu'il vient du dépôt ; sans nom, l'hôte ;
+  - **aucune requête ne part vers cette adresse** : ni à la lecture, ni en montrant la bande, ni par « Demander une invitation » (vérifié par un test avec un serveur qui compte ses requêtes).
+- **La bande**, en haut de la fenêtre quand le projet est à l'écran :
+  - sur un poste qui n'est pas dans cette équipe (un autre id, ou le même id sur un autre serveur, ou une équipe pas encore rejointe) : « Ce projet appartient à l'équipe Acme sur team.acme.fr, d'après le dépôt. », « Ce nom et cette adresse viennent du fichier .escouade.yml du dépôt : Escouade ne joint ce serveur qu'à ton geste. », **« Demander une invitation »** (ouvre l'écran « Rejoindre une équipe » avec « D'après le dépôt, l'équipe est sur team.acme.fr : demande un lien d'invitation à un de ses administrateurs, puis colle-le ici. » ; un lien collé vers un autre serveur le fait dire) ;
+  - sur un poste de cette équipe : « Ce projet est de ton équipe Acme, d'après le dépôt. », **« Rattacher à l'équipe »** (le rattachement de la page « Les projets de l'équipe » : le Kanban de la liste est rejoint seulement quand un remote du projet est un dépôt de la liste, jamais sur la seule foi de l'id du fichier) ;
+  - aucune sur un projet déjà rattaché à cette équipe ;
+  - **« Ne plus proposer pour ce projet »** : gardé sur ce poste (l'empreinte du serveur et de l'équipe nommés) ; un fichier qui nomme ensuite une autre équipe ou un autre serveur montre la bande de nouveau.
+- **Un dépôt hostile** ne fait rien de plus qu'afficher cette bande : il ne branche le poste sur aucun serveur, n'ajoute le projet à aucune équipe, ne fait rejoindre aucun Kanban.
+- Les outils `list_projects` et `get_board` du serveur MCP disent `team.namedByRepository` (l'hôte) quand le fichier nomme une équipe à laquelle le projet n'est pas rattaché.

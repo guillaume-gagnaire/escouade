@@ -1521,6 +1521,11 @@ pub struct Ticket {
     /// « Ne pas partager » (TS-6): a ticket of a team's project that stays on this machine, of which nothing leaves.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub team_local: bool,
+    /// The keys it had before it was poured into its team's Kanban (TS-7): a ticket of ESC-190's files (`DEM-12`, and
+    /// `DEM-12@alice` on the boards that had another `DEM-12`), a ticket of this machine (`DEM-L3`). It is found by them
+    /// still (the tools of the MCP server, the links of the spec and the decisions).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub former_keys: Vec<String>,
     /// The pages of the spec it implements (`subject/page`), as « Planifier » made it (ESC-262);
     /// each of them names it in its `tickets`. Empty for a ticket made otherwise.
     pub pages: Vec<String>,

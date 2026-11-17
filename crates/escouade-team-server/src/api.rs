@@ -816,6 +816,10 @@ const JOIN_PAGE: &str = include_str!("join.html");
 /// only its writers are known here.
 pub const CATALOG_STREAM: Id = *b"escouade/project";
 
+/// The streams of the team itself (its list of projects, its settings, the proposals of its members, TS-7): open to
+/// every device of the team, always. Nobody restricts them, or a member could shut the administrators out of them.
+pub const TEAM_STREAMS: [Id; 3] = [CATALOG_STREAM, *b"escouade/setting", *b"escouade/propose"];
+
 async fn append(
     app: &Shared,
     authed: &Authed,
@@ -959,6 +963,11 @@ pub async fn put_access(
     Cbor(req): Cbor<AccessWire>,
 ) -> Result<StatusCode, Problem> {
     let project = path_id(&project)?;
+    if TEAM_STREAMS.contains(&project) {
+        return Err(Problem::forbidden(
+            "the team's own streams are the whole team's",
+        ));
+    }
     if req.devices.len() > app.limits.max_devices as usize {
         return Err(Problem::bad_request("too_many", "too many devices"));
     }

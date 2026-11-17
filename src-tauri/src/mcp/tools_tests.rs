@@ -309,6 +309,8 @@ async fn the_projects_are_listed_with_their_branch_agents_and_tickets_by_column(
             "engine": "claude",
             "models": [],
             "efforts": ["low", "medium", "high", "xhigh", "max"],
+            // Of no team (TS-7).
+            "team": { "attached": false, "board": false },
         })
     );
     assert_eq!(projects.as_array().unwrap().len(), 2);
@@ -1864,6 +1866,7 @@ async fn a_boards_settings_are_read_whole_with_its_accounts_defaults_and_the_bra
         "testsFirst": false,
         "testCommand": "",
         "prefix": "",
+        "team": { "attached": false, "board": false },
     });
     assert_eq!(
         read(&c, "get_board", json!({ "project": "DEMO" })).await,
@@ -1935,6 +1938,7 @@ async fn a_boards_settings_are_read_whole_with_its_accounts_defaults_and_the_bra
             "testsFirst": true,
             "testCommand": "npm test",
             "prefix": "",
+            "team": { "attached": false, "board": false },
         })
     );
 
@@ -1994,6 +1998,65 @@ async fn a_boards_settings_are_read_whole_with_its_accounts_defaults_and_the_bra
     assert_eq!(last_entry(&h).3, "error");
     c.cancel().await.unwrap();
     h.core.mcp.stop();
+}
+
+/// TS-7: a ticket poured into its team's Kanban is found by the key it had before; `list_projects` and `get_board` say
+/// whether a project is attached to a team and its Kanban the team's, and which team its repository names otherwise.
+#[tokio::test]
+async fn a_former_key_finds_its_ticket_and_the_team_of_a_project_is_said() {
+    let h = harness("mcp-ts7");
+    let p = project(&h).await;
+    let mut t = ticket(&p, "DEM-7", "Le bail", Column::Todo, 1);
+    t.former_keys = vec!["DEM-12@alice".into(), "DEM-12".into()];
+    put(&h, t);
+    let c = external(&h).await;
+    let got = read(&c, "get_ticket", json!({ "ticket": "DEM-12@alice" })).await;
+    assert_eq!(got["key"], json!("DEM-7"));
+    let got = read(&c, "get_ticket", json!({ "ticket": "dem-12" })).await;
+    assert_eq!(got["key"], json!("DEM-7"));
+    {
+        let mut projects = h.core.projects.write();
+        let x = projects.iter_mut().find(|x| x.id == p.id).unwrap();
+        x.team = Some("ab".repeat(16));
+        x.team_project = Some("cd".repeat(16));
+    }
+    let rows = read(&c, "list_projects", json!({})).await;
+    let row = rows
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["id"] == json!(p.id))
+        .unwrap()
+        .clone();
+    assert_eq!(row["team"], json!({ "attached": true, "board": true }));
+    let board = read(&c, "get_board", json!({ "project": p.id })).await;
+    assert_eq!(board["team"], json!({ "attached": true, "board": true }));
+    // A repository that names a team this device has not attached it to.
+    {
+        let mut projects = h.core.projects.write();
+        let x = projects.iter_mut().find(|x| x.id == p.id).unwrap();
+        x.team = None;
+        x.team_project = None;
+        x.shared.team = Some(crate::projectfile::TeamHint {
+            server: "https://team.acme.fr".into(),
+            host: "team.acme.fr".into(),
+            team: "ef".repeat(16),
+            ..Default::default()
+        });
+    }
+    let board = read(&c, "get_board", json!({ "project": p.id })).await;
+    assert_eq!(
+        board["team"],
+        json!({ "attached": false, "board": false, "namedByRepository": "team.acme.fr" })
+    );
+    // No tool attaches nor pours: those stay the user's gestures in the window.
+    let tools = super::tests::names(&c.list_all_tools().await.unwrap());
+    assert!(
+        !tools
+            .iter()
+            .any(|n| n.contains("attach") || n.contains("pour")),
+        "{tools:?}"
+    );
 }
 
 #[tokio::test]

@@ -39,6 +39,7 @@ fn the_shared_fields_go_and_come_back_whole() {
         progress: vec!["la prise".into()],
         partial: true,
         iteration: 2,
+        former_keys: vec!["DEM-12@alice".into()],
         team: Some(TeamTicket {
             assignee: Some("aa".repeat(16)),
             ..Default::default()
@@ -172,7 +173,7 @@ fn keys_of_the_team_and_of_this_machine() {
     assert_eq!(provisional_key("DEM", 3), "DEM-L3");
 }
 
-async fn server() -> (
+pub(crate) async fn server() -> (
     Arc<escouade_team_server::Server>,
     String,
     tokio::task::JoinHandle<()>,
@@ -232,7 +233,7 @@ impl Relay {
     }
 }
 
-fn teams(root: &std::path::Path, store: Arc<MemoryStore>) -> Arc<Teams> {
+pub(crate) fn teams(root: &std::path::Path, store: Arc<MemoryStore>) -> Arc<Teams> {
     Arc::new(Teams::open(
         root.to_path_buf(),
         store,
@@ -241,7 +242,7 @@ fn teams(root: &std::path::Path, store: Arc<MemoryStore>) -> Arc<Teams> {
     ))
 }
 
-fn draft(title: &str, local: bool) -> TicketDraft {
+pub(crate) fn draft(title: &str, local: bool) -> TicketDraft {
     TicketDraft {
         title: title.into(),
         max_loops: 3,
@@ -250,7 +251,7 @@ fn draft(title: &str, local: bool) -> TicketDraft {
     }
 }
 
-fn find(h: &crate::core_tests::Harness, project: &str, title: &str) -> Option<Ticket> {
+pub(crate) fn find(h: &crate::core_tests::Harness, project: &str, title: &str) -> Option<Ticket> {
     h.core
         .tickets
         .read()
@@ -260,7 +261,7 @@ fn find(h: &crate::core_tests::Harness, project: &str, title: &str) -> Option<Ti
 }
 
 /// A reading of the Kanban, the claims read too (a test has no live feed to tell of a claim).
-async fn read(h: &crate::core_tests::Harness, project: &str) {
+pub(crate) async fn read(h: &crate::core_tests::Harness, project: &str) {
     h.core.team_claims_at.lock().clear();
     h.core.sync_team_board(project).await;
 }

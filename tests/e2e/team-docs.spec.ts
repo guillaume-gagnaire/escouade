@@ -173,6 +173,10 @@ test('a page and a decision written on one client are read on the other, then a 
   await addProject(page, app.repo, { name: 'paiements' });
   const alice = await projectId(app.data, app.repo);
   await ipc(page, 'project_set_team', { project: alice, team });
+  // The attachment wrote the key `team` of `.escouade.yml` (TS-7): Alice commits it, as the toast asks.
+  await expect.poll(() => fs.existsSync(path.join(app.repo, '.escouade.yml'))).toBe(true);
+  execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'add', '.escouade.yml'], { cwd: app.repo });
+  execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-q', '-m', 'team'], { cwd: app.repo });
 
   // Bob, a data folder of his own, with the project; he asks to join, Alice lets him in.
   const bobData = path.join(app.root, 'bob-data');

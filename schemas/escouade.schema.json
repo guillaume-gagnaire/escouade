@@ -347,6 +347,28 @@
       "description": "« Projet privé »: the agents of the other projects do not know it, nor read its files. The accounts reserved to it stay each machine's. A project private on a machine stays so when the file says false.",
       "type": "boolean"
     },
+    "team": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "The team's id on its server (32 hexadecimal digits).",
+          "type": "string"
+        },
+        "name": {
+          "description": "The team's name, as the band of the invitation shows it, said to come from the repository.",
+          "type": "string"
+        },
+        "project": {
+          "description": "The project's id in the team's list of projects (32 hexadecimal digits), when it is in the list.",
+          "type": "string"
+        },
+        "server": {
+          "description": "The address of the server of the project's team (https). Nothing secret: a device of the team attaches the project by its member's gesture; any other device is offered to ask for an invitation, and never reaches this address by itself.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "version": {
       "description": "The version of this file's format (1 today).",
       "minimum": 1,

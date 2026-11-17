@@ -332,6 +332,13 @@ pub(crate) fn ticket_in(
         .iter()
         .filter(|t| t.key.to_lowercase() == wanted)
         .collect();
+    // A key it had before it was poured into its team's Kanban (TS-7) finds it still.
+    if by_key.is_empty() {
+        by_key = tickets
+            .iter()
+            .filter(|t| t.former_keys.iter().any(|k| k.to_lowercase() == wanted))
+            .collect();
+    }
     by_key.reverse();
     match by_key.len() {
         1 => Ok(by_key[0].clone()),

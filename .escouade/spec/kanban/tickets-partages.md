@@ -2,8 +2,8 @@
 title: "Tickets partagés"
 subject: "Kanban"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-190","ESC-243"]
-decisions: []
+tickets: ["ESC-190","ESC-243","ESC-493"]
+decisions: [194]
 compared: null
 ---
 
@@ -87,3 +87,12 @@ Un ticket partagé garde la clé de son auteur. Si elle existe déjà ici, le ti
 - « Ton nom » : Réglages › Application › Équipe.
 - « Ton nom dans ce projet » : Réglages › Projets › Kanban partagé.
 - « Partager chaque nouveau ticket » : réglage du projet.
+
+## Un projet qui rejoint un serveur d'équipe (TS-7, C5-A)
+
+Le partage par fichiers reste pour les projets hors équipe. Il n'y a pas de passerelle entre les fichiers et le serveur d'équipe (choix C5-A de `docs/TEAM-SERVER.md`).
+
+- **Les fichiers sont figés** dès que le Kanban du projet est celui de son équipe (partagé ou rejoint) : Escouade ne les lit ni ne les écrit plus pour ce projet. Il met en tête de chacun la ligne `# Frozen: this project joined a team server. Escouade 2.3 and later no longer write this file; its ticket is on the team's Kanban. You may remove this folder from the repository.`, une seule fois.
+- Cette ligne est un commentaire YAML : une version d'avant lit le fichier sans erreur (vérifié par un test du lecteur), et les retardataires voient que le projet a migré. Une version d'avant qui réécrit un fichier enlève la ligne ; le poste à jour ne le relit pas pour autant.
+- **« Verser à l'équipe »** (page « Le Kanban d'équipe ») importe les tickets des fichiers dans le Kanban de l'équipe, **leurs ids gardés** : verser deux fois, ou depuis deux postes, ne fait jamais de doublon. Leur clé `DEM-12` (ou `DEM-12@alice` ici) devient une clé commune de l'équipe, l'ancienne restant trouvable.
+- Escouade **propose** ensuite de retirer les fichiers et dit lesquels (`git rm -r .escouade/tickets`) ; il ne supprime ni ne commite rien.

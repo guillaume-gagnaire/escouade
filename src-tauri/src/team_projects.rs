@@ -52,6 +52,19 @@ pub struct Here {
     pub repos: Vec<usize>,
     /// The list names it otherwise: its own name stays, said.
     pub name_differs: bool,
+    /// Its Kanban is the one the list names (TS-7).
+    pub board_joined: bool,
+    /// Its Kanban is a team's, another than the one the list names.
+    pub board_other: bool,
+}
+
+/// A Kanban a member proposed for a project of the list (TS-7), shown to an administrator.
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProposedView {
+    pub board: String,
+    /// The member who proposed it (hex).
+    pub by: String,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -69,6 +82,10 @@ pub struct TeamProjectView {
     /// The member of this device is among those who have access.
     pub open_to_me: bool,
     pub here: Option<Here>,
+    /// The journal of its Kanban (TS-7), empty when the list names none.
+    pub board: String,
+    /// A Kanban a member proposed for it, other than the list's: shown to an administrator.
+    pub proposed: Option<ProposedView>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -95,6 +112,8 @@ pub struct Local {
     pub name: String,
     pub team: Option<String>,
     pub keys: Vec<String>,
+    /// The journal of its Kanban, when it is a team's (TS-6).
+    pub board: Option<String>,
 }
 
 pub fn repo_view(url: &str, folder: &str) -> RepoView {
@@ -122,7 +141,14 @@ pub fn repo_view(url: &str, folder: &str) -> RepoView {
     }
 }
 
-fn view_of(item: &Item, me: &str, team: &str, locals: &[Local]) -> TeamProjectView {
+fn view_of(
+    item: &Item,
+    me: &str,
+    team: &str,
+    locals: &[Local],
+    proposals: &escouade_team::proposals::Proposals,
+    admin: bool,
+) -> TeamProjectView {
     let p = &item.project;
     let keys: Vec<Option<String>> = p.repos.iter().map(|r| catalog::key(&r.url)).collect();
     let here = locals.iter().find_map(|l| {
@@ -139,8 +165,20 @@ fn view_of(item: &Item, me: &str, team: &str, locals: &[Local]) -> TeamProjectVi
             other_team: l.team.as_deref().is_some_and(|t| t != team),
             repos,
             name_differs: l.name.trim() != p.name.trim(),
+            board_joined: !p.board.is_empty() && l.board.as_deref() == Some(p.board.as_str()),
+            board_other: l
+                .board
+                .as_ref()
+                .is_some_and(|b| !p.board.is_empty() && *b != p.board),
         })
     });
+    let proposed = proposals
+        .of(&item.id)
+        .filter(|x| admin && x.board != p.board)
+        .map(|x| ProposedView {
+            board: x.board.clone(),
+            by: x.by.clone(),
+        });
     let folders = p.folders();
     let me_id = me
         .parse::<HexMember>()
@@ -162,6 +200,8 @@ fn view_of(item: &Item, me: &str, team: &str, locals: &[Local]) -> TeamProjectVi
         by: item.by.clone(),
         open_to_me: p.open_to(&me_id),
         here,
+        board: p.board.clone(),
+        proposed,
     }
 }
 
@@ -183,7 +223,7 @@ pub fn combine(of: crate::teams::CatalogOf, team: &str, locals: &[Local]) -> Tea
         .catalog
         .projects
         .iter()
-        .map(|i| view_of(i, &of.me, team, locals))
+        .map(|i| view_of(i, &of.me, team, locals, &of.proposals, of.admin))
         .collect();
     let outside = locals
         .iter()
@@ -253,6 +293,7 @@ pub async fn locals(projects: Vec<Project>) -> Vec<Local> {
             name: p.name,
             team: p.team,
             keys,
+            board: p.team_project,
         }
     });
     futures_util::future::join_all(reads).await

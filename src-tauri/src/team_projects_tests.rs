@@ -95,6 +95,7 @@ fn of(items: Vec<(&str, Listed)>) -> CatalogOf {
                 .collect(),
             ..Catalog::default()
         },
+        proposals: Default::default(),
     }
 }
 
@@ -106,18 +107,21 @@ fn a_project_here_is_known_by_its_repository_and_the_box_stays_for_the_others() 
             name: "api (local)".into(),
             team: None,
             keys: vec![catalog::key("git@GitHub.com:acme/api").unwrap()],
+            board: None,
         },
         Local {
             id: "p-site".into(),
             name: "site".into(),
             team: Some("acme".into()),
             keys: vec![catalog::key("https://github.com/acme/site").unwrap()],
+            board: None,
         },
         Local {
             id: "p-mine".into(),
             name: "mine".into(),
             team: None,
             keys: vec![],
+            board: None,
         },
     ];
     let mut web = listed(&["https://github.com/acme/web.git"]);

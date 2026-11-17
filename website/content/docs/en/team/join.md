@@ -3,7 +3,7 @@
 For a member: join a team through the link you were sent, add your other devices, keep the recovery key, clone the team’s projects and answer the settings it asks you to accept.
 
 > [!NOTE]
-> The team server is a preview of 2.3. Today, a team shares its members, its project list and its settings. The live team Kanban, then the spec, decisions, documents and memory on the server, are coming.
+> The team server is a preview of 2.3. Today, a team shares its members, its project list, its settings and the Kanban of its projects. The spec, decisions, documents and memory on the server are coming.
 
 ## A team, in a few words
 
@@ -73,6 +73,27 @@ A plain member has no recovery key to keep.
 - A project kept to other members is marked “Kept to other members of the team.”
 - An administrator adds, edits and removes the list’s projects. Only `https://` and ssh addresses get in.
 
+## The team’s Kanban and the tickets of before
+
+- **No id to copy.** A project’s entry in the list carries its team Kanban, encrypted like the rest. Attaching the project, or cloning it from the list, joins that Kanban: you see its tickets at once. Under each project, the screen says “The team’s Kanban joined”, “The team’s Kanban written” or “No Kanban of the team yet”.
+- **Who writes it.** An administrator who shares the Kanban of a project of the list writes it there. A member proposes it: the administrator sees “A member proposes their Kanban for this project” and “Write the Kanban”. A project outside the list is still joined by its Kanban’s id.
+- **Attaching writes the `team` key** of the repository’s `.escouade.yml` (the server’s address, the team’s and the project’s ids, the team’s name; nothing secret). Commit it: whoever opens the repository will see the project is the team’s. Escouade commits nothing.
+- **“Pour into the team”**, on the Kanban, puts the tickets of before on the team’s Kanban: those of the `.escouade/tickets/` files ([Sharing the Kanban](shared-board)) and those of this machine you check (“Check all” is there). A preview first says which tickets leave, what leaves (key, title, description, criteria, column…) and what stays on your machine (images, joined files, account, model, harness, and the shared memory). Nothing leaves before “Pour”.
+  - While the team does not have its docs on the server yet, the preview also names the spec, decisions and documents of `.escouade/`: “Also pour the spec, the decisions and the documents” sends them with the tickets. Attaching the project or joining its Kanban never sends them for you. When they do not go (on the server already, kept in the repository by the team, a private project), the preview says why.
+  - The tickets of the files keep their id: poured twice, or by two teammates at once, they are never doubled.
+  - A ticket poured takes a key of the team (`ACM-4`); a ticket imported from Jira, GitHub… keeps its own. Its card says “Former key: DEM-12”, and it can still be found by it.
+  - The files are then frozen: Escouade no longer writes them, and the screen offers to remove them from the repository (`git rm -r .escouade/tickets`), removing and committing nothing.
+
+## A repository that names a team
+
+When you open a repository whose `.escouade.yml` carries the `team` key, a band at the top of the window says so:
+
+- **You are not in that team**: “This project belongs to the team Acme on team.acme.fr, according to the repository.” “Ask for an invitation” opens the “Join a team” screen, with the server’s address: ask an administrator of the team for a link, then paste it.
+- **You are**: “Attach to the team” attaches the project, as in “Team projects”.
+- “Don’t offer again for this project” hides the band, until the file names another team.
+
+The name and the address come from the repository, not from the team: the band says so. Escouade never connects to that address by itself, neither when it shows the band nor when it opens the join screen; an address that is not a team server’s (`file://`, a password in the address…) shows no band. A repository therefore cannot plug your machine into a server.
+
 ## The team’s settings
 
 The team recommends and imposes settings on its projects through its team `.escouade.yml`, signed by its administrators (see [the security officer’s guide](team/security#what-a-team-can-impose)). “Team settings” shows it:
@@ -103,7 +124,5 @@ If the server shows two versions of the team, goes back, or changes what your de
 
 ## What is not there yet
 
-- The live team Kanban, and a ticket taken by a single agent (coming).
 - The spec, decisions, documents and memory on the server (coming).
 - The team as a separate space in the window, with its members, devices and their roles, and the key-by-key settings editor (coming).
-- Attaching a repository to the team through its `.escouade.yml`, with the invitation offered to whoever opens it (coming).

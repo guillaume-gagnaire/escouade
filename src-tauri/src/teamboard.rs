@@ -48,6 +48,7 @@ pub const SHARED_FIELDS: &[&str] = &[
     "partial",
     "iteration",
     "assignee",
+    "formerKeys",
 ];
 
 /// How often the holder renews its lease (of 10 minutes on the server): 3 minutes, or
@@ -88,6 +89,10 @@ pub fn fields_of(t: &Ticket) -> BTreeMap<String, Value> {
         "assignee".into(),
         json!(t.team.as_ref().and_then(|x| x.assignee.clone())),
     );
+    // Only once it has some (TS-7): the tickets of before are not written again for an empty list.
+    if !t.former_keys.is_empty() {
+        m.insert("formerKeys".into(), json!(t.former_keys));
+    }
     m
 }
 
@@ -135,6 +140,11 @@ pub fn apply_field(t: &mut Ticket, field: &str, v: &Value) {
         "assignee" => {
             if let Some(tt) = t.team.as_mut() {
                 tt.assignee = v.as_str().map(str::to_string);
+            }
+        }
+        "formerKeys" => {
+            if let Ok(k) = serde_json::from_value::<Vec<String>>(v.clone()) {
+                t.former_keys = k;
             }
         }
         _ => {}
@@ -282,6 +292,7 @@ impl Core {
         teams.set_projects_sink(Arc::new(move |_| {
             if let Some(core) = me.upgrade() {
                 core.team_boards_soon();
+                core.team_join_listed_soon();
             }
         }));
         let me = Arc::downgrade(self);
@@ -295,7 +306,7 @@ impl Core {
         self.team_boards_soon();
     }
 
-    fn teams_link(&self) -> Option<Arc<Teams>> {
+    pub(crate) fn teams_link(&self) -> Option<Arc<Teams>> {
         self.team_link.read().clone()
     }
 
@@ -440,6 +451,31 @@ impl Core {
                 if tickets.iter().any(|x| {
                     x.team.as_ref().map(|y| &y.object) == t.team.as_ref().map(|y| &y.object)
                 }) {
+                    continue;
+                }
+                // Poured by a teammate from the files of ESC-190 this machine read too (TS-7): its own ticket of that
+                // file becomes the team's, never a second one.
+                let object = t
+                    .team
+                    .as_ref()
+                    .map(|y| y.object.clone())
+                    .unwrap_or_default();
+                if let Some(x) = tickets.iter_mut().find(|x| {
+                    x.project_id == project_id
+                        && x.team.is_none()
+                        && x.shared
+                            .as_ref()
+                            .is_some_and(|s| crate::teampour::object_of_file(&s.id) == object)
+                }) {
+                    let fields = fields_of(&t);
+                    x.team = t.team.clone();
+                    x.shared = None;
+                    x.team_local = false;
+                    for (k, v) in &fields {
+                        apply_field(x, k, v);
+                    }
+                    x.former_keys = t.former_keys.clone();
+                    changed.push(x.clone());
                     continue;
                 }
                 changed.push(t.clone());
@@ -679,6 +715,25 @@ impl Core {
             project: project.clone(),
         });
         self.request_save();
+        // ESC-190's files are frozen from now on (C5-A): Escouade writes them no more, and says so at their head.
+        crate::sharing::freeze(&crate::sharing::dir_of(&project));
+        // What the project had before stays here until the gesture (TS-7): said once.
+        self.hub.emit(UiEvent::Toast {
+            text: tr!(
+                "{name} : son Kanban est celui de l’équipe. Ses tickets et ses docs d’avant restent sur ce poste : « Verser à l’équipe » les envoie, après un aperçu.",
+                "{name}: its Kanban is the team’s. Its tickets and docs of before stay on this machine: “Pour into the team” sends them, after a preview.",
+                name = project.name
+            ),
+        });
+        if team_project.is_none() {
+            // A new journal: the team's list learns it (TS-7), written by an administrator, proposed to one otherwise.
+            if let Some(said) = self
+                .team_list_board(&project, &team_id, &hex::encode(pid.0))
+                .await
+            {
+                self.hub.emit(UiEvent::Toast { text: said });
+            }
+        }
         self.sync_team_board(project_id).await;
         self.project(project_id)
     }
@@ -1053,7 +1108,14 @@ async fn board_in_step(
             .to_string();
         let local_id = by_object.get(&object).cloned();
         let mut tt = match &local_id {
-            Some(id) => states.get(id).cloned().unwrap_or_default(),
+            Some(id) => {
+                let mut tt = states.get(id).cloned().unwrap_or_default();
+                // Two devices poured the same ticket at once (TS-7): the claim the journal kept is the one.
+                if !claim_hex.is_empty() && claim_hex != tt.claim && tt.token.is_none() {
+                    tt.claim = claim_hex.clone();
+                }
+                tt
+            }
             None => TeamTicket {
                 object: object.clone(),
                 claim: claim_hex.clone(),
@@ -1214,4 +1276,4 @@ async fn board_in_step(
 
 #[cfg(test)]
 #[path = "teamboard_tests.rs"]
-mod tests;
+pub(crate) mod tests;

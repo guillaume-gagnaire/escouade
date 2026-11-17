@@ -1059,6 +1059,24 @@ export interface ProjectShared {
   trusted: string;
   /** None while the project has no `.escouade.yml`. */
   file: SharedFile | null;
+  /** The team its `.escouade.yml` names (its key `team`, TS-7), checked by the backend: the band of the invitation. */
+  team?: TeamHint | null;
+  /** « Ne plus proposer pour ce projet »: the fingerprint of the team the band named. */
+  teamDismissed?: string | null;
+}
+
+/** The key `team` of a repository's `.escouade.yml` (TS-7): from the repository, so never trusted. */
+export interface TeamHint {
+  /** The server's base (`https://team.acme.fr`) and its host (`team.acme.fr`). */
+  server: string;
+  host: string;
+  /** The team's id (hex). */
+  team: string;
+  /** The project's id in the team's list, when the file gives one. */
+  project?: string | null;
+  /** Cleaned by the backend: no control nor direction character, 60 characters at most. */
+  name: string;
+  fingerprint: string;
 }
 
 /** « Rédigé par l'agent » (the agent is asked to commit) or « Direct, avec un message proposé ». */
@@ -1240,6 +1258,8 @@ export interface Ticket {
   team?: TeamTicket | null;
   /** « Ne pas partager » (TS-6): a ticket of a team's Kanban that stays on this machine. */
   teamLocal?: boolean;
+  /** The keys it had before it was poured into its team's Kanban (TS-7): it is found by them still. */
+  formerKeys?: string[];
   /** The pages of the spec and the decisions it implements, as « Planifier » made it (ESC-262). */
   pages?: string[];
   decisions?: DecisionRef[];

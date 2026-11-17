@@ -156,6 +156,8 @@ export default {
     working: 'Demande…',
     waiting: 'Demande envoyée. Un administrateur en ligne te fait entrer : cette fenêtre le dira.',
     joined: 'Tu es dans l’équipe « {name} ».',
+    expected: 'D’après le dépôt, l’équipe est sur {host} : demande un lien d’invitation à un de ses administrateurs, puis colle-le ici.',
+    otherServer: 'Ce lien mène à {server}, pas à {host} que nomme le dépôt : vérifie-le avec la personne qui t’invite.',
   },
   device: {
     qrTab: 'QR code',

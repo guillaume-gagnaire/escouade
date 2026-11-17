@@ -5,7 +5,48 @@
 import { invoke } from './transport';
 import { fTime } from './format';
 import { t } from './i18n';
-import type { Project, TeamConflict, Ticket } from './types';
+import type { Column, Project, TeamConflict, TeamHint, Ticket } from './types';
+
+/** A ticket of the preview of « Verser à l'équipe » (TS-7). */
+export interface PourItem {
+  /** The id of its file (`<id>.yml`), or of this machine's ticket. */
+  id: string;
+  key: string;
+  title: string;
+  column: Column;
+  /** Imported from Jira, GitHub…: it keeps its key. */
+  external: boolean;
+  /** Already in the team's Kanban: not written again. */
+  poured: boolean;
+  problem: string | null;
+}
+
+/** The docs of `.escouade/` in the preview (TS-9's docs on the team server): `pending` they go with « Verser »;
+ * `server` the team's are there already; `repo` the team keeps them in the repository; `private`; `none`. */
+export interface PourDocs {
+  state: 'pending' | 'server' | 'repo' | 'private' | 'none';
+  pages: string[];
+  decisions: string[];
+  documents: string[];
+}
+
+export interface PourPreview {
+  files: PourItem[];
+  locals: PourItem[];
+  folder: string;
+  docs: PourDocs;
+}
+
+export interface Poured {
+  imported: number;
+  already: number;
+  locals: number;
+  /** The files frozen, that may be removed from the repository. */
+  files: string[];
+  folder: string;
+  /** The docs' files of `.escouade/` imported to the server, left in the repository. */
+  docs: string[];
+}
 
 export const teamBoardApi = {
   /** « Partager son Kanban avec l’équipe » (`teamProject` null) or « Rejoindre » a teammate's by its id. */
@@ -16,7 +57,45 @@ export const teamBoardApi = {
   settle: (id: string, field: string, keepMine: boolean) => invoke<Ticket>('ticket_team_settle', { id, field, keepMine }),
   assign: (id: string, me: boolean) => invoke<Ticket>('ticket_team_assign', { id, me }),
   local: (id: string, local: boolean) => invoke<Ticket>('ticket_team_local', { id, local }),
+  /** What « Verser à l'équipe » would pour (TS-7). */
+  pourPreview: (project: string) => invoke<PourPreview>('project_team_pour_preview', { project }),
+  /** « Verser à l'équipe »: the tickets of the files (`files`), those of this machine named, and the docs (`docs`). */
+  pour: (project: string, files: boolean, tickets: string[], docs: boolean) =>
+    invoke<Poured>('project_team_pour', { project, files, tickets, docs }),
+  /** « Ne plus proposer pour ce projet » on the band of the team a repository names. */
+  dismissHint: (project: string) => invoke<Project>('project_team_hint_dismiss', { project }),
 };
+
+/** A ticket of a project by its key, or by a key it had before it was poured into its team's Kanban (TS-7). */
+export function ticketByKey(tickets: Iterable<Ticket>, projectId: string, key: string): Ticket | undefined {
+  const all = [...tickets].filter((x) => x.projectId === projectId);
+  const k = key.toLowerCase();
+  return all.find((x) => x.key.toLowerCase() === k) ?? all.find((x) => (x.formerKeys ?? []).some((f) => f.toLowerCase() === k));
+}
+
+/** The number of the docs' files that would go. */
+export function docsCount(d: PourDocs): number {
+  return d.state === 'pending' ? d.pages.length + d.decisions.length + d.documents.length : 0;
+}
+
+/** The files to pour: those that can be read and are not in the team's Kanban yet. */
+export function filesToPour(p: PourPreview): PourItem[] {
+  return p.files.filter((f) => !f.poured && !f.problem);
+}
+
+/** The band of the team a repository names (TS-7), as this device shows it: `invite` (this device is not in that team,
+ * on that server), `attach` (it is: « Rattacher à l'équipe »), or none (attached, dismissed, no key). */
+export type HintBand = { kind: 'invite' | 'attach'; hint: TeamHint; teamId: string | null };
+
+export function hintBand(project: Project | null | undefined, teams: { id: string; server: string; joined: boolean }[]): HintBand | null {
+  const hint = project?.shared?.team;
+  if (!project || !hint) return null;
+  if (project.team === hint.team) return null;
+  if (project.shared?.teamDismissed === hint.fingerprint) return null;
+  // The same team on the same server: an id alone, from a repository, never makes it one's own.
+  const mine = teams.find((x) => x.id === hint.team && x.server.toLowerCase() === hint.host.toLowerCase() && x.joined);
+  return mine ? { kind: 'attach', hint, teamId: mine.id } : { kind: 'invite', hint, teamId: null };
+}
 
 /** Whether a project's Kanban is a team's. */
 export function isTeamBoard(project: Project | null | undefined): boolean {

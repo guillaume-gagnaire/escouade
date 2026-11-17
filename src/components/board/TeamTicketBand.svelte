@@ -41,6 +41,12 @@
     {/if}
   </div>
 {/if}
+{#if ticket.formerKeys?.length}
+  <!-- The keys it had before it was poured into the team's Kanban (TS-7): it is found by them still. -->
+  <span class="assignee" data-team-former
+    >{t('teamBoard.card.former', { count: ticket.formerKeys.length, keys: ticket.formerKeys.join(', ') })}</span
+  >
+{/if}
 {#if assignee}
   <span class="assignee" data-team-assignee><Icon name="user" size={13} /><span>{assignee}</span></span>
 {/if}

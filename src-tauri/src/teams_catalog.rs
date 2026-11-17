@@ -4,6 +4,7 @@
 
 use escouade_team::catalog::{self, Catalog, Listed};
 use escouade_team::crypto::Role;
+use escouade_team::proposals::{self, Proposals};
 
 use super::{say, Teams};
 
@@ -24,6 +25,8 @@ pub struct CatalogOf {
     pub me: String,
     pub members: Vec<MemberView>,
     pub catalog: Catalog,
+    /// What members proposed (TS-7: the Kanban of a project of the list), read by an administrator's device.
+    pub proposals: Proposals,
 }
 
 fn refused(e: &escouade_team::Error) -> String {
@@ -50,6 +53,7 @@ impl Teams {
     }
 
     fn catalog_of(&self, id: &str, t: &escouade_team::Team, catalog: Catalog) -> CatalogOf {
+        let proposals = proposals::view(t).unwrap_or_default();
         let me = t.identity().member;
         let members = t
             .members()
@@ -67,7 +71,26 @@ impl Teams {
             me: me.to_string(),
             members,
             catalog,
+            proposals,
         }
+    }
+
+    /// The team's list as this device read it last, without the server (TS-7: the Kanban a project of the team joins).
+    pub fn catalog_view(&self, id: &str) -> Option<Catalog> {
+        let team = self.team(id).ok()?;
+        let t = team.try_lock().ok()?;
+        catalog::view(&t).ok()
+    }
+
+    /// A member proposes to the administrators the Kanban `board` for the project `project` of the list (TS-7).
+    pub async fn propose_board(&self, id: &str, project: &str, board: &str) -> Result<(), String> {
+        self.unblocked(id)?;
+        let team = self.team(id)?;
+        let mut t = team.lock().await;
+        proposals::propose(&mut t, project, board, super::now())
+            .await
+            .map(|_| ())
+            .map_err(|e| say(&e))
     }
 
     /// The team's list, read from the server (offline: as this device read it last).
@@ -81,6 +104,11 @@ impl Teams {
                 catalog::view(&t).map_err(|e| say(&e))?
             }
         };
+        if t.is_admin().unwrap_or(false) {
+            if let Err(e) = proposals::sync(&mut t).await {
+                log::info!("teams: the proposals not read: {}", say(&e));
+            }
+        }
         Ok(self.catalog_of(id, &t, catalog))
     }
 

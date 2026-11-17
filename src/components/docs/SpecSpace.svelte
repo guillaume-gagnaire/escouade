@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ticketByKey } from '../../lib/teamboard';
   import Icon from '../Icon.svelte';
   import { t } from '../../lib/i18n';
   import { fAgo, fSize } from '../../lib/format';
@@ -306,7 +307,7 @@
                   <!-- Its tickets (ESC-262): the keys, the state of those of this board. -->
                   <span class="c-tickets" data-subject-tickets>
                     {#each keys.slice(0, 4) as k (k)}
-                      {@const tk = Object.values(app.tickets).find((x) => x.projectId === project.id && x.key === k)}
+                      {@const tk = ticketByKey(Object.values(app.tickets), project.id, k)}
                       <span class="tkey {tk?.column ?? ''}" use:tip={tk ? `${k} · ${tk.title}` : k}>{k}</span>
                     {/each}
                     {#if keys.length > 4}<span class="tkey more">+{keys.length - 4}</span>{/if}

@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Serveur d’équipe : un projet cloné ou rattaché depuis « Projets de l’équipe » rejoint le Kanban de l’équipe sans identifiant à copier, et « Verser à l’équipe » y met, après un aperçu, les tickets et les docs d’avant (les tickets des fichiers `.escouade/tickets` gardent leur id, jamais en double) ; rien ne part sans ce geste. Le dépôt dit son équipe dans son `.escouade.yml` : qui l’ouvre sans en être voit une invitation à demander, et Escouade ne contacte jamais ce serveur de lui-même.
 - Serveur d’équipe : la spec, les décisions et les documents d’un projet d’équipe vivent sur le serveur, chiffrés, et se lisent et s’écrivent hors ligne sur chaque poste. Une page écrite des deux côtés se fusionne seule ou montre son conflit, deux décisions acceptées en même temps n’ont jamais le même numéro, et un projet peut garder ses docs dans son dépôt.
 - L’agent relecteur commente maintenant comme un humain, à côté du code : ses remarques sont des fils sous leur ligne, marqués « agent, pas publié », avec leur sévérité, leurs suggestions de code et un résumé dans la Conversation. Écarte-en une, ou publie-la sous ton compte d’un clic, une à une ou toutes celles gardées ; relancée après un commit, la relecture garde ce qui tient et dit ce qui est périmé.
 - Serveur d’équipe : `init --help`, `serve --help` et `recovery-token --help` affichent l’aide de la commande au lieu de l’exécuter, et une option inconnue est refusée au lieu d’être ignorée.

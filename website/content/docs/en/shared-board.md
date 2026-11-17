@@ -91,6 +91,12 @@ A shared ticket keeps everywhere the key its author gave it: Alice’s DEM-12 is
 - **An import already shared.** Importing a Jira, Trello, GitHub, Linear, ClickUp, GitLab or Azure Boards ticket a teammate already shared makes no duplicate: your import, if not started, becomes the shared ticket.
 - **A private project.** It is shared too: “private” is about what Escouade’s other projects see, not your team on the repository. Its shared tickets stay out of sight of the other projects’ agents.
 
+## When the project joins a team server
+
+Sharing by files is meant for projects without a [team server](team/join). As soon as a project’s Kanban is its team’s, its files are frozen: Escouade neither reads nor writes them any more, and puts the line `# Frozen: this project joined a team server…` at the head of each. It is a comment: earlier versions still read the file, and your teammates who do not have 2.3 yet see that the project moved.
+
+“Pour into the team” puts these tickets on the team’s Kanban, their ids kept (never a double), with a key of the team; the former one can still be found. Escouade then offers to remove the `.escouade/tickets` folder from the repository; it removes and commits nothing.
+
 ## With the MCP server
 
 The ticket tools of the [MCP server](mcp) say whether a ticket is shared (`shared`: by whom, whether it is you, who took it, its file). `create_ticket` and `update_ticket` take `shared: true` to share, `false` to stop. An agent never starts a ticket someone else shared: `start_ticket` refuses it, and so does `delete_ticket`; only you start, hide or delete it, from the Kanban.

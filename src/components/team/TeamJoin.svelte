@@ -6,7 +6,18 @@
   import { errorText, teams, teamsApi, type JoinPreview } from '../../lib/teams.svelte';
   import SixWords from './SixWords.svelte';
 
-  let { link: given = '', onback, ondone }: { link?: string; onback: () => void; ondone: () => void } = $props();
+  let {
+    link: given = '',
+    expected = '',
+    onback,
+    ondone,
+  }: {
+    link?: string;
+    /** The host a repository names (TS-7, the band of the invitation): said, never reached. */
+    expected?: string;
+    onback: () => void;
+    ondone: () => void;
+  } = $props();
 
   let link = $state(untrack(() => given));
   let name = $state('');
@@ -60,6 +71,7 @@
 
 {#if !joining}
   <p class="lead">{t('team.join.lead')}</p>
+  {#if expected}<p class="hint" data-testid="team-join-expected">{t('team.join.expected', { host: expected })}</p>{/if}
   <label class="row">
     <span class="lbl">{t('team.join.link')}</span>
     <!-- svelte-ignore a11y_autofocus -->
@@ -70,6 +82,9 @@
   {#if preview}
     <div class="preview">
       <div><span class="lbl">{t('team.join.server')}</span> <span class="mono">{preview.server}</span></div>
+      {#if expected && preview.server.toLowerCase() !== expected.toLowerCase()}
+        <p class="hint" role="alert">{t('team.join.otherServer', { server: preview.server, host: expected })}</p>
+      {/if}
       <SixWords words={preview.fingerprint} label={t('team.card.fingerprint')} hint={t('team.join.check')} />
       {#if preview.ownDevice}<p class="hint">{t('team.join.ownDevice')}</p>{/if}
     </div>

@@ -54,4 +54,31 @@ pub struct ProjectShared {
     /// The fingerprint of the text last read ("" for no file): a file the same is not read again.
     #[serde(skip)]
     pub seen: Option<String>,
+    /// The team the file says the project belongs to (its key `team`, TS-7), as checked here: what the band of the
+    /// invitation shows. Never saved: read again with the file.
+    #[serde(skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub team: Option<TeamHint>,
+    /// « Ne plus proposer pour ce projet »: the fingerprint of the team the band named (its server and its id). A file
+    /// that names another team shows the band again.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team_dismissed: Option<String>,
+}
+
+/// The key `team` of a repository's `.escouade.yml` (TS-7): where the project's team is, nothing secret. It comes from
+/// the repository, so nothing of it is trusted: its name is cleaned, its address checked, and nothing goes to that
+/// address before the user's gesture.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TeamHint {
+    /// The server's base (`https://team.acme.fr`), and its host as the band names it (`team.acme.fr`).
+    pub server: String,
+    pub host: String,
+    /// The team's id (hex, 32 digits).
+    pub team: String,
+    /// The id of the project in the team's list (hex), when the file gives one.
+    pub project: Option<String>,
+    /// The team's name, as the file says it (cleaned: no control or direction character, 60 characters at most).
+    pub name: String,
+    /// The fingerprint the band's « Ne plus proposer » keeps.
+    pub fingerprint: String,
 }

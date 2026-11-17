@@ -91,6 +91,12 @@ Un ticket partagé garde partout la clé que lui a donnée son auteur : le DEM-1
 - **Un import déjà partagé.** Importer un ticket Jira, Trello, GitHub, Linear, ClickUp, GitLab ou Azure Boards qu’un coéquipier a déjà partagé ne crée pas de doublon : ton import, s’il n’a pas commencé, devient le ticket partagé.
 - **Un projet privé.** Il se partage aussi : « privé » dit ce que voient les autres projets d’Escouade, pas ton équipe sur le dépôt. Ses tickets partagés restent invisibles des agents des autres projets.
 
+## Quand le projet rejoint un serveur d’équipe
+
+Le partage par fichiers est fait pour les projets sans [serveur d’équipe](team/join). Dès que le Kanban d’un projet est celui de son équipe, ses fichiers sont figés : Escouade ne les lit ni ne les écrit plus, et met en tête de chacun la ligne `# Frozen: this project joined a team server…`. C’est un commentaire : les versions d’avant lisent toujours le fichier, et tes collègues qui n’ont pas encore la 2.3 voient que le projet a migré.
+
+« Verser à l’équipe » met ces tickets dans le Kanban de l’équipe, leurs ids gardés (jamais de doublon), avec une clé de l’équipe ; l’ancienne reste trouvable. Escouade te propose ensuite de retirer le dossier `.escouade/tickets` du dépôt ; il ne supprime ni ne commite rien.
+
 ## Avec le serveur MCP
 
 Les outils de tickets du [serveur MCP](mcp) disent si un ticket est partagé (`shared` : par qui, si c’est toi, qui l’a pris, son fichier). `create_ticket` et `update_ticket` prennent `shared: true` pour partager, `false` pour arrêter. Un agent ne lance jamais un ticket partagé par un autre : `start_ticket` le refuse, et `delete_ticket` aussi ; seul toi le lances, le masques ou le supprimes, depuis le Kanban.

@@ -24,7 +24,10 @@
 //!   (`docsticket`, the mechanism of a fixed branch, as it is), that no teammate reads; poured in the team's docs when
 //!   its ticket is validated, never before.
 //! - **The choice** (C4-B): « Les docs sur le serveur d'équipe » (the default for a project of the team) or « Les docs
-//!   restent dans le dépôt » (`.escouade/` as before); it is the team's, in the journal. Moving to the server imports
+//!   restent dans le dépôt » (`.escouade/` as before); it is the team's, in the journal. Nothing of the repository
+//!   leaves before a gesture (TS-7): while the team chose nothing and imported nothing, the project's docs stay in its
+//!   repository; « Verser à l'équipe » (after its preview, `teampour`) or this setting imports them. A teammate who
+//!   joins a journal whose docs are on the server reads them from there. Moving to the server imports
 //!   the repository's `.escouade/` (ids and numbers kept) and removes nothing from it: the window offers to remove the
 //!   files it names, the user commits. Going back writes the server's docs in the repository's `.escouade/`, which
 //!   the server keeps too.
@@ -1053,12 +1056,26 @@ impl Core {
         Some((team, ProjectId(pid.0)))
     }
 
-    /// Whether a project's docs are on the team server, as this machine last read the team's choice (offline too):
-    /// the server by default for a project of a team with its journal.
+    /// Whether a project's docs are on the team server, as this machine last read the team's choice (offline too): once
+    /// the team's docs are there (imported by a gesture, here or on a teammate's machine), for a project of a team with
+    /// its journal. Before that gesture, they stay in the repository (TS-7).
     pub(crate) fn team_docs_on(&self, project: &Project) -> bool {
         self.team_docs_link(project).is_some()
             && self.team_teams_known()
-            && self.team_docs_manifest(&project.id).place.as_deref() != Some("repo")
+            && self.team_docs_manifest(&project.id).place.as_deref() == Some("server")
+    }
+
+    /// Where the docs of a project of a team stand, for the preview of « Verser à l'équipe » (TS-7): the team's choice
+    /// as its journal says it (`server`, `repo`, none yet) and whether the repository's docs were imported, by any
+    /// device. None for a project with no journal, or private.
+    pub(crate) async fn team_docs_state(
+        &self,
+        project: &Project,
+    ) -> Option<(Option<String>, bool)> {
+        let (team_id, pid) = self.team_docs_link(project)?;
+        let shared = self.team_docs_teams()?.team(&team_id).ok()?;
+        let mut t = shared.lock().await;
+        Some((place_of(&mut t, pid), imported(&mut t, pid)))
     }
 
     fn team_teams_known(&self) -> bool {
@@ -1107,6 +1124,11 @@ impl Core {
             let _ = t.sync_project(pid).await;
         }
         let place = place_of(&mut t, pid);
+        if place.is_none() && !imported(&mut t, pid) {
+            // The team chose nothing and imported nothing: the repository's docs wait for a gesture (« Verser à
+            // l'équipe » after its preview, or the setting), and stay where they are until then (TS-7).
+            return Ok(Settled::default());
+        }
         man.place = Some(place.clone().unwrap_or_else(|| "server".into()));
         if place.as_deref() == Some("repo") {
             man.save(&file)?;
@@ -1193,7 +1215,13 @@ impl Core {
             .projects
             .read()
             .iter()
-            .filter(|p| p.team.as_deref() == Some(team_id) && self.team_docs_on(p))
+            // Those on the server, and those whose team's choice is not read yet (a teammate's import comes then).
+            .filter(|p| {
+                p.team.as_deref() == Some(team_id)
+                    && self.team_docs_link(p).is_some()
+                    && self.team_teams_known()
+                    && self.team_docs_manifest(&p.id).place.as_deref() != Some("repo")
+            })
             .map(|p| p.id.clone())
             .collect();
         for id in ids {

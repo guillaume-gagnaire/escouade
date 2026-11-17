@@ -16,7 +16,16 @@ const HERE = listedProject({
   id: 'bb'.repeat(16),
   name: 'Site ACME',
   repos: [repo('https://github.com/acme/site.git')],
-  here: { project: 'p1', name: 'site', attached: false, otherTeam: false, repos: [0], nameDiffers: true },
+  here: {
+    project: 'p1',
+    name: 'site',
+    attached: false,
+    otherTeam: false,
+    repos: [0],
+    nameDiffers: true,
+    boardJoined: false,
+    boardOther: false,
+  },
 });
 const API = listedProject();
 const PLATFORM = listedProject({
@@ -122,6 +131,7 @@ describe('« Projets de l’équipe » (TS-8)', () => {
         ],
         branch: 'develop',
         access: { kind: 'members', members: [ME] },
+        board: '',
       },
     });
     // Changed: by its id.
@@ -161,5 +171,27 @@ describe('« Projets de l’équipe » (TS-8)', () => {
     expect(screen.getByText(/2 entrées de la liste refusées/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
     await waitFor(() => expect(be.called('team_projects_retry')).toHaveLength(1));
+  });
+
+  it('says the Kanban of the list, keeps it when an administrator edits, and writes one a member proposed (TS-7)', async () => {
+    const BOARD = 'ab'.repeat(16);
+    const listed = listedProject({ board: BOARD });
+    const proposed = listedProject({ id: 'dd'.repeat(16), name: 'Proposé', proposed: { board: 'cd'.repeat(16), by: ALICE } });
+    const be = fakeBackend({
+      team_projects: () => teamProjects([listed, proposed], { admin: true }),
+      team_project_put: () => teamProjects([listed, proposed], { admin: true }),
+      team_project_accept_board: () => teamProjects([listed], { admin: true }),
+    });
+    render(TeamProjects, { teamId: 'acme', onback: () => {} });
+    const api = await screen.findByRole('article', { name: 'Acme API' });
+    expect(within(api).getByTestId('team-project-board')).toHaveTextContent('Kanban de l’équipe inscrit');
+    const other = screen.getByRole('article', { name: 'Proposé' });
+    expect(within(other).getByTestId('team-project-board')).toHaveTextContent('Pas encore de Kanban de l’équipe');
+    expect(within(other).getByTestId('team-project-proposed')).toHaveTextContent('cd'.repeat(16));
+    await userEvent.click(within(api).getByRole('button', { name: 'Modifier' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    await waitFor(() => expect(be.called('team_project_put')[0]?.args.listed.board).toBe(BOARD));
+    await userEvent.click(within(screen.getByRole('article', { name: 'Proposé' })).getByRole('button', { name: 'Inscrire le Kanban' }));
+    await waitFor(() => expect(be.called('team_project_accept_board')[0]?.args).toEqual({ team: 'acme', project: 'dd'.repeat(16) }));
   });
 });

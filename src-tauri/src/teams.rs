@@ -132,7 +132,12 @@ pub fn address(typed: &str) -> Result<(String, String), String> {
     let host = url
         .host_str()
         .ok_or_else(|| format!("« {typed} » n’est pas une adresse de serveur."))?;
-    if url.path() != "/" || url.query().is_some() || !url.username().is_empty() {
+    if url.path() != "/"
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || !url.username().is_empty()
+        || url.password().is_some()
+    {
         return Err("L’adresse du serveur s’écrit sans chemin : team.exemple.fr.".into());
     }
     let host = match url.port() {
@@ -634,6 +639,13 @@ impl Teams {
             .find(|k| k.id == id)
             .cloned()
             .ok_or_else(|| "Cette équipe n’est pas sur cet appareil.".to_string())
+    }
+
+    /// Where a team of this device is: its server's base, its host and its name (TS-7, the key `team` of
+    /// `.escouade.yml`); none for a team this device is not in.
+    pub(crate) fn place_of(&self, id: &str) -> Option<(String, String, String)> {
+        let k = self.known(id).ok()?;
+        Some((k.base, k.host, k.name))
     }
 
     pub(crate) fn team(&self, id: &str) -> Result<Shared, String> {

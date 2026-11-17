@@ -140,7 +140,16 @@ export type Modal =
   /** The first launch's other question (ESC-190): the user's name for the team; `then`, what waited for it (a share). */
   | { kind: 'teamName'; projectId?: string; then?: () => void }
   /** The teams of the team server (TS-3): at a step (the list by default), on a link opened (`escouade://team/join`). */
-  | { kind: 'team'; step?: import('../components/team/TeamModal.svelte').TeamStep; link?: string; teamId?: string }
+  | {
+      kind: 'team';
+      step?: import('../components/team/TeamModal.svelte').TeamStep;
+      link?: string;
+      teamId?: string;
+      /** The host of the server a repository names (TS-7): shown on the screen of the entry, never reached. */
+      expected?: string;
+    }
+  /** « Verser à l'équipe » (TS-7): the tickets of before poured into the team's Kanban, after a preview. */
+  | { kind: 'teamPour'; projectId: string }
   /** ESC-255: what Claude Code remembers of a project, offered once to its shared memory, memory by memory. */
   | { kind: 'claudeMemory'; projectId: string; offered: OfferedMemory[] }
   /**

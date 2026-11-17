@@ -22,11 +22,14 @@ export default defineZone('teamProjects', {
     title: 'On this device',
     attached: 'Team project',
     attach: 'Attach to the team',
-    attachHint: 'This project is a clone of this repository: it becomes a project of the team, with no new clone.',
+    attachHint:
+      'This project is a clone of this repository: it becomes a project of the team, with no new clone, and joins the list’s Kanban. Nothing leaves yet: its tickets and docs stay on this machine until “Pour into the team”, which shows them first.',
     attachedNote: 'What the team imposes and recommends holds for it.',
     otherTeam: 'A project of another team on this device.',
     nameDiffers: 'Here “{local}”, in the list “{listed}”: your name and logo stay.',
     open: 'Open',
+    boardJoined: 'The team’s Kanban joined',
+    boardOther: 'This device follows another Kanban than the list’s.',
   },
   elsewhere: {
     title: 'To clone',
@@ -41,6 +44,12 @@ export default defineZone('teamProjects', {
   access: {
     team: 'The whole team',
     members: { one: '{count} member', other: '{count} members' },
+  },
+  board: {
+    listed: 'The team’s Kanban written',
+    none: 'No Kanban of the team yet',
+    proposed: 'A member proposes their Kanban for this project: {id}',
+    accept: 'Write the Kanban',
   },
   admin: {
     add: 'Add a project',

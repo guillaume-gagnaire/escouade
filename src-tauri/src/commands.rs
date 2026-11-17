@@ -3258,6 +3258,37 @@ pub async fn project_link_team_board(
         .map_err(err)
 }
 
+/// What « Verser à l'équipe » would pour (TS-7): the tickets of ESC-190's files and those of this machine.
+#[tauri::command]
+pub async fn project_team_pour_preview(
+    core: CoreState<'_>,
+    project: String,
+) -> Res<crate::teampour::PourPreview> {
+    core.team_pour_preview(&project).await.map_err(err)
+}
+
+/// « Verser à l'équipe » (TS-7): the tickets of the files (`files`) and those of this machine named, into the team's
+/// Kanban, and the docs of `.escouade/` (`docs`) when the team has none on its server yet; the files frozen, named to
+/// be removed by hand.
+#[tauri::command]
+pub async fn project_team_pour(
+    core: CoreState<'_>,
+    project: String,
+    files: bool,
+    tickets: Vec<String>,
+    docs: Option<bool>,
+) -> Res<crate::teampour::Poured> {
+    core.team_pour(&project, files, tickets, docs.unwrap_or(false))
+        .await
+        .map_err(err)
+}
+
+/// « Ne plus proposer pour ce projet » on the band of the team a repository names (TS-7).
+#[tauri::command(async)]
+pub fn project_team_hint_dismiss(core: CoreState, project: String) -> Res<crate::model::Project> {
+    core.team_hint_dismiss(&project).map_err(err)
+}
+
 /// « Reprendre » a ticket of the team whose holder's lease ran out (TS-6).
 #[tauri::command(async)]
 pub fn ticket_team_resume(core: CoreState, id: String) -> Res<Ticket> {
@@ -5143,15 +5174,20 @@ pub async fn team_settings_retry(
     teams.settings_retry(&team).await
 }
 
-/// « Projet de l'équipe »: what the team imposes and recommends holds for this project (or no longer).
+/// « Projet de l'équipe », « Rattacher à l'équipe »: what the team imposes and recommends holds for this project (or no
+/// longer); attached, it joins the Kanban the team's list names and the key `team` of its `.escouade.yml` is written
+/// (TS-7).
 #[tauri::command]
-pub fn project_set_team(
-    core: CoreState,
+pub async fn project_set_team(
+    core: CoreState<'_>,
     project: String,
     team: Option<String>,
 ) -> Res<crate::model::Project> {
-    core.set_project_team(&project, team)
-        .map_err(|e| format!("{e:#}"))
+    match team.filter(|t| !t.trim().is_empty()) {
+        Some(team) => core.team_attach(&project, &team).await,
+        None => core.team_detach(&project),
+    }
+    .map_err(|e| format!("{e:#}"))
 }
 
 // ---------- The team's projects (TS-8) ----------
@@ -5187,6 +5223,21 @@ pub async fn team_project_put(
     listed: escouade_team::catalog::Listed,
 ) -> Res<crate::team_projects::TeamProjectsView> {
     let (_, of) = teams.catalog_put(&team, project.as_deref(), listed).await?;
+    Ok(team_projects_of(&core, &team, of).await)
+}
+
+/// An administrator's « Inscrire le Kanban »: the Kanban a member proposed for a project of the list (TS-7).
+#[tauri::command]
+pub async fn team_project_accept_board(
+    core: CoreState<'_>,
+    teams: TeamsState<'_>,
+    team: String,
+    project: String,
+) -> Res<crate::team_projects::TeamProjectsView> {
+    core.team_accept_board(&team, &project)
+        .await
+        .map_err(|e| format!("{e:#}"))?;
+    let of = teams.catalog(&team).await?;
     Ok(team_projects_of(&core, &team, of).await)
 }
 

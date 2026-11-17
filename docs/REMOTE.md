@@ -419,6 +419,9 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `project_prs`
 - `project_prs_watch`
 - `project_set_team`
+- `project_team_hint_dismiss`
+- `project_team_pour`
+- `project_team_pour_preview`
 - `refine_workflows`
 - `refresh_repos`
 - `refresh_usage`
@@ -482,6 +485,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `team_pair_join`
 - `team_pair_start`
 - `team_pair_step`
+- `team_project_accept_board`
 - `team_project_put`
 - `team_project_remove`
 - `team_projects`

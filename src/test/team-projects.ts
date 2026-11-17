@@ -29,6 +29,8 @@ export function listedProject(over: Partial<TeamProjectView> = {}): TeamProjectV
     by: ALICE,
     openToMe: true,
     here: null,
+    board: '',
+    proposed: null,
     ...over,
   };
 }

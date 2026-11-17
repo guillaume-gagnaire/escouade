@@ -3799,6 +3799,7 @@ async fn a_boards_settings_change_only_the_ones_given_and_the_core_and_the_windo
             "testsFirst": false,
             "testCommand": "npm test",
             "prefix": "DEM",
+            "team": { "attached": false, "board": false },
         })
     );
     let logged = entry(&h);

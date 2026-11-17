@@ -22,7 +22,12 @@
   import TeamProjects from './TeamProjects.svelte';
   import TeamSettings from './TeamSettings.svelte';
 
-  let { step: first = 'home', link = '', teamId: firstTeam = null }: { step?: TeamStep; link?: string; teamId?: string | null } = $props();
+  let {
+    step: first = 'home',
+    link = '',
+    teamId: firstTeam = null,
+    expected = '',
+  }: { step?: TeamStep; link?: string; teamId?: string | null; expected?: string } = $props();
 
   let step = $state<TeamStep>(untrack(() => first));
   let teamId = $state<string | null>(untrack(() => firstTeam));
@@ -94,7 +99,7 @@
   {:else if step === 'device' && teamId}
     <TeamDevice {teamId} onback={() => go('home')} />
   {:else if step === 'join'}
-    <TeamJoin {link} onback={() => go('home')} ondone={close} />
+    <TeamJoin {link} {expected} onback={() => go('home')} ondone={close} />
   {:else if step === 'pairJoin'}
     <TeamPairJoin onback={() => go('home')} ondone={close} />
   {:else}
