@@ -1,21 +1,21 @@
 ---
 title: "Les plugins d'exemple"
 subject: "plugins"
-sources: ["docs/TODO-2.1.md (PLG-10)","docs/PLUGINS.md","plugins/README.md","docs/STORE.md (§3.6, §9.2)","docs/TODO-2.2.md (décision 8)"]
-tickets: ["ESC-182","ESC-314","ESC-326","ESC-178","ESC-184","ESC-340"]
+sources: ["docs/TODO-2.1.md (PLG-10)","docs/PLUGINS.md","plugins/README.md","docs/STORE.md (§3.6, §9.2)","docs/TODO-2.2.md (décision 8)","plugins/prime-agent/ (ESC-485)"]
+tickets: ["ESC-182","ESC-314","ESC-326","ESC-178","ESC-184","ESC-340","ESC-485"]
 decisions: [4,21,25]
 compared: "2026-10-31T19:49:08+01:00"
 ---
 
 # Les plugins d'exemple
 
-Cinq plugins complets, à copier pour en écrire un, et qui servent aussi aux tests d'Escouade (banc, règles d'autorisation, revue du store). Ce sont des plugins de première main : écrits et tenus par Escouade, sous ses identifiants `dev.escouade.*`, mais pas livrés avec l'app.
+Six plugins complets, à copier pour en écrire un, et qui servent aussi aux tests d'Escouade (banc, règles d'autorisation, revue du store). Ce sont des plugins de première main : écrits et tenus par Escouade, sous ses identifiants `dev.escouade.*`, mais pas livrés avec l'app.
 
 ## Où ils vivent
 
 Dans le dépôt d'Escouade, dossier `plugins/`, un sous-dossier par plugin, nommé par la fin de son identifiant (`plugins/slack/` pour `dev.escouade.slack`), comme le seront les plugins de première main (décision 8 de TODO-2.2). Chaque dossier se lit seul, comme le dépôt d'un plugin tiers : son `escouade-plugin.json`, un `README.md` (ce qu'il fait, ses permissions en mots, comment le vérifier), sa `LICENSE` (MIT, avec la ligne `SPDX-License-Identifier: MIT`, puisque la racine du dépôt est sous GPL-3.0), son `CHANGELOG.md` et ses tests. Le `repository` de chaque manifeste est `https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/<id-court>`. Il n'y a pas de dépôt à part ; l'ancien dossier `plugin-examples/` n'existe plus.
 
-## Les cinq plugins
+## Les six plugins
 
 | Dossier | Identifiant | Ce qu'il montre | Genre |
 | --- | --- | --- | --- |
@@ -24,6 +24,7 @@ Dans le dépôt d'Escouade, dossier `plugins/`, un sous-dossier par plugin, nomm
 | `slack` | `dev.escouade.slack` | Les mêmes faits postés par `chat.postMessage` dans le salon de chaque projet : celui de `channels.json`, sinon `escouade-<nom du projet>` ; le jeton du bot (`xoxb-…`) lu au trousseau (`secrets/get`) à chaque fait ; sans jeton, ou avec un jeton qui n'est pas d'un bot, rien ne part et le journal le dit | Programme TypeScript, en WASM (`run.js`) depuis sa 2.0.0 |
 | `team-rules` | `dev.escouade.team-rules` | Les commandes des agents jugées selon `rules.json` (un fichier du dossier du plugin) : une ligne qui contient une commande refusée est refusée, même après `&&`, `;`, `&` ou `|` ; une ligne faite seulement de commandes permises est autorisée ; une substitution, une redirection ou un échappement, le reste et tout ce qui n'est pas une commande vont à l'utilisateur | Programme TypeScript, en WASM (`run.js`) depuis sa 2.0.0 |
 | `goose` | `dev.escouade.goose` | Goose comme harness, décrit par ACP et servi par le plugin livré `dev.escouade.acp` (voir *Les harness ACP décrits*) | Déclaratif |
+| `prime-agent` | `dev.escouade.prime-agent` | Prime Agent comme harness décrit par ACP dont le seul mode est Bypass, dit en clair ; il demande Escouade 2.2.2 (voir *Les harness ACP décrits*) | Déclaratif |
 
 Les programmes sont écrits avec `@escouade-dev/plugin` ; leur `dist/plugin.mjs` est compilé et versionné, car c'est lui que le store compile et que le banc joue.
 
@@ -33,7 +34,7 @@ Gemini CLI n'est pas un exemple : c'est un plugin livré avec l'app.
 
 Ils passent par le store comme ceux d'un tiers : soumis depuis leur dossier du dépôt de l'app, à une étiquette `plugins/<id-court>/v1.2.3` (jamais `v1.2.3`, réservée aux releases de l'app), puis revus et signés par le chef d'escouade. Le store n'accepte leurs identifiants que de ce dépôt (voir « Publier et sécurité »), et l'app ne les installe que signés (voir « Le store dans l'app »). Pour en faire le sien, un auteur copie le dossier et lui donne un identifiant à lui (`io.github.<login>.<plugin>`).
 
-Au 2026-11-04, sont publiés et signés : `high-contrast` 1.1.0, `discord` 1.1.0, `slack` 1.1.0 et `team-rules` 1.1.1. `slack` et `team-rules` 2.0.0 attendent la compilation au store en production (ESC-328) : les versions publiées se lancent encore par Node, qu'une machine sans Node n'a pas. `goose` n'est pas soumis.
+Au 2026-11-04, sont publiés et signés : `high-contrast` 1.1.0, `discord` 1.1.0, `slack` 1.1.0 et `team-rules` 1.1.1. `slack` et `team-rules` 2.0.0 attendent la compilation au store en production (ESC-328) : les versions publiées se lancent encore par Node, qu'une machine sans Node n'a pas. `goose` n'est pas soumis. `prime-agent` 1.0.0 (ESC-485) n'est ni signé ni soumis.
 
 ## Ce qui les tient
 
@@ -47,5 +48,7 @@ Au 2026-11-04, sont publiés et signés : `high-contrast` 1.1.0, `discord` 1.1.0
 ## La CI de `plugins/`, pour tous les plugins du dossier
 
 Depuis ESC-340, `plugins/ci.mjs` ne juge plus seulement ces cinq plugins, mais tous ceux de `plugins/`, y compris ceux que l'app livre encore. Pour chacun : sa `LICENSE` et son `CHANGELOG.md`, non vides ; `escouade-plugin validate` (`--builtin` tant que son programme est `{escouade}/escouade-plugins`). Pour un plugin avec `Cargo.toml` : `cargo test`, tous les crates en une passe, et la version du manifeste face à celle du crate. Un manifeste à `0.0.0` n'est admis que pour un plugin dont l'app stampe la version. Le banc joue les `run.js` et les `run.wasm` (après `escouade-plugin build`) ; il ne joue pas un plugin servi par `escouade-plugins`.
+
+Chaque plugin est jugé (`--escouade`) pour la version qui sert son genre (`wasm-since` de `escouade-plugin --version`), ou pour son propre `escouade.min` quand il en demande une plus récente (ESC-485 : Prime Agent demande 2.2.2) ; jugé pour une app plus ancienne, il serait refusé comme trop récent.
 
 `--changed [<révision>]` ne prend que les plugins touchés depuis cette révision, par défaut depuis le point où la branche a quitté `main`, et ceux qui en dépendent par `path`. Tous passent quand bouge ce qui les juge ou les construit (`crates/`, `schemas/`, `sdk/plugin/`, le code des plugins dans l'app, `Cargo.lock`, le script), et quand git ne sait pas comparer. En CI Linux, tout sur `main`, `--changed` sur une pull request.

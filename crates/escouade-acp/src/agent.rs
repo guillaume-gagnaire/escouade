@@ -37,6 +37,9 @@ enum Ours {
     Setting(String),
     /// Cursor's `cursor/list_available_models`: the option of each model's effort.
     Models,
+    /// `session/set_config_option` of a harness with no extension: its answer tells the options of the session as they
+    /// are now (a model that reasons has the option of its effort, ESC-491); only an error of it is said.
+    Config,
     /// The request whose answer tells Gemini's replay of a `session/load` is behind (`Agent::settling`).
     Settled,
 }
@@ -172,6 +175,24 @@ pub struct Agent {
     told_mode: Option<String>,
     /// What the turn spent, as the answer to its prompt told it.
     usage: TurnUsage,
+    /// The instructions (and the summary of what was done, `LaunchParams::recap`) held for a session to resume: given
+    /// to a new one if the harness does not take it back (ESC-491).
+    held: Option<String>,
+    /// The id the harness keeps its session under, when it is not the session's (`AcpDecl::resume`): the one the core
+    /// keeps and resumes.
+    kept: Option<String>,
+    /// What Escouade knows of what the agent did, held with `held`, then sent before the next message of a new session.
+    held_recap: Option<String>,
+    recap: Option<String>,
+    /// What its context holds and its window, as last told (`AcpDecl::usage`, `usage_update`).
+    context: (Option<u64>, Option<u64>),
+    /// The value of its option of reasoning asked last (`thought_lines`): not asked again before the effort or the model
+    /// changes (its session tells its options twice, by `config_option_update` and the answer).
+    effort_asked: Option<String>,
+    /// A turn the harness began by itself (no prompt asked it, ESC-491) is under way.
+    own: bool,
+    /// The items of the answer to a call that ends such a turn (a message, a stop), taken by `take_items`.
+    told_items: Vec<Item>,
 }
 
 fn line(v: Value) -> String {
@@ -203,6 +224,26 @@ fn tag_of(key: &str) -> String {
     } else {
         format!("{}-", end.chars().rev().collect::<String>())
     }
+}
+
+/// Whether `id`, a session's, can go in a command line as it is (`AcpDecl::resume`): letters, digits, `-`, `_`, `.`
+/// and `:`, never first a `-` (it would be an option).
+fn safe_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 200
+        && !id.starts_with('-')
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | ':'))
+}
+
+/// Whether the value `v` of an option of models, made of parts (Unharnessed's and Prime Agent's
+/// `["ollama","qwen3"]`, as a text of JSON), is `model`: its last part, or its parts joined by `/` (ESC-491).
+fn composed(v: &str, model: &str) -> bool {
+    let Ok(parts) = serde_json::from_str::<Vec<String>>(v) else {
+        return false;
+    };
+    !model.is_empty() && (parts.last().is_some_and(|p| p == model) || parts.join("/") == model)
 }
 
 /// The request of the client's own that holds the plan of a turn in Vibe's mode Plan, played here.
@@ -295,6 +336,14 @@ impl Agent {
             block: None,
             told_mode: None,
             usage: TurnUsage::default(),
+            held: None,
+            held_recap: None,
+            recap: None,
+            context: (None, None),
+            effort_asked: None,
+            kept: None,
+            own: false,
+            told_items: Vec::new(),
         };
         agent.attach(a);
         agent
@@ -451,8 +500,19 @@ impl Agent {
                 crate::questions::QUESTIONS
             );
         }
-        self.instructions = Some(instructions)
-            .filter(|i| !i.trim().is_empty() && (self.gemini || matches!(p.start, StartAt::New)));
+        let given = Some(instructions).filter(|i| !i.trim().is_empty());
+        let resuming = matches!(p.start, StartAt::Resume { .. });
+        // A session to resume has them already; one the harness does not take back is given them again, with what
+        // Escouade knows of what was done (ESC-491). Gemini's go before its first message whatever the start.
+        self.held = given.clone().filter(|_| resuming && !self.gemini);
+        self.held_recap = p
+            .recap
+            .clone()
+            .filter(|r| resuming && !self.gemini && !r.trim().is_empty());
+        self.recap = None;
+        self.kept = None;
+        self.own = false;
+        self.instructions = given.filter(|_| self.gemini || matches!(p.start, StartAt::New));
         self.relay = p.relay.clone().filter(|r| !r.trim().is_empty());
         self.by_key = p.by_key;
         if !self.fence.is_empty() && !self.acp.fs && !self.acp.fence_on_permissions {
@@ -489,8 +549,16 @@ impl Agent {
             }),
             Ours::Initialize,
         );
+        let mut args = self.acp.args.clone();
+        // The arguments its process takes a session back with (`AcpDecl::resume`), for an id that can be no other
+        // argument.
+        if let (StartAt::Resume { session }, Some(r)) = (&p.start, &self.acp.resume) {
+            if safe_id(session) {
+                args.extend(r.args.iter().map(|a| a.replace("{session}", session)));
+            }
+        }
         Ok(Launch {
-            args: self.acp.args.clone(),
+            args,
             env: self
                 .acp
                 .env
@@ -632,6 +700,10 @@ impl Agent {
                         .as_ref()
                         .map(|(u, t)| (u.as_str(), t.as_str())),
                 );
+                if matches!(self.start, StartAt::Resume { .. }) && !self.can_load {
+                    let said = texts::no_load(&self.lang, &self.name);
+                    self.fresh_session(said, out);
+                }
                 let line = match self.start.clone() {
                     StartAt::Resume { session } if self.can_load => {
                         self.loading = true;
@@ -668,19 +740,19 @@ impl Agent {
                     None => {
                         // Its session has them already.
                         self.instructions = None;
+                        self.held = None;
+                        self.held_recap = None;
                         self.settling = self.gemini;
                         self.opened(session, &result, out)
                     }
                     Some(e) => {
-                        // Gone: a new session, said.
-                        out.push(notice(
-                            texts::not_resumed(&self.lang, &self.name),
-                            "warning",
-                        ));
+                        // Gone: a new session, said, given the instructions again (ESC-491).
                         let _ = e;
                         if !self.gemini {
                             self.instructions = None;
                         }
+                        let said = texts::not_resumed(&self.lang, &self.name);
+                        self.fresh_session(said, out);
                         let mcp = crate::mcp_servers(
                             self.escouade
                                 .as_ref()
@@ -760,6 +832,22 @@ impl Agent {
                 }
                 self.turn_end(cancelled, out);
             }
+            Ours::Config => match error {
+                Some(e) => {
+                    let what = "session/set_config_option";
+                    let text =
+                        texts::not_translated(&self.lang, &self.name, &format!("{what}: {e}"));
+                    out.push(notice(text, "warning"));
+                }
+                // A model that reasons brings the option of its effort: set now.
+                None if result["configOptions"].is_array() => {
+                    self.options = result["configOptions"].clone();
+                    for l in self.effort_lines() {
+                        out.push(write(l));
+                    }
+                }
+                None => {}
+            },
             Ours::Setting(what) => {
                 if let Some(e) = error {
                     let text =
@@ -802,9 +890,22 @@ impl Agent {
 
     /// The session is open: its mode and model set, the first message waiting sent.
     fn opened(&mut self, session: String, result: &Value, out: &mut Vec<Item>) {
+        // The id the harness keeps it under, when it is not the session's (`AcpDecl::resume`): the one the core keeps.
+        let kept = self
+            .acp
+            .resume
+            .as_ref()
+            .and_then(|r| r.session.as_deref())
+            .and_then(|p| result.pointer(p))
+            .and_then(Value::as_str)
+            .filter(|k| safe_id(k))
+            .map(str::to_string);
+        if kept.is_some() {
+            self.kept = kept;
+        }
         // The session is the agent's from now on, a turn or not (a copy has its own as soon as it starts).
         out.push(Item::Session {
-            session: session.clone(),
+            session: self.kept.clone().unwrap_or_else(|| session.clone()),
         });
         self.session = Some(session);
         self.open = true;
@@ -846,7 +947,7 @@ impl Agent {
     /// The session given to the core, once.
     fn tell(&mut self, out: &mut Vec<Item>) {
         if !self.told {
-            if let Some(s) = &self.session {
+            if let Some(s) = self.kept.as_ref().or(self.session.as_ref()) {
                 self.told = true;
                 out.push(Item::Start {
                     session: Some(s.clone()),
@@ -900,7 +1001,7 @@ impl Agent {
         listed
             .iter()
             .filter_map(|o| o["value"].as_str())
-            .find(|v| *v == model || v.starts_with(&format!("{model}[")))
+            .find(|v| *v == model || v.starts_with(&format!("{model}[")) || composed(v, model))
             .map(str::to_string)
             .unwrap_or_else(|| {
                 if self.cursor {
@@ -915,8 +1016,12 @@ impl Agent {
         let Some(session) = self.session.clone() else {
             return Vec::new();
         };
+        // No model of its own (its harness's default): its effort alone, on a harness with no extension (ESC-491).
         if self.model.is_empty() {
-            return Vec::new();
+            if self.cursor || self.vibe || self.gemini {
+                return Vec::new();
+            }
+            return self.effort_lines();
         }
         // A model the session of Vibe or Gemini does not offer (another harness's, after a handover) is left to its
         // default.
@@ -933,10 +1038,11 @@ impl Agent {
         let mut lines = match self.acp.model_option.clone() {
             Some(key) => {
                 let value = self.model_value(&key);
+                let ours = self.config_or_setting();
                 vec![self.request(
                     "session/set_config_option",
                     json!({ "sessionId": session, "configId": key, "value": value }),
-                    Ours::Setting("session/set_config_option".into()),
+                    ours,
                 )]
             }
             None => vec![self.request(
@@ -967,6 +1073,9 @@ impl Agent {
                 Ours::Setting("session/set_config_option".into()),
             )];
         }
+        if !self.cursor && !self.acp.efforts.is_empty() {
+            return self.thought_lines();
+        }
         let Some(session) = self.session.clone().filter(|_| self.cursor) else {
             return Vec::new();
         };
@@ -990,6 +1099,10 @@ impl Agent {
             // Gemini's are made already (`launch`): its questions' rules stand beside them.
             let text = if self.gemini { i } else { crate::preamble(&i) };
             blocks.push(json!({ "type": "text", "text": text }));
+        }
+        // What was done, for a new session in place of one lost (ESC-491).
+        if let Some(r) = self.recap.take() {
+            blocks.push(json!({ "type": "text", "text": r }));
         }
         // Vibe has no mode Plan: each prompt of Escouade's says what it asks.
         if self.vibe && self.mode == "plan" {
@@ -1021,11 +1134,19 @@ impl Agent {
             Some(b) => b.clone(),
             None => vec![json!({ "type": "text", "text": text })],
         };
+        // A message ends a turn the harness began by itself: closed first, its text its own (ESC-491).
+        let mut lines = Vec::new();
+        if self.own {
+            let mut out = Vec::new();
+            self.turn_end(false, &mut out);
+            lines = self.told(out);
+        }
         if !self.open || self.busy {
             self.queue.push_back(blocks);
-            return Vec::new();
+            return lines;
         }
-        vec![self.prompt(blocks)]
+        lines.push(self.prompt(blocks));
+        lines
     }
 
     /// `session/cancel`; what the agent waits the user for is answered cancelled, as ACP wants it.
@@ -1050,6 +1171,12 @@ impl Agent {
         out.push(line(json!({
             "jsonrpc": "2.0", "method": "session/cancel", "params": { "sessionId": session },
         })));
+        // A turn the harness began by itself has no prompt whose answer would end it: it ends here, interrupted.
+        if self.own {
+            let mut items = Vec::new();
+            self.turn_end(true, &mut items);
+            out.extend(self.told(items));
+        }
         out
     }
 
@@ -1060,11 +1187,13 @@ impl Agent {
 
     pub fn set_model(&mut self, model: &str) -> Vec<String> {
         self.model = model.to_string();
+        self.effort_asked = None;
         self.model_lines()
     }
 
     pub fn set_effort(&mut self, effort: &str) -> Vec<String> {
         self.effort = effort.to_string();
+        self.effort_asked = None;
         self.effort_lines()
     }
 
@@ -1707,7 +1836,37 @@ impl Agent {
         let Some(parent) = self.owner(p["sessionId"].as_str()) else {
             return;
         };
+        let plain = !self.cursor && !self.vibe && !self.gemini;
+        // A turn the harness begins by itself, no prompt under way (Unharnessed once a command of its last cell ended):
+        // a turn of its own, the agent at work until it ends (ESC-491). Only for a harness whose manifest says how such a
+        // turn ends (`turn_end`): another's words after the answer to its prompt stay as they were (its streams, played
+        // against their recordings).
+        let content = matches!(
+            kind,
+            "agent_message_chunk" | "agent_thought_chunk" | "tool_call" | "plan"
+        );
+        let own_turns = plain && !self.acp.turn_end.is_empty();
+        if own_turns && parent.is_none() && content && !self.busy && self.open {
+            self.own = true;
+            self.busy = true;
+            self.cut = false;
+            self.turn_text.clear();
+            self.told = false;
+        }
         self.tell(out);
+        if plain && parent.is_none() {
+            self.context_told(u, out);
+            if kind == "config_option_update" && u["configOptions"].is_array() {
+                self.options = u["configOptions"].clone();
+                for l in self.effort_lines() {
+                    out.push(write(l));
+                }
+            }
+            // Its own turn ends where its manifest says (`AcpDecl::turn_end`).
+            if self.own && self.ends_own_turn(u) {
+                return self.turn_end(false, out);
+            }
+        }
         match kind {
             "agent_message_chunk" | "agent_thought_chunk" => {
                 let Some(text) = u["content"]["text"].as_str().filter(|t| !t.is_empty()) else {
@@ -2196,6 +2355,11 @@ impl Agent {
     /// The turn closed: its question asked if it ended on one, else its end given; the next message waiting sent.
     fn close_turn(&mut self, cancelled: bool, out: &mut Vec<Item>) {
         self.busy = false;
+        // A turn of the harness's own over: the next one, a prompt's, is told again as it begins (the core closed this
+        // one, a message waiting behind it).
+        if std::mem::take(&mut self.own) {
+            self.told = false;
+        }
         self.reports.clear();
         // What Vibe's session spent in the turn: what it grew by since the turn began.
         if self.vibe {
@@ -2271,6 +2435,126 @@ impl Agent {
         }
     }
 
+    /// A session to resume that the harness does not take back (`loadSession` false, or its session gone): the new one
+    /// gets the instructions held and what was done (ESC-491), said in one line.
+    fn fresh_session(&mut self, said: String, out: &mut Vec<Item>) {
+        if let Some(i) = self.held.take() {
+            self.instructions = Some(i);
+        }
+        self.recap = self.held_recap.take();
+        let text = if self.instructions.is_some() || self.recap.is_some() {
+            format!(
+                "{}. {}",
+                said.trim_end_matches('.'),
+                texts::given_again(&self.lang, self.recap.is_some())
+            )
+        } else {
+            said
+        };
+        out.push(notice(text, "warning"));
+    }
+
+    /// The items of the answer to the call under way (a message or a stop that ended a turn of the harness's own), its
+    /// lines apart: what `agent/sendMessage` and `agent/interrupt` answer beside their writes.
+    pub fn take_items(&mut self) -> Vec<Item> {
+        std::mem::take(&mut self.told_items)
+    }
+
+    /// The items `out` kept for the answer to the call under way, the lines they hold given back.
+    fn told(&mut self, out: Vec<Item>) -> Vec<String> {
+        let mut lines = Vec::new();
+        for item in out {
+            match item {
+                Item::Write { line } => lines.push(line),
+                other => self.told_items.push(other),
+            }
+        }
+        lines
+    }
+
+    /// Whether `u` ends a turn the harness began by itself (`AcpDecl::turn_end`).
+    fn ends_own_turn(&self, u: &Value) -> bool {
+        self.acp.turn_end.iter().any(|marks| {
+            !marks.is_empty() && marks.iter().all(|(at, v)| u.pointer(at) == Some(&v.0))
+        })
+    }
+
+    /// What its context holds and the window of its model, where its manifest says (`AcpDecl::usage`), else ACP's
+    /// `usage_update` (`used`, `size`): told when it changes, never guessed.
+    fn context_told(&mut self, u: &Value, out: &mut Vec<Item>) {
+        let at = |p: Option<&String>| p.and_then(|p| u.pointer(p)).and_then(Value::as_u64);
+        let told = match &self.acp.usage {
+            Some(us) => (at(us.context.as_ref()), at(us.window.as_ref())),
+            None if u["sessionUpdate"] == "usage_update" => {
+                (u["used"].as_u64(), u["size"].as_u64())
+            }
+            None => (None, None),
+        };
+        if told == (None, None) {
+            return;
+        }
+        let now = (told.0.or(self.context.0), told.1.or(self.context.1));
+        if now != self.context {
+            self.context = now;
+            out.push(Item::Context {
+                tokens: now.0,
+                window: now.1,
+            });
+        }
+    }
+
+    /// The setting of an option of a harness with no extension (`Ours::Config`), else as before.
+    fn config_or_setting(&self) -> Ours {
+        if self.cursor || self.vibe || self.gemini {
+            Ours::Setting("session/set_config_option".into())
+        } else {
+            Ours::Config
+        }
+    }
+
+    /// The effort by the option of reasoning its session offers (`AcpDecl::efforts`, ESC-491): the value its manifest
+    /// gives Escouade's effort, when the option has it and is not on it already; nothing otherwise.
+    fn thought_lines(&mut self) -> Vec<String> {
+        let Some(session) = self.session.clone() else {
+            return Vec::new();
+        };
+        let Some(value) = self.acp.efforts.get(&self.effort).cloned() else {
+            return Vec::new();
+        };
+        let wanted = self.acp.effort_option.clone();
+        let option = self
+            .options
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|o| match &wanted {
+                Some(id) => o["id"] == id.as_str(),
+                None => o["category"] == "thought_level",
+            })
+            .cloned();
+        let Some(option) = option else {
+            return Vec::new();
+        };
+        let offered = option["options"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .any(|o| o["value"] == value.as_str());
+        if !offered
+            || option["currentValue"] == value.as_str()
+            || self.effort_asked.as_deref() == Some(value.as_str())
+        {
+            return Vec::new();
+        }
+        self.effort_asked = Some(value.clone());
+        let id = option["id"].as_str().unwrap_or_default().to_string();
+        vec![self.request(
+            "session/set_config_option",
+            json!({ "sessionId": session, "configId": id, "value": value }),
+            Ours::Config,
+        )]
+    }
+
     /// A request of Cursor's own (`cursor/*`).
     fn cursor_asks(&mut self, method: &str, id: Value, params: Value, out: &mut Vec<Item>) {
         self.tell(out);
@@ -2341,3 +2625,7 @@ impl Agent {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "agent_tests.rs"]
+mod tests;

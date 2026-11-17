@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.5
+
+- After a restart, an agent whose harness does not take its session back (`loadSession: false`, or a session lost) says so, and its new session gets its instructions again with a summary of what it did. A manifest can say how its harness resumes a session (`acp.resume`).
+- A turn a harness begins by itself is a turn of the conversation: the agent is at work, then at rest, and its text is no longer the start of the next answer (`acp.turnEnd`).
+- The effort goes by the option of reasoning a harness offers (`acp.efforts`, `thought_level`); a model whose value is made of parts (`["ollama","qwen3"]`) is found by its name; what a harness tells of its context is read where its manifest says (`acp.usage`). Built on escouade-acp 0.1.7.
+
 ## 2.2.3
 
 - Its messages, README and documentation send to the settings pages of Escouade 2.2: Accounts and harnesses (ESC-387).

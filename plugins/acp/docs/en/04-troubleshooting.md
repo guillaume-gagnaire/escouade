@@ -34,7 +34,10 @@ The ACP plugin, or the plugin that describes the harness, is off, uninstalled or
 The agent touched a file by itself while a fence holds. The message comes once per agent. It isn’t an error of the plugin: it is that harness’s limit.
 
 **“The {harness} session couldn’t be resumed: new session (context cleared)”**
-The agent didn’t find its session. It goes on, without the earlier context.
+The agent didn’t find its session. It goes on, without the earlier context; the line adds “Its instructions are given again with its next message” when it has some (a ticket’s protocol), and “a summary of what it did” when Escouade knows it.
+
+**“{harness} doesn’t resume its session: the agent starts again on a new session.”**
+The harness loads no session (`loadSession: false`), and its manifest does not say how to take one back (`acp.resume`). After a restart, the agent goes on on a new session, its instructions and a summary given again with its next message.
 
 **“{harness}: {error}”**
 The agent ended the turn in an error, or refused a setting (`session/set_mode: …`, the model), in its own words.

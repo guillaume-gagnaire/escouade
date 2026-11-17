@@ -89,6 +89,12 @@ L’objet `acp` :
 - `modelOption` : l’option de configuration du modèle (`session/set_config_option`), sinon `session/set_model` ;
 - `questionsInText` : l’agent n’a pas d’outil pour poser une question ; son premier message lui dit de finir son tour sur un bloc `<escouade_question>`, qu’Escouade montre comme une carte ;
 - `tools` : le nom d’Escouade (celui de Claude Code) de ses outils de genre `other` (`{ "shell": "Bash" }`) ; `subagentTools` : ceux qui lancent un sous-agent ;
-- `extensions` : `cursor` et `gemini`, pour les extensions de Cursor CLI et de Gemini CLI.
+- `extensions` : `cursor` et `gemini`, pour les extensions de Cursor CLI et de Gemini CLI ;
+- `resume` : les arguments qui reprennent une session au lancement (`["--resume", "{session}"]`) et, dans `session`, un pointeur JSON vers l’id sous lequel le harness la garde (réponse à `session/new`) ;
+- `turnEnd` : les pointeurs JSON et leurs valeurs qui finissent un tour que le harness lance seul ; avec lui, ce tour est un tour de la conversation ;
+- `efforts` et `effortOption` : la valeur de son option de réflexion (`thought_level` par défaut) pour chaque effort d’Escouade ;
+- `usage` : les pointeurs JSON de ce que tient son contexte (`context`) et de sa fenêtre (`window`).
+
+Ces quatre derniers demandent Escouade 2.2.3 ; une version plus ancienne les ignore, et le harness marche comme avant.
 
 Pour l’essayer, installe le dossier du plugin depuis la vue Plugins (« Depuis un dossier… »), puis choisis son harness. `escouade-plugin validate <dossier>` lit le manifeste comme l’app.

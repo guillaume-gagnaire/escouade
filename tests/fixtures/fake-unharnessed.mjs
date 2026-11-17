@@ -8,7 +8,7 @@
 // each message pick what it plays:
 //   python — a cell (`print(2 ** 100)`) and its output, then a reply;  long — a cell that waits, stopped by
 //   session/cancel (the cell « Tool execution aborted », the turn `cancelled`);  réveil — a reply, then a turn of its
-//   own (a wake), no prompt asked;  serveurs — the MCP servers its session was given (names and header names, no
+//   own (a wake), no prompt asked, ended by the phases the real one ends its turns with;  serveurs — the MCP servers its session was given (names and header names, no
 //   value);  anything else — « Unharnessed a reçu : <text> ».
 // Sessions are kept in $UNHARNESSED_CODING_AGENT_DIR/sessions/<id>.json. Each message, and the launch ({launch: {argv,
 // home}}), goes to $FAKE_UNHARNESSED_LOG when set.
@@ -178,6 +178,16 @@ async function prompt(msg) {
       false,
     );
     say(id, s, 'Réveillé par la fin de sa commande.', wake);
+    // Its end, as the real one marks the end of each of its turns (tests/fixtures/unharnessed/full-turn.jsonl).
+    const phase = (p, more) =>
+      update(
+        id,
+        s,
+        { sessionUpdate: 'session_info_update', _meta: { unharnessed: { ...meta(wake).unharnessed, phase: p, ...more } } },
+        false,
+      );
+    phase('responseBoundary', { outcome: 'result', terminalQuiescenceExpected: true });
+    phase('terminalQuiescence', { outcome: 'result', quiescence: { remainingAutonomousContinuations: 0 } });
   }
 }
 

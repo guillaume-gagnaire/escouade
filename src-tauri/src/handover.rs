@@ -392,6 +392,33 @@ pub fn dossier(d: &Dossier) -> String {
             "This work is the ticket {ticket}. Its protocol (acceptance criteria, loop, report) is in your instructions: follow it as before.\n\n"
         ));
     }
+    body(d, out)
+}
+
+/// What a new session of the agent's own harness is told when its session could not be taken back (ESC-491): the
+/// same file, worded as a resume, after its instructions.
+pub fn recap(d: &Dossier) -> String {
+    let lang = d.lang;
+    let from = d.from;
+    let mut out = tr_in!(
+        lang,
+        "# Reprise : ta session d’avant n’a pas pu être reprise\n\n{from} n’a pas repris la session de cet agent : tu repars d’une session neuve, dans le même dossier de travail, sur la même branche. Ce résumé dit ce qui a été fait jusqu’ici. Continue là où le travail s’est arrêté, sans refaire ce qui est fait ; vérifie l’état des fichiers avant de les modifier.\n\n",
+        "# Resume: your session before could not be taken back\n\n{from} didn’t take back this agent’s session: you start again on a new session, in the same working folder, on the same branch. This summary says what was done so far. Go on where the work stopped, without redoing what is done; check the files before you change them.\n\n"
+    );
+    if let Some(ticket) = d.ticket {
+        out.push_str(&tr_in!(
+            lang,
+            "Ce travail est le ticket {ticket}. Son protocole (critères d’acceptation, boucle, bilan) est dans tes consignes : suis-le comme avant.\n\n",
+            "This work is the ticket {ticket}. Its protocol (acceptance criteria, loop, report) is in your instructions: follow it as before.\n\n"
+        ));
+    }
+    body(d, out)
+}
+
+/// The rest of a handover file after its head `out`: the requests, the work, the files and what was cut, bounded by
+/// `d.budget`.
+fn body(d: &Dossier, mut out: String) -> String {
+    let lang = d.lang;
     let room = d.budget.saturating_sub(out.chars().count());
     // The end of the work weighs the most: what was cut, then the files, the work, the requests.
     let cut = cut(d);
@@ -702,6 +729,45 @@ impl<R: Runtime> Core<R> {
             .filter(|m| pace::judge_meter(m, threshold, now).standing == Standing::Out)
             .filter_map(|m| m.resets_at)
             .max()
+    }
+
+    /// What the agent did so far, for a new session of its own harness in place of the one it could not take back
+    /// (`handover::recap`, ESC-491): None when its conversation holds nothing yet.
+    pub(crate) async fn recap_of(&self, h: &crate::agent::AgentHandle) -> Option<String> {
+        let (cwd, base, ticket, engine) = {
+            let rt = h.lock();
+            let base = rt.meta.worktree.as_ref().map(|w| w.base_branch.clone());
+            (
+                rt.meta.cwd.clone(),
+                base,
+                rt.meta.ticket_id.clone(),
+                rt.meta.engine,
+            )
+        };
+        let ticket = ticket
+            .and_then(|t| self.ticket(&t).ok())
+            .map(|t| format!("{} — {}", t.key, t.title));
+        let changes = self.changes_of(&cwd, base.as_deref()).await;
+        let to = engine::by_id(engine);
+        let mut rt = h.lock();
+        let items = rt.conv.items();
+        if !items
+            .iter()
+            .any(|i| i["kind"] == "user" || i["kind"] == "text")
+        {
+            return None;
+        }
+        Some(recap(&Dossier {
+            lang: self.lang().claude,
+            from: engine::by_name(engine),
+            limited: false,
+            items: &items,
+            plan: rt.meta.plan.as_ref(),
+            progress: rt.meta.progress_line.as_deref(),
+            changes: &changes,
+            ticket: ticket.as_deref(),
+            budget: budget(to.context_window(&rt.meta.model)),
+        }))
     }
 
     /// What git says of the agent's folder for its handover file.

@@ -1488,7 +1488,18 @@ impl Engine for ProcessEngine {
         self.efforts
     }
     fn supports_effort(&self, model: &str) -> bool {
+        // A described harness with an effort table (`acp.efforts`, ESC-491) takes one on any model it does not list
+        // without: its client sets it only where the session offers the option.
+        let table = self
+            .decl
+            .acp
+            .as_ref()
+            .is_some_and(|a| !a.efforts.is_empty());
         self.models.iter().any(|m| m.id == model && m.effort)
+            || (table && !self.models.iter().any(|m| m.id == model))
+    }
+    fn takes_recap(&self) -> bool {
+        self.described
     }
     fn supports_auto(&self, _: &str) -> bool {
         false
@@ -2129,6 +2140,7 @@ impl ProcessEngineProcess {
                 }
                 Escouade::Granted { .. } => None,
             },
+            recap: spawn.recap.clone(),
         };
         let settings = params.settings.clone();
         let v = self

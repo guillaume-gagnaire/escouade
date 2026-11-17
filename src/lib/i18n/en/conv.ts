@@ -184,6 +184,7 @@ export default defineZone('conv', {
     /** The link of the page an `Artifact` call published (ESC-400), opened in the browser. */
     openArtifact: 'Open the artifact',
     openArtifactTip: 'Open {url} in the browser',
+    whole: { one: 'All of {key} ({count} line)', other: 'All of {key} ({count} lines)' },
     running: 'running',
     subTools: { one: '{count} tool', other: '{count} tools' },
     more: { one: 'Show the rest ({count} character)', other: 'Show the rest ({count} characters)' },

@@ -99,14 +99,22 @@ Chaque entrée de `contributes.harnesses` avec un objet `acp` est un harness dé
 - `modelOption` : l’option de configuration du modèle (`session/set_config_option`), sinon `session/set_model` ;
 - `questionsInText` : l’agent n’a pas d’outil pour poser une question ; son premier message lui dit de finir son tour sur un bloc `<escouade_question>`, qu’Escouade montre comme une carte de question ;
 - `tools` : le nom d’Escouade (celui de Claude Code) de ses outils de genre `other` (`{ "shell": "Bash" }`), lus dans `_meta.<agent>.toolCall.toolName` ou dans leur titre avant « · » ; `subagentTools` : ceux qui lancent un sous-agent ;
-- `extensions` : `cursor` pour les extensions `cursor/*` de Cursor CLI.
+- `extensions` : `cursor` pour les extensions `cursor/*` de Cursor CLI ;
+- `resume` : comment il reprend une session qu’il ne recharge pas tel quel, depuis Escouade 2.2.3 : `args`, les arguments ajoutés au lancement (`["--resume", "{session}"]`, `{session}` est l’id de la session, qui ne peut pas être une option), et `session`, un pointeur JSON vers l’id sous lequel il garde la session dans la réponse à `session/new` (`/_meta/<agent>/saved/sessionId`), quand ce n’est pas celui de la session ;
+- `turnEnd` : ce qui finit un tour qu’il lance seul (sans `session/prompt`), et qui fait de ce tour un tour de la conversation : une liste d’entrées, chacune des pointeurs JSON dans `update` d’un `session/update` et la valeur que chacun doit avoir (`{ "/_meta/<agent>/phase": "terminalQuiescence" }`) ;
+- `efforts` : la valeur de son option de réflexion pour chaque effort d’Escouade (`{ "low": "low", "high": "high" }`), comme `modes` pour ses modes ; `effortOption` : l’id de cette option, sinon celle de la catégorie `thought_level`. L’option n’est posée que quand la session l’offre (un modèle qui raisonne) avec cette valeur ; déclare aussi les efforts du menu (`efforts` du harness) ;
+- `usage` : où ses `session/update` disent ce que tient son contexte (`context`) et la fenêtre de son modèle (`window`), des pointeurs JSON dans leur `update`. Sans lui, Escouade lit `usage_update` d’ACP (`used`, `size`).
+
+Une valeur d’option faite de parties (`["ollama","qwen3"]`, en texte JSON) est trouvée par sa dernière partie ou ses parties jointes par `/` : le modèle `qwen3` ou `ollama/qwen3`. Un manifeste d’avant ces champs marche tel quel : une version d’Escouade qui ne les connaît pas les ignore.
 
 ## Ce qu’Escouade tient
 
 - **Le lancement.** Escouade trouve le programme, demande au plugin ACP comment le lancer, vérifie la description et le lance lui-même. Le serveur MCP d’Escouade est donné à la session (`mcpServers`), son jeton dans un en-tête, sur l’entrée de l’agent : jamais dans ses arguments.
 - **Les permissions.** Chaque permission demandée est une carte, avec son diff pour une écriture. « Édits auto » laisse passer les écritures dans le dossier de l’agent, « Bypass » tout ce qu’il demande.
 - **Les projets privés.** Escouade refuse les fichiers d’un autre projet que l’agent lit ou écrit par lui. Quand l’agent lit ou écrit un fichier lui-même pendant qu’une clôture tient, la conversation le dit : la clôture ne tient pas pour ces accès. Un harness déclaré `"fs": false` ne démarre pas dans un projet privé.
-- **Ce qu’ACP ne dit pas** reste inconnu : le quota, le coût, les comptes. Les jetons d’un tour sont comptés quand l’agent les donne.
+- **Ce qu’ACP ne dit pas** reste inconnu : le quota, le coût, les comptes. Les jetons d’un tour sont comptés quand l’agent les donne ; rien n’est estimé.
+- **La reprise.** Après un redémarrage, Escouade recharge la session de l’agent (`session/load`) quand le harness le sait (`loadSession`, ou `resume`). Sinon, ou si la session est perdue, l’agent repart d’une session neuve, la conversation le dit, et son prochain message redonne ses consignes (le protocole de son ticket) avec un résumé de ce qu’il a fait.
+- **Les tours qu’il lance seul.** Quand son manifeste dit comment ils finissent (`turnEnd`), ce que l’agent dit sans qu’un message le lui demande est un tour à lui : l’agent passe au travail, son texte reste dans ce tour, et il revient au repos à cette fin, ou au message suivant, ou à l’arrêt. Sans `turnEnd`, rien ne change.
 
 Un plugin désinstallé ou désactivé (ou le plugin ACP lui-même) : ses agents restent, marqués « Harness absent », avec leurs conversations. Ils reviennent avec lui. L’id d’un harness décrit est `plugin:<plugin>:<harness>`.
 

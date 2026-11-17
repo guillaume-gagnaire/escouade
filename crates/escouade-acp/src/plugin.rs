@@ -48,6 +48,18 @@ fn writes(lines: Vec<String>) -> Result<Value, Refusal> {
 }
 
 /// A refusal that will not change (`Refused`): the launch cannot hold what is asked.
+/// The lines to write, and the items to apply beside them (the end of a turn of the harness's own, ESC-491): the core
+/// writes the lines first, then applies the items.
+fn writes_and_items(
+    lines: Vec<String>,
+    items: Vec<escouade_plugin_protocol::engine::Item>,
+) -> Result<Value, Refusal> {
+    if items.is_empty() {
+        return writes(lines);
+    }
+    Ok(serde_json::json!({ "writes": lines, "items": items }))
+}
+
 fn refused(message: String) -> Refusal {
     Refusal {
         code: -32010,
@@ -161,14 +173,15 @@ impl Plugin {
             }
             method::SEND_MESSAGE => {
                 let s: SendMessage = read(params)?;
-                writes(
-                    self.agent(&s.agent)?
-                        .send_content(&s.text, s.content.as_ref()),
-                )
+                let agent = self.agent(&s.agent)?;
+                let lines = agent.send_content(&s.text, s.content.as_ref());
+                writes_and_items(lines, agent.take_items())
             }
             method::INTERRUPT => {
                 let a: AgentRef = read(params)?;
-                writes(self.agent(&a.agent)?.interrupt())
+                let agent = self.agent(&a.agent)?;
+                let lines = agent.interrupt();
+                writes_and_items(lines, agent.take_items())
             }
             method::SET_MODEL => {
                 let v: SetValue = read(params)?;

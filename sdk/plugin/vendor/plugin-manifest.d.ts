@@ -29,7 +29,9 @@ export interface ManifestError {
     | 'command'
     | 'readOnly'
     | 'variable'
-    | 'interpreter';
+    | 'interpreter'
+    | 'pointer'
+    | 'session';
   /** The type, or the values, the field takes, for `type` and `enum`. */
   expected?: string;
 }

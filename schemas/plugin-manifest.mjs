@@ -471,6 +471,56 @@ export function validate(manifest, options = {}) {
           const a = string(it.account, p);
           if (a !== null && !accounts.includes(a)) problem(p, 'account');
         }
+        // What a harness described by ACP says of its sessions, its turns, its effort and its context (ESC-491): the
+        // arguments of a resume name the session (`{session}`), and what is read of its messages are JSON pointers.
+        if (point === 'harnesses')
+          for (const [at, it] of list) {
+            if (!isObject(it.acp)) continue;
+            const a = join(at, 'acp');
+            const pointer = (v, p) => {
+              if (typeof v !== 'string') problem(p, 'type', 'string');
+              else if (!v.startsWith('/')) problem(p, 'pointer');
+            };
+            if ('resume' in it.acp) {
+              const p = join(a, 'resume');
+              const r = it.acp.resume;
+              if (!isObject(r)) problem(p, 'type', 'object');
+              else {
+                const pa = join(p, 'args');
+                if (!('args' in r)) problem(pa, 'required');
+                else if (!Array.isArray(r.args)) problem(pa, 'type', 'array');
+                else {
+                  r.args.forEach((x, i) => {
+                    if (typeof x !== 'string') problem(`${pa}[${i}]`, 'type', 'string');
+                  });
+                  if (!r.args.some((x) => typeof x === 'string' && x.includes('{session}'))) problem(pa, 'session');
+                }
+                if ('session' in r) pointer(r.session, join(p, 'session'));
+              }
+            }
+            if ('turnEnd' in it.acp) {
+              const p = join(a, 'turnEnd');
+              if (!Array.isArray(it.acp.turnEnd)) problem(p, 'type', 'array');
+              else
+                it.acp.turnEnd.forEach((e, i) => {
+                  const pe = `${p}[${i}]`;
+                  if (!isObject(e)) problem(pe, 'type', 'object');
+                  else if (!Object.keys(e).length) problem(pe, 'empty');
+                  else for (const k of Object.keys(e)) if (!k.startsWith('/')) problem(join(pe, k), 'pointer');
+                });
+            }
+            if ('efforts' in it.acp) {
+              const p = join(a, 'efforts');
+              if (!isObject(it.acp.efforts)) problem(p, 'type', 'object');
+              else for (const [k, v] of Object.entries(it.acp.efforts)) if (typeof v !== 'string') problem(join(p, k), 'type', 'string');
+            }
+            if ('effortOption' in it.acp && typeof it.acp.effortOption !== 'string') problem(join(a, 'effortOption'), 'type', 'string');
+            if ('usage' in it.acp) {
+              const p = join(a, 'usage');
+              if (!isObject(it.acp.usage)) problem(p, 'type', 'object');
+              else for (const k of ['context', 'window']) if (k in it.acp.usage) pointer(it.acp.usage[k], join(p, k));
+            }
+          }
         // A harness of anyone's (ESC-424): no shell nor interpreter as its program, no variable Escouade refuses, set or
         // taken off (SEC-30).
         if (point === 'harnesses' && !firstParty) {
@@ -590,6 +640,8 @@ const WHAT = {
       "n'est pas une variable qu'un plugin peut poser : un nom (lettres, chiffres, `_`), hors des variables d'Escouade et des familles qui changeraient ce que lance le programme (`LD_*`, `GIT_*`, `PYTHON*`, `*_PROXY`, `HOME`, `PATH`…).",
     interpreter: () =>
       "nomme un shell ou un interpréteur (`bash`, `powershell`, `python`, `node`…) : le harness d'un tiers lance un programme à lui.",
+    pointer: () => "n'est pas un pointeur JSON (`/_meta/<agent>/…`) : ce qu'Escouade lit d'un message du harness.",
+    session: () => 'ne nomme pas la session à reprendre : un argument doit contenir `{session}`.',
     square: () => "n'est pas carrée (un PNG carré de 256 px au moins, 512 conseillé).",
     small: () => 'fait moins de 256 px de côté (512 conseillé).',
   },
@@ -621,6 +673,8 @@ const WHAT = {
       "is no variable a plugin may set: a name (letters, digits, `_`), out of Escouade's own and of the families that would change what the program runs (`LD_*`, `GIT_*`, `PYTHON*`, `*_PROXY`, `HOME`, `PATH`…).",
     interpreter: () =>
       "names a shell or an interpreter (`bash`, `powershell`, `python`, `node`…): the harness of anyone's runs a program of its own.",
+    pointer: () => 'is no JSON pointer (`/_meta/<agent>/…`): what Escouade reads of a message of the harness.',
+    session: () => 'does not name the session to resume: an argument must hold `{session}`.',
     square: () => 'is not square (a square PNG of 256 px at least, 512 advised).',
     small: () => 'is under 256 px a side (512 advised).',
   },

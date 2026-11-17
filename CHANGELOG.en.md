@@ -4,6 +4,11 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
+## [Unreleased]
+
+- After a restart, an agent whose harness doesn’t resume its session says so, and its new session gets its instructions again (its ticket’s) with a summary of what it did. Unharnessed now resumes its own.
+- A turn a harness begins by itself shows as a turn: the agent goes to work then back to rest, and that text no longer mixes with the next answer. The effort sets Prime Agent’s reasoning too, and the whole code of a long tool call can be read, folded, in its detail.
+
 ## [2.2.2] — 2026-11-16
 
 - Security: a harness that only runs in Bypass, or whose plugin declares no mode, no longer starts without “Allow Bypass mode”. An agent shows the mode its harness really runs in, and a mode that harness lacks never silently becomes a more permissive one.

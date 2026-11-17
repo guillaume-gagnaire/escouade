@@ -9,10 +9,11 @@ export const MANIFEST = 'escouade-plugin.json';
  * The plugins in `run.wasm` that stand on a version of a crate not on crates.io yet, and that version. Without it they
  * cannot have their Cargo.lock, so neither `escouade-plugin validate` nor `build` takes them: `ci.mjs` skips both and plays
  * the module of `scripts/plugins-wasm.sh`, compiled against `crates/`. Out of this list once the crate is published, their
- * Cargo.lock written again (`sh scripts/plugin-lock.sh <name>`). Empty since escouade-acp 0.1.6 (ESC-433: the `PATH` of a
- * view's hooks) went to crates.io on 2026-11-13.
+ * Cargo.lock written again (`sh scripts/plugin-lock.sh <name>`). The ACP plugin 2.2.5 stands on escouade-acp 0.1.7 and
+ * escouade-plugin-protocol 0.1.3 (ESC-491: the resume of a session not loaded, the turns of a harness, its effort, its
+ * context); its Cargo.lock is the one of 2.2.4 until then.
  */
-export const AWAITING_PUBLICATION = {};
+export const AWAITING_PUBLICATION = { acp: 'escouade-acp 0.1.7 and escouade-plugin-protocol 0.1.3' };
 
 /**
  * What judges or builds every plugin: a change there runs them all. `crates/` is the kit and the bench's library, the
@@ -50,11 +51,25 @@ export function readPlugin(folder, name) {
     name,
     id: manifest.id,
     version: manifest.version,
+    // The oldest Escouade it installs on (`escouade.min`).
+    min: manifest.escouade?.min ?? null,
     wasm: typeof manifest.run?.wasm === 'string',
     node: has('package.json'),
     nodeTests: has('test'),
     cargo,
   };
+}
+
+/**
+ * The version of Escouade a plugin is judged for: `since` (the one that serves its sort), or its own `escouade.min` when
+ * it asks for a newer one (Prime Agent's 2.2.2, ESC-485): judged for an older app, it would be refused as too new.
+ */
+export function judgedFor(since, min) {
+  const parts = (v) => String(v).replace(/-.*/, '').split('.').map(Number);
+  if (!min) return since;
+  const [a, b] = [parts(since), parts(min)];
+  for (let i = 0; i < 3; i++) if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) > (b[i] ?? 0) ? since : min;
+  return since;
 }
 
 /** The plugins of `folder`, by the name of their subfolder. */

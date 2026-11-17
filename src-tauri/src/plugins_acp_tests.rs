@@ -554,7 +554,20 @@ impl Driven {
             ),
             ("FAKE_ACP_LOG".into(), log.to_string_lossy().into_owned()),
         ];
-        let mut spawn = Spawn::of(&meta, fake_acp(), env);
+        Driven::spawn_on(engine, dir, meta, fake_acp(), env, log, f)
+    }
+
+    /// An agent of `meta` on `program`, its log `log`: another fake than Faux ACP's (Unharnessed's, ESC-484).
+    fn spawn_on(
+        engine: &'static ProcessEngine,
+        dir: &Path,
+        meta: AgentMeta,
+        program: Program,
+        env: Vec<(String, String)>,
+        log: PathBuf,
+        f: impl FnOnce(&mut Spawn),
+    ) -> Driven {
+        let mut spawn = Spawn::of(&meta, program, env);
         f(&mut spawn);
         let (tx, heard) = mpsc::unbounded_channel();
         let exit = tx.clone();
@@ -783,6 +796,391 @@ async fn goose_as_its_manifest_describes_it_starts() {
     assert!(matches!(&end, TurnEnd::Finished(_)), "{end:?}");
     a.stop().await;
     rt.shutdown();
+}
+
+/// Unharnessed as the manifest of its plugin declares it (ESC-484): a harness described over ACP whose one mode is Bypass.
+fn unharnessed_decl() -> Value {
+    let v: Value = serde_json::from_str(include_str!(
+        "../../plugins/unharnessed/escouade-plugin.json"
+    ))
+    .unwrap();
+    v["contributes"]["harnesses"][0].clone()
+}
+
+/// The fake Unharnessed (tests/fixtures/fake-unharnessed.mjs), by the name its manifest finds: its `.cmd` under Windows.
+fn fake_unharnessed() -> Program {
+    let name = if cfg!(windows) {
+        "unharnessed.cmd"
+    } else {
+        "unharnessed"
+    };
+    Program::Native(fixtures().join("unharnessed-bin").join(name))
+}
+
+/// An agent of Unharnessed in `dir` (its account's folder `dir/home`), in the mode it has, on the session `session`.
+fn unharnessed_agent(
+    engine: &'static ProcessEngine,
+    dir: &Path,
+    session: Option<String>,
+    f: impl FnOnce(&mut Spawn),
+) -> Driven {
+    let meta = AgentMeta {
+        id: crate::model::new_id(),
+        cwd: dir.to_string_lossy().to_string(),
+        mode: crate::bypass::BYPASS.into(),
+        session_id: session,
+        ..Default::default()
+    };
+    let log = dir.join("fake-unharnessed.jsonl");
+    let env = vec![
+        (
+            "UNHARNESSED_CODING_AGENT_DIR".into(),
+            dir.join("home").to_string_lossy().into_owned(),
+        ),
+        (
+            "FAKE_UNHARNESSED_LOG".into(),
+            log.to_string_lossy().into_owned(),
+        ),
+    ];
+    Driven::spawn_on(engine, dir, meta, fake_unharnessed(), env, log, f)
+}
+
+/// The harness of `dev.escouade.unharnessed`, from its manifest alone.
+fn unharnessed(name: &str) -> (Arc<Runtime>, &'static ProcessEngine) {
+    let (rt, _, _) = runtime(name);
+    let engine = described(&rt, "dev.escouade.unharnessed", unharnessed_decl());
+    (rt, engine)
+}
+
+/// Unharnessed as its manifest describes it, on a fake that speaks as Unharnessed 0.9.8 did in the study: it answers,
+/// its one tool shows as Python with its code and its output, a turn under way stops, no mode and no model are set
+/// (it has none of the first, the second is each user's own), and a new process takes its session back by `--resume`
+/// (ESC-491); its session gone, the agent starts again on a new one, said, given its instructions again.
+#[tokio::test(flavor = "multi_thread")]
+async fn unharnessed_answers_runs_its_cell_stops_and_takes_its_session_back() {
+    let (rt, engine) = unharnessed("unharnessed");
+    assert_eq!(engine.id().as_str(), "unharnessed");
+    let dir = bench_dir("esc484-unharnessed-run");
+    let mut a = unharnessed_agent(engine, &dir, None, |_| {});
+    a.proc().initialize().await.unwrap();
+    let end = a.turn("bonjour").await;
+    assert!(
+        matches!(&end, TurnEnd::Finished(t) if t.contains("Unharnessed a reçu : bonjour")),
+        "{end:?}"
+    );
+    // Its cell: a tool « Python », its code as its input, its output as its result.
+    let end = a.turn("python").await;
+    assert!(
+        matches!(&end, TurnEnd::Finished(t) if t.contains("1267650600228229401496703205376")),
+        "{end:?}"
+    );
+    let items = a.rt.conv.items();
+    let cell = items
+        .iter()
+        .find(|i| i["kind"] == "tool")
+        .unwrap_or_else(|| panic!("no tool: {items:#?}"));
+    assert_eq!(cell["name"], "Python", "{cell:#}");
+    assert_eq!(cell["input"]["code"], "print(2 ** 100)", "{cell:#}");
+    assert!(
+        cell["result"]["text"]
+            .as_str()
+            .is_some_and(|t| t.contains("1267650600228229401496703205376")),
+        "{cell:#}"
+    );
+    // A turn under way stops: its cell is aborted, the turn interrupted.
+    let n = a.ends.len();
+    a.send("long");
+    a.until("the cell under way", |d| {
+        d.rt.conv
+            .items()
+            .iter()
+            .any(|i| i["kind"] == "tool" && i["input"]["code"] == "r = await bash('sleep 90')")
+    })
+    .await;
+    a.rt.interrupted = true;
+    a.proc()
+        .interrupt(false, Duration::from_secs(15))
+        .await
+        .unwrap();
+    a.until("the end of the stopped turn", |d| d.ends.len() > n)
+        .await;
+    assert_eq!(a.ends[n], TurnEnd::Interrupted);
+    // Asked nothing, set nothing: no permission, no mode, no model, no effort.
+    let said: Vec<String> = a
+        .logged()
+        .into_iter()
+        .filter(|e| e["dir"] == "c2s")
+        .filter_map(|e| e["msg"]["method"].as_str().map(str::to_string))
+        .collect();
+    for never in [
+        "session/set_mode",
+        "session/set_model",
+        "session/set_config_option",
+    ] {
+        assert!(!said.iter().any(|m| m == never), "{never}: {said:?}");
+    }
+    let launch = a
+        .logged()
+        .into_iter()
+        .find_map(|e| e.get("launch").cloned())
+        .unwrap();
+    assert_eq!(launch["argv"], json!(["--mode", "acp"]));
+    assert_eq!(
+        launch["home"],
+        json!(dir.join("home").to_string_lossy()),
+        "its account's folder"
+    );
+    let session = a.rt.meta.session_id.clone().expect("its session");
+    a.stop().await;
+
+    // A new process takes its session back by `--resume <id>` (`acp.resume`, ESC-491): the id it saves it under, then
+    // `session/load` of it, nothing said, nothing given again.
+    let _ = std::fs::remove_file(dir.join("fake-unharnessed.jsonl"));
+    let mut b = unharnessed_agent(engine, &dir, Some(session.clone()), |s| {
+        s.append_prompt = Some("Le protocole du ticket ESC-491.".into())
+    });
+    b.proc().initialize().await.unwrap();
+    let end = b.turn("encore là ?").await;
+    assert!(
+        matches!(&end, TurnEnd::Finished(t) if t.contains("Unharnessed a reçu : encore là ?")),
+        "{end:?}"
+    );
+    let launch = b
+        .logged()
+        .into_iter()
+        .find_map(|e| e.get("launch").cloned())
+        .unwrap();
+    assert_eq!(
+        launch["argv"],
+        json!(["--mode", "acp", "--resume", session.clone()])
+    );
+    let items = b.rt.conv.items();
+    assert!(!items.iter().any(|i| i["kind"] == "notice"), "{items:#?}");
+    assert_eq!(b.rt.meta.session_id.as_deref(), Some(session.as_str()));
+    let prompts: Vec<String> = b
+        .logged()
+        .into_iter()
+        .filter(|e| e["msg"]["method"] == "session/prompt")
+        .map(|e| e["msg"]["params"]["prompt"].to_string())
+        .collect();
+    assert!(
+        !prompts.iter().any(|p| p.contains("ESC-491")),
+        "its session has them: {prompts:?}"
+    );
+    b.stop().await;
+
+    // Its session gone (its file removed): a new one, said, given its instructions again.
+    for f in std::fs::read_dir(dir.join("home").join("sessions")).unwrap() {
+        std::fs::remove_file(f.unwrap().path()).unwrap();
+    }
+    let _ = std::fs::remove_file(dir.join("fake-unharnessed.jsonl"));
+    let mut c = unharnessed_agent(engine, &dir, Some(session.clone()), |s| {
+        s.append_prompt = Some("Le protocole du ticket ESC-491.".into())
+    });
+    c.proc().initialize().await.unwrap();
+    let end = c.turn("toujours là ?").await;
+    assert!(matches!(&end, TurnEnd::Finished(_)), "{end:?}");
+    let items = c.rt.conv.items();
+    assert!(
+        items.iter().any(|i| i["kind"] == "notice"
+            && i["text"]
+                .as_str()
+                .is_some_and(|t| t.contains("n’a pas pu être reprise")
+                    && t.contains("Ses consignes lui sont redonnées"))),
+        "{items:#?}"
+    );
+    // The fake saves the new one under the id `--resume` named: what the real one does then was not tried.
+    let prompt = c
+        .logged()
+        .into_iter()
+        .find(|e| e["msg"]["method"] == "session/prompt")
+        .map(|e| e["msg"]["params"]["prompt"].to_string())
+        .unwrap();
+    assert!(prompt.contains("ESC-491"), "{prompt}");
+    c.stop().await;
+    rt.shutdown();
+}
+
+/// No discussion of the Docs tab on Unharnessed: it has no mode that changes nothing, and it does not start.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_discussion_of_unharnessed_does_not_start() {
+    let (rt, engine) = unharnessed("unharnessed-readonly");
+    let dir = bench_dir("esc484-unharnessed-readonly");
+    let a = unharnessed_agent(engine, &dir, None, |s| s.read_only = true);
+    let err = a.proc().initialize().await.unwrap_err().to_string();
+    assert!(
+        err.contains("ne tient pas une discussion en lecture seule"),
+        "{err}"
+    );
+    assert!(
+        !dir.join("fake-unharnessed.jsonl").exists(),
+        "its program never ran"
+    );
+    rt.shutdown();
+}
+
+/// Nor beside a private project: it reads and writes by itself, the fence would not hold.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_agent_of_unharnessed_does_not_start_beside_a_private_project() {
+    let (rt, engine) = unharnessed("unharnessed-fence");
+    let dir = bench_dir("esc484-unharnessed-fence");
+    let fence = crate::fence::Fence::new(vec![bench_dir("esc484-unharnessed-fence-other")]);
+    let a = unharnessed_agent(engine, &dir, None, |s| s.fence = fence);
+    let err = a.proc().initialize().await.unwrap_err().to_string();
+    assert!(
+        err.contains("la clôture des projets privés ne tiendrait pas"),
+        "{err}"
+    );
+    assert!(!dir.join("fake-unharnessed.jsonl").exists());
+    rt.shutdown();
+}
+
+/// Its turns of its own (a « wake », once a command of its last cell ended) come with no prompt under way (ESC-484):
+/// a turn of the conversation of its own (ESC-491), the agent at work while it runs, ended by the marks of its stream
+/// (`acp.turnEnd`), its words its own; the next turn's answer does not begin with them.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_turn_unharnessed_starts_by_itself_is_a_turn_of_its_own() {
+    let (rt, engine) = unharnessed("unharnessed-wake");
+    let dir = bench_dir("esc484-unharnessed-wake");
+    let mut a = unharnessed_agent(engine, &dir, None, |_| {});
+    a.proc().initialize().await.unwrap();
+    let end = a.turn("réveil").await;
+    assert!(matches!(&end, TurnEnd::Finished(_)), "{end:?}");
+    // The fake's wake, 300 ms after the end of the turn: a turn that begins and ends by itself.
+    let n = a.ends.len();
+    a.until("the end of the wake", |d| d.ends.len() > n).await;
+    assert!(
+        matches!(&a.ends[n], TurnEnd::Finished(t) if t == "Réveillé par la fin de sa commande."),
+        "{:?}",
+        a.ends
+    );
+    assert_eq!(a.rt.meta.status, crate::model::AgentStatus::Done);
+    let items = a.rt.conv.items();
+    let turns = items.iter().filter(|i| i["kind"] == "turn").count();
+    assert_eq!(turns, 2, "the wake's turn closed: {items:#?}");
+    assert!(
+        !items.iter().any(|i| i["streaming"] == true),
+        "nothing left open: {items:#?}"
+    );
+    let end = a.turn("bonjour").await;
+    assert!(
+        matches!(&end, TurnEnd::Finished(t) if t == "Unharnessed a reçu : bonjour"),
+        "{end:?}"
+    );
+    a.stop().await;
+    rt.shutdown();
+}
+
+/// What its stream tells of its context (`_meta.unharnessed.usage`: the tokens it holds, its window) is read by its
+/// manifest's pointers (ESC-491); its cost, always 0 and `billed: false` in the study, is not read, nor are tokens in
+/// and out, which it does not tell.
+#[tokio::test(flavor = "multi_thread")]
+async fn unharnessed_tells_what_its_context_holds_and_nothing_else_is_guessed() {
+    let (rt, engine) = unharnessed("unharnessed-context");
+    let dir = bench_dir("esc491-unharnessed-context");
+    let mut a = unharnessed_agent(engine, &dir, None, |_| {});
+    a.proc().initialize().await.unwrap();
+    let end = a.turn("bonjour").await;
+    assert!(matches!(&end, TurnEnd::Finished(_)), "{end:?}");
+    assert_eq!((a.rt.context_tokens, a.rt.context_window), (1301, 32768));
+    assert_eq!(a.rt.meta.cost, 0.0);
+    assert_eq!(a.rt.meta.tokens, 0, "tokens in and out are not told");
+    a.stop().await;
+    rt.shutdown();
+}
+
+/// The streams of Unharnessed 0.9.8 recorded in the study's sandbox (tests/fixtures/unharnessed/: a fix with five cells
+/// on a local model, a turn cancelled in its cell, a call of an MCP server from the kernel), through the client of its
+/// manifest: each cell a tool « Python » with its code and its output, the cancelled one failed, the notifications of
+/// its own (`_unharnessed/kernel/*`) and its `session_info_update` ignored.
+#[test]
+fn the_recorded_streams_of_unharnessed_make_python_cells_with_their_code() {
+    let decl = unharnessed_decl();
+    for (case, cells, last) in [
+        (
+            "full-turn",
+            7,
+            "The bug in the `add()` function in `calc.py` has been fixed and verified",
+        ),
+        ("cancel", 1, "Hello"),
+        ("mcp", 1, "3 tickets"),
+    ] {
+        let flux =
+            std::fs::read_to_string(fixtures().join("unharnessed").join(format!("{case}.jsonl")))
+                .unwrap();
+        let lines: Vec<Value> = flux
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect();
+        let meta = AgentMeta {
+            id: crate::model::new_id(),
+            cwd: "/home/tester/proj".into(),
+            mode: crate::bypass::BYPASS.into(),
+            ..Default::default()
+        };
+        let conv = crate::paths::test_dir(&format!("esc484-replay-{case}"));
+        let mut rt = replayed_through_the_client(&decl, meta, &lines, &conv);
+        let items = rt.conv.items();
+        let tools: Vec<&Value> = items.iter().filter(|i| i["kind"] == "tool").collect();
+        assert_eq!(tools.len(), cells, "{case}: {items:#?}");
+        for t in &tools {
+            assert_eq!(t["name"], "Python", "{case}: {t:#}");
+            assert!(
+                t["input"]["code"].as_str().is_some_and(|c| !c.is_empty()),
+                "{case}: {t:#}"
+            );
+        }
+        let texts: String = items
+            .iter()
+            .filter(|i| i["kind"] == "text")
+            .filter_map(|i| i["text"].as_str())
+            .collect();
+        assert!(texts.contains(last), "{case}: {texts}");
+        if case == "cancel" {
+            assert!(
+                tools[0]["result"]["isError"] == true
+                    && tools[0]["result"]["text"]
+                        .as_str()
+                        .is_some_and(|t| t.contains("Tool execution aborted")),
+                "{:#}",
+                tools[0]
+            );
+        }
+    }
+}
+
+/// The gap ESC-484 showed, closed by ESC-489: a harness whose one mode is Bypass has its agents in that mode, one asked in « Demander »
+/// (`default`) too; the mode judged is the one it runs in, Bypass. Without « Autoriser le mode
+/// Bypass » an agent of Unharnessed does not start, and the refusal says why; with it, it runs in Bypass.
+#[test]
+fn an_agent_of_a_harness_whose_one_mode_is_bypass_runs_in_bypass_and_only_when_it_is_allowed() {
+    let (_rt, engine) = unharnessed("unharnessed-gap");
+    crate::engine::registry::register(engine);
+    let modes: Vec<&str> = engine.caps().modes.iter().map(|m| m.id).collect();
+    assert_eq!(modes, [crate::bypass::BYPASS]);
+    // Its new agents' mode, as the core gives it to an account that says none.
+    let mode = crate::accounts::defaults_with(None, engine.id(), "").mode;
+    assert_eq!(
+        mode,
+        crate::bypass::BYPASS,
+        "its new agents are in the one mode it has"
+    );
+    // One asked in « Demander » (an account that says it, a handover) runs in Bypass too: judged as Bypass.
+    let lang = crate::i18n::Lang::Fr;
+    let err = crate::modes::judge(engine, "default", false, lang)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("Unharnessed ne tourne qu’en Bypass")
+            && err.contains("Autoriser le mode Bypass"),
+        "{err}"
+    );
+    assert_eq!(
+        crate::modes::judge(engine, "default", true, lang).unwrap(),
+        crate::bypass::BYPASS
+    );
+    crate::engine::registry::unregister(engine.id());
 }
 
 /// What `proc/*` refuses to a plugin with a module, a plugin without code does not get by naming it in its manifest: its
@@ -1752,3 +2150,7 @@ fn w_32_what_a_described_harness_words_is_shown_and_judged() {
     vars.hold_removed("Audit", &mut removed);
     assert!(removed.is_empty(), "{removed:?}");
 }
+
+/// Prime Agent's, on the same bench (ESC-485).
+#[path = "plugins_prime_agent_tests.rs"]
+mod prime_agent;

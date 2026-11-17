@@ -1560,6 +1560,108 @@
         "contributes.harnesses[1].id interpreter"
       ],
       "ignored": []
+    },
+    {
+      "name": "a harness described by ACP resumes, ends its own turns, sets its effort and reads its context as its manifest says (ESC-491)",
+      "manifest": {
+        "id": "dev.exemple.outil",
+        "name": "Outil",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.3"
+        },
+        "contributes": {
+          "harnesses": [
+            {
+              "id": "outil",
+              "name": "Outil",
+              "acp": {
+                "args": ["--acp"],
+                "resume": {
+                  "args": ["--resume", "{session}"],
+                  "session": "/_meta/outil/saved/sessionId"
+                },
+                "turnEnd": [
+                  {
+                    "/_meta/outil/phase": "terminalQuiescence"
+                  },
+                  {
+                    "/_meta/outil/phase": "responseBoundary",
+                    "/_meta/outil/terminalQuiescenceExpected": false
+                  }
+                ],
+                "efforts": {
+                  "low": "low",
+                  "high": "high"
+                },
+                "effortOption": "thought_level",
+                "usage": {
+                  "context": "/_meta/outil/usage/tokens",
+                  "window": "/_meta/outil/usage/window"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "errors": [],
+      "ignored": []
+    },
+    {
+      "name": "the resume of a harness names its session, and what it reads of its messages are JSON pointers (ESC-491)",
+      "manifest": {
+        "id": "dev.exemple.outil",
+        "name": "Outil",
+        "version": "1.0.0",
+        "escouade": {
+          "api": "1",
+          "min": "2.2.3"
+        },
+        "contributes": {
+          "harnesses": [
+            {
+              "id": "outil",
+              "name": "Outil",
+              "acp": {
+                "args": ["--acp"],
+                "resume": {
+                  "args": ["--resume", 3],
+                  "session": "saved.id"
+                },
+                "turnEnd": [
+                  {},
+                  {
+                    "phase": "done"
+                  },
+                  "x"
+                ],
+                "efforts": {
+                  "high": 2
+                },
+                "effortOption": 4,
+                "usage": {
+                  "context": "tokens",
+                  "window": 5
+                }
+              }
+            }
+          ]
+        }
+      },
+      "errors": [
+        "contributes.harnesses[0].acp.resume.args[1] type",
+        "contributes.harnesses[0].acp.resume.args session",
+        "contributes.harnesses[0].acp.resume.session pointer",
+        "contributes.harnesses[0].acp.turnEnd[0] empty",
+        "contributes.harnesses[0].acp.turnEnd[1].phase pointer",
+        "contributes.harnesses[0].acp.turnEnd[2] type",
+        "contributes.harnesses[0].acp.efforts.high type",
+        "contributes.harnesses[0].acp.effortOption type",
+        "contributes.harnesses[0].acp.usage.context pointer",
+        "contributes.harnesses[0].acp.usage.window type"
+      ],
+      "ignored": []
     }
   ],
   "hosts": {

@@ -1,10 +1,10 @@
 # Example plugins
 
-Five complete plugins to read, copy and install: a theme, a Discord webhook with no code, Slack and a team’s rules in TypeScript, and Goose, a harness described with no code. They are Escouade’s own plugins, on its store; each one passes the conformance bench on every change.
+Seven complete plugins to read, copy and install: a theme, a Discord webhook with no code, Slack and a team’s rules in TypeScript, and Goose, Unharnessed and Prime Agent, three harnesses described with no code. They are Escouade’s own plugins, on its store; each one passes the conformance bench on every change.
 
 ## Where to find them
 
-They are in the `plugins/` folder of Escouade’s repository, one folder per plugin (`plugins/slack/`…), each readable on its own with its manifest, its README, its LICENSE (MIT), its CHANGELOG and its tests: https://github.com/guillaume-gagnaire/escouade/tree/main/plugins. The store publishes them as `dev.escouade.high-contrast`, `dev.escouade.discord`, `dev.escouade.slack`, `dev.escouade.team-rules` and `dev.escouade.goose`, taken from these folders at their tags `plugins/<folder>/v1.2.3` (see [Publishing a plugin](plugins/publishing)).
+They are in the `plugins/` folder of Escouade’s repository, one folder per plugin (`plugins/slack/`…), each readable on its own with its manifest, its README, its LICENSE (MIT), its CHANGELOG and its tests: https://github.com/guillaume-gagnaire/escouade/tree/main/plugins. The store publishes them as `dev.escouade.high-contrast`, `dev.escouade.discord`, `dev.escouade.slack`, `dev.escouade.team-rules`, `dev.escouade.goose`, `dev.escouade.unharnessed` and `dev.escouade.prime-agent`, taken from these folders at their tags `plugins/<folder>/v1.2.3` (see [Publishing a plugin](plugins/publishing)).
 
 To make one yours, copy its folder and give it an id of your own (`io.github.<your-login>.slack`): `dev.escouade.*` is kept for Escouade’s own plugins, and the store takes it from Escouade’s repository alone.
 
@@ -15,6 +15,7 @@ To make one yours, copy its folder and give it an id of your own (`io.github.<yo
 | Slack | The same in Slack, in each project’s channel, with a secret in the keychain | TypeScript program |
 | Team rules | The agents’ commands allowed or denied by a file of the repository | TypeScript program |
 | Goose | An agent that speaks ACP, added as a harness | Declarative |
+| Unharnessed | An ACP harness with one mode, Bypass, said in clear | Declarative |
 | Linear | A source of the Kanban, on the kit | Rust module |
 
 The code shown here is the repository’s: a test of the site checks it has not changed since.
@@ -508,6 +509,135 @@ A harness without code: Goose, Block’s open source agent, described over ACP. 
           "questionsInText": true,
           "tools": { "shell": "Bash", "write": "Write", "edit": "Edit", "text_editor": "Edit", "read": "Read", "tree": "Glob" }
         }
+      }
+    ]
+  },
+  "store": { "categories": ["harness"], "docs": "docs" }
+}
+```
+
+## Unharnessed
+
+Another harness without code: Unharnessed, a coding agent whose one tool is a Python REPL. It never asks anything and its kernel is not a sandbox: its manifest has one mode, Bypass, its meaning written in clear, no mode that changes nothing, and no install command (nothing official installs it alone). Its Python cell shows as a “Python” tool, with its code. See [A described ACP harness](plugins/harnesses).
+
+`plugins/unharnessed/escouade-plugin.json`
+
+```json
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.unharnessed",
+  "name": "Unharnessed",
+  "version": "1.0.0",
+  "description": {
+    "fr": "Unharnessed, l'agent de code à un seul outil (un REPL Python), comme harness : décrit par ACP, sans code. Il ne demande jamais rien : ses agents ne tournent qu'en Bypass.",
+    "en": "Unharnessed, the coding agent with one tool (a Python REPL), as a harness: described over ACP, no code. It never asks: its agents run in Bypass only."
+  },
+  "author": { "name": "Escouade", "url": "https://escouade.dev" },
+  "license": "MIT",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/unharnessed",
+  "escouade": { "api": "1", "min": "2.2.2" },
+  "contributes": {
+    "harnesses": [
+      {
+        "id": "unharnessed",
+        "name": "Unharnessed",
+        "speaker": "Unharnessed",
+        "writer": "Unharnessed",
+        "locate": { "names": ["unharnessed"] },
+        "tested": { "oldest": "0.9.8", "newest": "0.9.8" },
+        "caps": {
+          "modes": [
+            {
+              "id": "bypassPermissions",
+              "meaning": {
+                "fr": "Unharnessed ne demande jamais : son code Python et ses commandes tournent avec tes droits, sur tout le disque et le réseau, sans bac à sable. Escouade ne voit rien passer avant.",
+                "en": "Unharnessed never asks: its Python code and its commands run with your rights, on the whole disk and the network, with no sandbox. Escouade sees nothing go by before."
+              }
+            }
+          ]
+        },
+        "accountVar": "UNHARNESSED_CODING_AGENT_DIR",
+        "acp": {
+          "args": ["--mode", "acp"],
+          "fs": false,
+          "modelOption": "model",
+          "questionsInText": true,
+          "tools": { "Python cell": "Python" },
+          "resume": { "args": ["--resume", "{session}"], "session": "/_meta/unharnessed/saved/sessionId" },
+          "turnEnd": [
+            { "/_meta/unharnessed/phase": "terminalQuiescence" },
+            { "/_meta/unharnessed/phase": "responseBoundary", "/_meta/unharnessed/terminalQuiescenceExpected": false }
+          ],
+          "usage": { "context": "/_meta/unharnessed/usage/tokens", "window": "/_meta/unharnessed/usage/window" }
+        }
+      }
+    ]
+  },
+  "store": { "categories": ["harness"], "docs": "docs" }
+}
+```
+
+## Prime Agent
+
+A harness without code whose one mode is Bypass: Prime Agent, Prime Intellect’s coding agent, described over ACP. It has one tool, a Python kernel, shown cell by cell with its code; it never asks anything, and the manifest says so in clear. It needs Escouade 2.2.2, which refuses its agents when Bypass mode is not allowed. See [A described ACP harness](plugins/harnesses).
+
+`plugins/prime-agent/escouade-plugin.json`
+
+```json
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.prime-agent",
+  "name": "Prime Agent",
+  "version": "1.0.0",
+  "description": {
+    "fr": "Prime Agent, l'agent de code open source de Prime Intellect à un seul outil (un noyau Python), comme harness : décrit par ACP, sans code. Il ne demande jamais rien : ses agents ne tournent qu'en Bypass.",
+    "en": "Prime Agent, Prime Intellect's open source coding agent with one tool (a Python kernel), as a harness: described over ACP, no code. It never asks: its agents run in Bypass only."
+  },
+  "author": { "name": "Escouade", "url": "https://escouade.dev" },
+  "license": "MIT",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/prime-agent",
+  "escouade": { "api": "1", "min": "2.2.2" },
+  "contributes": {
+    "harnesses": [
+      {
+        "id": "prime-agent",
+        "name": "Prime Agent",
+        "speaker": "Prime Agent",
+        "writer": "Prime Agent",
+        "locate": { "names": ["prime-agent"] },
+        "tested": { "oldest": "0.10.3", "newest": "0.10.3" },
+        "caps": {
+          "modes": [
+            {
+              "id": "bypassPermissions",
+              "meaning": {
+                "fr": "Prime Agent ne demande jamais : le code Python de son modèle et ses commandes tournent avec tes droits, sur tout le disque et le réseau, sans bac à sable. Escouade ne voit rien passer avant.",
+                "en": "Prime Agent never asks: its model's Python code and its commands run with your rights, on the whole disk and the network, with no sandbox. Escouade sees nothing go by before."
+              }
+            }
+          ]
+        },
+        "install": {
+          "windows": "irm https://app.primeintellect.ai/prime-agent/install.ps1 | iex",
+          "unix": "curl -fsSL https://app.primeintellect.ai/prime-agent/install.sh | sh"
+        },
+        "updateCommand": "prime-agent update",
+        "acp": {
+          "args": ["--mode", "acp", "--no-session"],
+          "fs": false,
+          "modelOption": "model",
+          "questionsInText": true,
+          "tools": { "Python cell": "Python" },
+          "turnEnd": [
+            { "/_meta/ai.primeintellect.prime-agent/phase": "terminalQuiescence" },
+            {
+              "/_meta/ai.primeintellect.prime-agent/phase": "responseBoundary",
+              "/_meta/ai.primeintellect.prime-agent/terminalQuiescenceExpected": false
+            }
+          ],
+          "efforts": { "low": "low", "medium": "medium", "high": "high" }
+        },
+        "efforts": ["low", "medium", "high"]
       }
     ]
   },

@@ -3734,6 +3734,11 @@ impl<R: Runtime> Core<R> {
             .then(|| self.takes_effort(rt.meta.engine, &account.id, &rt.meta.model));
             (spawn, rt.gen, engine::of(&rt.meta))
         };
+        // A session to resume that its harness may not take back (ESC-491): what the agent did so far goes with it, for
+        // a new one in its place.
+        if engine.takes_recap() && matches!(spawn.start, crate::engine::Start::Resume { .. }) {
+            spawn.recap = self.recap_of(h).await;
+        }
         // A relay its interface left in its folder (the app stopped in « Vue Cursor »).
         self.clear_stale_relay(h);
         // A configuration folder of the agent's own (Cursor: what its « Toujours » keeps).

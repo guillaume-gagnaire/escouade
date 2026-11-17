@@ -280,6 +280,32 @@ export function toolArg(tool: ToolItem, cwd: string): string {
   }
 }
 
+/** The tools whose row says what they do by a field of their own (`toolArg`), which their detail shows whole. */
+const ARG_TOOLS: ReadonlySet<string> = new Set([
+  ...SUMMED_UP,
+  'Task',
+  'Agent',
+  'TodoWrite',
+  'TaskCreate',
+  'TaskUpdate',
+  'Skill',
+  'Artifact',
+]);
+
+/**
+ * The whole of the first text of a call its row shows the start of (ESC-491: a Python cell of two hundred lines, a tool
+ * of a harness Escouade does not know), when the row cannot hold it: its field and its lines, for its detail, folded.
+ * None for a tool whose detail shows what it does its own way, or a text the row holds.
+ */
+export function fullInput(tool: ToolItem): { key: string; text: string; lines: number } | null {
+  if (ARG_TOOLS.has(tool.name) || isEscouadeTool(tool.name)) return null;
+  const entry = Object.entries(tool.input ?? {}).find(([, v]) => typeof v === 'string');
+  if (!entry) return null;
+  const [key, text] = entry as [string, string];
+  if (!text.includes('\n') && text.length <= 160) return null;
+  return { key, text, lines: lines(text) };
+}
+
 export function toolResultSummary(tool: ToolItem): string {
   const r = tool.result;
   if (tool.status === 'running') return '';

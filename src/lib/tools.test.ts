@@ -5,6 +5,7 @@ import {
   artifactLink,
   editsByTurn,
   escouadeArgs,
+  fullInput,
   hasDiff,
   isEscouadeTool,
   isQuietTool,
@@ -409,5 +410,21 @@ describe('the artifacts of Claude Code (ESC-400)', () => {
       artifactLink(tool('Artifact', {}, { result: { text: 'Published at https://evil.example/claude.ai/artifact/x', isError: false } })),
     ).toBeNull();
     expect(artifactLink(tool('Bash', {}, { result: { text: URL, isError: false } }))).toBeNull();
+  });
+});
+
+describe('fullInput', () => {
+  const code = Array.from({ length: 200 }, (_, i) => `print(${i})`).join('\n');
+
+  it('gives the whole of a long cell of code, for its detail (ESC-491)', () => {
+    expect(fullInput(tool('Python', { code }))).toEqual({ key: 'code', text: code, lines: 200 });
+    expect(fullInput(tool('lookup', { q: 'x'.repeat(161) }))?.lines).toBe(1);
+  });
+
+  it('gives nothing for a text its row holds, nor for a tool its detail shows its own way', () => {
+    expect(fullInput(tool('Python', { code: 'print(1)' }))).toBeNull();
+    expect(fullInput(tool('Python', { n: 3 }))).toBeNull();
+    for (const name of ['Bash', 'Edit', 'Task', 'TodoWrite', 'mcp__escouade__create_ticket'])
+      expect(fullInput(tool(name, { command: code, description: code, title: code }))).toBeNull();
   });
 });

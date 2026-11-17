@@ -467,7 +467,7 @@ describe('the page of the example plugins', () => {
         const run = JSON.parse(readFileSync(new URL(file, REPO), 'utf8')).run;
         return !run?.wasm;
       });
-    expect(examples.length).toBe(5);
+    expect(examples.length).toBe(7);
     for (const lang of LANGS) {
       const shown = blocks(lang).map((b) => b.path);
       for (const manifest of examples) expect(shown, lang).toContain(manifest);

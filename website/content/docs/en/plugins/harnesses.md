@@ -99,14 +99,22 @@ Each entry of `contributes.harnesses` with an `acp` object is a described harnes
 - `modelOption`: the configuration option of the model (`session/set_config_option`), else `session/set_model`;
 - `questionsInText`: the agent has no tool to ask a question; its first message tells it to end its turn on a block `<escouade_question>`, which Escouade shows as a question’s card;
 - `tools`: Escouade’s name (Claude Code’s) of its tools of the kind `other` (`{ "shell": "Bash" }`), read from `_meta.<agent>.toolCall.toolName` or from their title before “·”; `subagentTools`: those that start a subagent;
-- `extensions`: `cursor` for the extensions `cursor/*` of Cursor CLI.
+- `extensions`: `cursor` for the extensions `cursor/*` of Cursor CLI;
+- `resume`: how it takes back a session it does not load as it is, since Escouade 2.2.3: `args`, the arguments added to its launch (`["--resume", "{session}"]`, `{session}` the session’s id, which can be no option), and `session`, a JSON pointer to the id it keeps the session under in the answer to `session/new` (`/_meta/<agent>/saved/sessionId`), when it is not the session’s;
+- `turnEnd`: what ends a turn it begins by itself (no `session/prompt`), and makes that turn one of the conversation: a list of entries, each of them JSON pointers into the `update` of a `session/update` and the value each must have (`{ "/_meta/<agent>/phase": "terminalQuiescence" }`);
+- `efforts`: the value of its option of reasoning for each effort of Escouade (`{ "low": "low", "high": "high" }`), as `modes` for its modes; `effortOption`: the id of that option, else the one of the category `thought_level`. The option is set only when the session offers it (a model that reasons) with that value; declare the efforts of the menu too (the harness’s `efforts`);
+- `usage`: where its `session/update`s tell what its context holds (`context`) and the window of its model (`window`), JSON pointers into their `update`. Without it, Escouade reads ACP’s `usage_update` (`used`, `size`).
+
+An option’s value made of parts (`["ollama","qwen3"]`, as a JSON text) is found by its last part or its parts joined by `/`: the model `qwen3` or `ollama/qwen3`. A manifest written before these fields works as it is: a version of Escouade that does not know them ignores them.
 
 ## What Escouade holds
 
 - **The launch.** Escouade finds the program, asks the ACP plugin how to launch it, checks the description and launches it itself. Escouade’s MCP server goes to the session (`mcpServers`), its token in a header, on the agent’s input: never among its arguments.
 - **The permissions.** Each permission asked is a card, with its diff for a write. “Accept edits” lets the writes in the agent’s folder through, “Bypass” all it asks.
 - **Private projects.** Escouade refuses the files of another project the agent reads or writes through it. When the agent reads or writes a file by itself while a fence holds, the conversation says so: the fence does not hold for these. A harness declared `"fs": false` does not start in a private project.
-- **What ACP does not tell** stays unknown: the quota, the cost, the accounts. A turn’s tokens are counted when the agent gives them.
+- **What ACP does not tell** stays unknown: the quota, the cost, the accounts. A turn’s tokens are counted when the agent gives them; nothing is estimated.
+- **The resume.** After a restart, Escouade loads the agent’s session again (`session/load`) when the harness can (`loadSession`, or `resume`). Otherwise, or when the session is lost, the agent starts again on a new session, the conversation says so, and its next message gives its instructions again (its ticket’s protocol) with a summary of what it did.
+- **The turns it begins by itself.** When its manifest says how they end (`turnEnd`), what the agent says with no message asking it is a turn of its own: the agent is at work, its text stays in that turn, and it is back at rest at that end, or at the next message, or when stopped. Without `turnEnd`, nothing changes.
 
 A plugin uninstalled or turned off (or the ACP plugin itself): its agents stay, marked “Harness missing”, with their conversations. They come back with it. The id of a described harness is `plugin:<plugin>:<harness>`.
 
