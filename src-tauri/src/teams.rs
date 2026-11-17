@@ -462,12 +462,17 @@ pub struct Teams {
     settings_views: Mutex<BTreeMap<String, escouade_team::settings::View>>,
     /// Told the version in force of a team's settings (None: the device left it): the core applies it.
     on_settings: Mutex<Option<SettingsSink>>,
+    /// Told a team was read (its projects too): the core brings the docs of its projects on the server in step (TS-9).
+    on_docs: Mutex<Option<DocsSink>>,
     /// Told a team was read (its projects too): the core brings the Kanban of its projects in step (TS-6).
     on_projects: Mutex<Option<ProjectsSink>>,
     /// The teams whose live feed told of a claim (a ticket taken, renewed, given back) since their Kanban last read the
     /// claims (TS-6).
     claim_frames: Mutex<std::collections::BTreeSet<String>>,
 }
+
+/// Where a reading of a team is told: the team's id (TS-9).
+pub type DocsSink = Arc<dyn Fn(&str) + Send + Sync>;
 
 /// Where a reading of a team is told: its id (the core's Kanban of its projects, TS-6).
 pub type ProjectsSink = Arc<dyn Fn(&str) + Send + Sync>;
@@ -530,6 +535,7 @@ impl Teams {
             live: Mutex::default(),
             settings_views: Mutex::default(),
             on_settings: Mutex::default(),
+            on_docs: Mutex::default(),
             on_projects: Mutex::default(),
             claim_frames: Mutex::default(),
         };
@@ -1055,7 +1061,8 @@ impl Teams {
                 Err(e) => Err(e),
             }
         };
-        if done.is_ok() {
+        let read = done.is_ok();
+        if read {
             let sink = self.on_projects.lock().clone();
             if let Some(sink) = sink {
                 sink(id);
@@ -1077,11 +1084,22 @@ impl Teams {
                 self.failed(id, e);
             }
         }
+        if read {
+            let sink = self.on_docs.lock().clone();
+            if let Some(sink) = sink {
+                sink(id);
+            }
+        }
         let after = self.view(id).await?;
         if after != before {
             (self.changed)();
         }
         Ok(after)
+    }
+
+    /// Where a reading of a team is told (the core's docs of its projects on the server, TS-9).
+    pub fn set_docs_sink(&self, sink: DocsSink) {
+        *self.on_docs.lock() = Some(sink);
     }
 
     /// Forgets the team on this device: its state and its keys. The group keeps its leaf until an administrator

@@ -264,6 +264,9 @@ mod taskout;
 mod team_projects;
 mod team_settings;
 mod teamboard;
+mod teamdocs;
+#[cfg(test)]
+mod teamdocs_tests;
 mod teams;
 #[cfg(test)]
 mod teams_tests;
@@ -600,6 +603,17 @@ pub fn run() {
             app.manage(teams.clone());
             // The Kanban of the teams' projects (TS-6): their journals, their claims.
             core.set_teams(teams.clone());
+            {
+                let core = Arc::downgrade(&core);
+                teams.set_docs_sink(Arc::new(move |id| {
+                    if let Some(core) = core.upgrade() {
+                        let id = id.to_string();
+                        tauri::async_runtime::spawn(async move {
+                            core.team_docs_after_read(&id).await;
+                        });
+                    }
+                }));
+            }
             // The team's signed settings (TS-13): the version in force of each team to the core's locks and projects.
             {
                 let core = Arc::downgrade(&core);

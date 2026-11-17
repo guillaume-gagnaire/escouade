@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Serveur d’équipe : la spec, les décisions et les documents d’un projet d’équipe vivent sur le serveur, chiffrés, et se lisent et s’écrivent hors ligne sur chaque poste. Une page écrite des deux côtés se fusionne seule ou montre son conflit, deux décisions acceptées en même temps n’ont jamais le même numéro, et un projet peut garder ses docs dans son dépôt.
 - L’agent relecteur commente maintenant comme un humain, à côté du code : ses remarques sont des fils sous leur ligne, marqués « agent, pas publié », avec leur sévérité, leurs suggestions de code et un résumé dans la Conversation. Écarte-en une, ou publie-la sous ton compte d’un clic, une à une ou toutes celles gardées ; relancée après un commit, la relecture garde ce qui tient et dit ce qui est périmé.
 - Serveur d’équipe : `init --help`, `serve --help` et `recovery-token --help` affichent l’aide de la commande au lieu de l’exécuter, et une option inconnue est refusée au lieu d’être ignorée.
 - Serveur d’équipe : le Kanban d’un projet se partage avec l’équipe, en direct. Un ticket se prend par le serveur, une seule fois, et chaque carte dit qui le tient et depuis quand ; deux changements du même champ en même temps se montrent à celui qui a perdu, et une description changée des deux côtés se fusionne seule.

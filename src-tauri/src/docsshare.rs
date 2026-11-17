@@ -404,6 +404,15 @@ impl Core {
 
     /// What the project's docs have to share, and the conflict being handled.
     pub async fn docs_pending(&self, project_id: &str) -> Result<Pending> {
+        // On the team server (TS-9), the docs leave by themselves: nothing to share by git.
+        if self.team_docs_on(&self.project(project_id)?) {
+            return Ok(Pending {
+                count: 0,
+                files: Vec::new(),
+                code_commits: 0,
+                conflict: None,
+            });
+        }
         let dir = self.docs_dir(project_id).await?;
         let files = pending_files(&dir).await?;
         let code_commits = code_commits(&dir).await.unwrap_or(0);
@@ -422,6 +431,8 @@ impl Core {
     /// Tells the window what the project's docs have to share when it changed since it was last
     /// told. A read that fails says nothing.
     pub async fn docs_changed(&self, project_id: &str) {
+        // On the team server (TS-9): to its journal, and sent soon.
+        self.team_docs_changed(project_id).await;
         let Ok(p) = self.docs_pending(project_id).await else {
             return;
         };
@@ -460,6 +471,12 @@ impl Core {
         message: Option<&str>,
         with_code: bool,
     ) -> Result<Shared> {
+        if self.team_docs_on(&self.project(project_id)?) {
+            bail!(tr!(
+                "Les docs de ce projet sont sur le serveur d’équipe : elles partent toutes seules.",
+                "This project’s docs are on the team server: they leave by themselves."
+            ));
+        }
         let _one = SHARING.lock().await;
         let waiting = self
             .docs_shares

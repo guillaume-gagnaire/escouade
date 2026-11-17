@@ -1318,6 +1318,46 @@ impl Space {
         Ok(d)
     }
 
+    /// A human accepts the proposal `r` on the team server (TS-9): accepted, without a number yet (the team's
+    /// counter gives it in the server's order: `teamdocs`), its date and who written, `ticket` added to its tickets.
+    /// What cites it by its id keeps doing so until its number comes (`cite_numbered`).
+    pub fn decision_accept_pending(
+        &self,
+        r: &Ref,
+        by: &str,
+        ticket: Option<&str>,
+    ) -> Result<Decision> {
+        let old = self.decision(r)?;
+        let shown = old.reference();
+        match old.state {
+            State::Accepted => return Ok(old),
+            State::Superseded => bail!(tr!(
+                "La décision {shown} est remplacée : elle ne s’accepte plus.",
+                "Decision {shown} is superseded: it can no longer be accepted."
+            )),
+            State::Proposed => {}
+        }
+        let mut d = old.clone();
+        d.number = None;
+        d.state = State::Accepted;
+        d.accepted_at = chrono::Local::now()
+            .format("%Y-%m-%dT%H:%M:%S%:z")
+            .to_string();
+        d.accepted_by = by.to_string();
+        if let Some(key) = ticket {
+            if !d.tickets.iter().any(|t| t.eq_ignore_ascii_case(key)) {
+                d.tickets.push(key.to_string());
+            }
+        }
+        self.decision_save(&d, Some(&old))?;
+        Ok(d)
+    }
+
+    /// The pages that cite the decision `old` (accepted, its number not given yet) by its id cite `number` then.
+    pub(crate) fn cite_numbered(&self, old: &Decision, number: u32) -> Result<()> {
+        self.cite_number(old, number)
+    }
+
     /// The pages that cite the proposal `old` cite `number` then: those that cite its id, and
     /// (numbered before ESC-303, and renumbered) those it names that cite its old number.
     fn cite_number(&self, old: &Decision, number: u32) -> Result<()> {

@@ -2,7 +2,7 @@
 title: "Spec tenue à jour"
 subject: "Docs"
 sources: ["website/content/docs/fr/docs-space.md","docs/FACTORY.md","src-tauri/src/board.rs","src-tauri/src/docsticket.rs","src-tauri/src/docscompare.rs","src-tauri/src/codesearch.rs","src-tauri/src/docsimport.rs","src-tauri/src/docs.rs","src-tauri/src/tickets.rs","src/lib/i18n/fr/docs.ts"]
-tickets: ["ESC-263","ESC-278","ESC-301","ESC-310"]
+tickets: ["ESC-263","ESC-278","ESC-301","ESC-310","ESC-482"]
 decisions: []
 compared: "2026-10-31T16:09:26+01:00"
 ---
@@ -42,3 +42,7 @@ Dès que la spec d'un projet a une page dans Escouade, tout agent qu'Escouade la
 - Pas de comparaison après une validation sans merge (« Valider + PR », « Valider et pousser », « Valider ») ni après un ticket sans modification : « Comparer au code » le fait à la demande.
 - Les écarts ne se partagent pas par git : chaque poste a ceux de ses comparaisons.
 - Les fichiers nommés à l'agent le sont par leur texte : un mot de code courant les nomme tous, et un dossier qui n'est pas un dépôt git n'en nomme aucun.
+
+### Sur le serveur d'équipe
+
+Pour un projet dont les docs sont sur le serveur d'équipe, il n'y a pas de branche : l'agent d'un ticket écrit dans un **brouillon du ticket**, comme sur une branche fixe (une copie tenue pour son ticket dans le dossier de données de ce poste, que ses seuls agents lisent). Le brouillon est versé dans les docs de l'équipe à la validation du ticket, jamais avant, puis envoyé au serveur ; ses décisions y prennent leur numéro du compteur de l'équipe (voir *Les docs d'un projet d'équipe*).

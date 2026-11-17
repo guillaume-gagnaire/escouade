@@ -2,7 +2,7 @@
 title: "Serveur MCP"
 subject: "Harness"
 sources: ["docs/SPEC.md","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","docs/security/audit-2026-11/rapport.md (branche ticket/esc-418, fiche SEC-03)","docs/security/audit-2026-11/rapport.md (SEC-17)"]
-tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422","ESC-448","ESC-462","ESC-470","ESC-479","ESC-487"]
+tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422","ESC-448","ESC-462","ESC-470","ESC-479","ESC-482","ESC-487"]
 decisions: [153]
 compared: null
 ---
@@ -304,6 +304,10 @@ Ce qui suit l'emporte sur « Une connexion a 10 s pour envoyer sa requête » pl
 - `start_ticket` d'un ticket de l'équipe passe par la prise du serveur (voir *Le Kanban d'équipe*) : un ticket qu'un collègue tient est refusé tout de suite, avec son nom (« DEM-4 est pris par Alice Martin : un ticket de l'équipe a un seul preneur. ») ; hors ligne, ou pris pendant l'attente, le refus de la prise est la réponse. `move_ticket` ne range que dans « À faire » et ne prend rien.
 - `get_ticket` et `list_tickets` ajoutent `team` à un ticket de l'équipe : `holder` (le nom de qui le tient, vide si son membre n'en a pas encore écrit, `null` s'il est libre), `heldHere`, `since`, `interrupted`, `unreachableMinutes`, `assignee`, et `conflicts` (les champs qu'un collègue a écrits en même temps).
 - Quand le titre, la description ou les critères d'un ticket de l'équipe ont été écrits sur le poste d'un collègue, la réponse entière est marquée comme données de tiers : un avertissement, puis le JSON entre `<third_party_data>` et `</third_party_data>` (`<` échappé). Pour `list_tickets`, dès qu'un ticket du projet est dans ce cas.
+
+### Les docs d'un projet d'équipe (TS-9)
+
+Sur un projet dont les docs sont sur le serveur d'équipe, les outils des docs (`get_spec_tree`, `read_spec_page`, `search_spec`, `list_decisions`, `read_decision`, `search_documents`, `read_document`) lisent la copie du poste, et marquent ce qu'un collègue a écrit comme une donnée de tiers : une ligne qui le dit, puis la réponse entre `<third_party_data>` et `</third_party_data>`, `<` échappé. Ce que ce poste a écrit vient tel quel. Voir *Les docs d'un projet d'équipe*.
 
 ### Les copies des données (ESC-487)
 

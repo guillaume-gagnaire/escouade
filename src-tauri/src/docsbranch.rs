@@ -95,6 +95,15 @@ impl Core {
 
     async fn docs_space_of(&self, project_id: &str, agent: Option<&str>) -> Result<Space> {
         let project = self.project(project_id)?;
+        // On the team server (TS-9): this machine's copy, as a fixed branch; a ticket's agent writes in its draft,
+        // poured there when its ticket is validated.
+        if self.team_docs_on(&project) {
+            let fixed = self.team_docs_space(&project).await?;
+            return match agent.and_then(|a| self.ticket_key_of_agent(&project.id, a)) {
+                Some(key) => self.docs_ticket_space(&project.id, &key, fixed),
+                None => Ok(fixed),
+            };
+        }
         let text = Some(self.docs_text_dir(&project.id));
         let branch = project.docs_branch.trim().to_string();
         if branch.is_empty() {
@@ -173,6 +182,12 @@ impl Core {
         let project = self.project(project_id)?;
         let by = self.me_in(&project).name;
         let space = self.docs_space(project_id, None).await?;
+        if self.team_docs_on(&project) {
+            // Its number is the team's counter's, given by the server's order (TS-9): it comes with the next reading.
+            let d = space.decision_accept_pending(reference, &by, None)?;
+            self.team_docs_changed(project_id).await;
+            return Ok(d);
+        }
         let was = space.decision(reference)?;
         // Never a number a validation under way gave, not merged yet (ESC-377).
         let numbers = self.decision_numbers(project_id);
@@ -208,6 +223,15 @@ impl Core {
             })
             .collect();
         if mine.is_empty() {
+            return Ok(Vec::new());
+        }
+        if self.team_docs_on(&project) {
+            // In the ticket's draft, accepted without a number: poured with it in the team's docs, they take theirs
+            // from the team's counter, in the server's order (TS-9).
+            let by = self.me_in(&project).name;
+            for was in mine {
+                space.decision_accept_pending(&Ref::Id(was.id.clone()), &by, Some(key))?;
+            }
             return Ok(Vec::new());
         }
         // One validation of the project at a time from here (ESC-377), and after the numbers the

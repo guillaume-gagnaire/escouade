@@ -30,25 +30,30 @@
 </script>
 
 <span class="docs-share" data-docs-share use:tip={{ text: t('docs.share.tip'), aria: false }}>
-  {#if onBranch}<span class="on"><Rich k="docs.share.on">{#snippet branch()}<b class="mono">{onBranch}</b>{/snippet}</Rich></span>{/if}
-  {#if conflict}
-    <span class="sep" aria-hidden="true">·</span>
-    <span class="conflict" role="status">{t('docs.share.conflict', { files: conflict.files.join(', ') })}</span>
-    {#if conflict.agentId}
-      <span class="d">{t('docs.share.resolving')}</span>
-    {:else}
-      <button class="small" onclick={() => resolveDocsConflict(projectId)}>{t('docs.share.resolve')}</button>
-      <button class="small" onclick={() => cancelDocsConflict(projectId)}>{t('docs.share.cancel')}</button>
-    {/if}
+  {#if app.teamDocsOn[projectId]}
+    <!-- On the team server (TS-9): they leave by themselves, no branch to share. -->
+    <span class="on">{t('teamDocs.sync.synced')}</span>
   {:else}
-    <span class="sep" aria-hidden="true">·</span>
-    <span class:some={pending > 0} data-pending={pending}
-      >{pending ? t('docs.share.pending', { count: pending }) : t('docs.share.none')}</span
-    >
-    {#if pending}
-      <button class="small share" disabled={busy} onclick={share}
-        ><Icon name="push" size={12} />{busy ? t('docs.share.going') : t('docs.share.go')}</button
+    {#if onBranch}<span class="on"><Rich k="docs.share.on">{#snippet branch()}<b class="mono">{onBranch}</b>{/snippet}</Rich></span>{/if}
+    {#if conflict}
+      <span class="sep" aria-hidden="true">·</span>
+      <span class="conflict" role="status">{t('docs.share.conflict', { files: conflict.files.join(', ') })}</span>
+      {#if conflict.agentId}
+        <span class="d">{t('docs.share.resolving')}</span>
+      {:else}
+        <button class="small" onclick={() => resolveDocsConflict(projectId)}>{t('docs.share.resolve')}</button>
+        <button class="small" onclick={() => cancelDocsConflict(projectId)}>{t('docs.share.cancel')}</button>
+      {/if}
+    {:else}
+      <span class="sep" aria-hidden="true">·</span>
+      <span class:some={pending > 0} data-pending={pending}
+        >{pending ? t('docs.share.pending', { count: pending }) : t('docs.share.none')}</span
       >
+      {#if pending}
+        <button class="small share" disabled={busy} onclick={share}
+          ><Icon name="push" size={12} />{busy ? t('docs.share.going') : t('docs.share.go')}</button
+        >
+      {/if}
     {/if}
   {/if}
 </span>

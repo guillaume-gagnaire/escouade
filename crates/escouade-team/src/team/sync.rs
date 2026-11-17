@@ -70,6 +70,13 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
+/// What binds a document's bytes to its file: another file's bytes do not open under its id.
+fn document_aad(file: &ObjectId) -> Vec<u8> {
+    let mut aad = b"escouade/document/v1\0".to_vec();
+    aad.extend_from_slice(&file.0);
+    aad
+}
+
 fn entry_digest(e: &Entry) -> [u8; 32] {
     super::digest(&wire::encode(e))
 }
@@ -509,6 +516,80 @@ impl Team {
         Ok(version)
     }
 
+    /// Asks a number of the project's counter `counter` for `object` (TS-9: an accepted decision's): given once the
+    /// server's order is read back ([`Replica::number`]), the same on every copy; `at` keeps one as it is (an
+    /// import). Offline, it waits with the rest.
+    pub fn take_number(
+        &mut self,
+        project: ProjectId,
+        object: ObjectId,
+        counter: &str,
+        at: Option<u32>,
+    ) -> Result<(), Error> {
+        self.write(
+            project,
+            OpBody::Number {
+                object,
+                counter: counter.to_string(),
+                at,
+            },
+        )
+    }
+
+    // === The documents (TS-9) ===
+
+    /// Puts a document of the project's docs on the server: its bytes sealed under a key of its own, drawn here, then
+    /// as a file of the team. The key goes in the project's journal with the document (its object), sealed at the
+    /// project's epoch: a member gone, or one outside a project kept to some members, never reads it. The server sees
+    /// a file and its size, neither its name nor its path nor its bytes. Its id and key.
+    pub async fn put_document(
+        &mut self,
+        project: ProjectId,
+        bytes: &[u8],
+    ) -> Result<(ObjectId, [u8; 32]), Error> {
+        let file = ObjectId(random::<16>());
+        let key = random::<32>();
+        let nonce = random::<24>();
+        let mut blob = nonce.to_vec();
+        blob.extend(escouade_team_crypto::keys::aead_seal(
+            &key,
+            &nonce,
+            &document_aad(&file),
+            bytes,
+        ));
+        let put = self.put_file(project, file, &blob).await;
+        match put {
+            Err(Error::Client(ClientError::Net(e))) => {
+                self.online = Some(false);
+                Err(Error::Client(ClientError::Net(e)))
+            }
+            r => {
+                if r.is_ok() {
+                    self.online = Some(true);
+                }
+                r.map(|_| (file, key))
+            }
+        }
+    }
+
+    /// A document put by [`Team::put_document`], opened with its key: None when the server has no such file.
+    pub async fn get_document(
+        &mut self,
+        file: ObjectId,
+        key: &[u8; 32],
+    ) -> Result<Option<Vec<u8>>, Error> {
+        let Some(blob) = self.get_file(file).await? else {
+            return Ok(None);
+        };
+        if blob.len() < 24 {
+            return Err(Error::Refused("a document too short".into()));
+        }
+        let nonce: [u8; 24] = blob[..24].try_into().expect("24 bytes");
+        escouade_team_crypto::keys::aead_open(key, &nonce, &document_aad(&file), &blob[24..])
+            .map(Some)
+            .map_err(|_| Error::Refused("a document that does not open".into()))
+    }
+
     // === Sending ===
 
     /// Sends a project's outbox, in order, each operation sealed at the current epoch of its project. Offline, what
@@ -712,7 +793,9 @@ impl Team {
         let mut meta = r.meta()?;
         meta.cursor = entry.seq;
         meta.last = Some((entry.seq, entry_digest(&entry)));
-        r.set_meta(&meta)
+        r.set_meta(&meta)?;
+        // Every entry up to this one read: the numbers they asked for are given, in the server's order (TS-9).
+        r.assign_numbers(entry.seq).map(|_| ())
     }
 
     fn take_project_commit(

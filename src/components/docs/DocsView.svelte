@@ -6,6 +6,7 @@
   import DiscussionView from './DiscussionView.svelte';
   import DocumentsSpace from './DocumentsSpace.svelte';
   import SpecSpace from './SpecSpace.svelte';
+  import TeamDocsBands from './TeamDocsBands.svelte';
 
   // The main area of the Docs tab (ESC-258): the space chosen in the sidebar. Its docs are read on opening, then again
   // each time what is left to share changes (a page written here, by an agent, a « Partager ») and each time a page is
@@ -27,11 +28,14 @@
     void pending;
     void comparing;
     void project.docsBranch;
+    // A teammate's page, decision or document came, a number was given (TS-9).
+    void app.teamDocsTick[project.id];
     void docsStore.load(project.id);
   });
 </script>
 
 <div class="docs" data-space={discussion ? 'discussion' : space}>
+  {#if !discussion}<TeamDocsBands {project} onchange={() => void docsStore.load(project.id)} />{/if}
   {#if discussion}
     <DiscussionView {project} agent={discussion} />
   {:else if space === 'spec'}

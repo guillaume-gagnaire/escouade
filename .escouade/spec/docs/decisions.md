@@ -2,7 +2,7 @@
 title: "Décisions"
 subject: "Docs"
 sources: ["website/content/docs/fr/docs-space.md","docs/FACTORY.md","src-tauri/src/docs.rs","src-tauri/src/docsbranch.rs","src-tauri/src/docsticket.rs","src-tauri/src/mcp/docs.rs","src-tauri/src/tickets.rs","src/lib/decisions.ts","src/lib/i18n/fr/docs.ts"]
-tickets: ["ESC-259","ESC-263","ESC-303","ESC-377"]
+tickets: ["ESC-259","ESC-263","ESC-303","ESC-377","ESC-482"]
 decisions: [115]
 compared: "2026-10-30T05:29:15+01:00"
 ---
@@ -55,3 +55,12 @@ Le registre des décisions sur le produit : une décision par fichier, datée, q
 - Aucun outil MCP n'accepte une décision, et le mot « accepter » est interdit aux noms d'outils : seuls la fenêtre et la validation d'un ticket l'acceptent.
 - Deux instances d'Escouade (deux machines) qui valident en même temps ne se voient pas : chacune numérote face au registre de la branche tel que git l'a chez elle.
 - Une validation par pull request (sans merge) libère son numéro à sa fin, avant que la PR soit fusionnée : une validation suivante peut le reprendre.
+
+## Sur le serveur d'équipe (TS-9)
+
+Pour un projet dont les docs sont sur le serveur d'équipe (voir *Les docs d'un projet d'équipe*) :
+
+- **Le numéro vient du compteur de l'équipe**, dans le journal du projet : accepter (dans la fenêtre, ou à la validation d'un ticket) rend la décision acceptée et demande un numéro. Le numéro est la place de cette demande parmi celles du compteur, dans l'ordre que le serveur donne au journal, après le plus haut donné avant : chaque poste donne le même, et **deux acceptations au même moment, sur deux postes, n'ont jamais le même numéro**. La limite « deux instances qui valident en même temps ne se voient pas » ne vaut plus pour ces projets.
+- Jusqu'à ce que ce poste relise l'ordre du serveur (hors ligne), la décision est acceptée sans numéro et se cite par son id ; le numéro venu, son fichier le prend, et les pages, les tickets et ce qui est à planifier qui la citaient par son id le citent.
+- Ses champs (titre, contexte, décision, conséquences…) s'écrivent un par un : deux postes qui changent le même champ en même temps, le dernier gagne, et l'autre le voit en tête de l'onglet Docs.
+- Une décision importée du dépôt garde son numéro ; la suivante prend le numéro d'après.

@@ -829,7 +829,14 @@ impl Team {
     /// Reads the team's stream from the last number read: commits, links, beacons, requests, Welcomes. Then reads
     /// the history back, writes the links that are missing, sends a beacon when one is due, and empties the outbox.
     pub async fn sync(&mut self) -> Result<Synced, Error> {
-        self.sync_at(now()).await
+        let read = self.sync_at(now()).await;
+        // What the status says (§2.5): the server unreachable is « Hors ligne » (TS-9: the docs read the team first).
+        match &read {
+            Ok(_) => self.online = Some(true),
+            Err(Error::Client(crate::client::ClientError::Net(_))) => self.online = Some(false),
+            Err(_) => {}
+        }
+        read
     }
 
     /// [`Team::sync`] at the hour `now` (seconds), for the beacons.

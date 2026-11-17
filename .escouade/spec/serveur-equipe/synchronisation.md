@@ -2,14 +2,14 @@
 title: "La synchronisation des projets"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team-server/README.md"]
-tickets: ["ESC-466","ESC-479"]
+tickets: ["ESC-466","ESC-479","ESC-482"]
 decisions: [168,173,178]
 compared: null
 ---
 
 # La synchronisation des projets
 
-Chaque projet d'une équipe est un **journal d'opérations** : « créer le ticket X », « changer le titre de X », « déplacer X », « supprimer X », « écrire la page P, version 4 ». Chaque appareil le rejoue dans sa **copie locale**, que l'interface lit : jamais le serveur. Tout se lit hors ligne, et tout s'écrit hors ligne, sauf la prise d'un ticket (TS-6). Le Kanban d'équipe (TS-6) et la spec sur le serveur (TS-9) s'appuient dessus ; ce ticket n'a pas d'écran.
+Chaque projet d'une équipe est un **journal d'opérations** : « créer le ticket X », « changer le titre de X », « déplacer X », « supprimer X », « écrire la page P, version 4 ». Chaque appareil le rejoue dans sa **copie locale**, que l'interface lit : jamais le serveur. Tout se lit hors ligne, et tout s'écrit hors ligne, sauf la prise d'un ticket (TS-6). Le Kanban d'équipe (TS-6) et les docs sur le serveur (TS-9, voir « Les docs d'un projet d'équipe ») s'appuient dessus ; ce ticket n'a pas d'écran.
 
 ## Un projet de toute l'équipe, ou de quelques membres
 
@@ -32,7 +32,8 @@ Chaque projet d'une équipe est un **journal d'opérations** : « créer le tick
 - **Le dernier qui écrit gagne**, champ par champ, sous une **horloge hybride** (HLC) : l'heure de l'appareil, un compteur, puis l'appareil. Une écriture faite après en avoir vu une autre gagne sur elle, quelles que soient les horloges. Une horloge trop en avance ne fait pas avancer celle des autres de plus d'une heure.
 - **Le conflit gardé** : deux écritures d'un champ faites depuis la même valeur sont concurrentes. Celle qui perd est gardée, pour que TS-6 la montre (« Bob a changé le titre en même temps · Reprendre le mien »).
 - **Une suppression est définitive**, quoi qu'on écrive ensuite dans l'objet.
-- **Une page de spec va en versions entières**. Deux versions faites depuis la même base sont un conflit, gardé ; la fusion à trois voies viendra avec TS-9.
+- **Une page de spec va en versions entières**. Deux versions faites depuis la même base sont deux têtes, gardées ; chaque appareil retrouve la version dont elles viennent toutes deux et les fusionne à trois voies (TS-9).
+- **Un compteur** (TS-9 : les numéros des décisions acceptées) : une opération demande un numéro pour un objet ; le numéro est la place de cette demande parmi celles du compteur, dans l'ordre du serveur, après le plus haut donné avant. Il n'est donné qu'une fois tout le journal lu jusqu'à elle : chaque copie donne le même, et jamais deux fois. Un numéro donné tel quel (un import) est gardé s'il est libre.
 - Quel que soit l'ordre d'arrivée des opérations, toutes les copies finissent pareilles.
 
 ## La copie locale
@@ -45,7 +46,7 @@ Chaque projet d'une équipe est un **journal d'opérations** : « créer le tick
 
 - Ce que l'appareil écrit s'applique à sa copie tout de suite et attend dans une file, dans son ordre. Les opérations partent au retour du réseau, une à une, chacune chiffrée à l'époque du moment : un membre parti entre-temps ne lit pas ce qui était en attente.
 - Une opération dont la réponse s'est perdue est renvoyée, et comptée une fois.
-- **L'état « Hors ligne · 3 changements en attente »** est donné par le cœur (`team_sync_status`) ; TS-4 et TS-6 l'affichent.
+- **L'état « Hors ligne · 3 changements en attente »** est donné par le cœur (`team_sync_status`) ; TS-4 et TS-6 l'affichent. Une lecture de l'équipe que le serveur ne reçoit pas met l'état « hors ligne » aussi.
 
 ## Le serveur qui ment
 
@@ -59,7 +60,7 @@ Dans tous ces cas, l'appareil s'arrête et le dit, comme pour la fourche : « Le
 
 ## Les instantanés
 
-- Au-delà de 10 000 entrées depuis le dernier, un appareil de l'équipe écrit un **instantané** chiffré et signé de l'état du projet, avec la chaîne de chaque appareil. Le serveur oublie alors les opérations d'avant ; il garde les commits du groupe du projet.
+- Au-delà de 10 000 entrées depuis le dernier, un appareil de l'équipe écrit un **instantané** chiffré et signé de l'état du projet, avec la chaîne de chaque appareil et les numéros donnés. Le serveur oublie alors les opérations d'avant ; il garde les commits du groupe du projet.
 - Un nouvel appareil, ou un appareil resté absent au-delà, part du dernier instantané. Il en vérifie la signature et la tête, et vérifie que chaque chaîne va au moins aussi loin que ce qu'il a lu. Un instantané forgé est refusé.
 
 ## La rotation

@@ -38,6 +38,7 @@ import subagents from './subagents';
 import team from './team';
 import teamBoard from './teamBoard';
 import teamProjects from './teamProjects';
+import teamDocs from './teamDocs';
 import wizard from './wizard';
 import voice from './voice';
 import plugins from './plugins';
@@ -87,4 +88,5 @@ export const en = defineCatalog({
   team,
   teamBoard,
   teamProjects,
+  teamDocs,
 });

@@ -381,6 +381,12 @@ pub enum UiEvent {
         pending: u32,
         conflict: Option<crate::docsshare::Conflict>,
     },
+    /// A project's docs on the team server changed on this machine (TS-9): a teammate's page, decision or document
+    /// came, a conflict, a number given; the window reads them again (`team_docs_status`, and its docs).
+    #[serde(rename_all = "camelCase")]
+    TeamDocs {
+        project_id: String,
+    },
     /// The pages of a project being compared to the code (ESC-263), told when one starts or ends.
     #[serde(rename_all = "camelCase")]
     DocsCompared {

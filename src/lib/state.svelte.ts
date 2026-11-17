@@ -537,6 +537,10 @@ class AppState {
   docsShare = $state<Record<string, { pending: number; conflict: DocsConflict | null }>>({});
   /** The pages of each project being compared to the code (ESC-263). */
   docsComparing = $state<Record<string, string[]>>({});
+  /** Each time a project's docs on the team server changed on this machine (TS-9): the Docs read them again. */
+  teamDocsTick = $state<Record<string, number>>({});
+  /** The projects whose docs are on the team server, as last read (TS-9): the status bar says so, not a branch. */
+  teamDocsOn = $state<Record<string, boolean>>({});
   /** Why no ticket of any board starts for now (a quota window, a usage limit), as the backend says. */
   autopilotPause = $state<AutopilotPause | null>(null);
   /** The same for the paused projects that prefer an account, by project (they wait for that account alone). */
@@ -1028,6 +1032,9 @@ class AppState {
         break;
       case 'docsShare':
         this.docsShare[e.projectId] = { pending: e.pending, conflict: e.conflict };
+        break;
+      case 'teamDocs':
+        this.teamDocsTick[e.projectId] = (this.teamDocsTick[e.projectId] ?? 0) + 1;
         break;
       case 'docsCompared':
         this.docsComparing[e.projectId] = e.comparing;

@@ -73,6 +73,17 @@ pub enum OpBody {
         bases: Vec<ObjectId>,
         content: Value,
     },
+    /// Takes a number of the project's counter `counter` for `object` (TS-9: an accepted decision's). The number is
+    /// not in the operation: it is this operation's place among the counter's in the server's order, after the
+    /// highest number given before it. Every copy reads the same order, so every copy gives the same number, and two
+    /// taken at the same moment never share one. `at` is a number given as it is (an import keeps its numbers); an
+    /// object that has a number keeps it, whatever comes after.
+    Number {
+        object: ObjectId,
+        counter: String,
+        #[serde(default)]
+        at: Option<u32>,
+    },
 }
 
 impl OpBody {
@@ -82,7 +93,8 @@ impl OpBody {
             | OpBody::Set { object, .. }
             | OpBody::Move { object, .. }
             | OpBody::Delete { object }
-            | OpBody::Version { object, .. } => *object,
+            | OpBody::Version { object, .. }
+            | OpBody::Number { object, .. } => *object,
         }
     }
 }

@@ -2,7 +2,7 @@
 title: "Docs du projet"
 subject: "Docs"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-256","ESC-257","ESC-258"]
+tickets: ["ESC-256","ESC-257","ESC-258","ESC-482"]
 decisions: []
 compared: "2026-10-30T05:35:38+01:00"
 gaps: [{"text":"La page dit que « Partager » est dans la barre d'état de l'onglet Docs, et que les autres onglets ne l'affichent que tant que les docs ont des changements ou un conflit. Dans le code, le bouton « Partager » n'apparaît que si le compte est supérieur à 0, y compris sur l'onglet Docs. Il y est donc absent quand il n'y a rien à partager.","code":["src/components/docs/DocsShareItem.svelte"]}]
@@ -79,3 +79,7 @@ Elles se disent en phrase simple, jamais la sortie de git en tête : identifiant
 ## Limites
 
 - « L'agent résout » et « Annuler » n'ont pas d'outil MCP : seule la fenêtre les propose.
+
+## Sur le serveur d'équipe
+
+Un projet d'une équipe peut avoir ses docs sur le serveur d'équipe plutôt que dans son dépôt (Réglages › Projets › Git et worktrees › « Docs du projet d'équipe » : « Sur le serveur d'équipe », par défaut, ou « Dans le dépôt »). Ses docs vivent alors dans une copie du poste, chiffrées sur le serveur, sans branche ni « Partager » : la barre d'état dit « Docs sur le serveur d'équipe » et « Branche des docs » ne s'affiche plus. Voir *Les docs d'un projet d'équipe*. Un projet privé garde toujours ses docs dans son dépôt.

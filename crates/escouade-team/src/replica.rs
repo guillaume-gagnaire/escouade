@@ -62,6 +62,19 @@ CREATE TABLE IF NOT EXISTS versions (
     content TEXT NOT NULL,
     PRIMARY KEY (object, id)
 );
+CREATE TABLE IF NOT EXISTS counts (
+    digest BLOB PRIMARY KEY,
+    counter TEXT NOT NULL,
+    object BLOB NOT NULL,
+    at INTEGER
+);
+CREATE TABLE IF NOT EXISTS numbers (
+    counter TEXT NOT NULL,
+    object BLOB NOT NULL,
+    number INTEGER NOT NULL,
+    PRIMARY KEY (counter, object),
+    UNIQUE (counter, number)
+);
 CREATE TABLE IF NOT EXISTS outbox (
     n INTEGER PRIMARY KEY AUTOINCREMENT,
     digest BLOB NOT NULL,
@@ -166,6 +179,8 @@ pub type ObjectRow = (Vec<u8>, Option<String>, Option<Vec<u8>>, Option<Vec<u8>>)
 pub type WriteRow = (Vec<u8>, String, Vec<u8>, Option<Vec<u8>>, String);
 /// A row of `versions`: object, id, bases, stamp, content.
 pub type VersionRow = (Vec<u8>, Vec<u8>, String, Vec<u8>, String);
+/// A row of `numbers`: counter, object, number.
+pub type NumberRow = (String, Vec<u8>, i64);
 /// An operation of the outbox: its place, its digest, its bytes.
 pub type Waiting = (i64, [u8; 32], Vec<u8>);
 /// An operation of the outbox taken back: its bytes, its fence.
@@ -179,6 +194,9 @@ pub struct State {
     pub objects: Vec<ObjectRow>,
     pub writes: Vec<WriteRow>,
     pub versions: Vec<VersionRow>,
+    /// The numbers given (TS-9): a snapshot keeps them, as the operations that gave them leave the journal.
+    #[serde(default)]
+    pub numbers: Vec<NumberRow>,
 }
 
 fn stamp_of(bytes: &[u8]) -> Result<Hlc, Error> {
@@ -320,8 +338,149 @@ impl Replica {
             }
             return Ok(false);
         }
+        if let OpBody::Number {
+            object,
+            counter,
+            at,
+        } = &op.body
+        {
+            self.conn()
+                .execute(
+                    "INSERT OR IGNORE INTO counts (digest, counter, object, at) VALUES (?1, ?2, ?3, ?4)",
+                    params![
+                        digest.as_slice(),
+                        counter,
+                        object.0.as_slice(),
+                        at.map(i64::from)
+                    ],
+                )
+                .map_err(db)?;
+        }
         self.apply_body(op)?;
         Ok(true)
+    }
+
+    /// Gives the numbers of the counters (TS-9), in the server's order, to the operations `Number` read up to `upto`
+    /// (the stream's number this copy read every entry before): each object its first number, after the highest one
+    /// given; one given as it is (`at`, an import's) when it is free. The same on every copy, as they read the same
+    /// order; a number given is never taken back. This device's operations not read back yet wait.
+    pub fn assign_numbers(&self, upto: u64) -> Result<usize, Error> {
+        type Row = (String, Vec<u8>, Option<i64>);
+        let waiting: Vec<Row> = {
+            let c = self.conn();
+            let mut stmt = c
+                .prepare(
+                    "SELECT c.counter, c.object, c.at FROM counts c JOIN ops o ON o.digest = c.digest
+                     WHERE o.seq IS NOT NULL AND o.seq <= ?1
+                     AND NOT EXISTS (SELECT 1 FROM numbers n WHERE n.counter = c.counter AND n.object = c.object)
+                     ORDER BY o.seq",
+                )
+                .map_err(db)?;
+            let rows = stmt
+                .query_map([upto as i64], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+                .map_err(db)?;
+            rows.collect::<Result<_, _>>().map_err(db)?
+        };
+        let mut given = 0;
+        let c = self.conn();
+        for (counter, object, at) in waiting {
+            let has = c
+                .query_row(
+                    "SELECT 1 FROM numbers WHERE counter = ?1 AND object = ?2",
+                    params![counter, object],
+                    |_| Ok(()),
+                )
+                .optional()
+                .map_err(db)?
+                .is_some();
+            if has {
+                continue;
+            }
+            let taken = |n: i64| -> Result<bool, Error> {
+                Ok(c.query_row(
+                    "SELECT 1 FROM numbers WHERE counter = ?1 AND number = ?2",
+                    params![counter, n],
+                    |_| Ok(()),
+                )
+                .optional()
+                .map_err(db)?
+                .is_some())
+            };
+            let number = match at {
+                Some(n) if n > 0 && !taken(n)? => n,
+                _ => {
+                    let max: Option<i64> = c
+                        .query_row(
+                            "SELECT MAX(number) FROM numbers WHERE counter = ?1",
+                            [&counter],
+                            |r| r.get(0),
+                        )
+                        .map_err(db)?;
+                    max.unwrap_or(0) + 1
+                }
+            };
+            c.execute(
+                "INSERT INTO numbers (counter, object, number) VALUES (?1, ?2, ?3)",
+                params![counter, object, number],
+            )
+            .map_err(db)?;
+            given += 1;
+        }
+        // The counts of operations gone from the journal (a snapshot) were given before it.
+        c.execute(
+            "DELETE FROM counts WHERE digest NOT IN (SELECT digest FROM ops)",
+            [],
+        )
+        .map_err(db)?;
+        Ok(given)
+    }
+
+    /// The number an object has of a counter, once the server's order gave it.
+    pub fn number(&self, counter: &str, object: &ObjectId) -> Result<Option<u32>, Error> {
+        self.conn()
+            .query_row(
+                "SELECT number FROM numbers WHERE counter = ?1 AND object = ?2",
+                params![counter, object.0.as_slice()],
+                |r| r.get::<_, i64>(0),
+            )
+            .optional()
+            .map(|n| n.map(|n| n as u32))
+            .map_err(db)
+    }
+
+    /// Every number of a counter: object and number, by number.
+    pub fn numbers(&self, counter: &str) -> Result<Vec<(ObjectId, u32)>, Error> {
+        let rows: Vec<(Vec<u8>, i64)> = {
+            let c = self.conn();
+            let mut stmt = c
+                .prepare("SELECT object, number FROM numbers WHERE counter = ?1 ORDER BY number")
+                .map_err(db)?;
+            let rows = stmt
+                .query_map([counter], |r| Ok((r.get(0)?, r.get(1)?)))
+                .map_err(db)?;
+            rows.collect::<Result<_, _>>().map_err(db)?
+        };
+        rows.into_iter()
+            .map(|(o, n)| Ok((object_of(o)?, n as u32)))
+            .collect()
+    }
+
+    /// Whether an object asked a number of a counter that the server's order has not given yet (this device's, not
+    /// sent or not read back).
+    pub fn number_waits(&self, counter: &str, object: &ObjectId) -> Result<bool, Error> {
+        if self.number(counter, object)?.is_some() {
+            return Ok(false);
+        }
+        Ok(self
+            .conn()
+            .query_row(
+                "SELECT 1 FROM counts WHERE counter = ?1 AND object = ?2",
+                params![counter, object.0.as_slice()],
+                |_| Ok(()),
+            )
+            .optional()
+            .map_err(db)?
+            .is_some())
     }
 
     /// What an operation does to the state. Every statement is the same whatever the order of the operations: a
@@ -413,6 +572,8 @@ impl Replica {
                     )
                     .map_err(db)?;
             }
+            // Its number comes from the server's order (`assign_numbers`), not from the operation alone.
+            OpBody::Number { .. } => {}
         }
         Ok(())
     }
@@ -443,13 +604,17 @@ impl Replica {
             for bytes in ops {
                 r.apply_body(&Operation::from_bytes(&bytes)?)?;
             }
+            let cursor = r.meta()?.cursor;
+            r.assign_numbers(cursor)?;
             Ok(())
         })
     }
 
     fn clear_state(&self) -> Result<(), Error> {
         self.conn()
-            .execute_batch("DELETE FROM objects; DELETE FROM writes; DELETE FROM versions;")
+            .execute_batch(
+                "DELETE FROM objects; DELETE FROM writes; DELETE FROM versions; DELETE FROM numbers;",
+            )
             .map_err(db)
     }
 
@@ -489,6 +654,14 @@ impl Replica {
                 )
                 .map_err(db)?;
         }
+        for (counter, object, number) in &state.numbers {
+            self.conn()
+                .execute(
+                    "INSERT OR IGNORE INTO numbers (counter, object, number) VALUES (?1, ?2, ?3)",
+                    params![counter, object, number],
+                )
+                .map_err(db)?;
+        }
         Ok(())
     }
 
@@ -521,6 +694,14 @@ impl Replica {
             .query_map([], |r| {
                 Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
             })
+            .map_err(db)?
+            .collect::<Result<_, _>>()
+            .map_err(db)?;
+        let mut stmt = c
+            .prepare("SELECT counter, object, number FROM numbers ORDER BY counter, number")
+            .map_err(db)?;
+        out.numbers = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
             .map_err(db)?
             .collect::<Result<_, _>>()
             .map_err(db)?;
@@ -781,6 +962,84 @@ impl Replica {
             current: heads.next(),
             conflicts: heads.collect(),
         })
+    }
+
+    /// The documents that have versions (the spec's pages, TS-9).
+    pub fn versioned(&self) -> Result<Vec<ObjectId>, Error> {
+        let rows: Vec<Vec<u8>> = {
+            let c = self.conn();
+            let mut stmt = c
+                .prepare("SELECT DISTINCT object FROM versions ORDER BY object")
+                .map_err(db)?;
+            let rows = stmt.query_map([], |r| r.get(0)).map_err(db)?;
+            rows.collect::<Result<_, _>>().map_err(db)?
+        };
+        rows.into_iter().map(object_of).collect()
+    }
+
+    /// Every version of a document, oldest first: what the three-way merge looks for a base in (TS-9).
+    pub fn history(&self, id: &ObjectId) -> Result<Vec<Version>, Error> {
+        let rows: Vec<(Vec<u8>, String, Vec<u8>, String)> = {
+            let c = self.conn();
+            let mut stmt = c
+                .prepare("SELECT id, bases, stamp, content FROM versions WHERE object = ?1 ORDER BY stamp")
+                .map_err(db)?;
+            let rows = stmt
+                .query_map([id.0.as_slice()], |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+                })
+                .map_err(db)?;
+            rows.collect::<Result<_, _>>().map_err(db)?
+        };
+        rows.into_iter()
+            .map(|(vid, bases, stamp, content)| {
+                let bases: Vec<String> = serde_json::from_str(&bases).unwrap_or_default();
+                Ok(Version {
+                    id: object_of(vid)?,
+                    bases: bases
+                        .iter()
+                        .filter_map(|b| {
+                            let mut out = [0u8; 16];
+                            hex::decode_to_slice(b, &mut out)
+                                .ok()
+                                .map(|_| ObjectId(out))
+                        })
+                        .collect(),
+                    stamp: stamp_of(&stamp)?,
+                    content: value_of(&content),
+                })
+            })
+            .collect()
+    }
+
+    /// The version two versions of a document were both made after, the latest of them (by stamp): the base of
+    /// their three-way merge. None when they have none (two pages made apart under the same path).
+    pub fn common_base(
+        &self,
+        id: &ObjectId,
+        a: &ObjectId,
+        b: &ObjectId,
+    ) -> Result<Option<Version>, Error> {
+        let all = self.history(id)?;
+        let by: BTreeMap<ObjectId, &Version> = all.iter().map(|v| (v.id, v)).collect();
+        let ancestors = |from: &ObjectId| {
+            let mut seen: BTreeSet<ObjectId> = BTreeSet::new();
+            let mut todo = vec![*from];
+            while let Some(v) = todo.pop() {
+                if seen.insert(v) {
+                    if let Some(x) = by.get(&v) {
+                        todo.extend(x.bases.iter().copied());
+                    }
+                }
+            }
+            seen
+        };
+        let (of_a, of_b) = (ancestors(a), ancestors(b));
+        Ok(all
+            .iter()
+            .filter(|v| of_a.contains(&v.id) && of_b.contains(&v.id))
+            .max_by_key(|v| v.stamp)
+            .cloned())
     }
 
     // === The outbox ===

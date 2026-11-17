@@ -5003,6 +5003,66 @@ pub async fn team_sync_status(
     teams.status(&team).await
 }
 
+/// What the window shows of a project's docs on the team server (TS-9): the team's choice, the conflicts, the
+/// repository's files left to remove, what waits.
+#[tauri::command]
+pub async fn team_docs_status(
+    core: CoreState<'_>,
+    id: String,
+) -> Res<crate::teamdocs::TeamDocsView> {
+    core.team_docs_view(&id).await.map_err(err)
+}
+
+/// « Les docs sur le serveur d'équipe » (`server`) or « Les docs restent dans le dépôt » (TS-9, C4-B); `journal`: a
+/// teammate's journal to follow, for a project that has none yet.
+#[tauri::command]
+pub async fn team_docs_choose(
+    core: CoreState<'_>,
+    id: String,
+    server: bool,
+    journal: Option<String>,
+) -> Res<crate::teamdocs::TeamDocsView> {
+    let out = core
+        .team_docs_choose(&id, server, journal)
+        .await
+        .map_err(err);
+    core.docs_changed(&id).await;
+    out
+}
+
+/// A page's conflict on the team server settled: `mine`, `theirs` or `agent` (TS-9).
+#[tauri::command]
+pub async fn team_docs_settle(
+    core: CoreState<'_>,
+    id: String,
+    path: String,
+    choice: String,
+) -> Res<crate::teamdocs::TeamDocsView> {
+    core.team_docs_settle(&id, &path, &choice)
+        .await
+        .map_err(err)
+}
+
+/// « Compris » on a decision's field that lost to a teammate's (TS-9).
+#[tauri::command]
+pub async fn team_docs_dismiss(
+    core: CoreState<'_>,
+    id: String,
+    stamp: String,
+) -> Res<crate::teamdocs::TeamDocsView> {
+    core.team_docs_dismiss(&id, &stamp).await.map_err(err)
+}
+
+/// « Retirer du dépôt » (TS-9): the repository's docs imported to the server, removed from its folder; the user
+/// commits.
+#[tauri::command]
+pub async fn team_docs_remove_repo_files(
+    core: CoreState<'_>,
+    id: String,
+) -> Res<crate::teamdocs::TeamDocsView> {
+    core.team_docs_remove_repo_files(&id).await.map_err(err)
+}
+
 /// Forgets the team on this device.
 #[tauri::command]
 pub async fn team_forget(teams: TeamsState<'_>, team: String) -> Res<()> {

@@ -1,6 +1,6 @@
 # escouade-team : le client du serveur d'équipe (TS-2)
 
-Tickets ESC-458 (TS-2), ESC-461 (TS-3), ESC-466 (TS-5), ESC-471 (TS-13), ESC-480 (TS-8) et ESC-479 (TS-6) de `docs/TEAM-SERVER.md` §16. L'équipe est un groupe MLS (C9-B). Cette crate est le client : elle tient un appareil dans une équipe, avec ses clés au trousseau, son état sur le disque et son serveur, et fait entrer dans l'équipe (création, invitation, autre appareil, récupération). Le cœur la branche (`src-tauri/src/teams.rs`) : le `SecretStore` de l'app pour trousseau, son client HTTP (proxy et certificats des réglages), le dossier `teams` des données. Elle synchronise les projets de l'équipe (TS-5) : le journal d'opérations chiffrées et signées, la copie locale, la file d'envoi hors ligne, les instantanés. Elle tient la liste chiffrée des projets de l'équipe (TS-8).
+Tickets ESC-458 (TS-2), ESC-461 (TS-3), ESC-466 (TS-5), ESC-471 (TS-13), ESC-480 (TS-8), ESC-479 (TS-6) et ESC-482 (TS-9) de `docs/TEAM-SERVER.md` §16. L'équipe est un groupe MLS (C9-B). Cette crate est le client : elle tient un appareil dans une équipe, avec ses clés au trousseau, son état sur le disque et son serveur, et fait entrer dans l'équipe (création, invitation, autre appareil, récupération). Le cœur la branche (`src-tauri/src/teams.rs`) : le `SecretStore` de l'app pour trousseau, son client HTTP (proxy et certificats des réglages), le dossier `teams` des données. Elle synchronise les projets de l'équipe (TS-5) : le journal d'opérations chiffrées et signées, la copie locale, la file d'envoi hors ligne, les instantanés. Elle tient la liste chiffrée des projets de l'équipe (TS-8).
 
 ## La maquette devient la couche cryptographique
 
@@ -30,7 +30,8 @@ Ce que TS-2 y a changé :
 | `pairing.rs` | Le code court de 8 caractères (TS-3) : SPAKE2 sur le relais du serveur, un seul essai |
 | `escrow.rs` | La clé de séquestre de l'organisation en texte : sa moitié publique, son secret |
 | `wire.rs` | Les corps CBOR du serveur, et `TeamMessage`, ce que le client écrit dans le flux d'équipe à côté des commits (liens, enveloppes, balises, demandes, Welcome) |
-| `replica.rs` | La copie locale d'un projet (TS-5) : SQLite, un fichier par projet, le journal rejoué, la fusion champ par champ, le conflit gardé, les versions des pages, la file d'envoi |
+| `replica.rs` | La copie locale d'un projet (TS-5) : SQLite, un fichier par projet, le journal rejoué, la fusion champ par champ, le conflit gardé, les versions des pages (leur historique et leur base commune, TS-9), les numéros des compteurs (TS-9), la file d'envoi |
+| `merge.rs` | La fusion à trois voies d'un texte, ligne par ligne (TS-6 et TS-9) : une page, une description écrites des deux côtés |
 | `team/sync.rs` | La synchronisation des projets (TS-5) : écrire, envoyer, lire (chaînes, signatures, tête des membres, serveur menteur), les instantanés, les groupes des projets gardés à quelques membres |
 | `fuzzing.rs` | Le corps des cibles de fuzzing (`fuzz/`) |
 
@@ -141,7 +142,7 @@ Choix tranchés (§15.2) : C2-A (journal d'opérations, champ par champ, le dern
 
 ### La fusion, champ par champ
 
-`replica.rs` garde chaque écriture d'un champ avec son horodatage, dont les octets se trient comme les horodatages : la valeur d'un champ est l'écriture la plus récente, calculée en SQL, quel que soit l'ordre d'arrivée. Deux écritures depuis la même base sont concurrentes : la perdante est gardée (`conflicts`), pour que TS-6 la montre. Une suppression est définitive. Les versions d'une page : les têtes (aucune autre ne les cite en base) sont la version courante (la plus récente) et les conflits, que TS-9 fusionnera à trois voies.
+`replica.rs` garde chaque écriture d'un champ avec son horodatage, dont les octets se trient comme les horodatages : la valeur d'un champ est l'écriture la plus récente, calculée en SQL, quel que soit l'ordre d'arrivée. Deux écritures depuis la même base sont concurrentes : la perdante est gardée (`conflicts`), pour que TS-6 la montre. Une suppression est définitive. Les versions d'une page : les têtes (aucune autre ne les cite en base) sont la version courante (la plus récente) et les conflits, que le cœur fusionne à trois voies (TS-9, ci-dessous).
 
 ### La copie locale et la file d'envoi
 
@@ -265,6 +266,17 @@ Le cœur (`src-tauri/src/teams_catalog.rs`, `team_projects.rs`) lit la liste à 
 
 Les tests (`tests/catalog.rs`, contre le vrai serveur, sur SQLite puis PostgreSQL) : un administrateur ajoute, change et retire, un membre lit, et le disque du serveur ne garde ni nom, ni adresse, ni branche, ni hôte ; un membre refusé par le client, par le serveur (403) et à la lecture ; une adresse dangereuse refusée à l'écriture et, signée quand même, à la lecture ; un clone reconnu sous sept formes de son adresse ; les projets d'un administrateur parti réécrits pour un appareil venu après ; un serveur qui cache ou change une entrée. Le cœur (`team_projects_tests.rs`) : la reconnaissance près des projets du poste, le clone depuis un dépôt local (`insteadOf`), un projet à plusieurs dépôts dont un manque, les refus d'accès de git, une adresse dangereuse qui n'atteint jamais git. L'e2e `tests/e2e/team-projects.spec.ts` (serveur sur `ESCOUADE_PORT_BASE + 4`) : deux clients, le clone par l'assistant.
 
+## Les docs d'un projet d'équipe (TS-9)
+
+Choix tranchés (§15.2) : C2-A (les pages en versions entières, fusion à trois voies sur le poste, un vrai conflit à l'agent rédacteur), C4-B (au choix par projet, le serveur par défaut), C5-A (pas de passerelle). La page de spec est « Les docs d'un projet d'équipe ». Le cœur (`src-tauri/src/teamdocs.rs`) tient la copie des docs sur le poste et ce qui les relie au journal ; la crate lui donne :
+
+- **Les versions d'une page** (`OpBody::Version`, TS-5) : `Replica::versioned` (les documents qui en ont), `history` (toutes leurs versions), `common_base` (la plus récente version dont deux versions viennent toutes deux, en remontant leurs bases) ; `merge::merge3` fusionne à trois voies. Le cœur fusionne les têtes dans l'ordre de leurs horodatages, la plus ancienne d'abord : chaque copie fusionne pareil, et deux fusions écrites en même temps ont le même texte (des têtes au même contenu ne sont pas un conflit).
+- **Le compteur des numéros** : `OpBody::Number { object, counter, at }` (`ops.rs` d'`escouade-team-crypto`), écrit par `Team::take_number`. Le numéro n'est pas dans l'opération : c'est sa place parmi les demandes du compteur dans l'ordre du serveur, après le plus haut donné avant (`at` le donne tel quel quand il est libre : un import). `Replica::assign_numbers` ne le donne qu'aux demandes dont le numéro du flux est déjà lu, et tout ce qui le précède aussi (`take_project_entry`, après chaque entrée) : une opération de ce poste envoyée mais pas relue attend (`number_waits`). Les numéros donnés sont dans l'état (`numbers`), donc dans un instantané ; `rebuild` les redonne. Deux acceptations au même moment, sur deux postes, ont deux numéros, les mêmes partout ; le serveur ne voit ni le compteur ni les numéros.
+- **Les documents** : `Team::put_document` scelle les octets sous une clé tirée sur le poste (XChaCha20-Poly1305, les données authentifiées liées à l'id du fichier), puis les envoie comme un fichier de l'équipe ; la clé, l'id, la taille et l'empreinte vont dans le journal, sous la clé du projet de l'époque. `get_document` les rouvre. Un membre parti, ou hors d'un projet gardé, ne lit pas la clé d'un document écrit après.
+- **Hors ligne** : `Team::sync` dit « hors ligne » quand le serveur ne répond pas (pas seulement la lecture d'un projet).
+
+Les tests (`tests/docs.rs`, contre le vrai serveur, sur SQLite puis PostgreSQL) : une page écrite ici lue là, et le disque du serveur sans son chemin, son titre ni son texte ; une page écrite des deux côtés, sa base retrouvée et la fusion écrite après les deux têtes ; trois acceptations au même moment (1, 2, 3, les mêmes sur chaque copie, une demande refaite qui ne change rien) ; une acceptation hors ligne qui attend et prend le numéro d'après ; des numéros gardés tels quels (un import), puis un instantané et un appareil venu après qui donne le suivant, et une reconstruction qui donne pareil. Le cœur (`src-tauri/src/teamdocs_tests.rs`, deux dossiers de données contre le vrai serveur) : page, décision et document lus de l'autre côté, ce que garde le serveur, fusion et conflit montré puis réglé, champ d'une décision perdu, deux décisions acceptées serveur coupé, brouillon d'un ticket invisible puis versé, hors ligne puis retour, import du dépôt, « dans le dépôt » et retour, membre retiré ; `mcp/teamdocs_tests.rs` : les outils des docs et la marque de donnée de tiers. L'e2e `tests/e2e/team-docs.spec.ts` (serveur sur `ESCOUADE_PORT_BASE + 6`) : deux clients, une page et une décision lues de l'autre côté, puis un conflit montré.
+
 ## Ce qui reste
 
 - **TS-3** (fait, ESC-461), sauf :
@@ -273,12 +285,13 @@ Les tests (`tests/catalog.rs`, contre le vrai serveur, sur SQLite puis PostgreSQ
 - **TS-13** (fait, ESC-471), sauf : le fichier d’un projet d’équipe par-dessus celui de l’équipe (il passera par le groupe du projet gardé de TS-5) ; un serveur qui cache une version à un appareil qui ne l’a jamais vue (à croiser avec les balises de tête) ; le flux des réglages pourrait passer par le journal d’opérations de TS-5 (copie locale, direct) plutôt que par une lecture à chaque relecture.
 - **TS-4** : montrer l'équipe dans les espaces et ses réglages (membres, appareils, rôles, état du trousseau, hors ligne), retirer un appareil de soi qu'on oublie.
 - **TS-5** (fait, ESC-466, avec les projets d'une invitation et le direct dans le cœur de TS-3), sauf :
-  - les écrans (« Hors ligne · N changements en attente », les conflits, le Kanban) : TS-4 et TS-6 ; la prise d'un ticket : TS-6 ; la fusion à trois voies des pages : TS-9 ;
+  - les écrans (« Hors ligne · N changements en attente », les conflits, le Kanban) : TS-4 et TS-6 ; la prise d'un ticket : TS-6 ; la fusion à trois voies des pages est faite (TS-9) ;
   - les droits par projet sur le serveur : faits par TS-6 ;
   - l'écriture d'un lien d'historique manquant d'un groupe de projet par un autre appareil que son committeur (pour l'équipe, c'est fait) ;
   - la liste chiffrée des projets de l'équipe est faite (TS-8, ESC-480), mais elle ne porte pas encore l'id du projet synchronisé (TS-5) d'un projet de la liste : « Rattacher à l'équipe » avec ses tickets est TS-7 (ici, un appareil suit un projet dont on lui donne l'id, `Team::follow`) ;
 - **TS-8** (fait, ESC-480), sauf : la barre des projets par espace (avec les espaces d'Escouade à distance) ; un serveur qui cache une entrée de la liste à un appareil qui ne l'a jamais vue (comme pour TS-13) ; le choix des membres d'un accès par leur nom (l'annuaire chiffré est TS-4) ; l'accès d'un projet de la liste n'est pas encore celui de son groupe MLS (TS-7).
   - `write_object` et `read_objects` (l'objet scellé de TS-2) restent pour les fichiers ; les projets passent par les opérations.
+- **TS-9** (fait, ESC-482), sauf : le nom de l'auteur d'une version dans un conflit (l'annuaire chiffré, TS-4) ; un document de plus de 20 Mo ne part pas ; les écarts des comparaisons au code restent par poste.
 - **TS-6** (fait, ESC-479), sauf : la liste des Kanbans de l'équipe (TS-8 : ici, on rejoint un Kanban par son identifiant) ; l'import des tickets existants (TS-7) ; passer l'agent d'un ticket interrompu (TS-17) ; l'annuaire des noms de toute l'équipe (TS-4 : ici, chaque projet porte les noms de ses appareils) ; un administrateur qui rend la prise d'un autre ; la règle de colonne d'un ticket pris est tenue par les clients (le serveur ne voit pas les déplacements).
 - **TS-18** : faire tourner les cibles de fuzzing longtemps ; l'e2e à deux clients en CI (`tests/e2e/team-board.spec.ts` en lance deux en même temps).
 - **L'audit externe (TS-20)** : les points 1 à 10 du README de la maquette. Pour cette crate, en plus :

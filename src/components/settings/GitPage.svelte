@@ -11,6 +11,7 @@
   import { DEFAULT_WORKTREES, worktreesRoot, type WorktreesProblem } from '../../lib/worktrees';
   import Chips from './Chips.svelte';
   import DocsBranchField from './DocsBranchField.svelte';
+  import TeamDocsPlace from './TeamDocsPlace.svelte';
   import Facts from './Facts.svelte';
   import Group from './Group.svelte';
   import Proposal, { ask, settle } from './Proposal.svelte';
@@ -168,9 +169,17 @@
   <Row label={t('settings.project.commit')} desc={t('settings.project.commitDesc')} shared="git.commit_mode">
     <Chips label={t('settings.project.commit')} options={COMMIT_MODES} bind:value={draft.commitMode} />
   </Row>
-  <Row label={t('docs.branch.label')} desc={t('docs.branch.desc')} wide>
-    <DocsBranchField bind:value={draft.docsBranch} />
-  </Row>
+  {#if !(live.team && app.teamDocsOn[live.id])}
+    <!-- On the team server (TS-9), the docs follow no branch. -->
+    <Row label={t('docs.branch.label')} desc={t('docs.branch.desc')} wide>
+      <DocsBranchField bind:value={draft.docsBranch} />
+    </Row>
+  {/if}
+  {#if live.team}
+    <Row label={t('teamDocs.place.label')} desc={t('teamDocs.place.desc')} wide>
+      <TeamDocsPlace project={live} />
+    </Row>
+  {/if}
 </Group>
 
 <Group title={t('settings.project.worktrees')} anchor="worktrees" note={t('settings.project.worktreesNote')}>
