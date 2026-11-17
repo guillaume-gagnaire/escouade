@@ -151,7 +151,9 @@ test('the title bar, the projects’ rail and the status bar look as the preview
   }
 });
 
-test('at the first start the rail keeps « + » and the settings, the title bar its logo and the window’s buttons', async ({ app }) => {
+test('at the first start the rail keeps « + », « Aide » and the settings, the title bar its logo and the window’s buttons', async ({
+  app,
+}) => {
   const exe = chromium.executablePath();
   test.skip(
     !fs.existsSync(exe) || !fs.existsSync(PREVIEW_FONT),
@@ -170,9 +172,11 @@ test('at the first start the rail keeps « + » and the settings, the title bar 
       await still(page);
       await still(preview);
       const rail = page.getByRole('navigation', { name: 'Projets' });
-      await expect(rail.getByRole('button')).toHaveCount(2);
+      // « Aide » (ESC-504) is not in the 2.0 preview: the others stay where it has them.
+      await expect(rail.getByRole('button')).toHaveCount(3);
       expect(await rail.getByRole('button').evaluateAll((b) => b.map((x) => x.getAttribute('aria-label')))).toLookLike([
         'Ajouter un projet',
+        'Aide',
         'Réglages (Ctrl+,)',
       ]);
       expect(await place(page.getByRole('button', { name: 'Ajouter un projet', exact: true }))).toLookLike(

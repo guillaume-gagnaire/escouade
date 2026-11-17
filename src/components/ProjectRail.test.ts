@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { viewUnsaved } from '../lib/vscode/unsaved.svelte';
 import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
+import { onboarding } from '../lib/onboarding.svelte';
 import { initials } from '../lib/project-rail';
 import { handleShortcut } from '../lib/shortcuts';
 import { app } from '../lib/state.svelte';
@@ -333,7 +334,7 @@ describe('ProjectRail', () => {
     expect(app.modal).toEqual({ kind: 'settings' });
   });
 
-  it('keeps « + » and the settings alone at the first start (choice 49)', () => {
+  it('keeps « + », « Aide » and the settings alone at the first start (choice 49, ESC-504)', () => {
     resetApp({ projects: [] });
     fakeBackend();
     render(ProjectRail);
@@ -342,7 +343,7 @@ describe('ProjectRail', () => {
       within(rail)
         .getAllByRole('button')
         .map((b) => b.getAttribute('aria-label')),
-    ).toEqual(['Ajouter un projet', 'Réglages (Ctrl+,)']);
+    ).toEqual(['Ajouter un projet', 'Aide', 'Réglages (Ctrl+,)']);
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
   });
 
@@ -351,7 +352,33 @@ describe('ProjectRail', () => {
     render(ProjectRail);
     const rail = screen.getByRole('navigation', { name: 'Projets' });
     const icons = [...rail.querySelectorAll(':scope > button [data-icon]')].map((i) => i.getAttribute('data-icon'));
-    expect(icons).toEqual(['overview', 'plus', 'stats', 'puzzle', 'sliders']);
+    expect(icons).toEqual(['overview', 'plus', 'info', 'stats', 'puzzle', 'sliders']);
+  });
+
+  it('opens « Aide »: the first launch again, the documentation and a problem to report (ESC-504, choice O10)', async () => {
+    const backend = fakeBackend({
+      onboarding_act: () => ({
+        open: true,
+        trigger: 'redo',
+        steps: [{ id: 'harness', status: 'done' }],
+        resumeAt: 'harness',
+        started: true,
+        finished: false,
+        askTelemetryAgain: false,
+      }),
+    });
+    render(ProjectRail);
+    await userEvent.click(screen.getByRole('button', { name: 'Aide' }));
+    expect(menu.open?.items.filter((i) => !i.separator).map((i) => i.label)).toEqual([
+      'Premier lancement',
+      'Documentation',
+      'Signaler un problème',
+    ]);
+    menu.open?.items[0].onClick?.();
+    await waitFor(() => expect(onboarding.shown).toBe(true));
+    expect(backend.called('onboarding_act')[0].args).toEqual({ act: { kind: 'redo' } });
+    expect(onboarding.at).toBe('harness');
+    onboarding.shown = false;
   });
 });
 

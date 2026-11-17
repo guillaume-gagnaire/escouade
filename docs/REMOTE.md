@@ -374,6 +374,8 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `merge_agent`
 - `merge_agent_repos`
 - `message_subagent`
+- `onboarding_act`
+- `onboarding_view`
 - `overseer_revoke`
 - `overseer_send`
 - `overseer_undo`

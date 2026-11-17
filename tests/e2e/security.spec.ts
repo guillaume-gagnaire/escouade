@@ -24,17 +24,23 @@ test.describe('the first start of a new installation (SEC-09)', () => {
   // Settings of this version not answered yet: as a new installation has them after its first start.
   test.use({ preStart: { run: () => ({ agentMode: '', allowBypass: false, telemetry: null }) } });
 
-  test('asks the mode of new agents first, the recommended one chosen, then the statistics', async ({ app }) => {
+  test('asks the mode of new agents in the first launch, the recommended one chosen and Bypass off, then the statistics', async ({
+    app,
+  }) => {
     const { page } = app;
-    const dialog = page.getByRole('dialog', { name: 'Comment tes agents demandent-ils ?' });
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole('radio', { name: /Édits auto/ })).toHaveAttribute('aria-checked', 'true');
-    await expect(dialog.getByRole('radio', { name: /Bypass/ })).toHaveCount(0);
-    await dialog.getByRole('radio', { name: /^Demander/ }).click();
-    await dialog.getByRole('button', { name: 'Choisir' }).click();
-    await expect(page.getByRole('dialog', { name: 'Aider à améliorer Escouade ?' })).toBeVisible();
+    // An account is there already: the first launch goes on at its starting settings (ESC-504).
+    const journey = page.getByRole('region', { name: 'Premier lancement' });
+    await expect(page.getByRole('heading', { level: 1, name: 'Quand tes agents doivent-ils te demander ?' })).toBeVisible();
+    await expect(journey.getByRole('radio', { name: /Édits auto/ })).toHaveAttribute('aria-checked', 'true');
+    // Bypass shown, never offered.
+    await expect(journey.getByRole('radio', { name: /Bypass/ })).toHaveAttribute('aria-disabled', 'true');
+    await journey.getByRole('radio', { name: /^Demander/ }).click();
+    await journey.getByRole('button', { name: /Garder Demander/ }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Où travaille ton premier agent ?' })).toBeVisible();
     const settings = () => JSON.parse(fs.readFileSync(path.join(app.data, 'settings.json'), 'utf8'));
     await expect.poll(() => settings().agentMode).toBe('default');
     expect(settings().allowBypass).toBe(false);
+    await journey.getByRole('button', { name: 'Plus tard' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Aider à améliorer Escouade ?' })).toBeVisible();
   });
 });

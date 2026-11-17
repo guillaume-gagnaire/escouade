@@ -39,7 +39,7 @@ import { hasTab } from './code-host';
 import { newCount, opened, readSeen, seenOf, type PrSeen } from './prnew';
 import { keptViewed } from './prfiles';
 import { workflows } from './workflows.svelte';
-import { modeToAsk } from './first-mode';
+import { takeView as takeOnboarding } from './onboarding.svelte';
 import {
   activeItem,
   close as closePane,
@@ -135,8 +135,6 @@ export type Modal =
     }
   /** The question of the first start: the usage statistics. */
   | { kind: 'telemetry' }
-  /** The first start's question of the mode of new agents (SEC-09). */
-  | { kind: 'firstMode' }
   /** The first launch's other question (ESC-190): the user's name for the team; `then`, what waited for it (a share). */
   | { kind: 'teamName'; projectId?: string; then?: () => void }
   /** The teams of the team server (TS-3): at a step (the list by default), on a link opened (`escouade://team/join`). */
@@ -215,7 +213,16 @@ export type Modal =
   /** « Ajouter un compte… » (a new Claude account, then its sign-in), or « Se connecter… » for the account `accountId`. */
   /** `back`: the settings' tab it came from and goes back to (Comptes Claude by default). */
   /** `forAgent`: opened by `/login` typed to that agent (ESC-401), which goes on once signed in; closed, back to it. */
-  | { kind: 'account'; accountId?: string; back?: SettingsPage; engine?: EngineId; reserveFor?: string; forAgent?: string }
+  | {
+      kind: 'account';
+      accountId?: string;
+      back?: SettingsPage;
+      engine?: EngineId;
+      reserveFor?: string;
+      forAgent?: string;
+      /** Opened from the first launch's journey (ESC-504): closed, back to it. */
+      onboarding?: boolean;
+    }
   | { kind: 'testLaunch'; agentId: string }
   | { kind: 'import'; projectId: string }
   /** The update downloaded (`app.update`), which a restart installs; `back`, the settings' tab it was opened from and goes back to. */
@@ -858,12 +865,17 @@ class AppState {
     this.recovered = s.recovered ?? [];
     this.restored = s.restored ?? [];
     if (s.pageCrash) this.tellPageCrash(s.pageCrash);
-    // The mode of new agents, then the statistics: not answered yet (closed without a choice: asked again at the next
-    // start). An installation that existed before the first has `auto` (SEC-09).
-    if (modeToAsk(s.settings)) this.modal = { kind: 'firstMode' };
-    else if (s.settings.telemetry === null) this.modal = { kind: 'telemetry' };
-    // The user's name for the shared tickets (ESC-190), asked once, after the statistics' question.
-    else if (!s.settings.nameAsked) this.modal = { kind: 'teamName' };
+    // The first launch's journey (ESC-504): open on a new installation, or left half-way; never imposed on a device set
+    // up. It asks the mode of the new agents and the statistics itself; the user's name for the team waits for the first
+    // share (choice O8). Out of it, the statistics not answered are asked as before: at each start on an installation
+    // that never saw the journey, once more when they were passed in it.
+    takeOnboarding(s.onboarding);
+    if (!s.onboarding?.open) {
+      if (s.onboarding?.askTelemetryAgain) {
+        this.modal = { kind: 'telemetry' };
+        void api.onboardingAct({ kind: 'telemetryAskedAgain' }).catch(() => {});
+      } else if (!s.onboarding?.started && s.settings.telemetry === null) this.modal = { kind: 'telemetry' };
+    }
     if (s.installed) {
       const { version, notes } = s.installed;
       const tell = () =>

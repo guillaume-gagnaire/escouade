@@ -2,7 +2,7 @@
 title: "Réglages"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/index.html","design/settings-2-2/captures/a-plugins.png","design/settings-2-2/captures/a-projet.png","design/settings-2-2/captures/a-comptes.png"]
-tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-462","ESC-468"]
+tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-462","ESC-468","ESC-504"]
 decisions: [118,119,120,121,123,124,126,145,147,181]
 compared: null
 ---
@@ -182,3 +182,8 @@ Le tableau des plugins, côté réglages, et le seul endroit des réglages où l
 - « Son écran » › « Raccourci global » : le raccourci qui ouvre son écran de n'importe où (`Alt+Maj+O`, `⌥⌘O` sous macOS), « Changer » puis les touches, « Par défaut », « Retirer ». Il est enregistré auprès du système avant d'être gardé : un raccourci déjà pris est refusé, avec la raison sous la rangée, et l'ancien reste. Sous la rangée : « Actif », « Actif quand l'Overseer est allumé », ou, sous Wayland, ce qu'il faut faire à la place (voir *L'Overseer*).
 - « Consignes » : la liste des consignes de l'utilisateur, chacune retirée par « Retirer » (voir *L'Overseer*).
 - Le registre a trois rangées pour elle : `overseerAgent` (la clé `overseer` des réglages, son raccourci compris), `overseerShortcut` et `overseerDirectives`.
+
+### Refaire le premier lancement (ESC-504)
+
+- Dans Général › « Toi », sous « Statistiques d'usage » : « Premier lancement », « Revoir le harness, le compte, le mode des nouveaux agents et les statistiques. Rien n'est remis à zéro. », et « Refaire le premier lancement », qui ferme la fenêtre des réglages et rouvre le parcours depuis sa première station (voir *Premier lancement*).
+- Ce que le parcours écrit est ce qu'écrivent ces pages, par les mêmes appels : « Ordre des harness » et les comptes (Comptes et harness), « Mode par défaut des agents » (Agents), « Statistiques d'usage » (Général).

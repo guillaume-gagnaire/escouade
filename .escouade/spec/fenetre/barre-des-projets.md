@@ -2,21 +2,21 @@
 title: "Barre des projets"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-158","ESC-72","ESC-167","ESC-168"]
+tickets: ["ESC-158","ESC-72","ESC-167","ESC-168","ESC-504"]
 decisions: []
 compared: null
 ---
 
 ## Ce que c'est
 
-Une colonne à gauche de la fenêtre, de la barre de titre à la barre de statut. Elle donne accès à la vue d'ensemble, à chaque projet ouvert par sa tuile, à l'ajout d'un projet, aux stats et aux réglages. Chaque tuile dit où en sont les agents de son projet. Au-dessus, la barre de titre porte le projet affiché et la recherche.
+Une colonne à gauche de la fenêtre, de la barre de titre à la barre de statut. Elle donne accès à la vue d'ensemble, à chaque projet ouvert par sa tuile, à l'ajout d'un projet, à l'aide, aux stats, aux plugins et aux réglages. Chaque tuile dit où en sont les agents de son projet. Au-dessus, la barre de titre porte le projet affiché et la recherche. Pendant le premier lancement (voir *Premier lancement*), elle laisse sa place au parcours.
 
 ## Comportement
 
 ### La colonne
 
-- De haut en bas : « Vue d'ensemble » (voir *Vue d'ensemble*), un filet, une tuile de 36 px par projet ouvert, `+`, puis « Stats » et « Réglages » en bas.
-- Au premier démarrage, sans projet : `+` et « Réglages » seuls.
+- De haut en bas : « Vue d'ensemble » (voir *Vue d'ensemble*), un filet, une tuile de 36 px par projet ouvert, `+`, puis « Aide », « Stats », « Plugins » et « Réglages » en bas.
+- Au premier démarrage, sans projet : `+`, « Aide » et « Réglages » seuls.
 - Trop de projets : la liste défile, avec des bords fondus. Le projet actif revient dans la vue à chaque choix. Une pastille ambre sous la liste (ou sur elle) signale un projet hors de vue qui attend, et le ramène dans la vue.
 
 ### Une tuile
@@ -52,6 +52,8 @@ Une colonne à gauche de la fenêtre, de la barre de titre à la barre de statut
 - Ordre : glisser-déposer, ou `Alt+↑` / `Alt+↓` sur la tuile qui a le focus. L'ordre est gardé.
 - Clic droit (ou clic du milieu) sur une tuile, comme sur le nom du projet dans la barre de titre : renommer, couleur, worktree par agent, « Réglages du projet… » (onglet « Projets » des réglages), ouvrir le dossier, Monter, Descendre, fermer le projet (voir *Fermer un projet*).
 - `+` ouvre « Nouveau projet » (voir *Nouveau projet*). S'il y a des projets fermés, il ouvre d'abord un menu : « Ajouter un projet… », les cinq derniers projets fermés (« Rouvrir »), puis « Tous les projets fermés… » (Réglages › Projets).
+- « Aide » (icône d'information, infobulle « Le premier lancement, la documentation ») ouvre un menu, au clavier aussi : « Premier lancement » (le parcours refait, voir *Premier lancement*), « Documentation » (escouade.dev/docs, ou /en/docs, dans le navigateur) et « Signaler un problème » (les tickets du dépôt sur GitHub).
+- « Plugins » ouvre la vue des plugins (voir *Les plugins : vue d'ensemble*).
 
 ### Barre de titre
 

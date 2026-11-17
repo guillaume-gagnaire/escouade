@@ -2778,6 +2778,51 @@ pub struct PersistedState {
     pub pr_reviews: Vec<crate::prreview::PrReview>,
     /// The scheduled tasks of every project (ESC-448): this machine's alone.
     pub scheduled: Vec<ScheduledTask>,
+    /// The first launch's journey (ESC-504): where it stands on this installation, never in a project's file.
+    pub onboarding: Onboarding,
+}
+
+/// A station of the first launch's journey (ESC-504, `docs/ONBOARDING.md` § 4), in its order.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum OnboardingStep {
+    /// The program the agents run on.
+    Harness,
+    /// The account they go out on.
+    Account,
+    /// The mode of the new agents (the model and the effort said, not asked).
+    Defaults,
+    /// Where the first agent works.
+    Project,
+    /// The usage statistics' agreement.
+    Telemetry,
+}
+
+/// What the user did at a station: what the real state says is never kept here, but a station done stays done.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum StepOutcome {
+    Done,
+    /// « Plus tard », or « Tout passer »: it never comes back by itself, it waits in Aide › Premier lancement.
+    Skipped,
+}
+
+/// The first launch's journey of this installation (ESC-504, `docs/ONBOARDING.md` § 5), kept in `state.json`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Onboarding {
+    /// The version of the journey (a later one that changes a station raises it).
+    pub version: u32,
+    /// When it was opened first (ms since the epoch); None: never opened.
+    pub started: Option<i64>,
+    /// When its last station was passed, or « Tout passer » (ms); None while it is under way.
+    pub finished: Option<i64>,
+    /// Opened again from Aide or Réglages (« Refaire le premier lancement »): every station is shown, from the first.
+    pub redo: bool,
+    /// What the user did at each station.
+    pub steps: BTreeMap<OnboardingStep, StepOutcome>,
+    /// The statistics' question passed at the journey was asked once more at a later start: never again.
+    pub telemetry_asked_again: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]

@@ -8,6 +8,8 @@
   import { dropProject, moveProject, projectMenu, tileState } from '../lib/project-rail';
   import { RAIL_MIN, railWidth } from '../lib/rail-width.svelte';
   import { app } from '../lib/state.svelte';
+  import { openOutside, siteUrl } from '../lib/links';
+  import { redo } from '../lib/onboarding.svelte';
   import { tip } from '../lib/tip';
   import type { Project } from '../lib/types';
   import Icon from './Icon.svelte';
@@ -170,6 +172,36 @@
     menu.open = { x: besideRail(r), y: Math.max(8, r.top - 6), items, keyboard: true };
   }
 
+  /** Where a problem is reported. */
+  const ISSUES_URL = 'https://github.com/guillaume-gagnaire/escouade/issues';
+
+  /** « Aide » (choice O10 of docs/ONBOARDING.md): the first launch again, the documentation, a problem to report. */
+  function help(e: MouseEvent) {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const items: MenuItem[] = [
+      {
+        label: t('onboarding.help.firstLaunch'),
+        icon: 'flow',
+        detail: t('onboarding.help.firstLaunchDetail'),
+        onClick: () => void redo(),
+      },
+      { label: '', separator: true },
+      {
+        label: t('onboarding.help.docs'),
+        icon: 'ext',
+        detail: t('onboarding.help.docsDetail'),
+        onClick: () => openOutside(`${siteUrl()}docs`),
+      },
+      {
+        label: t('onboarding.help.report'),
+        icon: 'ext',
+        detail: t('onboarding.help.reportDetail'),
+        onClick: () => openOutside(ISSUES_URL),
+      },
+    ];
+    menu.open = { x: besideRail(r), y: Math.max(8, r.top - 6), items, keyboard: true };
+  }
+
   /** A pill of projects out of view: a click brings the first of them into view. */
   function reveal(ids: string[]) {
     tileEls[ids[0]]?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
@@ -245,6 +277,15 @@
     onclick={add}><Icon name="plus" /><span class="lbl" aria-hidden="true"><span class="tx">{t('nav.rail.add')}</span></span></button
   >
   <div class="spacer"></div>
+  <!-- « Aide » (ESC-504), above the stats: the first launch again, the documentation. -->
+  <button
+    class="tile global"
+    aria-haspopup="menu"
+    aria-label={t('onboarding.help.label')}
+    use:tip={{ title: t('onboarding.help.label'), rows: [t('onboarding.help.tip')], side: 'right', aria: false }}
+    onclick={help}
+    ><Icon name="info" /><span class="lbl" aria-hidden="true"><span class="tx">{t('onboarding.help.label')}</span></span></button
+  >
   {#if !first}
     <button
       class="tile global"

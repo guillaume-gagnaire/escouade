@@ -1,5 +1,7 @@
 import { Channel, invoke } from './transport';
 import type {
+  OnboardingAct,
+  OnboardingView,
   BackupDiff,
   BackupsView,
   RestoreOutcome,
@@ -200,6 +202,10 @@ export const api = {
   mcpManualCommand: (account: string) => invoke<string>('mcp_manual_command', { account }),
   /** The answer to « Statistiques d’usage », saved at once. */
   telemetrySet: (consent: boolean) => invoke<void>('telemetry_set', { consent }),
+  /** The first launch's journey (ESC-504): open at a new installation's first start, or left half-way. */
+  onboardingView: () => invoke<OnboardingView>('onboarding_view'),
+  /** A station done or passed, « Tout passer », its end, « Refaire le premier lancement »; the journey as it then is. */
+  onboardingAct: (act: OnboardingAct) => invoke<OnboardingView>('onboarding_act', { act }),
   /** The dictation (Réglages › Voix): the microphones and the models. */
   voiceInfo: () => invoke<VoiceInfo>('voice_info'),
   /** Starts listening with the settings' microphone and model, or says the model is to be downloaded first. */

@@ -135,6 +135,8 @@ pub struct InitialState {
     /// The copies taken back by hand from the screen of the copies at the last starts (ESC-487), until the same notice
     /// closes.
     restored: Vec<escouade_model::backups::Restored>,
+    /// The first launch's journey (ESC-504): open at a new installation's first start, or left half-way.
+    onboarding: crate::onboarding::OnboardingView,
 }
 
 // Off the main thread: finding a `claude` of WSL may start its distribution (seconds).
@@ -221,6 +223,7 @@ pub fn subscribe(
         team_locks: core.team_locks.read().clone(),
         recovered: escouade_model::backups::notices(core.data.root()),
         restored: core.restored_backups(),
+        onboarding: core.onboarding_view(),
     }
 }
 
@@ -3885,6 +3888,21 @@ pub fn mcp_set_enabled(core: CoreState, enabled: bool) -> Res<()> {
         core.telemetry.track(Event::McpEnabled);
     }
     Ok(())
+}
+
+/// The first launch's journey (ESC-504) as the window shows it: open at a new installation's first start, or left half-way.
+#[tauri::command(async)]
+pub fn onboarding_view(core: CoreState) -> crate::onboarding::OnboardingView {
+    core.onboarding_view()
+}
+
+/// A gesture on the journey: a station done or passed, « Tout passer », its end, « Refaire le premier lancement ».
+#[tauri::command(async)]
+pub fn onboarding_act(
+    core: CoreState,
+    act: crate::onboarding::Act,
+) -> crate::onboarding::OnboardingView {
+    core.onboarding_act(act)
 }
 
 /// The answer to « Statistiques d’usage », at the first start.

@@ -53,7 +53,8 @@
   import TestLaunchModal from './components/modals/TestLaunchModal.svelte';
   import ImportModal from './components/modals/ImportModal.svelte';
   import TelemetryModal from './components/modals/TelemetryModal.svelte';
-  import FirstModeModal from './components/modals/FirstModeModal.svelte';
+  import Onboarding from './components/onboarding/Onboarding.svelte';
+  import { onboarding } from './lib/onboarding.svelte';
   import TeamNameModal from './components/modals/TeamNameModal.svelte';
   import TeamModal from './components/team/TeamModal.svelte';
   import UpdateModal from './components/modals/UpdateModal.svelte';
@@ -229,91 +230,96 @@
       <TeamHintBand />
     </div>
   {/if}
-  <ProjectRail />
-  <div class="body">
-    {#if initError}
-      <div class="work"><div class="fatal">{t('shell.app.cantStart', { error: initError })}</div></div>
-    {:else if !app.ready}
-      <div class="work"></div>
-    {:else if app.ui.view === 'overview'}
-      <div class="work"><Overview /></div>
-    {:else if app.ui.view === 'stats'}
-      <div class="work"><Stats /></div>
-    {:else if app.ui.view === 'plugins'}
-      <PluginsSide />
-      <div class="work"><PluginsView /></div>
-    {:else if app.project}
-      {@const project = app.project}
-      <Sidebar {project} />
-      {#if app.panesOn && app.panes}
-        <!-- The split screen (ESC-392): each pane its own panel on the frame. -->
-        <div class="work panes" data-testid="panes"><PaneGrid node={app.panes.root} {project} /></div>
-      {:else}
-        <!-- What is shown alone carries its key: a content dragged from the sidebar is dropped beside it (ESC-392). -->
-        <div class="work" data-pane-key={app.singleItem ? itemKey(app.singleItem) : undefined}>
-          {#if app.boardOn}
-            {#key project.id}
-              <Board {project} />
-            {/key}
-          {:else if app.prsOn}
-            {#key project.id}
-              <PrsView {project} />
-            {/key}
-          {:else if app.docsOn}
-            {#key project.id}
-              <DocsView {project} />
-            {/key}
-          {:else if app.editorOn}
-            {#key project.id}
-              <VscodeView {project} />
-            {/key}
-          {:else if app.runCommand}
-            <RunView cmd={app.runCommand} {project} />
-          {:else if app.term}
-            <TerminalView term={app.term} {project} />
-          {:else if app.agent}
-            {#key app.agent.id}
-              <!-- One of its subagents' conversation (ESC-13), or the view of one of its background tasks (ESC-14), in place of its own. -->
-              {#if app.subView[app.agent.id]}
-                {#key app.subView[app.agent.id]}
-                  <SubagentView agent={app.agent} {project} call={app.subView[app.agent.id] ?? ''} />
-                {/key}
-              {:else if app.taskView[app.agent.id]}
-                {#key app.taskView[app.agent.id]}
-                  <TaskView agent={app.agent} task={app.taskView[app.agent.id] ?? ''} />
-                {/key}
-              {:else}
-                <Conversation agent={app.agent} {project} />
+  {#if app.ready && onboarding.shown}
+    <!-- The first launch (ESC-504): the whole window but its title bar and its status bar, until it closes. -->
+    <Onboarding />
+  {:else}
+    <ProjectRail />
+    <div class="body">
+      {#if initError}
+        <div class="work"><div class="fatal">{t('shell.app.cantStart', { error: initError })}</div></div>
+      {:else if !app.ready}
+        <div class="work"></div>
+      {:else if app.ui.view === 'overview'}
+        <div class="work"><Overview /></div>
+      {:else if app.ui.view === 'stats'}
+        <div class="work"><Stats /></div>
+      {:else if app.ui.view === 'plugins'}
+        <PluginsSide />
+        <div class="work"><PluginsView /></div>
+      {:else if app.project}
+        {@const project = app.project}
+        <Sidebar {project} />
+        {#if app.panesOn && app.panes}
+          <!-- The split screen (ESC-392): each pane its own panel on the frame. -->
+          <div class="work panes" data-testid="panes"><PaneGrid node={app.panes.root} {project} /></div>
+        {:else}
+          <!-- What is shown alone carries its key: a content dragged from the sidebar is dropped beside it (ESC-392). -->
+          <div class="work" data-pane-key={app.singleItem ? itemKey(app.singleItem) : undefined}>
+            {#if app.boardOn}
+              {#key project.id}
+                <Board {project} />
+              {/key}
+            {:else if app.prsOn}
+              {#key project.id}
+                <PrsView {project} />
+              {/key}
+            {:else if app.docsOn}
+              {#key project.id}
+                <DocsView {project} />
+              {/key}
+            {:else if app.editorOn}
+              {#key project.id}
+                <VscodeView {project} />
+              {/key}
+            {:else if app.runCommand}
+              <RunView cmd={app.runCommand} {project} />
+            {:else if app.term}
+              <TerminalView term={app.term} {project} />
+            {:else if app.agent}
+              {#key app.agent.id}
+                <!-- One of its subagents' conversation (ESC-13), or the view of one of its background tasks (ESC-14), in place of its own. -->
+                {#if app.subView[app.agent.id]}
+                  {#key app.subView[app.agent.id]}
+                    <SubagentView agent={app.agent} {project} call={app.subView[app.agent.id] ?? ''} />
+                  {/key}
+                {:else if app.taskView[app.agent.id]}
+                  {#key app.taskView[app.agent.id]}
+                    <TaskView agent={app.agent} task={app.taskView[app.agent.id] ?? ''} />
+                  {/key}
+                {:else}
+                  <Conversation agent={app.agent} {project} />
+                {/if}
+              {/key}
+              {#if app.split}
+                <SidePanel {project} agent={app.agent} docked />
+              {:else if app.filesOpen}
+                <SidePanel {project} agent={app.agent} />
               {/if}
-            {/key}
-            {#if app.split}
-              <SidePanel {project} agent={app.agent} docked />
-            {:else if app.filesOpen}
-              <SidePanel {project} agent={app.agent} />
+            {:else}
+              <div class="noagent">
+                <span>{t('shell.app.noAgent')}</span>
+                <button class="btn primary" onclick={() => app.newAgent()}><Icon name="plus" size={14} />{t('shell.app.newAgent')}</button>
+                <!-- The project's open pull requests (ESC-305), in the side panel's « PR et CI » tab without an agent. -->
+                <button
+                  class="btn ghost"
+                  onclick={() => {
+                    app.panelTab = 'hosts';
+                    app.filesOpen = true;
+                  }}><Icon name="pr" size={14} />{t('shell.app.projectPrs')}</button
+                >
+              </div>
+              {#if app.split || app.filesOpen}
+                <SidePanel {project} agent={null} />
+              {/if}
             {/if}
-          {:else}
-            <div class="noagent">
-              <span>{t('shell.app.noAgent')}</span>
-              <button class="btn primary" onclick={() => app.newAgent()}><Icon name="plus" size={14} />{t('shell.app.newAgent')}</button>
-              <!-- The project's open pull requests (ESC-305), in the side panel's « PR et CI » tab without an agent. -->
-              <button
-                class="btn ghost"
-                onclick={() => {
-                  app.panelTab = 'hosts';
-                  app.filesOpen = true;
-                }}><Icon name="pr" size={14} />{t('shell.app.projectPrs')}</button
-              >
-            </div>
-            {#if app.split || app.filesOpen}
-              <SidePanel {project} agent={null} />
-            {/if}
-          {/if}
-        </div>
+          </div>
+        {/if}
+      {:else}
+        <div class="work"><Welcome /></div>
       {/if}
-    {:else}
-      <div class="work"><Welcome /></div>
-    {/if}
-  </div>
+    </div>
+  {/if}
   <StatusBar />
 </div>
 
@@ -366,6 +372,7 @@
     engine={app.modal.engine}
     reserveFor={app.modal.reserveFor}
     forAgent={app.modal.forAgent}
+    onclose={app.modal.onboarding ? () => (app.modal = null) : undefined}
   />
 {:else if app.modal?.kind === 'testLaunch'}
   <TestLaunchModal agentId={app.modal.agentId} />
@@ -375,8 +382,6 @@
   <UpdateModal version={app.update.version} notes={app.update.notes} back={app.modal.back} />
 {:else if app.modal?.kind === 'claudeMemory'}
   <ClaudeMemoryModal projectId={app.modal.projectId} offered={app.modal.offered} />
-{:else if app.modal?.kind === 'firstMode'}
-  <FirstModeModal />
 {:else if app.modal?.kind === 'telemetry'}
   <TelemetryModal />
 {:else if app.modal?.kind === 'teamName'}

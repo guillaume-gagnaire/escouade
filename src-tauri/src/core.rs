@@ -985,6 +985,11 @@ pub struct Core {
     pub(crate) pr_reviews: RwLock<Vec<crate::prreview::PrReview>>,
     /// The scheduled tasks of every project (ESC-448): this machine's alone.
     pub(crate) scheduled: RwLock<Vec<crate::model::ScheduledTask>>,
+    /// The first launch's journey (ESC-504), saved with the state.
+    pub(crate) onboarding: RwLock<crate::model::Onboarding>,
+    /// A new installation: its settings had no mode for the new agents when it started (SEC-09), as with no settings at
+    /// all. The journey opens by itself on such a one alone (`onboarding`).
+    pub(crate) fresh: bool,
     /// One look at the scheduled tasks' due times at a time (`scheduled_tick`).
     pub(crate) scheduled_lock: tokio::sync::Mutex<()>,
     /// The time the scheduled tasks go by, and when this run of the app began on it.
@@ -1927,6 +1932,8 @@ impl Core {
         if existed && settings.allow_bypass.is_none() && settings.agent_mode.is_empty() {
             settings.agent_mode = "auto".into();
         }
+        // Before a policy imposes a mode: what the settings say of the user alone.
+        let fresh = settings.agent_mode.is_empty();
         // First: what the backend writes from now on (the menus, its texts) is in these languages.
         let lang = i18n::configure(&settings.language, &settings.claude_language);
         log::info!("languages: {lang:?}");
@@ -1958,6 +1965,7 @@ impl Core {
         let mut leftover = std::mem::take(&mut state.leftover_histories);
         let pr_reviews = std::mem::take(&mut state.pr_reviews);
         let scheduled = std::mem::take(&mut state.scheduled);
+        let onboarding = std::mem::take(&mut state.onboarding);
         closed::retry_leftovers(&data, &mut leftover);
         // The folder of the closed projects is read here, once: the index (`closed_index`) keeps
         // what the app needs of it from now on.
@@ -2176,6 +2184,8 @@ impl Core {
             leftover_histories: Mutex::new(leftover),
             pr_reviews: RwLock::new(pr_reviews),
             scheduled: RwLock::new(scheduled),
+            onboarding: RwLock::new(onboarding),
+            fresh,
             scheduled_lock: tokio::sync::Mutex::new(()),
             schedule_clock: crate::scheduled::Clock::from_env(),
             overseer,
@@ -2716,6 +2726,7 @@ impl Core {
             projects.iter().any(|p| p.id == id)
         });
         let scheduled = self.scheduled.read().clone();
+        let onboarding = self.onboarding.read().clone();
         PersistedState {
             projects,
             agents,
@@ -2728,6 +2739,7 @@ impl Core {
             leftover_histories,
             pr_reviews,
             scheduled,
+            onboarding,
         }
     }
 

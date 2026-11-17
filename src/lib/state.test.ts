@@ -9,6 +9,7 @@ import { fileSearches } from './editor/search.svelte';
 import { trees } from './editor/trees.svelte';
 import { locale, setLang } from './i18n';
 import { app } from './state.svelte';
+import { onboarding } from './onboarding.svelte';
 import type { CodeHost, InitialState, LaunchState, Ticket, UiEvent } from './types';
 
 /** Starts the app against a fake backend and returns a function pushing backend events. */
@@ -538,6 +539,42 @@ describe('AppState start-up', () => {
       await start({ settings: { ...SETTINGS, telemetry } });
       expect(app.modal).toBeNull();
     }
+  });
+
+  it('opens the first launch on a new installation, and asks nothing else beside it (ESC-504)', async () => {
+    const journey = {
+      open: true,
+      trigger: 'first' as const,
+      steps: [{ id: 'harness' as const, status: 'todo' as const }],
+      resumeAt: 'harness' as const,
+      started: true,
+      finished: false,
+      askTelemetryAgain: false,
+    };
+    resetApp();
+    await start({ settings: { ...SETTINGS, agentMode: '', telemetry: null, nameAsked: false }, onboarding: journey });
+    expect(onboarding.shown).toBe(true);
+    expect(onboarding.at).toBe('harness');
+    // Neither the mode, nor the statistics, nor the name for the team (choice O8) in windows of their own.
+    expect(app.modal).toBeNull();
+    onboarding.shown = false;
+    // Ended with the statistics passed: asked once more, the core told so.
+    resetApp();
+    const backend: string[] = [];
+    await start(
+      {
+        settings: { ...SETTINGS, telemetry: null },
+        onboarding: { ...journey, open: false, trigger: null, finished: true, askTelemetryAgain: true },
+      },
+      { onboarding_act: (a) => backend.push(a.act.kind) },
+    );
+    expect(app.modal).toEqual({ kind: 'telemetry' });
+    expect(backend).toEqual(['telemetryAskedAgain']);
+    expect(onboarding.shown).toBe(false);
+    // Ended, and asked once more already: never again.
+    resetApp();
+    await start({ settings: { ...SETTINGS, telemetry: null }, onboarding: { ...journey, open: false, trigger: null, finished: true } });
+    expect(app.modal).toBeNull();
   });
 
   it('says nothing of an update when none was installed', async () => {

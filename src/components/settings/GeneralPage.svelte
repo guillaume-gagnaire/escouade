@@ -12,6 +12,7 @@
   import { plugins } from '../../lib/plugins-view.svelte';
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
+  import { redo } from '../../lib/onboarding.svelte';
   import { privacyUrl } from '../../lib/telemetry';
   import { checkForUpdate, postponeRestart, restartIn, shownVersion } from '../../lib/updater';
   import Markdown from '../conv/Markdown.svelte';
@@ -292,6 +293,16 @@
       >
     {/snippet}
     <Switch label={t('settings.about.telemetry')} bind:on={() => s.telemetry === true, (on) => (s.telemetry = on)} />
+  </Row>
+  <!-- The first launch again (ESC-504): every station from the first, what is set in place; nothing undone. -->
+  <Row label={t('onboarding.redo.row')} desc={t('onboarding.redo.rowDesc')}>
+    <button
+      class="btn"
+      onclick={() => {
+        app.modal = null;
+        void redo();
+      }}><Icon name="flow" size={14} />{t('onboarding.redo.button')}</button
+    >
   </Row>
 </Group>
 

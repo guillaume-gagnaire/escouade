@@ -3096,6 +3096,8 @@ export interface InitialState {
   recovered?: Recovery[];
   /** The copies taken back by hand from the screen of the copies at the last starts (ESC-487), told by the same band. */
   restored?: Restored[];
+  /** The first launch's journey (ESC-504); absent from the tests made before it. */
+  onboarding?: OnboardingView;
 }
 
 /** Who imposes a lock (TS-11): the policy of this device (rank 6), or a team (rank 5). */
@@ -4075,3 +4077,29 @@ export interface OverseerView {
   news?: OverseerNews[];
   shortcut?: OverseerShortcut;
 }
+
+/** A station of the first launch's journey (ESC-504, `docs/ONBOARDING.md` § 4), in its order. */
+export type OnboardingStep = 'harness' | 'account' | 'defaults' | 'project' | 'telemetry';
+
+/** Where a station stands (`onboarding::StepStatus`): done by the real state, passed, or imposed by a policy. */
+export type StepStatus = 'todo' | 'done' | 'skipped' | 'policy';
+
+/** The journey as the core tells it (`onboarding::OnboardingView`). */
+export interface OnboardingView {
+  open: boolean;
+  trigger: 'first' | 'resume' | 'redo' | null;
+  steps: { id: OnboardingStep; status: StepStatus }[];
+  resumeAt: OnboardingStep | null;
+  /** Opened once at least on this installation. */
+  started: boolean;
+  finished: boolean;
+  askTelemetryAgain: boolean;
+}
+
+/** A gesture on the journey (`onboarding::Act`). */
+export type OnboardingAct =
+  | { kind: 'step'; step: OnboardingStep; outcome: 'done' | 'skipped' }
+  | { kind: 'skipAll' }
+  | { kind: 'finish' }
+  | { kind: 'redo' }
+  | { kind: 'telemetryAskedAgain' };

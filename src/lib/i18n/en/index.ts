@@ -20,6 +20,7 @@ import integrations from './integrations';
 import mcp from './mcp';
 import memory from './memory';
 import backups from './backups';
+import onboarding from './onboarding';
 import vectors from './vectors';
 import nav from './nav';
 import plan from './plan';
@@ -70,6 +71,7 @@ export const en = defineCatalog({
   mcp,
   memory,
   backups,
+  onboarding,
   vectors,
   branches,
   plan,

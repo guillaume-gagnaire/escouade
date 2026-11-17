@@ -142,6 +142,7 @@ mod multiticket;
 mod multiwt;
 mod navigation;
 mod notify;
+mod onboarding;
 #[cfg(test)]
 mod opencode_tests;
 mod outside;

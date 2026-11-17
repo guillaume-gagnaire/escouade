@@ -15,8 +15,8 @@
     try {
       await api.telemetrySet(consent);
       app.settings = { ...app.settings, telemetry: consent };
-      // Then the user's name for the team, asked once (ESC-190).
-      app.modal = app.settings.nameAsked ? null : { kind: 'teamName' };
+      // The user's name for the team waits for the first share (ESC-190, choice O8 of docs/ONBOARDING.md).
+      app.modal = null;
     } catch (e) {
       app.toast(String(e), 'error');
     } finally {

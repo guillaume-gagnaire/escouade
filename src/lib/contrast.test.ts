@@ -57,6 +57,10 @@ const PAIRS: [string, string[], number][] = [
   ...['--ansi-w', '--ansi-w-2'].map((t): [string, string[], number] => [t, ['puits'], TEXT]),
   // The project's own colour is the product's: its dot and its bars always carry the project's name.
   ...['--idle', '--ring', '--brand'].map((t): [string, string[], number] => [t, PLAIN, MARK]),
+  // The lanes of the git graph and of the first launch's line (choice O14), on the frame and the panel they are drawn on.
+  ...['--lane-main', '--lane-1', '--lane-2', '--lane-3', '--lane-4', '--lane-5', '--lane-6', '--lane-7', '--lane-8'].map(
+    (t): [string, string[], number] => [t, ['cadre', 'panneau'], MARK],
+  ),
 ];
 // Text on a filled colour.
 const ON: [string, string, string[]][] = [

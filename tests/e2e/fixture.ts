@@ -394,6 +394,7 @@ export type Language = 'fr' | 'en';
 const LABELS = {
   fr: {
     addProject: /Ajouter un projet/,
+    firstLaunch: 'Premier lancement',
     newProject: 'Nouveau projet',
     path: 'C:\\chemin\\vers\\le\\projet',
     repo: /Dépôt git détecté · branche main · propre/,
@@ -408,6 +409,7 @@ const LABELS = {
   },
   en: {
     addProject: /Add a project/,
+    firstLaunch: 'First launch',
     newProject: 'New project',
     path: 'C:\\path\\to\\the\\project',
     repo: /Git repository detected · branch main · clean/,
@@ -866,7 +868,13 @@ export const test = base.extend<{
         // A runner's window thread stops for 7 to 10 s at times while the app starts (« window thread: paused 9725 ms » in
         // its log), its page still blank: longer than the 15 s of an expect, which failed a test there before it began
         // (shell.spec.ts, tall-fields.spec.ts on the CI of 2026-11-08, ESC-393).
-        await expect(page.getByRole('button', { name: LABELS[language].addProject }).first()).toBeVisible({ timeout: 45_000 });
+        // Or the first launch (ESC-504), which takes the rail's place on a new installation.
+        await expect(
+          page
+            .getByRole('button', { name: LABELS[language].addProject })
+            .first()
+            .or(page.getByRole('region', { name: LABELS[language].firstLaunch })),
+        ).toBeVisible({ timeout: 45_000 });
       } catch (e) {
         throw new Error(`${(e as Error).message.split('\n')[0]}\n${await state()}`);
       }

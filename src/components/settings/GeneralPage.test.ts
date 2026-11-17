@@ -10,6 +10,7 @@ import { plugins } from '../../lib/plugins-view.svelte';
 import { PROJECT_COLORS } from '../../lib/theme';
 import { settingsForm } from '../../lib/settings.svelte';
 import { app } from '../../lib/state.svelte';
+import { onboarding } from '../../lib/onboarding.svelte';
 import { BARE_ENGINE, CLAUDE_ENGINE, fakeBackend, resetApp } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
 import { afterGesture } from '../../test/settings';
@@ -30,6 +31,27 @@ describe('the page « Général »', () => {
   beforeEach(() => {
     resetApp();
     app.modal = { kind: 'settings', page: 'general' };
+  });
+
+  it('opens the first launch again, the settings closed, nothing undone (ESC-504)', async () => {
+    const backend = fakeBackend({
+      onboarding_act: () => ({
+        open: true,
+        trigger: 'redo',
+        steps: [{ id: 'harness', status: 'done' }],
+        resumeAt: 'harness',
+        started: true,
+        finished: false,
+        askTelemetryAgain: false,
+      }),
+    });
+    render(SettingsModal, { page: 'general' });
+    expect(screen.getByText(/Revoir le harness, le compte, le mode des nouveaux agents et les statistiques/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Refaire le premier lancement' }));
+    expect(app.modal).toBeNull();
+    await vi.waitFor(() => expect(onboarding.shown).toBe(true));
+    expect(backend.called('onboarding_act').map((c) => c.args.act)).toEqual([{ kind: 'redo' }]);
+    onboarding.shown = false;
   });
 
   it('comes first and chooses the languages, each named in itself', () => {

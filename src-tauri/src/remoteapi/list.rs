@@ -358,6 +358,9 @@ escouade_command::commands! {
         commands::mcp_clear_activity,
         commands::mcp_set_enabled,
         commands::telemetry_set,
+        // The first launch's journey (ESC-504): shown in the window alone.
+        commands::onboarding_view,
+        commands::onboarding_act,
         commands::mcp_declare_status,
         commands::mcp_manual_command,
     }
