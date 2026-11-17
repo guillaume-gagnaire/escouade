@@ -888,6 +888,7 @@ Demandé le 2026-11-14 : « avoir plusieurs serveurs Escouade pilotés par un se
   - ce que la barre des projets et la vue d'ensemble deviennent avec plusieurs espaces ;
   - le coût mémoire de plusieurs connexions ouvertes ;
   - la reprise d'un espace après une coupure, sans gêner les autres.
+- **Le design côté client** (ESC-516, 2026-11-17) : [`SERVER-UX.md`](SERVER-UX.md) dessine « Se connecter à un serveur », ses états, la machine partout où elle compte et trois directions pour les espaces (l'aiguillage, les piles, la colonne), avec les choix S1 à S16 et les tickets MS-3 à MS-5.
 
 **Décisions à prendre (en plus des quatre plus bas)** :
 5. L'app mobile dès la 2.3, ou l'interface web d'abord ; et sa technique (Tauri 2, Capacitor, React Native ou Flutter), après l'étude.

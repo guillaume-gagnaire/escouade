@@ -1,0 +1,999 @@
+<!doctype html>
+<!--
+  ESC-516 : le mode serveur (MS-2), trois directions. Maquette statique, rien n'est branché.
+  ?d=a|b|c, &theme=light, puis #un (un seul espace, et où l'on trouve « Se connecter à un serveur »), #deux (deux espaces,
+  sur ce poste), #trois (trois espaces, sur Travail), #serveur (la barre de titre et un terminal sur un serveur),
+  #coupure (le tunnel tombé, la reprise), #connexion (le premier appairage), #erreur (le serveur injoignable),
+  #projet (« Nouveau projet » sur un serveur) ou #appareils (les réglages des appareils).
+  ?d=x#hote, #etats, #version, #jeton, #fichier, #compte, #notifs : communs aux trois (la navigation entre espaces y est
+  masquée, seule la machine de la barre de titre, commune, reste).
+  La page prend la taille de la fenêtre du navigateur : 1440 × 900 ou 1024 × 728.
+  Jetons, polices et icônes de l'app (src/app.css, src/lib/icons.ts) ; données fictives (espaces « Ce poste », « Travail »
+  et « Perso », projets, agents et machines inventés). Captures : node design/server-2-3/render.mjs
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>ESC-516 · le mode serveur</title>
+<link rel="stylesheet" href="../../node_modules/@fontsource-variable/inter/opsz.css" />
+<link rel="stylesheet" href="../../node_modules/@fontsource/jetbrains-mono/400.css" />
+<link rel="stylesheet" href="../../node_modules/@fontsource/jetbrains-mono/500.css" />
+<script src="icons.js"></script>
+<style>
+  /* Les jetons de src/app.css (sombre, puis clair). Teint du projet ouvert : --p, posé par la page. */
+  :root {
+    --p: oklch(0.72 0.12 250);
+    --frame: color-mix(in oklch, var(--p) 8%, #08090a);
+    --panel: color-mix(in oklch, var(--p) 4.5%, #0e0f11);
+    --raise: color-mix(in oklch, var(--p) 6%, #15161a);
+    --raise-2: color-mix(in oklch, var(--p) 6%, #1b1c20);
+    --well: color-mix(in oklch, var(--p) 2%, #0a0b0d);
+    --col: #050607;
+    --fg-rgb: 255, 255, 255;
+    --line: rgba(255, 255, 255, 0.075);
+    --line-2: rgba(255, 255, 255, 0.12);
+    --line-3: rgba(255, 255, 255, 0.2);
+    --hover: rgba(255, 255, 255, 0.045);
+    --text: #f7f8f8;
+    --soft: #d0d3d8;
+    --muted: #989da6;
+    --dim: #8f949e;
+    --text-ai: #e9ebee;
+    --brand: #35c1bd;
+    --teal-ink: oklch(0.86 0.08 190);
+    --run: oklch(0.79 0.15 155);
+    --wait: oklch(0.84 0.14 82);
+    --wait-bg: oklch(from var(--wait) l c h / 0.07);
+    --wait-line: oklch(from var(--wait) l c h / 0.32);
+    --del: oklch(0.74 0.14 22);
+    --del-bg: oklch(from var(--del) l c h / 0.08);
+    --del-line: oklch(from var(--del) l c h / 0.36);
+    --idle: #7a7f88;
+    --primary: #f2f3f4;
+    --on-primary: #08090a;
+    --code-fg: #d5d8dd;
+    --term: #0b0c0e;
+    --scrim: rgba(3, 4, 5, 0.66);
+    --shadow-float: 0 24px 64px -12px rgba(0, 0, 0, 0.75);
+    --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+    --side: 276px;
+    color-scheme: dark;
+  }
+  :root[data-theme='light'] {
+    --frame: color-mix(in oklch, var(--p) 7%, #f0f1f3);
+    --panel: color-mix(in oklch, var(--p) 2.5%, #fdfdfd);
+    --raise: color-mix(in oklch, var(--p) 4%, #f4f5f7);
+    --raise-2: color-mix(in oklch, var(--p) 5%, #eceef1);
+    --well: color-mix(in oklch, var(--p) 2.5%, #f6f7f9);
+    --col: #dcdee2;
+    --fg-rgb: 15, 17, 22;
+    --line: rgba(15, 17, 22, 0.09);
+    --line-2: rgba(15, 17, 22, 0.14);
+    --line-3: rgba(15, 17, 22, 0.24);
+    --hover: rgba(15, 17, 22, 0.045);
+    --text: #15171c;
+    --soft: #363a42;
+    --muted: #555a63;
+    --dim: #5c616a;
+    --text-ai: #1d2026;
+    --brand: oklch(0.52 0.09 190);
+    --teal-ink: oklch(0.47 0.08 190);
+    --run: oklch(0.48 0.13 155);
+    --wait: oklch(0.5 0.11 70);
+    --wait-bg: oklch(from var(--wait) l c h / 0.09);
+    --wait-line: oklch(from var(--wait) l c h / 0.4);
+    --del: oklch(0.5 0.18 25);
+    --del-bg: oklch(from var(--del) l c h / 0.07);
+    --del-line: oklch(from var(--del) l c h / 0.4);
+    --primary: #1b1d22;
+    --on-primary: #f7f8f8;
+    --code-fg: #24272e;
+    --term: #fbfbfc;
+    --scrim: rgba(24, 26, 32, 0.34);
+    --shadow-float: 0 24px 64px -12px rgba(15, 17, 22, 0.28);
+    color-scheme: light;
+  }
+  @media (max-width: 1100px) { :root { --side: 236px; } }
+  * { box-sizing: border-box; }
+  html { background: var(--frame); }
+  body { margin: 0; font: 13px/1.45 'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif; font-feature-settings: 'cv11', 'ss03';
+    font-variant-ligatures: none; color: var(--text); -webkit-font-smoothing: antialiased; overflow: hidden; background: var(--frame); }
+  ::selection { background: oklch(from var(--brand) l c h / 0.32); }
+  p { margin: 0; }
+  h1, h2, h3 { margin: 0; text-wrap: balance; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: default; }
+  svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .mono { font-family: var(--mono); font-size: 0.92em; letter-spacing: -0.01em; }
+  .muted { color: var(--muted); }
+  .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .sp { margin-left: auto; }
+  .tn { font-variant-numeric: tabular-nums; }
+  @media (max-width: 1100px) { .wide-only { display: none !important; } }
+  @media (min-width: 1101px) { .narrow-only { display: none !important; } }
+
+  /* ───────── La fenêtre ───────── */
+  .win { width: 100vw; height: 100vh; display: grid; grid-template-columns: 52px var(--side) minmax(0, 1fr); grid-template-rows: 44px minmax(0, 1fr) 30px;
+    background: var(--frame); overflow: hidden; position: relative; }
+  .win.view { grid-template-columns: 52px minmax(0, 1fr); }
+  .win.col { grid-template-columns: 64px 52px var(--side) minmax(0, 1fr); }
+  .win.col.view { grid-template-columns: 64px 52px minmax(0, 1fr); }
+  .tb { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 0 0 0 14px; color: var(--muted); min-width: 0; }
+  .tb .logo { width: 22px; height: 22px; border-radius: 6px; background: #35c1bd; display: grid; place-items: center; color: #08090a; flex: none; }
+  .tb .logo.btn-logo { width: 30px; height: 30px; margin: 0 -4px; border-radius: 8px; background: none; }
+  .tb .logo.btn-logo i { width: 22px; height: 22px; border-radius: 6px; background: #35c1bd; display: grid; place-items: center; }
+  .tb .logo.btn-logo.open { background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .tb .lefts { display: flex; align-items: center; gap: 6px; min-width: 0; margin-left: 10px; flex: 0 1 auto; }
+  .tb .proj { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-weight: 600; white-space: nowrap; height: 30px; padding: 0 8px; border-radius: 8px; min-width: 0; }
+  .tb .proj .sq { width: 8px; height: 8px; border-radius: 2.5px; background: var(--p); flex: none; }
+  .tb .slash { color: var(--line-3); font-size: 16px; font-weight: 300; margin: 0 -2px; }
+  .tb .search { margin: 0 auto; height: 30px; border-radius: 8px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line);
+    display: flex; align-items: center; gap: 8px; padding: 0 6px 0 11px; flex: 0 1 340px; min-width: 120px; }
+  .tb .search kbd { margin-left: auto; }
+  .tb .ed { display: inline-flex; gap: 7px; align-items: center; color: var(--soft); white-space: nowrap; }
+  .tb .wb { display: flex; }
+  .tb .wbtn { width: 46px; height: 44px; display: grid; place-items: center; color: var(--muted); }
+  kbd { font: 500 11px/1 'Inter Variable', Inter, sans-serif; padding: 3px 6px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--line-2); color: var(--muted); white-space: nowrap; }
+
+  /* La machine, dans la barre de titre : commune aux trois (B et C la disent, A en fait le bouton de l'aiguillage). */
+  .mach { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 9px 0 4px; border-radius: 8px; white-space: nowrap; flex: none;
+    color: var(--text); font-weight: 600; background: rgba(var(--fg-rgb), 0.06); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .mach.local { background: none; box-shadow: none; color: var(--soft); font-weight: 550; padding-left: 2px; }
+  .mach .host { color: var(--muted); font-weight: 500; font-size: 12px; }
+  .mach.crumb { height: 30px; padding: 0 8px 0 4px; }
+  .mach.crumb.local { box-shadow: inset 0 0 0 1px var(--line); }
+  .mach .else { display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 6px; border-radius: 9px; background: var(--wait-bg);
+    box-shadow: inset 0 0 0 1px var(--wait-line); color: var(--wait); font-size: 11px; font-weight: 700; }
+  .mach.lost { color: var(--wait); box-shadow: inset 0 0 0 1px var(--wait-line); background: var(--wait-bg); }
+  .mach.open { background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line-3); }
+
+  /* Une plaque d'espace : neutre (la couleur reste aux projets), un écran pour ce poste, une lettre pour un serveur. */
+  .plate { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; flex: none; position: relative;
+    background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--text); font-weight: 720; font-size: 14px; letter-spacing: -0.01em; }
+  .plate.sm { width: 22px; height: 22px; border-radius: 6px; font-size: 11px; }
+  .plate.lg { width: 56px; height: 56px; border-radius: 15px; font-size: 22px; }
+  .plate .badge, .tile .badge { position: absolute; top: -5px; right: -7px; }
+  .plate.lost { box-shadow: inset 0 0 0 1.5px var(--wait); color: var(--wait); }
+  .badge { min-width: 18px; height: 16px; padding: 0 4px; border-radius: 8px; font-size: 10.5px; font-weight: 700; display: grid; place-items: center;
+    background: var(--wait); color: #1a1405; box-shadow: 0 0 0 2px var(--frame); font-variant-numeric: tabular-nums; }
+  :root[data-theme='light'] .badge { color: #fff; }
+  .badge.icon { padding: 0; width: 18px; }
+
+  .rail { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 6px 0 8px; min-height: 0; }
+  .rail .low { margin-top: auto; display: grid; gap: 6px; }
+  .rail .r-i { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: var(--muted); position: relative; flex: none; }
+  .rail .r-i.on { color: var(--text); background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .rail .r-i .badge { position: absolute; top: -4px; right: -6px; }
+  .tile { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; font-weight: 700; font-size: 12px; color: #101114; position: relative; flex: none; }
+  .tile.cur { box-shadow: 0 0 0 2px var(--frame), 0 0 0 3.5px var(--p); }
+  .tile .wd { position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; border-radius: 50%; background: var(--wait); box-shadow: 0 0 0 2px var(--frame); }
+  .rail .sep { width: 22px; height: 1px; background: var(--line-2); flex: none; }
+  .side { min-width: 0; padding: 4px 10px 10px 10px; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+  .stabs { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line); flex: none; }
+  .stabs span { flex: 1 1 auto; padding: 0 4px; display: inline-flex; justify-content: center; align-items: center; gap: 4px; height: 26px; border-radius: 7px; color: var(--muted);
+    font-weight: 550; font-size: 12px; white-space: nowrap; min-width: 0; }
+  .stabs span.on { background: var(--panel); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2), 0 1px 2px rgba(0, 0, 0, 0.18); }
+  .stabs .c { color: var(--dim); font-size: 11.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .new { display: flex; align-items: center; gap: 8px; height: 32px; margin: 8px 0 4px; padding: 0 8px 0 9px; color: var(--soft); font-weight: 550; flex: none; }
+  .new .plus { width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; background: rgba(var(--fg-rgb), 0.07); box-shadow: inset 0 0 0 1px var(--line); }
+  .new kbd { margin-left: auto; }
+  .agent { border-radius: 11px; padding: 10px 12px; display: grid; gap: 3px; font-size: 12.5px; flex: none; }
+  .agent.on { background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .agent.wt { background: var(--wait-bg); box-shadow: inset 0 0 0 1px var(--wait-line); }
+  .agent .r { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .agent .n { font-weight: 620; }
+  .agent .key { color: var(--muted); font-size: 11.5px; font-weight: 550; white-space: nowrap; }
+  .agent .m { color: var(--muted); font-size: 12px; }
+  .agent.wt .m { color: var(--wait); }
+  .ring { width: 9px; height: 9px; border-radius: 50%; box-shadow: inset 0 0 0 1.6px var(--run); flex: none; }
+  .ring.wt { box-shadow: inset 0 0 0 1.6px var(--wait), 0 0 0 3px oklch(from var(--wait) l c h / 0.18); }
+  .ring.idle { box-shadow: inset 0 0 0 1.6px var(--idle); }
+  .side .foot { margin-top: auto; border-top: 1px solid var(--line); padding: 10px 6px 0; display: grid; gap: 8px; color: var(--muted); font-size: 12px; flex: none; }
+  .side .foot .r { display: flex; gap: 8px; align-items: center; min-width: 0; }
+  .side .foot .on-srv { color: var(--soft); font-weight: 600; white-space: nowrap; }
+  .main { min-width: 0; min-height: 0; background: var(--panel); border-radius: 12px 0 0 0; box-shadow: inset 0 0 0 1px var(--line); display: flex;
+    flex-direction: column; overflow: hidden; position: relative; }
+  .status { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 14px; color: var(--muted); font-size: 12px; white-space: nowrap; min-width: 0; position: relative; }
+  .status b { color: var(--text); font-weight: 600; }
+  .status .link { display: inline-flex; align-items: center; gap: 6px; color: var(--soft); }
+  .status .link.lost { color: var(--wait); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; background: var(--idle); flex: none; }
+  .dot.ok { background: var(--run); } .dot.wt { background: var(--wait); } .dot.err { background: var(--del); }
+  .pdot { width: 8px; height: 8px; border-radius: 2.5px; flex: none; display: inline-block; }
+
+  /* ───────── Commun ───────── */
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--text); font-weight: 550; font-size: 12.5px; white-space: nowrap; background: rgba(var(--fg-rgb), 0.04); flex: none; }
+  .btn.sm { height: 26px; padding: 0 9px; font-size: 12px; border-radius: 7px; }
+  .btn.lg { height: 34px; padding: 0 14px; font-size: 13px; }
+  .btn.quiet { box-shadow: none; background: none; color: var(--muted); }
+  .btn.primary { background: var(--primary); color: var(--on-primary); box-shadow: none; }
+  .btn.primary kbd { color: inherit; box-shadow: inset 0 0 0 1px oklch(from var(--on-primary) l c h / 0.3); }
+  .btn.danger { color: var(--del); }
+  .btn.dis { opacity: 0.45; }
+  .pill { display: inline-flex; align-items: center; gap: 5px; height: 21px; padding: 0 7px; border-radius: 6px; font-size: 11.5px; font-weight: 600;
+    white-space: nowrap; flex: none; color: var(--soft); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .pill.wt { color: var(--wait); box-shadow: inset 0 0 0 1px var(--wait-line); background: var(--wait-bg); }
+  .pill.ok { color: var(--run); box-shadow: inset 0 0 0 1px oklch(from var(--run) l c h / 0.4); background: oklch(from var(--run) l c h / 0.07); }
+  .pill.err { color: var(--del); box-shadow: inset 0 0 0 1px var(--del-line); background: var(--del-bg); }
+  .pill.k { color: var(--muted); font-weight: 550; }
+  .seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: rgba(var(--fg-rgb), 0.035); box-shadow: inset 0 0 0 1px var(--line); flex: none; }
+  .seg span { height: 26px; padding: 0 10px; border-radius: 7px; display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12.5px; font-weight: 550; white-space: nowrap; }
+  .seg span.on { background: var(--raise-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .seg .c { color: var(--dim); font-variant-numeric: tabular-nums; }
+  .field { height: 32px; border-radius: 7px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line-2); display: flex; align-items: center; gap: 8px;
+    padding: 0 8px 0 10px; color: var(--muted); font-size: 12.5px; min-width: 0; }
+  .field.filled { color: var(--text); }
+  .field.focus { box-shadow: inset 0 0 0 1px var(--brand), 0 0 0 3px oklch(from var(--brand) l c h / 0.18); }
+  .field .ell { flex: 1; }
+  .lbl { font-size: 12px; font-weight: 600; color: var(--soft); }
+  .hint { display: flex; align-items: center; gap: 6px; color: var(--dim); font-size: 11.5px; }
+  .code { font-family: var(--mono); font-size: 12px; color: var(--code-fg); background: var(--well); box-shadow: inset 0 0 0 1px var(--line); border-radius: 8px;
+    padding: 9px 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .code .e { color: var(--del); }
+  .code .d { color: var(--muted); }
+  .menu { position: absolute; z-index: 25; min-width: 260px; border-radius: 10px; background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow-float); padding: 5px; display: grid; gap: 1px; }
+  .menu .mi { display: flex; align-items: center; gap: 9px; height: 30px; padding: 0 9px; border-radius: 7px; color: var(--soft); font-size: 12.5px; white-space: nowrap; }
+  .menu .mi.on { background: rgba(var(--fg-rgb), 0.07); color: var(--text); }
+  .menu .mi kbd { margin-left: auto; }
+  .menu .mh { padding: 8px 9px 6px; display: flex; gap: 9px; align-items: center; }
+  .menu .mh b { font-weight: 620; display: block; }
+  .menu .mh span { color: var(--muted); font-size: 11.5px; }
+  .menu hr { border: 0; height: 1px; background: var(--line); margin: 4px 2px; }
+  .tip { position: absolute; z-index: 25; border-radius: 8px; background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow-float); padding: 7px 10px;
+    font-size: 12px; color: var(--soft); white-space: nowrap; display: flex; gap: 8px; align-items: center; }
+  .tip b { color: var(--text); font-weight: 620; }
+  .modal-wrap { position: absolute; inset: 0; background: var(--scrim); display: grid; place-items: center; z-index: 30; padding: 24px; }
+  .focusring { box-shadow: 0 0 0 2px var(--frame), 0 0 0 3.5px var(--brand) !important; }
+
+  /* ── La conversation ── */
+  .chead { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--line); min-width: 0; flex: none; }
+  .chead b { font-weight: 640; }
+  .chead .meta { color: var(--muted); font-size: 12px; display: inline-flex; gap: 8px; align-items: center; white-space: nowrap; min-width: 0; }
+  .conv { flex: 1; min-height: 0; overflow: hidden; padding: 20px 28px 0; }
+  .conv .col2 { width: min(720px, 100%); margin: 0 auto; display: grid; gap: 14px; }
+  .bubble-me { justify-self: end; max-width: 82%; padding: 9px 13px; border-radius: 12px 12px 4px 12px; background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line); }
+  .ai { color: var(--text-ai); line-height: 1.6; display: grid; gap: 8px; }
+  .tool { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; min-width: 0; }
+  .tool b { color: var(--soft); font-weight: 600; }
+  .perm { border-radius: 12px; background: var(--wait-bg); box-shadow: inset 0 0 0 1px var(--wait-line); padding: 12px 14px; display: grid; gap: 10px; }
+  .perm .h { display: flex; align-items: center; gap: 8px; color: var(--wait); font-weight: 620; font-size: 12.5px; }
+  .perm .acts { display: flex; gap: 8px; align-items: center; }
+  .composer { width: min(744px, calc(100% - 48px)); margin: 12px auto 14px; border-radius: 12px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); padding: 10px 12px; display: grid; gap: 10px; flex: none; }
+  .composer .row { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+  .composer .chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; border-radius: 7px; box-shadow: inset 0 0 0 1px var(--line-2); color: var(--soft); white-space: nowrap; }
+  .composer .send { width: 28px; height: 28px; border-radius: 8px; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; }
+  .composer.off { opacity: 0.7; }
+  .composer.off .send { background: var(--line-2); color: var(--muted); }
+  .fcard { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; padding: 12px 14px; border-radius: 12px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); align-items: center; }
+  .fcard .ic { grid-row: span 2; width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center; background: var(--well); box-shadow: inset 0 0 0 1px var(--line); color: var(--soft); }
+  .fcard .t { display: flex; gap: 8px; align-items: center; min-width: 0; font-weight: 600; }
+  .fcard .s { color: var(--muted); font-size: 12px; display: flex; gap: 6px; align-items: center; min-width: 0; flex-wrap: wrap; }
+  .fcard .acts { grid-column: 2; display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+
+  /* ── Le bandeau de la connexion perdue ── */
+  .lostbar { display: flex; align-items: center; gap: 12px; padding: 10px 16px 10px 18px; background: var(--wait-bg); box-shadow: inset 0 -1px 0 var(--wait-line); flex: none; min-width: 0; }
+  .lostbar .t { display: grid; gap: 1px; min-width: 0; }
+  .lostbar .t b { color: var(--wait); font-weight: 640; font-size: 13px; }
+  .lostbar .t span { color: var(--soft); font-size: 12.5px; }
+  .stale { opacity: 0.55; filter: saturate(0.6); }
+
+  /* ── Le terminal ── */
+  .term { flex: 1; min-height: 0; display: flex; flex-direction: column; margin: 12px; border-radius: 10px; background: var(--term); box-shadow: inset 0 0 0 1px var(--line-2); overflow: hidden; }
+  .term .th { display: flex; align-items: center; gap: 10px; padding: 0 8px 0 12px; height: 38px; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--soft); flex: none; min-width: 0; }
+  .term .th .tabn { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; white-space: nowrap; }
+  .term .tbody { padding: 12px 14px; font-family: var(--mono); font-size: 12.5px; line-height: 1.65; color: var(--code-fg); white-space: pre; overflow: hidden; }
+  .term .pr { color: var(--run); }
+  .term .pa { color: oklch(0.72 0.12 250); }
+  :root[data-theme='light'] .term .pa { color: oklch(0.48 0.13 250); }
+  .term .dm { color: var(--muted); }
+
+  /* ── Dialogues et pages de la connexion ── */
+  .dialog { width: min(760px, 100%); max-height: 100%; background: var(--panel); border-radius: 14px; box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow-float);
+    display: grid; grid-template-columns: 220px minmax(0, 1fr); overflow: hidden; }
+  .dialog.one { grid-template-columns: minmax(0, 1fr); width: min(560px, 100%); }
+  .steps { border-right: 1px solid var(--line); padding: 18px 12px; display: grid; align-content: start; gap: 2px; background: rgba(var(--fg-rgb), 0.015); }
+  .steps h2 { font-size: 15px; font-weight: 640; padding: 0 8px 12px; }
+  .step { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 2px 9px; padding: 8px; border-radius: 9px; align-items: center; }
+  .step .n { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line-3); }
+  .step b { font-weight: 600; font-size: 12.5px; color: var(--muted); }
+  .step .s { grid-column: 2; font-size: 11.5px; color: var(--dim); }
+  .step.done .n { background: oklch(from var(--run) l c h / 0.14); color: var(--run); box-shadow: none; }
+  .step.done b { color: var(--soft); }
+  .step.cur { background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .step.cur .n { background: var(--primary); color: var(--on-primary); box-shadow: none; }
+  .step.cur b { color: var(--text); }
+  .step.bad .n { background: var(--del-bg); color: var(--del); box-shadow: inset 0 0 0 1px var(--del-line); }
+  .step.bad b { color: var(--del); }
+  .cbody { padding: 22px 24px 18px; display: grid; gap: 14px; align-content: start; min-width: 0; }
+  .cbody h3 { font-size: 16px; font-weight: 640; letter-spacing: -0.01em; display: flex; gap: 10px; align-items: center; }
+  .cbody > p { color: var(--soft); line-height: 1.55; max-width: 62ch; }
+  .cbody .acts { display: flex; gap: 8px; align-items: center; padding-top: 6px; border-top: 1px solid var(--line); margin-top: 4px; padding-top: 14px; }
+  .instr { display: grid; gap: 8px; padding: 12px 14px; border-radius: 10px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line); }
+  .instr .r { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .instr .k { color: var(--soft); font-weight: 600; font-size: 12.5px; }
+  .cmd { display: inline-flex; align-items: center; gap: 10px; height: 30px; padding: 0 6px 0 10px; border-radius: 7px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line-2);
+    font-family: var(--mono); font-size: 12.5px; color: var(--code-fg); white-space: nowrap; }
+  .pin { display: flex; gap: 6px; align-items: center; }
+  .pin span { width: 34px; height: 40px; border-radius: 8px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line-2); display: grid; place-items: center;
+    font-family: var(--mono); font-size: 18px; font-weight: 500; color: var(--text); }
+  .pin span.cur { box-shadow: inset 0 0 0 1px var(--brand), 0 0 0 3px oklch(from var(--brand) l c h / 0.18); }
+  .pin i { width: 10px; height: 2px; background: var(--line-3); border-radius: 1px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid2 > div { display: grid; gap: 6px; min-width: 0; }
+  .why { display: grid; gap: 6px; color: var(--soft); font-size: 12.5px; padding-left: 2px; }
+  .why div { display: flex; gap: 8px; align-items: baseline; }
+  .why div::before { content: ''; width: 4px; height: 4px; border-radius: 50%; background: var(--dim); flex: none; transform: translateY(-2px); }
+  .hostrow { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; padding: 9px 10px; border-radius: 9px; }
+  .hostrow.on { background: var(--raise); box-shadow: inset 0 0 0 1px var(--brand); }
+  .hostrow .s { grid-column: 2; color: var(--muted); font-size: 12px; }
+  .radio { width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line-3); }
+  .radio.on { box-shadow: inset 0 0 0 5px var(--brand); }
+
+  /* ── Réglages ── */
+  .settings { width: min(1000px, 100%); height: min(700px, 100%); background: var(--panel); border-radius: 14px; box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow-float);
+    display: grid; grid-template-columns: 236px minmax(0, 1fr); overflow: hidden; }
+  @media (max-width: 1100px) { .settings { grid-template-columns: 206px minmax(0, 1fr); } }
+  .settings nav { border-right: 1px solid var(--line); padding: 12px 10px; display: flex; flex-direction: column; gap: 1px; min-height: 0; overflow: hidden; }
+  .settings nav .g { color: var(--muted); font-size: 11.5px; font-weight: 600; padding: 12px 10px 5px; display: flex; gap: 7px; align-items: center; white-space: nowrap; }
+  .settings nav .it { display: flex; align-items: center; gap: 9px; padding: 0 10px; height: 29px; border-radius: 8px; color: var(--soft); font-size: 12.5px; font-weight: 550; white-space: nowrap; flex: none; }
+  .settings nav .it.on { background: var(--raise); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .settings nav .it .i { color: var(--muted); }
+  .settings nav .scope { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 9px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); flex: none; }
+  .settings nav .scope b { font-weight: 620; display: block; }
+  .settings nav .scope span { color: var(--muted); font-size: 11.5px; }
+  .settings nav .foot { margin-top: auto; color: var(--muted); font-size: 11.5px; line-height: 1.45; padding: 10px; border-top: 1px solid var(--line); display: flex; gap: 8px; }
+  .settings .sb { padding: 20px 28px; display: flex; flex-direction: column; gap: 4px; overflow: hidden; min-height: 0; }
+  .settings .shead { display: flex; align-items: flex-start; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+  .settings h2 { font-size: 17px; font-weight: 640; }
+  .settings .shead p { color: var(--muted); font-size: 12.5px; margin-top: 3px; max-width: 70ch; }
+  .settings h3 { font-size: 13px; color: var(--text); font-weight: 640; margin: 14px 0 2px; }
+  .srow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 20px; padding: 11px 0; border-top: 1px solid rgba(var(--fg-rgb), 0.05); align-items: center; }
+  .srow:first-of-type { border-top: 0; }
+  .srow b { font-weight: 600; font-size: 13px; }
+  .srow .d { grid-column: 1; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+  .srow .acts { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 8px; align-items: center; }
+  .srow.lock .d .lk { display: inline-flex; gap: 5px; align-items: center; color: var(--soft); font-weight: 550; }
+  .dev { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 2px 12px; padding: 11px 0; border-top: 1px solid rgba(var(--fg-rgb), 0.05); align-items: center; }
+  .dev .ic { grid-row: span 2; width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line); color: var(--soft); }
+  .dev .t { display: flex; gap: 8px; align-items: center; min-width: 0; }
+  .dev .t b { font-weight: 620; }
+  .dev .s { color: var(--muted); font-size: 12px; grid-column: 2; min-width: 0; }
+  .dev .acts { grid-row: 1 / span 2; grid-column: 3; display: flex; gap: 8px; }
+  .switch { width: 34px; height: 20px; border-radius: 10px; background: var(--line-3); position: relative; flex: none; }
+  .switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
+  .switch.on { background: var(--brand); }
+  .switch.on::after { left: 17px; }
+  .switch.lockd { opacity: 0.5; }
+
+  /* ───────── A · L'aiguillage ───────── */
+  .switcher { position: absolute; z-index: 26; top: 42px; left: 52px; width: min(820px, calc(100vw - 104px)); border-radius: 14px; background: var(--panel);
+    box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow-float); overflow: hidden; display: grid; }
+  .switcher .sh { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .switcher .sh b { font-weight: 640; font-size: 13.5px; }
+  .lane { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 4px 14px; padding: 12px 16px; border-bottom: 1px solid var(--line); align-items: center; }
+  .lane.cur { background: rgba(var(--fg-rgb), 0.035); }
+  .lane.sel { background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-3); }
+  .lane .nm { display: flex; align-items: center; gap: 9px; min-width: 0; }
+  .lane .nm b { font-size: 14px; font-weight: 650; }
+  .lane .st { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; white-space: nowrap; min-width: 0; }
+  .lane .tiles { display: flex; gap: 5px; align-items: center; }
+  .lane .tiles i { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; font: 700 8.5px/1 Inter, sans-serif; color: #101114; font-style: normal; }
+  .lane .waits { grid-column: 2 / -1; display: grid; gap: 4px; margin-top: 4px; }
+  .lane .w { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12.5px; color: var(--soft); }
+  .lane .w .k { color: var(--wait); font-weight: 600; white-space: nowrap; }
+  .lane .right { display: flex; gap: 8px; align-items: center; }
+  .switcher .sf { display: flex; gap: 8px; align-items: center; padding: 10px 12px; flex-wrap: wrap; }
+  .switcher .sf .hint { margin-left: auto; }
+
+  /* ───────── B · Les piles ───────── */
+  .rail .shead-b { display: grid; justify-items: center; gap: 3px; flex: none; }
+  .rail .lab { font-size: 10px; font-weight: 650; color: var(--soft); letter-spacing: 0.01em; line-height: 1; white-space: nowrap; max-width: 50px; overflow: hidden; text-overflow: ellipsis; }
+  .rail .lab.lost { color: var(--wait); }
+  .pile { width: 36px; height: 36px; position: relative; flex: none; }
+  .pile i { position: absolute; width: 26px; height: 26px; border-radius: 7px; box-shadow: 0 0 0 1.5px var(--frame); }
+  .pile i:nth-child(1) { left: 0; top: 0; }
+  .pile i:nth-child(2) { left: 5px; top: 5px; }
+  .pile i:nth-child(3) { left: 10px; top: 10px; }
+  .pile .badge { position: absolute; top: -5px; right: -7px; }
+  .pile .mon { position: absolute; left: 10px; top: 10px; width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; background: var(--raise-2);
+    box-shadow: 0 0 0 1.5px var(--frame), inset 0 0 0 1px var(--line-2); color: var(--text); font: 700 11px/1 Inter, sans-serif; }
+  .rail .group { display: flex; flex-direction: column; align-items: center; gap: 10px; flex: none; }
+  .ov { flex: 1; min-height: 0; overflow: hidden; padding: 18px 24px; display: grid; gap: 14px; align-content: start; }
+  .ov .oh { display: flex; align-items: center; gap: 12px; }
+  .ov .oh h2 { font-size: 17px; font-weight: 640; }
+  .ovs { display: grid; gap: 8px; }
+  .ovs .sh { display: flex; align-items: center; gap: 9px; padding: 4px 2px; }
+  .ovs .sh b { font-weight: 640; }
+  .ovs .sh .c { color: var(--muted); font-size: 12px; }
+  .orow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 14px; padding: 10px 14px; border-radius: 11px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line); align-items: center; }
+  .orow.wt { background: var(--wait-bg); box-shadow: inset 0 0 0 1px var(--wait-line); }
+  .orow .t { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12.5px; }
+  .orow .t b { font-weight: 620; }
+  .orow .m { color: var(--muted); font-size: 12px; }
+  .orow.wt .m { color: var(--wait); }
+  .orow .acts { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 8px; }
+
+  /* ───────── C · La colonne ───────── */
+  .spaces { grid-row: 2 / 3; grid-column: 1; background: var(--col); display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 0 8px; min-height: 0; position: relative; }
+  .spaces .sp-i { position: relative; display: grid; justify-items: center; gap: 4px; padding: 6px 0 6px; margin-left: 8px; border-radius: 12px 0 0 12px; }
+  .spaces .sp-i .lab { font-size: 10.5px; font-weight: 600; color: var(--muted); line-height: 1; white-space: nowrap; }
+  .spaces .sp-i.cur { background: var(--frame); }
+  .spaces .sp-i.cur::before, .spaces .sp-i.cur::after { content: ''; position: absolute; right: 0; width: 12px; height: 12px; background: transparent; }
+  .spaces .sp-i.cur::before { top: -12px; border-bottom-right-radius: 12px; box-shadow: 4px 4px 0 4px var(--frame); }
+  .spaces .sp-i.cur::after { bottom: -12px; border-top-right-radius: 12px; box-shadow: 4px -4px 0 4px var(--frame); }
+  .spaces .sp-i.cur .lab { color: var(--text); }
+  .spaces .sp-i.cur .plate { background: var(--raise-2); box-shadow: inset 0 0 0 1.5px var(--line-3); }
+  .spaces .sp-i.cur.lost .lab { color: var(--wait); }
+  .spaces .sp-i.cur.lost .plate { box-shadow: inset 0 0 0 1.5px var(--wait); color: var(--wait); }
+  .spaces .low { margin-top: auto; display: grid; justify-items: center; gap: 8px; margin-right: 8px; }
+  .spaces .add { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line-2); margin-left: 8px; }
+  .spaces .add.on { color: var(--text); box-shadow: inset 0 0 0 1.5px var(--brand); }
+  .spaces .gear { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: var(--muted); margin-left: 8px; }
+  .spaces .sp-i .plate { box-shadow: inset 0 0 0 1px var(--line-2); }
+  .addpage { grid-column: 2 / -1; grid-row: 2; display: grid; place-items: center; padding: 20px; background: var(--frame); min-height: 0; }
+  .addcard { width: min(640px, 100%); background: var(--panel); border-radius: 16px; box-shadow: inset 0 0 0 1px var(--line-2); overflow: hidden; display: grid; }
+  .addcard .ah { display: flex; gap: 14px; align-items: center; padding: 18px 24px 0; }
+  .addcard .ah h2 { font-size: 18px; font-weight: 650; letter-spacing: -0.01em; }
+  .addcard .ah p { color: var(--muted); font-size: 12.5px; }
+  .dots { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+  .dots i { width: 22px; height: 4px; border-radius: 2px; background: var(--line-2); }
+  .dots i.on { background: var(--text); }
+  .dots i.done { background: var(--run); }
+  .dots i.bad { background: var(--del); }
+  .bpage { flex: 1; min-height: 0; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+  .bpage .bh { display: flex; align-items: center; gap: 12px; padding: 14px 22px; border-bottom: 1px solid var(--line); }
+  .bpage .bh h2 { font-size: 16px; font-weight: 640; }
+  .hsteps { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+  .hsteps span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); font-weight: 550; white-space: nowrap; }
+  .hsteps span .n { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 700; box-shadow: inset 0 0 0 1px var(--line-3); }
+  .hsteps span.done .n { background: oklch(from var(--run) l c h / 0.14); color: var(--run); box-shadow: none; }
+  .hsteps span.cur { color: var(--text); }
+  .hsteps span.cur .n { background: var(--primary); color: var(--on-primary); box-shadow: none; }
+  .hsteps span.bad { color: var(--del); }
+  .hsteps span.bad .n { background: var(--del-bg); color: var(--del); box-shadow: inset 0 0 0 1px var(--del-line); }
+  .hsteps .ln { width: 18px; height: 1px; background: var(--line-2); }
+  .bpage .bb { display: grid; place-items: start center; padding: 22px 24px; overflow: hidden; }
+  .bpage .bb .cbody { width: min(640px, 100%); padding: 0; }
+
+  /* ── Nouveau projet ── */
+  .wiz { width: min(880px, 100%); height: min(640px, 100%); background: var(--panel); border-radius: 14px; box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow-float);
+    display: grid; grid-template-columns: 196px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; }
+  .wiz .wh { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--line); min-width: 0; }
+  .wiz .wh h2 { font-size: 16px; font-weight: 650; white-space: nowrap; }
+  .wiz .wh .muted { font-size: 12.5px; white-space: nowrap; }
+  .wiz .wsteps { padding: 10px; border-right: 1px solid var(--line); display: grid; align-content: start; gap: 1px; }
+  .wiz .wsteps span { display: flex; gap: 9px; align-items: center; height: 30px; padding: 0 8px; border-radius: 8px; color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .wiz .wsteps span i { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font: 600 10.5px/1 Inter, sans-serif; box-shadow: inset 0 0 0 1px var(--line-3); font-style: normal; }
+  .wiz .wsteps span.on { background: var(--raise); color: var(--text); font-weight: 600; }
+  .wiz .wsteps span.on i { background: var(--p); color: #101114; box-shadow: none; }
+  .wiz .wb { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: hidden; }
+  .wiz .wf { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; padding: 12px 20px; border-top: 1px solid var(--line); }
+  .wiz .wf .lnk { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; font-size: 12.5px; }
+  .onsrv { display: flex; gap: 10px; align-items: center; padding: 9px 12px; border-radius: 10px; background: rgba(var(--fg-rgb), 0.04); box-shadow: inset 0 0 0 1px var(--line-2); font-size: 12.5px; color: var(--soft); }
+  .onsrv b { color: var(--text); font-weight: 620; }
+  .fb { border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line-2); background: var(--well); display: flex; flex-direction: column; min-height: 0; overflow: hidden; flex: 1; }
+  .fb .crumbs { display: flex; align-items: center; gap: 4px; padding: 7px 8px 7px 10px; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; min-width: 0; }
+  .fb .crumbs b { color: var(--text); font-weight: 500; }
+  .fb .rows { overflow: hidden; display: grid; align-content: start; }
+  .frow { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 0 12px; height: 34px; font-size: 12.5px; color: var(--soft); border-bottom: 1px solid rgba(var(--fg-rgb), 0.04); }
+  .frow .n { display: flex; gap: 8px; align-items: center; min-width: 0; }
+  .frow .n b { font-weight: 560; color: var(--text); }
+  .frow .meta { color: var(--muted); font-size: 11.5px; display: flex; gap: 8px; align-items: center; white-space: nowrap; }
+  .frow.sel { background: oklch(from var(--brand) l c h / 0.1); box-shadow: inset 0 0 0 1px oklch(from var(--brand) l c h / 0.5); }
+  .frow.dim { opacity: 0.6; }
+  .fb .ff { display: flex; gap: 10px; align-items: center; padding: 7px 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11.5px; }
+  .sw { display: flex; gap: 7px; }
+  .sw i { width: 22px; height: 22px; border-radius: 6px; }
+  .sw i.on { box-shadow: 0 0 0 2px var(--panel), 0 0 0 3.5px var(--text); }
+
+  /* ── Les notifications du système ── */
+  .toasts { position: absolute; right: 16px; bottom: 44px; display: grid; gap: 10px; z-index: 28; width: 364px; }
+  .toast { border-radius: 10px; background: #202226; color: #f3f4f6; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 18px 40px -10px rgba(0, 0, 0, 0.6); padding: 12px 14px; display: grid; gap: 4px; }
+  :root[data-theme='light'] .toast { background: #f9f9fa; color: #15171c; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1), 0 18px 40px -10px rgba(0, 0, 0, 0.25); }
+  .toast .app { display: flex; gap: 8px; align-items: center; font-size: 11.5px; opacity: 0.8; }
+  .toast .app i { width: 16px; height: 16px; border-radius: 4px; background: #35c1bd; display: grid; place-items: center; color: #08090a; }
+  .toast b { font-size: 13px; font-weight: 640; }
+  .toast p { font-size: 12.5px; opacity: 0.86; line-height: 1.45; }
+  .toast .acts { display: flex; gap: 6px; margin-top: 6px; }
+  .toast .acts span { flex: 1; height: 28px; border-radius: 6px; display: grid; place-items: center; font-size: 12px; font-weight: 550; background: rgba(127, 127, 127, 0.18); }
+  .intoast { position: absolute; z-index: 28; left: 50%; transform: translateX(-50%); top: 54px; display: flex; gap: 10px; align-items: center; padding: 9px 14px; border-radius: 10px;
+    background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow-float); font-size: 12.5px; color: var(--soft); white-space: nowrap; }
+  .intoast b { color: var(--text); font-weight: 620; }
+  .jpage { flex: 1; display: grid; place-items: center; padding: 24px; }
+  .jcard { width: min(520px, 100%); display: grid; gap: 14px; justify-items: start; }
+  .jcard h2 { font-size: 18px; font-weight: 650; letter-spacing: -0.01em; }
+  .jcard p { color: var(--soft); line-height: 1.55; }
+  .jcard .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const q = new URLSearchParams(location.search);
+const D = (q.get('d') || 'a').toLowerCase();
+const LIGHT = q.get('theme') === 'light';
+if (LIGHT) document.documentElement.dataset.theme = 'light';
+const ROUTE = location.hash.slice(1) || 'deux';
+const NARROW = innerWidth < 1100;
+const ic = (n, s = 14) => `<svg class="i" viewBox="0 0 16 16" style="width:${s}px;height:${s}px" aria-hidden="true">${ICONS[n] || ''}</svg>`;
+const g = (s) => `«&nbsp;${s}&nbsp;»`;
+
+/* ───────── Les données fictives (les mêmes que docs/SERVER-UX.md) ───────── */
+const PROJ = {
+  PA: { name: 'portail-adherents', color: 'oklch(0.72 0.12 250)' },
+  AW: { name: 'atlas-web', color: 'oklch(0.72 0.12 48)', wait: true },
+  FA: { name: 'facturation', color: 'oklch(0.72 0.12 155)', wait: true },
+  AC: { name: 'api-clients', color: 'oklch(0.72 0.12 300)' },
+  IK: { name: 'infra-k8s', color: 'oklch(0.72 0.12 200)', wait: true },
+  RC: { name: 'recettes', color: 'oklch(0.72 0.12 20)', wait: true },
+  BL: { name: 'blog', color: 'oklch(0.72 0.12 85)' },
+};
+// Les espaces : ce poste (son cœur est dans l'app), le serveur du travail, le serveur perso.
+const SP = {
+  poste: { id: 'poste', name: 'Ce poste', lab: 'Poste', local: true, host: 'DESKTOP-7QK2', projects: ['PA', 'AW'], wait: 1, key: 'Alt 1' },
+  travail: { id: 'travail', name: 'Travail', lab: 'Travail', glyph: 'T', host: 'acme-escouade', addr: 'escouade.acme.internal', user: 'escouade', ms: 38, projects: ['FA', 'AC', 'IK'], wait: 2, key: 'Alt 2' },
+  perso: { id: 'perso', name: 'Perso', lab: 'Perso', glyph: 'P', host: 'vps-perso', addr: 'vps.example.net', user: 'escouade', ms: 22, projects: ['RC', 'BL'], wait: 1, key: 'Alt 3' },
+};
+// Ce qui attend, par espace (ce que l'aiguillage, la vue « Partout » et les notifications en disent).
+const WAITS = {
+  poste: [['AW', 'tests-e2e', 'Autorisation', 'Bash : npm run e2e -- --project=webkit']],
+  travail: [['FA', 'relances-impayes', 'Autorisation', 'Bash : psql $DATABASE_URL -f migrations/0042_relances.sql'], ['IK', 'quotas-pods', 'Question', 'Limiter la mémoire des workers à 512 Mo ou 1 Go ?']],
+  perso: [['RC', 'import-fiches', 'Tour fini', 'À tester : 214 fiches importées']],
+};
+const AGENTS = {
+  PA: [['design-tableau', 'DEM-12', 'Tour fini · il attend ton choix', 'on'], ['etude-paiement', 'DEM-9', 'Lit docs/offres/b.md'], ['emails', 'DEM-17', 'Modifie src/mail/welcome.mjml'], ['export-csv', 'DEM-11', 'À tester', 'idle']],
+  FA: [['relances-impayes', 'FAC-88', 'Attend ton autorisation', 'wt'], ['export-sepa', 'FAC-91', 'Écrit src/sepa/pain008.ts', 'on'], ['tests-factures', 'FAC-79', 'Lance vitest run'], ['revue-tva', 'FAC-85', 'À tester', 'idle']],
+  RC: [['import-fiches', 'RC-14', 'Tour fini · à tester', 'on'], ['photos-webp', 'RC-17', 'Convertit 214 images'], ['recherche', 'RC-12', 'Lit src/search/index.ts']],
+};
+const pc = (k) => PROJ[k].color;
+const setP = (k) => document.documentElement.style.setProperty('--p', pc(k));
+const srvIcon = (s) => (s.local ? ic('monitor', 14) : ic('server', 14));
+function plate(s, o = {}) {
+  const inner = s.local ? ic('monitor', o.size === 'lg' ? 24 : o.size === 'sm' ? 12 : 17) : s.glyph;
+  return `<span class="plate ${o.size || ''} ${o.lost ? 'lost' : ''}" aria-hidden="true">${inner}${o.badge ? `<span class="badge">${o.badge}</span>` : ''}${o.unlink ? `<span class="badge icon">${ic('unlink', 11)}</span>` : ''}</span>`;
+}
+
+/* ───────── La fenêtre, commune ───────── */
+// o.mach : null (un seul espace : rien), 'label' (B, C, et les écrans communs) ou 'crumb' (A : le bouton de l'aiguillage).
+function titlebar(o) {
+  const s = SP[o.space];
+  let mach = '';
+  if (o.mach) {
+    const lost = o.lost ? 'lost' : '';
+    const inner = `${plate(s, { size: 'sm' })}<span>${s.name}</span>${!s.local && !NARROW ? `<span class="host">${s.host}</span>` : ''}${o.lost ? `${ic('refresh', 12)}<span class="host" style="color:inherit">reconnexion</span>` : ''}`;
+    mach =
+      o.mach === 'crumb'
+        ? `<button class="mach crumb ${s.local ? 'local' : ''} ${lost} ${o.open ? 'open' : ''}" aria-haspopup="dialog" aria-expanded="${o.open ? 'true' : 'false'}" aria-label="Espace : ${s.name}. ${o.else || 0} demandes attendent dans les autres espaces. Changer d’espace (Ctrl+²)">${inner}${o.else ? `<span class="else" aria-hidden="true">${o.else}</span>` : ''}${ic('down', 12)}</button>`
+        : `<span class="mach ${s.local ? 'local' : ''} ${lost}" role="status" aria-label="Machine : ${s.name}">${inner}</span>`;
+    // La vue « Partout » de B : aucune machine en particulier, chaque ligne dit la sienne.
+    if (o.partout) mach = `<span class="mach local" role="status">${ic('overview', 13)}<span>Tous les espaces</span></span>`;
+  }
+  const logo = o.logoMenu
+    ? `<button class="logo btn-logo open" aria-haspopup="menu" aria-expanded="true" aria-label="Escouade"><i>${ic('agents', 13)}</i></button>`
+    : `<span class="logo">${ic('agents', 13)}</span>`;
+  const pk = o.proj ?? o.cur;
+  const proj = pk && !o.view ? `<span class="proj"><span class="sq"></span><span class="ell">${PROJ[pk].name}</span> ${ic('down', 12)}</span>` : `<span class="proj">${o.title ?? (o.view ? 'Vue d’ensemble' : '')}</span>`;
+  const hasProj = (pk && !o.view) || o.title || (o.view && o.title === undefined);
+  return `<header class="tb">${logo}<span class="lefts">${mach}${mach && hasProj ? '<span class="slash" aria-hidden="true">/</span>' : ''}${proj}</span>
+    <span class="search">${ic('search', 13)}<span class="ell">Rechercher</span><kbd>Ctrl K</kbd></span><span class="ed wide-only">${ic('code', 14)}Éditeur</span>
+    <span class="wb"><span class="wbtn">${ic('min', 13)}</span><span class="wbtn">${ic('max', 12)}</span><span class="wbtn">${ic('close', 13)}</span></span></header>`;
+}
+function tiles(s, cur) {
+  return SP[s].projects
+    .map((k) => `<span class="tile ${k === cur ? 'cur' : ''}" style="background:${pc(k)}" aria-label="${PROJ[k].name}${PROJ[k].wait ? ', un agent attend' : ''}">${k}${PROJ[k].wait && k !== cur ? '<span class="wd"></span>' : ''}</span>`)
+    .join('');
+}
+// Le rail des projets. B y range les espaces : l'en-tête de l'espace ouvert, puis les autres en piles.
+function rail(o) {
+  const top = `<span class="r-i ${o.overview ? 'on' : ''}" aria-label="Vue d’ensemble${o.partout ? ' de tous les espaces' : ''}">${ic('overview', 15)}</span>
+    <span class="r-i" aria-label="À toi">${ic('inbox', 16)}<span class="badge">${o.inbox ?? 3}</span></span><span class="sep"></span>`;
+  let mid = '';
+  if (o.b) {
+    const s = SP[o.space];
+    const head = o.b.n > 1 ? `<span class="shead-b" title="${s.name}">${plate(s, { lost: o.lost })}<span class="lab ${o.lost ? 'lost' : ''}">${s.lab}</span></span>` : '';
+    const others = o.b.n > 1 ? `<span class="sep"></span>${o.b.others.map((id) => pile(id)).join('')}` : '';
+    mid = `${head}<span class="group">${tiles(o.space, o.view ? '' : o.cur)}</span><span class="r-i ${o.plusOpen ? 'on' : ''}" aria-label="Ajouter">${ic('plus', 15)}</span>${others}`;
+  } else mid = `${o.noTiles ? '' : tiles(o.space, o.cur)}<span class="r-i">${ic('plus', 15)}</span>`;
+  return `<nav class="rail" aria-label="Projets${o.b && o.b.n > 1 ? ' et espaces' : ''}">${top}${mid}<span class="low"><span class="r-i">${ic('stats', 15)}</span><span class="r-i">${ic('puzzle', 15)}</span><span class="r-i">${ic('sliders', 15)}</span></span></nav>`;
+}
+// Une pile : un espace replié, ses projets en cartes décalées, ce qui y attend en pastille.
+function pile(id) {
+  const s = SP[id];
+  const ps = s.projects.slice(0, 2).map((k) => `<i style="background:${pc(k)}"></i>`).join('');
+  return `<span class="shead-b" aria-label="${s.name}, ${s.wait} en attente (${s.key})"><span class="pile">${ps}<span class="mon">${s.local ? ic('monitor', 13) : s.glyph}</span><span class="badge">${s.wait}</span></span><span class="lab">${s.lab}</span></span>`;
+}
+// C : la colonne des espaces, à gauche du rail ; l'espace ouvert fait corps avec la fenêtre.
+function column(o) {
+  const items = o.c.list
+    .map((id) => {
+      const s = SP[id];
+      const cur = id === o.space;
+      const lost = cur && o.lost;
+      return `<span class="sp-i ${cur ? 'cur' : ''} ${lost ? 'lost' : ''}" ${cur ? 'aria-current="true"' : ''} aria-label="${s.name}${s.wait && !cur ? `, ${s.wait} en attente` : ''} (${s.key})" ${o.c.hover === id ? 'id="hov"' : ''}>${plate(s, { badge: !cur && s.wait ? s.wait : 0, lost, unlink: lost })}<span class="lab">${s.lab}</span></span>`;
+    })
+    .join('');
+  return `<nav class="spaces" aria-label="Espaces">${items}<span class="add ${o.c.adding ? 'on' : ''}" aria-label="Se connecter à un serveur">${ic('plus', 15)}</span><span class="low"><span class="gear" aria-label="Réglages de l’app">${ic('sliders', 15)}</span></span></nav>`;
+}
+function side(o) {
+  const s = SP[o.space];
+  const list = (AGENTS[o.cur] || AGENTS.FA)
+    .map(([n, k, m, st]) => `<div class="agent ${st === 'on' && !o.noSel ? 'on' : ''} ${st === 'wt' ? 'wt' : ''}"><div class="r"><span class="ring ${st === 'wt' ? 'wt' : st === 'idle' ? 'idle' : ''}"></span><span class="n ell">${n}</span><span class="key sp">${k}</span></div><div class="m ell">${m}</div></div>`)
+    .join('');
+  const path = s.local ? `~/dev/${PROJ[o.cur].name}` : `/home/${s.user}/projets/${PROJ[o.cur].name}`;
+  const where = s.local || !o.n || o.n < 2 ? '' : `<span class="on-srv">${s.name}&nbsp;:</span>`;
+  return `<div class="side ${o.stale ? 'stale' : ''}"><div class="stabs"><span class="on">Agents<span class="c">${(AGENTS[o.cur] || []).length}</span></span><span>Kanban</span><span>PR</span><span>Docs</span></div>
+    <div class="new"><span class="plus">${ic('plus', 12)}</span>Nouvel agent<kbd>Ctrl N</kbd></div>${list}
+    <div class="foot"><div class="r">${s.local ? ic('folder', 13) : ic('server', 13)}${where}<span class="mono ell">${path}</span></div><div class="r">${ic('branch', 13)}<span class="mono ell">main</span></div></div></div>`;
+}
+function statusbar(o) {
+  const s = SP[o.space];
+  const link = s.local || !o.n || o.n < 2 ? '' : o.lost
+    ? `<span class="link lost">${ic('refresh', 12)} ${s.name} · reconnexion dans 4 s</span>`
+    : `<span class="link">${ic('tunnel', 12)} ${s.name} · ssh ${s.host} · <b class="tn">${s.ms} ms</b></span>`;
+  return `<footer class="status"><span><span class="dot ok"></span> <b>3</b> actifs</span><span><span class="dot wt"></span> <b>${s.wait}</b> en attente</span><span><span class="dot"></span> <b>1</b> terminé</span>
+    <span class="sp wide-only">5h <b>34 %</b> · 7j <b>61 %</b></span>${link}<span>${ic('branch', 12)} <span class="mono">main</span></span></footer>`;
+}
+function conversation(o) {
+  const s = SP[o.space];
+  if (o.cur === 'PA')
+    return `<div class="chead"><b>design-tableau</b><span class="pill k">Prêt</span><span class="meta">${ic('branch', 12)}<span class="mono ell">escouade/design-tableau</span></span></div>
+    <div class="conv"><div class="col2">
+      <div class="bubble-me">Rends trois directions pour le tableau de bord des adhérents, clair et sombre, et dépose le choix dans la boîte.</div>
+      <div class="tool">${ic('edit', 13)}<b>Écrit</b> design/tableau/maquette.html · ${ic('image', 13)}<b>Capturé</b> 6 rendus</div>
+      <div class="ai"><p>Les trois directions sont rendues et le choix t’attend dans la boîte. Je recommande B. En attendant, j’écris les tests des filtres, qui valent pour les trois.</p></div>
+    </div></div>${composer(o)}`;
+  return `<div class="chead"><b>export-sepa</b><span class="pill ok">En cours</span><span class="meta">${ic('branch', 12)}<span class="mono ell">escouade/export-sepa</span></span></div>
+    <div class="conv ${o.stale ? 'stale' : ''}"><div class="col2">
+      <div class="bubble-me">Génère le fichier de prélèvement SEPA (pain.008) des relances de novembre, à partir de la table des échéances.</div>
+      <div class="tool">${ic('read', 13)}<b>Lu</b> src/sepa/schema.ts · src/db/echeances.sql</div>
+      <div class="tool">${ic('edit', 13)}<b>Écrit</b> src/sepa/pain008.ts · <b>+184</b> lignes</div>
+      <div class="ai"><p>Le fichier suit le schéma pain.008.001.02 : une remise par date d’échéance, le mandat et sa date de signature repris de la table des adhérents. J’écris maintenant les tests sur les trois cas de la banque (premier prélèvement, récurrent, dernier).</p></div>
+      <div class="tool">${ic('bash', 13)}<b>Lance</b> <span class="mono ell">npx vitest run src/sepa</span></div>
+    </div></div>${composer(o)}`;
+}
+function composer(o) {
+  const off = o.stale;
+  return `<div class="composer ${off ? 'off' : ''}"><div style="color:var(--muted)">${off ? 'Envoi suspendu jusqu’à la reprise ; ton brouillon est gardé.' : 'Écris à l’agent…'}</div><div class="row"><span class="chip">${ic('shield', 12)}Édits auto</span><span class="chip">Opus · moyen</span><span class="sp"></span>${ic('clip', 15)}${ic('mic', 15)}<span class="send">${ic('up', 14)}</span></div></div>`;
+}
+// Le bandeau de la connexion perdue (commun) : ce qui est arrivé, ce qui continue, la reprise, et la sortie.
+function lostbar(o) {
+  const back = o.back || 'Aller sur Ce poste';
+  return `<div class="lostbar" role="alert">${ic('warn', 16)}<div class="t"><b>Connexion à Travail perdue à 14:32</b><span>Nouvel essai dans 4&nbsp;s (6ᵉ). Les agents continuent sur le serveur ; ce que tu vois date de 14:32.</span></div>
+    <span class="sp"></span><button class="btn sm">${ic('refresh', 12)}Réessayer</button><button class="btn sm quiet">${back}</button></div>`;
+}
+
+/* ───────── La connexion : ses étapes et ses corps, communs aux trois ───────── */
+const STEPS = (state) => state === 'host' ? [['Hôte SSH', '~/.ssh/config', 'cur'], ['Connexion', 'SSH, puis Escouade', ''], ['Appairage', 'Une seule fois', ''], ['L’espace', 'Nom, projets', '']] : [
+  ['Hôte SSH', 'acme-escouade', 'done'],
+  ['Connexion', state === 'error' ? 'Injoignable' : 'SSH · Escouade 2.3.2', state === 'error' ? 'bad' : 'done'],
+  ['Appairage', 'Une seule fois', state === 'error' ? '' : 'cur'],
+  ['L’espace', 'Nom, projets', ''],
+];
+function stepsCol(state) {
+  return `<div class="steps"><h2>Se connecter à un serveur</h2>${STEPS(state)
+    .map(([t, s, c], i) => `<div class="step ${c}"><span class="n">${c === 'done' ? ic('check', 11) : c === 'bad' ? ic('close', 11) : i + 1}</span><b>${t}</b><span class="s">${s}</span></div>`)
+    .join('')}</div>`;
+}
+function hsteps(state) {
+  return `<span class="hsteps" aria-label="Étapes">${STEPS(state)
+    .map(([t, , c], i) => `${i ? '<span class="ln"></span>' : ''}<span class="${c}"><span class="n">${c === 'done' ? ic('check', 10) : c === 'bad' ? ic('close', 10) : i + 1}</span>${NARROW && c !== 'cur' && c !== 'bad' ? '' : t}</span>`)
+    .join('')}</span>`;
+}
+function pairBody(o = {}) {
+  return `<div class="cbody">
+    ${o.noTitle ? '' : `<h3>Appairer ce poste à acme-escouade</h3>`}
+    <p>La connexion SSH marche, et Escouade 2.3.2 répond sur le serveur. Il reste à donner à ce poste son jeton d’appareil, une seule fois.</p>
+    <div class="instr"><div class="r"><span class="k">1. Sur le serveur, lance</span><span class="cmd">escouade-server pair<span class="btn sm quiet" style="height:22px;padding:0 6px">${ic('copy', 12)}</span></span><span class="hint">ou <u style="text-underline-offset:3px;color:var(--soft)">le lancer d’ici par SSH</u></span></div>
+      <div class="r"><span class="k">2. Tape le code qu’il affiche</span></div>
+      <div class="pin" role="group" aria-label="Code d’appairage, 8 caractères"><span>K</span><span>7</span><span>Q</span><span>4</span><i></i><span>M</span><span>X</span><span class="cur"></span><span></span></div>
+      <span class="hint">${ic('clock', 12)}Il vaut 10 minutes, pour un seul appareil.</span></div>
+    <div class="grid2"><div><span class="lbl">Nom de l’espace</span><span class="field filled">${ic('server', 13)}<span class="ell">Travail</span></span></div>
+      <div><span class="lbl">Ce poste, vu du serveur</span><span class="field filled">${ic('monitor', 13)}<span class="ell">DESKTOP-7QK2 · Windows</span></span></div></div>
+    <div class="acts"><button class="btn quiet">Retour</button><span class="sp"></span><button class="btn">Annuler</button><button class="btn primary dis">Appairer<kbd>Entrée</kbd></button></div></div>`;
+}
+function errorBody(o = {}) {
+  return `<div class="cbody">
+    ${o.noTitle ? '' : `<h3 style="color:var(--del)">${ic('warn', 17)}acme-escouade ne répond pas</h3>`}
+    <p>ssh n’a pas pu joindre escouade.acme.internal sur le port 22 en 15&nbsp;s. Rien n’a été changé sur ce poste ni sur le serveur.</p>
+    <div class="code"><span class="d">$ ssh -N -L 47831:127.0.0.1:47830 acme-escouade</span>
+<span class="e">ssh: connect to host escouade.acme.internal port 22: Connection timed out</span></div>
+    <div class="lbl">Ce qui peut l’expliquer</div>
+    <div class="why"><div>Le VPN de l’entreprise est coupé : l’adresse se termine en .internal.</div><div>Le serveur est éteint, ou son pare-feu ferme le port 22.</div><div>L’hôte de ~/.ssh/config vise une autre machine : HostName escouade.acme.internal, Port 22, User escouade.</div></div>
+    <div class="acts"><button class="btn quiet">${ic('term', 13)}Essayer ssh dans un terminal</button><span class="sp"></span><button class="btn">Modifier l’hôte</button><button class="btn primary">${ic('refresh', 13)}Réessayer</button></div></div>`;
+}
+
+/* ───────── Nouveau projet sur un serveur (commun) ───────── */
+function wizard(o) {
+  const s = SP[o.space];
+  const rows = [
+    ['folder', 'facturation', 'git · main', 'Déjà un projet', 'dim'],
+    ['folder', 'api-clients', 'git · main', 'Déjà un projet', 'dim'],
+    ['folder', 'outils-internes', 'git · main · propre', '', 'sel'],
+    ['folder', 'migration-2024', 'git · 3 branches', ''],
+    ['folder', 'scripts', 'dossier', ''],
+    ['folder', 'sauvegardes', 'dossier · 12 Go', ''],
+  ]
+    .map(([i, n, m, t, c]) => `<div class="frow ${c || ''}" role="option" ${c === 'sel' ? 'aria-selected="true"' : ''}>${ic(i, 14)}<span class="n"><b>${n}</b></span><span class="meta">${t ? `<span class="pill k">${t}</span>` : ''}${m}</span></div>`)
+    .join('');
+  const st = ['Départ', 'Réglages copiés', 'Worktrees', 'Lancement', 'Kanban', 'Compte et commit', 'Intégrations', 'Récapitulatif'];
+  return `<div class="modal-wrap"><div class="wiz" role="dialog" aria-label="Nouveau projet sur ${s.name}">
+    <div class="wh"><h2>Nouveau projet</h2><span class="mach">${plate(s, { size: 'sm' })}sur ${s.name}<span class="host">${s.addr}</span></span><span class="muted wide-only">étape 1 sur 8</span><span class="sp"></span>${ic('close', 14)}</div>
+    <div class="wsteps">${st.map((t, i) => `<span class="${i ? '' : 'on'}"><i>${i + 1}</i>${t}</span>`).join('')}</div>
+    <div class="wb">
+      <div class="onsrv">${ic('server', 15)}<span>Les dossiers sont ceux de <b>${s.name}</b> (${s.addr}), pas de ce poste : le projet et ses agents vivront sur le serveur.</span></div>
+      <div style="display:flex;gap:10px;align-items:center"><span class="seg" role="tablist"><span role="tab">${ic('download', 13)}Cloner un dépôt</span><span class="on" role="tab" aria-selected="true">${ic('folder', 13)}Un dossier du serveur</span><span role="tab">${ic('folder-plus', 13)}Nouveau dépôt</span></span></div>
+      <div class="fb" role="listbox" aria-label="Dossiers de /home/escouade/projets sur ${s.name}"><div class="crumbs">${ic('server', 12)}<span>${s.name}&nbsp;:</span><span>/home/escouade/</span><b>projets</b><span class="sp"></span><span class="btn sm quiet" style="font-family:Inter,sans-serif">${ic('folder-plus', 12)}Nouveau dossier</span></div>
+        <div class="rows">${rows}</div><div class="ff">${ic('info', 12)}<span class="ell">Le disque du serveur : 41 Go libres sur 80 Go</span><span class="sp mono ell">/home/escouade/projets/outils-internes</span></div></div>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end"><div style="display:grid;gap:6px"><span class="lbl">Nom</span><span class="field filled">outils-internes</span></div>
+        <div style="display:grid;gap:6px"><span class="lbl">Couleur</span><span class="sw">${['oklch(0.72 0.12 48)', 'oklch(0.72 0.12 155)', 'oklch(0.72 0.12 250)', 'oklch(0.72 0.12 300)', 'oklch(0.72 0.12 85)', 'oklch(0.72 0.12 20)', 'oklch(0.72 0.12 200)'].map((c, i) => `<i class="${i === 2 ? 'on' : ''}" style="background:${c}"></i>`).join('')}</span></div></div>
+    </div>
+    <div class="wf"><span class="lnk">Créer sans l’assistant</span><span class="sp"></span><button class="btn">Annuler</button><button class="btn primary">Suivant</button></div></div></div>`;
+}
+
+/* ───────── Les appareils d'un espace (commun) ───────── */
+function devicesBody(o = {}) {
+  return `<div class="sb"><div class="shead"><div><h2>Appareils</h2><p>Les appareils appairés à Travail (escouade.acme.internal). Chacun a son jeton ; en retirer un ferme aussitôt ses connexions.</p></div></div>
+    <div class="dev"><span class="ic">${ic('monitor', 16)}</span><span class="t"><b>DESKTOP-7QK2</b><span class="pill ok">Ce poste</span></span><span class="s">Windows · connecté depuis 9:12, par SSH (acme-escouade)</span><span class="acts"><button class="btn sm">Se déconnecter</button></span></div>
+    <div class="dev"><span class="ic">${ic('phone', 16)}</span><span class="t"><b>Pixel 8</b></span><span class="s">Android · vu il y a 3 h, par WireGuard</span><span class="acts"><button class="btn sm danger">Retirer</button></span></div>
+    <div class="dev"><span class="ic">${ic('monitor', 16)}</span><span class="t"><b>MacBook-Air</b></span><span class="s">macOS · vu il y a 12 jours, par SSH</span><span class="acts"><button class="btn sm danger">Retirer</button></span></div>
+    <div class="srow"><b>Appairer un appareil</b><span class="acts"><button class="btn sm">${ic('key', 12)}Créer un code</button></span><span class="d">Lance <span class="mono">escouade-server pair</span> sur le serveur, ou crée ici un code de 10 minutes pour un seul appareil.</span></div>
+    <h3>Ce qui est gardé sur le serveur</h3>
+    <div class="srow"><b>Les secrets de Travail</b><span class="acts"><span class="pill k">${ic('lock', 11)}Fichier du serveur</span></span><span class="d">Clés d’API, jetons des intégrations : dans <span class="mono">~/.escouade/secrets.json</span>, lisible du seul compte escouade. Un serveur n’a pas de trousseau : leur sécurité est celle du serveur (disque, accès SSH, sauvegardes).</span></div>
+    ${o.policy === false ? '' : `<h3>Imposé sur ce poste</h3>
+    <div class="srow lock"><b>Serveurs permis</b><span class="acts"><span class="mono" style="color:var(--soft)">*.acme.internal</span></span><span class="d"><span class="lk">${ic('lock', 12)}Imposé par la stratégie de ce poste</span> · un autre serveur est refusé à la connexion.</span></div>`}
+  </div>`;
+}
+
+/* ═════════════════════ A · L'aiguillage ═════════════════════ */
+function shellA(o, main, over = '') {
+  setP(o.cur);
+  const n = o.n || 1;
+  const view = o.view ? 'view' : '';
+  return `<div class="win ${view}">${titlebar({ ...o, mach: n > 1 ? 'crumb' : null })}${rail({ ...o })}${o.view ? '' : side({ ...o, n })}<div class="main">${main}</div>${statusbar({ ...o, n })}${over}</div>`;
+}
+function switcher(o) {
+  const lanes = ['poste', 'travail', 'perso']
+    .map((id, i) => {
+      const s = SP[id];
+      const cur = id === o.space;
+      const waits = (WAITS[id] || []).slice(0, 2);
+      const st = s.local ? `${ic('monitor', 12)}${s.host} · sur ce poste` : `${ic('tunnel', 12)}ssh ${s.host} · <span class="dot ok"></span> ${s.ms} ms`;
+      const tl = s.projects.map((k) => `<i style="background:${pc(k)}">${k}</i>`).join('');
+      return `<div class="lane ${cur ? 'cur' : ''} ${o.sel === id ? 'sel' : ''}" role="option" ${o.sel === id ? 'aria-selected="true"' : ''}>${plate(s)}
+        <div style="display:grid;gap:3px;min-width:0"><span class="nm"><b>${s.name}</b>${cur ? '<span class="pill k">Ici</span>' : ''}${s.wait ? `<span class="pill wt">${s.wait} attend${s.wait > 1 ? 'ent' : ''}</span>` : ''}</span><span class="st">${st}</span></div>
+        <span class="right"><span class="tiles wide-only">${tl}</span>${!cur ? `<span class="btn sm quiet wide-only">${ic('window', 12)}Fenêtre</span>` : ''}<kbd>${s.key}</kbd></span>
+        <div class="waits">${waits.map(([p, a, k, t]) => `<span class="w"><span class="pdot" style="background:${pc(p)}"></span><span class="k">${k}</span><span class="ell">${PROJ[p].name} · ${a} · ${t}</span></span>`).join('')}</div></div>`;
+    })
+    .join('');
+  return `<div class="switcher" role="dialog" aria-label="Changer d’espace"><div class="sh">${ic('swap', 14)}<b>Espaces</b><span class="muted">· 4 attendent, partout</span><span class="sp"></span><kbd>Ctrl ²</kbd></div>
+    <div role="listbox" aria-label="Espaces">${lanes}</div>
+    <div class="sf"><button class="btn sm">${ic('plus', 12)}Se connecter à un serveur</button><button class="btn sm quiet">${ic('sliders', 12)}Gérer les serveurs</button><span class="hint">↑ ↓ choisir · Entrée ouvrir · Ctrl Entrée dans une nouvelle fenêtre</span></div></div>`;
+}
+const A = {
+  un: () => {
+    const menu = `<div class="menu" role="menu" style="top:40px;left:10px"><div class="mh">${plate(SP.poste, { size: 'sm' })}<div><b>Ce poste</b><span>DESKTOP-7QK2 · Escouade 2.3.2</span></div><span class="sp">${ic('check', 13)}</span></div><hr>
+      <div class="mi on" role="menuitem">${ic('server', 14)}Se connecter à un serveur…</div><div class="mi" role="menuitem">${ic('sliders', 14)}Réglages<kbd>Ctrl ,</kbd></div><div class="mi" role="menuitem">${ic('info', 14)}À propos d’Escouade</div></div>`;
+    return shellA({ space: 'poste', cur: 'PA', n: 1, logoMenu: true, inbox: 1 }, conversation({ space: 'poste', cur: 'PA' }), menu);
+  },
+  deux: () => {
+    const tip = `<div class="tip" style="top:46px;left:44px">${ic('server', 13)}<b>Travail</b>2 attendent · <kbd>Ctrl ²</kbd> pour changer d’espace</div>`;
+    return shellA({ space: 'poste', cur: 'PA', n: 2, else: 2, inbox: 1 }, conversation({ space: 'poste', cur: 'PA' }), tip);
+  },
+  trois: () => shellA({ space: 'travail', cur: 'FA', n: 3, else: 2, open: true, inbox: 2 }, conversation({ space: 'travail', cur: 'FA' }), switcher({ space: 'travail', sel: 'perso' })),
+  serveur: () => shellA({ space: 'perso', cur: 'RC', n: 3, else: 3, inbox: 1 }, terminal('perso')),
+  coupure: () => shellA({ space: 'travail', cur: 'FA', n: 3, else: 2, lost: true, stale: true, inbox: 2 }, lostbar({}) + conversation({ space: 'travail', cur: 'FA', stale: true })),
+  connexion: () => shellA({ space: 'poste', cur: 'PA', n: 1, inbox: 1 }, conversation({ space: 'poste', cur: 'PA' }), `<div class="modal-wrap"><div class="dialog" role="dialog" aria-label="Se connecter à un serveur">${stepsCol('pair')}${pairBody()}</div></div>`),
+  erreur: () => shellA({ space: 'poste', cur: 'PA', n: 1, inbox: 1 }, conversation({ space: 'poste', cur: 'PA' }), `<div class="modal-wrap"><div class="dialog" role="alertdialog" aria-label="Se connecter à un serveur : erreur">${stepsCol('error')}${errorBody()}</div></div>`),
+  projet: () => shellA({ space: 'travail', cur: 'FA', n: 3, else: 2, inbox: 2 }, conversation({ space: 'travail', cur: 'FA' }), wizard({ space: 'travail' })),
+  appareils: () => {
+    const nav = `<nav aria-label="Réglages"><span class="scope">${plate(SP.travail, { size: 'sm' })}<div style="min-width:0"><b>Travail</b><span>Réglages de cet espace</span></div><span class="sp">${ic('down', 12)}</span></span>
+      <span class="g">${ic('server', 12)}Travail</span>${['Général', 'Agents', 'Comptes et harness', 'Services connectés', 'Plugins', 'Appareils', 'Données'].map((l) => `<span class="it ${l === 'Appareils' ? 'on' : ''}">${l}</span>`).join('')}
+      <span class="g">${ic('monitor', 12)}L’app sur ce poste</span>${['Serveurs', 'Apparence et langue', 'Voix', 'Notifications'].map((l) => `<span class="it">${l}</span>`).join('')}</nav>`;
+    return shellA({ space: 'travail', cur: 'FA', n: 3, else: 2, inbox: 2 }, conversation({ space: 'travail', cur: 'FA' }), `<div class="modal-wrap"><div class="settings" role="dialog" aria-label="Réglages de Travail">${nav}${devicesBody()}</div></div>`);
+  },
+};
+
+/* ═════════════════════ B · Les piles ═════════════════════ */
+function shellB(o, main, over = '') {
+  setP(o.cur);
+  const n = o.n || 1;
+  const others = ['poste', 'travail', 'perso'].filter((id) => id !== o.space).slice(0, n - 1);
+  return `<div class="win ${o.view ? 'view' : ''}">${titlebar({ ...o, mach: n > 1 ? 'label' : null })}${rail({ ...o, b: { n, others } })}${o.view ? '' : side({ ...o, n })}<div class="main">${main}</div>${statusbar({ ...o, n })}${over}</div>`;
+}
+function overviewAll() {
+  const sec = (id) => {
+    const s = SP[id];
+    const rows = (WAITS[id] || [])
+      .map(([p, a, k, t]) => `<div class="orow wt"><span class="t"><span class="pdot" style="background:${pc(p)}"></span><b>${a}</b><span class="muted">${PROJ[p].name}</span></span><span class="m ell">${k} · ${t}</span><span class="acts">${k === 'Autorisation' ? '<button class="btn sm">Autoriser</button>' : ''}<button class="btn sm quiet">Ouvrir</button></span></div>`)
+      .join('');
+    const run = id === 'travail' ? `<div class="orow"><span class="t"><span class="pdot" style="background:${pc('FA')}"></span><b>export-sepa</b><span class="muted">facturation</span></span><span class="m ell">Lance npx vitest run src/sepa</span><span class="acts"><button class="btn sm quiet">Ouvrir</button></span></div>` : '';
+    return `<div class="ovs"><div class="sh">${plate(s, { size: 'sm' })}<b>${s.name}</b><span class="c">${s.local ? s.host : `${s.addr} · ${s.ms} ms`}</span><span class="pill wt">${s.wait} attend${s.wait > 1 ? 'ent' : ''}</span></div>${rows}${run}</div>`;
+  };
+  return `<div class="ov"><div class="oh"><h2>Vue d’ensemble</h2><span class="seg" role="tablist"><span class="on" role="tab" aria-selected="true">Partout<span class="c">3 espaces</span></span><span role="tab">Travail</span></span><span class="sp"></span><span class="hint">Ce qui attend en tête, espace par espace</span></div>
+    ${sec('travail')}${sec('poste')}${sec('perso')}</div>`;
+}
+const B = {
+  un: () => {
+    const menu = `<div class="menu" role="menu" style="top:142px;left:56px"><div class="mi" role="menuitem">${ic('folder-plus', 14)}Nouveau projet…</div><div class="mi" role="menuitem">${ic('download', 14)}Cloner un dépôt…</div><hr><div class="mi on" role="menuitem">${ic('server', 14)}Se connecter à un serveur…</div></div>`;
+    return shellB({ space: 'poste', cur: 'PA', n: 1, plusOpen: true, inbox: 1 }, conversation({ space: 'poste', cur: 'PA' }), menu);
+  },
+  deux: () => shellB({ space: 'poste', cur: 'PA', n: 2, inbox: 3 }, conversation({ space: 'poste', cur: 'PA' })),
+  trois: () => shellB({ space: 'travail', cur: 'FA', n: 3, view: true, overview: true, partout: true, inbox: 4 }, overviewAll()),
+  serveur: () => shellB({ space: 'perso', cur: 'RC', n: 3, inbox: 4 }, terminal('perso')),
+  coupure: () => shellB({ space: 'travail', cur: 'FA', n: 3, lost: true, stale: true, inbox: 4 }, lostbar({}) + conversation({ space: 'travail', cur: 'FA', stale: true })),
+  connexion: () => shellB({ space: 'poste', cur: 'PA', n: 1, view: true, title: '', inbox: 1 }, `<div class="bpage"><div class="bh">${ic('server', 16)}<h2>Se connecter à un serveur</h2>${hsteps('pair')}</div><div class="bb">${pairBody()}</div></div>`),
+  erreur: () => shellB({ space: 'poste', cur: 'PA', n: 1, view: true, title: '', inbox: 1 }, `<div class="bpage"><div class="bh">${ic('server', 16)}<h2>Se connecter à un serveur</h2>${hsteps('error')}</div><div class="bb">${errorBody()}</div></div>`),
+  projet: () => shellB({ space: 'travail', cur: 'FA', n: 3, inbox: 4 }, conversation({ space: 'travail', cur: 'FA' }), wizard({ space: 'travail' })),
+  appareils: () => {
+    const nav = `<nav aria-label="Réglages"><span class="g">${ic('monitor', 12)}L’app sur ce poste</span>${['Général', 'Serveurs', 'Voix', 'Notifications'].map((l) => `<span class="it">${l}</span>`).join('')}
+      <span class="g">${ic('server', 12)}Travail</span>${['Agents', 'Comptes et harness', 'Services connectés', 'Plugins', 'Appareils'].map((l) => `<span class="it ${l === 'Appareils' ? 'on' : ''}">${l}</span>`).join('')}
+      <span class="g">Projets de Travail</span>${['FA', 'AC', 'IK'].map((k) => `<span class="it"><span class="pdot" style="background:${pc(k)}"></span>${PROJ[k].name}</span>`).join('')}</nav>`;
+    return shellB({ space: 'travail', cur: 'FA', n: 3, inbox: 4 }, conversation({ space: 'travail', cur: 'FA' }), `<div class="modal-wrap"><div class="settings" role="dialog" aria-label="Réglages">${nav}${devicesBody()}</div></div>`);
+  },
+};
+
+/* ═════════════════════ C · La colonne ═════════════════════ */
+function shellC(o, main, over = '') {
+  setP(o.cur || 'PA');
+  const n = o.n || 1;
+  const list = ['poste', 'travail', 'perso'].slice(0, n);
+  const col = n > 1 ? 'col' : '';
+  if (o.adding)
+    return `<div class="win col">${titlebar({ space: 'poste', title: 'Se connecter à un serveur', mach: null })}${column({ ...o, space: 'aucun', c: { list: ['poste'], adding: true } })}<div class="addpage">${main}</div>${statusbar({ space: 'poste', n: 1 })}${over}</div>`;
+  return `<div class="win ${col} ${o.view ? 'view' : ''}">${titlebar({ ...o, mach: n > 1 ? 'label' : null })}${n > 1 ? column({ ...o, c: { list, hover: o.hover } }) : ''}${rail(o)}${o.view ? '' : side({ ...o, n })}<div class="main">${main}</div>${statusbar({ ...o, n })}${over}</div>`;
+}
+function serversEmpty() {
+  const nav = `<nav aria-label="Réglages"><span class="g">Escouade</span>${['Général', 'Agents', 'Comptes et harness', 'Services connectés', 'Voix', 'Notifications', 'Plugins', 'Serveurs', 'Avancé'].map((l) => `<span class="it ${l === 'Serveurs' ? 'on' : ''}">${l}</span>`).join('')}</nav>`;
+  return `<div class="modal-wrap"><div class="settings" role="dialog" aria-label="Réglages">${nav}<div class="sb"><div class="shead"><div><h2>Serveurs</h2><p>Ton Escouade tourne sur ce poste. Sur un serveur (un VPS, une machine du bureau), il tourne jour et nuit, et ce poste n’en est qu’une vue.</p></div></div>
+    <div class="jcard" style="padding:28px 0 8px;width:min(560px,100%)">${plate(SP.poste, { size: 'lg' })}<h2>Aucun serveur pour l’instant</h2><p>Connecte-toi à une machine où <span class="mono">escouade-server</span> est installé : par SSH, avec ta config, tes clés et tes hôtes connus. Chaque serveur devient un espace, avec ses projets, ses agents, ses comptes et ses réglages ; une colonne d’espaces apparaît à gauche.</p>
+    <div class="acts"><button class="btn primary">${ic('server', 13)}Se connecter à un serveur</button><button class="btn quiet">${ic('ext', 13)}Installer escouade-server sur un VPS</button></div></div></div></div></div>`;
+}
+const C = {
+  un: () => shellC({ space: 'poste', cur: 'PA', n: 1, inbox: 1 }, conversation({ space: 'poste', cur: 'PA' }), serversEmpty()),
+  deux: () => {
+    const menu = `<div class="menu" role="menu" style="top:112px;left:58px"><div class="mh">${plate(SP.travail, { size: 'sm' })}<div><b>Travail</b><span>acme-escouade · 2 attendent</span></div></div><hr>
+      <div class="mi on" role="menuitem">${ic('window', 14)}Ouvrir dans une nouvelle fenêtre</div><div class="mi" role="menuitem">${ic('sliders', 14)}Réglages de Travail</div><div class="mi" role="menuitem">${ic('bell', 14)}Notifications de Travail…</div><hr><div class="mi" role="menuitem">${ic('unlink', 14)}Se déconnecter</div><div class="mi" role="menuitem" style="color:var(--del)">${ic('trash', 14)}Retirer de ce poste…</div></div>`;
+    return shellC({ space: 'poste', cur: 'PA', n: 2, inbox: 1 }, conversation({ space: 'poste', cur: 'PA' }), menu);
+  },
+  trois: () => {
+    const tip = `<div class="tip" style="top:200px;left:68px">${ic('server', 13)}<b>Perso</b>1 attend · <kbd>Alt 3</kbd></div>`;
+    return shellC({ space: 'travail', cur: 'FA', n: 3, hover: 'perso', inbox: 2 }, conversation({ space: 'travail', cur: 'FA' }), tip);
+  },
+  serveur: () => shellC({ space: 'perso', cur: 'RC', n: 3, inbox: 1 }, terminal('perso')),
+  coupure: () => shellC({ space: 'travail', cur: 'FA', n: 3, lost: true, stale: true, inbox: 2 }, lostbar({}) + conversation({ space: 'travail', cur: 'FA', stale: true })),
+  connexion: () => shellC({ n: 2, adding: true }, `<div class="addcard" role="dialog" aria-label="Ajouter un espace"><div class="ah">${plate(SP.travail, { size: 'lg' })}<div><h2>Appairer ce poste à acme-escouade</h2><p>Un nouvel espace, à côté de Ce poste</p></div><span class="dots" aria-label="Étape 3 sur 4"><i class="done"></i><i class="done"></i><i class="on"></i><i></i></span></div>${pairBody({ noTitle: true })}</div>`),
+  erreur: () => shellC({ n: 2, adding: true }, `<div class="addcard" role="alertdialog" aria-label="Ajouter un espace : erreur"><div class="ah">${plate(SP.travail, { size: 'lg', lost: true })}<div><h2 style="color:var(--del)">acme-escouade ne répond pas</h2><p>Un nouvel espace, à côté de Ce poste</p></div><span class="dots" aria-label="Étape 2 sur 4, en échec"><i class="done"></i><i class="bad"></i><i></i><i></i></span></div>${errorBody({ noTitle: true })}</div>`),
+  projet: () => shellC({ space: 'travail', cur: 'FA', n: 3, inbox: 2 }, conversation({ space: 'travail', cur: 'FA' }), wizard({ space: 'travail' })),
+  appareils: () => {
+    const nav = `<nav aria-label="Réglages de Travail"><span class="scope">${plate(SP.travail, { size: 'sm' })}<div style="min-width:0"><b>Travail</b><span>acme-escouade</span></div></span>
+      <span class="g">Cet espace</span>${['Général', 'Agents', 'Comptes et harness', 'Services connectés', 'Plugins', 'Appareils', 'Données'].map((l) => `<span class="it ${l === 'Appareils' ? 'on' : ''}">${l}</span>`).join('')}
+      <span class="g">Projets</span>${['FA', 'AC', 'IK'].map((k) => `<span class="it"><span class="pdot" style="background:${pc(k)}"></span>${PROJ[k].name}</span>`).join('')}
+      <span class="foot">${ic('sliders', 13)}<span>Serveurs, voix, notifications : les réglages de l’app, en bas de la colonne.</span></span></nav>`;
+    return shellC({ space: 'travail', cur: 'FA', n: 3, inbox: 2 }, conversation({ space: 'travail', cur: 'FA' }), `<div class="modal-wrap"><div class="settings" role="dialog" aria-label="Réglages de Travail">${nav}${devicesBody()}</div></div>`);
+  },
+};
+
+/* ───────── Le terminal sur un serveur (commun) ───────── */
+function terminal(id) {
+  const s = SP[id];
+  const pr = `<span class="pr">${s.user}@${s.host}</span>:<span class="pa">~/projets/recettes</span>$ `;
+  return `<div class="chead"><b>import-fiches</b><span class="pill k">Tour fini</span><span class="meta">${ic('branch', 12)}<span class="mono ell">escouade/import-fiches</span></span><span class="sp"></span><span class="seg"><span>Conversation</span><span class="on">${ic('term', 12)}Terminal</span></span></div>
+    <div class="term" role="region" aria-label="Terminal sur ${s.name}"><div class="th"><span class="tabn">${ic('term', 13)}bash</span><span class="mach" style="height:24px">${plate(s, { size: 'sm' })}${s.name}<span class="host">${s.user}@${s.addr}</span></span><span class="sp"></span><span class="muted mono ell" style="font-size:11.5px">~/projets/recettes</span><span class="btn sm quiet">${ic('plus', 12)}</span></div>
+    <div class="tbody">${pr}npm run import -- --source=fiches/
+<span class="dm">> recettes@1.4.0 import</span>
+<span class="dm">> node scripts/import.mjs --source=fiches/</span>
+
+Lu 214 fiches (fiches/*.md) · 3 ignorées (sans titre)
+Images converties en WebP : 214 · 38,2 Mo → 9,7 Mo
+Écrit data/recettes.json (211 recettes, 1 412 ingrédients)
+${pr}git status --short
+ M data/recettes.json
+?? data/images/
+${pr}<span style="display:inline-block;width:8px;height:15px;background:var(--code-fg);vertical-align:-2px"></span></div></div>`;
+}
+
+/* ═════════════════════ Communs aux trois (x) ═════════════════════ */
+// La navigation entre espaces y est masquée : seule la machine de la barre de titre, commune, reste.
+function shellX(o, main, over = '') {
+  setP(o.cur);
+  return `<div class="win ${o.view ? 'view' : ''}">${titlebar({ ...o, mach: 'label' })}${rail(o)}${o.view ? '' : side({ ...o, n: 3 })}<div class="main">${main}</div>${statusbar({ ...o, n: 3 })}${over}</div>`;
+}
+function appSettings(page, body) {
+  const nav = `<nav aria-label="Réglages de l’app"><span class="g">${ic('monitor', 12)}L’app sur ce poste</span>${['Général', 'Serveurs', 'Voix', 'Notifications', 'Raccourcis'].map((l) => `<span class="it ${l === page ? 'on' : ''}">${l}</span>`).join('')}
+    <span class="g">${ic('server', 12)}Travail</span>${['Agents', 'Comptes et harness', 'Services connectés', 'Plugins', 'Appareils'].map((l) => `<span class="it ${l === page ? 'on' : ''}">${l}</span>`).join('')}</nav>`;
+  return `<div class="modal-wrap"><div class="settings" role="dialog" aria-label="Réglages">${nav}${body}</div></div>`;
+}
+function serverRow(s, state, d, acts) {
+  return `<div class="dev"><span class="ic">${plate(s, { size: 'sm' })}</span><span class="t"><b>${s.name}</b><span class="muted mono ell" style="font-size:11.5px">${s.host}${s.addr ? ` → ${s.addr}` : ''}</span>${state}</span><span class="s">${d}</span><span class="acts">${acts}</span></div>`;
+}
+const X = {
+  hote: () => {
+    const hosts = [
+      ['acme-escouade', 'escouade@escouade.acme.internal · port 22', true],
+      ['vps-perso', 'escouade@vps.example.net · port 2222', false],
+      ['labo-gpu', 'gpu@10.4.0.12 · par bastion-acme (ProxyJump)', false],
+    ]
+      .map(([h, d, on]) => `<div class="hostrow ${on ? 'on' : ''}" role="radio" aria-checked="${on}"><span class="radio ${on ? 'on' : ''}"></span><b class="mono" style="font-size:12.5px;font-weight:500">${h}</b><span class="pill k">~/.ssh/config</span><span class="s">${d}</span></div>`)
+      .join('');
+    const body = `<div class="cbody"><h3>Quelle machine&nbsp;?</h3><p>Escouade lance le <span class="mono">ssh</span> de ce poste, avec ta config, ton agent SSH et tes hôtes connus. Il ne garde aucune clé, et rien de nouveau ne s’ouvre sur le serveur : une seule redirection, vers son 127.0.0.1.</p>
+      <div role="radiogroup" aria-label="Hôtes de ~/.ssh/config" style="display:grid;gap:4px">${hosts}</div>
+      <div style="display:grid;gap:6px"><span class="lbl">Ou un autre hôte</span><span class="field"><span class="ell mono">utilisateur@adresse:port</span></span></div>
+      <div class="acts"><span class="hint">${ic('info', 12)}Les hôtes à motif (Host *) et ceux sans HostName ne sont pas listés.</span><span class="sp"></span><button class="btn">Annuler</button><button class="btn primary">Se connecter<kbd>Entrée</kbd></button></div></div>`;
+    return shellX({ space: 'poste', cur: 'PA', inbox: 1 }, conversation({ space: 'poste', cur: 'PA' }), `<div class="modal-wrap"><div class="dialog" role="dialog" aria-label="Se connecter à un serveur">${stepsCol('host')}${body}</div></div>`);
+  },
+  etats: () => {
+    const body = `<div class="sb"><div class="shead"><div><h2>Serveurs</h2><p>Les serveurs Escouade que ce poste connaît. Chacun est un espace : ses projets, ses agents, ses comptes et ses réglages restent sur lui.</p></div><span class="sp"></span><button class="btn sm primary">${ic('plus', 12)}Se connecter à un serveur</button></div>
+      ${serverRow(SP.travail, '<span class="pill ok">Connecté</span>', 'Escouade 2.3.2 · 38 ms · depuis 9:12', '<button class="btn sm">Ouvrir</button><button class="btn sm quiet">' + ic('more', 13) + '</button>')}
+      ${serverRow(SP.perso, '<span class="pill wt">' + ic('refresh', 11) + 'Reconnexion</span>', 'Tunnel tombé à 14:32 · 6ᵉ essai dans 4 s ; les agents continuent sur le serveur', '<button class="btn sm">Réessayer</button>')}
+      ${serverRow({ name: 'Labo', glyph: 'L', host: 'labo-gpu' }, '<span class="pill wt">Version différente</span>', 'Le serveur a Escouade 2.3.0, ce poste 2.3.2 : le serveur est à mettre à jour', '<button class="btn sm">Mettre le serveur à 2.3.2</button>')}
+      ${serverRow({ name: 'Démo client', glyph: 'D', host: 'demo-escouade' }, '<span class="pill err">Injoignable</span>', 'Depuis 2 h · ssh : Connection timed out (port 22)', '<button class="btn sm">Réessayer</button><button class="btn sm quiet">Modifier</button>')}
+      ${serverRow({ name: 'Bastion', glyph: 'B', host: 'bastion-test' }, '<span class="pill err">Clé d’hôte inconnue</span>', 'Escouade n’accepte pas de clé à ta place : connecte-toi une fois par <span class="mono">ssh bastion-test</span>', '<button class="btn sm">' + ic('copy', 12) + 'Copier la commande</button>')}
+      ${serverRow({ name: 'Ancien VPS', glyph: 'A', host: 'old-vps' }, '<span class="pill err">Jeton révoqué</span>', 'Ce poste a été retiré de ses appareils le 12 nov., depuis MacBook-Air', '<button class="btn sm">Appairer de nouveau</button><button class="btn sm quiet danger">Retirer</button>')}
+      <h3>Sur ce poste</h3>
+      <div class="srow lock"><b>Vue ${g('Partout')} et notifications détaillées</b><span class="acts"><span class="switch lockd"></span></span><span class="d"><span class="lk">${ic('lock', 12)}Imposé par la stratégie de ce poste</span> · les demandes de Travail ne s’y comptent que par leur nombre.</span></div></div>`;
+    return shellX({ space: 'travail', cur: 'FA', inbox: 2 }, conversation({ space: 'travail', cur: 'FA' }), appSettings('Serveurs', body));
+  },
+  version: () => {
+    const dlg = `<div class="modal-wrap"><div class="dialog one" role="alertdialog" aria-label="Versions différentes"><div class="cbody"><h3>${ic('warn', 17)}Labo a une autre version d’Escouade</h3>
+      <p>Ce poste a Escouade <b>2.3.2</b>, le serveur labo-gpu <b>2.3.0</b>. Ils doivent avoir la même pour se parler : le serveur est à mettre à jour.</p>
+      <div class="instr"><div class="r"><span class="k">2 agents sont en plein tour sur Labo</span></div>
+        <div class="hostrow on" role="radio" aria-checked="true" style="padding:6px 8px"><span class="radio on"></span><b>Après leurs tours</b><span></span><span class="s">Le serveur redémarre quand plus aucun agent ne travaille. Recommandé.</span></div>
+        <div class="hostrow" role="radio" aria-checked="false" style="padding:6px 8px"><span class="radio"></span><b>Maintenant</b><span></span><span class="s">Les tours en cours sont coupés ; chaque agent reprend sa session au redémarrage.</span></div></div>
+      <p class="muted" style="font-size:12.5px">La mise à jour est signée comme celle de l’app ; le serveur la vérifie avant de l’installer.</p>
+      <div class="acts"><button class="btn quiet">Rester sur Ce poste</button><span class="sp"></span><button class="btn">Plus tard</button><button class="btn primary">Mettre Labo à 2.3.2</button></div></div></div></div>`;
+    return shellX({ space: 'poste', cur: 'PA', inbox: 1 }, conversation({ space: 'poste', cur: 'PA' }), dlg);
+  },
+  jeton: () => {
+    const page = `<div class="jpage"><div class="jcard">${plate(SP.travail, { size: 'lg', lost: true })}<h2>Ce poste n’est plus appairé à Travail</h2>
+      <p>Son jeton a été révoqué le 16 nov. à 18:04, depuis MacBook-Air. Les agents de Travail continuent sur le serveur ; tu ne les vois plus d’ici, et rien n’est parti de ce poste depuis.</p>
+      <div class="acts"><button class="btn primary">${ic('key', 13)}Appairer de nouveau</button><button class="btn">Aller sur Ce poste</button><button class="btn quiet danger">Retirer Travail de ce poste</button></div>
+      <span class="hint">${ic('info', 12)}Pour l’appairer, il faut un nouveau code : <span class="mono">escouade-server pair</span> sur le serveur.</span></div></div>`;
+    return `<div class="win view">${titlebar({ space: 'travail', mach: 'label', title: '' })}${rail({ space: 'travail', cur: '', inbox: 1, noTiles: true })}<div class="main">${page}</div>${statusbar({ space: 'poste', n: 1 })}</div>`;
+  },
+  fichier: () => {
+    setP('FA');
+    const conv = `<div class="chead"><b>relances-impayes</b><span class="pill k">Tour fini</span><span class="meta">${ic('branch', 12)}<span class="mono ell">escouade/relances-impayes</span></span></div>
+    <div class="conv"><div class="col2">
+      <div class="bubble-me">Sors-moi le rapport des relances de novembre en PDF, et le script qui les rejoue.</div>
+      <div class="tool">${ic('bash', 13)}<b>Lancé</b> <span class="mono ell">node scripts/rapport.mjs --mois=2026-11</span></div>
+      <div class="ai"><p>Voici le rapport (312 relances, 41 impayés de plus de 60 jours) et le script.</p></div>
+      <div class="fcard"><span class="ic">${ic('file', 17)}</span><span class="t"><span class="ell">rapport-relances-2026-11.pdf</span><span class="pill ok">${ic('check', 11)}Téléchargé</span></span>
+        <span class="s">248 Ko · envoyé depuis <b style="color:var(--soft)">Travail</b> · copié sur ce poste dans <span class="mono">Téléchargements\\Escouade\\Travail</span></span>
+        <span class="acts"><button class="btn sm">${ic('ext', 12)}Ouvrir la copie</button><button class="btn sm">${ic('folder', 12)}Afficher sur ce poste</button><button class="btn sm quiet">${ic('server', 12)}Voir sur le serveur</button></span></div>
+      <div class="fcard"><span class="ic">${ic('term', 17)}</span><span class="t"><span class="ell">rejouer-relances.sh</span></span>
+        <span class="s">3 Ko · sur Travail · un script ne s’ouvre pas d’Escouade : il se télécharge seulement</span>
+        <span class="acts"><button class="btn sm">${ic('download', 12)}Télécharger sur ce poste</button><button class="btn sm quiet">${ic('server', 12)}Voir sur le serveur</button></span></div>
+    </div></div>${composer({})}`;
+    return shellX({ space: 'travail', cur: 'FA', inbox: 2 }, conv);
+  },
+  compte: () => {
+    const body = `<div class="sb"><div class="shead"><div><h2>Comptes et harness</h2><p>Les comptes de Travail : gardés sur le serveur, utilisés par ses agents. Ils ne passent jamais sur ce poste.</p></div></div>
+      <h3>Connecter un compte Claude sur Travail</h3>
+      <div class="instr" style="margin-top:6px"><div class="r" style="flex-wrap:nowrap;align-items:flex-start"><span class="pill ok">${ic('check', 11)}1</span><span>La page de connexion s’est ouverte dans ton navigateur, <b>sur ce poste</b>.</span></div>
+        <div class="r" style="flex-wrap:nowrap;align-items:flex-start"><span class="pill wt">2</span><span>Colle ici le code qu’elle affiche à la fin&nbsp;: le compte sera gardé <b>sur Travail</b>, dans <span class="mono">~/.claude-acme</span> du serveur.</span></div>
+        <div class="r"><span class="field focus" style="flex:1;min-width:200px"><span class="ell">Code de la page de connexion</span></span><button class="btn primary">Connecter</button></div>
+        <div class="code" style="font-size:11.5px"><span class="d">escouade@acme-escouade $ claude /login</span>
+Ouvre cette adresse pour te connecter : https://claude.ai/oauth/authorize?…  <span class="d">(ouverte sur ce poste)</span>
+Colle le code ici : <span style="display:inline-block;width:7px;height:13px;background:var(--code-fg);vertical-align:-2px"></span></div>
+        <div class="r"><button class="btn sm quiet">${ic('ext', 12)}Rouvrir la page</button><button class="btn sm quiet">${ic('copy', 12)}Copier l’adresse</button><span class="hint sp">Le retour par localhost ne marche pas d’une machine à l’autre : le code le remplace.</span></div></div>
+      <h3>Clé d’API de Cursor</h3>
+      <div class="srow"><b>Gardée dans un fichier sur Travail</b><span class="acts"><span class="field filled" style="width:220px"><span class="ell mono">key_••••••••••••3f9a</span></span></span><span class="d">${ic('lock', 12)} <span class="mono">~/.escouade/secrets.json</span>, lisible du seul compte escouade : un serveur n’a pas de trousseau. Pas dans le trousseau de ce poste.</span></div></div>`;
+    return shellX({ space: 'travail', cur: 'FA', inbox: 2 }, conversation({ space: 'travail', cur: 'FA' }), appSettings('Comptes et harness', body));
+  },
+  notifs: () => {
+    const toasts = `<div class="toasts" aria-label="Notifications du système">
+      <div class="toast"><span class="app"><i>${ic('agents', 10)}</i>Escouade · Perso</span><b>recettes · import-fiches a fini son tour</b><p>214 fiches importées. À tester.</p><div class="acts"><span>Ouvrir</span><span>Plus tard</span></div></div>
+      <div class="toast"><span class="app"><i>${ic('agents', 10)}</i>Escouade · Travail</span><b>Un agent attend ta réponse</b><p>Le détail ne s’affiche que dans Escouade (stratégie de ce poste).</p><div class="acts"><span>Ouvrir Travail</span></div></div>
+      <div class="toast"><span class="app"><i>${ic('agents', 10)}</i>Escouade · Ce poste</span><b>atlas-web · tests-e2e veut lancer une commande</b><p>Bash : npm run e2e -- --project=webkit</p><div class="acts"><span>Ouvrir</span></div></div></div>`;
+    const back = `<div class="intoast" role="status">${ic('check', 13)}<b>Reconnecté à Travail</b>· 12 événements rattrapés</div>`;
+    return shellX({ space: 'poste', cur: 'PA', inbox: 1 }, conversation({ space: 'poste', cur: 'PA' }), toasts + back);
+  },
+};
+
+const DIRS = { a: A, b: B, c: C, x: X };
+const set = DIRS[D] || A;
+const view = set[ROUTE] || set.deux || X.etats;
+document.getElementById('root').innerHTML = view();
+</script>
+</body>
+</html>
