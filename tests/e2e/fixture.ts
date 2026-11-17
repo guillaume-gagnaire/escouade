@@ -436,6 +436,31 @@ export const SHOW = !!process.env.ESCOUADE_E2E_SHOW && process.env.ESCOUADE_E2E_
 const VIEWPORT = /^(\d+)x(\d+)$/.exec(process.env.ESCOUADE_E2E_VIEWPORT ?? '');
 
 /**
+ * `ESCOUADE_E2E_SLOW_IPC=duplicate_agent=1500,send_message=300`: those commands of the window reach the core that many ms
+ * late, at each start, as on a slow runner, to bring out a test that acts before the state it waits for is shown (ESC-498:
+ * a message typed while « Dupliquer la conversation » was under way went to the original, or stayed in its draft).
+ */
+const SLOW_IPC = new Map(
+  (process.env.ESCOUADE_E2E_SLOW_IPC ?? '')
+    .split(',')
+    .map((s) => s.split('='))
+    .filter(([cmd, ms]) => cmd && Number(ms) > 0)
+    .map(([cmd, ms]) => [cmd.trim(), Number(ms)] as const),
+);
+
+async function slowIpc(page: Page) {
+  // Windows' WebView2 calls a command at http://ipc.localhost/<command>. Through CDP, paused for those commands alone:
+  // `page.route` would pause every request of the page on its way to the test, and slow the app's start under load.
+  const cdp = await page.context().newCDPSession(page);
+  cdp.on('Fetch.requestPaused', (e) => {
+    const ms = SLOW_IPC.get(new URL(e.request.url).pathname.slice(1)) ?? 0;
+    setTimeout(() => cdp.send('Fetch.continueRequest', { requestId: e.requestId }).catch(() => {}), ms);
+  });
+  const patterns = [...SLOW_IPC.keys()].map((cmd) => ({ urlPattern: `http://ipc.localhost/${cmd}*` }));
+  await cdp.send('Fetch.enable', { patterns });
+}
+
+/**
  * WebView2 draws and runs its timers in full even though its window is not seen: Chromium slows down a window it takes for
  * hidden or covered. Off the screens, the window was drawn without them in short tests (ESC-126): they keep it so in the long
  * ones. The same in ci.yml, where they reach WebView2 by the machine policy.
@@ -657,6 +682,8 @@ export const test = base.extend<{
         const { browser, page } = await connect(on.port, () => launch.stopped);
         if (VIEWPORT) await page.setViewportSize({ width: Number(VIEWPORT[1]), height: Number(VIEWPORT[2]) });
         launch.browser = browser;
+        // On the app's page, loaded: a route set on the blank page it starts with is lost when it loads.
+        if (SLOW_IPC.size) await slowIpc(await appReady(page));
         return page;
       } catch (e) {
         throw new Error(`${(e as Error).message}\n${await launchLogs(on.data, on.stderr)}`);
@@ -988,6 +1015,19 @@ export async function closeSettings(dialog: Locator) {
   await expect(dialog).toHaveAttribute('data-saving', 'false');
   await dialog.locator('.s-head .close').click();
   await expect(dialog).toBeHidden();
+}
+
+/**
+ * « Dupliquer la conversation » from the menu of the agent `name`'s card, then waits for the copy to be the conversation
+ * shown, its composer its own, as the user does before writing to it. Not sooner: the copy is made in the core first, and a
+ * message typed meanwhile goes to the original, still shown, or stays in its draft (ESC-498, codex.spec.ts on the CI).
+ */
+export async function duplicateConversation(page: Page, name: string) {
+  await page.locator('.card', { hasText: name }).first().click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Dupliquer la conversation' }).click();
+  const copy = `${name} (copie)`;
+  await expect(page.locator('main.conv h1')).toHaveText(copy);
+  await expect(page.getByRole('textbox').last()).toHaveAccessibleName(`Envoyer un message à ${copy}…`);
 }
 
 export async function send(page: Page, text: string) {
