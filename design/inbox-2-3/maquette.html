@@ -1,0 +1,965 @@
+<!doctype html>
+<!--
+  ESC-508 : la boîte « À toi » (2.3), quatre directions. Maquette statique, rien n'est branché.
+  ?d=a|b|c|d, &theme=light, puis #pleine (la boîte pleine), #choix (un choix entre trois rendus), #pdf (une demande avec
+  un PDF, des images et un tableur joints), #validation (un feu vert), #tache (une tâche à faire), #vide (la boîte vide)
+  ou #compteur (le compteur dans la fenêtre, la boîte fermée). ?d=x#eteint et ?d=x#eteindre : le serveur MCP éteint,
+  commun aux quatre. La page prend la taille de la fenêtre du navigateur : 1440 × 900 ou 1024 × 728.
+  Jetons, polices et icônes de l'app (src/app.css, src/lib/icons.ts) ; données fictives (projets « portail-adherents »
+  et « atlas-web », agents et tickets inventés). Captures : node design/inbox-2-3/render.mjs
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>ESC-508 · la boîte « À toi »</title>
+<link rel="stylesheet" href="../../node_modules/@fontsource-variable/inter/opsz.css" />
+<link rel="stylesheet" href="../../node_modules/@fontsource/jetbrains-mono/400.css" />
+<link rel="stylesheet" href="../../node_modules/@fontsource/jetbrains-mono/500.css" />
+<script src="icons.js"></script>
+<style>
+  /* Les jetons de src/app.css (sombre, puis clair). Teint du projet ouvert, portail-adherents : --p. */
+  :root {
+    --p: oklch(0.72 0.12 250);
+    --frame: color-mix(in oklch, var(--p) 8%, #08090a);
+    --panel: color-mix(in oklch, var(--p) 4.5%, #0e0f11);
+    --raise: color-mix(in oklch, var(--p) 6%, #15161a);
+    --raise-2: color-mix(in oklch, var(--p) 6%, #1b1c20);
+    --well: color-mix(in oklch, var(--p) 2%, #0a0b0d);
+    --fg-rgb: 255, 255, 255;
+    --line: rgba(255, 255, 255, 0.075);
+    --line-2: rgba(255, 255, 255, 0.12);
+    --line-3: rgba(255, 255, 255, 0.2);
+    --hover: rgba(255, 255, 255, 0.045);
+    --sel: color-mix(in oklch, var(--p) 16%, transparent);
+    --text: #f7f8f8;
+    --soft: #d0d3d8;
+    --muted: #989da6;
+    --dim: #8f949e;
+    --text-ai: #e9ebee;
+    --brand: #35c1bd;
+    --teal-ink: oklch(0.86 0.08 190);
+    --p-ink: color-mix(in oklch, var(--p) 70%, white);
+    --run: oklch(0.79 0.15 155);
+    --wait: oklch(0.84 0.14 82);
+    --wait-bg: oklch(from var(--wait) l c h / 0.07);
+    --wait-line: oklch(from var(--wait) l c h / 0.32);
+    --del: oklch(0.74 0.14 22);
+    --idle: #7a7f88;
+    --primary: #f2f3f4;
+    --on-primary: #08090a;
+    --code-fg: #d5d8dd;
+    --scrim: rgba(3, 4, 5, 0.66);
+    --shadow-float: 0 24px 64px -12px rgba(0, 0, 0, 0.75);
+    --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+    --side: 276px;
+    color-scheme: dark;
+  }
+  :root[data-theme='light'] {
+    --frame: color-mix(in oklch, var(--p) 7%, #f0f1f3);
+    --panel: color-mix(in oklch, var(--p) 2.5%, #fdfdfd);
+    --raise: color-mix(in oklch, var(--p) 4%, #f4f5f7);
+    --raise-2: color-mix(in oklch, var(--p) 5%, #eceef1);
+    --well: color-mix(in oklch, var(--p) 2.5%, #f6f7f9);
+    --fg-rgb: 15, 17, 22;
+    --line: rgba(15, 17, 22, 0.09);
+    --line-2: rgba(15, 17, 22, 0.14);
+    --line-3: rgba(15, 17, 22, 0.24);
+    --hover: rgba(15, 17, 22, 0.045);
+    --sel: color-mix(in oklch, var(--p) 12%, transparent);
+    --text: #15171c;
+    --soft: #363a42;
+    --muted: #555a63;
+    --dim: #5c616a;
+    --text-ai: #1d2026;
+    --brand: oklch(0.52 0.09 190);
+    --teal-ink: oklch(0.47 0.08 190);
+    --p-ink: color-mix(in oklch, var(--p) 50%, #15171c);
+    --run: oklch(0.48 0.13 155);
+    --wait: oklch(0.5 0.11 70);
+    --wait-bg: oklch(from var(--wait) l c h / 0.09);
+    --wait-line: oklch(from var(--wait) l c h / 0.4);
+    --del: oklch(0.5 0.18 25);
+    --primary: #1b1d22;
+    --on-primary: #f7f8f8;
+    --code-fg: #24272e;
+    --scrim: rgba(24, 26, 32, 0.34);
+    --shadow-float: 0 24px 64px -12px rgba(15, 17, 22, 0.28);
+    color-scheme: light;
+  }
+  @media (max-width: 1100px) { :root { --side: 236px; } }
+  * { box-sizing: border-box; }
+  html { background: var(--frame); }
+  body { margin: 0; font: 13px/1.45 'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif; font-feature-settings: 'cv11', 'ss03';
+    font-variant-ligatures: none; color: var(--text); -webkit-font-smoothing: antialiased; overflow: hidden; background: var(--frame); }
+  p { margin: 0; }
+  h1, h2, h3 { margin: 0; text-wrap: balance; }
+  svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .mono { font-family: var(--mono); font-size: 0.92em; letter-spacing: -0.01em; }
+  .muted { color: var(--muted); }
+  .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .sp { margin-left: auto; }
+  .tn { font-variant-numeric: tabular-nums; }
+  @media (max-width: 1100px) { .wide-only { display: none !important; } }
+  @media (min-width: 1101px) { .narrow-only { display: none !important; } }
+
+  /* ───────── La fenêtre ───────── */
+  .win { width: 100vw; height: 100vh; display: grid; grid-template-columns: 52px var(--side) minmax(0, 1fr); grid-template-rows: 44px minmax(0, 1fr) 30px;
+    background: var(--frame); overflow: hidden; position: relative; }
+  .win.view { grid-template-columns: 52px minmax(0, 1fr); }
+  .tb { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 0 0 0 14px; color: var(--muted); min-width: 0; }
+  .tb .logo { width: 22px; height: 22px; border-radius: 6px; background: #35c1bd; display: grid; place-items: center; color: #08090a; flex: none; }
+  .tb .proj { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-weight: 600; margin-left: 18px; white-space: nowrap; }
+  .tb .proj .sq { width: 8px; height: 8px; border-radius: 2.5px; background: var(--p); }
+  .tb .search { margin: 0 auto; height: 30px; border-radius: 8px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line);
+    display: flex; align-items: center; gap: 8px; padding: 0 6px 0 11px; flex: 0 1 340px; min-width: 0; }
+  .tb .search kbd { margin-left: auto; }
+  .tb .ed { display: inline-flex; gap: 7px; align-items: center; color: var(--soft); white-space: nowrap; }
+  .tb .wb { display: flex; }
+  .tb .wbtn { width: 46px; height: 44px; display: grid; place-items: center; color: var(--muted); }
+  kbd { font: 500 11px/1 'Inter Variable', Inter, sans-serif; padding: 3px 6px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--line-2); color: var(--muted); white-space: nowrap; }
+  .rail { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 6px 0 8px; min-height: 0; }
+  .rail .low { margin-top: auto; display: grid; gap: 6px; }
+  .rail .r-i { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: var(--muted); position: relative; }
+  .rail .r-i.on { color: var(--text); background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .rail .tile { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; font-weight: 700; font-size: 12px; color: #101114; position: relative; }
+  .rail .tile.cur { box-shadow: 0 0 0 2px var(--frame), 0 0 0 3.5px var(--p); }
+  .rail .tile .wd { position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; border-radius: 50%; background: var(--wait); box-shadow: 0 0 0 2px var(--frame); }
+  .rail .sep { width: 22px; height: 1px; background: var(--line-2); }
+  .rail .badge { position: absolute; top: -4px; right: -6px; min-width: 18px; height: 16px; padding: 0 4px; border-radius: 8px; font-size: 10.5px; font-weight: 700;
+    display: grid; place-items: center; background: var(--wait); color: #1a1405; box-shadow: 0 0 0 2px var(--frame); font-variant-numeric: tabular-nums; }
+  :root[data-theme='light'] .rail .badge { color: #fff; }
+  .side { min-width: 0; padding: 4px 10px 10px 10px; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+  .stabs { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line); flex: none; }
+  .stabs span { flex: 1 1 auto; padding: 0 4px; display: inline-flex; justify-content: center; align-items: center; gap: 4px; height: 26px; border-radius: 7px; color: var(--muted);
+    font-weight: 550; font-size: 12px; white-space: nowrap; min-width: 0; }
+  .stabs span.on { background: var(--panel); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2), 0 1px 2px rgba(0, 0, 0, 0.18); }
+  .stabs .c { color: var(--dim); font-size: 11.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .stabs .c.w { color: var(--wait); font-weight: 650; }
+  .new { display: flex; align-items: center; gap: 8px; height: 32px; margin: 8px 0 4px; padding: 0 8px 0 9px; color: var(--soft); font-weight: 550; flex: none; }
+  .new .plus { width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; background: rgba(var(--fg-rgb), 0.07); box-shadow: inset 0 0 0 1px var(--line); }
+  .new kbd { margin-left: auto; }
+  .agent { border-radius: 11px; padding: 10px 12px; display: grid; gap: 3px; font-size: 12.5px; flex: none; }
+  .agent.on { background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .agent.wt { background: var(--wait-bg); box-shadow: inset 0 0 0 1px var(--wait-line); }
+  .agent .r { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .agent .n { font-weight: 620; }
+  .agent .key { color: var(--muted); font-size: 11.5px; font-weight: 550; white-space: nowrap; }
+  .agent .m { color: var(--muted); font-size: 12px; }
+  .ring { width: 9px; height: 9px; border-radius: 50%; box-shadow: inset 0 0 0 1.6px var(--run); flex: none; }
+  .ring.wt { box-shadow: inset 0 0 0 1.6px var(--wait), 0 0 0 3px oklch(from var(--wait) l c h / 0.18); }
+  .ring.idle { box-shadow: inset 0 0 0 1.6px var(--idle); }
+  .side .foot { margin-top: auto; border-top: 1px solid var(--line); padding: 10px 6px 0; display: grid; gap: 8px; color: var(--muted); font-size: 12px; flex: none; }
+  .side .foot .r { display: flex; gap: 8px; align-items: center; min-width: 0; }
+  .main { min-width: 0; min-height: 0; background: var(--panel); border-radius: 12px 0 0 0; box-shadow: inset 0 0 0 1px var(--line); display: flex;
+    flex-direction: column; overflow: hidden; position: relative; }
+  .status { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 14px; color: var(--muted); font-size: 12px; white-space: nowrap; min-width: 0; position: relative; }
+  .status b { color: var(--text); font-weight: 600; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; background: var(--idle); flex: none; }
+  .dot.ok { background: var(--run); } .dot.wt { background: var(--wait); }
+  .pdot { width: 8px; height: 8px; border-radius: 2.5px; flex: none; display: inline-block; }
+
+  /* ───────── Commun ───────── */
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--text); font-weight: 550; font-size: 12.5px; white-space: nowrap; background: rgba(var(--fg-rgb), 0.04); flex: none; }
+  .btn.sm { height: 26px; padding: 0 9px; font-size: 12px; border-radius: 7px; }
+  .btn.lg { height: 34px; padding: 0 14px; font-size: 13px; }
+  .btn.icon { width: 30px; padding: 0; justify-content: center; color: var(--soft); }
+  .btn.sm.icon { width: 26px; }
+  .btn.quiet { box-shadow: none; background: none; color: var(--muted); }
+  .btn.primary { background: var(--primary); color: var(--on-primary); box-shadow: none; }
+  .btn.primary kbd { color: inherit; box-shadow: inset 0 0 0 1px oklch(from var(--on-primary) l c h / 0.3); }
+  .btn.go { background: oklch(from var(--run) calc(l - 0.12) c h); color: #fff; box-shadow: none; }
+  :root[data-theme='light'] .btn.go { background: var(--run); }
+  .btn.go kbd { color: inherit; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35); }
+  .btn.danger { color: var(--del); }
+  .pill { display: inline-flex; align-items: center; gap: 5px; height: 21px; padding: 0 7px; border-radius: 6px; font-size: 11.5px; font-weight: 600;
+    white-space: nowrap; flex: none; color: var(--soft); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .pill.wt { color: var(--wait); box-shadow: inset 0 0 0 1px var(--wait-line); background: var(--wait-bg); }
+  .pill.ok { color: var(--run); box-shadow: inset 0 0 0 1px oklch(from var(--run) l c h / 0.4); background: oklch(from var(--run) l c h / 0.07); }
+  .pill.rec { color: var(--teal-ink); box-shadow: inset 0 0 0 1px oklch(from var(--brand) l c h / 0.45); background: oklch(from var(--brand) l c h / 0.08); border-radius: 999px; }
+  .pill.k { color: var(--muted); font-weight: 550; }
+  .seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: rgba(var(--fg-rgb), 0.035); box-shadow: inset 0 0 0 1px var(--line); flex: none; }
+  .seg span { height: 24px; padding: 0 9px; border-radius: 7px; display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; font-weight: 550; white-space: nowrap; }
+  .seg span.on { background: var(--raise-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .seg .c { color: var(--dim); font-variant-numeric: tabular-nums; }
+  .field { height: 30px; border-radius: 7px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line-2); display: flex; align-items: center; gap: 8px;
+    padding: 0 6px 0 10px; color: var(--muted); font-size: 12.5px; min-width: 0; }
+  .field.ta { height: auto; min-height: 58px; align-items: flex-start; padding: 8px 10px; }
+  .field.filled { color: var(--text); }
+  .field .ell { flex: 1; }
+  .who { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  @media (max-width: 1100px) { .req .rh .who { flex-basis: 100%; } .req .rh .sp { display: none; } }
+  .who b { color: var(--soft); font-weight: 600; }
+  .tk { font-weight: 600; color: var(--soft); font-size: 11.5px; white-space: nowrap; }
+  .kind { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11.5px; font-weight: 550; white-space: nowrap; }
+  .kind.wt { color: var(--wait); }
+  .hint { display: flex; align-items: center; gap: 6px; color: var(--dim); font-size: 11.5px; white-space: nowrap; }
+
+  /* ── Une demande ── */
+  .req { display: grid; gap: 14px; align-content: start; min-width: 0; }
+  .req .rh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+  .req h2 { font-size: 17px; font-weight: 640; letter-spacing: -0.01em; line-height: 1.3; }
+  .req.big h2 { font-size: 21px; }
+  .req .body { color: var(--text-ai); line-height: 1.6; display: grid; gap: 8px; max-width: 72ch; }
+  .req .body code { font-family: var(--mono); font-size: 0.9em; padding: 1px 5px; border-radius: 5px; background: rgba(var(--fg-rgb), 0.06); color: var(--code-fg); }
+  .req .src { color: var(--dim); font-size: 11.5px; display: flex; align-items: center; gap: 6px; }
+  .unblk { display: flex; align-items: center; gap: 8px; padding: 8px 11px; border-radius: 9px; background: rgba(var(--fg-rgb), 0.025); box-shadow: inset 0 0 0 1px var(--line);
+    color: var(--soft); font-size: 12.5px; min-width: 0; }
+  .unblk > svg { color: var(--teal-ink); }
+  .unblk b { color: var(--text); font-weight: 600; white-space: nowrap; }
+  .tchip { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 6px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--line-2); font-size: 11.5px; font-weight: 600; color: var(--soft); white-space: nowrap; }
+  .recline { display: flex; gap: 9px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: oklch(from var(--brand) l c h / 0.06);
+    box-shadow: inset 0 0 0 1px oklch(from var(--brand) l c h / 0.3); color: var(--soft); font-size: 12.5px; line-height: 1.5; }
+  .recline > svg { color: var(--teal-ink); margin-top: 2px; }
+  .recline b { color: var(--teal-ink); font-weight: 640; }
+  /* Les planches : un rendu par option, son filet de crédits dessous, la recommandation en sceau à demi hors de la planche. */
+  .plates { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; min-width: 0; }
+  .plate { position: relative; display: grid; gap: 0; border-radius: 10px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line-2); min-width: 0; }
+  .plate.on { box-shadow: inset 0 0 0 1.5px var(--brand); }
+  .plate .shot { padding: 8px; display: grid; gap: 6px; }
+  .plate .shot svg { display: block; width: 100%; height: auto; border-radius: 6px; box-shadow: 0 0 0 1px var(--line); }
+  .plate .both { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .plate .cred { white-space: nowrap; display: flex; align-items: center; gap: 8px; padding: 8px 10px 9px; border-top: 1px solid var(--line); min-width: 0; font-size: 12px; color: var(--muted); }
+  .plate .cred .l { width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; font-weight: 700; font-size: 11.5px; box-shadow: inset 0 0 0 1px var(--line-3); color: var(--soft); flex: none; }
+  .plate.on .cred .l { background: var(--brand); color: #08090a; box-shadow: none; }
+  .plate .cred b { color: var(--text); font-weight: 620; }
+  .plate .zoom { position: absolute; top: 14px; left: 14px; width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; background: rgba(8, 9, 10, 0.55); color: #fff; }
+  .seal { position: absolute; top: -16px; right: -12px; width: 62px; height: 62px; z-index: 2; pointer-events: none; }
+  .seal circle.bg { fill: var(--panel); stroke: var(--brand); stroke-width: 1.2; }
+  .seal circle.in { fill: none; stroke: oklch(from var(--brand) l c h / 0.45); stroke-width: 0.8; }
+  .seal text { font: 700 6.3px 'Inter Variable', Inter, sans-serif; letter-spacing: 0.16em; fill: var(--teal-ink); }
+  .seal path.ck { fill: none; stroke: var(--teal-ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  /* Les pièces jointes : vignettes, la lecture d'un PDF page par page, les autres fichiers avec leurs gestes. */
+  .atts { display: flex; gap: 10px; flex-wrap: wrap; min-width: 0; }
+  .att { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; align-items: center; padding: 7px 10px 7px 7px; border-radius: 9px; box-shadow: inset 0 0 0 1px var(--line-2);
+    background: rgba(var(--fg-rgb), 0.025); min-width: 0; max-width: 100%; }
+  .att .th { grid-row: 1 / 3; width: 44px; height: 34px; border-radius: 5px; overflow: hidden; display: grid; place-items: center; background: var(--well); box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); }
+  .att .th svg:not(.i) { width: 100%; height: 100%; display: block; }
+  .att .nm { font-weight: 600; font-size: 12px; color: var(--text); }
+  .att .mt { color: var(--muted); font-size: 11.5px; display: flex; gap: 8px; align-items: center; white-space: nowrap; }
+  .att .mt a { color: var(--soft); font-weight: 550; text-decoration: none; }
+  .att.on { box-shadow: inset 0 0 0 1.5px var(--p); background: var(--sel); }
+  .atts.compact { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .atts.compact .att { grid-template-columns: auto minmax(0, 1fr); padding: 5px 8px 5px 5px; gap: 0 8px; }
+  .atts.compact .att .th { grid-row: auto; width: 30px; height: 24px; }
+  .atts.compact .att .mt { display: none; }
+  @media (max-width: 1100px) { .atts.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; } .atts.two .att .mt { display: none; } .atts.two .att .th { grid-row: auto; width: 30px; height: 24px; } .atts.two .att { padding: 5px 8px 5px 5px; } }
+  .pdfv { display: grid; grid-template-rows: auto minmax(0, 1fr); border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line-2); background: var(--well); min-height: 0; min-width: 0; overflow: hidden; }
+  .pdfv .bar { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); min-width: 0; }
+  .pdfv .bar b { color: var(--text); font-weight: 600; }
+  .pdfv .bar .pg { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .pdfv .bar .pgn { width: 30px; height: 22px; border-radius: 5px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line-2); display: grid; place-items: center; color: var(--text); font-variant-numeric: tabular-nums; }
+  .pdfv .in { display: grid; grid-template-columns: 64px minmax(0, 1fr); min-height: 0; }
+  .pdfv .thumbs { border-right: 1px solid var(--line); padding: 10px 8px; display: grid; align-content: start; gap: 8px; overflow: hidden; }
+  .pdfv .thumbs i { display: block; aspect-ratio: 210 / 297; border-radius: 3px; background: #fbfbfa; box-shadow: 0 0 0 1px var(--line-2); position: relative; }
+  .pdfv .thumbs i::after { content: ''; position: absolute; inset: 14% 16% auto; height: 34%; background: repeating-linear-gradient(#d8dadd 0 1.5px, transparent 1.5px 5px); }
+  .pdfv .thumbs i.on { box-shadow: 0 0 0 2px var(--p); }
+  .pdfv .thumbs span { font-size: 10.5px; color: var(--dim); text-align: center; margin-top: -5px; font-variant-numeric: tabular-nums; }
+  .pdfv .canvas { overflow: hidden; display: grid; grid-template-columns: minmax(0, 520px); justify-content: center; container-type: inline-size; align-content: start; padding: 14px; min-width: 0; }
+  .pdfv.nothumbs .in { grid-template-columns: minmax(0, 1fr); }
+  .pdfv.nothumbs .thumbs { display: none; }
+  /* Une page de PDF, dessinée blanche dans les deux thèmes, comme l'aperçu de l'éditeur. */
+  .pdfpage { width: 100%; max-width: 520px; aspect-ratio: 210 / 297; background: #fff; color: #23262b; border-radius: 2px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+    padding: 7% 8%; display: grid; align-content: start; gap: 2.2%; font-size: calc(100cqw * 0.0205); line-height: 1.45; overflow: hidden; }
+  .pdfpage td, .pdfpage th { white-space: nowrap; }
+  .pdfpage .rh { font-size: 0.78em; color: #8a8f97; display: flex; justify-content: space-between; border-bottom: 1px solid #e4e6ea; padding-bottom: 3%; }
+  .pdfpage h4 { margin: 2% 0 0; font-size: 1.45em; font-weight: 700; color: #15171c; letter-spacing: -0.01em; }
+  .pdfpage p { color: #3a3e45; }
+  .pdfpage table { border-collapse: collapse; width: 100%; font-size: 0.9em; }
+  .pdfpage td, .pdfpage th { border-bottom: 1px solid #e4e6ea; padding: 0.45em 0.4em; text-align: left; }
+  .pdfpage th { color: #6a6f77; font-weight: 600; }
+  .pdfpage tr.b td { background: #eef5f4; font-weight: 600; }
+  .pdfpage svg { width: 100%; height: auto; }
+  /* La réponse : l'option, un mot, la voix, puis envoyer ; « Plus tard » et le reste à côté. */
+  .answer { display: grid; gap: 10px; padding: 12px; border-radius: 12px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2), 0 12px 32px -12px rgba(0, 0, 0, 0.5); min-width: 0; }
+  .answer .opts { display: flex; gap: 8px; flex-wrap: wrap; min-width: 0; }
+  .answer .opt { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px 0 8px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line-2); background: rgba(var(--fg-rgb), 0.03);
+    color: var(--soft); font-weight: 550; font-size: 12.5px; white-space: nowrap; min-width: 0; }
+  .answer .opt .l { width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; font-weight: 700; font-size: 11.5px; box-shadow: inset 0 0 0 1px var(--line-3); flex: none; }
+  .answer .opt.on { box-shadow: inset 0 0 0 1.5px var(--brand); background: oklch(from var(--brand) l c h / 0.08); color: var(--text); }
+  .answer .opt.on .l { background: var(--brand); color: #08090a; box-shadow: none; }
+  .answer .row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .answer .row .field { flex: 1; }
+  .answer .mic { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--soft); flex: none; }
+  .answer .foot { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 11.5px; min-width: 0; }
+  .answer .foot .who { font-size: 11.5px; }
+  .check { display: grid; gap: 6px; }
+  .check div { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--soft); }
+  .check .ok { color: var(--run); } .check .wt { color: var(--wait); }
+  .steps { display: grid; gap: 6px; counter-reset: s; }
+  .steps .st { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 10px; align-items: start; padding: 9px 11px; border-radius: 9px; box-shadow: inset 0 0 0 1px var(--line); color: var(--soft); line-height: 1.5; }
+  .steps .bx { width: 16px; height: 16px; border-radius: 4px; box-shadow: inset 0 0 0 1.5px var(--line-3); margin-top: 1px; display: grid; place-items: center; }
+  .steps .st.done .bx { background: var(--run); box-shadow: none; color: #08090a; }
+  .steps .st.done { color: var(--muted); }
+  .cmd { font-family: var(--mono); font-size: 12px; color: var(--code-fg); padding: 8px 10px; border-radius: 8px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line); }
+  .warnline { display: flex; gap: 8px; align-items: flex-start; color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .warnline svg { margin-top: 2px; color: var(--muted); }
+  .md { border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line); padding: 12px 14px; display: grid; gap: 6px; color: var(--soft); font-size: 12.5px; line-height: 1.55; }
+  .md h5 { margin: 0; font-size: 13px; color: var(--text); }
+  .md ul { margin: 0; padding-left: 18px; display: grid; gap: 2px; }
+
+  /* ── Une ligne de la boîte ── */
+  .grp { display: flex; align-items: center; gap: 8px; padding: 10px 8px 5px; color: var(--muted); font-size: 11.5px; font-weight: 600; white-space: nowrap; flex: none; }
+  .grp .c { color: var(--dim); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .grp.wt { color: var(--wait); }
+  .row-ask { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 2px 9px; align-items: center; padding: 8px 9px; border-radius: 9px; min-width: 0; flex: none; }
+  .row-ask .ic { color: var(--muted); display: grid; place-items: center; }
+  .row-ask .t { font-weight: 580; font-size: 12.5px; color: var(--text); }
+  .row-ask .tm { color: var(--dim); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .row-ask .s { grid-column: 2 / 4; display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11.5px; min-width: 0; white-space: nowrap; }
+  .row-ask .mini { grid-column: 2 / 4; display: flex; gap: 4px; margin-top: 4px; }
+  .row-ask .mini svg { width: 46px; height: 29px; border-radius: 3px; box-shadow: 0 0 0 1px var(--line-2); }
+  .row-ask.on { background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .row-ask.wt { background: var(--wait-bg); box-shadow: inset 0 0 0 1px var(--wait-line); }
+  .row-ask.wt .ic { color: var(--wait); }
+  .row-ask.done .t { color: var(--soft); font-weight: 520; }
+  .row-ask.done .ic { color: var(--run); }
+
+  /* ═════════ A « Le tableau » : un onglet, et le travail en colonnes par geste ═════════ */
+  .bhead { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--line); min-width: 0; flex: none; }
+  .bhead h1 { font-size: 15px; font-weight: 640; white-space: nowrap; }
+  .bband { display: grid; gap: 6px; padding: 10px 14px; margin: 12px 14px 0; border-radius: 11px; background: var(--wait-bg); box-shadow: inset 0 0 0 1px var(--wait-line); flex: none; }
+  .bband .h { display: flex; align-items: center; gap: 8px; color: var(--wait); font-size: 12px; font-weight: 640; }
+  .bband .it { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 12.5px; }
+  .bband .it .q { flex: 1; min-width: 0; }
+  .cols { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 12px 14px 14px; overflow: hidden; }
+  .col { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; overflow: hidden; }
+  .col .ch { display: flex; align-items: center; gap: 7px; padding: 4px 4px 2px; color: var(--soft); font-weight: 620; font-size: 12.5px; white-space: nowrap; }
+  .col .ch .c { color: var(--dim); font-weight: 500; }
+  .col .ch .v { color: var(--muted); font-weight: 500; font-size: 11.5px; }
+  .card { border-radius: 10px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line), 0 1px 2px rgba(0, 0, 0, 0.3); padding: 10px 11px; display: grid; gap: 7px; min-width: 0; flex: none; }
+  .card.on { box-shadow: inset 0 0 0 1.5px var(--p), 0 1px 2px rgba(0, 0, 0, 0.3); }
+  .card .t { font-weight: 600; font-size: 12.5px; line-height: 1.4; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .card .s { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11.5px; min-width: 0; white-space: nowrap; }
+  .card .mini { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  .card .mini svg { width: 100%; height: auto; border-radius: 3px; box-shadow: 0 0 0 1px var(--line-2); display: block; }
+  .card .ub { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11.5px; min-width: 0; }
+  .card .ub svg { color: var(--teal-ink); }
+  .card .acts { display: flex; gap: 6px; }
+  .sheet { position: absolute; top: 0; right: 0; bottom: 0; width: min(560px, 62%); background: var(--panel); box-shadow: -1px 0 0 var(--line-2), -24px 0 48px -20px rgba(0, 0, 0, 0.55);
+    display: flex; flex-direction: column; z-index: 4; }
+  @media (max-width: 1100px) { .sheet { width: 100%; } }
+  .sheet .shh { display: flex; align-items: center; gap: 8px; padding: 10px 12px 10px 18px; border-bottom: 1px solid var(--line); flex: none; }
+  .sheet .shb { flex: 1; min-height: 0; overflow: hidden; padding: 16px 18px; display: grid; align-content: start; gap: 14px; }
+  .sheet .shf { padding: 0 14px 14px; flex: none; }
+  .cols.dim { opacity: 0.55; }
+  .sidegrp { display: grid; gap: 2px; }
+  .sidegrp .h { padding: 10px 8px 4px; color: var(--muted); font-size: 11.5px; font-weight: 600; display: flex; gap: 6px; }
+  .flt { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; color: var(--soft); font-size: 12.5px; }
+  .flt .c { margin-left: auto; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .flt.on { background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--text); }
+  .flt .bx { width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 0 0 1.5px var(--line-3); display: grid; place-items: center; }
+  .flt .bx.on { background: var(--soft); box-shadow: none; color: var(--panel); }
+
+  /* ── La comparaison en grand : plein fenêtre, les rendus côte à côte ── */
+  .compare { position: absolute; inset: 0; z-index: 20; background: var(--scrim); display: grid; padding: 22px; }
+  .compare .box { background: var(--panel); border-radius: 14px; box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow-float); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-height: 0; overflow: hidden; }
+  .compare .ch { display: flex; align-items: center; gap: 10px; padding: 12px 14px 12px 18px; border-bottom: 1px solid var(--line); min-width: 0; }
+  .compare .ch h2 { font-size: 15px; font-weight: 640; }
+  .compare .cb { padding: 26px 22px 12px; display: grid; min-height: 0; overflow: hidden; }
+  .compare .cb .plates { gap: 18px; align-content: start; }
+  .compare .plate .both { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  @media (max-width: 1100px) { .stabs .c.ag { display: none; } .stabs span { padding: 0 2px; } }
+  .compare .cf { border-top: 1px solid var(--line); padding: 12px 14px; display: flex; align-items: center; gap: 8px; min-width: 0; }
+
+  /* ═════════ B « La file » : une vue de tous les projets, une demande à la fois ═════════ */
+  .fview { grid-column: 2; grid-row: 2; display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: 0; min-width: 0; }
+  @media (max-width: 1100px) { .fview { grid-template-columns: 236px minmax(0, 1fr); } }
+  .queue { display: flex; flex-direction: column; min-height: 0; padding: 4px 10px 10px; gap: 2px; overflow: hidden; }
+  .queue .qh { display: flex; align-items: center; gap: 8px; padding: 6px 8px 4px; flex: none; }
+  .queue .qh h1 { font-size: 15px; font-weight: 650; }
+  .queue .meter { display: flex; gap: 3px; padding: 6px 8px 8px; flex: none; }
+  .queue .meter i { height: 4px; flex: 1; border-radius: 2px; background: var(--line-2); }
+  .queue .meter i.d { background: var(--run); } .queue .meter i.w { background: var(--wait); } .queue .meter i.c { background: var(--text); }
+  .queue .left { padding: 0 8px 4px; color: var(--muted); font-size: 12px; flex: none; }
+  .focus { background: var(--panel); border-radius: 12px 0 0 0; box-shadow: inset 0 0 0 1px var(--line); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-height: 0; min-width: 0; overflow: hidden; }
+  .focus .fh { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--line); min-width: 0; }
+  .focus .fb { padding: 22px 28px 14px; overflow: hidden; display: grid; align-content: start; gap: 16px; min-height: 0; }
+  .focus .ff { padding: 0 20px 16px; }
+  @media (max-width: 1100px) { .focus .fb { padding: 16px 20px 10px; gap: 12px; } .pane .pb { padding: 14px 18px 8px; } .pane .pb .col3 { gap: 12px; } .plates { gap: 10px; } }
+  .split { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 22px; min-height: 0; }
+  .split > div { min-width: 0; min-height: 0; display: grid; gap: 14px; align-content: start; }
+  .keysbar { display: flex; align-items: center; gap: 12px; color: var(--dim); font-size: 11.5px; white-space: nowrap; min-width: 0; overflow: hidden; }
+  .keysbar span { display: inline-flex; gap: 5px; align-items: center; }
+
+  /* ═════════ C « Le tiroir » : le compteur de la barre d'état ouvre la boîte par-dessus le travail ═════════ */
+  .trayb { display: inline-flex; align-items: center; gap: 7px; height: 22px; padding: 0 8px; border-radius: 6px; color: var(--soft); box-shadow: inset 0 0 0 1px var(--line-2);
+    background: rgba(var(--fg-rgb), 0.04); font-weight: 550; }
+  .trayb b { font-variant-numeric: tabular-nums; }
+  .trayb .w { color: var(--wait); font-weight: 600; }
+  .trayb.on { background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line-3); color: var(--text); }
+  .drawer { position: absolute; left: 8px; bottom: 30px; width: min(760px, calc(100% - 16px)); top: 50px; z-index: 8; background: var(--raise); border-radius: 14px;
+    box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow-float); display: grid; grid-template-rows: auto auto minmax(0, 1fr); overflow: hidden; }
+  .drawer .dh { display: flex; align-items: center; gap: 8px; padding: 12px 12px 10px 16px; min-width: 0; }
+  .drawer .dh h1 { font-size: 15px; font-weight: 650; white-space: nowrap; }
+  .drawer .dt { display: flex; gap: 4px; padding: 0 12px 10px; border-bottom: 1px solid var(--line); overflow: hidden; }
+  .drawer .db { overflow: hidden; padding: 6px 8px 10px; display: flex; flex-direction: column; gap: 2px; min-height: 0; }
+  .drawer.two .db { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 8px; padding: 0 8px 8px 0; }
+  .drawer.two .dl { overflow: hidden; padding: 6px 0 0 8px; display: flex; flex-direction: column; gap: 2px; min-height: 0; border-right: 1px solid var(--line); }
+  @media (max-width: 1100px) { .drawer.two .db { grid-template-columns: minmax(0, 1fr); padding-left: 8px; } .drawer.two .dl { display: none; } .drawer.two .dt { display: none; } }
+  .drawer .open { border-radius: 11px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line-2); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; margin-top: 8px; min-width: 0; min-height: 0; overflow: hidden; }
+  .drawer .open .oh { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 14px; border-bottom: 1px solid var(--line); }
+  .drawer .open .ob { padding: 14px; overflow: hidden; min-height: 0; display: grid; align-content: start; gap: 12px; }
+  .drawer .open .of { padding: 0 10px 10px; }
+  .drawer .open .req h2 { font-size: 15px; }
+  .film { display: grid; grid-template-columns: minmax(0, 1fr) 132px; gap: 10px; min-width: 0; }
+  @media (max-width: 1100px) { .film { grid-template-columns: minmax(0, 1fr) 104px; } }
+  .film .big { position: relative; border-radius: 9px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line-2); padding: 8px; display: grid; gap: 6px; min-width: 0; }
+  .film .big > svg:not(.seal) { height: 258px; width: auto; max-width: 100%; justify-self: center; display: block; border-radius: 5px; }
+  @media (max-width: 1100px) { .film .big > svg:not(.seal) { height: 126px; } .film { grid-template-columns: minmax(0, 1fr); } .film .strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } .film .strip .s > svg { height: 40px; } }
+  .film .strip { display: grid; gap: 8px; align-content: start; }
+  .film .strip .s { border-radius: 7px; padding: 4px; box-shadow: inset 0 0 0 1px var(--line-2); display: grid; gap: 4px; font-size: 11px; color: var(--muted); font-weight: 600; }
+  .film .strip .s.on { box-shadow: inset 0 0 0 1.5px var(--brand); color: var(--teal-ink); }
+  .film .strip .s > svg { height: 64px; width: auto; max-width: 100%; justify-self: center; display: block; border-radius: 3px; }
+  .conv { flex: 1; min-height: 0; overflow: hidden; padding: 20px 28px 0; }
+  .conv .col2 { width: min(720px, 100%); margin: 0 auto; display: grid; gap: 14px; }
+  .bubble-me { justify-self: end; max-width: 82%; padding: 9px 13px; border-radius: 12px 12px 4px 12px; background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line); }
+  .ai { color: var(--text-ai); line-height: 1.6; display: grid; gap: 8px; }
+  .tool { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+  .tool b { color: var(--soft); font-weight: 600; }
+  .chead { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--line); min-width: 0; flex: none; }
+  .chead b { font-weight: 640; }
+  .chead .meta { color: var(--muted); font-size: 12px; display: inline-flex; gap: 8px; align-items: center; white-space: nowrap; min-width: 0; }
+  .composer { width: min(744px, calc(100% - 48px)); margin: 12px auto 14px; border-radius: 12px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); padding: 10px 12px; display: grid; gap: 10px; flex: none; }
+  .composer .row { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+  .composer .chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; border-radius: 7px; box-shadow: inset 0 0 0 1px var(--line-2); color: var(--soft); white-space: nowrap; }
+  .composer .send { width: 28px; height: 28px; border-radius: 8px; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; }
+  .callout { position: absolute; z-index: 12; width: 300px; border-radius: 12px; background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow-float); padding: 13px 14px 12px;
+    display: grid; gap: 8px; color: var(--soft); font-size: 12.5px; line-height: 1.5; }
+  .callout h3 { font-size: 13.5px; color: var(--text); display: flex; gap: 8px; align-items: center; }
+  .callout .acts { display: flex; gap: 8px; align-items: center; }
+  .ringed { box-shadow: 0 0 0 2px var(--frame), 0 0 0 3.5px var(--brand) !important; }
+
+  /* ═════════ D « La liste » : un onglet, la liste dans la barre, la demande dans le panneau ═════════ */
+  .list { display: flex; flex-direction: column; gap: 1px; min-height: 0; overflow: hidden; }
+  .lhead { display: flex; align-items: center; gap: 8px; padding: 8px 2px 4px; flex: none; }
+  .pane { flex: 1; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+  .pane .ph { display: flex; align-items: center; gap: 8px; padding: 10px 14px 10px 20px; border-bottom: 1px solid var(--line); min-width: 0; }
+  .pane .pb { overflow: hidden; padding: 20px 26px 12px; min-height: 0; }
+  .pane .pb .col3 { width: min(880px, 100%); margin: 0 auto; display: grid; gap: 15px; align-content: start; }
+  .pane .pf { padding: 0 20px 14px; }
+  .pane .pf .answer { width: min(880px, 100%); margin: 0 auto; }
+
+  /* ── Vide ── */
+  .empty { flex: 1; display: grid; place-items: center; padding: 28px; min-height: 0; overflow: hidden; }
+  .empty .in { width: min(560px, 100%); display: grid; gap: 16px; }
+  .empty h2 { font-size: 21px; font-weight: 640; letter-spacing: -0.015em; }
+  .empty .lead { color: var(--muted); line-height: 1.6; }
+  .empty .kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; padding: 14px 16px; border-radius: 10px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line); }
+  .empty .kinds div { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 2px 8px; font-size: 12px; color: var(--muted); line-height: 1.45; }
+  .empty .kinds b { color: var(--soft); font-weight: 600; font-size: 12.5px; }
+  .empty .kinds svg { margin-top: 2px; color: var(--teal-ink); }
+  .recent { display: grid; gap: 2px; }
+
+  /* ── Réglages (MCP éteint) ── */
+  .modal-wrap { position: absolute; inset: 0; background: var(--scrim); display: grid; place-items: center; z-index: 30; padding: 24px; }
+  .settings { width: min(980px, 100%); height: min(680px, 100%); background: var(--panel); border-radius: 14px; box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow-float);
+    display: grid; grid-template-columns: 210px minmax(0, 1fr); overflow: hidden; }
+  .settings nav { border-right: 1px solid var(--line); padding: 14px 10px; display: grid; align-content: start; gap: 2px; }
+  .settings nav span { padding: 7px 10px; border-radius: 8px; color: var(--muted); font-size: 12.5px; font-weight: 550; }
+  .settings nav span.on { background: var(--raise); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .settings .sb { padding: 20px 26px; display: grid; align-content: start; gap: 6px; overflow: hidden; }
+  .settings h2 { font-size: 17px; font-weight: 640; margin-bottom: 8px; }
+  .settings h3 { font-size: 12.5px; color: var(--muted); font-weight: 600; margin: 12px 0 2px; }
+  .srow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 24px; padding: 12px 0; border-top: 1px solid rgba(var(--fg-rgb), 0.05); align-items: center; }
+  .srow b { font-weight: 600; font-size: 13px; }
+  .srow .d { grid-column: 1; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+  .srow.dis { opacity: 0.55; }
+  .switch { width: 34px; height: 20px; border-radius: 10px; background: var(--line-3); position: relative; }
+  .switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
+  .switch.on { background: var(--brand); }
+  .switch.on::after { left: 17px; }
+  .dialog { width: min(480px, 100%); background: var(--panel); border-radius: 14px; box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow-float); padding: 20px 22px 16px; display: grid; gap: 12px; }
+  .dialog h2 { font-size: 16px; font-weight: 640; }
+  .dialog p { color: var(--soft); line-height: 1.55; }
+  .dialog .acts { display: flex; gap: 8px; justify-content: flex-end; padding-top: 4px; }
+  .dialog .list2 { display: grid; gap: 4px; padding: 10px 12px; border-radius: 10px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line); font-size: 12.5px; color: var(--soft); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const q = new URLSearchParams(location.search);
+const D = (q.get('d') || 'a').toLowerCase();
+const LIGHT = q.get('theme') === 'light';
+if (LIGHT) document.documentElement.dataset.theme = 'light';
+const ROUTE = location.hash.slice(1) || 'pleine';
+const NARROW = innerWidth < 1100;
+const ic = (n, s = 14) => `<svg class="i" viewBox="0 0 16 16" style="width:${s}px;height:${s}px" aria-hidden="true">${ICONS[n] || ''}</svg>`;
+const g = (s) => `«&nbsp;${s}&nbsp;»`;
+
+/* ───────── Les données fictives (les mêmes que docs/INBOX.md) ───────── */
+const PROJ = {
+  portail: { name: 'portail-adherents', key: 'PA', color: 'oklch(0.72 0.12 250)' },
+  atlas: { name: 'atlas-web', key: 'AW', color: 'oklch(0.72 0.12 48)' },
+};
+const KINDS = {
+  permission: ['shield', 'Autorisation'], question: ['question', 'Question'], choice: ['choice', 'Choix'], confirm: ['check-c', 'Oui ou non'],
+  answer: ['edit', 'Réponse'], task: ['check', 'Tâche'], ticket: ['kanban', 'Ticket à valider'], decision: ['file', 'Décision proposée'], review: ['pr', 'Relecture'],
+};
+// Les demandes de la boîte : les bloquantes (vues sur les demandes d'aujourd'hui), les asynchrones, puis ce qu'Escouade y verse.
+const ASKS = [
+  { id: 'perm', block: true, kind: 'permission', agent: 'tests-e2e', ticket: 'ATL-51', proj: 'atlas', since: '3 min', title: 'Autoriser Bash&nbsp;: npm run e2e -- --project=webkit ?' },
+  { id: 'quest', block: true, kind: 'question', agent: 'refacto-auth', ticket: 'ATL-47', proj: 'atlas', since: '12 min', title: 'Un jeton expiré&nbsp;: 401 ou 403&nbsp;?' },
+  { id: 'choix', kind: 'choice', agent: 'design-tableau', ticket: 'DEM-12', proj: 'portail', since: '40 min', title: 'Choisis la direction du tableau de bord', files: '6 images', unblocks: ['DEM-13', 'DEM-14'] },
+  { id: 'pdf', kind: 'choice', agent: 'etude-paiement', ticket: 'DEM-9', proj: 'portail', since: '1 h', title: 'Prestataire de paiement&nbsp;: trois offres comparées', files: '1 PDF, 2 images, 1 tableur', unblocks: ['DEM-15'] },
+  { id: 'publier', kind: 'confirm', agent: 'chef-atlas', chef: true, proj: 'atlas', since: '25 min', title: 'Publier atlas-web 1.4.0 en production&nbsp;?', today: true, unblocks: ['tag v1.4.0'] },
+  { id: 'valider', kind: 'ticket', escouade: true, ticket: 'DEM-11', proj: 'portail', since: '2 h', title: 'DEM-11 · Export CSV des adhérents est à tester', unblocks: ['merge dans main'] },
+  { id: 'tache', kind: 'task', agent: 'lien-magique', ticket: 'ATL-53', proj: 'atlas', since: '3 h', title: 'Essaie la connexion par lien magique sur un vrai téléphone', unblocks: ['ATL-53'] },
+  { id: 'texte', kind: 'answer', agent: 'emails', ticket: 'DEM-17', proj: 'portail', since: 'hier', title: 'Quelle phrase d’accueil pour l’e-mail de bienvenue&nbsp;?', unblocks: ['DEM-17'] },
+  { id: 'decision', kind: 'decision', escouade: true, ticket: 'DEM-9', proj: 'portail', since: 'hier', title: 'Un seul prestataire de paiement pour toutes les cotisations' },
+];
+const LATER = [
+  { kind: 'review', proj: 'atlas', title: 'Ta relecture : PR #214 · Connexion par lien magique', until: 'demain 9:00' },
+  { kind: 'task', proj: 'atlas', agent: 'nettoyage', title: 'Supprime à la main ~/.cache/atlas-old (2,1 Go)', until: 'lundi' },
+];
+const RECENT = [
+  ['Direction du formulaire d’inscription', 'C · Une seule page', 'toi · 10:42 · lue par design-form'],
+  ['Feu vert&nbsp;: signer le plugin atlas-theme 0.3', 'Oui', 'toi · hier 18:05 · lue par chef-atlas'],
+  ['Nom de la commande d’export', '« export:csv »', 'chef-atlas, délégué · hier'],
+];
+const byId = (id) => ASKS.find((a) => a.id === id);
+const blocking = ASKS.filter((a) => a.block);
+const asyncs = ASKS.filter((a) => !a.block);
+
+/* ───────── Les rendus joints (illustratifs) : trois directions d'un tableau de bord, des graphiques, un tunnel ───────── */
+function pal(light) {
+  return light
+    ? { bg: '#f6f7f9', pn: '#ffffff', ln: '#e2e5ea', ink: '#1b1e24', mu: '#a3a8b1', ac: '#3b6fd8', ac2: '#2c9a70', ac3: '#d58a2c' }
+    : { bg: '#111318', pn: '#1a1d24', ln: '#2a2f38', ink: '#e8eaee', mu: '#59606b', ac: '#6e9cf2', ac2: '#47c08f', ac3: '#e3a04a' };
+}
+function dash(v, light) {
+  const c = pal(light);
+  const r = (x, y, w, h, f, rx = 3) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${f}"/>`;
+  const bars = (x, y, n, w, f) => Array.from({ length: n }, (_, i) => r(x, y + i * 9, w - (i * 37) % 60, 3.5, f, 1.5)).join('');
+  let body = '';
+  if (v === 'A') {
+    body = r(0, 0, 54, 200, c.pn, 0) + bars(10, 30, 7, 36, c.mu) + r(10, 12, 26, 6, c.ink, 2)
+      + [0, 1, 2, 3].map((i) => r(64 + i * 63, 12, 56, 40, c.pn) + r(70 + i * 63, 20, 22, 4, c.mu, 2) + r(70 + i * 63, 30, 34, 10, i === 1 ? c.ac : c.ink, 2)).join('')
+      + r(64, 60, 245, 80, c.pn) + `<polyline points="72,124 102,110 132,116 162,92 192,98 222,78 252,84 296,70" fill="none" stroke="${c.ac}" stroke-width="2"/>`
+      + r(64, 148, 245, 44, c.pn) + bars(72, 156, 4, 200, c.mu);
+  } else if (v === 'B') {
+    body = r(0, 0, 320, 26, c.pn, 0) + r(12, 9, 40, 8, c.ink, 2) + `<circle cx="304" cy="13" r="6" fill="${c.mu}"/>`
+      + r(12, 36, 296, 62, c.pn, 8) + r(24, 48, 60, 5, c.mu, 2) + r(24, 60, 92, 18, c.ink, 3) + r(220, 50, 76, 36, c.ac, 6)
+      + r(12, 106, 144, 50, c.pn, 8) + r(24, 118, 44, 5, c.mu, 2) + r(24, 130, 70, 12, c.ac2, 3)
+      + r(164, 106, 144, 50, c.pn, 8) + r(176, 118, 44, 5, c.mu, 2) + r(176, 130, 70, 12, c.ac3, 3)
+      + r(12, 164, 296, 30, c.pn, 8) + bars(24, 172, 2, 220, c.mu);
+  } else {
+    body = r(0, 0, 320, 24, c.pn, 0) + r(10, 8, 30, 8, c.ink, 2) + [0, 1, 2].map((i) => r(60 + i * 46, 6, 40, 12, c.bg, 4)).join('')
+      + r(10, 32, 300, 160, c.pn) + r(18, 40, 284, 8, c.ln, 2)
+      + Array.from({ length: 12 }, (_, i) => r(18, 54 + i * 11.4, 70, 4, c.mu, 1.5) + r(100, 54 + i * 11.4, 40, 4, c.mu, 1.5) + r(156, 54 + i * 11.4, 54, 4, c.mu, 1.5)
+        + r(230, 52 + i * 11.4, 30, 7, i % 4 === 1 ? c.ac3 : c.ac2, 3)).join('');
+  }
+  return `<svg viewBox="0 0 320 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Rendu ${v}, ${light ? 'clair' : 'sombre'}">${r(0, 0, 320, 200, c.bg, 0)}${body}</svg>`;
+}
+function costChart(light) {
+  const c = pal(light);
+  const bars = [[38, 'A', c.mu], [44, 'B', c.ac], [31, 'C', c.mu]].map(([h, l, f], i) => `<rect x="${40 + i * 90}" y="${110 - h * 2}" width="46" height="${h * 2}" rx="3" fill="${f}"/><text x="${63 + i * 90}" y="128" text-anchor="middle" font-size="11" font-family="Inter Variable" fill="${c.ink}">${l}</text>`).join('');
+  return `<svg viewBox="0 0 320 140" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Coût par mois des trois offres"><rect width="320" height="140" fill="${c.bg}"/>${bars}<line x1="24" y1="110" x2="300" y2="110" stroke="${c.ln}"/></svg>`;
+}
+function tunnel(light) {
+  const c = pal(light);
+  const r = (x, y, w, h, f, rx = 3) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${f}"/>`;
+  return `<svg viewBox="0 0 320 140" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Capture du tunnel de paiement de l’offre B">${r(0, 0, 320, 140, c.bg, 0)}${r(80, 10, 160, 120, c.pn, 8)}${r(96, 22, 60, 6, c.ink, 2)}${r(96, 40, 128, 14, c.bg, 4)}${r(96, 60, 60, 14, c.bg, 4)}${r(164, 60, 60, 14, c.bg, 4)}${r(96, 86, 128, 18, c.ac, 5)}${r(120, 112, 80, 4, c.mu, 2)}</svg>`;
+}
+function qr() {
+  let s = '';
+  for (let y = 0; y < 21; y++) for (let x = 0; x < 21; x++) {
+    const f = (x < 7 && y < 7) || (x > 13 && y < 7) || (x < 7 && y > 13);
+    const edge = f && (x % 20 === 0 || y % 20 === 0 || x === 6 || y === 6 || x === 14 || y === 14 || (x > 1 && x < 5 && y > 1 && y < 5) || (x > 15 && x < 19 && y > 1 && y < 5) || (x > 1 && x < 5 && y > 15 && y < 19));
+    const on = f ? edge : ((x * 7 + y * 13 + x * y) % 5 < 2);
+    if (on) s += `<rect x="${x}" y="${y}" width="1" height="1"/>`;
+  }
+  return `<svg viewBox="-2 -2 25 25" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="QR code de l’aperçu"><rect x="-2" y="-2" width="25" height="25" fill="#fff"/><g fill="#15171c">${s}</g></svg>`;
+}
+function pdfPage() {
+  return `<div class="pdfpage"><div class="rh"><span>Étude · prestataire de paiement</span><span>3 / 12</span></div>
+    <h4>3. Ce que coûte chaque offre</h4>
+    <p>Sur les 1 840 cotisations de 2026 (panier moyen de 42 €), l’écart entre les offres tient moins au taux qu’aux frais fixes et à l’engagement. L’offre B coûte un peu plus, sans contrat ni frais d’installation.</p>
+    <table><tr><th>Offre</th><th>Taux</th><th>Fixe</th><th>Par mois</th><th>Engagement</th></tr>
+      <tr><td>A · Banque du réseau</td><td>1,4 %</td><td>0,25 €</td><td>129 €</td><td>12 mois</td></tr>
+      <tr class="b"><td>B · Prestataire en ligne</td><td>1,5 %</td><td>0,25 €</td><td>136 €</td><td>aucun</td></tr>
+      <tr><td>C · Agrégateur</td><td>1,2 %</td><td>0,30 €</td><td>118 €</td><td>24 mois</td></tr></table>
+    ${costChart(true)}
+    <p>Au-delà de 5 000 € par mois, C devient la moins chère ; le portail n’y arrive qu’en septembre, le mois des renouvellements.</p></div>`;
+}
+
+/* ───────── La fenêtre ───────── */
+function titlebar() {
+  return `<div class="tb"><span class="logo">${ic('agents', 13)}</span><span class="proj"><span class="sq"></span>portail-adherents ${ic('down', 12)}</span>
+    <span class="search">${ic('search', 13)}Rechercher<kbd>Ctrl K</kbd></span><span class="ed wide-only">${ic('code', 14)}Éditeur</span>
+    <span class="wb"><span class="wbtn">${ic('min', 13)}</span><span class="wbtn">${ic('max', 12)}</span><span class="wbtn">${ic('close', 13)}</span></span></div>`;
+}
+function rail(o = {}) {
+  const inbox = o.inbox ? `<span class="r-i ${o.inbox === 'on' ? 'on' : ''} ${o.ring ? 'ringed' : ''}" id="rail-inbox">${ic('inbox', 16)}${o.count ? `<span class="badge">${o.count}</span>` : ''}</span>` : '';
+  return `<div class="rail"><span class="r-i">${ic('overview', 15)}</span>${inbox}<span class="sep"></span>
+    <span class="tile ${o.viewOn ? '' : 'cur'}" style="background:${PROJ.portail.color}">PA</span><span class="tile" style="background:${PROJ.atlas.color}">AW<span class="wd"></span></span>
+    <span class="r-i">${ic('plus', 15)}</span><span class="low"><span class="r-i">${ic('stats', 15)}</span><span class="r-i">${ic('puzzle', 15)}</span><span class="r-i">${ic('sliders', 15)}</span></span></div>`;
+}
+// Les onglets du haut de la barre ; « À toi » n'est là que si le serveur MCP est allumé (et pour les directions A et D).
+function tabs(o = {}) {
+  const list = [['Agents', '4'], ['Kanban', ''], ['PR', ''], ['Docs', '']];
+  if (o.inbox) list.push(['À toi', o.inboxCount ?? '5', o.inboxWait]);
+  return `<div class="stabs">${list.map(([l, c, w], i) => `<span class="${i === (o.tab ?? 0) ? 'on' : ''} ${o.ring && l === 'À toi' ? 'ringed' : ''}" ${l === 'À toi' ? 'id="tab-inbox"' : ''}>${l}${c ? `<span class="c ${w ? 'w' : ''} ${l === 'Agents' ? 'ag' : ''}">${c}</span>` : ''}</span>`).join('')}</div>`;
+}
+function agentList() {
+  return `<div class="new"><span class="plus">${ic('plus', 12)}</span>Nouvel agent<kbd>Ctrl N</kbd></div>
+    <div class="agent on"><div class="r"><span class="ring"></span><span class="n ell">design-tableau</span><span class="key sp">DEM-12</span></div><div class="m ell">Tour fini · il attend ton choix</div></div>
+    <div class="agent"><div class="r"><span class="ring"></span><span class="n ell">etude-paiement</span><span class="key sp">DEM-9</span></div><div class="m ell">Lit docs/offres/b.md</div></div>
+    <div class="agent"><div class="r"><span class="ring"></span><span class="n ell">emails</span><span class="key sp">DEM-17</span></div><div class="m ell">Modifie src/mail/welcome.mjml</div></div>
+    <div class="agent"><div class="r"><span class="ring idle"></span><span class="n ell">export-csv</span><span class="key sp">DEM-11</span></div><div class="m ell">À tester</div></div>`;
+}
+function foot() {
+  return `<div class="foot"><div class="r">${ic('folder', 13)}<span class="mono ell">~/dev/portail-adherents</span></div><div class="r">${ic('branch', 13)}<span class="mono ell">main</span></div></div>`;
+}
+function statusbar(o = {}) {
+  const waitBtn = o.tray
+    ? `<span class="trayb ${o.tray === 'on' ? 'on' : ''} ${o.ring ? 'ringed' : ''}" id="tray-btn">${ic('inbox', 13)}À toi <b>9</b><span class="w">· 2 bloquantes</span></span>`
+    : `<span><span class="dot wt"></span> <b>2</b> en attente</span>`;
+  return `<div class="status"><span><span class="dot ok"></span> <b>3</b> actifs</span>${waitBtn}<span><span class="dot"></span> <b>1</b> terminé</span>
+    <span class="sp wide-only">5h <b>34 %</b> · 7j <b>61 %</b></span><span class="wide-only">Aujourd’hui <b>4,12 $</b></span><span>${ic('branch', 12)} <span class="mono">main</span></span>${o.sp ? '' : ''}</div>`;
+}
+function conversation() {
+  return `<div class="chead"><b>design-tableau</b><span class="pill k">Prêt</span><span class="meta">${ic('branch', 12)}<span class="mono ell">escouade/design-tableau</span></span></div>
+    <div class="conv"><div class="col2">
+      <div class="bubble-me">Rends trois directions pour le tableau de bord des adhérents, clair et sombre, et dépose le choix dans la boîte.</div>
+      <div class="tool">${ic('edit', 13)}<b>Écrit</b> design/tableau/maquette.html · ${ic('image', 13)}<b>Capturé</b> 6 rendus</div>
+      <div class="tool">${ic('inbox', 13)}<b>Déposé dans À toi</b> ${g('Choisis la direction du tableau de bord')} · 3 options, 6 images</div>
+      <div class="ai"><p>Les trois directions sont rendues et le choix t’attend dans la boîte. Je recommande B. En attendant, j’écris les tests des filtres, qui valent pour les trois.</p></div>
+    </div></div>
+    <div class="composer"><div style="color:var(--muted)">Écris à l’agent…</div><div class="row"><span class="chip">${ic('shield', 12)}Édits auto</span><span class="chip">Opus · moyen</span><span class="sp"></span>${ic('clip', 15)}${ic('mic', 15)}<span class="send">${ic('up', 14)}</span></div></div>`;
+}
+
+/* ───────── Une demande : en-tête, texte, ce qu'elle débloque, et sa sorte ───────── */
+function whoLine(a) {
+  const p = PROJ[a.proj];
+  const author = a.escouade ? `<b>Escouade</b>` : `<b>${a.agent}</b>${a.chef ? ' · chef d’escouade' : ''}`;
+  return `<span class="who"><span class="pdot" style="background:${p.color}"></span>${p.name} · ${author}${a.ticket ? ` · <span class="tk">${a.ticket}</span>` : ''} · il y a ${a.since}</span>`;
+}
+function kindTag(a) {
+  const [i, l] = KINDS[a.kind];
+  return `<span class="kind ${a.block ? 'wt' : ''}">${ic(i, 12)}${a.block ? `${l} · l’agent s’est arrêté` : l}</span>`;
+}
+function unblocks(a, short) {
+  const T = {
+    choix: ['DEM-13 et DEM-14', 'démarrent sur la direction choisie'],
+    pdf: ['DEM-15, le tunnel de paiement', 'démarre avec l’offre choisie'],
+    publier: ['chef-atlas', 'pose le tag v1.4.0, déploie et annonce la version'],
+    valider: ['Le merge de DEM-11', 'dans main, puis son worktree nettoyé'],
+    tache: ['ATL-53', 'passe « À tester »'],
+    texte: ['DEM-17', 'reprend avec ta phrase'],
+  }[a.id];
+  if (!T) return '';
+  return `<div class="unblk">${ic('unlock', 14)}<span class="ell">Ta réponse débloque&nbsp;: <b>${T[0]}</b> ${short ? '' : T[1]}</span></div>`;
+}
+function seal() {
+  return `<svg class="seal" viewBox="0 0 62 62" aria-hidden="true"><defs><path id="sealp" d="M31 31 m-21 0 a21 21 0 1 1 42 0 a21 21 0 1 1 -42 0"/></defs>
+    <circle class="bg" cx="31" cy="31" r="29"/><circle class="in" cx="31" cy="31" r="14"/><text><textPath href="#sealp">RECOMMANDÉ · PAR L’AGENT ·</textPath></text><path class="ck" d="M25 31.5l4 4 8-9"/></svg>`;
+}
+const OPTS = [
+  ['A', 'Colonnes de chiffres', 'Une barre à gauche, quatre chiffres, la courbe des adhésions.'],
+  ['B', 'Cartes empilées', 'Les cartes de l’app mobile, la cotisation en tête.'],
+  ['C', 'Tableau dense', 'Tout en lignes, filtrable : pour le bureau de l’association.'],
+];
+function plates(o = {}) {
+  return `<div class="plates">${OPTS.map(([l, n, d]) => `<div class="plate ${l === 'B' ? 'on' : ''}">${l === 'B' && o.seal !== false ? seal() : ''}
+    <div class="shot">${o.both ? `<div class="both">${dash(l, false)}${dash(l, true)}</div>` : dash(l, LIGHT)}</div>
+    ${o.zoom ? `<span class="zoom">${ic('expand', 12)}</span>` : ''}
+    <div class="cred"><span class="l">${l}</span><span class="ell"><b>${n}</b>${o.desc ? ` · ${d}` : ''}</span><span class="sp tn">${o.both ? '' : '2 images'}</span></div></div>`).join('')}</div>`;
+}
+function attsPdf(o = {}) {
+  const cls = o.compact ? 'compact' : 'two';
+  const pdf = `<div class="att ${o.pdfOn ? 'on' : ''}"><span class="th">${ic('file', 18)}</span><span class="nm ell">etude-paiement.pdf</span><span class="mt">12 pages · 1,4 Mo${o.acts ? ' · <a>Lire</a> · <a>Enregistrer sous…</a>' : ''}</span></div>`;
+  const im1 = `<div class="att"><span class="th">${costChart(LIGHT)}</span><span class="nm ell">couts-par-mois.png</span><span class="mt">1280 × 560 · 84 Ko</span></div>`;
+  const im2 = `<div class="att"><span class="th">${tunnel(LIGHT)}</span><span class="nm ell">tunnel-offre-b.png</span><span class="mt">1440 × 900 · 212 Ko</span></div>`;
+  const xl = `<div class="att"><span class="th">${ic('sheet', 18)}</span><span class="nm ell">couts-detailles.xlsx</span><span class="mt">48 Ko${o.acts ? ' · <a>Ouvrir</a> · <a>Enregistrer sous…</a>' : ''}</span></div>`;
+  return `<div class="atts ${cls}">${pdf}${im1}${im2}${xl}</div>`;
+}
+function pdfViewer(o = {}) {
+  return `<div class="pdfv ${o.thumbs === false ? 'nothumbs' : ''}" style="${o.h ? `height:${o.h}` : ''}"><div class="bar">${ic('file', 13)}<b class="ell">etude-paiement.pdf</b>
+    <span class="pg sp"><span class="btn sm icon quiet">${ic('left', 12)}</span><span class="pgn">3</span>sur 12<span class="btn sm icon quiet">${ic('right', 12)}</span></span>
+    <span class="btn sm icon quiet wide-only">${ic('zoom', 13)}</span><span class="btn sm icon quiet">${ic('expand', 12)}</span></div>
+    <div class="in"><div class="thumbs"><i></i><span>1</span><i></i><span>2</span><i class="on"></i><span>3</span><i></i><span>4</span></div><div class="canvas">${pdfPage()}</div></div></div>`;
+}
+const PAY = [
+  ['A', 'Banque du réseau', '129 € par mois · contrat de 12 mois'],
+  ['B', 'Prestataire en ligne', '136 € par mois · sans engagement · 3 jours d’intégration'],
+  ['C', 'Agrégateur', '118 € par mois · 24 mois · 2 semaines d’intégration'],
+];
+function answerChoice(o = {}) {
+  const opts = o.pay ? PAY : OPTS;
+  return `<div class="answer"><div class="opts">${opts.map(([l, n]) => `<span class="opt ${l === 'B' ? 'on' : ''}"><span class="l">${l}</span><span class="ell">${n}</span>${l === 'B' && !o.short ? '<span class="pill rec">Recommandé</span>' : ''}</span>`).join('')}
+      ${o.compare ? `<span class="btn sm quiet sp">${ic('expand', 12)}Comparer en grand</span>` : ''}</div>
+    <div class="row"><span class="field"><span class="ell">Un mot pour l’agent (facultatif)</span>${ic('clip', 14)}</span><span class="mic">${ic('mic', 15)}</span>
+      <span class="btn">${ic('clock', 13)}Plus tard${ic('down', 11)}</span><span class="btn primary">Choisir B<kbd>Entrée</kbd></span></div>
+    ${o.foot === false ? '' : `<div class="foot">${ic('info', 12)}<span class="ell">Ta réponse part à ${o.pay ? 'etude-paiement' : 'design-tableau'}, qui la lit à son prochain tour ; tu peux revenir dessus tant qu’il ne l’a pas lue.</span>
+      <span class="sp wide-only">${ic('team', 12)} Laisser chef-portail trancher</span></div>`}</div>`;
+}
+function answerConfirm() {
+  return `<div class="answer"><div class="row"><span class="field"><span class="ell">Un mot pour chef-atlas (facultatif)</span></span><span class="mic">${ic('mic', 15)}</span>
+    <span class="btn">${ic('clock', 13)}Plus tard${ic('down', 11)}</span><span class="btn">Non, pas encore</span><span class="btn primary">${ic('check', 13)}Oui, publie<kbd>Entrée</kbd></span></div>
+    <div class="foot">${ic('lock', 12)}<span class="ell">Un feu vert : toi seul y réponds. Ton ${g('oui')} revient à chef-atlas ; c’est lui qui publie, avec ses propres garde-fous.</span></div></div>`;
+}
+function answerTask() {
+  return `<div class="answer"><div class="row"><span class="field"><span class="ell">Ce que tu as vu (facultatif)</span>${ic('clip', 14)}</span><span class="mic">${ic('mic', 15)}</span>
+    <span class="btn">${ic('clock', 13)}Plus tard${ic('down', 11)}</span><span class="btn">Je ne le ferai pas</span><span class="btn primary">${ic('check', 13)}C’est fait<kbd>Entrée</kbd></span></div>
+    <div class="foot">${ic('info', 12)}<span class="ell">Joins une capture si quelque chose cloche : elle part avec ta réponse.</span></div></div>`;
+}
+function answerPerm() {
+  return `<div class="answer"><div class="row" style="flex-wrap:wrap"><span class="btn go">${ic('check', 13)}Autoriser<kbd>1</kbd></span><span class="btn">Toujours autoriser<kbd>2</kbd></span><span class="btn danger">Refuser<kbd>3</kbd></span>
+    <span class="btn quiet sp">${ic('agents', 13)}Ouvrir la conversation</span></div>
+    <div class="foot">${ic('info', 12)}<span class="ell">C’est la carte de tests-e2e : y répondre ici la règle aussi dans sa conversation.</span></div></div>`;
+}
+
+const REQ = {
+  choix: (o = {}) => `<div class="req ${o.big ? 'big' : ''}"><div class="rh">${kindTag(byId('choix'))}<span class="sp"></span>${whoLine(byId('choix'))}</div>
+    <h2>Choisis la direction du tableau de bord</h2>
+    <div class="body"><p>J’ai rendu trois directions pour le tableau de bord des adhérents, en clair et en sombre, à 1440 px. Les filtres et la cotisation y sont dans les trois ; seule la forme change.</p></div>
+    ${o.noplates ? '' : plates({ desc: o.desc, zoom: o.zoom })}
+    ${o.norec ? '' : `<div class="recline">${ic('sparkle', 14)}<span><b>Recommandé&nbsp;: B.</b> Les adhérents arrivent du mobile ; les cartes s’y retrouvent, et la cotisation à payer est en tête.</span></div>`}
+    ${unblocks(byId('choix'), o.short)}</div>`,
+  pdf: (o = {}) => `<div class="req ${o.big ? 'big' : ''}"><div class="rh">${kindTag(byId('pdf'))}<span class="sp"></span>${whoLine(byId('pdf'))}</div>
+    <h2>Prestataire de paiement&nbsp;: trois offres comparées</h2>
+    ${o.lean ? '' : `<div class="body"><p>L’étude complète est dans le PDF (12 pages) ; la page 3 compare les coûts. Les deux images montrent les coûts par mois et le tunnel de l’offre B ; le tableur détaille le calcul.</p></div>`}
+    ${o.atts === false ? '' : attsPdf({ pdfOn: true, acts: o.acts, compact: o.compact })}
+    ${o.viewer ? pdfViewer(o.viewer) : ''}
+    ${o.norec ? '' : `<div class="recline">${ic('sparkle', 14)}<span><b>Recommandé&nbsp;: B, prestataire en ligne.</b> 7 € de plus par mois que A, mais sans contrat : le portail peut changer en 2027.</span></div>`}
+    ${unblocks(byId('pdf'), o.short)}</div>`,
+  publier: (o = {}) => `<div class="req ${o.big ? 'big' : ''}"><div class="rh">${kindTag(byId('publier'))}<span class="pill wt">${ic('clock', 11)}Aujourd’hui</span><span class="sp"></span>${whoLine(byId('publier'))}</div>
+    <h2>Publier atlas-web 1.4.0 en production&nbsp;?</h2>
+    ${o.lean ? '' : `<div class="body"><p>Tout est prêt pour la 1.4.0. Je pose le tag, je déploie, puis j’annonce la version, dès ton ${g('oui')}.</p></div>`}
+    <div class="check"><div><span class="ok">${ic('check-c', 14)}</span>CI verte sur main, <span class="mono">a3f91c2</span></div><div><span class="ok">${ic('check-c', 14)}</span>12 tickets validés depuis la 1.3.2</div>
+      <div><span class="ok">${ic('check-c', 14)}</span>Notes de version rédigées (jointes)</div><div><span class="wt">${ic('info', 14)}</span>La migration 0042 ajoute une colonne, sans arrêt du service</div></div>
+    <div class="md"><h5>notes-1.4.0.md</h5><ul><li>Connexion par lien magique (ATL-42)</li><li>Export CSV des commandes (ATL-49)</li><li>10 corrections</li></ul></div>
+    ${unblocks(byId('publier'), o.short)}</div>`,
+  tache: (o = {}) => `<div class="req ${o.big ? 'big' : ''}"><div class="rh">${kindTag(byId('tache'))}<span class="sp"></span>${whoLine(byId('tache'))}</div>
+    <h2>Essaie la connexion par lien magique sur un vrai téléphone</h2>
+    <div class="body"><p>Les e2e passent, mais seul un vrai téléphone dit si le lien du mail ouvre l’app ou le navigateur. Cinq minutes :</p></div>
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) 112px;gap:14px;align-items:start">
+      <div class="steps"><div class="st done"><span class="bx">${ic('check', 11)}</span><span>Lance l’aperçu du worktree : c’est fait, <span class="mono">Front · lien-magique</span> tourne.</span></div>
+        <div class="st"><span class="bx"></span><span>Scanne le QR code avec ton téléphone, puis demande un lien avec ton adresse.</span></div>
+        <div class="st"><span class="bx"></span><span>Touche le lien dans le mail : tu dois arriver connecté, dans l’app.</span></div></div>
+      <div class="att" style="grid-template-columns:1fr;padding:8px;justify-items:center"><span style="width:92px;height:92px;display:block">${qr()}</span><span class="mt">apercu-qr.png</span></div></div>
+    ${unblocks(byId('tache'), o.short)}</div>`,
+  perm: () => `<div class="req"><div class="rh">${kindTag(byId('perm'))}<span class="sp"></span>${whoLine(byId('perm'))}</div>
+    <h2>tests-e2e veut lancer une commande</h2><div class="cmd">npm run e2e -- --project=webkit</div>
+    <div class="warnline">${ic('info', 13)}<span>Claude Code : ${g('Bash command requires approval')}. Le mode de l’agent est Demander.</span></div></div>`,
+};
+
+/* ───────── Les lignes de la boîte ───────── */
+function rowAsk(a, o = {}) {
+  const [i] = KINDS[a.kind];
+  const p = PROJ[a.proj];
+  const mini = a.id === 'choix' && o.mini ? `<span class="mini">${['A', 'B', 'C'].map((l) => dash(l, LIGHT)).join('')}</span>` : '';
+  const sub = a.block ? `<span class="kind wt">${KINDS[a.kind][1]}</span>` : a.files ? `${ic('clip', 11)}<span class="ell">${a.files}</span>` : `<span class="ell">${KINDS[a.kind][1]}${a.today ? ' · aujourd’hui' : ''}</span>`;
+  return `<div class="row-ask ${a.block ? 'wt' : ''} ${o.on ? 'on' : ''}"><span class="ic">${ic(i, 14)}</span><span class="t ell">${a.title}</span><span class="tm">${a.since}</span>
+    <span class="s"><span class="pdot" style="background:${p.color}"></span>${o.proj === false ? '' : `<span>${a.escouade ? 'Escouade' : a.agent}</span>·`}${sub}</span>${mini}</div>`;
+}
+function rowLater(l) {
+  const p = PROJ[l.proj];
+  return `<div class="row-ask"><span class="ic">${ic(KINDS[l.kind][0], 14)}</span><span class="t ell">${l.title}</span><span class="tm"></span>
+    <span class="s"><span class="pdot" style="background:${p.color}"></span>${ic('clock', 11)}<span class="ell">jusqu’à ${l.until}</span></span></div>`;
+}
+function rowRecent([t, a, w]) {
+  return `<div class="row-ask done"><span class="ic">${ic('check', 14)}</span><span class="t ell">${t}</span><span class="tm"></span><span class="s"><span class="ell"><b style="color:var(--soft);font-weight:600">${a}</b> · ${w}</span></span></div>`;
+}
+function inboxList(o = {}) {
+  const sel = o.sel;
+  const groups = [
+    ['wt', 'Tes agents se sont arrêtés', blocking],
+    ['', 'Aujourd’hui', asyncs.filter((a) => ['choix', 'pdf', 'publier', 'valider'].includes(a.id))],
+    ['', 'Plus tôt', asyncs.filter((a) => ['tache', 'texte', 'decision'].includes(a.id))],
+  ];
+  const html = groups.map(([k, l, items]) => items.length ? `<div class="grp ${k}">${k ? ic('shield', 12) : ''}${l}<span class="c">${items.length}</span></div>${items.map((a) => rowAsk(a, { on: a.id === sel, mini: o.mini })).join('')}` : '').join('');
+  const later = o.later === false ? '' : `<div class="grp">${ic('clock', 12)}Plus tard<span class="c">2</span></div>${o.laterOpen ? LATER.map(rowLater).join('') : ''}`;
+  const recent = o.recent ? `<div class="grp">${ic('check', 12)}Répondu récemment</div>${RECENT.map(rowRecent).join('')}` : '';
+  return html + later + recent;
+}
+
+/* ═════════════════════ A · Le tableau ═════════════════════ */
+function aSide(o = {}) {
+  const f = (l, c, on, bx) => `<div class="flt ${on ? 'on' : ''}">${bx !== undefined ? `<span class="bx ${bx ? 'on' : ''}">${bx ? ic('check', 10) : ''}</span>` : ''}${l}<span class="c">${c}</span></div>`;
+  return `<div class="side">${tabs({ inbox: true, tab: 4, inboxCount: o.count ?? '5', inboxWait: o.wait ?? false })}
+    <div class="sidegrp"><div class="h">Projets</div>${f('Ce projet', o.empty ? 0 : 5, !o.all)}${f('Tous les projets', o.empty ? 0 : 9, o.all)}</div>
+    <div class="sidegrp"><div class="h">Sortes</div>${f('Choix', o.empty ? 0 : 2, false, true)}${f('Oui ou non', o.empty ? 0 : 3, false, true)}${f('Réponses', o.empty ? 0 : 1, false, true)}${f('Tâches', o.empty ? 0 : 1, false, true)}</div>
+    <div class="sidegrp"><div class="h">${ic('clock', 12)}Plus tard · 2</div>${LATER.map(rowLater).join('')}</div>
+    <div class="sidegrp"><div class="h">${ic('check', 12)}Répondu récemment</div>${RECENT.slice(0, NARROW ? 2 : 3).map(rowRecent).join('')}</div>
+    ${foot()}</div>`;
+}
+function aCard(a, o = {}) {
+  const mini = a.id === 'choix' ? `<div class="mini">${['A', 'B', 'C'].map((l) => dash(l, LIGHT)).join('')}</div>` : '';
+  const files = a.id === 'pdf' ? `<div class="s">${ic('file', 12)}etude-paiement.pdf · ${ic('image', 12)}2 · ${ic('sheet', 12)}1</div>` : '';
+  const ub = a.unblocks ? `<div class="ub">${ic('unlock', 12)}<span class="ell">Débloque ${a.unblocks.join(', ')}</span></div>` : '';
+  const acts = a.id === 'valider' ? `<div class="acts"><span class="btn sm">${ic('play', 11)}Tester</span><span class="btn sm">Valider</span></div>`
+    : a.id === 'decision' ? `<div class="acts"><span class="btn sm">Accepter</span><span class="btn sm quiet">Ouvrir dans Docs</span></div>` : '';
+  return `<div class="card ${o.on ? 'on' : ''}"><div class="s"><span class="pdot" style="background:${PROJ[a.proj].color}"></span><span class="ell">${a.escouade ? 'Escouade' : a.agent}${a.ticket ? ` · ${a.ticket}` : ''}</span><span class="sp tn">${a.since}</span></div>
+    <div class="t">${a.title}</div>${mini}${files}${a.today ? '<div><span class="pill wt">Aujourd’hui</span></div>' : ''}${ub}${acts}</div>`;
+}
+function aBoard(o = {}) {
+  const col = (t, v, ids) => `<div class="col"><div class="ch">${t}<span class="c">${ids.length}</span><span class="v sp">${v}</span></div>${ids.map((id) => aCard(byId(id), { on: id === o.sel })).join('')}</div>`;
+  const band = `<div class="bband"><div class="h">${ic('shield', 13)}Tes agents se sont arrêtés · 2</div>
+    ${blocking.map((a) => `<div class="it"><span class="pdot" style="background:${PROJ[a.proj].color}"></span><b class="ell" style="max-width:120px">${a.agent}</b><span class="q ell">${a.title}</span><span class="tm muted">${a.since}</span>
+      ${a.kind === 'permission' ? `<span class="btn sm go">Autoriser<kbd>1</kbd></span><span class="btn sm">Refuser</span>` : `<span class="btn sm">401</span><span class="btn sm">403</span>`}</div>`).join('')}</div>`;
+  return `<div class="bhead"><h1>À toi</h1><span class="muted">tous les projets · 9</span><span class="sp"></span><span class="btn sm quiet wide-only">${ic('sliders', 12)}Trier&nbsp;: urgence</span><span class="btn sm">${ic('right', 12)}Traiter à la suite</span></div>
+    ${band}<div class="cols ${o.dim ? 'dim' : ''}">${col('Choisir', 'un clic', ['choix', 'pdf'])}${col('Valider', 'oui ou non', ['publier', 'valider', 'decision'])}${col('Répondre', 'une phrase', ['texte'])}${col('Faire', 'toi seul', ['tache'])}</div>`;
+}
+function aSheet(inner, answer) {
+  return `<div class="sheet"><div class="shh"><span class="btn sm icon quiet">${ic('left', 12)}</span><span class="btn sm icon quiet">${ic('right', 12)}</span><span class="muted tn">2 sur 7</span><span class="sp"></span><span class="btn sm quiet">${ic('agents', 12)}Aller à l’agent</span><span class="btn sm icon quiet">${ic('close', 12)}</span></div>
+    <div class="shb">${inner}</div><div class="shf">${answer}</div></div>`;
+}
+function compareOverlay() {
+  return `<div class="compare"><div class="box"><div class="ch"><span class="kind">${ic('choice', 12)}Comparer</span><h2 class="ell">Choisis la direction du tableau de bord</h2>
+    <span class="who wide-only">design-tableau · <span class="tk">DEM-12</span></span><span class="sp"></span><span class="seg"><span>Sombre</span><span>Clair</span><span class="on">Les deux</span></span>
+    <span class="hint wide-only"><kbd>Échap</kbd> fermer</span></div>
+    <div class="cb">${plates({ both: true, desc: !NARROW })}</div>
+    <div class="cf"><span class="keysbar"><span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> choisir</span><span><kbd>←</kbd><kbd>→</kbd> passer</span><span class="wide-only"><kbd>Espace</kbd> une seule en grand</span></span><span class="sp"></span>
+      <span class="field wide-only" style="width:280px"><span class="ell">Un mot pour l’agent (facultatif)</span></span><span class="btn">${ic('clock', 13)}Plus tard</span><span class="btn primary">Choisir B<kbd>Entrée</kbd></span></div></div></div>`;
+}
+const A = {
+  pleine: () => shellA(aBoard({ sel: 'choix' }), { all: true }),
+  choix: () => shellA(aBoard({ dim: true }), { all: true }, compareOverlay()),
+  pdf: () => shellA(aBoard({ sel: 'pdf', dim: true }) + aSheet(NARROW ? `<div class="split"><div>${REQ.pdf({ short: true, lean: true, atts: true })}</div><div>${pdfViewer({ h: '410px', thumbs: false })}</div></div>` : REQ.pdf({ short: true, lean: true, viewer: { h: '322px' }, atts: true }), answerChoice({ pay: true, short: true, foot: false })), { all: true }),
+  validation: () => shellA(aBoard({ sel: 'publier', dim: true }) + aSheet(REQ.publier(), answerConfirm()), { all: true }),
+  tache: () => shellA(aBoard({ sel: 'tache', dim: true }) + aSheet(REQ.tache(), answerTask()), { all: true }),
+  vide: () => shellA(empty('a'), { empty: true, count: '', wait: false }),
+  compteur: () => shellCounter('a'),
+};
+function shellA(main, side = {}, over = '') {
+  return `<div class="win">${titlebar()}${rail()}${aSide(side)}<div class="main">${main}</div>${statusbar()}${over}</div>`;
+}
+
+/* ═════════════════════ B · La file ═════════════════════ */
+function bQueue(sel) {
+  const meter = `<div class="meter">${['d', 'd', 'd', 'w', 'w', '', '', '', '', '', '', ''].map((k, i) => `<i class="${i === 3 && sel === 'perm' ? 'c' : k}"></i>`).join('')}</div>`;
+  return `<div class="queue"><div class="qh"><h1>À toi</h1><span class="muted tn">9</span><span class="sp"></span><span class="seg"><span class="on">Tous</span><span>Ce projet</span></span></div>
+    ${meter}<div class="left">3 traitées aujourd’hui · il en reste 9</div>${inboxList({ sel, recent: false })}</div>`;
+}
+function bFocus(inner, answer, pos) {
+  return `<div class="focus"><div class="fh"><span class="btn sm icon quiet">${ic('left', 12)}</span><span class="muted tn">${pos} sur 9</span><span class="btn sm icon quiet">${ic('right', 12)}</span>
+    <span class="keysbar wide-only"><span><kbd>J</kbd> suivante</span><span><kbd>K</kbd> précédente</span><span><kbd>L</kbd> plus tard</span></span><span class="sp"></span>
+    <span class="btn sm quiet">${ic('agents', 12)}Aller à l’agent</span><span class="btn sm quiet">${ic('kanban', 12)}Le ticket</span></div>
+    <div class="fb">${inner}</div><div class="ff">${answer}</div></div>`;
+}
+function shellB(view, o = {}) {
+  return `<div class="win view">${titlebar()}${rail({ inbox: 'on', count: o.count ?? 9, viewOn: true })}<div class="fview">${view}</div>${statusbar()}</div>`;
+}
+const B = {
+  pleine: () => shellB(bQueue('perm') + bFocus(REQ.perm(), answerPerm(), 1)),
+  choix: () => shellB(bQueue('choix') + bFocus(REQ.choix({ big: true, desc: !NARROW, zoom: true, norec: NARROW }), answerChoice({ compare: !NARROW }), 3)),
+  pdf: () => shellB(bQueue('pdf') + bFocus(`<div class="split"><div>${REQ.pdf({ big: !NARROW, lean: NARROW, norec: NARROW, atts: true, acts: true })}</div><div>${pdfViewer({ h: NARROW ? '420px' : '560px' })}</div></div>`, answerChoice({ pay: true }), 4)),
+  validation: () => shellB(bQueue('publier') + bFocus(REQ.publier({ big: true }), answerConfirm(), 5)),
+  tache: () => shellB(bQueue('tache') + bFocus(REQ.tache({ big: true }), answerTask(), 7)),
+  vide: () => shellB(`<div class="queue"><div class="qh"><h1>À toi</h1><span class="muted tn">0</span><span class="sp"></span><span class="seg"><span class="on">Tous</span><span>Ce projet</span></span></div>
+      <div class="meter">${Array.from({ length: 12 }, () => '<i class="d"></i>').join('')}</div><div class="left">12 traitées aujourd’hui</div>
+      <div class="grp">${ic('clock', 12)}Plus tard<span class="c">2</span></div>${LATER.map(rowLater).join('')}<div class="grp">${ic('check', 12)}Répondu récemment</div>${RECENT.map(rowRecent).join('')}</div>
+      <div class="focus" style="display:flex">${empty('b')}</div>`, { count: 0 }),
+  compteur: () => shellCounter('b'),
+};
+
+/* ═════════════════════ C · Le tiroir ═════════════════════ */
+function drawer(open, o = {}) {
+  const tabsC = `<div class="dt"><span class="seg"><span class="on">Tout <span class="c">9</span></span><span>Bloquantes <span class="c">2</span></span><span>Choix <span class="c">2</span></span><span class="wide-only">Oui ou non <span class="c">3</span></span><span class="wide-only">À faire <span class="c">2</span></span></span>
+    <span class="sp"></span><span class="seg"><span class="on">Tous</span><span>Ce projet</span></span></div>`;
+  const pos = ASKS.findIndex((a) => a.id === o.sel) + 1;
+  const body = o.sel
+    ? `<div class="dl">${ASKS.map((a) => rowAsk(a, { on: a.id === o.sel })).join('')}</div><div class="open"><div class="oh"><span class="btn sm quiet narrow-only">${ic('left', 12)}Toutes</span><span class="muted tn">${pos} sur 9</span><span class="sp"></span><span class="btn sm quiet">${ic('agents', 12)}Aller à l’agent</span></div><div class="ob">${open}</div><div class="of">${o.answer}</div></div>`
+    : inboxList({ mini: true, later: true });
+  return `<div class="drawer ${o.sel ? 'two' : ''}"><div class="dh">${ic('inbox', 15)}<h1>À toi</h1><span class="muted tn">9 · 2 bloquantes</span><span class="sp"></span><span class="btn sm quiet wide-only">${ic('check', 12)}Répondu récemment</span>
+    <span class="btn sm icon quiet">${ic('expand', 12)}</span><span class="btn sm icon quiet">${ic('close', 12)}</span></div>${tabsC}<div class="db">${body}</div></div>`;
+}
+function filmChoice(o = {}) {
+  return `<div class="req"><div class="rh">${kindTag(byId('choix'))}<span class="sp"></span>${whoLine(byId('choix'))}</div><h2>Choisis la direction du tableau de bord</h2>
+    <div class="film"><div class="big">${seal()}${dash('B', LIGHT)}<div class="who"><b>B · Cartes empilées</b> · ${LIGHT ? 'clair' : 'sombre'}<span class="sp">${ic('expand', 12)}</span></div></div>
+      <div class="strip">${OPTS.map(([l, n]) => `<div class="s ${l === 'B' ? 'on' : ''}">${dash(l, LIGHT)}<span class="ell">${l} · ${n}</span></div>`).join('')}</div></div>
+    ${o.norec ? '' : `<div class="recline">${ic('sparkle', 14)}<span><b>Recommandé&nbsp;: B.</b> Les adhérents arrivent du mobile ; les cartes s’y retrouvent.</span></div>`}${unblocks(byId('choix'), true)}</div>`;
+}
+function shellC(over, o = {}) {
+  return `<div class="win">${titlebar()}${rail()}<div class="side">${tabs()}${agentList()}${foot()}</div><div class="main">${conversation()}</div>${statusbar({ tray: o.closed ? 'closed' : 'on', ring: o.ring })}${over}</div>`;
+}
+const C = {
+  pleine: () => shellC(drawer('', {})),
+  choix: () => shellC(drawer(filmChoice({ norec: NARROW }), { sel: 'choix', answer: answerChoice({ short: !NARROW, foot: false }) })),
+  pdf: () => shellC(drawer(REQ.pdf({ short: true, lean: true, norec: true, compact: true, atts: true, viewer: { h: NARROW ? '186px' : '340px', thumbs: false } }), { sel: 'pdf', answer: answerChoice({ pay: true, foot: false }) })),
+  validation: () => shellC(drawer(REQ.publier({ short: true, lean: true }), { sel: 'publier', answer: answerConfirm() })),
+  tache: () => shellC(drawer(REQ.tache({ short: true }), { sel: 'tache', answer: answerTask() })),
+  vide: () => shellC(`<div class="drawer" style="grid-template-rows:auto minmax(0,1fr)"><div class="dh">${ic('inbox', 15)}<h1>À toi</h1><span class="muted tn">0</span><span class="sp"></span><span class="btn sm icon quiet">${ic('close', 12)}</span></div>${empty('c')}</div>`),
+  compteur: () => shellCounter('c'),
+};
+
+/* ═════════════════════ D · La liste ═════════════════════ */
+function dSide(sel, o = {}) {
+  return `<div class="side">${tabs({ inbox: true, tab: 4, inboxCount: o.count ?? '5', inboxWait: false })}
+    <div class="lhead"><span class="seg"><span>Ce projet <span class="c">${o.empty ? 0 : 5}</span></span><span class="on">Tous <span class="c">${o.empty ? 0 : 9}</span></span></span><span class="sp"></span><span class="btn sm icon quiet">${ic('sliders', 12)}</span></div>
+    <div class="list">${o.empty ? `<div class="grp">${ic('clock', 12)}Plus tard<span class="c">2</span></div>${LATER.map(rowLater).join('')}<div class="grp">${ic('check', 12)}Répondu récemment</div>${RECENT.map(rowRecent).join('')}` : inboxList({ sel, mini: !NARROW, later: true })}</div>${foot()}</div>`;
+}
+function dPane(inner, answer, a) {
+  const pos = a ? ASKS.indexOf(a) + 1 : 0;
+  return `<div class="pane"><div class="ph">${a ? `<span class="btn sm icon quiet">${ic('left', 12)}</span><span class="muted tn">${pos} sur 9</span><span class="btn sm icon quiet">${ic('right', 12)}</span>` : ''}<span class="sp"></span><span class="btn sm quiet">${ic('agents', 12)}Aller à l’agent</span><span class="btn sm quiet wide-only">${ic('kanban', 12)}Le ticket</span><span class="btn sm icon quiet">${ic('more', 13)}</span></div>
+    <div class="pb"><div class="col3">${inner}</div></div><div class="pf">${answer}</div></div>`;
+}
+function shellD(sel, main, o = {}) {
+  return `<div class="win">${titlebar()}${rail()}${dSide(sel, o)}<div class="main">${main}</div>${statusbar()}</div>`;
+}
+const D_ = {
+  pleine: () => shellD('perm', dPane(REQ.perm(), answerPerm(), byId('perm'))),
+  choix: () => shellD('choix', dPane(REQ.choix({ desc: !NARROW, zoom: true, norec: NARROW }), answerChoice({ compare: true }), byId('choix'))),
+  pdf: () => shellD('pdf', dPane(`<div class="split" style="grid-template-columns:minmax(0,1fr) minmax(0,1.05fr)"><div>${REQ.pdf({ atts: true, lean: NARROW, norec: NARROW, acts: !NARROW })}</div><div>${pdfViewer({ h: NARROW ? '400px' : '520px', thumbs: !NARROW })}</div></div>`, answerChoice({ pay: true }), byId('pdf'))),
+  validation: () => shellD('publier', dPane(REQ.publier(), answerConfirm(), byId('publier'))),
+  tache: () => shellD('tache', dPane(REQ.tache(), answerTask(), byId('tache'))),
+  vide: () => shellD('', empty('d'), { empty: true, count: '' }),
+  compteur: () => shellCounter('d'),
+};
+
+/* ───────── La boîte vide : ce qui y arrive, et d'où ───────── */
+function empty(d) {
+  const kinds = [
+    ['choice', 'Un choix', 'entre des options, avec leurs rendus à comparer.'], ['check-c', 'Oui ou non', 'un feu vert : publier, signer, supprimer.'],
+    ['edit', 'Une réponse', 'une phrase, au clavier ou à la voix.'], ['check', 'Une tâche', 'ce que toi seul peux faire, coché par toi.'],
+  ];
+  return `<div class="empty"><div class="in"><h2>Rien ne t’attend</h2>
+    <p class="lead">Tes agents déposent ici ce qu’ils attendent de toi sans s’arrêter de travailler. Escouade y ajoute ce qui t’attend déjà ailleurs : les demandes de tes agents, les tickets à valider, les décisions proposées, tes relectures.</p>
+    <div class="kinds">${kinds.map(([i, b, t]) => `<div>${ic(i, 14)}<span><b>${b}</b><br />${t}</span></div>`).join('')}</div>
+    ${d === 'b' || d === 'd' ? '' : `<div class="recent"><div class="grp">${ic('check', 12)}Répondu récemment</div>${RECENT.slice(0, 2).map(rowRecent).join('')}</div>`}
+    <p class="muted" style="font-size:12px">${ic('bell', 12)} Un résumé te prévient quand des demandes arrivent, jamais une alerte par demande. <span style="color:var(--soft)">Réglages › Notifications</span></p></div></div>`;
+}
+
+/* ───────── Le compteur, la boîte fermée : où il est, et ce qu'il dit ───────── */
+function shellCounter(d) {
+  const callout = (style, title, text) => `<div class="callout" style="${style}"><h3>${ic('inbox', 14)}${title}</h3><p>${text}</p>
+    <div class="acts"><span class="btn sm primary">Ouvrir</span><span class="btn sm quiet">Plus tard</span><span class="sp hint">Ctrl Maj J</span></div></div>`;
+  const msg = 'Tes agents y déposent ce qu’ils attendent de toi sans s’arrêter : 2 se sont arrêtés, 7 attendent ton choix ou ton accord.';
+  if (d === 'a' || d === 'd')
+    return `<div class="win">${titlebar()}${rail()}<div class="side">${tabs({ inbox: true, inboxCount: '5', inboxWait: true, ring: true })}${agentList()}${foot()}</div><div class="main">${conversation()}</div>${statusbar()}
+      ${callout(`top:84px;left:calc(52px + var(--side) - 150px)`, 'À toi · 5 ici, 9 en tout', msg)}</div>`;
+  if (d === 'b')
+    return `<div class="win">${titlebar()}${rail({ inbox: true, count: 9, ring: true })}<div class="side">${tabs()}${agentList()}${foot()}</div><div class="main">${conversation()}</div>${statusbar()}
+      ${callout('top:58px;left:66px', 'À toi · 9, tous projets', msg)}</div>`;
+  return shellC(callout('bottom:10px;left:14px', 'À toi · 9 · 2 bloquantes', msg + ' Ctrl J va toujours au prochain agent arrêté.'), { closed: true, ring: true });
+}
+
+/* ═════════════════════ Commun : le serveur MCP éteint ═════════════════════ */
+function settingsMcp() {
+  return `<div class="modal-wrap"><div class="settings"><nav>${['Général', 'Comptes et harness', 'Agents', 'Projets', 'Notifications', 'Overseer', 'Voix', 'Données'].map((l) => `<span class="${l === 'Agents' ? 'on' : ''}">${l}</span>`).join('')}</nav>
+    <div class="sb"><h2>Agents</h2><h3>Piloter Escouade</h3>
+      <div class="srow"><b>Les agents peuvent piloter Escouade</b><span class="switch"></span><span class="d">Le serveur MCP d’Escouade : tes agents, et Claude dans un terminal, lisent et mènent tes projets, tes agents et tes tickets. Allumé, il ouvre aussi la boîte <b style="color:var(--soft)">${g('À toi')}</b> : ce que tes agents attendent de toi sans s’arrêter (un choix entre des rendus, un feu vert, un essai à faire), avec leurs images et leurs PDF.</span></div>
+      <div class="srow dis"><b>La boîte ${g('À toi')}</b><span class="pill k">Éteinte avec le serveur</span><span class="d">Sans le serveur, tes agents ne peuvent rien y déposer : leurs demandes de permission, les tickets à valider et les décisions proposées restent où ils sont, dans la barre latérale, le Kanban et Docs.</span></div>
+      <div class="srow dis"><b>Les agents peuvent répondre aux demandes des autres agents</b><span class="pill k">Personne</span><span class="d">Les demandes de la boîte comprises, une à une, quand tu les laisses au chef d’escouade.</span></div></div></div></div>`;
+}
+function turnOff() {
+  return `<div class="modal-wrap"><div class="dialog"><h2>Éteindre le serveur MCP&nbsp;?</h2>
+    <p>4 demandes de tes agents t’attendent dans la boîte ${g('À toi')}. Éteint, la boîte se ferme : ces demandes sont gardées, sans que tu les voies ni que leurs agents puissent les lire, jusqu’à ce que tu le rallumes. Elles se périment à leur date.</p>
+    <div class="list2"><span>${ic('choice', 13)} Choisis la direction du tableau de bord · design-tableau</span><span>${ic('choice', 13)} Prestataire de paiement · etude-paiement</span><span>${ic('check', 13)} Essaie la connexion sur un vrai téléphone · lien-magique</span><span class="muted">et 1 autre</span></div>
+    <p class="muted" style="font-size:12.5px">Les demandes de permission, les tickets à valider et les décisions proposées ne bougent pas : tu les retrouves où ils sont aujourd’hui.</p>
+    <div class="acts"><span class="btn quiet">Ouvrir la boîte</span><span class="btn">Annuler</span><span class="btn primary">Éteindre quand même</span></div></div></div>`;
+}
+const X = {
+  eteint: () => `<div class="win">${titlebar()}${rail()}<div class="side">${tabs()}${agentList()}${foot()}</div><div class="main">${conversation()}</div>${statusbar()}${settingsMcp()}</div>`,
+  eteindre: () => `<div class="win">${titlebar()}${rail()}<div class="side">${tabs({ inbox: true, inboxCount: '5' })}${agentList()}${foot()}</div><div class="main">${conversation()}</div>${statusbar()}${turnOff()}</div>`,
+};
+
+const DIRS = { a: A, b: B, c: C, d: D_, x: X };
+const view = (DIRS[D] || A)[ROUTE] || (DIRS[D] || A).pleine || X.eteint;
+document.getElementById('root').innerHTML = view();
+</script>
+</body>
+</html>
