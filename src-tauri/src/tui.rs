@@ -1190,8 +1190,9 @@ impl<R: Runtime> Core<R> {
             (rt.meta.engine, rt.meta.project_id.clone())
         };
         self.check_harness_in(engine, &project_id)?;
-        // The mode its harness runs it in, judged (SEC-09, ESC-489).
-        self.settle_mode(id)?;
+        // The mode its harness runs it in, judged by « Autoriser le mode Bypass » (SEC-09, ESC-489): its view does not
+        // start either, and what still runs of it (a process started ahead, an interface kept up) stops, said (ESC-497).
+        self.judge_start(id)?;
         if crate::engine::of(&h.lock().meta).attaches() {
             return self.open_attached(&h, id, size, Box::new(on_data)).await;
         }
@@ -1285,6 +1286,14 @@ impl<R: Runtime> Core<R> {
                 return Ok(());
             }
         }
+        // Judged as every start (ESC-497): its harness's plugin on for its project, the mode it runs in allowed;
+        // refused, one kept up stops, said.
+        let (engine, project_id) = {
+            let rt = h.lock();
+            (rt.meta.engine, rt.meta.project_id.clone())
+        };
+        self.check_harness_in(engine, &project_id)?;
+        self.judge_start(id)?;
         if self.running_interface(&h, false).is_some() {
             return Ok(());
         }

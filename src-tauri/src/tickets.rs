@@ -2303,6 +2303,8 @@ impl<R: Runtime> Core<R> {
     }
 
     pub(crate) async fn turn_ended(self: &Arc<Self>, agent_id: &str, end: TurnEnd) {
+        // Its turn over, a mode « Autoriser le mode Bypass » no longer allows stops what runs of it (ESC-497).
+        self.settle_locked_mode(agent_id).await;
         let report = match &end {
             TurnEnd::Finished(text) => board::parse_report(text),
             _ => None,

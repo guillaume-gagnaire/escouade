@@ -199,7 +199,133 @@ pub fn no_discussion(lang: Lang, name: &str) -> String {
     )
 }
 
+/// Why the agent of `meta`, as it runs now (the mode its harness runs it in), may not run on: that mode Bypass while
+/// « Autoriser le mode Bypass » (`bypass_setting`, the app's) does not allow it (ESC-497). None when it may run on.
+pub fn refusal_of(
+    meta: &crate::model::AgentMeta,
+    bypass_setting: bool,
+    lang: Lang,
+) -> Option<String> {
+    let engine = crate::engine::of(meta);
+    check(engine, &meta.mode, bypass_setting, lang)
+        .err()
+        .map(|e| e.to_string())
+}
+
+/// What the conversation of an agent stopped because `why` says.
+pub fn stopped(lang: Lang, why: &str) -> String {
+    tr_in!(
+        lang,
+        "{why} L’agent s’arrête.",
+        "{why} The agent stops.",
+        why = why
+    )
+}
+
 impl<R: Runtime> Core<R> {
+    /// Why the agent `id`, as it runs now, may not run on (`refusal_of`): what a change of « Autoriser le mode Bypass »
+    /// looks at, and what a start does not take a live process over with.
+    pub(crate) fn run_refusal(&self, id: &str) -> Option<String> {
+        let h = self.agent(id).ok()?;
+        let bypass = self.bypass_allowed();
+        let meta = h.lock().meta.clone();
+        refusal_of(&meta, bypass, crate::i18n::ui())
+    }
+
+    /// What runs of the agent `id` — its process, its interface (the terminal view, the one kept up for Remote Control)
+    /// — stopped, its conversation saying `text`: it may not run on (ESC-497). An agent at work is left to end its turn
+    /// (as « Un agent dans un mode devenu interdit finit son tour » says), and judged again then (`settle_locked_mode`
+    /// at `turn_ended`). True when something stopped.
+    pub(crate) fn stop_out_of_rule(self: &Arc<Self>, id: &str, text: &str) -> bool {
+        let Ok(h) = self.agent(id) else { return false };
+        let (proc, term) = {
+            let mut rt = h.lock();
+            if rt.meta.status.is_active() {
+                return false;
+            }
+            let proc = rt.detach();
+            let term = rt
+                .tui
+                .as_ref()
+                .map(|run| (run.term_id.clone(), crate::tui::quit_key(&rt.meta)));
+            if term.is_some() {
+                rt.gen += 1;
+                rt.stop_tui(&mut crate::agent::Effects::default());
+            }
+            (proc, term)
+        };
+        if proc.is_none() && term.is_none() {
+            return false;
+        }
+        log::info!("agent {id}: stopped, it may not run on: {text}");
+        if let Some(p) = proc {
+            p.close_input();
+        }
+        if let Some((term, key)) = term {
+            self.hooks.revoke(id);
+            self.quit_soon(id, &term, key);
+        }
+        self.emit_agent(&h);
+        self.request_save();
+        let text = text.to_string();
+        let _ = self.with_agent(id, |rt, fx| {
+            rt.notice("warn", text, fx);
+            Ok(())
+        });
+        true
+    }
+
+    /// What every start of the agent `id` goes through, process or interface: the mode its harness runs it in judged
+    /// (`settle_mode`). Refused, what still runs of it (a process started ahead, an interface kept up) stops, said with
+    /// the same reason (ESC-497).
+    pub(crate) fn judge_start(self: &Arc<Self>, id: &str) -> Result<()> {
+        let judged = self.settle_mode(id);
+        if let Err(e) = &judged {
+            self.stop_out_of_rule(id, &stopped(crate::i18n::ui(), &e.to_string()));
+        }
+        judged
+    }
+
+    /// Each agent at rest that may not run on as it is — what runs of it (its process, its interface) in a mode
+    /// « Autoriser le mode Bypass » no longer allows — settled at once (`settle_locked_mode`); one at work, at the end
+    /// of its turn (ESC-497). Called when that setting changes.
+    pub(crate) fn settle_agents(self: &Arc<Self>) {
+        // Taken apart, never held under an agent's lock.
+        let bypass = self.bypass_allowed();
+        let lang = crate::i18n::ui();
+        let idle: Vec<String> = self
+            .agents
+            .read()
+            .iter()
+            .filter(|(_, h)| {
+                let rt = h.lock();
+                !rt.meta.status.is_active()
+                    && (rt.proc.is_some() || rt.tui.is_some())
+                    && refusal_of(&rt.meta, bypass, lang).is_some()
+            })
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in idle {
+            let c = self.clone();
+            tauri::async_runtime::spawn(async move { c.settle_locked_mode(&id).await });
+        }
+    }
+
+    /// What still refuses the agent `id` as it runs — « Autoriser le mode Bypass » turned off (ESC-497) — stops what
+    /// runs of it, said: its mode stays. Called once its turn is over (`turn_ended`), and at once for an agent not at
+    /// work.
+    pub(crate) async fn settle_locked_mode(self: &Arc<Self>, id: &str) {
+        let ends = |why: &str| {
+            tr!(
+                "{why} L’agent s’arrête à la fin de son tour.",
+                "{why} The agent stops at the end of its turn."
+            )
+        };
+        if let Some(why) = self.run_refusal(id) {
+            self.stop_out_of_rule(id, &ends(&why));
+        }
+    }
+
     /// The agent `id` in the mode its harness runs it in (`runs_in`), judged: what every start goes through, and a
     /// change of harness. When its harness runs it in another mode than its own, that one becomes its mode (shown on
     /// it) and its conversation says so; refused, with why and what to do, when no mode of its harness allows as

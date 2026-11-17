@@ -2767,6 +2767,11 @@ impl<R: Runtime> Core<R> {
         let self_update = s.claude_self_update;
         let before_settings = std::mem::replace(&mut *self.settings.write(), s);
         let mcp_was_enabled = before_settings.mcp_enabled;
+        if before_settings.bypass_allowed() && !self.bypass_allowed() {
+            // « Autoriser le mode Bypass » turned off: what runs of an agent in Bypass stops, at once at rest, at the
+            // end of its turn at work, said (ESC-497).
+            self.settle_agents();
+        }
         self.need_settings_plugins(&before_settings);
         if self_update && !before_settings.claude_self_update {
             // « Mettre à jour Claude Code automatiquement » turned on: run when due, at once.
@@ -3692,8 +3697,17 @@ impl<R: Runtime> Core<R> {
         // Taken apart: the agent is not held while its process may be stopped (`refence`).
         let live = h.lock().proc.clone();
         if let Some(p) = live {
-            if p.is_alive() && !self.refence(h, id).await? {
-                return Ok(p);
+            if p.is_alive() {
+                // The mode it runs in no longer allowed by « Autoriser le mode Bypass » (a change not settled yet, or
+                // one that came during its turn): its process is given no message; at rest, it stops at once, said; at
+                // work, at the end of its turn (ESC-497).
+                if let Some(why) = self.run_refusal(id) {
+                    self.stop_out_of_rule(id, &crate::modes::stopped(i18n::ui(), &why));
+                    bail!(why);
+                }
+                if !self.refence(h, id).await? {
+                    return Ok(p);
+                }
             }
         }
         // None starts once the app quits: the stop of the processes has been through, and one
@@ -3711,8 +3725,9 @@ impl<R: Runtime> Core<R> {
         let project_id = h.lock().meta.project_id.clone();
         self.check_harness_in(engine, &project_id)?;
         // The mode its harness runs it in, judged: a mode it does not have is never taken for true, and the mode of no
-        // question goes only with « Autoriser le mode Bypass » (SEC-09, ESC-489).
-        self.settle_mode(id)?;
+        // question goes only with « Autoriser le mode Bypass » (SEC-09, ESC-489). Refused, what still runs of it stops,
+        // said (`judge_start`, ESC-497).
+        self.judge_start(id)?;
         // In the Claude Code view, its interface has the session (`tui`).
         if h.lock().meta.terminal {
             bail!(tr!(

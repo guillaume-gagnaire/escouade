@@ -3742,3 +3742,48 @@ async fn an_interface_opens_the_mode_of_no_question_only_with_the_setting() {
         );
     }
 }
+
+/// ESC-497: the interface of an agent in Bypass kept up in the background for Remote Control, started while Bypass was
+/// allowed, stops when « Autoriser le mode Bypass » is turned off, said; nothing starts it again — its start in the
+/// background, the warm-up, the start with the app.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interface_kept_up_in_bypass_stops_when_bypass_is_turned_off_and_nothing_starts_it_again(
+) {
+    let h = harness("tui-bypass-turned-off");
+    let (p, r) = h.project(false).await;
+    second_account(&h);
+    h.core.settings.write().terminal_view = true;
+    crate::modes::tests::allow_bypass(&h, true);
+    let id = agent_on(&h, &p, "pro").await.id;
+    h.core
+        .set_agent_options(&id, None, None, Some(crate::bypass::BYPASS.into()))
+        .await
+        .unwrap();
+    h.core.set_agent_view(&id, true).await.unwrap();
+    hold_remote_control(&h, &id);
+    h.core.start_interface(&id).await.unwrap();
+    ready(&h, &id).await;
+    let term = terminal_of(&h, &id);
+    let launched = interface_launches(&h, &r).len();
+    assert!(launched >= 1);
+
+    crate::modes::tests::allow_bypass(&h, false);
+    h.wait("the interface stopped", |h| !interface_runs(h, &id))
+        .await;
+    h.wait("its terminal closed", |h| !h.core.pty.exists(&term))
+        .await;
+    let said = texts(&h, &id, "notice");
+    assert!(
+        said.iter()
+            .any(|n| n.contains("Autoriser le mode Bypass") && n.contains("L’agent s’arrête")),
+        "{said:?}"
+    );
+    let exits = h.core.agent(&id).unwrap().lock().tui_quick_exits;
+    let why = h.core.start_interface(&id).await.unwrap_err().to_string();
+    assert!(why.contains("Autoriser le mode Bypass"), "{why}");
+    nothing_starts_it_again(&h, &id, &r, (launched, exits), "start_interface").await;
+    h.core.warm(&id);
+    nothing_starts_it_again(&h, &id, &r, (launched, exits), "the warm-up").await;
+    h.core.start_remote_agents();
+    nothing_starts_it_again(&h, &id, &r, (launched, exits), "the start with the app").await;
+}

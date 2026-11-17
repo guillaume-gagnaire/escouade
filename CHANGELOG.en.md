@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Security: an agent running in Bypass mode stops when that mode is no longer allowed, at the end of its turn if it is working, and its conversation says why.
 - Your agents can leave you what they wait for from you without stopping (a choice between their renders, a go-ahead, an answer, a test to run), with their images and PDFs, through the MCP server: your answer comes back to them as a message, and a ticket can wait for it. The screen of the “Your turn” box follows.
 
 ## [2.2.3] — 2026-11-17

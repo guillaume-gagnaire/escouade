@@ -2,8 +2,8 @@
 title: "Comptes"
 subject: "Harness"
 sources: ["docs/SPEC.md","tests/fixtures/claude-usage/real-2.1.314.json","tests/fixtures/quota-pace.json","design/settings-2-2/PROPOSITION.md","docs/PROTOCOL.md"]
-tickets: ["ESC-30","ESC-52","ESC-88","ESC-120","ESC-124","ESC-128","ESC-141","ESC-147","ESC-148","ESC-162","ESC-312","ESC-382","ESC-425","ESC-428","ESC-441","ESC-442","ESC-489","ESC-511"]
-decisions: [20,24,123,154,160,"les-corrections-de-l-audit-dans-la-2-2-v",161,"le-mode-juge-est-celui-ou-le-harness-tou","un-agent-peut-demander-la-suppression-de"]
+tickets: ["ESC-30","ESC-52","ESC-88","ESC-120","ESC-124","ESC-128","ESC-141","ESC-147","ESC-148","ESC-162","ESC-312","ESC-382","ESC-425","ESC-428","ESC-441","ESC-442","ESC-489","ESC-511","ESC-521"]
+decisions: [20,24,123,154,160,"les-corrections-de-l-audit-dans-la-2-2-v",161,"le-mode-juge-est-celui-ou-le-harness-tou","un-agent-peut-demander-la-suppression-de","sur-la-2-2-ce-qui-tourne-en-bypass-s-arr"]
 compared: "2026-10-31T17:26:28+01:00"
 ---
 
@@ -263,3 +263,5 @@ Le mode jugé est celui où le harness de l'agent tourne vraiment, pas seulement
 - **Une reprise après un redémarrage** : un agent gardé dans un mode que son harness n'a pas prend, à son démarrage suivant, le mode où il tourne, et la conversation le dit ; il est jugé dans ce mode.
 - **La passation et « Continuer sur »** gardent la règle du plus proche qui n'autorise jamais plus (le seul mode d'un harness n'est pas pris s'il autorise plus) ; un mode trouvé Bypass sans « Autoriser le mode Bypass » est refusé avant que rien ne s'arrête.
 - **Une discussion** reste en « Demander » ou « Plan » : sur un harness qui n'a ni l'un ni l'autre, elle ne part pas (« X n’a ni « Demander » ni « Plan » : une discussion, qui ne modifie jamais le code, ne tourne pas dessus. »).
+
+- **« Autoriser le mode Bypass » éteint pendant qu'un agent tourne en Bypass** (ESC-497) : son process, ou son interface, ne reste pas en vie. Au repos, il s'arrête aussitôt ; en plein tour, il finit son tour puis s'arrête. La conversation le dit avec la raison du refus, et son mode ne change pas. Son message, « Relancer », sa vue, la reprise programmée et le démarrage d'avance sont refusés de même tant que le réglage est éteint.
