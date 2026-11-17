@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
-import { addProject, expect, FAKE_CODEX, send, test, type App, openSettingsPage } from './fixture';
+import { addProject, duplicateConversation, expect, FAKE_CODEX, send, test, type App, openSettingsPage } from './fixture';
 
 /** What the fake codex was sent, launch by launch: its arguments, then the messages of the app. */
 function codexLog(
@@ -228,8 +228,7 @@ test.describe('an agent on Codex', () => {
     const thread = requests(app, 'thread/start')[0]!;
     expect(requests(app, 'thread/resume').length).toBeGreaterThanOrEqual(1);
     // Copied: a thread of its own, forked from the original at its last turn.
-    await page2.locator('.card', { hasText: 'Codex' }).first().click({ button: 'right' });
-    await page2.getByRole('menuitem', { name: 'Dupliquer la conversation' }).click();
+    await duplicateConversation(page2, 'bonjour-codex-fake');
     await send(page2, 'et la copie ?');
     await expect(page2.getByText('Bonjour, tu as dit : et la copie ?')).toBeVisible();
     const fork = requests(app, 'thread/fork')[0]!;

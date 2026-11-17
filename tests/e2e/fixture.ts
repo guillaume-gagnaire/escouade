@@ -721,6 +721,19 @@ export async function closeSettings(dialog: Locator) {
   await expect(dialog).toBeHidden();
 }
 
+/**
+ * « Dupliquer la conversation » from the menu of the agent `name`'s card, then waits for the copy to be the conversation
+ * shown, its composer its own, as the user does before writing to it. Not sooner: the copy is made in the core first, and a
+ * message typed meanwhile goes to the original, still shown, or stays in its draft (ESC-498, codex.spec.ts on the CI).
+ */
+export async function duplicateConversation(page: Page, name: string) {
+  await page.locator('.card', { hasText: name }).first().click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Dupliquer la conversation' }).click();
+  const copy = `${name} (copie)`;
+  await expect(page.locator('main.conv h1')).toHaveText(copy);
+  await expect(page.getByRole('textbox').last()).toHaveAccessibleName(`Envoyer un message à ${copy}…`);
+}
+
 export async function send(page: Page, text: string) {
   const box = page.getByRole('textbox').last();
   await box.fill(text);
