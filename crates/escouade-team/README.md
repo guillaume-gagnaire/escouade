@@ -33,7 +33,7 @@ Ce que TS-2 y a changé :
 | `replica.rs` | La copie locale d'un projet (TS-5) : SQLite, un fichier par projet, le journal rejoué, la fusion champ par champ, le conflit gardé, les versions des pages (leur historique et leur base commune, TS-9), les numéros des compteurs (TS-9), la file d'envoi |
 | `merge.rs` | La fusion à trois voies d'un texte, ligne par ligne (TS-6 et TS-9) : une page, une description écrites des deux côtés |
 | `team/sync.rs` | La synchronisation des projets (TS-5) : écrire, envoyer, lire (chaînes, signatures, tête des membres, serveur menteur), les instantanés, les groupes des projets gardés à quelques membres |
-| `fuzzing.rs` | Le corps des cibles de fuzzing (`fuzz/`) |
+| `fuzzing/` | Le corps des cibles de fuzzing (le paquet `fuzz/` à la racine, TS-18 : « Le fuzzing » ci-dessous) |
 
 ### Les clés d'appareil, au trousseau, jamais exportées
 
@@ -216,23 +216,53 @@ cd src-tauri && cargo nextest run -p escouade-team -p escouade-team-crypto -p es
 - **La synchronisation** (`tests/sync.rs`, TS-5), chacun sur SQLite puis sur PostgreSQL (`ESCOUADE_TEST_POSTGRES_URL`, comme TS-1 ; la macro `both!` du banc) : deux appareils qui partagent les tickets (créer, changer un champ, déplacer, supprimer ; ce que voit le serveur), trois appareils qui écrivent en même temps sur le même champ et sur des champs différents (les copies pareilles, le conflit gardé), l'écriture hors ligne puis le retour (l'état « hors ligne », l'ordre gardé, une réponse perdue comptée une fois), le serveur qui ment (rejouée, réordonnée, retirée, tue, forgée, réécrite, retour en arrière), une signature fausse, un membre parti qui ne lit plus (projet de toute l'équipe et projet gardé à deux), un instantané puis un nouvel appareil (et un appareil absent au-delà, et un instantané forgé refusé), la reprise après coupure (rouvert depuis le disque, relu depuis le dernier numéro, rejoué depuis le journal), une invitation qui donne un projet. Le transport `Liar` ment aussi sur les flux des projets.
 - **La convergence** (`replica.rs`, proptest) : quel que soit l'ordre d'arrivée des opérations de trois appareils (et rejouées), toutes les copies finissent pareilles, rejouées depuis leur journal aussi ; un instantané puis le reste égale le journal entier.
 
-Les tests unitaires couvrent le trousseau, le chiffrement du stockage (une autre clé n'ouvre rien, une valeur déplacée non plus), les transactions, et un passage des deux cibles de fuzzing sur quelques entrées. La maquette garde ses 18 tests et ses vecteurs, et en gagne 6 (commit en deux temps, invitation rendue, état sauvegardé, balises, liens d'historique, fausses alertes).
+Les tests unitaires couvrent le trousseau, le chiffrement du stockage (une autre clé n'ouvre rien, une valeur déplacée non plus), les transactions, et chaque cible de fuzzing sur ses graines et sur des entrées au hasard (TS-18). La maquette garde ses 18 tests et ses vecteurs, et en gagne 6 (commit en deux temps, invitation rendue, état sauvegardé, balises, liens d'historique, fausses alertes).
 
-## Le fuzzing
+- **Les bornes du client** (`tests/bounds.rs`, TS-18) : une réponse du serveur annoncée ou lue au-delà de `MAX_REPLY` est refusée, un message du direct au-delà de `MAX_LIVE_MESSAGE` ferme la connexion, une réponse dans les bornes passe.
+- **Les propriétés** (`tests/properties.rs`, proptest, TS-18) : l'horloge hybride ne recule jamais et passe ce qu'elle a vu (dans la dérive permise), ses octets se trient comme ses horodatages ; la fusion à trois voies rend l'autre côté quand un côté n'a pas changé, garde deux changements éloignés, garde ce que les deux côtés ont ajouté.
 
-`fuzz/` est un paquet cargo-fuzz à part, hors du workspace de l'app, qui ne tourne pas en CI :
+## Le fuzzing (TS-18)
+
+`fuzz/`, à la racine du dépôt, est le paquet cargo-fuzz du serveur d'équipe et de son client : son workspace, son verrou et sa nightly (`fuzz/rust-toolchain.toml`) sont à lui, rien n'en passe dans `src-tauri/Cargo.lock` ni dans `cargo deny`. Les corps des cibles sont ici (`src/fuzzing/`, derrière la feature `fuzzing`) et dans `escouade-team-server` (`src/fuzzing.rs`). La CI fait une passe courte (le job `fuzz` de `ci.yml`, 15 s par cible), `.github/workflows/fuzz.yml` une longue (chaque dimanche, ou à la main).
 
 ```sh
-cargo install cargo-fuzz
-cd crates/escouade-team/fuzz
-cargo +nightly fuzz run commit   # la vérification des commits
-cargo +nightly fuzz run roster   # le décodage du registre, des identités, des messages du flux
-cargo +nightly fuzz run operation   # le décodage d'une opération, scellée et ouverte (TS-5)
+cargo install cargo-fuzz          # Linux ou macOS ; sous Windows, une distribution WSL
+sh scripts/fuzz.sh                # toutes les cibles, 20 s chacune
+sh scripts/fuzz.sh 3600 journal   # une cible, une heure
 ```
 
-- `commit` : les octets construisent un commit par MLS brut, sur l'appareil d'un administrateur ou d'un membre. Ce commit ajoute des inconnus ou les appareils d'un autre, retire des feuilles, réécrit le registre (y compris par des octets bruts). Un troisième appareil le traite. S'il le prend, l'équipe doit rester saine : la genèse gardée, un administrateur au moins, chaque appareil d'un membre du registre, et rien qu'un membre n'a pas le droit de faire. Les octets bruts passent aussi par le décodeur des commits.
-- `roster` : le registre (et son aller-retour), les identités, `TeamMessage`, les entrées et les trames du serveur, les objets scellés, les enregistrements d'époque.
-- `operation` (TS-5) : les octets comme opération scellée, opération, instantané, registre de projet, horodatage ; une opération scellée du banc, changée par les octets, s'ouvre telle qu'elle a été scellée ou pas du tout ; une opération qui se décode, appliquée deux fois à une copie, ne change rien la seconde.
+Chaque cible part de ses graines commitées (`fuzz/seeds/<cible>/` : des entrées choisies, les vecteurs de `escouade-team-crypto` sous la forme où le serveur les sert, et ce que le fuzzing a trouvé). `ESCOUADE_WRITE_SEEDS=1` les réécrit (`fuzzing::tests::write_the_seeds`). Les tests de la crate jouent chaque cible sur ses graines et sur des entrées au hasard, à chaque passage de nextest : une trouvaille devient une graine, donc un test de non-régression. `scripts/fuzz.sh` refuse ce qui alloue plus de 256 Mio d'un coup ou tient plus de 2 Gio : ce que donne un pair ne fait jamais allouer sans borne.
+
+Ce que vérifie chaque cible, au-delà de « ne panique pas » :
+
+| Cible | Ce qui vient du réseau ou du disque | Les propriétés |
+| --- | --- | --- |
+| `commit` | un commit MLS d'un administrateur ou d'un membre, construit par les octets, et les octets bruts | ce qu'un appareil prend laisse l'équipe saine : genèse gardée, un administrateur au moins, chaque appareil d'un membre du registre, rien qu'un membre n'a le droit de faire |
+| `roster` | le registre, les identités, `TeamMessage`, les entrées et les trames du serveur, les objets scellés, les enregistrements d'époque | ce qui se décode se réencode pareil |
+| `journal` | une tête citée pour une époque, l'état que montre le serveur, un point de contrôle remis, une balise, un objet et un lien d'historique d'Alice changés par les octets | une tête autre que la sienne pour une époque tenue est une fourche ; une époque plus vieille que le point de contrôle est un retour en arrière ; une balise, un objet, un lien changés ne s'ouvrent que tels qu'Alice les a signés |
+| `operation` | une opération scellée changée, une opération, un instantané, un registre de projet, un horodatage ; une opération qui se dit d'Alice mais signée d'une autre clé | elle s'ouvre telle qu'elle a été scellée, ou pas du tout ; une signature fausse n'est jamais prise ; appliquée deux fois, la seconde ne change rien |
+| `convergence` | les opérations de trois appareils faites par les octets, dans un ordre qu'ils choisissent, certaines rejouées, un instantané au milieu | toutes les copies finissent pareilles, rejouées depuis leur journal aussi |
+| `snapshot` | l'état d'un instantané tel qu'il arrive, un instantané scellé changé | refusé, ou chargé entier (et rechargé pareil) ; il ne s'ouvre que tel que scellé |
+| `envelope` | les enveloppes de séquestre et de secours (HPKE) changées, les textes de la clé de séquestre | elles ne s'ouvrent que sur l'époque et le GroupInfo scellés |
+| `invite` | un lien d'invitation, une demande d'entrée changée, une confirmation de Welcome changée | le lien se relit pareil, son hôte n'a ni chemin ni utilisateur, ce qui part au serveur n'a ni secret ni empreinte ; le MAC ne tient que pour l'invitation et le KeyPackage d'origine, la confirmation que pour son groupe et son époque |
+| `handshake` | un code court tapé, l'essai du nouvel appareil (message SPAKE2 et confirmation) changé par le relais, une réponse scellée | un essai changé ou un mauvais code n'est jamais pris, l'essai ne sert qu'une fois, la réponse ne s'ouvre que par la bonne clé et le bon créneau |
+| `catalog` | une adresse, une entrée de la liste des projets, une entrée scellée changée | une adresse qui passe est https ou ssh, sans option de git, ni assistant distant en tête, ni espace, ni `..` ; un projet que `check` laisse passer a des dossiers qui restent dans le projet ; l'entrée ne s'ouvre que telle qu'écrite |
+| `settings` | un `.escouade.yml` d'équipe, des versions et des cosignatures de trois membres dans n'importe quel ordre | ce qui passe `never` n'impose rien qui s'exécute ; la chaîne choisie va 1, 2, 3… chacune citant la précédente, lisible, au format, signée par assez d'administrateurs d'aujourd'hui (deux sous le quorum) ; relue avec la suite, elle n'est jamais défaite |
+| `server-bodies` | chaque corps CBOR d'une requête, l'en-tête de la poignée de main des versions, `X-Forwarded-For` | la poignée de main n'accepte que la version du serveur ; l'adresse est celle du pair ou celle que l'en-tête nomme |
+| `server-requests` | une requête faite des octets (route, ids, session ou non, version, type, corps) sur le vrai routeur en mémoire, de personne, d'un appareil révoqué, d'un membre, d'un administrateur | jamais de 5xx ; rien que les routes ouvertes ne répond sans session ni à l'appareil révoqué ; un membre ne fait rien de ce qui est à l'administrateur |
+
+**Ce qui a été trouvé** (corrigé, avec sa graine ou son test) :
+- par le fuzzing (`catalog`) : le nom de dossier que l'assistant propose pour cloner un projet de la liste reprenait la fin de l'adresse telle quelle, si bien qu'une adresse `…/.ssh` proposait le dossier caché `.ssh` du dossier parent (`folderName`, `src/lib/team-projects.ts`, et son test) ;
+- par la relecture : le client lisait une réponse du serveur sans borne (le corps HTTP entier, et un message du direct jusqu'aux 64 Mio de tungstenite). `client::MAX_REPLY` (32 Mio, refusé dès la longueur annoncée, sinon dès qu'il est dépassé) et `MAX_LIVE_MESSAGE` (4 Mio) les bornent, testés dans `tests/bounds.rs`.
+
+**Ce qu'il ne couvre pas**, pour l'audit externe (TS-20) :
+- MLS lui-même (openmls a sa propre suite et ses vecteurs) : `commit` construit des commits valides au sens de MLS, pour viser nos règles ;
+- la lecture d'un flux entier par `Team` contre un serveur qui ment : c'est le transport `Liar` des tests d'intégration (`tests/sync.rs`, `tests/team.rs`), pas le fuzzing ;
+- le stockage SQLite chiffré d'openmls et le trousseau (le disque n'est pas une entrée d'un pair) ;
+- le cœur de l'app (`src-tauri`) : le lien `escouade://team/join`, l'application des réglages d'équipe, le Kanban d'équipe ; ses tests le couvrent, pas le fuzzing ;
+- `merge3` (la fusion à trois voies) est vérifiée par proptest (`tests/properties.rs`), pas fuzzée : sa table de plus longue sous-suite commune va jusqu'à 64 Mio pour deux textes de 4 000 lignes, une borne voulue mais large ;
+- le temps : `server-requests` ne mesure ni le débit ni la durée d'une requête, que les tests du serveur bornent (`tests/bounds.rs`, `server.rs`) ;
+- `commit` reconstruit son équipe à chaque entrée (quelques centaines par minute) : c'est la passe longue qui le fait avancer.
 
 ## Le .escouade.yml d’équipe (TS-13)
 
@@ -305,7 +335,7 @@ Les tests (`tests/docs.rs`, contre le vrai serveur, sur SQLite puis PostgreSQL) 
 - **TS-9** (fait, ESC-482), sauf : le nom de l'auteur d'une version dans un conflit (l'annuaire chiffré, TS-4) ; un document de plus de 20 Mo ne part pas ; les écarts des comparaisons au code restent par poste.
 - **TS-7** (fait, ESC-493), sauf : l'import de la mémoire de `.escouade/` (TS-10 ; la spec, les décisions et les documents partent avec « Verser à l'équipe » ou le réglage de TS-9, jamais seuls) ; un poste qui suit un autre Kanban que celui de la liste n'en change pas seul (l'écran le dit) ; deux postes qui versent le même ticket en même temps consomment deux numéros du compteur.
 - **TS-6** (fait, ESC-479), sauf : passer l'agent d'un ticket interrompu (TS-17) ; l'annuaire des noms de toute l'équipe (TS-4 : ici, chaque projet porte les noms de ses appareils) ; un administrateur qui rend la prise d'un autre ; la règle de colonne d'un ticket pris est tenue par les clients (le serveur ne voit pas les déplacements).
-- **TS-18** : faire tourner les cibles de fuzzing longtemps ; l'e2e à deux clients en CI (`tests/e2e/team-board.spec.ts` en lance deux en même temps).
+- **TS-18** (fait, ESC-519) : « Le fuzzing » ci-dessus ; l'e2e à deux clients tient dans la CI (la part « team server », `docs/TEAM-SERVER.md` §14). Reste : la révocation d'un appareil dans un e2e, quand l'app aura son écran (TS-4).
 - **L'audit externe (TS-20)** : les points 1 à 10 du README de la maquette. Pour cette crate, en plus :
   - le format du stockage (les clés en clair, dont l'id du groupe et les époques) ;
   - l'ordre état puis trousseau du point de contrôle ;

@@ -768,6 +768,22 @@ Seulement des pistes, à étudier plus tard.
   - des vecteurs de test pour la cryptographie ;
   - du fuzzing (cargo-fuzz) sur le vérificateur du journal et le lecteur des opérations.
 
+**Ce que la CI tient (TS-18, ESC-519)** :
+- **La part « team server » des e2e** (`windows-e2e`, à côté des cinq parts et de la part « remote API ») : chaque spec `tests/e2e/team*.spec.ts`, à la taille du runner puis à 1024 × 728. Les cinq autres parts les laissent (`ESCOUADE_E2E_PART`, `playwright.config.ts`). `escouade-team-server` est construit une fois, par `windows-build`, avec l'app. `team-journey.spec.ts` est le parcours entier à deux clients en même temps : créer l'équipe, inviter, rejoindre, partager le Kanban, prendre un ticket chez l'un et le voir pris chez l'autre en moins d'une seconde, verser la spec, perdre le serveur puis le retrouver. La révocation d'un appareil n'y est pas : l'app n'a encore ni écran ni commande pour elle (TS-4) ; les tests de la crate la jouent contre le vrai serveur.
+- **PostgreSQL** : les tests Rust du serveur et du client (les variantes `postgres::` de la macro `both!`) tournent contre un service `postgres:17` dans `linux-rust`. `ESCOUADE_TEST_POSTGRES_REQUIRED=1` y fait échouer une variante sans base, au lieu de la sauter en silence.
+- **Les bornes du serveur** : chacune a son test, `crates/escouade-team-server/tests/bounds.rs` en tête dit où est chacun.
+- **Le fuzzing, une passe courte** (le job `fuzz`, sous Linux) : chaque cible de `fuzz/` 15 s, depuis ses graines commitées ; **une passe longue** par `.github/workflows/fuzz.yml`, chaque dimanche ou à la main (une cible par runner, 30 min par défaut). Ce qu'elles trouvent est gardé en artefact.
+
+**Le fuzzing chez soi** (Linux ou macOS ; sous Windows, une distribution WSL) :
+
+```sh
+cargo install cargo-fuzz        # la nightly vient de fuzz/rust-toolchain.toml
+sh scripts/fuzz.sh              # toutes les cibles, 20 s chacune
+sh scripts/fuzz.sh 3600 journal # une cible, une heure
+```
+
+`fuzz/` est un paquet à part, à la racine : son workspace et son verrou sont à lui, rien n'en passe dans `src-tauri/Cargo.lock` ni dans `cargo deny`. Les corps des cibles sont dans les crates (`crates/escouade-team/src/fuzzing/`, `crates/escouade-team-server/src/fuzzing.rs`, derrière leur feature `fuzzing`), et leurs tests les jouent sur `fuzz/seeds/` à chaque passage de nextest : une trouvaille y devient une graine, donc un test de non-régression. Ce que chaque cible couvre, et ce qu'elle ne couvre pas, est dans le README d'`escouade-team` (« Le fuzzing »).
+
 ## 15. Les décisions
 
 ### 15.1 Ce qui est décidé (par l'utilisateur, le 2026-11-14)
@@ -852,7 +868,7 @@ Le socle s'appuie sur la fondation du mode serveur (`docs/REMOTE.md`) pour le tr
 | TS-16 | Le tableau des coûts et des quotas : totaux horaires chiffrés pour les administrateurs, tableau, budgets et alertes, pilote auto arrêté au-delà, ce que voit chaque membre de lui | TS-5 | 5 j |
 | TS-17 | Passer un agent à un collègue : prise transférée, push au geste, travail non commité, conversation chiffrée, passation d'ESC-88 chez le collègue ; vers une machine en mode serveur | TS-6, TS-0c | 5 j |
 | **Qualité et docs** | | | |
-| TS-18 | L'e2e serveur et deux clients en CI ; le fuzzing du journal et des opérations | TS-6 | 4 j |
+| TS-18 | L'e2e serveur et deux clients en CI ; le fuzzing du journal et des opérations. **Fait (ESC-519)** : la part « team server » des e2e et `tests/e2e/team-journey.spec.ts`, PostgreSQL exigé dans `linux-rust`, `fuzz/` à la racine (13 cibles, des propriétés, des graines dont les vecteurs de la crypto), une passe courte dans la CI et une longue par `fuzz.yml`, un test par borne du serveur (`tests/bounds.rs`), des tests de propriété (horloge hybride, fusion à trois voies, bornes croisées) ; le §14 dit ce que la CI tient et comment lancer le fuzzing chez soi | TS-6 | 4 j |
 | TS-19 | Les pages du site : installer le serveur d'équipe, le guide du RSSI (ce que voit le serveur, les stratégies, le piège du hook), la FAQ « Où vont mes données ? » | TS-13 | 3 j |
 | TS-20 | L'audit externe de la cryptographie et du journal, avant de dire le serveur stable (à confier par l'utilisateur à des auditeurs, pas un ticket d'agent) | TS-3, TS-13 | — |
 | **Pistes** | | | |

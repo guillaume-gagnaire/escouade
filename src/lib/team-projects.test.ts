@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { listedProject, teamProjects } from '../test/team-projects';
+import { listedProject, repo, teamProjects } from '../test/team-projects';
 import { draftOf, folderName, listedHere, listedOf, logoOk, parentOf, split } from './team-projects';
 
 describe('the team’s projects (TS-8)', () => {
@@ -7,6 +7,10 @@ describe('the team’s projects (TS-8)', () => {
     expect(folderName(listedProject({ name: 'Acme API' }))).toBe('acme-api');
     expect(folderName(listedProject({ name: 'Équipe été 2026' }))).toBe('equipe-ete-2026');
     expect(folderName(listedProject({ name: '…' }))).toBe('api');
+    // Never a hidden folder from the address (TS-18: a project listed as `…/.ssh` would be cloned into the parent's
+    // `.ssh`): the dots and dashes before it go.
+    expect(folderName(listedProject({ name: '…', repos: [repo('git@github.com:x/.ssh')] }))).toBe('ssh');
+    expect(folderName(listedProject({ name: '.', repos: [repo('https://github.com/x/...')] }))).toBe('projet');
   });
 
   it('offers the folder that holds most of the projects of this device', () => {

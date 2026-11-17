@@ -136,7 +136,13 @@ export function folderName(p: TeamProjectView): string {
     .replace(/[^a-z0-9._-]+/g, '-')
     .replace(/^[-.]+|-+$/g, '');
   if (fromName) return fromName;
-  return p.repos[0]?.path.split('/').pop() || 'projet';
+  // The address's last part, never as a hidden folder nor an option (`…/.ssh`, `…/-x`).
+  return (
+    p.repos[0]?.path
+      .split('/')
+      .pop()
+      ?.replace(/^[-.]+/, '') || 'projet'
+  );
 }
 
 /** The parent folder offered for a clone: the one that holds most of the projects of this device. */

@@ -1,0 +1,1 @@
+{"version":1,"enforced":{"permissions.modes":["plan","default"]},"proposed":{"worktrees.setup":"npm ci"},"quorum":true}

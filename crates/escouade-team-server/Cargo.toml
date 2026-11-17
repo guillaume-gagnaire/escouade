@@ -10,6 +10,10 @@ workspace = "../../src-tauri"
 # Published with the 2.3 (binaries and image), not before.
 publish = false
 
+# The fuzzing targets' bodies (`fuzzing`), for the package `fuzz/` at the root. Never in the app nor the server shipped.
+[features]
+fuzzing = []
+
 [[bin]]
 name = "escouade-team-server"
 path = "src/main.rs"

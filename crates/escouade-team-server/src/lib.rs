@@ -17,6 +17,9 @@ pub mod pair;
 pub mod transport;
 pub mod util;
 
+#[cfg(any(test, feature = "fuzzing"))]
+pub mod fuzzing;
+
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};

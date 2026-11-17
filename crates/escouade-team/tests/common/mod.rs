@@ -434,6 +434,11 @@ impl Backend {
         match std::env::var("ESCOUADE_TEST_POSTGRES_URL") {
             Ok(url) if !url.is_empty() => Some(Backend::Postgres(url)),
             _ => {
+                // The CI's Linux job has a base: there, a variant without it fails instead of passing without a word.
+                assert!(
+                    std::env::var("ESCOUADE_TEST_POSTGRES_REQUIRED").as_deref() != Ok("1"),
+                    "ESCOUADE_TEST_POSTGRES_REQUIRED is set, ESCOUADE_TEST_POSTGRES_URL is not"
+                );
                 eprintln!(
                     "ESCOUADE_TEST_POSTGRES_URL is not set: the PostgreSQL variant is skipped"
                 );

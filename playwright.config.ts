@@ -1,11 +1,17 @@
 import { defineConfig } from '@playwright/test';
 
+// The CI's parts (ESC-519): `ESCOUADE_E2E_PART=team` runs the specs of the team server alone (tests/e2e/team*.spec.ts, its
+// part « team server »), `rest` every other one (the five parts); unset, all of them.
+const PART = process.env.ESCOUADE_E2E_PART;
+const TEAM = '**/team*.spec.ts';
+
 // End-to-end tests drive the real Tauri app (debug build with the embedded frontend:
 // `npx tauri build --debug --no-bundle`) through WebView2's DevTools protocol.
 export default defineConfig({
   testDir: 'tests/e2e',
   // Only the tests: tests/e2e also holds the unit tests of the fixture's helpers (`*.test.ts`, Vitest's).
-  testMatch: '**/*.spec.ts',
+  testMatch: PART === 'team' ? TEAM : '**/*.spec.ts',
+  testIgnore: PART === 'rest' ? TEAM : undefined,
   // A temporary folder of its own, the app's too, removed at the end (scripts/test-tmp.ts).
   globalSetup: './tests/e2e/global-tmp.ts',
   timeout: 90_000,

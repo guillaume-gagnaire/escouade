@@ -663,6 +663,64 @@ fn evaluate(
     out
 }
 
+/// A version as the rules judged it ([`judge`]).
+#[cfg(any(test, feature = "fuzzing"))]
+pub(crate) struct Judged {
+    pub version: Version,
+    pub file: Option<TeamFile>,
+    pub digest: [u8; 32],
+    pub status: Status,
+    /// The members whose signature counts.
+    pub counted: BTreeSet<MemberId>,
+    pub need: usize,
+}
+
+/// The rules of the versions without a team, for the fuzzing (`fuzzing/settings.rs`): the entries as a device opened
+/// them (their number, epoch, signer and what they carry), the administrators now and at each epoch, and the chain
+/// this device chose before (kept, and grown). Gives each version judged, the chain's indices, and the quorum.
+#[cfg(any(test, feature = "fuzzing"))]
+pub(crate) fn judge(
+    seen: Vec<(u64, u64, MemberId, Entry)>,
+    now_admins: BTreeSet<MemberId>,
+    admins_at: &dyn Fn(u64) -> Option<BTreeSet<MemberId>>,
+    chosen: &mut Vec<[u8; 32]>,
+    classify: &dyn Classify,
+) -> (Vec<Judged>, Vec<usize>, bool) {
+    let state = State {
+        seen: seen
+            .into_iter()
+            .map(|(seq, epoch, member, entry)| Seen {
+                seq,
+                epoch,
+                member,
+                device: DeviceId([0; 16]),
+                entry,
+            })
+            .collect(),
+        ..Default::default()
+    };
+    let cx = Context {
+        now_admins,
+        admins_at,
+        classify,
+    };
+    let (cands, cosigns, _) = candidates(&state, classify);
+    let ev = evaluate(&cands, &cosigns, chosen, &cx);
+    let judged = cands
+        .into_iter()
+        .enumerate()
+        .map(|(i, c)| Judged {
+            status: ev.statuses[&i].clone(),
+            counted: ev.counted.get(&i).cloned().unwrap_or_default(),
+            need: ev.need.get(&i).copied().unwrap_or(1),
+            version: c.version,
+            file: c.file,
+            digest: c.digest,
+        })
+        .collect();
+    (judged, ev.chain, ev.quorum)
+}
+
 // === Building what the window shows ===
 
 type Cosigns = BTreeMap<[u8; 32], Vec<(MemberId, u64)>>;

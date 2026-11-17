@@ -1,0 +1,4 @@
+# cargo-fuzz needs a nightly (libFuzzer and the sanitizers): pinned, so that the CI and a machine build the same.
+[toolchain]
+channel = "nightly-2026-11-01"
+profile = "minimal"

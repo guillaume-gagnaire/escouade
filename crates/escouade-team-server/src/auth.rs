@@ -185,3 +185,33 @@ impl FromRequestParts<Shared> for Authed {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    /// At most `MAX_PENDING` challenges, and as many sessions, wait in memory (TS-18): past it, those whose time is
+    /// over make room, and when none is, a new one is refused (503 `busy`) rather than kept.
+    #[test]
+    fn the_challenges_and_the_sessions_waiting_are_bounded() {
+        let later = Instant::now() + Duration::from_secs(60);
+        let s = Sessions::default();
+        for _ in 0..MAX_PENDING {
+            s.challenge([1; 16], later).unwrap();
+            s.open([1; 16], later).unwrap();
+        }
+        assert_eq!(s.challenge([1; 16], later).unwrap_err().error, "busy");
+        assert_eq!(s.open([1; 16], later).unwrap_err().error, "busy");
+        // Their time over, they make room.
+        let s = Sessions::default();
+        let now = Instant::now();
+        for _ in 0..MAX_PENDING {
+            s.challenge([1; 16], now).unwrap();
+            s.open([1; 16], now).unwrap();
+        }
+        assert!(s.challenge([1; 16], later).is_ok());
+        assert!(s.open([1; 16], later).is_ok());
+        assert_eq!(s.challenges.lock().unwrap().len(), 1);
+    }
+}

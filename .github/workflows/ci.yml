@@ -360,6 +360,14 @@ jobs:
           CARGO_PROFILE_DEV_DEBUG: 0
         run: cargo nextest archive --profile ci --archive-file ../nextest-windows.tar.zst
 
+      # The team server the end-to-end tests of the part « team server » start (tests/e2e/team*.spec.ts, ESC-519): built
+      # once here, with the profile of the archive above (its test of the binary built it already), never in each part.
+      - name: The team server, for the end-to-end tests
+        working-directory: src-tauri
+        env:
+          CARGO_PROFILE_DEV_DEBUG: 0
+        run: cargo build -p escouade-team-server
+
       - name: Build the app for end-to-end tests
         run: npx tauri build --debug --no-bundle
 
@@ -380,6 +388,7 @@ jobs:
           path: |
             src-tauri/target/debug/escouade.exe
             src-tauri/target/debug/escouade-hook.exe
+            src-tauri/target/debug/escouade-team-server.exe
             src-tauri/target/plugins-wasm/
           retention-days: 1
 
@@ -435,15 +444,20 @@ jobs:
   # Five parts of all the end-to-end tests, and a part of its own (ESC-495) where a set of them runs again with the window
   # on the remote API of the core (its WebSocket on the loopback, not Tauri's IPC), with the e2e of a cut: beside the
   # others, it adds no time to the CI's.
+  # The part « team server » (ESC-519): the specs of the team server (tests/e2e/team*.spec.ts, two clients against a real
+  # escouade-team-server, built once by windows-build) at the runner's size, then again at 1024 × 728; the five parts
+  # leave them out (ESCOUADE_E2E_PART, playwright.config.ts). Its 8 specs took 6 min 08 at the window's size and 4 min 30 at
+  # 1024 × 728 on a desktop (2026-11-17): about 13 min with its setup, beside the others (11 to 18 min), and 3 to 4 min
+  # fewer in the part that held them before (the build of the server among them).
   windows-e2e:
-    name: Windows (end-to-end ${{ matrix.shard == 'remote' && 'remote API' || format('{0}/5', matrix.shard) }})
+    name: Windows (end-to-end ${{ matrix.shard == 'remote' && 'remote API' || matrix.shard == 'team' && 'team server' || format('{0}/5', matrix.shard) }})
     needs: windows-build
     runs-on: windows-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, remote]
+        shard: [1, 2, 3, 4, 5, remote, team]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -492,12 +506,33 @@ jobs:
       # as flaky, and its trace is kept. Each runner takes a fifth of the tests (Playwright's shards): in 3, a part took
       # up to 19 min after the 16 of the build.
       - name: End-to-end tests (Playwright over WebView2)
-        if: matrix.shard != 'remote'
+        if: matrix.shard != 'remote' && matrix.shard != 'team'
         env:
           ESCOUADE_E2E_CDP_PORT: 9222
+          # The specs of the team server are the part « team server »'s.
+          ESCOUADE_E2E_PART: rest
           # As in the environment of an agent of Escouade: the tests must not depend on it.
           CLAUDE_CODE_ENABLE_TODO_TOOLS: '1'
         run: npx playwright test --shard=${{ matrix.shard }}/5
+
+      # The team server (ESC-519): each spec of tests/e2e/team*.spec.ts, the journey of two clients among them
+      # (team-journey.spec.ts), at the runner's size, then at 1024 × 728. The server is the build's (src-tauri/target/debug).
+      - name: End-to-end tests of the team server
+        if: matrix.shard == 'team'
+        env:
+          ESCOUADE_E2E_CDP_PORT: 9222
+          ESCOUADE_E2E_PART: team
+          CLAUDE_CODE_ENABLE_TODO_TOOLS: '1'
+        run: npx playwright test
+
+      - name: End-to-end tests of the team server at 1024 × 728
+        if: matrix.shard == 'team' && !cancelled()
+        env:
+          ESCOUADE_E2E_CDP_PORT: 9222
+          ESCOUADE_E2E_PART: team
+          ESCOUADE_E2E_VIEWPORT: 1024x728
+          CLAUDE_CODE_ENABLE_TODO_TOOLS: '1'
+        run: npx playwright test --output=test-results/1024x728
 
       # The window on the remote API (ESC-495): the app, a conversation, a terminal, the Kanban, the MCP server, and the
       # WebSocket closed by force while a terminal writes.
@@ -651,6 +686,8 @@ jobs:
         env:
           CLAUDE_CODE_ENABLE_TODO_TOOLS: '1'
           ESCOUADE_TEST_POSTGRES_URL: postgres://team:team@localhost:5432/team
+          # Here, a PostgreSQL variant without its base fails instead of passing without a word (ESC-519).
+          ESCOUADE_TEST_POSTGRES_REQUIRED: '1'
         # Extracted where the build put it (the same path on every Linux runner): the paths cargo wrote into the tests
         # (`CARGO_BIN_EXE_escouade-hook`, the fake codex beside them) are right as they are.
         run: |
@@ -660,6 +697,42 @@ jobs:
           status=${PIPESTATUS[0]}
           node ../scripts/nextest-annotations.mjs nextest.log target/nextest/ci/junit.xml $status
           exit $status
+
+  # The short pass of the fuzzing of the team server and its client (TS-18, ESC-519): every target of fuzz/ for 15 s, from
+  # its committed seeds, on its own runner beside the others (a few minutes, its build first). The long pass is
+  # .github/workflows/fuzz.yml (weekly, or by hand). fuzz/ is a package of its own (its lock, its nightly): nothing of it
+  # reaches src-tauri/Cargo.lock nor `cargo deny`.
+  fuzz:
+    name: Linux (fuzzing, short pass)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Rust nightly (pinned in fuzz/rust-toolchain.toml)
+        working-directory: fuzz
+        run: rustup toolchain install
+
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-fuzz@0.13.2
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: fuzz
+
+      - name: Fuzzing, 15 s a target
+        run: sh scripts/fuzz.sh 15
+
+      # A failure's input (fuzz/artifacts/<target>/): to play again with `cargo fuzz run --fuzz-dir fuzz <target> <file>`.
+      - name: Upload what the fuzzing found
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-artifacts
+          path: fuzz/artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
 
   # Beside the tests, off their way (all of it took 26 to 44 min one after the other, on 2026-11-10): Clippy, the webview
   # probe, the packages, the plugin templates and Escouade's own plugins.

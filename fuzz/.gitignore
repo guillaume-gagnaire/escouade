@@ -1,0 +1,5 @@
+# What cargo-fuzz makes: the build, the corpus it grows (the seeds/ are committed), the crashes, the coverage.
+target/
+corpus/
+artifacts/
+coverage/

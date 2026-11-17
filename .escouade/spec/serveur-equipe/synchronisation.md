@@ -2,8 +2,8 @@
 title: "La synchronisation des projets"
 subject: "serveur-equipe"
 sources: ["docs/TEAM-SERVER.md","crates/escouade-team/README.md","crates/escouade-team-crypto/README.md","crates/escouade-team-server/README.md"]
-tickets: ["ESC-466","ESC-479","ESC-482"]
-decisions: [168,173,178]
+tickets: ["ESC-466","ESC-479","ESC-482","ESC-519"]
+decisions: [168,173,178,199]
 compared: null
 ---
 
@@ -74,3 +74,7 @@ L'app tient pour chaque équipe sa connexion en direct au serveur. Une entrée n
 ## Les droits par projet sur le serveur (TS-6)
 
 Jusqu'à TS-6, le serveur servait un projet à tout appareil de l'équipe, et seule la clé protégeait un projet gardé à quelques membres. Il sait désormais quels appareils ont accès à chaque projet, et ne sert, ne prend une écriture, une prise ou une clé, ni ne diffuse une trame qu'à ceux-là ; un appareil sans accès reçoit `403 no_access`, et le client le dit « Cet appareil n'a pas accès à ce projet de l'équipe ». Un projet de toute l'équipe est ouvert à tous ses appareils ; un administrateur dit au serveur les appareils d'un projet gardé avant d'y écrire, puis à chaque changement de son groupe. Ce qui reste de confiance est dit dans *Le Kanban d'équipe*.
+
+## Ce que l'appareil lit du serveur, borné (TS-18)
+
+Un serveur qui ment ne fait pas non plus allouer sans borne l'appareil qui le lit : une réponse annoncée plus longue que 32 Mio (une page d'un flux, un fichier ou un instantané, et leur enveloppe) est refusée avant d'en lire un octet, une réponse sans longueur dès qu'elle la dépasse, et un message de la connexion en direct de plus de 4 Mio la ferme ; l'appareil le prend comme un serveur qui ne répond pas. Ce que vérifient les cibles de fuzzing de ces lectures (la convergence, les signatures fausses, les fourches et les retours en arrière, les instantanés) est dans `docs/TEAM-SERVER.md` §14 et le README d'`escouade-team`.

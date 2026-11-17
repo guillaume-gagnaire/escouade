@@ -246,6 +246,21 @@ mod tests {
         assert_eq!(pairs.message(&slots[0]), Err(PairError::Gone));
     }
 
+    /// The relay holds `MAX_SLOTS` slots in all (TS-18), whatever the teams: past it, a new one waits.
+    #[test]
+    fn the_relay_holds_a_bounded_number_of_slots() {
+        let pairs = Pairs::default();
+        for n in 0..MAX_SLOTS {
+            let mut team = [0u8; 16];
+            team[..8].copy_from_slice(&((n / MAX_PER_TEAM) as u64).to_be_bytes());
+            pairs.open(team, [2; 16], vec![1]).unwrap();
+        }
+        assert_eq!(
+            pairs.open([0xff; 16], [2; 16], vec![1]),
+            Err(PairError::Full)
+        );
+    }
+
     #[test]
     fn a_typed_slot_reads_o_as_zero_and_i_l_as_one() {
         assert_eq!(normalize(" o1l "), "011");

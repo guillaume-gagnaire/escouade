@@ -1,0 +1,123 @@
+# The fuzzing of the team server and its client (TS-18, docs/TEAM-SERVER.md § 14): a cargo-fuzz package of its own, at
+# the root, apart from the crates shipped. Its workspace and its lock are its own: none of its dependencies (libfuzzer-sys)
+# goes into src-tauri/Cargo.lock nor into `cargo deny` (which reads src-tauri and plugins). Its lock started from the
+# app's, so that it fuzzes the versions the app ships. The bodies of the targets are in the crates
+# (crates/escouade-team/src/fuzzing/, crates/escouade-team-server/src/fuzzing.rs, behind their feature `fuzzing`), which
+# the crates' own tests play on seeds/ in every run.
+#
+#   cargo install cargo-fuzz             (Linux or macOS; the nightly comes from rust-toolchain.toml)
+#   sh scripts/fuzz.sh 60                (every target, 60 s each: what the CI does, shorter)
+#   sh scripts/fuzz.sh 3600 journal      (one target, an hour)
+#   cd fuzz && cargo fuzz run --fuzz-dir . journal corpus/journal seeds/journal
+[package]
+name = "escouade-fuzz"
+version = "0.0.0"
+license = "GPL-3.0-or-later"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+escouade-team = { path = "../crates/escouade-team", features = ["fuzzing"] }
+escouade-team-server = { path = "../crates/escouade-team-server", features = ["fuzzing"] }
+
+[workspace]
+members = ["."]
+
+# Line tables, for the stacks of a crash.
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "catalog"
+path = "fuzz_targets/catalog.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "commit"
+path = "fuzz_targets/commit.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "convergence"
+path = "fuzz_targets/convergence.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "envelope"
+path = "fuzz_targets/envelope.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "handshake"
+path = "fuzz_targets/handshake.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "invite"
+path = "fuzz_targets/invite.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "journal"
+path = "fuzz_targets/journal.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "operation"
+path = "fuzz_targets/operation.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "roster"
+path = "fuzz_targets/roster.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "server-bodies"
+path = "fuzz_targets/server-bodies.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "server-requests"
+path = "fuzz_targets/server-requests.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "settings"
+path = "fuzz_targets/settings.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "snapshot"
+path = "fuzz_targets/snapshot.rs"
+test = false
+doc = false
+bench = false

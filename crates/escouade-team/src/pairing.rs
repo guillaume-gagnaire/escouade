@@ -32,8 +32,8 @@ pub const ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 pub const SLOT_LEN: usize = 3;
 pub const SECRET_LEN: usize = 5;
 
-const SIDE_A: &[u8] = b"escouade/pair/v1/device-in-the-team";
-const SIDE_B: &[u8] = b"escouade/pair/v1/new-device";
+pub(crate) const SIDE_A: &[u8] = b"escouade/pair/v1/device-in-the-team";
+pub(crate) const SIDE_B: &[u8] = b"escouade/pair/v1/new-device";
 
 /// A short code: its slot and its secret.
 #[derive(Clone, PartialEq, Eq)]
@@ -93,7 +93,7 @@ impl PairCode {
         format!("{}-{}", &all[..4], &all[4..])
     }
 
-    fn password(&self) -> Password {
+    pub(crate) fn password(&self) -> Password {
         Password::new(self.secret.as_bytes())
     }
 }
@@ -106,7 +106,7 @@ fn derive(key: &[u8], label: &[u8]) -> Zeroizing<[u8; 32]> {
     Zeroizing::new(h.finalize().into())
 }
 
-fn confirmation(key: &[u8]) -> [u8; 32] {
+pub(crate) fn confirmation(key: &[u8]) -> [u8; 32] {
     *derive(key, b"escouade/pair/v1/confirm")
 }
 
@@ -129,7 +129,7 @@ fn seal(key: &[u8], slot: &str, plain: &[u8]) -> Vec<u8> {
     out
 }
 
-fn open(key: &[u8], slot: &str, sealed: &[u8]) -> Result<Zeroizing<Vec<u8>>, Error> {
+pub(crate) fn open(key: &[u8], slot: &str, sealed: &[u8]) -> Result<Zeroizing<Vec<u8>>, Error> {
     if sealed.len() < 24 {
         return Err(Error::WrongCode);
     }

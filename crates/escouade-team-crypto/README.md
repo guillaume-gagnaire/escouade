@@ -60,7 +60,7 @@ Ticket ESC-453, ligne TS-0a de `docs/TEAM-SERVER.md` §16. Le choix C9-B (MLS d�
 
 ## Les points à soumettre à l'audit externe (TS-20)
 
-1. **Les règles des commits** (`policy.rs`) : sont-elles complètes ? Elles couvrent toutes les propositions, les commits externes, la conservation de l'identité, l'état d'après. Ce sont elles qui empêchent de glisser une clé : à fuzzer (TS-18).
+1. **Les règles des commits** (`policy.rs`) : sont-elles complètes ? Elles couvrent toutes les propositions, les commits externes, la conservation de l'identité, l'état d'après. Ce sont elles qui empêchent de glisser une clé : la cible `commit` de `fuzz/` les vise (TS-18), en construisant des commits valides au sens de MLS ; un commit que MLS refuse n'atteint pas les règles.
 2. **L'historique contre la confidentialité persistante** : qui tient une époque lit toutes les précédentes. C'est voulu (un Kanban dure), mais un appareil compromis livre tout l'historique, comme les clés persistantes du premier schéma.
 3. **Les labels d'export et de HKDF**, leur séparation de domaine et le format des données associées (`ObjectHeader::aad`, `link_aad`, `wrap_aad`).
 4. **L'invitation** : la force du MAC face à un serveur actif, le fait qu'un faux Welcome **consomme le KeyPackage** de l'invité (déni de service, l'invité redemande ; vu par les tests), et le partage de l'invitation entre appareils administrateurs (ici gardée par l'appareil qui invite, en équipe un objet chiffré).
@@ -72,7 +72,7 @@ Ticket ESC-453, ligne TS-0a de `docs/TEAM-SERVER.md` §16. Le choix C9-B (MLS d�
 10. **Les métadonnées** : le serveur voit la taille et l'heure des commits, des liens et des enveloppes, et le nombre d'époques.
 11. **Les opérations et les projets (TS-5)** : le label et les données associées de `Sealed` (`ops.rs`), la signature à l'intérieur du chiffré (un membre qui tient la clé peut rechiffrer l'opération signée d'un autre, sans la changer : la chaîne la dédouble) ; l'horodatage, qu'un membre malveillant peut mettre en avance pour gagner (la dérive bornée à une heure ne vaut que pour les horloges des autres) ; les règles des groupes de projet évaluées contre la vue de l'équipe du vérificateur (un vérificateur en avance sur le committeur peut refuser un ajout que l'autre a fait) ; le KeyPackage de dernier recours, réutilisé d'un groupe de projet à l'autre.
 
-## Ce que TS-2 a fait, ce qui reste (TS-3, TS-5, TS-18)
+## Ce que TS-2 a fait, ce qui reste (TS-3, TS-5, TS-18, TS-20)
 
 Fait par TS-2 (ESC-458), ici et dans `escouade-team` :
 - la persistance (stockage SQLite d'openmls), les clés d'appareil au trousseau, le point de contrôle hors de l'état ;
@@ -85,4 +85,12 @@ Fait par TS-5 (ESC-466) : `hlc.rs`, `ops.rs` et `project.rs` (ci-dessus), `TeamD
 
 Ce qui reste :
 - l'ajout d'un appareil par QR code et par code court (PAKE) : même mécanisme que `Purpose::OwnDevice` (TS-3) ;
-- faire tourner le fuzzing longtemps (TS-18), et l'audit externe (TS-20).
+- l'audit externe (TS-20).
+
+Fait par TS-18 (ESC-519) : le fuzzing de ce que la crate lit sans l'avoir vérifié, dans `fuzz/` à la racine (les corps dans `escouade-team`, `src/fuzzing/`). Ses vecteurs (`vectors/team-crypto-v1.json`) en sont des graines, sous la forme où le serveur les sert : l'objet scellé, le lien d'historique, l'enveloppe de secours, l'enregistrement d'époque, l'identité, le lien d'invitation. Ce que le fuzzing vérifie de cette crate, pour l'audit :
+- `check_head`, `check_server_state`, `check_restored`, `check_beacon` (cible `journal`) : une tête forgée n'est jamais prise, une époque plus ancienne que le point de contrôle est toujours un retour en arrière, une balise changée n'est prise que telle que signée ;
+- `SealedObject::open`, `HistoryLink::open`, `Sealed::open_operation` et `open_snapshot`, `EscrowKey::open`, `RecoveryWrap::open` (cibles `journal`, `operation`, `snapshot`, `envelope`) : changés octet par octet, ils s'ouvrent tels que scellés ou pas du tout ; une opération signée d'une clé qui n'est la feuille de personne n'est jamais ouverte ;
+- `InviteLink::parse`, `verify_join_mac`, `verify_welcome_confirmation` (cible `invite`) ;
+- `policy::check_commit` à travers `process_commit` (cible `commit`).
+
+Ce qu'il ne couvre pas : MLS lui-même (openmls a sa suite), la dérivation des clés (les vecteurs la fixent), le temps constant des comparaisons (`verify_slice` de `hmac`, `verify_strict` d'`ed25519-dalek` : à lire, pas à fuzzer). L'horloge hybride (`hlc.rs`) a ses propriétés par proptest dans `escouade-team` (`tests/properties.rs`) : elle ne recule jamais, passe ce qu'elle a vu dans la dérive permise, et ses octets se trient comme ses horodatages.

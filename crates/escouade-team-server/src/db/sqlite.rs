@@ -1072,3 +1072,51 @@ impl Store for Sqlite {
         .await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::{ClaimAsk, Store, StoreError, MAX_CLAIMS};
+
+    /// A project holds `MAX_CLAIMS` claims at most (TS-18): one more ticket is refused, one held already is still
+    /// taken again. The claims are written straight into the base, as the routes would take long to make so many.
+    #[tokio::test]
+    async fn a_project_holds_a_bounded_number_of_claims() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Sqlite::open(&dir.path().join("team.db")).unwrap();
+        store.migrate().await.unwrap();
+        let (team, project, device) = ([1u8; 16], [2u8; 16], [3u8; 16]);
+        store
+            .run(move |c| {
+                let tx = c.transaction()?;
+                {
+                    let mut insert = tx.prepare(
+                        "INSERT INTO claims (team_id, project_id, ticket_id, holder, until, token, version, claimed_at, renewed_at, last_holder)
+                         VALUES (?1, ?2, ?3, NULL, 0, 1, 1, 0, 0, NULL)",
+                    )?;
+                    for i in 0..MAX_CLAIMS {
+                        let mut ticket = [0u8; 16];
+                        ticket[..8].copy_from_slice(&i.to_be_bytes());
+                        insert.execute(params![team.as_slice(), project.as_slice(), ticket.as_slice()])?;
+                    }
+                }
+                tx.commit()?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        let take = ClaimAsk::Take { expected: None };
+        let refused = store
+            .claim(team, project, [9; 16], device, take, 10, 600)
+            .await;
+        assert!(
+            matches!(refused, Err(StoreError::TooMany("claims"))),
+            "{refused:?}"
+        );
+        // Another project has its own count.
+        assert!(store
+            .claim(team, [5; 16], [9; 16], device, take, 10, 600)
+            .await
+            .is_ok());
+    }
+}

@@ -119,6 +119,36 @@ pub trait Transport: Send + Sync {
 
 // === The app's transport ===
 
+/// The largest answer of the server the client reads: a page of a stream (8 MiB on the server by default), a file or
+/// a snapshot (25 MiB), with room for their CBOR. Past it, the answer is refused before it is read whole (its announced
+/// length, or as it comes): a server that lies, or one in between, never makes the device allocate without a bound.
+pub const MAX_REPLY: usize = 32 << 20;
+
+/// The largest message of the live connection: a frame carries an entry (1 MiB on the server by default) and its
+/// header. tungstenite's own bound is 64 MiB.
+pub const MAX_LIVE_MESSAGE: usize = 4 << 20;
+
+/// The body of an answer, `max` bytes at most: refused at once when its announced length is past it, else read
+/// piece by piece and refused as soon as it goes past.
+async fn read_bounded(mut reply: reqwest::Response, max: usize) -> Result<Vec<u8>, ClientError> {
+    let too_large = || ClientError::Net(format!("the server's answer is larger than {max} bytes"));
+    if reply.content_length().is_some_and(|n| n > max as u64) {
+        return Err(too_large());
+    }
+    let mut body = Vec::new();
+    while let Some(piece) = reply
+        .chunk()
+        .await
+        .map_err(|e| ClientError::Net(e.to_string()))?
+    {
+        if body.len() + piece.len() > max {
+            return Err(too_large());
+        }
+        body.extend_from_slice(&piece);
+    }
+    Ok(body)
+}
+
 /// The app's transport: the core's reqwest client, and its proxy and TLS for the live connection.
 pub struct HttpTransport {
     base: reqwest::Url,
@@ -183,11 +213,7 @@ impl Transport for HttpTransport {
             .await
             .map_err(|e| ClientError::Net(e.to_string()))?;
         let status = reply.status().as_u16();
-        let body = reply
-            .bytes()
-            .await
-            .map_err(|e| ClientError::Net(e.to_string()))?
-            .to_vec();
+        let body = read_bounded(reply, MAX_REPLY).await?;
         Ok(Reply { status, body })
     }
 
@@ -244,17 +270,19 @@ impl Transport for HttpTransport {
                 .parse()
                 .expect("a number is a header value"),
         );
-        let (socket, _) =
-            tokio_tungstenite::client_async(request, io)
-                .await
-                .map_err(|e| match e {
-                    tokio_tungstenite::tungstenite::Error::Http(r) => ClientError::Refused {
-                        status: r.status().as_u16(),
-                        error: "live".into(),
-                        message: "the live connection was refused".into(),
-                    },
-                    e => ClientError::Net(e.to_string()),
-                })?;
+        let config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
+            .max_message_size(Some(MAX_LIVE_MESSAGE))
+            .max_frame_size(Some(MAX_LIVE_MESSAGE));
+        let (socket, _) = tokio_tungstenite::client_async_with_config(request, io, Some(config))
+            .await
+            .map_err(|e| match e {
+                tokio_tungstenite::tungstenite::Error::Http(r) => ClientError::Refused {
+                    status: r.status().as_u16(),
+                    error: "live".into(),
+                    message: "the live connection was refused".into(),
+                },
+                e => ClientError::Net(e.to_string()),
+            })?;
         Ok(Box::new(WsSocket { socket }))
     }
 }

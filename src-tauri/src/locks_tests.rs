@@ -629,3 +629,79 @@ async fn an_agent_in_a_mode_no_longer_allowed_goes_to_the_nearest_and_says_it() 
     h.core.set_team_policies(None);
     assert!(h.core.locks.read().locks.is_empty());
 }
+
+/// The bounds crossed, on combinations drawn by the thousand (TS-18; the app has no proptest, so a small generator of
+/// its own, as the fuzzing's tests of `escouade-team`): the modes resolved are within every bound that sets them and
+/// within the device's own list; the default mode resolved is one every bound allows (when one does), the device's
+/// own when it is allowed, else never one that allows more than it.
+#[test]
+fn the_bounds_crossed_hold_on_every_combination_drawn() {
+    let mut state = 0x9e37_79b9_7f4a_7c15u64;
+    let mut next = || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state
+    };
+    let subset = |bits: u64| -> Vec<&'static str> {
+        MODES
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| bits >> i & 1 == 1)
+            .map(|(_, m)| *m)
+            .collect()
+    };
+    let rank = |m: &str| MODES.iter().position(|x| *x == m).unwrap();
+    for _ in 0..3000 {
+        let r = next();
+        let own = (r & 1 == 1).then(|| subset(r >> 1));
+        let by_team = (r >> 6 & 1 == 1).then(|| subset(r >> 7));
+        let by_device = (r >> 12 & 1 == 1).then(|| subset(r >> 13));
+        let chosen = MODES[(r >> 20) as usize % MODES.len()];
+        let mut device = vec![(DEFAULT_MODE, json!(chosen))];
+        if let Some(o) = &own {
+            device.push((MODES_KEY, json!(o)));
+        }
+        let layers = Layers {
+            device: map(&device),
+            team: by_team
+                .as_ref()
+                .map(|b| team(&[(MODES_KEY, json!(b))], &[])),
+            managed: by_device
+                .as_ref()
+                .map_or_else(Managed::default, |b| managed(&[(MODES_KEY, json!(b))])),
+            ..Default::default()
+        };
+        let allowed = |m: &str| {
+            by_team.as_ref().is_none_or(|b| b.contains(&m))
+                && by_device.as_ref().is_none_or(|b| b.contains(&m))
+        };
+        let case = format!("own {own:?}, team {by_team:?}, device {by_device:?}, chosen {chosen}");
+        if let Some(r) = resolve(TABLE, &layers, MODES_KEY) {
+            for m in r.value.as_array().expect("a list") {
+                let m = m.as_str().expect("a mode");
+                assert!(allowed(m), "{m} past a bound: {case}");
+                if by_team.is_some() || by_device.is_some() {
+                    assert!(
+                        own.as_ref().is_none_or(|o| o.contains(&m)),
+                        "{m} not the device's: {case}"
+                    );
+                }
+            }
+        }
+        let resolved = value_of(&layers, DEFAULT_MODE).0;
+        let d = resolved.as_str().expect("a mode");
+        if !MODES.iter().any(|m| allowed(m)) {
+            continue;
+        }
+        assert!(allowed(d), "the default {d} past a bound: {case}");
+        if allowed(chosen) {
+            assert_eq!(d, chosen, "{case}");
+        } else if MODES.iter().any(|m| allowed(m) && rank(m) <= rank(chosen)) {
+            assert!(
+                rank(d) <= rank(chosen),
+                "{d} allows more than {chosen}: {case}"
+            );
+        }
+    }
+}
