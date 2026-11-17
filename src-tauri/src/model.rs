@@ -368,6 +368,8 @@ pub enum UiEvent {
     DeepLink {},
     /// A team of the team server changed on this device (TS-3): the window reads them again (`team_list`).
     Teams {},
+    /// A discovery of the features done by a fact of the core (ESC-506): the window reads it again (`discover_view`).
+    DiscoverChanged {},
     /// The download of the vectors' model (ESC-254): bytes so far, of `total`.
     VectorsDownload {
         done: u64,

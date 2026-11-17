@@ -5,6 +5,7 @@
   import { t } from '../lib/i18n';
   import { app } from '../lib/state.svelte';
   import { tip } from '../lib/tip';
+  import { HOVER_REST_MS, offer } from '../lib/discover.svelte';
   import Icon from './Icon.svelte';
   import Level from './Level.svelte';
 
@@ -29,6 +30,20 @@
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
     dictation.press(target);
+  }
+
+  // The dictation offered (ESC-506) on a hover that rests on the microphone, never on one that goes on to a press:
+  // the bubble would cover the panel the press opens.
+  let rest: ReturnType<typeof setTimeout> | undefined;
+  function hovered(el: HTMLElement) {
+    clearTimeout(rest);
+    if (phase !== 'idle') return;
+    rest = setTimeout(() => {
+      if (phase === 'idle') offer('dictation', el);
+    }, HOVER_REST_MS);
+  }
+  function unhovered() {
+    clearTimeout(rest);
   }
 
   function key_(e: KeyboardEvent, isDown: boolean) {
@@ -84,15 +99,22 @@
       {/if}
     </div>
   {/if}
+  <!-- Hovered the first time (ESC-506): the dictation offered, in a bubble on it, once. -->
   <button
     class="icon-btn mic"
+    data-discover="dictation"
+    onmouseenter={(e) => hovered(e.currentTarget)}
+    onmouseleave={unhovered}
     class:on={listening}
     class:busy={phase === 'transcribing' || phase === 'starting'}
     aria-pressed={listening}
     aria-label={listening ? t('voice.button.stop') : t('voice.button.label')}
     aria-keyshortcuts={(app.settings.voice?.shortcut || DEFAULT_SHORTCUT).replace('Mod', 'Control')}
     use:tip={t('voice.button.title', { key })}
-    onpointerdown={down}
+    onpointerdown={(e) => {
+      unhovered();
+      down(e);
+    }}
     onpointerup={() => dictation.release()}
     onpointercancel={() => dictation.release()}
     onkeydown={(e) => key_(e, true)}

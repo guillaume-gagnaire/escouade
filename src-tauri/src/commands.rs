@@ -37,7 +37,7 @@ type Res<T> = Result<T, String>;
 /// A command's result, counted in the usage statistics when it went well (`telemetry`).
 fn counted<T>(core: &Core, event: Event, r: Res<T>) -> Res<T> {
     if r.is_ok() {
-        core.telemetry.track(event);
+        core.track(event);
     }
     r
 }
@@ -589,8 +589,7 @@ pub fn plugin_install(
         view.origin,
         crate::plugins::Origin::Store { seed: true, .. }
     );
-    core.telemetry
-        .track(crate::telemetry::Event::PluginInstalled { from_store });
+    core.track(crate::telemetry::Event::PluginInstalled { from_store });
     // The store's count, only with the user's consent to the statistics (docs/STORE.md §5.4); a version of the seed
     // through the counts the seed keeps, once (ESC-394).
     if from_seed {
@@ -3031,7 +3030,7 @@ pub async fn term_spawn(
             },
         )
         .map_err(err)?;
-    core.telemetry.track(Event::TerminalOpened);
+    core.track(Event::TerminalOpened);
     Ok(info)
 }
 
@@ -3927,7 +3926,7 @@ pub fn mcp_clear_activity(core: CoreState) {
 pub fn mcp_set_enabled(core: CoreState, enabled: bool) -> Res<()> {
     core.set_mcp_enabled(enabled).map_err(err)?;
     if enabled {
-        core.telemetry.track(Event::McpEnabled);
+        core.track(Event::McpEnabled);
     }
     Ok(())
 }
@@ -3945,6 +3944,24 @@ pub fn onboarding_act(
     act: crate::onboarding::Act,
 ) -> crate::onboarding::OnboardingView {
     core.onboarding_act(act)
+}
+
+/// The discovery of the features (ESC-506) as the window shows it. `microphones`: those the window found (`voice_info`),
+/// None when it cannot tell.
+#[tauri::command(async)]
+pub fn discover_view(core: CoreState, microphones: Option<usize>) -> crate::discover::DiscoverView {
+    core.discover_view(microphones)
+}
+
+/// A gesture on the discovery: seen by the window, « Écarter », « Remettre », « Tout masquer », a bubble shown, the
+/// band « Nouveau dans la … » closed.
+#[tauri::command(async)]
+pub fn discover_act(
+    core: CoreState,
+    act: crate::discover::Act,
+    microphones: Option<usize>,
+) -> crate::discover::DiscoverView {
+    core.discover_act(act, microphones)
 }
 
 /// The answer to « Statistiques d’usage », at the first start.
@@ -4070,7 +4087,7 @@ pub async fn voice_stop(
                 None,
             ),
         };
-        core.telemetry.track(Event::DictationUsed {
+        core.track(Event::DictationUsed {
             target,
             model,
             online_model,
@@ -4275,7 +4292,7 @@ pub fn conversation_start(
         started,
         crate::voice::conversation::ConvStarted::Listening { .. }
     ) {
-        core.telemetry.track(Event::VoiceConversation {
+        core.track(Event::VoiceConversation {
             lang,
             voice: id,
             engine,
@@ -4959,6 +4976,7 @@ pub async fn team_list(teams: TeamsState<'_>) -> Res<Vec<crate::teams::TeamView>
 /// escrow key if any (its public half and who holds it). Gives the 24 words of the recovery key, shown once.
 #[tauri::command]
 pub async fn team_create(
+    core: CoreState<'_>,
     teams: TeamsState<'_>,
     server: String,
     token: String,
@@ -4973,7 +4991,10 @@ pub async fn team_create(
         }
         _ => None,
     };
-    teams.create(&server, &token, &name, escrow).await
+    let created = teams.create(&server, &token, &name, escrow).await?;
+    // A team of one's own: the discovery « Ton équipe » is done (ESC-506).
+    core.discover_done(crate::model::Discovery::Team);
+    Ok(created)
 }
 
 /// A new escrow key pair for the organisation: its public half, and its secret to give to whoever holds it.
@@ -5023,11 +5044,14 @@ pub fn team_join_preview(teams: TeamsState<'_>, link: String) -> Res<crate::team
 
 #[tauri::command]
 pub async fn team_join(
+    core: CoreState<'_>,
     teams: TeamsState<'_>,
     link: String,
     name: String,
 ) -> Res<crate::teams::TeamView> {
-    teams.join(&link, &name).await
+    let team = teams.join(&link, &name).await?;
+    core.discover_done(crate::model::Discovery::Team);
+    Ok(team)
 }
 
 /// Shows a short code for another device of one's own.

@@ -109,6 +109,7 @@
     {#if activeProject && !first}
       <button
         class="btn-bar"
+        data-discover="editor"
         aria-label={t('nav.titleBar.openEditor')}
         use:tip={t('nav.titleBar.openEditorTitle')}
         onclick={() => app.openEditor({ projectId: activeProject.id, source: 'project' })}

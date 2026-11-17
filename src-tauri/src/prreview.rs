@@ -878,10 +878,9 @@ impl Core {
             review
         };
         self.pr_review_emit(&review);
-        self.telemetry
-            .track(crate::telemetry::Event::PrReviewStarted {
-                forge: crate::telemetry::forge(&source.kind),
-            });
+        self.track(crate::telemetry::Event::PrReviewStarted {
+            forge: crate::telemetry::forge(&source.kind),
+        });
         let me = self.clone();
         let working = self.working_owned();
         let at = review.at;

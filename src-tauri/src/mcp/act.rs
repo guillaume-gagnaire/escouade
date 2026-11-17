@@ -1282,7 +1282,7 @@ pub(super) fn approve_ticket(
     let since = wait::since(core, &t);
     core.ticket_approve_detached(&t.id).map_err(refusal)?;
     // Counted in the usage statistics once it started, as the window's.
-    core.telemetry.track(Event::TicketApproved);
+    core.track(Event::TicketApproved);
     answer(core, &t.id, since)
 }
 

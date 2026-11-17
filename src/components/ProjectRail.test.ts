@@ -6,6 +6,7 @@ import { viewUnsaved } from '../lib/vscode/unsaved.svelte';
 import { setLang } from '../lib/i18n';
 import { menu } from '../lib/menu.svelte';
 import { onboarding } from '../lib/onboarding.svelte';
+import { discover, resetDiscover } from '../lib/discover.svelte';
 import { initials } from '../lib/project-rail';
 import { handleShortcut } from '../lib/shortcuts';
 import { app } from '../lib/state.svelte';
@@ -355,7 +356,7 @@ describe('ProjectRail', () => {
     expect(icons).toEqual(['overview', 'plus', 'info', 'stats', 'puzzle', 'sliders']);
   });
 
-  it('opens « Aide »: the first launch again, the documentation and a problem to report (ESC-504, choice O10)', async () => {
+  it('opens « Aide »: the first launch again, the discovery, the documentation and a problem to report (ESC-504, ESC-506)', async () => {
     const backend = fakeBackend({
       onboarding_act: () => ({
         open: true,
@@ -371,6 +372,7 @@ describe('ProjectRail', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Aide' }));
     expect(menu.open?.items.filter((i) => !i.separator).map((i) => i.label)).toEqual([
       'Premier lancement',
+      'À découvrir',
       'Documentation',
       'Signaler un problème',
     ]);
@@ -379,6 +381,24 @@ describe('ProjectRail', () => {
     expect(backend.called('onboarding_act')[0].args).toEqual({ act: { kind: 'redo' } });
     expect(onboarding.at).toBe('harness');
     onboarding.shown = false;
+  });
+
+  it('puts a dot on « Aide » while something is left to discover, and « À découvrir » opens the map (ESC-506)', async () => {
+    fakeBackend({ discover_view: () => discover.view });
+    discover.view = { items: [], hidden: false, done: 2, total: 17, dot: true, tips: [], band: null };
+    render(ProjectRail);
+    const help = screen.getByRole('button', { name: 'Aide' });
+    expect(help.querySelector('[data-testid="help-dot"]')).not.toBeNull();
+    expect(help).toHaveAccessibleDescription('Il reste des choses à découvrir');
+    await userEvent.click(help);
+    const item = menu.open?.items.find((i) => i.label === 'À découvrir');
+    expect(item?.detail).toBe('2 sur 17 : la voix, le Kanban, les PR…');
+    item?.onClick?.();
+    expect(app.ui.view).toBe('discover');
+    // « Tout masquer »: no dot, the map still there.
+    discover.view = { ...discover.view, hidden: true, dot: false };
+    await waitFor(() => expect(help.querySelector('[data-testid="help-dot"]')).toBeNull());
+    resetDiscover();
   });
 });
 

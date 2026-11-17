@@ -98,7 +98,7 @@ export default defineZone('onboarding', {
   },
   help: {
     label: 'Help',
-    tip: 'The first launch, the documentation',
+    tip: 'The first launch, Discover, the documentation',
     firstLaunch: 'First launch',
     firstLaunchDetail: 'Go over the harness, the account, the agents’ mode',
     docs: 'Documentation',

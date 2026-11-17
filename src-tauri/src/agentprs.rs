@@ -847,7 +847,7 @@ impl Core {
         };
         self.link_work_item(&t.meta, &t.provider.kind(), &mut draft);
         let pr = t.client.create_pr(&t.remote.repo, &draft).await?;
-        self.telemetry.track(Event::PrOpened {
+        self.track(Event::PrOpened {
             from: "agent",
             forge: crate::telemetry::forge(&t.provider.kind()),
         });
@@ -1381,7 +1381,7 @@ impl Core {
             };
             match step.await {
                 Ok(mut pr) => {
-                    self.telemetry.track(Event::PrOpened {
+                    self.track(Event::PrOpened {
                         from: "agent",
                         forge: crate::telemetry::forge(&t.provider.kind()),
                     });

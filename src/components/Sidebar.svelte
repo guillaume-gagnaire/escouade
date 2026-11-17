@@ -1021,6 +1021,7 @@
     <div class="new-split">
       <button
         class="new-agent"
+        data-discover="secondAgent"
         aria-label={t('nav.sidebar.newAgent')}
         aria-keyshortcuts="Control+N"
         onclick={() => app.newAgent(project.id)}
@@ -1586,6 +1587,7 @@
           <button
             class="icon-btn"
             bind:this={termMenuBtn}
+            data-discover="terminal"
             aria-label={t('nav.sidebar.newTerminal')}
             use:tip={{ text: t('nav.sidebar.newTerminal'), aria: false }}
             onclick={shellMenu}><Icon name="plus" size={14} /></button

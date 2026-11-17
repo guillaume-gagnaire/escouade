@@ -7,6 +7,7 @@
   import Icon from '../Icon.svelte';
   import TicketCard from './TicketCard.svelte';
   import { tip } from '../../lib/tip';
+  import { mayOffer, offerWhenQuiet } from '../../lib/discover.svelte';
 
   let {
     column,
@@ -51,9 +52,14 @@
   // The command's ticket shows at once, unless the backend's event, which may come before its answer, already brought
   // it, maybe newer (started meanwhile); one coming after brings the same or newer. True once it is made: the window closes.
   async function add(projectId: string, d: TicketDraft) {
+    // The first ticket made (ESC-506): the autopilot offered, on its switch, once the form is closed. Asked before: the
+    // autopilot starts the ticket at once, which does its discovery.
+    const tipOk = !Object.values(app.tickets).some((x) => x.projectId === projectId) && mayOffer('autopilot');
     const made = await app.run(api.ticketCreate(projectId, d));
     if (!made) return false;
     app.tickets[made.id] ??= made;
+    if (tipOk)
+      setTimeout(() => offerWhenQuiet('autopilot', () => document.querySelector<HTMLElement>('[data-discover="autopilot"]'), true), 600);
     return true;
   }
 
@@ -67,7 +73,12 @@
 </script>
 
 <!-- A column without a box (2.0): its ring, its name and its count, then its cards. -->
-<section class="col" aria-label={t(`board.columns.${column.id}`)} style:--tone={column.tone}>
+<section
+  class="col"
+  aria-label={t(`board.columns.${column.id}`)}
+  style:--tone={column.tone}
+  data-discover={column.id === 'review' ? 'approve' : undefined}
+>
   <div class="head">
     <i
       class="ring"
@@ -90,8 +101,12 @@
       >
     {/if}
     {#if column.id === 'todo'}
-      <button class="add" use:tip={t('board.column.newTicket')} aria-label={t('board.column.newTicket')} onclick={() => openForm()}
-        ><Icon name="plus" size={14} /></button
+      <button
+        class="add"
+        data-discover="ticket"
+        use:tip={t('board.column.newTicket')}
+        aria-label={t('board.column.newTicket')}
+        onclick={() => openForm()}><Icon name="plus" size={14} /></button
       >
     {/if}
   </div>

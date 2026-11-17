@@ -2977,6 +2977,8 @@ export type UiEvent =
   | { type: 'deepLink' }
   /** A team of the team server changed on this device (TS-3): read again by `team_list`. */
   | { type: 'teams' }
+  /** A discovery of the features done by a fact of the core (ESC-506): read it again. */
+  | { type: 'discoverChanged' }
   /** What a project's docs have to share (the changes not shared yet), and the conflict a « Partager » stopped on. */
   | { type: 'docsShare'; projectId: string; pending: number; conflict: DocsConflict | null }
   | { type: 'teamDocs'; projectId: string }
@@ -4114,3 +4116,67 @@ export type OnboardingAct =
   | { kind: 'finish' }
   | { kind: 'redo' }
   | { kind: 'telemetryAskedAgain' };
+
+/** A feature to discover by doing it (ESC-506, `docs/ONBOARDING.md` § 7), in the order of its map. */
+export type Discovery =
+  | 'ticket'
+  | 'autopilot'
+  | 'docs'
+  | 'dictation'
+  | 'voice'
+  | 'terminal'
+  | 'editor'
+  | 'secondAgent'
+  | 'launch'
+  | 'forge'
+  | 'prView'
+  | 'prReview'
+  | 'approve'
+  | 'openPr'
+  | 'plugin'
+  | 'mcp'
+  | 'account'
+  | 'remote'
+  | 'team';
+
+/** The moments of the cycle, the map's lanes. */
+export type DiscoverLane = 'plan' | 'code' | 'review' | 'ship' | 'drive';
+
+/** Why a discovery is not on this device (`discover::Absent`). */
+export type DiscoverAbsent = { kind: 'noMicrophone' } | { kind: 'noTeamServer' } | { kind: 'policy'; why: string };
+
+/** A discovery as the core tells it (`discover::DiscoverItem`). */
+export interface DiscoverItem {
+  id: Discovery;
+  lane: DiscoverLane;
+  status: 'todo' | 'done' | 'dismissed' | 'absent';
+  absent: DiscoverAbsent | null;
+  /** What it needs done first (« après GitHub »). */
+  after: Discovery | null;
+  /** New in the release of the band. */
+  new: boolean;
+}
+
+/** The discovery as the core tells it (`discover::DiscoverView`). */
+export interface DiscoverView {
+  items: DiscoverItem[];
+  /** « Tout masquer ». */
+  hidden: boolean;
+  done: number;
+  total: number;
+  /** The dot on « Aide ». */
+  dot: boolean;
+  /** The bubbles at the right moment still allowed. */
+  tips: Discovery[];
+  /** The band « Nouveau dans la 2.3 » to show: its release. */
+  band: string | null;
+}
+
+/** A gesture on the discovery (`discover::Act`). */
+export type DiscoverAct =
+  | { kind: 'seen'; id: Discovery }
+  | { kind: 'dismiss'; id: Discovery }
+  | { kind: 'restore'; id: Discovery }
+  | { kind: 'hide'; hidden: boolean }
+  | { kind: 'tipped'; id: Discovery }
+  | { kind: 'bandSeen' };

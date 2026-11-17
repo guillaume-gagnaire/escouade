@@ -55,6 +55,10 @@
   import TelemetryModal from './components/modals/TelemetryModal.svelte';
   import Onboarding from './components/onboarding/Onboarding.svelte';
   import { onboarding } from './lib/onboarding.svelte';
+  import DiscoverMap from './components/discover/DiscoverMap.svelte';
+  import DiscoverTip from './components/discover/DiscoverTip.svelte';
+  import NewBand from './components/discover/NewBand.svelte';
+  import { keyPressed, load as loadDiscover } from './lib/discover.svelte';
   import TeamNameModal from './components/modals/TeamNameModal.svelte';
   import TeamModal from './components/team/TeamModal.svelte';
   import UpdateModal from './components/modals/UpdateModal.svelte';
@@ -102,6 +106,12 @@
     void app.ui.view;
     void app.project?.color;
     app.applyTheme();
+  });
+
+  // The discovery of the features (ESC-506): read once the app is ready and the first launch is not on screen (its dot
+  // on « Aide », its band, its bubbles).
+  $effect(() => {
+    if (app.ready && !onboarding.shown) untrack(() => void loadDiscover());
   });
 
   // The one clock of the caches' degrees (ESC-398): it ticks while one of them is warm, and stops with the last.
@@ -196,7 +206,11 @@
       e.stopPropagation();
       return;
     }
-    if (e.type === 'keydown') holdPrint(e);
+    if (e.type === 'keydown') {
+      holdPrint(e);
+      // No bubble of the discovery while the user types (ESC-506).
+      keyPressed();
+    }
   }
 </script>
 
@@ -228,6 +242,9 @@
       <TlsBanner />
       <TeamSettingsBand />
       <TeamHintBand />
+      {#if !onboarding.shown}
+        <NewBand />
+      {/if}
     </div>
   {/if}
   {#if app.ready && onboarding.shown}
@@ -244,6 +261,9 @@
         <div class="work"><Overview /></div>
       {:else if app.ui.view === 'stats'}
         <div class="work"><Stats /></div>
+      {:else if app.ui.view === 'discover'}
+        <!-- Aide › À découvrir (ESC-506). -->
+        <div class="work"><DiscoverMap /></div>
       {:else if app.ui.view === 'plugins'}
         <PluginsSide />
         <div class="work"><PluginsView /></div>
@@ -326,6 +346,9 @@
 {#if overseer.open}
   <OverseerScreen />
 {/if}
+
+<!-- A bubble of the discovery (ESC-506), on the real control. -->
+<DiscoverTip />
 
 {#if app.modal?.kind === 'newProject'}
   <NewProjectModal />

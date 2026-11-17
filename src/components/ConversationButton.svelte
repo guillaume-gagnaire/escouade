@@ -67,6 +67,7 @@
   {/if}
   <button
     class="icon-btn conv"
+    data-discover="voice"
     class:on={mine && conversation.active}
     aria-pressed={mine && conversation.active}
     aria-label={t('voice.conversation.button')}

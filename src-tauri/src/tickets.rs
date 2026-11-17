@@ -1918,8 +1918,7 @@ impl Core {
         });
         let Ok((t, forced)) = started else { return };
         if !forced {
-            self.telemetry
-                .track(Event::TicketStarted { autopilot: true });
+            self.track(Event::TicketStarted { autopilot: true });
         }
         if let Err(e) = self.launch_ticket_agent(project, &t).await {
             log::warn!("ticket {}: start failed: {e:#}", t.key);
@@ -3610,7 +3609,7 @@ impl Core {
         match self.forge_client(&remote.host).await {
             Ok((client, _)) => match client.create_pr(&remote.repo, &draft).await {
                 Ok(pr) => {
-                    self.telemetry.track(Event::PrOpened {
+                    self.track(Event::PrOpened {
                         from: "ticket",
                         forge: crate::telemetry::forge(&kind),
                     });

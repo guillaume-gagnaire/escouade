@@ -21,6 +21,7 @@ import mcp from './mcp';
 import memory from './memory';
 import backups from './backups';
 import onboarding from './onboarding';
+import discover from './discover';
 import vectors from './vectors';
 import nav from './nav';
 import plan from './plan';
@@ -72,6 +73,7 @@ export const en = defineCatalog({
   memory,
   backups,
   onboarding,
+  discover,
   vectors,
   branches,
   plan,

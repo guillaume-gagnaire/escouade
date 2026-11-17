@@ -57,6 +57,7 @@ mod devpage;
 mod devpage_probe;
 #[cfg(test)]
 mod devpage_tests;
+mod discover;
 mod discussion;
 #[cfg(test)]
 mod discussion_tests;

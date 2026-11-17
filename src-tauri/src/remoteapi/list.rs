@@ -364,6 +364,9 @@ escouade_command::commands! {
         // The first launch's journey (ESC-504): shown in the window alone.
         commands::onboarding_view,
         commands::onboarding_act,
+        // The discovery of the features (ESC-506).
+        commands::discover_view,
+        commands::discover_act,
         commands::mcp_declare_status,
         commands::mcp_manual_command,
     }

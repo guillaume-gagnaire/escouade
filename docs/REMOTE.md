@@ -272,6 +272,8 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `create_agent_on_pr`
 - `data_dir`
 - `delete_agent`
+- `discover_act`
+- `discover_view`
 - `discussion_drop`
 - `discussion_pour`
 - `discussion_start`

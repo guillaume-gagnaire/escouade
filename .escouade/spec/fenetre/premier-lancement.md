@@ -2,7 +2,7 @@
 title: "Premier lancement"
 subject: "fenetre"
 sources: ["docs/ONBOARDING.md","design/onboarding-2-3/README.md","design/onboarding-2-3/maquette.html","design/onboarding-2-3/captures/c-harness.png","design/onboarding-2-3/captures/c-modes-clair-1024.png"]
-tickets: ["ESC-503","ESC-504"]
+tickets: ["ESC-503","ESC-504","ESC-506"]
 decisions: [195]
 compared: null
 ---
@@ -90,7 +90,7 @@ Le parcours qui règle Escouade sur un poste neuf, une question à la fois : le 
 
 ### L'aide
 
-- L'icône « Aide » du rail, au-dessus des stats (et au premier démarrage, entre `+` et « Réglages ») ouvre un menu : « Premier lancement » (le parcours refait), « Documentation » (le site, dans la langue de l'interface), « Signaler un problème » (les tickets du dépôt sur GitHub). « À découvrir » s'y ajoutera avec la découverte (ON-3, ESC-506).
+- L'icône « Aide » du rail, au-dessus des stats (et au premier démarrage, entre `+` et « Réglages ») ouvre un menu : « Premier lancement » (le parcours refait), « À découvrir » (la carte de la découverte des fonctionnalités, page « À découvrir »), « Documentation » (le site, dans la langue de l'interface), « Signaler un problème » (les tickets du dépôt sur GitHub). Un point teal s'y pose tant qu'il reste des découvertes ni faites ni écartées.
 
 ## Réglages
 
@@ -99,6 +99,6 @@ Le parcours qui règle Escouade sur un poste neuf, une question à la fois : le 
 
 ## Limites
 
-- La bande « Nouveau dans la 2.3 » d'un poste mis à jour et la découverte (Aide › À découvrir) sont d'ON-3 ; la démonstration, le clone et le premier agent d'ON-2 ; les fonctionnalités à brancher (sources de tickets, voix) d'ON-1b (ESC-512) ; les événements de statistiques du parcours d'ON-4 (ESC-507).
+- La bande « Nouveau dans la 2.3 » d'un poste mis à jour et la découverte (Aide › À découvrir) ont leur page, « À découvrir » ; une nouvelle installation ne voit jamais la bande. La démonstration, le clone et le premier agent sont d'ON-2 ; les fonctionnalités à brancher (sources de tickets, voix) d'ON-1b (ESC-512) ; les événements de statistiques du parcours d'ON-4 (ESC-507).
 - Une invitation d'équipe ouverte au premier lancement n'est pas encore une station.
 - Un poste qui a fermé la question du mode sans répondre avant la 2.3 (son mode vide, des projets) n'est pas un poste neuf : le parcours ne s'ouvre pas, le mode recommandé reste en vigueur.

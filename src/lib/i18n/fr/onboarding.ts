@@ -114,7 +114,7 @@ export default {
   /** The rail's Aide (choice O10). */
   help: {
     label: 'Aide',
-    tip: 'Le premier lancement, la documentation',
+    tip: 'Le premier lancement, À découvrir, la documentation',
     firstLaunch: 'Premier lancement',
     firstLaunchDetail: 'Revoir le harness, le compte, le mode des agents',
     docs: 'Documentation',

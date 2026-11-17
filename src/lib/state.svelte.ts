@@ -40,6 +40,7 @@ import { newCount, opened, readSeen, seenOf, type PrSeen } from './prnew';
 import { keptViewed } from './prfiles';
 import { workflows } from './workflows.svelte';
 import { takeView as takeOnboarding } from './onboarding.svelte';
+import { hear as discoverHears, seen as discoverSeen } from './discover.svelte';
 import {
   activeItem,
   close as closePane,
@@ -985,6 +986,8 @@ class AppState {
   }
 
   private onEvent(e: UiEvent) {
+    // The discovery of the features (ESC-506) read again when the real state may have done one.
+    discoverHears(e.type);
     switch (e.type) {
       case 'agent': {
         const prev = this.agents[e.agent.id];
@@ -1083,6 +1086,8 @@ class AppState {
         break;
       case 'teams':
         void teams.load();
+        break;
+      case 'discoverChanged':
         break;
       case 'voice':
         dictation.take(e.voice);
@@ -1758,6 +1763,7 @@ class AppState {
     this.selectedLaunch[projectId] = null;
     this.closeEditor(projectId);
     this.persistUi();
+    discoverSeen('docs');
   }
 
   /** Shows the discussion `agentId` (ESC-261) in its project's Docs tab. */
@@ -1989,6 +1995,7 @@ class AppState {
       // the one it showed last (ESC-464).
       const seq = (st.reveal?.seq ?? 0) + 1;
       st.reveal = req.line ? (req.col ? { path, line: req.line, col: req.col, seq } : { path, line: req.line, seq }) : { path, seq };
+      discoverSeen('editor');
     }
     this.paneShow(projectId, { kind: 'editor' });
     this.persistUi();

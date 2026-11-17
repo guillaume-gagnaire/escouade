@@ -1,5 +1,7 @@
 import { Channel, invoke } from './transport';
 import type {
+  DiscoverAct,
+  DiscoverView,
   OnboardingAct,
   OnboardingView,
   BackupDiff,
@@ -206,6 +208,10 @@ export const api = {
   onboardingView: () => invoke<OnboardingView>('onboarding_view'),
   /** A station done or passed, « Tout passer », its end, « Refaire le premier lancement »; the journey as it then is. */
   onboardingAct: (act: OnboardingAct) => invoke<OnboardingView>('onboarding_act', { act }),
+  /** The discovery of the features (ESC-506); `microphones`: those this window found, null when it cannot tell. */
+  discoverView: (microphones: number | null) => invoke<DiscoverView>('discover_view', { microphones }),
+  /** Seen, « Écarter », « Remettre », « Tout masquer », a bubble shown, the band closed; the discovery as it then is. */
+  discoverAct: (act: DiscoverAct, microphones: number | null) => invoke<DiscoverView>('discover_act', { act, microphones }),
   /** The dictation (Réglages › Voix): the microphones and the models. */
   voiceInfo: () => invoke<VoiceInfo>('voice_info'),
   /** Starts listening with the settings' microphone and model, or says the model is to be downloaded first. */

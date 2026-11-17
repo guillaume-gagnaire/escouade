@@ -13,6 +13,7 @@
   import { settingsForm } from '../../lib/settings.svelte';
   import { app } from '../../lib/state.svelte';
   import { redo } from '../../lib/onboarding.svelte';
+  import { openMap } from '../../lib/discover.svelte';
   import { privacyUrl } from '../../lib/telemetry';
   import { checkForUpdate, postponeRestart, restartIn, shownVersion } from '../../lib/updater';
   import Markdown from '../conv/Markdown.svelte';
@@ -302,6 +303,16 @@
         app.modal = null;
         void redo();
       }}><Icon name="flow" size={14} />{t('onboarding.redo.button')}</button
+    >
+  </Row>
+  <!-- The map of the discovery (ESC-506), there even when « Tout masquer » hid its bubbles. -->
+  <Row label={t('discover.settings.row')} desc={t('discover.settings.rowDesc')}>
+    <button
+      class="btn"
+      onclick={() => {
+        app.modal = null;
+        openMap();
+      }}><Icon name="diagram" size={14} />{t('discover.settings.button')}</button
     >
   </Row>
 </Group>

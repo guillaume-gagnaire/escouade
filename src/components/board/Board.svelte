@@ -106,6 +106,7 @@
         {/if}
         <button
           class="auto"
+          data-discover="autopilot"
           role="switch"
           aria-checked={s.autopilot}
           aria-label={t('board.header.autopilot')}

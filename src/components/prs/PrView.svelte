@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { offer, seen } from '../../lib/discover.svelte';
   import { fAgo, fList, fTime } from '../../lib/format';
   import { t } from '../../lib/i18n';
   import { api } from '../../lib/ipc';
@@ -744,6 +745,18 @@
   }
 
   const ago = (seconds?: number) => (seconds ? fAgo(seconds, app.now) : '');
+
+  // A pull request shown in the app (ESC-506): its discovery done; the first open one offers the review by an agent, on
+  // its button, once.
+  let reviewBtn = $state<HTMLButtonElement | undefined>();
+  $effect(() => {
+    if (!pr) return;
+    untrack(() => seen('prView'));
+    const btn = reviewBtn;
+    if (!btn) return;
+    const timer = setTimeout(() => offer('prReview', btn), 800);
+    return () => clearTimeout(timer);
+  });
 </script>
 
 <svelte:window
@@ -1045,6 +1058,8 @@
       {#if !hostRepo && pr?.state === 'open'}
         <button
           class="btn agentic"
+          data-discover="prReview"
+          bind:this={reviewBtn}
           disabled={starting || review?.phase === 'reading'}
           use:tip={review ? t('prs.review.againHint', { word }) : t('prs.review.askHint', { word })}
           onclick={askReview}><Icon name="sparkle" size={14} />{review ? t('prs.review.again') : t('prs.review.ask')}</button

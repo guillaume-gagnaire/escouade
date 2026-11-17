@@ -10,6 +10,7 @@
   import { app } from '../lib/state.svelte';
   import { openOutside, siteUrl } from '../lib/links';
   import { redo } from '../lib/onboarding.svelte';
+  import { discover, openMap } from '../lib/discover.svelte';
   import { tip } from '../lib/tip';
   import type { Project } from '../lib/types';
   import Icon from './Icon.svelte';
@@ -185,6 +186,15 @@
         detail: t('onboarding.help.firstLaunchDetail'),
         onClick: () => void redo(),
       },
+      // The map of the discovery (ESC-506): there even when « Tout masquer » hid its bubbles and its dot.
+      {
+        label: t('discover.help.item'),
+        icon: 'diagram',
+        detail: discover.view?.hidden
+          ? t('discover.help.itemHidden')
+          : t('discover.help.itemDetail', { done: discover.view?.done ?? 0, total: discover.view?.total ?? 0 }),
+        onClick: () => openMap(),
+      },
       { label: '', separator: true },
       {
         label: t('onboarding.help.docs'),
@@ -282,9 +292,20 @@
     class="tile global"
     aria-haspopup="menu"
     aria-label={t('onboarding.help.label')}
-    use:tip={{ title: t('onboarding.help.label'), rows: [t('onboarding.help.tip')], side: 'right', aria: false }}
+    aria-describedby={discover.view?.dot ? 'help-dot-desc' : undefined}
+    aria-pressed={app.ui.view === 'discover'}
+    data-testid="rail-help"
+    use:tip={{
+      title: t('onboarding.help.label'),
+      rows: discover.view?.dot ? [t('onboarding.help.tip'), t('discover.help.dot')] : [t('onboarding.help.tip')],
+      side: 'right',
+      aria: false,
+    }}
     onclick={help}
-    ><Icon name="info" /><span class="lbl" aria-hidden="true"><span class="tx">{t('onboarding.help.label')}</span></span></button
+    ><Icon name="info" />{#if discover.view?.dot}<i class="help-dot" aria-hidden="true" data-testid="help-dot"></i><span
+        id="help-dot-desc"
+        hidden>{t('discover.help.dot')}</span
+      >{/if}<span class="lbl" aria-hidden="true"><span class="tx">{t('onboarding.help.label')}</span></span></button
   >
   {#if !first}
     <button
@@ -377,6 +398,17 @@
     min-height: 0;
   }
   /* The tiles of what no project owns: the overview, « + », the stats and the settings. */
+  /* The dot on « Aide » (ESC-506): something left to discover, neither done nor dismissed. */
+  .help-dot {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--teal);
+    box-shadow: 0 0 0 2px var(--frame, var(--bg));
+  }
   .tile {
     position: relative;
     flex: none;

@@ -4,7 +4,7 @@ use crate::notify::NotifyKind;
 use escouade_plan::plan::PlanState;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -2823,6 +2823,61 @@ pub struct Onboarding {
     pub steps: BTreeMap<OnboardingStep, StepOutcome>,
     /// The statistics' question passed at the journey was asked once more at a later start: never again.
     pub telemetry_asked_again: bool,
+    /// The discovery of the features (ESC-506, `docs/ONBOARDING.md` § 7): what became of each, kept done once the real
+    /// state made it so, or dismissed (it never comes back by itself).
+    pub discover: BTreeMap<Discovery, DiscoverOutcome>,
+    /// « Tout masquer »: no bubble, no dot on « Aide »; the map stays in Aide › À découvrir.
+    pub discover_hidden: bool,
+    /// The discoveries already offered by a bubble at the right moment: never twice.
+    pub tipped: BTreeSet<Discovery>,
+    /// The last release (« 2.3 ») whose band « Nouveau dans la … » was seen or closed; a new installation starts at its own.
+    pub seen_release: Option<String>,
+}
+
+/// A feature to discover by doing it (ESC-506, `docs/ONBOARDING.md` § 7), in the order of its map.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum Discovery {
+    /// Plan: a ticket and its criteria.
+    Ticket,
+    Autopilot,
+    /// The spec and the decisions (the tab Docs).
+    Docs,
+    /// Code: dictate a message.
+    Dictation,
+    /// A spoken conversation with an agent.
+    Voice,
+    Terminal,
+    Editor,
+    SecondAgent,
+    /// Review: the commands that run the project.
+    Launch,
+    /// A code host connected (its PRs and its CI).
+    Forge,
+    PrView,
+    PrReview,
+    /// Ship: a ticket validated.
+    Approve,
+    OpenPr,
+    /// Drive: a plugin of the store.
+    Plugin,
+    /// The MCP server, for another client.
+    Mcp,
+    /// A second account, or another harness: the handover when one hits its limit.
+    Account,
+    /// Escouade remote (the remote API, the phone).
+    Remote,
+    Team,
+}
+
+/// What became of a discovery.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum DiscoverOutcome {
+    /// Its gesture made for real (or the real state says so): it stays done.
+    Done,
+    /// « Écarter »: never offered again by itself; « Remettre » on its map brings it back.
+    Dismissed,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
