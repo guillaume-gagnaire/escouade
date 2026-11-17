@@ -1,6 +1,12 @@
+// The core alone (`escouade-server`, no feature `desktop`) leaves out the window and what serves it alone: what the
+// desktop's modules lend the core is built, its other parts are unused there, which says nothing.
+#![cfg_attr(not(feature = "desktop"), allow(dead_code, unused_imports))]
 // First: its macros (`tr!`, `tr_in!`) are then in scope in every module below.
 #[macro_use]
 extern crate escouade_plugin_cli;
+// The core alone (`escouade-server`): what it takes of Tauri, without Tauri, under Tauri's name (docs/CRATES.md, § 14).
+#[cfg(not(feature = "desktop"))]
+extern crate escouade_tauri_shim as tauri;
 #[macro_use]
 mod i18n;
 mod accounts;
@@ -24,6 +30,7 @@ mod branchci;
 #[cfg(test)]
 mod branches_tests;
 mod bypass;
+#[cfg(feature = "desktop")]
 mod clipboard;
 mod closed;
 #[cfg(test)]
@@ -48,12 +55,15 @@ mod core_tests;
 mod cursor_tests;
 #[cfg(test)]
 mod cursor_tui_tests;
+#[cfg(feature = "desktop")]
 mod deeplink;
 #[cfg(test)]
 mod deeplink_tests;
 mod deploys;
+#[cfg(feature = "desktop")]
 mod desktop;
 mod devpage;
+#[cfg(feature = "desktop")]
 mod devpage_probe;
 #[cfg(test)]
 mod devpage_tests;
@@ -135,6 +145,7 @@ mod locks;
 mod lsp;
 mod mcp;
 mod memory;
+#[cfg(feature = "desktop")]
 mod menus;
 mod model;
 mod modes;
@@ -142,6 +153,7 @@ mod modes;
 mod multi_repo_tests;
 mod multiticket;
 mod multiwt;
+#[cfg(feature = "desktop")]
 mod navigation;
 mod notify;
 mod onboarding;
@@ -250,6 +262,9 @@ mod selfupdate;
 mod sentfiles;
 #[cfg(test)]
 mod sentfiles_tests;
+pub mod server;
+#[cfg(test)]
+mod server_tests;
 mod sharing;
 #[cfg(test)]
 mod sharing_tests;
@@ -333,14 +348,19 @@ use crate::core::Core;
 use std::io::Write;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+#[cfg(feature = "desktop")]
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+#[cfg(feature = "desktop")]
 use tauri::{Manager, WebviewWindowBuilder, WindowEvent};
+#[cfg(feature = "desktop")]
 use tauri_plugin_window_state::StateFlags;
 
+#[cfg(feature = "desktop")]
 struct FileLogger {
     file: parking_lot::Mutex<std::fs::File>,
 }
 
+#[cfg(feature = "desktop")]
 impl log::Log for FileLogger {
     fn enabled(&self, m: &log::Metadata) -> bool {
         // whisper.cpp tells every step of a model's loading: only its warnings and errors.
@@ -368,6 +388,7 @@ impl log::Log for FileLogger {
     fn flush(&self) {}
 }
 
+#[cfg(feature = "desktop")]
 fn init_logging() {
     let data = paths::DataDir::new(paths::default_data_dir());
     let _ = data.ensure();
@@ -391,6 +412,7 @@ fn init_logging() {
 
 /// The tray icon, its menu in the interface's language (written again when it changes:
 /// `menus::relabel`).
+#[cfg(feature = "desktop")]
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     let lang = i18n::ui();
     let menu = menus::tray_menu(app.handle(), lang)?;
@@ -429,6 +451,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 }
 
 /// The window's theme for « Thème »: none is the system's.
+#[cfg(feature = "desktop")]
 fn window_theme(choice: model::ThemeChoice) -> Option<tauri::Theme> {
     match choice {
         model::ThemeChoice::System => None,
@@ -440,6 +463,7 @@ fn window_theme(choice: model::ThemeChoice) -> Option<tauri::Theme> {
 /// The main window, made from the config's (`create: false` there: the guard of `navigation` can
 /// only be put on it as it is made), hidden until `setup` (in `run`) shows it. `remote`: in a build of development, the
 /// link of the window to the remote API (`remoteapi::window`), which its page then speaks to the core by.
+#[cfg(feature = "desktop")]
 fn build_window(
     app: &tauri::App,
     remote: Option<&remoteapi::window::WindowLink>,
@@ -493,6 +517,11 @@ fn build_window(
     Ok(())
 }
 
+/// `escouade-server` (src/bin): the core without a window, its remote API, its pairing (ESC-514). Gives the exit code.
+pub fn server_main(args: Vec<String>) -> i32 {
+    server::main(args)
+}
+
 /// `escouade-plugin` (src/bin): the conformance bench, the manifest's check and the fake Escouade,
 /// for the plugins' authors (PLG-3). Gives the exit code.
 pub fn plugin_cli(args: Vec<String>) -> i32 {
@@ -500,16 +529,19 @@ pub fn plugin_cli(args: Vec<String>) -> i32 {
 }
 
 /// The app's context (its config and its pages), made once: the window's and the probes'.
+#[cfg(feature = "desktop")]
 fn context() -> tauri::Context {
     tauri::generate_context!()
 }
 
 /// `devpage_probe` (examples): a launch's page in a real webview of this system (ESC-311), what it
 /// could reach of Escouade, its storage, its devtools and its widths. Gives the exit code.
+#[cfg(feature = "desktop")]
 pub fn devpage_probe_cli(args: Vec<String>) -> i32 {
     devpage_probe::cli(args, context())
 }
 
+#[cfg(feature = "desktop")]
 pub fn run() {
     // Before GTK starts: the window's app_id and WM_CLASS, which find its icon (ESC-239).
     #[cfg(target_os = "linux")]
@@ -706,7 +738,8 @@ pub fn run() {
             // only (the tests, until the server mode has its setting: a variable opens nothing in a release, as
             // SEC-13 of the audit asks of the policies); the window is a client like any other of the same core.
             let listen = match window_link {
-                Some(link) => Some(remoteapi::server::Listen::Bound(link.listener)),
+                // The window on another core's API (`escouade-server`, ESC-514): this one serves nothing.
+                Some(link) => link.listener.map(remoteapi::server::Listen::Bound),
                 None => remoteapi::server::port_asked().map(remoteapi::server::Listen::Port),
             };
             if let Some(listen) = listen {

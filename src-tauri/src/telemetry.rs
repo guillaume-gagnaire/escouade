@@ -258,7 +258,11 @@ impl System {
                 "WebKitGTK"
             }
             .to_string(),
+            // A server has no WebView (docs/CRATES.md, § 14).
+            #[cfg(feature = "desktop")]
             engine_version: tauri::webview_version().unwrap_or_default(),
+            #[cfg(not(feature = "desktop"))]
+            engine_version: String::new(),
         }
     }
 

@@ -210,6 +210,15 @@ impl Output for Silent {
 /// The system's speakers (its default output), through cpal: the stream lives on a thread of its own.
 pub struct Speakers;
 
+/// Without the feature `devices` (escouade-server, ESC-514: the voice is on the client's machine), no speakers.
+#[cfg(not(feature = "devices"))]
+impl Output for Speakers {
+    fn open(&self, _rate: u32, _volume: f32, _done: Done) -> Result<Arc<dyn Playing>, String> {
+        Err("no speakers on this machine".into())
+    }
+}
+
+#[cfg(feature = "devices")]
 impl Output for Speakers {
     fn open(&self, rate: u32, volume: f32, done: Done) -> Result<Arc<dyn Playing>, String> {
         use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};

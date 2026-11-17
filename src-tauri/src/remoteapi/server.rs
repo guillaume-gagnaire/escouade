@@ -51,6 +51,9 @@ pub const PORT_VAR: &str = "ESCOUADE_REMOTE_API";
 /// In a debug build only, a device token the tests give (fondation 2b's e2e): a device « test » kept in memory.
 pub const TEST_TOKEN_VAR: &str = "ESCOUADE_REMOTE_API_TOKEN";
 
+/// How often the devices' file is looked at, for a device another process revoked (`escouade-server devices`).
+const DEVICES_EVERY: Duration = Duration::from_secs(2);
+
 /// The port `ESCOUADE_REMOTE_API` gives, in a build of development; never in a release (a variable opens nothing
 /// there, as SEC-13 of the audit asks of the policies).
 pub fn port_asked() -> Option<u16> {
@@ -380,6 +383,65 @@ impl RemoteApi {
         Ok(gone)
     }
 
+    /// A new device paired by the code `code` (`pairing`), named `name`: it and its token, or the refusal's code and text.
+    /// A refused code counts as a failed handshake (the bound of a minute's failures); the log says neither the code
+    /// nor the token.
+    fn pair(
+        &self,
+        code: &str,
+        name: &str,
+    ) -> std::result::Result<(super::devices::Device, String), (&'static str, String)> {
+        let core = self.services.core().clone();
+        if let Err(e) = core.locks.read().check_remote_api() {
+            return Err((codes::POLICY, e.to_string()));
+        }
+        let data = core.data.clone();
+        if let Err(refusal) = super::pairing::redeem(&data, code, crate::model::now_ms()) {
+            self.failed();
+            log::warn!("remote API: pairing refused: {}", refusal.reason());
+            return Err((codes::PAIRING, refusal.text()));
+        }
+        // The name, as the user typed it: printable, 64 characters at most.
+        let name: String = name.chars().filter(|c| !c.is_control()).take(64).collect();
+        let name = if name.trim().is_empty() {
+            tr!("Appareil", "Device")
+        } else {
+            name
+        };
+        match self.devices.add(&name) {
+            Ok((device, token)) => {
+                log::info!("remote API: device « {} » paired", device.name);
+                Ok((device, token))
+            }
+            Err(e) => {
+                log::error!("remote API: a paired device not kept: {e:#}");
+                Err((codes::PAIRING, e.to_string()))
+            }
+        }
+    }
+
+    /// The devices read again when another process changed them (`escouade-server devices revoke`): the connections
+    /// of a device revoked there are closed, its sessions forgotten.
+    fn sync_devices(&self) {
+        if !self.devices.refresh() {
+            return;
+        }
+        let gone: Vec<String> = self
+            .live
+            .lock()
+            .values()
+            .filter(|c| !self.devices.holds(&c.device))
+            .map(|c| {
+                c.kicked.notify_one();
+                c.device.clone()
+            })
+            .collect();
+        for id in gone {
+            self.sessions.forget_device(&id);
+            log::info!("remote API: device {id} revoked");
+        }
+    }
+
     /// No more connections, and the ones open closed.
     pub fn stop(&self) {
         self.stopped.notify_one();
@@ -417,9 +479,11 @@ impl RemoteApi {
     }
 
     async fn accept(self: Arc<Self>, listener: TcpListener) {
+        let mut devices = tokio::time::interval(DEVICES_EVERY);
         loop {
             tokio::select! {
                 _ = self.stopped.notified() => break,
+                _ = devices.tick() => self.sync_devices(),
                 accepted = listener.accept() => match accepted {
                     Ok((stream, _)) => {
                         let now = Instant::now();
@@ -526,6 +590,27 @@ impl RemoteApi {
                     token,
                     session,
                 }) => (version, token, session),
+                // A new device's code, in place of the handshake (ESC-514): its token, or why not; closed either way.
+                Ok(ToServer::Pair { code, name }) => {
+                    let messages = match self.pair(&code, &name) {
+                        Ok((device, token)) => {
+                            let mut out = Vec::new();
+                            if let Ok(text) =
+                                serde_json::to_string(&ToClient::Paired { device, token })
+                            {
+                                out.push(Message::text(text));
+                            }
+                            out.push(Message::Close(Some(CloseFrame {
+                                code: CloseCode::Normal,
+                                reason: "paired".into(),
+                            })));
+                            out
+                        }
+                        Err((code, error)) => refuse(code, error, None, None),
+                    };
+                    send_all(&mut sink, messages).await;
+                    return;
+                }
                 _ => {
                     self.failed();
                     send_all(
@@ -548,6 +633,8 @@ impl RemoteApi {
         };
         let core = self.services.core().clone();
         let server_version = core.host.version();
+        // A device paired or revoked by another process meanwhile (`escouade-server pair`, `devices revoke`).
+        self.devices.refresh();
         let refused = if let Err(e) = core.locks.read().check_remote_api() {
             Err(refuse(codes::POLICY, e.to_string(), None, None))
         } else if let Some(device) = self.devices.find(&token) {
@@ -677,6 +764,7 @@ impl RemoteApi {
                 .filter(|c| c.class == super::Class::Desk)
                 .map(|c| c.name.to_string())
                 .collect(),
+            secrets_in_file: core.host.secrets_in_file(),
         });
         // What the host publishes (a process without a window), pushed as it comes.
         let host_events = core.host.events().map(|mut events| {

@@ -91,6 +91,10 @@ pub enum ToServer {
     },
     /// The terminals of the session to take over again, each from where the client stopped.
     Resume { channels: Vec<Resume> },
+    /// In place of the handshake, a new device's first connection (ESC-514): the pairing code `escouade-server pair`
+    /// showed (`remoteapi::pairing`), and the name the user gives the device. Answered by [`ToClient::Paired`] (its
+    /// token, given once) or [`ToClient::Refused`] (`pairing`), then closed: the device connects again with its token.
+    Pair { code: String, name: String },
 }
 
 /// What the server sends.
@@ -110,6 +114,17 @@ pub enum ToClient {
         /// The desktop's commands (`desk-only` here): a client that has a desktop of its own does them there.
         #[serde(default)]
         desk: Vec<String>,
+        /// The server keeps its secrets (the keys of the integrations, of Cursor, of the voices and of the plugins) in a
+        /// file of its data readable by its owner alone, not in a keychain (`escouade-server`, ESC-514): the client says
+        /// so where they are given.
+        #[serde(default, rename = "secretsInFile")]
+        secrets_in_file: bool,
+    },
+    /// The pairing passed (ESC-514): the new device and its token, which the client keeps and gives at each handshake
+    /// from now on. Given once; the connection then closes.
+    Paired {
+        device: super::devices::Device,
+        token: String,
     },
     /// The connection refused, then closed: `code` says why (`remoteapi::codes`). For `version`, both versions and
     /// which one to update (`server` or `client`), for the client to offer « Mettre à jour le serveur ».

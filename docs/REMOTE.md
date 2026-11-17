@@ -137,7 +137,7 @@ Relevé sur `release/2.3` : chaque usage de Tauri dans le crate de l'app (`src-t
 - **Le verrou du dossier de données** (`headless::InstanceLock`) : un fichier `instance.lock` verrouillé par le système (`flock` sous Unix, ouvert sans partage sous Windows), lâché avec le process quelle que soit sa fin. Le process sans fenêtre le prend avant de charger le cœur, et refuse un dossier déjà tenu ; l'app de bureau le prend aussi, sans s'arrêter si elle ne l'a pas (`single-instance` l'en garde déjà), pour qu'un process sans fenêtre ne démarre pas sur ses données.
 - **Le cœur sans fenêtre** (`headless::Headless::start`) : le verrou, l'hôte sans fenêtre, `Core::load`, puis `Core::start` comme l'app (Kanban, Git, enregistrements). C'est ce que lancera `escouade-server`.
 - **L'essai court, en test** (`headless_tests.rs`, dans `cargo nextest` sur les trois systèmes, la CI Linux comprise) : sous Linux, sans `DISPLAY` ni `WAYLAND_DISPLAY`, le cœur sans fenêtre crée un projet, lance un agent sur le faux `claude` et le mène à la fin de son tour ; le hub dit l'agent fini, et l'hôte publie le carillon, le clignotement et la notification de fin. Essayé aussi sous WSL, WSLg écarté.
-- **Ce qui reste lié à Tauri** : le crate de l'app lie toujours WebKitGTK et GTK, même sans fenêtre ; `escouade-server` sans WebKit ni GTK demande de sortir le cœur dans un crate à lui (`docs/CRATES.md`), avec `tauri::async_runtime` remplacé par Tokio.
+- **Ce qui restait lié à Tauri** : le crate de l'app liait toujours WebKitGTK et GTK, même sans fenêtre. Fait par ESC-514 sans sortir le cœur dans un crate à lui : une feature `desktop` du crate de l'app, et `escouade-tauri-shim` à la place de Tauri sans elle (`docs/CRATES.md`, § 14 ; « Le mode serveur, MS-1 » ci-dessous).
 
 ### La fondation 2a (ESC-478, 2026-11-16) : l'API distante du cœur
 
@@ -738,6 +738,22 @@ Elles ne marchent pas encore telles quelles : refusées avec l'erreur `not-serve
   - GTK du presse-papiers.
 - **Les tests.** Un e2e lance `escouade-server`, puis le client par une redirection locale : sans SSH réel en CI, et avec un `ssh` du système vers `localhost` en option.
 
+### Le mode serveur, MS-1 (ESC-514, 2026-11-17) : `escouade-server`
+
+La spec le décrit (« Escouade à distance › Le mode serveur »). Le client qui s'y connecte (« Se connecter à un serveur », le tunnel SSH), le service systemd, l'image Docker et la mise à jour signée du serveur sont d'autres tickets.
+
+- **Le cœur sans Tauri** (`docs/CRATES.md`, § 14, et sa décision) : aucun fichier déplacé. Le crate de l'app a une feature `desktop` (par défaut) qui porte Tauri, ses plugins, GTK, WebKitGTK et le reste du bureau ; sans elle, `crates/escouade-tauri-shim` tient lieu de Tauri sous son nom (`async_runtime`, `ipc::Channel`, les corps de l'IPC, `http`, `Url`), et ce qui ne sert que la fenêtre n'est pas compilé (`#[cfg(feature = "desktop")]`). Les commandes refusées à distance par leur classe (`desk`, `moves_refused`) n'existent pas dans le serveur : sa table de l'API les refuse (`remoteapi::refused_here`).
+- **Le binaire** (`src-tauri/src/bin/escouade-server.rs`, `src-tauri/src/server/`) : `cargo build -p escouade --bin escouade-server --no-default-features`. Il ne lie que la libc, libm, libgcc_s et libstdc++ (whisper.cpp et eSpeak NG, liés en statique) : ni WebKit, ni GTK, ni D-Bus, ni ALSA (le micro et les haut-parleurs, cpal, sont la feature `devices` de la voix, que seul le bureau prend), ni X11 ou Wayland. Vérifié par `scripts/server-libs.sh` (`ldd`) et par `scripts/server-trial.sh` dans un conteneur `debian:trixie-slim` nu, sans affichage : il démarre, sert l'API sur 127.0.0.1 seulement, fait un code d'appairage, refuse un second serveur sur son dossier et s'arrête à SIGTERM avec le code 0, son état écrit. Le job « Server (Linux x64 / arm64) » de la CI fait les deux (runners `ubuntu-24.04` et `ubuntu-24.04-arm`, sans WebKitGTK ni GTK installés). Sous Windows, il se construit avec `desktop` pour l'e2e. Construit sur Ubuntu 24.04, il demande la glibc 2.39 (Debian 13) : une release pour des systèmes plus anciens se construira sur une base plus ancienne.
+- **Ce qu'il fait** (`server::serve`) : le verrou du dossier de données d'abord (`headless::InstanceLock` ; « Escouade tourne déjà sur ce dossier de données (…) : un seul à la fois. »), les groupes de process laissés par un arrêt brutal, le cœur sans fenêtre sur un hôte qui garde ses secrets dans un fichier (`Headless::start_locked`), l'API sur 127.0.0.1:46480 (`--port`), puis ce que l'app fait une fois son cœur levé (la migration des comptes, `claude` de WSL réchauffé, les modèles des comptes, la mise à jour de Claude Code). À SIGTERM ou SIGINT : l'API fermée, `Core::shutdown` (les tours coupés, les process et les plugins arrêtés, l'état écrit), le dossier lâché.
+- **Ses commandes** : `run` (par défaut), `pair`, `devices`, `devices revoke <id>`, `--data-dir`, `--port`, `--listen <adresse>` (une autre interface que 127.0.0.1, pour Docker ou un proxy : il avertit, rien n'est ouvert par défaut), `--debug`, `--version`, `--help` (partout : `pair --help` ne fait pas de code). Elles parlent la langue des réglages du dossier, sinon celle du système.
+- **L'appairage** (`remoteapi::pairing`) : `pair` écrit `remote-pairing.json` (0600, l'empreinte SHA-256 du code, sa fin, les essais restants), sous le verrou d'un fichier `.lock` à côté (`headless::with_file_lock` : le serveur et `pair` sont deux process) ; un code de 8 lettres sans 0, O, 1 ni I (40 bits), valable 10 minutes, une fois, 5 essais faux au plus. Le client l'envoie à la place de la poignée de main (`{"t":"pair","code","name"}`) ; le serveur répond `{"t":"paired","device","token"}` puis ferme, ou refuse (`pairing`, compté comme une poignée de main ratée). Comparé en temps constant ; ni le code ni le jeton dans le journal.
+- **Les appareils entre deux process** (`remoteapi::devices`) : chaque changement de `remote-devices.json` (ajout, révocation, dernière connexion) relit le fichier sous son verrou, puis l'écrit ; le serveur le relit quand il a changé (à chaque poignée de main, et toutes les 2 s : un appareil révoqué par `escouade-server devices revoke` est déconnecté).
+- **Les secrets** (`server::secrets::FileStore`) : le magasin en fichier d'ESC-499 n'est pas encore dans `release/2.3` (parti de `main`) ; ce ticket en fait un au plus simple, à réunir avec lui quand il sera reversé : `secrets.json` (0600, remis à 0600 au démarrage s'il ne l'est plus), relu quand un autre process l'a changé, écrit sous son verrou. Il garde tout ce que le cœur garde au trousseau sur un poste : les jetons des appareils, les clés des intégrations, de Cursor, des voix en ligne et des plugins. Le `welcome` porte `secretsInFile` (`Host::secrets_in_file`) ; la fenêtre le lit (`connection.secretsInFile`), l'interface qui le montre vient avec le client.
+- **Le journal** (`server::logs`) : chaque ligne sur la sortie standard (systemd, Docker) et dans `server.log` du dossier de données, qui tourne à 5 Mo (trois anciens gardés).
+- **La fenêtre sur un autre cœur** (`remoteapi::window`, build de debug) : `ESCOUADE_REMOTE_URL` (une WebSocket de 127.0.0.1) et `ESCOUADE_REMOTE_API_TOKEN` mettent la fenêtre sur l'API d'un `escouade-server` ; le cœur de l'app ne sert alors rien, les commandes du poste restent les siennes.
+- **Les essais** : Rust (`server_tests` : la ligne de commande, l'appairage et ses refus (expiré, redonné, faux, trop d'essais, un nouveau code qui remplace l'ancien), les secrets en fichier et leurs droits, le verrou d'un fichier, l'appairage par la WebSocket puis la connexion par le jeton et la révocation par un autre process, le journal sans code ni jeton, l'arrêt propre et son état écrit, le refus d'un dossier tenu) ; Vitest (`secretsInFile`) ; e2e (`server.spec.ts`, `tests/e2e/server.ts` : `escouade-server` sur un dossier neuf, `pair`, une redirection locale en Node à la place de `ssh -L`, l'appairage, la fenêtre sur son API ; un projet, un agent du faux `claude` et sa réponse, tout sur le serveur ; le client fermé puis rouvert retrouve l'agent et lui parle encore).
+- **Pas encore** : le service systemd et sa commande d'installation ; l'image Docker ; le tunnel et « Se connecter à un serveur » ; l'affichage de `secretsInFile` ; la release du binaire et sa mise à jour signée ; les équipes sur un serveur (`teams` n'est pas ouvert par `escouade-server`).
+
 ## Le téléphone
 
 Il repose sur la même fondation : l'API distante du cœur, servie dans un tunnel. Il vise le PC ou un serveur. Le tout se fait sans service tiers ni abonnement, avec une configuration réduite à une redirection de port dans la box et un QR code à scanner.
@@ -955,8 +971,10 @@ Demandé le 2026-11-14 : « avoir plusieurs serveurs Escouade pilotés par un se
 
 **Mode serveur**
 - [ ] Essais : la connexion de Claude Code, Codex, Copilot CLI, Cursor CLI et OpenCode sur un VPS, le navigateur sur une autre machine.
-- [ ] `escouade-server` pour Linux x64 et arm64, sans WebKit ni GTK ; le service systemd ; `escouade-server pair` ; ses journaux.
-- [ ] Les secrets dans un fichier lisible du seul propriétaire, sur un serveur ; dit dans l'interface.
+- [x] `escouade-server` pour Linux x64 et arm64, sans WebKit ni GTK ; `escouade-server pair` et `devices` ; ses journaux ; l'arrêt propre à SIGTERM (ESC-514, `src-tauri/src/server`, le job « Server (Linux) »).
+- [ ] Le service systemd et sa commande d'installation ; l'image Docker.
+- [x] Les secrets dans un fichier lisible du seul propriétaire, sur un serveur ; le fait dit au client (`welcome.secretsInFile`) (ESC-514).
+- [ ] L'interface dit que les secrets d'un serveur sont en fichier (avec « Se connecter à un serveur »).
 - [ ] La mise à jour du serveur (même signature que l'updater), proposée par le client à sa version.
 - [ ] Dans le client : « Se connecter à un serveur » (hôte SSH, appairage), la machine dans la barre de titre, le retour en local.
 - [ ] La table « Ce qui change de machine » :
@@ -966,7 +984,7 @@ Demandé le 2026-11-14 : « avoir plusieurs serveurs Escouade pilotés par un se
   - les ports des serveurs de test relayés ;
   - les notifications rendues par le client ;
   - la voix sur le poste.
-- [ ] Un e2e `escouade-server` + client par une redirection locale.
+- [x] Un e2e `escouade-server` + client par une redirection locale (ESC-514, `tests/e2e/server.spec.ts`).
 
 **Téléphone**
 - [ ] Essais : `boringtun` + `smoltcp` dans un binaire de test, joint depuis l'app WireGuard d'un téléphone en 4G, sous Windows, macOS et Linux.

@@ -13,13 +13,16 @@
 //! - **The client** a call comes from ([`Client`]): the window, or a connection of the API. The hub's subscribers and
 //!   the interface's state (`UiState`) are kept by client.
 //! - **The server** (`server.rs`): the WebSocket, the handshake (versions, device token), its guards.
+//! - **The pairing** (`pairing.rs`, ESC-514): a new device's code, exchanged for its token before any handshake.
 
 pub mod devices;
 pub mod list;
 pub mod outbox;
+pub mod pairing;
 pub mod proto;
 pub mod server;
 pub mod sessions;
+#[cfg(feature = "desktop")]
 pub mod window;
 
 use crate::core::Core;
@@ -30,7 +33,10 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use tauri::ipc::{CommandArg, CommandItem, InvokeError, InvokeResponseBody};
+use tauri::ipc::InvokeResponseBody;
+#[cfg(feature = "desktop")]
+use tauri::ipc::{CommandArg, CommandItem, InvokeError};
+#[cfg(feature = "desktop")]
 use tauri::{Manager, Runtime};
 
 /// What the remote API does of a command (`docs/REMOTE.md`, « Le classement des commandes »).
@@ -59,6 +65,13 @@ pub struct Command {
     pub class: Class,
     /// `__remote_<name>`, written by `#[tauri::command]` (`escouade_command::command`).
     pub call: fn(Call) -> Reply,
+}
+
+/// The call of a command the core without a window refuses by its class (the desktop's, those not served yet): its
+/// function is not built there (docs/CRATES.md, § 14), the server refuses it before any call.
+#[cfg(not(feature = "desktop"))]
+pub fn refused_here(_call: Call) -> Reply {
+    Reply::refused("not in this process")
 }
 
 /// The command `name` of the list.
@@ -112,6 +125,7 @@ pub fn scoped<F: Future>(client: Client, f: F) -> impl Future<Output = F::Output
 /// put there (`with`).
 pub struct Services {
     core: Arc<Core>,
+    #[cfg(feature = "desktop")]
     app: Option<tauri::AppHandle>,
     more: HashMap<TypeId, Box<dyn Any + Send + Sync>>,
 }
@@ -121,12 +135,14 @@ impl Services {
     pub fn new(core: Arc<Core>) -> Self {
         Self {
             core,
+            #[cfg(feature = "desktop")]
             app: None,
             more: HashMap::new(),
         }
     }
 
     /// The core and the desktop app's states (`app.manage`).
+    #[cfg(feature = "desktop")]
     pub fn of_app(core: Arc<Core>, app: tauri::AppHandle) -> Self {
         Self {
             app: Some(app),
@@ -152,12 +168,18 @@ impl Services {
         if let Some(state) = self.more.get(&TypeId::of::<T>()) {
             return state.downcast_ref::<T>();
         }
-        self.app
+        #[cfg(feature = "desktop")]
+        let found = self
+            .app
             .as_ref()
             .and_then(|app| app.try_state::<T>())
-            .map(|s| s.inner())
+            .map(|s| s.inner());
+        #[cfg(not(feature = "desktop"))]
+        let found = None;
+        found
     }
 
+    #[cfg(feature = "desktop")]
     pub fn app(&self) -> Option<&tauri::AppHandle> {
         self.app.as_ref()
     }
@@ -223,6 +245,7 @@ impl crate::termlog::Sink for IpcSink {
     }
 }
 
+#[cfg(feature = "desktop")]
 impl<'de, R: Runtime> CommandArg<'de, R> for TermChannel {
     fn from_command(command: CommandItem<'de, R>) -> Result<Self, InvokeError> {
         Ok(TermChannel::Window(CommandArg::from_command(command)?))
@@ -262,6 +285,7 @@ fn channel_id(call: &Call, key: &str) -> Result<u32, Failure> {
 /// The raw body of a call (the chunks of an attachment, the bytes of a file) and its headers, as the commands read
 /// it: from Tauri's request for the IPC, from the call's binary frames for the remote API (`server`).
 pub enum Body<'a> {
+    #[cfg(feature = "desktop")]
     Ipc(tauri::ipc::Request<'a>),
     Remote(Option<&'a RawBody>),
 }
@@ -270,6 +294,7 @@ impl Body<'_> {
     /// Its bytes, when they came raw (not as JSON).
     pub fn raw(&self) -> Option<&[u8]> {
         match self {
+            #[cfg(feature = "desktop")]
             Body::Ipc(request) => match request.body() {
                 tauri::ipc::InvokeBody::Raw(bytes) => Some(bytes.as_slice()),
                 _ => None,
@@ -281,6 +306,7 @@ impl Body<'_> {
     /// The header `name`, as text.
     pub fn header(&self, name: &str) -> Option<&str> {
         let headers = match self {
+            #[cfg(feature = "desktop")]
             Body::Ipc(request) => request.headers(),
             Body::Remote(body) => &(*body)?.headers,
         };
@@ -288,6 +314,7 @@ impl Body<'_> {
     }
 }
 
+#[cfg(feature = "desktop")]
 impl<'a, R: Runtime> CommandArg<'a, R> for Body<'a> {
     fn from_command(command: CommandItem<'a, R>) -> Result<Self, InvokeError> {
         Ok(Body::Ipc(CommandArg::from_command(command)?))
@@ -342,6 +369,8 @@ pub mod codes {
     pub const POLICY: &str = "policy";
     /// The first message was not the handshake, or came too late.
     pub const HANDSHAKE: &str = "handshake";
+    /// A pairing code refused (`pairing`): none waits, it expired, it is wrong, or it took too many tries.
+    pub const PAIRING: &str = "pairing";
     /// Too many connections of this device, or in all.
     pub const TOO_MANY: &str = "too-many-connections";
     /// Too many calls of this connection wait for their answer.
@@ -403,6 +432,7 @@ impl<T: Send + Sync + 'static> Clone for State<'_, T> {
     }
 }
 
+#[cfg(feature = "desktop")]
 impl<'r, 'de: 'r, T: Send + Sync + 'static, R: Runtime> CommandArg<'de, R> for State<'r, T> {
     fn from_command(command: CommandItem<'de, R>) -> Result<Self, InvokeError> {
         let state: tauri::State<'r, T> = CommandArg::from_command(command)?;
@@ -420,6 +450,7 @@ impl<'r, T: Send + Sync + 'static> Maybe<'r, T> {
     }
 }
 
+#[cfg(feature = "desktop")]
 impl<'r, 'de: 'r, T: Send + Sync + 'static, R: Runtime> CommandArg<'de, R> for Maybe<'r, T> {
     fn from_command(command: CommandItem<'de, R>) -> Result<Self, InvokeError> {
         Ok(Maybe(
@@ -468,6 +499,7 @@ impl<'c, T> FromCall<'c> for tauri::ipc::Channel<T> {
 }
 
 /// The desktop app's handle: in the desktop app only.
+#[cfg(feature = "desktop")]
 impl<'c> FromCall<'c> for tauri::AppHandle {
     fn from_call(call: &'c Call, key: &str) -> Result<Self, Failure> {
         call.services.app().cloned().ok_or_else(|| {
@@ -480,6 +512,7 @@ impl<'c> FromCall<'c> for tauri::AppHandle {
 }
 
 /// Tauri's request: the commands take [`Body`] instead, which both read.
+#[cfg(feature = "desktop")]
 impl<'c, 'a> FromCall<'c> for tauri::ipc::Request<'a> {
     fn from_call(call: &'c Call, _key: &str) -> Result<Self, Failure> {
         Err(Failure::refused(

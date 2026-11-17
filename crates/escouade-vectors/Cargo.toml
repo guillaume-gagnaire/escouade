@@ -12,7 +12,7 @@ publish = false
 
 [dependencies]
 # ONNX Runtime as the voice links it (its `ort`), made ready by it, and the download of a model.
-escouade-voice-local = { path = "../escouade-voice-local" }
+escouade-voice-local = { path = "../escouade-voice-local", default-features = false }
 anyhow = "1"
 parking_lot = "0.13"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }

@@ -7,12 +7,20 @@
 //!   never a launch's page, which is another webview), and the API serves on it once the core is up.
 //! - The window's content security policy lets it reach the loopback's WebSockets ([`open_csp`]): in that case alone.
 //! - Nothing of it in a release: a variable opens nothing there.
+//! - With `ESCOUADE_REMOTE_URL` in place of the port (ESC-514), the window speaks to another core's API: an
+//!   `escouade-server` reached through a local forward, as a client of the server mode will (the e2e of `server.spec.ts`).
+//!   The app's own core serves nothing then; the desktop's commands are still its own (the IPC).
 
 use std::net::{Ipv4Addr, TcpListener};
 
-/// The link of the window to the API: its socket, bound, and what the page is told.
+/// In a build of development, the address of another core's API on the loopback (`ws://127.0.0.1:<port>/remote`), which
+/// the window speaks to with the token of `ESCOUADE_REMOTE_API_TOKEN`.
+pub const URL_VAR: &str = "ESCOUADE_REMOTE_URL";
+
+/// The link of the window to the API: its socket, bound (none when the API is another process's), and what the page
+/// is told.
 pub struct WindowLink {
-    pub listener: TcpListener,
+    pub listener: Option<TcpListener>,
     pub url: String,
     token: String,
 }
@@ -23,24 +31,46 @@ pub fn wanted() -> bool {
         return false;
     }
     let set = |k: &str| std::env::var(k).is_ok_and(|v| !v.trim().is_empty());
-    set(super::server::PORT_VAR) && set(super::server::TEST_TOKEN_VAR)
+    (set(super::server::PORT_VAR) || set(URL_VAR)) && set(super::server::TEST_TOKEN_VAR)
+}
+
+/// The address of `ESCOUADE_REMOTE_URL`, when it is a WebSocket of the loopback (what the window's policy lets it reach).
+fn other_core() -> Option<String> {
+    let url = std::env::var(URL_VAR).ok()?;
+    let url = url.trim();
+    let parsed = tauri::Url::parse(url).ok()?;
+    let loopback = parsed.host_str() == Some("127.0.0.1");
+    if parsed.scheme() != "ws" || !loopback || parsed.port().is_none() {
+        log::warn!("remote API: {URL_VAR} is not a WebSocket of 127.0.0.1 with a port: the window keeps the IPC");
+        return None;
+    }
+    Some(url.to_string())
 }
 
 /// The API's socket bound on 127.0.0.1 at the port of `ESCOUADE_REMOTE_API` (0: a free one), when both variables say
-/// the window is to speak by it.
+/// the window is to speak by it; or the address of another core's (`ESCOUADE_REMOTE_URL`), nothing bound.
 pub fn bind() -> Option<WindowLink> {
     if !wanted() {
         return None;
     }
-    let port = super::server::port_asked()?;
     let token = std::env::var(super::server::TEST_TOKEN_VAR).ok()?;
+    if std::env::var(URL_VAR).is_ok_and(|v| !v.trim().is_empty()) {
+        let url = other_core()?;
+        log::info!("remote API: the window speaks to another core, through {url}");
+        return Some(WindowLink {
+            listener: None,
+            url,
+            token,
+        });
+    }
+    let port = super::server::port_asked()?;
     match TcpListener::bind((Ipv4Addr::LOCALHOST, port)) {
         Ok(listener) => {
             let addr = listener.local_addr().ok()?;
             log::info!("remote API: the window speaks to the core through {addr}");
             Some(WindowLink {
                 url: format!("ws://{addr}{}", super::proto::PATH),
-                listener,
+                listener: Some(listener),
                 token,
             })
         }
@@ -97,7 +127,7 @@ mod tests {
     fn the_page_of_escouade_alone_is_told_where_the_api_is_and_its_policy_lets_it_reach_the_loopback(
     ) {
         let link = WindowLink {
-            listener: TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap(),
+            listener: Some(TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap()),
             url: "ws://127.0.0.1:4210/remote".into(),
             token: "a\"b</script>".into(),
         };

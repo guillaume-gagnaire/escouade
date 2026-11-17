@@ -1,4 +1,11 @@
 fn main() {
+    // The core alone (`escouade-server`, no feature `desktop`): no window, no context of Tauri to make (docs/CRATES.md, § 14).
+    #[cfg(feature = "desktop")]
+    desktop();
+}
+
+#[cfg(feature = "desktop")]
+fn desktop() {
     #[allow(unused_mut)] // only changed on Windows
     let mut attributes = tauri_build::Attributes::new();
     // Embed the Common-Controls v6 manifest in every binary, test harnesses included:

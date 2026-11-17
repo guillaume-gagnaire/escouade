@@ -24,7 +24,9 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+#[cfg(feature = "desktop")]
 use tauri::{AppHandle, Manager, Runtime};
+#[cfg(feature = "desktop")]
 use tauri_plugin_updater::{Update, UpdaterExt};
 
 // What the app learns of a request that failed, and the fake server of the tests: in `escouade-updates` (docs/CRATES.md).
@@ -219,6 +221,7 @@ type Slot = Arc<Mutex<Option<Hook>>>;
 
 /// The update the plugin found, with the way it was found: a download goes the same way, and
 /// latest.json is read again the same way (`Release::again`).
+#[cfg(feature = "desktop")]
 struct PluginRelease<R: Runtime> {
     update: Update,
     slot: Slot,
@@ -227,6 +230,7 @@ struct PluginRelease<R: Runtime> {
     checker: Arc<Checker<R>>,
 }
 
+#[cfg(feature = "desktop")]
 impl<R: Runtime> PluginRelease<R> {
     fn package(&self, update: Update, bytes: Vec<u8>) -> Box<dyn Package> {
         Box::new(PluginPackage {
@@ -284,6 +288,7 @@ impl<R: Runtime> PluginRelease<R> {
     }
 }
 
+#[cfg(feature = "desktop")]
 impl<R: Runtime> Release for PluginRelease<R> {
     fn version(&self) -> &str {
         &self.update.version
@@ -313,12 +318,14 @@ impl<R: Runtime> Release for PluginRelease<R> {
     }
 }
 
+#[cfg(feature = "desktop")]
 struct PluginPackage {
     update: Update,
     bytes: Vec<u8>,
     slot: Slot,
 }
 
+#[cfg(feature = "desktop")]
 impl Package for PluginPackage {
     fn install(&self, relaunch: bool, before_exit: Hook) -> Result<()> {
         #[cfg(windows)]
@@ -721,6 +728,7 @@ fn trouble_text(error: &anyhow::Error) -> String {
 }
 
 /// An update the plugin found, and what came with it.
+#[cfg(feature = "desktop")]
 struct Candidate {
     update: Update,
     slot: Slot,
@@ -756,6 +764,7 @@ pub fn accepts(current: &semver::Version, remote: &semver::Version, beta: bool) 
 }
 
 /// A check of the updates: how to reach the network, and where latest.json is.
+#[cfg(feature = "desktop")]
 struct Checker<R: Runtime> {
     app: AppHandle<R>,
     net: Network,
@@ -768,6 +777,7 @@ struct Checker<R: Runtime> {
     pause: Duration,
 }
 
+#[cfg(feature = "desktop")]
 impl<R: Runtime> Checker<R> {
     /// A check through the network settings as they are now.
     fn new(app: &AppHandle<R>, settings: &Settings) -> Result<Self> {
@@ -922,6 +932,7 @@ impl<R: Runtime> Checker<R> {
 
 /// Where latest.json is, from the plugin's configuration (`plugins.updater.endpoints`); in a
 /// debug build, `ESCOUADE_UPDATE_ENDPOINT` when set (the end-to-end tests' server).
+#[cfg(feature = "desktop")]
 fn configured_endpoints<R: Runtime>(app: &AppHandle<R>) -> Result<Vec<Url>> {
     if cfg!(debug_assertions) {
         let given = std::env::var("ESCOUADE_UPDATE_ENDPOINT").unwrap_or_default();
@@ -950,6 +961,7 @@ fn configured_endpoints<R: Runtime>(app: &AppHandle<R>) -> Result<Vec<Url>> {
 /// certificate checks of the settings; the update found is kept for its download. None found: the
 /// one downloaded, if any, was withdrawn. A failure is told with its cause, and shown (`manual`: the
 /// user asked) or kept quiet until it goes on (`Updates::check_failed`).
+#[cfg(feature = "desktop")]
 pub async fn check<R: Runtime>(
     app: &AppHandle<R>,
     settings: &Settings,
@@ -1279,6 +1291,7 @@ pub fn closing(
 /// Restarts or closes the app once its update is in place, or after an install that failed once
 /// the app had stopped. On Windows the plugin's hook cleaned the app up before the installer:
 /// no Tauri API may run any more, the process restarts or exits by itself.
+#[cfg(feature = "desktop")]
 fn leave<R: Runtime>(app: &AppHandle<R>, env: &tauri::Env, relaunch: bool) {
     if cfg!(windows) {
         if relaunch {
@@ -1293,6 +1306,7 @@ fn leave<R: Runtime>(app: &AppHandle<R>, env: &tauri::Env, relaunch: bool) {
 }
 
 /// How the main window is now.
+#[cfg(feature = "desktop")]
 fn window_now<R: Runtime>(app: &AppHandle<R>) -> Window {
     match app.get_webview_window("main") {
         Some(w) => window_of(
@@ -1320,6 +1334,7 @@ fn window_of(visible: bool, minimized: bool, focused: bool, macos: bool) -> Wind
 
 /// « Redémarrer maintenant », or the automatic restart, off the async runtime (the stop and the
 /// install block).
+#[cfg(feature = "desktop")]
 pub async fn restart_now<R: Runtime>(app: AppHandle<R>) -> Result<()> {
     tauri::async_runtime::spawn_blocking(move || {
         let core = app.state::<Arc<Core>>().inner().clone();
@@ -1334,6 +1349,7 @@ pub async fn restart_now<R: Runtime>(app: AppHandle<R>) -> Result<()> {
 
 /// « Redémarrer maintenant » of a copy chosen to be taken back (ESC-487): the app stops as « Quitter » stops it, its
 /// state saved, and starts again, which puts the copy in place; no update is installed on the way.
+#[cfg(feature = "desktop")]
 pub async fn relaunch<R: Runtime>(app: AppHandle<R>) -> Result<()> {
     tauri::async_runtime::spawn_blocking(move || {
         let core = app.state::<Arc<Core>>().inner().clone();
@@ -1350,6 +1366,7 @@ const QUIT_WAIT: Duration = Duration::from_secs(120);
 
 /// « Quitter »: the app stops; with an update ready, it installs silently and the app stays
 /// closed (`closing`).
+#[cfg(feature = "desktop")]
 pub fn quit<R: Runtime>(app: &AppHandle<R>) {
     let core = app.state::<Arc<Core>>().inner().clone();
     let updates = app.state::<Updates>();
@@ -1450,6 +1467,7 @@ fn wait_install(core: &Core, updates: &Updates, unattended: bool, limit: Duratio
 /// it on the main thread, which waits here). One installing already is waited for, unless it
 /// needs an administrator (`wait_install`). True when the app stopped for it.
 #[cfg(target_os = "macos")]
+#[cfg(feature = "desktop")]
 pub fn install_at_exit<R: Runtime>(app: &AppHandle<R>) -> bool {
     let updates = app.state::<Updates>();
     let core = app.state::<Arc<Core>>().inner().clone();
@@ -1478,6 +1496,7 @@ pub fn install_at_exit<R: Runtime>(app: &AppHandle<R>) -> bool {
 }
 
 /// « Plus tard »: the automatic restart planned is called off, and none comes for a while.
+#[cfg(feature = "desktop")]
 pub fn postpone<R: Runtime>(app: &AppHandle<R>) {
     if app.state::<Updates>().postpone(now_ms()) {
         app.state::<Arc<Core>>()
@@ -1488,6 +1507,7 @@ pub fn postpone<R: Runtime>(app: &AppHandle<R>) {
 
 /// Restarts the app by itself for the update downloaded, the setting on, once it is at rest,
 /// the user warned `WARNING` before (a system notification, the status bar's countdown).
+#[cfg(feature = "desktop")]
 pub fn watch<R: Runtime>(app: AppHandle<R>) {
     // Sandboxed runs (end-to-end tests, demos) never restart under the one driving them.
     if crate::paths::sandbox_dir().is_some() {
@@ -1501,6 +1521,7 @@ pub fn watch<R: Runtime>(app: AppHandle<R>) {
     });
 }
 
+#[cfg(feature = "desktop")]
 async fn tick<R: Runtime>(app: &AppHandle<R>) {
     let core = app.state::<Arc<Core>>().inner().clone();
     let updates = app.state::<Updates>();

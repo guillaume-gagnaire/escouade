@@ -360,6 +360,12 @@ jobs:
           CARGO_PROFILE_DEV_DEBUG: 0
         run: cargo nextest archive --profile ci --archive-file ../nextest-windows.tar.zst
 
+      # The core without a window, which server.spec.ts drives the app on (ESC-514): built here too, before the app's
+      # build (nothing is built between the app's build and the end-to-end tests).
+      - name: Build escouade-server for end-to-end tests
+        working-directory: src-tauri
+        run: cargo build --locked --bin escouade-server
+
       # The team server the end-to-end tests of the part « team server » start (tests/e2e/team*.spec.ts, ESC-519): built
       # once here, with the profile of the archive above (its test of the binary built it already), never in each part.
       - name: The team server, for the end-to-end tests
@@ -388,6 +394,7 @@ jobs:
           path: |
             src-tauri/target/debug/escouade.exe
             src-tauri/target/debug/escouade-hook.exe
+            src-tauri/target/debug/escouade-server.exe
             src-tauri/target/debug/escouade-team-server.exe
             src-tauri/target/plugins-wasm/
           retention-days: 1
@@ -553,6 +560,56 @@ jobs:
           path: test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  # escouade-server (ESC-514, docs/CRATES.md § 14, docs/REMOTE.md « Le mode serveur »): the core without the desktop, for
+  # Linux x64 and arm64, built where neither WebKitGTK nor GTK is installed; no library of the desktop linked
+  # (scripts/server-libs.sh); started in a bare Debian container, no display: served on 127.0.0.1, a pairing code, a
+  # clean stop at SIGTERM (scripts/server-trial.sh). No release yet (its signed update is another ticket).
+  server-linux:
+    name: Server (Linux ${{ matrix.arch }})
+    needs: escouade-js
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download escouade-js
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: escouade-js
+          path: src-tauri/escouade-js/target
+
+      - name: System libraries (whisper.cpp's tools; no WebKitGTK, no GTK, no sound)
+        run: sh scripts/linux-deps.sh server
+
+      - name: Rust toolchain (pinned in src-tauri/rust-toolchain.toml)
+        working-directory: src-tauri
+        run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: src-tauri
+          key: server-${{ matrix.arch }}
+
+      - name: Build escouade-server without the desktop
+        working-directory: src-tauri
+        run: cargo build --locked -p escouade --bin escouade-server --no-default-features
+
+      - name: No library of the desktop linked (ldd)
+        run: sh scripts/server-libs.sh src-tauri/target/debug/escouade-server
+
+      - name: In a bare Debian container, no display
+        run: >-
+          docker run --rm -v "$PWD/src-tauri/target/debug:/srv/bin:ro" -v "$PWD/scripts:/srv/scripts:ro"
+          debian:trixie-slim bash /srv/scripts/server-trial.sh /srv/bin/escouade-server
 
   # The Rust tests built once, as on Windows and macOS: compiling them took 4 min and running them 9 to 13 on one runner
   # of 4 vCPUs (2026-11-10).

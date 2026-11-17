@@ -18,6 +18,7 @@ use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
+#[cfg(feature = "desktop")]
 use tauri::{AppHandle, Manager, Runtime};
 
 /// A future of the host's, which the core awaits from any task.
@@ -71,6 +72,15 @@ pub trait Host: Send + Sync + 'static {
     fn events(&self) -> Option<tokio::sync::mpsc::UnboundedReceiver<HostEvent>> {
         None
     }
+    /// Where the core keeps its secrets, when the host chooses (`escouade-server`: a file readable by its owner alone,
+    /// ESC-514); none: the system's keychain, as the desktop does (`integrations::secrets::store_for`).
+    fn secrets(&self) -> Option<Arc<dyn crate::integrations::secrets::SecretStore>> {
+        None
+    }
+    /// Whether the secrets are in a file of the data rather than in a keychain: the client says so (`welcome`).
+    fn secrets_in_file(&self) -> bool {
+        false
+    }
 }
 
 /// What `Core::load` takes for its host: a Tauri app's handle (the desktop's and most tests'), or a
@@ -79,6 +89,7 @@ pub trait IntoHost {
     fn into_host(self) -> Arc<dyn Host>;
 }
 
+#[cfg(feature = "desktop")]
 impl<R: Runtime> IntoHost for AppHandle<R> {
     fn into_host(self) -> Arc<dyn Host> {
         Arc::new(TauriHost::new(self))
@@ -100,16 +111,19 @@ impl IntoHost for Arc<dyn Host> {
 // ---------- the desktop's ----------
 
 /// The desktop app's host: Tauri's window, tray, notifications, opener and clipboard.
+#[cfg(feature = "desktop")]
 pub struct TauriHost<R: Runtime> {
     app: AppHandle<R>,
 }
 
+#[cfg(feature = "desktop")]
 impl<R: Runtime> TauriHost<R> {
     pub fn new(app: AppHandle<R>) -> Self {
         Self { app }
     }
 }
 
+#[cfg(feature = "desktop")]
 impl<R: Runtime> Host for TauriHost<R> {
     fn version(&self) -> String {
         self.app.package_info().version.to_string()
@@ -208,6 +222,8 @@ pub struct HeadlessHost {
     resources: Option<PathBuf>,
     origins: FileOrigins,
     subscribers: Mutex<Vec<tokio::sync::mpsc::UnboundedSender<HostEvent>>>,
+    /// The secrets' store it gives the core (`escouade-server`'s file), if any.
+    secrets: Option<Arc<dyn crate::integrations::secrets::SecretStore>>,
 }
 
 impl Default for HeadlessHost {
@@ -224,7 +240,17 @@ impl HeadlessHost {
             resources,
             origins: FileOrigins::default(),
             subscribers: Mutex::new(Vec::new()),
+            secrets: None,
         }
+    }
+
+    /// The core's secrets kept in a file (`escouade-server`, ESC-514: no keychain on a server).
+    pub fn with_secrets(
+        mut self,
+        store: Arc<dyn crate::integrations::secrets::SecretStore>,
+    ) -> Self {
+        self.secrets = Some(store);
+        self
     }
 
     /// The events from now on. A subscriber that went is forgotten at the next event.
@@ -302,5 +328,13 @@ impl Host for HeadlessHost {
 
     fn events(&self) -> Option<tokio::sync::mpsc::UnboundedReceiver<HostEvent>> {
         Some(self.subscribe())
+    }
+
+    fn secrets(&self) -> Option<Arc<dyn crate::integrations::secrets::SecretStore>> {
+        self.secrets.clone()
+    }
+
+    fn secrets_in_file(&self) -> bool {
+        self.secrets.is_some()
     }
 }

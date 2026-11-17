@@ -12,6 +12,10 @@ workspace = "../../src-tauri"
 publish = false
 
 [features]
+default = ["devices"]
+# The machine's microphone and speakers, through cpal (WASAPI, CoreAudio, ALSA). Without it, `Microphone` and `Speakers` say
+# there are none, and no sound library is linked: escouade-server (ESC-514), whose voice is on the client's machine.
+devices = ["dep:cpal"]
 # ONNX Runtime loaded from a library at run time, as on Intel Macs and Linux (the app's `ort-dynamic`).
 ort-dynamic = ["ort/load-dynamic"]
 
@@ -28,7 +32,7 @@ serde_json = "1"
 sha2 = "0.11"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }
 # The microphone through cpal (WASAPI, CoreAudio, ALSA), transcribed by whisper.cpp (whisper-rs builds it, with cmake).
-cpal = "0.18"
+cpal = { version = "0.18", optional = true }
 whisper-rs = { version = "0.16", features = ["log_backend"] }
 # A WAV file as the sound source: the end-to-end tests, which have no microphone.
 hound = "3.5"

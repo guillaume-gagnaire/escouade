@@ -2105,6 +2105,7 @@ dependencies = [
  "escouade-plugin-protocol",
  "escouade-plugins",
  "escouade-policy",
+ "escouade-tauri-shim",
  "escouade-team",
  "escouade-team-server",
  "escouade-updates",
@@ -2365,6 +2366,7 @@ dependencies = [
  "escouade-plugin-cli",
  "escouade-plugin-kit",
  "escouade-plugin-protocol",
+ "escouade-tauri-shim",
  "flate2",
  "futures-util",
  "log",
@@ -2378,7 +2380,6 @@ dependencies = [
  "serde_json",
  "sha2 0.11.1",
  "tar",
- "tauri",
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite 0.30.0",
@@ -2402,6 +2403,18 @@ dependencies = [
  "tempfile",
  "windows-sys 0.61.2",
  "winreg 0.55.0",
+]
+
+[[package]]
+name = "escouade-tauri-shim"
+version = "0.1.0"
+dependencies = [
+ "http",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tokio",
+ "url",
 ]
 
 [[package]]

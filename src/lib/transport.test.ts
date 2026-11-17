@@ -109,6 +109,19 @@ describe('the transport on the remote API', () => {
     expect(connection.state).toBe('open');
   });
 
+  it('reads in the handshake whether the core keeps its secrets in a file (a server, ESC-514)', async () => {
+    socket().onopen?.();
+    socket().json({ t: 'welcome', session: 's1', desk: [], secretsInFile: true });
+    await tick();
+    expect(connection.secretsInFile).toBe(true);
+    socket().close(1006, 'cut');
+    await new Promise((r) => setTimeout(r, 20));
+    socket().onopen?.();
+    socket().json({ t: 'welcome', session: 's1', desk: [] });
+    await tick();
+    expect(connection.secretsInFile).toBe(false);
+  });
+
   it('gives the results and the errors as the IPC does, and the named ones in the window’s language', async () => {
     welcome();
     const ok = transport.invoke('set_ui', { ui: {} });

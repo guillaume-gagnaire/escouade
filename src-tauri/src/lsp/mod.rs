@@ -22,6 +22,7 @@ use std::sync::Arc;
 
 use serde::Serialize;
 use serde_json::{Map, Value};
+#[cfg(feature = "desktop")]
 use tauri::{AppHandle, Emitter, Runtime};
 
 use crate::model::LanguageServerSetting;
@@ -310,14 +311,17 @@ pub fn server_named(name: &str) -> Result<&'static Server, Refused> {
 }
 
 /// The window's: messages as `lsp-message` (`{ id, msg }`), states as `lsp-state` (`Info`).
+#[cfg(feature = "desktop")]
 pub struct TauriSink<R: Runtime>(pub AppHandle<R>);
 
 #[derive(Clone, Serialize)]
+#[cfg(feature = "desktop")]
 struct Message<'a> {
     id: u32,
     msg: &'a str,
 }
 
+#[cfg(feature = "desktop")]
 impl<R: Runtime> Sink for TauriSink<R> {
     fn message(&self, id: u32, msg: &str) {
         let _ = self.0.emit("lsp-message", Message { id, msg });
@@ -328,6 +332,7 @@ impl<R: Runtime> Sink for TauriSink<R> {
 }
 
 /// The servers of the app, its window their sink.
+#[cfg(feature = "desktop")]
 pub fn for_app<R: Runtime>(app: AppHandle<R>) -> Arc<Manager> {
     Manager::new(Arc::new(TauriSink(app)), Policy::default())
 }

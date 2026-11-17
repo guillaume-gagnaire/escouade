@@ -9,6 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { freePort, waitForPortToClose } from './port';
+import { serverProgram, startServer, type Server } from './server';
 import { lookDiff } from './srgb';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -93,6 +94,12 @@ export interface App {
     /** `CLAUDE_CODE_ARTIFACT`: its artifacts on in stream-json (ESC-400). */
     artifact: string | null;
   }[];
+  /**
+   * With `test.use({ server: true })` (ESC-514): the `escouade-server` the window speaks to, through a local forward to its
+   * API, its device paired by `escouade-server pair`; its data folder is `server-data` of the test's, with the same settings
+   * as the app's (the fake `claude`). Stopped with the test; a `restart()` restarts the app, not the server.
+   */
+  server: Server | null;
 }
 
 function git(cwd: string, ...args: string[]) {
@@ -550,7 +557,10 @@ export const test = base.extend<{
   appArgs: string[];
   language: Language;
   preStart: { run: (root: string) => Record<string, unknown> | void };
+  server: boolean;
 }>({
+  // The window on an `escouade-server` of the test's (`test.use({ server: true })`, ESC-514): `app.server`.
+  server: [false, { option: true }],
   // Variables for the app on top of the fixture's, which they replace (`test.use({ appEnv: … })`):
   // Principal’s folder with a fake-limit in it.
   appEnv: [{}, { option: true }],
@@ -562,7 +572,7 @@ export const test = base.extend<{
   // may put there (a second Claude account's folder and sign-in), and the settings to start with, merged into settings.json.
   // (An object: Playwright reads a function given as an option for a fixture.)
   preStart: [{ run: () => ({}) }, { option: true }],
-  app: async ({ appEnv, appArgs, language, preStart }, use, testInfo) => {
+  app: async ({ appEnv, appArgs, language, preStart, server }, use, testInfo) => {
     if (!fs.existsSync(EXE)) throw new Error(`build the app first: npx tauri build --debug --no-bundle (missing ${EXE})`);
     // CI runs elevated, where WebView2 ignores WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: the workflow
     // opens a fixed port through the machine policy instead (tests run one at a time), by the program's name
@@ -685,6 +695,28 @@ export const test = base.extend<{
       ...(REMOTE ? { ESCOUADE_REMOTE_API: String(REMOTE_PORT), ESCOUADE_REMOTE_API_TOKEN: randomBytes(16).toString('hex') } : {}),
       ...appEnv,
     };
+    // The window on an `escouade-server` of the test's (ESC-514): started on a data folder of its own with the same settings,
+    // a device paired, a local forward to it; the app's own core serves nothing. Its ports: the worktree's
+    // (`ESCOUADE_PORT_BASE` + 2 and + 3) when given, else free ones.
+    let served: Server | null = null;
+    if (server) {
+      const serverData = path.join(root, 'server-data');
+      fs.mkdirSync(serverData);
+      fs.copyFileSync(path.join(data, 'settings.json'), path.join(serverData, 'settings.json'));
+      const base = Number(process.env.ESCOUADE_PORT_BASE ?? 0);
+      served = await startServer(
+        serverProgram(EXE),
+        serverData,
+        { ...env, ESCOUADE_DATA_DIR: serverData },
+        {
+          server: base ? base + 2 : 0,
+          forward: base ? base + 3 : 0,
+        },
+      );
+      delete env.ESCOUADE_REMOTE_API;
+      env.ESCOUADE_REMOTE_URL = served.url;
+      env.ESCOUADE_REMOTE_API_TOKEN = served.token;
+    }
     // The launch the test is on (the last one, after a restart): the one the end of the test must kill.
     let instance: Instance | null = null;
     const current = () => instance as Instance;
@@ -771,6 +803,7 @@ export const test = base.extend<{
         codexToml: path.join(root, 'codex', 'config.toml'),
         opencodeJson: path.join(root, 'xdg', 'opencode', 'opencode.json'),
         copilotJson: path.join(root, 'copilot', 'mcp-config.json'),
+        server: served,
         launches,
         launchedAt: () => current().at,
         restart: async () => {
@@ -888,6 +921,7 @@ export const test = base.extend<{
         await waitForPortToClose(other.port);
       }
       if (instance) await killApp(instance);
+      await served?.stop();
       // The next test must not find this instance still answering on the port (it waits for that too, before it
       // starts; a test that passed does not fail for it).
       if (!(await waitForPortToClose(port))) console.warn(`port ${port} is still taken 30 s after the app was killed`);

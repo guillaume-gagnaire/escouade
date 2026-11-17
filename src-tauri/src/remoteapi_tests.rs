@@ -491,6 +491,8 @@ async fn the_handshake_passes_with_a_device_token_and_the_server_s_version_and_a
             session: session.clone(),
             resumed: false,
             desk: desk.clone(),
+            // A core whose host keeps no file of secrets (the tests' memory store): the keychain's, as the desktop.
+            secrets_in_file: false,
         }
     );
     assert_eq!(api.clients(), 1);

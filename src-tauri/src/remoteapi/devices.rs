@@ -10,10 +10,11 @@ use crate::integrations::secrets::{keep_secret, SecretStore};
 use crate::model::{new_id, now_ms};
 use crate::paths::DataDir;
 use anyhow::{bail, Context, Result};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::SystemTime;
 
 /// The file of the devices, in the data folder.
 pub const FILE: &str = "remote-devices.json";
@@ -44,40 +45,55 @@ struct Kept {
 pub struct Devices {
     file: Option<PathBuf>,
     store: Arc<dyn SecretStore>,
-    /// Each device with its token, read once.
+    /// Each device with its token, read from the file and the store.
     known: RwLock<Vec<(Device, String, bool)>>,
+    /// The file as it was last read or written (its time and length): another process of the same data folder
+    /// (`escouade-server devices revoke`, ESC-514) changes it, and `refresh` reads it again.
+    stamp: Mutex<Option<(SystemTime, u64)>>,
 }
 
 fn entry(id: &str) -> String {
     format!("remote-device-{id}")
 }
 
+fn stamp_of(file: &Path) -> Option<(SystemTime, u64)> {
+    let meta = std::fs::metadata(file).ok()?;
+    Some((meta.modified().ok()?, meta.len()))
+}
+
+/// The devices of `file`, their tokens from the file or from `store`.
+fn read_known(file: &Path, store: &dyn SecretStore) -> Vec<(Device, String, bool)> {
+    let kept: Vec<Kept> = match std::fs::read(file) {
+        Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_else(|e| {
+            log::error!("remote API: {FILE} unreadable ({e}): no device");
+            Vec::new()
+        }),
+        Err(_) => Vec::new(),
+    };
+    let mut known = Vec::new();
+    for k in kept {
+        let (token, in_file) = match k.token {
+            Some(t) if !t.is_empty() => (Some(t), true),
+            _ => (store.get(&entry(&k.device.id)).ok().flatten(), false),
+        };
+        match token {
+            Some(token) if !token.is_empty() => known.push((k.device, token, in_file)),
+            _ => log::warn!(
+                "remote API: the device {} has no token any more: it cannot connect",
+                k.device.id
+            ),
+        }
+    }
+    known
+}
+
 impl Devices {
     /// The devices of `data`, their tokens read from `store` (or the file).
     pub fn load(data: &DataDir, store: Arc<dyn SecretStore>) -> Self {
         let file = data.root().join(FILE);
-        let kept: Vec<Kept> = match std::fs::read(&file) {
-            Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_else(|e| {
-                log::error!("remote API: {FILE} unreadable ({e}): no device");
-                Vec::new()
-            }),
-            Err(_) => Vec::new(),
-        };
-        let mut known = Vec::new();
-        for k in kept {
-            let (token, in_file) = match k.token {
-                Some(t) if !t.is_empty() => (Some(t), true),
-                _ => (store.get(&entry(&k.device.id)).ok().flatten(), false),
-            };
-            match token {
-                Some(token) if !token.is_empty() => known.push((k.device, token, in_file)),
-                _ => log::warn!(
-                    "remote API: the device {} has no token any more: it cannot connect",
-                    k.device.id
-                ),
-            }
-        }
+        let known = read_known(&file, &*store);
         Self {
+            stamp: Mutex::new(stamp_of(&file)),
             file: Some(file),
             store,
             known: RwLock::new(known),
@@ -97,7 +113,38 @@ impl Devices {
             file: None,
             store,
             known: RwLock::new(vec![(device, token, true)]),
+            stamp: Mutex::new(None),
         }
+    }
+
+    /// The file read again when another process changed it since: true when it did.
+    pub fn refresh(&self) -> bool {
+        let Some(file) = &self.file else {
+            return false;
+        };
+        let now = stamp_of(file);
+        let mut stamp = self.stamp.lock();
+        if *stamp == now {
+            return false;
+        }
+        *self.known.write() = read_known(file, &*self.store);
+        *stamp = now;
+        true
+    }
+
+    /// `change` made to the devices as the file holds them now, then written, one process at a time (the file's lock):
+    /// what another process of the data folder wrote meanwhile is kept.
+    fn change<T>(&self, change: impl FnOnce(&mut Vec<(Device, String, bool)>) -> T) -> Result<T> {
+        let Some(file) = self.file.clone() else {
+            return Ok(change(&mut self.known.write()));
+        };
+        crate::headless::with_file_lock(&file, || {
+            self.refresh();
+            let out = change(&mut self.known.write());
+            self.save()?;
+            *self.stamp.lock() = stamp_of(&file);
+            Ok(out)
+        })
     }
 
     /// A new device named `name`, and its token: given once, to the device; kept in the keychain (or the file).
@@ -120,26 +167,21 @@ impl Devices {
                 true
             }
         };
-        self.known
-            .write()
-            .push((device.clone(), token.clone(), in_file));
-        self.save()?;
+        self.change(|known| known.push((device.clone(), token.clone(), in_file)))?;
         Ok((device, token))
     }
 
     /// The device `id` revoked: its token forgotten, it can no longer connect. False when there is none.
     pub fn revoke(&self, id: &str) -> Result<bool> {
-        let gone = {
-            let mut known = self.known.write();
+        let gone = self.change(|known| {
             let before = known.len();
             known.retain(|(d, _, _)| d.id != id);
             known.len() != before
-        };
+        })?;
         if gone {
             if let Err(e) = self.store.delete(&entry(id)) {
                 log::warn!("remote API: the system keychain did not forget a revoked device's token: {e:#}");
             }
-            self.save()?;
         }
         Ok(gone)
     }
@@ -170,19 +212,16 @@ impl Devices {
 
     /// The device `id` seen now.
     pub fn seen(&self, id: &str) {
-        let changed = {
-            let mut known = self.known.write();
+        let changed = self.change(|known| {
             let mut changed = false;
             for (d, _, _) in known.iter_mut().filter(|(d, _, _)| d.id == id) {
                 d.last_seen = Some(now_ms());
                 changed = true;
             }
             changed
-        };
-        if changed {
-            if let Err(e) = self.save() {
-                log::warn!("remote API: {FILE} not written: {e:#}");
-            }
+        });
+        if let Err(e) = changed {
+            log::warn!("remote API: {FILE} not written: {e:#}");
         }
     }
 

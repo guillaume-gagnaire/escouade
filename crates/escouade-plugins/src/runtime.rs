@@ -1313,7 +1313,7 @@ impl Host {
 
     fn start(self: &Arc<Self>) {
         let me = self.clone();
-        tauri::async_runtime::spawn(async move { me.run_start().await });
+        escouade_tauri_shim::async_runtime::spawn(async move { me.run_start().await });
     }
 
     /// Starts its process, then `initialize`, what was attached, and what waited in the queue.

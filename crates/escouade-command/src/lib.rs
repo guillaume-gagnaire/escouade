@@ -29,10 +29,12 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
         .replace(' ', "")
         .contains("rename_all=\"snake_case\"");
     let adapter = adapter(&func, snake);
+    // Tauri's attribute in the desktop app alone: without its feature `desktop`, the app's crate has no IPC (escouade-server,
+    // docs/CRATES.md, § 14), the remote API's call is the command's only one.
     let tauri = if attr.is_empty() {
-        quote!(#[::tauri::command])
+        quote!(#[cfg_attr(feature = "desktop", ::tauri::command)])
     } else {
-        quote!(#[::tauri::command(#attr)])
+        quote!(#[cfg_attr(feature = "desktop", ::tauri::command(#attr))])
     };
     quote! {
         #tauri
@@ -145,6 +147,10 @@ pub fn commands(input: TokenStream) -> TokenStream {
     let mut all = Vec::new();
     let mut names = Vec::new();
     let mut rows = Vec::new();
+    // The same, in the core without a window (no feature `desktop`): the commands refused at a distance (the desktop's,
+    // and those that change machines and are not served yet) are refused there by their class, never called: their
+    // functions, which may need the window, are not built (`remoteapi::refused_here`).
+    let mut rows_alone = Vec::new();
     let mut seen = BTreeSet::new();
     for group in &groups {
         let class = match group.class.to_string().as_str() {
@@ -176,10 +182,21 @@ pub fn commands(input: TokenStream) -> TokenStream {
             rows.push(quote! {
                 crate::remoteapi::Command { name: #name, class: #class, call: #remote }
             });
+            let refused = matches!(group.class.to_string().as_str(), "desk" | "moves_refused");
+            rows_alone.push(if refused {
+                quote! {
+                    crate::remoteapi::Command { name: #name, class: #class, call: crate::remoteapi::refused_here }
+                }
+            } else {
+                quote! {
+                    crate::remoteapi::Command { name: #name, class: #class, call: #remote }
+                }
+            });
         }
     }
     quote! {
         /// The IPC's handler of every command of the list.
+        #[cfg(feature = "desktop")]
         pub fn ipc() -> impl Fn(::tauri::ipc::Invoke<::tauri::Wry>) -> bool + Send + Sync + 'static {
             ::tauri::generate_handler![#(#all),*]
         }
@@ -188,7 +205,12 @@ pub fn commands(input: TokenStream) -> TokenStream {
         pub const IPC: &[&str] = &[#(#names),*];
 
         /// The remote API's table: each command of the list, its class and its call.
+        #[cfg(feature = "desktop")]
         pub static COMMANDS: &[crate::remoteapi::Command] = &[#(#rows),*];
+
+        /// The remote API's table in the core without a window: the commands it refuses are not built there.
+        #[cfg(not(feature = "desktop"))]
+        pub static COMMANDS: &[crate::remoteapi::Command] = &[#(#rows_alone),*];
     }
     .into()
 }

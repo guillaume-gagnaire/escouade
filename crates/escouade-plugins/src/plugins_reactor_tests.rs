@@ -574,7 +574,9 @@ async fn a_plugin_without_its_module_or_with_no_reactor_is_refused_and_says_why(
     // Its workers: one by core.
     let workers = std::thread::available_parallelism().map_or(8, |n| n.get());
     for _ in 0..workers {
-        tauri::async_runtime::spawn(async { std::thread::sleep(Duration::from_millis(600)) });
+        escouade_tauri_shim::async_runtime::spawn(async {
+            std::thread::sleep(Duration::from_millis(600))
+        });
     }
     let rt = w.rt.clone();
     let call = tokio::spawn(async move { rt.call(ID, "probe/turns", json!({})).await });

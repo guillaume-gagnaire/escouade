@@ -14,6 +14,9 @@ publish = false
 # What the app's tests start the host with: the secrets in memory, the runtime of the workspace's plugins, the fake isola,
 # French as the system's language.
 testing = ["escouade-base/testing"]
+# The desktop app's: the plugins start on Tauri's runtime, as the app's commands (`escouade-tauri-shim`); without it, on the
+# runtime of Tokio of `escouade-server`.
+desktop = ["escouade-tauri-shim/desktop"]
 
 [dependencies]
 # The languages written in now, the guards of the paths.
@@ -26,8 +29,9 @@ escouade-plugin-cli = { path = "../escouade-plugin-cli" }
 escouade-plugin-kit = { path = "../escouade-plugin-kit" }
 # Whether a plugin's file is inside its folder, and the protected parts of a repository (`files/*`).
 escouade-acp = { path = "../escouade-acp" }
-# The runtime the host starts its plugins on: Tauri's (`tauri::async_runtime`), as the app's.
-tauri = { version = "2", features = ["tray-icon", "image-png", "devtools", "unstable"] }
+# The runtime the host starts its plugins on: Tauri's (`tauri::async_runtime`) in the desktop app, as the app's; the
+# process's runtime of Tokio in `escouade-server` (feature `desktop`).
+escouade-tauri-shim = { path = "../escouade-tauri-shim" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time", "fs", "net"] }

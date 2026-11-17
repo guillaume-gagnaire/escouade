@@ -122,12 +122,22 @@ pub fn open(what: What) -> Result<()> {
         };
         return spawn(&launch);
     }
-    match what {
+    #[cfg(feature = "desktop")]
+    return match what {
         What::Url(url) => tauri_plugin_opener::open_url(url, None::<&str>),
         What::Path(path) => tauri_plugin_opener::open_path(path, None::<&str>),
         What::Reveal(path) => tauri_plugin_opener::reveal_item_in_dir(path),
     }
-    .map_err(|e| anyhow!(e))
+    .map_err(|e| anyhow!(e));
+    // The core without a window (`escouade-server`): its host publishes what to open, for the client (`HeadlessHost`).
+    #[cfg(not(feature = "desktop"))]
+    {
+        let _ = what;
+        Err(anyhow!(tr!(
+            "rien ne s’ouvre sur une machine sans bureau",
+            "nothing opens on a machine without a desktop"
+        )))
+    }
 }
 
 #[cfg(test)]

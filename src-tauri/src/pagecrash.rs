@@ -7,6 +7,7 @@
 use crate::core::Core;
 use serde::Serialize;
 use std::sync::Arc;
+#[cfg(feature = "desktop")]
 use tauri::{Manager, Runtime, WebviewWindow};
 
 /// What the page showed when its process ended.
@@ -56,6 +57,7 @@ impl Core {
 
 /// The page's process ended for `reason`: written, and the page loaded again.
 #[cfg_attr(not(any(target_os = "linux", windows)), allow(dead_code))]
+#[cfg(feature = "desktop")]
 pub fn crashed<R: Runtime>(app: &tauri::AppHandle<R>, reason: &str) {
     let Some(core) = app.try_state::<Arc<Core>>() else {
         return;
@@ -66,6 +68,7 @@ pub fn crashed<R: Runtime>(app: &tauri::AppHandle<R>, reason: &str) {
 
 /// Listens to the end of the page's process of `window` (WebKitGTK, WebView2). macOS's WKWebView
 /// tells it to a delegate wry keeps: nothing there.
+#[cfg(feature = "desktop")]
 pub fn install<R: Runtime>(window: &WebviewWindow<R>) {
     let app = window.app_handle().clone();
     let asked = window.with_webview(move |webview| listen(webview, app));
@@ -75,6 +78,7 @@ pub fn install<R: Runtime>(window: &WebviewWindow<R>) {
 }
 
 #[cfg(target_os = "linux")]
+#[cfg(feature = "desktop")]
 fn listen<R: Runtime>(webview: tauri::webview::PlatformWebview, app: tauri::AppHandle<R>) {
     use webkit2gtk::{WebProcessTerminationReason, WebViewExt};
     webview
@@ -93,6 +97,7 @@ fn listen<R: Runtime>(webview: tauri::webview::PlatformWebview, app: tauri::AppH
 }
 
 #[cfg(windows)]
+#[cfg(feature = "desktop")]
 fn listen<R: Runtime>(webview: tauri::webview::PlatformWebview, app: tauri::AppHandle<R>) {
     use webview2_com::Microsoft::Web::WebView2::Win32::*;
     use webview2_com::ProcessFailedEventHandler;
@@ -126,6 +131,7 @@ fn listen<R: Runtime>(webview: tauri::webview::PlatformWebview, app: tauri::AppH
 }
 
 #[cfg(not(any(target_os = "linux", windows)))]
+#[cfg(feature = "desktop")]
 fn listen<R: Runtime>(_webview: tauri::webview::PlatformWebview, _app: tauri::AppHandle<R>) {}
 
 #[cfg(test)]

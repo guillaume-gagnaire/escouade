@@ -11,7 +11,9 @@ use parking_lot::Mutex;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+#[cfg(feature = "desktop")]
 use tauri::ipc::{Invoke, InvokeBody};
+#[cfg(feature = "desktop")]
 use tauri::Runtime;
 
 /// A command whose part on its lane lasts more than this is written in the log.
@@ -176,6 +178,7 @@ impl Lanes {
 /// The ids a command was called with, as the log may hold them: those of its project, agent or
 /// ticket, an id being only letters, digits, `-` and `_` (`model::new_id`). A path, a text, a
 /// content never: « project 3f2a9c81d0e4 ».
+#[cfg(feature = "desktop")]
 pub fn ids_of(body: &InvokeBody) -> String {
     let InvokeBody::Json(args) = body else {
         return String::new();
@@ -214,6 +217,7 @@ pub fn ids_of(body: &InvokeBody) -> String {
 
 /// The app's handler of the commands, `handler`, run away from the window's thread: each call on
 /// the lane of its command (`lane_of`), timed there.
+#[cfg(feature = "desktop")]
 pub fn off_the_window<R: Runtime>(
     lanes: Arc<Lanes>,
     handler: impl Fn(Invoke<R>) -> bool + Send + Sync + 'static,
@@ -319,6 +323,7 @@ pub fn watch(
 }
 
 /// Starts the watch of the app's window thread, its pauses written in the log.
+#[cfg(feature = "desktop")]
 pub fn watch_app<R: Runtime>(app: tauri::AppHandle<R>, running: Arc<Running>) {
     let spawned = std::thread::Builder::new()
         .name("window-watch".into())

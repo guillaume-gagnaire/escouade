@@ -57,6 +57,9 @@ public_dns() {
 public_dns
 # `dns`: only that, for a job whose apt runs elsewhere (Playwright's browsers in the store's job).
 [ "${1:-}" = dns ] && exit 0
+# `server`: what escouade-server builds with, and nothing of the desktop (no WebKitGTK, no GTK: ESC-514, docs/CRATES.md
+# § 14): whisper.cpp's tools; neither the sound (cpal, the feature `devices` of the voice, is the desktop's) nor a window.
+[ "${1:-}" = server ] && PACKAGES="libclang-dev cmake"
 
 attempt "the runner's order" && exit 0
 azure_last

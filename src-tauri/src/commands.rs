@@ -276,6 +276,7 @@ pub fn cancel_restore(core: CoreState) -> Res<()> {
 }
 
 /// « Redémarrer maintenant » to put the copy chosen in place: refused while an agent works.
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn restart_for_restore(app: tauri::AppHandle, core: CoreState<'_>) -> Res<()> {
     let busy = core.agents_at_work();
@@ -2898,6 +2899,7 @@ pub async fn agent_local_open(
 /// « Enregistrer sous… » of the image viewer: the image it shows (a `data:` URL the core made),
 /// written where the user picks in the system's dialog, which the core opens: the window never
 /// gives a path. False when the user cancels.
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn save_image(app: tauri::AppHandle, data_url: String, name: String) -> Res<bool> {
     use tauri_plugin_dialog::DialogExt;
@@ -3202,6 +3204,7 @@ pub fn play_chime() {
 }
 
 /// « Quitter »: with an update downloaded, it installs silently and the app stays closed.
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn quit_app(app: tauri::AppHandle) {
     crate::updates::quit(&app);
@@ -3677,6 +3680,7 @@ pub async fn suggest_run_commands_at(
 /// Looks for a newer release, through the network settings as they are now. `manual`: the user
 /// asked, a failure is shown whatever the checks before it did; else it is kept quiet until it goes
 /// on. A failure is an answer (`failed`, with its cause), not an error of the command.
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn update_check(
     app: tauri::AppHandle,
@@ -3703,12 +3707,14 @@ pub async fn update_download(
 
 /// « Redémarrer maintenant »: the update downloaded installs, the app stopped cleanly first, and
 /// the app starts again on it.
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub async fn update_restart(app: tauri::AppHandle) -> Res<()> {
     crate::updates::restart_now(app).await.map_err(err)
 }
 
 /// « Plus tard »: the automatic restart planned is called off.
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn update_postpone(app: tauri::AppHandle) {
     crate::updates::postpone(&app);
@@ -4325,6 +4331,7 @@ pub fn overseer_shortcut_set(core: CoreState, shortcut: String) -> Res<()> {
 }
 
 /// The Overseer's shortcut pressed, in a sandbox only (the end-to-end tests): the system's keys are not reached there.
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn overseer_hotkey_press(app: tauri::AppHandle) -> Res<()> {
     if crate::paths::sandbox_dir().is_none() {
@@ -4957,6 +4964,7 @@ pub fn discussion_drop(
 }
 
 /// The links `escouade://` not yet taken (STORE-11): what they ask, for the window, once.
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn deep_links_take(inbox: State<'_, crate::deeplink::Inbox>) -> Vec<crate::deeplink::DeepLink> {
     inbox.take()
@@ -5398,6 +5406,7 @@ pub async fn team_project_logo(
 // ---------- The launches' pages (ESC-311) ----------
 
 /// Whether an address is Escouade's own (`navigation::destination`), never loaded in a page.
+#[cfg(feature = "desktop")]
 fn own_of(app: &tauri::AppHandle) -> crate::devpage::Own {
     use ::tauri::Manager;
     let dev = app
@@ -5420,6 +5429,7 @@ fn tell_of(core: &Arc<Core>) -> crate::devpage::Tell {
 
 /// Opens the page of agent `agent_id`'s launch at `url` (or loads it in the page already open):
 /// in the agent's view at `bounds`, or in its project's « Pages » window (`detached`).
+#[cfg(feature = "desktop")]
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub fn devpage_open(
@@ -5460,6 +5470,7 @@ pub fn devpage_open(
 }
 
 /// The page of agent `agent_id` in its view: placed at `bounds`, or hidden (none).
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn devpage_place(
     app: tauri::AppHandle,
@@ -5471,6 +5482,7 @@ pub fn devpage_place(
 }
 
 /// Back, forward, reload, or `to` (an address typed in its bar).
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn devpage_go(
     app: tauri::AppHandle,
@@ -5482,12 +5494,14 @@ pub fn devpage_go(
 }
 
 /// The devtools of the page of agent `agent_id`.
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn devpage_devtools(app: tauri::AppHandle, agent_id: String) -> Res<()> {
     crate::devpage::devtools(&app, &agent_id)
 }
 
 /// Moves the page to its project's « Pages » window, or back to the agent's view.
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn devpage_detach(
     app: tauri::AppHandle,
@@ -5499,6 +5513,7 @@ pub fn devpage_detach(
 }
 
 /// Shows the page of agent `agent_id` at a width: `full`, `tablet` or `mobile`.
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn devpage_mode(
     app: tauri::AppHandle,
@@ -5510,6 +5525,7 @@ pub fn devpage_mode(
 }
 
 /// The « Pages » window shows the page of agent `agent_id` (its tab clicked).
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn devpage_show(
     app: tauri::AppHandle,
@@ -5521,6 +5537,7 @@ pub fn devpage_show(
 }
 
 /// Closes the page of agent `agent_id`.
+#[cfg(feature = "desktop")]
 #[tauri::command]
 pub fn devpage_close(
     app: tauri::AppHandle,

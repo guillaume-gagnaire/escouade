@@ -1,30 +1,30 @@
 ---
 title: "L'API distante"
 subject: "a-distance"
-sources: ["docs/REMOTE.md, « La fondation commune » (points 2 à 6), « La fondation 2a », « La fondation 2b », « Le classement des commandes »","src-tauri/src/remoteapi (list.rs, server.rs, proto.rs, devices.rs, outbox.rs, sessions.rs, window.rs)","src-tauri/src/termlog.rs (le tampon numéroté des terminaux), src-tauri/src/tui.rs (TuiOutput)","src/lib/transport.ts (le front sur deux transports), src/components/ConnectionBand.svelte","crates/escouade-command (la liste unique des commandes)","crates/escouade-policy/src/list.rs (servers.remoteApi)"]
-tickets: ["ESC-478","ESC-495"]
-decisions: [189,193]
+sources: ["docs/REMOTE.md, « La fondation commune » (points 2 à 6), « La fondation 2a », « La fondation 2b », « Le classement des commandes », « Le mode serveur, MS-1 »","src-tauri/src/remoteapi (list.rs, server.rs, proto.rs, devices.rs, pairing.rs, outbox.rs, sessions.rs, window.rs)","src-tauri/src/termlog.rs (le tampon numéroté des terminaux), src-tauri/src/tui.rs (TuiOutput)","src/lib/transport.ts (le front sur deux transports), src/lib/connection.svelte.ts, src/components/ConnectionBand.svelte","crates/escouade-command (la liste unique des commandes)","crates/escouade-policy/src/list.rs (servers.remoteApi)"]
+tickets: ["ESC-478","ESC-495","ESC-514"]
+decisions: [189,193,202]
 compared: null
 ---
 
 # L'API distante
 
-Le cœur d'Escouade (agents, Git, Kanban, terminaux) peut être piloté par un client qui tourne ailleurs : le poste qui vise un serveur, puis le téléphone. Il le fait par l'**API distante** : les mêmes commandes que la fenêtre, servies sur une WebSocket. C'est la fondation commune du mode serveur et du téléphone (`docs/REMOTE.md`) ; rien ne la montre encore dans la fenêtre.
+Le cœur d'Escouade (agents, Git, Kanban, terminaux) peut être piloté par un client qui tourne ailleurs : le poste qui vise un serveur, puis le téléphone. Il le fait par l'**API distante** : les mêmes commandes que la fenêtre, servies sur une WebSocket. C'est la fondation commune du mode serveur (voir *Le mode serveur* : `escouade-server` la sert) et du téléphone (`docs/REMOTE.md`) ; rien ne la montre encore dans la fenêtre.
 
 ## Éteinte par défaut, jamais ouverte sur Internet
 
-- L'API est **éteinte** tant qu'on ne l'allume pas. Aujourd'hui, seuls les essais l'allument : un build de développement par `ESCOUADE_REMOTE_API` (le port), le cœur sans fenêtre quand il le demande. Le mode serveur aura son réglage.
-- Elle n'écoute que sur **127.0.0.1** : aucune autre interface, ni IPv6. On l'atteint par un tunnel (SSH, puis WireGuard : les tickets suivants). Pas de TLS ici : c'est le tunnel qui chiffre.
+- L'API est **éteinte** tant qu'on ne l'allume pas. Elle s'allume dans `escouade-server` (voir *Le mode serveur*), et dans les essais : un build de développement de l'app par `ESCOUADE_REMOTE_API` (le port), le cœur sans fenêtre quand il le demande.
+- Elle n'écoute que sur **127.0.0.1** : aucune autre interface, ni IPv6, sauf `escouade-server --listen`, demandé en toutes lettres et qui avertit (Docker, un tunnel, un proxy). On l'atteint par un tunnel (SSH, puis WireGuard : les tickets suivants). Pas de TLS ici : c'est le tunnel qui chiffre.
 - Avant même d'ouvrir la WebSocket, le cœur refuse (HTTP 403) une requête dont le `Host` n'est pas le bouclage (`127.0.0.1`, `localhost`, `[::1]`, avec n'importe quel port, celui d'un tunnel compris), ou qui porte l'`Origin` d'une page web : **une page web du poste ne peut pas s'y connecter**. Seule passe l'`Origin` de la fenêtre d'Escouade elle-même (`tauri://localhost`, `http://tauri.localhost`), pour que la fenêtre puisse passer par l'API.
 - Un message de plus de 16 Mo ferme la connexion ; ce qui est plus gros (un fichier écrit ou lu) passe en parties.
-- La stratégie du poste **`servers.remoteApi`** à `false` interdit l'API : elle ne démarre pas, et chaque nouvelle connexion est refusée (« L'API distante est interdite par la stratégie de ce poste (servers.remoteApi). »).
+- La stratégie du poste **`servers.remoteApi`** à `false` interdit l'API : elle ne démarre pas, et chaque nouvelle connexion est refusée (« L'API distante est interdite par la stratégie de ce poste (servers.remoteApi). »), un appairage compris.
 
 ## Le jeton d'appareil
 
-- Chaque appareil qui peut se connecter a **son jeton**, révocable un par un. Révoquer un appareil ferme aussitôt ses connexions et oublie ses sessions ; son jeton est ensuite refusé.
-- Les jetons sont gardés comme les autres secrets d'Escouade : au trousseau du système, ou, s'il le refuse (Linux), dans le fichier des appareils, lisible du seul propriétaire. La liste des appareils (nom, date de création, dernière connexion) ne contient pas de jeton quand le trousseau les garde.
+- Chaque appareil qui peut se connecter a **son jeton**, révocable un par un. Révoquer un appareil ferme aussitôt ses connexions et oublie ses sessions ; son jeton est ensuite refusé. Révoqué par `escouade-server devices revoke` pendant que le serveur tourne, il est déconnecté en quelques secondes.
+- Les jetons sont gardés comme les autres secrets d'Escouade : au trousseau du système, ou, s'il le refuse (Linux), dans le fichier des appareils, lisible du seul propriétaire ; sur un serveur, dans son fichier de secrets (voir *Le mode serveur*). La liste des appareils (nom, date de création, dernière connexion) ne contient pas de jeton quand le trousseau ou le fichier de secrets les garde.
 - Un jeton présenté est comparé **en temps constant** à tous ceux des appareils, à chaque connexion.
-- L'appairage (donner un jeton à un nouvel appareil) vient avec le mode serveur et le téléphone.
+- Un nouvel appareil reçoit son jeton par **l'appairage** : un code d'`escouade-server pair`, à usage unique et de courte durée, donné à l'API à la place de la poignée de main (voir *Le mode serveur*). Le téléphone aura le sien.
 
 ## Ce que vaut un jeton
 
@@ -39,7 +39,8 @@ Ne sont refusées à distance que les commandes du poste, et celles qui changent
    - Un jeton absent, inconnu ou révoqué : refusé (`token`).
    - Une **autre version** que celle du serveur : refusée (`version`), avec la version du serveur et le côté à mettre à jour, le plus ancien, pour que le client propose « Mettre à jour le serveur » (ou le client). L'API suit la version de l'app : il n'y a pas de compatibilité entre versions.
    - Trop de connexions de cet appareil, ou en tout : refusée (`too-many-connections`).
-   - Acceptée : `{"t":"welcome","version","client","device","session","resumed","desk"}` : la session (celle qu'il a redonnée quand elle est encore à lui, sinon une nouvelle), et les commandes du poste (`desk`), que le client fait chez lui s'il a un poste.
+   - Acceptée : `{"t":"welcome","version","client","device","session","resumed","desk","secretsInFile"}` : la session (celle qu'il a redonnée quand elle est encore à lui, sinon une nouvelle), les commandes du poste (`desk`), que le client fait chez lui s'il a un poste, et si le cœur garde ses secrets dans un fichier plutôt qu'au trousseau (`secretsInFile` : un serveur), que le client dit là où un secret se donne.
+   - **L'appairage**, à la place de la poignée de main, pour un nouvel appareil : `{"t":"pair","code":"8NUC-W6HS","name":"Portable du bureau"}`. Réponse : `{"t":"paired","device":{…},"token":"…"}`, ou un refus `pairing` (aucun code n'attend, code expiré, faux, trop d'essais) ; puis la connexion se ferme, et l'appareil revient avec son jeton.
 3. **Les appels** : `{"t":"call","id":7,"cmd":"create_agent","args":{…}}`, avec les arguments de l'IPC, par les mêmes noms. La réponse reprend l'id : `{"t":"reply","id":7,"ok":…}`, ou `{"t":"reply","id":7,"error":…}` avec l'erreur **telle que l'IPC la donne** (le texte de la commande, ou « command X missing required key y »), et un `code` quand c'est l'API qui refuse (`desk-only`, `not-served-yet`, `unknown-command`, `unavailable`, `busy`, `too-large`).
    - **Un corps brut** (les octets d'un fichier écrit, les morceaux d'un fichier joint) passe avant son appel, en trames binaires de 16 Mo au plus ; l'appel dit sa longueur et ses en-têtes (`"body":n,"headers":{…}`). Un corps qui n'a pas la longueur dite est refusé (`too-large`).
    - **Une réponse en octets** (un fichier lu) arrive en binaire, en parties quand elle dépasse 16 Mo.
@@ -50,7 +51,7 @@ Les appels d'une connexion passent dans l'ordre de leur commande, comme dans la 
 
 ## La fenêtre sur l'API
 
-La fenêtre d'Escouade sait parler au cœur par l'IPC de Tauri ou par l'API distante, sans qu'aucun écran ne sache lequel : les mêmes commandes, les mêmes résultats, les mêmes erreurs, les mêmes canaux. Le transport se choisit au démarrage ; aujourd'hui, seul un build de développement met la fenêtre sur l'API (`ESCOUADE_REMOTE_API` et `ESCOUADE_REMOTE_API_TOKEN` donnés tous deux : les essais), sans réglage visible.
+La fenêtre d'Escouade sait parler au cœur par l'IPC de Tauri ou par l'API distante, sans qu'aucun écran ne sache lequel : les mêmes commandes, les mêmes résultats, les mêmes erreurs, les mêmes canaux. Le transport se choisit au démarrage ; aujourd'hui, seul un build de développement met la fenêtre sur l'API, sans réglage visible : `ESCOUADE_REMOTE_API_TOKEN` donné avec `ESCOUADE_REMOTE_API` (l'API du cœur de l'app elle-même) ou avec `ESCOUADE_REMOTE_URL` (celle d'un autre cœur, un `escouade-server` atteint par une redirection locale, sur 127.0.0.1 seulement : les essais du mode serveur).
 
 - Les erreurs que l'API nomme arrivent dans la langue de la fenêtre : « « voice_start » se fait sur ce poste, pas à distance. », « Le jeton de cet appareil est absent, inconnu ou révoqué. »…
 - Les commandes du poste (la voix, les pages des lancements, l'updater, les liens, la fin de l'app) sont faites par la fenêtre elle-même, chez elle.
@@ -71,9 +72,9 @@ La fenêtre d'Escouade sait parler au cœur par l'IPC de Tauri ou par l'API dist
 Un client lent, muet ou hostile ne fait pas grossir la mémoire du cœur :
 
 - **La file d'envoi** d'une connexion est bornée (2048 messages, 8 Mo). Au-delà, les événements de l'interface se fondent en une seule relecture de l'état (le dernier état gagne), et la sortie d'un terminal n'est plus mise en file : le client est prévenu dès qu'il y a de la place, et la reprend par son numéro. Les réponses ne sont jamais jetées ; mais quand plus de 96 Mo attendent, ou que rien n'est lu pendant 30 secondes alors que quelque chose attend, la connexion est fermée (code 4002, `slow-client`).
-- **Les connexions** : 4 par appareil, 16 en tout ; 8 poignées de main en cours au plus ; après 20 poignées de main ratées dans la minute, les connexions suivantes sont fermées dès qu'acceptées, jusqu'à la fin de la minute.
+- **Les connexions** : 4 par appareil, 16 en tout ; 8 poignées de main en cours au plus ; après 20 poignées de main ratées dans la minute (un code d'appairage refusé en est une), les connexions suivantes sont fermées dès qu'acceptées, jusqu'à la fin de la minute.
 - **Les appels** : 256 en attente de réponse par connexion (`busy` au-delà).
-- **Ce que donne le client** est borné et vérifié : un numéro de reprise au-delà de la fin vaut la fin, 1024 terminaux par reprise, une session de 64 caractères, 32 en-têtes, un corps brut de 64 Mo au plus.
+- **Ce que donne le client** est borné et vérifié : un numéro de reprise au-delà de la fin vaut la fin, 1024 terminaux par reprise, une session de 64 caractères, 32 en-têtes, un corps brut de 64 Mo au plus, un nom d'appareil de 64 caractères.
 
 ## Plusieurs clients à la fois
 
@@ -91,8 +92,8 @@ Chaque commande du cœur a sa classe, dans une **liste unique** d'où l'IPC de l
 
 ## Le journal
 
-`app.log` dit chaque connexion et sa fin avec le **nom de l'appareil**, une session reprise, chaque refus et sa raison (jeton, version, `Origin`, `Host`, stratégie, trop de connexions, commande du poste demandée), une connexion fermée parce qu'elle ne lisait plus, des poignées de main ratées en nombre, et chaque appareil révoqué. Jamais un jeton, une session, un chemin du disque, les arguments d'un appel ni ce qu'écrit un terminal ; un texte venu du client n'y paraît que coupé à 80 caractères.
+`app.log` (`server.log` et la sortie standard d'un serveur) dit chaque connexion et sa fin avec le **nom de l'appareil**, une session reprise, chaque appareil appairé, chaque refus et sa raison (jeton, version, `Origin`, `Host`, stratégie, code d'appairage refusé, trop de connexions, commande du poste demandée), une connexion fermée parce qu'elle ne lisait plus, des poignées de main ratées en nombre, et chaque appareil révoqué. Jamais un jeton, un code d'appairage, une session, un chemin du disque, les arguments d'un appel ni ce qu'écrit un terminal ; un texte venu du client n'y paraît que coupé à 80 caractères.
 
 ## Pas encore
 
-`escouade-server`, l'appairage, le tunnel et « Se connecter à un serveur » (mode serveur) ; le téléphone.
+Le tunnel lancé par l'app et « Se connecter à un serveur » (voir *Le mode serveur*) ; le téléphone.

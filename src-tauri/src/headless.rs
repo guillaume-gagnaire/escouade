@@ -73,6 +73,47 @@ impl InstanceLock {
     }
 }
 
+/// A file written by two processes of the same data folder (the server, and `escouade-server pair` or `devices`
+/// beside it: ESC-514) read, changed and written again by one at a time: the lock of `<file>.lock`, held while `f`
+/// runs. Under Unix, `flock` (waited for); under Windows, the lock file opened shared with no one, tried again for 5 s.
+pub fn with_file_lock<T>(file: &Path, f: impl FnOnce() -> Result<T>) -> Result<T> {
+    let path = file.with_extension("lock");
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let mut options = OpenOptions::new();
+    options.create(true).truncate(false).write(true);
+    #[cfg(windows)]
+    let _held = {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.share_mode(0);
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            match options.open(&path) {
+                Ok(file) => break file,
+                Err(e) if e.raw_os_error() == Some(32) && std::time::Instant::now() < until => {
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+                Err(e) => return Err(anyhow!("{}: {e}", path.display())),
+            }
+        }
+    };
+    #[cfg(not(windows))]
+    let _held = {
+        let file = options.open(&path)?;
+        #[cfg(unix)]
+        {
+            use std::os::fd::AsRawFd;
+            // SAFETY: the descriptor is the open file's, which lives until `f` returns.
+            if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) } != 0 {
+                return Err(std::io::Error::last_os_error().into());
+            }
+        }
+        file
+    };
+    f()
+}
+
 /// The core started without a window, its host and the lock of its data folder.
 pub struct Headless {
     pub core: Arc<Core>,
@@ -86,16 +127,25 @@ impl Headless {
     /// The core on `data`, started as the desktop app starts it (its board, its git, its saves),
     /// once the data folder is this process's. On a runtime of Tokio.
     pub fn start(data: DataDir) -> Result<Self> {
+        Self::start_with(data, Arc::new(HeadlessHost::default()))
+    }
+
+    /// The same, on `host` (`escouade-server`'s: its resources, its secrets in a file).
+    pub fn start_with(data: DataDir, host: Arc<HeadlessHost>) -> Result<Self> {
         let lock = InstanceLock::acquire(data.root())?;
-        let host = Arc::new(HeadlessHost::default());
+        Ok(Self::start_locked(lock, data, host))
+    }
+
+    /// The same, the data folder's `lock` taken already (`escouade-server`, which does what needs the folder first).
+    pub fn start_locked(lock: InstanceLock, data: DataDir, host: Arc<HeadlessHost>) -> Self {
         let (core, git_rx) = Core::load(host.clone(), data);
         core.start(git_rx);
-        Ok(Self {
+        Self {
             core,
             host,
             remote: parking_lot::Mutex::new(None),
             _lock: lock,
-        })
+        }
     }
 
     /// The remote API of this core served on 127.0.0.1:`port` (0: a free port), off until then (ESC-478): what
@@ -111,13 +161,19 @@ impl Headless {
         port: u16,
         limits: crate::remoteapi::server::Limits,
     ) -> Result<Arc<RemoteApi>> {
+        self.serve_remote_on(crate::remoteapi::server::Listen::Port(port), limits)
+            .await
+    }
+
+    /// The same, where `listen` says: a port of 127.0.0.1, or a socket bound already (`escouade-server --listen`,
+    /// another interface asked for in so many words).
+    pub async fn serve_remote_on(
+        &self,
+        listen: crate::remoteapi::server::Listen,
+        limits: crate::remoteapi::server::Limits,
+    ) -> Result<Arc<RemoteApi>> {
         let services = Arc::new(Services::new(self.core.clone()));
-        let api = RemoteApi::start_with(
-            services,
-            crate::remoteapi::server::Listen::Port(port),
-            limits,
-        )
-        .await?;
+        let api = RemoteApi::start_with(services, listen, limits).await?;
         *self.remote.lock() = Some(api.clone());
         Ok(api)
     }

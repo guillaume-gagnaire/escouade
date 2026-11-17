@@ -1,0 +1,24 @@
+[package]
+name = "escouade-tauri-shim"
+version = "0.1.0"
+description = "The few pieces of Tauri's API the core of Escouade compiles against, for its builds without Tauri (escouade-server): the async runtime, the IPC's channels and bodies, HTTP's types"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../src-tauri"
+# A part of the app (docs/CRATES.md, § 14): never published.
+publish = false
+
+[features]
+# The desktop app: the runtime is Tauri's own (`tauri::async_runtime`), so that what the crates of the workspace start
+# runs where the app's commands do. Without it, a runtime of Tokio of the crate's, as Tauri makes its own.
+desktop = ["dep:tauri"]
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png", "devtools", "unstable"], optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time", "fs", "net"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["raw_value"] }
+http = "1"
+url = "2"

@@ -198,13 +198,16 @@ impl Keys for Recorded {
 }
 
 /// The shortcut was pressed: the Overseer's screen opens, the window brought forward (as by its link).
+#[cfg(feature = "desktop")]
 pub fn pressed<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     crate::deeplink::deliver(app, [OVERSEER_LINK.to_string()]);
 }
 
 /// The keys of `tauri-plugin-global-shortcut`, on the app's handle.
+#[cfg(feature = "desktop")]
 pub struct PluginKeys<R: tauri::Runtime>(pub tauri::AppHandle<R>);
 
+#[cfg(feature = "desktop")]
 impl<R: tauri::Runtime> Keys for PluginKeys<R> {
     fn register(&self, accel: &str) -> Result<(), String> {
         use tauri_plugin_global_shortcut::GlobalShortcutExt;

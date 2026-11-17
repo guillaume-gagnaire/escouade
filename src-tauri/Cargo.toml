@@ -10,9 +10,41 @@ rust-version = "1.88"
 default-run = "escouade"
 
 [features]
+# The desktop app: Tauri, its window and its plugins, the system's dialogs, tray and notifications. Without it
+# (`--no-default-features`), the core alone, for `escouade-server`, which links neither WebKit nor GTK (docs/CRATES.md,
+# § 14): `escouade-tauri-shim` stands in Tauri's place.
+default = ["desktop"]
+desktop = [
+    "dep:tauri-build",
+    "dep:tauri",
+    "dep:tauri-plugin-deep-link",
+    "dep:tauri-plugin-dialog",
+    "dep:tauri-plugin-global-shortcut",
+    "dep:tauri-plugin-opener",
+    "dep:tauri-plugin-process",
+    "dep:tauri-plugin-single-instance",
+    "dep:tauri-plugin-updater",
+    "dep:tauri-plugin-window-state",
+    "dep:tauri-winrt-notification",
+    "dep:webview2-com",
+    "dep:windows-core",
+    "dep:gtk",
+    "dep:webkit2gtk",
+    "dep:tauri-plugin-notification",
+    "dep:objc2",
+    "escouade-tauri-shim/desktop",
+    "escouade-plugins/desktop",
+    "escouade-voice-local/devices",
+]
 # ONNX Runtime loaded from a library at run time, as on Intel Macs and Linux: to try that path elsewhere
 # (`ESCOUADE_ORT_DYLIB` names the library).
 ort-dynamic = ["escouade-voice-local/ort-dynamic"]
+
+# The desktop app needs its window (`escouade-server`, its core alone, builds without: docs/CRATES.md, § 14).
+[[bin]]
+name = "escouade"
+path = "src/main.rs"
+required-features = ["desktop"]
 
 [lib]
 name = "escouade_lib"
@@ -22,24 +54,26 @@ name = "escouade_lib"
 crate-type = ["rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2", features = [], optional = true }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "image-png", "devtools", "unstable"] }
-tauri-plugin-deep-link = "2"
-tauri-plugin-dialog = "2"
+tauri = { version = "2", features = ["tray-icon", "image-png", "devtools", "unstable"], optional = true }
+# What the core takes of Tauri, without Tauri (`escouade-server`, docs/CRATES.md, § 14): in its place when `desktop` is off.
+escouade-tauri-shim = { path = "../crates/escouade-tauri-shim" }
+tauri-plugin-deep-link = { version = "2", optional = true }
+tauri-plugin-dialog = { version = "2", optional = true }
 # The Overseer's global shortcut (ESC-468).
-tauri-plugin-global-shortcut = "2"
-tauri-plugin-opener = "2"
-tauri-plugin-process = "2"
-tauri-plugin-single-instance = "2"
-tauri-plugin-updater = "2"
+tauri-plugin-global-shortcut = { version = "2", optional = true }
+tauri-plugin-opener = { version = "2", optional = true }
+tauri-plugin-process = { version = "2", optional = true }
+tauri-plugin-single-instance = { version = "2", optional = true }
+tauri-plugin-updater = { version = "2", optional = true }
 # The versions of the updater's latest.json, to leave the betas out unless « Recevoir les versions bêta » is on.
 semver = "1"
-tauri-plugin-window-state = "2"
+tauri-plugin-window-state = { version = "2", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time", "fs", "net"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time", "fs", "net", "signal"] }
 anyhow = "1"
 glob = "0.3"
 parking_lot = "0.13"
@@ -94,7 +128,7 @@ escouade-model = { path = "../crates/escouade-model" }
 escouade-plan = { path = "../crates/escouade-plan" }
 # The voice on the machine (`voice`): the microphone (cpal), the dictation (whisper.cpp), the reading (Piper, eSpeak NG,
 # ONNX Runtime) and their models, in a crate of the workspace (docs/CRATES.md).
-escouade-voice-local = { path = "../crates/escouade-voice-local" }
+escouade-voice-local = { path = "../crates/escouade-voice-local", default-features = false }
 # The vectors of « Recherche par le sens » (`vectors`), in a crate of the workspace too.
 escouade-vectors = { path = "../crates/escouade-vectors" }
 # The parts of the harnesses that stand without the app (where their programs are, the user configs Escouade edits,
@@ -137,11 +171,11 @@ quick-xml = "0.42"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Media_Audio", "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_ProcessStatus", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
-tauri-winrt-notification = "0.8"
+tauri-winrt-notification = { version = "0.8", optional = true }
 # The path of a file the page hands the window (`fileorigin`): WebView2's own COM interfaces, in the
 # versions Tauri's wry already uses (`windows-core` for `Interface::cast`, which webview2-com does not re-export).
-webview2-com = "0.39"
-windows-core = "0.62"
+webview2-com = { version = "0.39", optional = true }
+windows-core = { version = "0.62", optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -149,14 +183,14 @@ libc = "0.2"
 [target.'cfg(target_os = "linux")'.dependencies]
 # The image of a paste, which WebKitGTK does not give the page: read from GTK's clipboard (the one
 # Tauri's windows already run on).
-gtk = "0.18"
+gtk = { version = "0.18", optional = true }
 # The end of the page's process (`pagecrash`), on the WebView wry makes: its version.
-webkit2gtk = { version = "2.0", features = ["v2_20"] }
+webkit2gtk = { version = "2.0", features = ["v2_20"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-tauri-plugin-notification = "2"
+tauri-plugin-notification = { version = "2", optional = true }
 # The inspector of a launch's page in a window of its own (`devpage::open_devtools`): wry's version.
-objc2 = "0.6"
+objc2 = { version = "0.6", optional = true }
 
 # The dependencies keep their line tables only (backtraces still say where), Escouade its full debug info: with
 # everything in full, the program database of the debug build went over the MSVC linker's limit (LNK1140, 2026-10-28,
@@ -186,6 +220,7 @@ members = [
     "../crates/escouade-team",
     "../crates/escouade-vsx",
     "../crates/escouade-command",
+    "../crates/escouade-tauri-shim",
 ]
 default-members = [
     ".",
@@ -208,6 +243,7 @@ default-members = [
     "../crates/escouade-policy",
     "../crates/escouade-team-server",
     "../crates/escouade-team",
+    "../crates/escouade-tauri-shim",
     "../crates/escouade-vsx",
 ]
 

@@ -6,7 +6,9 @@ use crate::paths::relative_slash;
 use serde_json::Value;
 use std::f64::consts::PI;
 use std::sync::OnceLock;
+#[cfg(feature = "desktop")]
 use tauri::image::Image;
+#[cfg(feature = "desktop")]
 use tauri::{AppHandle, Manager, Runtime};
 
 // ---------- what a notification says ----------
@@ -380,6 +382,7 @@ pub fn play_chime() {
     }
 }
 
+#[cfg(feature = "desktop")]
 pub fn window_attended<R: Runtime>(app: &AppHandle<R>) -> bool {
     app.get_webview_window("main")
         .map(|w| {
@@ -390,6 +393,7 @@ pub fn window_attended<R: Runtime>(app: &AppHandle<R>) -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(feature = "desktop")]
 pub fn flash<R: Runtime>(app: &AppHandle<R>) {
     if crate::paths::hidden_window() {
         return;
@@ -401,6 +405,7 @@ pub fn flash<R: Runtime>(app: &AppHandle<R>) {
 
 /// Brings the window forward, shown and focused. Not a window kept out of sight
 /// (`paths::hidden_window`): it stays where it is, never taking the focus from the user's app.
+#[cfg(feature = "desktop")]
 pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
     if crate::paths::hidden_window() {
         return;
@@ -414,6 +419,7 @@ pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
 
 /// System notification. On Windows, `on_click` runs when the user activates the toast; macOS
 /// notifications only bring the app forward (the Dock icon shows its window again).
+#[cfg(feature = "desktop")]
 pub fn toast<R: Runtime>(
     app: &AppHandle<R>,
     title: &str,
@@ -457,6 +463,7 @@ pub fn toast<R: Runtime>(
 /// System notification with a button, shown long. On Windows, `on_click` runs when the user
 /// activates the toast, told whether it was by its button; macOS notifications have no button
 /// (the window offers the same choice).
+#[cfg(feature = "desktop")]
 pub fn toast_with_button<R: Runtime>(
     app: &AppHandle<R>,
     title: &str,
@@ -495,6 +502,7 @@ pub fn toast_with_button<R: Runtime>(
 }
 
 /// Tray icon with an amber dot in the corner when agents are waiting.
+#[cfg(feature = "desktop")]
 pub fn tray_icon<R: Runtime>(app: &AppHandle<R>, waiting: usize) -> Option<Image<'static>> {
     let base = app.default_window_icon()?;
     let (w, h) = (base.width(), base.height());
@@ -527,6 +535,7 @@ fn out_of_sight_x(right_edges: &[i32]) -> i32 {
 /// Shows the main window out of sight (`paths::hidden_window`), at its usual size (some tests
 /// depend on it): right of every screen, with no button in the taskbar, and without taking the
 /// focus (`show` would take it). Windows only, as the end-to-end tests.
+#[cfg(feature = "desktop")]
 pub fn show_out_of_sight<R: Runtime>(w: &tauri::WebviewWindow<R>) {
     let edges: Vec<i32> = w
         .available_monitors()

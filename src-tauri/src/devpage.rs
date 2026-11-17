@@ -19,8 +19,11 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+#[cfg(feature = "desktop")]
 use tauri::webview::{NewWindowResponse, PageLoadEvent, WebviewBuilder};
-use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, Url, WebviewUrl};
+use tauri::Url;
+#[cfg(feature = "desktop")]
+use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, WebviewUrl};
 
 /// The labels of the pages' webviews: `devpage-<agent>`.
 pub const PAGE_PREFIX: &str = "devpage-";
@@ -322,6 +325,7 @@ pub type Own = Arc<dyn Fn(&Url) -> bool + Send + Sync>;
 
 /// Opens the page of agent `o.agent_id` at `o.url`, or, when it is open, loads `o.url` in it
 /// (launching again reloads the same page).
+#[cfg(feature = "desktop")]
 pub fn open<R: Runtime>(
     app: &AppHandle<R>,
     pages: &Arc<Pages>,
@@ -404,6 +408,7 @@ pub fn open<R: Runtime>(
 
 /// The webview of a page: its launch's origin alone, its own storage, no command, its shortcut.
 #[allow(clippy::too_many_arguments)]
+#[cfg(feature = "desktop")]
 fn builder<R: Runtime>(
     app: &AppHandle<R>,
     pages: &Arc<Pages>,
@@ -473,6 +478,7 @@ fn builder<R: Runtime>(
 
 /// A page's storage, its project's: a folder (Windows, Linux), a data store (macOS 14 and later),
 /// a private session before (WKWebView has no folder of its own to give it there).
+#[cfg(feature = "desktop")]
 fn with_store<R: Runtime>(
     b: WebviewBuilder<R>,
     data_root: &Path,
@@ -498,6 +504,7 @@ fn with_store<R: Runtime>(
 }
 
 /// What a refused address of a page does: told to the window, which opens it outside; its devtools; or nothing.
+#[cfg(feature = "desktop")]
 fn act<R: Runtime>(
     app: &AppHandle<R>,
     label: &str,
@@ -538,6 +545,7 @@ fn act<R: Runtime>(
 }
 
 /// The « Pages » window of project `project_id`, made with its bar when it is not there yet.
+#[cfg(feature = "desktop")]
 fn pages_window<R: Runtime>(
     app: &AppHandle<R>,
     pages: &Arc<Pages>,
@@ -589,6 +597,7 @@ fn pages_window<R: Runtime>(
 }
 
 /// What the title of a « Pages » window says: its project's name and « Pages ».
+#[cfg(feature = "desktop")]
 fn window_title<R: Runtime>(app: &AppHandle<R>, project_id: &str) -> String {
     let name = app
         .try_state::<Arc<crate::core::Core>>()
@@ -604,6 +613,7 @@ fn placed() -> &'static Mutex<HashMap<String, Bounds>> {
 }
 
 /// Places `webview` at `b`, in its window's logical pixels.
+#[cfg(feature = "desktop")]
 fn set_bounds<R: Runtime>(webview: &tauri::Webview<R>, b: Bounds) -> Result<(), String> {
     placed().lock().insert(webview.label().to_string(), b);
     webview
@@ -641,6 +651,7 @@ fn set_bounds<R: Runtime>(webview: &tauri::Webview<R>, b: Bounds) -> Result<(), 
 /// webview in its `GtkBox` (which then follows the size the layout is given), `view` moved in.
 /// A layout asks the window for no size: the window still shrinks as the user wants.
 #[cfg(target_os = "linux")]
+#[cfg(feature = "desktop")]
 fn gtk_layout_of(view: &gtk::Widget) -> Option<gtk::Layout> {
     use gtk::prelude::*;
     let parent = view.parent()?;
@@ -681,6 +692,7 @@ fn gtk_layout_of(view: &gtk::Widget) -> Option<gtk::Layout> {
 }
 
 /// The bar and the page shown of the « Pages » window of project `project_id`, at its size.
+#[cfg(feature = "desktop")]
 fn lay_out<R: Runtime>(app: &AppHandle<R>, pages: &Pages, project_id: &str) {
     let Some(window) = app.get_window(&window_label(project_id)) else {
         return;
@@ -728,6 +740,7 @@ fn lay_out<R: Runtime>(app: &AppHandle<R>, pages: &Pages, project_id: &str) {
 }
 
 /// The « Pages » window of the project shows the page of agent `agent_id`, and comes to the front.
+#[cfg(feature = "desktop")]
 pub fn show_in_window<R: Runtime>(
     app: &AppHandle<R>,
     pages: &Arc<Pages>,
@@ -754,6 +767,7 @@ pub struct PagesOf {
 }
 
 /// The bar of the « Pages » window of the project reads its pages again.
+#[cfg(feature = "desktop")]
 pub fn tell_bar<R: Runtime>(app: &AppHandle<R>, project_id: &str, pages: &Pages) {
     use tauri::Emitter;
     let _ = app.emit_to(
@@ -767,6 +781,7 @@ pub fn tell_bar<R: Runtime>(app: &AppHandle<R>, project_id: &str, pages: &Pages)
 }
 
 /// The page of agent `agent_id` in the agent's view: placed at `bounds` and shown, or hidden.
+#[cfg(feature = "desktop")]
 pub fn place<R: Runtime>(
     app: &AppHandle<R>,
     pages: &Pages,
@@ -793,6 +808,7 @@ pub fn place<R: Runtime>(
 
 /// Back, forward, reload, or an address typed in its bar (judged by the page's guard like any
 /// other: another origin opens outside).
+#[cfg(feature = "desktop")]
 pub fn go<R: Runtime>(
     app: &AppHandle<R>,
     agent_id: &str,
@@ -816,6 +832,7 @@ pub fn go<R: Runtime>(
 
 /// Shows the page of agent `agent_id` at `mode`: in the « Pages » window, laid out again at once
 /// (in the agent's view, the window places it by its mode).
+#[cfg(feature = "desktop")]
 pub fn set_mode<R: Runtime>(
     app: &AppHandle<R>,
     pages: &Pages,
@@ -835,6 +852,7 @@ pub fn set_mode<R: Runtime>(
 }
 
 /// Opens the devtools of the page of agent `agent_id`, never the window's.
+#[cfg(feature = "desktop")]
 pub fn devtools<R: Runtime>(app: &AppHandle<R>, agent_id: &str) -> Result<(), String> {
     let webview = app
         .get_webview(&page_label(agent_id))
@@ -850,6 +868,7 @@ pub fn devtools<R: Runtime>(app: &AppHandle<R>, agent_id: &str) -> Result<(), St
 /// the move ends, later and on its own, the page is placed again where it was, a few times while
 /// the inspector settles (asked again to leave the page each time: it may ignore an ask while it
 /// is still being shown).
+#[cfg(feature = "desktop")]
 fn open_devtools<R: Runtime>(webview: &tauri::Webview<R>) {
     webview.open_devtools();
     #[cfg(target_os = "macos")]
@@ -873,6 +892,7 @@ fn open_devtools<R: Runtime>(webview: &tauri::Webview<R>) {
 /// Asks the inspector of the WKWebView `view` to leave the page for a window of its own. Each
 /// call is checked first (`respondsToSelector:`): an Objective-C exception would abort the app.
 #[cfg(target_os = "macos")]
+#[cfg(feature = "desktop")]
 fn detach_inspector(view: *mut objc2::runtime::AnyObject) {
     use objc2::runtime::{AnyObject, Sel};
     if view.is_null() {
@@ -909,6 +929,7 @@ fn next_shown(pages: &Pages, project_id: &str, leaving: &str) {
 
 /// Moves the page of agent `agent_id` to its project's « Pages » window (`detached`), or back to the
 /// agent's view (hidden until placed). The page keeps its state, it is not loaded again.
+#[cfg(feature = "desktop")]
 pub fn detach<R: Runtime>(
     app: &AppHandle<R>,
     pages: &Arc<Pages>,
@@ -947,6 +968,7 @@ pub fn detach<R: Runtime>(
 }
 
 /// Closes the page of agent `agent_id` (its agent gone, its ticket done).
+#[cfg(feature = "desktop")]
 pub fn close<R: Runtime>(
     app: &AppHandle<R>,
     pages: &Arc<Pages>,

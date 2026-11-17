@@ -24,6 +24,7 @@ use serde::Deserialize;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
+#[cfg(feature = "desktop")]
 use tauri::{Manager, Runtime, WebviewWindow};
 use tokio::sync::Notify;
 use tokio::time::{timeout_at, Instant};
@@ -141,6 +142,7 @@ pub(crate) fn parse_message(message: &str) -> Option<String> {
 /// The path of the file on the disk that the page sent as `id`, as the host read it: nothing
 /// where the system gives none, or if it did not arrive in time. What it answers is kept for
 /// `attach_origin`, which takes the id (`take_handed`) and never a path the page makes up.
+#[cfg(feature = "desktop")]
 #[escouade_command::command]
 pub async fn file_origin<R: Runtime>(app: tauri::AppHandle<R>, id: String) -> Option<String> {
     if !cfg!(windows) || !valid_id(&id) {
@@ -153,6 +155,7 @@ pub async fn file_origin<R: Runtime>(app: tauri::AppHandle<R>, id: String) -> Op
 /// Puts the listener on the WebView of `window`, which it keeps for good: the app only ever makes
 /// its main window once (a reload keeps the WebView, and with it the listener).
 #[cfg(windows)]
+#[cfg(feature = "desktop")]
 pub fn install<R: Runtime>(window: &WebviewWindow<R>, origins: &FileOrigins) {
     let origins = origins.clone();
     // The WebView's COM objects are only for its own thread: `with_webview` runs this on it.
@@ -169,9 +172,11 @@ pub fn install<R: Runtime>(window: &WebviewWindow<R>, origins: &FileOrigins) {
 
 /// No bridge on the other systems: the command answers nothing.
 #[cfg(not(windows))]
+#[cfg(feature = "desktop")]
 pub fn install<R: Runtime>(_window: &WebviewWindow<R>, _origins: &FileOrigins) {}
 
 #[cfg(windows)]
+#[cfg(feature = "desktop")]
 mod windows_side {
     use super::{parse_message, FileOrigins};
     use webview2_com::Microsoft::Web::WebView2::Win32::{

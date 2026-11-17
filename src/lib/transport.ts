@@ -284,6 +284,8 @@ export class RemoteTransport {
     this.tries = 0;
     connection.state = 'open';
     connection.reason = '';
+    // A server's secrets are in a file of its data, not in a keychain (ESC-514).
+    connection.secretsInFile = m.secretsInFile === true;
     if (again) {
       // The terminals from where they stopped (the channels of the state are not resumed: it is read again).
       const channels = [...this.channels.entries()]

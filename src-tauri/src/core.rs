@@ -2043,7 +2043,10 @@ impl Core {
                 )
             })
             .collect();
-        let secrets = integrations::secrets::store_for(&data);
+        // The host's store when it has one (`escouade-server`: a file, ESC-514), else the system's keychain.
+        let secrets = host
+            .secrets()
+            .unwrap_or_else(|| integrations::secrets::store_for(&data));
         let accounts = integrations::secrets::load_accounts(
             &data,
             &*secrets,
