@@ -118,7 +118,7 @@ Ses méthodes, leurs paramètres, leurs réponses et leurs délais sont décrits
 
 Le manifeste d’un plugin qui a un programme dit le manifeste dit `"run": { "js": "dist/plugin.mjs" }` ou `"run": { "wasm": "Cargo.toml" }` est un programme que fait tourner Escouade **dans l’app, en WASM**, sans Node ni Rust sur la machine. Une instance par plugin, sur un fil à elle, qui garde son état d’un appel à l’autre. Les messages passent par l’entrée et la sortie standard du module ; la poignée de main, les délais, le journal et les relances sont ceux de toute la page ; [le SDK](plugins/sdk) et [le kit Rust](plugins/rust) parlent le protocole pour toi.
 
-Le module est compilé une fois : par le store pour un plugin du store (l’app le télécharge et vérifie son empreinte contre `version.json`), par l’app pour un `run.js` installé depuis un dossier ou un dépôt git. Un `run.wasm` hors du store vient avec son `plugin.wasm`, à côté du manifeste. L’app le précompile à l’installation, le garde dans son cache et le précompile à nouveau après une mise à jour d’Escouade. Il lui faut Escouade 2.2.0 ou plus récent.
+Le module est compilé une fois : par le store pour un plugin du store (l’app le télécharge et vérifie son empreinte contre `version.json`), par l’app pour un `run.js` installé depuis un dossier ou un dépôt git. Un `run.wasm` hors du store vient avec son `plugin.wasm`, à côté du manifeste ; un dossier en développement prend le module que `escouade-plugin build` y a écrit pour la version de son manifeste (`packs/<id>-<version>.wasm`), sinon son `plugin.wasm`. L’app le précompile à l’installation, le garde dans son cache et le précompile à nouveau après une mise à jour d’Escouade. Il lui faut Escouade 2.2.0 ou plus récent.
 
 ### Le réseau, par Escouade
 

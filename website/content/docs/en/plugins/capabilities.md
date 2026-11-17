@@ -26,7 +26,7 @@ A plugin that asks for everything, to show the form:
       { "root": "agent", "access": "write" },
       { "root": "agentHome", "access": "read" }
     ],
-    "commands": ["git status --short", "git log *"]
+    "commands": ["git status --short", "git log *", "git --version"]
   },
   "limits": { "fetchSeconds": 60, "fetchBytes": 8388608, "fileBytes": 1048576 },
 ```
@@ -99,8 +99,10 @@ On the bench, `escouade-plugin test <folder> --account <address>` stands for an 
 | `fetchSeconds` | How long a `net/fetch` has | 10 s | 120 s |
 | `fetchBytes` | How large a response is | 1 MiB | 32 MiB |
 | `fileBytes` | What an `fs/read` gives | 256 KiB | 4 MiB |
+| `memoryBytes` | The memory of its instance | 64 MiB | 256 MiB |
+| `turnSeconds` | How long a turn of its module has (a decision keeps its 500 ms) | 2 s | 10 s |
 
-A value past the ceiling is brought down to it by the host (the manifest refuses it for `fileBytes`). The window says nothing more: a limit opens nothing.
+A value past the ceiling is brought down to it by the host: the manifest does not refuse it (the schema of the editors marks the ceiling of `fileBytes`). Below the default, `fetchSeconds`, `fetchBytes` and `fileBytes` tighten the limit; `memoryBytes` and `turnSeconds` keep the default. The window says nothing more: a limit opens nothing.
 
 ### Streams and the WebSocket
 
@@ -151,7 +153,7 @@ Each write and each refusal go to the journal.
 `sdk/doc-examples/rust/escouade-plugin.json` (excerpt)
 
 ```json
-    "commands": ["git status --short", "git log *"]
+    "commands": ["git status --short", "git log *", "git --version"]
 ```
 
 **What it allows.** `proc/spawn` runs one of these lines. The first word is a program’s name, which Escouade looks for on the PATH.
@@ -164,7 +166,7 @@ Each write and each refusal go to the journal.
 - a `dir` other than a root (`agent`, `project`), and a private project where the plugin is not on. Without `dir`, the program runs in `temp`;
 - a variable of `env` that `permissions.env` does not declare ([the variables](#the-variables-env)).
 
-Each program dies with the plugin’s instance or at `proc/kill`, with what it started. Four at once. Its output is no longer read past 256 KiB that have not reached the module.
+Each program dies with the plugin’s instance or at `proc/kill`, with what it started. Four at once. Its output comes back as text by `proc/out` (never base64), its end by `proc/exit` with its code ([the programs](plugins/calls#the-programs-proc), with a complete example); it is no longer read past 256 KiB that have not reached the module.
 
 **The window** says “Runs this command on your computer”, then the command, in red, one line a command.
 

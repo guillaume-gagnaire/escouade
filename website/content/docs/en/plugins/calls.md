@@ -357,15 +357,24 @@ pub async fn words(cx: &Cx) -> Result<Value, Refusal> {
 
 ## The programs: `proc/*`
 
-`proc/spawn { command, args?, dir?, agent?, project?, env? }` → `{ proc }`, `proc/write { proc, data, close? }`, `proc/kill { proc }`, then the notifications `proc/out { proc, stream, data }` and `proc/exit { proc, code }`. `proc/out` may come before the answer to `proc/spawn`.
+`proc/spawn { command, args?, dir?, agent?, project?, env? }` → `{ proc }`, `proc/write { proc, data, close? }`, `proc/kill { proc }`, then the notifications `proc/out { proc, stream, data }` and `proc/exit { proc, code }`.
 
 `command` and `args` must be a line of `permissions.commands`:
 
 `sdk/doc-examples/rust/escouade-plugin.json` (excerpt)
 
 ```json
-    "commands": ["git status --short", "git log *"]
+    "commands": ["git status --short", "git log *", "git --version"]
 ```
+
+**What comes back.**
+
+- `proc/out { proc, stream, data }`: `proc` is the one `proc/spawn` answered; `stream` is `stdout` or `stderr`; `data` is **text**, never base64: the bytes read as UTF-8, cut between two characters (a byte that is no UTF-8 becomes U+FFFD). A `proc/out` carries 16 KiB at most and is not a line: a line may come in two. Each output comes in the order it was written; `stdout` and `stderr` are not ordered between them.
+- `proc/out` may come **before** the answer to `proc/spawn`: keep the output by its `proc`.
+- `proc/exit { proc, code }` comes once, **after** all its `proc/out` (unless what it left running keeps its outputs open more than a second). `code` is its exit code, `null` when it was killed (`proc/kill`, the end of the instance) or stopped by a signal.
+- The output is no longer read past 256 KiB that have not reached the module: a program that writes without end slows down, the app’s memory does not grow. Four programs at once.
+
+Running a line in a project (`dir: "project"`, the id of a fact’s project):
 
 `sdk/doc-examples/ts/src/procs.ts` (excerpt)
 
@@ -396,16 +405,50 @@ pub async fn status(cx: &Cx, project: &str) -> Result<Value, Refusal> {
         .await?;
     Ok(spawned["proc"].clone())
 }
+```
 
-pub fn out(cx: &Cx, out: &Value) {
-    let data = out["data"].as_str().unwrap_or_default();
-    cx.log("info", &format!("{}: {data}", out["stream"]));
-}
+**A complete example**: run `git --version` and answer what it wrote. In TypeScript, `runProgram` keeps the output and `exited` waits for the end:
 
-pub fn exit(cx: &Cx, exit: &Value) {
-    cx.log("info", &format!("it ended: {}", exit["code"]));
+`sdk/doc-examples/ts/src/procs.ts` (excerpt)
+
+```ts
+// Runs `git --version` and answers what it wrote and how it ended: `data` is text, a piece of the output, not a line.
+export async function version(p: Plugin) {
+  let stdout = '';
+  let stderr = '';
+  const program = await p.runProgram({ command: 'git', args: ['--version'] }, (data, stream) => {
+    if (stream === 'stderr') stderr += data;
+    else stdout += data;
+  });
+  const code = await program.exited;
+  return { stdout: stdout.trimEnd(), stderr, code };
 }
 ```
+
+In Rust, the plugin keeps the output of each program by its `proc`, and the answer waits for its `proc/exit`. The notifications come like any call:
+
+`sdk/doc-examples/rust/src/lib.rs` (excerpt)
+
+```rust
+                "proc/out" => procs::out(cx, &params),
+                "proc/exit" => procs::exit(cx, &params),
+```
+
+`sdk/doc-examples/rust/src/procs.rs` (excerpt)
+
+```rust
+/// What a program wrote, by its `proc`, until its end.
+#[derive(Default)]
+pub struct Said {
+    pub stdout: String,
+    pub stderr: String,
+    /// Its exit code once it ended; `null` when it was killed.
+    pub code: Option<Value>,
+    waiting: Option<Waker>,
+}
+```
+
+Escouade’s tests build this example as an author does (`escouade-plugin build`), load it and call `example/version`: the answer is `{ "stdout": "git version …", "stderr": "", "code": 0 }`.
 
 `proc/write` writes on its input, and `proc/kill` stops it with what it started:
 

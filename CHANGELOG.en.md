@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Plugins in development: “Load a folder” takes a Rust plugin’s module where `escouade-plugin build` writes it, with no file to copy, and loads it again at each new build. A folder not built yet says the command to run instead of a path that cannot be found.
 - On a machine without a system keychain (WSL, Linux), “Keep” on a plugin’s secret says why it was not kept, beside the field, and offers to keep it in a file only you can read. Settings › Plugins shows that choice and takes it back.
 - After a restart, an agent whose harness doesn’t resume its session says so, and its new session gets its instructions again (its ticket’s) with a summary of what it did. Unharnessed now resumes its own.
 - A turn a harness begins by itself shows as a turn: the agent goes to work then back to rest, and that text no longer mixes with the next answer. The effort sets Prime Agent’s reasoning too, and the whole code of a long tool call can be read, folded, in its detail.

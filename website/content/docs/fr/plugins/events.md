@@ -24,7 +24,9 @@ Chaque fait a la même forme, en JSON :
 - `version` : la version de la forme des faits. Un champ ajouté la garde ; un champ retiré ou qui change de sens passe à la suivante.
 - `seq` : son numéro depuis le démarrage d’Escouade. Deux faits arrivent dans l’ordre de leurs numéros.
 - `name` et `data` : ce qui s’est passé, et ce qu’il en dit (la table plus bas).
-- `project`, `ticket`, `agent` : ce dont il parle, par leurs ids et leurs noms, quand il en parle. Le fait d’un agent qui travaille sur un ticket dit aussi son ticket ; le projet dit s’il est privé (`private`).
+- `project`, `ticket`, `agent` : ce dont il parle, par leurs ids et leurs noms, quand il en parle. Le fait d’un agent qui travaille sur un ticket dit aussi son ticket ; le projet dit s’il est privé (`private`).
+
+Les ids d’un fait servent à reconnaître ce dont il parle, **pas à y accéder**. `project.id` se passe à `proc/spawn` (`dir: "project"`, `project`) et à `settings/get`. `agent.id` n’ouvre pas les fichiers de l’agent : la clé `agent` de `fs/*` (avec `root: "agent"`, `agentRepo` ou `agentHome`) est celle qu’`agent/attach` donne à un plugin de harness, ou celle qu’un appel prête à un environnement de lancement. Sans elle, un plugin a les racines `plugin` et `temp` ([les fichiers](plugins/capabilities#les-fichiers-files)).
 
 Un fait ne porte **jamais la conversation** : un plugin apprend qu’un tour est fini et comment, pas ce qui s’y est dit.
 
@@ -191,7 +193,10 @@ Le plugin Discord, en entier : un webhook pour un ticket passé « À tester �
 
 ## Le lecteur de workflow
 
-Escouade lit seule les workflows d’un projet (GSD, Superpowers, Ralph…). Un plugin peut lui en apprendre un qu’elle ne connaît pas, avec `contributes.workflowReaders` :
+> [!NOTE]
+> Pas encore servi : le manifeste accepte `workflowReaders` et le contrat ci-dessous est fixé, mais Escouade 2.2 n’appelle encore aucun lecteur.
+
+Escouade lit seule les workflows d’un projet (GSD, Superpowers, Ralph…). Un plugin pourra lui en apprendre un qu’elle ne connaît pas, avec `contributes.workflowReaders` :
 
 ```json
 "contributes": {

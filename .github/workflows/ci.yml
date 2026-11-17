@@ -394,6 +394,10 @@ jobs:
         with:
           node-version: 22
 
+      # The author’s path in TS (plugins_wasm_tests.rs, issue #43) bundles the model by the repository’s esbuild.
+      - name: The repository’s esbuild, for a test of the plugins
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
       - name: Rust toolchain (pinned in src-tauri/rust-toolchain.toml)
         working-directory: src-tauri
         run: rustup toolchain install
@@ -573,6 +577,10 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
+
+      # The author’s path in TS (plugins_wasm_tests.rs, issue #43) bundles the model by the repository’s esbuild.
+      - name: The repository’s esbuild, for a test of the plugins
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
       # libasound2-dev: the microphone (cpal); libclang-dev and cmake: whisper.cpp, built by whisper-rs.
       - name: System libraries (WebKitGTK, tray, AppImage, sound, whisper.cpp)
@@ -815,6 +823,10 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
+
+      # The author’s path in TS (plugins_wasm_tests.rs, issue #43) bundles the model by the repository’s esbuild.
+      - name: The repository’s esbuild, for a test of the plugins
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Rust toolchain (pinned in src-tauri/rust-toolchain.toml)
         working-directory: src-tauri

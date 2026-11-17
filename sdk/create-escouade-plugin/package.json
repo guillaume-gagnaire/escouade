@@ -1,6 +1,6 @@
 {
   "name": "create-escouade-plugin",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "npm create escouade-plugin: a new plugin of Escouade, a TypeScript program or a Rust module with its tests, or a declarative theme.",
   "license": "MIT",
   "type": "module",
@@ -24,6 +24,7 @@
     "index.mjs",
     "templates",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ]
 }

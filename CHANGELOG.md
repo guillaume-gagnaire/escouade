@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Plugins en développement : « Charger un dossier » prend le module d’un plugin Rust là où `escouade-plugin build` l’écrit, sans fichier à copier, et le recharge à chaque nouvelle construction. Un dossier pas encore construit dit la commande à lancer au lieu d’un chemin introuvable.
 - Sur un poste sans trousseau système (WSL, Linux), « Garder » le secret d’un plugin dit pourquoi il n’a pas été gardé, à côté du champ, et propose de le garder dans un fichier lisible de toi seul. Ce choix se voit et se retire dans Réglages › Plugins.
 - Après un redémarrage, un agent dont le harness ne reprend pas sa session le dit, et sa session neuve reçoit de nouveau ses consignes (celles de son ticket) avec un résumé de ce qu’il a fait. Unharnessed reprend désormais la sienne.
 - Un tour qu’un harness lance seul s’affiche comme un tour : l’agent passe au travail puis revient au repos, et ce texte ne se mêle plus à la réponse suivante. L’effort règle aussi la réflexion de Prime Agent, et le code entier d’un long appel d’outil se lit, replié, dans son détail.

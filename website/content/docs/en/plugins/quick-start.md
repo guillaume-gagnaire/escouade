@@ -163,11 +163,10 @@ escouade-plugin test .
 
 `escouade-plugin` compiles the module as the store does, with a compiler it downloads itself the first time (650 MB, a minute), then plays it as Escouade does.
 
-**3. Load it.** `escouade-plugin build .` writes the module into `packs/`: copy it beside the manifest as `plugin.wasm`, which the template keeps out of git, then load the folder from “In development”. Copy it again after each change: the store, for its part, compiles the sources.
+**3. Load it.** `escouade-plugin build .` writes the module into `packs/<id>-<version>.wasm`; then load the folder from “In development”: Escouade takes the last module built for the version of the manifest there, copying nothing. After a change, build it again: the folder loads again by itself. A folder not built yet is refused, and the refusal says the command to run. The template keeps `packs/` out of git: the store, for its part, compiles the sources.
 
 ```sh
 escouade-plugin build .
-cp packs/*.wasm plugin.wasm
 ```
 
 ## Next

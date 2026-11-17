@@ -332,6 +332,15 @@ struct Host {
     journal: Arc<Journal>,
     /// The agents it was given, for `fs/*` and `proc/*`.
     agents: super::files::Agents,
+    /// A folder in development: where its `run.wasm` module is built (issue #43).
+    built: Option<super::wasm::Built>,
+}
+
+/// Where the module of a folder in development is built (issue #43); none for an installed plugin.
+fn built_of(view: &super::PluginView) -> Option<super::wasm::Built> {
+    let m = view.manifest.as_ref()?;
+    matches!(view.origin, super::Origin::Dev { .. })
+        .then(|| super::wasm::Built::of(&m.id, &m.version))
 }
 
 /// The plugins' processes of the app.
@@ -633,6 +642,7 @@ impl Runtime {
         id: &str,
     ) -> Option<std::thread::JoinHandle<Result<super::wasm::Made, String>>> {
         let view = self.plugins.get(id, Lang::En)?;
+        let built = built_of(&view);
         let run = view.manifest?.run.filter(|r| r.in_wasm().is_some())?;
         let folder = PathBuf::from(&view.folder);
         let modules = self.modules.clone();
@@ -641,7 +651,9 @@ impl Runtime {
         std::thread::Builder::new()
             .name(format!("plugin {id}: its module"))
             .spawn(move || {
-                let made = modules.of(&folder, &run).map(|(_, made)| made);
+                let made = modules
+                    .of(&folder, &run, built.as_ref())
+                    .map(|(_, made)| made);
                 match &made {
                     Ok(super::wasm::Made::Cache) => {}
                     Ok(m) => journal.push(Kind::Message, format!("ready: {}", m.describe())),
@@ -684,11 +696,12 @@ impl Runtime {
         if let Some(h) = self.hosts.lock().get(id) {
             return Ok(h.clone());
         }
-        let (folder, manifest) = self.runnable(id)?;
+        let (folder, manifest, built) = self.runnable(id)?;
         let host = Arc::new(Host {
             id: id.to_string(),
             folder,
             manifest,
+            built,
             rt: self.me.clone(),
             inner: Mutex::new(Inner {
                 phase: Phase::Idle,
@@ -722,7 +735,10 @@ impl Runtime {
     }
 
     /// The folder and the granted manifest of the plugin `id`, when it may run.
-    fn runnable(&self, id: &str) -> Result<(PathBuf, Manifest), CallError> {
+    fn runnable(
+        &self,
+        id: &str,
+    ) -> Result<(PathBuf, Manifest, Option<super::wasm::Built>), CallError> {
         if self.quitting.load(Ordering::Acquire) {
             return Err(CallError::Stopped(Stop::Shutdown));
         }
@@ -745,13 +761,14 @@ impl Runtime {
         if !view.choices.enabled {
             return Err(CallError::Unavailable(format!("{id} is switched off")));
         }
+        let built = built_of(&view);
         // What it is given: its permissions but those the user took back.
         let manifest = view
             .manifest
             .filter(|m| m.run.is_some())
             .map(|m| super::granted(&m, &view.choices.revoked))
             .ok_or_else(|| CallError::Unavailable(format!("{id} is declarative: nothing runs")))?;
-        Ok((PathBuf::from(&view.folder), manifest))
+        Ok((PathBuf::from(&view.folder), manifest, built))
     }
 
     /// Starts the plugins `word` activates (`event:ticket.column`, `account:github`), those that
@@ -780,12 +797,12 @@ impl Runtime {
     /// An instance of the module of the plugin `id`, for its views (`plugins/view.rs`): greeted, and asking nothing of the
     /// machine.
     pub fn view_instance(&self, id: &str) -> Result<super::wasm::Instance, String> {
-        let (folder, manifest) = self.runnable(id).map_err(|e| e.to_string())?;
+        let (folder, manifest, built) = self.runnable(id).map_err(|e| e.to_string())?;
         let run = manifest.run.as_ref().ok_or("no program")?;
         if run.in_wasm().is_none() {
             return Err(format!("{id} is no module"));
         }
-        let (module, _) = self.modules.of(&folder, run)?;
+        let (module, _) = self.modules.of(&folder, run, built.as_ref())?;
         let limits = self.limits.wasm.asked(manifest.limits);
         let files = super::wasm::files_of(&folder);
         let mut instance = super::wasm::Instance::start_with(&module, &files, limits, None)
@@ -1336,18 +1353,23 @@ impl Host {
             // In WASM (ESC-320, ESC-331): its module from the cache, or made now, off the runtime's threads.
             let js = run.js.as_deref().unwrap_or(super::wasm::MODULE_FILE);
             let (modules, folder, program) = (rt.modules.clone(), self.folder.clone(), run.clone());
+            let built = self.built.clone();
             let asked = Instant::now();
-            let prepared = tokio::task::spawn_blocking(move || modules.of(&folder, &program))
-                .await
-                .unwrap_or_else(|e| Err(e.to_string()));
+            let prepared =
+                tokio::task::spawn_blocking(move || modules.of(&folder, &program, built.as_ref()))
+                    .await
+                    .unwrap_or_else(|e| Err(e.to_string()));
             // How long its module took at this activation (ESC-354): the first one of a plugin of the seed precompiles it.
             let took = asked.elapsed().as_millis();
             let (module, made) = match prepared {
                 Ok(m) => m,
                 Err(e) => {
-                    self.stop_with(Stop::Refused {
-                        reason: format!("cannot make the module of {js}: {e}"),
-                    });
+                    // A Rust module says its own file (installed) or what to build (a folder in development).
+                    let reason = match &run.js {
+                        Some(js) => format!("cannot make the module of {js}: {e}"),
+                        None => format!("cannot make its module: {e}"),
+                    };
+                    self.stop_with(Stop::Refused { reason });
                     return;
                 }
             };

@@ -19,3 +19,15 @@ export async function stop(p: Plugin) {
   const program = await p.runProgram({ command: 'git', args: ['log', '--oneline'] });
   await program.kill();
 }
+
+// Runs `git --version` and answers what it wrote and how it ended: `data` is text, a piece of the output, not a line.
+export async function version(p: Plugin) {
+  let stdout = '';
+  let stderr = '';
+  const program = await p.runProgram({ command: 'git', args: ['--version'] }, (data, stream) => {
+    if (stream === 'stderr') stderr += data;
+    else stdout += data;
+  });
+  const code = await program.exited;
+  return { stdout: stdout.trimEnd(), stderr, code };
+}

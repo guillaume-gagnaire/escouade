@@ -1287,3 +1287,121 @@ fn load_dev(plugins: &Plugins, folder: &Path) {
         plugins.load_dev(folder, Lang::En).unwrap();
     }
 }
+
+/// A plugin made by `npm create escouade-plugin` from its model `kind` (`program`, `rust`), in `folder`, as an author
+/// gets it (issue #43).
+pub fn created(kind: &str, folder: &Path, id: &str) {
+    let script = "import { pathToFileURL } from 'node:url';
+        const { create } = await import(pathToFileURL(process.argv[1]).href);
+        create({ folder: process.argv[2], kind: process.argv[3], id: process.argv[4] });";
+    let o = std::process::Command::new("node")
+        .args(["--input-type=module", "-e", script])
+        .arg(root().join("sdk/create-escouade-plugin/index.mjs"))
+        .arg(folder)
+        .args([kind, id])
+        .output()
+        .expect("node, for create-escouade-plugin");
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+}
+
+/// What `npm run build` of the model in TS does, by the esbuild of this repository, the SDK taken from its sources
+/// (the folder has no `node_modules`): the line of its `package.json` as it is, one alias more.
+fn bundled(folder: &Path, esbuild: &Path) {
+    let package: Value =
+        serde_json::from_str(&std::fs::read_to_string(folder.join("package.json")).unwrap())
+            .unwrap();
+    let line = package["scripts"]["build"].as_str().unwrap();
+    let args: Vec<&str> = line.split_whitespace().skip(1).collect();
+    assert_eq!(line.split_whitespace().next(), Some("esbuild"), "{line}");
+    let sdk = root().join("sdk/plugin/src/index.ts");
+    let o = std::process::Command::new("node")
+        .arg(esbuild)
+        .args(args)
+        .arg(format!("--alias:@escouade-dev/plugin={}", sdk.display()))
+        .arg("--log-level=warning")
+        .current_dir(folder)
+        .output()
+        .unwrap();
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+}
+
+/// What the plugin of `id` decides of a force push: what both models refuse.
+pub async fn force_push_decided(rt: &Runtime, id: &str) -> Result<Value, CallError> {
+    let request = json!({ "request": { "kind": "command", "input": { "command": "git push --force origin main" } } });
+    rt.call_within(id, "permissions/decide", request, Duration::from_secs(60))
+        .await
+}
+
+/// Until the plugin `id` decides with `message`: its folder, changed and built again, loads again by itself.
+pub async fn until_decided(rt: &Runtime, id: &str, message: &str) {
+    let end = Instant::now() + Duration::from_secs(90);
+    loop {
+        let said = force_push_decided(rt, id).await;
+        if said.as_ref().is_ok_and(|v| v["message"] == message) {
+            return;
+        }
+        assert!(Instant::now() < end, "still {said:?}, not {message:?}");
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+}
+
+/// Issue #43, in TS: the model of `create-escouade-plugin`, not built, then built as `npm run build` does, loaded in
+/// development, called, changed, built again, and read again by itself.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_author_creates_builds_loads_and_reloads_a_plugin_in_ts() {
+    if !ready() {
+        return;
+    }
+    let esbuild = root().join("node_modules/esbuild/bin/esbuild");
+    if !esbuild.is_file() {
+        assert!(std::env::var_os("CI").is_none(), "npm ci: esbuild");
+        eprintln!("skipped: no esbuild (npm ci)");
+        return;
+    }
+    let base = std::env::temp_dir().join(format!(
+        "plugin-author-ts-{}",
+        uuid::Uuid::new_v4().simple()
+    ));
+    let dir = base.join("my-plugin");
+    let id = "dev.test.author-ts";
+    created("program", &dir, id);
+    let data = DataDir::new(base.join("data"));
+    let plugins = Plugins::load(data.clone(), "2.2.0");
+
+    // Not built yet: loading the folder says what to run.
+    for (lang, said) in [
+        (Lang::En, "run `npm run build`"),
+        (Lang::Fr, "lance d'abord `npm run build`"),
+    ] {
+        let why = plugins.inspect_dev(&dir, lang).unwrap_err().message;
+        assert!(why.contains(said), "{why}");
+    }
+
+    bundled(&dir, &esbuild);
+    plugins.load_dev(&dir, Lang::En).unwrap();
+    let rt = Runtime::new(
+        plugins.clone(),
+        Arc::new(MemoryStore::default()),
+        &data,
+        "2.2.0",
+        Limits::default(),
+    );
+    let said = force_push_decided(&rt, id).await.unwrap();
+    assert_eq!(said["decision"], "deny", "{said}");
+    assert_eq!(
+        said["message"],
+        "No force push in this team: push a new commit instead."
+    );
+
+    let source = dir.join("src/plugin.ts");
+    let text = std::fs::read_to_string(&source).unwrap();
+    std::fs::write(
+        &source,
+        text.replace("push a new commit instead", "built again"),
+    )
+    .unwrap();
+    bundled(&dir, &esbuild);
+    until_decided(&rt, id, "No force push in this team: built again.").await;
+    rt.shutdown();
+    let _ = std::fs::remove_dir_all(&base);
+}

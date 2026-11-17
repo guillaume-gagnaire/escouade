@@ -25,6 +25,39 @@ const SETTING_TYPES = ['string', 'number', 'boolean', 'select'];
 const POINTS_WITH_ID = ['accounts', 'ticketSources', 'forges', 'harnesses', 'workflowReaders', 'launchEnvironments'];
 const OPEN_POINTS = ['themes', 'webhooks', 'commands', 'menus', 'statusBar', 'badges', 'projectTemplates'];
 
+/**
+ * The fields this library knows, object by object (`''` the manifest itself): any other is ignored, and said so. They
+ * are the properties of plugin-1.json, the schema the app's reader publishes (crates/escouade-plugin-cli/src/manifest.rs):
+ * schemas/plugin-manifest.test.ts fails when the two differ (issue #43).
+ */
+export const FIELDS = {
+  '': [
+    '$schema',
+    'id',
+    'name',
+    'version',
+    'description',
+    'author',
+    'license',
+    'repository',
+    'escouade',
+    'run',
+    'activation',
+    'permissions',
+    'limits',
+    'contributes',
+    'store',
+    'icon',
+  ],
+  author: ['name', 'url', 'email'],
+  escouade: ['api', 'min', 'max'],
+  run: ['command', 'js', 'wasm', 'args', 'windows', 'macos', 'linux'],
+  permissions: ['events', 'network', 'secrets', 'commands', 'env', 'files', 'decide'],
+  limits: ['fetchSeconds', 'fetchBytes', 'fileBytes', 'memoryBytes', 'turnSeconds'],
+  contributes: ['settings', 'secrets', 'escouadeYml', ...POINTS_WITH_ID, ...OPEN_POINTS],
+  store: ['categories', 'keywords', 'screenshots', 'docs'],
+};
+
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const join = (path, key) => (path ? `${path}.${key}` : key);
 const lowerWord = (w) => /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(w);
@@ -273,24 +306,7 @@ export function validate(manifest, options = {}) {
 
   const o = object(manifest, '');
   if (!o) return { ok: false, errors, ignored };
-  ignoreOthers(o, '', [
-    '$schema',
-    'id',
-    'name',
-    'version',
-    'description',
-    'author',
-    'license',
-    'repository',
-    'escouade',
-    'run',
-    'activation',
-    'permissions',
-    'limits',
-    'contributes',
-    'store',
-    'icon',
-  ]);
+  ignoreOthers(o, '', FIELDS['']);
   if ('$schema' in o) string(o.$schema, '$schema');
   required(o, 'id', 'id', (v, p) => {
     const s = string(v, p);
@@ -307,7 +323,7 @@ export function validate(manifest, options = {}) {
   if ('author' in o) {
     const a = object(o.author, 'author');
     if (a) {
-      ignoreOthers(a, 'author', ['name', 'url', 'email']);
+      ignoreOthers(a, 'author', FIELDS.author);
       if ('url' in a) url(a.url, 'author.url');
       if ('email' in a) filled(a.email, 'author.email');
       required(a, 'name', 'author.name', filled);
@@ -318,7 +334,7 @@ export function validate(manifest, options = {}) {
   required(o, 'escouade', 'escouade', (v) => {
     const e = object(v, 'escouade');
     if (!e) return;
-    ignoreOthers(e, 'escouade', ['api', 'min', 'max']);
+    ignoreOthers(e, 'escouade', FIELDS.escouade);
     required(e, 'api', 'escouade.api', (a, p) => {
       const s = string(a, p);
       if (s !== null && !/^[1-9][0-9]*$/.test(s)) problem(p, 'api');
@@ -338,7 +354,7 @@ export function validate(manifest, options = {}) {
   if ('run' in o) {
     const r = object(o.run, 'run');
     if (r) {
-      ignoreOthers(r, 'run', ['command', 'js', 'wasm', 'args', 'windows', 'macos', 'linux']);
+      ignoreOthers(r, 'run', FIELDS.run);
       // A JS/TS bundle of the folder (ESC-320) or the Rust of a module (ESC-331), run by Escouade in WASM: one of the three.
       const inWasm = (key, cargo) => {
         const at = `run.${key}`;
@@ -362,7 +378,7 @@ export function validate(manifest, options = {}) {
   if ('permissions' in o) {
     const p = object(o.permissions, 'permissions');
     if (p) {
-      ignoreOthers(p, 'permissions', ['events', 'network', 'secrets', 'commands', 'env', 'files', 'decide']);
+      ignoreOthers(p, 'permissions', FIELDS.permissions);
       for (const key of ['events', 'network', 'secrets', 'commands', 'env']) if (key in p) words(p[key], `permissions.${key}`);
       if (Array.isArray(p.env))
         p.env.forEach((v, i) => {
@@ -380,17 +396,15 @@ export function validate(manifest, options = {}) {
   if ('limits' in o) {
     const l = object(o.limits, 'limits');
     if (l) {
-      const known = ['fetchSeconds', 'fetchBytes', 'fileBytes', 'memoryBytes', 'turnSeconds'];
-      ignoreOthers(l, 'limits', known);
-      for (const key of known)
+      ignoreOthers(l, 'limits', FIELDS.limits);
+      for (const key of FIELDS.limits)
         if (key in l && !(Number.isSafeInteger(l[key]) && l[key] > 0)) problem(`limits.${key}`, 'type', 'positive integer');
     }
   }
   if ('contributes' in o) {
     const c = object(o.contributes, 'contributes');
     if (c) {
-      const known = ['settings', 'secrets', 'escouadeYml', ...POINTS_WITH_ID, ...OPEN_POINTS];
-      ignoreOthers(c, 'contributes', known);
+      ignoreOthers(c, 'contributes', FIELDS.contributes);
       const items = (v, path) => {
         if (!Array.isArray(v)) return (problem(path, 'type', 'array'), []);
         return v.map((item, i) => [`${path}[${i}]`, object(item, `${path}[${i}]`)]).filter(([, it]) => it);
@@ -571,7 +585,7 @@ export function validate(manifest, options = {}) {
   if ('store' in o) {
     const s = object(o.store, 'store');
     if (s) {
-      ignoreOthers(s, 'store', ['categories', 'keywords', 'screenshots', 'docs']);
+      ignoreOthers(s, 'store', FIELDS.store);
       for (const key of ['categories', 'keywords']) if (key in s) words(s[key], `store.${key}`);
       if ('screenshots' in s) {
         if (Array.isArray(s.screenshots)) s.screenshots.forEach((p, i) => innerPath(p, `store.screenshots[${i}]`));

@@ -383,7 +383,7 @@ async fn a_run_wasm_plugin_installs_the_module_the_store_compiled_and_one_withou
     );
     let modules = crate::wasm::Modules::new(&data, "2.1.0");
     let (_, made) = modules
-        .prepare_reactor(Path::new(&view.folder))
+        .prepare_reactor(Path::new(&view.folder), None)
         .expect("precompiled");
     assert_eq!(made, crate::wasm::Made::Precompiled);
 

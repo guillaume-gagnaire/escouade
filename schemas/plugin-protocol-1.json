@@ -47,7 +47,7 @@
       "timeoutMs": 500
     },
     "proc/out": {
-      "description": "What a program wrote, as text cut between two characters. Escouade stops reading it past 256 KiB not yet written on the input of the module. A notification: no answer.",
+      "description": "What a program wrote, as UTF-8 text cut between two characters (never base64), 16 KiB at most a notification. Escouade stops reading it past 256 KiB not yet written on the input of the module. A notification: no answer.",
       "direction": "toPlugin",
       "notification": true,
       "params": {
@@ -1028,7 +1028,7 @@
       "properties": {
         "agent": {
           "type": "string",
-          "description": "The key of the agent, as agent/attach gave it."
+          "description": "The key of the agent, as agent/attach gave it (a harness), or as a launch environment's call lends a worktree. The agent of a fact (its agent.id) gives no access: without a key, a plugin has the roots plugin and temp."
         },
         "root": {
           "description": "A root of permissions.files.",
@@ -1255,13 +1255,16 @@
       "type": "object",
       "properties": {
         "proc": {
-          "type": "integer"
+          "type": "integer",
+          "description": "The proc that proc/spawn answered."
         },
         "stream": {
-          "enum": ["stdout", "stderr"]
+          "enum": ["stdout", "stderr"],
+          "description": "Which of its outputs: stdout or stderr, each in the order it was written; the two are not ordered between them."
         },
         "data": {
-          "type": "string"
+          "type": "string",
+          "description": "Text, never base64: the bytes as UTF-8, cut between two characters (a byte that is no UTF-8 becomes U+FFFD); 16 KiB at most a notification, and not cut by lines: a line may come in two."
         }
       },
       "required": ["proc", "stream", "data"]
@@ -1270,10 +1273,12 @@
       "type": "object",
       "properties": {
         "proc": {
-          "type": "integer"
+          "type": "integer",
+          "description": "The proc that proc/spawn answered."
         },
         "code": {
-          "type": ["integer", "null"]
+          "type": ["integer", "null"],
+          "description": "Its exit code; null when it was killed (proc/kill, the end of the instance) or ended by a signal. It comes once, after every proc/out of the program (unless what it left running held its outputs open more than 1 s)."
         }
       },
       "required": ["proc", "code"]

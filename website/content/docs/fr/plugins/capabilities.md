@@ -26,7 +26,7 @@ Un plugin qui demande tout, pour montrer la forme :
       { "root": "agent", "access": "write" },
       { "root": "agentHome", "access": "read" }
     ],
-    "commands": ["git status --short", "git log *"]
+    "commands": ["git status --short", "git log *", "git --version"]
   },
   "limits": { "fetchSeconds": 60, "fetchBytes": 8388608, "fileBytes": 1048576 },
 ```
@@ -99,8 +99,10 @@ Au banc, `escouade-plugin test <dossier> --account <adresse>` tient lieu de comp
 | `fetchSeconds` | Le temps d’un `net/fetch` | 10 s | 120 s |
 | `fetchBytes` | La taille d’une réponse | 1 Mio | 32 Mio |
 | `fileBytes` | Ce que rend un `fs/read` | 256 Kio | 4 Mio |
+| `memoryBytes` | La mémoire de son instance | 64 Mio | 256 Mio |
+| `turnSeconds` | Le temps d’un tour de son module (une décision garde ses 500 ms) | 2 s | 10 s |
 
-Une valeur au-delà du plafond est ramenée à lui par l’hôte (`fileBytes` est refusé par le manifeste). La fenêtre ne dit rien de plus : une limite ne donne accès à rien.
+Une valeur au-delà du plafond est ramenée à lui par l’hôte : le manifeste ne la refuse pas (le schéma des éditeurs marque le plafond de `fileBytes`). Sous le défaut, `fetchSeconds`, `fetchBytes` et `fileBytes` resserrent la limite ; `memoryBytes` et `turnSeconds` gardent le défaut. La fenêtre ne dit rien de plus : une limite ne donne accès à rien.
 
 ### Les flux et le WebSocket
 
@@ -151,7 +153,7 @@ Chaque écriture et chaque refus vont au journal.
 `sdk/doc-examples/rust/escouade-plugin.json` (extrait)
 
 ```json
-    "commands": ["git status --short", "git log *"]
+    "commands": ["git status --short", "git log *", "git --version"]
 ```
 
 **Ce qu’elle permet.** `proc/spawn` lance une de ces lignes. Le premier mot est un nom de programme, qu’Escouade cherche sur le PATH.
@@ -164,7 +166,7 @@ Chaque écriture et chaque refus vont au journal.
 - `dir` autre qu’une racine (`agent`, `project`), et un projet privé où le plugin n’est pas activé. Sans `dir`, le programme tourne dans `temp` ;
 - une variable de `env` que `permissions.env` ne déclare pas ([les variables](#les-variables-env)).
 
-Chaque programme meurt avec l’instance du plugin ou à `proc/kill`, avec ce qu’il a lancé. Quatre à la fois. Sa sortie n’est plus lue au-delà de 256 Kio qui n’ont pas atteint le module.
+Chaque programme meurt avec l’instance du plugin ou à `proc/kill`, avec ce qu’il a lancé. Quatre à la fois. Sa sortie revient en texte par `proc/out` (jamais en base64), sa fin par `proc/exit` et son code ([les programmes](plugins/calls#les-programmes-proc), avec un exemple complet) ; elle n’est plus lue au-delà de 256 Kio qui n’ont pas atteint le module.
 
 **La fenêtre** dit « Lance cette commande sur ton ordinateur », puis la commande, en rouge, une ligne par commande.
 

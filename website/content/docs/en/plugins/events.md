@@ -26,6 +26,8 @@ Every fact has the same shape, in JSON:
 - `name` and `data`: what happened, and what it says of it (the table below).
 - `project`, `ticket`, `agent`: what it is about, by their ids and their names, when it is about them. The fact of an agent working on a ticket also says its ticket; the project says whether it is private (`private`).
 
+A fact’s ids tell what it is about, **not a way into it**. `project.id` goes to `proc/spawn` (`dir: "project"`, `project`) and to `settings/get`. `agent.id` does not open the agent’s files: the key `agent` of `fs/*` (with `root: "agent"`, `agentRepo` or `agentHome`) is the one `agent/attach` gives a harness plugin, or the one a call lends a launch environment. Without it, a plugin has the roots `plugin` and `temp` ([the files](plugins/capabilities#the-files-files)).
+
 A fact **never carries the conversation**: a plugin learns that a turn is over and how, not what was said in it.
 
 ## The facts
@@ -191,7 +193,10 @@ The Discord plugin, whole: one webhook for a ticket moved to “To review”, an
 
 ## The workflow reader
 
-Escouade reads the workflows of a project by itself (GSD, Superpowers, Ralph…). A plugin can teach it one it does not know, with `contributes.workflowReaders`:
+> [!NOTE]
+> Not served yet: the manifest accepts `workflowReaders` and the contract below is set, but Escouade 2.2 calls no reader yet.
+
+Escouade reads the workflows of a project by itself (GSD, Superpowers, Ralph…). A plugin will be able to teach it one it does not know, with `contributes.workflowReaders`:
 
 ```json
 "contributes": {

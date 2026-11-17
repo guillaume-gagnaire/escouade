@@ -118,7 +118,7 @@ Its methods, their parameters, their answers and their delays are described by a
 
 A plugin whose manifest says `"run": { "js": "dist/plugin.mjs" }` or `"run": { "wasm": "Cargo.toml" }` is a program Escouade runs **inside the app, in WASM**, with no Node or Rust on the machine. One instance per plugin, on a thread of its own, which keeps its state from one call to the next. The messages go through the module’s standard input and output; the handshake, the delays, the journal and the restarts are those of the whole page; [the SDK](plugins/sdk) and [the Rust kit](plugins/rust) speak the protocol for you.
 
-The module is compiled once: by the store for a plugin of the store (the app downloads it and checks its fingerprint against `version.json`), by the app for a `run.js` plugin installed from a folder or a git repository. A `run.wasm` plugin outside the store comes with its `plugin.wasm`, beside the manifest. The app precompiles it at install, keeps it in its cache and precompiles it again after an update of Escouade. It needs Escouade 2.2.0 or later.
+The module is compiled once: by the store for a plugin of the store (the app downloads it and checks its fingerprint against `version.json`), by the app for a `run.js` plugin installed from a folder or a git repository. A `run.wasm` plugin outside the store comes with its `plugin.wasm`, beside the manifest; a folder in development takes the module `escouade-plugin build` wrote there for the version of its manifest (`packs/<id>-<version>.wasm`), else its `plugin.wasm`. The app precompiles it at install, keeps it in its cache and precompiles it again after an update of Escouade. It needs Escouade 2.2.0 or later.
 
 ### The network, through Escouade
 

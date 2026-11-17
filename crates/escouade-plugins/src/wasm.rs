@@ -257,10 +257,18 @@ impl Modules {
         Ok((module, made))
     }
 
-    /// The module of a `run.wasm` plugin (ESC-331), its `plugin.wasm`: precompiled from the cache, by the SHA-256 of the
-    /// module and the app's version, or now. The module is not kept here: it stays in the plugin's folder.
-    pub fn prepare_reactor(&self, folder: &Path) -> Result<(Module, Made), String> {
-        let path = folder.join(MODULE_FILE);
+    /// The module of a `run.wasm` plugin (ESC-331), its `plugin.wasm`, or for a folder in development the one `built`
+    /// names ([`Built`], issue #43): precompiled from the cache, by the SHA-256 of the module and the app's version, or
+    /// now. The module is not kept here: it stays in the plugin's folder.
+    pub fn prepare_reactor(
+        &self,
+        folder: &Path,
+        built: Option<&Built>,
+    ) -> Result<(Module, Made), String> {
+        let path = match built {
+            Some(b) => b.module(folder).ok_or_else(|| b.missing(folder))?,
+            None => folder.join(MODULE_FILE),
+        };
         let bytes =
             std::fs::read(&path).map_err(|e| format!("its module {}: {e}", path.display()))?;
         let name = format!("{}-{}.cwasm", sha256(&bytes), self.app_version);
@@ -286,10 +294,16 @@ impl Modules {
     }
 
     /// The module of the program `run` of the plugin of `folder`, whichever of the two it is; a process has none.
-    pub fn of(&self, folder: &Path, run: &super::manifest::Run) -> Result<(Module, Made), String> {
+    /// `built`: the folder is one in development (`Origin::Dev`), whose `run.wasm` module is the last one built.
+    pub fn of(
+        &self,
+        folder: &Path,
+        run: &super::manifest::Run,
+        built: Option<&Built>,
+    ) -> Result<(Module, Made), String> {
         match &run.js {
             Some(js) => self.prepare(folder, js),
-            None => self.prepare_reactor(folder),
+            None => self.prepare_reactor(folder, built),
         }
     }
 
@@ -347,6 +361,54 @@ impl Modules {
 /// The folder `folder` itself when it holds a module of `scripts/plugins-wasm.sh`: its precompiled one is kept there, in a
 /// build of development and the tests alone. Each test has a data folder of its own, and Cranelift, unoptimized in such a
 /// build, would take seconds a module in each of them.
+/// The module of a `run.wasm` folder in development (issue #43): the last one `escouade-plugin build` wrote for the
+/// version of its manifest, `packs/<id>-<version>.wasm`, else the `plugin.wasm` its author put beside the manifest.
+/// Nothing is taken from outside the folder, and nothing is compiled when it is loaded: without either, it says what to
+/// run. An installed plugin (the store, the seed, a copy) has its `plugin.wasm` alone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Built {
+    /// `<id>-<version>.wasm`, the file of `packs/`.
+    pub name: String,
+}
+
+/// The folder `escouade-plugin build` writes in, in the plugin's folder.
+pub const PACKS: &str = "packs";
+
+impl Built {
+    pub fn of(id: &str, version: &str) -> Self {
+        Self {
+            name: format!("{id}-{version}.wasm"),
+        }
+    }
+
+    /// The module there is in `folder`: the one built for this version first.
+    pub fn module(&self, folder: &Path) -> Option<PathBuf> {
+        [
+            folder.join(PACKS).join(&self.name),
+            folder.join(MODULE_FILE),
+        ]
+        .into_iter()
+        .find(|p| p.is_file())
+    }
+
+    /// What a folder without a module says, in the interface's language: what to run.
+    pub fn missing(&self, folder: &Path) -> String {
+        no_module(crate::i18n::ui(), folder, &self.name)
+    }
+}
+
+/// Why a `run.wasm` folder in development has no module, and what to run (issue #43).
+pub fn no_module(lang: crate::i18n::Lang, folder: &Path, name: &str) -> String {
+    tr_in!(
+        lang,
+        "Ce plugin n'a pas encore de module : construis-le d'abord avec `escouade-plugin build {folder}`, qui écrit {packs}/{name}. Le dossier se recharge ensuite de lui-même.",
+        "This plugin has no module yet: build it first with `escouade-plugin build {folder}`, which writes {packs}/{name}. The folder then loads again by itself.",
+        folder = folder.display(),
+        packs = PACKS,
+        name = name
+    )
+}
+
 fn of_the_build(folder: &Path) -> Option<&Path> {
     let built = folder.parent()?.file_name()? == "plugins-wasm";
     (cfg!(any(debug_assertions, test)) && built).then_some(folder)

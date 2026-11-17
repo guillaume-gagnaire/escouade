@@ -12,7 +12,7 @@ Ce document dit **ce qu'est un plugin aujourd'hui**, et où c'est dans le code. 
 - §8 : ce qui reste au cœur, et ce qui n'est pas un point d'extension ;
 - Annexe : l'historique (l'étude, les étapes), court.
 
-Pour l'auteur : la documentation du site (`website/content/docs/*/plugins/`) est la page à lire en premier ; ce document est celle du contributeur d'Escouade. La place de marché est dans `docs/STORE.md`, l'interface des harness dans `docs/ENGINES.md`.
+**Ce qui fait foi** (issue #43, 2026-11-17) : pour un auteur, ce document et les schémas (`schemas/plugin-1.json` pour le manifeste, que le lecteur de l'app écrit ; `schemas/plugin-protocol-1.json` pour les méthodes, d'où viennent les types du SDK). Les pages du site (`website/content/docs/*/plugins/`) les disent pour l'auteur, à lire en premier, et s'accordent avec eux ; `docs/PLUGINS-DESIGN.md` est le document de conception, daté (2026-10 à 2026-11) : quand il les contredit, c'est lui qui a tort. Ce document est celui du contributeur d'Escouade. La place de marché est dans `docs/STORE.md`, l'interface des harness dans `docs/ENGINES.md`.
 
 ## 1. Ce qu'est un plugin
 
@@ -90,7 +90,7 @@ Un champ inconnu est ignoré ; un manifeste invalide ne charge rien et dit pourq
 
 ### 1.4 Les points d'extension
 
-Un point est **servi** quand le cœur s'en sert ; le schéma en réserve davantage. Un plugin peut tenir plusieurs points sur **un compte** (`contributes.accounts`) : le plugin GitHub donne les Issues, les PR, la CI et les déploiements sur une seule connexion.
+Un point est **servi** quand le cœur s'en sert ; le schéma en réserve davantage. **Réservé** veut dire : le manifeste l'accepte et `validate` en juge la forme, mais Escouade n'en montre rien et n'en appelle rien aujourd'hui ; un plugin ne peut pas compter dessus. Un plugin peut tenir plusieurs points sur **un compte** (`contributes.accounts`) : le plugin GitHub donne les Issues, les PR, la CI et les déploiements sur une seule connexion.
 
 | Point | Contribution | État | Qui s'en sert |
 | --- | --- | --- | --- |
@@ -104,7 +104,7 @@ Un point est **servi** quand le cœur s'en sert ; le schéma en réserve davanta
 | Hébergeurs | `forges` | servi | GitHub, GitLab, Bitbucket, Gitea et Forgejo, Azure DevOps |
 | Services de voix | `voice/*` | servi | OpenAI, Groq, Mistral, ElevenLabs, Deepgram |
 | Environnements de lancement | `launchEnvironments` | servi | isola |
-| Lecteurs de workflow | `workflowReaders` | contrat seul, rien ne l'appelle | — |
+| Lecteurs de workflow | `workflowReaders` | contrat seul, rien ne l'appelle (`plugins/reader.rs`, joué par ses tests) | — |
 | Réglages et secrets | `settings`, `secrets` | servi | tous |
 | Menus, barre d'état, badges | `menus`, `statusBar`, `badges` | réservé | — |
 | Modèles de projet, clés de `.escouade.yml` | `projectTemplates`, `escouadeYml` | réservé (`plugins.<id>` est lu) | — |
@@ -203,9 +203,9 @@ Le bus est `src-tauri/src/facts.rs` : un `Body` typé par fait, **trente-neuf fa
 | `net/stream`, `net/chunk`, `net/end`, `net/credit`, `net/cancel` | les mêmes hôtes | un crédit : l'hôte ne lit plus la socket au-delà de 256 Kio non consommés ; 8 flux par plugin ; 120 s sans octet ferment un flux, sauf `"sse": true` |
 | `ws/open`, `ws/send`, `ws/close`, `ws/message`, `ws/closed` | les mêmes hôtes, `wss` seulement | 4 sockets, 1 Mio par message, file bornée à 256 Kio, en-têtes hors du journal |
 | `timer/set`, `timer/cancel`, `timer/fired` | aucune (un droit de base) | 10 ms au moins, 64 minuteurs |
-| `fs/read`, `fs/write`, `fs/stat`, `fs/list`, `fs/canon` | `files: [{ root, access }]` | les racines sont une liste fermée : `plugin`, `agent`, `agentRepo`, `agentHome`, `temp` ; le chemin résolu, liens compris, doit être sous une racine de cet agent-là ; la clôture d'un projet privé est appliquée **ici, par l'hôte** ; 256 Kio en lecture par défaut (`limits.fileBytes`, 4 Mio au plus) |
+| `fs/read`, `fs/write`, `fs/stat`, `fs/list`, `fs/canon` | `files: [{ root, access }]` | les racines sont une liste fermée : `plugin`, `agent`, `agentRepo`, `agentHome`, `temp` ; les racines d'un agent veulent sa clé, celle d'`agent/attach` (un harness) ou celle qu'un appel d'environnement de lancement prête : l'`agent.id` d'un fait n'ouvre rien ; le chemin résolu, liens compris, doit être sous une racine de cet agent-là ; la clôture d'un projet privé est appliquée **ici, par l'hôte** ; 256 Kio en lecture par défaut (`limits.fileBytes`, 4 Mio au plus) |
 | `fs/gitProtected`, `fs/fileOnly` | `files` | pour un harness : si git ne peut rien lancer de l'agent dans son dossier, et si l'écriture d'un chemin n'atteint qu'un fichier |
-| `proc/spawn`, `proc/write`, `proc/kill`, `proc/out`, `proc/exit` | `commands`, `env` | la commande et ses arguments commencent par une entrée déclarée, mot pour mot (`*` en fin d'entrée) ; `dir` est une racine, jamais un chemin libre ; l'environnement d'un agent sans les secrets d'Escouade, plus les variables de `permissions.env` seules, jamais une des familles refusées (§1.3, `procs::var_refused`) ; 4 à la fois ; pas de shell, pas de `.cmd` ni de `.bat` ; le programme meurt avec l'instance |
+| `proc/spawn`, `proc/write`, `proc/kill`, `proc/out`, `proc/exit` | `commands`, `env` | `proc/out { proc, stream, data }` : `data` en texte UTF-8 (jamais base64), coupé entre deux caractères, 16 Kio au plus, pas par ligne, parfois avant la réponse de `proc/spawn` ; `proc/exit { proc, code }` une fois, après toute la sortie, `code` `null` si le programme a été tué ; la commande et ses arguments commencent par une entrée déclarée, mot pour mot (`*` en fin d'entrée) ; `dir` est une racine, jamais un chemin libre ; l'environnement d'un agent sans les secrets d'Escouade, plus les variables de `permissions.env` seules, jamais une des familles refusées (§1.3, `procs::var_refused`) ; 4 à la fois ; pas de shell, pas de `.cmd` ni de `.bat` ; le programme meurt avec l'instance |
 
 `proc/*` est la surface la plus forte : le module est isolé, le programme qu'il lance ne l'est pas. Le store refuse `*` sur un programme généraliste pour un tiers, sauf justification relue. `files` demande aussi une justification à la revue (`agentHome` contient les identifiants d'un harness).
 
@@ -222,7 +222,7 @@ Par défaut **64 Mio de mémoire, 2 s par tour, 500 ms pour une décision**. Le 
 - **TypeScript** : `sdk/plugin` (`@escouade-dev/plugin`, MIT). Le programme (`run.js`) est un bundle qui n'importe que `node:fs` et `node:readline` et n'a pas d'`export` ; le store le compile. `sdk/create-escouade-plugin` écrit le gabarit ; le SDK donne un faux Escouade en mémoire (`@escouade-dev/plugin/testing`) pour tester sans l'app.
 - **Rust** : `crates/escouade-plugin-kit` (avec `escouade-plugin-protocol` et `escouade-acp`, sur crates.io ; un `[patch.crates-io]` de `src-tauri/Cargo.toml` les ramène sur les chemins locaux dans le dépôt). Le plugin est un `cdylib` pour `wasm32-wasip1` (la chaîne d'outils épinglée de `plugins/rust-toolchain.toml`) ; la même source compile aussi en natif pour `cargo test`. `serve::run` donne la boucle ; un hébergeur donne un `ForgeKind` et un `SourceKind` à `Hosts::new` ; un harness écrit son `Plugin::handle` ; le kit a `http` (le client, qui suit les redirections), `time` (`sleep`, `timeout`), `host` (les fichiers, les programmes). Pas de thread, `std::process` échoue.
 - **Ajouter un plugin de première main** : un dossier `plugins/<id-court>/` (manifeste, README, LICENSE, CHANGELOG, tests, un `Cargo.toml` membre de `plugins/Cargo.toml`), son identifiant dans `src-tauri/src/plugins/builtin.rs` (`REGISTRY`) pour que l'amorce le connaisse, et, côté cœur, ce qu'il faut pour que le point d'extension le trouve (`Provider::plugin()`, `TicketSourceKind::plugin()`, `harness::BUILTIN_HARNESSES`). Ses tests de cœur jouent contre son module, construit par `scripts/plugins-wasm.sh`.
-- **L'essayer** : `escouade-plugin test` (le banc de conformité), `dev` (recharge), `validate`, `build` (compile un `run.js` ou un `run.wasm` comme le store). La vue Plugins › « En développement » charge un dossier en place. Dans le dépôt, `plugins/ci.mjs` fait tout ce qu'un auteur fait avant une étiquette (LICENSE, CHANGELOG, tests, `validate`, banc `--first-party`).
+- **L'essayer** : `escouade-plugin test` (le banc de conformité), `dev` (recharge), `validate`, `build` (compile un `run.js` ou un `run.wasm` comme le store, dans `packs/<id>-<version>.wasm`). La vue Plugins › « En développement » charge un dossier en place : un `run.wasm` y tourne sur `packs/<id>-<version>.wasm` (le dernier construit pour la version du manifeste), sinon sur son `plugin.wasm` ; un `run.js` sur son bundle, que l'app compile. Rien n'est compilé au chargement ni pris hors du dossier : sans module, « Charger un dossier » refuse et dit la commande (`escouade-plugin build <dossier>`, `npm run build`), et un module retiré après coup arrête le plugin avec la même phrase (`wasm::Built`). Construire à nouveau recharge le dossier. Dans le dépôt, `plugins/ci.mjs` fait tout ce qu'un auteur fait avant une étiquette (LICENSE, CHANGELOG, tests, `validate`, banc `--first-party`).
 
 La documentation à jour, avec des exemples compilés (`sdk/doc-examples/{ts,rust}`), est dans les pages du site `plugins/*`.
 
