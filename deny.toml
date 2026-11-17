@@ -12,12 +12,20 @@ all-features = false
 [advisories]
 yanked = "warn"
 ignore = [
-    # zip 4.6: the four of `extract`. Escouade never calls `extract`: it reads an entry by its name, in memory
-    # (src-tauri/src/docsextract.rs). The fix is zip 9, a major version that changes the API: its own ticket.
-    { id = "RUSTSEC-2026-0367", reason = "zip: only ZipArchive::extract is concerned, which the app never calls (docsextract.rs reads entries in memory); fixed in zip 9, a major bump" },
-    { id = "RUSTSEC-2026-0368", reason = "zip: only ZipArchive::extract is concerned, which the app never calls (docsextract.rs reads entries in memory); fixed in zip 9, a major bump" },
-    { id = "RUSTSEC-2026-0369", reason = "zip: only extract() is concerned, which the app never calls (docsextract.rs reads entries in memory); fixed in zip 9, a major bump" },
-    { id = "RUSTSEC-2026-0429", reason = "zip: only ZipArchive::extract is concerned, which the app never calls (docsextract.rs reads entries in memory); fixed in zip 9, a major bump" },
+    # zip 4.6.1: the app's own zip is 9 (docsextract.rs); zip 4 comes only from tauri-plugin-updater 2.13.1, the
+    # latest 2.x (`zip = "4"`, Windows only, without default features). It opens an archive only after the update's
+    # minisign signature was checked against the app's key (updater.rs:837, before `install`), and only if that signed
+    # file is a zip: the Windows update is the NSIS setup.exe (createUpdaterArtifacts = true), never a zip
+    # (docs/SECURITY-DEPENDENCIES.md). They leave with the updater's move to zip >= 9.0.5.
+    { id = "RUSTSEC-2026-0367", reason = "zip 4 (tauri-plugin-updater, Windows): ZipArchive::extract runs only on a zip signed with the app's key, and the Windows update is a setup.exe; no updater 2.x on zip 9" },
+    { id = "RUSTSEC-2026-0368", reason = "zip 4 (tauri-plugin-updater, Windows): ZipArchive::extract runs only on a zip signed with the app's key, and the Windows update is a setup.exe; no updater 2.x on zip 9" },
+    { id = "RUSTSEC-2026-0369", reason = "zip 4 (tauri-plugin-updater, Windows): ZipArchive::extract runs only on a zip signed with the app's key, and the Windows update is a setup.exe; no updater 2.x on zip 9" },
+    { id = "RUSTSEC-2026-0429", reason = "zip 4 (tauri-plugin-updater, Windows): ZipArchive::extract runs only on a zip signed with the app's key, and the Windows update is a setup.exe; no updater 2.x on zip 9" },
+    { id = "RUSTSEC-2026-0545", reason = "zip 4 (tauri-plugin-updater) is built without aes-crypto (default-features = false): no AES entry can be read; no updater 2.x on zip 9" },
+    { id = "RUSTSEC-2026-0548", reason = "zip 4 (tauri-plugin-updater) never uses ZipStreamReader, only ZipArchive (updater.rs:1074), on a zip signed with the app's key; no updater 2.x on zip 9.0.5" },
+    # chrono: an "unmaintained" notice, no known flaw, no fixed version. It is in the app, five of our crates (two
+    # published) and rmcp/schemars: its replacement is weighed in docs/SECURITY-DEPENDENCIES.md.
+    { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained (no known flaw, no fixed version); used by the app, our crates, rmcp and schemars; replacement weighed in docs/SECURITY-DEPENDENCIES.md" },
     # Crates no longer maintained, pulled by Tauri, GTK and zbus (Linux): no fixed version exists; they follow the
     # dependencies that bring them.
     { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained (pulled by wgpu, tauri); no fixed version, no known flaw" },
