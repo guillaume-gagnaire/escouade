@@ -20,6 +20,7 @@
   import Icon from '../Icon.svelte';
   import Chips from './Chips.svelte';
   import Group from './Group.svelte';
+  import ExtensionsAllowed from './ExtensionsAllowed.svelte';
   import LanguageServers from './LanguageServers.svelte';
   import Row from './Row.svelte';
   import Switch from './Switch.svelte';
@@ -322,6 +323,9 @@
   {@render size('editorFontSize')}
   <Row label={t('settings.lsp.title')} desc={t('settings.lsp.titleDesc')} wide>
     <LanguageServers />
+  </Row>
+  <Row label={t('settings.extensions.title')} desc={t('settings.extensions.titleDesc')} wide row="extensionsAllowed">
+    <ExtensionsAllowed />
   </Row>
   {#if s.userId}
     <Row label={t('share.settings.id')} desc={t('share.settings.idDesc')}>

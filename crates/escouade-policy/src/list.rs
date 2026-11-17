@@ -86,6 +86,7 @@ pub enum Category {
     Permissions,
     Harnesses,
     Plugins,
+    Editor,
     Projects,
     Network,
     Privacy,
@@ -97,10 +98,11 @@ pub enum Category {
 }
 
 impl Category {
-    pub const ALL: [Category; 11] = [
+    pub const ALL: [Category; 12] = [
         Category::Permissions,
         Category::Harnesses,
         Category::Plugins,
+        Category::Editor,
         Category::Projects,
         Category::Network,
         Category::Privacy,
@@ -117,6 +119,7 @@ impl Category {
             Category::Permissions => "permissions",
             Category::Harnesses => "harnesses",
             Category::Plugins => "plugins",
+            Category::Editor => "editor",
             Category::Projects => "projects",
             Category::Network => "network",
             Category::Privacy => "privacy",
@@ -134,6 +137,7 @@ impl Category {
             Category::Permissions => ("Modes de permission", "Permission modes"),
             Category::Harnesses => ("Harness et modèles", "Harnesses and models"),
             Category::Plugins => ("Plugins", "Plugins"),
+            Category::Editor => ("Éditeur", "Editor"),
             Category::Projects => ("Projets", "Projects"),
             Category::Network => ("Proxy et certificats", "Proxy and certificates"),
             Category::Privacy => ("Télémétrie et voix", "Telemetry and voice"),
@@ -251,6 +255,7 @@ pub const PLUGIN_ORIGINS_KEY: &str = "plugins.allowedOrigins";
 pub const PLUGINS_ALLOWED: &str = "plugins.allowed";
 pub const PLUGINS_DENIED: &str = "plugins.denied";
 pub const VERIFIED_ONLY: &str = "plugins.verifiedOnly";
+pub const EXTENSIONS_ALLOWED: &str = "extensions.allowed";
 pub const FORCE_PRIVATE: &str = "projects.forcePrivate";
 pub const DENIED_FILES: &str = "projects.deniedFiles";
 pub const PROXY_URL: &str = "proxy.url";
@@ -495,6 +500,27 @@ pub const POLICIES: &[Def] = &[
             title: "Install verified versions only",
             help: "A version of the store without the “Verified by Escouade” seal is refused, at an install as at an update. Only the value true (1) is imposed.",
             locks: "Plugins › “Install verified versions only”, on and grayed.",
+        },
+    },
+    // ---------- the editor ----------
+    Def {
+        key: EXTENSIONS_ALLOWED,
+        sort: Sort::Restrict,
+        form: Form::Json,
+        rows: &["extensionsAllowed"],
+        within: None,
+        category: Category::Editor,
+        later: false,
+        example: r#"{"*": false, "dracula-theme": true, "vscodevim.vim": "stable"}"#,
+        fr: Text {
+            title: "Extensions permises de l’éditeur",
+            help: "Un objet JSON comme extensions.allowed de VS Code : ses clés sont * (toutes), un éditeur d’Open VSX ou une extension (éditeur.nom), ses valeurs true, false, stable (pas de préversion) ou la liste des versions permises. La clé la plus précise dit. Un objet qui nomme quelque chose ne permet que ce qu’il nomme. Il s’ajoute aux listes des réglages et des fichiers .escouade.yml : une extension doit être permise par chacune.",
+            locks: "Général › « Extensions permises de l’éditeur », grisé ; une extension hors de la liste est refusée avant tout téléchargement, et une extension installée qu’elle exclut n’est plus chargée.",
+        },
+        en: Text {
+            title: "Editor’s allowed extensions",
+            help: "A JSON object like VS Code’s extensions.allowed: its keys are * (all), a publisher of Open VSX or an extension (publisher.name), its values true, false, stable (no pre-release) or the list of the versions allowed. The most precise key says it. An object that names anything allows only what it names. It adds to the lists of the settings and of the .escouade.yml files: an extension must be allowed by each.",
+            locks: "General › “Editor’s allowed extensions”, grayed; an extension outside the list is refused before any download, and an installed extension it leaves out is no longer loaded.",
         },
     },
     // ---------- projects ----------

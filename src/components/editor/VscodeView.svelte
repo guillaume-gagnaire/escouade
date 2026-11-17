@@ -18,7 +18,10 @@
   import { app } from '../../lib/state.svelte';
   import type { Project } from '../../lib/types';
   import { worktreeLabel } from '../../lib/worktrees';
+  import { api } from '../../lib/ipc';
+  import type { Installed } from '../../lib/vscode/extensions';
   import Icon from '../Icon.svelte';
+  import ExtensionsPanel from './ExtensionsPanel.svelte';
   import SourcePicker from './SourcePicker.svelte';
 
   let { project }: { project: Project } = $props();
@@ -74,6 +77,8 @@
         );
         wb = mod;
         phase = 'ready';
+        // The extensions installed, laid once the workbench is there (no request to Open VSX: the core's list).
+        void relayExtensions(mod);
         await reopen(mod);
       } catch (e) {
         failure = String(e);
@@ -82,6 +87,34 @@
       }
     })();
   });
+
+  /** The panel of the extensions of Open VSX (ESC-481), beside the workbench. */
+  let extOpen = $state(false);
+  /** The projects whose folders the workbench shows, as the panel is opened: their `.escouade.yml` and privacy count. */
+  let extProjects = $state<string[]>([]);
+
+  function toggleExtensions() {
+    if (!extOpen) extProjects = wb?.viewProjects() ?? [project.id];
+    extOpen = !extOpen;
+  }
+
+  /** What the core says is installed, laid in the workbench: the declarative extensions that run, the theme chosen. */
+  async function layExtensions(installed: Installed | null) {
+    if (installed) await wb?.useExtensions(installed.extensions, installed.theme);
+  }
+
+  /** The projects of the workspace the extensions were laid for last. */
+  let laidFor: string[] = [];
+
+  /** What the core says installed for the projects of the workspace (no request to Open VSX), laid. */
+  async function relayExtensions(mod: NonNullable<typeof wb>) {
+    try {
+      laidFor = mod.viewProjects();
+      await layExtensions(await api.vsxInstalled(laidFor));
+    } catch (e) {
+      console.warn('[vscode] extensions', e);
+    }
+  }
 
   /** The keyboard was given to the view once it showed: a file asked for since takes it with it. */
   let welcomed = false;
@@ -101,6 +134,8 @@
     void mod
       .workbench(at, folder, app.settings.editorFontSize)
       .then(async () => {
+        // A project come into the workspace brings its `.escouade.yml` and its privacy: the extensions laid again.
+        if (!mod.viewProjects().every((p) => laidFor.includes(p))) void relayExtensions(mod);
         if (asked) {
           untrack(() => {
             const cur = app.editor[pid];
@@ -193,8 +228,24 @@
     {:else}
       <span class="what">{t('editor.vscode.what')}</span>
     {/if}
+    {#if phase === 'ready'}
+      <button
+        class="btn ext"
+        class:on={extOpen}
+        data-testid="vscode-ext-open"
+        aria-pressed={extOpen}
+        aria-label={t('editor.ext.open')}
+        use:tip={t('editor.ext.openTip')}
+        onclick={toggleExtensions}><Icon name="blocks" size={14} /><span class="ext-label">{t('editor.ext.open')}</span></button
+      >
+    {/if}
   </header>
-  <div class="vscode-place" bind:this={place}></div>
+  <div class="vscode-body">
+    <div class="vscode-place" bind:this={place}></div>
+    {#if extOpen && phase === 'ready'}
+      <ExtensionsPanel projects={extProjects} onclose={() => (extOpen = false)} onlaid={layExtensions} />
+    {/if}
+  </div>
   {#if phase === 'failed'}
     <p class="vscode-msg" role="alert">{t('editor.vscode.failed', { error: failure })}</p>
   {:else if phase === 'loading'}
@@ -211,6 +262,12 @@
     min-width: 0;
     min-height: 0;
     background: var(--panel);
+  }
+  .vscode-body {
+    flex: 1;
+    display: flex;
+    min-width: 0;
+    min-height: 0;
   }
   .vscode-place {
     flex: 1;
@@ -258,6 +315,28 @@
   .vscode-bar .reload {
     flex: none;
     color: var(--p-ink);
+  }
+  .vscode-bar .ext {
+    flex: none;
+  }
+  .vscode-bar .ext.on {
+    color: var(--p-ink);
+  }
+  /* A narrow bar (a small window, a pane): what says where it is (« VS Code ») goes, « Extensions » keeps its icon,
+     its name and its tooltip; the source, the count of the changes and « Comparer » (A7) keep their room. */
+  .vscode-view {
+    container: vscode-view / inline-size;
+  }
+  @container vscode-view (max-width: 900px) {
+    .vscode-bar .what {
+      display: none;
+    }
+    .vscode-bar .what + .ext {
+      margin-left: auto;
+    }
+    .vscode-bar .ext-label {
+      display: none;
+    }
   }
   /* How the file shown differs from its base, as the old editor said it above its text (ESC-476). */
   .vscode-bar .vs {

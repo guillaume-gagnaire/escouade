@@ -16,6 +16,15 @@
       <string>6C1D2F8E-3B4A-4E5F-9A0B-7C8D9E0F1A2B</string>
       <key>PayloadVersion</key>
       <integer>1</integer>
+      <key>extensions.allowed</key>
+      <dict>
+        <key>*</key>
+        <false/>
+        <key>dracula-theme</key>
+        <true/>
+        <key>vscodevim.vim</key>
+        <string>stable</string>
+      </dict>
       <key>harnesses.allowed</key>
       <array>
         <string>claude</string>

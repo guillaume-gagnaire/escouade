@@ -229,6 +229,22 @@ Sous `plugins.<id>`, les réglages que le projet donne au plugin : ceux qu’il 
 
 Ces clés restent celles du fichier : elles ne sont pas des réglages du projet, ne sont pas marquées dans la fenêtre, et « Exporter vers .escouade.yml » les garde telles qu’elles sont écrites.
 
+### editor
+
+| Clé | Type | Valeurs | Absente | Exemple |
+|---|---|---|---|---|
+| `editor.extensions_allowed` | Clés et valeurs | `"*"`, un éditeur d’Open VSX ou une extension (`éditeur.nom`), chacun `true`, `false`, `stable` ou une liste de versions | toutes les extensions permises par ce fichier | voir ci-dessous |
+
+```yaml
+editor:
+  extensions_allowed:
+    "*": false
+    dracula-theme: true
+    vscodevim.vim: stable
+```
+
+Les [extensions de l’éditeur](editor#les-extensions) permises quand le projet est ouvert dans l’éditeur, comme `extensions.allowed` de VS Code : la clé la plus précise dit (l’extension, sinon son éditeur, sinon `*`), et une liste qui nomme quelque chose ne permet que ce qu’elle nomme. Elle s’ajoute à celles de Réglages › Général › Avancé, de l’équipe et du poste géré : une extension doit être permise par chacune, sinon elle ne se télécharge pas. `*` s’écrit entre guillemets (sans eux, YAML le lit comme un alias). Comme `plugins`, c’est une clé du fichier seul, que l’export garde telle quelle.
+
 ### team
 
 Écrite par Escouade quand le projet est rattaché à une [équipe](team/join), et retirée quand il la quitte : à quelle équipe le projet appartient. Rien de secret.

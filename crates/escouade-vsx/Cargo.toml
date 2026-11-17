@@ -1,0 +1,45 @@
+[package]
+name = "escouade-vsx"
+version = "0.1.0"
+description = "The extensions of the editor's view, by the core: Open VSX searched, a VSIX downloaded, its SHA-256 and its signature checked, unpacked within bounds, the allowed list, its files served read-only"
+authors = ["Guillaume Gagnaire"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+rust-version = "1.88"
+workspace = "../../src-tauri"
+# A part of the app, cut out of its crate for it to compile faster (docs/CRATES.md): never published.
+publish = false
+
+[features]
+# The fake Open VSX (`fake`): the app's tests answer from it too.
+testing = ["dep:tokio"]
+
+[dependencies]
+# The languages written in now, the guard of a path kept inside its folder.
+escouade-base = { path = "../escouade-base" }
+# `tr_in!`, and `write_atomic`.
+escouade-plugin-cli = { path = "../escouade-plugin-cli" }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+parking_lot = "0.13"
+# The requests to Open VSX: the client is the app's (its proxy, its authorities), given by the caller.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json"] }
+url = "2"
+percent-encoding = "2"
+# The sum of a VSIX, and Open VSX's signature of it (Ed25519, its public key in SPKI PEM).
+sha2 = "0.11"
+ed25519-dalek = "2"
+base64 = "0.23"
+# The VSIX and its `.sigzip`, as the app reads its other archives.
+zip = { version = "9.5", default-features = false, features = ["deflate"] }
+# The responses of the core's protocol (`escouade-ext:`), as Tauri takes them.
+http = "1"
+uuid = { version = "1", features = ["v4"] }
+log = "0.4"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync"], optional = true }
+
+[dev-dependencies]
+escouade-base = { path = "../escouade-base", features = ["testing"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync"] }
+tempfile = "3"

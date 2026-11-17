@@ -58,6 +58,10 @@ board:
   mode: plan
 workflows:
   enabled: false
+editor:
+  extensions_allowed:
+    \"*\": true
+    acme: false
 plugins:
   recommended: [dev.exemple.slack]
 team:

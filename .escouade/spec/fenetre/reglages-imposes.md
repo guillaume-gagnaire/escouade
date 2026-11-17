@@ -2,8 +2,8 @@
 title: "Réglages imposés"
 subject: "fenetre"
 sources: ["docs/TEAM-SERVER.md §6.1, §6.2, §6.3, §6.4, §6.5, §16 (TS-11, TS-12, TS-13)","crates/escouade-policy/README.md (TS-0b ESC-454, TS-12 ESC-465)","crates/escouade-policy/src/list.rs (la liste unique)","src-tauri/src/team_settings.rs (TS-13)"]
-tickets: ["ESC-455","ESC-465","ESC-471","ESC-478","ESC-497"]
-decisions: [169,175,183,189,198,197]
+tickets: ["ESC-455","ESC-465","ESC-471","ESC-478","ESC-481","ESC-497"]
+decisions: [169,175,183,189,201,198,197]
 compared: null
 ---
 
@@ -62,6 +62,7 @@ Un `REG_DWORD` 0 ou 1 devient un booléen quand la liste le dit ; une chaîne se
 | `plugins.allowedOrigins` | restreindre, une borne (`store-verified`, `store`, `team-store`, `git`, `folder`, `dev`) | l'installation d'un plugin d'une autre origine, refusée |
 | `plugins.allowed`, `plugins.denied` | restreindre (borne ; liste d'interdits) | l'installation d'un plugin hors de la liste, ou de la liste des interdits, refusée |
 | `plugins.verifiedOnly` | restreindre (allumé seulement) | Plugins › « N'installer que des versions vérifiées » |
+| `extensions.allowed` | restreindre, JSON comme `extensions.allowed` de VS Code (`{"*": false, "dracula-theme": true}`) ; le poste géré et l'équipe croisés avec les réglages du poste et les `.escouade.yml` : chacun doit permettre l'extension | Réglages › Général › Avancé › « Extensions permises de l'éditeur », grisé ; une extension de l'éditeur hors de la liste refusée avant tout téléchargement, une extension installée qu'elle exclut plus chargée (voir *Extensions*) |
 | `projects.forcePrivate` | restreindre (allumé seulement) | « Nouveaux projets privés » et « Projet privé » de chaque projet |
 | `projects.deniedFiles` | restreindre, liste d'interdits | lu et gardé ; appliqué avec la clôture des fichiers (à venir) |
 | `proxy.url`, `proxy.exclusions`, `proxy.authorities` | sensible | Réglages › Avancé › Réseau : le proxy, ses exclusions, les autorités supplémentaires |
@@ -98,7 +99,7 @@ Un `REG_DWORD` 0 ou 1 devient un booléen quand la liste le dit ; une chaîne se
 
 L'interface ne fait que montrer. Une écriture de ce qui est imposé est refusée par le cœur, et dite avec qui l'impose (« Ce réglage est imposé par la stratégie de ce poste (telemetry.enabled) : il ne se change pas sur ce poste. », « Le mode « auto » n'est pas permis par la stratégie de ce poste. ») :
 
-- **par la fenêtre** : l'enregistrement des réglages de l'app, les réglages d'un projet (harness, Remote Control, projet privé), le Kanban (son mode, son effort), le mode, le modèle et l'effort d'un agent, son Remote Control, l'installation d'un plugin, la dictée ;
+- **par la fenêtre** : l'enregistrement des réglages de l'app, les réglages d'un projet (harness, Remote Control, projet privé), le Kanban (son mode, son effort), le mode, le modèle et l'effort d'un agent, son Remote Control, l'installation d'un plugin, l'installation ou la mise à jour d'une extension de l'éditeur, la dictée ;
 - **par le MCP** : `set_board` avec un mode ou un effort interdits, `create_agent` dans un projet dont le harness n'est pas permis, `update_ticket` qui met un compte sur un harness interdit ; un client extérieur selon `mcp.externalClients` ;
 - **par l'API distante** : son démarrage et chaque nouvelle connexion, selon `servers.remoteApi` ;
 - **par le `.escouade.yml` du dépôt** : `agents.engine`, `board.mode` ou `board.effort` interdits ne sont pas appliqués, et un avertissement le dit dans Réglages › Équipe, le reste du fichier lu comme avant ;
@@ -124,7 +125,7 @@ L'interface ne fait que montrer. Une écriture de ce qui est imposé est refusé
 
 ## Pour les essais
 
-Un build de développement (jamais une version publiée) lit, à la place des stratégies du système, le fichier JSON que nomme `ESCOUADE_TEST_POLICIES` (`{"telemetry.enabled": false}`), et le **surveille** comme le système. C'est la source des e2e `tests/e2e/policies.spec.ts` et `tests/e2e/policies-live.spec.ts` (une stratégie posée puis retirée pendant que l'app tourne). Un test vérifie que ce code n'existe que sous `cfg(debug_assertions)` : une variable d'environnement ne doit ni lever ni poser une stratégie dans une version publiée (constat SEC-13 de l'audit de la 2.2.0). Le rang 5 s'essaie dans `tests/e2e/team-settings.spec.ts`, contre un vrai serveur d'équipe et deux clients.
+Un build de développement (jamais une version publiée) lit, à la place des stratégies du système, le fichier JSON que nomme `ESCOUADE_TEST_POLICIES` (`{"telemetry.enabled": false}`), et le **surveille** comme le système. C'est la source des e2e `tests/e2e/policies.spec.ts` et `tests/e2e/policies-live.spec.ts` (une stratégie posée puis retirée pendant que l'app tourne), et de `tests/e2e/vscode-extensions.spec.ts` (la liste permise des extensions imposée). Un test vérifie que ce code n'existe que sous `cfg(debug_assertions)` : une variable d'environnement ne doit ni lever ni poser une stratégie dans une version publiée (constat SEC-13 de l'audit de la 2.2.0). Le rang 5 s'essaie dans `tests/e2e/team-settings.spec.ts`, contre un vrai serveur d'équipe et deux clients.
 
 ## Le mode jugé est celui où tourne le harness (ESC-497)
 

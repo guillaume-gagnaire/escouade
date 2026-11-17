@@ -640,6 +640,8 @@ export const test = base.extend<{
       ESCOUADE_STORE_URL: process.env.ESCOUADE_STORE_URL ?? NO_STORE,
       ESCOUADE_STORE_MIRROR_URL: process.env.ESCOUADE_STORE_MIRROR_URL ?? NO_STORE,
       ESCOUADE_STORE_TEST_KEY: process.env.ESCOUADE_STORE_TEST_KEY,
+      // Nor Open VSX (the editor's extensions, ESC-481): a closed port, unless a test starts the fake one and names it.
+      ESCOUADE_TEST_OPEN_VSX: NO_STORE,
       // No Codex but the fake one a test asks for (`appEnv: { ESCOUADE_CODEX: FAKE_CODEX }`), never the machine's.
       ESCOUADE_CODEX: 'none',
       // Codex's Principal is a folder of the test's (its `config.toml`, « Les agents peuvent piloter Escouade »), never the user's ~/.codex.

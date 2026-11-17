@@ -547,6 +547,17 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `vectors_model_cancel`
 - `vectors_model_delete`
 - `vectors_model_download`
+- `vsx_card`
+- `vsx_file`
+- `vsx_files`
+- `vsx_image`
+- `vsx_install`
+- `vsx_installed`
+- `vsx_remove`
+- `vsx_search`
+- `vsx_set_enabled`
+- `vsx_set_theme`
+- `vsx_updates`
 - `warm_agent`
 - `workflow_refine_plan`
 

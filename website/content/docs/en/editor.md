@@ -150,3 +150,18 @@ Each jump (a click, `F12`, a search result, a file opened with `Ctrl+P`) remembe
 - Results are grouped by file, with the number of lines found, and the matching part is highlighted. Clicking a line opens the file at that line and column. `↑` and `↓`, `Home` and `End` go through the list, `→` and `←` unfold and fold a file.
 - Results stop at the first 2,000 lines (“Results limited to the first 2,000.”) or after 10 seconds (“Search stopped after 10 s: partial results.”).
 - The search is kept when you close the editor, per project; when you change source, it starts again on the new one.
+
+## Extensions
+
+The “Extensions” button, on the right of the editor’s bar, opens the panel of the extensions of [Open VSX](https://open-vsx.org), the open registry of the Eclipse Foundation (Microsoft’s is reserved to its own products). Search an extension, open its card, then “Install”; “Check for updates” proposes the new versions of what is installed, without installing anything by itself; “Turn off” and “Remove” do what they say.
+
+- **Escouade does everything**: the search, the download, the check of the SHA-256 and of the signature Open VSX puts on each version, then the unpacking, where a trapped archive (a path leaving its folder, a link, a decompression bomb) is refused whole. A version Open VSX did not sign is not installed. The editor’s page never talks to Open VSX itself.
+- **What works today**: the declarative extensions, with no code: color themes, grammars (a language’s coloring), snippets, language configurations, icon themes. An extension with code installs but stays “Waiting for its host”, and an extension that needs Node says so (“Needs the Node host, not in Escouade yet”).
+- **Trust**: a publisher’s first extension asks “Do you trust the publisher …?”, as VS Code does. The card says whether Open VSX verified its namespace (“Verified”): the signature proves the file is the one Open VSX published, not that the extension is safe.
+- **The theme**: the editor keeps Escouade’s theme. “Use “…”” takes an extension’s, and “Back to Escouade’s theme” leaves it.
+- **A card comes from Open VSX**: its icon is downloaded by Escouade, its README is shown as a message is, an image from the web loading only on a click on “Show image”.
+- **A private project** sends nothing to Open VSX: from a private project’s editor, no search and no update; the installed extensions work.
+
+### Allowed extensions
+
+A list, as VS Code’s `extensions.allowed`, says what may be installed: `"*"`, a publisher (`dracula-theme`) or an extension (`dracula-theme.theme-dracula`), each `true`, `false`, `stable` (no pre-release) or a list of versions. The most precise key says it; a list that names anything allows only what it names. It is set in four places, and an extension must be allowed by each: Settings › General › Advanced › “Editor’s allowed extensions”, the project’s [`.escouade.yml`](escouade-yml#editor) (`editor.extensions_allowed`), the team, and the [device policies](managed-policies) (`extensions.allowed`). A refused extension is not even downloaded, and its card says who refuses it.

@@ -317,6 +317,32 @@ describe('the new project’s assistant', () => {
     expect(be.called('create_agent')).toHaveLength(0);
   });
 
+  it('leaves the editor opened while the first agent is made on its source, the agent the selected one (ESC-481)', async () => {
+    const worktree = { path: 'C:\\code\\atlas\\.claude\\worktrees\\a9', branch: 'a9' };
+    for (const opened of [true, false]) {
+      resetApp({ projects: [project(), webShop] });
+      app.modal = { kind: 'newProject' };
+      const be = backend({
+        create_agent: () => {
+          // The user opened the project's editor while the agent was being made (slow on a loaded machine).
+          if (opened) app.editor.new = { on: true, source: 'project', places: {}, reveal: null };
+          return agent({ id: 'a9', projectId: 'new', worktree } as never);
+        },
+      });
+      const { unmount } = render(NewProjectModal);
+      await typePath();
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Suivant' })).toBeEnabled());
+      await userEvent.click(screen.getByRole('button', { name: /Récapitulatif/ }));
+      await userEvent.click(screen.getByRole('button', { name: 'Créer le projet' }));
+      await waitFor(() => expect(be.called('create_agent')).toHaveLength(1));
+      await waitFor(() => expect(app.ui.selectedAgent.new).toBe('a9'));
+      // Opened, it stays on the project; closed, it is not opened.
+      expect(app.editor.new?.on ?? false).toBe(opened);
+      if (opened) expect(app.editor.new.source).toBe('project');
+      unmount();
+    }
+  });
+
   it('offers nothing to index in the summary (ESC-310)', async () => {
     backend();
     render(NewProjectModal);

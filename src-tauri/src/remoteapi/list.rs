@@ -13,11 +13,23 @@
 //! A command that is not here is not served by the IPC either: `remoteapi_tests` checks every `#[tauri::command]` of the
 //! crate is in the list.
 
-use crate::{commands, fileorigin};
+use crate::{commands, fileorigin, vsx};
 
 escouade_command::commands! {
     // Served as they are.
     served {
+        // The extensions of the VS Code view (ESC-481): the core's store, whatever the client's machine.
+        vsx::vsx_installed,
+        vsx::vsx_search,
+        vsx::vsx_card,
+        vsx::vsx_image,
+        vsx::vsx_install,
+        vsx::vsx_updates,
+        vsx::vsx_set_enabled,
+        vsx::vsx_remove,
+        vsx::vsx_set_theme,
+        vsx::vsx_files,
+        vsx::vsx_file,
         commands::subscribe,
         commands::dismiss_recovery,
         // The screen of the copies (ESC-487).

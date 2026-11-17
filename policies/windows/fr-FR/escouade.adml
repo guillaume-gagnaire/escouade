@@ -10,6 +10,7 @@
       <string id="cat_permissions">Modes de permission</string>
       <string id="cat_harnesses">Harness et modèles</string>
       <string id="cat_plugins">Plugins</string>
+      <string id="cat_editor">Éditeur</string>
       <string id="cat_projects">Projets</string>
       <string id="cat_network">Proxy et certificats</string>
       <string id="cat_privacy">Télémétrie et voix</string>
@@ -87,6 +88,12 @@ Clé : plugins.denied (liste). Sorte : restreindre.</string>
 Sur le poste : Plugins › « N’installer que des versions vérifiées », allumé et grisé.
 
 Clé : plugins.verifiedOnly (booléen, true (1)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
+      <string id="extensions_allowed">Extensions permises de l’éditeur</string>
+      <string id="extensions_allowed_Explain">Un objet JSON comme extensions.allowed de VS Code : ses clés sont * (toutes), un éditeur d’Open VSX ou une extension (éditeur.nom), ses valeurs true, false, stable (pas de préversion) ou la liste des versions permises. La clé la plus précise dit. Un objet qui nomme quelque chose ne permet que ce qu’il nomme. Il s’ajoute aux listes des réglages et des fichiers .escouade.yml : une extension doit être permise par chacune.
+
+Sur le poste : Général › « Extensions permises de l’éditeur », grisé ; une extension hors de la liste est refusée avant tout téléchargement, et une extension installée qu’elle exclut n’est plus chargée.
+
+Clé : extensions.allowed (JSON). Sorte : restreindre.</string>
       <string id="projects_forcePrivate">Projets privés d’office</string>
       <string id="projects_forcePrivate_Explain">Chaque projet est privé : ses agents ne voient aucun autre projet, et aucun autre projet ne le voit. Seule la valeur true (1) s’impose.
 
@@ -245,6 +252,11 @@ Clé : team.onlyThisServer (booléen, true (1)). Sorte : restreindre. « Désac
       </presentation>
       <presentation id="plugins_denied">
         <listBox refId="plugins_denied">Plugins interdits</listBox>
+      </presentation>
+      <presentation id="extensions_allowed">
+        <textBox refId="extensions_allowed">
+          <label>Extensions permises de l’éditeur</label>
+        </textBox>
       </presentation>
       <presentation id="projects_deniedFiles">
         <listBox refId="projects_deniedFiles">Motifs de fichiers interdits</listBox>

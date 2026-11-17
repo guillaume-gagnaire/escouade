@@ -19,6 +19,8 @@ const wb = vi.hoisted(() => ({
   hasTabs: vi.fn(() => false),
   setFontSize: vi.fn(),
   openTabs: vi.fn(() => [{ projectId: 'p1', source: 'project', path: 'src/app.ts' }]),
+  viewProjects: vi.fn(() => ['p1']),
+  useExtensions: vi.fn(async () => {}),
 }));
 vi.mock('../../lib/vscode/workbench', () => wb);
 // The French texts of VS Code (lib/vscode/load.ts): not looked at here.
@@ -158,6 +160,23 @@ describe('VscodeView', () => {
     setLang('fr');
     await waitFor(() => expect(screen.queryByTestId('vscode-lang-note')).toBeNull());
     reload.mockRestore();
+  });
+
+  it('lays the extensions the core says installed, and opens their panel beside the workbench', async () => {
+    const list = { extensions: [], theme: 'acme.night/Acme Night', layers: [], warnings: [], private: null };
+    const b = fakeBackend({ vsx_installed: () => list, set_unsaved: () => null });
+    await app.openEditor({ projectId: 'p1', source: 'project' });
+    render(VscodeView, { project: project() });
+    await waitFor(() => expect(wb.useExtensions).toHaveBeenCalledWith(list.extensions, 'acme.night/Acme Night'));
+    expect(b.called('vsx_installed')[0].args).toEqual({ projects: ['p1'] });
+    // Nothing asked of Open VSX to show the view.
+    expect(b.called('vsx_search')).toHaveLength(0);
+    expect(screen.queryByTestId('vscode-ext-panel')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Extensions' }));
+    expect(await screen.findByTestId('vscode-ext-panel')).toBeTruthy();
+    expect(screen.getByTestId('vscode-ext-open')).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(screen.getByLabelText('Fermer les extensions'));
+    expect(screen.queryByTestId('vscode-ext-panel')).toBeNull();
   });
 
   it('opens again the tabs kept by a reload, the one shown last', async () => {

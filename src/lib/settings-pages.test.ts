@@ -90,6 +90,7 @@ const SETTINGS_KEYS: Record<keyof Settings, true> = {
   voice: true,
   languageServers: true,
   languageServersTrusted: true,
+  extensionsAllowed: true,
   overseer: true,
 };
 

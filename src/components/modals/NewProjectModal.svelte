@@ -209,7 +209,13 @@
     const a = await app.run(api.createAgent(p.id, agent));
     if (a) {
       app.agents[a.id] = a;
-      app.selectAgent(a.id);
+      // Made after the window closed (its worktree first, slow on a loaded machine): the editor opened in the meantime on
+      // the project keeps its source, the agent is the project's selected one (ESC-481). Selecting it would take the
+      // editor to its worktree, as when the user picks it.
+      if (app.editor[p.id]?.on) {
+        app.ui.selectedAgent[p.id] = a.id;
+        app.persistUi();
+      } else app.selectAgent(a.id);
     }
   }
 

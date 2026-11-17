@@ -54,6 +54,9 @@ pub enum Kind {
     Prefix,
     /// Plugins' ids in the store (`dev.exemple.slack`; a single one stands for a list of one).
     PluginIds,
+    /// The extensions of the editor allowed (ESC-481): VS Code's `extensions.allowed`, a mapping of `"*"`, a publisher or
+    /// an extension to `true`, `false`, `stable` or a list of versions.
+    ExtensionRules,
 }
 
 /// A setting of the file.
@@ -110,13 +113,15 @@ pub const TEAM: &str = "team";
 pub const PLUGINS: &str = "plugins";
 /// The plugins the project proposes.
 pub const RECOMMENDED: &str = "plugins.recommended";
+/// The extensions of the editor allowed (ESC-481).
+pub const EXTENSIONS_ALLOWED: &str = "editor.extensions_allowed";
 
 /// Whether `path` is the file's alone (`plugins.*`): no field of the project holds it.
 pub fn file_only(path: &str) -> bool {
     matches!(
         path.split('.').next(),
         Some(PLUGINS | crate::lsp::FILE_GROUP | TEAM)
-    )
+    ) || key_of(path).is_some_and(|k| k.file_only)
 }
 
 /// The settings the file gives the plugin `id` (`plugins.<id>`), as read; none when it gives none.
@@ -300,6 +305,11 @@ pub const KEYS: &[Key] = &[
         RECOMMENDED,
         Kind::PluginIds,
         "The plugins the project proposes, by their id in the store (store.escouade.dev). Escouade names those not installed in Settings › Project, each with its page in the store: it never installs nor turns on anything by itself. A plugin's own settings go under plugins.<id>, never a secret.",
+    ),
+    file_key(
+        EXTENSIONS_ALLOWED,
+        Kind::ExtensionRules,
+        "The extensions of the editor allowed in this project, as VS Code's extensions.allowed: \"*\" (quoted: all), a publisher of Open VSX or an extension (publisher.name), each true, false, stable (no pre-release) or a list of its versions. The most precise key says it; a mapping that names anything allows only what it names. It adds to the settings' list, the team's and the managed device's: an extension must be allowed by each, or it is not downloaded.",
     ),
 ];
 
@@ -810,6 +820,48 @@ fn rel_dir(node: &Node) -> Result<String, Invalid> {
     Ok(dir)
 }
 
+/// `editor.extensions_allowed`: the mapping as JSON, what `escouade_vsx::allowed` cannot read told and left out.
+fn extension_rules(k: &Key, node: &Node, warnings: &mut Vec<Warning>) -> Result<Value, Invalid> {
+    let N::Map(entries) = &node.v else {
+        return Err((
+            node.line,
+            tr!(
+                "une liste de clés est attendue, comme \"*\": true",
+                "a mapping is expected, such as \"*\": true"
+            ),
+        ));
+    };
+    let mut out = Map::new();
+    for (name, line, v) in entries {
+        let value = match &v.v {
+            N::Scalar {
+                text,
+                quoted: false,
+                ..
+            } if text.eq_ignore_ascii_case("true") || text.eq_ignore_ascii_case("false") => {
+                json!(text.eq_ignore_ascii_case("true"))
+            }
+            N::Scalar { text, .. } => json!(text.trim()),
+            N::Seq(items) => json!(items
+                .iter()
+                .filter_map(|i| text_of(i).ok())
+                .collect::<Vec<_>>()),
+            _ => json!(null),
+        };
+        let one = Value::Object(Map::from_iter([(name.clone(), value.clone())]));
+        let (_, said) = escouade_vsx::allowed::Rules::parse(&one);
+        if said.is_empty() {
+            out.insert(name.clone(), value);
+        } else {
+            let path = k.path;
+            for s in said {
+                warnings.push(warn(Some(*line), format!("{path} : {s}")));
+            }
+        }
+    }
+    Ok(Value::Object(out))
+}
+
 /// The steps or launch commands of a list: an item that cannot be read is told and left out.
 fn items(k: &Key, node: &Node, warnings: &mut Vec<Warning>) -> Result<Value, Invalid> {
     let list: Vec<&Node> = match &node.v {
@@ -977,6 +1029,7 @@ fn value_of(k: &Key, node: &Node, warnings: &mut Vec<Warning>) -> Result<Value, 
             }
             Ok(json!(ids))
         }
+        Kind::ExtensionRules => extension_rules(k, node, warnings),
         Kind::Dir => rel_dir(node).map(Value::String),
         Kind::Prefix => {
             let p = text_of(node)?;
@@ -1516,6 +1569,16 @@ fn schema_of(k: &Key) -> Value {
             let id = json!({ "type": "string", "pattern": PLUGIN_ID_PATTERN });
             json!({ "oneOf": [{ "type": "array", "items": id, "uniqueItems": true }, id] })
         }
+        Kind::ExtensionRules => json!({
+            "type": "object",
+            "additionalProperties": {
+                "oneOf": [
+                    { "type": "boolean" },
+                    { "const": "stable" },
+                    { "type": "array", "items": { "type": "string" } },
+                ],
+            },
+        }),
     };
     s["description"] = json!(k.about);
     s

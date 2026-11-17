@@ -150,3 +150,18 @@ Chaque saut (un clic, `F12`, un résultat de recherche, un fichier ouvert par `C
 - Les résultats sont groupés par fichier, avec le nombre de lignes trouvées, et la partie qui correspond est surlignée. Un clic sur une ligne ouvre le fichier à cette ligne et cette colonne. `↑` et `↓`, `Home` et `End` parcourent la liste, `→` et `←` déplient et replient un fichier.
 - Les résultats s’arrêtent aux 2 000 premières lignes (« Résultats limités aux 2 000 premiers. ») ou après 10 secondes (« Recherche arrêtée après 10 s : résultats partiels. »).
 - La recherche est gardée quand tu fermes l’éditeur, par projet ; en changeant de source, elle repart sur la nouvelle.
+
+## Les extensions
+
+Le bouton « Extensions », à droite de la barre de l’éditeur, ouvre le panneau des extensions d’[Open VSX](https://open-vsx.org), le registre ouvert de la fondation Eclipse (celui de Microsoft est réservé à ses produits). Cherche une extension, ouvre sa fiche, puis « Installer » ; « Rechercher des mises à jour » propose les nouvelles versions de ce qui est installé, sans rien installer seul ; « Couper » et « Retirer » font ce qu’ils disent.
+
+- **Escouade fait tout** : la recherche, le téléchargement, la vérification de la somme SHA-256 et de la signature qu’Open VSX pose sur chaque version, puis le déballage, où une archive piégée (un chemin qui sort de son dossier, un lien, une bombe de décompression) est refusée entière. Une version qu’Open VSX n’a pas signée ne s’installe pas. La page de l’éditeur ne parle jamais à Open VSX elle-même.
+- **Ce qui marche aujourd’hui** : les extensions déclaratives, sans code : thèmes de couleurs, grammaires (la coloration d’un langage), extraits, configurations de langage, thèmes d’icônes. Une extension avec du code s’installe mais reste « En attente de l’hôte », et une extension qui demande Node le dit (« Demande l’hôte Node, pas encore dans Escouade »).
+- **La confiance** : la première extension d’un éditeur demande « Faites-vous confiance à l’éditeur … ? », comme VS Code. La fiche dit si Open VSX a vérifié son espace de noms (« Vérifié ») : la signature prouve que le fichier est celui qu’Open VSX a publié, pas que l’extension est sûre.
+- **Le thème** : l’éditeur garde le thème d’Escouade. « Utiliser « … » » prend celui d’une extension, et « Revenir au thème d’Escouade » le quitte.
+- **Une fiche vient d’Open VSX** : son icône est téléchargée par Escouade, son README est affiché comme un message, une image du web ne se chargeant qu’au clic sur « Afficher l’image ».
+- **Un projet privé** n’envoie rien à Open VSX : depuis l’éditeur d’un projet privé, pas de recherche ni de mise à jour ; les extensions installées marchent.
+
+### Les extensions permises
+
+Une liste, comme `extensions.allowed` de VS Code, dit ce qui peut s’installer : `"*"`, un éditeur (`dracula-theme`) ou une extension (`dracula-theme.theme-dracula`), chacun `true`, `false`, `stable` (pas de préversion) ou une liste de versions. La clé la plus précise dit ; une liste qui nomme quelque chose ne permet que ce qu’elle nomme. Elle se règle à quatre endroits, et une extension doit être permise par chacun : Réglages › Général › Avancé › « Extensions permises de l’éditeur », le [`.escouade.yml`](escouade-yml#editor) du projet (`editor.extensions_allowed`), l’équipe, et les [stratégies du poste](managed-policies) (`extensions.allowed`). Une extension refusée n’est même pas téléchargée, et sa fiche dit qui la refuse.

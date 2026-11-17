@@ -75,6 +75,32 @@
       },
       "type": "object"
     },
+    "editor": {
+      "additionalProperties": false,
+      "properties": {
+        "extensions_allowed": {
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "const": "stable"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "description": "The extensions of the editor allowed in this project, as VS Code's extensions.allowed: \"*\" (quoted: all), a publisher of Open VSX or an extension (publisher.name), each true, false, stable (no pre-release) or a list of its versions. The most precise key says it; a mapping that names anything allows only what it names. It adds to the settings' list, the team's and the managed device's: an extension must be allowed by each, or it is not downloaded.",
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
     "git": {
       "additionalProperties": false,
       "properties": {

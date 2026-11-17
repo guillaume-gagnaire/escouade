@@ -10,6 +10,7 @@
       <string id="cat_permissions">Permission modes</string>
       <string id="cat_harnesses">Harnesses and models</string>
       <string id="cat_plugins">Plugins</string>
+      <string id="cat_editor">Editor</string>
       <string id="cat_projects">Projects</string>
       <string id="cat_network">Proxy and certificates</string>
       <string id="cat_privacy">Telemetry and voice</string>
@@ -87,6 +88,12 @@ Key: plugins.denied (list). Sort: restrict.</string>
 On the device: Plugins › “Install verified versions only”, on and grayed.
 
 Key: plugins.verifiedOnly (Boolean, true (1)). Sort: restrict. “Disabled” removes the policy: the setting is free again.</string>
+      <string id="extensions_allowed">Editor’s allowed extensions</string>
+      <string id="extensions_allowed_Explain">A JSON object like VS Code’s extensions.allowed: its keys are * (all), a publisher of Open VSX or an extension (publisher.name), its values true, false, stable (no pre-release) or the list of the versions allowed. The most precise key says it. An object that names anything allows only what it names. It adds to the lists of the settings and of the .escouade.yml files: an extension must be allowed by each.
+
+On the device: General › “Editor’s allowed extensions”, grayed; an extension outside the list is refused before any download, and an installed extension it leaves out is no longer loaded.
+
+Key: extensions.allowed (JSON). Sort: restrict.</string>
       <string id="projects_forcePrivate">Private projects by default</string>
       <string id="projects_forcePrivate_Explain">Every project is private: its agents see no other project, and no other project sees it. Only the value true (1) is imposed.
 
@@ -245,6 +252,11 @@ Key: team.onlyThisServer (Boolean, true (1)). Sort: restrict. “Disabled” rem
       </presentation>
       <presentation id="plugins_denied">
         <listBox refId="plugins_denied">Denied plugins</listBox>
+      </presentation>
+      <presentation id="extensions_allowed">
+        <textBox refId="extensions_allowed">
+          <label>Editor’s allowed extensions</label>
+        </textBox>
       </presentation>
       <presentation id="projects_deniedFiles">
         <listBox refId="projects_deniedFiles">Denied file patterns</listBox>

@@ -34,11 +34,11 @@ use std::collections::BTreeMap;
 #[allow(unused_imports)]
 pub use escouade_policy::list::{
     Def as LockKey, Form, Sort, AGGREGATE_VIEW, ALLOW_BYPASS, AUTHORITIES, AUTO_UPDATE, CHANNEL,
-    CONTENTLESS, DEFAULT_MODE, DENIED_FILES, DENY_INSECURE_TLS, DICTATION, FORCE_PRIVATE,
-    HARNESSES, MAX_EFFORT, MCP_EXTERNAL, MODELS, MODES_KEY, ONLY_THIS_SERVER, PERSONAL_SPACE,
-    PLUGINS_ALLOWED, PLUGINS_DENIED, PLUGIN_ORIGINS_KEY, POLICIES as KEYS, PROXY_EXCLUSIONS,
-    PROXY_URL, REMOTE, REMOTE_API, SERVERS, TEAM_FINGERPRINT, TEAM_SERVER, TELEMETRY,
-    VERIFIED_ONLY, VOICE_ONLINE,
+    CONTENTLESS, DEFAULT_MODE, DENIED_FILES, DENY_INSECURE_TLS, DICTATION, EXTENSIONS_ALLOWED,
+    FORCE_PRIVATE, HARNESSES, MAX_EFFORT, MCP_EXTERNAL, MODELS, MODES_KEY, ONLY_THIS_SERVER,
+    PERSONAL_SPACE, PLUGINS_ALLOWED, PLUGINS_DENIED, PLUGIN_ORIGINS_KEY, POLICIES as KEYS,
+    PROXY_EXCLUSIONS, PROXY_URL, REMOTE, REMOTE_API, SERVERS, TEAM_FINGERPRINT, TEAM_SERVER,
+    TELEMETRY, VERIFIED_ONLY, VOICE_ONLINE,
 };
 
 /// The modes a bound of modes may name, from the one that allows the least to the one that allows the most
@@ -228,6 +228,14 @@ pub struct Bound {
     pub allowed: Vec<String>,
 }
 
+/// One rank's value of a key, and who set it.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Imposed {
+    pub by: LockedBy,
+    pub value: Value,
+}
+
 /// What ranks 5 and 6 impose on a key: a value, or bounds (each rank's list; what all allow is left).
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -237,6 +245,10 @@ pub struct Lock {
     pub value: Option<Value>,
     pub by: Option<LockedBy>,
     pub bounds: Vec<Bound>,
+    /// Each rank's value of a JSON key that restricts (`extensions.allowed`), the strongest first: each holds, crossed
+    /// by whoever reads it (`check_extension`). Empty for the other keys.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub layers: Vec<Imposed>,
 }
 
 impl Lock {
@@ -439,6 +451,7 @@ impl Locks {
                             allowed: strings(&v),
                         })
                         .collect(),
+                    layers: Vec::new(),
                 }
             } else if let Form::Ceiling { choices } = k.form {
                 // A ceiling: the lower one holds, the managed device's when they are equal.
@@ -452,6 +465,7 @@ impl Locks {
                     value: Some(value),
                     by: Some(by),
                     bounds: Vec::new(),
+                    layers: Vec::new(),
                 }
             } else if k.form == Form::Union {
                 // What each rank denies or adds, together; said imposed by the strongest.
@@ -468,15 +482,28 @@ impl Locks {
                     value: Some(Value::from(all)),
                     by: Some(layers[0].0.clone()),
                     bounds: Vec::new(),
+                    layers: Vec::new(),
                 }
             } else {
                 // A value: the managed device's wins (it comes first).
+                let each = if k.form == Form::Json && k.sort == Sort::Restrict {
+                    layers
+                        .iter()
+                        .map(|(by, value)| Imposed {
+                            by: by.clone(),
+                            value: value.clone(),
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
                 let (by, value) = layers.into_iter().next().expect("one layer at least");
                 Lock {
                     key: k.key.to_owned(),
                     value: Some(value),
                     by: Some(by),
                     bounds: Vec::new(),
+                    layers: each,
                 }
             };
             for row in k.rows {
@@ -712,6 +739,14 @@ impl Locks {
             ));
         }
         Ok(())
+    }
+
+    /// Each imposed rank's `extensions.allowed` (the managed device's, then the team's), as the extensions of the editor
+    /// cross them with the device's and the projects' (`vsx::layers`).
+    pub fn extension_layers(&self) -> Vec<Imposed> {
+        self.get(EXTENSIONS_ALLOWED)
+            .map(|l| l.layers.clone())
+            .unwrap_or_default()
     }
 
     /// Whether the dictation may start.

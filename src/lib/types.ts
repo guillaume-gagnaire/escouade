@@ -144,6 +144,11 @@ export interface Settings {
   languageServers?: Record<string, LanguageServerSetting>;
   /** The projects trusted with their own language servers: the backend’s (`lsp_trust`), never saved from the window. */
   languageServersTrusted?: string[];
+  /**
+   * « Extensions permises de l’éditeur » (ESC-481): VS Code’s `extensions.allowed`, by publisher or by extension; null
+   * allows them all. Crossed by the core with each project’s `.escouade.yml`, the team’s and the managed device’s.
+   */
+  extensionsAllowed?: Record<string, unknown> | null;
 }
 
 /** A language server’s settings (ESC-446); what is left out is the catalog’s. */

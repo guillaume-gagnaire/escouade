@@ -2,7 +2,7 @@
 title: "Nouveau projet"
 subject: "Projets"
 sources: ["docs/SPEC.md"]
-tickets: ["ESC-94","ESC-167","ESC-168","ESC-142","ESC-163","ESC-89","ESC-309"]
+tickets: ["ESC-94","ESC-167","ESC-168","ESC-142","ESC-163","ESC-89","ESC-309","ESC-481"]
 decisions: []
 compared: "2026-10-31T10:06:22+01:00"
 gaps: [{"text":"La page dit que la fenêtre fait 840 px de large. Le code ouvre la modale à 900 px (`width={900}`).","code":["src/components/modals/NewProjectModal.svelte"]}]
@@ -78,6 +78,7 @@ Le dossier est revérifié à la lecture du chemin, au changement de projet copi
 
 - Le récapitulatif montre les contrôles, ce qui sera réglé (worktrees, préparation, lancement, validation, conflits, agents des tickets — en parallèle, modèle, effort, mode, « pilote auto » —, harness, workflows — « Lire les workflows » ou « Pas de workflow pour ce projet » —, projet privé — « non », ou « oui · 1 compte réservé · comptes partagés à la limite » —, commit, intégrations) et « Créer un premier agent », avec son modèle (celui du réglage par défaut coché).
 - « Créer le projet » crée le projet, sans premier agent et sans reprendre d'historique, enregistre ses réglages, ses sources liées et son Kanban (la clé des tickets du projet gardée), puis crée le premier agent avec le modèle choisi : il naît avec les réglages du projet, son worktree préparé par eux. Un refus de l'enregistrement est dit par un toast ; le projet, créé, est montré quand même.
+- Le premier agent est sélectionné quand il arrive. Si l'éditeur du projet a été ouvert pendant sa création (elle prépare son worktree d'abord, et peut prendre quelques secondes), l'éditeur garde sa source : l'agent devient l'agent sélectionné du projet sans emmener l'éditeur sur son worktree (ESC-481).
 - « Créer sans l'assistant » : un projet avec « Un worktree par agent » éteint et un premier agent du modèle par défaut de son compte ; rien d'autre n'est enregistré (les défauts d'Escouade).
 
 ### Le dossier d'un projet fermé

@@ -21,6 +21,9 @@
     <category name="plugins" displayName="$(string.cat_plugins)">
       <parentCategory ref="escouade" />
     </category>
+    <category name="editor" displayName="$(string.cat_editor)">
+      <parentCategory ref="escouade" />
+    </category>
     <category name="projects" displayName="$(string.cat_projects)">
       <parentCategory ref="escouade" />
     </category>
@@ -163,6 +166,13 @@
       <enabledValue>
         <decimal value="1" />
       </enabledValue>
+    </policy>
+    <policy name="extensions_allowed" class="Both" displayName="$(string.extensions_allowed)" explainText="$(string.extensions_allowed_Explain)" presentation="$(presentation.extensions_allowed)" key="Software\Policies\Escouade">
+      <parentCategory ref="editor" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <elements>
+        <text id="extensions_allowed" valueName="extensions.allowed" required="true" maxLength="4096" />
+      </elements>
     </policy>
     <policy name="projects_forcePrivate" class="Both" displayName="$(string.projects_forcePrivate)" explainText="$(string.projects_forcePrivate_Explain)" key="Software\Policies\Escouade" valueName="projects.forcePrivate">
       <parentCategory ref="projects" />

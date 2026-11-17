@@ -45,6 +45,12 @@ Each policy has a key, the same name everywhere: the registry value, the profile
 | Denied plugins | `plugins.denied` · list · restrict | The list of the plugin ids that are never installed, even when allowed elsewhere. | Installing a plugin of the list is refused and said. |
 | Install verified versions only | `plugins.verifiedOnly` · Boolean `true` (`1`) · restrict | A version of the store without the “Verified by Escouade” seal is refused, at an install as at an update. Only the value true (1) is imposed. | Plugins › “Install verified versions only”, on and grayed. |
 
+### Editor
+
+| Policy | Key and type | What it does | On the device |
+| --- | --- | --- | --- |
+| Editor’s allowed extensions | `extensions.allowed` · JSON · restrict | A JSON object like VS Code’s extensions.allowed: its keys are * (all), a publisher of Open VSX or an extension (publisher.name), its values true, false, stable (no pre-release) or the list of the versions allowed. The most precise key says it. An object that names anything allows only what it names. It adds to the lists of the settings and of the .escouade.yml files: an extension must be allowed by each. | General › “Editor’s allowed extensions”, grayed; an extension outside the list is refused before any download, and an installed extension it leaves out is no longer loaded. |
+
 ### Projects
 
 | Policy | Key and type | What it does | On the device |

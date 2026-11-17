@@ -118,6 +118,8 @@ escouade-policy = { path = "../crates/escouade-policy" }
 # The team server's client (TS-3, docs/TEAM-SERVER.md): the team as an MLS group, its keys in the keychain (the app's
 # `SecretStore`), its state in the data's `teams` folder, its server through the app's proxy and certificates (`teams`).
 escouade-team = { path = "../crates/escouade-team" }
+# The extensions of the editor (ESC-481): Open VSX by the core, checked, served.
+escouade-vsx = { path = "../crates/escouade-vsx" }
 # The QR code of an invitation of one's own device (§3.4), drawn as SVG: no image library.
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 # The transcription as one speaks (ESC-136): a WebSocket to the service, through the settings' proxy (HTTP CONNECT,
@@ -182,6 +184,7 @@ members = [
     "../crates/escouade-policy",
     "../crates/escouade-team-server",
     "../crates/escouade-team",
+    "../crates/escouade-vsx",
     "../crates/escouade-command",
 ]
 default-members = [
@@ -205,6 +208,7 @@ default-members = [
     "../crates/escouade-policy",
     "../crates/escouade-team-server",
     "../crates/escouade-team",
+    "../crates/escouade-vsx",
 ]
 
 # The plugins depend on the kit by version, as the store reads them (their folder, published crates, the checksum of their
@@ -279,3 +283,5 @@ escouade-forge = { path = "../crates/escouade-forge", features = ["testing"] }
 # The fake server of the updates (`updates::fake_server`), for the tests of the updater that stay here.
 escouade-updates = { path = "../crates/escouade-updates", features = ["testing"] }
 escouade-mcp = { path = "../crates/escouade-mcp", features = ["testing"] }
+# The fake Open VSX (`escouade_vsx::fake`), for the tests of the editor's extensions.
+escouade-vsx = { path = "../crates/escouade-vsx", features = ["testing"] }

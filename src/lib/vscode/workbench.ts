@@ -10,8 +10,10 @@
 // - The theme is Escouade's (`theme.ts`), followed as it changes (`followTheme`), and its fonts (`fontSettings`); its
 //   language is the one it was loaded in (`load.ts`).
 // - No extension host of its own: the default extensions it carries are declarative (languages, grammars, themes), so
-//   that the page needs neither `unsafe-eval` nor an iframe. The extensions of Open VSX (A5), the language servers
-//   (A1, ESC-446: `onFolder` tells it each folder) and the Node extension host (N2) come later.
+//   that the page needs neither `unsafe-eval` nor an iframe. The extensions of Open VSX (A5, ESC-481) come by the core,
+//   checked, and only the declarative ones are laid (`useExtensions`): one with code waits for the extension host of its
+//   own origin (A6). The language servers (A1, ESC-446: `onFolder` tells it each folder) and the Node extension host
+//   (N2) are apart.
 
 import {
   getService,
@@ -19,6 +21,8 @@ import {
   initialize,
   IWorkbenchLayoutService,
   IWorkingCopyService,
+  IWorkspaceContextService,
+  IWorkspaceEditingService,
   LogLevel,
 } from '@codingame/monaco-vscode-api';
 import { ExtensionHostKind, registerExtension } from '@codingame/monaco-vscode-api/extensions';
@@ -81,7 +85,8 @@ import outputWorker from '@codingame/monaco-vscode-output-service-override/worke
 import { onDiskChange } from '../disk-changes';
 import { api } from '../ipc';
 import { IS_MAC } from '../platform';
-import { EscouadeFileSystem, type Source } from './fs-provider';
+import { type ExtState, type FileInfo, chosenTheme, filesToLay, runs } from './extensions';
+import { EscouadeFileSystem, FileType, type Source } from './fs-provider';
 import { appTakes, utf16Column } from './keys';
 import { closePreviews, registerPreviews } from './previews/panes';
 import { previewOf } from './previews/kinds';
@@ -266,7 +271,12 @@ async function laySettings(settings: Record<string, unknown>) {
 /** The theme read again from the tokens, and laid if it changed: the colours of every part of the view at once. */
 async function retheme() {
   if (!host) return;
-  const settings = { ...themeSettings(readTokens(tokenRoot())), ...fontSettings(fontSize) };
+  // Escouade's theme, unless the user chose one of an extension (ESC-481): that one wins, Escouade's colours off, until
+  // « Revenir au thème d'Escouade ».
+  const look = extensionTheme
+    ? { 'workbench.colorTheme': extensionTheme, 'workbench.colorCustomizations': {}, 'editor.tokenColorCustomizations': {} }
+    : themeSettings(readTokens(tokenRoot()));
+  const settings = { ...look, ...fontSettings(fontSize) };
   const key = JSON.stringify(settings);
   if (key === laidLook) return;
   laidLook = key;
@@ -299,6 +309,106 @@ function followTheme() {
 
 /** The editor's text size, « Taille du texte de l'éditeur » of the settings. */
 let fontSize = 13;
+
+/** The colour theme of an extension chosen in the view (its id), null: Escouade's. */
+let extensionTheme: string | null = null;
+
+/** An extension of Open VSX laid in the view: its version, and what takes it away again. */
+interface Laid {
+  version: string;
+  dispose: () => Promise<void>;
+}
+const laidExtensions = new Map<string, Laid>();
+
+/** What the view reads of the core to lay an extension (the tests give their own). */
+export interface ExtensionFiles {
+  files: (id: string) => Promise<FileInfo[]>;
+  file: (id: string, path: string) => Promise<ArrayBuffer>;
+}
+const coreFiles: ExtensionFiles = { files: (id) => api.vsxFiles(id), file: (id, path) => api.vsxFile(id, path) };
+
+/**
+ * An installed extension laid in the view, declarative alone: its `package.json` registered, each file it reads given
+ * by the core (`vsx_file`, read-only, inside its folder) as a `blob:` URL of its type, a font as a `data:` URL (the
+ * window's CSP takes no other: it is not widened). No code of it runs.
+ */
+async function layExtension(e: ExtState, read: ExtensionFiles): Promise<Laid> {
+  const all = await read.files(e.key);
+  const manifest = JSON.parse(new TextDecoder().decode(await read.file(e.key, 'package.json')));
+  delete manifest.main;
+  delete manifest.browser;
+  // Every file read first: VS Code reads some (a language's configuration) as soon as the extension is added.
+  const urls: string[] = [];
+  const laid: { path: string; url: string; mime: string }[] = [];
+  const lay = filesToLay(all);
+  for (let i = 0; i < lay.length; i += 16) {
+    await Promise.all(
+      lay.slice(i, i + 16).map(async (f) => {
+        const bytes = await read.file(e.key, f.path);
+        let url: string;
+        if (f.mime.startsWith('font/')) {
+          let bin = '';
+          const view = new Uint8Array(bytes);
+          for (let j = 0; j < view.length; j += 0x8000) bin += String.fromCharCode(...view.subarray(j, j + 0x8000));
+          url = `data:${f.mime};base64,${btoa(bin)}`;
+        } else {
+          url = URL.createObjectURL(new Blob([bytes], { type: f.mime }));
+          urls.push(url);
+        }
+        laid.push({ path: f.path, url, mime: f.mime.split(';')[0] });
+      }),
+    );
+  }
+  // A location of its own per version: an update laid while the version before goes away does not meet its files.
+  const ext = registerExtension(manifest, ExtensionHostKind.LocalProcess, { system: false, path: `/${e.version}` });
+  const registered = laid.map((f) => ext.registerFileUrl(`./${f.path}`, f.url, f.mime));
+  await ext.whenReady();
+  return {
+    version: e.version,
+    dispose: async () => {
+      await ext.dispose();
+      for (const r of registered) r.dispose();
+      for (const u of urls) URL.revokeObjectURL(u);
+    },
+  };
+}
+
+/**
+ * The extensions installed, as the core says them, laid in the view: those that run (declarative, on, allowed) added,
+ * an updated one laid again, the others taken away; then the theme chosen (`<key>/<id>`), if its extension runs.
+ */
+export async function useExtensions(list: ExtState[], theme: string | null, read: ExtensionFiles = coreFiles) {
+  if (!host) return;
+  const wanted = new Map(list.filter(runs).map((e) => [e.key, e]));
+  for (const [key, laid] of [...laidExtensions]) {
+    if (wanted.get(key)?.version === laid.version) continue;
+    laidExtensions.delete(key);
+    await laid.dispose().catch((err) => console.warn('[vscode] extension', key, err));
+  }
+  for (const [key, e] of wanted) {
+    if (laidExtensions.has(key)) continue;
+    try {
+      laidExtensions.set(key, await layExtension(e, read));
+    } catch (err) {
+      console.warn('[vscode] extension', key, err);
+    }
+  }
+  const next = chosenTheme(list, theme);
+  if (next !== extensionTheme) {
+    extensionTheme = next;
+    laidLook = '';
+    await retheme();
+  }
+}
+
+/** The extensions laid in the view now (their keys): what the e2e read. */
+export const laidExtensionKeys = () => [...laidExtensions.keys()];
+
+/** The projects whose folders are in the view's workspace: their `.escouade.yml` and their privacy count for the extensions. */
+export const viewProjects = () => [...new Set(folders.map((f) => f.source.projectId))];
+
+/** The colour theme the view shows now (`workbench.colorTheme`). */
+export const colorTheme = () => vscode.workspace.getConfiguration('workbench').get<string>('colorTheme') ?? '';
 
 /** « Taille du texte de l'éditeur » changed: the view takes it at once. */
 export function setFontSize(size: number) {
@@ -335,6 +445,7 @@ async function start(first: Source, name: string, size: number): Promise<void> {
     },
     fold,
   );
+  withFolderFault(files);
   registerFileSystemOverlay(1, files as unknown as IFileSystemProviderWithFileReadWriteCapability);
   onDiskChange((c) => void files?.diskChanged(c));
   const uri = await files.addSource(first);
@@ -442,6 +553,8 @@ async function start(first: Source, name: string, size: number): Promise<void> {
       .update('cursorBlinking', stillMotion.matches ? 'solid' : 'blink', vscode.ConfigurationTarget.Global);
   });
   await followUnsaved();
+  // A folder of a source the workspace lost afterwards (its file read again, a change on its way): brought back.
+  (await getService(IWorkspaceContextService)).onDidChangeWorkspaceFolders(() => void reconcileFolders());
   for (const f of folderListeners) f(folders[0], vscode);
 }
 
@@ -493,6 +606,117 @@ async function followUnsaved() {
   });
 }
 
+/** A folder's URI as the workspace is compared with it: the drive's letter in any case, no slash at its end. */
+const folderKey = (uri: { toString(): string }) => uri.toString().toLowerCase().replace(/\/+$/, '');
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * A fault the e2e inject (`localStorage['escouade.test.vscodeFolders']`, JSON `{ drop, delay }`): the first `drop`
+ * reads of the root of a source being added to the workspace answer, after `delay` ms, that it is not a folder. VS Code
+ * leaves a folder that is not one out of the workspace without a word (`doUpdateFolders`): what a late or wrong answer of
+ * a loaded machine does. Nothing set, nothing done.
+ */
+export const FOLDER_FAULTS_KEY = 'escouade.test.vscodeFolders';
+function folderFault(): { drop: boolean; delay: number } {
+  try {
+    const f = JSON.parse(localStorage.getItem(FOLDER_FAULTS_KEY) ?? 'null') as { drop?: number; delay?: number } | null;
+    if (!f) return { drop: false, delay: 0 };
+    const drop = (f.drop ?? 0) > 0;
+    if (drop) localStorage.setItem(FOLDER_FAULTS_KEY, JSON.stringify({ ...f, drop: (f.drop ?? 0) - 1 }));
+    return { drop, delay: f.delay ?? 0 };
+  } catch {
+    return { drop: false, delay: 0 };
+  }
+}
+
+/** The provider's `stat`, with the fault above on the root of a source the workspace does not show yet. */
+function withFolderFault(fs: EscouadeFileSystem<vscode.Uri>) {
+  const stat = fs.stat.bind(fs);
+  fs.stat = async (uri) => {
+    const st = await stat(uri);
+    if (st.type !== FileType.Directory || fs.sourceOf(uri)?.rel !== '' || localStorage.getItem(FOLDER_FAULTS_KEY) === null) return st;
+    const context = await getService(IWorkspaceContextService);
+    if (context.getWorkspace().folders.some((f) => folderKey(f.uri) === folderKey(uri))) return st;
+    const fault = folderFault();
+    if (fault.delay) await sleep(fault.delay);
+    return fault.drop ? { ...st, type: FileType.File } : st;
+  };
+}
+
+/** How many rounds the workspace is brought to its sources before it is said not to come (about 20 s). */
+const ROUNDS = 25;
+
+let reconciling: Promise<void> | null = null;
+let reconcileAgain = false;
+
+/**
+ * The workspace brought to the folders of the sources shown (`folders`, the reference), as the explorer shows them:
+ * the main side's list (`IWorkspaceContextService`), never the extension host's, which says a folder asked for at once,
+ * before the main side took it, and forgets it without a word when it is refused (ESC-481). Each round adds what is
+ * missing by the main side's editing service, awaited, then waits for the workspace to change or for a delay that grows;
+ * after `ROUNDS`, what is still missing is said in the console, with the last refusal, and the round ends. One at a
+ * time; a call during it makes one more.
+ */
+function reconcileFolders(): Promise<void> {
+  if (reconciling) {
+    reconcileAgain = true;
+    return reconciling;
+  }
+  reconciling = (async () => {
+    const context = await getService(IWorkspaceContextService);
+    const editing = await getService(IWorkspaceEditingService);
+    const missing = () => {
+      const shown = new Set(context.getWorkspace().folders.map((f) => folderKey(f.uri)));
+      return folders.filter((f) => !shown.has(folderKey(f.uri)));
+    };
+    let refusal = '';
+    for (let round = 0; round < ROUNDS; round++) {
+      reconcileAgain = false;
+      const lacking = missing();
+      if (!lacking.length) return;
+      try {
+        await editing.addFolders(
+          lacking.map((f) => ({ uri: f.uri, name: f.name })),
+          true,
+        );
+      } catch (e) {
+        refusal = String(e);
+      }
+      if (!missing().length) return;
+      // The main side tells the change once the workspace file is read again: that, or a delay that grows.
+      await new Promise<void>((done) => {
+        const sub = context.onDidChangeWorkspaceFolders(() => {
+          sub.dispose();
+          done();
+        });
+        setTimeout(
+          () => {
+            sub.dispose();
+            done();
+          },
+          Math.min(100 * 2 ** round, 1000),
+        );
+      });
+    }
+    const still = missing();
+    if (still.length)
+      console.error(
+        `[vscode] workspace: ${still.map((f) => f.name).join(', ')} not in the explorer after ${ROUNDS} rounds${refusal ? ` (last: ${refusal})` : ''}`,
+      );
+  })().finally(() => {
+    reconciling = null;
+    if (reconcileAgain) void reconcileFolders();
+  });
+  return reconciling;
+}
+
+/** Whether the explorer shows the folder of `uri`. */
+async function inExplorer(uri: vscode.Uri): Promise<boolean> {
+  const context = await getService(IWorkspaceContextService);
+  return context.getWorkspace().folders.some((f) => folderKey(f.uri) === folderKey(uri));
+}
+
 /**
  * The workbench, started the first time (on the source `src`, the editor's text at `fontSize`); the source's folder in
  * its workspace, named `name`.
@@ -503,17 +727,29 @@ export async function workbench(src: Source, name: string, fontSize: number): Pr
     throw e;
   });
   await ready;
-  if (folders.some((f) => sameSource(f.source, src))) return;
-  const uri = await files!.addSource(src);
+  if (folders.some((f) => sameSource(f.source, src))) {
+    // Asked again (the view drawn again, the source picked again): still not shown, it is brought there once more.
+    const there = folders.find((f) => sameSource(f.source, src))!;
+    if (!(await inExplorer(there.uri))) await reconcileFolders();
+    return;
+  }
+  // The source's files: a tree the core may be slow to give under load, asked again before it is said.
+  let uri: vscode.Uri | null = null;
+  for (let i = 0; !uri; i++) {
+    try {
+      uri = await files!.addSource(src);
+    } catch (e) {
+      if (i >= 2) throw e;
+      await sleep(500 * (i + 1));
+    }
+  }
   if (folders.some((f) => sameSource(f.source, src))) return;
   const folder = { source: src, uri, name };
-  // The extension host writes the whole list of folders from the one it knows: until it knows those already there (a
-  // source picked right after the workbench started), a folder added would take their place (ESC-476).
-  for (let i = 0; i < 200 && (vscode.workspace.workspaceFolders?.length ?? 0) < folders.length; i++)
-    await new Promise((r) => setTimeout(r, 25));
-  if (folders.some((f) => sameSource(f.source, src))) return;
   folders.push(folder);
-  vscode.workspace.updateWorkspaceFolders(vscode.workspace.workspaceFolders?.length ?? 0, 0, { uri, name });
+  // Added by the main side, not through the extension host (whose list says a folder before the main side took it):
+  // the explorer shows it when this returns, or the console says why not.
+  await reconcileFolders();
+  if (!(await inExplorer(uri))) await reconcileFolders();
   addSource(src, uri, name);
   for (const f of folderListeners) f(folder, vscode);
 }
@@ -610,12 +846,18 @@ export async function forgetProject(projectId: string) {
     );
   if (tabs.length) await vscode.window.tabGroups.close(tabs, true);
   await closePreviews(mine);
-  for (let i = folders.length - 1; i >= 0; i--) {
-    if (folders[i].source.projectId !== projectId) continue;
-    const at = vscode.workspace.workspaceFolders?.findIndex((w) => w.uri.toString() === folders[i].uri.toString()) ?? -1;
-    if (at >= 0) vscode.workspace.updateWorkspaceFolders(at, 1);
-    folders.splice(i, 1);
-  }
+  // Out of the reference first: the workspace is not brought back to them.
+  const gone = folders.filter((f) => f.source.projectId === projectId);
+  for (const f of gone) folders.splice(folders.indexOf(f), 1);
+  if (gone.length)
+    await (
+      await getService(IWorkspaceEditingService)
+    )
+      .removeFolders(
+        gone.map((f) => f.uri),
+        true,
+      )
+      .catch((e) => console.error('[vscode] workspace: the folders of a project closed stay', e));
   removeProject(projectId);
 }
 

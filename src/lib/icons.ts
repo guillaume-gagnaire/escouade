@@ -62,6 +62,9 @@ export const ICONS = {
   restart: '<path d="M12.75 8a4.75 4.75 0 1 1-1.4-3.37M12.75 2.75v2.5h-2.5" />',
   shield: '<path d="M8 2.25l4.75 1.75v3.75c0 3-2.1 5.1-4.75 6-2.65-.9-4.75-3-4.75-6V4z" /><path d="M8 5.75v2.75M8 10.75v.01" />',
   ext: '<path d="M9.5 2.75h3.75V6.5M13.25 2.75L7.5 8.5M11.5 9.5v3c0 .41-.34.75-.75.75h-7a.75.75 0 0 1-.75-.75v-7c0-.41.34-.75.75-.75h3" />',
+  /** The extensions of the editor (ESC-481): three blocks and a fourth set apart, as VS Code draws them. */
+  blocks:
+    '<rect x="2.75" y="5.75" width="3.75" height="3.75" rx=".75" /><rect x="2.75" y="9.5" width="3.75" height="3.75" rx=".75" /><rect x="6.5" y="9.5" width="3.75" height="3.75" rx=".75" /><path d="M11.4 2.4l2.2 2.2-2.2 2.2-2.2-2.2z" />',
   lang: '<path d="M2.75 4h6.5M6 2.75V4M4.25 4c.4 2.6 2 4.4 4.25 5.25M8 4c-.5 2.8-2.4 5-5.25 6M9 13.25l2.5-6 2.5 6M9.8 11.5h3.4" />',
   user: '<circle cx="8" cy="5.75" r="2.75" /><path d="M3 13.25c.6-2.4 2.6-3.75 5-3.75s4.4 1.35 5 3.75" />',
   /** A ticket shared with the team (ESC-190). */

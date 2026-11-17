@@ -1,6 +1,17 @@
 {
   "description": "Escouade’s policies for managed devices. Generated from crates/escouade-policy/src/list.rs: do not edit.",
   "properties": {
+    "extensions.allowed": {
+      "additionalProperties": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "description": "A JSON object like VS Code’s extensions.allowed: its keys are * (all), a publisher of Open VSX or an extension (publisher.name), its values true, false, stable (no pre-release) or the list of the versions allowed. The most precise key says it. An object that names anything allows only what it names. It adds to the lists of the settings and of the .escouade.yml files: an extension must be allowed by each. General › “Editor’s allowed extensions”, grayed; an extension outside the list is refused before any download, and an installed extension it leaves out is no longer loaded.",
+      "title": "Editor’s allowed extensions",
+      "type": "object"
+    },
     "harnesses.allowed": {
       "description": "The list of the harnesses agents may use, by their id (claude, codex, copilot, cursor, opencode, gemini…). An agent of a harness no longer allowed stops at the end of its turn. The harness of a project, an agent, a ticket: a harness not allowed is grayed and refused.",
       "items": {

@@ -45,6 +45,12 @@ Chaque stratégie a une clé, le même nom partout : la valeur du registre, la c
 | Plugins interdits | `plugins.denied` · liste · restreindre | La liste des ids de plugins qui ne s’installent jamais, même permis par ailleurs. | L’installation d’un plugin de la liste est refusée et dite. |
 | N’installer que des versions vérifiées | `plugins.verifiedOnly` · booléen `true` (`1`) · restreindre | Une version du store sans le sceau « Vérifié par Escouade » est refusée, à l’installation comme à la mise à jour. Seule la valeur true (1) s’impose. | Plugins › « N’installer que des versions vérifiées », allumé et grisé. |
 
+### Éditeur
+
+| Stratégie | Clé et type | Ce qu’elle fait | Sur le poste |
+| --- | --- | --- | --- |
+| Extensions permises de l’éditeur | `extensions.allowed` · JSON · restreindre | Un objet JSON comme extensions.allowed de VS Code : ses clés sont * (toutes), un éditeur d’Open VSX ou une extension (éditeur.nom), ses valeurs true, false, stable (pas de préversion) ou la liste des versions permises. La clé la plus précise dit. Un objet qui nomme quelque chose ne permet que ce qu’il nomme. Il s’ajoute aux listes des réglages et des fichiers .escouade.yml : une extension doit être permise par chacune. | Général › « Extensions permises de l’éditeur », grisé ; une extension hors de la liste est refusée avant tout téléchargement, et une extension installée qu’elle exclut n’est plus chargée. |
+
 ### Projets
 
 | Stratégie | Clé et type | Ce qu’elle fait | Sur le poste |

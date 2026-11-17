@@ -6,6 +6,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- The VS Code editor takes extensions from Open VSX: search them, install a theme, a grammar or snippets, update them, turn them off or remove them from its “Extensions” panel. Escouade checks each one’s signature and runs no extension code; a list of allowed extensions is set on the device, in `.escouade.yml` and by the policies.
 - Help › Discover: the map of what Escouade can do (voice, the board and its autopilot, Docs, PRs, terminals, the editor, plugins, the MCP server, your team), each thing leading to the real gesture and ticked once you have really done it. A bubble at the right moment, never while you type, nothing installed or sent without your click; what you dismiss never comes back, and “Hide all” quiets the rest.
 - Control a pull request from its view: mark it ready from a draft, request a review, put a label, update its branch or run a check again, in one click. The “Ready to merge?” box says what is missing with the gesture that unblocks it, and merges after a confirmation with the method chosen, the branch deleted and the ticket moved to Done.
 - A first launch that guides you: the harness found on your machine (or the command that installs it, copied in one click), its account, your agents’ modes explained in one sentence each and the statistics, one question at a time, from the keyboard too. You can skip anything and come back, and Help › First launch goes through it again without resetting anything.

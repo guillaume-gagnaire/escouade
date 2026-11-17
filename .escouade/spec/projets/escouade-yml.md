@@ -2,8 +2,8 @@
 title: ".escouade.yml"
 subject: "Projets"
 sources: ["docs/SPEC.md","docs/PLUGINS.md","docs/STORE.md"]
-tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288","ESC-309","ESC-446","ESC-493"]
-decisions: [165,194]
+tickets: ["ESC-146","ESC-163","ESC-156","ESC-160","ESC-167","ESC-288","ESC-309","ESC-446","ESC-481","ESC-493"]
+decisions: [165,201,194]
 compared: "2026-10-31T10:05:41+01:00"
 ---
 
@@ -42,6 +42,7 @@ Seulement ce qui vaut pour toute l'équipe. Clés en anglais, en `snake_case`, p
 | `plugins.recommended` | les plugins que le projet propose : des identifiants du store (`dev.exemple.slack`) ; voir *Plugins proposés* |
 | `plugins.<id>` | les réglages que le projet donne au plugin `<id>` : des valeurs simples (texte, nombre, `true`, `false`), jamais un secret |
 | `language_servers.<id>` | le serveur de langage `<id>` du catalogue (`typescript`, `rust`, `python`, `go`, `json`, `css`, `html`) : `enabled` (`true`, `false`), `path` (son programme, relatif au dépôt), `args` (ses arguments) ; voir *Serveurs de langage* |
+| `editor.extensions_allowed` | les extensions de l'éditeur permises dans ce projet, comme `extensions.allowed` de VS Code : des clés `"*"` (entre guillemets : toutes), un éditeur d'Open VSX ou une extension (`éditeur.nom`), chacune `true`, `false`, `stable` ou une liste de versions ; voir *Extensions permises* |
 
 Une valeur ou une étape seule, hors liste, vaut une liste d'un élément (`launch`, `worktrees.copy`, `worktrees.setup`, `worktrees.teardown`, `plugins.recommended`, `language_servers.<id>.args`).
 
@@ -59,7 +60,7 @@ Chaque cas est tranché :
 - le mode `bypassPermissions` : un dépôt ne lève pas les autorisations de qui l'ouvre. Refusé à la lecture (« bypassPermissions ne se partage pas : il se règle sur chaque machine »), jamais écrit, gardé sur la machine ;
 - les intégrations : liées aux comptes connectés de chacun ;
 - les workflows supprimés d'un projet : retenus par chaque machine (voir *Workflows*) ;
-- les chemins absolus, les jetons, les empreintes approuvées ; les secrets d'un plugin (ils vont au trousseau du système, par sa page) ; la confiance accordée au projet pour ses serveurs de langage (de chaque machine).
+- les chemins absolus, les jetons, les empreintes approuvées ; les secrets d'un plugin (ils vont au trousseau du système, par sa page) ; la confiance accordée au projet pour ses serveurs de langage (de chaque machine) ; les extensions installées et les éditeurs d'extensions approuvés (de chaque machine).
 
 ### Projet privé
 
@@ -85,6 +86,23 @@ Chaque cas est tranché :
 - `path` et `args` sont des choix du dépôt : ils ne servent qu'une fois que l'utilisateur fait confiance au projet pour ses serveurs, sur sa machine. Un chemin réglé à la main dans l'app passe devant `path`.
 - Comme `plugins.*`, ces clés sont celles du fichier seul : jamais appliquées au projet, jamais écrites par l'export.
 
+### Extensions permises
+
+- `editor.extensions_allowed` restreint les extensions d'Open VSX de l'éditeur quand le projet est ouvert dans la vue VS Code (voir *Extensions*) : une liste de plus, que le cœur croise avec celles des réglages du poste, de l'équipe et du poste géré. Une extension doit être permise par chacune ; refusée, elle ne se télécharge pas, et une extension installée qu'elle exclut n'est plus chargée tant que le projet est dans la vue. Le refus nomme le fichier : « … n'est pas permise par le .escouade.yml de demo. ».
+- Exemple :
+
+  ```yaml
+  editor:
+    extensions_allowed:
+      "*": false
+      dracula-theme: true
+      vscodevim.vim: stable
+      acme.lang: [1.2.3]
+  ```
+
+- `*` doit être entre guillemets (sans eux, YAML le lit comme un alias). Une clé qui n'est ni `*`, ni un éditeur, ni une extension, ou une valeur qui n'est ni `true`, ni `false`, ni `stable`, ni une liste de versions, est dite avec sa ligne et ignorée.
+- Comme `plugins.*`, c'est une clé du fichier seul : jamais appliquée au projet, jamais écrite par l'export.
+
 ### Versions et erreurs
 
 - Le format a un lecteur par version et une migration de chaque version à la suivante (aucune encore).
@@ -96,7 +114,7 @@ Chaque cas est tranché :
 
 ### Schéma
 
-- Un JSON Schema (draft-07), `schemas/escouade.schema.json` dans le dépôt d'Escouade, publié à `https://escouade.dev/schemas/escouade.schema.json`. Il est fait depuis la même liste de clés que le lecteur et l'écriture : il ne peut pas en diverger. Les réglages d'un plugin y sont un groupe par identifiant (`patternProperties`), de valeurs simples ; ceux des serveurs de langage, un groupe par serveur du catalogue.
+- Un JSON Schema (draft-07), `schemas/escouade.schema.json` dans le dépôt d'Escouade, publié à `https://escouade.dev/schemas/escouade.schema.json`. Il est fait depuis la même liste de clés que le lecteur et l'écriture : il ne peut pas en diverger. Les réglages d'un plugin y sont un groupe par identifiant (`patternProperties`), de valeurs simples ; ceux des serveurs de langage, un groupe par serveur du catalogue ; `editor.extensions_allowed`, un objet de booléens, de `stable` ou de listes.
 - Le fichier écrit par Escouade commence par `# yaml-language-server: $schema=…`, pour l'autocomplétion des éditeurs.
 
 ### À l'ouverture
@@ -125,7 +143,7 @@ Chaque cas est tranché :
 
 ### Exporter
 
-- Réglages › Projets › « Exporter vers .escouade.yml » écrit toutes les clés avec les réglages enregistrés du projet (une branche cible vide est omise, le mode `bypassPermissions` aussi, et les clés `plugins.*` et `language_servers.*`, qui ne sont pas des réglages du projet) : par-dessus le fichier existant, en gardant ses commentaires, son ordre et ses clés inconnues ; sinon un nouveau fichier, avec la ligne du schéma, un commentaire qui renvoie à la doc et `version: 1`.
+- Réglages › Projets › « Exporter vers .escouade.yml » écrit toutes les clés avec les réglages enregistrés du projet (une branche cible vide est omise, le mode `bypassPermissions` aussi, et les clés `plugins.*`, `language_servers.*` et `editor.extensions_allowed`, qui ne sont pas des réglages du projet) : par-dessus le fichier existant, en gardant ses commentaires, son ordre et ses clés inconnues ; sinon un nouveau fichier, avec la ligne du schéma, un commentaire qui renvoie à la doc et `version: 1`.
 - Les commandes écrites sont celles du projet : approuvées d'office.
 - « Écrire dans .escouade.yml » d'un mode `bypassPermissions` gardé sur la machine n'écrit rien et le garde.
 - Un fichier illisible ou d'une version plus récente n'est pas réécrit : « modifie-le à la main ».

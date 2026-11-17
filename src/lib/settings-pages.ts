@@ -167,6 +167,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('telemetry', 'general', 'settings.about.telemetry', s('telemetry')),
   row('editorFontSize', 'general', 'settings.app.editorFontSize', { advanced: true, ...s('editorFontSize') }),
   row('languageServers', 'general', 'settings.lsp.title', { advanced: true, ...s('languageServers') }),
+  row('extensionsAllowed', 'general', 'settings.extensions.title', { advanced: true, ...s('extensionsAllowed') }),
   row('userId', 'general', 'share.settings.id', { advanced: true, ...s('userId') }),
 
   // Agents › Nouveaux agents, Textes rédigés, Remote control, Piloter Escouade; Avancé.

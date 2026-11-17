@@ -1,4 +1,9 @@
 {
+  "extensions.allowed": {
+    "*": false,
+    "dracula-theme": true,
+    "vscodevim.vim": "stable"
+  },
   "harnesses.allowed": [
     "claude",
     "codex"

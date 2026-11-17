@@ -638,6 +638,14 @@ export default defineZone('settings', {
     warnings: 'Policies of this device',
     warningsDesc: 'What the IT department set and Escouade could not apply.',
   },
+  extensions: {
+    title: 'Editor’s allowed extensions',
+    titleDesc:
+      'As VS Code’s extensions.allowed: a JSON object whose keys are * (all), a publisher of Open VSX or an extension (publisher.name), and whose values are true, false, stable or the list of the versions allowed. Empty: all. A project’s .escouade.yml, the team and the managed device add their own list: an extension must be allowed by each.',
+    placeholder: 'For example: {example}',
+    invalid: 'This is not a JSON object: {error}',
+    saved: 'List taken into account.',
+  },
   // « Serveurs de langage » (Général › Avancé, ESC-446): what the editor starts to read the code.
   lsp: {
     title: 'Language servers',

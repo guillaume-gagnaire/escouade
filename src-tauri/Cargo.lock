@@ -2111,6 +2111,7 @@ dependencies = [
  "escouade-vectors",
  "escouade-voice",
  "escouade-voice-local",
+ "escouade-vsx",
  "flate2",
  "futures-util",
  "getrandom 0.4.3",
@@ -2566,6 +2567,30 @@ dependencies = [
  "sha2 0.11.1",
  "tokio",
  "whisper-rs",
+]
+
+[[package]]
+name = "escouade-vsx"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.23.1",
+ "ed25519-dalek",
+ "escouade-base",
+ "escouade-plugin-cli",
+ "http",
+ "log",
+ "parking_lot 0.13.0",
+ "percent-encoding",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
+ "tokio",
+ "url",
+ "uuid",
+ "zip 9.5.0",
 ]
 
 [[package]]

@@ -53,10 +53,11 @@ fn the_list_covers_what_the_managed_device_imposes_in_6_4() {
         "team.server",
         "team.fingerprint",
         "team.onlyThisServer",
+        "extensions.allowed",
     ] {
         assert!(def(key).is_some(), "{key} missing from the list");
     }
-    assert_eq!(POLICIES.len(), 31);
+    assert_eq!(POLICIES.len(), 32);
 }
 
 #[test]

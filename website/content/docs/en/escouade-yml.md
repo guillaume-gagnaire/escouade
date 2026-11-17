@@ -229,6 +229,22 @@ Under `plugins.<id>`, the settings the project gives the plugin: those it declar
 
 These keys stay the file’s: they are no settings of the project, are not marked in the window, and “Export to .escouade.yml” keeps them as they are written.
 
+### editor
+
+| Key | Type | Values | Absent | Example |
+|---|---|---|---|---|
+| `editor.extensions_allowed` | Keys and values | `"*"`, a publisher of Open VSX or an extension (`publisher.name`), each `true`, `false`, `stable` or a list of versions | every extension allowed by this file | see below |
+
+```yaml
+editor:
+  extensions_allowed:
+    "*": false
+    dracula-theme: true
+    vscodevim.vim: stable
+```
+
+The [editor’s extensions](editor#extensions) allowed when the project is open in the editor, as VS Code’s `extensions.allowed`: the most precise key says it (the extension, else its publisher, else `*`), and a list that names anything allows only what it names. It adds to the lists of Settings › General › Advanced, the team and the managed device: an extension must be allowed by each, or it is not downloaded. `*` is written in quotes (without them, YAML reads it as an alias). As `plugins`, it is a key of the file alone, which the export keeps as it is.
+
 ### team
 
 Written by Escouade when the project is attached to a [team](team/join), and taken out when it leaves it: which team the project belongs to. Nothing secret.

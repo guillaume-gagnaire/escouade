@@ -1,5 +1,14 @@
 import { Channel, invoke } from './transport';
 import type {
+  Card as VsxCard,
+  ExtState as VsxState,
+  FileInfo as VsxFileInfo,
+  Installed as VsxInstalled,
+  Outcome as VsxOutcome,
+  SearchPage as VsxSearchPage,
+  Update as VsxUpdate,
+} from './vscode/extensions';
+import type {
   DiscoverAct,
   DiscoverView,
   OnboardingAct,
@@ -713,6 +722,24 @@ export const api = {
   lspRunning: () => invoke<LspInfo[]>('lsp_running'),
   lspLog: (id: number) => invoke<LspLogLine[]>('lsp_log', { id }),
   lspTrust: (projectId: string, trusted: boolean) => invoke<void>('lsp_trust', { projectId, trusted }),
+  // The extensions of Open VSX in the VS Code view (ESC-481): by the core alone (`vsx.rs`). `projects`: those open in
+  // the view (their `.escouade.yml` and their privacy count).
+  vsxInstalled: (projects: string[]) => invoke<VsxInstalled>('vsx_installed', { projects }),
+  vsxSearch: (projects: string[], query: string, offset = 0) =>
+    invoke<VsxOutcome<VsxSearchPage>>('vsx_search', { projects, query, offset }),
+  vsxCard: (projects: string[], id: string, version: string | null = null) =>
+    invoke<VsxOutcome<VsxCard>>('vsx_card', { projects, id, version }),
+  /** An icon or a capture of a card, downloaded by the core when shown: a `data:` URL. */
+  vsxImage: (projects: string[], url: string) => invoke<VsxOutcome<string>>('vsx_image', { projects, url }),
+  /** Installs (or updates) `id`; `trust`: the user answered yes to the question of its publisher. */
+  vsxInstall: (projects: string[], id: string, version: string | null, trust: boolean) =>
+    invoke<VsxOutcome<VsxState>>('vsx_install', { projects, id, version, trust }),
+  vsxUpdates: (projects: string[]) => invoke<VsxOutcome<VsxUpdate[]>>('vsx_updates', { projects }),
+  vsxSetEnabled: (id: string, enabled: boolean) => invoke<void>('vsx_set_enabled', { id, enabled }),
+  vsxRemove: (id: string) => invoke<void>('vsx_remove', { id }),
+  vsxSetTheme: (theme: string | null) => invoke<void>('vsx_set_theme', { theme }),
+  vsxFiles: (id: string) => invoke<VsxFileInfo[]>('vsx_files', { id }),
+  vsxFile: (id: string, path: string) => invoke<ArrayBuffer>('vsx_file', { id, path }),
   fsTree: (projectId: string, agentId: string | null) => invoke<FileTree>('fs_tree', { projectId, agentId }),
   fsRead: (projectId: string, agentId: string | null, path: string) => invoke<FileText>('fs_read', { projectId, agentId, path }),
   /** Refused with "changed" / "deleted" when the file is no longer the one read (`expectedHash`); null forces. */

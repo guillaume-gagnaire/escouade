@@ -2,8 +2,8 @@
 title: "Éditeur"
 subject: "Éditeur"
 sources: ["docs/SPEC.md","docs/EDITOR-STUDY.md","docs/TODO-2.3.md"]
-tickets: ["ESC-447","ESC-463","ESC-464","ESC-472","ESC-473","ESC-476"]
-decisions: [170,172,176,182,184,185]
+tickets: ["ESC-447","ESC-463","ESC-464","ESC-472","ESC-473","ESC-476","ESC-481"]
+decisions: [170,172,176,182,184,185,201]
 compared: "2026-10-30T05:39:53+01:00"
 gaps: [{"text":"La spec dit que le double-clic sur la poignée ramène la colonne des fichiers à 240 px. Le code revient à 200 px (TREE_NARROW) quand la zone de l'éditeur fait 904 px ou moins, et à 240 px seulement au-delà.","code":["src/lib/editor/layout.ts","src/components/editor/EditorView.svelte"]}]
 order: 25
@@ -15,7 +15,7 @@ Le mode éditeur prend la zone principale d'un projet, ou un volet de l'écran p
 
 Les images, l'audio et la vidéo, le Markdown, les tableaux, les PDF et les documents Word s'ouvrent dans des aperçus d'Escouade, en onglets de la vue (ESC-473, voir *Aperçus*).
 
-Ce que l'ancien éditeur faisait et que la vue ne fait pas encore revient par les tickets de l'éditeur de la 2.3 (voir `docs/EDITOR-STUDY.md`, §7) : A5 (extensions), A1 (serveurs de langage). Les pages *Navigation de code* et *Recherche dans les fichiers* décrivent l'ancien éditeur jusqu'à ces tickets. Les marques des changements par rapport à la base, leur compte, la comparaison avec la base et avec le disque et les fichiers changés de l'arbre sont revenus par A7 (ESC-476) : voir *Voir les changements*.
+Ce que l'ancien éditeur faisait et que la vue ne fait pas encore revient par les tickets de l'éditeur de la 2.3 (voir `docs/EDITOR-STUDY.md`, §7) : A1 (serveurs de langage). Les extensions d'Open VSX sont venues par A5 (ESC-481) : voir *Extensions*. Les pages *Navigation de code* et *Recherche dans les fichiers* décrivent l'ancien éditeur jusqu'à ces tickets. Les marques des changements par rapport à la base, leur compte, la comparaison avec la base et avec le disque et les fichiers changés de l'arbre sont revenus par A7 (ESC-476) : voir *Voir les changements*.
 
 ## Comportement
 
@@ -26,13 +26,14 @@ Ce que l'ancien éditeur faisait et que la vue ne fait pas encore revient par le
 - Le bouton `</>` d'un fichier non commité, « Voir le code » d'un écart de la spec, un chemin de fichier dans la conversation, « Ouvrir un fichier » (`Ctrl+P`, voir *Ouvrir un fichier*) : le fichier s'ouvre dans un onglet de la vue, le curseur et le clavier dedans ; un fichier qui a un aperçu s'ouvre dans son aperçu (voir *Aperçus*).
 - Un fichier hors du dossier de la source ne s'ouvre pas (message).
 - Une seule vue VS Code par fenêtre : seule dans la zone de travail ou dans un volet (voir *Écran partagé*). Elle se déplace, se redimensionne, se ferme et se rouvre en gardant ses onglets et leurs modifications. Ses groupes d'onglets peuvent se mettre côte à côte dans la colonne. Un clic dans la vue, ou le focus qui y entre, active son volet ; son survol montre le ×.
-- La barre au-dessus : « Conversation », le sélecteur de source, ce que le fichier montré a changé par rapport à sa base (« 5 lignes modifiées par rapport à main ») et « Comparer » (voir *Voir les changements*), « VS Code ». Le menu de la source s'ouvre par-dessus la vue.
+- La barre au-dessus : « Conversation », le sélecteur de source, ce que le fichier montré a changé par rapport à sa base (« 5 lignes modifiées par rapport à main ») et « Comparer » (voir *Voir les changements*), « VS Code », « Extensions » (le panneau des extensions d'Open VSX, voir *Extensions*). Le menu de la source s'ouvre par-dessus la vue.
 - À la première ouverture dans la fenêtre, « Chargement de la vue VS Code… » ; si elle ne démarre pas : « La vue VS Code n'a pas démarré : <raison> ».
 
 ### Le thème, les polices et la langue
 
 - **Le thème** : la vue prend les couleurs d'Escouade, celles de ses jetons (`src/app.css`) tels que la fenêtre les affiche, sur l'éditeur, la coloration du code, l'arborescence, les onglets, les barres, les menus, la palette, les infobulles, la recherche dans le fichier et ses occurrences, les erreurs et les avertissements. Chaque couleur de VS Code vient d'un jeton, parfois à une transparence : la sélection, les occurrences et la ligne de l'occurrence sont à la couleur du projet.
 - Elle suit tout de suite, sans se recharger ni perdre ses onglets, sa recherche ou ses modifications : « Thème » (Clair, Sombre, ou Système et ses changements), la couleur du projet montré (une fois sa transition finie), « Couleurs » (le thème d'un plugin, comme *Contraste élevé*, et le retour à celles d'Escouade). Un jeton dont la valeur change, d'où que ce soit, change la vue.
+- Le thème d'une extension d'Open VSX, choisi exprès dans le panneau des extensions, passe devant celui d'Escouade jusqu'à « Revenir au thème d'Escouade » (voir *Extensions › Le thème*).
 - Le contraste reste lisible dans les deux thèmes, pour chaque couleur de projet : le code et sa coloration atteignent 4,5:1 sur l'éditeur, sa ligne courante, une sélection et une occurrence ; un commentaire garde 4,5:1 sur l'éditeur et 3:1 sous une sélection ou une occurrence ; les libellés des onglets, de l'arborescence, des barres, des menus, de la palette et des infobulles 4,5:1 ; le curseur, la bordure de l'occurrence, les traits d'erreur et d'avertissement 3:1.
 - **Les polices** : l'interface de la vue dans celle de l'app (Inter), le code dans celle du code d'Escouade (JetBrains Mono), à l'épaisseur normale, avec ses ligatures comme ailleurs dans l'app. La taille du code est « Taille du texte de l'éditeur », suivie tout de suite quand elle change ; « Zoom de l'interface » agrandit la vue avec le reste.
 - **La langue** : l'interface de VS Code (menus, palette, explorateur, questions, messages) est en français quand Escouade est en français, en anglais sinon ; les aperçus (leurs barres, leurs messages, les noms de leurs commandes) aussi. Ils prennent leurs couleurs du thème de la vue et le suivent avec elle, en direct. VS Code lit ses textes quand il se charge : la vue se charge dans la langue d'Escouade de ce moment-là, une fois par fenêtre.
@@ -156,6 +157,7 @@ Rien des aperçus ne se charge au démarrage de la fenêtre, et à l'ouverture d
 
 ## Réglages
 
+- Les extensions permises : Réglages › Général › Avancé › « Extensions permises de l'éditeur », le `.escouade.yml` (`editor.extensions_allowed`), l'équipe et le poste géré (voir *Extensions*).
 - Taille du texte : Réglages › Général › Avancé › « Taille du texte de l'éditeur », suivie tout de suite par la vue ouverte (voir *Réglages*).
 - « Thème », « Couleurs » et « Langue de l'interface » (Réglages › Général) : suivis par la vue, la langue au rechargement de la fenêtre (voir *Le thème, les polices et la langue*).
 - Les « Fichiers copiés dans les worktrees » et le « Dossier des worktrees » du projet décident des fichiers montrés et des dossiers protégés (voir *Git & fichiers*).
@@ -163,7 +165,7 @@ Rien des aperçus ne se charge au démarrage de la fenêtre, et à l'ouverture d
 ## Limites
 
 - La vue ne change de langue qu'au rechargement de la fenêtre ; rechargée, elle rouvre les onglets du projet montré, pas ceux d'un autre projet.
-- Pas encore de serveurs de langage (A1) ni d'extensions (A5) : la vue n'a que les extensions déclaratives qu'elle embarque (langages, grammaires, thèmes). Une extension qui prendrait des touches (A5) passera par la même règle.
+- Pas encore de serveurs de langage (A1). Des extensions d'Open VSX, seules les déclaratives tournent (voir *Extensions*) ; une extension à code qui prendrait des touches (A6) passera par la même règle.
 - Les aperçus intégrés de VS Code (images, audio et vidéo de `media-preview`, Markdown de `markdown-language-features`) ne tournent pas dans la vue : ils demandent son hôte d'extensions et ses webviews, sur une origine à part (A6). Le Markdown d'Escouade n'a ni diagrammes Mermaid ni formules mathématiques.
 - Un PDF dont les polices ne sont pas incluses s'affiche avec celles du système : les polices standard et les tables CMap de pdf.js ne sont pas livrées, et un PDF en chinois, japonais ou coréen sans ses polices peut mal s'afficher.
 - Un fichier sans titre (« Nouveau fichier texte sans titre » de la palette de VS Code) n'est compté par aucune question d'Escouade.

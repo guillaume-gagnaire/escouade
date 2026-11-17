@@ -307,6 +307,7 @@ mod vibe_tests;
 #[cfg(test)]
 mod vibe_tui_tests;
 mod voice;
+mod vsx;
 use escouade_engines::which;
 mod windowthread;
 #[cfg(test)]
@@ -562,6 +563,12 @@ pub fn run() {
     // Restarted by itself behind another app, it does not take the focus from it.
     #[cfg(target_os = "macos")]
     let builder = builder.activate_ignoring_other_apps(window == updates::Window::Front);
+    // The files of the editor's extensions (ESC-481), read-only: what `vsx` installed and checked, nothing else.
+    let builder =
+        builder.register_uri_scheme_protocol(escouade_vsx::serve::SCHEME, |ctx, request| {
+            let ext = ctx.app_handle().try_state::<Arc<vsx::Extensions>>();
+            vsx::protocol(ext.as_deref().map(|e| e.as_ref()), &request)
+        });
     builder
         .setup(move |app| {
             init_logging();
@@ -648,6 +655,8 @@ pub fn run() {
             tauri::async_runtime::spawn(teams.watch(teams::watch_every()));
             // The editor's language servers (ESC-446): their messages and states to the window.
             app.manage(lsp::for_app(app.handle().clone()));
+            // The editor's extensions (ESC-481): Open VSX by the core, checked, served.
+            app.manage(vsx::Extensions::new(core.data.root()));
             // The dictation: its events to the window, as the core's.
             let hub = std::sync::Arc::downgrade(&core);
             app.manage(Arc::new(voice::Voice::for_app(

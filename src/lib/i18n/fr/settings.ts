@@ -725,6 +725,15 @@ export default {
     warnings: 'Stratégies de ce poste',
     warningsDesc: 'Ce que le service informatique a posé et qu’Escouade n’a pas pu appliquer.',
   },
+  // « Extensions permises de l'éditeur » (Général › Avancé, ESC-481): VS Code's `extensions.allowed`, held by the core.
+  extensions: {
+    title: 'Extensions permises de l’éditeur',
+    titleDesc:
+      'Comme extensions.allowed de VS Code : un objet JSON dont les clés sont * (toutes), un éditeur d’Open VSX ou une extension (éditeur.nom), et les valeurs true, false, stable ou la liste des versions permises. Vide : toutes. Le .escouade.yml d’un projet, l’équipe et le poste géré ajoutent leur liste : une extension doit être permise par chacune.',
+    placeholder: 'Par exemple : {example}',
+    invalid: 'Ce n’est pas un objet JSON : {error}',
+    saved: 'Liste prise en compte.',
+  },
   // « Serveurs de langage » (Général › Avancé, ESC-446): what the editor starts to read the code.
   lsp: {
     title: 'Serveurs de langage',

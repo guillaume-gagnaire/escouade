@@ -214,6 +214,10 @@ pub struct Settings {
     /// The projects (by id) whose own language servers may run: a `node_modules/.bin` of theirs, the path or the
     /// arguments of their `.escouade.yml` (ESC-446). The backend's alone (`lsp_trust`), as `mcp_port`.
     pub language_servers_trusted: Vec<String>,
+    /// « Extensions permises de l’éditeur » (ESC-481): VS Code's `extensions.allowed`, an object (by publisher or by
+    /// extension); `null` allows every extension. Crossed with the projects' `.escouade.yml`, the team's and the managed
+    /// device's (`vsx::layers`).
+    pub extensions_allowed: Value,
     /// « Ton nom » (Réglages › Général › Toi, ESC-190): written in the tickets shared with
     /// the team and in those this machine moves on; a project may have its own
     /// (`Project::user_name`). Empty until given: the name git knows stands in (ESC-243).
@@ -840,6 +844,7 @@ impl Default for Settings {
             voice: VoiceSettings::default(),
             language_servers: BTreeMap::new(),
             language_servers_trusted: Vec::new(),
+            extensions_allowed: Value::Null,
             user_name: String::new(),
             user_id: String::new(),
             name_asked: false,
