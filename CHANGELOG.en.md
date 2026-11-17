@@ -4,7 +4,7 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
-## [Unreleased]
+## [2.2.3] — 2026-11-17
 
 - Plugins in development: “Load a folder” takes a Rust plugin’s module where `escouade-plugin build` writes it, with no file to copy, and loads it again at each new build. A folder not built yet says the command to run instead of a path that cannot be found.
 - On a machine without a system keychain (WSL, Linux), “Keep” on a plugin’s secret says why it was not kept, beside the field, and offers to keep it in a file only you can read. Settings › Plugins shows that choice and takes it back.
