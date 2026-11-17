@@ -90,6 +90,14 @@ impl Core {
         self.settings.read().bypass_allowed()
     }
 
+    /// Whether the mode of no question is open to the agents of the project `project_id`: « Autoriser le mode Bypass »,
+    /// and the policies of the device and of the project's team (`permissions.allowBypass`, `permissions.modes`,
+    /// ESC-497). A team's are its projects' alone (`locks::project_scoped`): the setting of the app does not hold them.
+    /// Never to be called under an agent's lock (`locks_for` reads the projects).
+    pub fn bypass_allowed_in(&self, project_id: &str) -> bool {
+        self.bypass_allowed() && self.locks_for(project_id).check_mode(BYPASS).is_ok()
+    }
+
     /// Once, at the first start that knows the setting: on when the installation already uses the mode of no question
     /// (an account's default, a board's, an agent's mode or the one its plan goes back to), off otherwise. Written at
     /// once, so the user's later choice is never guessed again.

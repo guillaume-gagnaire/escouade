@@ -294,24 +294,36 @@ pub fn defaults_with(account: Option<&Account>, engine: EngineId, chosen: &str) 
     let model = own(|a| &a.default_model)
         .unwrap_or_else(|| crate::engine::by_id(engine).default_model().to_string());
     // A harness without the mode `auto` (Cursor CLI, Mistral Vibe, Gemini CLI…) starts its new
-    // agents in « Demander », the mode they would run in anyway.
-    let modes = &crate::engine::by_id(engine).caps().modes;
-    let has = |id: &str| modes.iter().any(|m| m.id == id);
+    // agents in « Demander », the mode they would run in anyway. Never a mode its harness does not
+    // have, nor one that allows more than the one chosen (ESC-489): a harness of one mode alone
+    // gets it, the one it runs in (and that is judged).
+    let modes = crate::modes::offered(crate::engine::by_id(engine));
+    let has = |id: &str| modes.contains(&id);
+    // Bypass is never a default: one below it is.
     let chosen = match chosen.trim() {
         "" => RECOMMENDED_MODE,
+        crate::bypass::BYPASS => "auto",
         c => c,
     };
-    let fallback = if !chosen.is_empty() && chosen != crate::bypass::BYPASS && has(chosen) {
-        chosen
-    } else if has("auto") {
-        "auto"
+    let at_most = |id: &str| crate::modes::rank(id) <= crate::modes::rank(chosen);
+    let fallback = if has(chosen) {
+        chosen.to_string()
+    } else if has("auto") && at_most("auto") {
+        "auto".into()
+    } else if has("default") && at_most("default") {
+        "default".into()
     } else {
-        "default"
+        crate::modes::runs_in(chosen, &modes).unwrap_or_else(|| chosen.to_string())
     };
+    // Its account's own, as its harness runs it.
+    let own_mode = own(|a| &a.default_mode).map(|m| match has(&m) {
+        true => m,
+        false => crate::modes::runs_in(&m, &modes).unwrap_or(m),
+    });
     Defaults {
         model,
         effort: own(|a| &a.default_effort).unwrap_or_else(|| "medium".into()),
-        mode: own(|a| &a.default_mode).unwrap_or_else(|| fallback.into()),
+        mode: own_mode.unwrap_or(fallback),
     }
 }
 

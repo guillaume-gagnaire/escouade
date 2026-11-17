@@ -1463,7 +1463,11 @@ impl Core {
             .account_for_new(project_id, engine)
             .ok()
             .map(|id| accounts::get(&self.settings.read(), &id));
-        accounts::defaults_with(account.as_ref(), engine, &self.settings.read().agent_mode)
+        // From the default mode imposed when one is (its team's for a project of a team, ESC-497).
+        let chosen = self
+            .locks_for(project_id)
+            .default_mode(&self.settings.read().agent_mode);
+        accounts::defaults_with(account.as_ref(), engine, &chosen)
     }
 
     /// `accounts::pick` as the board has it: a good account (`pace`: a short window under the
@@ -2220,10 +2224,18 @@ impl Core {
         let defaults = accounts::defaults_with(
             accounts::find(&settings, &account),
             engine,
-            &settings.agent_mode,
+            // The default mode imposed when one is (its team's for a project of a team, ESC-497).
+            &self
+                .locks_for(&project.id)
+                .default_mode(&settings.agent_mode),
         );
         let (model, effort, mode) =
             ticket_agent_options(t, s, &defaults, &|m| self.takes_auto(engine, &account, m));
+        // The mode its harness would run it in, judged before anything is made (SEC-09, ESC-489): a mode of the board its
+        // harness does not have is never taken for true, a harness that runs in Bypass alone blocks the ticket, with
+        // why, while Bypass is not allowed, and so does a mode the policies of the device or of the project's team do
+        // not allow (TS-11, ESC-497). The agent made says in its conversation the mode it runs in, when it is another.
+        self.judge_mode(&project.id, crate::engine::by_id(engine), &mode)?;
         // The branch it takes up may still be in the worktree of its earlier agent, archived.
         if !t.branch.is_empty() {
             self.release_archived_holder(project, t).await?;
@@ -2283,6 +2295,7 @@ impl Core {
                     remote_off: t.remote_off,
                     cwd: None,
                     discussion: None,
+                    judge: true,
                 },
             )
             .await;

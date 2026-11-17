@@ -1304,6 +1304,31 @@ describe('Composer of an agent on another harness', () => {
     expect(screen.getByRole('menuitemradio', { name: /Plan/ })).toBeEnabled();
   });
 
+  it('shows the one mode of a harness that has one alone, the others greyed with why (ESC-489)', async () => {
+    const a = agent({ id: `u${Math.random()}`, engine: 'codex', mode: 'bypassPermissions' });
+    resetApp({ agents: [a] });
+    app.settings.allowBypass = false;
+    app.engines = [
+      CLAUDE_ENGINE,
+      {
+        ...BARE_ENGINE,
+        name: 'Unharnessed',
+        caps: { ...BARE_ENGINE.caps, modes: [{ id: 'bypassPermissions', meaning: 'Ne demande jamais.' }] },
+      },
+    ];
+    fakeBackend({ get_conversation: () => [] });
+    render(Composer, { agent: app.agents[a.id] });
+    const chip = screen.getByRole('button', { name: /^Mode/ });
+    expect(chip).toHaveTextContent('Bypass');
+    await userEvent.click(chip);
+    expect(screen.getByRole('menuitemradio', { name: /^Bypass/ })).toHaveTextContent('Ne demande jamais.');
+    for (const label of ['Auto', 'Demander', 'Plan', 'Édits auto']) {
+      const item = screen.getByRole('menuitemradio', { name: new RegExp(`^${label}`) });
+      expect(item).toBeDisabled();
+      expect(item).toHaveTextContent('Unharnessed ne tourne qu’en Bypass.');
+    }
+  });
+
   it('suggests no / command when its harness offers none', async () => {
     const { backend, textarea } = bare();
     await userEvent.type(textarea, '/com');

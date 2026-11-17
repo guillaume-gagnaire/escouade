@@ -219,7 +219,7 @@ impl Def {
     }
 }
 
-/// Escouade's modes, from the one that allows the least to the one that allows the most (`handover::MODES`).
+/// Escouade's modes, from the one that allows the least to the one that allows the most (`modes::ORDER` of the app).
 pub const MODES: &[&str] = &[
     "plan",
     "default",

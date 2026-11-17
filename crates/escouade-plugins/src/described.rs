@@ -71,5 +71,26 @@ pub fn told_words(decl: &proto::HarnessDecl) -> Vec<String> {
     if let Some(acp) = &decl.acp {
         out.extend(acp.remove_env.iter().map(|v| format!("harnessUnset:{v}")));
     }
+    // What its modes say of its agents (ESC-489): one that runs in Bypass alone never asks before it acts; one that
+    // declares none Escouade knows is held for Bypass. Both start only with « Autoriser le mode Bypass ».
+    let known: Vec<&str> = decl
+        .caps
+        .modes
+        .iter()
+        .map(|m| m.id.as_str())
+        .filter(|m| MODES.contains(m))
+        .collect();
+    match known.as_slice() {
+        [] => out.push(format!("harnessNoMode:{}", decl.name)),
+        [BYPASS] => out.push(format!("harnessBypass:{}", decl.name)),
+        _ => {}
+    }
     out
 }
+
+/// The modes of Escouade (`modes::ORDER` of the app, a test holds them equal): a harness's mode of another name is not
+/// one.
+pub const MODES: [&str; 5] = ["plan", "default", "acceptEdits", "auto", BYPASS];
+
+/// The mode where a harness asks nothing.
+const BYPASS: &str = "bypassPermissions";

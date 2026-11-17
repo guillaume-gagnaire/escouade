@@ -130,7 +130,7 @@ fn every_text_is_written_in_both_languages() {
 
 #[test]
 fn the_modes_are_the_cores() {
-    // `handover::MODES` of the app: checked again there (locks_tests).
+    // `modes::ORDER` of the app is this list (locks_policies_tests).
     assert_eq!(MODES.first(), Some(&"plan"));
     assert_eq!(MODES.last(), Some(&"bypassPermissions"));
 }

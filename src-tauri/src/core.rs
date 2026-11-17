@@ -860,6 +860,10 @@ pub struct AgentOptions {
     pub cwd: Option<String>,
     /// A discussion of the Docs tab (ESC-261).
     pub discussion: Option<crate::discussion::Discussion>,
+    /// Refused before anything is made when the mode its harness would run it in is (`modes::judge`, ESC-489): an
+    /// agent the Kanban or a tool of the MCP server makes, which no one watches start. The window's is made, its mode
+    /// shown as its harness runs it, and its start says why it does not.
+    pub judge: bool,
 }
 
 /// What a copy takes of its original, read while no turn of the original ran.
@@ -2899,6 +2903,11 @@ impl Core {
         let self_update = s.claude_self_update;
         let before_settings = std::mem::replace(&mut *self.settings.write(), s);
         let mcp_was_enabled = before_settings.mcp_enabled;
+        if before_settings.bypass_allowed() && !self.bypass_allowed() {
+            // « Autoriser le mode Bypass » turned off: what runs of an agent in Bypass stops, at once at rest, at the
+            // end of its turn at work, said (ESC-497).
+            self.settle_agents();
+        }
         self.need_settings_plugins(&before_settings);
         if self_update && !before_settings.claude_self_update {
             // « Mettre à jour Claude Code automatiquement » turned on: run when due, at once.
@@ -3851,8 +3860,17 @@ impl Core {
         // Taken apart: the agent is not held while its process may be stopped (`refence`).
         let live = h.lock().proc.clone();
         if let Some(p) = live {
-            if p.is_alive() && !self.refence(h, id).await? {
-                return Ok(p);
+            if p.is_alive() {
+                // Its harness or the mode it runs in no longer allowed by the policies or by « Autoriser le mode
+                // Bypass » (a change not settled yet, or one that came during its turn): its process is given no
+                // message; at rest, it stops at once, said; at work, at the end of its turn (ESC-497).
+                if let Some(why) = self.run_refusal(id) {
+                    self.stop_out_of_rule(id, &crate::modes::stopped(i18n::ui(), &why));
+                    bail!(why);
+                }
+                if !self.refence(h, id).await? {
+                    return Ok(p);
+                }
             }
         }
         // None starts once the app quits: the stop of the processes has been through, and one
@@ -3869,12 +3887,12 @@ impl Core {
         // Its harness's plugin off for its project (ESC-404): the plugin would get all it does.
         let project_id = h.lock().meta.project_id.clone();
         self.check_harness_in(engine, &project_id)?;
-        // The mode of no question without « Autoriser le mode Bypass » (SEC-09).
-        crate::bypass::check(&h.lock().meta.mode, self.bypass_allowed())?;
-        // A harness or a mode the policies do not allow (TS-11).
+        // A harness the policies do not allow (TS-11), and the mode its harness runs it in, judged: a mode it does not
+        // have is never taken for true, the policies of the device and of its team judge that one (TS-11, ESC-497), and
+        // the mode of no question goes only with « Autoriser le mode Bypass » (SEC-09, ESC-489). Refused, what still
+        // runs of it stops, said (`judge_start`).
+        self.judge_start(id)?;
         let locks = self.locks_for(&project_id);
-        locks.check_engine(engine.as_str())?;
-        locks.check_mode(&h.lock().meta.mode)?;
         // A model or an effort the policies do not allow (TS-12).
         {
             let (model, effort) = {
@@ -3918,6 +3936,8 @@ impl Core {
         // them (OpenCode, whose server never starts without a model of its own).
         let env = [settings.agent_env(), accounts::launch_env(&account)].concat();
         self.settle_model(h, harness, &program, env).await;
+        // The mode of no question open to it: its project's policies too (ESC-497), taken before its lock.
+        let bypass = settings.bypass_allowed() && locks.check_mode(crate::bypass::BYPASS).is_ok();
         let (mut spawn, gen, engine) = {
             let mut rt = h.lock();
             rt.gen += 1;
@@ -3928,7 +3948,7 @@ impl Core {
             );
             spawn.account = account.id.clone();
             spawn.agents_mcp = settings.agents_mcp;
-            spawn.bypass = settings.bypass_allowed();
+            spawn.bypass = bypass;
             spawn.takes_effort = (engine::of(&rt.meta).models_by_alias()
                 && !rt.meta.effort.is_empty())
             .then(|| self.takes_effort(rt.meta.engine, &account.id, &rt.meta.model));
@@ -6669,10 +6689,21 @@ impl Core {
         }
         // A discussion of the Docs tab stays in a mode that asks before a write (ESC-261).
         if let Some(m) = mode.as_deref() {
-            crate::bypass::check(m, self.bypass_allowed())?;
-            // A mode the policies do not allow (TS-11).
+            // One of its harness's modes, never one it would run as another (ESC-489), judged by the policies of the
+            // device and of its team (TS-11, ESC-497), then by « Autoriser le mode Bypass » (SEC-09).
+            let harness = engine::of(&h.lock().meta);
+            if !crate::modes::offered(harness).contains(&m) {
+                bail!(crate::modes::missing(i18n::ui(), harness.name(), m));
+            }
             let project_id = h.lock().meta.project_id.clone();
-            self.locks_for(&project_id).check_mode(m)?;
+            crate::modes::check_in(
+                harness,
+                m,
+                m,
+                self.bypass_allowed_in(&project_id),
+                &self.locks_for(&project_id),
+                i18n::ui(),
+            )?;
             if h.lock().meta.discussion.is_some() && !crate::discussion::MODES.contains(&m) {
                 bail!(tr!(
                     "Une discussion ne modifie jamais le code : elle reste en mode « Demander » ou « Plan ».",
@@ -6903,31 +6934,85 @@ impl Core {
             Some(a) if a.engine == meta.engine => a.id.clone(),
             _ => self.account_for_new(project_id, meta.engine)?,
         };
-        // Its model, effort and mode: those asked for, else its account's (ESC-128).
+        // Its model, effort and mode: those asked for, else its account's (ESC-128), from the default mode imposed when
+        // one is (its team's for a project of a team, ESC-497).
         let defaults = accounts::defaults_with(
             accounts::find(&settings, &meta.account),
             engine,
-            &settings.agent_mode,
+            &locks.default_mode(&settings.agent_mode),
         );
         meta.model = self.model_for(engine, o.model.unwrap_or(defaults.model));
         meta.effort = o.effort.unwrap_or(defaults.effort);
         // A model the policies do not allow is refused; an effort above their ceiling comes down to it (TS-12).
         locks.check_model(engine.as_str(), &meta.model)?;
         meta.effort = locks.effort_within(&meta.effort);
-        // A mode asked that the policies do not allow is refused; its account's goes to the nearest allowed (TS-11).
+        // A mode asked that the policies do not allow is refused; its account's goes to the nearest allowed (TS-11), and
+        // when its harness would run that one in a mode they do not allow, to the nearest of its harness's they allow
+        // (ESC-497): `nearest_mode` knows nothing of a harness's modes.
+        let harness = engine::by_id(engine);
+        let offered = crate::modes::offered(harness);
         meta.mode = match o.mode {
             Some(m) => {
                 locks.check_mode(&m)?;
                 m
             }
             None => {
-                if locks.check_mode(&defaults.mode).is_err() {
+                let mut m = if locks.check_mode(&defaults.mode).is_err() {
                     locks.nearest_mode(&defaults.mode)
                 } else {
                     defaults.mode.clone()
+                };
+                if crate::modes::runs_in(&m, &offered)
+                    .is_some_and(|r| locks.check_mode(&r).is_err())
+                {
+                    if let Some(n) = locks.nearest_mode_of(&defaults.mode, &offered) {
+                        m = n;
+                    }
                 }
+                m
             }
         };
+        let asked = meta.mode.clone();
+        // Its mode as its harness runs it (ESC-489): one it does not have is not taken for true, the one it runs in is
+        // its mode, said. A discussion keeps its own: its harness, without one of its modes, does not start it.
+        let mut mode_notice = None;
+        if let Some(m) = crate::modes::runs_in(&meta.mode, &offered).filter(|m| *m != meta.mode) {
+            if o.discussion.is_none() || crate::discussion::MODES.contains(&m.as_str()) {
+                let alone = offered.len() == 1;
+                let lang = i18n::ui();
+                mode_notice = Some(crate::modes::settled(
+                    lang,
+                    harness.name(),
+                    &meta.mode,
+                    &m,
+                    alone,
+                ));
+                meta.mode = m;
+            }
+        }
+        // The mode its harness runs it in, judged by the policies of the device and of its team, whoever makes it (TS-11,
+        // ESC-497). Made by the Kanban or a tool, which no one watches start: judged whole, refused before anything is
+        // made (ESC-489); made in the window, its start says why it does not go.
+        let lang = i18n::ui();
+        if o.judge {
+            if crate::modes::runs_in(&meta.mode, &offered).is_none() {
+                bail!(crate::modes::none_as_careful(
+                    lang,
+                    harness.name(),
+                    &meta.mode
+                ));
+            }
+            crate::modes::check_in(
+                harness,
+                &asked,
+                &meta.mode,
+                self.bypass_allowed_in(project_id),
+                &locks,
+                lang,
+            )?;
+        } else {
+            crate::modes::policies(harness, &asked, &meta.mode, &locks, lang)?;
+        }
         // Started in Plan: its plan approved, it goes on in its mode of departure, the ticket's or
         // the board's (`o.mode`), else its account's, else the app's (ESC-277).
         if meta.mode == "plan" {
@@ -7152,6 +7237,10 @@ impl Core {
         {
             let mut fx = Effects::default();
             h.lock().notice("warn", text, &mut fx);
+        }
+        if let Some(text) = mode_notice {
+            let mut fx = Effects::default();
+            h.lock().notice("info", text, &mut fx);
         }
         self.agents.write().insert(id.clone(), h.clone());
         {

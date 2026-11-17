@@ -660,6 +660,21 @@ pub(super) async fn start_ticket(
         if let Some(why) = core.harness_refusal(engine, &project.id) {
             return Err(ToolError::Refused(why));
         }
+        // The mode its harness would run its agent in, judged (SEC-09, ESC-489): the board's, else a new agent's. Its
+        // start judges it again, as it is then.
+        let mode = match project.board.mode.trim() {
+            "" => {
+                // The default mode imposed when one is (its team's for a project of a team, ESC-497).
+                let chosen = core.settings.read().agent_mode.clone();
+                let agent_mode = core.locks_for(&project.id).default_mode(&chosen);
+                crate::accounts::defaults_with(None, engine, &agent_mode).mode
+            }
+            m => m.to_string(),
+        };
+        // The policies of the device and of the project's team judge that mode too (TS-11, ESC-497).
+        if let Err(e) = core.judge_mode(&project.id, crate::engine::by_id(engine), &mode) {
+            return Err(ToolError::Refused(e.to_string()));
+        }
         // Set on an account (by this call or before), it waits for that one alone (ESC-153).
         let pinned = Ticket {
             account: account.clone().unwrap_or_else(|| t.account.clone()),
@@ -1730,6 +1745,8 @@ pub(super) async fn create_agent(
                 folder,
                 // Its Claude account is the project's, else the first usable one: one of those
                 // `not_held` found free.
+                // Refused before anything is made when its mode is (ESC-489).
+                judge: true,
                 ..Default::default()
             },
         )

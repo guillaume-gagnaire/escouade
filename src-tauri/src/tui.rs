@@ -1273,7 +1273,10 @@ impl Core {
             (rt.meta.engine, rt.meta.project_id.clone())
         };
         self.check_harness_in(engine, &project_id)?;
-        crate::bypass::check(&h.lock().meta.mode, self.bypass_allowed())?;
+        // A harness the policies do not allow (TS-11), and the mode its harness runs it in, judged by the policies of
+        // the device and of its team (ESC-497), then by « Autoriser le mode Bypass » (SEC-09, ESC-489): its view does
+        // not start either, and what still runs of it (a process started ahead, an interface kept up) stops, said.
+        self.judge_start(id)?;
         if crate::engine::of(&h.lock().meta).attaches() {
             return self.open_attached(&h, id, size, on_data).await;
         }
@@ -1366,6 +1369,14 @@ impl Core {
                 return Ok(());
             }
         }
+        // Judged as every start (ESC-497): its harness's plugin on for its project, its harness and the mode it runs in
+        // allowed; refused, one kept up stops, said.
+        let (engine, project_id) = {
+            let rt = h.lock();
+            (rt.meta.engine, rt.meta.project_id.clone())
+        };
+        self.check_harness_in(engine, &project_id)?;
+        self.judge_start(id)?;
         if self.running_interface(&h, false).is_some() {
             return Ok(());
         }
@@ -1718,7 +1729,7 @@ impl Core {
                 params,
                 place,
                 by_core.is_some() || view.fence_by_core(),
-                self.bypass_allowed(),
+                self.bypass_allowed_in(&meta.project_id),
             )
             .await
         {
@@ -1800,7 +1811,7 @@ impl Core {
                             checked_by_core,
                             &judged,
                             given,
-                            self.bypass_allowed(),
+                            self.bypass_allowed_in(&meta.project_id),
                         ) {
                             Ok(a) => args = a,
                             Err(e) => {

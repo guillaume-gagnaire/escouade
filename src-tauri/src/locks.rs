@@ -42,8 +42,8 @@ pub use escouade_policy::list::{
 };
 
 /// The modes a bound of modes may name, from the one that allows the least to the one that allows the most
-/// (`handover::MODES`, checked equal by a test).
-pub const MODES: &[&str] = escouade_policy::list::MODES;
+/// (`modes::ORDER`, one and the same).
+pub const MODES: &[&str] = crate::modes::ORDER;
 /// The efforts, from the least to the most.
 pub const EFFORTS: &[&str] = escouade_policy::list::EFFORTS;
 /// The harness's mode of no question (`bypass::BYPASS`).
@@ -532,7 +532,7 @@ impl Locks {
         })
     }
 
-    /// The mode the nearest to `mode` among those allowed, that never allows more (`handover::closest_mode`); the one
+    /// The mode the nearest to `mode` among those allowed, that never allows more (`modes::closest`); the one
     /// that allows the least when every one allows more. `mode` itself when it is allowed.
     pub fn nearest_mode(&self, mode: &str) -> String {
         let mut allowed: Vec<String> = self
@@ -543,7 +543,7 @@ impl Locks {
             allowed.retain(|m| m != BYPASS);
         }
         let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
-        crate::handover::closest_mode(mode, &allowed)
+        crate::modes::closest(mode, &allowed)
             .or_else(|| {
                 MODES
                     .iter()
@@ -552,6 +552,31 @@ impl Locks {
             })
             // Nothing allowed at all: the one that asks before every change.
             .unwrap_or_else(|| "plan".to_owned())
+    }
+
+    /// The « Mode par défaut des agents » a new agent goes from: the one imposed (`permissions.defaultMode`, brought within
+    /// the bound of the modes), else `chosen`, the app's. A team's holds for its projects alone (`Core::locks_for`),
+    /// where the setting of the app does not have it (ESC-497).
+    pub fn default_mode(&self, chosen: &str) -> String {
+        match self.value(DEFAULT_MODE).and_then(Value::as_str) {
+            Some(m) => self.nearest_mode(m),
+            None => chosen.to_owned(),
+        }
+    }
+
+    /// The mode the nearest to `mode` among those allowed that a harness of the modes `offered` runs in, never one that
+    /// allows more (ESC-497): a harness of one mode runs in it, that one when it is allowed. None when none of its modes
+    /// allowed allows as little.
+    pub fn nearest_mode_of(&self, mode: &str, offered: &[&str]) -> Option<String> {
+        let allowed: Vec<&str> = offered
+            .iter()
+            .copied()
+            .filter(|m| self.check_mode(m).is_ok())
+            .collect();
+        match offered {
+            [one] => allowed.contains(one).then(|| (*one).to_owned()),
+            _ => crate::modes::closest(mode, &allowed),
+        }
     }
 
     /// The mode an agent goes in, `mode` asked: refused when a bound denies it, or when the mode of no question is
@@ -982,13 +1007,26 @@ impl Locks {
         }
     }
 
-    /// The mode an agent in `meta` goes to, when its own is no longer allowed.
-    pub fn agent_mode_after(&self, meta: &AgentMeta) -> Option<String> {
-        if meta.mode.is_empty() || self.check_mode(&meta.mode).is_ok() {
+    /// Whether the mode of the agent in `meta` is no longer allowed.
+    pub fn agent_mode_denied(&self, meta: &AgentMeta) -> bool {
+        !meta.mode.is_empty() && self.check_mode(&meta.mode).is_err()
+    }
+
+    /// The mode an agent in `meta` goes to, when its own is no longer allowed: one its harness has (`offered`, ESC-497),
+    /// the nearest allowed that allows no more. None when its own is allowed, or when none of its harness's is: it then
+    /// stops (`settle_locked_mode`).
+    pub fn agent_mode_after(&self, meta: &AgentMeta, offered: &[&str]) -> Option<String> {
+        if !self.agent_mode_denied(meta) {
             return None;
         }
-        let m = self.nearest_mode(&meta.mode);
-        Some(if m == BYPASS { "plan".to_owned() } else { m })
+        // Every allowed mode of its harness allows more: the one that allows the least, never Bypass.
+        self.nearest_mode_of(&meta.mode, offered).or_else(|| {
+            offered
+                .iter()
+                .filter(|m| **m != BYPASS && self.check_mode(m).is_ok())
+                .min_by_key(|m| crate::modes::rank(m))
+                .map(|m| (*m).to_owned())
+        })
     }
 }
 
@@ -1282,6 +1320,8 @@ impl crate::core::Core {
     /// The projects brought within the locks, and each agent whose mode is no longer allowed moved to the nearest one
     /// that is: at once when it is not at work, at the end of its turn otherwise (`settle_locked_mode`).
     pub(crate) fn settle_locks(self: &std::sync::Arc<Self>) {
+        // The agents first: a policy taken off locks nothing, but « Autoriser le mode Bypass » may still refuse one.
+        self.settle_agents();
         if self.locks.read().locks.is_empty()
             && self.team_locks.read().values().all(|l| l.locks.is_empty())
         {
@@ -1308,6 +1348,21 @@ impl crate::core::Core {
             self.hub.emit(crate::model::UiEvent::Project { project });
             self.request_save();
         }
+    }
+
+    /// Each agent at rest that may not run on as it is — its mode no longer allowed, or what runs of it (its process,
+    /// its interface) in a harness or a mode the policies or « Autoriser le mode Bypass » no longer allow — settled at
+    /// once (`settle_locked_mode`); one at work, at the end of its turn (ESC-497). Called when the policies or that
+    /// setting change.
+    pub(crate) fn settle_agents(self: &std::sync::Arc<Self>) {
+        // Taken apart, never held under an agent's lock.
+        let base = self.locks.read().clone();
+        let teams = self.team_locks.read().clone();
+        let bypass = self.bypass_allowed();
+        let lang = crate::i18n::ui();
+        let of = |team: &Option<String>| -> &Locks {
+            team.as_ref().and_then(|t| teams.get(t)).unwrap_or(&base)
+        };
         let team_of: BTreeMap<String, Option<String>> = self
             .projects
             .read()
@@ -1322,9 +1377,9 @@ impl crate::core::Core {
                 let rt = h.lock();
                 let locks = of(team_of.get(&rt.meta.project_id).unwrap_or(&None));
                 !rt.meta.status.is_active()
-                    && (locks.agent_mode_after(&rt.meta).is_some()
-                        || rt.proc.is_some()
-                            && locks.check_engine(rt.meta.engine.as_str()).is_err())
+                    && (locks.agent_mode_denied(&rt.meta)
+                        || (rt.proc.is_some() || rt.tui.is_some())
+                            && crate::modes::refusal_of(&rt.meta, locks, bypass, lang).is_some())
             })
             .map(|(id, _)| id.clone())
             .collect();
@@ -1334,57 +1389,78 @@ impl crate::core::Core {
         }
     }
 
-    /// An agent in a mode the locks no longer allow goes to the nearest one allowed, and says it in its conversation.
-    /// Called once its turn is over (`turn_ended`), and at once for an agent not at work.
+    /// An agent in a mode the locks no longer allow goes to the nearest one allowed that its harness has (ESC-497), and
+    /// says it in its conversation. Called once its turn is over (`turn_ended`), and at once for an agent not at work.
     pub(crate) async fn settle_locked_mode(self: &std::sync::Arc<Self>, id: &str) {
         let Ok(h) = self.agent(id) else { return };
         let locks = self.locks_for(&h.lock().meta.project_id.clone());
-        // A harness no longer allowed: its process stops between two turns, and the agent says why (§6.2). Its next
-        // message is refused at the start of a process (`check_engine`).
+        let (from, to) = {
+            let rt = h.lock();
+            let offered = crate::modes::offered(crate::engine::of(&rt.meta));
+            (
+                rt.meta.mode.clone(),
+                locks.agent_mode_after(&rt.meta, &offered),
+            )
+        };
+        // A harness no longer allowed, or none of whose modes is: its process stops between two turns, and the agent
+        // says why (§6.2). Its next message is refused at the start of a process (`check_engine`, `settle_mode`).
         let denied = {
             let rt = h.lock();
             locks
                 .check_engine(rt.meta.engine.as_str())
                 .err()
                 .map(|e| e.to_string())
+                .or_else(|| {
+                    (to.is_none() && locks.agent_mode_denied(&rt.meta)).then(|| {
+                        let why = locks
+                            .denial(MODES_KEY, &from)
+                            .unwrap_or_else(|| locks.imposed(ALLOW_BYPASS));
+                        let name = crate::engine::of(&rt.meta).name();
+                        tr!(
+                            "{why} {name} n’a aucun autre mode permis.",
+                            "{why} {name} has no other mode allowed."
+                        )
+                    })
+                })
+        };
+        let ends = |why: &str| {
+            tr!(
+                "{why} L’agent s’arrête à la fin de son tour.",
+                "{why} The agent stops at the end of its turn."
+            )
         };
         if let Some(why) = denied {
-            let stopped = {
-                let mut rt = h.lock();
-                if rt.meta.status.is_active() {
-                    None
-                } else {
-                    rt.detach()
-                }
-            };
-            if let Some(p) = stopped {
-                p.close_input();
-                self.emit_agent(&h);
-                let text = tr!(
-                    "{why} L’agent s’arrête à la fin de son tour.",
-                    "{why} The agent stops at the end of its turn."
-                );
-                let _ = self.with_agent(id, |rt, fx| {
-                    rt.notice("warning", text, fx);
-                    Ok(())
-                });
-            }
+            // Its process and its interface (ESC-497).
+            self.stop_out_of_rule(id, &ends(&why));
             return;
         }
-        let (from, to) = {
-            let rt = h.lock();
-            (rt.meta.mode.clone(), locks.agent_mode_after(&rt.meta))
-        };
-        let Some(to) = to else { return };
+        if let Some(to) = to {
+            self.move_locked_mode(id, &locks, &from, &to).await;
+        }
+        // What still refuses it as it runs: « Autoriser le mode Bypass » turned off, or a mode its harness runs it in
+        // that the move did not settle (ESC-497). Its mode stays; what runs of it stops, said.
+        if let Some(why) = self.run_refusal(id) {
+            self.stop_out_of_rule(id, &ends(&why));
+        }
+    }
+
+    /// The agent `id`, in `from` that `locks` no longer allow, moved to `to`, said.
+    async fn move_locked_mode(
+        self: &std::sync::Arc<Self>,
+        id: &str,
+        locks: &Locks,
+        from: &str,
+        to: &str,
+    ) {
         if let Err(e) = self
-            .set_agent_options(id, None, None, Some(to.clone()))
+            .set_agent_options(id, None, None, Some(to.to_string()))
             .await
         {
             log::warn!("policies: agent {id} not moved to {to}: {e:#}");
             return;
         }
         let why = locks
-            .denial(MODES_KEY, &from)
+            .denial(MODES_KEY, from)
             .unwrap_or_else(|| locks.imposed(ALLOW_BYPASS));
         let text = tr!(
             "{why} L’agent passe en mode « {to} », le plus proche permis.",

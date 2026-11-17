@@ -40,7 +40,7 @@ fn locks(pairs: &[(&str, Value)]) -> Locks {
 
 #[test]
 fn the_tables_modes_and_efforts_are_the_cores() {
-    assert_eq!(MODES, crate::handover::MODES);
+    assert!(std::ptr::eq(MODES, crate::modes::ORDER));
     assert_eq!(EFFORTS, ["low", "medium", "high", "xhigh", "max"]);
     // The app's table is the list the ADMX is generated from: one and the same.
     assert!(std::ptr::eq(KEYS, escouade_policy::list::POLICIES));

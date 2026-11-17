@@ -99,6 +99,10 @@ pub fn by_id(id: EngineId) -> &'static dyn Engine {
     if id == EngineId::BENCH {
         return &minimal::MINIMAL;
     }
+    #[cfg(test)]
+    if let Some(m) = minimal::variant(id) {
+        return m;
+    }
     registry::find(id).unwrap_or_else(|| absent::of(id))
 }
 
@@ -106,7 +110,7 @@ pub fn by_id(id: EngineId) -> &'static dyn Engine {
 /// made or handed over; the others are « harness absent ».
 pub fn written(id: EngineId) -> bool {
     #[cfg(test)]
-    if id == EngineId::BENCH {
+    if id == EngineId::BENCH || minimal::variant(id).is_some() {
         return true;
     }
     registry::find(id).is_some()
@@ -428,6 +432,11 @@ pub trait Engine: Send + Sync {
     }
     /// What it can do, as the interface reads it (`registry::EngineCaps`).
     fn caps(&self) -> registry::EngineCaps;
+    /// Whether it declares its modes (ESC-489): a harness of a plugin whose manifest declares none Escouade knows is
+    /// held for Bypass (`modes::declared`), and its refusal says so.
+    fn declares_modes(&self) -> bool {
+        true
+    }
     /// What tells its accounts apart (`registry::AccountStore`): for Claude Code, a configuration
     /// folder of their own given by `CLAUDE_CONFIG_DIR`.
     fn accounts(&self) -> registry::AccountStore;

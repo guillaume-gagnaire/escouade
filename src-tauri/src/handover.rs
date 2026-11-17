@@ -23,34 +23,10 @@ use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Value};
 use std::sync::Arc;
 
-/// Escouade's modes, from the one that allows the least to the one that allows the most.
-pub(crate) const MODES: [&str; 5] = [
-    "plan",
-    "default",
-    "acceptEdits",
-    "auto",
-    "bypassPermissions",
-];
-
-fn rank(mode: &str) -> Option<usize> {
-    MODES.iter().position(|m| *m == mode)
-}
-
-/// The mode an agent in `current` runs in on a harness that offers `offered`: the same when it is
-/// there, else the closest one that never allows more. None when every mode offered allows more.
-/// A mode Escouade does not know is taken as « Demander » (`default`).
-pub fn closest_mode(current: &str, offered: &[&str]) -> Option<String> {
-    if offered.contains(&current) {
-        return Some(current.to_string());
-    }
-    let at = rank(current).unwrap_or(1);
-    offered
-        .iter()
-        .filter_map(|m| rank(m).map(|r| (r, *m)))
-        .filter(|(r, _)| *r <= at)
-        .max_by_key(|(r, _)| *r)
-        .map(|(_, m)| m.to_string())
-}
+/// The mode an agent in `current` runs in on a harness that offers `offered` (`modes::closest`):
+/// the same when it is there, else the closest one that never allows more; None when every mode
+/// offered allows more. A handover never takes a harness's one mode when it allows more (ESC-489).
+pub use crate::modes::closest as closest_mode;
 
 /// The modes `engine` takes, `auto` only where its model takes it (`auto`: `Core::takes_auto`,
 /// what the `claude` of its account told).
@@ -826,6 +802,19 @@ impl Core {
                 ))
             })?
         };
+        // A harness or that mode the policies of the device or of its team do not allow (TS-11, ESC-497), or Bypass
+        // there, not allowed (SEC-09, ESC-489): refused before anything stops.
+        let locks = self.locks_for(&project);
+        locks.check_engine(target.as_str())?;
+        let asked = h.lock().meta.mode.clone();
+        crate::modes::check_in(
+            to,
+            &asked,
+            &mode,
+            self.bypass_allowed_in(&project),
+            &locks,
+            lang,
+        )?;
         // Its own harness's interface stops first (« Vue <harness> »): the handover goes over the
         // stream.
         if terminal {

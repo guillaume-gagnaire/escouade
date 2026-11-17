@@ -136,6 +136,7 @@ mod mcp;
 mod memory;
 mod menus;
 mod model;
+mod modes;
 #[cfg(test)]
 mod multi_repo_tests;
 mod multiticket;
