@@ -327,6 +327,16 @@ Le taux d'arrivée au premier agent : `first_reply` ÷ `onboarding_started{trigg
 
 ## 10. Les choix à trancher
 
+**Tranché par l’utilisateur le 2026-11-17** (ces lignes font foi pour ON-1 à ON-4) :
+
+- **O1 : la direction C « La ligne »** (« le C me plaît bien »).
+- **Une station de plus, « Ce que tu veux brancher »** (demandée le même jour) : le premier lancement propose les fonctionnalités optionnelles, chacune passable, rien d’installé ni de connecté sans le geste :
+  - **les sources de tickets** (Jira, Trello, GitHub, Linear, ClickUp, GitLab, Azure Boards : celles que le store et l’amorce offrent), avec ce que chacune importe et ce qu’elle demande (un jeton, un projet) ;
+  - **la voix**, si on veut s’en servir : le fournisseur de la dictée et de la conversation, Whisper en local (son poids dit avant le téléchargement) ou un service en ligne (Mistral, ElevenLabs, Deepgram, OpenAI, Groq… : ceux qui sont offerts), avec sa clé ;
+  - et les autres branchements du même genre que la conception retient (l’hébergeur de code pour les PR et la CI, un second harness, le serveur MCP pour un autre client), sans allonger le parcours : une seule station, des cartes à cocher, « Plus tard » pour tout.
+  - Elle n’installe que les plugins de ce qui est choisi (le tri de l’amorce), et chaque choix se retrouve dans la découverte s’il est passé. Ticket : ON-1b (ESC-512).
+- **O2 à O14** : les recommandations ci-dessous sont retenues par défaut, tant que l’utilisateur n’en change pas une.
+
 Chacun avec ma recommandation. L'utilisateur tranche ; ON-1 à ON-4 suivent.
 
 1. **O1. La direction** : A « Essaie d'abord », B « Au bon endroit » ou C « La ligne ». **Recommandé : C.** C'est la seule qui ait la place d'être « très didactique », elle se fait au clavier, et sa ligne (le git graph) est propre à Escouade.
