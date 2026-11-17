@@ -424,6 +424,13 @@ Le texte de présentation du serveur MCP (les instructions qu'il donne à chaque
 
 ## 15. Les choix à trancher
 
+**Tranché par l’utilisateur le 2026-11-17** (ces lignes font foi pour IN-1 à IN-3) :
+
+- **La direction B « La file »** (« J’aime beaucoup le B ») : une vue de tous les projets, ouverte depuis le rail de gauche avec sa pastille, la liste à gauche (« Tous » ou « Ce projet »), une demande à la fois en grand, « n sur m », J, K et L au clavier, la barre de ce qui est traité.
+- **Repris de la direction D** : les vignettes des options sous la ligne d’une demande de choix, dans la liste.
+- **Déjà posé par l’utilisateur le 2026-11-16** : l’écran et son compteur ne s’affichent que si le serveur MCP est activé ; les pièces jointes fournies par les agents (images, PDF, autres fichiers) se voient dans l’écran.
+- **Les autres choix (I1 à I17)** : les recommandations ci-dessous sont retenues par défaut, tant que l’utilisateur n’en change pas une ; là où une recommandation suppose la direction D (l’onglet dans la barre du projet), c’est la direction B qui vaut.
+
 1. **I1. La direction** (`design/inbox-2-3/README.md`) : A le tableau, B la file, C le tiroir, D la liste. **Recommandé : D, la liste en onglet**, avec trois emprunts. **De B** : le traitement à la suite (`J` `K`, « 3 sur 9 », la réponse qui ouvre la suivante), et sa forme pour le téléphone. **De C** : le compteur « 2 en attente · 9 à toi » dans la barre d'état, qui ouvre l'onglet sur « Tous ». **De A** : la comparaison en grand. D est la forme attendue (« un onglet dédié »), elle s'aligne sur Agents, Kanban, PR et Docs et garde la place de lire un PDF ou trois rendus. A détourne le Kanban (des colonnes qui ne sont pas des étapes) et serre ses colonnes à 1024 px. B prend toute la fenêtre et quitte le projet. C est trop bas pour un PDF à 1024 px et se referme sur ce qu'on lisait.
 2. **I2. Le nom** : « À toi » / “Your turn”. **Recommandé.** Autres : « Boîte » / “Inbox”, « En attente de toi » / “Waiting on you” (§ 2).
 3. **I3. Une seule boîte ou deux endroits** : **une seule**, les bloquantes en tête comme des vues ; elles gardent aussi leurs places d'aujourd'hui. Deux endroits obligeraient à regarder deux fois, et l'utilisateur demande un seul endroit pour « tout ce que les agents veulent que je fasse ».
