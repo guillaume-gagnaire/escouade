@@ -1,0 +1,407 @@
+<!doctype html>
+<!--
+  ESC-501 : le contrat des réglages, des secrets et des permissions d'un plugin (issues #38, #39, #40, #42). Maquette
+  statique, rien n'est branché. &theme=light pour le clair, puis la route :
+  #a-plugin   direction A (portée « projet ») : la page du plugin, ses réglages groupés, un secret multi-ligne importé ;
+  #a-projet   direction A : la section du plugin dans Réglages › Projets › atlas-web › Plugins ;
+  #b-plugin   direction B (profils) : la page du plugin, la liste de ses profils ;
+  #b-profil   direction B : un profil ouvert, ses champs groupés ;
+  #b-projet   direction B : le profil choisi dans les réglages du projet, le fichier qui en propose un ;
+  #onglet     #39, direction 2 : l'onglet « Projets » de la page du plugin, un projet déplié ;
+  #install    #42 : la fenêtre d'installation, des jokers typés et une limite de programmes relevée.
+  Jetons, polices et icônes de l'app (src/app.css, src/lib/icons.ts) ; plugin, projets et valeurs fictifs
+  (« Tunnel », dev.exemple.tunnel). Captures : node design/plugins-contract-2-3/render.mjs
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>ESC-501 · réglages, secrets et permissions d'un plugin</title>
+<link rel="stylesheet" href="../../node_modules/@fontsource-variable/inter/opsz.css" />
+<link rel="stylesheet" href="../../node_modules/@fontsource/jetbrains-mono/400.css" />
+<link rel="stylesheet" href="../../node_modules/@fontsource/jetbrains-mono/500.css" />
+<script src="icons.js"></script>
+<style>
+  /* Les jetons de src/app.css (sombre, puis clair). Teinte du projet ouvert, atlas-web : --p. */
+  :root {
+    --p: oklch(0.72 0.12 48);
+    --frame: color-mix(in oklch, var(--p) 8%, #08090a);
+    --panel: color-mix(in oklch, var(--p) 4.5%, #0e0f11);
+    --raise: color-mix(in oklch, var(--p) 6%, #15161a);
+    --raise-2: color-mix(in oklch, var(--p) 6%, #1b1c20);
+    --well: color-mix(in oklch, var(--p) 2%, #0a0b0d);
+    --line: rgba(255, 255, 255, 0.075);
+    --line-2: rgba(255, 255, 255, 0.12);
+    --line-3: rgba(255, 255, 255, 0.2);
+    --hover: rgba(255, 255, 255, 0.045);
+    --sel: color-mix(in oklch, var(--p) 16%, transparent);
+    --text: #f7f8f8;
+    --soft: #d0d3d8;
+    --muted: #989da6;
+    --dim: #8f949e;
+    --brand: #35c1bd;
+    --p-ink: color-mix(in oklch, var(--p) 70%, white);
+    --run: oklch(0.79 0.15 155);
+    --wait: oklch(0.84 0.14 82);
+    --wait-bg: oklch(from var(--wait) l c h / 0.07);
+    --wait-line: oklch(from var(--wait) l c h / 0.32);
+    --del: oklch(0.74 0.14 22);
+    --primary: #f2f3f4;
+    --on-primary: #08090a;
+    --scrim: rgba(3, 4, 5, 0.66);
+    --shadow-float: 0 24px 64px -12px rgba(0, 0, 0, 0.75);
+    --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+    color-scheme: dark;
+  }
+  :root[data-theme='light'] {
+    --frame: color-mix(in oklch, var(--p) 7%, #f0f1f3);
+    --panel: color-mix(in oklch, var(--p) 2.5%, #fdfdfd);
+    --raise: color-mix(in oklch, var(--p) 4%, #f4f5f7);
+    --raise-2: color-mix(in oklch, var(--p) 5%, #eceef1);
+    --well: color-mix(in oklch, var(--p) 2.5%, #f6f7f9);
+    --line: rgba(15, 17, 22, 0.09);
+    --line-2: rgba(15, 17, 22, 0.14);
+    --line-3: rgba(15, 17, 22, 0.24);
+    --hover: rgba(15, 17, 22, 0.045);
+    --sel: color-mix(in oklch, var(--p) 12%, transparent);
+    --text: #15171c;
+    --soft: #363a42;
+    --muted: #555a63;
+    --dim: #5c616a;
+    --brand: oklch(0.52 0.09 190);
+    --p-ink: color-mix(in oklch, var(--p) 50%, #15171c);
+    --run: oklch(0.48 0.13 155);
+    --wait: oklch(0.5 0.11 70);
+    --wait-bg: oklch(from var(--wait) l c h / 0.09);
+    --wait-line: oklch(from var(--wait) l c h / 0.4);
+    --del: oklch(0.5 0.18 25);
+    --primary: #1b1d22;
+    --on-primary: #f7f8f8;
+    --scrim: rgba(24, 26, 32, 0.34);
+    --shadow-float: 0 24px 64px -12px rgba(15, 17, 22, 0.28);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--frame); }
+  body { margin: 0; font: 13px/1.45 'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif; font-feature-settings: 'cv11', 'ss03';
+    font-variant-ligatures: none; color: var(--text); -webkit-font-smoothing: antialiased; overflow: hidden; background: var(--frame); }
+  ::selection { background: color-mix(in oklch, var(--p) 35%, transparent); }
+  p { margin: 0; }
+  h1, h2, h3, h4 { margin: 0; text-wrap: balance; }
+  svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .mono { font-family: var(--mono); font-size: 0.92em; letter-spacing: -0.01em; }
+  .muted { color: var(--muted); }
+  .sp { margin-left: auto; }
+
+  /* ───────── La fenêtre ───────── */
+  .win { width: 100vw; height: 100vh; display: grid; grid-template-columns: 52px 248px minmax(0, 1fr); grid-template-rows: 44px minmax(0, 1fr) 30px; }
+  .tb { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 0 14px; color: var(--muted); }
+  .tb .logo { width: 22px; height: 22px; border-radius: 6px; background: #35c1bd; display: grid; place-items: center; color: #08090a; }
+  .tb .proj { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-weight: 600; margin-left: 10px; }
+  .tb .proj .sq { width: 8px; height: 8px; border-radius: 2.5px; background: var(--p); }
+  .tb .search { margin: 0 auto; height: 30px; border-radius: 8px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line);
+    display: flex; align-items: center; gap: 8px; padding: 0 6px 0 11px; width: 340px; }
+  kbd { font: 500 11px/1 'Inter Variable', Inter, sans-serif; padding: 3px 6px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--line-2); color: var(--muted); margin-left: auto; }
+  .rail { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 6px 0; }
+  .tile { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; font: 650 11.5px/1 'Inter Variable', Inter, sans-serif; color: #08090a; }
+  .tile.on { box-shadow: 0 0 0 2px var(--frame), 0 0 0 3.5px var(--p); }
+  .side { background: var(--panel); border-radius: 10px 0 0 0; box-shadow: inset 0 0 0 1px var(--line); padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .side h5 { margin: 6px 8px 6px; font-size: 11px; font-weight: 600; color: var(--dim); }
+  .side .it { display: flex; align-items: center; gap: 9px; height: 30px; padding: 0 9px; border-radius: 7px; color: var(--soft); }
+  .side .it.on { background: var(--raise-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+  .side .it em { font-style: normal; color: var(--dim); margin-left: auto; font-size: 11.5px; }
+  .main { background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+  .sb { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 0 14px; color: var(--muted); font-size: 11.5px; }
+
+  /* ───────── La page d'un plugin ───────── */
+  .ph { padding: 18px 26px 0; border-bottom: 1px solid var(--line); }
+  .crumb { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+  .head { display: flex; gap: 16px; align-items: flex-start; }
+  .plogo { width: 60px; height: 60px; border-radius: 14px; display: grid; place-items: center; background: oklch(0.62 0.11 250); color: #fff; font: 650 20px/1 'Inter Variable', Inter, sans-serif; flex: none; }
+  .plogo svg.i { width: 26px; height: 26px; stroke-width: 1.6; }
+  .head h1 { font-size: 19px; font-weight: 650; letter-spacing: -0.01em; display: flex; align-items: center; gap: 10px; }
+  .badge { font-size: 11px; font-weight: 550; padding: 2px 8px; border-radius: 6px; box-shadow: inset 0 0 0 1px var(--line-2); color: var(--muted); }
+  .meta { display: flex; gap: 14px; color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .desc { margin-top: 6px; color: var(--soft); }
+  .tabs { display: flex; gap: 2px; margin-top: 16px; }
+  .tabs span { padding: 9px 12px; color: var(--muted); font-weight: 550; border-bottom: 2px solid transparent; }
+  .tabs span.on { color: var(--text); border-color: var(--text); }
+  .tabs em { font-style: normal; color: var(--dim); margin-left: 5px; font-weight: 450; }
+  .pbody { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 22px; padding: 20px 26px; overflow: hidden; flex: 1; min-height: 0; }
+  .aside { display: grid; gap: 12px; align-content: start; }
+  .card { border-radius: 10px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line); padding: 12px 14px; }
+  .card h6 { margin: 0 0 8px; font-size: 11px; font-weight: 600; color: var(--dim); }
+  .card p { color: var(--soft); font-size: 12.5px; }
+  .card p + p { margin-top: 6px; }
+
+  /* ───────── Les réglages ───────── */
+  .grp { margin-bottom: 18px; }
+  .gh { display: flex; align-items: center; gap: 8px; padding: 2px 0 6px; }
+  .gh h4 { font-size: 12.5px; font-weight: 600; }
+  .gh .cnt { color: var(--dim); font-size: 11.5px; }
+  .gh .gd { color: var(--muted); font-size: 12px; }
+  .gsub { color: var(--muted); font-size: 12px; margin: -2px 0 4px; max-width: 62ch; }
+  .fold { display: flex; align-items: center; gap: 8px; height: 38px; border-top: 1px solid var(--line); color: var(--soft); font-weight: 550; }
+  .fold .cnt { color: var(--dim); font-weight: 450; font-size: 12px; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 24px; padding: 11px 0; border-top: 1px solid var(--line); }
+  .row.top { align-items: flex-start; }
+  .lab { flex: 1 1 200px; display: grid; gap: 3px; min-width: 0; }
+  .lab b { font-weight: 560; font-size: 12.5px; }
+  .lab span { color: var(--muted); font-size: 12px; }
+  .lab .src { display: block; color: var(--p-ink); font-size: 11.5px; }
+  .lab .src svg.i { width: 12px; height: 12px; vertical-align: -2px; margin-right: 5px; }
+  .lab .src.local { color: var(--wait); }
+  .lab .src a { color: var(--soft); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-3); }
+  .ctl { display: flex; gap: 8px; align-items: center; flex: none; }
+  .field { height: 30px; border-radius: 7px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line-2); padding: 0 10px; display: flex; align-items: center;
+    font-size: 12.5px; color: var(--text); width: 260px; gap: 8px; }
+  .field.ph { color: var(--dim); }
+  .field.sel::after { content: ''; margin-left: auto; width: 7px; height: 7px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: translateY(-2px) rotate(45deg); }
+  .field.focus { box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 60%, transparent), 0 0 0 3px color-mix(in oklch, var(--p) 14%, transparent); }
+  .area { width: 100%; border-radius: 7px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line-2); padding: 9px 11px; font: 12px/1.55 var(--mono);
+    color: var(--soft); height: 132px; overflow: hidden; white-space: pre; margin-top: 8px; position: relative; }
+  .area .ln { color: var(--dim); display: inline-block; width: 22px; }
+  .area.hide { -webkit-text-security: disc; color: var(--dim); }
+  .area .fade { position: absolute; left: 0; right: 0; bottom: 0; height: 40px; background: linear-gradient(transparent, var(--well)); }
+  .wide { flex: 1 1 100%; }
+  .btn { height: 30px; padding: 0 12px; border-radius: 7px; display: inline-flex; align-items: center; gap: 7px; font-weight: 550; font-size: 12.5px;
+    color: var(--text); background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line-2); white-space: nowrap; }
+  .btn.primary { background: var(--primary); color: var(--on-primary); box-shadow: none; }
+  .btn.ghost { background: none; box-shadow: none; color: var(--muted); padding: 0 8px; }
+  .btn.sm { height: 26px; font-size: 12px; padding: 0 10px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 11.5px; font-weight: 550; white-space: nowrap; }
+  .pill.ok { color: var(--run); background: oklch(from var(--run) l c h / 0.1); box-shadow: inset 0 0 0 1px oklch(from var(--run) l c h / 0.3); }
+  .pill.ok::before, .pill.off::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .pill.off { color: var(--muted); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .pill.wait { color: var(--wait); background: var(--wait-bg); box-shadow: inset 0 0 0 1px var(--wait-line); }
+  .switch { width: 30px; height: 18px; border-radius: 9px; background: var(--line-3); position: relative; flex: none; }
+  .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
+  .switch.on { background: var(--brand); }
+  .switch.on::after { left: 14px; }
+  .seg { display: inline-flex; padding: 2px; border-radius: 8px; background: rgba(127, 127, 127, 0.06); box-shadow: inset 0 0 0 1px var(--line); }
+  .seg span { height: 26px; padding: 0 11px; display: grid; place-items: center; border-radius: 6px; color: var(--muted); font-weight: 550; font-size: 12px; }
+  .seg span.on { background: var(--raise-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .callout { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 9px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line); color: var(--soft); font-size: 12.5px; margin-bottom: 16px; }
+  .callout svg.i { margin-top: 2px; color: var(--muted); }
+  .callout.wait { background: var(--wait-bg); box-shadow: inset 0 0 0 1px var(--wait-line); }
+  .callout.wait svg.i { color: var(--wait); }
+  .callout b { font-weight: 600; color: var(--text); }
+
+  /* Les profils (direction B) */
+  .prof { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line); }
+  .prof .av { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--soft); }
+  .prof b { font-weight: 560; }
+  .prof .sub { color: var(--muted); font-size: 12px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: 5px; font-size: 11px; font-weight: 550; box-shadow: inset 0 0 0 1px var(--line-2); color: var(--soft); }
+  .chip i { width: 7px; height: 7px; border-radius: 2px; }
+
+  /* ───────── Les fenêtres posées sur l'app ───────── */
+  .scrim { position: fixed; inset: 0; background: var(--scrim); display: grid; place-items: center; }
+  .dialog { background: var(--panel); border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line-2), var(--shadow-float); overflow: hidden; display: flex; flex-direction: column; }
+  .dh { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+  .dh h2 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .dh .x { margin-left: auto; color: var(--muted); }
+  .db { padding: 16px 20px; overflow: hidden; }
+  .df { display: flex; gap: 8px; justify-content: flex-end; padding: 12px 20px; border-top: 1px solid var(--line); align-items: center; }
+
+  /* La fenêtre des réglages */
+  .settings { width: 1180px; height: 800px; display: grid; grid-template-columns: 240px minmax(0, 1fr); }
+  .snav { background: var(--raise); border-right: 1px solid var(--line); padding: 12px 10px; display: flex; flex-direction: column; gap: 1px; }
+  .snav .q { height: 30px; border-radius: 7px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line-2); display: flex; align-items: center; gap: 8px; padding: 0 6px 0 8px; color: var(--dim); margin-bottom: 10px; font-size: 12.5px; white-space: nowrap; }
+  .snav h5 { margin: 10px 9px 5px; font-size: 11px; font-weight: 600; color: var(--dim); }
+  .snav .it { display: flex; align-items: center; gap: 9px; height: 29px; padding: 0 9px; border-radius: 7px; color: var(--soft); font-size: 12.5px; }
+  .snav .it.sub { padding-left: 30px; }
+  .snav .it.on { background: var(--sel); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .snav .dot { width: 8px; height: 8px; border-radius: 2.5px; }
+  .spage { display: flex; flex-direction: column; min-width: 0; }
+  .sh { display: flex; gap: 12px; align-items: center; padding: 18px 28px; border-bottom: 1px solid var(--line); }
+  .sh .tile { width: 30px; height: 30px; }
+  .sh h2 { font-size: 16px; font-weight: 650; }
+  .sh p { color: var(--muted); font-size: 12.5px; }
+  .sbody { padding: 18px 28px; overflow: hidden; }
+  .pl { display: flex; align-items: center; gap: 10px; margin: 4px 0 2px; }
+  .pl .mini { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; background: oklch(0.62 0.11 250); color: #fff; }
+  .pl .mini svg.i { width: 13px; height: 13px; }
+  .pl h3 { font-size: 13.5px; font-weight: 600; }
+  .pl .id { color: var(--dim); font-size: 11.5px; }
+
+  /* La fenêtre d'installation */
+  .perm { display: flex; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line); }
+  .perm:first-child { border-top: 0; }
+  .perm .ic { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; background: var(--raise-2); color: var(--soft); flex: none; }
+  .perm .ic.red { color: var(--del); background: oklch(from var(--del) l c h / 0.1); }
+  .perm .ic.amb { color: var(--wait); background: var(--wait-bg); }
+  .perm b { font-weight: 600; }
+  .perm b.red { color: var(--del); }
+  .perm .what { display: grid; gap: 5px; min-width: 0; flex: 1; }
+  .cmd { font: 12px/1.6 var(--mono); color: var(--soft); background: var(--well); box-shadow: inset 0 0 0 1px var(--line); border-radius: 7px; padding: 6px 9px; }
+  .jk { display: inline-block; padding: 0 6px; border-radius: 5px; color: var(--p-ink); background: color-mix(in oklch, var(--p) 12%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--p) 40%, transparent); font-family: 'Inter Variable', Inter, sans-serif; font-size: 11.5px; font-weight: 550; line-height: 18px; }
+  .why { color: var(--muted); font-size: 12px; }
+  .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 22px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  const q = new URLSearchParams(location.search);
+  if (q.get('theme') === 'light') document.documentElement.dataset.theme = 'light';
+  const route = location.hash.slice(1) || 'a-plugin';
+  const I = (n) => `<svg class="i" viewBox="0 0 16 16">${window.ICONS[n] ?? ''}</svg>`;
+  const ROUTE = {};
+
+  // ── Ce qui revient d'une route à l'autre ──
+  const rail = `<div class="rail">
+      <div class="tile on" style="background:oklch(0.72 0.12 48)">AW</div>
+      <div class="tile" style="background:oklch(0.72 0.12 250)">PA</div>
+      <div class="tile" style="background:oklch(0.72 0.12 150)">CI</div></div>`;
+  const tb = `<div class="tb"><span class="logo">${I('spark')}</span><span class="proj"><span class="sq"></span>atlas-web</span>
+      <span class="muted">main</span><span class="search">${I('search')}Rechercher<kbd>Ctrl K</kbd></span><span>Éditeur</span></div>`;
+  const sb = `<div class="sb"><span>● 3 actifs</span><span>● 1 en attente</span><span class="sp">Claude 5 h · 31 %</span><span>Aujourd'hui 2,84 $</span></div>`;
+  const side = `<div class="side"><h5>Plugins</h5>
+      <div class="it">${I('star')}Store<em>52</em></div><div class="it on">${I('puzzle')}Installés<em>9</em></div>
+      <div class="it">${I('up')}Mises à jour<em>0</em></div><div class="it">${I('code')}En développement<em>1</em></div>
+      <h5 style="margin-top:14px">Catégories</h5>
+      <div class="it">${I('agents')}Harness<em>6</em></div><div class="it">${I('kanban')}Sources du Kanban<em>9</em></div>
+      <div class="it">${I('globe')}Réseau<em>3</em></div><div class="it">${I('bell')}Notifications<em>11</em></div><div class="it">${I('shield')}Autorisations<em>4</em></div></div>`;
+  const app = (main) => `<div class="win">${tb}${rail}${side}<div class="main">${main}</div>${sb}</div>`;
+  const pluginHead = (tab, extra = '') => `<div class="ph">
+      <div class="crumb">‹ Installés</div>
+      <div class="head"><div class="plogo">${I('globe')}</div><div style="min-width:0;flex:1">
+        <h1>Tunnel <span class="badge">non vérifié</span></h1>
+        <div class="meta"><span>exemple</span><span>Réseau</span><span>v1.4.0</span><span class="mono">dev.exemple.tunnel</span></div>
+        <p class="desc">Un tunnel OpenVPN par projet, sans droits d'administrateur : les agents du projet passent par lui.</p></div>${extra}</div>
+      <div class="tabs">${[['overview', 'Présentation'], ['permissions', 'Permissions<em>4</em>'], ['versions', 'Versions'], ['projects', 'Projets<em>2 / 3</em>'], ['settings', 'Réglages'], ['journal', 'Journal']]
+        .map(([k, l]) => `<span class="${k === tab ? 'on' : ''}">${l}</span>`).join('')}</div></div>`;
+  const aside = (cards) => `<div class="aside">${cards}</div>`;
+  const row = (title, sub, ctl, cls = '') => `<div class="row ${cls}"><div class="lab"><b>${title}</b>${sub ? `<span>${sub}</span>` : ''}</div><div class="ctl">${ctl}</div></div>`;
+  const field = (v, cls = '') => `<span class="field ${cls}">${v}</span>`;
+  const ovpn = (hide) => `<div class="area ${hide ? 'hide' : ''}">${[
+      'client', 'dev tun', 'proto udp', 'remote vpn.acme.example 1194', 'resolv-retry infinite', 'nobind', 'persist-key',
+      'remote-cert-tls server', 'cipher AES-256-GCM', '&lt;ca&gt;', '-----BEGIN CERTIFICATE-----']
+      .map((l, i) => `<span class="ln">${i + 1}</span>${l}`).join('\n')}<span class="fade"></span></div>`;
+  const settingsWin = (nav, page) => `${app(pluginHead('overview') + `<div class="pbody"></div>`)}
+    <div class="scrim"><div class="dialog settings"><div class="snav">${nav}</div><div class="spage">${page}</div></div></div>`;
+  const nav = (onPlugins) => `<div class="q">${I('search')}Rechercher un réglage<kbd>Ctrl F</kbd></div>
+      <h5>Escouade</h5>
+      <div class="it">${I('sliders')}Général</div><div class="it">${I('agents')}Agents</div><div class="it">${I('user')}Comptes et harness</div>
+      <div class="it">${I('link')}Services connectés</div><div class="it">${I('mic')}Voix</div><div class="it">${I('puzzle')}Plugins</div><div class="it">${I('term')}Avancé</div>
+      <h5>Projets</h5>
+      <div class="it"><span class="dot" style="background:oklch(0.72 0.12 48)"></span>atlas-web</div>
+      <div class="it sub">Projet</div><div class="it sub">Git et worktrees</div><div class="it sub">Lancement</div><div class="it sub">Kanban</div>
+      <div class="it sub ${onPlugins ? 'on' : ''}">Plugins</div><div class="it sub">Équipe</div><div class="it sub">Confidentialité</div>
+      <div class="it"><span class="dot" style="background:oklch(0.72 0.12 250)"></span>portail-adherents</div>
+      <div class="it"><span class="dot" style="background:oklch(0.72 0.12 150)"></span>compta-interne<span class="sp">${I('lock')}</span></div>`;
+  const projectHead = `<div class="sh"><div class="tile" style="background:oklch(0.72 0.12 48)">AW</div><div><h2>atlas-web · Plugins</h2>
+      <p>Ce que les plugins actifs dans ce projet te demandent pour lui. Les autres réglages d'un plugin sont dans sa page.</p></div>
+      <span class="sp muted">${I('close')}</span></div>`;
+
+  // ── A : la page du plugin, groupes, ordre, description, multi-ligne ──
+  ROUTE['a-plugin'] = () => app(pluginHead('settings') + `<div class="pbody"><div>
+      <div class="grp"><div class="gh"><h4>Connexion</h4></div>
+        <p class="gsub">Pour tous les projets, sauf ceux qui donnent les leurs (Réglages › Projets › <i>projet</i> › Plugins).</p>
+        ${row('Serveur', 'Le nom ou l’adresse du serveur OpenVPN.', field('vpn.acme.example'))}
+        ${row('Protocole', '', `<span class="seg"><span class="on">UDP</span><span>TCP</span></span>`)}
+        ${row('Tunnel au lancement d’un agent', 'Monte le tunnel du projet quand son premier agent démarre.', `<span class="switch on"></span>`)}</div>
+      <div class="grp"><div class="gh"><h4>Identifiants</h4><span class="cnt">2 secrets</span></div>
+        ${row('Identifiant', '', field('m.durand'))}
+        ${row('Mot de passe', `<span class="pill ok">Gardé dans le trousseau</span>`, `<span class="btn ghost">Oublier</span><span class="btn sm">Remplacer…</span>`)}
+        <div class="row top"><div class="lab"><b>Configuration OpenVPN</b><span>Le fichier .ovpn de ton fournisseur, certificats compris. Un secret : il ne se relit pas, il se remplace.</span></div>
+          <div class="ctl"><span class="pill ok">Gardé · 84 lignes · 5,1 Ko</span><span class="btn sm">${I('import')}Importer un fichier…</span></div>
+</div></div>
+      <div class="fold">${I('right')}Avancé<span class="cnt">· 3 réglages</span></div></div>
+      ${aside(`<div class="card"><h6>Ce que voit l'auteur</h6><p><span class="mono">contributes.groups</span> range réglages et secrets ensemble, dans l'ordre de ses <span class="mono">fields</span>.</p>
+        <p><span class="mono">"multiline": true</span> sur un secret donne ce champ ; <span class="mono">"import"</span> le bouton « Importer un fichier… ».</p></div>
+        <div class="card"><h6>Par projet</h6><p>Les champs déclarés <span class="mono">"scope": "project"</span> ne sont pas ici : chaque projet les règle dans ses réglages.</p></div>`)}</div>`);
+
+  // ── A : la section du plugin dans les réglages d'un projet ──
+  ROUTE['a-projet'] = () => settingsWin(nav(true), projectHead + `<div class="sbody">
+      <div class="pl"><span class="mini">${I('globe')}</span><h3>Tunnel</h3><span class="id mono">dev.exemple.tunnel</span><span class="sp btn ghost sm">Page du plugin</span></div>
+      <div class="grp">
+        <div class="row"><div class="lab"><b>Serveur</b><span>Celui de ce projet ; vide : celui de la page du plugin.</span>
+          <span class="src">${I('file')}Défini par .escouade.yml</span></div><div class="ctl">${field('vpn.client-a.example')}</div></div>
+        <div class="row"><div class="lab"><b>Port</b><span class="src local">${I('info')}Réglage local de cette machine : il passe devant .escouade.yml. <a>Écrire dans .escouade.yml</a> · <a>Reprendre la valeur du fichier</a></span></div>
+          <div class="ctl">${field('1194')}</div></div>
+        ${row('Identifiant', 'Gardé sur cette machine, jamais dans .escouade.yml.', field('mdurand-clienta'))}
+        ${row('Mot de passe', `<span class="pill ok">Gardé dans le trousseau, pour ce projet</span>`, `<span class="btn ghost">Oublier</span><span class="btn sm">Remplacer…</span>`)}
+        <div class="row top"><div class="lab"><b>Configuration OpenVPN</b><span>Celle de ce projet seulement. Collée ici, ou importée d'un fichier : son contenu est gardé, pas son chemin.</span></div>
+          <div class="ctl"><span class="btn sm">${I('import')}Importer un fichier…</span><span class="btn sm primary">Garder</span></div>
+          <div class="wide">${ovpn(false).replace('area', 'area focus')}</div></div>
+      </div>
+      <div class="callout">${I('lock')}<p>Les secrets de ce projet vont au trousseau sous un nom à lui : le plugin les lit pour atlas-web, et seulement tant qu'il y est actif. Ils ne vont jamais dans .escouade.yml, ni dans un autre projet.</p></div></div>`);
+
+  // ── B : la liste des profils ──
+  ROUTE['b-plugin'] = () => app(pluginHead('settings') + `<div class="pbody"><div>
+      <div class="grp"><div class="gh"><h4>Profils VPN</h4><span class="cnt">3</span><span class="sp btn sm">${I('plus')}Ajouter un profil…</span></div>
+        <p class="gsub">Un profil réunit un serveur, ses identifiants et sa configuration. Chaque projet choisit le sien dans ses réglages.</p>
+        ${[['Client A', 'vpn.client-a.example · UDP 1194', [['atlas-web', 48]]], ['Client B', 'gw.client-b.example · TCP 443', [['portail-adherents', 250]]], ['Interne', 'vpn.interne.example · UDP 1194', []]]
+          .map(([n, s, p]) => `<div class="prof"><span class="av">${I('globe')}</span><div style="flex:1;min-width:0"><b>${n}</b><div class="sub">${s}</div></div>
+            ${p.length ? p.map(([x, h]) => `<span class="chip"><i style="background:oklch(0.72 0.12 ${h})"></i>${x}</span>`).join('') : '<span class="muted" style="font-size:12px">Aucun projet</span>'}
+            <span class="pill ok">3 secrets gardés</span><span class="btn ghost sm">Modifier</span></div>`).join('')}</div>
+      <div class="grp"><div class="gh"><h4>Général</h4></div>
+        ${row('Tunnel au lancement d’un agent', 'Monte le tunnel du projet quand son premier agent démarre.', `<span class="switch on"></span>`)}
+        ${row('Profil par défaut', 'Pour un projet qui n’en choisit pas.', field('Aucun : pas de tunnel', 'sel'))}</div></div>
+      ${aside(`<div class="card"><h6>Ce que voit l'auteur</h6><p><span class="mono">contributes.profiles</span> : un genre de profil, ses champs et ses secrets ; l'utilisateur en crée autant qu'il veut.</p>
+        <p><span class="mono">secrets/get</span> avec <span class="mono">profile</span>, et <span class="mono">settings/get</span> d'un projet qui rend le profil choisi.</p></div>`)}</div>`);
+
+  // ── B : un profil ouvert ──
+  ROUTE['b-profil'] = () => `${ROUTE['b-plugin']()}<div class="scrim"><div class="dialog" style="width:720px">
+      <div class="dh"><span class="mini plogo" style="width:28px;height:28px;border-radius:8px">${I('globe')}</span><h2>Profil « Client A »</h2><span class="x">${I('close')}</span></div>
+      <div class="db">
+        <div class="grp"><div class="gh"><h4>Serveur</h4></div>
+          ${row('Nom du profil', 'Son nom dans la liste et dans les réglages des projets.', field('Client A', 'focus'))}
+          ${row('Serveur', '', field('vpn.client-a.example'))}
+          ${row('Protocole et port', '', `<span class="seg"><span class="on">UDP</span><span>TCP</span></span>${field('1194').replace('field', 'field" style="width:80px')}`)}</div>
+        <div class="grp" style="margin-bottom:0"><div class="gh"><h4>Identifiants</h4><span class="cnt">secrets</span></div>
+          ${row('Identifiant', '', field('mdurand-clienta'))}
+          ${row('Mot de passe', `<span class="pill ok">Gardé dans le trousseau</span>`, `<span class="btn sm">Remplacer…</span>`)}
+          <div class="row top"><div class="lab"><b>Configuration OpenVPN</b><span>Gardée : 84 lignes, 5,1 Ko. Elle ne se relit pas.</span></div>
+            <div class="ctl"><span class="btn sm">${I('import')}Remplacer par un fichier…</span></div></div></div></div>
+      <div class="df"><span class="btn ghost" style="color:var(--del)">Supprimer le profil</span><span class="muted sp" style="font-size:12px">Utilisé par atlas-web</span><span class="btn">Annuler</span><span class="btn primary">Enregistrer</span></div></div></div>`;
+
+  // ── B : le profil choisi par le projet ──
+  ROUTE['b-projet'] = () => settingsWin(nav(true), projectHead + `<div class="sbody">
+      <div class="callout wait">${I('file')}<p><b>.escouade.yml propose le profil « client-a »</b> pour Tunnel. Un dépôt ne choisit pas tes identifiants : c'est toi qui choisis, ici, sur cette machine.</p></div>
+      <div class="pl"><span class="mini">${I('globe')}</span><h3>Tunnel</h3><span class="id mono">dev.exemple.tunnel</span><span class="sp btn ghost sm">Page du plugin</span></div>
+      <div class="grp">
+        <div class="row"><div class="lab"><b>Profil VPN</b><span>Celui que prennent les agents de ce projet. Gardé sur cette machine.</span></div>
+          <div class="ctl">${field('Client A · vpn.client-a.example', 'sel focus')}</div></div>
+        <div class="row"><div class="lab"><b>Routes par le tunnel</b><span>Les réseaux que les agents de ce projet joignent par le tunnel ; le reste sort directement.</span>
+          <span class="src">${I('file')}Défini par .escouade.yml</span></div><div class="ctl">${field('10.20.0.0/16')}</div></div>
+        ${row('Tunnel au lancement d’un agent', 'Celui de la page du plugin : allumé.', `<span class="switch on"></span>`)}</div>
+      <div class="pl" style="margin-top:18px"><span class="mini" style="background:oklch(0.6 0.13 300)">${I('bell')}</span><h3>Slack</h3><span class="id mono">dev.escouade.slack</span><span class="sp btn ghost sm">Page du plugin</span></div>
+      <div class="grp">${row('Salon du projet', '', field('#atlas-web'))}</div></div>`);
+
+  // ── #39, direction 2 : l'onglet Projets de la page du plugin ──
+  ROUTE['onglet'] = () => app(pluginHead('projects') + `<div class="pbody"><div>
+      <p class="muted" style="margin-bottom:10px">Allumé, le plugin reçoit les faits de ce projet et ses agents. Déplie un projet pour ses réglages à lui.</p>
+      <div class="prof"><span class="tile" style="width:24px;height:24px;font-size:10px;border-radius:7px;background:oklch(0.72 0.12 48)">AW</span>
+        <div style="flex:1"><b>atlas-web</b><div class="sub">Profil Client A · 10.20.0.0/16</div></div><span class="switch on"></span>${I('down')}</div>
+      <div style="padding:0 0 6px 36px">
+        ${row('Profil VPN', 'Gardé sur cette machine.', field('Client A · vpn.client-a.example', 'sel'))}
+        <div class="row"><div class="lab"><b>Routes par le tunnel</b><span class="src">${I('file')}Défini par .escouade.yml</span></div><div class="ctl">${field('10.20.0.0/16')}</div></div></div>
+      <div class="prof"><span class="tile" style="width:24px;height:24px;font-size:10px;border-radius:7px;background:oklch(0.72 0.12 250)">PA</span>
+        <div style="flex:1"><b>portail-adherents</b><div class="sub">Profil Client B</div></div><span class="switch on"></span>${I('right')}</div>
+      <div class="prof"><span class="tile" style="width:24px;height:24px;font-size:10px;border-radius:7px;background:oklch(0.72 0.12 150)">CI</span>
+        <div style="flex:1"><b>compta-interne</b><div class="sub">Projet privé : coupé d'office, rien ne lui parvient</div></div><span class="switch"></span>${I('right')}</div></div>
+      ${aside(`<div class="card"><h6>Direction 2</h6><p>Les réglages d'un projet vivent dans la page du plugin. Simple pour un plugin, mais l'utilisateur qui règle <b>un projet</b> doit ouvrir chaque plugin.</p></div>`)}</div>`);
+
+  // ── #42 : la fenêtre d'installation ──
+  ROUTE['install'] = () => `${app(pluginHead('overview') + '<div class="pbody"></div>')}<div class="scrim"><div class="dialog" style="width:760px">
+      <div class="dh"><span class="mini plogo" style="width:28px;height:28px;border-radius:8px">${I('globe')}</span><h2>Installer Tunnel v1.4.0 ?</h2><span class="badge">non vérifié</span><span class="x">${I('close')}</span></div>
+      <div class="db">
+        <p class="muted" style="margin-bottom:8px">Tourne dans Escouade, isolé. Les programmes qu'il lance, eux, ne le sont pas : ils ont tes droits.</p>
+        <div class="perm"><span class="ic red">${I('term')}</span><div class="what"><b class="red">Lance ces commandes sur ton ordinateur</b>
+          <div class="cmd">unshare -Urn openvpn --config <span class="jk">un fichier de son dossier temporaire</span> --script-security 1</div>
+          <div class="cmd">slirp4netns --configure --mtu=65520 <span class="jk">un programme qu'il a lancé</span> tap0</div>
+          <div class="cmd">nsenter --preserve-credentials -U -n -t <span class="jk">un programme qu'il a lancé</span> ip addr</div>
+          <p class="why">Chaque <span class="jk">pastille</span> est un seul mot, que l'hôte vérifie : jamais une option, jamais un chemin hors de ce qu'elle dit.</p></div></div>
+        <div class="perm"><span class="ic amb">${I('overview')}</span><div class="what"><b>Jusqu'à 8 programmes à la fois</b>
+          <p class="why">4 sans le demander. L'auteur dit pourquoi : « deux programmes par tunnel, un tunnel par projet ».</p></div></div>
+        <div class="perm"><span class="ic">${I('lock')}</span><div class="what"><b>Garde des secrets, projet par projet</b><p class="why">Un profil VPN par projet : identifiant, mot de passe, configuration.</p></div></div>
+        <div class="perm"><span class="ic">${I('bell')}</span><div class="what"><b>Reçoit ces événements</b><p class="why mono">agent.status · project.opened</p></div></div></div>
+      <div class="df"><span class="muted" style="font-size:12px;margin-right:auto">Chaque permission se retire ensuite, dans sa page.</span><span class="btn">Annuler</span><span class="btn primary">Installer</span></div></div></div>`;
+
+  document.getElementById('root').innerHTML = (ROUTE[route] ?? ROUTE['a-plugin'])();
+</script>
+</body>
+</html>
