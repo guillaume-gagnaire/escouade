@@ -1,0 +1,873 @@
+<!doctype html>
+<!--
+  ESC-503 : l'onboarding d'Escouade (2.3), trois directions. Maquette statique, rien n'est branché.
+  ?d=a|b|c, &theme=light, puis #harness (le harness et son compte), #modes (les réglages de départ), #projet (le premier
+  projet), #agent (le premier agent et sa première permission) ou #decouverte (la découverte des fonctionnalités).
+  Aux deux tailles de la fenêtre : 1440 × 900 et 1024 × 728 (la page prend la taille de la fenêtre du navigateur).
+  Jetons, polices et icônes de l'app (src/app.css, src/lib/icons.ts) ; données fictives (projet « atlas-web », compte
+  « toi@exemple.dev »). Captures : node design/onboarding-2-3/render.mjs
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>ESC-503 · l'onboarding d'Escouade</title>
+<link rel="stylesheet" href="../../node_modules/@fontsource-variable/inter/opsz.css" />
+<link rel="stylesheet" href="../../node_modules/@fontsource/jetbrains-mono/400.css" />
+<link rel="stylesheet" href="../../node_modules/@fontsource/jetbrains-mono/500.css" />
+<script src="icons.js"></script>
+<style>
+  /* Les jetons de src/app.css (sombre, puis clair). Teint du projet : --p. */
+  :root {
+    --p: oklch(0.72 0.12 48);
+    --frame: color-mix(in oklch, var(--p) 8%, #08090a);
+    --panel: color-mix(in oklch, var(--p) 4.5%, #0e0f11);
+    --raise: color-mix(in oklch, var(--p) 6%, #15161a);
+    --raise-2: color-mix(in oklch, var(--p) 6%, #1b1c20);
+    --well: color-mix(in oklch, var(--p) 2%, #0a0b0d);
+    --fg-rgb: 255, 255, 255;
+    --line: rgba(255, 255, 255, 0.075);
+    --line-2: rgba(255, 255, 255, 0.12);
+    --line-3: rgba(255, 255, 255, 0.2);
+    --hover: rgba(255, 255, 255, 0.045);
+    --text: #f7f8f8;
+    --soft: #d0d3d8;
+    --muted: #989da6;
+    --dim: #8f949e;
+    --text-ai: #e9ebee;
+    --brand: #35c1bd;
+    --teal-ink: oklch(0.86 0.08 190);
+    --p-ink: color-mix(in oklch, var(--p) 70%, white);
+    --p-soft: color-mix(in oklch, var(--p) 14%, transparent);
+    --run: oklch(0.79 0.15 155);
+    --wait: oklch(0.84 0.14 82);
+    --wait-bg: oklch(from var(--wait) l c h / 0.07);
+    --wait-line: oklch(from var(--wait) l c h / 0.32);
+    --add: oklch(0.8 0.13 155);
+    --del: oklch(0.74 0.14 22);
+    --info: oklch(0.8 0.1 235);
+    --brain: oklch(0.8 0.12 300);
+    --warn-ink: oklch(0.8 0.1 60);
+    --idle: #7a7f88;
+    --primary: #f2f3f4;
+    --on-primary: #08090a;
+    --on-wait: #1a1405;
+    --code-fg: #d5d8dd;
+    --scrim: rgba(3, 4, 5, 0.62);
+    --lane-main: #c8ccd2;
+    --lane-1: oklch(0.72 0.12 250);
+    --lane-2: oklch(0.72 0.13 340);
+    --lane-3: oklch(0.72 0.12 48);
+    --lane-4: oklch(0.7 0.13 155);
+    --lane-5: oklch(0.74 0.12 85);
+    --shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
+    --shadow-tip: 0 12px 30px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
+    --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --side: 276px;
+    --guide: 344px;
+    --line-col: 300px;
+    color-scheme: dark;
+  }
+  :root[data-theme='light'] {
+    --frame: color-mix(in oklch, var(--p) 7%, #f0f1f3);
+    --panel: color-mix(in oklch, var(--p) 2.5%, #fdfdfd);
+    --raise: color-mix(in oklch, var(--p) 4%, #f4f5f7);
+    --raise-2: color-mix(in oklch, var(--p) 5%, #eceef1);
+    --well: color-mix(in oklch, var(--p) 2.5%, #f6f7f9);
+    --fg-rgb: 15, 17, 22;
+    --line: rgba(15, 17, 22, 0.09);
+    --line-2: rgba(15, 17, 22, 0.14);
+    --line-3: rgba(15, 17, 22, 0.24);
+    --hover: rgba(15, 17, 22, 0.045);
+    --text: #15171c;
+    --soft: #363a42;
+    --muted: #555a63;
+    --dim: #5c616a;
+    --text-ai: #1d2026;
+    --brand: oklch(0.52 0.09 190);
+    --teal-ink: oklch(0.47 0.08 190);
+    --p-ink: color-mix(in oklch, var(--p) 50%, #15171c);
+    --run: oklch(0.48 0.13 155);
+    --wait: oklch(0.5 0.11 70);
+    --wait-bg: oklch(from var(--wait) l c h / 0.09);
+    --wait-line: oklch(from var(--wait) l c h / 0.4);
+    --add: oklch(0.47 0.12 155);
+    --del: oklch(0.5 0.18 25);
+    --info: oklch(0.5 0.12 245);
+    --brain: oklch(0.5 0.16 300);
+    --warn-ink: oklch(0.49 0.11 55);
+    --primary: #1b1d22;
+    --on-primary: #f7f8f8;
+    --on-wait: #fff;
+    --code-fg: #24272e;
+    --scrim: rgba(24, 26, 32, 0.3);
+    --lane-main: #595e68;
+    /* Les voies du git graph, foncées pour tenir 3:1 sur le fond clair (à reporter dans src/app.css si C est choisie). */
+    --lane-1: oklch(0.55 0.13 250);
+    --lane-2: oklch(0.55 0.15 340);
+    --lane-3: oklch(0.58 0.13 48);
+    --lane-4: oklch(0.52 0.13 155);
+    --lane-5: oklch(0.58 0.12 85);
+    --shadow: 0 14px 32px rgba(15, 17, 22, 0.16);
+    --shadow-tip: 0 12px 28px rgba(15, 17, 22, 0.18), 0 2px 6px rgba(15, 17, 22, 0.1);
+    color-scheme: light;
+  }
+  @media (max-width: 1100px) {
+    :root { --side: 236px; --guide: 292px; --line-col: 248px; }
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--frame); }
+  body { font-variant-ligatures: none; margin: 0; font: 13px/1.45 'Inter Variable', Inter, 'Segoe UI', system-ui, sans-serif; font-feature-settings: 'cv11', 'ss03';
+    color: var(--text); -webkit-font-smoothing: antialiased; overflow: hidden; }
+  ::selection { background: oklch(from var(--brand) l c h / 0.32); }
+  p { margin: 0; }
+  h1, h2, h3 { margin: 0; text-wrap: balance; }
+  svg.i { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  .mono { font-feature-settings: 'calt' 0, 'liga' 0; font-family: var(--mono); font-size: 0.92em; letter-spacing: -0.01em; }
+  .muted { color: var(--muted); }
+  .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .sp { margin-left: auto; }
+  .narrow-hide { }
+  @media (max-width: 1100px) { .narrow-hide { display: none !important; } }
+
+  /* ───────── La fenêtre : barre de titre, rail des projets, barre latérale, place de travail, barre d'état ───────── */
+  .win { width: 100vw; height: 100vh; display: grid; grid-template-columns: 52px var(--side) minmax(0, 1fr); grid-template-rows: 44px minmax(0, 1fr) 30px;
+    background: var(--frame); overflow: hidden; position: relative; }
+  .win.wide { grid-template-columns: 52px minmax(0, 1fr); }
+  .win.guided { grid-template-columns: 52px var(--side) minmax(0, 1fr) var(--guide); }
+  .win.full { grid-template-columns: minmax(0, 1fr); }
+  .tb { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 0 0 0 14px; font-size: 13px; color: var(--muted); min-width: 0; }
+  .tb .logo { width: 22px; height: 22px; border-radius: 6px; background: #35c1bd; display: grid; place-items: center; color: #08090a; flex: none; }
+  .tb .proj { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-weight: 600; margin-left: 18px; white-space: nowrap; }
+  .tb .proj .sq { width: 8px; height: 8px; border-radius: 2.5px; background: var(--p); }
+  .tb .search { margin-left: auto; margin-right: auto; width: 340px; height: 30px; border-radius: 8px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line);
+    display: flex; align-items: center; gap: 8px; padding: 0 6px 0 11px; flex: 0 1 340px; min-width: 0; }
+  .tb .search kbd { margin-left: auto; }
+  .tb .ed { display: inline-flex; gap: 7px; align-items: center; color: var(--soft); white-space: nowrap; }
+  .tb .wb { display: flex; }
+  .tb .wbtn { width: 46px; height: 44px; display: grid; place-items: center; color: var(--muted); }
+  kbd { font: 500 11px/1 'Inter Variable', Inter, sans-serif; padding: 3px 6px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--line-2); color: var(--muted); white-space: nowrap; }
+  .rail { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 6px 0 8px; } .rail .low { margin-top: auto; display: grid; gap: 6px; }
+  .rail .r-i { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: var(--muted); position: relative; }
+  .rail .r-i.on { color: var(--text); background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .rail .tile { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; font-weight: 700; font-size: 12px; color: #101114;
+    background: var(--p); box-shadow: 0 0 0 2px var(--frame), 0 0 0 3.5px var(--p); }
+  .rail .tile.demo { background: repeating-linear-gradient(135deg, var(--p) 0 5px, color-mix(in oklch, var(--p) 80%, white) 5px 10px); }
+  .rail .dotn { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--brand); box-shadow: 0 0 0 2px var(--frame); }
+  .side { min-width: 0; padding: 4px 10px 10px 10px; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+  .stabs { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line); }
+  .stabs span { flex: 1 1 auto; padding: 0 4px; display: inline-flex; justify-content: center; align-items: center; gap: 5px; height: 26px; border-radius: 7px; color: var(--muted);
+    font-weight: 550; font-size: 12px; white-space: nowrap; }
+  .stabs span.on { background: var(--panel); color: var(--text); box-shadow: inset 0 0 0 1px var(--line-2), 0 1px 2px rgba(0, 0, 0, 0.18); }
+  .stabs .c { color: var(--dim); font-size: 11.5px; font-weight: 500; }
+  .new { display: flex; align-items: center; gap: 8px; height: 32px; margin: 8px 0 4px; padding: 0 8px 0 9px; color: var(--soft); font-weight: 550; }
+  .new .plus { width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; background: rgba(var(--fg-rgb), 0.07); box-shadow: inset 0 0 0 1px var(--line); }
+  .new kbd { margin-left: auto; }
+  .agent { border-radius: 11px; padding: 10px 12px; display: grid; gap: 3px; font-size: 12.5px; }
+  .agent.on { background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .agent .r { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .agent .n { font-weight: 620; }
+  .agent .key { color: var(--muted); font-size: 11.5px; font-weight: 550; }
+  .agent .m { color: var(--muted); font-size: 12px; }
+  .ring { width: 9px; height: 9px; border-radius: 50%; box-shadow: inset 0 0 0 1.6px var(--run); flex: none; }
+  .ring.wt { box-shadow: inset 0 0 0 1.6px var(--wait); }
+  .ring.idle { box-shadow: inset 0 0 0 1.6px var(--idle); }
+  .side .foot { margin-top: auto; border-top: 1px solid var(--line); padding: 10px 6px 0; display: grid; gap: 8px; color: var(--muted); font-size: 12px; }
+  .side .foot .r { display: flex; gap: 8px; align-items: center; min-width: 0; }
+  .main { min-width: 0; min-height: 0; background: var(--panel); border-radius: 12px 0 0 0; box-shadow: inset 0 0 0 1px var(--line); display: flex;
+    flex-direction: column; overflow: hidden; position: relative; }
+  .win.guided .main { border-radius: 12px 12px 0 0; }
+  .status { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 14px; color: var(--muted); font-size: 12px; white-space: nowrap; min-width: 0; }
+  .status b { color: var(--text); font-weight: 600; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; background: var(--idle); flex: none; }
+  .dot.ok { background: var(--run); } .dot.wt { background: var(--wait); }
+
+  /* ───────── Commun : boutons, pastilles, choix, commande, conversation ───────── */
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line-2);
+    color: var(--text); font-weight: 550; font-size: 12.5px; white-space: nowrap; background: rgba(var(--fg-rgb), 0.03); flex: none; }
+  .btn.sm { height: 26px; padding: 0 9px; font-size: 12px; border-radius: 7px; }
+  .btn.lg { height: 34px; padding: 0 14px; font-size: 13px; }
+  .btn.icon { width: 30px; padding: 0; justify-content: center; color: var(--soft); }
+  .btn.sm.icon { width: 26px; }
+  .btn.quiet { box-shadow: none; background: none; color: var(--muted); }
+  .btn.primary { background: var(--primary); color: var(--on-primary); box-shadow: none; }
+  .btn.go { background: oklch(from var(--run) calc(l - 0.12) c h); color: #fff; box-shadow: none; }
+  :root[data-theme='light'] .btn.go { background: var(--run); }
+  .btn.off { opacity: 0.45; }
+  .btn:focus-visible, .focus { outline: 2px solid var(--brand); outline-offset: 2px; }
+  .pill { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 11.5px; font-weight: 600;
+    white-space: nowrap; flex: none; color: var(--soft); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .pill.ok { color: var(--run); box-shadow: inset 0 0 0 1px oklch(from var(--run) l c h / 0.4); background: oklch(from var(--run) l c h / 0.07); }
+  .pill.wt { color: var(--wait); box-shadow: inset 0 0 0 1px var(--wait-line); background: var(--wait-bg); }
+  .pill.no { color: var(--muted); }
+  .pill.rec { color: var(--teal-ink); box-shadow: inset 0 0 0 1px oklch(from var(--brand) l c h / 0.45); background: oklch(from var(--brand) l c h / 0.08); border-radius: 999px; }
+  .pill.lock { color: var(--muted); }
+  .cmd { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 4px 0 10px; border-radius: 8px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line);
+    color: var(--code-fg); font-family: var(--mono); font-size: 12px; min-width: 0; }
+  .cmd > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+  .cmd .btn { height: 24px; }
+  /* Un choix : une rangée cliquable, le bouton radio dessiné à gauche. */
+  .choices { display: grid; gap: 8px; }
+  .choice { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 4px 12px; align-items: start; padding: 12px 14px; border-radius: 10px;
+    background: rgba(var(--fg-rgb), 0.022); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--soft); }
+  .choice .rd { width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line-3); margin-top: 1px; }
+  .choice.on { background: oklch(from var(--brand) l c h / 0.07); box-shadow: inset 0 0 0 1.5px var(--brand); }
+  .choice.on .rd { box-shadow: inset 0 0 0 5px var(--brand); }
+  .choice.dis { opacity: 0.62; }
+  .choice .t { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+  .choice .t b { color: var(--text); font-weight: 620; }
+  .choice .d { grid-column: 2 / 4; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+  .choice .x { grid-column: 2 / 4; margin-top: 6px; }
+  .choice .ver { color: var(--dim); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  .choice .state { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .choice .state.ok { color: var(--run); }
+  .choice .state.wt { color: var(--wait); }
+  /* La conversation de l'app, en petit. */
+  .conv { flex: 1; min-height: 0; overflow: hidden; padding: 22px 28px 0; display: flex; flex-direction: column; gap: 14px; }
+  .conv .col { width: min(720px, 100%); margin: 0 auto; display: grid; gap: 14px; }
+  .bubble-me { justify-self: end; max-width: 82%; padding: 9px 13px; border-radius: 12px 12px 4px 12px; background: var(--raise-2); box-shadow: inset 0 0 0 1px var(--line); color: var(--text); }
+  .ai { color: var(--text-ai); line-height: 1.6; display: grid; gap: 8px; }
+  .ai ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
+  .ai code, .inl { font-family: var(--mono); font-size: 0.9em; padding: 1px 5px; border-radius: 5px; background: rgba(var(--fg-rgb), 0.06); color: var(--code-fg); }
+  .tool { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+  .tool b { color: var(--soft); font-weight: 600; }
+  .caret { display: inline-block; width: 7px; height: 14px; background: var(--brand); vertical-align: -2px; border-radius: 1px; margin-left: 2px; }
+  .perm { border-radius: 12px; background: var(--wait-bg); box-shadow: inset 0 0 0 1px var(--wait-line); padding: 12px 14px; display: grid; gap: 10px; position: relative; }
+  .perm .h { display: flex; align-items: center; gap: 8px; color: var(--wait); font-weight: 600; font-size: 12.5px; }
+  .perm .c { font-family: var(--mono); font-size: 12px; color: var(--code-fg); padding: 8px 10px; border-radius: 8px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line); }
+  .perm .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+  .perm .acts kbd { margin-left: 2px; }
+  .composer { width: min(744px, calc(100% - 48px)); margin: 12px auto 14px; border-radius: 12px; background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); padding: 10px 12px; display: grid; gap: 10px; position: relative; }
+  .composer .w { width: 100%; }
+  .composer .txt { color: var(--muted); min-height: 20px; }
+  .composer .txt.filled { color: var(--text); }
+  .composer .row { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; min-width: 0; }
+  .composer .chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; border-radius: 7px; box-shadow: inset 0 0 0 1px var(--line-2); color: var(--soft); white-space: nowrap; }
+  .composer .send { width: 28px; height: 28px; border-radius: 8px; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; }
+  .composer .mic { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: var(--soft); position: relative; }
+  .starters { display: flex; flex-wrap: wrap; gap: 8px; }
+  .starter { display: inline-flex; align-items: center; gap: 7px; padding: 7px 11px; border-radius: 9px; background: rgba(var(--fg-rgb), 0.03); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--soft); font-size: 12.5px; }
+  .starter.on { box-shadow: inset 0 0 0 1.5px var(--brand); color: var(--text); background: oklch(from var(--brand) l c h / 0.07); }
+  .chead { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--line); min-width: 0; }
+  .chead b { font-weight: 640; }
+  .chead .meta { color: var(--muted); font-size: 12px; display: inline-flex; gap: 8px; align-items: center; white-space: nowrap; min-width: 0; }
+
+  /* ═════════ A « Essaie d'abord » : un bac à sable, le guide en colonne, chaque réglage quand il sert ═════════ */
+  .guide { grid-row: 2; grid-column: 4; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--panel); box-shadow: inset 1px 0 0 var(--line), inset 0 1px 0 var(--line);
+    margin-left: 8px; border-radius: 12px 0 0 0; overflow: hidden; }
+  .guide .gh { display: flex; align-items: center; gap: 8px; padding: 14px 16px 12px; border-bottom: 1px solid var(--line); }
+  .guide .gh b { font-weight: 640; font-size: 13.5px; }
+  .guide .gh .n { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .guide .meter { height: 3px; border-radius: 2px; background: var(--line-2); margin: 0 16px; overflow: hidden; }
+  .guide .meter i { display: block; height: 100%; background: var(--brand); border-radius: 2px; }
+  .guide .gb { flex: 1; min-height: 0; overflow: hidden; padding: 12px 10px 8px; display: grid; align-content: start; gap: 2px; }
+  .gstep { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 2px 10px; padding: 9px 8px; border-radius: 9px; color: var(--muted); }
+  .gstep .k { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; box-shadow: inset 0 0 0 1.5px var(--line-3); font-size: 10.5px; font-weight: 650; color: var(--muted); margin-top: 1px; }
+  .gstep.done .k { background: var(--brand); box-shadow: none; color: #08090a; }
+  .gstep.done .lbl { color: var(--soft); }
+  .gstep .lbl { font-weight: 600; font-size: 12.5px; }
+  .gstep .s { grid-column: 2; font-size: 12px; color: var(--muted); }
+  .gstep.cur { background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--soft); padding: 12px 12px 10px 8px; }
+  .gstep.cur .k { box-shadow: inset 0 0 0 1.5px var(--brand); color: var(--teal-ink); }
+  .gstep.cur .lbl { color: var(--text); font-size: 13px; }
+  .gstep .body { grid-column: 2; display: grid; gap: 10px; margin-top: 6px; font-size: 12.5px; line-height: 1.5; }
+  .gstep .body .why { color: var(--muted); }
+  .gstep .acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .mini { display: grid; gap: 4px; }
+  .mini .o { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 1px 8px; padding: 6px 10px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line-2); }
+  .mini .o .rd { width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line-3); margin-top: 2px; }
+  .mini .o.on { box-shadow: inset 0 0 0 1.5px var(--brand); background: oklch(from var(--brand) l c h / 0.07); }
+  .mini .o.on .rd { box-shadow: inset 0 0 0 4px var(--brand); }
+  .mini .o b { color: var(--text); font-weight: 600; font-size: 12.5px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .mini .o span.d { grid-column: 2; color: var(--muted); font-size: 12px; line-height: 1.4; }
+  .mini .o.dis { opacity: 0.6; }
+  .gsum { display: none; padding: 8px 8px 0 38px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .gsum b { color: var(--soft); font-weight: 600; }
+  .gstep.next .s { display: none; }
+  @media (max-width: 1100px) {
+    .guide.setup .gstep:not(.cur) { display: none; }
+    .guide.setup .gsum { display: block; }
+    .guide.setup .mini .o:not(.on):not(.dis) span.d { display: none; }
+    .gstep:not(.cur) .s { display: none; }
+    .gstep { padding: 7px 8px; }
+    .gstep.cur { padding: 10px 10px 12px 8px; }
+    .guide .gh { padding: 12px 14px 10px; }
+  }
+  .guide .gf { border-top: 1px solid var(--line); padding: 10px 16px; display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12px; }
+  /* Le fil : le trait du guide jusqu'à la vraie chose dans la fenêtre. */
+  .thread-svg { position: absolute; inset: 0; pointer-events: none; z-index: 5; overflow: visible; }
+  .thread-svg path { fill: none; stroke: var(--brand); stroke-width: 1.5; stroke-dasharray: 4 4; opacity: 0.85; }
+  .thread-svg circle.end { fill: var(--brand); }
+  .target { box-shadow: 0 0 0 2px var(--panel), 0 0 0 3.5px var(--brand) !important; border-radius: 10px; }
+  .demo-band { display: flex; align-items: center; gap: 10px; padding: 8px 20px; background: oklch(from var(--brand) l c h / 0.07); border-bottom: 1px solid oklch(from var(--brand) l c h / 0.25);
+    color: var(--teal-ink); font-size: 12px; white-space: nowrap; min-width: 0; }
+  .demo-band b { font-weight: 620; }
+  .files { padding: 18px 24px; display: grid; gap: 14px; overflow: hidden; }
+  .files .readme { border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line); padding: 16px 18px; display: grid; gap: 8px; color: var(--soft); line-height: 1.55; }
+  .files .readme h2 { font-size: 15px; }
+  .tree { display: grid; gap: 2px; font-size: 12.5px; color: var(--soft); }
+  .tree span { display: flex; gap: 8px; align-items: center; padding: 3px 6px; border-radius: 6px; }
+
+  /* ═════════ B « Au bon endroit » : trois questions, puis des bulles posées sur les vrais boutons ═════════ */
+  .welcome { flex: 1; display: grid; place-items: center; padding: 32px; overflow: hidden; min-height: 0; }
+  .sheet { width: min(600px, 100%); display: grid; gap: 20px; }
+  .sheet .steps { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 550; }
+  .sheet .steps .s { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .sheet .steps .s i { width: 6px; height: 6px; border-radius: 50%; background: var(--line-3); }
+  .sheet .steps .s.done i { background: var(--brand); }
+  .sheet .steps .s.cur { color: var(--text); }
+  .sheet .steps .s.cur i { width: 18px; border-radius: 3px; background: var(--brand); }
+  .sheet .steps .sep { width: 16px; height: 1px; background: var(--line-2); }
+  .sheet h1 { font-size: 21px; font-weight: 640; letter-spacing: -0.015em; }
+  .sheet .why { color: var(--muted); line-height: 1.55; max-width: 62ch; }
+  .sheet .foot { display: flex; align-items: center; gap: 8px; padding-top: 4px; }
+  .sheet .foot .where { color: var(--muted); font-size: 12px; }
+  .gloss { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 18px; padding: 14px 16px; border-radius: 10px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line); }
+  .gloss div { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 2px 8px; font-size: 12px; color: var(--muted); line-height: 1.45; }
+  .gloss b { color: var(--soft); font-weight: 600; font-size: 12.5px; }
+  .gloss svg { margin-top: 2px; color: var(--teal-ink); }
+  .tip { position: absolute; z-index: 6; width: 312px; border-radius: 12px; background: var(--raise-2); box-shadow: var(--shadow-tip), inset 0 0 0 1px var(--line-2); padding: 14px 15px 12px; display: grid; gap: 9px; color: var(--soft); line-height: 1.5; font-size: 12.5px; }
+  .tip h3 { font-size: 13.5px; font-weight: 640; color: var(--text); display: flex; align-items: center; gap: 8px; }
+  .tip .dd { display: grid; gap: 4px; }
+  .tip .dd div { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; }
+  .tip .dd b { color: var(--text); font-weight: 600; }
+  .tip .acts { display: flex; gap: 8px; align-items: center; margin-top: 2px; }
+  .tip .acts .k { margin-left: auto; color: var(--dim); font-size: 11.5px; }
+  .tip::before { content: ''; position: absolute; width: 12px; height: 12px; background: var(--raise-2); box-shadow: inset 1px 1px 0 var(--line-2); transform: rotate(45deg); }
+  .tip.down::before { bottom: -6px; left: var(--ax, 40px); transform: rotate(225deg); }
+  .tip.left::before { left: -6px; top: var(--ay, 24px); transform: rotate(-45deg); }
+  .tip.up::before { top: -6px; left: var(--ax, 40px); transform: rotate(45deg); }
+  .halo { position: absolute; z-index: 4; border-radius: 12px; pointer-events: none; box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--brand), 0 0 0 10px oklch(from var(--brand) l c h / 0.14); }
+  .disc { border-top: 1px solid var(--line); margin-top: auto; padding: 10px 4px 2px; display: grid; gap: 2px; }
+  .disc .dh { display: flex; align-items: center; gap: 8px; padding: 0 4px 6px; font-size: 12px; }
+  .disc .dh b { color: var(--soft); font-weight: 620; }
+  .disc .dh .n { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .disc .it { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 5px 6px; border-radius: 7px; font-size: 12.5px; color: var(--soft); }
+  .disc .it .ck { width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 0 0 1.5px var(--line-3); display: grid; place-items: center; }
+  .disc .it.done { color: var(--muted); }
+  .disc .it.done .ck { background: var(--brand); box-shadow: none; color: #08090a; }
+  .disc .it.done .tx { text-decoration: line-through; text-decoration-color: var(--line-3); }
+  .disc .it.cur { background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--text); }
+  .disc .it .go { color: var(--dim); }
+  .disc .more { padding: 4px 6px; color: var(--muted); font-size: 12px; display: flex; gap: 6px; align-items: center; }
+
+  /* ═════════ C « La ligne » : le premier lancement dessiné comme le git graph, une station par question ═════════ */
+  .cbody { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: var(--line-col) minmax(0, 1fr); min-height: 0; }
+  .cline { padding: 26px 0 20px 28px; display: flex; flex-direction: column; min-height: 0; }
+  .cline .brand { display: flex; gap: 10px; align-items: center; margin-bottom: 26px; }
+  .cline .brand b { font-weight: 640; font-size: 14px; }
+  .cline .brand span { color: var(--muted); font-size: 12px; }
+  .stations { position: relative; display: grid; gap: 0; }
+  .st { position: relative; display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 0 14px; padding-bottom: 22px; }
+  .st::before { content: ''; position: absolute; left: 10px; top: 14px; bottom: -2px; width: 2px; background: var(--lc, var(--lane-main)); opacity: 0.85; }
+  .st.todo::before { background: repeating-linear-gradient(var(--lc, var(--lane-main)) 0 4px, transparent 4px 8px); opacity: 0.45; }
+  .st:last-child::before { display: none; }
+  .st .nd { width: 22px; height: 22px; display: grid; place-items: center; z-index: 1; }
+  .st .nd i { width: 12px; height: 12px; border-radius: 50%; background: var(--frame); box-shadow: inset 0 0 0 2px var(--lc, var(--lane-main)); }
+  .st.done .nd i { background: var(--lc, var(--lane-main)); }
+  .st.cur .nd i { width: 16px; height: 16px; background: var(--brand); box-shadow: 0 0 0 4px oklch(from var(--brand) l c h / 0.22); }
+  .st .nm { font-weight: 600; font-size: 13px; color: var(--muted); padding-top: 1px; }
+  .st.done .nm, .st.cur .nm { color: var(--text); }
+  .st .sub { grid-column: 2; color: var(--muted); font-size: 12px; margin-top: 1px; }
+  .st.cur .sub { color: var(--teal-ink); }
+  .st.skip .nm { color: var(--muted); }
+  .st.skip .nd i { background: var(--frame); box-shadow: inset 0 0 0 2px var(--lc, var(--lane-main)); opacity: 0.6; }
+  .fan { position: relative; height: 70px; margin-left: 10px; }
+  .fan svg { position: absolute; left: 0; top: 0; overflow: visible; }
+  .fan svg path { fill: none; stroke-width: 2; stroke-linecap: round; opacity: 0.6; }
+  .cline .later { margin-top: auto; display: grid; gap: 8px; color: var(--muted); font-size: 12px; padding-right: 20px; }
+  .logo-tile { width: 32px; height: 32px; border-radius: 9px; background: #35c1bd; display: grid; place-items: center; color: #08090a; flex: none; }
+  @media (max-width: 1100px) {
+    .choice { padding: 9px 12px; }
+    .sheet { gap: 14px; }
+    .sheet h1 { font-size: 19px; }
+    .welcome { padding: 20px 28px; }
+    .cagent .live .conv { justify-content: flex-end; }
+  }
+  .cmain { background: var(--panel); border-radius: 12px 0 0 0; box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; }
+  .cq { padding: 56px 64px 24px; display: grid; align-content: start; gap: 22px; overflow: hidden; min-height: 0; }
+  .cq .q { width: min(640px, 100%); display: grid; gap: 22px; }
+  .cq .ord { display: flex; gap: 10px; align-items: center; color: var(--muted); font-size: 12.5px; font-weight: 550; }
+  .cq .ord .ln { width: 22px; height: 3px; border-radius: 2px; background: var(--brand); }
+  .cq h1 { font-size: 26px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.2; }
+  .cq .why { color: var(--muted); font-size: 13.5px; line-height: 1.6; max-width: 60ch; }
+  .cfoot { display: flex; align-items: center; gap: 10px; padding: 14px 64px; border-top: 1px solid var(--line); }
+  .cfoot .keys { color: var(--dim); font-size: 12px; display: inline-flex; gap: 6px; align-items: center; }
+  @media (max-width: 1100px) {
+    .cq { padding: 34px 32px 18px; gap: 18px; }
+    .cq h1 { font-size: 22px; }
+    .cfoot { padding: 12px 32px; }
+    .cline { padding: 22px 0 16px 20px; }
+  }
+  .cagent { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); min-height: 0; }
+  .cagent .cq { padding-right: 32px; }
+  .cagent .live { margin: 24px 24px 24px 0; border-radius: 12px; background: var(--frame); box-shadow: inset 0 0 0 1px var(--line-2); display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+  .cagent .live .conv { padding: 16px 18px 0; }
+  .cagent .live .composer { margin: 10px 14px 12px; }
+  @media (max-width: 1100px) {
+    .cagent { grid-template-columns: minmax(0, 1fr); }
+    .cagent .cq { padding-bottom: 0; }
+    .cagent .cq .why.extra { display: none; }
+    .cagent .live { margin: 14px 32px 18px; }
+  }
+  /* La carte de la découverte : une voie par moment du cycle, une station par geste. */
+  .map { flex: 1; min-height: 0; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) 320px; }
+  .map .lanes { padding: 26px 28px; display: grid; align-content: start; gap: 0; overflow: hidden; position: relative; }
+  .map .mh { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+  .map .mh h1 { font-size: 20px; font-weight: 650; letter-spacing: -0.015em; }
+  .map .mh span { color: var(--muted); font-size: 12.5px; }
+  /* Comme le git graph : le tronc (l'installation faite) à gauche, une branche par moment du cycle. */
+  .trunk-head { display: grid; grid-template-columns: 112px 30px minmax(0, 1fr); align-items: center; height: 30px; }
+  .trunk-head .o { width: 18px; height: 18px; display: grid; place-items: center; margin-left: -8px; }
+  .trunk-head .o i { width: 12px; height: 12px; border-radius: 50%; background: var(--lane-main); }
+  .trunk-head .t { color: var(--muted); font-size: 12px; }
+  .lane { position: relative; display: grid; grid-template-columns: 112px 30px minmax(0, 1fr); align-items: start; min-height: 96px; }
+  .lane .ln { font-weight: 620; font-size: 12.5px; color: var(--soft); display: flex; align-items: center; gap: 8px; padding-top: 6px; }
+  .lane .ln i { width: 8px; height: 8px; border-radius: 50%; background: var(--lc); }
+  .lane .elbow { position: relative; height: 100%; }
+  .lane .elbow svg { position: absolute; left: 0; top: 0; overflow: visible; }
+  .lane .elbow path { fill: none; stroke-width: 2; }
+  .lane .track { position: relative; display: flex; align-items: flex-start; gap: 0; padding-top: 6px; }
+  .lane .track::before { content: ''; position: absolute; left: 0; right: 8px; top: 15px; height: 2px; background: var(--lc); opacity: 0.8; }
+  .stop .m { font-size: 11.5px; color: var(--dim); line-height: 1.3; margin-top: -4px; }
+  .stop.done .m { color: var(--teal-ink); }
+  .stop { position: relative; flex: 1 1 0; min-width: 0; display: grid; justify-items: start; gap: 7px; padding-right: 8px; }
+  .stop .o { width: 18px; height: 18px; display: grid; place-items: center; z-index: 1; }
+  .stop .o i { width: 12px; height: 12px; border-radius: 50%; background: var(--panel); box-shadow: inset 0 0 0 2px var(--lc); }
+  .stop.done .o i { background: var(--lc); }
+  .stop.sel .o i { width: 16px; height: 16px; background: var(--panel); box-shadow: inset 0 0 0 2px var(--lc), 0 0 0 4px oklch(from var(--lc) l c h / 0.25); }
+  .stop.na .o i { box-shadow: inset 0 0 0 2px var(--line-3); }
+  .stop .t { font-size: 12px; color: var(--soft); line-height: 1.3; }
+  .stop.done .t { color: var(--muted); }
+  .stop.na .t { color: var(--dim); }
+  .stop.sel .t { color: var(--text); font-weight: 600; }
+  .map .detail { border-left: 1px solid var(--line); padding: 26px 22px; display: grid; align-content: start; gap: 14px; }
+  .map .detail h2 { font-size: 16px; font-weight: 640; display: flex; gap: 9px; align-items: center; }
+  .map .detail p { color: var(--soft); line-height: 1.55; }
+  .map .detail .facts { display: grid; gap: 7px; font-size: 12.5px; color: var(--muted); }
+  .map .detail .facts div { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 8px; }
+  .map .detail .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+  .map .legend { display: flex; gap: 16px; color: var(--muted); font-size: 12px; margin-top: 16px; flex-wrap: wrap; }
+  .map .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .map .legend i { width: 10px; height: 10px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--lane-main); }
+  .map .legend i.f { background: var(--lane-main); }
+  @media (max-width: 1100px) {
+    .map { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+    .map .lanes { padding: 18px 20px 6px; }
+    .lane { grid-template-columns: 76px 26px minmax(0, 1fr); min-height: 76px; }
+    .trunk-head { grid-template-columns: 76px 26px minmax(0, 1fr); }
+    .stop .m { display: none; }
+    .map .detail { border-left: none; border-top: 1px solid var(--line); padding: 14px 20px; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; align-items: center; }
+    .map .detail .facts { display: none; }
+    .map .detail p { grid-column: 1; font-size: 12.5px; }
+    .map .detail .acts { grid-column: 2; grid-row: 1 / 3; }
+    .map .legend { display: none; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .caret { animation: blink 1.1s steps(2) infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const q = new URLSearchParams(location.search);
+const D = (q.get('d') || 'a').toLowerCase();
+if (q.get('theme') === 'light') document.documentElement.dataset.theme = 'light';
+const ROUTE = location.hash.slice(1) || 'harness';
+const NARROW = innerWidth < 1100;
+const ic = (n, s = 14) => `<svg class="i" viewBox="0 0 16 16" style="width:${s}px;height:${s}px" aria-hidden="true">${ICONS[n] || ''}</svg>`;
+const ok = (s = 12) => ic('check', s);
+
+/* ───────── La fenêtre ───────── */
+function titlebar(proj) {
+  return `<div class="tb"><span class="logo">${ic('agents', 13)}</span>${proj ? `<span class="proj"><span class="sq"></span>${proj} ${ic('down', 12)}</span>` : ''}
+    <span class="search">${ic('search', 13)}Rechercher<kbd>Ctrl K</kbd></span>
+    ${proj ? `<span class="ed narrow-hide">${ic('code', 14)}Éditeur</span>` : ''}<span class="wb"><span class="wbtn">${ic('min', 13)}</span><span class="wbtn">${ic('max', 12)}</span><span class="wbtn">${ic('close', 13)}</span></span></div>`;
+}
+function rail(o = {}) {
+  const tiles = o.tiles ?? '';
+  return `<div class="rail"><span class="r-i">${ic('overview', 15)}</span>${tiles}<span class="r-i">${ic('plus', 15)}</span><span class="low">
+    ${o.help ? `<span class="r-i ${o.help === 'on' ? 'on' : ''}">${ic('info', 15)}${o.helpDot ? '<span class="dotn"></span>' : ''}</span>` : ''}
+    <span class="r-i">${ic('stats', 15)}</span><span class="r-i">${ic('puzzle', 15)}</span><span class="r-i">${ic('sliders', 15)}</span></span></div>`;
+}
+function sidebar(o = {}) {
+  const tabs = [['Agents', o.agents ?? '1'], ['Kanban', ''], ['PR', ''], ['Docs', '']]
+    .map(([l, c], i) => `<span class="${i === (o.tab ?? 0) ? 'on' : ''}">${l}${c ? `<span class="c">${c}</span>` : ''}</span>`).join('');
+  const agents = o.list ?? `<div class="agent on" id="agent-card"><div class="r"><span class="ring ${o.ring ?? ''}"></span><span class="n ell">${o.name ?? 'agent-1'}</span><span class="key sp">${o.key ?? 'Claude Code'}</span></div>
+      <div class="m ell" ${o.ring === 'wt' ? 'style="color:var(--wait)"' : ''}>${o.what ?? 'Prêt'}</div></div>`;
+  const foot = o.foot ?? `<div class="foot"><div class="r">${ic('folder', 13)}<span class="mono ell">${o.path ?? '~/dev/atlas-web'}</span></div><div class="r">${ic('branch', 13)}<span class="mono ell">${o.branch ?? 'main'}</span></div></div>`;
+  return `<div class="side"><div class="stabs">${tabs}</div>
+    <div class="new" id="new-agent"><span class="plus">${ic('plus', 12)}</span>Nouvel agent<kbd>Ctrl N</kbd></div>${agents}${foot}</div>`;
+}
+function statusbar(o = {}) {
+  return `<div class="status">${o.left ?? `<span><span class="dot ${o.active ? 'ok' : ''}"></span> <b>${o.active ?? 0}</b> actif${o.active > 1 ? 's' : ''}</span>`}
+    <span class="sp">${o.account ?? 'Claude · toi@exemple.dev'}</span>${o.quota === false ? '' : `<span class="narrow-hide">5 h <b>${o.quota ?? '2 %'}</b></span>`}<span>${ic('branch', 12)} <span class="mono">${o.branch ?? 'main'}</span></span></div>`;
+}
+
+/* ───────── Les textes communs (les mêmes dans docs/ONBOARDING.md) ───────── */
+const HARNESSES = [
+  { id: 'claude', name: 'Claude Code', ver: '2.1.301', state: 'ok', stateText: 'Connecté · toi@exemple.dev', rec: true },
+  { id: 'codex', name: 'Codex', ver: '0.71.0', state: 'wt', stateText: 'Installé, pas connecté' },
+  { id: 'opencode', name: 'OpenCode', state: 'no', stateText: 'Introuvable', cmd: 'npm install -g opencode-ai' },
+  { id: 'copilot', name: 'Copilot CLI', state: 'no', stateText: 'Introuvable', cmd: 'npm install -g @github/copilot' },
+];
+const MODES = [
+  ['acceptEdits', 'Édits auto', 'Les modifications dans le dossier de l’agent passent sans demander ; chaque commande demande ton accord.', true],
+  ['default', 'Demander', 'Chaque action sensible demande ton accord, modifications comprises.'],
+  ['plan', 'Plan', 'L’agent analyse et propose un plan, sans rien modifier ni lancer, jusqu’à ce que tu l’approuves.'],
+  ['auto', 'Auto', 'Un classifieur approuve ce qu’il juge sûr, commandes comprises, et ne demande que pour le reste.'],
+  ['bypass', 'Bypass', 'Éteint : l’agent ferait tout sans rien te montrer, même ce qu’un contenu piégé lui dicterait. À réserver à une machine jetable.', false, true],
+];
+const MODES_SHORT = { acceptEdits: 'Les modifications passent ; chaque commande demande.', default: 'Tout ce qui est sensible demande, modifications comprises.', plan: 'Il propose un plan et ne touche à rien avant ton accord.', auto: 'Un classifieur approuve ce qui est sûr, demande le reste.', bypass: 'Éteint : aucune demande, même pour un contenu piégé.' };
+const PROJECTS = [
+  ['folder', 'Un dossier de ta machine', 'Un dépôt que tu as déjà. Escouade le lit sans rien y changer.'],
+  ['download', 'Cloner un dépôt', 'Une adresse git, ou un dépôt de GitHub ou GitLab si tu en as connecté un.'],
+  ['sparkle', 'Un projet de démonstration', 'Un petit dépôt jetable, créé sur ta machine sans réseau, pour essayer sans risque. Supprimé d’un clic.'],
+];
+const STARTERS = ['Explique-moi ce dépôt en cinq lignes', 'Lance les tests et dis-moi ce qui casse', 'Trouve un petit bug et propose un correctif'];
+const GLOSS = [
+  ['folder', 'Un projet', 'un dossier, avec ses agents, son Kanban et ses docs.'],
+  ['agents', 'Un agent', 'une conversation avec ton harness, qui lit et modifie le code.'],
+  ['branch', 'Un worktree', 'une copie de travail à l’agent seul : deux agents ne se gênent pas.'],
+  ['merge', 'Une branche par agent', 'son travail reste à part jusqu’à ce que tu l’intègres.'],
+];
+// Chaque station : son geste, son état, et ce qu'elle demande (ce qui se télécharge, se connecte ou s'attend).
+const DISCOVER = [
+  ['Planifier', 'lane-1', [['Écrire un ticket', 'done', 'fait'], ['Le pilote auto', '', 'un ticket prêt'], ['La spec et les décisions', '', 'onglet Docs']]],
+  ['Coder', 'lane-2', [['Dicter un message', 'sel', '148 Mo, local'], ['Parler à un agent', '', 'micro et son'], ['Un terminal', 'done', 'fait'], ['L’éditeur', '', 'Ctrl P'], ['Un 2ᵉ agent', '', 'Ctrl N']]],
+  ['Relire', 'lane-3', [['Lancer le projet', '', 'commandes relues'], ['Connecter GitHub', '', 'un jeton, au trousseau'], ['Une PR dans Escouade', '', 'après GitHub'], ['Relecture par un agent', '', 'une PR ouverte']]],
+  ['Livrer', 'lane-4', [['Valider un ticket', '', 'un ticket À tester'], ['Ouvrir une PR', '', 'après GitHub']]],
+  ['Piloter', 'lane-5', [['Un plugin', '', 'le store'], ['Le serveur MCP', '', 'un autre client'], ['Ton téléphone', '', 'Escouade à distance'], ['Ton équipe', 'na', 'pas de serveur d’équipe']]],
+];
+
+function conversation(o = {}) {
+  const tool = o.stream
+    ? `<div class="tool">${ic('read', 13)}<b>Lu</b> README.md, package.json, src/ · 14 fichiers</div>`
+    : '';
+  return `<div class="conv"><div class="col">
+    <div class="bubble-me">${STARTERS[o.starter ?? 1]}.</div>
+    ${tool}
+    <div class="ai"><p>${o.ai ?? `C’est une app web en TypeScript (Vite, Vitest). Je lance la suite de tests pour voir ce qui casse${o.perm ? ' :' : '.'}`}</p></div>
+    ${o.perm ? `<div class="perm" id="perm"><div class="h">${ic('shield', 14)}Claude Code demande une autorisation</div>
+      <div class="c">npm test</div>
+      <div class="acts"><span class="btn sm go" id="perm-allow">${ok(12)}Autoriser<kbd style="color:inherit;box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)">1</kbd></span><span class="btn sm">Toujours autoriser<kbd>2</kbd></span><span class="btn sm">Refuser<kbd>3</kbd></span></div></div>` : ''}
+    ${o.after ?? ''}
+  </div></div>`;
+}
+function composer(o = {}) {
+  return `<div class="composer" id="composer"><div class="w" style="display:grid;gap:10px">
+    ${o.starters ? `<div class="starters">${STARTERS.map((s, i) => `<span class="starter ${i === 0 ? 'on' : ''}">${ic(i === 0 ? 'read' : i === 1 ? 'play' : 'spark', 12)}${s}</span>`).join('')}</div>` : ''}
+    <div class="txt ${o.text ? 'filled' : ''}">${o.text ?? 'Écris à l’agent…'}</div>
+    <div class="row"><span class="chip">${ic('shield', 12)}Édits auto</span><span class="chip">Sonnet · moyen</span><span class="sp"></span><span class="mic" id="mic">${ic('mic', 15)}</span><span class="send">${ic('up', 14)}</span></div></div></div>`;
+}
+
+/* ═════════════════════ A « Essaie d'abord » ═════════════════════ */
+const A_STEPS = [
+  ['Ton harness', 'Claude Code · ton compte'],
+  ['Comment l’agent demande', 'Édits auto'],
+  ['Un premier message', 'dans le bac à sable'],
+  ['Ton vrai projet', 'un dossier ou un clone'],
+  ['Tes statistiques', 'partagées ou non'],
+];
+function aGuide(cur, body, o = {}) {
+  const done = o.done ?? cur;
+  const steps = A_STEPS.map(([l, s], i) => {
+    const k = i < done ? 'done' : i === cur ? 'cur' : 'next';
+    return `<div class="gstep ${k}" ${i === cur ? 'id="gcur"' : ''}><span class="k">${i < done ? ok(11) : i + 1}</span><span class="lbl">${l}</span>
+      ${i === cur ? `<div class="body">${body}</div>` : `<span class="s">${s}</span>`}</div>`;
+  }).join('');
+  const sum = `<div class="gsum">${done ? `<b>Fait</b> : ${A_STEPS.slice(0, done).map((x) => x[0]).join(', ')}. ` : ''}${cur < 4 ? `<b>Ensuite</b> : ${A_STEPS.slice(cur + 1).map((x) => x[0]).join(', ')}.` : ''}</div>`;
+  return `<aside class="guide setup" aria-label="Premiers pas"><div class="gh"><b>Premiers pas</b><span class="n">${Math.min(done, 5)} sur 5</span><span class="sp btn sm quiet icon" aria-label="Réduire le guide">${ic('collapse', 13)}</span></div>
+    <div class="meter"><i style="width:${(done / 5) * 100}%"></i></div><div class="gb">${steps}${sum}</div>
+    <div class="gf">${ic('clock', 13)}<span>Environ 2 minutes</span><span class="sp">Tout passer</span></div></aside>`;
+}
+function aBand() {
+  return `<div class="demo-band">${ic('sparkle', 13)}<b>Bac à sable</b><span class="ell">un dépôt de démonstration sur ta machine · rien ne sort d’ici</span><span class="sp">Supprimer</span></div>`;
+}
+function aShell(main, guide, o = {}) {
+  const tiles = `<span class="tile demo" title="bac-a-sable">BS</span>${o.real ? '<span class="tile" style="background:oklch(0.72 0.11 250);box-shadow:none;opacity:.9">AW</span>' : ''}`;
+  return `<div class="win guided">${titlebar('bac-a-sable')}${rail({ tiles, help: true })}${sidebar({ path: '~/.escouade/demo/bac-a-sable', branch: o.branch ?? 'main', ...o.side })}<div class="main">${main}</div>${guide}${statusbar(o.status)}<svg class="thread-svg" id="thread"></svg></div>`;
+}
+function aFiles() {
+  return `${aBand()}<div class="files"><div class="tree">
+    <span>${ic('folder', 13)}src</span><span>${ic('folder', 13)}tests</span><span>${ic('file', 13)}package.json</span><span style="background:var(--hover)">${ic('page', 13)}README.md</span></div>
+    <div class="readme"><h2>bac-a-sable</h2><p>Une petite liste de tâches en TypeScript, avec deux tests qui échouent exprès. Demande à un agent de les trouver et de les corriger : tu verras ce qu’il lit, ce qu’il te demande et ce qu’il change.</p>
+    <p class="muted">Ce dossier est à toi : supprime-le quand tu veux, depuis la bande ci-dessus ou Réglages › Tous les projets.</p></div></div>`;
+}
+const A = {
+  harness() {
+    const rows = HARNESSES.slice(0, 3).map((h, i) => `<div class="o ${i === 0 ? 'on' : ''}"><span class="rd"></span><b>${h.name}${h.rec ? '<span class="pill rec">Recommandé</span>' : ''}</b>
+      <span class="d" ${h.state === 'ok' ? 'style="color:var(--run)"' : ''}>${h.stateText}${h.ver ? ` · ${h.ver}` : ''}</span>
+      ${h.cmd ? `<span class="d"><span class="cmd" style="height:28px"><span>${h.cmd}</span><span class="btn sm icon quiet" aria-label="Copier la commande">${ic('copy', 12)}</span></span></span>` : ''}</div>`).join('');
+    const body = `<p class="why">Ton agent tourne sur un harness, le programme d’agent de code de ta machine. Ses agents partent sur le compte déjà connecté ; un compte à part se crée dans Réglages.</p>
+      <div class="mini">${rows}</div>
+      
+      <div class="acts"><span class="btn primary" data-from>Utiliser Claude Code</span><span class="btn quiet">Plus tard</span></div>`;
+    return aShell(aFiles(), aGuide(0, body), { side: { list: '', agents: '0' }, status: { account: 'Aucun compte encore', quota: false } });
+  },
+  modes() {
+    const rows = MODES.map(([id, l, d, rec, dis]) => [id, l, MODES_SHORT[id], rec, dis]).map(([id, l, d, rec, dis]) => `<div class="o ${rec ? 'on' : ''} ${dis ? 'dis' : ''}"><span class="rd"></span><b>${l}${rec ? '<span class="pill rec">Recommandé</span>' : ''}${dis ? `<span class="pill lock">${ic('lock', 11)}Éteint</span>` : ''}</b><span class="d">${d}</span></div>`).join('');
+    const body = `<p class="why">Quand ton agent doit-il te demander ? Tu le changes pour chacun, sous le message.</p>
+      <div class="mini">${rows}</div>
+      <p class="why">Modèle Sonnet, effort moyen : ceux de ton compte.</p>
+      <div class="acts"><span class="btn primary" data-from>Garder Édits auto</span><span class="btn quiet">Plus tard</span></div>`;
+    const empty = `<div class="conv"><div class="col" style="margin-top:auto;margin-bottom:0;justify-items:center;text-align:center;gap:8px;padding-bottom:8px">
+      <b style="font-size:15px;font-weight:640">agent-1 est prêt</b><p class="muted" style="max-width:46ch">Un message proposé t’attend : modifie-le ou choisis-en un autre. Rien ne part avant que tu l’envoies.</p></div></div>`;
+    return aShell(`${aBand()}${empty}${composer({ starters: true, text: STARTERS[0] + '.' }).replace('class="chip"', 'class="chip" id="mode-chip"')}`,
+      aGuide(1, body), { side: { name: 'agent-1', what: 'Prêt · bac à sable', key: 'Sonnet' } });
+  },
+  agent() {
+    const body = `<p class="why">Ton agent veut lancer une commande. C’est ici qu’il te demande, et sa carte clignote dans la barre :</p>
+      <div style="display:grid;gap:6px;font-size:12.5px">
+        <div><b style="color:var(--text)">Autoriser</b> <span class="muted">· cette fois</span></div>
+        <div><b style="color:var(--text)">Toujours autoriser</b> <span class="muted">· cette commande ne redemande plus dans ce projet</span></div>
+        <div><b style="color:var(--text)">Refuser</b> <span class="muted">· l’agent cherche autrement ; écris-lui pourquoi</span></div></div>
+      <p class="why">Au clavier : 1, 2 ou 3. Ctrl J t’amène au prochain agent qui attend.</p>
+      <div class="acts"><span class="btn sm quiet">Plus tard</span></div>`;
+    return aShell(`${aBand()}<div class="chead"><b>tests-qui-cassent</b><span class="meta">${ic('branch', 12)}<span class="mono">escouade/tests-qui-cassent</span></span></div>${conversation({ starter: 1, stream: true, perm: true })}${composer()}`,
+      aGuide(2, body), { side: { name: 'tests-qui-cassent', ring: 'wt', what: 'attend ta réponse', key: 'worktree' }, branch: 'escouade/tests-qui-cassent', status: { active: 1, quota: '3 %' } });
+  },
+  projet() {
+    const rows = PROJECTS.slice(0, 2).map(([i, l, d], k) => `<div class="o ${k === 0 ? 'on' : ''}"><span class="rd"></span><b>${l}</b><span class="d">${d}</span></div>`).join('');
+    const body = `<p class="why">L’agent a corrigé les deux tests dans son worktree, sur sa branche : ton dépôt de démonstration n’a pas bougé. Passe à ton projet :</p>
+      <div class="mini">${rows}<div class="o"><span class="rd"></span><b>Rester dans le bac à sable</b><span class="d">Tu ajouteras ton projet avec le + des projets.</span></div></div>
+      <div class="acts"><span class="btn primary">Parcourir…</span><span class="btn quiet">Plus tard</span></div>`;
+    const done = `<div class="ai"><p>Les deux tests passent. J’ai changé <code>src/tasks.ts</code> (+6 −2) : la date d’échéance était comparée en texte.</p></div>
+      <div class="tool" id="diff-line">${ic('branch', 13)}<b>2 fichiers changés</b> dans le worktree <span class="mono">escouade/tests-qui-cassent</span><span class="sp btn sm">Voir le diff</span></div>`;
+    return aShell(`${aBand()}<div class="chead"><b>tests-qui-cassent</b><span class="meta">${ic('branch', 12)}<span class="mono">escouade/tests-qui-cassent</span></span></div>${conversation({ starter: 1, after: done })}${composer()}`,
+      aGuide(3, body), { side: { name: 'tests-qui-cassent', ring: 'idle', what: 'Terminé · 2 fichiers', key: 'worktree' }, branch: 'escouade/tests-qui-cassent', status: { active: 0, quota: '4 %' } });
+  },
+  decouverte() {
+    const items = [
+      ['mic', 'Dicter un message', 'La voix sur ta machine : Whisper « base », 148 Mo, téléchargé une fois.', 'cur'],
+      ['kanban', 'Écrire un ticket', 'Ses critères, puis un agent qui boucle jusqu’à les atteindre.', 'done'],
+      ['term', 'Ouvrir un terminal', 'Dans le dossier du projet ou le worktree d’un agent.', 'done'],
+      ['play', 'Laisser le pilote auto', 'Il lance les tickets prêts ; jamais de merge sans toi.'],
+      ['page', 'La spec et les décisions', 'L’onglet Docs, tenu à jour par les agents.'],
+      ['pr', 'Connecter GitHub', 'Les PR et la CI de tes tickets, dans Escouade.'],
+      ['code', 'L’éditeur', 'Ouvrir un fichier, voir ce qu’un agent a changé.'],
+      ['puzzle', 'Un plugin', 'Le store : harness, hébergeurs, voix, thèmes.'],
+      ['plug', 'Le serveur MCP', 'Piloter Escouade depuis un autre client.'],
+    ];
+    const rows = items.map(([i, l, d, k]) => `<div class="gstep ${k === 'done' ? 'done' : k === 'cur' ? 'cur' : ''}" ${k === 'cur' ? 'id="gcur"' : ''}><span class="k">${k === 'done' ? ok(11) : ic(i, 11)}</span><span class="lbl">${l}</span>
+      ${k === 'cur' ? `<div class="body"><p class="why">${d} Rien de ce que tu dis ne quitte ta machine.</p><div class="acts"><span class="btn primary" data-from>${ic('mic', 13)}Essayer le micro</span><span class="btn quiet">Écarter</span></div></div>` : `<span class="s">${d}</span>`}</div>`).join('');
+    const guide = `<aside class="guide" aria-label="À découvrir"><div class="gh"><b>À découvrir</b><span class="n">2 sur 17</span><span class="sp btn sm quiet">Tout masquer</span></div>
+      <div class="meter"><i style="width:12%"></i></div><div class="gb">${rows}</div>
+      <div class="gf">${ic('info', 13)}<span>Se rouvre depuis Aide › À découvrir</span></div></aside>`;
+    return `<div class="win guided">${titlebar('atlas-web')}${rail({ tiles: '<span class="tile">AW</span>', help: 'on' })}${sidebar({ name: 'export-csv', what: 'En cours · écrit les tests', ring: '', key: 'ATL-45', path: '~/dev/atlas-web' })}
+      <div class="main"><div class="chead"><b>export-csv</b><span class="meta">${ic('branch', 12)}<span class="mono">escouade/export-csv</span></span></div>${conversation({ starter: 0, ai: 'J’ajoute <code>exportCsv()</code> dans <code>src/invoices.ts</code> et un bouton « Exporter » à la liste. J’écris d’abord les tests.' }).replace(STARTERS[0], 'Ajoute un export CSV de la liste des factures')}${composer({ text: '' })}</div>
+      ${guide}${statusbar({ active: 1, quota: '11 %' })}<svg class="thread-svg" id="thread"></svg></div>`;
+  },
+};
+const A_TARGET = { harness: null, modes: '#mode-chip', agent: '#perm', projet: '#diff-line', decouverte: '#mic' };
+
+/* ═════════════════════ B « Au bon endroit » ═════════════════════ */
+function bSteps(cur) {
+  const n = ['Harness', 'Mode', 'Projet'];
+  return `<div class="steps" aria-label="Étape ${cur + 1} sur 3">${n.map((l, i) => `${i ? '<span class="sep"></span>' : ''}<span class="s ${i < cur ? 'done' : i === cur ? 'cur' : ''}"><i></i>${l}</span>`).join('')}<span class="sp">${cur + 1} sur 3</span></div>`;
+}
+function bWelcome(inner, account = 'Aucun compte encore') {
+  return `<div class="win wide">${titlebar()}${rail({ help: true })}<div class="main"><div class="welcome"><div class="sheet">${inner}</div></div></div>${statusbar({ left: '<span>Escouade 2.3.0</span>', account, quota: false, branch: '—' })}</div>`;
+}
+const B = {
+  harness() {
+    const rows = HARNESSES.map((h) => `<div class="choice ${h.rec ? 'on' : ''} ${h.state === 'no' ? 'dis' : ''}"><span class="rd"></span>
+      <span class="t"><b>${h.name}</b>${h.ver ? `<span class="ver">${h.ver}</span>` : ''}${h.rec ? '<span class="pill rec">Recommandé</span>' : ''}</span>
+      <span class="state ${h.state}">${h.state === 'ok' ? ok(12) : ''}${h.stateText}</span>
+      ${h.cmd ? `<div class="x"><span class="cmd"><span>${h.cmd}</span><span class="btn sm">${ic('copy', 12)}Copier</span></span></div>` : ''}
+      ${h.state === 'wt' ? `<span class="d">Tu t’y connecteras dans un terminal, juste après.</span>` : ''}</div>`).join('');
+    return bWelcome(`${bSteps(0)}<h1>Avec quel harness tes agents travaillent-ils ?</h1>
+      <p class="why">Un harness est le programme d’agent de code de ta machine : Escouade le lance et le pilote, il garde ta connexion. Claude Code est déjà connecté ici : ses agents partiront sur ce compte.</p>
+      <div class="choices">${rows}</div>
+      <div class="foot"><span class="btn quiet">${ic('restart', 13)}Chercher à nouveau</span><span class="where narrow-hide">Cherché dans le PATH</span><span class="sp"></span><span class="btn quiet">Plus tard</span><span class="btn primary">Continuer</span></div>`);
+  },
+  modes() {
+    const rows = MODES.map(([id, l, d, rec, dis]) => `<div class="choice ${rec ? 'on' : ''} ${dis ? 'dis' : ''}"><span class="rd"></span><span class="t"><b>${l}</b>${rec ? '<span class="pill rec">Recommandé</span>' : ''}</span>
+      ${dis ? `<span class="state">${ic('lock', 12)}Réglages › Agents</span>` : '<span></span>'}<span class="d">${d}</span></div>`).join('');
+    return bWelcome(`${bSteps(1)}<h1>Quand tes agents doivent-ils te demander ?</h1>
+      <p class="why">Le mode des nouveaux agents. Tu le changes pour chacun, sous son message ; le modèle (Sonnet) et l’effort (moyen) restent ceux de ton compte.</p>
+      <div class="choices">${rows}</div>
+      <div class="foot"><span class="btn quiet">${ic('left', 13)}Retour</span><span class="sp"></span><span class="btn quiet">Plus tard</span><span class="btn primary">Continuer</span></div>`, 'Claude · toi@exemple.dev');
+  },
+  projet() {
+    const rows = PROJECTS.map(([i, l, d], k) => `<div class="choice ${k === 0 ? 'on' : ''}"><span class="rd"></span><span class="t">${ic(i, 14)}<b>${l}</b>${k === 0 ? '<span class="pill rec">Recommandé</span>' : ''}</span><span></span><span class="d">${d}</span>
+      ${k === 0 ? `<div class="x"><span class="cmd" style="font-family:inherit"><span class="mono">~/dev/atlas-web</span><span class="btn sm">Parcourir…</span></span></div>` : ''}</div>`).join('');
+    return bWelcome(`${bSteps(2)}<h1>Où travaille ton premier agent ?</h1>
+      <p class="why">Escouade range tes agents par projet. Le plus simple : un dépôt que tu as déjà.</p>
+      <div class="choices">${rows}</div>
+      <div class="gloss">${GLOSS.map(([i, l, d]) => `<div>${ic(i, 13)}<span><b>${l}</b> : ${d}</span></div>`).join('')}</div>
+      <div class="foot"><span class="btn quiet">${ic('left', 13)}Retour</span><span class="sp"></span><span class="btn quiet">Plus tard</span><span class="btn primary">Ouvrir le projet</span></div>`, 'Claude · toi@exemple.dev');
+  },
+  agent() {
+    const tip = `<div class="tip left" id="tip" style="--ay:26px"><h3>${ic('shield', 14)}Ton agent te demande</h3>
+      <p>Il veut lancer une commande. Il attend ta réponse, et sa carte le dit dans la barre.</p>
+      <div class="dd"><div><b>Autoriser</b><span class="muted">cette fois</span></div><div><b>Toujours</b><span class="muted">cette commande, dans ce projet</span></div><div><b>Refuser</b><span class="muted">il cherche autrement</span></div></div>
+      <div class="acts"><span class="btn sm primary">Compris</span><span class="btn sm quiet">Ne plus montrer</span><span class="k">1 sur 2</span></div></div>`;
+    return `<div class="win">${titlebar('atlas-web')}${rail({ tiles: '<span class="tile">AW</span>', help: true })}${sidebar({ name: 'tests-qui-cassent', ring: 'wt', what: 'attend ta réponse', key: 'worktree', branch: 'escouade/tests-qui-cassent' })}
+      <div class="main"><div class="chead"><b>tests-qui-cassent</b><span class="meta">${ic('branch', 12)}<span class="mono">escouade/tests-qui-cassent</span></span></div>${conversation({ starter: 1, stream: true, perm: true })}${composer()}</div>
+      ${statusbar({ active: 1, quota: '3 %', branch: 'escouade/tests-qui-cassent' })}${tip}<div class="halo" id="halo"></div></div>`;
+  },
+  decouverte() {
+    const items = [['Écrire un ticket', 'done'], ['Ouvrir un terminal', 'done'], ['Dicter un message', 'cur'], ['Le pilote auto'], ['La spec et les décisions'], ['Connecter GitHub']];
+    const disc = `<div class="disc"><div class="dh">${ic('sparkle', 13)}<b>À découvrir</b><span class="n">2 sur 17</span><span class="sp btn sm quiet icon" aria-label="Masquer">${ic('close', 12)}</span></div>
+      ${items.map(([l, k]) => `<div class="it ${k ?? ''}"><span class="ck">${k === 'done' ? ok(10) : ''}</span><span class="tx ell">${l}</span>${k === 'cur' ? `<span class="go">${ic('right', 12)}</span>` : ''}</div>`).join('')}
+      <div class="more">${ic('down', 12)}11 autres</div></div>`;
+    const list = `<div class="agent on"><div class="r"><span class="ring"></span><span class="n ell">export-csv</span><span class="key sp">ATL-45</span></div><div class="m ell">En cours · écrit les tests</div></div>`;
+    const tip = `<div class="tip down" id="tip"><h3>${ic('mic', 14)}Dicte au lieu de taper</h3>
+      <p>Maintiens le micro, parle, relâche : le texte arrive ici. Whisper transcrit sur ta machine ; son modèle « base » (148 Mo) se télécharge une fois, quand tu le demandes.</p>
+      <div class="acts"><span class="btn sm primary">${ic('download', 12)}Télécharger et essayer</span><span class="btn sm quiet">Plus tard</span><span class="k">Écarter</span></div></div>`;
+    return `<div class="win">${titlebar('atlas-web')}${rail({ tiles: '<span class="tile">AW</span>', help: true })}${sidebar({ list, foot: disc })}
+      <div class="main"><div class="chead"><b>export-csv</b><span class="meta">${ic('branch', 12)}<span class="mono">escouade/export-csv</span></span></div>${conversation({ starter: 0, ai: 'J’ajoute <code>exportCsv()</code> dans <code>src/invoices.ts</code> et un bouton « Exporter » à la liste. J’écris d’abord les tests.' }).replace(STARTERS[0], 'Ajoute un export CSV de la liste des factures')}${composer({ text: '' })}</div>
+      ${statusbar({ active: 1, quota: '11 %', branch: 'escouade/export-csv' })}${tip}<div class="halo" id="halo"></div></div>`;
+  },
+};
+const B_TARGET = { agent: ['#perm', 'right'], decouverte: ['#mic', 'above'] };
+
+/* ═════════════════════ C « La ligne » ═════════════════════ */
+const C_STATIONS = [
+  ['Harness', 'Claude Code'],
+  ['Compte', 'celui de la machine'],
+  ['Réglages de départ', 'Édits auto · Sonnet'],
+  ['Premier projet', 'atlas-web'],
+  ['Premier agent', 'un message, une réponse'],
+  ['Statistiques', 'partagées ou non'],
+];
+function cLine(cur, o = {}) {
+  const st = C_STATIONS.map(([n, s], i) => {
+    const k = (o.skipped ?? []).includes(i) ? 'skip' : i < cur ? 'done' : i === cur ? 'cur' : 'todo';
+    return `<div class="st ${k}"><span class="nd"><i></i></span><span class="nm">${n}</span><span class="sub">${k === 'skip' ? 'passé · à reprendre' : k === 'cur' ? 'maintenant' : s}</span></div>`;
+  }).join('');
+  const lanes = ['--lane-1', '--lane-2', '--lane-3', '--lane-4', '--lane-5'];
+  const fan = `<div class="fan"><svg width="220" height="70" aria-hidden="true">${lanes.map((l, i) => `<path d="M1 0 C 1 30, ${30 + i * 36} 26, ${30 + i * 36} 66" style="stroke:var(${l})"/>`).join('')}</svg></div>`;
+  return `<nav class="cline" aria-label="Le parcours"><div class="brand"><span class="logo-tile">${ic('agents', 16)}</span><span style="display:grid"><b>Premier lancement</b><span>6 stations · environ 2 minutes</span></span></div>
+    <div class="stations">${st}</div>${fan}
+    <div style="display:grid;gap:4px;margin-left:2px;font-size:12px;color:var(--muted)"><span style="color:var(--soft);font-weight:600">Ensuite : À découvrir</span><span>Planifier · Coder · Relire · Livrer · Piloter</span></div>
+    <div class="later"><span>Tout se passe et se reprend. Le parcours revient depuis Aide › Premier lancement.</span></div></nav>`;
+}
+function cShell(cur, body, foot, o = {}) {
+  return `<div class="win full">${titlebar()}<div class="cbody">${cLine(cur, o)}<main class="cmain">${body}${foot}</main></div><div class="status"><span>Escouade 2.3.0</span><span class="sp">${o.account ?? 'Aucun compte encore'}</span></div></div>`;
+}
+const cFoot = (primary, o = {}) => `<div class="cfoot">${o.back === false ? '' : `<span class="btn quiet">${ic('left', 13)}Retour</span>`}<span class="keys narrow-hide"><kbd>↑</kbd><kbd>↓</kbd> choisir · <kbd>Entrée</kbd> valider</span><span class="sp"></span><span class="btn quiet">Plus tard</span><span class="btn primary lg">${primary}${ic('right', 13)}</span></div>`;
+const C = {
+  harness() {
+    const rows = HARNESSES.map((h) => `<div class="choice ${h.rec ? 'on' : ''} ${h.state === 'no' ? 'dis' : ''}"><span class="rd"></span>
+      <span class="t"><b>${h.name}</b>${h.ver ? `<span class="ver">${h.ver}</span>` : ''}${h.rec ? '<span class="pill rec">Recommandé</span>' : ''}</span>
+      <span class="state ${h.state}">${h.state === 'ok' ? ok(12) : ''}${h.stateText}</span>
+      ${h.cmd ? `<div class="x"><span class="cmd"><span>${h.cmd}</span><span class="btn sm">${ic('copy', 12)}Copier</span></span></div>` : ''}</div>`).join('');
+    return cShell(0, `<div class="cq"><div class="q"><div class="ord"><span class="ln"></span>Station 1 · le harness</div>
+      <h1>Avec quel harness tes agents travaillent-ils ?</h1>
+      <p class="why">Un harness est le programme d’agent de code de ta machine. Escouade le lance et le pilote ; il garde ta connexion et tes réglages.</p>
+      <div class="choices">${rows}</div></div></div>`, cFoot('Continuer', { back: false }));
+  },
+  modes() {
+    const rows = MODES.map(([id, l, d, rec, dis]) => `<div class="choice ${rec ? 'on' : ''} ${dis ? 'dis' : ''}"><span class="rd"></span><span class="t"><b>${l}</b>${rec ? '<span class="pill rec">Recommandé</span>' : ''}</span>
+      ${dis ? `<span class="state">${ic('lock', 12)}Éteint</span>` : '<span></span>'}<span class="d">${d}</span></div>`).join('');
+    return cShell(2, `<div class="cq"><div class="q"><div class="ord"><span class="ln"></span>Station 3 · les réglages de départ</div>
+      <h1>Quand tes agents doivent-ils te demander ?</h1>
+      <p class="why">Le mode des nouveaux agents ; tu le changes pour chacun. Modèle Sonnet, effort moyen : ceux de ton compte.</p>
+      <div class="choices">${rows}</div></div></div>`, cFoot('Continuer'), { account: 'Claude · toi@exemple.dev' });
+  },
+  projet() {
+    const rows = PROJECTS.map(([i, l, d], k) => `<div class="choice ${k === 0 ? 'on' : ''}"><span class="rd"></span><span class="t">${ic(i, 14)}<b>${l}</b>${k === 0 ? '<span class="pill rec">Recommandé</span>' : ''}</span><span></span><span class="d">${d}</span>
+      ${k === 0 ? `<div class="x"><span class="cmd" style="font-family:inherit"><span class="mono">~/dev/atlas-web</span><span class="btn sm">Parcourir…</span></span></div>` : ''}</div>`).join('');
+    const branchDiagram = `<svg width="100%" height="64" viewBox="0 0 560 64" preserveAspectRatio="xMinYMid meet" aria-label="Le dépôt sur main, deux agents chacun sur sa branche" style="max-width:560px">
+      <path d="M8 14 H552" style="stroke:var(--lane-main);stroke-width:2;fill:none"/>
+      <path d="M90 14 C 110 14, 110 40, 130 40 H 330" style="stroke:var(--lane-1);stroke-width:2;fill:none"/>
+      <path d="M200 14 C 220 14, 220 56, 240 56 H 470" style="stroke:var(--lane-2);stroke-width:2;fill:none"/>
+      <circle cx="40" cy="14" r="5" style="fill:var(--lane-main)"/><circle cx="330" cy="40" r="5" style="fill:var(--lane-1)"/><circle cx="470" cy="56" r="5" style="fill:var(--lane-2)"/>
+      <text x="48" y="10" style="font:500 11px 'Inter Variable',Inter,sans-serif;fill:var(--muted)">main</text><text x="342" y="44" style="font:500 11px 'Inter Variable',Inter,sans-serif;fill:var(--muted)">agent « export-csv » · son worktree</text>
+      <text x="482" y="60" style="font:500 11px 'Inter Variable',Inter,sans-serif;fill:var(--muted)">agent 2</text></svg>`;
+    return cShell(3, `<div class="cq"><div class="q"><div class="ord"><span class="ln"></span>Station 4 · le premier projet</div>
+      <h1>Où travaille ton premier agent ?</h1>
+      <p class="why">Un projet est un dossier, avec ses agents, son Kanban et ses docs. Chaque agent y travaille dans son worktree, sur sa branche : deux agents ne se gênent pas, et rien n’entre dans ta branche sans toi.</p>
+      ${branchDiagram}
+      <div class="choices">${rows}</div></div></div>`, cFoot('Ouvrir le projet'), { account: 'Claude · toi@exemple.dev' });
+  },
+  agent() {
+    const live = `<div class="live"><div class="chead"><b>tests-qui-cassent</b><span class="meta">${ic('branch', 12)}<span class="mono ell">escouade/tests-qui-cassent</span></span></div>${conversation({ starter: 1, stream: true, perm: true })}${composer()}</div>`;
+    return cShell(4, `<div class="cagent"><div class="cq"><div class="q"><div class="ord"><span class="ln"></span>Station 5 · le premier agent</div>
+      <h1>Ton agent te demande la permission</h1>
+      <p class="why">Il a lu le dépôt et veut lancer les tests. En Édits auto, chaque commande te demande : <b style="color:var(--text)">Autoriser</b> cette fois, <b style="color:var(--text)">Toujours</b> pour cette commande dans ce projet, ou <b style="color:var(--text)">Refuser</b> pour qu’il cherche autrement.</p>
+      <p class="why extra">Ton message est parti sur ton compte Claude Code et compte dans son quota. Plus tard, une demande comme celle-ci fait clignoter la carte de l’agent ; Ctrl J t’y amène.</p></div></div>${live}</div>`,
+      cFoot('Continuer'), { account: 'Claude · toi@exemple.dev · 5 h 3 %' });
+  },
+  decouverte() {
+    const elbow = (last) => `<span class="elbow" aria-hidden="true"><svg width="30" height="96">${last ? '' : '<path d="M0 0 V96" style="stroke:var(--lane-main);opacity:.7"/>'}<path d="M0 0 C0 15, 6 15, 30 15" style="stroke:var(--lc)"/></svg></span>`;
+    const lanes = `<div class="trunk-head"><span></span><span class="o"><i></i></span><span class="t">Installé · harness, compte, projet, premier agent</span></div>` +
+      DISCOVER.map(([n, lc, stops], i) => `<div class="lane" style="--lc:var(--${lc})"><span class="ln"><i></i>${n}</span>${elbow(i === DISCOVER.length - 1)}<div class="track">${stops.map(([t, k, m]) => `<div class="stop ${k ?? ''}"><span class="o"><i></i></span><span class="t">${t}</span><span class="m">${m}</span></div>`).join('')}</div></div>`).join('');
+    const detail = `<aside class="detail"><h2>${ic('mic', 16)}Dicter un message</h2>
+      <p>Maintiens le micro sous le message, parle, relâche : ton texte arrive dans le champ, prêt à relire.</p>
+      <div class="facts"><div>${ic('download', 13)}<span>Whisper « base », 148 Mo, téléchargé une fois quand tu cliques.</span></div><div>${ic('lock', 13)}<span>Transcrit sur ta machine : rien de ce que tu dis n’en sort.</span></div><div>${ic('globe', 13)}<span>Ou un service en ligne, avec ta clé, dans Réglages › Voix.</span></div></div>
+      <div class="acts"><span class="btn primary">${ic('mic', 13)}Essayer</span><span class="btn quiet">Écarter</span></div></aside>`;
+    return `<div class="win wide">${titlebar('atlas-web')}${rail({ tiles: '<span class="tile">AW</span>', help: 'on' })}<div class="main">
+      <div class="map"><div class="lanes"><div class="mh"><h1>À découvrir</h1><span>2 sur 17 · chaque station t’amène au vrai geste</span><span class="sp btn sm quiet">Tout masquer</span></div>${lanes}
+      <div class="legend"><span><i class="f"></i>fait</span><span><i></i>à essayer</span><span><i style="box-shadow:inset 0 0 0 2px var(--line-3)"></i>pas sur ce poste</span></div></div>${detail}</div>
+      </div>${statusbar({ active: 1, quota: '11 %' })}</div>`;
+  },
+};
+
+/* ───────── Rendu ───────── */
+const DIRS = { a: A, b: B, c: C };
+document.getElementById('app').innerHTML = (DIRS[D][ROUTE] ?? DIRS[D].harness)();
+
+// A : le fil, du bouton du guide à la vraie chose dans la fenêtre.
+function drawThread() {
+  const svg = document.getElementById('thread');
+  const sel = A_TARGET[ROUTE];
+  if (!svg || !sel) return;
+  const to = document.querySelector(sel);
+  const from = document.querySelector('#gcur .k');
+  if (!to || !from) return;
+  to.classList.add('target');
+  const w = document.querySelector('.win').getBoundingClientRect();
+  const a = from.getBoundingClientRect(), b = to.getBoundingClientRect();
+  // Le fil court dans les gouttières, en angles arrondis comme les voies du git graph : il longe le bord du guide, puis
+  // rejoint la cible par la droite, ou par-dessous quand elle est dans le compositeur (rien de lu n'est barré).
+  const g = document.querySelector('.guide').getBoundingClientRect();
+  const r = 8, x1 = a.left - w.left - 2, y1 = a.top - w.top + a.height / 2, gx = g.left - w.left - 4;
+  const comp = to.closest('.composer');
+  let d;
+  if (comp) {
+    const c = comp.getBoundingClientRect();
+    const yb = c.bottom - w.top + 7, x2 = b.left - w.left + b.width / 2, y2 = b.bottom - w.top + 3;
+    d = `M${x1} ${y1} H${gx + r} Q${gx} ${y1} ${gx} ${y1 + r} V${yb - r} Q${gx} ${yb} ${gx - r} ${yb} H${x2 + r} Q${x2} ${yb} ${x2} ${yb - r} V${y2}`;
+    svg.innerHTML = `<path d="${d}"/><circle class="end" cx="${x2}" cy="${y2}" r="3.5"/>`;
+  } else {
+    const x2 = b.right - w.left + 6, y2 = b.top - w.top + Math.min(b.height / 2, 24), down = y2 > y1 ? 1 : -1;
+    d = Math.abs(y2 - y1) < 2 * r ? `M${x1} ${y1} H${x2}` : `M${x1} ${y1} H${gx + r} Q${gx} ${y1} ${gx} ${y1 + r * down} V${y2 - r * down} Q${gx} ${y2} ${gx - r} ${y2} H${x2}`;
+    svg.innerHTML = `<path d="${d}"/><circle class="end" cx="${x2}" cy="${y2}" r="3.5"/>`;
+  }
+}
+// B : la bulle et son halo, posés sur la vraie chose.
+function placeTip() {
+  const spec = B_TARGET[ROUTE];
+  const tip = document.getElementById('tip'), halo = document.getElementById('halo');
+  if (!spec || !tip) return;
+  const to = document.querySelector(spec[0]);
+  const w = document.querySelector('.win').getBoundingClientRect();
+  const b = to.getBoundingClientRect();
+  Object.assign(halo.style, { left: `${b.left - w.left - 2}px`, top: `${b.top - w.top - 2}px`, width: `${b.width + 4}px`, height: `${b.height + 4}px` });
+  if (spec[1] === 'right') {
+    const left = Math.min(b.right - w.left + 18, w.width - tip.offsetWidth - 12);
+    const overlap = left < b.right - w.left + 18;
+    if (overlap) { // Pas la place à droite : la bulle passe sous la carte, la flèche en haut.
+      tip.classList.remove('left'); tip.classList.add('up');
+      tip.style.left = `${b.right - w.left - tip.offsetWidth}px`; tip.style.top = `${b.bottom - w.top + 14}px`;
+      tip.style.setProperty('--ax', `${tip.offsetWidth - 40}px`);
+    } else { tip.style.left = `${left}px`; tip.style.top = `${b.top - w.top}px`; }
+  } else {
+    // Au-dessus du compositeur qui porte le bouton, la flèche sur le bouton.
+    const box = to.closest('.composer')?.getBoundingClientRect() ?? b;
+    const left = Math.max(12, b.left - w.left + b.width / 2 - tip.offsetWidth + 34);
+    tip.style.left = `${left}px`;
+    tip.style.top = `${box.top - w.top - tip.offsetHeight - 12}px`;
+    tip.style.setProperty('--ax', `${b.left - w.left + b.width / 2 - left - 6}px`);
+    halo.style.top = `${b.top - w.top - 2}px`;
+  }
+}
+document.fonts.ready.then(() => { if (D === 'a') drawThread(); if (D === 'b') placeTip(); });
+</script>
+</body>
+</html>
