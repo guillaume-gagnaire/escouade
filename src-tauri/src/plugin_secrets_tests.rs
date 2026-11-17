@@ -14,7 +14,9 @@ use std::sync::Arc;
 const ID: &str = "dev.test.vpn";
 const SECRET: &str = "hunter2-openvpn-password";
 
-/// What the app's log says while the test runs (the test's own process under nextest).
+/// What Escouade's own crates log while the test runs (the test's own process under nextest), at every level. The
+/// other crates are left out: at « trace », the compiler of the plugins' modules alone says enough to make the test
+/// last minutes (it timed out on the CI's Mac).
 struct Capture(parking_lot::Mutex<Vec<String>>);
 
 impl log::Log for Capture {
@@ -22,6 +24,9 @@ impl log::Log for Capture {
         true
     }
     fn log(&self, record: &log::Record) {
+        if !record.target().starts_with("escouade") {
+            return;
+        }
         self.0.lock().push(format!("{}", record.args()));
     }
     fn flush(&self) {}
