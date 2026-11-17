@@ -1038,3 +1038,111 @@ async fn the_requests_are_kept_across_a_restart() {
     assert_eq!(next.id, "a-2");
     assert!(again.ask_file(&found, None, Some(0)).is_ok());
 }
+
+// ---------- the screen's needs (ESC-510) ----------
+
+#[test]
+fn the_statistics_of_an_answer_say_its_sort_its_wait_and_the_recommendation_never_a_text() {
+    let mut a = Ask {
+        kind: AskKind::Choice,
+        created_at: 1_000,
+        recommend: Some(AskRecommend {
+            option: Some("b".into()),
+            text: None,
+            why: "parce que".into(),
+        }),
+        ..Ask::default()
+    };
+    a.answer = Some(AskAnswer {
+        options: vec!["b".into()],
+        via: AskVia::Keyboard,
+        at: 1_000 + 30 * 60_000,
+        note: Some("garde la courbe".into()),
+        ..AskAnswer::default()
+    });
+    assert_eq!(
+        answered_event(&a),
+        Some(crate::telemetry::Event::AskAnswered {
+            kind: "choice",
+            delay: "hour",
+            via: "keyboard",
+            followed: Some(true),
+        })
+    );
+    a.answer.as_mut().unwrap().options = vec!["a".into()];
+    a.answer.as_mut().unwrap().at = 1_000 + 3 * 24 * 3_600_000;
+    assert_eq!(
+        answered_event(&a),
+        Some(crate::telemetry::Event::AskAnswered {
+            kind: "choice",
+            delay: "longer",
+            via: "keyboard",
+            followed: Some(false),
+        })
+    );
+    // An answer of an agent the user left it to is not the user's.
+    a.answer.as_mut().unwrap().by = Some("c1".into());
+    assert_eq!(answered_event(&a), None);
+    // A task has no recommendation to follow.
+    let t = Ask {
+        kind: AskKind::Task,
+        answer: Some(AskAnswer {
+            done: Some(true),
+            via: AskVia::Voice,
+            at: 5_000,
+            ..AskAnswer::default()
+        }),
+        ..Ask::default()
+    };
+    assert_eq!(
+        answered_event(&t),
+        Some(crate::telemetry::Event::AskAnswered {
+            kind: "task",
+            delay: "ten_minutes",
+            via: "voice",
+            followed: None,
+        })
+    );
+}
+
+#[test]
+fn the_files_of_closed_requests_are_kept_7_30_or_90_days_as_set() {
+    assert_eq!(kept_days(7), 7);
+    assert_eq!(kept_days(90), 90);
+    assert_eq!(kept_days(30), 30);
+    // Anything else (a hand-edited settings.json): 30.
+    assert_eq!(kept_days(0), 30);
+    assert_eq!(kept_days(365), 30);
+}
+
+#[tokio::test]
+async fn a_shorter_keeping_erases_the_files_sooner_and_says_so() {
+    let h = harness("asks-files-keep-7");
+    h.core.settings.write().inbox_keep_days = 7;
+    let (p, _) = h.project(false).await;
+    let a = put_agent(&h, &p, "design");
+    let kept = h
+        .core
+        .ask_deposit(
+            agent_author(&a),
+            &p.id,
+            None,
+            choice("Choisis"),
+            vec![bytes("a.png", PNG, None)],
+        )
+        .unwrap();
+    h.core
+        .ask_withdraw(&Asker::Agent(a.clone()), &kept.id, "plus besoin")
+        .unwrap();
+    let day = 24 * 3600 * 1000;
+    h.core.asks.lock().list[0].closed_at = Some(now_ms() - 8 * day);
+    h.core.asks_sweep();
+    let after = h.core.ask(&kept.id).unwrap();
+    assert!(after.files_erased_at.is_some());
+    assert!(h
+        .core
+        .ask_file(&after, None, Some(0))
+        .unwrap_err()
+        .to_string()
+        .contains("7 jours"));
+}

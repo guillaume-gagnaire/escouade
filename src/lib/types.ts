@@ -88,6 +88,8 @@ export interface Settings {
   mcpEnabled: boolean;
   /** « Les agents peuvent répondre aux demandes des autres agents » (ESC-423): nobody by default. */
   agentsAnswer?: AgentsAnswer;
+  /** « Garder les fichiers des demandes closes », in days: 7, 30 (by default) or 90. */
+  inboxKeepDays?: number;
   /** The port of the MCP server on 127.0.0.1 (0 until its first start): the backend's own. */
   mcpPort: number;
   /** « Les agents tiennent une liste de tâches »: Claude Code's task list tools are on for the agents that start, so their progress can be shown (`Agent.plan`). */
@@ -3549,4 +3551,121 @@ export interface DeleteLoss {
   names: string[];
   unmerged: number;
   base: string;
+}
+
+// ---------- the box « À toi » (ESC-509, ESC-510: docs/INBOX.md) ----------
+
+export type AskKind = 'choice' | 'confirm' | 'answer' | 'task';
+export type AskState = 'open' | 'snoozed' | 'answered' | 'read' | 'withdrawn' | 'expired' | 'retired';
+export type AskFileKind = 'image' | 'pdf' | 'markdown' | 'word' | 'csv' | 'other';
+export type AskVia = 'click' | 'keyboard' | 'voice' | 'phone' | 'delegated';
+
+export interface AskOption {
+  id: string;
+  label: string;
+  description: string;
+}
+
+/** A file of a request (`asks::AskFile`): its copy is the core's, read by `inbox_file`. */
+export interface AskFile {
+  file: string;
+  name: string;
+  kind: AskFileKind;
+  mediaType: string;
+  size: number;
+  option: string | null;
+  byUser: boolean;
+}
+
+export interface AskAnswer {
+  options: string[];
+  yes: boolean | null;
+  text: string | null;
+  done: boolean | null;
+  steps: boolean[];
+  note: string | null;
+  by: string | null;
+  byName: string | null;
+  via: AskVia;
+  at: number;
+  sendAt: number | null;
+  sentAt: number | null;
+}
+
+export interface AskEvent {
+  at: number;
+  what: string;
+  detail: string;
+}
+
+/** A request as the window shows it (`asks::WindowAsk`). */
+export interface WindowAsk {
+  id: string;
+  projectId: string;
+  ticketId: string | null;
+  author: { agent: string | null; name: string; chef: boolean };
+  kind: AskKind;
+  title: string;
+  body: string;
+  options: AskOption[];
+  multi: boolean;
+  steps: string[];
+  recommend: { option: string | null; text: string | null; why: string } | null;
+  unblocks: string;
+  tickets: string[];
+  urgency: 'normal' | 'today';
+  expiresAt: number;
+  decision: boolean;
+  wake: boolean;
+  yesLabel: string;
+  noLabel: string;
+  gate: boolean;
+  files: AskFile[];
+  state: AskState;
+  createdAt: number;
+  updatedAt: number;
+  snoozedUntil: number | null;
+  woke: boolean;
+  delegatedTo: string | null;
+  answer: AskAnswer | null;
+  readAt: number | null;
+  closedAt: number | null;
+  reason: string | null;
+  filesErasedAt: number | null;
+  seen: boolean;
+  history: AskEvent[];
+  projectName: string;
+  private: boolean;
+  ticketKey: string | null;
+  delegatedName: string | null;
+  /** The agents the user may leave it to, by id and name. */
+  delegates: [string, string][];
+}
+
+/** The box as the window reads it (`asks::InboxView`). */
+export interface InboxView {
+  enabled: boolean;
+  asks: WindowAsk[];
+  open: number;
+}
+
+/** A part of a request's file (`asks::InboxChunk`), its bytes in base64. */
+export interface InboxChunk {
+  name: string;
+  kind: AskFileKind;
+  mediaType: string;
+  size: number;
+  offset: number;
+  data: string;
+}
+
+/** An answer as the window gives it (`asks::AnswerIn`). */
+export interface AskAnswerIn {
+  options?: string[];
+  yes?: boolean;
+  text?: string;
+  done?: boolean;
+  steps?: boolean[];
+  note?: string;
+  via?: AskVia;
 }

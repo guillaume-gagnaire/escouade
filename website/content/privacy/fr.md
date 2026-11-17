@@ -47,6 +47,12 @@ Chaque événement porte son nom, son heure (UTC, à la milliseconde), un identi
 | `pr_merged` | La pull request d’un ticket est mergée, depuis Escouade ou chez l’hébergeur | `forge` : `github`, `gitlab`, `bitbucket`, `gitea` (Forgejo compris), `azure` ou `other` (l’hébergeur d’un plugin d’un tiers, jamais nommé) |
 | `ci_fix_started` | Une CI en échec est donnée à un agent | `from` : `agent` ou `ticket` ; `by` : `user` ou `autopilot` |
 | `pr_review_started` | Une pull request est donnée à relire à un agent | `forge` : `github`, `gitlab`, `bitbucket`, `gitea` (Forgejo compris), `azure` ou `other` (l’hébergeur d’un plugin d’un tiers, jamais nommé) |
+| `inbox_opened` | La boîte « À toi » est ouverte | `from` : `tile` (sa tuile), `shortcut` (Ctrl Maj J) ou `settings` (« Ouvrir la boîte ») ; `scope` : `all` ou `project` |
+| `ask_answered` | Tu réponds à une demande d’un agent dans la boîte | `kind` : `choice`, `confirm`, `answer` ou `task` ; `delay` : depuis combien de temps elle attendait (`ten_minutes`, `hour`, `day` ou `longer`) ; `via` : `click`, `keyboard` ou `voice` ; `followed` : pour un choix recommandé, si tu as suivi la recommandation (oui ou non) ; jamais la question ni la réponse |
+| `ask_snoozed` | Une demande est remise à plus tard | — |
+| `ask_reopened` | Tu reviens sur une réponse avant que l’agent l’ait lue | — |
+| `inbox_compare_opened` | Les rendus d’un choix sont comparés en grand | — |
+| `inbox_attachment_opened` | Un fichier joint à une demande est regardé | `type` : `image`, `pdf`, `markdown`, `word`, `csv` ou `other` ; jamais son nom |
 
 Un événement dit qu’une fonctionnalité a servi, pas sur quoi : jamais le nom du projet, de l’agent, de la branche ou du dépôt, ni l’adresse d’un hébergeur, ni ce qui a été écrit.
 

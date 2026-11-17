@@ -642,6 +642,8 @@ describe('SettingsModal', () => {
             'plugins_list',
             'plugin_seed_offers',
             'data_dir',
+            // What the files of the box « À toi » weigh (ESC-510), in « Avancé › Données locales ».
+            'inbox_weight',
             // The amber dots of the bar (R8): the code hosts' accounts as last checked, each plugin's process.
             'forges',
             'plugin_run',

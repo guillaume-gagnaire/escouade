@@ -44,6 +44,12 @@ const EVENTS = [
   'pr_merged',
   'ci_fix_started',
   'pr_review_started',
+  'inbox_opened',
+  'ask_answered',
+  'ask_snoozed',
+  'ask_reopened',
+  'inbox_compare_opened',
+  'inbox_attachment_opened',
 ];
 /** The values some props take, written on the page as `value`. */
 const VALUES = [
@@ -66,8 +72,29 @@ const VALUES = [
   'ticket',
   'project',
   'global',
+  // The box « À toi » (ESC-510).
+  'tile',
+  'shortcut',
+  'settings',
+  'all',
+  'choice',
+  'confirm',
+  'answer',
+  'task',
+  'ten_minutes',
+  'hour',
+  'day',
+  'longer',
+  'click',
+  'keyboard',
+  'voice',
+  'image',
+  'pdf',
+  'markdown',
+  'word',
+  'csv',
 ];
-const PROPS = ['worktree', 'by', 'op', 'service', 'from', 'from_store', 'forge'];
+const PROPS = ['worktree', 'by', 'op', 'service', 'from', 'from_store', 'forge', 'scope', 'kind', 'delay', 'via', 'followed', 'type'];
 
 const source = (lang: Lang) => readFileSync(new URL(`../${privacySource(lang)}`, import.meta.url), 'utf8');
 const render = (lang: Lang) => renderDoc(source(lang), { lang, link: (p) => p, callouts: CATALOGS[lang].docs.callouts });

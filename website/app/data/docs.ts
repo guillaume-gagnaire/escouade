@@ -16,6 +16,7 @@ export const DOC_GROUPS = [
       'workflows',
       'shared-memory',
       'overview',
+      'inbox',
       'notifications',
       'claude-code-view',
       'remote-control',

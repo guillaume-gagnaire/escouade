@@ -1,5 +1,5 @@
 // Everything the French page says. en.ts says the same, key for key.
-// The French guillemets hold non-breaking spaces ( ), so that « Importer » never splits over two lines.
+// The French guillemets hold non-breaking spaces ( ), so that « Importer » never splits over two lines.
 import type { Catalog } from './catalog';
 import { DOWNLOAD, SUPPORT } from './site';
 import { docPath } from './docs';
@@ -408,6 +408,7 @@ export const fr: Catalog = {
       chat: 'La conversation',
       plan: 'L’avancée d’un plan',
       overview: 'Suivre ses agents',
+      inbox: 'La boîte « À toi »',
       notifications: 'Notifications',
       'claude-code-view': 'La vue terminal',
       'remote-control': 'Remote control',

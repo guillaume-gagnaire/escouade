@@ -115,6 +115,17 @@ export const ICONS = {
     '<rect x="5.25" y="1.75" width="5.5" height="3.5" rx="1" /><rect x="1.75" y="10.75" width="5" height="3.5" rx="1" /><rect x="9.25" y="10.75" width="5" height="3.5" rx="1" /><path d="M8 5.25v2.5M4.25 10.75V9.5c0-.7.55-1.25 1.25-1.25h5c.7 0 1.25.55 1.25 1.25v1.25" />',
   expand: '<path d="M9.5 2.75h3.75V6.5M6.5 13.25H2.75V9.5M13.25 2.75 9 7M2.75 13.25 7 9" />',
   copy: '<rect x="5.25" y="5.25" width="8" height="8" rx="1.5" /><path d="M10.75 5.25V3.5c0-.7-.55-1.25-1.25-1.25h-6c-.7 0-1.25.55-1.25 1.25v6c0 .7.55 1.25 1.25 1.25h1.75" />',
+  // The box « À toi » (ESC-510): its tile, a choice, a question, a sheet, an archive, the zoom of its PDF.
+  inbox:
+    '<path d="M2.75 9.25h3l1 1.75h2.5l1-1.75h3" /><path d="M2.75 9.25 4.5 3.75h7l1.75 5.5v3c0 .55-.45 1-1 1h-9.5c-.55 0-1-.45-1-1z" />',
+  sheet: '<rect x="2.5" y="2.75" width="11" height="10.5" rx="1.5" /><path d="M2.5 6.25h11M2.5 9.75h11M6.25 2.75v10.5" />',
+  archive:
+    '<rect x="2.5" y="3" width="11" height="3" rx=".8" /><path d="M3.5 6v6.25c0 .4.35.75.75.75h7.5c.4 0 .75-.35.75-.75V6M6.5 8.5h3" />',
+  zoom: '<circle cx="7" cy="7" r="4.25" /><path d="M10.25 10.25l3 3M5.25 7h3.5M7 5.25v3.5" />',
+  choice:
+    '<rect x="2.25" y="3" width="4.75" height="10" rx="1.25" /><rect x="9" y="3" width="4.75" height="10" rx="1.25" /><path d="M10.4 8.1l.9.9 1.4-1.6" />',
+  undo: '<path d="M5.5 3.75L2.75 6.5 5.5 9.25" /><path d="M2.75 6.5h6.5a3.5 3.5 0 0 1 0 7H7" />',
+  question: '<circle cx="8" cy="8" r="5.75" /><path d="M6.4 6.3a1.7 1.7 0 0 1 3.3.5c0 1.15-1.7 1.4-1.7 2.45M8 11v.01" />',
 } as const;
 
 export type IconName = keyof typeof ICONS;

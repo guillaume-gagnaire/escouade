@@ -122,6 +122,27 @@ pub enum Event {
     PrReviewStarted {
         forge: &'static str,
     },
+    /// The box « À toi » opened (ESC-510): from where, on what.
+    InboxOpened {
+        from: &'static str,
+        scope: &'static str,
+    },
+    /// A request of the box answered by the user: its sort, how long it waited (in a bracket), how, and whether the
+    /// agent's recommendation was followed (a choice with one).
+    AskAnswered {
+        kind: &'static str,
+        delay: &'static str,
+        via: &'static str,
+        followed: Option<bool>,
+    },
+    AskSnoozed,
+    AskReopened,
+    /// « Comparer en grand ».
+    InboxCompareOpened,
+    /// A file of a request looked at: its sort (image, pdf, markdown, word, csv, other).
+    InboxAttachmentOpened {
+        kind: &'static str,
+    },
 }
 
 impl Event {
@@ -157,6 +178,12 @@ impl Event {
             Event::PrMerged { .. } => "pr_merged",
             Event::CiFixStarted { .. } => "ci_fix_started",
             Event::PrReviewStarted { .. } => "pr_review_started",
+            Event::InboxOpened { .. } => "inbox_opened",
+            Event::AskAnswered { .. } => "ask_answered",
+            Event::AskSnoozed => "ask_snoozed",
+            Event::AskReopened => "ask_reopened",
+            Event::InboxCompareOpened => "inbox_compare_opened",
+            Event::InboxAttachmentOpened { .. } => "inbox_attachment_opened",
         }
     }
 
@@ -209,6 +236,19 @@ impl Event {
             Event::IntegrationConnected { service } | Event::TicketsImported { service } => {
                 json!({ "service": service })
             }
+            Event::InboxOpened { from, scope } => json!({ "from": from, "scope": scope }),
+            Event::AskAnswered {
+                kind,
+                delay,
+                via,
+                followed,
+            } => match followed {
+                Some(f) => {
+                    json!({ "kind": kind, "delay": delay, "via": via, "followed": yes(*f) })
+                }
+                None => json!({ "kind": kind, "delay": delay, "via": via }),
+            },
+            Event::InboxAttachmentOpened { kind } => json!({ "type": kind }),
             _ => json!({}),
         };
         match props {
@@ -819,6 +859,20 @@ mod tests {
                 autopilot: false,
             },
             Event::PrReviewStarted { forge: "gitea" },
+            Event::InboxOpened {
+                from: "tile",
+                scope: "all",
+            },
+            Event::AskAnswered {
+                kind: "choice",
+                delay: "hour",
+                via: "keyboard",
+                followed: Some(true),
+            },
+            Event::AskSnoozed,
+            Event::AskReopened,
+            Event::InboxCompareOpened,
+            Event::InboxAttachmentOpened { kind: "pdf" },
         ];
         let names: std::collections::HashSet<_> = events.iter().map(Event::name).collect();
         assert_eq!(names.len(), events.len());
@@ -878,6 +932,45 @@ mod tests {
         assert_eq!(
             Value::Object(Event::PrReviewStarted { forge: "gitea" }.props()),
             json!({ "forge": "gitea" })
+        );
+        // The box « À toi » (ESC-510): never a text, a name or a path, only brackets and sorts.
+        assert_eq!(
+            Value::Object(
+                Event::AskAnswered {
+                    kind: "choice",
+                    delay: "ten_minutes",
+                    via: "click",
+                    followed: Some(false)
+                }
+                .props()
+            ),
+            json!({ "kind": "choice", "delay": "ten_minutes", "via": "click", "followed": "no" })
+        );
+        assert_eq!(
+            Value::Object(
+                Event::AskAnswered {
+                    kind: "task",
+                    delay: "longer",
+                    via: "voice",
+                    followed: None
+                }
+                .props()
+            ),
+            json!({ "kind": "task", "delay": "longer", "via": "voice" })
+        );
+        assert_eq!(
+            Value::Object(
+                Event::InboxOpened {
+                    from: "shortcut",
+                    scope: "all"
+                }
+                .props()
+            ),
+            json!({ "from": "shortcut", "scope": "all" })
+        );
+        assert_eq!(
+            Value::Object(Event::InboxAttachmentOpened { kind: "image" }.props()),
+            json!({ "type": "image" })
         );
     }
 

@@ -35,14 +35,65 @@
   const answer = $derived<AgentsAnswer>(settingsForm.settings.agentsAnswer ?? 'nobody');
   let busy = $state(false);
 
+  /** « Garder les fichiers des demandes closes » (ESC-510): 7, 30 or 90 days, 30 by default; saved with the draft. */
+  const keepOptions = $derived(
+    ([7, 30, 90] as const).map((value) => ({ value, label: t('inbox.settings.days', { count: value }), disabled: !on })),
+  );
+  const keep = $derived(
+    settingsForm.settings.inboxKeepDays === 7 || settingsForm.settings.inboxKeepDays === 90 ? settingsForm.settings.inboxKeepDays : 30,
+  );
+
+  /** « Ouvrir la boîte »: the settings close on it. */
+  function openBox() {
+    app.modal = null;
+    app.openInbox('settings');
+  }
+
   onMount(() => {
     void mcp.load().catch(() => {});
   });
 
   async function toggle() {
     if (busy) return;
-    busy = true;
     const next = !on;
+    // Turned off with requests of the box « À toi » waiting (ESC-510, docs/INBOX.md § 6.2): asked first; they are kept,
+    // frozen, until it is on again.
+    if (!next) {
+      const closing = (await api.inboxClosing().catch(() => null)) ?? { open: 0, titles: [] as string[] };
+      if (closing.open > 0) {
+        // Back to this page of the settings, whichever page they were opened on.
+        const back = app.modal?.kind === 'settings' ? { ...app.modal, page: 'agents' as const, at: undefined } : app.modal;
+        const list = closing.titles.map((title) => t('inbox.closing.item', { title })).join('\n');
+        const more =
+          closing.open > closing.titles.length ? `\n${t('inbox.closing.more', { count: closing.open - closing.titles.length })}` : '';
+        app.modal = {
+          kind: 'confirm',
+          icon: 'inbox',
+          title: t('inbox.closing.title'),
+          body: [t('inbox.closing.body', { count: closing.open }), `${list}${more}`, t('inbox.closing.rest')].join('\n\n'),
+          confirm: t('inbox.closing.confirm'),
+          danger: true,
+          alt: {
+            label: t('inbox.settings.open'),
+            onClick: () => {
+              app.modal = null;
+              app.openInbox('settings');
+            },
+          },
+          onConfirm: () => {
+            app.modal = back;
+            void turn(false);
+          },
+          onCancel: () => (app.modal = back),
+        };
+        return;
+      }
+    }
+    await turn(next);
+  }
+
+  async function turn(next: boolean) {
+    busy = true;
     const saved = await app.run(api.mcpSetEnabled(next).then(() => true));
     busy = false;
     if (saved) app.settings.mcpEnabled = next;
@@ -98,6 +149,19 @@
       {/if}
     {/snippet}
   </Row>
+  <!-- The box « À toi » (ESC-510, docs/INBOX.md § 6.3, § 10.5): the server's own, greyed with it. -->
+  <div class="box" class:off={!on} data-testid="inbox-settings">
+    <Row label={t('inbox.settings.box')} desc={on ? t('inbox.settings.boxOn') : t('inbox.settings.boxOff')}>
+      {#if on}<button class="btn" onclick={openBox}><Icon name="inbox" size={14} />{t('inbox.settings.open')}</button>{/if}
+    </Row>
+    <Row label={t('inbox.settings.keep')} desc={t('inbox.settings.keepDesc')}>
+      <Chips
+        label={t('inbox.settings.keep')}
+        options={keepOptions}
+        bind:value={() => keep, (v) => (settingsForm.settings.inboxKeepDays = v)}
+      />
+    </Row>
+  </div>
   {#if on}
     <Row label={t('mcp.section.list')} wide>
       {#snippet extra()}
@@ -217,6 +281,9 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     user-select: text;
+  }
+  .box.off {
+    opacity: 0.55;
   }
   /* As `Switch` has it: shown busy while the change is saved. */
   .switch:disabled {

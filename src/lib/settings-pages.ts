@@ -171,6 +171,8 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('remoteKeepMax', 'agents', 'settings.claude.remoteKeepMax', s('remoteKeepMax')),
   row('mcp', 'agents', 'mcp.section.enable', s('mcpEnabled')),
   row('agentsAnswer', 'agents', 'mcp.section.answer', s('agentsAnswer')),
+  row('inbox', 'agents', 'inbox.settings.box'),
+  row('inboxKeep', 'agents', 'inbox.settings.keep', s('inboxKeepDays')),
   row('mcpDeclared', 'agents', 'mcp.section.list'),
   row('idleStop', 'agents', 'settings.claude.idleStop', { advanced: true, ...s('idleStopMinutes') }),
   row('agentsMcp', 'agents', 'settings.claude.agentsMcp', { advanced: true, ...s('agentsMcp') }),
@@ -228,6 +230,7 @@ export const SETTINGS_ROWS: RowInfo[] = [
   row('attachKeep', 'advanced', 'settings.claude.attachKeep', s('attachKeepDays')),
   row('vectors', 'advanced', 'vectors.label'),
   row('localData', 'advanced', 'settings.about.localData'),
+  row('inboxWeight', 'advanced', 'inbox.settings.weight'),
 
   // À propos.
   row('version', 'about', { raw: 'Escouade' }),

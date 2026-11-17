@@ -429,6 +429,8 @@ class AppState {
   gitTick = $state(0);
   /** Each project's shared memory changed this many times (ESC-255): its settings' list reads it again. */
   memoryTicks = $state<Record<string, number>>({});
+  /** Counts the changes of the box « À toi » the core told (ESC-510): the box reads itself again (App.svelte). */
+  inboxTick = $state(0);
   /** The download of the vectors' model under way (ESC-254): bytes so far, of `total`; null when none is. */
   vectorsProgress = $state<{ done: number; total: number } | null>(null);
   update = $state<UpdateInfo | null>(null);
@@ -768,6 +770,8 @@ class AppState {
   private uiTimer: ReturnType<typeof setTimeout> | undefined;
   /** The view « Vue d’ensemble » covers, which closing it goes back to (the project's, after a start on it). */
   private overviewFrom = 'project';
+  /** The view the box « À toi » covers, which closing it goes back to. */
+  private inboxFrom = 'project';
   /** Events received while the initial snapshot is in flight (newer than the snapshot). */
   private early: UiEvent[] | null = null;
   private toastId = 0;
@@ -997,6 +1001,9 @@ class AppState {
       case 'memory':
         this.memoryTicks[e.projectId] = (this.memoryTicks[e.projectId] ?? 0) + 1;
         break;
+      case 'inbox':
+        this.inboxTick++;
+        break;
       case 'vectorsDownload':
         this.vectorsProgress = { done: e.done, total: e.total };
         break;
@@ -1194,6 +1201,31 @@ class AppState {
     if (this.ui.view !== 'overview') return;
     this.ui.view = this.overviewFrom;
     this.persistUi();
+  }
+
+  /**
+   * Shows the box « À toi » (ESC-510, direction B: a view of every project, from the rail) in place of the project, the
+   * statistics or « Vue d’ensemble »; never while the MCP server is off (the box is its own, docs/INBOX.md § 6).
+   */
+  openInbox(from: 'tile' | 'shortcut' | 'settings' = 'tile', scope: 'all' | 'project' = 'all') {
+    if (this.ui.view === 'inbox' || !this.settings.mcpEnabled) return;
+    this.inboxFrom = this.ui.view;
+    this.ui.view = 'inbox';
+    this.persistUi();
+    api.inboxTrack('opened', { from, scope }).catch(() => {});
+  }
+
+  /** Goes back from the box to the view it covered (the project's when it covered nothing else). */
+  closeInbox() {
+    if (this.ui.view !== 'inbox') return;
+    this.ui.view = this.inboxFrom === 'inbox' ? 'project' : this.inboxFrom;
+    this.persistUi();
+  }
+
+  /** Its tile and Ctrl+Shift+J open the box, and close it when it is open. */
+  toggleInbox(from: 'tile' | 'shortcut' = 'tile', scope: 'all' | 'project' = 'all') {
+    if (this.ui.view === 'inbox') this.closeInbox();
+    else this.openInbox(from, scope);
   }
 
   /** Its button and Ctrl+Shift+A open « Vue d’ensemble », and close it when it is open. */

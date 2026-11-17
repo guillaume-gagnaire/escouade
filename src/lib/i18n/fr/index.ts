@@ -16,6 +16,7 @@ import git from './git';
 import handover from './handover';
 import heat from './heat';
 import integrations from './integrations';
+import inbox from './inbox';
 import mcp from './mcp';
 import memory from './memory';
 import vectors from './vectors';
@@ -38,6 +39,7 @@ import workflow from './workflow';
 import workflowSettings from './workflowSettings';
 
 export const fr = {
+  inbox,
   common,
   format,
   editor,

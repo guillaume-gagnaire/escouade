@@ -99,6 +99,9 @@ pub struct Settings {
     /// Nobody by default, for a new installation as for settings saved before it: Claude outside
     /// Escouade (`Caller::External`) always answers.
     pub agents_answer: AgentsAnswer,
+    /// « Garder les fichiers des demandes closes » (ESC-510): 7, 30 or 90 days after a request of
+    /// the box closed, its files are erased (`asks_sweep`). 30 by default.
+    pub inbox_keep_days: u32,
     /// The MCP server's port on 127.0.0.1: 0 until its first start chooses a free one (47000 to
     /// 47999), kept from then on. The backend's own: a save from the window leaves it as it is.
     pub mcp_port: u16,
@@ -744,6 +747,7 @@ impl Default for Settings {
             writer_model: String::new(),
             mcp_enabled: false,
             agents_answer: AgentsAnswer::Nobody,
+            inbox_keep_days: 30,
             mcp_port: 0,
             accounts: Vec::new(),
             engine_order: Vec::new(),

@@ -5,7 +5,9 @@ import { openUrl } from './opener';
 export type ImageSource =
   | { kind: 'sent'; agent: string; item: string; index: number }
   | { kind: 'local'; agent: string; src: string }
-  | { kind: 'remote'; src: string };
+  | { kind: 'remote'; src: string }
+  /** A file of a request of the box « À toi » (ESC-510), by its request and its copy's name. */
+  | { kind: 'ask'; id: string; file: string };
 
 export interface ViewedImage {
   name: string;
@@ -45,6 +47,7 @@ function viewed(img: HTMLImageElement): ViewedImage {
 export function openSource(s: ImageSource, reveal: boolean): Promise<void> {
   if (s.kind === 'sent') return api.sentFileOpen(s.agent, s.item, s.index, reveal);
   if (s.kind === 'local') return api.agentLocalOpen(s.agent, s.src, reveal);
+  if (s.kind === 'ask') return api.inboxOpenFile(s.id, s.file, reveal);
   return openUrl(s.src);
 }
 

@@ -38,6 +38,10 @@ import type {
   NoPr,
   Agent,
   AttachedFile,
+  AskAnswerIn,
+  InboxChunk,
+  InboxView,
+  WindowAsk,
   Attachment,
   BoardSettings,
   BranchInfo,
@@ -302,6 +306,33 @@ export const api = {
   vectorsModelDownload: () => invoke<VectorsModelInfo>('vectors_model_download'),
   vectorsModelCancel: () => invoke<void>('vectors_model_cancel'),
   vectorsModelDelete: () => invoke<VectorsModelInfo>('vectors_model_delete'),
+  /** The box « À toi » (ESC-509, ESC-510): the requests of a project, or of all; nothing while the MCP server is off. */
+  inboxList: (projectId?: string) => invoke<InboxView>('inbox_list', { projectId: projectId ?? null }),
+  inboxGet: (id: string) => invoke<WindowAsk>('inbox_get', { id }),
+  /** A part of a request's file (4 MB at most), read from the core's copy. */
+  inboxFile: (id: string, file: string, offset = 0, length?: number) =>
+    invoke<InboxChunk>('inbox_file', { id, file, offset, length: length ?? null }),
+  /** « Ouvrir » (never a program, a script nor a page) or « Afficher dans le dossier » (`reveal`) of a request's file. */
+  inboxOpenFile: (id: string, file: string, reveal: boolean) => invoke<void>('inbox_open_file', { id, file, reveal }),
+  /** « Enregistrer sous… » of a request's file: the core asks where; false when cancelled. */
+  inboxSaveFile: (id: string, file: string) => invoke<boolean>('inbox_save_file', { id, file }),
+  /** The user's answer, with the files joined to it (drafts' copies): it goes 10 seconds later. */
+  inboxAnswer: (id: string, answer: AskAnswerIn, files: AttachedFile[] = []) => invoke<WindowAsk>('inbox_answer', { id, answer, files }),
+  /** « Plus tard » until `until` (ms); null: back now. */
+  inboxSnooze: (id: string, until: number | null) => invoke<WindowAsk>('inbox_snooze', { id, until }),
+  /** « Laisser <agent> trancher », or taken back (null). */
+  inboxDelegate: (id: string, agent: string | null) => invoke<WindowAsk>('inbox_delegate', { id, agent }),
+  /** « Revenir sur ma réponse », before its author read it. */
+  inboxReopen: (id: string) => invoke<WindowAsk>('inbox_reopen', { id }),
+  inboxSeen: (id: string) => invoke<void>('inbox_seen', { id }),
+  /** What the window alone sees of the box, for the usage statistics: opened, « Comparer en grand », a file looked at. */
+  inboxTrack: (event: 'opened' | 'compare' | 'attachment', o: { from?: string; scope?: string; kind?: string } = {}) =>
+    invoke<void>('inbox_track', { event, from: o.from ?? null, scope: o.scope ?? null, kind: o.kind ?? null }),
+  /** What the question before turning the MCP server off lists. */
+  inboxClosing: () => invoke<{ open: number; titles: string[] }>('inbox_closing'),
+  /** What the box's files weigh, and « Vider les fichiers des demandes closes » (what it freed). */
+  inboxWeight: () => invoke<number>('inbox_weight'),
+  inboxEraseClosedFiles: () => invoke<number>('inbox_erase_closed_files'),
   /** The project’s shared memory (ESC-255), by name. */
   memoryList: (projectId: string) => invoke<Memory[]>('memory_list', { projectId }),
   /** « Oublier » a memory of the project’s shared memory. */

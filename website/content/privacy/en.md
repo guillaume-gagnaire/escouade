@@ -47,6 +47,12 @@ Every event carries its name, its time (UTC, to the millisecond), a session id, 
 | `pr_merged` | A ticket’s pull request is merged, from Escouade or on the host | `forge`: `github`, `gitlab`, `bitbucket`, `gitea` (Forgejo included), `azure` or `other` (the host of a third party’s plugin, never named) |
 | `ci_fix_started` | A failed CI is given to an agent | `from`: `agent` or `ticket`; `by`: `user` or `autopilot` |
 | `pr_review_started` | A pull request is given to an agent to review | `forge`: `github`, `gitlab`, `bitbucket`, `gitea` (Forgejo included), `azure` or `other` (the host of a third party’s plugin, never named) |
+| `inbox_opened` | The “Your turn” box is opened | `from`: `tile` (its tile), `shortcut` (Ctrl Shift J) or `settings` (“Open the box”); `scope`: `all` or `project` |
+| `ask_answered` | You answer an agent’s request in the box | `kind`: `choice`, `confirm`, `answer` or `task`; `delay`: how long it had waited (`ten_minutes`, `hour`, `day` or `longer`); `via`: `click`, `keyboard` or `voice`; `followed`: for a choice with a recommendation, whether you followed it (yes or no); never the question nor the answer |
+| `ask_snoozed` | A request is put off for later | — |
+| `ask_reopened` | You take back an answer before the agent read it | — |
+| `inbox_compare_opened` | The renders of a choice are compared full size | — |
+| `inbox_attachment_opened` | A file attached to a request is looked at | `type`: `image`, `pdf`, `markdown`, `word`, `csv` or `other`; never its name |
 
 An event says that a feature was used, not on what: never the name of the project, the agent, the branch or the repository, nor a host’s address, nor anything that was written.
 

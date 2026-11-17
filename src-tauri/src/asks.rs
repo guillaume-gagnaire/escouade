@@ -54,8 +54,17 @@ pub(crate) const EXPIRES_DEFAULT: u32 = 14;
 pub(crate) const EXPIRES_MAX: u32 = 30;
 /// The time to take an answer back before it goes (§ 8.6).
 pub(crate) const UNDO_MS: i64 = 10_000;
-/// The files of a closed request are kept that long (§ 4.4).
+/// The files of a closed request are kept that long (§ 4.4), unless « Garder les fichiers des demandes closes »
+/// says 7 or 90 (`Settings::inbox_keep_days`, ESC-510).
 pub(crate) const FILES_KEPT_DAYS: i64 = 30;
+
+/// The days a closed request's files are kept, as « Garder les fichiers des demandes closes » says: 7, 30 or 90.
+pub(crate) fn kept_days(setting: u32) -> i64 {
+    match setting {
+        7 | 90 => i64::from(setting),
+        _ => FILES_KEPT_DAYS,
+    }
+}
 /// A closed request stays in the history that long, and so many at most.
 pub(crate) const KEPT_DAYS: i64 = 90;
 pub(crate) const CLOSED_MAX: usize = 300;
@@ -1642,6 +1651,7 @@ impl<R: Runtime> Core<R> {
     /// days, and the request itself after 90 (300 kept at most).
     pub fn asks_sweep(self: &Arc<Self>) {
         let now = now_ms();
+        let files_kept = kept_days(self.settings.read().inbox_keep_days);
         let projects: HashSet<String> = self.projects.read().iter().map(|p| p.id.clone()).collect();
         let tickets: Vec<(String, Column)> = self
             .tickets
@@ -1727,7 +1737,7 @@ impl<R: Runtime> Core<R> {
                 };
                 if a.files_erased_at.is_none()
                     && !a.files.is_empty()
-                    && closed_at + FILES_KEPT_DAYS * DAY_MS <= now
+                    && closed_at + files_kept * DAY_MS <= now
                 {
                     a.files_erased_at = Some(now);
                     record(a, now, "filesErased", String::new());
@@ -1833,10 +1843,12 @@ impl<R: Runtime> Core<R> {
             ));
         };
         if a.files_erased_at.is_some() {
+            let days = kept_days(self.settings.read().inbox_keep_days);
             bail!(tr!(
-                "Les fichiers de la demande {id} ont été effacés, 30 jours après sa fin.",
-                "The files of request {id} were erased, 30 days after it ended.",
-                id = a.id
+                "Les fichiers de la demande {id} ont été effacés, {days} jours après sa fin.",
+                "The files of request {id} were erased, {days} days after it ended.",
+                id = a.id,
+                days = days
             ));
         }
         let dir = self.ask_dir(&a.id);
@@ -2081,6 +2093,16 @@ impl<R: Runtime> Core<R> {
         Ok(self.window_ask(a))
     }
 
+    /// The copy of a request's file, for « Enregistrer sous… » (ESC-510): the box open, never a path out of the request's
+    /// folder.
+    pub fn inbox_file_copy(&self, id: &str, file: &str) -> Result<(AskFile, PathBuf)> {
+        if !self.inbox_enabled() {
+            return Err(self.inbox_closed());
+        }
+        let a = self.ask(id)?;
+        self.ask_file(&a, Some(file), None)
+    }
+
     /// What the question before turning the server off lists.
     pub fn inbox_closing(&self) -> InboxClosing {
         let all = self.asks_all();
@@ -2090,6 +2112,45 @@ impl<R: Runtime> Core<R> {
             titles: open.iter().take(3).map(|a| a.title.clone()).collect(),
         }
     }
+}
+
+/// The statistics' event of an answer the user gave (ESC-510): its sort, how long it waited, how, whether the
+/// recommendation was followed. None for an answer that is not the user's.
+pub(crate) fn answered_event(a: &Ask) -> Option<crate::telemetry::Event> {
+    let ans = a.answer.as_ref()?;
+    if ans.by.is_some() {
+        return None;
+    }
+    let waited = (ans.at - a.created_at).max(0);
+    let delay = if waited < 10 * 60_000 {
+        "ten_minutes"
+    } else if waited < 3_600_000 {
+        "hour"
+    } else if waited < DAY_MS {
+        "day"
+    } else {
+        "longer"
+    };
+    let via = match ans.via {
+        AskVia::Click => "click",
+        AskVia::Keyboard => "keyboard",
+        AskVia::Voice => "voice",
+        AskVia::Phone => "phone",
+        AskVia::Delegated => "delegated",
+    };
+    let followed = match (
+        &a.kind,
+        a.recommend.as_ref().and_then(|r| r.option.as_ref()),
+    ) {
+        (AskKind::Choice, Some(rec)) => Some(ans.options.len() == 1 && ans.options[0] == *rec),
+        _ => None,
+    };
+    Some(crate::telemetry::Event::AskAnswered {
+        kind: a.kind.as_str(),
+        delay,
+        via,
+        followed,
+    })
 }
 
 /// Whether « Ouvrir » may hand a file to the system: never a program or a script (by its name, or
