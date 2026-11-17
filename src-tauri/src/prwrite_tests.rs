@@ -315,16 +315,429 @@ async fn a_write_the_host_refuses_is_said_in_the_windows_words() {
 
 #[test]
 fn no_tool_of_the_mcp_server_writes_on_a_pull_request() {
-    // Only the window's command calls `pr_write`: an agent, its tools or anything by itself never comments, answers or
-    // resolves in the user's name.
-    for (name, source) in [
+    // Only the window's commands call `pr_write` and `pr_merge`: an agent, its tools or anything by itself never
+    // comments, answers, resolves, changes a draft, asks a review, labels, updates a branch, runs a check again, turns
+    // the auto-merge on or off, merges nor deletes a branch in the user's name (ESC-474, ESC-488).
+    let sources = [
         ("mcp/prs.rs", include_str!("mcp/prs.rs")),
         ("mcp/tools.rs", include_str!("mcp/tools.rs")),
         ("mcp/act.rs", include_str!("mcp/act.rs")),
         ("mcp/mod.rs", include_str!("mcp/mod.rs")),
-    ] {
-        for call in ["pr_write", "PrWrite", ".unresolve(", ".line_comment("] {
+        ("mcp/activity.rs", include_str!("mcp/activity.rs")),
+        ("mcp/background.rs", include_str!("mcp/background.rs")),
+        ("mcp/docs.rs", include_str!("mcp/docs.rs")),
+        ("mcp/files.rs", include_str!("mcp/files.rs")),
+        ("mcp/http.rs", include_str!("mcp/http.rs")),
+        ("mcp/images.rs", include_str!("mcp/images.rs")),
+        ("mcp/install.rs", include_str!("mcp/install.rs")),
+        ("mcp/memory.rs", include_str!("mcp/memory.rs")),
+        ("mcp/overseer.rs", include_str!("mcp/overseer.rs")),
+        ("mcp/read.rs", include_str!("mcp/read.rs")),
+        ("mcp/resolve.rs", include_str!("mcp/resolve.rs")),
+        ("mcp/scheduled.rs", include_str!("mcp/scheduled.rs")),
+        ("mcp/wait.rs", include_str!("mcp/wait.rs")),
+        ("mcp/workflow.rs", include_str!("mcp/workflow.rs")),
+    ];
+    let writes = [
+        "pr_write",
+        "PrWrite",
+        "pr_merge",
+        "MergeAsk",
+        ".unresolve(",
+        ".line_comment(",
+        ".set_draft(",
+        ".request_reviewers(",
+        ".remove_reviewer(",
+        ".add_labels(",
+        ".remove_label(",
+        ".update_branch(",
+        ".rerun_check(",
+        ".cancel_auto_merge(",
+        ".delete_branch(",
+        ".auto_merge(",
+        ".merge(",
+        "ticket_pr_merge",
+    ];
+    for (name, source) in sources {
+        for call in writes {
             assert!(!source.contains(call), "{name} calls {call}");
         }
     }
+    // Every file of the server is looked at: a new one is added above.
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/mcp");
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let name = entry.unwrap().file_name().to_string_lossy().to_string();
+        if name.ends_with(".rs") && !name.ends_with("_tests.rs") && name != "tests.rs" {
+            assert!(
+                sources.iter().any(|(n, _)| *n == format!("mcp/{name}")),
+                "mcp/{name} is not looked at"
+            );
+        }
+    }
+}
+
+// ---------- The control of a pull request (ESC-488) ----------
+
+#[test]
+fn the_controls_are_offered_by_the_hosts_capabilities_and_checked_before_they_are_asked() {
+    use crate::forge::{MergeStrategy, UpdateMethod};
+    use crate::prview::Can;
+    let all = [
+        PrWrite::SetDraft { draft: false },
+        PrWrite::RequestReviewers {
+            logins: vec!["marta".into()],
+        },
+        PrWrite::RemoveReviewer {
+            login: "bob".into(),
+        },
+        PrWrite::AddLabels {
+            labels: vec!["bug".into()],
+        },
+        PrWrite::RemoveLabel {
+            label: "bug".into(),
+        },
+        PrWrite::UpdateBranch {
+            method: UpdateMethod::Merge,
+        },
+        PrWrite::UpdateBranch {
+            method: UpdateMethod::Rebase,
+        },
+        PrWrite::RerunCheck { job: "42".into() },
+        PrWrite::CancelAutoMerge,
+    ];
+    for w in &all {
+        assert!(w.check().is_ok(), "{w:?}");
+        assert!(w.allowed(&Writing::ALL), "GitHub: {w:?}");
+        assert!(!w.allowed(&Writing::ANSWERS), "the others: {w:?}");
+    }
+    // The auto-merge is the host's own, with a strategy it merges with.
+    let on = PrWrite::AutoMerge {
+        strategy: MergeStrategy::Squash,
+    };
+    let mut can = Can {
+        writing: Writing::ALL,
+        merge_strategies: vec![MergeStrategy::Merge],
+        auto_merge: true,
+        ..Default::default()
+    };
+    assert!(!on.allowed_in(&can), "squash is not among its strategies");
+    can.merge_strategies.push(MergeStrategy::Squash);
+    assert!(on.allowed_in(&can));
+    can.auto_merge = false;
+    assert!(!on.allowed_in(&can));
+    // Nothing unnamed.
+    for w in [
+        PrWrite::RequestReviewers { logins: vec![] },
+        PrWrite::RequestReviewers {
+            logins: vec![" ".into()],
+        },
+        PrWrite::AddLabels { labels: vec![] },
+        PrWrite::RemoveLabel { label: "".into() },
+        PrWrite::RemoveReviewer { login: " ".into() },
+        PrWrite::RerunCheck { job: "".into() },
+    ] {
+        assert!(w.check().is_err(), "{w:?}");
+    }
+    // As the window sends them.
+    let sent: PrWrite =
+        serde_json::from_value(json!({ "kind": "updateBranch", "method": "rebase" })).unwrap();
+    assert_eq!(
+        sent,
+        PrWrite::UpdateBranch {
+            method: UpdateMethod::Rebase
+        }
+    );
+    let off: PrWrite = serde_json::from_value(json!({ "kind": "cancelAutoMerge" })).unwrap();
+    assert_eq!(off, PrWrite::CancelAutoMerge);
+    let ask: MergeAsk =
+        serde_json::from_value(json!({ "strategy": "squash", "deleteBranch": true })).unwrap();
+    assert!(ask.delete_branch && !ask.delete_worktree);
+}
+
+#[test]
+fn a_refused_merge_says_a_conflict_the_rules_and_a_check_required_apart() {
+    let http = |status: u16, message: &str| {
+        anyhow::Error::new(HttpError {
+            status,
+            message: message.into(),
+        })
+    };
+    let kind = |status, message| write_failure(&http(status, message), None).kind;
+    assert_eq!(
+        kind(405, "Required status check \"e2e\" is expected."),
+        FailureKind::CheckRequired
+    );
+    assert_eq!(
+        kind(
+            405,
+            "At least 1 approving review is required by reviewers with write access."
+        ),
+        FailureKind::Protected
+    );
+    assert_eq!(
+        kind(405, "Repository rule violations found"),
+        FailureKind::Protected
+    );
+    assert_eq!(
+        kind(405, "Pull Request is not mergeable"),
+        FailureKind::Conflict
+    );
+    assert_eq!(
+        kind(
+            409,
+            "Head branch was modified. Review and try the merge again."
+        ),
+        FailureKind::Conflict
+    );
+    assert_eq!(
+        kind(
+            422,
+            "GitHub (GraphQL) : merge conflict between base and head"
+        ),
+        FailureKind::Conflict
+    );
+    assert_eq!(
+        kind(403, "Resource not accessible by integration"),
+        FailureKind::Forbidden
+    );
+    assert_eq!(kind(403, "API rate limit exceeded"), FailureKind::RateLimit);
+    assert_eq!(kind(422, "Validation Failed"), FailureKind::Other);
+}
+
+/// The routes of the control on the fake GitHub, beside `routes`'.
+fn control_routes(server: &FakeServer) {
+    server.on(
+        "GET",
+        "/repos/acme/demo",
+        200,
+        json!({ "allow_merge_commit": true, "allow_squash_merge": true, "allow_rebase_merge": false,
+                "allow_auto_merge": true }),
+    );
+    server.on(
+        "POST",
+        "/graphql#PrControl",
+        200,
+        json!({ "data": { "repository": { "deleteBranchOnMerge": false, "pullRequest": {
+            "id": "PR_12", "mergeStateStatus": "BEHIND", "reviewDecision": "REVIEW_REQUIRED",
+            "baseRefOid": "def", "headRefOid": "abc", "labels": { "nodes": [{ "name": "auth" }] },
+            "autoMergeRequest": null } } } }),
+    );
+    server.on(
+        "GET",
+        "/repos/acme/demo/compare/def...abc",
+        200,
+        json!({ "behind_by": 2 }),
+    );
+    server.on(
+        "POST",
+        "/graphql#PrCandidates",
+        200,
+        json!({ "data": { "repository": { "assignableUsers": { "nodes": [{ "login": "marta" }] },
+                "labels": { "nodes": [{ "name": "auth", "color": "0e8a16" }, { "name": "bug" }] } } } }),
+    );
+    server.on(
+        "POST",
+        "/graphql#PullRequestId",
+        200,
+        json!({ "data": { "repository": { "pullRequest": { "id": "PR_12" } } } }),
+    );
+    for (op, field, extra) in [
+        (
+            "MarkReady",
+            "markPullRequestReadyForReview",
+            json!({ "isDraft": false }),
+        ),
+        (
+            "UpdateBranch",
+            "updatePullRequestBranch",
+            json!({ "number": 12 }),
+        ),
+        (
+            "EnableAutoMerge",
+            "enablePullRequestAutoMerge",
+            json!({ "number": 12 }),
+        ),
+        (
+            "DisableAutoMerge",
+            "disablePullRequestAutoMerge",
+            json!({ "number": 12 }),
+        ),
+    ] {
+        server.on(
+            "POST",
+            &format!("/graphql#{op}"),
+            200,
+            json!({ "data": { field: { "pullRequest": extra } } }),
+        );
+    }
+    for (method, path) in [
+        ("POST", "/repos/acme/demo/pulls/12/requested_reviewers"),
+        ("DELETE", "/repos/acme/demo/pulls/12/requested_reviewers"),
+        ("POST", "/repos/acme/demo/issues/12/labels"),
+        ("DELETE", "/repos/acme/demo/issues/12/labels/auth"),
+        ("POST", "/repos/acme/demo/actions/jobs/77/rerun"),
+    ] {
+        server.on(method, path, 200, json!({}));
+    }
+}
+
+#[tokio::test]
+async fn the_merge_box_reads_where_the_pull_request_stands_and_the_kanbans_strategy() {
+    let h = harness("prcontrol-read");
+    let server = FakeServer::start().await;
+    let (p, _, _) = github_project(&h, &server, false).await;
+    routes(&server, "2026-11-14T10:00:00Z");
+    control_routes(&server);
+    h.set_board(&p.id, |s| s.strategy = "rebase".into());
+    let read = h.core.pr_control(&p.id, 12, "").await;
+    let r = read.data.unwrap_or_else(|| panic!("{:?}", read.failure));
+    let c = r.control.expect("GitHub reads it");
+    assert_eq!(c.merge_state, crate::forge::MergeState::Behind);
+    assert_eq!(c.behind, Some(true));
+    assert_eq!(
+        c.review_decision,
+        Some(crate::forge::ReviewDecision::ReviewRequired)
+    );
+    use crate::forge::MergeStrategy::*;
+    assert_eq!(r.options.strategies, vec![Merge, Squash]);
+    assert!(r.options.auto_merge);
+    assert_eq!(
+        r.preferred,
+        Some(Merge),
+        "rebase is not allowed: the first allowed"
+    );
+    assert_eq!(r.writing, Writing::ALL);
+    let k = h
+        .core
+        .pr_candidates(&p.id, 12, "")
+        .await
+        .data
+        .expect("read");
+    assert_eq!(k.reviewers, vec!["marta".to_string()]);
+    assert_eq!(k.labels.len(), 2);
+    // Reading writes nothing.
+    assert!(
+        writes(&server)
+            .iter()
+            .all(|(at, _)| at.starts_with("graphql#Pr")),
+        "{:?}",
+        writes(&server)
+    );
+}
+
+#[tokio::test]
+async fn each_control_goes_to_github_in_the_users_name() {
+    use crate::forge::{MergeStrategy, UpdateMethod};
+    let h = harness("prcontrol-write");
+    let server = FakeServer::start().await;
+    let (p, _, _) = github_project(&h, &server, false).await;
+    routes(&server, "2026-11-14T10:00:00Z");
+    control_routes(&server);
+    let asks = [
+        PrWrite::SetDraft { draft: false },
+        PrWrite::RequestReviewers {
+            logins: vec!["marta".into()],
+        },
+        PrWrite::RemoveReviewer {
+            login: "bob".into(),
+        },
+        PrWrite::AddLabels {
+            labels: vec!["bug".into()],
+        },
+        PrWrite::RemoveLabel {
+            label: "auth".into(),
+        },
+        PrWrite::UpdateBranch {
+            method: UpdateMethod::Merge,
+        },
+        PrWrite::RerunCheck { job: "77".into() },
+        PrWrite::AutoMerge {
+            strategy: MergeStrategy::Squash,
+        },
+        PrWrite::CancelAutoMerge,
+    ];
+    for w in asks {
+        let r = h.core.pr_write(&p.id, 12, "", w.clone()).await;
+        assert!(r.failure.is_none(), "{w:?}: {:?}", r.failure);
+    }
+    let at: Vec<String> = writes(&server)
+        .into_iter()
+        .map(|(a, _)| a)
+        .filter(|a| a != "graphql#PullRequestId")
+        .collect();
+    assert_eq!(
+        at,
+        [
+            "graphql#MarkReady",
+            "/repos/acme/demo/pulls/12/requested_reviewers",
+            "/repos/acme/demo/pulls/12/requested_reviewers",
+            "/repos/acme/demo/issues/12/labels",
+            "/repos/acme/demo/issues/12/labels/auth",
+            "graphql#UpdateBranch",
+            "/repos/acme/demo/actions/jobs/77/rerun",
+            "graphql#EnableAutoMerge",
+            "graphql#DisableAutoMerge",
+        ]
+    );
+    let auto: Vec<Value> = server
+        .writes()
+        .into_iter()
+        .map(|r| r.json())
+        .filter(|b| b["operationName"] == "EnableAutoMerge")
+        .collect();
+    assert_eq!(auto[0]["variables"]["method"], "SQUASH");
+}
+
+#[tokio::test]
+async fn a_control_github_refuses_is_said_and_nothing_is_asked_before_its_check() {
+    use crate::forge::UpdateMethod;
+    let h = harness("prcontrol-refused");
+    let server = FakeServer::start().await;
+    let (p, _, _) = github_project(&h, &server, false).await;
+    routes(&server, "2026-11-14T10:00:00Z");
+    control_routes(&server);
+    server.on(
+        "POST",
+        "/graphql#UpdateBranch",
+        200,
+        json!({ "data": { "updatePullRequestBranch": null },
+                "errors": [{ "type": "UNPROCESSABLE", "message": "merge conflict between base and head" }] }),
+    );
+    server.on(
+        "POST",
+        "/repos/acme/demo/issues/12/labels",
+        403,
+        json!({ "message": "Resource not accessible by personal access token" }),
+    );
+    let update = h
+        .core
+        .pr_write(
+            &p.id,
+            12,
+            "",
+            PrWrite::UpdateBranch {
+                method: UpdateMethod::Merge,
+            },
+        )
+        .await;
+    assert_eq!(update.failure.expect("refused").kind, FailureKind::Conflict);
+    let label = h
+        .core
+        .pr_write(
+            &p.id,
+            12,
+            "",
+            PrWrite::AddLabels {
+                labels: vec!["bug".into()],
+            },
+        )
+        .await;
+    assert_eq!(label.failure.expect("refused").kind, FailureKind::Forbidden);
+    let before = server.writes().len();
+    let none = h
+        .core
+        .pr_write(&p.id, 12, "", PrWrite::AddLabels { labels: vec![] })
+        .await;
+    assert!(none.failure.is_some());
+    assert_eq!(server.writes().len(), before);
 }

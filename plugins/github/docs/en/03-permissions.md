@@ -27,9 +27,16 @@ It writes, when Escouade asks it to:
 - rerunning the failed jobs of an Actions run;
 - a review you approved, a reply under a comment, a comment;
 - from a pull request's view in Escouade, on your click only: a comment on lines of its diff, a reply in a thread, a thread resolved or reopened, a comment of its conversation;
+- from the same view, on your click only (Escouade 2.3): the pull request marked ready from a draft or back, a review requested or taken back, a label put or removed, its branch updated with its base (merge or rebase, by GitHub), one Actions job run again, auto-merge turned on or off, its merge with the method chosen, then its branch deleted once merged;
 - for an issue: a comment, closing or reopening it, its labels from the status mapping.
 
-It pushes no code: `git`, run by Escouade, pushes the branches. It deletes no branch, repository or issue.
+It pushes no code: `git`, run by Escouade, pushes the branches. It deletes no repository nor issue, and a branch only when you ask for it while merging its pull request (never a fork's branch).
+
+## The token's rights for a pull request's view
+
+- A classic token: `repo` covers everything.
+- A fine-grained token, on the repositories you want: **Pull requests** in write (draft or ready, reviewers, labels, auto-merge, merge), **Contents** in write (updating the branch, merging, deleting the branch), **Actions** in write (running a job again). The people and labels offered are read with the repository's metadata.
+- A missing right is no failure: the merge box says "Your GitHub token is not allowed to do this on this repository" and nothing is sent.
 
 ## The secrets it receives
 

@@ -402,10 +402,13 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `plugin_start`
 - `plugins_check_updates`
 - `plugins_list`
+- `pr_candidates`
 - `pr_commit_files`
 - `pr_contents`
+- `pr_control`
 - `pr_detail`
 - `pr_log`
+- `pr_merge`
 - `pr_rerun`
 - `pr_review_discard`
 - `pr_review_note`

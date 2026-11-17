@@ -110,6 +110,13 @@ function seed() {
       // repository it is in (`repo`, acme/demo by default) and the one of its branch (`headRepo`: a fork's, ESC-238);
       // `thirdParty`: a failed status of another CI (ci/jenkins), which keeps no log (ESC-60).
       pulls: [],
+      // Who may be asked for a review on acme/demo and its labels (ESC-488, `PrCandidates`).
+      assignable: ['ada', 'marta', 'bob'],
+      prLabels: [
+        { name: 'bug', color: 'd73a4a', description: 'Quelque chose ne marche pas' },
+        { name: 'auth', color: '0e8a16', description: '' },
+        { name: '<img src=x onerror=alert(1)>', color: 'ffffff', description: '' },
+      ],
       // The settings of acme/demo (ESC-62): its merge methods and « Allow auto-merge », set by POST /__github/repo.
       repo: { allow_merge_commit: true, allow_squash_merge: true, allow_rebase_merge: true, allow_auto_merge: false },
       // The forks and the repository each was forked from (`repository.parent`).
@@ -766,6 +773,13 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       Object.assign(pull, json() ?? {});
       return send(200, pull);
     }
+    // Answers held back (ESC-488): `description` the reads of a pull request's description, `mergedPulls` the reads of a
+    // merged one, in ms; each answer is computed when asked and sent later, older than what comes since (a race of reads).
+    if (p === '/__github/delays') {
+      g.delays = json() ?? {};
+      return send(200, g.delays);
+    }
+    const lag = (ms) => (ms ? (status, value) => void setTimeout(() => send(status, value), ms) : send);
     if (p === '/__github/repo') {
       Object.assign(g.repo, json() ?? {});
       return send(200, g.repo);
@@ -776,6 +790,11 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
     if (m && method === 'PUT') {
       const pull = g.pulls.find((x) => x.number === Number(m[1]));
       if (!pull) return send(404, { message: 'Not Found' });
+      // ESC-488: refused as a token without the right, a conflict, a review the base requires.
+      if (pull.writeStatus === 403) return send(403, { message: 'Resource not accessible by personal access token' });
+      if (pull.mergeable === 'CONFLICTING') return send(405, { message: 'Pull Request is not mergeable' });
+      if (pull.reviewRequired && !(pull.approvals || pull.approved))
+        return send(405, { message: 'At least 1 approving review is required by reviewers with write access.' });
       if (pull.checks !== 'SUCCESS') return send(405, { message: 'Required status check "test" is expected.' });
       pull.state = 'MERGED';
       pull.mergedWith = json()?.merge_method;
@@ -856,7 +875,8 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
           const x = g.pulls.find((y) => y.number === Number(n));
           repository[`p${n}`] = x ? node(x) : null;
         }
-        return send(200, { data: { repository } });
+        const merged = Object.values(repository).some((x) => x?.state === 'MERGED');
+        return lag(merged ? g.delays?.mergedPulls : 0)(200, { data: { repository } });
       }
       // The project's open pull requests (ESC-305), the most recent first.
       if (q.operationName === 'OpenPulls')
@@ -962,6 +982,90 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
         t.resolved = field === 'resolveReviewThread';
         return send(200, { data: { [field]: { thread: { id: t.id, isResolved: t.resolved } } } });
       }
+      // The control of a pull request (ESC-488): where it stands for its merge, as GitHub sums it up from what a test set
+      // (`draft`, `mergeable`, `behind`, `checks`, `reviewRequired`, `approvals`), its labels and its auto-merge.
+      if (q.operationName === 'PrControl') {
+        const x = g.pulls.find((y) => y.number === q.variables.number);
+        if (!x) return send(200, { data: { repository: { deleteBranchOnMerge: false, pullRequest: null } } });
+        const approvals = x.approvals ?? (x.approved && !x.changesRequested ? 1 : 0);
+        const decision = x.changesRequested
+          ? 'CHANGES_REQUESTED'
+          : approvals > 0
+            ? 'APPROVED'
+            : x.reviewRequired
+              ? 'REVIEW_REQUIRED'
+              : null;
+        const state = x.draft
+          ? 'DRAFT'
+          : x.mergeable === 'CONFLICTING'
+            ? 'DIRTY'
+            : x.behind
+              ? 'BEHIND'
+              : decision === 'REVIEW_REQUIRED' || decision === 'CHANGES_REQUESTED'
+                ? 'BLOCKED'
+                : x.checks === 'FAILURE'
+                  ? 'UNSTABLE'
+                  : x.checks === 'PENDING'
+                    ? 'BLOCKED'
+                    : 'CLEAN';
+        return send(200, {
+          data: {
+            repository: {
+              deleteBranchOnMerge: !!g.repo.delete_branch_on_merge,
+              pullRequest: {
+                id: `PR_${x.number}`,
+                mergeStateStatus: state,
+                reviewDecision: decision,
+                baseRefOid: 'base',
+                headRefOid: `sha${x.number}`,
+                labels: { nodes: (x.labels ?? []).map((name) => ({ name })) },
+                autoMergeRequest: x.autoMerge ? { mergeMethod: typeof x.autoMerge === 'string' ? x.autoMerge : 'SQUASH' } : null,
+              },
+            },
+          },
+        });
+      }
+      // Who may review and the labels of acme/demo (ESC-488): `g.assignable`, `g.prLabels`.
+      if (q.operationName === 'PrCandidates')
+        return send(200, {
+          data: {
+            repository: {
+              assignableUsers: { nodes: g.assignable.map((login) => ({ login })) },
+              labels: { nodes: g.prLabels },
+            },
+          },
+        });
+      // A draft made ready, ready made a draft, its branch updated, its auto-merge off (ESC-488); `writeStatus` refuses
+      // them as GitHub's GraphQL says it, a conflict refuses the update.
+      const control = { MarkReady: 'markPullRequestReadyForReview', ConvertToDraft: 'convertPullRequestToDraft' };
+      if (control[q.operationName] || q.operationName === 'UpdateBranch' || q.operationName === 'DisableAutoMerge') {
+        const x = g.pulls.find((y) => `PR_${y.number}` === q.variables.id);
+        const field =
+          control[q.operationName] ?? (q.operationName === 'UpdateBranch' ? 'updatePullRequestBranch' : 'disablePullRequestAutoMerge');
+        if (!x) return send(200, { data: { [field]: null }, errors: [{ type: 'NOT_FOUND', message: 'Could not resolve to a node' }] });
+        if (x.writeStatus === 403)
+          return send(200, {
+            data: { [field]: null },
+            errors: [{ type: 'FORBIDDEN', message: 'Resource not accessible by personal access token' }],
+          });
+        if (q.operationName === 'UpdateBranch') {
+          if (x.mergeable === 'CONFLICTING')
+            return send(200, {
+              data: { [field]: null },
+              errors: [{ type: 'UNPROCESSABLE', message: 'merge conflict between base and head' }],
+            });
+          x.behind = false;
+          x.updatedWith = q.variables.method;
+          x.checks = 'PENDING';
+          return send(200, { data: { [field]: { pullRequest: { number: x.number } } } });
+        }
+        if (q.operationName === 'DisableAutoMerge') {
+          x.autoMerge = null;
+          return send(200, { data: { [field]: { pullRequest: { number: x.number } } } });
+        }
+        x.draft = q.operationName === 'ConvertToDraft';
+        return send(200, { data: { [field]: { pullRequest: { isDraft: x.draft } } } });
+      }
       return send(200, { data: null, errors: [{ message: `unknown operation ${q.operationName}` }] });
     }
     // A comment on lines of a pull request, and an answer in a thread (ESC-474): a thread of `threadsWhole` more, an
@@ -991,6 +1095,47 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
         comments: [{ id, author: 'ada', body: b.body }],
       });
       return send(201, { id });
+    }
+    // The control of a pull request (ESC-488): reviewers asked and taken back, labels put and taken off, one job run
+    // again, a branch deleted, how far behind its base it is; `writeStatus` refuses the writes.
+    m = p.match(/^\/github\/repos\/acme\/demo\/(?:pulls|issues)\/(\d+)\/(requested_reviewers|labels)(?:\/(.+))?$/);
+    if (m && method !== 'GET' && g.pulls.some((x) => x.number === Number(m[1]))) {
+      const pull = g.pulls.find((x) => x.number === Number(m[1]));
+      const refused = writeRefusal(pull);
+      if (refused) return send(refused.status, refused.body);
+      if (m[2] === 'requested_reviewers') {
+        const asked = json()?.reviewers ?? [];
+        pull.reviewers =
+          method === 'DELETE'
+            ? (pull.reviewers ?? []).filter((r) => !asked.includes(r))
+            : [...new Set([...(pull.reviewers ?? []), ...asked])];
+        return send(method === 'DELETE' ? 200 : 201, { number: pull.number });
+      }
+      pull.labels =
+        method === 'DELETE'
+          ? (pull.labels ?? []).filter((l) => l !== decodeURIComponent(m[3] ?? ''))
+          : [...new Set([...(pull.labels ?? []), ...(json()?.labels ?? [])])];
+      pull.updatedAt = new Date().toISOString();
+      return send(
+        200,
+        pull.labels.map((name) => ({ name })),
+      );
+    }
+    m = p.match(/^\/github\/repos\/acme\/demo\/actions\/jobs\/(\d+)\/rerun$/);
+    if (m && method === 'POST') {
+      for (const x of g.pulls) if (x.checks === 'FAILURE') x.checks = 'PENDING';
+      g.rerunJobs = [...(g.rerunJobs ?? []), Number(m[1])];
+      return send(201, {});
+    }
+    m = p.match(/^\/github\/repos\/acme\/demo\/git\/refs\/heads\/(.+)$/);
+    if (m && method === 'DELETE') {
+      g.deletedBranches = [...(g.deletedBranches ?? []), decodeURIComponent(m[1])];
+      return send(204);
+    }
+    m = p.match(/^\/github\/repos\/acme\/demo\/compare\/base\.\.\.sha(\d+)$/);
+    if (m) {
+      const pull = g.pulls.find((x) => x.number === Number(m[1]));
+      return send(200, { behind_by: pull?.behind ? 2 : 0, ahead_by: 1 });
     }
     // A comment of a pull request's conversation (ESC-474).
     m = p.match(/^\/github\/repos\/acme\/demo\/issues\/(\d+)\/comments$/);
@@ -1047,7 +1192,7 @@ export function startFakeTrackers(port = 0, adjust = (db) => db) {
       if (m[2])
         return send(200, pull.changesRequested ? [{ user: { login: 'bob' }, state: 'CHANGES_REQUESTED', body: 'Ajoute un test.' }] : []);
       // Its description (ESC-452): `updatedAt` moves it, as a comment or a push does on GitHub.
-      return send(200, {
+      return lag(g.delays?.description)(200, {
         number: pull.number,
         body: pull.body ?? '',
         updated_at: pull.updatedAt ?? '2026-11-14T09:00:00Z',

@@ -1072,7 +1072,7 @@ impl Core {
 
     /// A merge Escouade asked for went (the pull request read again, the ticket « Terminé » once
     /// the host says it merged), or did not (said on the card, the wait over).
-    async fn ticket_pr_merge_done(
+    pub(crate) async fn ticket_pr_merge_done(
         self: &Arc<Self>,
         id: &str,
         number: u64,

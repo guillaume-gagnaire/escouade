@@ -56,5 +56,273 @@
     "result": {
       "value": null
     }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "GET",
+        "target": "/repos/cli/cli/compare/b1...h1"
+      },
+      {
+        "body": "{\"operationName\":\"PrControl\",\"query\":\"query PrControl($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { deleteBranchOnMerge pullRequest(number: $number) { id mergeStateStatus reviewDecision baseRefOid headRefOid labels(first: 50) { nodes { name } } autoMergeRequest { mergeMethod } } } }\",\"variables\":{\"name\":\"cli\",\"number\":14768,\"owner\":\"cli\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "forge/control",
+    "result": {
+      "value": {
+        "behind": true,
+        "deletesBranch": false,
+        "id": "PR_1",
+        "labels": ["bug"],
+        "mergeState": "behind",
+        "reviewDecision": "approved"
+      }
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"PrCandidates\",\"query\":\"query PrCandidates($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { assignableUsers(first: 100) { nodes { login } } labels(first: 100, orderBy: {field: NAME, direction: ASC}) { nodes { name color description } } } }\",\"variables\":{\"name\":\"cli\",\"owner\":\"cli\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "forge/candidates",
+    "result": {
+      "value": {
+        "labels": [
+          {
+            "color": "d73a4a",
+            "name": "bug"
+          }
+        ],
+        "reviewers": ["bob"]
+      }
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"MarkReady\",\"query\":\"mutation MarkReady($id: ID!) { markPullRequestReadyForReview(input: {pullRequestId: $id}) { pullRequest { isDraft } } }\",\"variables\":{\"id\":\"PR_1\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      },
+      {
+        "body": "{\"operationName\":\"PullRequestId\",\"query\":\"query PullRequestId($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { id } } }\",\"variables\":{\"name\":\"cli\",\"number\":14768,\"owner\":\"cli\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "forge/setDraft",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"reviewers\":[\"bob\"]}",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "POST",
+        "target": "/repos/cli/cli/pulls/14768/requested_reviewers"
+      }
+    ],
+    "error": null,
+    "method": "forge/requestReviewers",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"reviewers\":[\"bob\"]}",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "DELETE",
+        "target": "/repos/cli/cli/pulls/14768/requested_reviewers"
+      }
+    ],
+    "error": null,
+    "method": "forge/removeReviewer",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"labels\":[\"bug\"]}",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "POST",
+        "target": "/repos/cli/cli/issues/14768/labels"
+      }
+    ],
+    "error": null,
+    "method": "forge/addLabels",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "DELETE",
+        "target": "/repos/cli/cli/issues/14768/labels/bug"
+      }
+    ],
+    "error": null,
+    "method": "forge/removeLabel",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"PullRequestId\",\"query\":\"query PullRequestId($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { id } } }\",\"variables\":{\"name\":\"cli\",\"number\":14768,\"owner\":\"cli\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      },
+      {
+        "body": "{\"operationName\":\"UpdateBranch\",\"query\":\"mutation UpdateBranch($id: ID!, $method: PullRequestBranchUpdateMethod!) { updatePullRequestBranch(input: {pullRequestId: $id, updateMethod: $method}) { pullRequest { number } } }\",\"variables\":{\"id\":\"PR_1\",\"method\":\"REBASE\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "forge/updateBranch",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{}",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "POST",
+        "target": "/repos/cli/cli/actions/jobs/119211823435/rerun"
+      }
+    ],
+    "error": null,
+    "method": "forge/rerunCheck",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "{\"operationName\":\"DisableAutoMerge\",\"query\":\"mutation DisableAutoMerge($id: ID!) { disablePullRequestAutoMerge(input: {pullRequestId: $id}) { pullRequest { number } } }\",\"variables\":{\"id\":\"PR_1\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      },
+      {
+        "body": "{\"operationName\":\"PullRequestId\",\"query\":\"query PullRequestId($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { id } } }\",\"variables\":{\"name\":\"cli\",\"number\":14768,\"owner\":\"cli\"}}",
+        "headers": [
+          ["accept", "*/*"],
+          ["authorization", "Bearer tok_1"],
+          ["content-type", "application/json"]
+        ],
+        "method": "POST",
+        "target": "/graphql"
+      }
+    ],
+    "error": null,
+    "method": "forge/cancelAutoMerge",
+    "result": {
+      "value": null
+    }
+  },
+  {
+    "asked": [
+      {
+        "body": "",
+        "headers": [
+          ["accept", "application/vnd.github+json"],
+          ["authorization", "Bearer tok_1"],
+          ["x-github-api-version", "2022-11-28"]
+        ],
+        "method": "DELETE",
+        "target": "/repos/cli/cli/git/refs/heads/trunk"
+      }
+    ],
+    "error": null,
+    "method": "forge/deleteBranch",
+    "result": {
+      "value": null
+    }
   }
 ]

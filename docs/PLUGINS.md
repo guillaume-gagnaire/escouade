@@ -161,7 +161,7 @@ Trois façons, de la plus simple à la plus complète :
 
 ### 2.4 Les hébergeurs de code
 
-`contributes.forges`, sur un compte déclaré : `account/me` et `forge/*` (`createPr`, `pullRequest`, `pullRequestsOfBranch`, `pullRequests`, `mergeOptions`, `merge`, `autoMerge`, `checks`, `branchChecks`, `jobLog`, `rerunFailed`, `reviews`, `comments`, `comment`, `review`, `reply`, `deployments`, `environments`, et depuis la 2.3 `description`, `commits`, `files`, `threads`, `resolve`, `unresolve`, `lineComment`). Chaque méthode est refusée par défaut (`unsupported`, -32601), selon les `capabilities` déclarées. `ProcessForge` répond au trait `Forge` (`src-tauri/src/forge/`) ; chaque réponse est `{ value, rateLimit? }`.
+`contributes.forges`, sur un compte déclaré : `account/me` et `forge/*` (`createPr`, `pullRequest`, `pullRequestsOfBranch`, `pullRequests`, `mergeOptions`, `merge`, `autoMerge`, `checks`, `branchChecks`, `jobLog`, `rerunFailed`, `reviews`, `comments`, `comment`, `review`, `reply`, `deployments`, `environments`, et depuis la 2.3 `description`, `commits`, `files`, `threads`, `resolve`, `unresolve`, `lineComment`, `control`, `candidates`, `setDraft`, `requestReviewers`, `removeReviewer`, `addLabels`, `removeLabel`, `updateBranch`, `rerunCheck`, `cancelAutoMerge`, `deleteBranch`). Chaque méthode est refusée par défaut (`unsupported`, -32601), selon les `capabilities` déclarées. `ProcessForge` répond au trait `Forge` (`src-tauri/src/forge/`) ; chaque réponse est `{ value, rateLimit? }`.
 
 **Lire une PR entière** (ESC-452, kit 0.1.3, protocole 0.1.3) : quatre lectures que l'hébergeur déclare dans `Capabilities::reading` (`description`, `commits`, `files`, `threads`) ; GitHub les sert toutes, GitLab, Gitea et Forgejo, Bitbucket et Azure DevOps aucune pour l'instant (PR-9), et leur plugin répond `unsupported`.
 
@@ -183,6 +183,24 @@ Trois façons, de la plus simple à la plus complète :
 | `forge/unresolve` | `repo`, `number`, `thread` (`ReviewThread::id`) | rien : le fil rouvert |
 
 Un fil supprimé entre-temps se dit en 404 (GitHub : le `NOT_FOUND` de GraphQL), un jeton sans le droit d'écrire en 403 : le cœur les nomme `gone` et `forbidden` pour la fenêtre.
+
+**Le contrôle d'une PR** (ESC-488, kit 0.1.3, protocole 0.1.3) : ce que l'hébergeur déclare aussi dans `Capabilities::writing` (`draft`, `reviewers`, `labels`, `updateMerge`, `updateRebase`, `rerunCheck`, `cancelAutoMerge`, `deleteBranch`, et `control` pour la lecture), à côté de `merge_strategies` et `auto_merge` qui disent déjà son merge. Le cœur ne les appelle qu'au clic de l'utilisateur dans la vue de la PR (commandes `pr_write` et `pr_merge` ; `pr_control` et `pr_candidates` lisent), jamais pour un agent ni par le serveur MCP. GitHub les sert toutes ; les autres hébergeurs n'en déclarent aucune pour l'instant (PR-9) et gardent leur merge et leur auto-merge.
+
+| Méthode | Paramètres | Réponse |
+|---|---|---|
+| `forge/control` | `repo`, `number` | `PrControl` : `mergeState` (`clean`, `behind`, `blocked`, `dirty`, `draft`, `unstable`, `unknown`), `behind`, `reviewDecision` (`approved`, `changesRequested`, `reviewRequired`), `labels`, `autoMerge` (la méthode quand il est actif), `deletesBranch`, `id` |
+| `forge/candidates` | `repo` | `Candidates` : `reviewers` (logins), `labels` (`name`, `color`, `description`) |
+| `forge/setDraft` | `repo`, `number`, `draft` | rien |
+| `forge/requestReviewers` | `repo`, `number`, `logins` | rien |
+| `forge/removeReviewer` | `repo`, `number`, `login` | rien |
+| `forge/addLabels` | `repo`, `number`, `labels` | rien |
+| `forge/removeLabel` | `repo`, `number`, `label` | rien |
+| `forge/updateBranch` | `repo`, `number`, `method` (`merge`, `rebase`) | rien |
+| `forge/rerunCheck` | `repo`, `job` (`Check::job`) | rien |
+| `forge/cancelAutoMerge` | `repo`, `number` | rien |
+| `forge/deleteBranch` | `repo`, `branch` | rien (404 ou 422 : déjà supprimée) |
+
+Un refus de merge se nomme pour la fenêtre : `conflict` (409, ou « not mergeable »), `protected` (les règles de la branche protégée), `checkRequired` (un contrôle requis).
 
 Le cœur (`src-tauri/src/prread.rs`, commande `pr_contents`) les lit ensemble, garde la lecture 20 s, puis tant que la PR et sa description (son commit de tête, `updated`) ne changent pas ; le suivi des PR (la liste du projet, celles des agents et des tickets) la marque à relire quand il la voit changer (`UiEvent::PrChanged`). Tout y est marqué comme données d'un tiers (`thirdParty`), et `get_pull_request` le donne dans sa balise `<third_party_data>`.
 

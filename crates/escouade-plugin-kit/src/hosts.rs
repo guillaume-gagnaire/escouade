@@ -428,6 +428,29 @@ async fn forge_call(f: &dyn Forge, name: &str, p: &Value) -> Result<Value, Refus
             f.line_comment(&repo()?, number()?, &arg(p, "comment")?)
                 .await,
         ),
+        "control" => to_value(f.control(&repo()?, number()?).await.map_err(refusal)?),
+        "candidates" => to_value(f.candidates(&repo()?).await.map_err(refusal)?),
+        "setDraft" => done(f.set_draft(&repo()?, number()?, arg(p, "draft")?).await),
+        "requestReviewers" => {
+            let logins: Vec<String> = arg(p, "logins")?;
+            done(f.request_reviewers(&repo()?, number()?, &logins).await)
+        }
+        "removeReviewer" => done(
+            f.remove_reviewer(&repo()?, number()?, &text("login")?)
+                .await,
+        ),
+        "addLabels" => {
+            let labels: Vec<String> = arg(p, "labels")?;
+            done(f.add_labels(&repo()?, number()?, &labels).await)
+        }
+        "removeLabel" => done(f.remove_label(&repo()?, number()?, &text("label")?).await),
+        "updateBranch" => done(
+            f.update_branch(&repo()?, number()?, arg(p, "method")?)
+                .await,
+        ),
+        "rerunCheck" => done(f.rerun_check(&repo()?, &text("job")?).await),
+        "cancelAutoMerge" => done(f.cancel_auto_merge(&repo()?, number()?).await),
+        "deleteBranch" => done(f.delete_branch(&repo()?, &text("branch")?).await),
         "deployments" => to_value(
             f.deployments(&repo()?, &text("ref")?)
                 .await

@@ -38,7 +38,23 @@
     writeFailure,
     type LinePick,
     type PrWrite,
+    type PrWriting,
   } from '../../lib/prthreads';
+  import {
+    boxRows,
+    controlFailure,
+    labelColor,
+    ordered,
+    written,
+    mergedText,
+    type Candidates,
+    type MergeAsk,
+    type MergeStrategy,
+    type Merged,
+    type PrControlRead,
+    type Row,
+    type RowAction,
+  } from '../../lib/prcontrol';
   import { openPrPage } from '../../lib/prs';
   import {
     SEVERITIES,
@@ -79,14 +95,18 @@
   import PrAgentNote from './PrAgentNote.svelte';
   import PrComposer from './PrComposer.svelte';
   import PrFiles from './PrFiles.svelte';
+  import PrMergeBox from './PrMergeBox.svelte';
+  import PrPicker from './PrPicker.svelte';
   import PrThreadView from './PrThread.svelte';
 
   // The view of a pull request (ESC-457, PR-2 of the PR in Escouade, direction A of design/pr-2-3): in the work area, in
   // place of the list « Pull requests », in reading only. Its header (number, title, state, branches, ticket, author,
   // « Ouvrir sur <hébergeur> »), its tabs Conversation (the description, a third party's, then the timeline of the commits,
   // comments, threads and reviews), Commits (each one's files a click away), Contrôles (the tab « PR et CI »'s checks,
-  // their log and « Relancer les échecs ») and Fichiers (ESC-467, PR-3: `PrFiles`). The aside says its reviewers, its labels and where it stands; the merge box
-  // (PR-8) will go at its foot. Read when shown and again when the host says it changed (`prChanged`).
+  // their log and « Relancer les échecs ») and Fichiers (ESC-467, PR-3: `PrFiles`). The aside says its reviewers, its labels and where it stands, and
+  // controls them (ESC-488, PR-8: draft or ready, reviewers and labels asked, the branch updated), with the merge box at its foot
+  // (`PrMergeBox`); narrow, or on the tab « Fichiers », it opens over the view. Read when shown and again when the host says
+  // it changed (`prChanged`).
   let {
     project,
     number,
@@ -249,7 +269,8 @@
     (app.prReviews[project.id] ??= {})[number] = out.review;
     if (out.sent.length) {
       app.toast(t('prs.review.published', { count: out.sent.length, host }), 'ok');
-      // Published, each one is the host's thread now: read again to show it.
+      // Published, each one is the host's thread now: read again to show it, no read of before brought back (ESC-488).
+      fence();
       await loadContents();
     }
     return out.failure ? writeFailure(out.failure, host, online) : null;
@@ -295,6 +316,7 @@
       return { kind: 'other', message: String(e) };
     }
     if (r.failure) return r.failure;
+    fence();
     await loadContents();
     return null;
   }
@@ -374,15 +396,26 @@
     next(e.key === 'n' ? 1 : -1);
   }
 
+  // The reads of the pull request, its checks and its merge box, in order (ESC-488): an answer older than the one shown,
+  // or than a write, is dropped.
+  const order = { contents: ordered(), detail: ordered(), control: ordered() };
+  /** Something was written: the reads on their way are older than it. */
+  function fence() {
+    order.contents.fence();
+    order.detail.fence();
+    order.control.fence();
+  }
+
   async function loadContents() {
     const at = { id: project.id, n: number };
+    const seq = order.contents.start();
     let next: PrRead<PrContents>;
     try {
       next = await api.prContents(at.id, at.n, hostRepo);
     } catch (e) {
       next = { failure: { kind: 'other', message: String(e) } as PrFailure };
     }
-    if (project.id !== at.id || number !== at.n) return;
+    if (project.id !== at.id || number !== at.n || !order.contents.take(seq)) return;
     // A read that fails keeps what was shown, and says why above it.
     if (next.failure && contents?.data) next = { data: contents.data, failure: next.failure };
     contents = next;
@@ -394,32 +427,40 @@
 
   async function loadDetail() {
     const at = { id: project.id, n: number };
+    const seq = order.detail.start();
     let next: PrRead<PrDetail>;
     try {
       next = await api.prDetail(at.id, at.n, hostRepo);
     } catch (e) {
       next = { failure: { kind: 'other', message: String(e) } as PrFailure };
     }
-    if (project.id !== at.id || number !== at.n) return;
+    if (project.id !== at.id || number !== at.n || !order.detail.take(seq)) return;
     if (next.failure && detail?.data) next = { data: detail.data, failure: next.failure };
     detail = next;
   }
 
+  /** The reads on their way: the header turns while there is one. */
+  let inFlight = 0;
+  /**
+   * Reads it all. A read asked while another is on its way goes too (« Relire la PR », a change the host said, ESC-488):
+   * their answers are in order, the newest shown.
+   */
   async function load() {
-    if (reading) return;
+    inFlight += 1;
     reading = true;
     try {
-      await Promise.all([loadContents(), loadDetail()]);
+      await Promise.all([loadContents(), loadDetail(), loadControl()]);
     } finally {
-      reading = false;
+      inFlight -= 1;
+      reading = inFlight > 0;
     }
   }
 
-  // Shown: read. Another pull request: from the start.
+  // Shown: read. Another pull request: from the start. Keyed on its place, not on the project's object, which the app
+  // replaces when the project changes (ESC-488: the control open over the view stays open).
+  const place = $derived(`${project.id}#${number}#${hostRepo ?? ''}`);
   $effect(() => {
-    void project.id;
-    void number;
-    void hostRepo;
+    void place;
     untrack(() => {
       contents = null;
       detail = null;
@@ -432,6 +473,16 @@
       convFailure = null;
       currentThread = null;
       reveal = null;
+      control = null;
+      busy = null;
+      boxFailure = null;
+      boxNote = null;
+      merged = null;
+      picker = null;
+      candidates = null;
+      pickerFailure = null;
+      updateMenu = false;
+      asideOpen = false;
       sevFilter = {};
       batchOpen = false;
       batchFailure = null;
@@ -465,6 +516,216 @@
     app.toast(n ? t('prs.view.ci.rerunDone', { count: n }) : t('prs.view.ci.rerunNone'), n ? 'ok' : 'info');
     void loadDetail();
   }
+
+  // ---------- The control and the merge box (ESC-488, PR-8) ----------
+
+  let control = $state<PrRead<PrControlRead> | null>(null);
+  const ctl = $derived(control?.data ?? null);
+  /** What the host writes, the control's first (it is read with it), else the contents'. */
+  const can = $derived<PrWriting>(ctl?.writing ?? writing);
+  /** The gesture on its way: a row's key, `merge`, `autoMerge`, `draft`, `update`, a reviewer's or a label's name. */
+  let busy = $state<string | null>(null);
+  let boxFailure = $state<string | null>(null);
+  let boxNote = $state<string | null>(null);
+  let merged = $state<string[] | null>(null);
+  let picker = $state<'reviewers' | 'labels' | null>(null);
+  let candidates = $state<Candidates | null>(null);
+  let pickerFailure = $state<string | null>(null);
+  let updateMenu = $state(false);
+  /** The control shown over the view when it is narrow, or on the tab « Fichiers ». */
+  let asideOpen = $state(false);
+
+  const labels = $derived(ctl?.control?.labels ?? c?.description?.labels ?? []);
+  const requested = $derived(pr?.reviewers ?? []);
+  const openThreads = $derived(c?.reading.threads ? counts.open : (pr?.openThreads ?? 0));
+  /** The agent whose worktree goes with the merge: the one that holds the branch, with a worktree of Escouade. */
+  const worktreeHolder = $derived(holder?.worktree?.path && !holder.archived ? holder.name : null);
+  const rows = $derived(
+    pr
+      ? boxRows({
+          pr,
+          detail: d,
+          control: ctl,
+          openThreads,
+          people,
+          host,
+          ticketAgent: !!ticket && ticket.column === 'pr' && !!ticket.agentId,
+          agent: agent?.name ?? null,
+        })
+      : [],
+  );
+
+  async function loadControl() {
+    const at = { id: project.id, n: number };
+    const seq = order.control.start();
+    let next: PrRead<PrControlRead> | null;
+    try {
+      next = await api.prControl(at.id, at.n, hostRepo);
+    } catch (e) {
+      next = { failure: { kind: 'other', message: String(e) } };
+    }
+    if (project.id !== at.id || number !== at.n || !order.control.take(seq)) return;
+    if (next?.failure && control?.data) next = { data: control.data, failure: next.failure };
+    control = next ?? null;
+  }
+
+  const failureText = (f: PrFailure) => controlFailure(f, host, pr?.base ?? '', word, online);
+
+  /** A control the user clicked (`key` says which is busy): done, the pull request read again; else said in the box. */
+  /** A write the host accepted, shown at once: the reread that follows confirms it. */
+  function shown(w: PrWrite) {
+    if (!contents?.data) return;
+    const was = contents.data;
+    const now = written(w, { pr: was.pr, labels, read: ctl });
+    contents = { ...contents, data: { ...was, pr: now.pr, description: was.description && { ...was.description, labels: now.labels } } };
+    if (control?.data && now.read) control = { ...control, data: now.read };
+  }
+
+  async function act(key: string, w: PrWrite, done?: string): Promise<boolean> {
+    busy = key;
+    boxFailure = null;
+    boxNote = null;
+    try {
+      let r: PrRead<boolean>;
+      try {
+        r = await api.prWrite(project.id, number, w, hostRepo);
+      } catch (e) {
+        r = { failure: { kind: 'other', message: String(e) } };
+      }
+      if (r.failure) {
+        boxFailure = failureText(r.failure);
+        return false;
+      }
+      if (done) boxNote = done;
+      fence();
+      shown(w);
+      await Promise.all([loadContents(), loadDetail(), loadControl()]);
+      return true;
+    } finally {
+      busy = null;
+    }
+  }
+
+  async function openPicker(which: 'reviewers' | 'labels') {
+    if (picker === which) {
+      picker = null;
+      return;
+    }
+    picker = which;
+    pickerFailure = null;
+    if (candidates) return;
+    let r: PrRead<Candidates>;
+    try {
+      r = await api.prCandidates(project.id, number, hostRepo);
+    } catch (e) {
+      r = { failure: { kind: 'other', message: String(e) } };
+    }
+    if (r?.failure) pickerFailure = failureText(r.failure);
+    candidates = r?.data ?? { reviewers: [], labels: [] };
+  }
+
+  async function toggleReviewer(login: string, on: boolean) {
+    const ok = await act(login, on ? { kind: 'requestReviewers', logins: [login] } : { kind: 'removeReviewer', login });
+    pickerFailure = ok ? null : boxFailure;
+  }
+
+  async function toggleLabel(name: string, on: boolean) {
+    const ok = await act(name, on ? { kind: 'addLabels', labels: [name] } : { kind: 'removeLabel', label: name });
+    pickerFailure = ok ? null : boxFailure;
+  }
+
+  async function updateBranch(method: 'merge' | 'rebase') {
+    updateMenu = false;
+    await act('update', { kind: 'updateBranch', method }, t('prs.page.control.updated', { host }));
+  }
+
+  /** « Mettre à jour »: the host's way when it has only one, else a choice. */
+  function onUpdate() {
+    if (can.updateMerge && can.updateRebase) updateMenu = !updateMenu;
+    else void updateBranch(can.updateRebase ? 'rebase' : 'merge');
+  }
+
+  async function rerunOne(job: string, key: string) {
+    await act(key, { kind: 'rerunCheck', job }, t('prs.page.control.rerunDone'));
+  }
+
+  /** The gesture of a row of the box. */
+  async function onRow(a: RowAction, key: Row['key']) {
+    switch (a.kind) {
+      case 'ready':
+        return void act(key, { kind: 'setDraft', draft: false });
+      case 'rerunOne':
+        return void rerunOne(a.job, key);
+      case 'rerunAll':
+        busy = key;
+        try {
+          await rerun();
+        } finally {
+          busy = null;
+        }
+        return;
+      case 'checks':
+        tab = 'checks';
+        asideOpen = false;
+        return;
+      case 'askReview':
+        return void openPicker('reviewers');
+      case 'threads':
+        asideOpen = false;
+        return next(1);
+      case 'update':
+        return onUpdate();
+      case 'ticketAgent': {
+        if (!ticket) return;
+        busy = key;
+        try {
+          const done = await app.run(api.ticketPrUpdateBranch(ticket.id));
+          if (done !== undefined) boxNote = t('prs.page.control.box.ticketAgentSent');
+        } finally {
+          busy = null;
+        }
+        return;
+      }
+      case 'openAgent':
+        if (agent) {
+          boxNote = t('prs.page.control.box.agentNote', { agent: agent.name });
+          app.selectAgent(agent.id);
+        }
+        return;
+      case 'host':
+        return openOnHost();
+    }
+  }
+
+  async function merge(ask: MergeAsk) {
+    busy = 'merge';
+    boxFailure = null;
+    boxNote = null;
+    try {
+      let r: PrRead<Merged>;
+      try {
+        r = await api.prMerge(project.id, number, ask, hostRepo);
+      } catch (e) {
+        r = { failure: { kind: 'other', message: String(e) } };
+      }
+      if (r.failure || !r.data) {
+        boxFailure = r.failure ? failureText(r.failure) : null;
+        return;
+      }
+      merged = mergedText(r.data, { base: pr?.base ?? '', host, method: ask.strategy });
+      // Merged: said at once, and no read of before brings back « Ouverte ».
+      fence();
+      if (r.data.merged && contents?.data)
+        contents = { ...contents, data: { ...contents.data, pr: { ...contents.data.pr, state: 'merged' } } };
+      await Promise.all([loadContents(), loadDetail(), loadControl()]);
+    } finally {
+      busy = null;
+    }
+  }
+
+  const autoMerge = (strategy: MergeStrategy) =>
+    act('autoMerge', { kind: 'autoMerge', strategy }, t('prs.page.control.box.autoMergeOnDone', { host }));
+  const cancelAutoMerge = () => act('autoMerge', { kind: 'cancelAutoMerge' }, t('prs.page.control.box.autoMergeOffDone'));
 
   function openOnHost() {
     if (pr) void openPrPage({ url: pr.url, number: pr.number, word });
@@ -789,7 +1050,15 @@
           onclick={askReview}><Icon name="sparkle" size={14} />{review ? t('prs.review.again') : t('prs.review.ask')}</button
         >
       {/if}
-      <!-- The place of « Ta relecture » (PR-7) and of the merge (PR-8). -->
+      <!-- The place of « Ta relecture » (PR-7). The control of the pull request and its merge box, over the view when it is narrow or on « Fichiers » (ESC-488). -->
+      <button
+        class="btn ctl-toggle"
+        class:files={tab === 'files'}
+        aria-controls="pr-control"
+        aria-expanded={asideOpen}
+        disabled={!c}
+        onclick={() => (asideOpen = !asideOpen)}><Icon name="merge" size={14} />{t('prs.page.control.toggle', { word })}</button
+      >
       <button class="btn" disabled={!pr} onclick={openOnHost}><Icon name="ext" size={14} />{t('prs.page.openOnHost', { host })}</button>
     </div>
   </header>
@@ -1031,6 +1300,7 @@
               canRerun={d.can.rerun && c.pr.state === 'open'}
               loadLog={(job) => api.prLog(project.id, number, job, hostRepo)}
               onRerun={rerun}
+              onRerunOne={can.rerunCheck && c.pr.state === 'open' ? (k) => k.job && rerunOne(k.job, 'checks') : undefined}
               titleId="pr-view-ci"
               tall
             />
@@ -1038,51 +1308,174 @@
         {/if}
       </div>
 
-      <aside class="aside" class:gone={tab === 'files'}>
-        <section class="sec">
-          <h3>{t('prs.page.aside.reviewers')}</h3>
-          {#each people as r (r.name)}
-            <div class="rvr">
-              {@render avatar(r.name)}<span class="ell">{r.name}</span>
-              <span class="st {r.state}">{t(`prs.page.aside.reviewer.${r.state}`)}</span>
-            </div>
-          {:else}
-            <p class="muted">{t('prs.page.aside.noReviewer')}</p>
-          {/each}
-        </section>
-        {#if c.reading.description}
+      {#if tab !== 'files' || asideOpen}
+        <aside class="aside" class:over={asideOpen} id="pr-control" aria-label={t('prs.page.control.toggle', { word })}>
+          {#if asideOpen}
+            <button class="icon-btn shut" aria-label={t('prs.page.control.close')} onclick={() => (asideOpen = false)}
+              ><Icon name="close" size={13} /></button
+            >
+          {/if}
           <section class="sec">
-            <h3>{t('prs.page.aside.labels')}</h3>
-            {#if c.description?.labels?.length}
-              <div class="lbls">
-                {#each c.description.labels as l (l)}<span class="lbl"><i></i>{l}</span>{/each}
+            <h3>
+              {t('prs.page.aside.reviewers')}
+              {#if can.reviewers && c.pr.state === 'open'}
+                <button
+                  class="icon-btn g"
+                  aria-label={t('prs.page.control.editReviewers')}
+                  aria-expanded={picker === 'reviewers'}
+                  use:tip={t('prs.page.control.editReviewers')}
+                  onclick={() => openPicker('reviewers')}><Icon name="sliders" size={13} /></button
+                >
+              {/if}
+            </h3>
+            {#each people as r (r.name)}
+              <div class="rvr">
+                {@render avatar(r.name)}<span class="ell">{r.name}</span>
+                <span class="st {r.state}">{t(`prs.page.aside.reviewer.${r.state}`)}</span>
+                {#if r.state === 'requested' && can.reviewers && c.pr.state === 'open'}
+                  <button
+                    class="icon-btn x"
+                    aria-label={t('prs.page.control.removeReviewer', { name: r.name })}
+                    use:tip={t('prs.page.control.removeReviewer', { name: r.name })}
+                    disabled={busy !== null}
+                    onclick={() => toggleReviewer(r.name, false)}><Icon name="close" size={11} /></button
+                  >
+                {/if}
               </div>
             {:else}
-              <p class="muted">{t('prs.page.aside.noLabel')}</p>
+              <p class="muted">{t('prs.page.aside.noReviewer')}</p>
+            {/each}
+            {#if picker === 'reviewers'}
+              <PrPicker
+                label={t('prs.page.control.reviewersPicker')}
+                items={candidates ? candidates.reviewers.filter((n) => n !== c.pr.author).map((name) => ({ name })) : null}
+                chosen={requested}
+                {busy}
+                failure={pickerFailure}
+                onToggle={toggleReviewer}
+                onClose={() => (picker = null)}
+              />
             {/if}
           </section>
-        {/if}
-        <section class="sec">
-          <h3>{t('prs.page.aside.about', { word })}</h3>
-          <div class="kv"><Icon name="pr" size={13} />{c.pr.draft ? t('prs.page.aside.draft') : t('prs.page.aside.ready')}</div>
-          <div class="kv" class:ko={c.pr.mergeable === false}>
-            <Icon name="branch" size={13} />{c.pr.mergeable === false
-              ? t('prs.page.aside.conflict', { base: c.pr.base })
-              : c.pr.mergeable
-                ? t('prs.page.aside.upToDate', { base: c.pr.base })
-                : t('prs.page.aside.mergeUnknown', { base: c.pr.base })}
-          </div>
-          {#if ticket}
-            <div class="kv">
-              <Icon name="kanban" size={13} />{t('prs.page.aside.ticketIn', {
-                key: ticket.key,
-                column: t(`board.columns.${ticket.column}`),
-              })}
-            </div>
+          {#if c.reading.description || ctl?.control}
+            <section class="sec">
+              <h3>
+                {t('prs.page.aside.labels')}
+                {#if can.labels && c.pr.state === 'open'}
+                  <button
+                    class="icon-btn g"
+                    aria-label={t('prs.page.control.editLabels')}
+                    aria-expanded={picker === 'labels'}
+                    use:tip={t('prs.page.control.editLabels')}
+                    onclick={() => openPicker('labels')}><Icon name="sliders" size={13} /></button
+                  >
+                {/if}
+              </h3>
+              {#if labels.length}
+                <div class="lbls">
+                  {#each labels as l (l)}
+                    {@const color = labelColor(candidates?.labels.find((x) => x.name === l)?.color)}
+                    <span class="lbl"
+                      ><i style:background={color}></i>{l}{#if can.labels && c.pr.state === 'open'}<button
+                          class="lx"
+                          aria-label={t('prs.page.control.removeLabel', { name: l })}
+                          disabled={busy !== null}
+                          onclick={() => toggleLabel(l, false)}><Icon name="close" size={10} /></button
+                        >{/if}</span
+                    >
+                  {/each}
+                </div>
+              {:else}
+                <p class="muted">{t('prs.page.aside.noLabel')}</p>
+              {/if}
+              {#if picker === 'labels'}
+                <PrPicker
+                  label={t('prs.page.control.labelsPicker', { word })}
+                  items={candidates?.labels ?? null}
+                  chosen={labels}
+                  {busy}
+                  failure={pickerFailure}
+                  onToggle={toggleLabel}
+                  onClose={() => (picker = null)}
+                />
+              {/if}
+            </section>
           {/if}
-        </section>
-        <!-- The place of the box « prête à merger ? » (PR-8). -->
-      </aside>
+          <section class="sec">
+            <h3>{t('prs.page.aside.about', { word })}</h3>
+            {#if can.draft && c.pr.state === 'open'}
+              <label class="kv draft-box">
+                <input
+                  type="checkbox"
+                  checked={c.pr.draft}
+                  disabled={busy !== null}
+                  aria-label={c.pr.draft ? t('prs.page.control.markReady', { word }) : t('prs.page.control.toDraft', { word })}
+                  onchange={() => act('draft', { kind: 'setDraft', draft: !c.pr.draft })}
+                />{t('prs.page.control.draft')}{#if !c.pr.draft}<span class="sp muted">{t('prs.page.aside.ready')}</span>{/if}
+              </label>
+            {:else}
+              <div class="kv"><Icon name="pr" size={13} />{c.pr.draft ? t('prs.page.aside.draft') : t('prs.page.aside.ready')}</div>
+            {/if}
+            <div class="kv" class:ko={c.pr.mergeable === false}>
+              <Icon name="branch" size={13} /><span
+                >{c.pr.mergeable === false
+                  ? t('prs.page.aside.conflict', { base: c.pr.base })
+                  : ctl?.control?.behind
+                    ? t('prs.page.control.box.behind', { base: c.pr.base })
+                    : c.pr.mergeable
+                      ? t('prs.page.aside.upToDate', { base: c.pr.base })
+                      : t('prs.page.aside.mergeUnknown', { base: c.pr.base })}</span
+              >
+              {#if (can.updateMerge || can.updateRebase) && c.pr.state === 'open' && ctl?.control?.behind && c.pr.mergeable !== false}
+                <span class="sp upd">
+                  <button
+                    class="btn small"
+                    disabled={busy !== null}
+                    aria-haspopup={can.updateMerge && can.updateRebase ? 'menu' : undefined}
+                    onclick={onUpdate}
+                    >{#if busy === 'update'}<span class="spinner" aria-hidden="true"></span>{/if}{t('prs.page.control.update')}</button
+                  >
+                  {#if updateMenu}
+                    <span class="umenu" role="menu" aria-label={t('prs.page.control.update')}>
+                      <button role="menuitem" onclick={() => updateBranch('merge')}
+                        >{t('prs.page.control.updateMerge', { base: c.pr.base })}</button
+                      >
+                      <button role="menuitem" onclick={() => updateBranch('rebase')}
+                        >{t('prs.page.control.updateRebase', { base: c.pr.base })}</button
+                      >
+                    </span>
+                  {/if}
+                </span>
+              {/if}
+            </div>
+            {#if ticket}
+              <div class="kv">
+                <Icon name="kanban" size={13} />{t('prs.page.aside.ticketIn', {
+                  key: ticket.key,
+                  column: t(`board.columns.${ticket.column}`),
+                })}
+              </div>
+            {/if}
+          </section>
+          <PrMergeBox
+            pr={c.pr}
+            {rows}
+            read={ctl}
+            {host}
+            {word}
+            {busy}
+            failure={boxFailure}
+            done={merged}
+            note={boxNote}
+            holder={worktreeHolder}
+            ticketKey={ticket && ticket.column === 'pr' ? ticket.key : null}
+            onAction={onRow}
+            onMerge={merge}
+            onAutoMerge={autoMerge}
+            onCancelAutoMerge={cancelAutoMerge}
+          />
+        </aside>
+      {/if}
     </div>
   {/if}
 </main>
@@ -1469,6 +1862,114 @@
   }
   .kv.ko {
     color: var(--del);
+  }
+  /* The control of the pull request (ESC-488). */
+  .body {
+    position: relative;
+  }
+  .ctl-toggle {
+    display: none;
+  }
+  .ctl-toggle.files {
+    display: inline-flex;
+  }
+  .aside.over {
+    display: flex;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(320px, 100%);
+    z-index: 6;
+    background: var(--panel);
+    box-shadow: -10px 0 30px oklch(0 0 0 / 0.22);
+  }
+  .shut {
+    align-self: flex-end;
+    margin: -6px -6px -8px 0;
+  }
+  .aside h3 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .aside h3 .g {
+    margin-left: auto;
+    width: 22px;
+    height: 22px;
+  }
+  .rvr .x {
+    width: 20px;
+    height: 20px;
+    flex: none;
+  }
+  .lx {
+    display: inline-grid;
+    place-items: center;
+    width: 14px;
+    height: 14px;
+    margin-right: -4px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .lx:hover {
+    color: var(--text);
+    background: var(--hover);
+  }
+  .draft-box {
+    cursor: pointer;
+  }
+  .kv .sp {
+    margin-left: auto;
+  }
+  .upd {
+    position: relative;
+    flex: none;
+  }
+  .upd .btn.small {
+    height: 24px;
+    font-size: 12px;
+    padding: 0 8px;
+  }
+  .umenu {
+    position: absolute;
+    right: 0;
+    top: 28px;
+    z-index: 5;
+    display: grid;
+    min-width: 230px;
+    padding: 4px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 8px 28px oklch(0 0 0 / 0.22);
+  }
+  .umenu button {
+    text-align: left;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .umenu button:hover,
+  .umenu button:focus-visible {
+    background: var(--hover);
+  }
+  /* Narrow, the column is hidden: the header's button opens it over the view (after the rules above, which hide it). */
+  @container (max-width: 860px) {
+    .ctl-toggle {
+      display: inline-flex;
+    }
+    .aside.over {
+      display: flex;
+    }
   }
   .av {
     flex: none;

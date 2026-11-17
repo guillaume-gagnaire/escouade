@@ -361,4 +361,41 @@ describe('the reviewer agent’s remarks (ESC-490)', () => {
     await next();
     await waitFor(() => expect(current()).toBe('agent:1'));
   });
+
+  it('a remark published stays the host’s thread when a read of before answers after it (ESC-488)', async () => {
+    const PUBLISHED: PrThread = {
+      id: 'PRRT_pub',
+      path: LINK.path,
+      line: 2,
+      side: 'right',
+      state: 'open',
+      comments: [{ id: '701', author: 'ada', body: 'Compare en temps constant.' }],
+    };
+    let published = false;
+    let calls = 0;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    const { sent } = backend([SECURITY], {
+      pr_contents: async () => {
+        calls += 1;
+        const answer = { data: contents(published ? [HOST_THREAD, PUBLISHED] : [HOST_THREAD]) };
+        // « Relire la PR », before the publication: answers late, without the published thread.
+        if (calls === 2) await gate;
+        return answer;
+      },
+    });
+    render(PrView, { project: project(), number: 214 });
+    const main = await openFiles();
+    const thread = await within(main).findByRole('article', { name: `Remarque de l’agent sur ${LINK.path}:2` });
+    await userEvent.click(within(main).getByRole('button', { name: 'Relire la PR' }));
+    await waitFor(() => expect(calls).toBe(2));
+    published = true;
+    await userEvent.click(within(thread).getByRole('button', { name: /^Publier/ }));
+    await userEvent.click(within(thread).getByRole('button', { name: /Publier sur GitHub/ }));
+    await waitFor(() => expect(sent).toHaveLength(1));
+    await waitFor(() => expect(main.querySelector('[data-thread-key="PRRT_pub"]')).not.toBeNull());
+    release();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(main.querySelector('[data-thread-key="PRRT_pub"]')).not.toBeNull();
+  });
 });

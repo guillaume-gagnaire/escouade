@@ -14,6 +14,17 @@ export interface PrWriting {
   reply: boolean;
   resolve: boolean;
   reopen: boolean;
+  /** The control of the pull request (ESC-488): a draft made ready, ready made a draft. */
+  draft?: boolean;
+  reviewers?: boolean;
+  labels?: boolean;
+  updateMerge?: boolean;
+  updateRebase?: boolean;
+  rerunCheck?: boolean;
+  cancelAutoMerge?: boolean;
+  deleteBranch?: boolean;
+  /** It reads where the pull request stands for its merge. */
+  control?: boolean;
 }
 
 export const NO_WRITING: PrWriting = { comment: false, lineComment: false, reply: false, resolve: false, reopen: false };
@@ -24,7 +35,17 @@ export type PrWrite =
   | { kind: 'lineComment'; path: string; line: number; startLine?: number; side: 'left' | 'right'; body: string }
   | { kind: 'reply'; comment: string; body: string }
   | { kind: 'resolve'; thread: string }
-  | { kind: 'reopen'; thread: string };
+  | { kind: 'reopen'; thread: string }
+  // The control of the pull request (ESC-488).
+  | { kind: 'setDraft'; draft: boolean }
+  | { kind: 'requestReviewers'; logins: string[] }
+  | { kind: 'removeReviewer'; login: string }
+  | { kind: 'addLabels'; labels: string[] }
+  | { kind: 'removeLabel'; label: string }
+  | { kind: 'updateBranch'; method: 'merge' | 'rebase' }
+  | { kind: 'rerunCheck'; job: string }
+  | { kind: 'autoMerge'; strategy: import('./prcontrol').MergeStrategy }
+  | { kind: 'cancelAutoMerge' };
 
 /** A thread's key in the view: the host's id, else its place and its first comment. */
 export const threadKey = (th: PrThread) => th.id || `${th.path ?? ''}:${th.line ?? ''}:${th.comments[0]?.id ?? ''}`;

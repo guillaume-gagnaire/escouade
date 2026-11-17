@@ -433,6 +433,93 @@ pub struct LineComment {
     pub body: String,
 }
 
+/// How a pull request's branch is brought up to date with its base on the host (`forge/updateBranch`, ESC-488).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum UpdateMethod {
+    /// The base merged into the branch.
+    #[default]
+    Merge,
+    /// The branch rebased onto the base.
+    Rebase,
+}
+
+/// Where a pull request stands for its merge, as the host sums it up (GitHub's `mergeStateStatus`, ESC-488).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum MergeState {
+    /// Nothing in the way.
+    Clean,
+    /// The branch is behind its base, and the base's rules want it up to date.
+    Behind,
+    /// The base's rules hold it (a review, a check required).
+    Blocked,
+    /// In conflict with its base.
+    Dirty,
+    /// A draft.
+    Draft,
+    /// Mergeable, with checks that did not pass (not required).
+    Unstable,
+    /// Not known yet (the host still computes it), or not said.
+    #[default]
+    Unknown,
+}
+
+/// What the review of a pull request needs, as the base's rules say it (GitHub's `reviewDecision`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ReviewDecision {
+    Approved,
+    ChangesRequested,
+    /// An approval is required and not given yet.
+    ReviewRequired,
+}
+
+/// What the control of a pull request reads (`forge/control`, ESC-488): where it stands for its merge, its labels, how
+/// its auto-merge is set, and the repository's settings that weigh on the merge box.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PrControl {
+    pub merge_state: MergeState,
+    /// Behind its base (commits of the base it does not have); none when the host does not say.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub behind: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review_decision: Option<ReviewDecision>,
+    /// Its labels' names.
+    pub labels: Vec<String>,
+    /// The strategy its auto-merge will merge with, when it is on.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auto_merge: Option<MergeStrategy>,
+    /// The repository deletes a branch once its pull request merged (GitHub's « Automatically delete head branches »).
+    pub deletes_branch: bool,
+    /// The pull request's id for the host's other calls (GitHub's node id); empty when it has none.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub id: String,
+}
+
+/// A label of a repository, as the host lists it (`forge/candidates`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LabelInfo {
+    pub name: String,
+    /// Its colour as the host keeps it (`d73a4a`); empty when it has none.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub color: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub description: String,
+}
+
+/// Who may be asked for a review and which labels a pull request of a repository may take (`forge/candidates`,
+/// ESC-488): what the pickers of the view offer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Candidates {
+    /// Logins.
+    pub reviewers: Vec<String>,
+    pub labels: Vec<LabelInfo>,
+}
+
 impl ReviewThread {
     /// On lines of a file, not of the conversation.
     pub fn on_lines(&self) -> bool {
@@ -475,6 +562,29 @@ mod read_tests {
                 .unwrap();
         assert_eq!(back.state, ThreadState::Resolved);
         assert!(!back.on_lines());
+    }
+
+    #[test]
+    fn the_control_of_a_pull_request_reads_with_its_defaults() {
+        let c: PrControl = serde_json::from_value(json!({
+            "mergeState": "behind", "behind": true, "reviewDecision": "reviewRequired",
+            "labels": ["bug"], "autoMerge": "squash", "deletesBranch": true,
+        }))
+        .unwrap();
+        assert_eq!(c.merge_state, MergeState::Behind);
+        assert_eq!(c.review_decision, Some(ReviewDecision::ReviewRequired));
+        assert_eq!(c.auto_merge, Some(MergeStrategy::Squash));
+        let empty: PrControl = serde_json::from_value(json!({})).unwrap();
+        assert_eq!(empty.merge_state, MergeState::Unknown);
+        assert!(serde_json::to_value(&empty).unwrap().get("id").is_none());
+        assert_eq!(
+            serde_json::to_value(UpdateMethod::Rebase).unwrap(),
+            "rebase"
+        );
+        let k: Candidates =
+            serde_json::from_value(json!({ "labels": [{ "name": "bug" }] })).unwrap();
+        assert_eq!(k.labels[0].name, "bug");
+        assert!(k.reviewers.is_empty());
     }
 
     #[test]

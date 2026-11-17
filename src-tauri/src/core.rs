@@ -1177,6 +1177,9 @@ pub struct Core {
     pub(crate) pr_wholes: Mutex<HashMap<String, (Instant, crate::prview::PrWhole)>>,
     /// The pull requests read whole (ESC-452), with what tells they changed.
     pub(crate) pr_contents: Mutex<HashMap<String, crate::prread::Kept>>,
+    /// How many times each pull request read whole was marked stale (a write, a change seen, ESC-488): a read that set
+    /// out before the last mark is not kept as fresh.
+    pub(crate) pr_marks: Mutex<HashMap<String, u64>>,
     /// The environments of the projects' hosts as last read (ESC-67), by project id; when the
     /// view « Environnements » of a project was last open; and whether a commit (the merge of a
     /// ticket) is in another (what runs in an environment), as git said it.
@@ -2272,6 +2275,7 @@ impl Core {
             pr_lists: Mutex::default(),
             pr_wholes: Mutex::default(),
             pr_contents: Mutex::default(),
+            pr_marks: Mutex::default(),
             deploys: Mutex::default(),
             deploys_viewed: Mutex::default(),
             deploys_contains: Mutex::default(),

@@ -402,6 +402,8 @@ impl Core {
         diff: bool,
     ) -> Read<PrContents> {
         let key = key_of(project_id, host_repo, number);
+        // Its marks when this read sets out: one more by the time it ends, and what it read is older than a write.
+        let mark = self.pr_mark(&key);
         let kept = self.pr_contents.lock().get(&key).cloned();
         let enough = |k: &Kept| !k.stale && (k.contents.diff || !diff);
         if let Some(k) = kept
@@ -446,7 +448,7 @@ impl Core {
             contents.description = description;
             contents.checked_at = now_ms();
             contents.rate_limit = client.rate_limit();
-            self.pr_contents_keep(key, host_repo, tracked, moved, &contents);
+            self.pr_contents_keep(key, host_repo, tracked, moved, &contents, mark);
             return Read::ok(contents);
         }
         let (commits, files, threads) = tokio::join!(
@@ -513,7 +515,7 @@ impl Core {
             checked_at: now,
             rate_limit: client.rate_limit(),
         };
-        self.pr_contents_keep(key, host_repo, tracked, moved, &contents);
+        self.pr_contents_keep(key, host_repo, tracked, moved, &contents, mark);
         Read::ok(contents)
     }
 
@@ -524,13 +526,16 @@ impl Core {
         tracked: String,
         moved: Option<(String, u64)>,
         contents: &PrContents,
+        mark: u64,
     ) {
+        // Marked since it set out (a write, a change seen): kept, but read again at the next ask.
+        let stale = self.pr_mark(&key) != mark;
         let mut kept = self.pr_contents.lock();
         kept.insert(
             key,
             Kept {
                 at: Instant::now(),
-                stale: false,
+                stale,
                 tracked,
                 moved,
                 host_repo: host_repo.to_string(),
@@ -708,13 +713,17 @@ impl Core {
             .unwrap_or_default()
     }
 
-    /// Something was written on a pull request (ESC-474): what is kept of it is read again at the next ask.
+    /// How many times the pull request of `key` was marked stale.
+    fn pr_mark(&self, key: &str) -> u64 {
+        self.pr_marks.lock().get(key).copied().unwrap_or(0)
+    }
+
+    /// Something was written on a pull request (ESC-474): what is kept of it is read again at the next ask, and a read
+    /// already on its way is not kept as fresh (ESC-488).
     pub(crate) fn pr_contents_stale(&self, project_id: &str, number: u64, host_repo: &str) {
-        if let Some(k) = self
-            .pr_contents
-            .lock()
-            .get_mut(&key_of(project_id, host_repo, number))
-        {
+        let key = key_of(project_id, host_repo, number);
+        *self.pr_marks.lock().entry(key.clone()).or_default() += 1;
+        if let Some(k) = self.pr_contents.lock().get_mut(&key) {
             k.stale = true;
         }
         let whole = format!("{project_id}|{}|{number}", host_repo.to_lowercase());
@@ -747,6 +756,7 @@ impl Core {
                 if let Some(pr) = found {
                     if tracked(pr) != k.tracked {
                         k.stale = true;
+                        *self.pr_marks.lock().entry(key.clone()).or_default() += 1;
                         changed.push(pr.number);
                     }
                 }

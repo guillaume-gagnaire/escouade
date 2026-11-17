@@ -16,6 +16,8 @@ Le plugin sert deux choses d'Escouade sur le même compte : l'hébergeur de code
 
 **Une PR entière** (Escouade 2.3). Le plugin lit aussi la description d'une PR, ses commits, ses fichiers modifiés et ses fils de discussion, avec leurs lignes, leurs réponses et leur état (ouvert, résolu, dépassé), et les commentaires de la conversation. Les lignes du diff, Escouade les lit par git, sans passer par GitHub. Rien n'est écrit sur GitHub pour cela.
 
+**Le contrôle de la PR** (Escouade 2.3). Depuis la vue d'une PR, à ton clic seulement et sous ton compte : la passer de brouillon à prête (et l'inverse), demander ou retirer une relecture et poser ou retirer une étiquette parmi celles que GitHub propose, mettre sa branche à jour avec sa cible (fusion ou rebase, fait par GitHub), relancer un job d'Actions seul, activer ou désactiver l'auto-merge, et la merger (merge, squash ou rebase, celles que le dépôt permet) après une confirmation, sa branche supprimée ensuite si tu le demandes. Le plugin lit aussi ce que GitHub dit de la PR pour le merge (en retard sur sa cible, retenue par les règles de la branche protégée, relecture exigée), que la boîte « prête à merger ? » montre ligne par ligne.
+
 **Les fils** (Escouade 2.3). Depuis la vue d'une PR, et à ton clic seulement, le plugin commente une ligne ou une plage du diff (sur le commit que tu as lu), répond dans un fil, résout un fil et le rouvre, et commente la conversation de la PR, sous ton compte. Un agent ne le lui demande jamais.
 
 **Les déploiements.** Le plugin lit les déploiements d'un commit et ceux des environnements du dépôt : la carte d'un ticket terminé dit où il tourne, et la vue « Environnements » montre un couloir par environnement.

@@ -239,6 +239,99 @@ pub trait Forge: Send + Sync {
         unsupported("line_comment")
     }
 
+    /// Where a pull request stands for its merge, its labels and its auto-merge (ESC-488).
+    fn control<'a>(&'a self, _repo: &'a RepoRef, _number: u64) -> BoxFuture<'a, Result<PrControl>> {
+        unsupported("control")
+    }
+
+    /// Who may be asked for a review and the labels of the repository (ESC-488).
+    fn candidates<'a>(&'a self, _repo: &'a RepoRef) -> BoxFuture<'a, Result<Candidates>> {
+        unsupported("candidates")
+    }
+
+    /// A draft made ready for review (`draft` false), or a pull request made a draft again (ESC-488).
+    fn set_draft<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _number: u64,
+        _draft: bool,
+    ) -> BoxFuture<'a, Result<()>> {
+        unsupported("set_draft")
+    }
+
+    /// Reviews asked of these logins (ESC-488).
+    fn request_reviewers<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _number: u64,
+        _logins: &'a [String],
+    ) -> BoxFuture<'a, Result<()>> {
+        unsupported("request_reviewers")
+    }
+
+    /// A review asked of `login` taken back (ESC-488).
+    fn remove_reviewer<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _number: u64,
+        _login: &'a str,
+    ) -> BoxFuture<'a, Result<()>> {
+        unsupported("remove_reviewer")
+    }
+
+    /// Labels put on the pull request (ESC-488).
+    fn add_labels<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _number: u64,
+        _labels: &'a [String],
+    ) -> BoxFuture<'a, Result<()>> {
+        unsupported("add_labels")
+    }
+
+    /// A label taken off the pull request (ESC-488).
+    fn remove_label<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _number: u64,
+        _label: &'a str,
+    ) -> BoxFuture<'a, Result<()>> {
+        unsupported("remove_label")
+    }
+
+    /// The branch brought up to date with its base by the host, merged or rebased (ESC-488).
+    fn update_branch<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _number: u64,
+        _method: UpdateMethod,
+    ) -> BoxFuture<'a, Result<()>> {
+        unsupported("update_branch")
+    }
+
+    /// One check's job run again (`Check::job`), ESC-488.
+    fn rerun_check<'a>(&'a self, _repo: &'a RepoRef, _job: &'a str) -> BoxFuture<'a, Result<()>> {
+        unsupported("rerun_check")
+    }
+
+    /// The host's auto-merge turned off (ESC-488).
+    fn cancel_auto_merge<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _number: u64,
+    ) -> BoxFuture<'a, Result<()>> {
+        unsupported("cancel_auto_merge")
+    }
+
+    /// A branch of the repository deleted, once its pull request merged (ESC-488).
+    fn delete_branch<'a>(
+        &'a self,
+        _repo: &'a RepoRef,
+        _branch: &'a str,
+    ) -> BoxFuture<'a, Result<()>> {
+        unsupported("delete_branch")
+    }
+
     /// The description of a pull request, with its tip's commit and when it last changed (ESC-452).
     fn description<'a>(
         &'a self,

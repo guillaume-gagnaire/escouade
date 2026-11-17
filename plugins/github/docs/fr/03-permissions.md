@@ -27,9 +27,16 @@ Il écrit, quand Escouade le lui demande :
 - la relance des jobs en échec d'un run d'Actions ;
 - une relecture que tu as validée, une réponse sous un commentaire, un commentaire ;
 - depuis la vue d'une PR dans Escouade, à ton clic seulement : un commentaire sur des lignes de son diff, une réponse dans un fil, un fil résolu ou rouvert, un commentaire de sa conversation ;
+- depuis la même vue, à ton clic seulement (Escouade 2.3) : la PR passée de brouillon à prête ou l'inverse, une relecture demandée ou retirée, une étiquette posée ou retirée, sa branche mise à jour avec sa cible (fusion ou rebase, par GitHub), un job d'Actions relancé seul, l'auto-merge activé ou désactivé, son merge avec la méthode choisie, puis la suppression de sa branche une fois mergée ;
 - pour une issue : un commentaire, sa fermeture ou sa réouverture, ses étiquettes de la correspondance des statuts.
 
-Il ne pousse aucun code : c'est `git`, lancé par Escouade, qui pousse les branches. Il ne supprime ni branche, ni dépôt, ni issue.
+Il ne pousse aucun code : c'est `git`, lancé par Escouade, qui pousse les branches. Il ne supprime ni dépôt ni issue, et une branche seulement quand tu le demandes en mergeant sa PR (pas la branche d'un fork).
+
+## Les droits du jeton pour la vue d'une PR
+
+- Un jeton classic : `repo` suffit à tout.
+- Un jeton fine-grained, sur les dépôts voulus : **Pull requests** en écriture (brouillon ou prête, relecteurs, étiquettes, auto-merge, merge), **Contents** en écriture (mettre la branche à jour, merger, supprimer la branche), **Actions** en écriture (relancer un job). Les personnes et les étiquettes proposées se lisent avec les métadonnées du dépôt.
+- Un droit qui manque n'est pas une panne : la boîte de merge dit « Ton jeton GitHub n'a pas le droit de faire cela sur ce dépôt » et rien ne part.
 
 ## Les secrets qu'il reçoit
 

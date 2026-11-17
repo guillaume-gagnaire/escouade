@@ -196,7 +196,7 @@ test('the view of a pull request opens from the list, reads its three tabs, reru
   await view.getByRole('button', { name: /^test/ }).first().click();
   await expect(view).toContainText('FAIL src/app.test.ts', { timeout: 30_000 });
   await shots(page, 'pr-view-checks');
-  await view.getByRole('button', { name: /Relancer/ }).click();
+  await view.getByRole('tabpanel').getByRole('button', { name: 'Relancer les échecs' }).click();
   await expect(page.getByText('1 exécution relancée.')).toBeVisible({ timeout: 30_000 });
   expect((await writes()).slice(before.length)).toEqual(['/github/repos/acme/demo/actions/runs/7/rerun-failed-jobs']);
 

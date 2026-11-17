@@ -18,6 +18,7 @@
     loadLog,
     onRerun,
     onSend,
+    onRerunOne,
     titleId,
     title = t('prs.view.ci.title'),
     rerunLabel = t('prs.view.ci.rerun'),
@@ -36,6 +37,8 @@
     onRerun: () => Promise<unknown>;
     /** « Envoyer à un agent » beside a failed check, when given: the check and the button clicked. */
     onSend?: (c: PrCheck, el: HTMLElement) => void;
+    /** « Relancer » beside a failed check whose job the host runs again alone (ESC-488), when given. */
+    onRerunOne?: (c: PrCheck) => void;
     titleId: string;
     title?: string;
     rerunLabel?: string;
@@ -120,6 +123,15 @@
               aria-label={`${c.name} · ${t('board.ci.send')}`}
               use:tip={{ text: t('board.ci.sendHint'), aria: false }}
               onclick={(e) => send(c, e.currentTarget as HTMLElement)}><Icon name="agents" size={12} /></button
+            >
+          {/if}
+          {#if onRerunOne && phase === 'failure' && c.job}
+            {@const one = onRerunOne}
+            <button
+              class="icon-btn rerun-one"
+              aria-label={t('prs.view.ci.rerunOne', { name: c.name })}
+              use:tip={{ text: t('prs.view.ci.rerunOne', { name: c.name }), aria: false }}
+              onclick={() => one(c)}><Icon name="restart" size={12} /></button
             >
           {/if}
           {#if c.url}

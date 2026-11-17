@@ -199,11 +199,13 @@ describe('the view of a pull request (ESC-457)', () => {
     await userEvent.click(await within(main).findByRole('button', { name: /e2e/ }));
     await waitFor(() => expect(main).toHaveTextContent('FAIL login.expired'));
     expect(backend.called('pr_log').map((c) => c.args)).toEqual([{ projectId: 'p1', number: 214, job: '77' }]);
-    await userEvent.click(within(main).getByRole('button', { name: /Relancer/ }));
+    await userEvent.click(within(within(main).getByRole('tabpanel')).getByRole('button', { name: /Relancer/ }));
     await waitFor(() => expect(backend.called('pr_rerun').map((c) => c.args)).toEqual([{ projectId: 'p1', number: 214 }]));
-    // Nothing else written: the view reads.
+    // Nothing else written: the view reads (its merge box too, ESC-488).
     expect(
-      backend.calls.map((c) => c.cmd).filter((c) => !['pr_contents', 'pr_detail', 'pr_log', 'pr_rerun', 'pr_reviews'].includes(c)),
+      backend.calls
+        .map((c) => c.cmd)
+        .filter((c) => !['pr_contents', 'pr_detail', 'pr_control', 'pr_log', 'pr_rerun', 'pr_reviews'].includes(c)),
     ).toEqual([]);
   });
 

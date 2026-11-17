@@ -3570,7 +3570,18 @@ export interface PrDetail {
 
 /** Why the host's answer is missing (`prview::Failure`). */
 export interface PrFailure {
-  kind: 'refused' | 'rateLimit' | 'unreachable' | 'other' | 'unavailable' | 'forbidden' | 'gone';
+  kind:
+    | 'refused'
+    | 'rateLimit'
+    | 'unreachable'
+    | 'other'
+    | 'unavailable'
+    | 'forbidden'
+    | 'gone'
+    // A merge or an update of the branch refused (ESC-488): a conflict since, the protected branch's rules, a check required.
+    | 'conflict'
+    | 'protected'
+    | 'checkRequired';
   message: string;
   /** When the host's limit starts over (Unix seconds). */
   reset?: number;

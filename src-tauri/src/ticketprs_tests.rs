@@ -1423,3 +1423,93 @@ async fn an_agent_that_commits_nothing_is_said_on_the_card() {
     let agent_id = u.agent_id.unwrap();
     assert!(!h.agent(&agent_id).archived);
 }
+
+/// « Merger » from the view of a ticket's pull request (ESC-488): the strategy chosen in the box, not the Kanban's; the
+/// ticket « Terminé » as ESC-62 does it, the branch deleted on GitHub once merged.
+#[tokio::test]
+async fn the_merge_box_merges_with_the_strategy_chosen_and_the_ticket_is_done() {
+    let h = harness("tp-merge-box");
+    let server = FakeServer::start().await;
+    let settings = json!({
+        "allow_merge_commit": true, "allow_squash_merge": true, "allow_rebase_merge": true,
+        "allow_auto_merge": true,
+    });
+    let (p, id) = merge_board(&h, &server, settings).await;
+    h.set_board(&p, |s| s.strategy = "merge".into());
+    // Open when asked first, merged after.
+    server.on(
+        "POST",
+        "/graphql#Pulls",
+        200,
+        pulls_answer(12, "MERGED", "SUCCESS", true),
+    );
+    server.on_once(
+        "POST",
+        "/graphql#Pulls",
+        200,
+        pulls_answer(12, "OPEN", "SUCCESS", true),
+        &[],
+    );
+    server.on(
+        "PUT",
+        "/repos/acme/demo/pulls/12/merge",
+        200,
+        json!({ "merged": true }),
+    );
+    server.on(
+        "DELETE",
+        "/repos/acme/demo/git/refs/heads/ticket/dem-1",
+        204,
+        Value::Null,
+    );
+    let ask = crate::prwrite::MergeAsk {
+        strategy: MergeStrategy::Squash,
+        delete_branch: true,
+        delete_worktree: false,
+    };
+    let read = h.core.pr_merge(&p, 12, "", ask).await;
+    let done = read.data.unwrap_or_else(|| panic!("{:?}", read.failure));
+    assert!(done.merged);
+    assert_eq!(done.branch.as_deref(), Some("ticket/dem-1"));
+    assert_eq!(done.branch_kept, None);
+    let sent = wrote(&server, "/repos/acme/demo/pulls/12/merge").unwrap();
+    assert_eq!(
+        sent["merge_method"], "squash",
+        "the box's, not the Kanban's"
+    );
+    let u = h.ticket(&id);
+    assert_eq!(u.column, Column::Done);
+    assert_eq!(done.ticket.as_deref(), Some(u.key.as_str()));
+}
+
+/// A merge GitHub refuses (a check required) is said in the box's words, and nothing is deleted.
+#[tokio::test]
+async fn a_merge_the_box_asks_and_github_refuses_deletes_nothing() {
+    let h = harness("tp-merge-box-refused");
+    let server = FakeServer::start().await;
+    let (p, id) = merge_board(&h, &server, json!({ "allow_squash_merge": true })).await;
+    server.on(
+        "POST",
+        "/graphql#Pulls",
+        200,
+        pulls_answer(12, "OPEN", "PENDING", true),
+    );
+    server.on(
+        "PUT",
+        "/repos/acme/demo/pulls/12/merge",
+        405,
+        json!({ "message": "Required status check \"e2e\" is expected." }),
+    );
+    let ask = crate::prwrite::MergeAsk {
+        strategy: MergeStrategy::Squash,
+        delete_branch: true,
+        delete_worktree: true,
+    };
+    let read = h.core.pr_merge(&p, 12, "", ask).await;
+    assert_eq!(
+        read.failure.expect("refused").kind,
+        crate::prview::FailureKind::CheckRequired
+    );
+    assert!(server.writes().iter().all(|w| w.method != "DELETE"));
+    assert_eq!(h.ticket(&id).column, Column::Pr);
+}

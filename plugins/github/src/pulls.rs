@@ -408,6 +408,75 @@ impl Github {
         }
     }
 
+    /// A GraphQL mutation (ESC-488): its data, or its errors as REST would say them (`graphql_refusal`), so that the
+    /// core tells a token without the right, a pull request gone or a refusal apart from a host out of reach.
+    async fn mutate(&self, operation: &str, query: &str, variables: Value) -> Result<Value> {
+        let rb = self
+            .http
+            .post(&self.graphql)
+            .bearer_auth(&self.token)
+            .header("User-Agent", "escouade");
+        let reply = self
+            .attempt(
+                "graphql",
+                rb.json(&json!({
+                    "operationName": operation,
+                    "query": query,
+                    "variables": variables,
+                })),
+            )
+            .await?;
+        let v = Self::json(&Self::judged(reply)?)?;
+        match graphql_refusal(&v) {
+            Some(e) => Err(e),
+            None => Ok(v["data"].clone()),
+        }
+    }
+
+    /// The node id of a pull request, what its GraphQL mutations take.
+    async fn pr_node(&self, repo: &RepoRef, number: u64) -> Result<String> {
+        let data = self
+            .graphql(
+                "PullRequestId",
+                "query PullRequestId($owner: String!, $name: String!, $number: Int!) { \
+                 repository(owner: $owner, name: $name) { pullRequest(number: $number) { id } } }",
+                json!({ "owner": repo.namespace, "name": repo.name, "number": number }),
+            )
+            .await?;
+        data["repository"]["pullRequest"]["id"]
+            .as_str()
+            .map(str::to_string)
+            .ok_or_else(|| {
+                anyhow::Error::new(escouade_plugin_kit::errors::HttpError {
+                    status: 404,
+                    message: tr!(
+                        "{NAME} : PR #{number} introuvable",
+                        "{NAME}: pull request #{number} not found"
+                    ),
+                })
+            })
+    }
+
+    /// Who is asked for a review, `DELETE`d or `POST`ed.
+    async fn reviewers_call(
+        &self,
+        method: reqwest::Method,
+        repo: &RepoRef,
+        number: u64,
+        logins: &[String],
+    ) -> Result<()> {
+        self.write(
+            method,
+            &format!(
+                "{}/pulls/{number}/requested_reviewers",
+                Self::repo_path(repo)
+            ),
+            json!({ "reviewers": logins }),
+        )
+        .await?;
+        Ok(())
+    }
+
     fn repo_path(repo: &RepoRef) -> String {
         format!("/repos/{}/{}", enc(&repo.namespace), enc(&repo.name))
     }
@@ -637,6 +706,111 @@ fn gone(thread: &str) -> anyhow::Error {
             "{NAME}: thread {thread} not found"
         ),
     })
+}
+
+/// The errors of a GraphQL answer as REST says them (ESC-488): GitHub answers 200 with `errors`, each with a `type`.
+/// `FORBIDDEN` is a 403 (the token has not the right), `NOT_FOUND` a 404, any other a 422 with GitHub's words; none
+/// when it has no error.
+pub fn graphql_refusal(v: &Value) -> Option<anyhow::Error> {
+    let errors = v["errors"].as_array().filter(|e| !e.is_empty())?;
+    let said = errors
+        .iter()
+        .filter_map(|e| e["message"].as_str())
+        .collect::<Vec<_>>()
+        .join(" ; ");
+    let kind = errors[0]["type"].as_str().unwrap_or("");
+    let status = match kind {
+        "FORBIDDEN" | "INSUFFICIENT_SCOPES" => 403,
+        "NOT_FOUND" => 404,
+        "RATE_LIMITED" => 429,
+        _ if said.contains("Could not resolve to a node") => 404,
+        _ => 422,
+    };
+    Some(anyhow::Error::new(escouade_plugin_kit::errors::HttpError {
+        status,
+        message: format!("{NAME} (GraphQL) : {said}"),
+    }))
+}
+
+/// The control of a pull request (ESC-488): what it asks of GraphQL.
+const CONTROL_QUERY: &str = "query PrControl($owner: String!, $name: String!, $number: Int!) { \
+    repository(owner: $owner, name: $name) { deleteBranchOnMerge pullRequest(number: $number) { \
+    id mergeStateStatus reviewDecision baseRefOid headRefOid labels(first: 50) { nodes { name } } \
+    autoMergeRequest { mergeMethod } } } }";
+
+/// What GraphQL says of a pull request's control (`CONTROL_QUERY`), its branch's lag left to `behind_by`.
+pub fn control_of(data: &Value) -> PrControl {
+    let p = &data["repository"]["pullRequest"];
+    let merge_state = match p["mergeStateStatus"].as_str() {
+        Some("CLEAN" | "HAS_HOOKS") => MergeState::Clean,
+        Some("BEHIND") => MergeState::Behind,
+        Some("BLOCKED") => MergeState::Blocked,
+        Some("DIRTY") => MergeState::Dirty,
+        Some("DRAFT") => MergeState::Draft,
+        Some("UNSTABLE") => MergeState::Unstable,
+        _ => MergeState::Unknown,
+    };
+    PrControl {
+        merge_state,
+        behind: (merge_state == MergeState::Behind).then_some(true),
+        review_decision: match p["reviewDecision"].as_str() {
+            Some("APPROVED") => Some(ReviewDecision::Approved),
+            Some("CHANGES_REQUESTED") => Some(ReviewDecision::ChangesRequested),
+            Some("REVIEW_REQUIRED") => Some(ReviewDecision::ReviewRequired),
+            _ => None,
+        },
+        labels: p["labels"]["nodes"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|l| l["name"].as_str())
+            .map(str::to_string)
+            .collect(),
+        auto_merge: match p["autoMergeRequest"]["mergeMethod"].as_str() {
+            Some("MERGE") => Some(MergeStrategy::Merge),
+            Some("SQUASH") => Some(MergeStrategy::Squash),
+            Some("REBASE") => Some(MergeStrategy::Rebase),
+            _ => None,
+        },
+        deletes_branch: data["repository"]["deleteBranchOnMerge"] == true,
+        id: p["id"].as_str().unwrap_or("").to_string(),
+    }
+}
+
+/// Who may review and the labels of a repository (ESC-488): what it asks of GraphQL.
+const CANDIDATES_QUERY: &str = "query PrCandidates($owner: String!, $name: String!) { \
+    repository(owner: $owner, name: $name) { assignableUsers(first: 100) { nodes { login } } \
+    labels(first: 100, orderBy: {field: NAME, direction: ASC}) { nodes { name color description } } } }";
+
+pub fn candidates_of(data: &Value) -> Candidates {
+    let nodes = |k: &str| {
+        data["repository"][k]["nodes"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+    };
+    Candidates {
+        reviewers: nodes("assignableUsers")
+            .iter()
+            .filter_map(|u| u["login"].as_str())
+            .map(str::to_string)
+            .collect(),
+        labels: nodes("labels")
+            .iter()
+            .filter_map(|l| {
+                Some(LabelInfo {
+                    name: l["name"].as_str()?.to_string(),
+                    color: l["color"].as_str().unwrap_or("").to_string(),
+                    description: l["description"].as_str().unwrap_or("").to_string(),
+                })
+            })
+            .collect(),
+    }
+}
+
+/// A branch's name in a path of the API: each of its segments encoded, its slashes kept (`ticket/esc-1`).
+fn ref_path(branch: &str) -> String {
+    branch.split('/').map(enc).collect::<Vec<_>>().join("/")
 }
 
 /// What `POST /pulls/<n>/comments` takes for a comment on lines (ESC-474): its last line and its side, and its first
@@ -1452,6 +1626,214 @@ impl Forge for Github {
                 line_comment_body(comment, &commit),
             )
             .await?;
+            Ok(())
+        })
+    }
+
+    /// Its state for the merge and its labels in one GraphQL read, then how far behind its base its branch is (REST's
+    /// comparison of the two tips, conditional).
+    fn control<'a>(&'a self, repo: &'a RepoRef, number: u64) -> BoxFuture<'a, Result<PrControl>> {
+        Box::pin(async move {
+            let data = self
+                .graphql(
+                    "PrControl",
+                    CONTROL_QUERY,
+                    json!({ "owner": repo.namespace, "name": repo.name, "number": number }),
+                )
+                .await?;
+            let p = &data["repository"]["pullRequest"];
+            if p.is_null() {
+                return Err(anyhow::Error::new(escouade_plugin_kit::errors::HttpError {
+                    status: 404,
+                    message: tr!(
+                        "{NAME} : PR #{number} introuvable",
+                        "{NAME}: pull request #{number} not found"
+                    ),
+                }));
+            }
+            let mut control = control_of(&data);
+            if let (Some(base), Some(head)) = (p["baseRefOid"].as_str(), p["headRefOid"].as_str()) {
+                let compared = self
+                    .get(&format!(
+                        "{}/compare/{}...{}",
+                        Self::repo_path(repo),
+                        enc(base),
+                        enc(head)
+                    ))
+                    .await;
+                // Not compared (a fork's tip GitHub no longer has): what the merge state says.
+                if let Ok(c) = compared {
+                    if let Some(n) = c["behind_by"].as_u64() {
+                        control.behind = Some(n > 0);
+                    }
+                }
+            }
+            Ok(control)
+        })
+    }
+
+    fn candidates<'a>(&'a self, repo: &'a RepoRef) -> BoxFuture<'a, Result<Candidates>> {
+        Box::pin(async move {
+            let data = self
+                .graphql(
+                    "PrCandidates",
+                    CANDIDATES_QUERY,
+                    json!({ "owner": repo.namespace, "name": repo.name }),
+                )
+                .await?;
+            Ok(candidates_of(&data))
+        })
+    }
+
+    fn set_draft<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+        draft: bool,
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move {
+            let id = self.pr_node(repo, number).await?;
+            let (operation, field) = match draft {
+                true => ("ConvertToDraft", "convertPullRequestToDraft"),
+                false => ("MarkReady", "markPullRequestReadyForReview"),
+            };
+            let query = format!(
+                "mutation {operation}($id: ID!) {{ {field}(input: {{pullRequestId: $id}}) {{ pullRequest {{ isDraft }} }} }}"
+            );
+            let data = self.mutate(operation, &query, json!({ "id": id })).await?;
+            match data[field]["pullRequest"]["isDraft"].as_bool() {
+                Some(d) if d == draft => Ok(()),
+                _ => Err(anyhow!(tr!(
+                    "{NAME} n'a pas changé l'état de brouillon",
+                    "{NAME} did not change the draft state"
+                ))),
+            }
+        })
+    }
+
+    fn request_reviewers<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+        logins: &'a [String],
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(self.reviewers_call(reqwest::Method::POST, repo, number, logins))
+    }
+
+    fn remove_reviewer<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+        login: &'a str,
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move {
+            self.reviewers_call(reqwest::Method::DELETE, repo, number, &[login.to_string()])
+                .await
+        })
+    }
+
+    fn add_labels<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+        labels: &'a [String],
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move {
+            self.write(
+                reqwest::Method::POST,
+                &format!("{}/issues/{number}/labels", Self::repo_path(repo)),
+                json!({ "labels": labels }),
+            )
+            .await?;
+            Ok(())
+        })
+    }
+
+    fn remove_label<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+        label: &'a str,
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move {
+            let path = format!(
+                "{}/issues/{number}/labels/{}",
+                Self::repo_path(repo),
+                enc(label)
+            );
+            self.go(reqwest::Method::DELETE, &path, None, None).await?;
+            Ok(())
+        })
+    }
+
+    /// GraphQL's `updatePullRequestBranch`, by a merge of the base or a rebase onto it.
+    fn update_branch<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+        method: UpdateMethod,
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move {
+            let id = self.pr_node(repo, number).await?;
+            let how = match method {
+                UpdateMethod::Merge => "MERGE",
+                UpdateMethod::Rebase => "REBASE",
+            };
+            self.mutate(
+                "UpdateBranch",
+                "mutation UpdateBranch($id: ID!, $method: PullRequestBranchUpdateMethod!) { \
+                 updatePullRequestBranch(input: {pullRequestId: $id, updateMethod: $method}) { \
+                 pullRequest { number } } }",
+                json!({ "id": id, "method": how }),
+            )
+            .await?;
+            Ok(())
+        })
+    }
+
+    /// An Actions job run again alone.
+    fn rerun_check<'a>(&'a self, repo: &'a RepoRef, job: &'a str) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move {
+            self.write(
+                reqwest::Method::POST,
+                &format!("{}/actions/jobs/{}/rerun", Self::repo_path(repo), enc(job)),
+                json!({}),
+            )
+            .await?;
+            Ok(())
+        })
+    }
+
+    fn cancel_auto_merge<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move {
+            let id = self.pr_node(repo, number).await?;
+            self.mutate(
+                "DisableAutoMerge",
+                "mutation DisableAutoMerge($id: ID!) { disablePullRequestAutoMerge(input: {pullRequestId: $id}) { \
+                 pullRequest { number } } }",
+                json!({ "id": id }),
+            )
+            .await?;
+            Ok(())
+        })
+    }
+
+    fn delete_branch<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        branch: &'a str,
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move {
+            let path = format!(
+                "{}/git/refs/heads/{}",
+                Self::repo_path(repo),
+                ref_path(branch)
+            );
+            self.go(reqwest::Method::DELETE, &path, None, None).await?;
             Ok(())
         })
     }

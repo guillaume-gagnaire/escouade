@@ -572,3 +572,204 @@ fn a_line_comment_on_one_line_says_no_first_line() {
     assert!(b.get("start_line").is_none(), "{b}");
     assert_eq!(b["side"], "RIGHT");
 }
+
+#[tokio::test]
+async fn the_control_of_a_pull_request_reads_its_state_its_labels_and_its_lag() {
+    let server = FakeServer::start().await;
+    server.on(
+        "POST",
+        "/graphql#PrControl",
+        200,
+        json!({ "data": { "repository": { "deleteBranchOnMerge": true, "pullRequest": {
+            "id": "PR_7", "mergeStateStatus": "BLOCKED", "reviewDecision": "REVIEW_REQUIRED",
+            "baseRefOid": "b1", "headRefOid": "h1",
+            "labels": { "nodes": [{ "name": "bug" }, { "name": "<b>x</b>" }] },
+            "autoMergeRequest": { "mergeMethod": "SQUASH" } } } } }),
+    );
+    server.on(
+        "GET",
+        "/repos/cli/cli/compare/b1...h1",
+        200,
+        json!({ "behind_by": 3, "ahead_by": 1 }),
+    );
+    let github = Github::new(reqwest::Client::new(), server.url.clone(), "t".into());
+    let c = github.control(&repo(), 7).await.unwrap();
+    assert_eq!(c.merge_state, MergeState::Blocked);
+    assert_eq!(c.behind, Some(true), "the comparison says it");
+    assert_eq!(c.review_decision, Some(ReviewDecision::ReviewRequired));
+    assert_eq!(c.labels, vec!["bug".to_string(), "<b>x</b>".to_string()]);
+    assert_eq!(c.auto_merge, Some(MergeStrategy::Squash));
+    assert!(c.deletes_branch);
+    assert_eq!(c.id, "PR_7");
+    assert!(server.writes().iter().all(|r| r.path() == "/graphql"));
+}
+
+#[tokio::test]
+async fn the_candidates_are_the_assignable_people_and_the_labels() {
+    let server = FakeServer::start().await;
+    server.on(
+        "POST",
+        "/graphql#PrCandidates",
+        200,
+        json!({ "data": { "repository": {
+            "assignableUsers": { "nodes": [{ "login": "marta" }, { "login": "bob" }] },
+            "labels": { "nodes": [{ "name": "bug", "color": "d73a4a", "description": "Ça casse" }, { "name": "doc", "color": null }] } } } }),
+    );
+    let github = Github::new(reqwest::Client::new(), server.url.clone(), "t".into());
+    let k = github.candidates(&repo()).await.unwrap();
+    assert_eq!(k.reviewers, vec!["marta".to_string(), "bob".to_string()]);
+    assert_eq!(k.labels[0].color, "d73a4a");
+    assert_eq!(k.labels[1].color, "");
+}
+
+#[tokio::test]
+async fn the_controls_write_where_github_takes_them() {
+    let server = FakeServer::start().await;
+    server.on(
+        "POST",
+        "/graphql#PullRequestId",
+        200,
+        json!({ "data": { "repository": { "pullRequest": { "id": "PR_7" } } } }),
+    );
+    server.on(
+        "POST",
+        "/graphql#MarkReady",
+        200,
+        json!({ "data": { "markPullRequestReadyForReview": { "pullRequest": { "isDraft": false } } } }),
+    );
+    server.on(
+        "POST",
+        "/graphql#ConvertToDraft",
+        200,
+        json!({ "data": { "convertPullRequestToDraft": { "pullRequest": { "isDraft": true } } } }),
+    );
+    server.on(
+        "POST",
+        "/graphql#UpdateBranch",
+        200,
+        json!({ "data": { "updatePullRequestBranch": { "pullRequest": { "number": 7 } } } }),
+    );
+    server.on(
+        "POST",
+        "/graphql#DisableAutoMerge",
+        200,
+        json!({ "data": { "disablePullRequestAutoMerge": { "pullRequest": { "number": 7 } } } }),
+    );
+    for (method, path) in [
+        ("POST", "/repos/cli/cli/pulls/7/requested_reviewers"),
+        ("DELETE", "/repos/cli/cli/pulls/7/requested_reviewers"),
+        ("POST", "/repos/cli/cli/issues/7/labels"),
+        ("DELETE", "/repos/cli/cli/issues/7/labels/needs%20review"),
+        ("POST", "/repos/cli/cli/actions/jobs/42/rerun"),
+        ("DELETE", "/repos/cli/cli/git/refs/heads/ticket/esc-1"),
+    ] {
+        server.on(method, path, 200, json!({}));
+    }
+    let github = Github::new(reqwest::Client::new(), server.url.clone(), "t".into());
+    let r = repo();
+    github.set_draft(&r, 7, false).await.unwrap();
+    github.set_draft(&r, 7, true).await.unwrap();
+    github
+        .request_reviewers(&r, 7, &["marta".to_string()])
+        .await
+        .unwrap();
+    github.remove_reviewer(&r, 7, "bob").await.unwrap();
+    github
+        .add_labels(&r, 7, &["bug".to_string()])
+        .await
+        .unwrap();
+    github.remove_label(&r, 7, "needs review").await.unwrap();
+    github
+        .update_branch(&r, 7, UpdateMethod::Rebase)
+        .await
+        .unwrap();
+    github.rerun_check(&r, "42").await.unwrap();
+    github.cancel_auto_merge(&r, 7).await.unwrap();
+    github.delete_branch(&r, "ticket/esc-1").await.unwrap();
+    let writes = server.writes();
+    let body_of = |path: &str, method: &str| {
+        writes
+            .iter()
+            .find(|w| w.path() == path && w.method == method)
+            .map(|w| w.json())
+            .unwrap_or_else(|| panic!("no {method} {path}"))
+    };
+    assert_eq!(
+        body_of("/repos/cli/cli/pulls/7/requested_reviewers", "POST")["reviewers"],
+        json!(["marta"])
+    );
+    assert_eq!(
+        body_of("/repos/cli/cli/pulls/7/requested_reviewers", "DELETE")["reviewers"],
+        json!(["bob"])
+    );
+    assert_eq!(
+        body_of("/repos/cli/cli/issues/7/labels", "POST")["labels"],
+        json!(["bug"])
+    );
+    let graphql: Vec<Value> = writes
+        .iter()
+        .filter(|w| w.path() == "/graphql")
+        .map(|w| w.json())
+        .filter(|b| b["operationName"] != "PullRequestId")
+        .collect();
+    let ops: Vec<&str> = graphql
+        .iter()
+        .map(|b| b["operationName"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        ops,
+        vec![
+            "MarkReady",
+            "ConvertToDraft",
+            "UpdateBranch",
+            "DisableAutoMerge"
+        ]
+    );
+    assert_eq!(
+        graphql[2]["variables"],
+        json!({ "id": "PR_7", "method": "REBASE" })
+    );
+    for path in [
+        "/repos/cli/cli/issues/7/labels/needs%20review",
+        "/repos/cli/cli/actions/jobs/42/rerun",
+        "/repos/cli/cli/git/refs/heads/ticket/esc-1",
+    ] {
+        assert_eq!(requests_to(&server, path), 1, "{path}");
+    }
+}
+
+#[tokio::test]
+async fn a_graphql_refusal_says_its_status() {
+    let server = FakeServer::start().await;
+    server.on(
+        "POST",
+        "/graphql#PullRequestId",
+        200,
+        json!({ "data": { "repository": { "pullRequest": { "id": "PR_7" } } } }),
+    );
+    server.on(
+        "POST",
+        "/graphql#UpdateBranch",
+        200,
+        json!({ "data": { "updatePullRequestBranch": null }, "errors": [{ "type": "FORBIDDEN", "message": "Resource not accessible by integration" }] }),
+    );
+    server.on(
+        "POST",
+        "/graphql#MarkReady",
+        200,
+        json!({ "data": null, "errors": [{ "message": "merge conflict between base and head" }] }),
+    );
+    let github = Github::new(reqwest::Client::new(), server.url.clone(), "t".into());
+    let status = |e: anyhow::Error| {
+        e.downcast_ref::<escouade_plugin_kit::errors::HttpError>()
+            .map(|h| h.status)
+    };
+    let e = github
+        .update_branch(&repo(), 7, UpdateMethod::Merge)
+        .await
+        .unwrap_err();
+    assert_eq!(status(e), Some(403));
+    let e = github.set_draft(&repo(), 7, false).await.unwrap_err();
+    assert_eq!(status(e), Some(422));
+    assert!(graphql_refusal(&json!({ "data": {} })).is_none());
+}

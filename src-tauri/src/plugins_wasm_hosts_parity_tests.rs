@@ -91,6 +91,33 @@ fn github_routes(s: &FakeServer) {
         201,
         json!({ "id": 9 }),
     );
+    // The control of a pull request (ESC-488, `SINCE_THE_PORT`).
+    s.on("POST", "/graphql#PrControl", 200, json!({ "data": { "repository": { "deleteBranchOnMerge": false, "pullRequest": { "id": "PR_1", "mergeStateStatus": "BEHIND", "reviewDecision": "APPROVED", "baseRefOid": "b1", "headRefOid": "h1", "labels": { "nodes": [{ "name": "bug" }] }, "autoMergeRequest": null } } } }));
+    s.on(
+        "GET",
+        &format!("{repo}/compare/b1...h1"),
+        200,
+        json!({ "behind_by": 1 }),
+    );
+    s.on("POST", "/graphql#PrCandidates", 200, json!({ "data": { "repository": { "assignableUsers": { "nodes": [{ "login": "bob" }] }, "labels": { "nodes": [{ "name": "bug", "color": "d73a4a" }] } } } }));
+    s.on("POST", "/graphql#MarkReady", 200, json!({ "data": { "markPullRequestReadyForReview": { "pullRequest": { "isDraft": false } } } }));
+    s.on(
+        "POST",
+        "/graphql#UpdateBranch",
+        200,
+        json!({ "data": { "updatePullRequestBranch": { "pullRequest": { "number": 14768 } } } }),
+    );
+    s.on("POST", "/graphql#DisableAutoMerge", 200, json!({ "data": { "disablePullRequestAutoMerge": { "pullRequest": { "number": 14768 } } } }));
+    for (method, path) in [
+        ("POST", "/pulls/14768/requested_reviewers"),
+        ("DELETE", "/pulls/14768/requested_reviewers"),
+        ("POST", "/issues/14768/labels"),
+        ("DELETE", "/issues/14768/labels/bug"),
+        ("POST", "/actions/jobs/119211823435/rerun"),
+        ("DELETE", "/git/refs/heads/trunk"),
+    ] {
+        s.on(method, &format!("{repo}{path}"), 200, json!({}));
+    }
     s.on("POST", "/graphql#OpenPulls", 200, fx("graphql-pulls.json"));
     s.on("POST", "/graphql#RepoParent", 200, json!({ "data": { "repository": { "parent": { "name": "cli", "owner": { "login": "upstream" } } } } }));
     s.on(
@@ -758,6 +785,16 @@ fn forge_steps(h: &'static Host, api: &str) -> Vec<Step> {
                     "path": "src/main.rs", "line": 4, "startLine": 2, "side": "left", "commit": "abc", "body": "Pourquoi ?",
                 } })),
             ),
+            "forge/control" | "forge/cancelAutoMerge" => Call(method, call(json!({ "number": h.number }))),
+            "forge/candidates" => Call(method, call(json!({}))),
+            "forge/setDraft" => Call(method, call(json!({ "number": h.number, "draft": false }))),
+            "forge/requestReviewers" => Call(method, call(json!({ "number": h.number, "logins": ["bob"] }))),
+            "forge/removeReviewer" => Call(method, call(json!({ "number": h.number, "login": "bob" }))),
+            "forge/addLabels" => Call(method, call(json!({ "number": h.number, "labels": ["bug"] }))),
+            "forge/removeLabel" => Call(method, call(json!({ "number": h.number, "label": "bug" }))),
+            "forge/updateBranch" => Call(method, call(json!({ "number": h.number, "method": "rebase" }))),
+            "forge/rerunCheck" => Call(method, call(json!({ "job": h.job }))),
+            "forge/deleteBranch" => Call(method, call(json!({ "branch": h.branch }))),
             other => panic!("no step for {other}"),
         })
         .collect();
@@ -1179,11 +1216,24 @@ async fn parity(
 /// What a host does on purpose otherwise than its process did before the port (ESC-345), by ticket: the recording of the
 /// port cannot learn it (its program is gone), so those steps are compared with `<name>-host-since.json`, recorded from
 /// the module (`ESCOUADE_PARITY_RECORD_SINCE=1`) and reviewed. GitHub resolves a thread (it said it could not), opens one
-/// again and comments lines since ESC-474; the other hosts' plugins did not change.
-const SINCE_THE_PORT: [(&str, &str, &str); 3] = [
+/// again and comments lines since ESC-474, and controls a pull request since ESC-488 (its state for the merge, who may
+/// review and its labels, a draft made ready, reviewers and labels asked and taken back, its branch updated, one check
+/// run again, its auto-merge turned off, its branch deleted); the other hosts' plugins did not change.
+const SINCE_THE_PORT: [(&str, &str, &str); 14] = [
     ("github", "forge/resolve", "ESC-474"),
     ("github", "forge/unresolve", "ESC-474"),
     ("github", "forge/lineComment", "ESC-474"),
+    ("github", "forge/control", "ESC-488"),
+    ("github", "forge/candidates", "ESC-488"),
+    ("github", "forge/setDraft", "ESC-488"),
+    ("github", "forge/requestReviewers", "ESC-488"),
+    ("github", "forge/removeReviewer", "ESC-488"),
+    ("github", "forge/addLabels", "ESC-488"),
+    ("github", "forge/removeLabel", "ESC-488"),
+    ("github", "forge/updateBranch", "ESC-488"),
+    ("github", "forge/rerunCheck", "ESC-488"),
+    ("github", "forge/cancelAutoMerge", "ESC-488"),
+    ("github", "forge/deleteBranch", "ESC-488"),
 ];
 
 async fn host(i: usize) {
@@ -1292,6 +1342,16 @@ fn each_hosts_declared_writes_are_the_ones_its_plugin_serves() {
             ("forge/resolve", w.resolve),
             ("forge/unresolve", w.reopen),
             ("forge/lineComment", w.line_comment),
+            ("forge/control", w.control),
+            ("forge/setDraft", w.draft),
+            ("forge/requestReviewers", w.reviewers),
+            ("forge/removeReviewer", w.reviewers),
+            ("forge/addLabels", w.labels),
+            ("forge/removeLabel", w.labels),
+            ("forge/updateBranch", w.update_merge || w.update_rebase),
+            ("forge/rerunCheck", w.rerun_check),
+            ("forge/cancelAutoMerge", w.cancel_auto_merge),
+            ("forge/deleteBranch", w.delete_branch),
         ] {
             // Not played: a write the plugin does not know yet (the kit's `unsupported`), so not declared.
             let served = served(method).unwrap_or(false);

@@ -7,8 +7,8 @@
 use crate::agentprs::log_tail;
 use crate::core::Core;
 use crate::forge::{
-    Capabilities, Check, Deployment, Forge, PullRequest, RateLimit, Reading, RepoRef, Review,
-    ReviewComment, Unsupported, Writing,
+    Capabilities, Check, Deployment, Forge, MergeStrategy, PullRequest, RateLimit, Reading,
+    RepoRef, Review, ReviewComment, Unsupported, Writing,
 };
 use crate::integrations::HttpError;
 use crate::model::now_ms;
@@ -58,6 +58,12 @@ pub enum FailureKind {
     Forbidden,
     /// A write on what the host no longer has: a thread or a comment deleted since it was read (404, ESC-474).
     Gone,
+    /// A merge or an update of the branch that meets a conflict with the base, appeared since it was read (ESC-488).
+    Conflict,
+    /// A merge the rules of the protected base refuse: a review required, the branch not up to date (ESC-488).
+    Protected,
+    /// A merge that waits for a check the base requires (ESC-488).
+    CheckRequired,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -156,6 +162,12 @@ pub struct Can {
     /// What it writes on a pull request in the user's name (ESC-474, `prwrite`): not the tab's.
     #[serde(skip)]
     pub writing: Writing,
+    /// How it merges (ESC-488, `prwrite`), as its provider declares it: not the tab's.
+    #[serde(skip)]
+    pub merge_strategies: Vec<MergeStrategy>,
+    /// Its own auto-merge, as its provider declares it.
+    #[serde(skip)]
+    pub auto_merge: bool,
 }
 
 impl From<&Capabilities> for Can {
@@ -168,6 +180,8 @@ impl From<&Capabilities> for Can {
             deployments: c.deployments,
             reading: c.reading,
             writing: c.writing,
+            merge_strategies: c.merge_strategies.clone(),
+            auto_merge: c.auto_merge,
         }
     }
 }

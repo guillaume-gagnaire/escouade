@@ -38,10 +38,11 @@ pub use escouade_plugin_kit::forge::BoxFuture;
 
 // The data of the hosts, shared with the plugins that serve them (docs/PLUGINS-DESIGN.md §4.5).
 pub use escouade_plugin_protocol::forge::{
-    Check, CheckState, Deployment, DiffSide, FileStatus, Identity, LineComment, MergeOptions,
-    MergeStrategy, PrCommit, PrDescription, PrFile, PrState, PullRequest, PullRequestDraft,
-    RateLimit, Review, ReviewComment, ReviewDraft, ReviewLine, ReviewState, ReviewThread,
-    ThreadComment, ThreadState,
+    Candidates, Check, CheckState, Deployment, DiffSide, FileStatus, Identity, LabelInfo,
+    LineComment, MergeOptions, MergeState, MergeStrategy, PrCommit, PrControl, PrDescription,
+    PrFile, PrState, PullRequest, PullRequestDraft, RateLimit, Review, ReviewComment,
+    ReviewDecision, ReviewDraft, ReviewLine, ReviewState, ReviewThread, ThreadComment, ThreadState,
+    UpdateMethod,
 };
 
 /// What a host reads of a pull request whole (ESC-452): each `true` is a call its client serves.
@@ -79,25 +80,62 @@ pub struct Writing {
     pub resolve: bool,
     /// A resolved thread opened again (`Forge::unresolve`).
     pub reopen: bool,
+    /// The control of the pull request (ESC-488): a draft made ready, or ready made a draft (`Forge::set_draft`).
+    pub draft: bool,
+    /// Reviews asked and taken back (`Forge::request_reviewers`, `Forge::remove_reviewer`), among `Forge::candidates`.
+    pub reviewers: bool,
+    /// Labels put and taken off (`Forge::add_labels`, `Forge::remove_label`), among `Forge::candidates`.
+    pub labels: bool,
+    /// The branch brought up to date by the host, by a merge of its base (`Forge::update_branch`).
+    pub update_merge: bool,
+    /// The same, by a rebase onto its base.
+    pub update_rebase: bool,
+    /// One check run again (`Forge::rerun_check`).
+    pub rerun_check: bool,
+    /// The host's auto-merge turned off (`Forge::cancel_auto_merge`); turning it on is `Capabilities::auto_merge`.
+    pub cancel_auto_merge: bool,
+    /// The branch deleted on the host once merged (`Forge::delete_branch`).
+    pub delete_branch: bool,
+    /// Where it stands for its merge (`Forge::control`): a read, without which the merge box says less.
+    pub control: bool,
 }
 
 impl Writing {
-    /// All five: GitHub's.
+    /// All of them: GitHub's.
     pub const ALL: Self = Self {
         comment: true,
         line_comment: true,
         reply: true,
         resolve: true,
         reopen: true,
+        draft: true,
+        reviewers: true,
+        labels: true,
+        update_merge: true,
+        update_rebase: true,
+        rerun_check: true,
+        cancel_auto_merge: true,
+        delete_branch: true,
+        control: true,
     };
     /// What the clients of GitLab, Bitbucket Cloud, Gitea and Azure DevOps do: comment, answer and resolve, not on a
-    /// line nor open again (PR-9 tries them for real).
+    /// line nor open again (PR-9 tries them for real). Of the control of a pull request (ESC-488) they keep what they
+    /// did before, the merge (`Capabilities::merge_strategies`) and the auto-merge (`Capabilities::auto_merge`).
     pub const ANSWERS: Self = Self {
         comment: true,
         line_comment: false,
         reply: true,
         resolve: true,
         reopen: false,
+        draft: false,
+        reviewers: false,
+        labels: false,
+        update_merge: false,
+        update_rebase: false,
+        rerun_check: false,
+        cancel_auto_merge: false,
+        delete_branch: false,
+        control: false,
     };
 }
 

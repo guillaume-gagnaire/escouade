@@ -535,6 +535,15 @@ export const api = {
   /** A write on a pull request (ESC-474), on the user's click only, in their name on its host: done, or why not. */
   prWrite: (projectId: string, number: number, write: import('./prthreads').PrWrite, hostRepo?: string) =>
     invoke<PrRead<boolean>>('pr_write', { projectId, number, write, ...(hostRepo ? { hostRepo } : {}) }),
+  /** « Merger », confirmed in the merge box of a pull request's view (ESC-488): on the user's click only, in their name. */
+  prMerge: (projectId: string, number: number, ask: import('./prcontrol').MergeAsk, hostRepo?: string) =>
+    invoke<PrRead<import('./prcontrol').Merged>>('pr_merge', { projectId, number, ask, ...(hostRepo ? { hostRepo } : {}) }),
+  /** Where a pull request stands for its merge and how it may merge (ESC-488): its merge box. */
+  prControl: (projectId: string, number: number, hostRepo?: string) =>
+    invoke<PrRead<import('./prcontrol').PrControlRead>>('pr_control', { projectId, number, ...(hostRepo ? { hostRepo } : {}) }),
+  /** Who may be asked for a review and the labels a pull request may take (ESC-488): its pickers. */
+  prCandidates: (projectId: string, number: number, hostRepo?: string) =>
+    invoke<PrRead<import('./prcontrol').Candidates>>('pr_candidates', { projectId, number, ...(hostRepo ? { hostRepo } : {}) }),
   /** The view of a pull request (ESC-457): its checks, reviews and comments, read by whoever holds it in the project. */
   prDetail: (projectId: string, number: number, hostRepo?: string) =>
     invoke<PrRead<PrDetail>>('pr_detail', { projectId, number, ...(hostRepo ? { hostRepo } : {}) }),

@@ -571,3 +571,53 @@ fn the_files_marked_seen_are_kept_with_the_interfaces_state() {
     let old: crate::model::UiState = serde_json::from_value(json!({ "view": "project" })).unwrap();
     assert!(old.pr_viewed.is_empty());
 }
+
+/// A read that set out before a write (ESC-488): its answer comes back after the write marked the pull request stale.
+/// It is the read of before: not kept as fresh, the next ask reads the host again and sees the merge.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_read_older_than_a_write_is_not_kept_as_fresh() {
+    let h = harness("prread-race");
+    let server = FakeServer::start().await;
+    let (p, _, _) = github_project(&h, &server, false).await;
+    routes(&server, "2026-11-14T10:00:00Z");
+    let described = "/repos/acme/demo/pulls/12";
+    server.delay("GET", described, Duration::from_millis(1500));
+    let (core, id) = (h.core.clone(), p.id.clone());
+    let old = tokio::spawn(async move { core.pr_contents(&id, 12, "", false).await });
+    // The old read has the pull request open and waits for its description.
+    let start = Instant::now();
+    while !server
+        .requests()
+        .iter()
+        .any(|r| r.method == "GET" && r.path() == described)
+    {
+        assert!(
+            start.elapsed() < Duration::from_secs(30),
+            "the description was never asked"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    // Meanwhile it merges, and the write marks it.
+    let mut merged = node(1);
+    merged["state"] = json!("MERGED");
+    server.on(
+        "POST",
+        "/graphql#Pulls",
+        200,
+        json!({ "data": { "repository": { "p12": merged } } }),
+    );
+    h.core.pr_contents_stale(&p.id, 12, "");
+    let was = old.await.unwrap().data.expect("read");
+    assert_eq!(
+        was.pr.state,
+        crate::forge::PrState::Open,
+        "the read of before"
+    );
+    server.delay("GET", described, Duration::ZERO);
+    let now = h.core.pr_contents(&p.id, 12, "", false).await;
+    assert_eq!(
+        now.data.expect("read").pr.state,
+        crate::forge::PrState::Merged,
+        "read again, not the read of before kept"
+    );
+}

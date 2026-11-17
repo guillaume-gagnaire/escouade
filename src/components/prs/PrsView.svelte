@@ -21,6 +21,7 @@
     savedFilter,
     type PrFilter,
   } from '../../lib/prlist';
+  import { ordered } from '../../lib/prcontrol';
   import { freshIn } from '../../lib/prnew';
   import { openPr, prKey } from '../../lib/prs';
   import { reviewMark } from '../../lib/prreview';
@@ -59,8 +60,12 @@
   /** The pull request whose view fills this one, in place of the list (ESC-457). */
   const viewing = $derived(app.prOpen[project.id] ?? null);
 
+  /** The list's reads in order: an answer older than the one shown is dropped (ESC-488). */
+  const order = ordered();
+
   async function load() {
     const id = project.id;
+    const seq = order.start();
     reading = true;
     let next: PrRead<ProjectPrs>;
     try {
@@ -68,7 +73,7 @@
     } catch (e) {
       next = { failure: { kind: 'other', message: String(e) } as PrFailure };
     }
-    if (project.id !== id) return;
+    if (project.id !== id || !order.take(seq)) return;
     reading = false;
     // A read that fails keeps what was shown, and says why above it.
     if (next.failure && read?.data) next = { data: read.data, failure: next.failure };
@@ -94,6 +99,21 @@
       if (document.visibilityState === 'visible' && !reading) void load();
     }, LIST_EVERY_MS);
     return () => clearInterval(timer);
+  });
+
+  // A pull request of the project changed or was written on (a merge from its view, ESC-488): the list read again at once.
+  const changed = $derived(
+    Object.entries(app.prChanges)
+      .filter(([k]) => k.startsWith(`${project.id}#`))
+      .reduce((n, [, v]) => n + v, 0),
+  );
+  let seenChanged = -1;
+  $effect(() => {
+    const n = changed;
+    untrack(() => {
+      if (seenChanged >= 0 && n !== seenChanged) void load();
+      seenChanged = n;
+    });
   });
 
   function setFilter(f: PrFilter) {

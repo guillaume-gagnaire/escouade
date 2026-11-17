@@ -2344,6 +2344,48 @@ pub async fn pr_write(
         .await)
 }
 
+/// « Merger », confirmed in the merge box of a pull request's view (ESC-488): merged by its host in the user's name with
+/// the strategy chosen, its ticket « Terminé », its branch and its agent's worktree removed when asked. Only the window
+/// calls it: no tool of the MCP server, no agent.
+#[tauri::command]
+pub async fn pr_merge(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+    host_repo: Option<String>,
+    ask: crate::prwrite::MergeAsk,
+) -> Res<crate::prview::Read<crate::prwrite::Merged>> {
+    Ok(core
+        .pr_merge(&project_id, number, host_repo.as_deref().unwrap_or(""), ask)
+        .await)
+}
+
+/// The merge box of a pull request's view (ESC-488): where it stands for its merge, how it may merge.
+#[tauri::command]
+pub async fn pr_control(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+    host_repo: Option<String>,
+) -> Res<crate::prview::Read<crate::prwrite::PrControlRead>> {
+    Ok(core
+        .pr_control(&project_id, number, host_repo.as_deref().unwrap_or(""))
+        .await)
+}
+
+/// Who may be asked for a review and which labels may be put, for the pickers of a pull request's view (ESC-488).
+#[tauri::command]
+pub async fn pr_candidates(
+    core: CoreState<'_>,
+    project_id: String,
+    number: u64,
+    host_repo: Option<String>,
+) -> Res<crate::prview::Read<crate::forge::Candidates>> {
+    Ok(core
+        .pr_candidates(&project_id, number, host_repo.as_deref().unwrap_or(""))
+        .await)
+}
+
 /// The view of a pull request (ESC-457): its checks, reviews, comments and deployments, read by
 /// whoever holds it in the project; or why the host did not give them.
 #[tauri::command]

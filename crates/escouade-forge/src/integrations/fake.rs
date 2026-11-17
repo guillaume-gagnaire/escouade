@@ -104,6 +104,8 @@ pub struct FakeServer {
     pub cert_pem: String,
     routes: Arc<Mutex<Vec<Route>>>,
     requests: Arc<Mutex<Vec<Request>>>,
+    /// Answers held back (`delay`): by method and target, the answer as it was when asked, sent that much later.
+    delays: Arc<Mutex<Vec<(String, String, std::time::Duration)>>>,
 }
 
 /// A certificate in PEM, as a `.pem` file of authorities holds it.
@@ -179,6 +181,7 @@ impl FakeServer {
             cert_pem: String::new(),
             routes: Arc::default(),
             requests: Arc::default(),
+            delays: Arc::default(),
         }
     }
 
@@ -188,7 +191,22 @@ impl FakeServer {
             return;
         };
         let (status, body, headers) = self.answer(&req);
+        let held = self.delays.lock().iter().rev().find_map(|(m, t, d)| {
+            let probe = Route {
+                method: m.clone(),
+                target: t.clone(),
+                status: 0,
+                body: String::new(),
+                headers: Vec::new(),
+                once: false,
+            };
+            probe.matches(&req).then_some(*d)
+        });
         self.requests.lock().push(req);
+        // Computed when asked, sent later: an answer older than what came since (a race of reads).
+        if let Some(d) = held {
+            tokio::time::sleep(d).await;
+        }
         let extra: String = headers
             .iter()
             .map(|(k, v)| format!("{k}: {v}\r\n"))
@@ -200,6 +218,11 @@ impl FakeServer {
         let _ = stream.write_all(head.as_bytes()).await;
         let _ = stream.write_all(body.as_bytes()).await;
         let _ = stream.shutdown().await;
+    }
+
+    /// Holds the answers of `method target` back for `d` (zero: no more), each computed when it is asked.
+    pub fn delay(&self, method: &str, target: &str, d: std::time::Duration) {
+        self.delays.lock().push((method.into(), target.into(), d));
     }
 
     /// Answers `method target` (the last route set for it wins) with `status` and `body`.

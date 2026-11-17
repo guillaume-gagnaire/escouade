@@ -20,9 +20,10 @@
 
 use super::runtime::{CallError, Runtime, METHOD_NOT_FOUND};
 use crate::forge::{
-    BoxFuture, Check, Credentials, Deployment, Forge, Identity, LineComment, MergeOptions,
-    MergeStrategy, PrCommit, PrDescription, PrFile, PullRequest, PullRequestDraft, RateLimit,
-    RepoRef, Review, ReviewComment, ReviewDraft, ReviewThread, Unsupported,
+    BoxFuture, Candidates, Check, Credentials, Deployment, Forge, Identity, LineComment,
+    MergeOptions, MergeStrategy, PrCommit, PrControl, PrDescription, PrFile, PullRequest,
+    PullRequestDraft, RateLimit, RepoRef, Review, ReviewComment, ReviewDraft, ReviewThread,
+    Unsupported, UpdateMethod,
 };
 use crate::integrations::source::{TicketSource, TicketSourceKind};
 use crate::integrations::{
@@ -463,6 +464,11 @@ impl ProcessForge {
             )
         })
     }
+
+    /// A write that answers nothing.
+    async fn done(&self, method: &str, what: &'static str, extra: Value) -> Result<()> {
+        self.ask::<Value>(method, what, extra).await.map(|_| ())
+    }
 }
 
 impl Forge for ProcessForge {
@@ -759,6 +765,128 @@ impl Forge for ProcessForge {
             .await
             .map(|_| ())
         })
+    }
+
+    fn control<'a>(&'a self, repo: &'a RepoRef, number: u64) -> BoxFuture<'a, Result<PrControl>> {
+        Box::pin(self.ask(
+            "forge/control",
+            "control",
+            json!({ "repo": repo, "number": number }),
+        ))
+    }
+
+    fn candidates<'a>(&'a self, repo: &'a RepoRef) -> BoxFuture<'a, Result<Candidates>> {
+        Box::pin(self.ask("forge/candidates", "candidates", json!({ "repo": repo })))
+    }
+
+    fn set_draft<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+        draft: bool,
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(self.done(
+            "forge/setDraft",
+            "set_draft",
+            json!({ "repo": repo, "number": number, "draft": draft }),
+        ))
+    }
+
+    fn request_reviewers<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+        logins: &'a [String],
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(self.done(
+            "forge/requestReviewers",
+            "request_reviewers",
+            json!({ "repo": repo, "number": number, "logins": logins }),
+        ))
+    }
+
+    fn remove_reviewer<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+        login: &'a str,
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(self.done(
+            "forge/removeReviewer",
+            "remove_reviewer",
+            json!({ "repo": repo, "number": number, "login": login }),
+        ))
+    }
+
+    fn add_labels<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+        labels: &'a [String],
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(self.done(
+            "forge/addLabels",
+            "add_labels",
+            json!({ "repo": repo, "number": number, "labels": labels }),
+        ))
+    }
+
+    fn remove_label<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+        label: &'a str,
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(self.done(
+            "forge/removeLabel",
+            "remove_label",
+            json!({ "repo": repo, "number": number, "label": label }),
+        ))
+    }
+
+    fn update_branch<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+        method: UpdateMethod,
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(self.done(
+            "forge/updateBranch",
+            "update_branch",
+            json!({ "repo": repo, "number": number, "method": method }),
+        ))
+    }
+
+    fn rerun_check<'a>(&'a self, repo: &'a RepoRef, job: &'a str) -> BoxFuture<'a, Result<()>> {
+        Box::pin(self.done(
+            "forge/rerunCheck",
+            "rerun_check",
+            json!({ "repo": repo, "job": job }),
+        ))
+    }
+
+    fn cancel_auto_merge<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        number: u64,
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(self.done(
+            "forge/cancelAutoMerge",
+            "cancel_auto_merge",
+            json!({ "repo": repo, "number": number }),
+        ))
+    }
+
+    fn delete_branch<'a>(
+        &'a self,
+        repo: &'a RepoRef,
+        branch: &'a str,
+    ) -> BoxFuture<'a, Result<()>> {
+        Box::pin(self.done(
+            "forge/deleteBranch",
+            "delete_branch",
+            json!({ "repo": repo, "branch": branch }),
+        ))
     }
 
     /// The account's budget: what the last answer of any point of its plugin said.
