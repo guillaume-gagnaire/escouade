@@ -29,6 +29,12 @@ concurrency:
 # on the three heavy roots (windows-build, macos-build, macos-bundle); the jobs that need them are skipped with them. A
 # human who has read the pull request runs the whole CI by pushing its branch under their name or with « Run workflow »
 # (workflow_dispatch), whose actor is the human.
+
+# The end-to-end specs that run again with the window on the remote API of the core (ESC-495): the part « remote API »
+# of windows-e2e.
+env:
+  REMOTE_E2E: tests/e2e/app.spec.ts tests/e2e/conversation.spec.ts tests/e2e/terminal-height.spec.ts tests/e2e/kanban-pr.spec.ts tests/e2e/mcp.spec.ts tests/e2e/remote-cut.spec.ts
+
 jobs:
   front:
     name: Frontend (format, types, Vitest)
@@ -426,15 +432,18 @@ jobs:
           node ../scripts/nextest-annotations.mjs nextest.log target/nextest/ci/junit.xml $status
           exit $status
 
+  # Five parts of all the end-to-end tests, and a part of its own (ESC-495) where a set of them runs again with the window
+  # on the remote API of the core (its WebSocket on the loopback, not Tauri's IPC), with the e2e of a cut: beside the
+  # others, it adds no time to the CI's.
   windows-e2e:
-    name: Windows (end-to-end ${{ matrix.shard }}/5)
+    name: Windows (end-to-end ${{ matrix.shard == 'remote' && 'remote API' || format('{0}/5', matrix.shard) }})
     needs: windows-build
     runs-on: windows-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5]
+        shard: [1, 2, 3, 4, 5, remote]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -483,11 +492,22 @@ jobs:
       # as flaky, and its trace is kept. Each runner takes a fifth of the tests (Playwright's shards): in 3, a part took
       # up to 19 min after the 16 of the build.
       - name: End-to-end tests (Playwright over WebView2)
+        if: matrix.shard != 'remote'
         env:
           ESCOUADE_E2E_CDP_PORT: 9222
           # As in the environment of an agent of Escouade: the tests must not depend on it.
           CLAUDE_CODE_ENABLE_TODO_TOOLS: '1'
         run: npx playwright test --shard=${{ matrix.shard }}/5
+
+      # The window on the remote API (ESC-495): the app, a conversation, a terminal, the Kanban, the MCP server, and the
+      # WebSocket closed by force while a terminal writes.
+      - name: End-to-end tests on the remote API
+        if: matrix.shard == 'remote'
+        env:
+          ESCOUADE_E2E_CDP_PORT: 9222
+          ESCOUADE_E2E_REMOTE: '1'
+          CLAUDE_CODE_ENABLE_TODO_TOOLS: '1'
+        run: npx playwright test ${{ env.REMOTE_E2E }}
 
       # The traces of the tests that failed, or that ran again (there is none when all passed first time).
       - name: Upload Playwright traces

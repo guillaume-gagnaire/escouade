@@ -16,8 +16,11 @@
 
 pub mod devices;
 pub mod list;
+pub mod outbox;
 pub mod proto;
 pub mod server;
+pub mod sessions;
+pub mod window;
 
 use crate::core::Core;
 use serde::Serialize;
@@ -164,6 +167,11 @@ impl Services {
 /// tagged with the id (`server`).
 pub trait Channels: Send + Sync {
     fn open(&self, id: u32) -> Box<dyn Fn(InvokeResponseBody) -> tauri::Result<()> + Send + Sync>;
+    /// The channel `id` as a terminal's output goes to it (`TermChannel`): numbered, so that the client resumes it after
+    /// a cut (`server`). By default, the bytes alone.
+    fn term(&self, id: u32) -> Box<dyn crate::termlog::Sink> {
+        Box::new(IpcSink(tauri::ipc::Channel::new(self.open(id))))
+    }
 }
 
 /// A call of a command by the remote API.
@@ -173,6 +181,123 @@ pub struct Call {
     pub args: serde_json::Map<String, Value>,
     pub services: Arc<Services>,
     pub channels: Arc<dyn Channels>,
+    /// Its raw body (`attach_chunk`, `fs_write_bytes`) and the headers that go with it, when it has one.
+    pub body: Option<RawBody>,
+}
+
+/// The raw body of a call and its headers, as the IPC gives them (`invoke(cmd, bytes, { headers })`).
+#[derive(Debug, Default, Clone)]
+pub struct RawBody {
+    pub bytes: Vec<u8>,
+    pub headers: tauri::http::HeaderMap,
+}
+
+// ---------- a terminal's output ----------
+
+/// Where a terminal's output goes (`term_spawn`, `run_start`, `test_run_start`, `account_login`, `agent_terminal`):
+/// the window's channel (Tauri's IPC: the bytes alone, as before), or a channel of a client of the remote API (numbered:
+/// the client resumes it after a cut, `termlog`). The commands take it in place of a `Channel`.
+pub enum TermChannel {
+    Window(tauri::ipc::Channel<InvokeResponseBody>),
+    Remote(Box<dyn crate::termlog::Sink>),
+}
+
+impl TermChannel {
+    pub fn sink(self) -> Box<dyn crate::termlog::Sink> {
+        match self {
+            TermChannel::Window(channel) => Box::new(IpcSink(channel)),
+            TermChannel::Remote(sink) => sink,
+        }
+    }
+}
+
+/// The window's channel of a terminal: the bytes alone, numbered or not.
+struct IpcSink(tauri::ipc::Channel<InvokeResponseBody>);
+
+impl crate::termlog::Sink for IpcSink {
+    fn send(&self, _end: u64, data: &[u8]) {
+        let _ = self.0.send(InvokeResponseBody::Raw(data.to_vec()));
+    }
+    fn replay(&self, data: &[u8]) {
+        let _ = self.0.send(InvokeResponseBody::Raw(data.to_vec()));
+    }
+}
+
+impl<'de, R: Runtime> CommandArg<'de, R> for TermChannel {
+    fn from_command(command: CommandItem<'de, R>) -> Result<Self, InvokeError> {
+        Ok(TermChannel::Window(CommandArg::from_command(command)?))
+    }
+}
+
+impl<'c> FromCall<'c> for TermChannel {
+    fn from_call(call: &'c Call, key: &str) -> Result<Self, Failure> {
+        Ok(TermChannel::Remote(
+            call.channels.term(channel_id(call, key)?),
+        ))
+    }
+}
+
+/// The id of the channel the client gave for `key`: `__CHANNEL__:<id>`, as the IPC's.
+fn channel_id(call: &Call, key: &str) -> Result<u32, Failure> {
+    let value = call.args.get(key);
+    value
+        .and_then(Value::as_str)
+        .and_then(|s| s.strip_prefix("__CHANNEL__:"))
+        .and_then(|n| n.parse::<u32>().ok())
+        .or_else(|| {
+            value
+                .and_then(Value::as_u64)
+                .and_then(|n| u32::try_from(n).ok())
+        })
+        .ok_or_else(|| {
+            Failure::Command(Value::String(format!(
+                "invalid args `{key}` for command `{}`: expected a string in the `__CHANNEL__:ID` format",
+                call.command
+            )))
+        })
+}
+
+// ---------- a raw body ----------
+
+/// The raw body of a call (the chunks of an attachment, the bytes of a file) and its headers, as the commands read
+/// it: from Tauri's request for the IPC, from the call's binary frames for the remote API (`server`).
+pub enum Body<'a> {
+    Ipc(tauri::ipc::Request<'a>),
+    Remote(Option<&'a RawBody>),
+}
+
+impl Body<'_> {
+    /// Its bytes, when they came raw (not as JSON).
+    pub fn raw(&self) -> Option<&[u8]> {
+        match self {
+            Body::Ipc(request) => match request.body() {
+                tauri::ipc::InvokeBody::Raw(bytes) => Some(bytes.as_slice()),
+                _ => None,
+            },
+            Body::Remote(body) => body.map(|b| b.bytes.as_slice()),
+        }
+    }
+
+    /// The header `name`, as text.
+    pub fn header(&self, name: &str) -> Option<&str> {
+        let headers = match self {
+            Body::Ipc(request) => request.headers(),
+            Body::Remote(body) => &(*body)?.headers,
+        };
+        headers.get(name).and_then(|h| h.to_str().ok())
+    }
+}
+
+impl<'a, R: Runtime> CommandArg<'a, R> for Body<'a> {
+    fn from_command(command: CommandItem<'a, R>) -> Result<Self, InvokeError> {
+        Ok(Body::Ipc(CommandArg::from_command(command)?))
+    }
+}
+
+impl<'c> FromCall<'c> for Body<'c> {
+    fn from_call(call: &'c Call, _key: &str) -> Result<Self, Failure> {
+        Ok(Body::Remote(call.body.as_ref()))
+    }
 }
 
 /// What a command answers: its result as the IPC gives it (JSON, or bytes for a `tauri::ipc::Response`), or why it
@@ -217,6 +342,14 @@ pub mod codes {
     pub const POLICY: &str = "policy";
     /// The first message was not the handshake, or came too late.
     pub const HANDSHAKE: &str = "handshake";
+    /// Too many connections of this device, or in all.
+    pub const TOO_MANY: &str = "too-many-connections";
+    /// Too many calls of this connection wait for their answer.
+    pub const BUSY: &str = "busy";
+    /// A raw body past its bounds (`proto::MAX_BODY`), or not the length its call says.
+    pub const TOO_LARGE: &str = "too-large";
+    /// The connection read nothing for too long, or let too much wait unread: closed (`proto::CLOSE_SLOW`).
+    pub const SLOW: &str = "slow-client";
 }
 
 type Job = Box<dyn FnOnce() -> Outcome + Send>;
@@ -328,23 +461,9 @@ impl<'c, T: Send + Sync + 'static> FromCall<'c> for Maybe<'c, T> {
 /// A channel the client opened: `__CHANNEL__:<id>`, as the IPC's.
 impl<'c, T> FromCall<'c> for tauri::ipc::Channel<T> {
     fn from_call(call: &'c Call, key: &str) -> Result<Self, Failure> {
-        let value = call.args.get(key);
-        let id = value
-            .and_then(Value::as_str)
-            .and_then(|s| s.strip_prefix("__CHANNEL__:"))
-            .and_then(|n| n.parse::<u32>().ok())
-            .or_else(|| {
-                value
-                    .and_then(Value::as_u64)
-                    .and_then(|n| u32::try_from(n).ok())
-            });
-        let Some(id) = id else {
-            return Err(Failure::Command(Value::String(format!(
-                "invalid args `{key}` for command `{}`: expected a string in the `__CHANNEL__:ID` format",
-                call.command
-            ))));
-        };
-        Ok(tauri::ipc::Channel::new(call.channels.open(id)))
+        Ok(tauri::ipc::Channel::new(
+            call.channels.open(channel_id(call, key)?),
+        ))
     }
 }
 
@@ -360,13 +479,13 @@ impl<'c> FromCall<'c> for tauri::AppHandle {
     }
 }
 
-/// A request's raw body (the chunks of an attachment, the bytes of a file): not over this API yet (fondation 2b).
+/// Tauri's request: the commands take [`Body`] instead, which both read.
 impl<'c, 'a> FromCall<'c> for tauri::ipc::Request<'a> {
     fn from_call(call: &'c Call, _key: &str) -> Result<Self, Failure> {
         Err(Failure::refused(
             codes::UNAVAILABLE,
             format!(
-                "{}: a raw body is not sent over the remote API yet",
+                "{}: Tauri's request is not made at a distance (take a `remoteapi::Body`)",
                 call.command
             ),
         ))

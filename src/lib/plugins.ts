@@ -1,6 +1,6 @@
 // The plugins (PLG-4, ESC-176; docs/PLUGINS-DESIGN.md §3): their views as the core gives them, the calls of the view Plugins,
 // and what the view reads of them — what each may do in words, the strongest first, its category, its projects.
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from './transport';
 import { t } from './i18n';
 import type { StoreView } from './store';
 import type { Project } from './types';

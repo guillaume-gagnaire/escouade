@@ -4,6 +4,7 @@ import { setLocks } from './locks.svelte';
 import { openUrl } from './opener';
 import { teams } from './teams.svelte';
 import { api } from './ipc';
+import { onStale } from './transport';
 import { overseer } from './overseer.svelte';
 import { applyConvOps, dropConversation, releaseIdle } from './conversations.svelte';
 import { buffers } from './editor/buffers.svelte';
@@ -58,6 +59,7 @@ import {
 } from './panes';
 import type {
   AccountView,
+  InitialState,
   CodeHost,
   Agent,
   AgentStatus,
@@ -821,21 +823,13 @@ class AppState {
     const s = await api.subscribe((e) => (this.early ? this.early.push(e) : this.onEvent(e)));
     // First: what is shown from here on is written in it.
     if (s.lang) this.takeLang(s.lang);
-    this.projects = s.projects;
-    this.agents = Object.fromEntries(s.agents.map((a) => [a.id, a]));
-    this.tickets = Object.fromEntries((s.tickets ?? []).map((t) => [t.id, t]));
-    this.scheduled = s.scheduled ?? [];
+    this.takeState(s);
     void overseer.load();
-    this.boardIssues = { ...s.boardIssues };
     // Read by the loop of the pull requests a little after the start: what it read already, those the events bring after.
     api
       .targetCis()
       .then((m) => (this.targetCi = { ...m, ...this.targetCi }))
       .catch(() => {});
-    this.setupOutput = { ...s.setupOutput };
-    this.autopilotPause = s.autopilotPause ?? null;
-    this.projectPauses = s.projectPauses ?? {};
-    this.accounts = s.accounts ?? [];
     this.attention = {};
     this.ui = {
       ...s.ui,
@@ -850,22 +844,6 @@ class AppState {
       // Never the one the page crashed on (ESC-290): it is offered again, not opened.
       this.ui.activeProject = this.projects.find((p) => p.id !== s.pageCrash?.projectId)?.id ?? null;
     }
-    this.settings = s.settings;
-    this.usage = s.usage;
-    this.git = s.git;
-    this.shells = s.shells;
-    this.claudeFound = s.claudeFound;
-    this.claudePathFound = s.claudePathFound ?? s.claudeFound;
-    this.version = s.version;
-    setLocks(s.locks, s.teamLocks);
-    this.models = s.models;
-    this.engines = s.engines ?? [];
-    this.engineModels = s.engineModels ?? {};
-    this.accountModels = s.accountModels ?? {};
-    this.enginesFound = s.enginesFound ?? (s.claudeFound ? ['claude'] : []);
-    this.enginesOff = s.enginesOff ?? [];
-    this.harnessScope = s.harnessScope ?? {};
-    if (s.sources) setSources(s.sources);
     this.restartAt = s.restartAt ?? null;
     this.failedUpdate = s.failedUpdate ?? null;
     this.recovered = s.recovered ?? [];
@@ -892,10 +870,70 @@ class AppState {
     this.early = null;
     for (const e of early) this.onEvent(e);
     this.ready = true;
+    // On the remote API, after a cut (or a queue the core let overflow): the state read again whole.
+    onStale(() => void this.resync());
     void this.reopenView();
     setInterval(() => (this.now = Date.now()), 1000);
     // The conversations out of sight leave the window's memory after a while, read again when shown.
     setInterval(() => releaseIdle(Date.now(), (id) => this.atWork(id)), 60_000);
+  }
+
+  /** What the core holds, as a snapshot gives it (the start, and a reading again after a cut). */
+  private takeState(s: InitialState) {
+    this.projects = s.projects;
+    this.agents = Object.fromEntries(s.agents.map((a) => [a.id, a]));
+    this.tickets = Object.fromEntries((s.tickets ?? []).map((t) => [t.id, t]));
+    this.scheduled = s.scheduled ?? [];
+    this.boardIssues = { ...s.boardIssues };
+    this.setupOutput = { ...s.setupOutput };
+    this.autopilotPause = s.autopilotPause ?? null;
+    this.projectPauses = s.projectPauses ?? {};
+    this.accounts = s.accounts ?? [];
+    this.settings = s.settings;
+    this.usage = s.usage;
+    this.git = s.git;
+    this.shells = s.shells;
+    this.claudeFound = s.claudeFound;
+    this.claudePathFound = s.claudePathFound ?? s.claudeFound;
+    this.version = s.version;
+    setLocks(s.locks, s.teamLocks);
+    this.models = s.models;
+    this.engines = s.engines ?? [];
+    this.engineModels = s.engineModels ?? {};
+    this.accountModels = s.accountModels ?? {};
+    this.enginesFound = s.enginesFound ?? (s.claudeFound ? ['claude'] : []);
+    this.enginesOff = s.enginesOff ?? [];
+    this.harnessScope = s.harnessScope ?? {};
+    if (s.sources) setSources(s.sources);
+  }
+
+  /**
+   * The state read again whole (ESC-495): the window on the remote API came back after a cut, or the core let events go
+   * for a slow reading. The core's state as it is now, the window's own choices kept (the view, the agent chosen) and
+   * given back to the core, whose memory of them for this client went with the connection; the terminals that ended
+   * meanwhile said ended.
+   */
+  async resync() {
+    this.early = [];
+    let s: InitialState;
+    try {
+      s = await api.subscribe((e) => (this.early ? this.early.push(e) : this.onEvent(e)));
+    } catch {
+      // Cut again: the next connection reads it.
+      this.early = null;
+      return;
+    }
+    if (s.lang) this.takeLang(s.lang);
+    this.takeState(s);
+    for (const x of s.exitedTerminals ?? []) {
+      if (this.terminals.some((term) => term.id === x.id) && !(x.id in this.exitedTerms)) {
+        this.onEvent({ type: 'terminalExit', id: x.id, code: x.code });
+      }
+    }
+    const early = this.early ?? [];
+    this.early = null;
+    for (const e of early) this.onEvent(e);
+    api.setUi($state.snapshot(this.ui)).catch(() => {});
   }
 
   /**

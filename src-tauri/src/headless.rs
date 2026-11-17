@@ -101,8 +101,23 @@ impl Headless {
     /// The remote API of this core served on 127.0.0.1:`port` (0: a free port), off until then (ESC-478): what
     /// `escouade-server` will turn on. Refused when the policies of the device forbid it.
     pub async fn serve_remote(&self, port: u16) -> Result<Arc<RemoteApi>> {
+        self.serve_remote_with(port, crate::remoteapi::server::Limits::default())
+            .await
+    }
+
+    /// The same, within `limits` (the tests' small ones).
+    pub async fn serve_remote_with(
+        &self,
+        port: u16,
+        limits: crate::remoteapi::server::Limits,
+    ) -> Result<Arc<RemoteApi>> {
         let services = Arc::new(Services::new(self.core.clone()));
-        let api = RemoteApi::start(services, port).await?;
+        let api = RemoteApi::start_with(
+            services,
+            crate::remoteapi::server::Listen::Port(port),
+            limits,
+        )
+        .await?;
         *self.remote.lock() = Some(api.clone());
         Ok(api)
     }

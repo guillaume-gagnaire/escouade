@@ -1,7 +1,7 @@
 // The store in the app (STORE-9, docs/STORE.md §5): the catalogue of store.escouade.dev as the core keeps it, searched on
 // this machine (name, description, keywords, author; case and accents ignored), its categories, what a version asks for
 // in one line, and the calls of the view Plugins.
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from './transport';
 import { t } from './i18n';
 import { textOf, type Category, type ManifestText } from './plugins';
 

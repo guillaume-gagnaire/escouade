@@ -271,6 +271,7 @@ escouade_command::commands! {
         commands::fs_base,
         commands::fs_stat,
         commands::fs_read_bytes,
+        commands::fs_write_bytes,
         commands::code_search,
         commands::term_spawn,
         commands::run_start,
@@ -428,17 +429,17 @@ escouade_command::commands! {
         commands::suggest_worktree_steps_at,
         commands::suggest_run_commands_at,
         commands::conversation_send,
+        commands::attach_open,
+        commands::attach_chunk,
+        commands::attach_finish,
+        commands::attach_cancel,
+        commands::attach_discard,
     }
     // They change machines in server mode, and do not work as they are yet: refused (`not-served-yet`).
     moves_refused {
         commands::open_path,
         commands::set_project_logo,
         commands::read_logo,
-        commands::attach_open,
-        commands::attach_chunk,
-        commands::attach_finish,
-        commands::attach_cancel,
-        commands::attach_discard,
         commands::attach_origin,
         fileorigin::file_origin,
         commands::clipboard_image,
@@ -454,6 +455,5 @@ escouade_command::commands! {
         commands::fs_reveal,
         commands::sent_file_open,
         commands::agent_local_open,
-        commands::fs_write_bytes,
     }
 }

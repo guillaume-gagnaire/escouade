@@ -154,23 +154,25 @@ const BACKGROUND_SIZE: (u16, u16) = (120, 40);
 /// later.
 const OUTPUT_KEPT: usize = 4 << 20;
 /// The size of the pieces the kept output is sent to a window in.
-const REPLAY_PIECE: usize = 64 << 10;
+const REPLAY_PIECE: usize = crate::termlog::REPLAY_PIECE;
 
 /// What an interface printed in its terminal. The pseudo-terminal lives in the backend, which
 /// keeps the last `OUTPUT_KEPT` bytes of its output, so that the interface runs with no window
 /// (Remote Control keeps it up) and a window that opens it, or opens it again after a reload,
-/// finds its screen as it is.
+/// finds its screen as it is. Its bytes are numbered (`termlog::Ring`): a client of the remote API
+/// that lost its connection takes it over again from where it stopped (`termlog::Replay`).
 #[derive(Default)]
 pub struct TuiOutput {
     inner: Mutex<Output>,
 }
 
-/// Where a window is sent what a terminal prints.
-pub type Forward = Box<dyn Fn(Vec<u8>) + Send>;
+/// Where a window is sent what a terminal prints: its bytes alone (the window's IPC), or numbered
+/// (a client of the remote API: `termlog::Sink`).
+pub type Forward = Box<dyn crate::termlog::Sink>;
 
-#[derive(Default)]
 struct Output {
-    kept: std::collections::VecDeque<u8>,
+    /// The last `OUTPUT_KEPT` bytes, numbered.
+    kept: crate::termlog::Ring,
     /// The window's sink, while a window shows the terminal.
     forward: Option<Forward>,
     /// A window has shown it (it still does, or did before it was closed).
@@ -203,7 +205,34 @@ enum ModeParse {
     Private(Vec<u8>),
 }
 
+impl Default for Output {
+    fn default() -> Self {
+        Self {
+            kept: crate::termlog::Ring::new(OUTPUT_KEPT),
+            forward: None,
+            shown: false,
+            modes: Default::default(),
+            parse: Default::default(),
+            query: Default::default(),
+        }
+    }
+}
+
 impl Output {
+    /// The screen again, for a terminal that shows it from now on: the modes first (the start of
+    /// the output, which set them, may be gone), then what is kept less the queries it would
+    /// answer again, outside the numbering, which goes on at the end.
+    fn replay_to(&self, forward: &dyn crate::termlog::Sink) {
+        let modes = self.modes_again();
+        if !modes.is_empty() {
+            forward.replay(&modes);
+        }
+        for piece in without_terminal_queries(&self.kept.kept()).chunks(REPLAY_PIECE) {
+            forward.replay(piece);
+        }
+        forward.mark(self.kept.end());
+    }
+
     /// Follows the modes `data` sets or resets.
     fn track_modes(&mut self, data: &[u8]) {
         for &b in data {
@@ -277,18 +306,16 @@ impl TuiOutput {
         let mut o = self.inner.lock();
         o.track_modes(&data);
         let asked = o.query.feed(&data);
-        o.kept.extend(data.iter());
-        let excess = o.kept.len().saturating_sub(OUTPUT_KEPT);
+        let excess = (o.kept.len() + data.len()).saturating_sub(OUTPUT_KEPT);
+        let end = o.kept.push(&data);
         if excess > 0 {
-            o.kept.drain(..excess);
             // Not in the middle of a sequence, or of a line: from the next line.
-            let line = o.kept.iter().take(CUT_LOOKS_IN).position(|b| *b == b'\n');
-            if let Some(line) = line {
-                o.kept.drain(..=line);
+            if let Some(line) = o.kept.position(b'\n', CUT_LOOKS_IN) {
+                o.kept.drop_front(line + 1);
             }
         }
         if let Some(forward) = &o.forward {
-            forward(data);
+            forward.send(end, &data);
         }
         asked && !o.shown
     }
@@ -303,19 +330,25 @@ impl TuiOutput {
     /// window that had it before (a reloaded one) is let go. The queries the terminal made
     /// (`without_terminal_queries`) are left out of what is replayed: they were answered, and
     /// the window's terminal would answer them again, the answers typed into the interface.
-    pub(crate) fn attach(&self, forward: Forward) {
+    pub(crate) fn attach(self: &Arc<Self>, forward: Forward) {
         let mut o = self.inner.lock();
-        let kept: Vec<u8> = o.kept.iter().copied().collect();
-        // The modes first: the start of the output, which set them, may be gone.
-        let modes = o.modes_again();
-        if !modes.is_empty() {
-            forward(modes);
-        }
-        for piece in without_terminal_queries(&kept).chunks(REPLAY_PIECE) {
-            forward(piece.to_vec());
-        }
+        o.replay_to(&*forward);
+        forward.bound(self.clone());
         o.forward = Some(forward);
         o.shown = true;
+    }
+
+    /// An output for the window `forward` sends to, if there is one yet, shared: a client of the
+    /// remote API may take it over again after a cut (`termlog::Replay`).
+    pub(crate) fn shared(forward: Option<Forward>) -> Arc<Self> {
+        let out = Arc::new(Self::new(None));
+        if let Some(forward) = forward {
+            forward.bound(out.clone());
+            let mut o = out.inner.lock();
+            o.forward = Some(forward);
+            o.shown = true;
+        }
+        out
     }
 
     /// A window has shown the terminal.
@@ -331,7 +364,34 @@ impl TuiOutput {
     /// The bytes kept (tests).
     #[cfg(test)]
     pub(crate) fn kept(&self) -> Vec<u8> {
-        self.inner.lock().kept.iter().copied().collect()
+        self.inner.lock().kept.kept()
+    }
+}
+
+/// A client of the remote API takes the interface over again after a cut: what it missed while
+/// the ring still holds it, else the screen again (as a window that opens it) and the count of
+/// what it lost.
+impl crate::termlog::Replay for TuiOutput {
+    fn resume(&self, after: Option<u64>, sink: Box<dyn crate::termlog::Sink>) {
+        let mut o = self.inner.lock();
+        match after {
+            Some(after) if after >= o.kept.start() => {
+                crate::termlog::send_since(&*sink, &o.kept.since(after));
+            }
+            _ => {
+                if let Some(after) = after {
+                    sink.lost(o.kept.start() - after);
+                }
+                o.replay_to(&*sink);
+            }
+        }
+        sink.resumed(false);
+        o.forward = Some(sink);
+        o.shown = true;
+    }
+
+    fn over(&self) -> bool {
+        false
     }
 }
 
@@ -1191,7 +1251,20 @@ impl Core {
         id: &str,
         size: (u16, u16),
         manual: bool,
-        on_data: impl Fn(Vec<u8>) + Send + 'static,
+        on_data: impl Fn(Vec<u8>) + Send + Sync + 'static,
+    ) -> Result<TermInfo> {
+        self.open_agent_terminal_to(id, size, manual, Box::new(on_data))
+            .await
+    }
+
+    /// The same, its output sent to `on_data` (the window's channel, or a client's of the remote
+    /// API, numbered: `termlog::Sink`).
+    pub async fn open_agent_terminal_to(
+        self: &Arc<Self>,
+        id: &str,
+        size: (u16, u16),
+        manual: bool,
+        on_data: Forward,
     ) -> Result<TermInfo> {
         let h = self.agent(id)?;
         // Its harness's plugin off for its project (ESC-404): its interface does not start either.
@@ -1202,7 +1275,7 @@ impl Core {
         self.check_harness_in(engine, &project_id)?;
         crate::bypass::check(&h.lock().meta.mode, self.bypass_allowed())?;
         if crate::engine::of(&h.lock().meta).attaches() {
-            return self.open_attached(&h, id, size, Box::new(on_data)).await;
+            return self.open_attached(&h, id, size, on_data).await;
         }
         let lock = self.spawn_lock(id);
         let _guard = lock.lock().await;
@@ -1238,13 +1311,12 @@ impl Core {
             }
         }
         if let Some((info, output)) = self.running_interface(&h, true) {
-            output.attach(Box::new(on_data));
+            output.attach(on_data);
             // Claude Code draws its screen again at the window's size.
             let _ = self.pty.resize(&info.id, size.0, size.1);
             return Ok(info);
         }
-        self.launch_interface(&h, id, size, Some(Box::new(on_data)))
-            .await
+        self.launch_interface(&h, id, size, Some(on_data)).await
     }
 
     /// The agent's interface, when it runs: its terminal and what that printed. With `show`, a
@@ -1778,7 +1850,7 @@ impl Core {
             info.id.clone(),
             access.token().map(str::to_string),
         );
-        let output = Arc::new(TuiOutput::new(forward));
+        let output = TuiOutput::shared(forward);
         // Its first output is kept apart too: what it says when it stops at once (a session it
         // does not find) is read from it, by its exit.
         let first = Arc::new(Mutex::new(Vec::new()));
@@ -2961,7 +3033,7 @@ mod tests {
 
     #[test]
     fn an_interfaces_output_is_kept_up_to_its_limit_and_its_end_stays() {
-        let out = TuiOutput::new(None);
+        let out = Arc::new(TuiOutput::new(None));
         for _ in 0..4 {
             out.push(vec![b'a'; 1 << 20]);
         }
@@ -2983,7 +3055,7 @@ mod tests {
 
     #[test]
     fn a_window_taking_the_output_over_is_sent_what_was_kept_then_what_comes() {
-        let out = TuiOutput::new(None);
+        let out = Arc::new(TuiOutput::new(None));
         assert!(!out.shown());
         out.push(b"avant ".to_vec());
         let (first, forward) = collecting();
@@ -3006,7 +3078,7 @@ mod tests {
     #[test]
     fn an_output_made_for_a_window_is_shown_from_the_start() {
         let (seen, forward) = collecting();
-        let out = TuiOutput::new(Some(forward));
+        let out = Arc::new(TuiOutput::new(Some(forward)));
         assert!(out.shown());
         out.push(b"ok".to_vec());
         assert_eq!(*seen.lock(), b"ok");
@@ -3014,7 +3086,7 @@ mod tests {
 
     #[test]
     fn what_is_replayed_to_a_window_is_sent_in_pieces_without_the_cursor_query() {
-        let out = TuiOutput::new(None);
+        let out = Arc::new(TuiOutput::new(None));
         // The query is answered already: a second answer would be typed into the interface.
         out.push(b"a\x1b[6".to_vec());
         out.push(b"nb".to_vec());
@@ -3022,7 +3094,7 @@ mod tests {
         let pieces = Arc::new(Mutex::new(Vec::<usize>::new()));
         let all = Arc::new(Mutex::new(Vec::<u8>::new()));
         let (sizes, bytes) = (pieces.clone(), all.clone());
-        out.attach(Box::new(move |b| {
+        out.attach(Box::new(move |b: Vec<u8>| {
             sizes.lock().push(b.len());
             bytes.lock().extend(b);
         }));
@@ -3036,7 +3108,7 @@ mod tests {
     }
 
     /// What a window is sent when it takes the output over, as one string.
-    fn replayed(out: &TuiOutput) -> Vec<u8> {
+    fn replayed(out: &Arc<TuiOutput>) -> Vec<u8> {
         let (all, forward) = collecting();
         out.attach(forward);
         let all = all.lock().clone();
@@ -3045,7 +3117,7 @@ mod tests {
 
     #[test]
     fn the_modes_an_interface_set_are_posed_again_when_the_start_of_its_output_is_lost() {
-        let out = TuiOutput::new(None);
+        let out = Arc::new(TuiOutput::new(None));
         // Set once, at the start, as Claude Code does.
         out.push(b"\x1b[?2004h\x1b[?1004h\x1b[?25l\x1b[?1049h".to_vec());
         // Then more than the output keeps.
@@ -3063,7 +3135,7 @@ mod tests {
 
     #[test]
     fn a_mode_is_followed_across_pieces_with_the_last_state_seen_and_many_numbers_at_once() {
-        let out = TuiOutput::new(None);
+        let out = Arc::new(TuiOutput::new(None));
         // Cut in the middle of the sequence, of its number, of its end.
         for piece in [&b"a\x1b"[..], b"[?20", b"04", b"h b\x1b[?", b"25l"] {
             out.push(piece.to_vec());
@@ -3082,19 +3154,19 @@ mod tests {
 
     #[test]
     fn nothing_is_posed_again_when_no_mode_was_set_and_garbage_is_no_mode() {
-        let out = TuiOutput::new(None);
+        let out = Arc::new(TuiOutput::new(None));
         out.push(b"plain\x1b[?h\x1b[?;h\x1b[?99999999999h\x1b[?\x1b[?2004h\x1b[?25\x07l".to_vec());
         let replay = replayed(&out);
         // Only the mode that was whole is posed; a number too big for a mode is none.
         assert!(replay.starts_with(b"\x1b[?2004h"), "{replay:?}");
-        let out = TuiOutput::new(None);
+        let out = Arc::new(TuiOutput::new(None));
         out.push(b"plain\x1b[31mred\x1b[0m".to_vec());
         assert_eq!(replayed(&out), b"plain\x1b[31mred\x1b[0m");
     }
 
     #[test]
     fn the_output_kept_after_the_start_was_dropped_begins_after_a_line() {
-        let out = TuiOutput::new(None);
+        let out = Arc::new(TuiOutput::new(None));
         let mut first = b"x".repeat(100);
         first.extend_from_slice(b"\x1b[38;5;2");
         out.push(first);
@@ -3110,14 +3182,14 @@ mod tests {
             String::from_utf8_lossy(&kept[..40])
         );
         // No newline in the first 4 KiB: kept as it is.
-        let out = TuiOutput::new(None);
+        let out = Arc::new(TuiOutput::new(None));
         out.push(vec![b'a'; OUTPUT_KEPT + 10]);
         assert_eq!(out.kept().len(), OUTPUT_KEPT);
     }
 
     #[test]
     fn the_cursor_query_is_answered_by_the_one_that_sees_no_window() {
-        let out = TuiOutput::new(None);
+        let out = Arc::new(TuiOutput::new(None));
         // Cut between two pieces, as it is when it is printed.
         assert!(!out.push(b"text \x1b[6".to_vec()));
         assert!(out.push(b"n".to_vec()));
@@ -3128,7 +3200,7 @@ mod tests {
         assert!(out.shown());
         assert!(!out.push(b"\x1b[6n".to_vec()));
         let (_, forward) = collecting();
-        let shown = TuiOutput::new(Some(forward));
+        let shown = Arc::new(TuiOutput::new(Some(forward)));
         assert!(!shown.push(b"\x1b[6n".to_vec()));
     }
 
@@ -3243,7 +3315,7 @@ mod tests {
             let mut buffer = vec![b'x'; REPLAY_PIECE - 2];
             buffer.extend_from_slice(q);
             buffer.extend_from_slice(b"y");
-            let out = TuiOutput::new(None);
+            let out = Arc::new(TuiOutput::new(None));
             out.push(buffer);
             let (all, forward) = collecting();
             out.attach(forward);

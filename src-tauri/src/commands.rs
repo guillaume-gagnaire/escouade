@@ -13,12 +13,12 @@ use crate::integrations::{
 use crate::model::Account as ClaudeAccount;
 use crate::model::*;
 use crate::pty::{self, ShellInfo, TermInfo, TermReport};
-use crate::remoteapi::{Maybe, State};
+use crate::remoteapi::{Maybe, State, TermChannel};
 use crate::search;
 use crate::stats::StatsView;
 use crate::telemetry::{self, Event};
 use crate::tickets::TicketDraft;
-use ::tauri::ipc::{Channel, InvokeResponseBody};
+use ::tauri::ipc::Channel;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
@@ -83,6 +83,8 @@ pub struct InitialState {
     git: HashMap<String, GitInfo>,
     shells: Vec<ShellInfo>,
     terminals: Vec<TermInfo>,
+    /// The last terminals that ended (ESC-495): a client back after a cut missed their `TerminalExit`.
+    exited_terminals: Vec<crate::hub::TermExit>,
     /// Claude Code is found for the account new agents go to.
     claude_found: bool,
     /// The settings' own path to Claude Code leads to it (what the field's hint says).
@@ -196,6 +198,7 @@ pub fn subscribe(
         usage,
         git,
         terminals,
+        exited_terminals: core.hub.exits(),
         installed: updates.and_then(|u| u.take_installed()),
         restart_at: updates.and_then(|u| u.restart_at()),
         failed_update: updates.and_then(|u| u.failed()),
@@ -1004,12 +1007,10 @@ pub fn account_login(
     id: String,
     cols: u16,
     rows: u16,
-    output: Channel<InvokeResponseBody>,
+    output: TermChannel,
 ) -> Res<TermInfo> {
-    core.claude_login(&id, (cols, rows), move |bytes| {
-        let _ = output.send(InvokeResponseBody::Raw(bytes));
-    })
-    .map_err(err)
+    core.claude_login(&id, (cols, rows), crate::termlog::feed(output.sink()))
+        .map_err(err)
 }
 
 /// « Vue Claude Code »: the agent runs in Claude Code's own interface, or in Escouade's view.
@@ -1033,13 +1034,11 @@ pub async fn agent_terminal(
     cols: u16,
     rows: u16,
     manual: Option<bool>,
-    output: Channel<InvokeResponseBody>,
+    output: TermChannel,
 ) -> Res<TermInfo> {
-    core.open_agent_terminal(&id, (cols, rows), manual.unwrap_or(false), move |bytes| {
-        let _ = output.send(InvokeResponseBody::Raw(bytes));
-    })
-    .await
-    .map_err(err)
+    core.open_agent_terminal_to(&id, (cols, rows), manual.unwrap_or(false), output.sink())
+        .await
+        .map_err(err)
 }
 
 /// Whether the agent's interface asks the question about the trust of its folder (Codex, Copilot
@@ -1625,18 +1624,14 @@ pub fn attach_open(core: CoreState, owner: String, name: String, size: u64) -> R
 /// The next bytes of a copy, as they are (`invoke('attach_chunk', bytes, { headers: { 'x-handle':
 /// handle } })`: no base64 round trip through JSON).
 #[tauri::command(async)]
-pub fn attach_chunk(core: CoreState, request: tauri::ipc::Request) -> Res<()> {
-    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+pub fn attach_chunk(core: CoreState, request: crate::remoteapi::Body) -> Res<()> {
+    let Some(bytes) = request.raw() else {
         return Err(tr!(
             "Les octets d’une copie viennent bruts, pas en JSON.",
             "The bytes of a copy come raw, not as JSON."
         ));
     };
-    let handle = request
-        .headers()
-        .get("x-handle")
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or_default();
+    let handle = request.header("x-handle").unwrap_or_default();
     core.attach_chunk(handle, bytes).map_err(err)
 }
 
@@ -2638,8 +2633,8 @@ pub async fn fs_read_bytes(
 
 /// One header of a raw call, decoded (`encodeURIComponent` on the window's side: a path may be
 /// any text).
-fn header(request: &tauri::ipc::Request, name: &str) -> Option<String> {
-    let raw = request.headers().get(name)?.to_str().ok()?;
+fn header(request: &crate::remoteapi::Body, name: &str) -> Option<String> {
+    let raw = request.header(name)?;
     percent_decoded(raw)
 }
 
@@ -2669,9 +2664,9 @@ pub(crate) fn percent_decoded(raw: &str) -> Option<String> {
 #[tauri::command]
 pub async fn fs_write_bytes(
     core: CoreState<'_>,
-    request: tauri::ipc::Request<'_>,
+    request: crate::remoteapi::Body<'_>,
 ) -> Res<fsedit::Stamp> {
-    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+    let Some(bytes) = request.raw() else {
         return Err(tr!(
             "Les octets d’un fichier viennent bruts, pas en JSON.",
             "The bytes of a file come raw, not as JSON."
@@ -2700,7 +2695,7 @@ pub async fn fs_write_bytes(
         .edit_worktrees(&project_id, agent_id)
         .await
         .map_err(err)?;
-    let bytes = bytes.clone();
+    let bytes = bytes.to_vec();
     let stamp = tokio::task::spawn_blocking(move || {
         let check = match (expect.as_str(), stamp) {
             ("absent", _) => fsedit::Expect::Absent,
@@ -2949,7 +2944,7 @@ pub async fn term_spawn(
     name: String,
     cols: u16,
     rows: u16,
-    output: Channel<InvokeResponseBody>,
+    output: TermChannel,
 ) -> Res<TermInfo> {
     let cwd = core
         .term_cwd(&project_id, agent_id, subdir.as_deref())
@@ -2982,9 +2977,7 @@ pub async fn term_spawn(
             &cwd,
             (cols, rows),
             env,
-            move |bytes| {
-                let _ = output.send(InvokeResponseBody::Raw(bytes));
-            },
+            crate::termlog::feed(output.sink()),
             move |code| {
                 if let Some(c) = hub_core.upgrade() {
                     c.test_run_ended(&id);
@@ -3012,7 +3005,7 @@ pub fn run_start(
     cols: u16,
     rows: u16,
     cursor_row: Option<u16>,
-    output: Channel<InvokeResponseBody>,
+    output: TermChannel,
 ) -> Res<TermInfo> {
     let project = core.project(&project_id).map_err(err)?;
     let run = project
@@ -3091,7 +3084,7 @@ fn spawn_launch(
     launch: Launch,
     size: (u16, u16),
     cursor_row: Option<u16>,
-    output: Channel<InvokeResponseBody>,
+    output: TermChannel,
 ) -> Res<TermInfo> {
     let mut env = if settings.proxy_terminals {
         settings.proxy_env()
@@ -3111,9 +3104,7 @@ fn spawn_launch(
             env,
             cursor_row.unwrap_or(1),
             launch.command,
-            move |bytes| {
-                let _ = output.send(InvokeResponseBody::Raw(bytes));
-            },
+            crate::termlog::feed(output.sink()),
             move |code| {
                 if let Some(c) = hub_core.upgrade() {
                     c.hub.emit(UiEvent::TerminalExit { id, code });
@@ -3503,7 +3494,7 @@ pub fn test_run_start(
     cols: u16,
     rows: u16,
     cursor_row: Option<u16>,
-    output: Channel<InvokeResponseBody>,
+    output: TermChannel,
 ) -> Res<TermInfo> {
     let spec = core.test_run_spec(&agent_id, &kind, index).map_err(err)?;
     let project_id = core

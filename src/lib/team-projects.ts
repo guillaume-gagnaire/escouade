@@ -2,7 +2,7 @@
 // team's key, next to the projects of this device; « Cloner » opens the wizard « Nouveau projet » with the repositories
 // filled in. Pure functions here, the screens in `components/team`.
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from './transport';
 
 export type Access = { kind: 'team' } | { kind: 'members'; members: string[] };
 

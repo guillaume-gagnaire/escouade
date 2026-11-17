@@ -1,7 +1,7 @@
 // The team's signed `.escouade.yml` on this device (TS-13, `src-tauri/src/teams_settings.rs`): what the band, the
 // history, the consents and the administrator's screen read. Pure functions here, the screens in `components/team`.
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from './transport';
 import { fAgo } from './format';
 import { t } from './i18n';
 

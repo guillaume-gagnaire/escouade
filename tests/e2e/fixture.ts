@@ -3,6 +3,7 @@
 
 import { test as base, chromium, expect as baseExpect, type Browser, type Locator, type Page } from '@playwright/test';
 import { execFile, execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -248,6 +249,9 @@ async function appReady(page: Page): Promise<Page> {
   for (let tries = 1; ; tries++) {
     try {
       await page.waitForFunction(() => '__TAURI_INTERNALS__' in window && document.readyState === 'complete', null, { timeout: 60_000 });
+      if (REMOTE && !(await page.evaluate(() => '__ESCOUADE_REMOTE__' in window))) {
+        throw new Error('ESCOUADE_E2E_REMOTE: the window is on Tauri’s IPC, not on the remote API (see app.log)');
+      }
       return page;
     } catch (e) {
       if (tries === 3 || !String(e).includes('Execution context was destroyed')) throw e;
@@ -426,6 +430,15 @@ const NO_STORE = 'http://127.0.0.1:9';
  * works, without taking their keyboard. `ESCOUADE_E2E_SHOW=1` shows it, in front, to watch a test.
  */
 export const SHOW = !!process.env.ESCOUADE_E2E_SHOW && process.env.ESCOUADE_E2E_SHOW !== '0';
+
+/**
+ * `ESCOUADE_E2E_REMOTE=1` (ESC-495): the window speaks to the core by the remote API's WebSocket on the loopback, not by
+ * Tauri's IPC (`src/lib/transport.ts`): the app is started with `ESCOUADE_REMOTE_API` (the port of
+ * `ESCOUADE_E2E_REMOTE_PORT`, else a free one) and a device token of the test (`ESCOUADE_REMOTE_API_TOKEN`), and a
+ * window that would still be on the IPC fails the test. The CI's part « remote API » runs a set of specs so.
+ */
+export const REMOTE = !!process.env.ESCOUADE_E2E_REMOTE && process.env.ESCOUADE_E2E_REMOTE !== '0';
+const REMOTE_PORT = Number(process.env.ESCOUADE_E2E_REMOTE_PORT ?? 0);
 
 /**
  * `ESCOUADE_E2E_VIEWPORT=1024x728`: the size of the window at each start, as the CI's runner bounds it (its screen); else
@@ -665,6 +678,7 @@ export const test = base.extend<{
       // app's data, never the user's ~/.gemini.
       ESCOUADE_GEMINI: 'none',
       FAKE_GEMINI_LOG: path.join(root, 'fake-gemini.jsonl'),
+      ...(REMOTE ? { ESCOUADE_REMOTE_API: String(REMOTE_PORT), ESCOUADE_REMOTE_API_TOKEN: randomBytes(16).toString('hex') } : {}),
       ...appEnv,
     };
     // The launch the test is on (the last one, after a restart): the one the end of the test must kill.
@@ -802,6 +816,8 @@ export const test = base.extend<{
             ...env,
             ESCOUADE_DATA_DIR: dataDir,
             ...webviewEnv(program, port2, path.join(root, 'webview-2'), port),
+            // Its own port of the remote API, next to the first app's.
+            ...(REMOTE ? { ESCOUADE_REMOTE_API: String(REMOTE_PORT ? REMOTE_PORT + 1 : 0) } : {}),
           };
           const errFile = path.join(root, 'app-2-stderr.log');
           const other = { instance: null as unknown as Instance, port: port2, data: dataDir };

@@ -4,7 +4,7 @@
 // à l'agent rédacteur »), a decision's field that lost to a teammate's, the repository's files left after the import,
 // the documents too heavy for the server, the numbers that wait. Pure functions here, the screens in `components`.
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from './transport';
 
 /** A page written on both sides that did not merge three ways. */
 export interface PageConflict {

@@ -25,6 +25,20 @@ pub struct Hub {
     /// The subscribers, by client: the window's first when it has one.
     sinks: RwLock<Vec<(Client, Sink)>>,
     meter: Mutex<Meter>,
+    /// The last terminals that ended, and their exit codes: a client that comes back after a cut missed their
+    /// `TerminalExit` (ESC-495), and reads them in the state it reads again (`InitialState::exited_terminals`).
+    exits: Mutex<std::collections::VecDeque<TermExit>>,
+}
+
+/// The most terminals' ends kept.
+const EXITS_KEPT: usize = 64;
+
+/// A terminal that ended, and its exit code.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TermExit {
+    pub id: String,
+    pub code: Option<u32>,
 }
 
 /// The events of the current second, by kind.
@@ -130,9 +144,24 @@ impl Hub {
         self.sinks.read().len()
     }
 
+    /// The last terminals that ended, oldest first.
+    pub fn exits(&self) -> Vec<TermExit> {
+        self.exits.lock().iter().cloned().collect()
+    }
+
     pub fn emit(&self, event: UiEvent) {
         if let Some(line) = self.meter.lock().count(&event, Instant::now()) {
             log::warn!("{line}");
+        }
+        if let UiEvent::TerminalExit { id, code } = &event {
+            let mut exits = self.exits.lock();
+            exits.push_back(TermExit {
+                id: id.clone(),
+                code: *code,
+            });
+            while exits.len() > EXITS_KEPT {
+                exits.pop_front();
+            }
         }
         let sinks = self.sinks.read();
         // The last one takes the event, the others a copy: one subscriber (the window alone) copies nothing.

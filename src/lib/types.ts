@@ -3025,6 +3025,8 @@ export interface InitialState {
   git: Record<string, GitInfo>;
   shells: ShellInfo[];
   terminals: TermInfo[];
+  /** The last terminals that ended (ESC-495): a client back after a cut missed their `terminalExit`. */
+  exitedTerminals?: { id: string; code: number | null }[];
   /** Claude Code is found for the account new agents go to (its own `claude`, else the settings'). */
   claudeFound: boolean;
   /** The settings' own path to Claude Code (empty: the PATH) leads to it: what the « Chemin de l'exécutable » field's hint says. */

@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from './transport';
 
 /**
  * Opening outside Escouade, by the core (`outside.rs`): a link in the system's browser, a file in

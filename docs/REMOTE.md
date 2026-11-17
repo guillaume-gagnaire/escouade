@@ -157,53 +157,493 @@ La spec la décrit (« Escouade à distance › L'API distante »). Rien ne chan
 - **Les jetons d'appareil** (`remoteapi::devices`) : la liste dans `remote-devices.json` (nom, dates), chaque jeton au trousseau (`remote-device-<id>`) ou, s'il le refuse (Linux), dans ce fichier lisible du seul propriétaire, comme le jeton MCP ; comparés en temps constant à tous les jetons à chaque connexion ; révoquer un appareil ferme ses connexions. En build de debug seulement, `ESCOUADE_REMOTE_API_TOKEN` donne un appareil « test » gardé en mémoire (les e2e de la fondation 2b).
 - **Plusieurs clients** : le hub garde un abonné par client (`remoteapi::Client` : la fenêtre, ou une connexion) ; `subscribe` d'un client ne remplace que le sien. L'état d'interface de la fenêtre reste `core.ui` (enregistré) ; chaque connexion a le sien (`core.client_ui`, oublié à sa fin) ; ce que le cœur y écrit (l'agent créé, le projet ajouté) va au client de l'appel, ce qui disparaît (un agent, un projet) est oublié de tous. Une réponse d'un client se ferme chez les autres : le hub leur pousse le même événement.
 - **La stratégie** `servers.remoteApi` (liste unique d'`escouade-policy`) : à `false`, l'API ne démarre pas et refuse chaque nouvelle connexion (`policy`).
-- **Pas encore** : le tampon de sortie des terminaux et la reprise après une coupure, `ipc.ts` sur deux transports et l'app de bureau testée sur l'API (fondation 2b) ; les corps bruts des requêtes (fichiers joints, `fs_write_bytes`) ; `escouade-server`, l'appairage, le tunnel, « Se connecter à un serveur ».
+- **Pas encore** (2a) : le tampon de sortie des terminaux et la reprise après une coupure, `ipc.ts` sur deux transports et l'app de bureau testée sur l'API, les corps bruts des requêtes : c'est la fondation 2b, ci-dessous ; `escouade-server`, l'appairage, le tunnel, « Se connecter à un serveur ».
+
+### La fondation 2b (ESC-495, 2026-11-16) : la fenêtre sur deux transports, la reprise, les bornes
+
+La spec la décrit (« Escouade à distance › L'API distante »). Rien ne change pour l'utilisateur tant que l'API est éteinte : la fenêtre reste sur l'IPC de Tauri, qui reçoit les mêmes octets qu'avant.
+
+- **`ipc.ts` sur deux transports** (`src/lib/transport.ts`) :
+  - `invoke` et `Channel` aux signatures de Tauri ; `ipc.ts` (ses fonctions et leurs signatures inchangées) et les modules qui appelaient le cœur (`opener`, `plugins`, `store`, `teams`, `team-projects`, `team-settings`, `teamboard`) les prennent là ; un test (`transport-only.test.ts`) vérifie qu'aucun autre module n'importe `@tauri-apps/api/core` ;
+  - choisi au démarrage : la WebSocket quand la page en a reçu l'adresse (`window.__ESCOUADE_REMOTE__`), l'IPC sinon ; en debug, `ESCOUADE_REMOTE_API` et `ESCOUADE_REMOTE_API_TOKEN` donnés tous deux mettent la fenêtre sur l'API (`remoteapi::window` : la socket liée avant la fenêtre, l'adresse, le jeton et la version donnés par un script d'initialisation de la fenêtre principale, réservé à l'origine de la page d'Escouade ; la CSP ouverte alors au seul `ws://127.0.0.1:*`) ; pas de réglage visible ;
+  - sur l'API : mêmes commandes, arguments, résultats et erreurs ; canaux JSON et binaires ; corps bruts et réponses en octets en trames binaires ; les codes de l'API (`desk-only`, `not-served-yet`, `policy`, `token`, `version`, `too-many-connections`, `busy`, `too-large`) rendus en texte de la langue de la fenêtre (zone `remote`) ; les commandes du poste, que le `welcome` nomme, faites par l'IPC de la fenêtre.
+- **Ce qui reste propre à la fenêtre** (`@tauri-apps/…` hors de `transport.ts`, la liste que vérifie `transport-only.test.ts`) :
+  - les dialogues natifs (`@tauri-apps/plugin-dialog` : le sélecteur de dossier de « Nouveau projet », des réglages avancés, du clone d'un projet d'équipe, d'un plugin local, du logo d'un projet) ;
+  - le navigateur du système pour un lien de la page d'un plugin ou du store (`@tauri-apps/plugin-opener`) ;
+  - la fenêtre et sa WebView (`@tauri-apps/api/window`, `@tauri-apps/api/webview` : la barre de titre, le thème, le zoom) ;
+  - les événements des fenêtres des pages de lancement (`@tauri-apps/api/event`, `PagesWindow`) ;
+  - côté Rust, ce que l'app de bureau fait de sa fenêtre : ses menus et son tray, le glisser-déposer natif (l'origine des fichiers déposés, `fileorigin` : `attach_origin` et `file_origin` restent refusées à distance, `not-served-yet`) ;
+  - par les commandes du poste (`desk-only`, faites par l'IPC de la fenêtre) : les pages des lancements, la voix, le raccourci global, l'updater, les liens `escouade://`, la fin de l'app ;
+  - les e2e appellent encore l'IPC de Tauri directement (`window.__TAURI_INTERNALS__`) pour leurs sondes.
+- **Le tampon de sortie** (`termlog.rs`) : chaque terminal, lancement, étape d'un lancement de test et connexion de compte garde ses derniers **1 Mo**, numérotés par leur place dans toute la sortie (`TermLog`) ; l'interface d'un agent en TUI garde ses **4 Mo** dans le même anneau (`tui::TuiOutput`, qui rejouait déjà l'écran à l'ouverture d'une vue : pas de second tampon). La fenêtre sur l'IPC reçoit les octets seuls ; un client de l'API les reçoit numérotés (trame `Frame::Term` : la fin de ses octets).
+- **La reprise** :
+  - le `welcome` donne une **session** (128 bits au hasard), que le client redonne au `hello` suivant ; une session est celle d'un appareil (`remoteapi::sessions`) : celle d'un autre, ou oubliée, n'est pas trouvée, et le client n'y reprend rien ; gardée 15 min après sa dernière connexion, 8 par appareil, 64 en tout, 256 terminaux chacune ;
+  - le client rouvre la WebSocket (250 ms, 500 ms, 1 s, 2 s, 4 s, puis toutes les 5 s), redonne sa session, reprend chaque terminal (`{"t":"resume","channels":[{"channel","after"}]}` : la fin des derniers octets reçus) et relit l'état entier (`subscribe`, `state.resync` : les choix de la fenêtre gardés et redonnés au cœur, les terminaux finis entre-temps dits finis par `InitialState.exitedTerminals`) ;
+  - le cœur envoie la suite (`Frame::Term`), ou, si le client est trop en retard, tout ce qui reste et le compte de ce qui est perdu (`lost`, que la fenêtre écrit dans le terminal) ; pour une interface d'agent trop en retard, l'écran rejoué (`Frame::Channel`) puis la numérotation (`mark`) ; la fin de la reprise est dite (`resumed`) ;
+  - le client ne montre aucun octet deux fois (une fin déjà reçue est sautée) et rien au-delà d'un trou (il redemande la suite) ;
+  - un appel resté sans réponse à la coupure est rendu en erreur, jamais rejoué ; un appel fait pendant la coupure échoue aussitôt ; la bande « Connexion au cœur perdue · nouvel essai… » le dit ; un jeton refusé, une autre version ou la stratégie arrêtent les essais, et la bande dit pourquoi.
+- **Les bornes** (`remoteapi::server::Limits`, `remoteapi::outbox`) :
+  - la file d'envoi d'une connexion : 2048 messages et 8 Mo ; au-delà, les événements de l'état se fondent en une relecture (`resync` : le dernier état gagne), la sortie d'un terminal n'est pas mise en file et le trou est dit (`gap`) quand il y a de la place, pour une reprise par le numéro ; les réponses et les rejeux ne sont jamais jetés, mais au-delà de 96 Mo en attente, ou quand rien n'est lu pendant 30 s alors que quelque chose attend, la connexion est fermée (code 4002, `slow-client`, dans le journal avec ce qui attendait) ;
+  - 4 connexions par appareil, 16 en tout (`too-many-connections`) ; 8 poignées de main en cours ; au-delà de 20 poignées de main ratées dans la minute, les connexions sont fermées dès qu'acceptées jusqu'à la fin de la minute ;
+  - 256 appels en attente de réponse par connexion (`busy`) ;
+  - ce que donne le client est borné et vérifié : le numéro de reprise (au-delà de la fin : la fin), 1024 terminaux par reprise, une session de 64 caractères au plus, 32 en-têtes de 64 et 8 Ko, un corps brut de 64 Mo au plus et de la longueur que dit son appel (`too-large`), 8 corps en attente ;
+  - le journal ne dit ni jeton, ni session, ni contenu d'un terminal, ni argument : un texte du client n'y paraît que coupé à 80 caractères imprimables (le chemin refusé, la version).
+- **Les corps bruts** : `fs_write_bytes` et `attach_chunk` prennent `remoteapi::Body` (la requête de Tauri pour l'IPC, les trames `Frame::Body` pour l'API, chacune de 16 Mo au plus) ; une réponse en octets de plus de 16 Mo arrive en parties (`Frame::ReplyPart`) ; `fs_write_bytes` et les fichiers joints (`attach_open`, `attach_chunk`, `attach_finish`, `attach_cancel`, `attach_discard`) sont servis.
+- **Les essais** : Rust (`termlog_tests`, `remoteapi_tests` : la coupure pendant qu'un terminal écrit, la session d'un autre appareil, le client muet, la borne dure, les connexions, les poignées de main ratées, les appels en attente, les corps bruts, la file et les sessions seules ; `remoteapi::window`) ; Vitest (`transport.test.ts`, contre un faux serveur WebSocket) ; e2e : `ESCOUADE_E2E_REMOTE=1` lance la fenêtre sur l'API, la part « remote API » de la CI rejoue `app`, `conversation`, `terminal-height`, `kanban-pr`, `mcp` et `remote-cut` (la WebSocket fermée de force pendant qu'un terminal écrit).
 
 ### Le classement des commandes (ESC-478)
 
 Chaque commande du cœur est écrite une fois (`#[tauri::command]` dans `commands.rs`), puis rangée dans une des quatre classes de la liste unique, `src-tauri/src/remoteapi/list.rs` : l'IPC de Tauri et l'API distante sont faits tous deux de cette liste. Un test (`remoteapi_tests`) vérifie que toute commande écrite y est, et que cette section dit la même classe que la liste.
 
-**Ajouter une commande** : l'écrire dans `commands.rs` avec `#[tauri::command]`, comme avant, puis mettre son nom dans sa classe de `remoteapi/list.rs`, et ici.
+**Ajouter une commande** : l'écrire dans `commands.rs` avec `#[tauri::command]`, comme avant, puis mettre son nom dans sa classe de `remoteapi/list.rs`, et ici : une puce par commande, à sa place dans l'ordre alphabétique de sa classe (deux tickets qui ajoutent chacun une commande ne touchent pas la même ligne).
 
-#### Servies telles quelles (327)
+#### Servies telles quelles
 
-Elles agissent sur le cœur, quelle que soit la machine du client : `account_add_machine`, `account_create`, `account_key`, `account_machine`, `account_models_refresh`, `account_remove`, `account_reorder`, `account_shareable`, `account_sign_in_ended`, `account_status`, `account_update`, `agent_branch_switch`, `agent_folder_create`, `agent_folder_delete`, `agent_folder_fold`, `agent_folder_move`, `agent_folder_principal`, `agent_folder_rename`, `agent_git_sync`, `agent_local_image`, `agent_logout`, `agent_merge_check`, `agent_no_pr`, `agent_pr_detail`, `agent_pr_fix`, `agent_pr_log`, `agent_pr_open`, `agent_pr_propose`, `agent_pr_rerun`, `agent_prepare_launch`, `agent_prs_refresh`, `agent_signed_in`, `agent_terminal`, `answer_permission`, `answer_question`, `archive_agent`, `autopilot_resume`, `back_to_previous_account`, `back_up_now`, `backups_view`, `board_set`, `branch_check`, `branch_create`, `branch_delete`, `branch_list`, `branch_switch`, `branches_merged`, `cancel_restore`, `cancel_resume`, `ci_detail`, `ci_job_log`, `ci_log_to_agent`, `ci_refresh`, `ci_rerun`, `claude_found`, `claude_memory_offer`, `claude_memory_take`, `claude_update_status`, `clean_worktrees`, `closed_projects`, `code_search`, `commit_direct`, `commit_preview`, `commit_propose`, `compare_backup`, `continue_on_engine`, `create_agent`, `create_agent_on_branch`, `create_agent_on_pr`, `data_dir`, `delete_agent`, `discussion_drop`, `discussion_pour`, `discussion_start`, `dismiss_recovery`, `docs_compare`, `docs_decision_accept`, `docs_decision_propose`, `docs_decision_replace`, `docs_decisions`, `docs_detect_spec`, `docs_document_check`, `docs_document_move`, `docs_document_text`, `docs_documents`, `docs_documents_search`, `docs_drive`, `docs_folder_add`, `docs_import`, `docs_import_plan`, `docs_pending`, `docs_plan`, `docs_plan_cancel`, `docs_recent`, `docs_share`, `docs_share_cancel`, `docs_share_resolve`, `docs_spec_page`, `docs_spec_search`, `docs_spec_tree`, `docs_spec_write`, `duplicate_agent`, `effective_workflows`, `engine_order_set`, `engines`, `engines_declared`, `engines_found_now`, `engines_off_now`, `erase_closed_project`, `favorite_model_set`, `file_suggestions`, `forge_check`, `forge_connect`, `forge_disconnect`, `forge_guess`, `forge_token_page`, `forges`, `forget_repo`, `fs_base`, `fs_create`, `fs_delete`, `fs_mkdir`, `fs_read`, `fs_read_bytes`, `fs_rename`, `fs_stat`, `fs_tree`, `fs_write`, `get_commands`, `get_conversation`, `get_workflow_tracks`, `get_workflows`, `git_branches`, `git_diff`, `git_diff_refs`, `git_discard`, `git_fetch`, `git_files`, `git_log`, `git_project_diff`, `git_pull`, `git_push`, `git_show`, `git_user_name`, `harness_enable_in`, `harness_plugin_of`, `harness_scope`, `http_ready`, `integrate_base`, `integration_connect`, `integration_containers`, `integration_disconnect`, `integration_import`, `integration_issues`, `integration_resync`, `integration_states`, `interrupt`, `isola_approve`, `isola_config`, `isola_down`, `isola_services`, `mcp_activity`, `mcp_clear_activity`, `mcp_declare_status`, `mcp_manual_command`, `mcp_set_enabled`, `mcp_status`, `memory_forget`, `memory_list`, `merge_agent`, `merge_agent_repos`, `message_subagent`, `overseer_revoke`, `overseer_send`, `overseer_undo`, `overseer_view`, `overview_prs`, `plugin_approve_commands`, `plugin_discard`, `plugin_icon`, `plugin_inspect_git`, `plugin_inspect_seed`, `plugin_inspect_store`, `plugin_install`, `plugin_install_seed`, `plugin_need_engine`, `plugin_remove`, `plugin_run`, `plugin_secrets`, `plugin_seed_offers`, `plugin_set_enabled`, `plugin_set_permission`, `plugin_set_project`, `plugin_set_secret`, `plugin_set_setting`, `plugin_start`, `plugins_check_updates`, `plugins_list`, `pr_commit_files`, `pr_contents`, `pr_detail`, `pr_log`, `pr_rerun`, `pr_review_discard`, `pr_review_note`, `pr_review_publish`, `pr_review_send`, `pr_review_start`, `pr_review_summary`, `pr_reviews`, `pr_write`, `project_code_host`, `project_environments`, `project_environments_read`, `project_link_team_board`, `project_logo`, `project_prs`, `project_prs_watch`, `project_set_team`, `refine_workflows`, `refresh_repos`, `refresh_usage`, `refresh_workflows`, `remote_image`, `remove_project`, `remove_workflow_file`, `rename_agent`, `reorder_projects`, `restart_agent_process`, `restore_backup`, `resume_on_account`, `run_start`, `save_settings`, `scheduled_create`, `scheduled_delete`, `scheduled_pause`, `scheduled_preview`, `scheduled_update`, `search_conversations`, `send_message`, `sent_files`, `set_agent_account`, `set_agent_options`, `set_agent_view`, `set_remote_control`, `set_ui`, `set_workflow_removed`, `shared_resolve`, `shared_trust`, `shared_unkeep`, `shared_write`, `stats`, `stop_bg_task`, `stop_subagent`, `store_refresh`, `store_suggestions`, `store_view`, `subagent_transcript`, `subscribe`, `suggest_run_commands`, `suggest_worktree_steps`, `target_cis`, `task_output`, `team_confirm_words`, `team_create`, `team_docs_choose`, `team_docs_dismiss`, `team_docs_remove_repo_files`, `team_docs_settle`, `team_docs_status`, `team_escrow_new`, `team_forget`, `team_invite`, `team_join`, `team_join_preview`, `team_list`, `team_new_recovery`, `team_own_device`, `team_pair_cancel`, `team_pair_join`, `team_pair_start`, `team_pair_step`, `team_project_put`, `team_project_remove`, `team_projects`, `team_projects_retry`, `team_recover`, `team_settings`, `team_settings_check`, `team_settings_consent`, `team_settings_cosign`, `team_settings_propose`, `team_settings_retry`, `team_settings_seen`, `team_settings_withdraw`, `team_sync`, `team_sync_status`, `telemetry_set`, `term_kill`, `term_report`, `term_resize`, `term_spawn`, `term_write`, `test_recipe_approve`, `test_run_start`, `ticket_approve`, `ticket_create`, `ticket_delete`, `ticket_dismiss`, `ticket_finish_anyway`, `ticket_hide`, `ticket_images`, `ticket_pr_back_to_todo`, `ticket_pr_fix_ci`, `ticket_pr_fix_reviews`, `ticket_pr_merge`, `ticket_pr_stop_waiting`, `ticket_pr_update_branch`, `ticket_prioritize`, `ticket_prs_refresh`, `ticket_reject`, `ticket_resolve_conflict`, `ticket_resume`, `ticket_share`, `ticket_start`, `ticket_team_assign`, `ticket_team_local`, `ticket_team_resume`, `ticket_team_settle`, `ticket_update`, `tui_asks_trust`, `update_project`, `vectors_model`, `vectors_model_cancel`, `vectors_model_delete`, `vectors_model_download`, `warm_agent`, `workflow_refine_plan`.
+Elles agissent sur le cœur, quelle que soit la machine du client :
 
-#### Du poste seulement (50)
+- `account_add_machine`
+- `account_create`
+- `account_key`
+- `account_machine`
+- `account_models_refresh`
+- `account_remove`
+- `account_reorder`
+- `account_shareable`
+- `account_sign_in_ended`
+- `account_status`
+- `account_update`
+- `agent_branch_switch`
+- `agent_folder_create`
+- `agent_folder_delete`
+- `agent_folder_fold`
+- `agent_folder_move`
+- `agent_folder_principal`
+- `agent_folder_rename`
+- `agent_git_sync`
+- `agent_local_image`
+- `agent_logout`
+- `agent_merge_check`
+- `agent_no_pr`
+- `agent_pr_detail`
+- `agent_pr_fix`
+- `agent_pr_log`
+- `agent_pr_open`
+- `agent_pr_propose`
+- `agent_pr_rerun`
+- `agent_prepare_launch`
+- `agent_prs_refresh`
+- `agent_signed_in`
+- `agent_terminal`
+- `answer_permission`
+- `answer_question`
+- `archive_agent`
+- `autopilot_resume`
+- `back_to_previous_account`
+- `back_up_now`
+- `backups_view`
+- `board_set`
+- `branch_check`
+- `branch_create`
+- `branch_delete`
+- `branch_list`
+- `branch_switch`
+- `branches_merged`
+- `cancel_restore`
+- `cancel_resume`
+- `ci_detail`
+- `ci_job_log`
+- `ci_log_to_agent`
+- `ci_refresh`
+- `ci_rerun`
+- `claude_found`
+- `claude_memory_offer`
+- `claude_memory_take`
+- `claude_update_status`
+- `clean_worktrees`
+- `closed_projects`
+- `code_search`
+- `commit_direct`
+- `commit_preview`
+- `commit_propose`
+- `compare_backup`
+- `continue_on_engine`
+- `create_agent`
+- `create_agent_on_branch`
+- `create_agent_on_pr`
+- `data_dir`
+- `delete_agent`
+- `discussion_drop`
+- `discussion_pour`
+- `discussion_start`
+- `dismiss_recovery`
+- `docs_compare`
+- `docs_decision_accept`
+- `docs_decision_propose`
+- `docs_decision_replace`
+- `docs_decisions`
+- `docs_detect_spec`
+- `docs_document_check`
+- `docs_document_move`
+- `docs_document_text`
+- `docs_documents`
+- `docs_documents_search`
+- `docs_drive`
+- `docs_folder_add`
+- `docs_import`
+- `docs_import_plan`
+- `docs_pending`
+- `docs_plan`
+- `docs_plan_cancel`
+- `docs_recent`
+- `docs_share`
+- `docs_share_cancel`
+- `docs_share_resolve`
+- `docs_spec_page`
+- `docs_spec_search`
+- `docs_spec_tree`
+- `docs_spec_write`
+- `duplicate_agent`
+- `effective_workflows`
+- `engine_order_set`
+- `engines`
+- `engines_declared`
+- `engines_found_now`
+- `engines_off_now`
+- `erase_closed_project`
+- `favorite_model_set`
+- `file_suggestions`
+- `forge_check`
+- `forge_connect`
+- `forge_disconnect`
+- `forge_guess`
+- `forge_token_page`
+- `forges`
+- `forget_repo`
+- `fs_base`
+- `fs_create`
+- `fs_delete`
+- `fs_mkdir`
+- `fs_read`
+- `fs_read_bytes`
+- `fs_rename`
+- `fs_stat`
+- `fs_tree`
+- `fs_write`
+- `fs_write_bytes`
+- `get_commands`
+- `get_conversation`
+- `get_workflow_tracks`
+- `get_workflows`
+- `git_branches`
+- `git_diff`
+- `git_diff_refs`
+- `git_discard`
+- `git_fetch`
+- `git_files`
+- `git_log`
+- `git_project_diff`
+- `git_pull`
+- `git_push`
+- `git_show`
+- `git_user_name`
+- `harness_enable_in`
+- `harness_plugin_of`
+- `harness_scope`
+- `http_ready`
+- `integrate_base`
+- `integration_connect`
+- `integration_containers`
+- `integration_disconnect`
+- `integration_import`
+- `integration_issues`
+- `integration_resync`
+- `integration_states`
+- `interrupt`
+- `isola_approve`
+- `isola_config`
+- `isola_down`
+- `isola_services`
+- `mcp_activity`
+- `mcp_clear_activity`
+- `mcp_declare_status`
+- `mcp_manual_command`
+- `mcp_set_enabled`
+- `mcp_status`
+- `memory_forget`
+- `memory_list`
+- `merge_agent`
+- `merge_agent_repos`
+- `message_subagent`
+- `overseer_revoke`
+- `overseer_send`
+- `overseer_undo`
+- `overseer_view`
+- `overview_prs`
+- `plugin_approve_commands`
+- `plugin_discard`
+- `plugin_icon`
+- `plugin_inspect_git`
+- `plugin_inspect_seed`
+- `plugin_inspect_store`
+- `plugin_install`
+- `plugin_install_seed`
+- `plugin_need_engine`
+- `plugin_remove`
+- `plugin_run`
+- `plugin_secrets`
+- `plugin_seed_offers`
+- `plugin_set_enabled`
+- `plugin_set_permission`
+- `plugin_set_project`
+- `plugin_set_secret`
+- `plugin_set_setting`
+- `plugin_start`
+- `plugins_check_updates`
+- `plugins_list`
+- `pr_commit_files`
+- `pr_contents`
+- `pr_detail`
+- `pr_log`
+- `pr_rerun`
+- `pr_review_discard`
+- `pr_review_note`
+- `pr_review_send`
+- `pr_review_start`
+- `pr_reviews`
+- `pr_write`
+- `project_code_host`
+- `project_environments`
+- `project_environments_read`
+- `project_link_team_board`
+- `project_logo`
+- `project_prs`
+- `project_prs_watch`
+- `project_set_team`
+- `refine_workflows`
+- `refresh_repos`
+- `refresh_usage`
+- `refresh_workflows`
+- `remote_image`
+- `remove_project`
+- `remove_workflow_file`
+- `rename_agent`
+- `reorder_projects`
+- `restart_agent_process`
+- `restore_backup`
+- `resume_on_account`
+- `run_start`
+- `save_settings`
+- `scheduled_create`
+- `scheduled_delete`
+- `scheduled_pause`
+- `scheduled_preview`
+- `scheduled_update`
+- `search_conversations`
+- `send_message`
+- `sent_files`
+- `set_agent_account`
+- `set_agent_options`
+- `set_agent_view`
+- `set_remote_control`
+- `set_ui`
+- `set_workflow_removed`
+- `shared_resolve`
+- `shared_trust`
+- `shared_unkeep`
+- `shared_write`
+- `stats`
+- `stop_bg_task`
+- `stop_subagent`
+- `store_refresh`
+- `store_suggestions`
+- `store_view`
+- `subagent_transcript`
+- `subscribe`
+- `suggest_run_commands`
+- `suggest_worktree_steps`
+- `target_cis`
+- `task_output`
+- `team_confirm_words`
+- `team_create`
+- `team_docs_choose`
+- `team_docs_dismiss`
+- `team_docs_remove_repo_files`
+- `team_docs_settle`
+- `team_docs_status`
+- `team_escrow_new`
+- `team_forget`
+- `team_invite`
+- `team_join`
+- `team_join_preview`
+- `team_list`
+- `team_new_recovery`
+- `team_own_device`
+- `team_pair_cancel`
+- `team_pair_join`
+- `team_pair_start`
+- `team_pair_step`
+- `team_project_put`
+- `team_project_remove`
+- `team_projects`
+- `team_projects_retry`
+- `team_recover`
+- `team_settings`
+- `team_settings_check`
+- `team_settings_consent`
+- `team_settings_cosign`
+- `team_settings_propose`
+- `team_settings_retry`
+- `team_settings_seen`
+- `team_settings_withdraw`
+- `team_sync`
+- `team_sync_status`
+- `telemetry_set`
+- `term_kill`
+- `term_report`
+- `term_resize`
+- `term_spawn`
+- `term_write`
+- `test_recipe_approve`
+- `test_run_start`
+- `ticket_approve`
+- `ticket_create`
+- `ticket_delete`
+- `ticket_dismiss`
+- `ticket_finish_anyway`
+- `ticket_hide`
+- `ticket_images`
+- `ticket_pr_back_to_todo`
+- `ticket_pr_fix_ci`
+- `ticket_pr_fix_reviews`
+- `ticket_pr_merge`
+- `ticket_pr_stop_waiting`
+- `ticket_pr_update_branch`
+- `ticket_prioritize`
+- `ticket_prs_refresh`
+- `ticket_reject`
+- `ticket_resolve_conflict`
+- `ticket_resume`
+- `ticket_share`
+- `ticket_start`
+- `ticket_team_assign`
+- `ticket_team_local`
+- `ticket_team_resume`
+- `ticket_team_settle`
+- `ticket_update`
+- `tui_asks_trust`
+- `update_project`
+- `vectors_model`
+- `vectors_model_cancel`
+- `vectors_model_delete`
+- `vectors_model_download`
+- `warm_agent`
+- `workflow_refine_plan`
+
+#### Du poste seulement
 
 Refusées à distance avec l'erreur `desk-only` : le client les fait chez lui.
 
-| Commandes | Pourquoi |
-| --- | --- |
-| `set_held`, `open_url`, `deep_links_take`, `play_chime`, `quit_app`, `restart_for_restore`, `set_unsaved` | La fenêtre du poste : ses liens, son état, sa fin |
-| `devpage_open`, `devpage_place`, `devpage_go`, `devpage_devtools`, `devpage_detach`, `devpage_mode`, `devpage_show`, `devpage_close`, `devpage_list` | Les pages des lancements, des WebViews du poste (le port du serveur de test sera relayé en mode serveur) |
-| `save_image` | Un dialogue du poste : le client enregistre l’image lui-même |
-| `overseer_shortcut_set`, `overseer_hotkey_press` | Le raccourci global du poste |
-| `overseer_voice_start`, `voice_info`, `voice_start`, `voice_stop`, `voice_cancel`, `voice_download`, `voice_download_cancel`, `voice_delete_model`, `voice_online_keys`, `voice_mistral_key`, `voice_online_key_set`, `voice_online_key_delete`, `voice_online_catalog`, `speech_info`, `conversation_start`, `conversation_listen`, `conversation_hold`, `conversation_say`, `conversation_end`, `conversation_stop`, `speech_download`, `speech_download_cancel`, `speech_delete`, `speech_preview`, `speech_preview_online` | Le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste |
-| `update_check`, `update_download`, `update_restart`, `update_postpone`, `update_presence`, `update_close` | L’updater du client : le client et le serveur ont chacun le leur |
+- `conversation_end` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `conversation_hold` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `conversation_listen` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `conversation_say` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `conversation_start` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `conversation_stop` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `deep_links_take` : la fenêtre du poste : ses liens, son état, sa fin
+- `devpage_close` : les pages des lancements, des WebViews du poste (le port du serveur de test sera relayé en mode serveur)
+- `devpage_detach` : les pages des lancements, des WebViews du poste (le port du serveur de test sera relayé en mode serveur)
+- `devpage_devtools` : les pages des lancements, des WebViews du poste (le port du serveur de test sera relayé en mode serveur)
+- `devpage_go` : les pages des lancements, des WebViews du poste (le port du serveur de test sera relayé en mode serveur)
+- `devpage_list` : les pages des lancements, des WebViews du poste (le port du serveur de test sera relayé en mode serveur)
+- `devpage_mode` : les pages des lancements, des WebViews du poste (le port du serveur de test sera relayé en mode serveur)
+- `devpage_open` : les pages des lancements, des WebViews du poste (le port du serveur de test sera relayé en mode serveur)
+- `devpage_place` : les pages des lancements, des WebViews du poste (le port du serveur de test sera relayé en mode serveur)
+- `devpage_show` : les pages des lancements, des WebViews du poste (le port du serveur de test sera relayé en mode serveur)
+- `open_url` : la fenêtre du poste : ses liens, son état, sa fin
+- `overseer_hotkey_press` : le raccourci global du poste
+- `overseer_shortcut_set` : le raccourci global du poste
+- `overseer_voice_start` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `play_chime` : la fenêtre du poste : ses liens, son état, sa fin
+- `quit_app` : la fenêtre du poste : ses liens, son état, sa fin
+- `restart_for_restore` : la fenêtre du poste : ses liens, son état, sa fin
+- `save_image` : un dialogue du poste : le client enregistre l’image lui-même
+- `set_held` : la fenêtre du poste : ses liens, son état, sa fin
+- `set_unsaved` : la fenêtre du poste : ses liens, son état, sa fin
+- `speech_delete` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `speech_download` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `speech_download_cancel` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `speech_info` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `speech_preview` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `speech_preview_online` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `update_check` : l’updater du client : le client et le serveur ont chacun le leur
+- `update_close` : l’updater du client : le client et le serveur ont chacun le leur
+- `update_download` : l’updater du client : le client et le serveur ont chacun le leur
+- `update_postpone` : l’updater du client : le client et le serveur ont chacun le leur
+- `update_presence` : l’updater du client : le client et le serveur ont chacun le leur
+- `update_restart` : l’updater du client : le client et le serveur ont chacun le leur
+- `voice_cancel` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `voice_delete_model` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `voice_download` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `voice_download_cancel` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `voice_info` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `voice_mistral_key` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `voice_online_catalog` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `voice_online_key_delete` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `voice_online_key_set` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `voice_online_keys` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `voice_start` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `voice_stop` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
 
-#### Changent de machine, servies (17)
+#### Changent de machine, servies
 
 Elles changent de machine en mode serveur (table « Ce qui change de machine »), mais marchent telles quelles : servies.
 
-| Commandes | Pourquoi |
-| --- | --- |
-| `claude_locate`, `plugin_inspect_folder`, `plugin_inspect_dev`, `inspect_folder`, `docs_document_add`, `team_project_clone`, `team_project_logo`, `inspect_setup`, `first_commit`, `create_project`, `check_authorities`, `shared_preview`, `suggest_worktree_steps_at`, `suggest_run_commands_at` | Un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur) |
-| `account_login` | La connexion d’un compte dans un terminal : sa sortie va au client, le navigateur s’ouvre sur la machine du cœur (à essayer harness par harness) |
-| `paste_image` | L’image collée, envoyée en données par le client |
-| `conversation_send` | Le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste |
+- `account_login` : la connexion d’un compte dans un terminal : sa sortie va au client, le navigateur s’ouvre sur la machine du cœur (à essayer harness par harness)
+- `attach_cancel` : les fichiers joints : une copie envoyée en morceaux d’octets bruts (trames binaires, ESC-495), écrite sur la machine du cœur
+- `attach_chunk` : les fichiers joints : une copie envoyée en morceaux d’octets bruts (trames binaires, ESC-495), écrite sur la machine du cœur
+- `attach_discard` : les fichiers joints : une copie envoyée en morceaux d’octets bruts (trames binaires, ESC-495), écrite sur la machine du cœur
+- `attach_finish` : les fichiers joints : une copie envoyée en morceaux d’octets bruts (trames binaires, ESC-495), écrite sur la machine du cœur
+- `attach_open` : les fichiers joints : une copie envoyée en morceaux d’octets bruts (trames binaires, ESC-495), écrite sur la machine du cœur
+- `check_authorities` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
+- `claude_locate` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
+- `conversation_send` : le micro, les haut-parleurs et leurs modèles : la voix tourne sur le poste
+- `create_project` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
+- `docs_document_add` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
+- `first_commit` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
+- `inspect_folder` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
+- `inspect_setup` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
+- `paste_image` : l’image collée, envoyée en données par le client
+- `plugin_inspect_dev` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
+- `plugin_inspect_folder` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
+- `shared_preview` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
+- `suggest_run_commands_at` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
+- `suggest_worktree_steps_at` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
+- `team_project_clone` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
+- `team_project_logo` : un chemin de la machine du cœur : il marche tel quel (le navigateur des dossiers du serveur viendra avec le mode serveur)
 
-#### Changent de machine, refusées (24)
+#### Changent de machine, refusées
 
-Elles ne marchent pas encore telles quelles : refusées avec l'erreur `not-served-yet`, pour le ticket du mode serveur (ou la fondation 2b pour les corps bruts).
+Elles ne marchent pas encore telles quelles : refusées avec l'erreur `not-served-yet`, pour le ticket du mode serveur.
 
-| Commandes | Pourquoi |
-| --- | --- |
-| `open_path`, `fs_reveal`, `sent_file_open`, `agent_local_open` | Ouvert sur la machine du cœur : téléchargé sur le poste en mode serveur |
-| `set_project_logo`, `read_logo`, `clipboard_image` | Lu sur la machine du cœur : lu par le client et envoyé en mode serveur |
-| `attach_open`, `attach_chunk`, `attach_finish`, `attach_cancel`, `attach_discard`, `attach_origin`, `file_origin` | Les fichiers joints : une copie envoyée en morceaux d’octets bruts (fondation 2b) ; leur origine sur le poste (Windows) |
-| `lsp_servers`, `lsp_start`, `lsp_send`, `lsp_release`, `lsp_release_view`, `lsp_restart`, `lsp_running`, `lsp_log`, `lsp_trust` | Les serveurs de langage de l’éditeur : leurs messages à la fenêtre deviendront des événements |
-| `fs_write_bytes` | Des octets bruts écrits : le corps brut d’une requête passe avec la fondation 2b |
+- `agent_local_open` : ouvert sur la machine du cœur : téléchargé sur le poste en mode serveur
+- `attach_origin` : l’origine d’un fichier déposé sur le poste (Windows) : lue par le client et envoyée en mode serveur
+- `clipboard_image` : lu sur la machine du cœur : lu par le client et envoyé en mode serveur
+- `file_origin` : l’origine d’un fichier déposé sur le poste (Windows) : lue par le client et envoyée en mode serveur
+- `fs_reveal` : ouvert sur la machine du cœur : téléchargé sur le poste en mode serveur
+- `lsp_log` : les serveurs de langage de l’éditeur : leurs messages à la fenêtre deviendront des événements
+- `lsp_release` : les serveurs de langage de l’éditeur : leurs messages à la fenêtre deviendront des événements
+- `lsp_release_view` : les serveurs de langage de l’éditeur : leurs messages à la fenêtre deviendront des événements
+- `lsp_restart` : les serveurs de langage de l’éditeur : leurs messages à la fenêtre deviendront des événements
+- `lsp_running` : les serveurs de langage de l’éditeur : leurs messages à la fenêtre deviendront des événements
+- `lsp_send` : les serveurs de langage de l’éditeur : leurs messages à la fenêtre deviendront des événements
+- `lsp_servers` : les serveurs de langage de l’éditeur : leurs messages à la fenêtre deviendront des événements
+- `lsp_start` : les serveurs de langage de l’éditeur : leurs messages à la fenêtre deviendront des événements
+- `lsp_trust` : les serveurs de langage de l’éditeur : leurs messages à la fenêtre deviendront des événements
+- `open_path` : ouvert sur la machine du cœur : téléchargé sur le poste en mode serveur
+- `read_logo` : lu sur la machine du cœur : lu par le client et envoyé en mode serveur
+- `sent_file_open` : ouvert sur la machine du cœur : téléchargé sur le poste en mode serveur
+- `set_project_logo` : lu sur la machine du cœur : lu par le client et envoyé en mode serveur
+
 ## Le mode serveur
 
 ### Ce que voit l'utilisateur
@@ -486,8 +926,9 @@ Demandé le 2026-11-14 : « avoir plusieurs serveurs Escouade pilotés par un se
 - [x] Le cœur sans Tauri : le trait `Host` à la place de l'`AppHandle` ; un verrou par fichier à la place de `single-instance` hors bureau (ESC-451).
 - [x] L'API distante : une seule liste des commandes (macro) pour l'IPC et la WebSocket ; les flux binaires des terminaux multiplexés ; la poignée de main des versions (ESC-478, `remoteapi`).
 - [x] `hub.rs` à plusieurs abonnés ; `UiState` par client ; une réponse fermée chez les autres clients (ESC-478).
-- [ ] Un tampon de sortie pour chaque terminal et chaque lancement ; la reprise d'un client après une coupure.
-- [ ] `ipc.ts` sur deux transports ; l'app de bureau testée sur l'API distante en local (e2e).
+- [x] Un tampon de sortie pour chaque terminal et chaque lancement ; la reprise d'un client après une coupure (ESC-495, `termlog`, `remoteapi::sessions`).
+- [x] `ipc.ts` sur deux transports ; l'app de bureau testée sur l'API distante en local (e2e) (ESC-495, `src/lib/transport.ts`, la part « remote API »).
+- [x] La file d'envoi bornée, les bornes des connexions et des poignées de main ratées ; les corps bruts en trames binaires (ESC-495).
 
 **Mode serveur**
 - [ ] Essais : la connexion de Claude Code, Codex, Copilot CLI, Cursor CLI et OpenCode sur un VPS, le navigateur sur une autre machine.

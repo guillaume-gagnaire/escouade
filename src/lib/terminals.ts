@@ -720,3 +720,15 @@ export function disposeTerminal(id: string): Promise<void> {
   xterms.delete(id);
   return api.termKill(id).catch(() => {});
 }
+
+// The e2e on the remote API (ESC-495) read what each terminal shows, its buffer line by line, as its user sees it: on a
+// window given the link to the API alone (a build of development), never on the IPC.
+if (typeof window !== 'undefined' && window.__ESCOUADE_REMOTE__) {
+  (window as unknown as { __escouadeTerminals?: () => { id: string; text: string }[] }).__escouadeTerminals = () =>
+    [...xterms.entries()].map(([id, x]) => {
+      const b = x.term.buffer.active;
+      const lines: string[] = [];
+      for (let i = 0; i < b.length; i++) lines.push(b.getLine(i)?.translateToString(true) ?? '');
+      return { id, text: lines.join('\n') };
+    });
+}

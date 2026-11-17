@@ -37,6 +37,7 @@ import stats from './stats';
 import subagents from './subagents';
 import team from './team';
 import teamBoard from './teamBoard';
+import remote from './remote';
 import teamProjects from './teamProjects';
 import teamDocs from './teamDocs';
 import wizard from './wizard';
@@ -87,6 +88,7 @@ export const en = defineCatalog({
   overseer,
   team,
   teamBoard,
+  remote,
   teamProjects,
   teamDocs,
 });

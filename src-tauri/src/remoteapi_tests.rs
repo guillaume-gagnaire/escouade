@@ -78,6 +78,7 @@ impl Client {
         c.send(&ToServer::Hello {
             version: version.into(),
             token: token.into(),
+            session: None,
         })
         .await;
         let first = c.recv().await.expect("an answer to the handshake");
@@ -129,6 +130,8 @@ impl Client {
             id,
             cmd: cmd.into(),
             args,
+            body: None,
+            headers: Default::default(),
         })
         .await;
         loop {
@@ -188,11 +191,14 @@ fn channel_data(m: &Message, channel: u32) -> Option<Value> {
     }
 }
 
-/// The bytes of a binary message of the channel `channel`.
+/// The bytes of a binary message of the channel `channel` (a terminal's output, numbered or not).
 fn channel_bytes(m: &Message, channel: u32) -> Option<Vec<u8>> {
     match m {
         Message::Binary(b) => match proto::read_frame(b)? {
             (Frame::Channel, id, bytes) if id == u64::from(channel) => Some(bytes.to_vec()),
+            (Frame::Term, id, rest) if id == u64::from(channel) => {
+                proto::read_term(rest).map(|(_, bytes)| bytes.to_vec())
+            }
             _ => None,
         },
         _ => None,
@@ -331,54 +337,137 @@ fn each_command_has_its_class_as_docs_remote_says() {
         class("clipboard_image"),
         Some(Class::Moves { served: false })
     );
-    assert_eq!(class("attach_chunk"), Some(Class::Moves { served: false }));
+    assert_eq!(class("attach_chunk"), Some(Class::Moves { served: true }));
+    assert_eq!(class("fs_write_bytes"), Some(Class::Served));
     assert_eq!(class("no_such_command"), None);
     // `docs/REMOTE.md` lists them all, in the same classes.
     let doc =
         std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/REMOTE.md"))
             .unwrap();
-    // Its section « Le classement des commandes », one part per class, each command in one of them.
-    let start = doc
-        .find("### Le classement des commandes")
-        .expect("the section of the classes");
-    let section = &doc[start..];
-    let end = [
-        "
-## ", "
-### ",
-    ]
-    .iter()
-    .filter_map(|h| section[4..].find(h))
-    .min()
-    .map_or(section.len(), |i| i + 4);
-    let section = &section[..end];
-    let parts: Vec<(&str, &str)> = section
-        .split(
-            "
-#### ",
-        )
-        .skip(1)
-        .map(|p| p.split_once('\n').unwrap_or((p, "")))
-        .collect();
-    for c in list::COMMANDS {
-        let wanted = match c.class {
-            Class::Served => "Servies",
-            Class::Desk => "Du poste seulement",
-            Class::Moves { served: true } => "Changent de machine, servies",
-            Class::Moves { served: false } => "Changent de machine, refusées",
-        };
-        let named = format!("`{}`", c.name);
-        let found: Vec<&str> = parts
-            .iter()
-            .filter(|(_, body)| body.contains(&named))
-            .map(|(title, _)| *title)
-            .collect();
-        assert!(
-            found.len() == 1 && found[0].starts_with(wanted),
-            "{}: wanted in « {wanted} », found in {found:?}",
-            c.name
-        );
+    let errors = classes_as_docs_says(&doc);
+    assert!(errors.is_empty(), "docs/REMOTE.md: {errors:#?}");
+}
+
+/// The title of a class's part in `docs/REMOTE.md`, « Le classement des commandes ».
+fn class_title(class: Class) -> &'static str {
+    match class {
+        Class::Served => "Servies telles quelles",
+        Class::Desk => "Du poste seulement",
+        Class::Moves { served: true } => "Changent de machine, servies",
+        Class::Moves { served: false } => "Changent de machine, refusées",
     }
+}
+
+/// What « Le classement des commandes » of `doc` says amiss of `list.rs`: one part per class (`#### <its title>`), one
+/// bullet per command (`` - `name` ``, maybe with why), in alphabetical order, so that two tickets that each add a
+/// command touch two lines. A command missing, one too many, in the wrong class or out of its place: each said.
+fn classes_as_docs_says(doc: &str) -> Vec<String> {
+    let mut errors = Vec::new();
+    let Some(start) = doc.find("### Le classement des commandes") else {
+        return vec!["no section « Le classement des commandes »".into()];
+    };
+    let section = &doc[start..];
+    let end = ["\n## ", "\n### "]
+        .iter()
+        .filter_map(|h| section[4..].find(h))
+        .min()
+        .map_or(section.len(), |i| i + 4);
+    let parts: Vec<(&str, Vec<&str>)> = section[..end]
+        .split("\n#### ")
+        .skip(1)
+        .map(|p| {
+            let (title, body) = p.split_once('\n').unwrap_or((p, ""));
+            let names = body
+                .lines()
+                .filter_map(|l| l.strip_prefix("- `"))
+                .filter_map(|l| l.split('`').next())
+                .collect();
+            (title.trim(), names)
+        })
+        .collect();
+    let titles: Vec<&str> = parts.iter().map(|(t, _)| *t).collect();
+    let wanted = [
+        class_title(Class::Served),
+        class_title(Class::Desk),
+        class_title(Class::Moves { served: true }),
+        class_title(Class::Moves { served: false }),
+    ];
+    if titles != wanted {
+        errors.push(format!("the parts are {titles:?}, not {wanted:?}"));
+    }
+    for (part, names) in &parts {
+        for pair in names.windows(2) {
+            if pair[0] >= pair[1] {
+                errors.push(format!(
+                    "« {part} »: `{}` before `{}`: not in alphabetical order, or twice",
+                    pair[0], pair[1]
+                ));
+            }
+        }
+        for name in names {
+            match remoteapi::find(name) {
+                None => errors.push(format!(
+                    "« {part} »: `{name}` is no command of remoteapi/list.rs"
+                )),
+                Some(c) if class_title(c.class) != *part => errors.push(format!(
+                    "`{name}`: in « {part} », of « {} » in remoteapi/list.rs",
+                    class_title(c.class)
+                )),
+                Some(_) => {}
+            }
+        }
+    }
+    for c in list::COMMANDS {
+        if !parts.iter().any(|(_, names)| names.contains(&c.name)) {
+            errors.push(format!(
+                "`{}`: missing from « {} »",
+                c.name,
+                class_title(c.class)
+            ));
+        }
+    }
+    errors
+}
+
+/// The check of « Le classement des commandes » fails on each way it can be wrong.
+#[test]
+fn the_classes_of_docs_remote_fail_when_a_command_is_missing_extra_misplaced_or_out_of_order() {
+    let doc =
+        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/REMOTE.md"))
+            .unwrap();
+    assert!(classes_as_docs_says(&doc).is_empty());
+    let says = |doc: String, what: &str| {
+        let errors = classes_as_docs_says(&doc);
+        assert!(
+            errors.iter().any(|e| e.contains(what)),
+            "wanted « {what} » in {errors:#?}"
+        );
+    };
+    // Missing.
+    says(
+        doc.replace("- `create_agent`\n", ""),
+        "`create_agent`: missing",
+    );
+    // One too many.
+    says(
+        doc.replace(
+            "- `create_agent`\n",
+            "- `create_agent`\n- `create_agentz`\n",
+        ),
+        "`create_agentz` is no command",
+    );
+    // In the wrong class: a command of the desk among the served ones.
+    let misplaced = doc.replace("- `data_dir`\n", "- `data_dir`\n- `deep_links_take`\n");
+    says(
+        misplaced,
+        "`deep_links_take`: in « Servies telles quelles »",
+    );
+    // Out of its place.
+    says(
+        doc.replace("- `create_agent`\n", "")
+            .replace("- `data_dir`\n", "- `data_dir`\n- `create_agent`\n"),
+        "before `create_agent`",
+    );
 }
 
 // ---------- the WebSocket, against the core without a window ----------
@@ -387,12 +476,21 @@ fn each_command_has_its_class_as_docs_remote_says() {
 async fn the_handshake_passes_with_a_device_token_and_the_server_s_version_and_a_command_answers() {
     let (dir, h, api, token) = served("remote-handshake").await;
     let (mut c, welcome) = Client::hello(&api, VERSION, &token).await;
+    let ToClient::Welcome { session, desk, .. } = &welcome else {
+        panic!("{welcome:?}")
+    };
+    assert_eq!(session.len(), 32, "{session}");
+    // The desktop's commands, for a client that has a desktop to do them.
+    assert!(desk.iter().any(|c| c == "open_url") && !desk.iter().any(|c| c == "term_spawn"));
     assert_eq!(
         welcome,
         ToClient::Welcome {
             version: VERSION.into(),
             client: "c1".into(),
             device: "Téléphone".into(),
+            session: session.clone(),
+            resumed: false,
+            desk: desk.clone(),
         }
     );
     assert_eq!(api.clients(), 1);
@@ -824,4 +922,677 @@ fn permission_id(v: &Value) -> Option<String> {
         Value::Array(a) => a.iter().find_map(permission_id),
         _ => None,
     }
+}
+
+// ---------- fondation 2b (ESC-495): the resume, the bounded queue, the bounds, the raw bodies ----------
+
+/// A core without a window whose remote API keeps to `limits`.
+async fn served_within(
+    name: &str,
+    limits: crate::remoteapi::server::Limits,
+) -> (PathBuf, Headless, Arc<RemoteApi>, String) {
+    let (dir, data) = data(name);
+    let h = Headless::start(data).unwrap();
+    let api = h.serve_remote_with(0, limits).await.unwrap();
+    let (_, token) = api.devices().add("Téléphone").unwrap();
+    (dir, h, api, token)
+}
+
+impl Client {
+    /// Connected with `token`, giving back `session` (a session of before a cut): its `Welcome`.
+    async fn hello_in(api: &RemoteApi, token: &str, session: Option<&str>) -> (Self, ToClient) {
+        let ws = open(api.addr(), proto::PATH, None, None).await.unwrap();
+        let mut c = Client {
+            ws,
+            next: 1_000,
+            seen: Vec::new(),
+        };
+        c.send(&ToServer::Hello {
+            version: VERSION.into(),
+            token: token.into(),
+            session: session.map(str::to_string),
+        })
+        .await;
+        let first = c.recv().await.expect("an answer to the handshake");
+        (c, parse(&first).expect("a message of the protocol"))
+    }
+
+    /// The command `cmd` called with `args` and a raw body, sent before it in parts, with `headers`.
+    async fn call_body(
+        &mut self,
+        cmd: &str,
+        args: Value,
+        headers: &[(&str, &str)],
+        body: &[u8],
+    ) -> ToClient {
+        let id = self.next;
+        self.next += 1;
+        for part in body.chunks(proto::MAX_MESSAGE - proto::FRAME_HEAD - 1) {
+            self.ws
+                .send(Message::binary(proto::frame(Frame::Body, id, part)))
+                .await
+                .unwrap();
+        }
+        let Value::Object(args) = args else {
+            panic!("args are an object")
+        };
+        let headers = headers
+            .iter()
+            .map(|(k, v)| (k.to_string(), Value::String(v.to_string())))
+            .collect();
+        self.send(&ToServer::Call {
+            id,
+            cmd: cmd.into(),
+            args,
+            body: Some(body.len() as u64),
+            headers,
+        })
+        .await;
+        self.reply_to(id, cmd).await
+    }
+
+    async fn reply_to(&mut self, id: u64, cmd: &str) -> ToClient {
+        loop {
+            let m = self
+                .recv()
+                .await
+                .unwrap_or_else(|| panic!("closed before the answer to {cmd}"));
+            if let Some(reply @ ToClient::Reply { id: got, .. }) = parse(&m) {
+                if got == id {
+                    return reply;
+                }
+            }
+            self.seen.push(m);
+        }
+    }
+
+    /// The answer in bytes to `cmd`, its parts put together, and how many frames it came in.
+    async fn call_bytes(&mut self, cmd: &str, args: Value) -> (Vec<u8>, usize) {
+        let id = self.next;
+        self.next += 1;
+        let Value::Object(args) = args else {
+            panic!("args are an object")
+        };
+        self.send(&ToServer::Call {
+            id,
+            cmd: cmd.into(),
+            args,
+            body: None,
+            headers: Default::default(),
+        })
+        .await;
+        let mut bytes = Vec::new();
+        let mut frames = 0;
+        loop {
+            let m = self
+                .recv()
+                .await
+                .unwrap_or_else(|| panic!("closed before the answer to {cmd}"));
+            if let Message::Binary(b) = &m {
+                match proto::read_frame(b) {
+                    Some((Frame::ReplyPart, got, part)) if got == id => {
+                        assert!(b.len() <= proto::MAX_MESSAGE);
+                        bytes.extend_from_slice(part);
+                        frames += 1;
+                        continue;
+                    }
+                    Some((Frame::Reply, got, part)) if got == id => {
+                        assert!(b.len() <= proto::MAX_MESSAGE);
+                        bytes.extend_from_slice(part);
+                        return (bytes, frames + 1);
+                    }
+                    _ => {}
+                }
+            }
+            if let Some(ToClient::Reply { id: got, .. }) = parse(&m) {
+                assert_ne!(got, id, "{cmd} answered in JSON: {m:?}");
+            }
+            self.seen.push(m);
+        }
+    }
+}
+
+/// A terminal as the window's transport shows it (`src/lib/transport.ts`): the end of the last numbered byte, what
+/// it shows, whether a resume's replay is under way.
+#[derive(Default)]
+struct Screen {
+    last: Option<u64>,
+    shown: Vec<u8>,
+    resuming: bool,
+    gaps: u32,
+    lost: u64,
+}
+
+impl Screen {
+    /// `m`, if it is of the channel `channel`. Its gap to resume, when it is one.
+    fn take(&mut self, m: &Message, channel: u32) -> Option<bool> {
+        match m {
+            Message::Binary(b) => match proto::read_frame(b)? {
+                (Frame::Term, id, rest) if id == u64::from(channel) => {
+                    let (end, data) = proto::read_term(rest)?;
+                    let start = end - data.len() as u64;
+                    let last = *self.last.get_or_insert(start);
+                    if end <= last {
+                        return Some(false);
+                    }
+                    if start > last {
+                        // A hole: a resume makes up for it.
+                        let ask = !self.resuming;
+                        self.resuming = true;
+                        self.gaps += u32::from(ask);
+                        return Some(ask);
+                    }
+                    self.shown
+                        .extend_from_slice(&data[(last - start) as usize..]);
+                    self.last = Some(end);
+                    Some(false)
+                }
+                (Frame::Channel, id, data) if id == u64::from(channel) => {
+                    self.shown.extend_from_slice(data);
+                    Some(false)
+                }
+                _ => None,
+            },
+            m => match parse(m)? {
+                ToClient::Mark { channel: c, end } if c == channel => {
+                    self.last = Some(end);
+                    Some(false)
+                }
+                ToClient::Lost { channel: c, bytes } if c == channel => {
+                    self.lost += bytes;
+                    self.last = self.last.map(|l| l + bytes);
+                    Some(false)
+                }
+                ToClient::Resumed { channel: c, .. } if c == channel => {
+                    self.resuming = false;
+                    Some(false)
+                }
+                ToClient::Gap { channel: c } if c == channel => {
+                    let ask = !self.resuming;
+                    self.resuming = true;
+                    Some(ask)
+                }
+                _ => None,
+            },
+        }
+    }
+
+    fn text(&self) -> String {
+        String::from_utf8_lossy(&self.shown).into_owned()
+    }
+}
+
+/// What `c` receives of the terminal of `channel`, into `screen`, until `done` says so (90 s at most); a hole is
+/// resumed at once.
+async fn pump(c: &mut Client, screen: &mut Screen, channel: u32, done: impl Fn(&Screen) -> bool) {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(90);
+    let mut kept = std::mem::take(&mut c.seen).into_iter();
+    while !done(screen) {
+        let m = match kept.next() {
+            Some(m) => m,
+            None => {
+                let left = deadline.saturating_duration_since(tokio::time::Instant::now());
+                match tokio::time::timeout(left, c.ws.next()).await {
+                    Ok(Some(Ok(m))) => m,
+                    other => panic!("{other:?} waiting for the terminal: {}", screen.text()),
+                }
+            }
+        };
+        if screen.take(&m, channel) == Some(true) {
+            c.send(&ToServer::Resume {
+                channels: vec![proto::Resume {
+                    channel,
+                    after: screen.last,
+                }],
+            })
+            .await;
+        }
+    }
+    c.seen.extend(kept);
+}
+
+/// The lines `L0001.` to `L<n>.` a terminal is to print, a few milliseconds apart, in its shell `shell`.
+fn numbered_lines(shell: &str, n: u32) -> String {
+    match shell {
+        "pwsh" | "powershell" => {
+            format!("1..{n} | % {{ 'L{{0:d4}}.' -f $_; Start-Sleep -Milliseconds 4 }}\r")
+        }
+        "fish" => format!("for i in (seq 1 {n}); printf 'L%04d.\\n' $i; sleep 0.004; end\r"),
+        _ => format!("for i in $(seq 1 {n}); do printf 'L%04d.\\n' $i; sleep 0.004; done\r"),
+    }
+}
+
+/// Each line `L0001.` to `L<n>.` once, in order, in `text`.
+fn each_line_once(text: &str, n: u32) -> std::result::Result<(), String> {
+    let mut at = 0;
+    for i in 1..=n {
+        let line = format!("L{i:04}.");
+        let count = text.matches(&line).count();
+        if count != 1 {
+            return Err(format!("{line} {count} times"));
+        }
+        let place = text.find(&line).unwrap();
+        if place < at {
+            return Err(format!("{line} out of order"));
+        }
+        at = place;
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_terminal_cut_while_it_writes_resumes_with_no_byte_missing_or_twice() {
+    let (dir, h, api, token) = served("remote-resume").await;
+    let (mut c, welcome) = Client::hello_in(&api, &token, None).await;
+    let ToClient::Welcome { session, .. } = welcome else {
+        panic!("{welcome:?}")
+    };
+    let initial = c.ok("subscribe", json!({"channel": "__CHANNEL__:1"})).await;
+    let shell = initial["shells"][0]["id"].as_str().unwrap().to_string();
+    let p = project(&mut c, &dir).await;
+    let term = c
+        .ok(
+            "term_spawn",
+            json!({
+                "projectId": p["id"], "shell": shell, "name": "t", "cols": 100, "rows": 30,
+                "output": "__CHANNEL__:7",
+            }),
+        )
+        .await;
+    let tid = term["id"].as_str().unwrap().to_string();
+    let mut screen = Screen::default();
+    pump(&mut c, &mut screen, 7, |s| !s.shown.is_empty()).await;
+    if screen.shown.windows(4).any(|w| w == b"\x1b[6n") {
+        c.ok("term_write", json!({"id": tid, "data": "\u{1b}[1;1R"}))
+            .await;
+    }
+    const N: u32 = 600;
+    c.ok(
+        "term_write",
+        json!({"id": tid, "data": numbered_lines(&shell, N)}),
+    )
+    .await;
+    // Some lines shown, then the connection cut while the terminal writes on.
+    pump(&mut c, &mut screen, 7, |s| s.text().contains("L0040.")).await;
+    drop(c);
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    // Back in its session: it resumes the terminal from the end of the last bytes it received.
+    let (mut c, welcome) = Client::hello_in(&api, &token, Some(&session)).await;
+    assert!(
+        matches!(&welcome, ToClient::Welcome { session: s, resumed: true, .. } if *s == session),
+        "{welcome:?}"
+    );
+    c.send(&ToServer::Resume {
+        channels: vec![proto::Resume {
+            channel: 7,
+            after: screen.last,
+        }],
+    })
+    .await;
+    screen.resuming = true;
+    let last_line = format!("L{N:04}.");
+    pump(&mut c, &mut screen, 7, |s| {
+        !s.resuming && s.text().contains(&last_line)
+    })
+    .await;
+    let text = screen.text();
+    each_line_once(&text, N).unwrap_or_else(|e| panic!("{e}: {text}"));
+    assert_eq!(screen.lost, 0);
+    c.ok("term_kill", json!({"id": tid})).await;
+    h.stop();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_session_is_its_device_s_alone_and_a_channel_it_does_not_hold_is_gone() {
+    let (_dir, h, api, token) = served("remote-session-device").await;
+    let (c, welcome) = Client::hello_in(&api, &token, None).await;
+    let ToClient::Welcome { session, .. } = welcome else {
+        panic!("{welcome:?}")
+    };
+    drop(c);
+    // Another device that gives this session's id gets a session of its own.
+    let (_, other) = api.devices().add("Portable").unwrap();
+    let (mut o, welcome) = Client::hello_in(&api, &other, Some(&session)).await;
+    assert!(
+        matches!(&welcome, ToClient::Welcome { session: s, resumed: false, .. } if *s != session),
+        "{welcome:?}"
+    );
+    // And resumes nothing: the channel is not one of its own.
+    o.send(&ToServer::Resume {
+        channels: vec![proto::Resume {
+            channel: 7,
+            after: Some(0),
+        }],
+    })
+    .await;
+    let m = o
+        .until("the resume's answer", |m| {
+            matches!(parse(m), Some(ToClient::Resumed { .. }))
+        })
+        .await;
+    assert_eq!(
+        parse(&m),
+        Some(ToClient::Resumed {
+            channel: 7,
+            ended: false,
+            gone: true
+        })
+    );
+    // A session id too long, or made up: a new session.
+    let long = "x".repeat(proto::MAX_SESSION + 1);
+    let (_c, welcome) = Client::hello_in(&api, &token, Some(&long)).await;
+    assert!(matches!(welcome, ToClient::Welcome { resumed: false, .. }));
+    h.stop();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_client_that_reads_nothing_is_closed_and_the_core_keeps_little_for_it() {
+    let limits = crate::remoteapi::server::Limits {
+        queue: crate::remoteapi::outbox::Bounds {
+            messages: 64,
+            bytes: 256 << 10,
+            hard_bytes: 4 << 20,
+            stall: Duration::from_secs(2),
+        },
+        ..Default::default()
+    };
+    let (_dir, h, api, token) = served_within("remote-muted", limits).await;
+    let mut c = Client::connect(&api, &token).await;
+    c.ok("subscribe", json!({"channel": "__CHANNEL__:1"})).await;
+    assert_eq!(api.clients(), 1);
+    // The client reads nothing from now on, while the core pushes 64 MB of events at it.
+    let text = "x".repeat(4 << 10);
+    for _ in 0..(16 << 10) {
+        h.core
+            .hub
+            .emit(crate::model::UiEvent::Toast { text: text.clone() });
+    }
+    // Closed once it read nothing for 2 s.
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+    while api.clients() > 0 {
+        assert!(tokio::time::Instant::now() < deadline, "still connected");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let counts = api.counts();
+    assert_eq!(
+        counts
+            .closed_slow
+            .load(std::sync::atomic::Ordering::Relaxed),
+        1
+    );
+    // What waited for it never went past the soft bound by more than a message: the events melted into a re-read.
+    let peak = counts
+        .peak_queued
+        .load(std::sync::atomic::Ordering::Relaxed);
+    assert!(peak <= (256 << 10) + (8 << 10), "{peak} bytes waited");
+    drop(c);
+    h.stop();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_client_that_lets_answers_pile_up_unread_is_closed_past_the_hard_bound() {
+    let limits = crate::remoteapi::server::Limits {
+        queue: crate::remoteapi::outbox::Bounds {
+            messages: 64,
+            bytes: 256 << 10,
+            hard_bytes: 3 << 20,
+            stall: Duration::from_secs(60),
+        },
+        ..Default::default()
+    };
+    let (dir, h, api, token) = served_within("remote-hard", limits).await;
+    let mut c = Client::connect(&api, &token).await;
+    let p = project(&mut c, &dir).await;
+    let r = PathBuf::from(p["path"].as_str().unwrap());
+    std::fs::write(r.join("big.bin"), vec![7u8; 2 << 20]).unwrap();
+    // Asked again and again, never read: past 3 MB waiting, it is closed.
+    for id in 0..64u64 {
+        c.send(&ToServer::Call {
+            id: 50_000 + id,
+            cmd: "fs_read_bytes".into(),
+            args: json!({"projectId": p["id"], "path": "big.bin"})
+                .as_object()
+                .unwrap()
+                .clone(),
+            body: None,
+            headers: Default::default(),
+        })
+        .await;
+    }
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(60);
+    while api.clients() > 0 {
+        assert!(tokio::time::Instant::now() < deadline, "still connected");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let peak = api
+        .counts()
+        .peak_queued
+        .load(std::sync::atomic::Ordering::Relaxed);
+    assert!(peak <= 3 << 20, "{peak} bytes waited");
+    drop(c);
+    h.stop();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_connections_of_a_device_and_in_all_are_bounded() {
+    let limits = crate::remoteapi::server::Limits {
+        per_device: 2,
+        total: 3,
+        ..Default::default()
+    };
+    let (_dir, h, api, token) = served_within("remote-bounds", limits).await;
+    let _a = Client::connect(&api, &token).await;
+    let _b = Client::connect(&api, &token).await;
+    let (mut third, refused) = Client::hello(&api, VERSION, &token).await;
+    assert_eq!(code_of(&refused), Some(codes::TOO_MANY), "{refused:?}");
+    assert!(third.closed().await);
+    // Another device has room, until all are taken.
+    let (_, other) = api.devices().add("Portable").unwrap();
+    let _c = Client::connect(&api, &other).await;
+    let (_d, refused) = Client::hello(&api, VERSION, &other).await;
+    assert_eq!(code_of(&refused), Some(codes::TOO_MANY), "{refused:?}");
+    assert_eq!(api.clients(), 3);
+    h.stop();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn failed_handshakes_turn_the_next_connections_away_for_a_while() {
+    let limits = crate::remoteapi::server::Limits {
+        failures_per_minute: 3,
+        ..Default::default()
+    };
+    let (_dir, h, api, token) = served_within("remote-failures", limits).await;
+    for _ in 0..3 {
+        let (mut c, refused) = Client::hello(&api, VERSION, "not-a-token").await;
+        assert_eq!(code_of(&refused), Some(codes::TOKEN));
+        assert!(c.closed().await);
+    }
+    // Now even the right token finds the door shut: closed as soon as accepted, before the WebSocket.
+    let opened = open(api.addr(), proto::PATH, None, None).await;
+    assert!(opened.is_err(), "the WebSocket opened");
+    assert!(
+        api.counts()
+            .turned_away
+            .load(std::sync::atomic::Ordering::Relaxed)
+            >= 1
+    );
+    let _ = token;
+    h.stop();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn too_many_calls_waiting_are_refused_as_busy() {
+    let limits = crate::remoteapi::server::Limits {
+        in_flight: 0,
+        ..Default::default()
+    };
+    let (_dir, h, api, token) = served_within("remote-busy", limits).await;
+    let mut c = Client::connect(&api, &token).await;
+    let reply = c.call("closed_projects", json!({})).await;
+    assert_eq!(code_of(&reply), Some(codes::BUSY), "{reply:?}");
+    h.stop();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_raw_body_sent_in_parts_writes_a_file_and_a_large_answer_comes_in_parts() {
+    let (dir, h, api, token) = served("remote-body").await;
+    let mut c = Client::connect(&api, &token).await;
+    let p = project(&mut c, &dir).await;
+    // 20 MB: past one message, in two parts each way.
+    let bytes: Vec<u8> = (0..(20u32 << 20)).map(|i| (i % 253) as u8).collect();
+    let pid = p["id"].as_str().unwrap().to_string();
+    let reply = c
+        .call_body(
+            "fs_write_bytes",
+            json!({}),
+            &[
+                ("x-project", &pid),
+                ("x-agent", ""),
+                ("x-path", "big.bin"),
+                ("x-expect", "absent"),
+            ],
+            &bytes,
+        )
+        .await;
+    assert!(
+        matches!(&reply, ToClient::Reply { ok: Some(stamp), error: None, .. } if stamp["size"] == bytes.len()),
+        "{reply:?}"
+    );
+    assert_eq!(
+        std::fs::read(PathBuf::from(p["path"].as_str().unwrap()).join("big.bin")).unwrap(),
+        bytes
+    );
+    let (back, frames) = c
+        .call_bytes(
+            "fs_read_bytes",
+            json!({"projectId": pid, "path": "big.bin"}),
+        )
+        .await;
+    assert_eq!(frames, 2);
+    assert!(back == bytes, "the bytes read back differ");
+    // A body whose length is not the one its call says: refused, nothing written.
+    let id = c.next;
+    c.next += 1;
+    c.ws.send(Message::binary(proto::frame(Frame::Body, id, b"abc")))
+        .await
+        .unwrap();
+    c.send(&ToServer::Call {
+        id,
+        cmd: "fs_write_bytes".into(),
+        args: Default::default(),
+        body: Some(4),
+        headers: Default::default(),
+    })
+    .await;
+    let reply = c.reply_to(id, "fs_write_bytes").await;
+    assert_eq!(code_of(&reply), Some(codes::TOO_LARGE), "{reply:?}");
+    // A file joined, in raw chunks.
+    let handle = c
+        .ok(
+            "attach_open",
+            json!({"owner": "draft", "name": "note.txt", "size": 5}),
+        )
+        .await;
+    let handle = handle.as_str().unwrap().to_string();
+    let reply = c
+        .call_body(
+            "attach_chunk",
+            json!({}),
+            &[("x-handle", &handle)],
+            b"hello",
+        )
+        .await;
+    assert!(
+        matches!(reply, ToClient::Reply { error: None, .. }),
+        "{reply:?}"
+    );
+    let file = c.ok("attach_finish", json!({"handle": handle})).await;
+    let path = file["path"].as_str().expect("its path");
+    assert_eq!(std::fs::read(path).unwrap(), b"hello");
+    h.stop();
+}
+
+// ---------- the bounded queue and the sessions, alone ----------
+
+#[test]
+fn the_events_of_a_slow_client_melt_into_a_re_read_and_a_terminal_s_dropped_output_is_said() {
+    use crate::remoteapi::outbox::{Bounds, Lane, Outbox};
+    let out = Outbox::new(Bounds {
+        messages: 2,
+        bytes: 1 << 20,
+        hard_bytes: 2 << 20,
+        stall: Duration::from_secs(60),
+    });
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let text = |m: &Message| match m {
+        Message::Text(t) => t.to_string(),
+        Message::Binary(b) => format!("bin {}", b.len()),
+        _ => String::new(),
+    };
+    out.push(Message::text("answer"), Lane::Control);
+    for i in 0..10 {
+        out.push(Message::text(format!("state {i}")), Lane::State);
+    }
+    out.push(Message::binary(vec![0; 10]), Lane::Term(7));
+    // The answer is never dropped; the events melted into one re-read; the terminal's output dropped, and said.
+    let mut sent = Vec::new();
+    while out.waiting() > 0 {
+        sent.push(text(&rt.block_on(out.next()).unwrap()));
+    }
+    assert_eq!(
+        sent,
+        ["answer", r#"{"t":"resync"}"#, r#"{"t":"gap","channel":7}"#]
+    );
+    assert!(out.dropped() >= 11, "{}", out.dropped());
+    // Room again: the state is queued as it comes.
+    out.push(Message::text("state 11"), Lane::State);
+    assert_eq!(text(&rt.block_on(out.next()).unwrap()), "state 11");
+    // Nothing read while something waits: stuck once its time is past; past the hard bound at once.
+    out.push(Message::text("waiting"), Lane::Control);
+    assert_eq!(out.stuck(std::time::Instant::now()), None);
+    assert!(out
+        .stuck(std::time::Instant::now() + Duration::from_secs(61))
+        .is_some());
+    out.push(Message::binary(vec![0; 3 << 20]), Lane::Control);
+    assert_eq!(
+        out.stuck(std::time::Instant::now()),
+        Some("too much left unread")
+    );
+    assert!(rt.block_on(out.next()).is_none());
+}
+
+#[test]
+fn a_session_keeps_its_terminals_within_its_bounds_and_is_forgotten_in_time() {
+    use crate::remoteapi::sessions::{self, Sessions};
+    use crate::termlog::{Replay, TermLog};
+    let s = Sessions::default();
+    let now = std::time::Instant::now();
+    let (id, again) = s.open("phone", None, now);
+    assert!(!again);
+    for channel in 0..(sessions::MAX_CHANNELS as u32 + 10) {
+        let log: Arc<dyn Replay> = TermLog::with_size(16, Box::new(|_: Vec<u8>| {}));
+        s.bind(&id, channel, log);
+    }
+    assert_eq!(s.channels(&id), sessions::MAX_CHANNELS);
+    assert!(s.find(&id, "phone", 0).is_none(), "the oldest let go");
+    assert!(s.find(&id, "phone", 265).is_some());
+    assert!(s.find(&id, "laptop", 265).is_none(), "another device's");
+    s.leave(&id, now);
+    // Taken again in time; a new one past it.
+    assert_eq!(s.open("phone", Some(&id), now), (id.clone(), true));
+    s.leave(&id, now);
+    let later = now + sessions::KEPT + Duration::from_secs(1);
+    let (fresh, again) = s.open("phone", Some(&id), later);
+    assert!(!again && fresh != id);
+    // A device's sessions bounded: the oldest without a connection let go.
+    for _ in 0..(sessions::MAX_PER_DEVICE * 2) {
+        let (x, _) = s.open("tablet", None, later);
+        s.leave(&x, later);
+    }
+    assert!(s.len() <= sessions::MAX_PER_DEVICE + 1, "{}", s.len());
+    s.forget_device("phone");
+    assert!(s.find(&fresh, "phone", 0).is_none());
 }

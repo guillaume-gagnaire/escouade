@@ -273,6 +273,9 @@ mod teams_tests;
 mod telemetry;
 #[cfg(test)]
 mod terminal_tests;
+mod termlog;
+#[cfg(test)]
+mod termlog_tests;
 #[cfg(test)]
 mod test_tmp;
 #[cfg(test)]
@@ -429,8 +432,12 @@ fn window_theme(choice: model::ThemeChoice) -> Option<tauri::Theme> {
 }
 
 /// The main window, made from the config's (`create: false` there: the guard of `navigation` can
-/// only be put on it as it is made), hidden until `setup` (in `run`) shows it.
-fn build_window(app: &tauri::App) -> tauri::Result<()> {
+/// only be put on it as it is made), hidden until `setup` (in `run`) shows it. `remote`: in a build of development, the
+/// link of the window to the remote API (`remoteapi::window`), which its page then speaks to the core by.
+fn build_window(
+    app: &tauri::App,
+    remote: Option<&remoteapi::window::WindowLink>,
+) -> tauri::Result<()> {
     let config = app.config();
     let window = config
         .app
@@ -461,6 +468,11 @@ fn build_window(app: &tauri::App) -> tauri::Result<()> {
         dev: dev.clone(),
     });
     let mut builder = WebviewWindowBuilder::from_config(app.handle(), &window)?;
+    if let Some(link) = remote {
+        let version = app.package_info().version.to_string();
+        let origin = dev.as_ref().map(|u| u.origin().ascii_serialization());
+        builder = builder.initialization_script(link.script(&version, origin.as_deref()));
+    }
     // The WebView2 folder an end-to-end test gives it: by the API, which a CI runner (elevated) follows (ESC-496).
     if let Some(dir) = paths::webview_dir() {
         builder = builder.data_directory(dir);
@@ -549,8 +561,11 @@ pub fn run() {
         .setup(move |app| {
             init_logging();
             windowthread::watch_app(app.handle().clone(), watched.clone());
+            // The window on the remote API (ESC-495), in a build of development whose variables ask for it: its socket
+            // bound before the window is made, which is told where it is.
+            let window_link = remoteapi::window::bind();
             // First: nothing below may find the window missing.
-            build_window(app)?;
+            build_window(app, window_link.as_ref())?;
             for note in paths::take_migration_notes() {
                 log::info!("migration: {note}");
             }
@@ -676,18 +691,19 @@ pub fn run() {
             // The remote API (ESC-478): off, unless `ESCOUADE_REMOTE_API` gives its port, in a build of development
             // only (the tests, until the server mode has its setting: a variable opens nothing in a release, as
             // SEC-13 of the audit asks of the policies); the window is a client like any other of the same core.
-            #[cfg(debug_assertions)]
-            if let Some(port) = std::env::var(remoteapi::server::PORT_VAR)
-                .ok()
-                .and_then(|p| p.trim().parse::<u16>().ok())
-            {
+            let listen = match window_link {
+                Some(link) => Some(remoteapi::server::Listen::Bound(link.listener)),
+                None => remoteapi::server::port_asked().map(remoteapi::server::Listen::Port),
+            };
+            if let Some(listen) = listen {
                 let services = Arc::new(remoteapi::Services::of_app(
                     core.clone(),
                     app.handle().clone(),
                 ));
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    match remoteapi::server::RemoteApi::start(services, port).await {
+                    let limits = remoteapi::server::Limits::default();
+                    match remoteapi::server::RemoteApi::start_with(services, listen, limits).await {
                         Ok(api) => {
                             handle.manage(api);
                         }
@@ -791,7 +807,14 @@ pub fn run() {
             // The single list of the commands, for the IPC and the remote API (`remoteapi::list`).
             remoteapi::list::ipc(),
         ))
-        .build(context())
+        .build({
+            let mut context = context();
+            // The window on the remote API reaches the WebSockets of the loopback (ESC-495): in that case alone.
+            if remoteapi::window::wanted() {
+                remoteapi::window::open_csp(&mut context);
+            }
+            context
+        })
         .expect("error while building the application")
         .run(|app, event| match event {
             tauri::RunEvent::Exit => {

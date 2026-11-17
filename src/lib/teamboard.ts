@@ -2,7 +2,7 @@
 // who holds it and since when, whether their machine still answers, an interrupted claim, the conflicts this machine
 // lost, « Sur ce poste seulement ».
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from './transport';
 import { fTime } from './format';
 import { t } from './i18n';
 import type { Project, TeamConflict, Ticket } from './types';

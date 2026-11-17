@@ -174,7 +174,7 @@ impl Core {
             attach.args.join(" "),
             account.id
         );
-        let output = Arc::new(TuiOutput::new(on_data.take()));
+        let output = TuiOutput::shared(on_data.take());
         let on_out = {
             let (pty, term, output) = (self.pty.clone(), info.id.clone(), output.clone());
             move |data: Vec<u8>| {

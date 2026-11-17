@@ -556,8 +556,9 @@ test('a keystroke whose echo comes late is noted in the log, with where the time
   const slow =
     /echo of a 1-byte write shown after (\d+) ms: written (\d+) ms after the backend got it, first output (\d+) ms after, the echo (\d+) ms after/g;
   const slowEchoes = () => [...log().matchAll(slow)];
-  // A key of the command slow to show (a loaded machine) took the terminal's one report in 10 s: wait for the next.
-  if (slowEchoes().length) await page.waitForTimeout(10_500);
+  // A key of the command slow to show (a loaded machine, or the window on the remote API, ESC-495) took the terminal's
+  // one report in 10 s, whether the backend still knew its write or not: wait for the next.
+  if (/echo of a \d+-byte write shown after/.test(log())) await page.waitForTimeout(10_500);
   const before = slowEchoes().length;
   await page.keyboard.press('x');
   await expect.poll(() => slowEchoes().length, { timeout: 15_000 }).toBeGreaterThan(before);

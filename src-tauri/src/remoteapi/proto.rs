@@ -1,12 +1,19 @@
 //! The messages of the remote API (`docs/REMOTE.md`, « L'API distante » of the spec): JSON in text frames, the bytes
-//! of the channels (the terminals) and of the raw answers in binary frames, all on one WebSocket.
+//! of the channels (the terminals), of the raw answers and of the raw bodies in binary frames, all on one WebSocket.
 //!
-//! - The client's first message is the handshake ([`ToServer::Hello`]): its version and its device token. The server
-//!   answers [`ToClient::Welcome`], or [`ToClient::Refused`] and closes.
+//! - The client's first message is the handshake ([`ToServer::Hello`]): its version, its device token, and the session
+//!   it had before a cut, if any. The server answers [`ToClient::Welcome`] (the session, kept or new), or
+//!   [`ToClient::Refused`] and closes.
 //! - A call ([`ToServer::Call`]) has the id its answer takes back ([`ToClient::Reply`]); its arguments are the IPC's,
-//!   by the same names; a channel is given as the IPC gives it, `__CHANNEL__:<id>`, an id the client chooses.
+//!   by the same names; a channel is given as the IPC gives it, `__CHANNEL__:<id>`, an id the client chooses (unique in
+//!   its session). A raw body (`attach_chunk`, `fs_write_bytes`) comes first in binary frames ([`Frame::Body`]), then
+//!   the call says its length and its headers.
 //! - What a channel is sent comes back as [`ToClient::Channel`] (JSON: the events of `subscribe`), or in a binary
-//!   frame ([`Frame`]: a terminal's output).
+//!   frame: a terminal's output, numbered ([`Frame::Term`]), or bytes outside the numbering ([`Frame::Channel`]: a
+//!   replay of a screen, then [`ToClient::Mark`]).
+//! - After a cut, the client resumes its terminals ([`ToServer::Resume`]: the end of the last bytes it received from
+//!   each); a gap the server made when the client read too slowly is said ([`ToClient::Gap`]), as is a state to read
+//!   again whole ([`ToClient::Resync`]).
 //! - What the host publishes (a notification, the count of what waits: `host::HostEvent`) comes as
 //!   [`ToClient::Host`].
 
@@ -17,45 +24,92 @@ use std::time::Duration;
 /// The path of the WebSocket: `ws://127.0.0.1:<port>/remote`.
 pub const PATH: &str = "/remote";
 
-/// The largest message the server reads, and the largest frame: a message past it closes the connection.
+/// The largest message the server reads, and the largest it sends: a message past it closes the connection; an answer
+/// or a body past it goes in parts.
 pub const MAX_MESSAGE: usize = 16 << 20;
+
+/// The largest raw body of a call (`fs_write_bytes`: a file of the editor, 64 MB at most, as `fs_read_bytes`).
+pub const MAX_BODY: usize = 64 << 20;
 
 /// The time the client has to send its handshake once the WebSocket is open.
 pub const HELLO_WAIT: Duration = Duration::from_secs(10);
 
+/// The longest session id a client may give back.
+pub const MAX_SESSION: usize = 64;
+
+/// The most channels a client resumes in one message.
+pub const MAX_RESUME: usize = 1024;
+
+/// The most headers of a raw call, and their sizes.
+pub const MAX_HEADERS: usize = 32;
+pub const MAX_HEADER_NAME: usize = 64;
+pub const MAX_HEADER_VALUE: usize = 8 << 10;
+
+/// The close code of a connection that read nothing for too long, or let too much wait unread.
+pub const CLOSE_SLOW: u16 = 4002;
+
 /// The `Origin` a connection may come with: none (a program of its own), or the page of Escouade's own window
-/// (`tauri://localhost` under macOS and Linux, `http://tauri.localhost` under Windows), which fondation 2b connects.
-/// Any other is a web page of the machine: refused.
+/// (`tauri://localhost` under macOS and Linux, `http://tauri.localhost` under Windows). Any other is a web page of the
+/// machine: refused.
 pub const ORIGINS: &[&str] = &[
     "tauri://localhost",
     "http://tauri.localhost",
     "https://tauri.localhost",
 ];
 
+/// A terminal to resume: its channel, and the end of the last bytes the client received of it (none: nothing yet).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Resume {
+    pub channel: u32,
+    #[serde(default)]
+    pub after: Option<u64>,
+}
+
 /// What the client sends.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "t", rename_all = "camelCase")]
 pub enum ToServer {
-    /// The handshake: the client's version (the app's, `2.3.0`) and its device's token.
-    Hello { version: String, token: String },
-    /// A command, `cmd`, with the IPC's arguments.
+    /// The handshake: the client's version (the app's, `2.3.0`), its device's token, and the session it had before a
+    /// cut (its terminals are resumed in it).
+    Hello {
+        version: String,
+        token: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        session: Option<String>,
+    },
+    /// A command, `cmd`, with the IPC's arguments. `body`: the length of its raw body, sent before in binary frames
+    /// ([`Frame::Body`]), with its `headers`.
     Call {
         id: u64,
         cmd: String,
         #[serde(default)]
         args: Map<String, Value>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        body: Option<u64>,
+        #[serde(default, skip_serializing_if = "Map::is_empty")]
+        headers: Map<String, Value>,
     },
+    /// The terminals of the session to take over again, each from where the client stopped.
+    Resume { channels: Vec<Resume> },
 }
 
 /// What the server sends.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "t", rename_all = "camelCase")]
 pub enum ToClient {
-    /// The handshake passed: the server's version, the client's name for this connection, its device's name.
+    /// The handshake passed: the server's version, the client's name for this connection, its device's name, its
+    /// session (`resumed`: the one it gave, whose terminals it may resume), the desktop's commands.
     Welcome {
         version: String,
         client: String,
         device: String,
+        #[serde(default)]
+        session: String,
+        #[serde(default)]
+        resumed: bool,
+        /// The desktop's commands (`desk-only` here): a client that has a desktop of its own does them there.
+        #[serde(default)]
+        desk: Vec<String>,
     },
     /// The connection refused, then closed: `code` says why (`remoteapi::codes`). For `version`, both versions and
     /// which one to update (`server` or `client`), for the client to offer « Mettre à jour le serveur ».
@@ -69,7 +123,7 @@ pub enum ToClient {
         update: Option<String>,
     },
     /// The answer to the call `id`: `ok` (its value, `null` for none), or `error` (as the IPC gives it: a text for
-    /// most) with `code` when the remote API refused it. An answer in bytes comes in a binary frame instead.
+    /// most) with `code` when the remote API refused it. An answer in bytes comes in binary frames instead.
     Reply {
         id: u64,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -81,6 +135,24 @@ pub enum ToClient {
     },
     /// A message of the channel `channel`, in JSON.
     Channel { channel: u32, data: Value },
+    /// The output of the terminal of `channel` is numbered from `end` on, after a replay of its screen.
+    Mark { channel: u32, end: u64 },
+    /// `bytes` of the terminal of `channel` left its ring before the client could have them: what follows is all
+    /// that is kept.
+    Lost { channel: u32, bytes: u64 },
+    /// The replay of a resume of `channel` is over (`ended`: its program ended; `gone`: no such terminal in the
+    /// session, nothing to resume).
+    Resumed {
+        channel: u32,
+        #[serde(default)]
+        ended: bool,
+        #[serde(default)]
+        gone: bool,
+    },
+    /// The client read too slowly: some output of the terminal of `channel` was not sent. To resume.
+    Gap { channel: u32 },
+    /// The client read too slowly: events of the state were not sent. To read it again whole (`subscribe`).
+    Resync {},
     /// What the host published (`host::HostEvent`).
     Host { event: Value },
     /// A message the server could not take (no call to answer): `code` says why.
@@ -90,10 +162,16 @@ pub enum ToClient {
 /// The kinds of the binary frames: a byte, then the id (8 bytes, big-endian), then the bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Frame {
-    /// The bytes sent on a channel (a terminal's output).
+    /// The bytes sent on a channel outside the numbering (a replay of a screen).
     Channel = 1,
-    /// The answer in bytes to a call (`tauri::ipc::Response`).
+    /// The answer in bytes to a call (`tauri::ipc::Response`), or its last part.
     Reply = 2,
+    /// A terminal's output, numbered: after the id, the end of these bytes (8 bytes, big-endian), then the bytes.
+    Term = 3,
+    /// A part of an answer in bytes past [`MAX_MESSAGE`], before its last ([`Frame::Reply`]).
+    ReplyPart = 4,
+    /// From the client: a part of the raw body of the call of this id, before the call.
+    Body = 5,
 }
 
 /// The length of a binary frame's head.
@@ -108,7 +186,17 @@ pub fn frame(kind: Frame, id: u64, bytes: &[u8]) -> Vec<u8> {
     out
 }
 
-/// A binary frame read back: its kind, its id, its bytes.
+/// A terminal's output on `channel`, its bytes ending at `end`.
+pub fn term_frame(channel: u32, end: u64, bytes: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(FRAME_HEAD + 8 + bytes.len());
+    out.push(Frame::Term as u8);
+    out.extend_from_slice(&u64::from(channel).to_be_bytes());
+    out.extend_from_slice(&end.to_be_bytes());
+    out.extend_from_slice(bytes);
+    out
+}
+
+/// A binary frame read back: its kind, its id, its bytes (for [`Frame::Term`], the end first).
 pub fn read_frame(bytes: &[u8]) -> Option<(Frame, u64, &[u8])> {
     if bytes.len() < FRAME_HEAD {
         return None;
@@ -116,10 +204,41 @@ pub fn read_frame(bytes: &[u8]) -> Option<(Frame, u64, &[u8])> {
     let kind = match bytes[0] {
         1 => Frame::Channel,
         2 => Frame::Reply,
+        3 => Frame::Term,
+        4 => Frame::ReplyPart,
+        5 => Frame::Body,
         _ => return None,
     };
     let id = u64::from_be_bytes(bytes[1..FRAME_HEAD].try_into().ok()?);
     Some((kind, id, &bytes[FRAME_HEAD..]))
+}
+
+/// The end and the bytes of a [`Frame::Term`]'s rest.
+pub fn read_term(rest: &[u8]) -> Option<(u64, &[u8])> {
+    let end = u64::from_be_bytes(rest.get(..8)?.try_into().ok()?);
+    Some((end, &rest[8..]))
+}
+
+/// The frames of an answer in bytes to `id`: parts of [`MAX_MESSAGE`] at most, the last one a [`Frame::Reply`].
+pub fn reply_frames(id: u64, bytes: &[u8]) -> Vec<Vec<u8>> {
+    let piece = MAX_MESSAGE - FRAME_HEAD;
+    if bytes.len() <= piece {
+        return vec![frame(Frame::Reply, id, bytes)];
+    }
+    let pieces: Vec<&[u8]> = bytes.chunks(piece).collect();
+    let last = pieces.len() - 1;
+    pieces
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            let kind = if i == last {
+                Frame::Reply
+            } else {
+                Frame::ReplyPart
+            };
+            frame(kind, id, p)
+        })
+        .collect()
 }
 
 /// The text of a `Reply` whose value `json` is already JSON (Tauri's answer): put in as it is, never parsed again.

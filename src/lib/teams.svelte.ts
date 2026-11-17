@@ -2,7 +2,7 @@
 // read and ask. The backend reads each team every few seconds (an administrator online lets the invitees in) and says
 // when one changed (`teams`), and the list is read again.
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from './transport';
 import { teamSettingsApi, type TeamSettingsView } from './team-settings';
 
 export interface AlarmView {

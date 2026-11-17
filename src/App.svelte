@@ -75,6 +75,7 @@
   import TlsBanner from './components/TlsBanner.svelte';
   import RecoveryBanner from './components/RecoveryBanner.svelte';
   import TeamSettingsBand from './components/team/TeamSettingsBand.svelte';
+  import ConnectionBand from './components/ConnectionBand.svelte';
   import Toasts from './components/Toasts.svelte';
   import Welcome from './components/Welcome.svelte';
   import PaneDrop from './components/panes/PaneDrop.svelte';
@@ -217,8 +218,9 @@
   <TitleBar />
   {#if app.ready}
     <!-- The bands across the window: the files recovered at the start (ESC-469), the certificates not checked (SEC-07),
-         a team’s settings (TS-13). -->
+         a team’s settings (TS-13), the connection to the core lost on the remote API (ESC-495). -->
     <div class="bands">
+      <ConnectionBand />
       <RecoveryBanner />
       <TlsBanner />
       <TeamSettingsBand />
