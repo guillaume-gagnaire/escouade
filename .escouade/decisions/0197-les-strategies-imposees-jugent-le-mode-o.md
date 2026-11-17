@@ -1,9 +1,9 @@
 ---
-number: null
+number: 197
 id: "les-strategies-imposees-jugent-le-mode-o"
 title: "Les stratégies imposées jugent le mode où le harness tourne"
 date: "2026-11-16"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-497"
 pages: ["fenetre/reglages-imposes","harness/comptes"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/reglages-imposes","added":11,"removed":0},{"page":"harness/comptes","added":2,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-17T15:16:48+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
