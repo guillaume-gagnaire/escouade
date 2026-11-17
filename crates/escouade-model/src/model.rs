@@ -94,7 +94,7 @@ pub struct Settings {
     /// (`mcp::install`). A `mcpHarnesses` of before (« <harness> peut piloter Escouade », ESC-50)
     /// is dropped at the load: the one switch says for all (ESC-119).
     pub mcp_enabled: bool,
-    /// « Les agents peuvent répondre aux questions et aux permissions des autres agents » (ESC-423):
+    /// « Les agents peuvent répondre aux demandes des autres agents » (ESC-423):
     /// who among the agents may use `answer_permission` and `answer_question` on another agent.
     /// Nobody by default, for a new installation as for settings saved before it: Claude outside
     /// Escouade (`Caller::External`) always answers.
@@ -1059,7 +1059,7 @@ pub enum PagesOpen {
     System,
 }
 
-/// « Les agents peuvent répondre aux questions et aux permissions des autres agents » (ESC-423).
+/// « Les agents peuvent répondre aux demandes des autres agents » (ESC-423).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum AgentsAnswer {
@@ -2550,6 +2550,11 @@ pub struct PersistedState {
     pub leftover_histories: Vec<String>,
     /// The reviews written by an agent, waiting for the user or published (ESC-66).
     pub pr_reviews: Vec<crate::prreview::PrReview>,
+    /// The agents' asynchronous requests (« À toi », ESC-509): open, answered, and the closed ones
+    /// still kept (`asks::KEPT_DAYS`).
+    pub asks: Vec<crate::asks::Ask>,
+    /// The number of the last request left (`a-<n>`): never given twice.
+    pub ask_seq: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]

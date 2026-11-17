@@ -4640,3 +4640,118 @@ pub fn devpage_list(
         },
     }
 }
+
+// ---------- the box « À toi » (ESC-509): the commands its screen (IN-2) reads and acts by ----------
+
+/// The box: the requests of a project, or of all (`project_id` left out); nothing while the MCP
+/// server is off.
+#[tauri::command(async)]
+pub fn inbox_list(core: CoreState, project_id: Option<String>) -> crate::asks::InboxView {
+    core.inbox_list(project_id.as_deref())
+}
+
+/// A request whole.
+#[tauri::command(async)]
+pub fn inbox_get(core: CoreState, id: String) -> Res<crate::asks::WindowAsk> {
+    core.inbox_get(&id).map_err(err)
+}
+
+/// A part of a request's file (4 MB at most), in base64: its images, its PDF.
+#[tauri::command(async)]
+pub fn inbox_file(
+    core: CoreState,
+    id: String,
+    file: String,
+    offset: Option<u64>,
+    length: Option<u64>,
+) -> Res<crate::asks::InboxChunk> {
+    core.inbox_file(&id, &file, offset.unwrap_or(0), length)
+        .map_err(err)
+}
+
+/// « Ouvrir » or « Afficher dans le dossier » of a request's file.
+#[tauri::command(async)]
+pub fn inbox_open_file(core: CoreState, id: String, file: String, reveal: bool) -> Res<()> {
+    core.inbox_open_file(&id, &file, reveal).map_err(err)
+}
+
+/// The user's answer: it goes to its author 10 seconds later (`inbox_reopen` takes it back).
+#[tauri::command(async)]
+pub fn inbox_answer(
+    core: CoreState,
+    id: String,
+    answer: crate::asks::AnswerIn,
+    files: Option<Vec<AttachedFile>>,
+) -> Res<crate::asks::WindowAsk> {
+    core.inbox_answer(&id, answer, files.unwrap_or_default())
+        .map_err(err)
+}
+
+/// The box closed with the server: what its commands say.
+fn inbox_open(core: &Core) -> Res<()> {
+    if core.inbox_enabled() {
+        Ok(())
+    } else {
+        Err(tr!(
+            "La boîte « À toi » est fermée avec le serveur MCP : allume-le dans Réglages › Agents › Piloter Escouade.",
+            "The “Your turn” box is closed with the MCP server: turn it on in Settings › Agents › Drive Escouade."
+        ))
+    }
+}
+
+/// « Plus tard » until `until` (ms since 1970); left out, it comes back now.
+#[tauri::command(async)]
+pub fn inbox_snooze(
+    core: CoreState,
+    id: String,
+    until: Option<i64>,
+) -> Res<crate::asks::WindowAsk> {
+    inbox_open(&core)?;
+    let a = core.ask_snooze(&id, until).map_err(err)?;
+    core.inbox_get(&a.id).map_err(err)
+}
+
+/// « Laisser <agent> trancher » (`agent`), or taken back (left out).
+#[tauri::command(async)]
+pub fn inbox_delegate(
+    core: CoreState,
+    id: String,
+    agent: Option<String>,
+) -> Res<crate::asks::WindowAsk> {
+    inbox_open(&core)?;
+    let a = core.ask_delegate(&id, agent.as_deref()).map_err(err)?;
+    core.inbox_get(&a.id).map_err(err)
+}
+
+/// « Revenir sur ma réponse »: before its author read it.
+#[tauri::command(async)]
+pub fn inbox_reopen(core: CoreState, id: String) -> Res<crate::asks::WindowAsk> {
+    inbox_open(&core)?;
+    let a = core.ask_reopen(&id).map_err(err)?;
+    core.inbox_get(&a.id).map_err(err)
+}
+
+/// The user saw the request.
+#[tauri::command(async)]
+pub fn inbox_seen(core: CoreState, id: String) -> Res<()> {
+    inbox_open(&core)?;
+    core.ask_seen(&id).map_err(err)
+}
+
+/// What the question before turning the MCP server off lists: the requests that wait.
+#[tauri::command(async)]
+pub fn inbox_closing(core: CoreState) -> crate::asks::InboxClosing {
+    core.inbox_closing()
+}
+
+/// What the box's files weigh, in bytes (shown with the space the app takes, IN-2).
+#[tauri::command(async)]
+pub fn inbox_weight(core: CoreState) -> u64 {
+    core.asks_weight()
+}
+
+/// « Vider les fichiers des demandes closes »: what it freed, in bytes.
+#[tauri::command(async)]
+pub fn inbox_erase_closed_files(core: CoreState) -> u64 {
+    core.asks_erase_closed_files()
+}

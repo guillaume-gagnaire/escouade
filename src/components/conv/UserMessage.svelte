@@ -53,7 +53,7 @@
         </div>
       {/if}
     </div>
-    {#if shown.spoken || waiting || item.queued || item.origin === 'remote' || extra}
+    {#if shown.spoken || waiting || item.queued || item.origin === 'remote' || item.origin === 'ask' || extra}
       <div class="meta">
         {#if shown.spoken}<span class="note aloud" data-said-aloud><Icon name="wave" size={14} />{t('conv.user.saidAloud')}</span>{/if}
         <!-- Sent while the worktree is prepared: the backend takes it once that is over. -->
@@ -61,6 +61,7 @@
         <!-- Sent while Claude worked: the CLI takes it at the turn's next step (after the running tool). -->
         {#if item.queued}<span class="note" use:tip={t('conv.user.queuedHint', { engine: speakerOf(engine) })}>{t('conv.user.queued')}</span
           >{/if}
+        {#if item.origin === 'ask'}<span class="note" data-ask-answer use:tip={t('conv.user.askHint')}>{t('conv.user.ask')}</span>{/if}
         {#if item.origin === 'remote'}<span class="note" use:tip={t('conv.user.remoteHint')}>{t('conv.user.remote')}</span>{/if}
         {@render extra?.()}
       </div>

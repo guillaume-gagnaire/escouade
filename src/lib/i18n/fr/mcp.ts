@@ -11,9 +11,9 @@ export default {
     enableDesc:
       'Les agents d’Escouade, et chaque harness installé lancé hors d’Escouade (Claude Code, Codex, OpenCode, Copilot CLI, dans un terminal ou leur app), lisent tes projets, agents et tickets, et peuvent créer des tickets ou lancer des agents, ce qui dépense du quota, valider des tickets (tests, fusion, push, pull request) ou en supprimer. Un agent déjà lancé reçoit les outils au prochain démarrage de son process.',
     /** ESC-423 (audit SEC-03): who among the agents answers another agent's permissions and questions. */
-    answer: 'Les agents peuvent répondre aux questions et aux permissions des autres agents',
+    answer: 'Les agents peuvent répondre aux demandes des autres agents',
     answerDesc:
-      'Par answer_permission et answer_question. « Piloter Escouade » ne les donne pas : par défaut, seul toi (et Claude hors d’Escouade) réponds à la demande d’un agent.',
+      'Par answer_permission et answer_question, et les demandes de la boîte « À toi » comprises, une à une, quand tu les laisses au chef d’escouade (answer_ask). « Piloter Escouade » ne les donne pas : par défaut, seul toi (et Claude hors d’Escouade, pour les questions et les permissions) peux répondre aux demandes d’un agent.',
     answerNobody: 'Personne',
     answerChef: 'Seulement le chef d’escouade',
     answerAll: 'Tous les agents',
@@ -115,6 +115,15 @@ export default {
     dismissBlock: 'Écarter un blocage',
     deleteTicket: 'Supprimer un ticket',
     waitTicket: 'Attendre des tickets',
+    // The box « À toi » (ESC-509).
+    askUser: 'Déposer une demande dans « À toi »',
+    updateAsk: 'Mettre à jour une demande',
+    withdrawAsk: 'Retirer une demande',
+    listAsks: 'Lister les demandes de « À toi »',
+    getAsk: 'Lire une demande',
+    waitAsk: 'Attendre une réponse',
+    getAskFile: 'Lire un fichier d’une demande',
+    answerAsk: 'Répondre à une demande laissée',
   },
   progress: {
     /** What a status line an agent reported (`report_progress`) is, for assistive technologies; the line is the agent's own words. */

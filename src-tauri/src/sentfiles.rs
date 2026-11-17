@@ -381,7 +381,7 @@ fn not_run(lang: crate::i18n::Lang, name: &str) -> anyhow::Error {
 }
 
 /// `path` opened with its application, or shown in its folder (`reveal`).
-fn open_or_reveal(path: PathBuf, reveal: bool) -> anyhow::Result<()> {
+pub(crate) fn open_or_reveal(path: PathBuf, reveal: bool) -> anyhow::Result<()> {
     if reveal {
         crate::fsedit::reveal(crate::fsedit::Reveal::Select(path))
     } else {

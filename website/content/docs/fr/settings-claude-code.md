@@ -191,7 +191,7 @@ Interrupteur allumé, la liste dessous donne chaque déclaration :
 > [!WARNING]
 > Le jeton est écrit en clair dans chacun de ces fichiers. Désactiver change le jeton.
 
-### Les agents peuvent répondre aux questions et aux permissions des autres agents
+### Les agents peuvent répondre aux demandes des autres agents
 
 « Piloter Escouade » ne donne pas aux agents `answer_permission` ni `answer_question`, qui répondent à la demande d’un autre agent : ce choix-là le fait, en trois valeurs. « Personne » (le défaut, pour une nouvelle installation comme après une mise à jour) : seuls toi et Claude hors d’Escouade répondez. « Seulement le chef d’escouade » : l’agent choisi pour chaque projet dans Réglages › Projets › Équipe › « Chef d’escouade » (aucun outil du serveur ne le désigne). « Tous les agents », avec un avertissement : ça retire l’humain de la boucle. Voir [le serveur MCP](mcp).
 

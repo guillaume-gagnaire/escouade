@@ -1705,8 +1705,11 @@ impl<R: Runtime> Core<R> {
                 let mut held: HashMap<(EngineId, bool, Option<String>), bool> = HashMap::new();
                 // « Pause quand la CI de la cible est rouge » (ESC-63): the autopilot's alone.
                 let red = self.red_target_holds(&p);
+                // A ticket that waits for a request of the box « À toi » not answered yet (ESC-509): the
+                // autopilot leaves it, as one that comes after another not done.
+                let asked = self.tickets_waiting_asks();
                 board::to_start(&tickets, &p.id, &p.board, |t| {
-                    if red && !t.forced {
+                    if (red || asked.contains(&t.id)) && !t.forced {
                         return true;
                     }
                     let e = engine_of(t);

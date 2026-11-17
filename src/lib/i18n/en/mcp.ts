@@ -7,9 +7,9 @@ export default defineZone('mcp', {
     enable: 'Agents can drive Escouade',
     enableDesc:
       'Escouade’s agents, and every harness installed started outside Escouade (Claude Code, Codex, OpenCode, Copilot CLI, in a terminal or their app), read your projects, agents and tickets, and can create tickets or start agents, which uses quota, approve tickets (tests, merge, push, pull request) or delete them. An agent already running gets the tools the next time its process starts.',
-    answer: 'Agents can answer the other agents’ questions and permissions',
+    answer: 'Agents can answer the other agents’ requests',
     answerDesc:
-      'Through answer_permission and answer_question. “Drive Escouade” does not give them: by default, only you (and Claude outside Escouade) answer an agent’s request.',
+      'Through answer_permission and answer_question, and the requests of the “Your turn” box too, one at a time, when you leave them to the squad lead (answer_ask). “Drive Escouade” does not give them: by default, only you (and Claude outside Escouade, for the questions and permissions) answer an agent’s request.',
     answerNobody: 'Nobody',
     answerChef: 'Only the squad lead',
     answerAll: 'Every agent',
@@ -103,6 +103,14 @@ export default defineZone('mcp', {
     dismissBlock: 'Dismiss a block',
     deleteTicket: 'Delete a ticket',
     waitTicket: 'Wait for tickets',
+    askUser: 'Leave a request in “Your turn”',
+    updateAsk: 'Update a request',
+    withdrawAsk: 'Withdraw a request',
+    listAsks: 'List the “Your turn” requests',
+    getAsk: 'Read a request',
+    waitAsk: 'Wait for an answer',
+    getAskFile: 'Read a file of a request',
+    answerAsk: 'Answer a request left to you',
   },
   progress: {
     label: 'What the agent says it is doing',

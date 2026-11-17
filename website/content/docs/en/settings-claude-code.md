@@ -191,7 +191,7 @@ With the switch on, the list below gives each declaration:
 > [!WARNING]
 > The token is written in plain text in each of these files. Turning it off changes the token.
 
-### Agents can answer the other agents’ questions and permissions
+### Agents can answer the other agents’ requests
 
 “Drive Escouade” does not give the agents `answer_permission` nor `answer_question`, which answer another agent’s request: this choice does, in three values. “Nobody” (the default, for a new installation as after an update): only you and Claude outside Escouade answer. “Only the squad lead”: the agent chosen for each project in Settings › Projects › Team › “Squad lead” (no tool of the server names it). “Every agent”, with a warning: it takes the human out of the loop. See [the MCP server](mcp).
 

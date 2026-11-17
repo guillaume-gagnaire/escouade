@@ -15,6 +15,9 @@ mod agentprs_tests;
 mod agy_tests;
 #[cfg(test)]
 mod agy_tui_tests;
+mod asks;
+#[cfg(test)]
+mod asks_tests;
 mod attach;
 mod attachfiles;
 #[cfg(test)]
@@ -789,6 +792,18 @@ pub fn run() {
                 commands::check_authorities,
                 commands::shared_trust,
                 commands::memory_list,
+                commands::inbox_list,
+                commands::inbox_get,
+                commands::inbox_file,
+                commands::inbox_open_file,
+                commands::inbox_answer,
+                commands::inbox_snooze,
+                commands::inbox_delegate,
+                commands::inbox_reopen,
+                commands::inbox_seen,
+                commands::inbox_closing,
+                commands::inbox_weight,
+                commands::inbox_erase_closed_files,
                 commands::memory_forget,
                 commands::claude_memory_offer,
                 commands::claude_memory_take,

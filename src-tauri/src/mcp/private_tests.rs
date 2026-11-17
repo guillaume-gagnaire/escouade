@@ -360,7 +360,17 @@ fn sorted(mut ids: Vec<&str>) -> Vec<String> {
 #[tokio::test]
 async fn every_tool_that_names_something_is_in_the_tests_of_the_private_projects() {
     // A tool added to the server is named here, or said to name nothing.
+    // The tools of the box name a request (their own private tests: `asks_tests`); `ask_user` and
+    // `list_asks` a project too.
     let names_nothing = [
+        "answer_ask",
+        "ask_user",
+        "get_ask",
+        "get_ask_file",
+        "list_asks",
+        "update_ask",
+        "wait_ask",
+        "withdraw_ask",
         "list_projects",
         "get_usage",
         "report_progress",

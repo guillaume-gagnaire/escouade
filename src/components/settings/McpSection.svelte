@@ -23,7 +23,7 @@
   const on = $derived(app.settings.mcpEnabled);
 
   /**
-   * « Les agents peuvent répondre aux questions et aux permissions des autres agents » (ESC-423, audit SEC-03): saved with
+   * « Les agents peuvent répondre aux demandes des autres agents » (ESC-423, audit SEC-03): saved with
    * the window's draft. Nobody by default, settings saved before it too.
    */
   const answerOptions = $derived(

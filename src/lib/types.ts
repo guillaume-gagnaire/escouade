@@ -86,7 +86,7 @@ export interface Settings {
   engineOrder?: EngineId[];
   /** « Les agents peuvent piloter Escouade »: the MCP server runs, given to the agents and declared in each active account of every harness installed. Changed by `mcp_set_enabled`, not by the settings modal's draft. */
   mcpEnabled: boolean;
-  /** « Les agents peuvent répondre aux questions et aux permissions des autres agents » (ESC-423): nobody by default. */
+  /** « Les agents peuvent répondre aux demandes des autres agents » (ESC-423): nobody by default. */
   agentsAnswer?: AgentsAnswer;
   /** The port of the MCP server on 127.0.0.1 (0 until its first start): the backend's own. */
   mcpPort: number;
@@ -2342,8 +2342,8 @@ export interface UserItem extends Base {
   files?: string[];
   ts: number;
   queued: boolean;
-  /** "remote": sent from claude.ai / the Claude app (Remote Control). */
-  origin?: 'remote' | 'handover';
+  /** "remote": sent from claude.ai / the Claude app (Remote Control); "ask": the answer to a request of the box « À toi » (ESC-509). */
+  origin?: 'remote' | 'handover' | 'ask';
 }
 export interface TextItem extends Base {
   kind: 'text';
@@ -2687,6 +2687,8 @@ export type UiEvent =
   | { type: 'agentRemoved'; id: string; projectId: string }
   | { type: 'conv'; agentId: string; ops: ConvOp[] }
   | { type: 'memory'; projectId: string }
+  /** The box « À toi » changed (ESC-509): `inbox_list` reads it again. */
+  | { type: 'inbox'; projectId: string }
   | { type: 'vectorsDownload'; done: number; total: number }
   | { type: 'git'; projectId: string; git: GitInfo }
   | { type: 'usage'; usage: Usage }

@@ -14,6 +14,9 @@ pub(crate) mod activity;
 mod agents_tests;
 #[cfg(test)]
 mod answer_rights_tests;
+mod asks;
+#[cfg(test)]
+mod asks_tests;
 mod background;
 #[cfg(test)]
 mod background_tests;

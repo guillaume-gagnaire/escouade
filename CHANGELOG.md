@@ -4,6 +4,10 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [Non publié]
+
+- Tes agents peuvent te laisser ce qu’ils attendent de toi sans s’arrêter (un choix entre leurs rendus, un feu vert, une réponse, un essai à faire), avec leurs images et leurs PDF, par le serveur MCP : ta réponse leur revient en message, et un ticket peut l’attendre. L’écran de la boîte « À toi » suit.
+
 ## [2.2.3] — 2026-11-17
 
 - Plugins en développement : « Charger un dossier » prend le module d’un plugin Rust là où `escouade-plugin build` l’écrit, sans fichier à copier, et le recharge à chaque nouvelle construction. Un dossier pas encore construit dit la commande à lancer au lieu d’un chemin introuvable.

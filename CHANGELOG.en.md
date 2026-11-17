@@ -4,6 +4,10 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
+## [Unreleased]
+
+- Your agents can leave you what they wait for from you without stopping (a choice between their renders, a go-ahead, an answer, a test to run), with their images and PDFs, through the MCP server: your answer comes back to them as a message, and a ticket can wait for it. The screen of the “Your turn” box follows.
+
 ## [2.2.3] — 2026-11-17
 
 - Plugins in development: “Load a folder” takes a Rust plugin’s module where `escouade-plugin build` writes it, with no file to copy, and loads it again at each new build. A folder not built yet says the command to run instead of a path that cannot be found.

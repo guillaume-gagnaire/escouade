@@ -71,14 +71,22 @@ const ESCOUADE_TOOLS: Record<string, Key> = {
   dismiss_block: 'mcp.tools.dismissBlock',
   delete_ticket: 'mcp.tools.deleteTicket',
   wait_ticket: 'mcp.tools.waitTicket',
+  ask_user: 'mcp.tools.askUser',
+  update_ask: 'mcp.tools.updateAsk',
+  withdraw_ask: 'mcp.tools.withdrawAsk',
+  list_asks: 'mcp.tools.listAsks',
+  get_ask: 'mcp.tools.getAsk',
+  wait_ask: 'mcp.tools.waitAsk',
+  get_ask_file: 'mcp.tools.getAskFile',
+  answer_ask: 'mcp.tools.answerAsk',
 };
 
 /**
  * What a tool of Escouade is about, first found first (`ESCOUADE_MAIN_ARGS` of the backend's `tool_arg` reads them in
- * the same order): the ticket it makes, the ticket or the agent it acts on, what an agent it starts is told, the line an
+ * the same order): the ticket it makes, the request of the box « À toi » it reads or changes (`ask`), the ticket or the agent it acts on, what an agent it starts is told, the line an
  * agent reports, the folder it acts on, the project it reads. A folder made (`create_folder`) is its name.
  */
-const ESCOUADE_MAIN_ARGS = ['title', 'ticket', 'agent', 'message', 'line', 'folder', 'project'];
+const ESCOUADE_MAIN_ARGS = ['title', 'ask', 'ticket', 'agent', 'message', 'line', 'folder', 'project'];
 
 /** The most characters of a value the permission card of a tool of Escouade shows. */
 export const ARG_MAX = 2000;

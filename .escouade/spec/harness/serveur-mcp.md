@@ -2,8 +2,8 @@
 title: "Serveur MCP"
 subject: "Harness"
 sources: ["docs/SPEC.md","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","docs/security/audit-2026-11/rapport.md (branche ticket/esc-418, fiche SEC-03)","https://github.com/guillaume-gagnaire/escouade/pull/44"]
-tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422","ESC-511"]
-decisions: [153,"un-agent-peut-demander-la-suppression-de"]
+tickets: ["ESC-13","ESC-14","ESC-50","ESC-90","ESC-91","ESC-92","ESC-98","ESC-102","ESC-103","ESC-107","ESC-108","ESC-119","ESC-128","ESC-141","ESC-157","ESC-198","ESC-256","ESC-68","ESC-423","ESC-422","ESC-509","ESC-511"]
+decisions: [153,"un-agent-peut-demander-la-suppression-de","la-boite-a-toi-les-demandes-asynchrones"]
 compared: null
 ---
 
@@ -274,3 +274,14 @@ Après les garde-fous de *Jetons et garde-fous* (`Host`, `Origin`, jeton, chemin
 - toute requête de plus de 32 Mio, déclarée ou non → 413. Le « 32 Mio au plus » des images et fichiers ci-dessus ne vaut donc que pour ces deux outils.
 
 Un corps qui n'est pas du JSON est laissé à la bibliothèque, sous le même plafond.
+
+## La boîte « À toi » (ESC-509)
+
+Huit outils servent les demandes asynchrones des agents (voir *La boîte « À toi »*) :
+
+- **Déposer, mettre à jour, retirer, lister, lire, attendre**, ouverts aux agents et à Claude hors Escouade : `ask_user` (une demande et ses fichiers, sur elle ou sur ses options), `update_ask` et `withdraw_ask` (par son auteur seul, tant qu'elle attend), `list_asks` (les siennes par défaut, ouvertes par défaut ; `delegated` pour celles que l'utilisateur lui a laissées), `get_ask` (la demande entière et sa réponse ; lue par son auteur une fois répondue, elle est marquée lue), `wait_ask` (240 s au plus), `get_ask_file` (une image en image, un autre fichier par morceaux ; le chemin de la copie à Claude hors Escouade seulement).
+- **Répondre**, `answer_ask` : à l'agent à qui **l'utilisateur** a laissé cette demande, seulement, tant que « Les agents peuvent répondre aux demandes des autres agents » le permet ; jamais sur sa propre demande, un feu vert ni une tâche ; jamais Claude hors Escouade (c'est la fenêtre qui répond). Le refus dit pourquoi et où changer le réglage.
+- Le réglage « Les agents peuvent répondre aux questions et aux permissions des autres agents » s'appelle désormais **« Les agents peuvent répondre aux demandes des autres agents »** (Réglages › Agents › Piloter Escouade) : il couvre aussi les demandes de la boîte, une à une, quand l'utilisateur les laisse à un agent. Ses valeurs et son défaut (« Personne ») ne changent pas.
+- Ce qu'un autre agent que l'auteur lit d'une demande est marqué comme une donnée de tiers. Une demande d'un projet privé est introuvable pour les autres, mot pour mot comme une demande qui n'existe pas. Le journal de l'activité garde le projet, la sorte et le numéro, jamais un texte ni un chemin.
+- Serveur éteint, ces outils n'existent pas ; les demandes ouvertes sont gardées, figées, jusqu'au rallumage.
+- Le nom d'un outil ne contient jamais « accepter » ; `answer_ask` est, avec `answer_permission` et `answer_question`, le seul qui porte « answer ».

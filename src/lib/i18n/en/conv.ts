@@ -116,6 +116,8 @@ export default defineZone('conv', {
     queuedHint: '{engine} takes it into account at its next step',
     remote: 'from claude.ai',
     remoteHint: 'Sent from claude.ai or the Claude app (remote control)',
+    ask: 'Your answer',
+    askHint: 'Your answer to a request of the “Your turn” box, given back to the agent',
     saidAloud: 'Said aloud',
   },
 

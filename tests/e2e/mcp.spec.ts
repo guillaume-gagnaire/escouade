@@ -123,6 +123,86 @@ test('Claude drives Escouade: a ticket created through MCP arrives in the Kanban
   await expect(page.getByText('Ticket venu de Claude')).toBeVisible();
 });
 
+/** A command of the window, as its screen calls it: `ok` or `err`. */
+async function invoke<T>(page: import('@playwright/test').Page, cmd: string, args: Record<string, unknown> = {}) {
+  return page.evaluate(
+    async ([cmd, args]) => {
+      const t = (window as unknown as { __TAURI_INTERNALS__: { invoke(c: string, a: unknown): Promise<unknown> } }).__TAURI_INTERNALS__;
+      try {
+        return { ok: await t.invoke(cmd as string, args) };
+      } catch (err) {
+        return { err: String(err) };
+      }
+    },
+    [cmd, args] as const,
+  ) as Promise<{ ok?: T; err?: string }>;
+}
+
+interface InboxAsk {
+  id: string;
+  kind: string;
+  state: string;
+  title: string;
+  projectName: string;
+  files: { file: string; name: string; kind: string; mediaType: string; option: string | null }[];
+}
+
+// The box « À toi » (ESC-509): an agent leaves a choice of three options, each with its renders, and a PDF, through the
+// server; it goes on; the user answers (here by the window's command, the screen being IN-2's); the answer comes back to
+// the agent, marked as the user's, and its files outlive the folder they came from.
+test('an agent leaves a choice with its images and a PDF, goes on working, and the answer comes back to it', async ({ app }) => {
+  const { page } = app;
+  // The server on before the agent: its process starts with the tools.
+  await addProject(page, app.repo, { firstAgent: false });
+  await page.getByRole('button', { name: 'Réglages (Ctrl+,)' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Réglages' });
+  await openSettingsPage(dialog, 'Agents');
+  await dialog.getByRole('switch', { name: SWITCH }).click();
+  await expect(row(dialog, 'Claude · compte Principal')).toContainText('Déclaré');
+  await closeSettings(dialog);
+  await page.getByRole('button', { name: 'Nouvel agent', exact: true }).first().click();
+
+  await send(page, '[demande] rends les trois directions du tableau de bord');
+  await expect(page.getByText('Demande a-1 déposée (7 fichiers), je continue mon travail.')).toBeVisible({ timeout: 30_000 });
+
+  const listed = await invoke<{ enabled: boolean; open: number; asks: InboxAsk[] }>(page, 'inbox_list');
+  expect(listed.err).toBeUndefined();
+  expect(listed.ok!.enabled).toBe(true);
+  expect(listed.ok!.open).toBe(1);
+  const ask = listed.ok!.asks[0];
+  expect(ask).toMatchObject({ id: 'a-1', kind: 'choice', state: 'open', title: 'Choisis la direction du tableau de bord' });
+  expect(ask.files.map((f) => [f.kind, f.option])).toEqual([
+    ['pdf', null],
+    ['image', 'a'],
+    ['image', 'a'],
+    ['image', 'b'],
+    ['image', 'b'],
+    ['image', 'c'],
+    ['image', 'c'],
+  ]);
+  // Copied in the data folder: the agent's folder of renders can go.
+  fs.rmSync(path.join(app.repo, 'design'), { recursive: true, force: true });
+  const pdf = await invoke<{ mediaType: string; size: number; data: string }>(page, 'inbox_file', { id: 'a-1', file: ask.files[0].file });
+  expect(pdf.err).toBeUndefined();
+  expect(pdf.ok!.mediaType).toBe('application/pdf');
+  expect(Buffer.from(pdf.ok!.data, 'base64').subarray(0, 5).toString()).toBe('%PDF-');
+  // A path of the window's is never read.
+  expect((await invoke(page, 'inbox_file', { id: 'a-1', file: '../../state.json' })).err).toBeTruthy();
+
+  const answered = await invoke<InboxAsk>(page, 'inbox_answer', { id: 'a-1', answer: { options: ['b'], note: 'garde la courbe de A' } });
+  expect(answered.err).toBeUndefined();
+  expect(answered.ok!.state).toBe('answered');
+  // 10 seconds to take it back, then it goes to the agent, which reads it in a turn of its own.
+  await expect(page.getByText('Réponse reçue pour a-1 : B')).toBeVisible({ timeout: 40_000 });
+  await expect(page.locator('[data-ask-answer]').first()).toHaveText('Réponse de l’utilisateur');
+  const after = await invoke<InboxAsk>(page, 'inbox_get', { id: 'a-1' });
+  expect(after.ok!.state).toBe('read');
+  // Nothing of the request in the app's log.
+  const log = fs.readFileSync(path.join(app.data, 'app.log'), 'utf8');
+  expect(log).toContain('ask a-1 deposited');
+  expect(log).not.toContain('tableau de bord');
+});
+
 test('turning Claude’s control of Escouade off takes it out of Claude Code and changes the token', async ({ app }) => {
   const { page } = app;
   await addProject(page, app.repo, { firstAgent: false });

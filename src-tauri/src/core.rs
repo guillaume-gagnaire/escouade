@@ -974,6 +974,8 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) leftover_histories: Mutex<Vec<String>>,
     /// The reviews written by an agent (ESC-66), one per pull request.
     pub(crate) pr_reviews: RwLock<Vec<crate::prreview::PrReview>>,
+    /// The agents' asynchronous requests (« À toi », ESC-509): `asks`.
+    pub(crate) asks: Mutex<crate::asks::AskBox>,
     /// Serializes agent creation so that concurrent creations get distinct names.
     create_lock: tokio::sync::Mutex<()>,
     conv_buffer: Mutex<HashMap<String, Vec<ConvOp>>>,
@@ -1912,6 +1914,10 @@ impl<R: Runtime> Core<R> {
         // they can be now.
         let mut leftover = std::mem::take(&mut state.leftover_histories);
         let pr_reviews = std::mem::take(&mut state.pr_reviews);
+        let asks = crate::asks::AskBox {
+            list: std::mem::take(&mut state.asks),
+            seq: state.ask_seq,
+        };
         closed::retry_leftovers(&data, &mut leftover);
         // The folder of the closed projects is read here, once: the index (`closed_index`) keeps
         // what the app needs of it from now on.
@@ -2137,6 +2143,7 @@ impl<R: Runtime> Core<R> {
             closed_index: Mutex::new(closed_index),
             leftover_histories: Mutex::new(leftover),
             pr_reviews: RwLock::new(pr_reviews),
+            asks: Mutex::new(asks),
             create_lock: tokio::sync::Mutex::new(()),
             conv_buffer: Mutex::default(),
             conv_flush: tokio::sync::Notify::new(),
@@ -2459,6 +2466,8 @@ impl<R: Runtime> Core<R> {
     pub fn start(self: &Arc<Self>, git_rx: mpsc::UnboundedReceiver<String>) {
         let projects = self.projects.read().clone();
         self.tell_started();
+        // The box « À toi » as the stop left it: what came due meanwhile (ESC-509).
+        self.asks_sweep();
         // The plugins that decide run before the first permission asked (PLG-8).
         crate::plugins::decide::warm(&self.plugins, &self.plugin_runtime);
         self.telemetry.track(self.started_event());
@@ -2564,6 +2573,10 @@ impl<R: Runtime> Core<R> {
                 c.pause_tick();
                 // A failed sync of an imported ticket, once its wait is over.
                 c.retry_due_syncs();
+                // The box « À toi »: requests back from « Plus tard », past their date or taken out, and
+                // answers whose 10 seconds were cut by a stop (ESC-509).
+                c.asks_sweep();
+                c.deliver_answers().await;
             }
         });
         // The pull requests of the tickets « En revue » (ESC-59), without a webhook.
@@ -2637,6 +2650,10 @@ impl<R: Runtime> Core<R> {
         let pr_reviews = crate::prreview::kept_reviews(&self.pr_reviews.read(), |id| {
             projects.iter().any(|p| p.id == id)
         });
+        let (asks, ask_seq) = {
+            let b = self.asks.lock();
+            (b.list.clone(), b.seq)
+        };
         PersistedState {
             projects,
             agents,
@@ -2648,6 +2665,8 @@ impl<R: Runtime> Core<R> {
             pause,
             leftover_histories,
             pr_reviews,
+            asks,
+            ask_seq,
         }
     }
 
@@ -5492,6 +5511,23 @@ impl<R: Runtime> Core<R> {
     pub(crate) async fn send_by_app(self: &Arc<Self>, id: &str, text: String) -> Result<()> {
         self.send(id, None, text, Vec::new(), Vec::new(), false, false, None)
             .await
+    }
+
+    /// The answer to a request of the box « À toi » (ESC-509), to its author: the conversation shows it as
+    /// such (`origin`: "ask"); it wakes the agent at rest, and reaches it during its turn as a message
+    /// typed then does. Never naming the agent.
+    pub(crate) async fn send_ask_answer(self: &Arc<Self>, id: &str, text: String) -> Result<()> {
+        self.send(
+            id,
+            None,
+            text,
+            Vec::new(),
+            Vec::new(),
+            false,
+            false,
+            Some("ask"),
+        )
+        .await
     }
 
     /// The handover file (`handover`), the first message of the agent on the harness it goes on

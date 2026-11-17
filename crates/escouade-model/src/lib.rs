@@ -11,6 +11,7 @@ extern crate escouade_plugin_cli;
 
 pub mod accounts;
 pub mod agentgroups;
+pub mod asks;
 pub mod attachfiles;
 pub mod backups;
 pub mod branchci;

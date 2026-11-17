@@ -30,9 +30,11 @@ use tauri::test::{mock_app, MockRuntime};
 /// permission.
 pub(super) const EXPOSED: &[&str] = &[
     "add_document",
+    "answer_ask",
     "answer_permission",
     "answer_question",
     "approve_ticket",
+    "ask_user",
     "create_agent",
     "create_folder",
     "create_ticket",
@@ -42,6 +44,8 @@ pub(super) const EXPOSED: &[&str] = &[
     "dismiss_block",
     "forget_memory",
     "get_agent_summary",
+    "get_ask",
+    "get_ask_file",
     "get_background_output",
     "get_board",
     "get_docs_to_share",
@@ -53,6 +57,7 @@ pub(super) const EXPOSED: &[&str] = &[
     "get_usage",
     "get_workflow",
     "list_agents",
+    "list_asks",
     "list_background_work",
     "list_decisions",
     "list_documents",
@@ -84,9 +89,12 @@ pub(super) const EXPOSED: &[&str] = &[
     "start_ticket",
     "stop_agent",
     "stop_background_work",
+    "update_ask",
     "update_folder",
     "update_ticket",
+    "wait_ask",
     "wait_ticket",
+    "withdraw_ask",
     "write_memory",
     "write_spec_page",
 ];
@@ -94,6 +102,8 @@ pub(super) const EXPOSED: &[&str] = &[
 /// Those of `EXPOSED` that only read.
 pub(super) const READING: &[&str] = &[
     "get_agent_summary",
+    "get_ask",
+    "get_ask_file",
     "get_background_output",
     "get_board",
     "get_docs_to_share",
@@ -105,6 +115,7 @@ pub(super) const READING: &[&str] = &[
     "get_usage",
     "get_workflow",
     "list_agents",
+    "list_asks",
     "list_background_work",
     "list_decisions",
     "list_documents",
@@ -120,15 +131,18 @@ pub(super) const READING: &[&str] = &[
     "search_documents",
     "search_memory",
     "search_spec",
+    "wait_ask",
     "wait_ticket",
 ];
 
 /// Those that act, under the guardrails of the window and the autopilot.
 pub(super) const ACTING: &[&str] = &[
     "add_document",
+    "answer_ask",
     "answer_permission",
     "answer_question",
     "approve_ticket",
+    "ask_user",
     "create_agent",
     "create_folder",
     "create_ticket",
@@ -150,8 +164,10 @@ pub(super) const ACTING: &[&str] = &[
     "start_ticket",
     "stop_agent",
     "stop_background_work",
+    "update_ask",
     "update_folder",
     "update_ticket",
+    "withdraw_ask",
     "write_memory",
     "write_spec_page",
 ];
@@ -162,6 +178,8 @@ pub(super) const ANSWERING: &[&str] = &["answer_permission", "answer_question"];
 /// The flow tools named for what they do, as the window's buttons are: (tool, the word of
 /// `FORBIDDEN` it holds).
 const NAMED_FOR_IT: &[(&str, &str)] = &[
+    // The box « À toi »: a request the user left to the caller, and no other (ESC-509).
+    ("answer_ask", "answer"),
     ("approve_ticket", "approve"),
     ("delete_agent", "delete"),
     ("delete_folder", "delete"),

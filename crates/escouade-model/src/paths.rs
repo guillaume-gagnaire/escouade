@@ -527,6 +527,23 @@ impl DataDir {
         self.ticket_dir(ticket_id).join(TICKET_FILES)
     }
 
+    /// The files of the agents' asynchronous requests (« À toi », docs/INBOX.md § 4), a folder each.
+    pub fn asks(&self) -> PathBuf {
+        self.0.join("asks")
+    }
+
+    /// The folder of a request's files (`files/<uniq>/<name>` in it): it outlives its agent's
+    /// worktree. An id is `a-<n>`: one of a hand-edited state that is not never names the folder
+    /// of all the requests, nor one above it.
+    pub fn ask_dir(&self, ask_id: &str) -> PathBuf {
+        let plain = !ask_id.is_empty()
+            && !ask_id.starts_with('.')
+            && ask_id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+        self.asks().join(if plain { ask_id } else { "_" })
+    }
+
     /// The files joined to messages, a folder each for what owns them: an agent, or the drafts of
     /// the tickets' forms (`drafts_files`).
     pub fn attachments(&self) -> PathBuf {

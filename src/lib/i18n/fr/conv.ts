@@ -144,6 +144,9 @@ export default {
     queuedHint: '{engine} en tient compte dès sa prochaine étape',
     remote: 'depuis claude.ai',
     remoteHint: 'Envoyé depuis claude.ai ou l’app Claude (remote control)',
+    /** The answer to a request of the box « À toi » (ESC-509), given back to its agent. */
+    ask: 'Réponse de l’utilisateur',
+    askHint: 'Ta réponse à une demande de la boîte « À toi », rendue à l’agent',
     saidAloud: 'Dit à voix haute',
   },
 

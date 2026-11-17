@@ -153,6 +153,12 @@ pub enum UiEvent {
         agent_id: String,
         ops: Vec<ConvOp>,
     },
+    /// The box « À toi » changed (ESC-509): a request of this project left, changed, answered or closed. The
+    /// window reads it again (`inbox_list`).
+    #[serde(rename_all = "camelCase")]
+    Inbox {
+        project_id: String,
+    },
     /// A project's shared memory changed (ESC-255): written or forgotten through the server or the window.
     #[serde(rename_all = "camelCase")]
     Memory {
