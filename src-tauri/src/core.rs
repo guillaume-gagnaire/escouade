@@ -1054,8 +1054,11 @@ pub struct Core<R: Runtime = Wry> {
     pub(crate) claude_accounts_lock: Mutex<()>,
     /// The accounts of the external ticket systems (`integrations.json`), with their secrets.
     pub accounts: RwLock<integrations::Accounts>,
-    /// Where the accounts' secrets are kept: the system's keychain (memory in tests).
+    /// Where the secrets are kept: the system's keychain (memory in tests), and the file the user chose for the
+    /// plugins' secrets where there is none (`kept`, ESC-499), read first.
     pub(crate) secrets: Arc<dyn integrations::secrets::SecretStore>,
+    /// The same store, with what the file holds and the gestures on it (Réglages › Plugins, a plugin's settings).
+    pub(crate) kept: Arc<integrations::kept::Kept>,
     /// Where the Trello and GitHub APIs are.
     pub bases: RwLock<integrations::Bases>,
     /// The GitHub CLI's token, once asked for.
@@ -1979,7 +1982,11 @@ impl<R: Runtime> Core<R> {
                 )
             })
             .collect();
-        let secrets = integrations::secrets::store_for(&data);
+        let kept = Arc::new(integrations::kept::Kept::new(
+            integrations::secrets::store_for(&data),
+            &data,
+        ));
+        let secrets: Arc<dyn integrations::secrets::SecretStore> = kept.clone();
         let accounts = integrations::secrets::load_accounts(
             &data,
             &*secrets,
@@ -2166,6 +2173,7 @@ impl<R: Runtime> Core<R> {
             claude_accounts_lock: Mutex::default(),
             accounts: RwLock::new(accounts),
             secrets,
+            kept,
             bases: RwLock::new(integrations::Bases::from_env()),
             gh_token: Mutex::default(),
             forges: RwLock::new(crate::forge::Registry::standard()),

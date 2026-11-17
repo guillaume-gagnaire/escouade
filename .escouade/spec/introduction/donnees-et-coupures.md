@@ -2,7 +2,7 @@
 title: "Données locales et coupures"
 subject: "introduction"
 sources: ["Ticket ESC-469 (perte de state.json le 2026-11-15)","crates/escouade-plugin-cli/src/paths.rs","crates/escouade-model/src/backups.rs","src-tauri/src/conv.rs","src-tauri/src/core.rs","src/components/RecoveryBanner.svelte","website/content/docs/fr/data.md"]
-tickets: ["ESC-469"]
+tickets: ["ESC-469","ESC-499"]
 decisions: []
 compared: null
 ---
@@ -54,3 +54,5 @@ Aucun : l'écriture forcée, les copies et la reprise ne se coupent pas.
 - Les autres fichiers (historiques des projets fermés, mémoire, workflows, file de synchronisation…) sont écrits pour tenir mais n'ont pas de copies.
 - Le coût n'est mesuré que sur un disque NVMe ; un disque dur lent coûterait davantage par sauvegarde de l'état.
 - Le remplacement write-through refusé par Windows (fichier tenu ouvert par un autre programme sans le droit de le remplacer) retombe sur le renommage ordinaire : les données sont sur le disque, le renommage attend la prochaine écriture du système.
+
+- **`plugin-secrets.json`** (ESC-499) : les secrets des plugins que l'utilisateur a choisi de garder dans un fichier, sur un poste sans trousseau. Il est écrit par le même chemin atomique, lisible de son seul propriétaire dès sa création, et n'est jamais dans les copies (`backups::FILES` ne le liste pas). S'il est illisible au démarrage, il est mis de côté (`plugin-secrets.unreadable.json`, droits gardés), et le choix est à refaire.

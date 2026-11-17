@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { fTime } from '../../lib/format';
   import { locale, t } from '../../lib/i18n';
-  import { markOf, type PluginView, type SeedOffer } from '../../lib/plugins';
+  import { markOf, pluginsApi, type PluginView, type SecretsFile, type SeedOffer } from '../../lib/plugins';
   import { addsOf, hasSettings, reachOf } from '../../lib/plugins-settings';
   import { plugins } from '../../lib/plugins-view.svelte';
   import { settingsForm } from '../../lib/settings.svelte';
@@ -21,7 +21,32 @@
   onMount(() => {
     void plugins.load();
     if (!plugins.store) void plugins.loadStore();
+    void readFile();
   });
+
+  // The file of the plugins' secrets the user chose where this machine has no keychain (ESC-499): seen here, and taken back.
+  let file = $state<SecretsFile | null>(null);
+  let removing = $state(false);
+  let fileError = $state<string | null>(null);
+
+  async function readFile() {
+    try {
+      file = await pluginsApi.secretsFile();
+    } catch (e) {
+      fileError = String(e);
+    }
+  }
+
+  async function removeFile() {
+    fileError = null;
+    try {
+      await pluginsApi.removeSecretsFile();
+      removing = false;
+    } catch (e) {
+      fileError = String(e);
+    }
+    await readFile();
+  }
 
   const lang = $derived(locale.ui);
   const list = $derived(plugins.store?.revocations ?? null);
@@ -124,6 +149,37 @@
   </Group>
 {/if}
 
+{#if file?.chosen}
+  <Group
+    title={t('plugins.settingsPage.fileTitle')}
+    note={t(file.keychain ? 'plugins.settingsPage.fileNoteKeychain' : 'plugins.settingsPage.fileNote', { path: file.path })}
+    aria-label={t('plugins.settingsPage.fileTitle')}
+  >
+    {#snippet action()}
+      {#if !removing}
+        <button class="btn" onclick={() => (removing = true)}>{t('plugins.settingsPage.fileRemove')}</button>
+      {/if}
+    {/snippet}
+    {#if removing}
+      <div class="confirm" role="group" aria-label={t('plugins.settingsPage.fileRemove')}>
+        <span>{t('plugins.settingsPage.fileRemoveConfirm')}</span>
+        <button class="btn" onclick={() => (removing = false)}>{t('common.cancel')}</button>
+        <button class="btn danger" onclick={removeFile}>{t('plugins.settingsPage.fileRemoveYes')}</button>
+      </div>
+    {/if}
+    {#if fileError}<p class="err" role="alert">{fileError}</p>{/if}
+    {#if file.secrets.length}
+      <ul class="kept" aria-label={t('plugins.settingsPage.fileTitle')}>
+        {#each file.secrets as s (s.plugin + s.key)}
+          <li><Icon name="lock" size={12} /><span>{t('plugins.settingsPage.fileSecret', { key: s.key, plugin: s.pluginName })}</span></li>
+        {/each}
+      </ul>
+    {:else}
+      <p class="note">{t('plugins.settingsPage.fileEmpty')}</p>
+    {/if}
+  </Group>
+{/if}
+
 <Group title={t('plugins.settingsPage.security')} aria-label={t('plugins.settingsPage.security')}>
   <Row label={t('plugins.installed.verifiedOnly')} desc={revocations}>
     <button
@@ -216,6 +272,33 @@
   }
   .err {
     margin: 6px 0 0;
+    color: var(--del);
+    font-size: 12px;
+  }
+  /* The secrets the file holds, by plugin; never their values. */
+  .kept {
+    display: grid;
+    gap: 6px;
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .kept li {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--soft);
+    font-size: 12.5px;
+  }
+  .confirm {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    margin: 6px 0 4px;
+  }
+  .confirm span {
+    flex: 1 1 240px;
     color: var(--del);
     font-size: 12px;
   }

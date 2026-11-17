@@ -83,6 +83,8 @@ Any other method answers the error `-32601` and notes it in the journal. Escouad
 
 A plugin’s secrets are in the system’s keychain, under a name of its own: `plugin:<id>:<key>`. It asks for them with `secrets/get`, when it needs them.
 
+On a machine without a keychain (Linux, WSL), the user may choose to keep them in a file only they can read: `secrets/get` gives them the same way. A missing secret, never entered or refused by the keychain, answers `null` in both cases: the window told the user why it was not kept, the plugin only has to say it lacks it.
+
 - **Only its own.** The key must be one of its `permissions.secrets`; a pattern ending with `*` takes in several (`account:*`). Any other key is refused with `-32001` and noted in the journal, even another plugin’s written in full: `plugin:dev.other:token` is not a key of its permissions.
 - A plugin never gets the secret of an account, a harness or an integration of Escouade.
 - A secret given to the plugin is masked (`••••`) everywhere in its journal, its standard error included.

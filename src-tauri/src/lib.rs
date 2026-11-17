@@ -146,6 +146,9 @@ mod remote_tests;
 use escouade_plan::{plan, planfiles};
 // The data and what it names, the processes and WSL: the crate `escouade-model` (`model` and `paths` re-export theirs).
 use escouade_model::{agentgroups, heat, job, pricing, proc, wsl};
+mod plugin_secrets;
+#[cfg(test)]
+mod plugin_secrets_tests;
 mod plugins;
 #[cfg(test)]
 mod plugins_accounts_tests;
@@ -696,6 +699,9 @@ pub fn run() {
                 commands::plugin_set_setting,
                 commands::plugin_secrets,
                 commands::plugin_set_secret,
+                commands::plugin_secret_move,
+                commands::secrets_file,
+                commands::secrets_file_remove,
                 commands::plugin_run,
                 commands::plugin_start,
                 commands::plugins_check_updates,

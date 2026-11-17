@@ -1,8 +1,8 @@
 ---
 title: "Les plugins : vue d'ensemble"
 subject: "plugins"
-sources: ["docs/PLUGINS.md","docs/PLUGINS-DESIGN.md §8.8, §8.33","docs/STORE.md","schemas/plugin-1.json","website/content/docs/fr/plugins/introduction.md","src-tauri/src/harness_scope.rs"]
-tickets: ["ESC-184","ESC-339","ESC-404","ESC-355"]
+sources: ["docs/PLUGINS.md","docs/PLUGINS-DESIGN.md §8.8, §8.33","docs/STORE.md","schemas/plugin-1.json","website/content/docs/fr/plugins/introduction.md","src-tauri/src/harness_scope.rs","issue GitHub #37","crates/escouade-forge/src/integrations/kept.rs","src-tauri/src/plugin_secrets.rs"]
+tickets: ["ESC-184","ESC-339","ESC-404","ESC-355","ESC-499"]
 decisions: [142]
 compared: null
 ---
@@ -59,3 +59,16 @@ Le choix d'un plugin pour un projet (`plugins::active_in`) vaut pour ses faits, 
 ## L'essai réel
 
 Fait le 2026-11-04 sur Windows, depuis store.escouade.dev (ESC-184) : voir `docs/PLUGINS-DESIGN.md` §7. macOS et Linux restent à faire à la release.
+
+## Les secrets d'un plugin, et un poste sans trousseau (ESC-499)
+
+Un plugin déclare ses secrets (`contributes.secrets`) ; l'utilisateur les saisit dans l'onglet Réglages de sa page, et ils vont au trousseau du système sous `plugin:<id>:<clé>`. Le plugin les demande par `secrets/get`.
+
+- **« Garder » n'échoue jamais en silence** (issue #37). Le secret est écrit puis relu. S'il n'est pas gardé, la cause est dite sous le champ, en français et en anglais. Sans trousseau (Linux, WSL sans Secret Service) : « Pas de trousseau système sur ce poste : le secret n’a pas été gardé. » Si un trousseau refuse : « Le trousseau système a refusé le secret (<sa raison>) : il n’a pas été gardé. », la valeur jamais dans la raison. La ligne dit toujours « aucun ». Sur un poste sans trousseau, la note des secrets le dit aussi.
+- **Le repli est choisi, jamais pris tout seul.** Quand le trousseau a refusé, la ligne offre « Garder dans un fichier lisible de toi seul », avec ce que cela veut dire : le secret est écrit en clair sur le disque, dans `plugin-secrets.json` du dossier de données d'Escouade, avec les droits du seul propriétaire. Le choix vaut pour ce poste (le fichier est dans le dossier de données, jamais dans un projet ni dans `.escouade.yml`). Ensuite, un secret gardé là se garde de nouveau là, et la ligne dit « gardé dans un fichier lisible de toi seul ». Sous Windows et macOS, le trousseau existe : le fichier n'y est offert que si le trousseau refuse.
+- **Le fichier** est créé avec ses droits dès l'ouverture (Unix `0600` sur le fichier temporaire, puis mis en place) et écrit par le chemin atomique de l'état (voir *Données locales et coupures*). Il n'est jamais copié dans les copies de l'état (`backups/`), ni écrit dans un journal ou un message d'erreur. Il ne reçoit que les secrets des plugins : le jeton d'un compte, une clé d'API ou une clé de voix gardent leurs règles.
+- **Le plugin lit son secret où qu'il soit gardé.** Le fichier choisi est lu avant le trousseau, par `secrets/get` comme par les gabarits des webhooks (`{{secrets.<clé>}}`). Le protocole ne change pas : `secrets/get` rend `null` pour un secret absent, qu'il n'ait jamais été saisi ou que le trousseau l'ait refusé. Rien n'est ajouté pour distinguer ces deux cas, car c'est l'utilisateur qui peut y remédier et la fenêtre le lui dit au moment du geste (voir `docs/PLUGINS.md`).
+- **Un trousseau qui arrive ensuite** ne déplace rien tout seul : le fichier reste lu, et la ligne d'un secret qui y est offre « Déplacer vers le trousseau ». Le secret est écrit au trousseau, relu, puis retiré du fichier.
+- **« Oublier »** retire le secret du fichier ou du trousseau. Désinstaller un plugin sans garder ses secrets les retire aussi.
+- **Réglages › Plugins** montre le choix et le retire (voir *Réglages*).
+- Une stratégie de poste géré qui interdirait ce repli n'est pas dans la 2.2.

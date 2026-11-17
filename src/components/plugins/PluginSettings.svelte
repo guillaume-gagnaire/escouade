@@ -1,12 +1,23 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { locale, t } from '../../lib/i18n';
-  import { pluginsApi, textOf, type ManifestSetting, type PluginView } from '../../lib/plugins';
+  import {
+    pluginsApi,
+    refusedOf,
+    textOf,
+    type ManifestSetting,
+    type PluginView,
+    type SecretRefused,
+    type SecretState,
+    type SecretsFile,
+  } from '../../lib/plugins';
   import { plugins } from '../../lib/plugins-view.svelte';
 
   // A plugin's settings and secrets (§3.5): the fields it declares (`contributes.settings`, `contributes.secrets`). A
   // setting is kept in the list of the installed plugins and given by `settings/get`; a secret goes to the system's
-  // keychain under a name of its own, and only whether it is kept comes back here.
+  // keychain under a name of its own, and only whether it is kept, and where, comes back here. « Garder » that kept nothing
+  // says why beside its field (issue #37, ESC-499); where the keychain refused, the field offers the file readable by the user
+  // alone, never taken by itself; a secret in the file, once a keychain is there, offers to move to it.
   let { plugin }: { plugin: PluginView } = $props();
 
   const lang = $derived(locale.ui);
@@ -19,28 +30,51 @@
       return { key, title: textOf(declared?.title, lang) || key };
     }),
   );
-  let kept = $state<Record<string, boolean>>({});
+  let kept = $state<Record<string, SecretState>>({});
   let typed = $state<Record<string, string>>({});
+  /** Why the last gesture on a secret did nothing, by its key: shown beside its field. */
+  let refused = $state<Record<string, SecretRefused>>({});
+  let file = $state<SecretsFile | null>(null);
   let error = $state<string | null>(null);
 
   async function readSecrets() {
     try {
-      kept = Object.fromEntries(await pluginsApi.secrets(plugin.id));
+      const [states, f] = await Promise.all([pluginsApi.secrets(plugin.id), pluginsApi.secretsFile()]);
+      kept = Object.fromEntries(states.map((s) => [s.key, s]));
+      file = f;
     } catch (e) {
       error = String(e);
     }
   }
 
-  async function keep(key: string, value: string) {
-    error = null;
+  /** « Garder » (`value`; empty: « Oublier »), or « Garder dans un fichier lisible de toi seul » (`inFile`). */
+  async function keep(key: string, value: string, inFile = false) {
+    delete refused[key];
     try {
-      await pluginsApi.setSecret(plugin.id, key, value);
+      await pluginsApi.setSecret(plugin.id, key, value, inFile);
       typed[key] = '';
-      await readSecrets();
     } catch (e) {
-      error = String(e);
+      refused[key] = refusedOf(e);
     }
+    await readSecrets();
   }
+
+  async function move(key: string) {
+    delete refused[key];
+    try {
+      await pluginsApi.moveSecret(plugin.id, key);
+    } catch (e) {
+      refused[key] = { message: String(e), keychainRefused: false };
+    }
+    await readSecrets();
+  }
+
+  const statusOf = (key: string) =>
+    !kept[key]?.kept
+      ? t('plugins.settings.secretUnset')
+      : kept[key].inFile
+        ? t('plugins.settings.secretInFile')
+        : t('plugins.settings.secretSet');
 
   const valueOf = (f: ManifestSetting) => plugin.choices.settings[f.key] ?? f.default ?? (f.type === 'boolean' ? false : '');
   const optionsOf = (f: ManifestSetting) =>
@@ -104,11 +138,12 @@
 {#if secretFields.length}
   <section>
     <h4>{t('plugins.settings.secrets')}</h4>
-    <p class="hint">{t('plugins.settings.secretNote')}</p>
+    <p class="hint">{t(file && !file.keychain ? 'plugins.settings.secretNoteNoKeychain' : 'plugins.settings.secretNote')}</p>
     {#each secretFields as s (s.key)}
-      <div class="row">
+      {@const why = refused[s.key]}
+      <div class="row" role="group" aria-label={s.title}>
         <div class="lab">
-          <b>{s.title}</b><span>{kept[s.key] ? t('plugins.settings.secretSet') : t('plugins.settings.secretUnset')}</span>
+          <b>{s.title}</b><span>{statusOf(s.key)}</span>
         </div>
         <form
           class="ctl"
@@ -126,9 +161,28 @@
             bind:value={typed[s.key]}
           />
           <button class="btn" type="submit" disabled={!typed[s.key]}>{t('plugins.settings.keep')}</button>
-          {#if kept[s.key]}<button class="btn ghost" type="button" onclick={() => keep(s.key, '')}>{t('plugins.settings.forget')}</button
+          {#if kept[s.key]?.kept}<button class="btn ghost" type="button" onclick={() => keep(s.key, '')}
+              >{t('plugins.settings.forget')}</button
             >{/if}
         </form>
+        {#if why}
+          <div class="why">
+            <p class="err" role="alert">{why.message}</p>
+            {#if why.keychainRefused && typed[s.key]}
+              <div class="offer">
+                <button class="btn" type="button" onclick={() => keep(s.key, typed[s.key], true)}>{t('plugins.settings.keepInFile')}</button
+                >
+                <span>{t('plugins.settings.keepInFileNote', { path: file?.path ?? '' })}</span>
+              </div>
+            {/if}
+          </div>
+        {/if}
+        {#if kept[s.key]?.inFile && file?.keychain}
+          <div class="offer">
+            <button class="btn" type="button" onclick={() => move(s.key)}>{t('plugins.settings.moveToKeychain')}</button>
+            <span>{t('plugins.settings.moveNote')}</span>
+          </div>
+        {/if}
       </div>
     {/each}
   </section>
@@ -184,5 +238,26 @@
     margin: 8px 0 0;
     color: var(--del);
     font-size: 12px;
+  }
+  /* Beside the field: why it kept nothing, and what can be done. */
+  .why,
+  .offer {
+    flex: 1 0 100%;
+  }
+  .why .err {
+    margin: 0;
+  }
+  .offer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    margin-top: 6px;
+  }
+  .offer span {
+    flex: 1 1 260px;
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.45;
   }
 </style>

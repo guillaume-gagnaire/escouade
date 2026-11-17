@@ -83,6 +83,8 @@ Une autre méthode répond l’erreur `-32601` et le note au journal. Les erreur
 
 Les secrets d’un plugin sont dans le trousseau du système, sous un nom à lui : `plugin:<id>:<clé>`. Il les demande par `secrets/get`, au moment où il en a besoin.
 
+Sur un poste sans trousseau (Linux, WSL), l’utilisateur peut choisir de les garder dans un fichier lisible de lui seul : `secrets/get` les rend de la même façon. Un secret absent, jamais saisi ou que le trousseau a refusé, répond `null` dans les deux cas : la fenêtre a dit à l’utilisateur pourquoi il n’a pas été gardé, le plugin n’a qu’à dire qu’il lui manque.
+
 - **Seulement les siens.** La clé doit être l’une de ses `permissions.secrets` ; un motif finissant par `*` en prend plusieurs (`account:*`). Tout autre clé est refusée par `-32001` et notée au journal, même celle d’un autre plugin écrite en entier : `plugin:dev.autre:token` n’est pas une clé de ses permissions.
 - Un plugin n’obtient jamais le secret d’un compte, d’un harness ou d’une intégration d’Escouade.
 - Un secret donné au plugin est masqué (`••••`) partout dans son journal, sa sortie d’erreur comprise.

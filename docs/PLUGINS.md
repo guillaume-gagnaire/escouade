@@ -133,6 +133,8 @@ Le protocole est `schemas/plugin-protocol-1.json` (version 1, délai par défaut
 
 Erreurs (`x-errors`) : celles de JSON-RPC, puis `notYours` -32001, `keychain` -32002, `refused` -32003, `failed` -32004, `notFound` -32005.
 
+**Un secret que le trousseau n'a pas gardé** (issue #37, ESC-499). Sur un poste sans trousseau système (Linux, WSL sans Secret Service), « Garder » ne garde rien et le dit à côté du champ, avec sa cause ; il offre « Garder dans un fichier lisible de toi seul » (`plugin-secrets.json` du dossier de données, droits du seul propriétaire, jamais copié dans les sauvegardes de l'état). Le protocole ne change pas : `secrets/get` rend le secret où qu'il soit gardé (le fichier choisi est lu avant le trousseau) et `null` pour un secret absent, qu'il n'ait jamais été saisi ou que le trousseau l'ait refusé. Rien n'est ajouté pour qu'un plugin distingue ces deux cas : c'est l'utilisateur qui peut y remédier, et la fenêtre le lui dit au moment du geste ; le plugin dit, comme avant, qu'il lui manque son secret. Un trousseau qui arrive ensuite ne déplace rien tout seul : la ligne offre « Déplacer vers le trousseau ».
+
 ### 2.2 Les harness
 
 Trois façons, de la plus simple à la plus complète :

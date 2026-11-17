@@ -338,6 +338,12 @@ impl DataDir {
         self.0.join("mcp-token.json")
     }
 
+    /// The plugins' secrets the user chose to keep in a file readable by them alone, where the system has no keychain
+    /// (ESC-499, `integrations::kept`). Never in the copies of the state (`backups::FILES`).
+    pub fn plugin_secrets_file(&self) -> PathBuf {
+        self.0.join("plugin-secrets.json")
+    }
+
     /// The configuration folder of the agent's own harness (`Engine::agent_home_var`): Cursor's
     /// rules, model and sessions for that agent alone, kept while it lives.
     pub fn agent_home(&self, agent_id: &str) -> PathBuf {

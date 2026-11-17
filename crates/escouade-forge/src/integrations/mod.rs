@@ -10,6 +10,7 @@ mod github_tests;
 #[cfg(test)]
 mod gitlab_tests;
 pub mod jira;
+pub mod kept;
 pub mod secrets;
 pub mod source;
 pub mod text;

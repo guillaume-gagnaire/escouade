@@ -311,6 +311,14 @@ export default defineZone('plugins', {
     keep: 'Keep',
     forget: 'Forget',
     secretNote: 'Kept in the system’s keychain under a name of its own; it only gets it when it asks.',
+    secretNoteNoKeychain:
+      'This machine has no system keychain: a secret is kept here only in a file only you can read, if you choose it. It only gets it when it asks.',
+    secretInFile: 'kept in a file only you can read',
+    keepInFile: 'Keep in a file only you can read',
+    keepInFileNote:
+      'The secret will be written in clear on the disk, in {path}, with your account’s rights alone. This choice holds for this machine: Settings › Plugins shows it and takes it back.',
+    moveToKeychain: 'Move to the keychain',
+    moveNote: 'There is a keychain now: nothing moves without you.',
     yes: 'Yes',
     no: 'No',
   },
@@ -480,6 +488,16 @@ export default defineZone('plugins', {
     install: 'Install',
     installOf: 'Install {name}',
     security: 'Security',
+    fileTitle: 'Secrets kept in a file',
+    fileNote:
+      'This machine has no system keychain: you chose to keep the plugins’ secrets in {path}, in clear, readable by your account alone. Never copied into the backups of the state.',
+    fileNoteKeychain:
+      'You chose to keep plugins’ secrets in {path}, in clear, readable by your account alone. There is a keychain now: move them from each plugin’s page.',
+    fileEmpty: 'No secret in it for now.',
+    fileSecret: '{key}, of {plugin}',
+    fileRemove: 'Remove the file',
+    fileRemoveConfirm: 'Remove the file? Its secrets are erased: they will have to be entered again.',
+    fileRemoveYes: 'Remove and erase',
   },
 
   proposed: {

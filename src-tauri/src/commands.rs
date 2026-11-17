@@ -674,44 +674,56 @@ pub fn plugin_set_setting(
     plugin_view(&core, &id)
 }
 
-/// Which of a plugin's secrets are kept (their values never leave the keychain).
+/// Which of a plugin's secrets are kept, and where (their values never leave the keychain or the file).
 #[tauri::command(async)]
-pub fn plugin_secrets(core: CoreState, id: String) -> Result<Vec<(String, bool)>, String> {
+pub fn plugin_secrets(
+    core: CoreState,
+    id: String,
+) -> Result<Vec<crate::plugin_secrets::SecretState>, String> {
     let view = plugin_view(&core, &id)?;
-    Ok(view
-        .secret_keys
-        .into_iter()
-        .map(|k| {
-            let set = core
-                .secrets
-                .get(&crate::plugins::runtime::secret_name(&id, &k))
-                .ok()
-                .flatten()
-                .is_some();
-            (k, set)
-        })
-        .collect())
+    Ok(core.plugin_secret_states(&id, view.secret_keys))
 }
 
-/// Keeps a plugin's secret in the keychain, under its own name; empty forgets it.
+/// Keeps a plugin's secret in the keychain, under its own name, read back to check; empty forgets it. `inFile`: the
+/// user chose « Garder dans un fichier lisible de toi seul » (ESC-499). Not kept, it says why
+/// (`plugin_secrets::SecretRefused`).
 #[tauri::command(async)]
 pub fn plugin_set_secret(
     core: CoreState,
     id: String,
     key: String,
     value: String,
-) -> Result<(), String> {
-    let view = plugin_view(&core, &id)?;
+    in_file: Option<bool>,
+) -> Result<(), crate::plugin_secrets::SecretRefused> {
+    let view = plugin_view(&core, &id).map_err(|message| crate::plugin_secrets::SecretRefused {
+        message,
+        keychain_refused: false,
+    })?;
     if !view.secret_keys.contains(&key) {
-        return Err(format!("{key}: not a secret of {id}"));
+        return Err(crate::plugin_secrets::SecretRefused {
+            message: format!("{key}: not a secret of {id}"),
+            keychain_refused: false,
+        });
     }
-    let name = crate::plugins::runtime::secret_name(&id, &key);
-    let done = if value.is_empty() {
-        core.secrets.delete(&name)
-    } else {
-        core.secrets.set(&name, &value)
-    };
-    done.map_err(|e| e.to_string())
+    core.plugin_secret_set(&id, &key, &value, in_file.unwrap_or(false))
+}
+
+/// « Déplacer vers le trousseau »: a plugin's secret kept in the file goes to the keychain, now that there is one.
+#[tauri::command(async)]
+pub fn plugin_secret_move(core: CoreState, id: String, key: String) -> Result<(), String> {
+    core.plugin_secret_move(&id, &key)
+}
+
+/// Réglages › Plugins: the file of the plugins' secrets on this machine, if the user chose it.
+#[tauri::command(async)]
+pub fn secrets_file(core: CoreState) -> crate::plugin_secrets::SecretsFile {
+    core.secrets_file()
+}
+
+/// The file of the plugins' secrets taken back: it goes, with what it holds.
+#[tauri::command(async)]
+pub fn secrets_file_remove(core: CoreState) -> Result<(), String> {
+    core.secrets_file_remove()
 }
 
 /// Where a plugin's process stands, and its journal (the oldest entry first).
