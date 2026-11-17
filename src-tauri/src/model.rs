@@ -148,6 +148,14 @@ pub enum UiEvent {
         id: String,
         project_id: String,
     },
+    /// An agent asks the user to delete the agent `id` it made (`delete_agent`): the window's
+    /// « Supprimer l'agent » modal, under `by`'s name, its worktree's box as `worktree` asks
+    /// (None: as the window has it).
+    AgentDeleteAsked {
+        id: String,
+        by: String,
+        worktree: Option<bool>,
+    },
     #[serde(rename_all = "camelCase")]
     Conv {
         agent_id: String,

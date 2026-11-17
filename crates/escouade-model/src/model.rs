@@ -2040,6 +2040,10 @@ pub struct AgentMeta {
     pub effort: String,
     /// Changed by `set_mode`, which keeps `plan_from`.
     pub mode: String,
+    /// The agent that made it through `create_agent`: the one agent that may ask the user to
+    /// delete it (`delete_agent`). None: made by the user, a ticket, or before it was kept.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_by: Option<String>,
     /// The mode its work resumes in once a plan is approved (ESC-277): the one it was in when it
     /// went into Plan, or its mode of departure when it started in it. None: the app's, `auto`.
     #[serde(skip_serializing_if = "Option::is_none")]

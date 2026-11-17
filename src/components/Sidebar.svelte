@@ -186,6 +186,16 @@
     const id = project.id;
     untrack(() => void app.readCodeHost(id));
   });
+  // The deletions agents asked for (`delete_agent`): one modal after another, the next once the one before is answered.
+  $effect(() => {
+    if (app.modal) return;
+    while (app.deleteAsks.length) {
+      const ask = app.deleteAsks.shift()!;
+      // Gone since (deleted by hand): nothing to ask, the next one is.
+      const a = app.agents[ask.id];
+      if (a) return untrack(() => confirmDelete(a, ask));
+    }
+  });
   /** Who waits for an answer goes first (2.0 design). */
   const agents = $derived(app.projectAgents);
   /** What the list shows: folders and loose agents (`agents`, flat, is the same in shown order: the keys' and Ctrl+J's). */
@@ -762,10 +772,11 @@
     };
   }
 
-  function confirmDelete(a: Agent) {
+  /** « Supprimer l'agent », asked by the user, or by the agent that made it (`asked`: `delete_agent`, under its name). */
+  function confirmDelete(a: Agent, asked?: { by: string; worktree: boolean | null }) {
     app.modal = {
       kind: 'confirm',
-      title: t('nav.sidebar.deleteTitle', { name: a.name }),
+      title: asked ? t('nav.sidebar.deleteAskedTitle', { by: asked.by, name: a.name }) : t('nav.sidebar.deleteTitle', { name: a.name }),
       body:
         t('nav.sidebar.deleteBody', { engine: speakerOf(a.engine), harness: engineName(a.engine) }) +
         // The files of its worktree, open in the editor: an agent without one edits the project's, which stay.
@@ -778,7 +789,7 @@
             label: a.worktree.existing
               ? t('branches.agent.deleteWorktree', { branch: a.worktree.branch })
               : t('nav.sidebar.deleteWorktree', { branch: a.worktree.branch }),
-            value: true,
+            value: asked?.worktree ?? true,
           }
         : undefined,
       onConfirm: async (removeWorktree) => {
@@ -2621,11 +2632,13 @@
     font-size: 11px;
     font-variant-numeric: tabular-nums;
   }
+  /* The global `.pill` is the amber one that pulses, « en attente »: « en cours » is a green number, no alert. */
   .pill.run {
+    min-width: 0;
+    padding: 0;
+    background: none;
     color: var(--run);
-  }
-  .pill.wait {
-    color: var(--wait);
+    animation: none;
   }
   .folder-b {
     margin: 0 6px 4px 14px;

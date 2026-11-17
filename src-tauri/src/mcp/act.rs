@@ -49,8 +49,8 @@ use super::read::{
 use super::resolve::{self, Sight};
 use super::tools::{
     AnswerPermissionArgs, AnswerQuestionArgs, ApproveTicketArgs, CreateAgentArgs, CreateFolderArgs,
-    CreateTicketArgs, DecisionArg, DeleteFolderArgs, DeleteTicketArgs, DismissBlockArgs,
-    MoveAgentArgs, MoveTicketArgs, PositionArg, QuestionAnswer, RejectTicketArgs,
+    CreateTicketArgs, DecisionArg, DeleteAgentArgs, DeleteFolderArgs, DeleteTicketArgs,
+    DismissBlockArgs, MoveAgentArgs, MoveTicketArgs, PositionArg, QuestionAnswer, RejectTicketArgs,
     ReportProgressArgs, ResolveConflictArgs, ResumeTicketArgs, SendMessageArgs, SetBoardArgs,
     SplitTicketArgs, StartTicketArgs, StopAgentArgs, SubTicket, ToolError, UpdateFolderArgs,
     UpdateTicketArgs, SPLIT_MAX,
@@ -65,7 +65,8 @@ use crate::folders;
 use crate::git;
 use crate::i18n;
 use crate::model::{
-    AgentsAnswer, BoardSettings, Column, EngineId, PauseReason, Project, Ticket, PROGRESS_LINE_MAX,
+    AgentsAnswer, BoardSettings, Column, EngineId, PauseReason, Project, Ticket, UiEvent,
+    PROGRESS_LINE_MAX,
 };
 use crate::telemetry::Event;
 use crate::tickets::{
@@ -1701,9 +1702,30 @@ pub(super) async fn create_agent<R: Runtime>(
             "Write the message that starts the agent."
         )));
     }
-    let on = carrier(core, &project, None, None);
-    let model = model(core, &on, a.model.as_deref())?;
-    not_held(core, &project.id, project.engine())?;
+    // An account of the project's harness it may use (ESC-153's checks), else the automatic choice.
+    let account = account_setting(core, a.account.as_deref()).filter(|id| !id.is_empty());
+    if let Some(id) = &account {
+        let refusal =
+            accounts::ticket_refusal(&core.settings.read(), &project, project.engine(), id);
+        if let Some(e) = refusal {
+            return Err(ToolError::Refused(format!("{e:#}")));
+        }
+    }
+    let on = carrier(core, &project, None, account.as_deref());
+    let model = model(core, &on, auto_off(a.model.as_deref()))?;
+    check_effort(core, &on, model.as_deref(), auto_off(a.effort.as_deref()))?;
+    // Auto (empty) is no effort asked: its account's.
+    let effort =
+        effort_setting(i18n::ui(), auto_off(a.effort.as_deref()))?.filter(|e| !e.is_empty());
+    match &account {
+        // Asked for by name, it waits for that one alone.
+        Some(id) => {
+            if let Some(held) = core.account_limit(id) {
+                return Err(ToolError::Refused(why(core, &held)));
+            }
+        }
+        None => not_held(core, &project.id, project.engine())?,
+    }
     // One at a time from the count to the first message: two calls at once do not both find a
     // place free.
     let _one = core.mcp.acting.lock().await;
@@ -1733,10 +1755,17 @@ pub(super) async fn create_agent<R: Runtime>(
             &project.id,
             AgentOptions {
                 model,
+                effort,
                 isolated: a.worktree,
                 folder,
-                // Its Claude account is the project's, else the first usable one: one of those
+                // The one asked for, else the project's, else the first usable one: one of those
                 // `not_held` found free.
+                account,
+                // The one agent that may ask for it to be deleted (`delete_agent`).
+                created_by: match caller {
+                    Caller::Agent(id) => Some(id.clone()),
+                    Caller::External => None,
+                },
                 // Refused before anything is made when its mode is (ESC-489).
                 judge: true,
                 ..Default::default()
@@ -1754,6 +1783,12 @@ pub(super) async fn create_agent<R: Runtime>(
         }
     };
     let (id, name) = (view.meta.id, view.meta.name);
+    // What it took, the defaults of its account included: what the caller asked or left out.
+    let account = accounts::name_in(
+        i18n::ui(),
+        &accounts::get(&core.settings.read(), &view.meta.account),
+    );
+    let (model, effort) = (view.meta.model, view.meta.effort);
     // Under its author's name, as every message from the server: not taken for the user's words.
     let origin = activity::caller_name(core, Some(caller));
     if let Err(e) = core
@@ -1765,7 +1800,14 @@ pub(super) async fn create_agent<R: Runtime>(
             "The agent {name} (id {id}) is created, but its message could not be sent: {e:#}"
         )));
     }
-    json(&json!({ "id": id, "name": name, "folder": folder_ref(core, &project.id, &id) }))
+    json(&json!({
+        "id": id,
+        "name": name,
+        "folder": folder_ref(core, &project.id, &id),
+        "account": account,
+        "model": model,
+        "effort": effort,
+    }))
 }
 
 /// The folder holding `agent`, as the tools that file agents say it; null when loose.
@@ -1853,6 +1895,52 @@ pub(super) async fn stop_agent<R: Runtime>(
         .is_ok_and(|h| h.lock().meta.status.is_active());
     core.interrupt(&found.id).await.map_err(failure)?;
     json(&json!({ "id": found.id, "name": found.name, "interrupted": interrupted }))
+}
+
+/// `delete_agent`: the user is asked, in the window, to delete an agent the caller made
+/// (`AgentMeta::created_by`). Nothing is deleted here: the window's own modal does it, the user
+/// confirming, one asked for after another.
+pub(super) async fn delete_agent<R: Runtime>(
+    core: &Arc<Core<R>>,
+    caller: &Caller,
+    a: DeleteAgentArgs,
+) -> Result<String, ToolError> {
+    let me = agent_only(caller)?;
+    let found = other_agent(
+        core,
+        caller,
+        &a.agent,
+        a.project.as_deref(),
+        tr!(
+            "Un agent ne peut pas demander sa propre suppression.",
+            "An agent cannot ask for its own deletion."
+        ),
+    )?;
+    let made_by = core
+        .agent(&found.id)
+        .ok()
+        .and_then(|h| h.lock().meta.created_by.clone());
+    if made_by.as_deref() != Some(me) {
+        let name = &found.name;
+        return Err(ToolError::Refused(tr!(
+            "Tu ne peux demander la suppression que des agents que tu as créés (create_agent) : {name} n’en est pas un.",
+            "You may only ask for the deletion of agents you made (create_agent): {name} is not one."
+        )));
+    }
+    core.hub.emit(UiEvent::AgentDeleteAsked {
+        id: found.id.clone(),
+        by: activity::caller_name(core, Some(caller)),
+        worktree: a.worktree,
+    });
+    json(&json!({
+        "id": found.id,
+        "name": found.name,
+        "asked": true,
+        "note": tr!(
+            "La suppression est demandée à l’utilisateur, dans la fenêtre : il l’accepte ou la refuse. Acceptée, l’agent n’est plus dans list_agents.",
+            "The deletion is asked of the user, in the window: they accept or refuse it. Accepted, the agent is no longer in list_agents."
+        ),
+    }))
 }
 
 // ---------- the requests of the agents ----------

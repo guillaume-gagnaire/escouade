@@ -494,6 +494,25 @@ describe('Sidebar', () => {
     });
   });
 
+  it('asks, one modal after another, for the deletions an agent asked for, under its name', async () => {
+    const backend = fakeBackend();
+    render(Sidebar, { project: project() });
+    app.deleteAsks.push(
+      { id: 'a1', by: 'chef', worktree: null },
+      { id: 'gone', by: 'chef', worktree: null },
+      { id: 'a2', by: 'chef', worktree: false },
+    );
+    await tick();
+    expect(app.modal).toMatchObject({ title: "L'agent « chef » demande de supprimer l'agent « refacto-auth ». Le supprimer ?" });
+    // Refused: the agent stays, and the next one is asked (one gone since is skipped).
+    app.modal = null;
+    await tick();
+    expect(app.modal).toMatchObject({ title: expect.stringContaining('« tests-e2e »') });
+    expect(app.deleteAsks).toEqual([]);
+    await (app.modal as any).onConfirm(false);
+    expect(backend.called('delete_agent')).toHaveLength(1);
+  });
+
   describe('deleting the agent of an existing branch', () => {
     it('says the branch is kept, where an ordinary agent’s goes with its worktree', async () => {
       const own = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\a1', branch: 'escouade/a1', baseBranch: 'main' };

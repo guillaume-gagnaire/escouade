@@ -87,6 +87,7 @@ export default defineZone('mcp', {
     createAgent: 'Start an agent',
     sendMessage: 'Send a message',
     stopAgent: 'Stop an agent',
+    deleteAgent: 'Ask to delete an agent',
     listBackgroundWork: 'List an agent’s subagents and background tasks',
     getBackgroundOutput: 'Read a background task’s output or a subagent’s report',
     stopBackgroundWork: 'Stop a background task or a subagent',

@@ -876,6 +876,14 @@ pub struct CreateAgentArgs {
     )]
     pub model: Option<String>,
     #[schemars(
+        description = "The account of the project's harness the agent runs on, when several are set up: its name (in any case) or its id (list_projects gives the project's accounts), or auto (the default): the project's, else the first usable one. An account its project may not use, or at its usage limit, is refused, with why."
+    )]
+    pub account: Option<String>,
+    #[schemars(
+        description = "The agent's effort (low, medium, high, xhigh or max: those of the harness and of the model, see list_projects), or auto (the default): its account's (a model that takes none, Haiku, goes without)."
+    )]
+    pub effort: Option<String>,
+    #[schemars(
         description = "The folder the new agent goes in (its sidebar folder): its id or its name in any case, made under that name if there is none. Leave it out: your own folder, made for you (named after you) if you have none. An empty string: no folder. Left out, from another project or from outside Escouade: no automatic folder."
     )]
     pub folder: Option<String>,
@@ -903,6 +911,22 @@ pub struct StopAgentArgs {
         description = "The project to look for its name in (two projects may each have an agent of that name): its id, or its name in any case."
     )]
     pub project: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct DeleteAgentArgs {
+    #[schemars(
+        description = "The agent to delete, one you made with create_agent: its id, or its name in any case."
+    )]
+    pub agent: String,
+    #[schemars(
+        description = "The project to look for its name in (two projects may each have an agent of that name): its id, or its name in any case."
+    )]
+    pub project: Option<String>,
+    #[schemars(
+        description = "true: its worktree and its branch go too (a branch that was there before it stays); false: they stay. The user may change it in the window. Leave it out: as the window offers it (they go)."
+    )]
+    pub worktree: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]

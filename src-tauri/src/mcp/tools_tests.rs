@@ -309,6 +309,8 @@ async fn the_projects_are_listed_with_their_branch_agents_and_tickets_by_column(
             "engine": "claude",
             "models": [],
             "efforts": ["low", "medium", "high", "xhigh", "max"],
+            // The accounts a new agent may go to (`create_agent`'s `account`).
+            "accounts": [{ "id": "principal", "name": "Principal" }],
         })
     );
     assert_eq!(projects.as_array().unwrap().len(), 2);

@@ -2680,6 +2680,8 @@ export type UiEvent =
   | { type: 'workflowTrack'; track: WorkflowTrack }
   | { type: 'agent'; agent: Agent }
   | { type: 'agentRemoved'; id: string; projectId: string }
+  /** An agent asks the user to delete one it made (`delete_agent`): `by` is its name, `worktree` the box it asks for. */
+  | { type: 'agentDeleteAsked'; id: string; by: string; worktree: boolean | null }
   | { type: 'conv'; agentId: string; ops: ConvOp[] }
   | { type: 'memory'; projectId: string }
   | { type: 'vectorsDownload'; done: number; total: number }

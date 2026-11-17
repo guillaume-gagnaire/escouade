@@ -469,6 +469,19 @@ describe('AppState', () => {
     focus.mockRestore();
   });
 
+  it('takes an agent opened under the editor as seen, the editor staying open over it', async () => {
+    const { emit } = await start();
+    app.ui.selectedAgent.p1 = 'a1';
+    emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, status: 'running' }) });
+    emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, status: 'waiting' }) });
+    expect(app.attention).toEqual({ a2: true });
+    await app.openEditor({ source: 'project' });
+    app.selectAgent('a2');
+    expect(app.editorOn).toBe(true);
+    app.markSeen();
+    expect(app.attention).toEqual({});
+  });
+
   it('goes to an agent that finished out of sight with Ctrl+J', async () => {
     const { emit } = await start();
     emit({ type: 'agent', agent: agent({ id: 'b1', projectId: 'p2', name: 'landing', status: 'running' }) });

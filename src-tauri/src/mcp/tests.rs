@@ -26,7 +26,7 @@ use tauri::test::{mock_app, MockRuntime};
 /// (`ACTING`, M4) and those only an agent of Escouade may call (`AGENTS_ONLY`, M4). A tool is added
 /// here knowingly. None may run a command; the flow tools do what the window's buttons of the
 /// board do, and so two are named for it (`NAMED_FOR_IT`: approving runs the tests and merges,
-/// deleting deletes). The only two that answer for the user (`ANSWERING`) never give a lasting
+/// deleting deletes; `delete_agent` only asks the user, who confirms in the window). The only two that answer for the user (`ANSWERING`) never give a lasting
 /// permission.
 pub(super) const EXPOSED: &[&str] = &[
     "add_document",
@@ -36,6 +36,7 @@ pub(super) const EXPOSED: &[&str] = &[
     "create_agent",
     "create_folder",
     "create_ticket",
+    "delete_agent",
     "delete_folder",
     "delete_ticket",
     "dismiss_block",
@@ -162,12 +163,13 @@ pub(super) const ANSWERING: &[&str] = &["answer_permission", "answer_question"];
 /// `FORBIDDEN` it holds).
 const NAMED_FOR_IT: &[(&str, &str)] = &[
     ("approve_ticket", "approve"),
+    ("delete_agent", "delete"),
     ("delete_folder", "delete"),
     ("delete_ticket", "delete"),
 ];
 
 /// Those an external Claude is refused.
-pub(super) const AGENTS_ONLY: &[&str] = &["report_progress", "split_ticket"];
+pub(super) const AGENTS_ONLY: &[&str] = &["delete_agent", "report_progress", "split_ticket"];
 
 /// The test's own tool, beside them in tests (`tools::Tools::test_router`).
 pub(super) const TEST_TOOL: &str = "whoami";

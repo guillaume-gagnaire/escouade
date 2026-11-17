@@ -2240,6 +2240,8 @@ impl<R: Runtime> Core<R> {
                     folder: t.folder.clone(),
                     copy_of: None,
                     account: Some(account),
+                    // A ticket's agent is the board's: no agent asks for its deletion.
+                    created_by: None,
                     isolated: None,
                     branch: taken_up,
                     base,

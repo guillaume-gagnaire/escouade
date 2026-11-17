@@ -1197,7 +1197,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Start a new Claude Code agent in a project and send it its first message, which it reads headed by your name (Message from <you>: …), as coming from you and not from the user. It works on its own from then on: follow it with get_agent_summary. Refused while every Claude account the project may use is at its usage limit (the answer says until when); asked for so, it is not held by “Pause above quota” nor by a day's budget, which hold back the autopilot alone and when the project already has its most agents working at once (its Kanban's In parallel setting). It uses the quota. Answers the agent's id and name.",
+        description = "Start a new agent of the project's harness in a project and send it its first message, which it reads headed by your name (Message from <you>: …), as coming from you and not from the user. It works on its own from then on: follow it with get_agent_summary. Its model, effort and account may be chosen (list_projects gives those of the project), else its account's defaults. Refused while every account the project may use is at its usage limit, or the one asked for is (the answer says until when); asked for so, it is not held by “Pause above quota” nor by a day's budget, which hold back the autopilot alone and when the project already has its most agents working at once (its Kanban's In parallel setting). It uses the quota. Answers the agent's id and name, its folder, and the account, model and effort it took.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -1281,6 +1281,27 @@ impl<R: Runtime> Tools<R> {
         ]);
         let result = act::stop_agent(&ctx.core, &ctx.caller, args).await;
         ctx.reply("stop_agent", &asked, result)
+    }
+
+    #[tool(
+        description = "Ask the user to delete an agent you made with create_agent, once it is no longer needed: the window shows them its « Supprimer l'agent » confirmation under your name, one after another when you ask for several; nothing is deleted until they confirm. Deleted, its process stops and its conversation leaves the app (its harness's session stays on disk); its worktree and branch go too unless worktree is false (the user may change it). Refused for yourself, for an agent you did not make, and outside Escouade's agents. Answers at once, before the user does: the agent's id and name and asked (true); accepted, the agent is no longer in list_agents.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn delete_agent(
+        &self,
+        ctx: ToolCtx<R>,
+        Parameters(args): Parameters<DeleteAgentArgs>,
+    ) -> CallToolResult {
+        let asked = summary(&[
+            ("agent", Some(&args.agent)),
+            ("project", args.project.as_deref()),
+        ]);
+        let result = act::delete_agent(&ctx.core, &ctx.caller, args).await;
+        ctx.reply("delete_agent", &asked, result)
     }
 
     #[tool(

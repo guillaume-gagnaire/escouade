@@ -3,7 +3,7 @@ title: "Barre latérale"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","src-tauri/src/core.rs","src-tauri/src/engine/claude/mod.rs","src-tauri/src/worktrees.rs","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","https://github.com/guillaume-gagnaire/escouade/issues/26"]
 tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390","ESC-396","ESC-398","ESC-403","ESC-417"]
-decisions: [129,133,147]
+decisions: [129,133,147,"un-agent-peut-demander-la-suppression-de"]
 compared: null
 ---
 
@@ -32,7 +32,7 @@ La colonne d'un projet, à droite de la barre des projets. Elle liste les agents
 
 - Les agents d'un projet se rangent en dossiers : un seul niveau, jamais un dossier dans un dossier. La liste est une suite de dossiers et d'agents hors dossier, dans l'ordre que l'utilisateur ou un agent a choisi (l'ordre rangé). Les agents déjà là restent hors dossier : rien n'est rangé après coup.
 - Un dossier est un cadre (`section.folder`, jamais la classe `agent`) : un en-tête, puis les cartes complètes de ses agents sous un filet.
-  - En-tête : le chevron (« Replier <nom> » / « Déplier <nom> »), le nom, le nombre d'agents non archivés, et les pastilles « en cours » (vert) et « en attente » (ambre), absentes à zéro, lues aussi par les lecteurs d'écran (« 2 en cours, 1 en attente »). « En attente » compte ses agents qui attendent une réponse et qu'on n'a pas encore vus, comme une carte qui clignote : ouvert, l'agent en sort, même s'il attend encore (sa carte le dit, en tête de son dossier).
+  - En-tête : le chevron (« Replier <nom> » / « Déplier <nom> »), le nom, le nombre d'agents non archivés, et les compteurs « en cours » (un nombre vert, sans fond ni pulsation : ce n'est pas une alerte) et « en attente » (la pastille ambre qui pulse, son nombre lisible sur elle), absents à zéro, lus aussi par les lecteurs d'écran (« 2 en cours, 1 en attente »). « En attente » compte ses agents qui attendent une réponse et qu'on n'a pas encore vus, comme une carte qui clignote : ouvert, l'agent en sort, même s'il attend encore (sa carte le dit, en tête de son dossier). Ouvrir un agent depuis sa carte le compte comme vu, même quand l'éditeur reste affiché par-dessus sa conversation.
   - Un dossier vide reste, avec « Glisse un agent ici », jusqu'à sa suppression. Sans aucun agent non archivé dans le projet, le message vide et « Créer un agent » restent affichés, même s'il reste des dossiers.
 - L'agent principal est en tête du dossier, avec une étoile à gauche de son nom (infobulle « Agent principal »). Au plus un par dossier : en désigner un retire l'étoile au précédent, qui reste dans le dossier. Un dossier jamais renommé prend alors le nom du nouveau principal (premier nom libre : « <nom> 2 »…).
 - Créer : « Nouveau dossier » dans le menu à côté de « Nouvel agent », ou « Nouveau dossier avec cet agent » au clic droit d'un agent hors dossier (il y entre, sans devenir principal). Le dossier naît en mode renommage (« Nom du dossier »), sous « Dossier », « Dossier 2 »…, en bas de la liste ou à la place de l'agent. Un double clic sur le nom le renomme.
@@ -89,6 +89,7 @@ Au clic droit sur sa carte :
 - « Ouvrir une PR… », ou « Voir la PR #n » tant qu'une est ouverte (voir *Pull requests*).
 - « Activer le remote control » ou « Désactiver le remote control » (ci-dessous).
 - Supprimer : arrête son process et supprime son worktree, après confirmation s'il n'est pas mergé.
+- Un agent peut demander la suppression d'un agent qu'il a créé (MCP `delete_agent`, voir *Serveur MCP*) : la même modale s'ouvre, titrée « L'agent « <créateur> » demande de supprimer l'agent « <nom> ». Le supprimer ? », la case du worktree cochée comme l'agent l'a demandé. Les demandes passent une à une : la suivante s'ouvre quand la précédente est confirmée ou annulée ; annuler garde l'agent.
 
 Au clic droit sur l'en-tête d'un dossier : Renommer…, Monter, Descendre, « Supprimer le dossier ».
 

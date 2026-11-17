@@ -99,6 +99,7 @@ export default {
     createAgent: 'Lancer un agent',
     sendMessage: 'Envoyer un message',
     stopAgent: 'Arrêter un agent',
+    deleteAgent: 'Demander la suppression d’un agent',
     listBackgroundWork: 'Lister les sous-agents et tâches de fond d’un agent',
     getBackgroundOutput: 'Lire la sortie d’une tâche de fond ou le rapport d’un sous-agent',
     stopBackgroundWork: 'Arrêter une tâche de fond ou un sous-agent',
