@@ -1665,6 +1665,11 @@ export interface Agent {
   ticketId: string | null;
   /** What the agent last reported of its work through Escouade's MCP server (120 characters at most), until its next report. */
   progressLine: string | null;
+  /**
+   * The agent that made it asks the user to delete it (`delete_agent`, ESC-511): `by` is that agent's id, `at` since when,
+   * `worktree` the box it asks for (null: as the window has it). Shown on its card until the user confirms or refuses.
+   */
+  deleteAsk?: DeleteAsk;
   /** Its pull requests (ESC-64), as its code host last told them, the ones to merge first: none when its host has no client yet. */
   prs: PullRequest[];
   /** The code host's word for them: « MR » on GitLab, « PR » elsewhere; null until read. */
@@ -2680,8 +2685,6 @@ export type UiEvent =
   | { type: 'workflowTrack'; track: WorkflowTrack }
   | { type: 'agent'; agent: Agent }
   | { type: 'agentRemoved'; id: string; projectId: string }
-  /** An agent asks the user to delete one it made (`delete_agent`): `by` is its name, `worktree` the box it asks for. */
-  | { type: 'agentDeleteAsked'; id: string; by: string; worktree: boolean | null }
   | { type: 'conv'; agentId: string; ops: ConvOp[] }
   | { type: 'memory'; projectId: string }
   | { type: 'vectorsDownload'; done: number; total: number }
@@ -3528,4 +3531,20 @@ export interface CacheHeat {
 export interface HarnessScope {
   off: EngineId[];
   asks: EngineId[];
+}
+
+/** A deletion an agent asks of the user (`Agent.deleteAsk`): who asks (an agent's id), since when, and for its worktree. */
+export interface DeleteAsk {
+  by: string;
+  at: number;
+  worktree: boolean | null;
+}
+
+/** What deleting an agent's worktree would lose, as git said it in time (`delete_loss`); `known` false: unknown. */
+export interface DeleteLoss {
+  known: boolean;
+  dirty: number;
+  names: string[];
+  unmerged: number;
+  base: string;
 }

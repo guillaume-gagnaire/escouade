@@ -50,6 +50,9 @@ mod cursor_tui_tests;
 mod deeplink;
 #[cfg(test)]
 mod deeplink_tests;
+mod deleteask;
+#[cfg(test)]
+mod deleteask_tests;
 mod deploys;
 mod desktop;
 mod devpage;
@@ -835,6 +838,8 @@ pub fn run() {
                 commands::duplicate_agent,
                 commands::archive_agent,
                 commands::delete_agent,
+                commands::refuse_delete,
+                commands::delete_loss,
                 commands::merge_agent,
                 commands::get_commands,
                 commands::file_suggestions,

@@ -2044,6 +2044,14 @@ pub struct AgentMeta {
     /// delete it (`delete_agent`). None: made by the user, a ticket, or before it was kept.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub created_by: Option<String>,
+    /// Its maker asks the user to delete it (`delete_agent`, ESC-511): shown on its card until the
+    /// user confirms or refuses, kept across restarts, gone with it or with its maker.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delete_ask: Option<DeleteAsk>,
+    /// The agents whose deletion it asked for and the user refused (their names): it is told with
+    /// the next message it gets, then these go.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub delete_refused: Vec<String>,
     /// The mode its work resumes in once a plan is approved (ESC-277): the one it was in when it
     /// went into Plan, or its mode of departure when it started in it. None: the app's, `auto`.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -2573,6 +2581,17 @@ pub struct GitInfo {
     /// Of a project of several repositories (ESC-169), each one's: the fields above are then
     /// their sums, and `branch` theirs when they share it (empty otherwise).
     pub repos: Vec<RepoGit>,
+}
+
+/// A deletion an agent asks of the user (`AgentMeta::delete_ask`, `delete_agent`): who asks, since
+/// when, and whether its worktree is to go too (None: as the window has it).
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteAsk {
+    /// The agent that asks (its id): the one that made it.
+    pub by: String,
+    pub at: i64,
+    pub worktree: Option<bool>,
 }
 
 /// An agent's worktree switched from one branch to another (`AgentMeta::branch_moved`).

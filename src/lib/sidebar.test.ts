@@ -99,6 +99,10 @@ describe('the order of the sidebar', () => {
     // `seen` was opened (its look taken back), `done` needs a look but asks nothing.
     expect(folderAsks(f, { p: true, done: true, new: true })).toBe(2);
     expect(folderAsks(f, {})).toBe(0);
+    // A deletion its maker asks for waits for the user until answered, seen or not (ESC-511).
+    const asked = folderItem([agent({ id: 'x', status: 'idle', deleteAsk: { by: 'p', at: 1, worktree: null } })]);
+    expect(folderAsks(asked, {})).toBe(1);
+    expect(foldedCards(asked, undefined).map((a) => a.id)).toEqual(['x']);
   });
 });
 

@@ -1425,13 +1425,22 @@ async fn an_agent_asks_the_user_to_delete_an_agent_it_made_and_no_other() {
     let aide = put_agent(&h, &p, "aide", 2);
     let autre = put_agent(&h, &p, "autre", 3);
     h.core.agent(&aide.id).unwrap().lock().meta.created_by = Some(chef.id.clone());
+    // What the user is asked: the asks kept on the agents' cards (ESC-511), no modal.
     let asked = |h: &Harness| {
-        h.events
-            .lock()
-            .iter()
-            .filter(|e| e["type"] == "agentDeleteAsked")
-            .cloned()
-            .collect::<Vec<_>>()
+        let mut asks: Vec<_> = h
+            .core
+            .agents
+            .read()
+            .values()
+            .filter_map(|a| {
+                let m = &a.lock().meta;
+                m.delete_ask
+                    .as_ref()
+                    .map(|k| (m.id.clone(), k.by.clone(), k.worktree))
+            })
+            .collect();
+        asks.sort();
+        asks
     };
     let c = as_agent(&h, &chef.id).await;
 
@@ -1446,10 +1455,7 @@ async fn an_agent_asks_the_user_to_delete_an_agent_it_made_and_no_other() {
         (v["id"].as_str(), v["asked"].as_bool()),
         (Some(aide.id.as_str()), Some(true))
     );
-    assert_eq!(
-        asked(&h),
-        [json!({ "type": "agentDeleteAsked", "id": aide.id, "by": "chef", "worktree": false })]
-    );
+    assert_eq!(asked(&h), [(aide.id.clone(), chef.id.clone(), Some(false))]);
     assert!(h.core.agent(&aide.id).is_ok());
     assert_eq!(entry(&h).outcome, "ok");
 
@@ -2322,6 +2328,57 @@ async fn a_ticket_is_started_while_an_account_is_free_for_its_project_and_refuse
         ),
         ("start_ticket", "refused", Some(none.as_str()))
     );
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+/// `create_agent` judges as a ticket does (ESC-511): a shared account of a private project that
+/// keeps to its own, and an effort asked of a model that takes none (Haiku), which runs without.
+#[tokio::test]
+async fn an_agent_is_created_under_the_judges_of_a_ticket_on_a_private_project_and_a_model_without_effort(
+) {
+    let h = harness("mcp-act-create-agent-judges");
+    let p = project(&h).await;
+    with_pro(&h);
+    let c = external(&h).await;
+
+    // Haiku takes no effort: not refused, the agent goes without, and the answer says none.
+    let v = read(
+        &c,
+        "create_agent",
+        json!({ "project": "demo", "message": "Vite", "model": "haiku", "effort": "high" }),
+    )
+    .await;
+    assert_eq!(v["model"], "haiku");
+    assert_eq!(v["effort"], Value::Null);
+    turn_over(&h, v["id"].as_str().unwrap()).await;
+    c.cancel().await.unwrap();
+
+    // Private, with an account of its own: a shared one is refused, with why; its own is taken.
+    make_private(&h, &p);
+    crate::harness_scope_tests::turn_on_every_harness(&h, &p.id);
+    h.core.settings.write().accounts[1].projects = vec![p.id.clone()];
+    let chef = put_agent(&h, &p, "chef", 1);
+    let c = as_agent(&h, &chef.id).await;
+    let count = h.core.agents.read().len();
+    let shared = refused(
+        &c,
+        "create_agent",
+        json!({ "project": "demo", "message": "Non", "account": "Principal" }),
+    )
+    .await;
+    assert!(
+        shared.contains("n’utilise que ses propres comptes"),
+        "{shared}"
+    );
+    assert_eq!(h.core.agents.read().len(), count);
+    let own = read(
+        &c,
+        "create_agent",
+        json!({ "project": "demo", "message": "Oui", "account": "pro" }),
+    )
+    .await;
+    assert_eq!(own["account"], "Pro");
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }

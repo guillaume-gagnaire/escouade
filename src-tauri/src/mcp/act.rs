@@ -65,8 +65,7 @@ use crate::folders;
 use crate::git;
 use crate::i18n;
 use crate::model::{
-    AgentsAnswer, BoardSettings, Column, EngineId, PauseReason, Project, Ticket, UiEvent,
-    PROGRESS_LINE_MAX,
+    AgentsAnswer, BoardSettings, Column, EngineId, PauseReason, Project, Ticket, PROGRESS_LINE_MAX,
 };
 use crate::telemetry::Event;
 use crate::tickets::{
@@ -1788,7 +1787,11 @@ pub(super) async fn create_agent<R: Runtime>(
         i18n::ui(),
         &accounts::get(&core.settings.read(), &view.meta.account),
     );
-    let (model, effort) = (view.meta.model, view.meta.effort);
+    // A model that takes no effort (Haiku) runs without one, as a ticket's agent: none is said.
+    let effort = core
+        .takes_effort(view.meta.engine, &view.meta.account, &view.meta.model)
+        .then_some(view.meta.effort);
+    let model = view.meta.model;
     // Under its author's name, as every message from the server: not taken for the user's words.
     let origin = activity::caller_name(core, Some(caller));
     if let Err(e) = core
@@ -1927,18 +1930,16 @@ pub(super) async fn delete_agent<R: Runtime>(
             "You may only ask for the deletion of agents you made (create_agent): {name} is not one."
         )));
     }
-    core.hub.emit(UiEvent::AgentDeleteAsked {
-        id: found.id.clone(),
-        by: activity::caller_name(core, Some(caller)),
-        worktree: a.worktree,
-    });
+    // Kept on its card until the user answers, across restarts (ESC-511): no modal opens by itself.
+    core.ask_delete(me, &found.id, a.worktree)
+        .map_err(|e| ToolError::Refused(format!("{e:#}")))?;
     json(&json!({
         "id": found.id,
         "name": found.name,
         "asked": true,
         "note": tr!(
-            "La suppression est demandée à l’utilisateur, dans la fenêtre : il l’accepte ou la refuse. Acceptée, l’agent n’est plus dans list_agents.",
-            "The deletion is asked of the user, in the window: they accept or refuse it. Accepted, the agent is no longer in list_agents."
+            "La suppression est demandée à l’utilisateur, sur la carte de l’agent : il l’accepte ou la refuse quand il veut. Acceptée, l’agent n’est plus dans list_agents ; refusée, tu le lis avec ton prochain message.",
+            "The deletion is asked of the user, on the agent’s card: they accept or refuse it when they wish. Accepted, the agent is no longer in list_agents; refused, you read it with your next message."
         ),
     }))
 }

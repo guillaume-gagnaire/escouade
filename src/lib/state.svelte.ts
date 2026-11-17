@@ -48,6 +48,7 @@ import {
   type PaneZone,
 } from './panes';
 import type {
+  DeleteAsk,
   AccountView,
   CodeHost,
   Agent,
@@ -169,6 +170,11 @@ export type Modal =
     }
   /** « Supprimer le dossier » of a folder that holds agents: what becomes of them (docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md). */
   | { kind: 'deleteFolder'; projectId: string; folderId: string }
+  /**
+   * « Supprimer l'agent » (ESC-511): asked by the user, or opened from the card or the toast of a deletion the agent that
+   * made it asks for (`Agent.deleteAsk`); it says what would be lost, read by git as it opens.
+   */
+  | { kind: 'deleteAgent'; agentId: string }
   | { kind: 'rename'; title: string; value: string; onSubmit: (v: string) => void | Promise<void> }
   /**
    * The agreement to a harness in a project (ESC-404): before the first agent of a private project on it, or from the card
@@ -279,6 +285,9 @@ const ALERT: ReadonlySet<AgentStatus> = new Set(['waiting', 'done', 'error']);
 
 /** Its turn is under way: working, or waiting for an answer. */
 export const atWork = (a: Pick<Agent, 'status'>) => a.status === 'running' || a.status === 'waiting';
+
+/** It waits for the user: a question or a permission, or a deletion its maker asks for (ESC-511). */
+export const asksUser = (a: Pick<Agent, 'status' | 'deleteAsk'>) => a.status === 'waiting' || !!a.deleteAsk;
 
 /** How many of the last lines of the step running a worktree's setup the window keeps (as the backend does). */
 const SETUP_LINES = 500;
@@ -415,8 +424,6 @@ class AppState {
   /** The list of an agent's background tasks under its card, unfolded or folded by the reader, by agent (absent: unfolded while one runs). */
   bgOpen = $state<Record<string, boolean>>({});
   modal = $state<Modal | null>(null);
-  /** The deletions agents asked for (`delete_agent`), each confirmed in its own modal, one after another (the sidebar's). */
-  deleteAsks = $state<{ id: string; by: string; worktree: boolean | null }[]>([]);
   toasts = $state<Toast[]>([]);
   now = $state(Date.now());
   gitTick = $state(0);
@@ -878,12 +885,10 @@ class AppState {
         if (!e.agent.setup) this.dropSetupOutput(e.agent.id);
         // Archived: its pane, if it has one, goes to another agent (ESC-399).
         if (e.agent.archived && !prev?.archived) this.settlePanes();
+        // A deletion its maker asks for (ESC-511): told once, by a toast; its card keeps it, no dialog opens by itself.
+        if (prev && !prev.deleteAsk && e.agent.deleteAsk) this.tellDeleteAsk(e.agent);
         break;
       }
-      case 'agentDeleteAsked':
-        // Asked twice before the user answers: one modal.
-        if (!this.deleteAsks.some((x) => x.id === e.id)) this.deleteAsks.push({ id: e.id, by: e.by, worktree: e.worktree });
-        break;
       case 'agentRemoved':
         this.runHooks(this.removalHooks, e.id);
         workflows.drop(e.projectId, e.id);
@@ -2076,7 +2081,7 @@ class AppState {
    */
   nextWaiting() {
     const list = Object.values(this.agents)
-      .filter((a) => !a.archived && (a.status === 'waiting' || this.attention[a.id]))
+      .filter((a) => !a.archived && (asksUser(a) || this.attention[a.id]))
       .sort((a, b) => a.lastActivity - b.lastActivity);
     if (!list.length) return;
     const cur = list.some((a) => a.id === this.cardFocus.id) ? this.cardFocus.id : this.agent?.id;
@@ -2095,6 +2100,33 @@ class AppState {
     this.toasts.push(action ? { id, text, kind, action } : { id, text, kind });
     // One with a button stays long enough to reach it.
     setTimeout(() => this.dismissToast(id), ms ?? (action ? 12_000 : kind === 'error' ? 7000 : 3500));
+  }
+
+  /** The deletion the agent that made `a` asks for, with that agent's name; none once that agent is gone (ESC-511). */
+  deleteAskOf(a: Agent): (DeleteAsk & { name: string }) | null {
+    const ask = a.deleteAsk;
+    const by = ask && this.agents[ask.by];
+    return ask && by ? { ...ask, name: by.name } : null;
+  }
+
+  /** « Voir » of a deletion asked for, or « Supprimer » of the user's: the dialog that says what would be lost. */
+  askDelete(agentId: string) {
+    this.modal = { kind: 'deleteAgent', agentId };
+  }
+
+  /** « Refuser » the deletion asked for `agentId`: it stays, and the agent that asked reads it with its next message. */
+  refuseDelete(agentId: string) {
+    this.run(api.refuseDelete(agentId));
+  }
+
+  /** A toast, once, with « Voir »: never a dialog over what the user is doing. */
+  private tellDeleteAsk(a: Agent) {
+    const ask = this.deleteAskOf(a);
+    if (!ask) return;
+    this.toast(t('nav.sidebar.deleteAsk.toast', { by: ask.name, name: a.name }), 'info', {
+      label: t('nav.sidebar.deleteAsk.see'),
+      onClick: () => void this.openFromToast({ kind: 'deleteAgent', agentId: a.id }),
+    });
   }
 
   dismissToast(id: number) {

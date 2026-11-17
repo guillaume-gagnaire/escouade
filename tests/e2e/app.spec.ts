@@ -443,7 +443,12 @@ test('a new worktree is set up before its agent takes a message, and torn down b
 
   await page.locator('.card').first().click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Supprimer…' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Supprimer' }).click();
+  // What its setup wrote is not committed: said, and its worktree's box unticked (ESC-511); ticked by hand, it goes.
+  const confirm = page.getByRole('dialog', { name: /^Supprimer l'agent/ });
+  await expect(confirm.getByText('1 fichier modifié non commité : prepare.txt')).toBeVisible();
+  await expect(confirm.getByRole('checkbox')).not.toBeChecked();
+  await confirm.getByRole('checkbox').check();
+  await confirm.getByRole('button', { name: 'Supprimer', exact: true }).click();
   await expect(page.locator('.card')).toHaveCount(0);
   // Torn down in the worktree while it was there, then removed.
   await expect.poll(() => fs.existsSync(wt), { timeout: 30_000 }).toBe(false);

@@ -1284,7 +1284,7 @@ impl<R: Runtime> Tools<R> {
     }
 
     #[tool(
-        description = "Ask the user to delete an agent you made with create_agent, once it is no longer needed: the window shows them its « Supprimer l'agent » confirmation under your name, one after another when you ask for several; nothing is deleted until they confirm. Deleted, its process stops and its conversation leaves the app (its harness's session stays on disk); its worktree and branch go too unless worktree is false (the user may change it). Refused for yourself, for an agent you did not make, and outside Escouade's agents. Answers at once, before the user does: the agent's id and name and asked (true); accepted, the agent is no longer in list_agents.",
+        description = "Ask the user to delete an agent you made with create_agent, once it is no longer needed: its card in the window says you ask it, and they confirm or refuse when they wish (no dialog opens by itself); nothing is deleted until they confirm. The ask is kept until they answer, across restarts, and goes if either agent is deleted; at most 5 of yours wait at once. Deleted, its process stops and its conversation leaves the app (its harness's session stays on disk); its worktree and branch go too unless worktree is false, or the user unticks it (the window unticks it when the worktree has uncommitted or unmerged work). Refused, you read it at the head of your next message. Refused for yourself, for an agent you did not make, and outside Escouade's agents. Answers at once, before the user does: the agent's id and name and asked (true); accepted, the agent is no longer in list_agents.",
         annotations(
             read_only_hint = false,
             destructive_hint = true,

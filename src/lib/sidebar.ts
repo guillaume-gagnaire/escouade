@@ -79,16 +79,21 @@ export function shownAgents(items: SidebarItem[]): Agent[] {
 
 /** What a folded folder still shows as cards: its agents that wait, and the open one. */
 export function foldedCards(item: Extract<SidebarItem, { kind: 'folder' }>, selectedId: string | undefined): Agent[] {
-  return [...(item.principal ? [item.principal] : []), ...item.agents].filter((a) => a.status === 'waiting' || a.id === selectedId);
+  return [...(item.principal ? [item.principal] : []), ...item.agents].filter(
+    (a) => a.status === 'waiting' || !!a.deleteAsk || a.id === selectedId,
+  );
 }
 
 /**
  * What the amber pill of a folder's header counts: its agents, its principal included, that wait for an answer and were not
- * seen yet (`attention`, what makes a card blink). Opened, an agent leaves the count, as its card stops blinking; it still
+ * seen yet (`attention`, what makes a card blink), and those whose deletion their maker asks for until the user answers (ESC-511).
+ * Opened, an agent that waits leaves the count, as its card stops blinking; it still
  * waits on top of its folder, and a folded folder still shows it (`foldedCards`).
  */
 export function folderAsks(item: Extract<SidebarItem, { kind: 'folder' }>, attention: Record<string, true>): number {
-  return [...(item.principal ? [item.principal] : []), ...item.agents].filter((a) => a.status === 'waiting' && attention[a.id]).length;
+  return [...(item.principal ? [item.principal] : []), ...item.agents].filter(
+    (a) => (a.status === 'waiting' && attention[a.id]) || !!a.deleteAsk,
+  ).length;
 }
 
 /** The line of a card under its model: what the agent does during a turn, or what its last turns changed. */

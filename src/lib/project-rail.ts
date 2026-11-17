@@ -6,7 +6,7 @@ import { t } from './i18n';
 import { api } from './ipc';
 import type { MenuItem } from './menu.svelte';
 import { askCloseProject } from './project-actions';
-import { app } from './state.svelte';
+import { app, asksUser } from './state.svelte';
 import { alertColor, mostPressing } from './tab-strip';
 import { projectPalette } from './plugin-theme.svelte';
 import type { Project } from './types';
@@ -95,7 +95,7 @@ export function tileState(p: Project): TileState {
   const agents = Object.values(app.agents).filter((a) => a.projectId === p.id && !a.archived);
   const seen = app.attentionIn(p.id);
   return {
-    waiting: agents.filter((a) => a.status === 'waiting').length,
+    waiting: agents.filter(asksUser).length,
     running: agents.filter((a) => a.status === 'running').length,
     changes: app.git[p.id]?.total ?? 0,
     alert: mostPressing(seen.map((a) => alertColor(a.status))),

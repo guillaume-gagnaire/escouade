@@ -56,7 +56,6 @@
   } from '../lib/prs';
   import { runIn } from '../lib/launch-actions';
   import { shortBranch } from '../lib/branches';
-  import { buffers, lossNotice } from '../lib/editor/buffers.svelte';
   import { menu, type MenuItem } from '../lib/menu.svelte';
   import { modeLabel, modelLabel, MODES, planResume } from '../lib/models';
   import HeatFigure from './HeatFigure.svelte';
@@ -185,16 +184,6 @@
   $effect(() => {
     const id = project.id;
     untrack(() => void app.readCodeHost(id));
-  });
-  // The deletions agents asked for (`delete_agent`): one modal after another, the next once the one before is answered.
-  $effect(() => {
-    if (app.modal) return;
-    while (app.deleteAsks.length) {
-      const ask = app.deleteAsks.shift()!;
-      // Gone since (deleted by hand): nothing to ask, the next one is.
-      const a = app.agents[ask.id];
-      if (a) return untrack(() => confirmDelete(a, ask));
-    }
   });
   /** Who waits for an answer goes first (2.0 design). */
   const agents = $derived(app.projectAgents);
@@ -772,32 +761,9 @@
     };
   }
 
-  /** « Supprimer l'agent », asked by the user, or by the agent that made it (`asked`: `delete_agent`, under its name). */
-  function confirmDelete(a: Agent, asked?: { by: string; worktree: boolean | null }) {
-    app.modal = {
-      kind: 'confirm',
-      title: asked ? t('nav.sidebar.deleteAskedTitle', { by: asked.by, name: a.name }) : t('nav.sidebar.deleteTitle', { name: a.name }),
-      body:
-        t('nav.sidebar.deleteBody', { engine: speakerOf(a.engine), harness: engineName(a.engine) }) +
-        // The files of its worktree, open in the editor: an agent without one edits the project's, which stay.
-        lossNotice(buffers.unsavedIn(a.projectId, a.id)),
-      confirm: t('common.delete'),
-      danger: true,
-      option: a.worktree
-        ? {
-            // A branch that was there before the agent stays, whatever becomes of its worktree.
-            label: a.worktree.existing
-              ? t('branches.agent.deleteWorktree', { branch: a.worktree.branch })
-              : t('nav.sidebar.deleteWorktree', { branch: a.worktree.branch }),
-            value: asked?.worktree ?? true,
-          }
-        : undefined,
-      onConfirm: async (removeWorktree) => {
-        stopTests(a.id);
-        const warning = await app.run(api.deleteAgent(a.id, removeWorktree));
-        if (warning) app.toast(warning, 'error');
-      },
-    };
+  /** « Supprimer l'agent »: the dialog that says what would be lost (ESC-511), as for a deletion an agent asks for. */
+  function confirmDelete(a: Agent) {
+    app.askDelete(a.id);
   }
 
   /**
@@ -1074,6 +1040,7 @@
       {@const remote = remoteStateOf(a)}
       {@const pending = pendingFor(a, app.agents, app.tickets, app.now, can(a, 'backgroundTasks'))}
       {@const ask = listRequest(a)}
+      {@const delAsk = app.deleteAskOf(a)}
       {@const act = cardActivity(a, git?.agents[a.id] ?? 0, pending)}
       {@const prs = cardPrs(a)}
       {@const subs = a.id === selectedAgentId ? sidebarSubs(a) : null}
@@ -1293,6 +1260,30 @@
                 >
               {/if}
               <span class="spend">{cardSpend(a)}</span>
+            </div>
+          {/if}
+          {#if delAsk}
+            <!-- Its maker asks for its deletion (`delete_agent`, ESC-511): said here, never by a dialog of its own. -->
+            <div class="del-ask" role="group" aria-label={t('nav.sidebar.deleteAsk.card', { by: delAsk.name })} data-delete-ask={a.id}>
+              <Icon name="trash" size={12} /><span class="del-text">{t('nav.sidebar.deleteAsk.card', { by: delAsk.name })}</span>
+              <button
+                class="del-btn"
+                aria-label={t('nav.sidebar.deleteAsk.seeLabel', { name: a.name })}
+                onclick={(e) => {
+                  e.stopPropagation();
+                  app.askDelete(a.id);
+                }}
+                onkeydown={(e) => e.stopPropagation()}>{t('nav.sidebar.deleteAsk.see')}</button
+              >
+              <button
+                class="del-btn"
+                aria-label={t('nav.sidebar.deleteAsk.refuseLabel', { name: a.name })}
+                onclick={(e) => {
+                  e.stopPropagation();
+                  app.refuseDelete(a.id);
+                }}
+                onkeydown={(e) => e.stopPropagation()}>{t('nav.sidebar.deleteAsk.refuse')}</button
+              >
             </div>
           {/if}
         </div>
@@ -2260,6 +2251,36 @@
     font-size: 11.5px;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+  }
+  /* A deletion its maker asks for (ESC-511): one line of the card, in amber as what waits for the user. */
+  .del-ask {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 4px 0 2px 16px;
+    color: var(--wait);
+    font-size: 12px;
+  }
+  .del-text {
+    flex: 1 1 140px;
+    min-width: 0;
+    color: var(--text);
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+  .del-btn {
+    flex: none;
+    padding: 0 2px;
+    border: none;
+    background: transparent;
+    color: var(--wait);
+    font-size: 12px;
+    font-weight: 550;
+  }
+  .del-btn:hover {
+    text-decoration: underline;
   }
   .in-conv {
     display: inline-flex;

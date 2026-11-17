@@ -1961,6 +1961,8 @@ impl<R: Runtime> Core<R> {
             m.resume_at = None;
             m.port_base = None;
         }
+        // A deletion asked by an agent that is no more (its project closed since) goes (ESC-511).
+        crate::deleteask::prune(&mut state.agents);
         let mut tickets = state.tickets;
         for t in &mut tickets {
             // A validation the app's stop cut: to run again by hand.
@@ -5562,9 +5564,16 @@ impl<R: Runtime> Core<R> {
         // Its worktree went to another branch since it was last told (`agentbranch`): the agent
         // reads it first, the conversation shows the message alone.
         let note = self.branch_note(id);
-        let with_note = |text: &str| match &note {
-            Some((_, n)) => format!("{n}\n\n{text}"),
-            None => text.to_string(),
+        // The deletions it asked for that the user refused since (`deleteask`, ESC-511): read
+        // first too, once.
+        let refused = self.refusal_note(id);
+        let with_note = |text: &str| {
+            let notes = [note.as_ref().map(|n| &n.1), refused.as_ref().map(|r| &r.1)];
+            notes
+                .into_iter()
+                .flatten()
+                .rev()
+                .fold(text.to_string(), |text, n| format!("{n}\n\n{text}"))
         };
         if h.lock().meta.terminal {
             if !attachments.is_empty() || !files.is_empty() {
@@ -5634,6 +5643,9 @@ impl<R: Runtime> Core<R> {
             if self.deliver(id, &proc, &delivered, naming, &content, &attachments, kind)? {
                 if let Some((mv, _)) = &note {
                     self.branch_told(id, mv);
+                }
+                if let Some((names, _)) = &refused {
+                    self.refusals_told(id, names);
                 }
                 // Named before it ran: its session takes the name.
                 if lazy && h.lock().meta.named {
@@ -8417,6 +8429,8 @@ impl<R: Runtime> Core<R> {
             project_id: pid.clone(),
         });
         self.layout_hook(&pid, |p| crate::folders::remove_agent(p, id));
+        // The deletions it asked for go with it (ESC-511).
+        self.drop_asks_by(id);
         self.request_save();
         self.update_tray();
         self.stop_test_runs(id);
@@ -9442,6 +9456,8 @@ impl<R: Runtime> Core<R> {
                     env.down_later(wt.path);
                 }
             }
+            // The deletions it asked for in other projects go with it (ESC-511).
+            self.drop_asks_by(&aid);
             self.hub.emit(UiEvent::AgentRemoved {
                 id: aid,
                 project_id: id.to_string(),

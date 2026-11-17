@@ -1,8 +1,8 @@
 ---
 title: "Barre latérale"
 subject: "Fenêtre"
-sources: ["docs/SPEC.md","src-tauri/src/core.rs","src-tauri/src/engine/claude/mod.rs","src-tauri/src/worktrees.rs","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","https://github.com/guillaume-gagnaire/escouade/issues/26"]
-tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390","ESC-396","ESC-398","ESC-403","ESC-417"]
+sources: ["docs/SPEC.md","src-tauri/src/core.rs","src-tauri/src/engine/claude/mod.rs","src-tauri/src/worktrees.rs","docs/superpowers/specs/2026-11-06-dossiers-d-agents-design.md","https://github.com/guillaume-gagnaire/escouade/issues/26","https://github.com/guillaume-gagnaire/escouade/pull/44"]
+tickets: ["ESC-204","ESC-73","ESC-75","ESC-160","ESC-19","ESC-380","ESC-390","ESC-396","ESC-398","ESC-403","ESC-417","ESC-511"]
 decisions: [129,133,147,"un-agent-peut-demander-la-suppression-de"]
 compared: null
 ---
@@ -32,7 +32,7 @@ La colonne d'un projet, à droite de la barre des projets. Elle liste les agents
 
 - Les agents d'un projet se rangent en dossiers : un seul niveau, jamais un dossier dans un dossier. La liste est une suite de dossiers et d'agents hors dossier, dans l'ordre que l'utilisateur ou un agent a choisi (l'ordre rangé). Les agents déjà là restent hors dossier : rien n'est rangé après coup.
 - Un dossier est un cadre (`section.folder`, jamais la classe `agent`) : un en-tête, puis les cartes complètes de ses agents sous un filet.
-  - En-tête : le chevron (« Replier <nom> » / « Déplier <nom> »), le nom, le nombre d'agents non archivés, et les compteurs « en cours » (un nombre vert, sans fond ni pulsation : ce n'est pas une alerte) et « en attente » (la pastille ambre qui pulse, son nombre lisible sur elle), absents à zéro, lus aussi par les lecteurs d'écran (« 2 en cours, 1 en attente »). « En attente » compte ses agents qui attendent une réponse et qu'on n'a pas encore vus, comme une carte qui clignote : ouvert, l'agent en sort, même s'il attend encore (sa carte le dit, en tête de son dossier). Ouvrir un agent depuis sa carte le compte comme vu, même quand l'éditeur reste affiché par-dessus sa conversation.
+  - En-tête : le chevron (« Replier <nom> » / « Déplier <nom> »), le nom, le nombre d'agents non archivés, et les compteurs « en cours » (un nombre vert, sans fond ni pulsation : ce n'est pas une alerte) et « en attente » (la pastille ambre qui pulse, son nombre lisible sur elle), absents à zéro, lus aussi par les lecteurs d'écran (« 2 en cours, 1 en attente »). « En attente » compte ses agents qui attendent une réponse et qu'on n'a pas encore vus, comme une carte qui clignote : ouvert, l'agent en sort, même s'il attend encore (sa carte le dit, en tête de son dossier). Il compte aussi, vus ou non, ses agents dont un agent demande la suppression, tant que l'utilisateur ne l'a ni acceptée ni refusée. Ouvrir un agent depuis sa carte le compte comme vu, même quand l'éditeur reste affiché par-dessus sa conversation.
   - Un dossier vide reste, avec « Glisse un agent ici », jusqu'à sa suppression. Sans aucun agent non archivé dans le projet, le message vide et « Créer un agent » restent affichés, même s'il reste des dossiers.
 - L'agent principal est en tête du dossier, avec une étoile à gauche de son nom (infobulle « Agent principal »). Au plus un par dossier : en désigner un retire l'étoile au précédent, qui reste dans le dossier. Un dossier jamais renommé prend alors le nom du nouveau principal (premier nom libre : « <nom> 2 »…).
 - Créer : « Nouveau dossier » dans le menu à côté de « Nouvel agent », ou « Nouveau dossier avec cet agent » au clic droit d'un agent hors dossier (il y entre, sans devenir principal). Le dossier naît en mode renommage (« Nom du dossier »), sous « Dossier », « Dossier 2 »…, en bas de la liste ou à la place de l'agent. Un double clic sur le nom le renomme.
@@ -69,7 +69,7 @@ La colonne d'un projet, à droite de la barre des projets. Elle liste les agents
 - Un clic, ou les touches `1`, `2`…, répondent à l'agent dont la carte a le focus, sinon au premier de la liste qui peut l'être.
 - Les touches ne marchent que hors d'un champ : ni dans un terminal, l'éditeur, un menu ou une boîte de dialogue, ni sur le Kanban, ni avec Ctrl, Alt ou Cmd, ni maintenues. Elles ne font rien pendant 500 ms après qu'une demande s'affiche.
 - La conversation ouverte ne change pas. La carte de l'agent qui repart brille en vert un instant, un toast dit la réponse (« tests-e2e : « Oui » »), et l'agent reprend sa place dans la liste.
-- `Ctrl+J`, ou le bouton « N en attente », donne le focus à la carte du prochain agent en attente ou à voir, dans tous les projets, sans l'ouvrir. `Entrée` l'ouvre.
+- `Ctrl+J`, ou le bouton « N en attente », donne le focus à la carte du prochain agent en attente (une question, une permission, une suppression demandée par un agent) ou à voir, dans tous les projets, sans l'ouvrir. `Entrée` l'ouvre.
 
 ### Menu d'un agent
 
@@ -88,10 +88,23 @@ Au clic droit sur sa carte :
 - « Ouvrir un terminal » : dans son worktree, sinon dans le dossier du projet, avec le premier shell détecté ; nommé « <shell> · <agent> ». Pas pour un agent archivé.
 - « Ouvrir une PR… », ou « Voir la PR #n » tant qu'une est ouverte (voir *Pull requests*).
 - « Activer le remote control » ou « Désactiver le remote control » (ci-dessous).
-- Supprimer : arrête son process et supprime son worktree, après confirmation s'il n'est pas mergé.
-- Un agent peut demander la suppression d'un agent qu'il a créé (MCP `delete_agent`, voir *Serveur MCP*) : la même modale s'ouvre, titrée « L'agent « <créateur> » demande de supprimer l'agent « <nom> ». Le supprimer ? », la case du worktree cochée comme l'agent l'a demandé. Les demandes passent une à une : la suivante s'ouvre quand la précédente est confirmée ou annulée ; annuler garde l'agent.
+- Supprimer : ouvre « Supprimer l'agent « <nom> » ? », qui dit ce qui serait perdu (voir *Supprimer un agent* ci-dessous).
+- Un agent peut demander la suppression d'un agent qu'il a créé (MCP `delete_agent`, voir *Serveur MCP*). Rien ne s'ouvre de soi-même : ce que l'utilisateur tapait n'est jamais pris pour une réponse.
+  - La carte de l'agent visé le dit, ligne ambre « « <créateur> » demande de le supprimer », avec « Voir » (ouvre la modale) et « Refuser » (retire la demande ; l'agent reste et son créateur le lit en tête de son prochain message).
+  - Un toast l'annonce une fois, à l'arrivée de la demande : « L'agent « <créateur> » demande de supprimer l'agent « <nom> ». », avec « Voir » (qui n'ouvre rien quand une autre modale est ouverte). Pas de toast après un rechargement ou un redémarrage : la carte suffit.
+  - La demande attend l'utilisateur comme une question : comptée dans « en attente » du dossier (même vue), dans la tuile du projet et le « N en attente » de la barre d'état, atteinte par `Ctrl+J` ; un dossier replié garde la carte visible. Plusieurs demandes s'additionnent sur leurs cartes, sans rien empiler à l'écran.
+  - Elle est gardée dans l'état d'Escouade : elle survit à un rechargement de la fenêtre et à un redémarrage, et part avec l'agent visé ou avec son créateur.
 
 Au clic droit sur l'en-tête d'un dossier : Renommer…, Monter, Descendre, « Supprimer le dossier ».
+
+#### Supprimer un agent
+
+La modale « Supprimer l'agent « <nom> » ? », qu'elle vienne du menu de l'agent ou d'une demande d'un agent (une ligne ambre dit alors « Demandé par l'agent « <créateur> », qui l'a créé. », et « Refuser » s'ajoute entre « Annuler » et « Supprimer ») :
+
+- Ce qu'elle arrête : le process du harness, la conversation retirée de l'app (la session du harness reste sur le disque), les fichiers de son worktree non enregistrés dans l'éditeur.
+- « Ce qui serait perdu », lu à l'ouverture : ses fichiers modifiés non commités (le nombre et les cinq premiers noms, « et N autres »), ses commits pas encore fusionnés dans sa branche de départ, un tour en cours, une demande en attente de réponse, le ticket auquel il est lié ; « Rien de non commité ni de non fusionné. » sinon. git est lu sur le worktree, 3 s au plus : « Lecture du worktree… » en attendant, sans bloquer la modale, puis « État du worktree inconnu : git n'a pas répondu à temps. » s'il est trop lent.
+- La case « Supprimer aussi le worktree et la branche <branche> » (ou « … (la branche <branche> est conservée) » pour une branche préexistante) est grisée pendant la lecture, puis décochée quand il y a du travail non commité ou non fusionné ou un état inconnu (« La case du worktree est décochée : son travail en cours resterait. »), cochée sinon (sauf si l'agent qui demande a voulu garder le worktree). Un choix de l'utilisateur n'est pas défait par la lecture.
+- Le focus va au cadre de la modale, pas à un bouton : Entrée ne confirme rien.
 
 ### Dupliquer la conversation
 

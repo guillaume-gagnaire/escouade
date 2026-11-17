@@ -1759,6 +1759,20 @@ pub async fn delete_agent(
     core.delete_agent(&id, remove_worktree).await.map_err(err)
 }
 
+/// « Refuser » the deletion its maker asked for (`delete_agent`, ESC-511): the agent stays.
+#[tauri::command]
+pub fn refuse_delete(core: CoreState<'_>, id: String) -> Res<()> {
+    core.refuse_delete(&id).map_err(err)
+}
+
+/// What deleting the agent's worktree would lose, as git says it in time (« Supprimer l'agent »).
+#[tauri::command]
+pub async fn delete_loss(core: CoreState<'_>, id: String) -> Res<crate::deleteask::Loss> {
+    core.delete_loss(&id, crate::deleteask::LOSS_TIMEOUT)
+        .await
+        .map_err(err)
+}
+
 #[tauri::command]
 pub async fn merge_agent(
     core: CoreState<'_>,

@@ -384,3 +384,72 @@ test.describe('« Les agents peuvent piloter Escouade » in every harness instal
     expect(old?.status ?? 0).not.toBe(200);
   });
 });
+
+// A deletion an agent asks for (`delete_agent`, ESC-511): no dialog opens by itself, the card of the agent asked about says
+// it, « Voir » shows what would be lost, and the ask is kept when the window reloads.
+test.describe('a deletion an agent asks for', () => {
+  test.use({ preStart: { run: () => ({ mcpEnabled: true }) } });
+
+  function agentServer(argv: string[]) {
+    const entry = JSON.parse(fs.readFileSync(optionValue(argv, '--mcp-config'), 'utf8')).mcpServers.escouade;
+    return { url: entry.url, token: String(entry.headers.Authorization).replace(/^Bearer /, '') };
+  }
+
+  test('is told on the card of the agent made, kept across a reload, and confirmed from « Voir »', async ({ app }) => {
+    let { page } = app;
+    await addProject(page, app.repo);
+    await expect.poll(() => streams(app).length).toBe(1);
+    const server = agentServer(streams(app)[0].argv);
+    const init = { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'e2e', version: '1.0.0' } };
+    expect((await rpc(server, 1, 'initialize', init)).status).toBe(200);
+    await rpc(server, null, 'notifications/initialized', {});
+    let n = 1;
+    const call = async (name: string, args: object) => {
+      const answer = await rpc(server, ++n, 'tools/call', { name, arguments: args });
+      return JSON.parse(answer.json.result.content[0].text);
+    };
+    const side = () => page.locator('aside.side');
+    const myName = (await side().locator('.agent .name').first().textContent())!.trim();
+
+    // The agent makes one in a worktree of its own, which leaves two files uncommitted.
+    const made = await call('create_agent', { project: 'demo-api', message: 'bonjour', worktree: true });
+    const worktrees = path.join(app.repo, '.claude', 'worktrees');
+    await expect.poll(() => (fs.existsSync(worktrees) ? fs.readdirSync(worktrees).length : 0)).toBe(1);
+    const wt = path.join(worktrees, fs.readdirSync(worktrees)[0]);
+    await expect.poll(() => fs.existsSync(path.join(wt, '.git'))).toBe(true);
+    fs.writeFileSync(path.join(wt, 'a.txt'), 'a\n');
+    fs.writeFileSync(path.join(wt, 'b.txt'), 'b\n');
+
+    expect(await call('delete_agent', { agent: made.id })).toMatchObject({ id: made.id, asked: true });
+    // Nothing opens: the card says it, and a toast once.
+    const card = () => side().locator(`[data-delete-ask="${made.id}"]`);
+    await expect(card()).toContainText(`« ${myName} » demande de le supprimer`);
+    await expect(page.locator('.toast', { hasText: `L'agent « ${myName} » demande de supprimer` })).toHaveCount(1);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    // The window reloaded: the ask is still on the card, no dialog, no toast again.
+    await page.reload();
+    await expect(card()).toContainText(`« ${myName} » demande de le supprimer`);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    // « Voir »: what would be lost, the worktree's box unticked.
+    await card()
+      .getByRole('button', { name: /^Voir la demande/ })
+      .click();
+    // Its name, given from its first message since it was made.
+    const dialog = page.getByRole('dialog', { name: /^Supprimer l'agent « .+ » \?$/ });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText(`Demandé par l'agent « ${myName} », qui l'a créé.`)).toBeVisible();
+    await expect(dialog.getByText('2 fichiers modifiés non commités : a.txt, b.txt')).toBeVisible();
+    await expect(dialog.getByRole('checkbox')).not.toBeChecked();
+    // Entrée confirms nothing.
+    await page.keyboard.press('Enter');
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Supprimer', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(side().locator(`.agent[data-agent="${made.id}"]`)).toHaveCount(0);
+    // Its worktree kept, with its work.
+    expect(fs.existsSync(path.join(wt, 'a.txt'))).toBe(true);
+    expect((await call('list_agents', { project: 'demo-api' })).map((a: { id: string }) => a.id)).not.toContain(made.id);
+  });
+});
