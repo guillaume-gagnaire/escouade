@@ -16,14 +16,18 @@ if [ $# -gt 0 ]; then shift; fi
 cd "$(dirname "$0")/../fuzz"
 targets=${*:-$(ls fuzz_targets | sed 's/\.rs$//')}
 
+# The target is named: a cargo-fuzz built for musl (the prebuilt one the CI installs) would aim at musl, where the
+# sanitizer cannot link and no standard library is installed.
+host=$(rustc -vV | sed -n 's/^host: //p')
+
 # Built once, all of them (the run of each then starts at once).
-cargo fuzz build --fuzz-dir .
+cargo fuzz build --fuzz-dir . --target "$host"
 
 failed=""
 for t in $targets; do
   mkdir -p "corpus/$t"
   echo "== $t ($seconds s)"
-  if ! cargo fuzz run --fuzz-dir . "$t" "corpus/$t" "seeds/$t" -- \
+  if ! cargo fuzz run --fuzz-dir . --target "$host" "$t" "corpus/$t" "seeds/$t" -- \
       -max_total_time="$seconds" -rss_limit_mb=2048 -malloc_limit_mb=256 -timeout=20 -max_len=8192 \
       -print_final_stats=1; then
     failed="$failed $t"
