@@ -1,9 +1,9 @@
 ---
-number: null
+number: 207
 id: "unharnessed-en-harness-decrit-a-son-seul"
 title: "Unharnessed en harness décrit, à son seul mode Bypass, sans installeur, sa session reprise par --resume"
 date: "2026-11-16"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-491"
 pages: ["plugins/harness-acp-decrits"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/harness-acp-decrits","added":11,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-18T12:15:07+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
