@@ -51,8 +51,11 @@ pub fn tools_dir(data: &Path) -> PathBuf {
 /// `write_cache`. Without the forcing, NTFS journals the renaming before the data reaches the disk: after a power cut,
 /// the file has its size and holds zeros (2026-11-15).
 ///
-/// The temporary file is `<file>.tmp`, one name for every writer: two writers of a same file at once must be
-/// serialized (ESC-440). It is removed when the writing fails.
+/// The temporary file is the write's own (`temp_of`): two writers of a same file at once, threads or processes, never
+/// share one, and neither fails (ESC-535; with one name for all, the second found its file renamed away, « os error
+/// 2 »). The last one put in place wins: a writer whose content must follow the order of its changes takes the
+/// snapshot and writes it under one lock of its own (the state: `Core::save_state`). The temporary file is removed when
+/// the writing fails; one a crash left is removed by the first write in its folder (`sweep_leftovers`).
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     write_through_temp(path, bytes, Durability::Forced, false)
 }
@@ -83,24 +86,28 @@ fn write_through_temp(
     private: bool,
 ) -> std::io::Result<()> {
     use std::io::Write;
-    let tmp = path.with_extension("tmp");
+    sweep_leftovers(path);
+    let tmp = temp_of(path);
     let written = (|| {
         let mut options = std::fs::OpenOptions::new();
-        options.write(true).create(true).truncate(true);
+        // Always a new file, made with its mode: never one another writer fills, nor one a crash left readable by all.
+        options.write(true).create_new(true);
         #[cfg(unix)]
         if private {
             use std::os::unix::fs::OpenOptionsExt;
             options.mode(0o600);
         }
-        let mut f = options.open(&tmp)?;
-        #[cfg(unix)]
-        if private {
-            use std::os::unix::fs::PermissionsExt;
-            // The mode only applies to a new file: one left by a crash keeps its own, emptied.
-            f.set_permissions(std::fs::Permissions::from_mode(0o600))?;
-        }
         #[cfg(not(unix))]
         let _ = private;
+        let mut f = match options.open(&tmp) {
+            // Its name is this process's and this write's alone: a file there was left by a crashed process whose
+            // number this one has now.
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                std::fs::remove_file(&tmp)?;
+                options.open(&tmp)?
+            }
+            opened => opened?,
+        };
         f.write_all(bytes)?;
         if durability == Durability::Forced {
             f.sync_all()?;
@@ -116,6 +123,70 @@ fn write_through_temp(
         let _ = std::fs::remove_file(&tmp);
     }
     written
+}
+
+/// The temporary file of one write of `path`: `<file>.<process>-<n>.tmp` beside it, `n` counting this process's
+/// writes, so that no two writes at once share it (ESC-535).
+fn temp_of(path: &Path) -> PathBuf {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let n = NEXT.fetch_add(1, Ordering::Relaxed);
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(".{}-{n}.tmp", std::process::id()));
+    path.with_file_name(name)
+}
+
+/// The number of the process whose write `name` was the temporary file of (`temp_of`), if it is one.
+fn temp_writer(name: &str) -> Option<u32> {
+    let (file, tag) = name.strip_suffix(".tmp")?.rsplit_once('.')?;
+    let (pid, n) = tag.split_once('-')?;
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    (!file.is_empty() && digits(pid) && digits(n))
+        .then(|| pid.parse().ok())
+        .flatten()
+}
+
+/// How old a temporary file of another process is when it is taken for a crash's leftover: a write lasts milliseconds.
+const LEFTOVER_AGE: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// The temporary files a crash or a power cut left beside `path` (`temp_of`, of another process, a minute old at
+/// least) removed, once per folder and process: with one name for all, the next write took the place of such a file;
+/// with a name per write, nothing else would.
+fn sweep_leftovers(path: &Path) {
+    static SWEPT: parking_lot::Mutex<std::collections::BTreeSet<PathBuf>> =
+        parking_lot::Mutex::new(std::collections::BTreeSet::new());
+    let dir = match path.parent() {
+        Some(d) if !d.as_os_str().is_empty() => d,
+        _ => Path::new("."),
+    };
+    {
+        if !SWEPT.lock().insert(dir.to_path_buf()) {
+            return;
+        }
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let me = std::process::id();
+    for e in entries.flatten() {
+        let name = e.file_name();
+        let Some(pid) = name.to_str().and_then(temp_writer) else {
+            continue;
+        };
+        let old = e
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age >= LEFTOVER_AGE);
+        if pid != me && old && e.file_type().is_ok_and(|t| t.is_file()) {
+            match std::fs::remove_file(e.path()) {
+                // Its name alone: the journal names no folder of the disk.
+                Ok(()) => log::info!("{}: left by a crash, removed", name.to_string_lossy()),
+                Err(err) => log::debug!("{}: not removed: {err}", name.to_string_lossy()),
+            }
+        }
+    }
 }
 
 /// `from` put in the place of `to`, the change of the folder on the disk when this returns.
@@ -196,6 +267,14 @@ mod tests {
         d
     }
 
+    fn temporaries(d: &Path) -> Vec<String> {
+        std::fs::read_dir(d)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|n| n.ends_with(".tmp"))
+            .collect()
+    }
+
     #[test]
     fn a_forced_write_puts_its_content_in_place_and_leaves_no_temporary_file() {
         let d = dir("forced");
@@ -230,7 +309,7 @@ mod tests {
             let mode = std::fs::metadata(&secret).unwrap().permissions().mode();
             assert_eq!(mode & 0o777, 0o600);
         }
-        assert!(!d.join("catalog.tmp").exists() && !d.join("integrations.tmp").exists());
+        assert!(temporaries(&d).is_empty());
         let _ = std::fs::remove_dir_all(&d);
     }
 
@@ -242,16 +321,99 @@ mod tests {
         std::fs::create_dir_all(f.join("inside")).unwrap();
         assert!(write_atomic(&f, b"{}").is_err());
         assert!(f.join("inside").is_dir());
-        assert!(
-            !d.join("state.tmp").exists(),
-            "the temporary file is removed"
-        );
+        assert!(temporaries(&d).is_empty(), "the temporary file is removed");
         assert!(write_cache(&f, b"{}").is_err());
-        assert!(!d.join("state.tmp").exists());
+        assert!(temporaries(&d).is_empty());
         // A folder that does not exist: the error, nothing written.
         let missing = d.join("nope").join("state.json");
         assert!(write_atomic(&missing, b"{}").is_err());
         assert!(!missing.exists());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Writers of one file at once (ESC-535): none fails, the file holds one of their contents whole, and nothing is left
+    /// beside it. With one temporary file for all, a writer found it renamed away by another (« os error 2 »).
+    #[test]
+    fn writers_of_a_same_file_at_once_all_succeed() {
+        let d = dir("at-once");
+        let f = d.join("state.json");
+        const WRITERS: usize = 8;
+        for round in 0..20 {
+            let start = std::sync::Arc::new(std::sync::Barrier::new(WRITERS));
+            let writers: Vec<_> = (0..WRITERS)
+                .map(|i| {
+                    let (f, start) = (f.clone(), start.clone());
+                    std::thread::spawn(move || {
+                        let bytes = format!("{{\"round\":{round},\"writer\":{i}}}").repeat(4096);
+                        start.wait();
+                        let write = [write_atomic, write_private, write_cache][i % 3];
+                        write(&f, bytes.as_bytes()).map(|()| bytes)
+                    })
+                })
+                .collect();
+            let written: Vec<String> = writers
+                .into_iter()
+                .map(|w| {
+                    w.join()
+                        .unwrap()
+                        .expect("a write at the same time as others")
+                })
+                .collect();
+            let there = std::fs::read_to_string(&f).unwrap();
+            assert!(written.contains(&there), "one writer's content, whole");
+        }
+        assert!(temporaries(&d).is_empty());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn the_temporary_file_of_a_write_is_its_own() {
+        let a = temp_of(Path::new("/d/state.json"));
+        let b = temp_of(Path::new("/d/state.json"));
+        assert_ne!(a, b);
+        let name = a.file_name().unwrap().to_str().unwrap();
+        assert!(
+            name.starts_with("state.json.") && name.ends_with(".tmp"),
+            "{name}"
+        );
+        assert_eq!(temp_writer(name), Some(std::process::id()));
+        for not_one in [
+            "state.tmp",
+            "state.json.tmp",
+            "notes.12.tmp",
+            "notes.a-1.tmp",
+            "notes.1-.tmp",
+            ".1-2.tmp",
+            "state.json.1-2",
+        ] {
+            assert_eq!(temp_writer(not_one), None, "{not_one}");
+        }
+        assert_eq!(temp_writer("plugins.json.4242-7.tmp"), Some(4242));
+    }
+
+    /// What a crash left (another process's temporary file, a minute old) goes at the first write in its folder; a
+    /// fresh one (a write under way in another process) and the user's own files stay.
+    #[test]
+    fn the_first_write_in_a_folder_removes_what_a_crash_left() {
+        let d = dir("leftovers");
+        let other = std::process::id().wrapping_add(1);
+        let old = d.join(format!("state.json.{other}-3.tmp"));
+        let fresh = d.join(format!("settings.json.{other}-4.tmp"));
+        let theirs = d.join("notes.tmp");
+        for f in [&old, &fresh, &theirs] {
+            std::fs::write(f, "{").unwrap();
+        }
+        let before =
+            std::time::SystemTime::now() - LEFTOVER_AGE - std::time::Duration::from_secs(5);
+        std::fs::File::options()
+            .write(true)
+            .open(&old)
+            .unwrap()
+            .set_modified(before)
+            .unwrap();
+        write_atomic(&d.join("state.json"), b"{}").unwrap();
+        assert!(!old.exists(), "left by a crash");
+        assert!(fresh.exists() && theirs.exists());
         let _ = std::fs::remove_dir_all(&d);
     }
 

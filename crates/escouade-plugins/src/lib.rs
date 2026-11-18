@@ -700,6 +700,8 @@ pub struct Plugins {
     seed_refused: RwLock<BTreeMap<String, String>>,
     /// One change of `.seed.json` at a time.
     seed_notes_lock: Mutex<()>,
+    /// One save of the list of installed plugins at a time, its content taken under it (ESC-535): the last change wins.
+    saving: Mutex<()>,
     /// One sending of the seed's counts at a time (`send_seed_counts`).
     counting: tokio::sync::Mutex<()>,
 }
@@ -817,6 +819,7 @@ impl Plugins {
             seed,
             seed_refused: RwLock::new(BTreeMap::new()),
             seed_notes_lock: Mutex::new(()),
+            saving: Mutex::new(()),
             counting: tokio::sync::Mutex::new(()),
         });
         let index = me.index();
@@ -919,6 +922,7 @@ impl Plugins {
     }
 
     fn save(&self) -> std::io::Result<()> {
+        let _one = self.saving.lock();
         let index = Index {
             version: INDEX_VERSION,
             plugins: self

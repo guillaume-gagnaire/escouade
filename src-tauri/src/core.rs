@@ -248,6 +248,36 @@ pub(crate) fn quitting_refusal() -> anyhow::Error {
     ))
 }
 
+/// How the last save of the state went as the app stopped (`Core::save_at_exit`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ExitSave {
+    Saved,
+    /// Failed once, saved at the second try.
+    SavedAgain,
+    /// Failed twice: the changes since the last save that worked are lost.
+    Lost,
+}
+
+/// `save` run, and once more when it fails, each failure said in the journal (ESC-535).
+pub(crate) fn save_twice(mut save: impl FnMut() -> Result<()>) -> ExitSave {
+    let Err(first) = save() else {
+        return ExitSave::Saved;
+    };
+    log::warn!("{first:#}: the last save as the app stops failed, tried again");
+    match save() {
+        Ok(()) => {
+            log::info!("state saved as the app stops, at the second try");
+            ExitSave::SavedAgain
+        }
+        Err(e) => {
+            log::error!(
+                "{e:#}: the state is not saved as the app stops, its last changes are lost"
+            );
+            ExitSave::Lost
+        }
+    }
+}
+
 /// The tag that opens `NotOnBase::wire`: the frontend recognizes the refusal by it.
 const NOT_ON_BASE: &str = "NOT_ON_BASE";
 
@@ -1003,6 +1033,12 @@ pub struct Core<R: Runtime = Wry> {
     /// (`subagent_transcript`): the meta files are not looked through at each read.
     pub(crate) sidechains: Mutex<crate::agent::sidechain::Found>,
     dirty: AtomicBool,
+    /// One save of the state at a time, its snapshot taken under it (ESC-535): the file is written in the order the
+    /// snapshots were taken, the last one taken wins. At the exit, the stop saves while the saver of the board does.
+    saving: Mutex<()>,
+    /// One write of the settings' file at a time, the settings it holds taken under it (ESC-535): a window's save, the
+    /// MCP server's port, the user's id and the backend's own changes write it, the last change wins.
+    pub(crate) settings_writing: Mutex<()>,
     waiting: AtomicUsize,
     pub quitting: AtomicBool,
     /// Files left unsaved in the editor, as the window last said.
@@ -2166,6 +2202,8 @@ impl<R: Runtime> Core<R> {
             plan_scans: Mutex::default(),
             sidechains: Mutex::default(),
             dirty: AtomicBool::new(false),
+            saving: Mutex::default(),
+            settings_writing: Mutex::default(),
             waiting: AtomicUsize::new(usize::MAX),
             quitting: AtomicBool::new(false),
             unsaved: AtomicUsize::new(0),
@@ -2687,8 +2725,11 @@ impl<R: Runtime> Core<R> {
         }
     }
 
-    /// The state saved; the error is for the caller that must lose nothing when it fails.
+    /// The state saved; the error is for the caller that must lose nothing when it fails. Its snapshot is taken and
+    /// written under `saving`: saves at once (the stop, the saver of the board, a closing) write one after the other,
+    /// in the order of their snapshots (ESC-535).
     pub(crate) fn save_state(&self) -> Result<()> {
+        let _one = self.saving.lock();
         let state = self.snapshot();
         let bytes = serde_json::to_vec_pretty(&state).context("cannot serialize state")?;
         paths::write_atomic(&self.data.state_file(), &bytes).context("cannot save state")?;
@@ -2699,6 +2740,12 @@ impl<R: Runtime> Core<R> {
         if let Err(e) = self.save_state() {
             log::error!("{e:#}");
         }
+    }
+
+    /// The last save, as the app stops (`shutdown`): tried once more when it fails, and said in the journal either way
+    /// (ESC-535). What follows it in the process may be its end.
+    pub(crate) fn save_at_exit(&self) -> ExitSave {
+        save_twice(|| self.save_state())
     }
 
     pub fn request_save(&self) {
@@ -2763,6 +2810,9 @@ impl<R: Runtime> Core<R> {
     }
 
     pub fn save_settings(self: &Arc<Self>, mut s: Settings) -> Result<()> {
+        // What it keeps of the backend's, its file and its taking in under one lock: a write of the backend's settings
+        // in between would be undone (ESC-535).
+        let writing = self.settings_writing.lock();
         // The MCP server's port is the backend's own (`sync_mcp`): the window's copy may be older.
         s.mcp_port = self.settings.read().mcp_port;
         // The user's id is the backend's too (`ensure_identity`): a window's copy may be older.
@@ -2783,6 +2833,7 @@ impl<R: Runtime> Core<R> {
         let remote_all = s.remote_control_all;
         let self_update = s.claude_self_update;
         let before_settings = std::mem::replace(&mut *self.settings.write(), s);
+        drop(writing);
         let mcp_was_enabled = before_settings.mcp_enabled;
         if before_settings.bypass_allowed() && !self.bypass_allowed() {
             // « Autoriser le mode Bypass » turned off: what runs of an agent in Bypass stops, at once at rest, at the
@@ -4767,6 +4818,7 @@ impl<R: Runtime> Core<R> {
     /// The settings as they are, written to their file (a change of the backend's own, which a
     /// window's save keeps: `accounts::keep_remote_refusals`).
     pub(crate) fn write_settings_file(&self) {
+        let _one = self.settings_writing.lock();
         let written = serde_json::to_vec_pretty(&*self.settings.read())
             .map_err(anyhow::Error::from)
             .and_then(|b| Ok(paths::write_atomic(&self.data.settings_file(), &b)?));
@@ -5467,7 +5519,7 @@ impl<R: Runtime> Core<R> {
         self.pty.kill_all();
         // The plugins are asked to `shutdown`, then their jobs end (a second at most).
         self.plugin_runtime.shutdown();
-        self.save_now();
+        self.save_at_exit();
         // The usage statistics of the last minute, if they can leave in time.
         self.telemetry.flush_at_exit();
     }

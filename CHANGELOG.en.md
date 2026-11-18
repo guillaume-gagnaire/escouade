@@ -10,6 +10,7 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - Security: an agent running in Bypass mode stops when that mode is no longer allowed, at the end of its turn if it is working, and its conversation says why.
 - Your agents can leave you what they wait for from you without stopping (a choice between their renders, a go-ahead, an answer, a test to run), with their images and PDFs, through the MCP server: your answer comes back to them as a message, and a ticket can wait for it. The screen of the “Your turn” box follows.
 - The “Your turn” box opens from the projects’ bar (`Ctrl+Shift+J`) while the MCP server is on: what waits for you, every project, one request at a time, its renders compared full size and its PDFs read in place, answered from the keyboard, put off or taken back.
+- Quitting Escouade for an update no longer loses your latest changes: two saves at the same moment no longer get in each other’s way, and a last save that fails is tried again before the app closes.
 - The box also gathers what already waits for you elsewhere (your agents’ permissions and questions, tickets to approve or blocked, proposed decisions, docs to share, reviews), settled in place. A summary tells you when requests come in, never one alert per request (Settings › Notifications).
 
 ## [2.2.3] — 2026-11-17

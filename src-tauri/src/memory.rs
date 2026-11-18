@@ -346,7 +346,12 @@ pub fn index_text(memories: &[Memory]) -> String {
     out
 }
 
+/// The index written again from the memories of `dir`, one at a time (ESC-535): the list is taken and written under
+/// one lock, so that the last one written, after the last memory changed, lists them all. Two agents writing a memory
+/// each at once: the index of the first, listed before the second memory was there, may no longer come last.
 fn write_index(dir: &Path) -> Result<()> {
+    static WRITING: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+    let _one = WRITING.lock();
     let path = dir.join(INDEX);
     if std::fs::symlink_metadata(&path).is_ok_and(|m| !m.file_type().is_file()) {
         bail!(tr!(

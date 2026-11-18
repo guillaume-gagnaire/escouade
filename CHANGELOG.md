@@ -10,6 +10,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Sécurité : un agent qui tourne en mode Bypass s’arrête quand ce mode n’est plus autorisé, à la fin de son tour s’il travaille, et sa conversation dit pourquoi.
 - Tes agents peuvent te laisser ce qu’ils attendent de toi sans s’arrêter (un choix entre leurs rendus, un feu vert, une réponse, un essai à faire), avec leurs images et leurs PDF, par le serveur MCP : ta réponse leur revient en message, et un ticket peut l’attendre. L’écran de la boîte « À toi » suit.
 - La boîte « À toi » s’ouvre depuis la barre des projets (`Ctrl+Maj+J`) quand le serveur MCP est allumé : ce qui t’attend, tous projets confondus, une demande à la fois, ses rendus comparés en grand et ses PDF lus sur place, à quoi tu réponds au clavier, que tu reportes ou sur quoi tu reviens.
+- Quitter Escouade pour une mise à jour ne perd plus tes derniers changements : deux sauvegardes au même moment ne s’empêchent plus, et une dernière sauvegarde ratée est réessayée avant que l’app se ferme.
 - La boîte y range aussi ce qui t’attend déjà ailleurs (permissions et questions de tes agents, tickets à valider ou bloqués, décisions proposées, docs à partager, relectures), réglé sur place. Un résumé te prévient quand des demandes arrivent, jamais une alerte par demande (Réglages › Notifications).
 
 ## [2.2.3] — 2026-11-17

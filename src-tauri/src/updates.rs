@@ -2585,6 +2585,88 @@ mod tests {
         assert_eq!(u.failed(), None);
     }
 
+    /// The stop for an update (ESC-535): its agents stop while the saver of the board and what they change save the
+    /// state at the same time as the stop does. No save fails, and the installer finds the last state taken on the disk.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn the_stop_for_an_update_saves_the_last_state_while_agents_stop_and_others_save() {
+        let h = harness("upd-saves-at-once");
+        let (p, _) = h.project(false).await;
+        let mut agents = Vec::new();
+        for _ in 0..3 {
+            let id = h.core.create_agent(&p.id, None).await.unwrap().meta.id;
+            h.turn(&id, "Bonjour").await;
+            agents.push(id);
+        }
+        assert!(agents.iter().all(|a| h.alive(a)));
+        let u = Updates::default();
+        let log = ready(&u, Install::Ok).await;
+        let stop = Arc::new(AtomicBool::new(false));
+        let failures = Arc::new(parking_lot::Mutex::new(Vec::<String>::new()));
+        let saves = Arc::new(AtomicUsize::new(0));
+        let savers: Vec<_> = (0..4)
+            .map(|i| {
+                let (core, stop, failures, saves) = (
+                    h.core.clone(),
+                    stop.clone(),
+                    failures.clone(),
+                    saves.clone(),
+                );
+                std::thread::spawn(move || {
+                    let mut n = 0;
+                    while !stop.load(Ordering::Acquire) {
+                        n += 1;
+                        core.ui.write().view = format!("saver {i}, change {n}");
+                        if let Err(e) = core.save_state() {
+                            failures.lock().push(format!("{e:#}"));
+                        }
+                        saves.fetch_add(1, Ordering::Relaxed);
+                    }
+                })
+            })
+            .collect();
+        while saves.load(Ordering::Relaxed) < 20 {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        let core = h.core.clone();
+        let found = Arc::new(parking_lot::Mutex::new(None));
+        let seen = found.clone();
+        let stopped: Vec<_> = agents.clone();
+        tokio::task::spawn_blocking(move || {
+            let c = core.clone();
+            restart(&c, &u, Window::Front, move |relaunch| {
+                // The savers end with the app: their last change is the last state taken.
+                stop.store(true, Ordering::Release);
+                for s in savers {
+                    s.join().unwrap();
+                }
+                let last = core.ui.read().view.clone();
+                let bytes = std::fs::read(core.data.state_file()).unwrap();
+                let on_disk = serde_json::from_slice::<crate::model::PersistedState>(&bytes)
+                    .unwrap()
+                    .ui
+                    .view;
+                let agents_alive = stopped
+                    .iter()
+                    .filter(|a| core.agent(a).is_ok_and(|h| h.lock().proc.is_some()))
+                    .count();
+                *seen.lock() = Some((relaunch, on_disk == last, last, agents_alive));
+            })
+        })
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(*log.lock(), ["installer (relaunch: true)"]);
+        let (relaunch, last_on_disk, last, agents_alive) = found.lock().clone().unwrap();
+        assert!(relaunch);
+        assert!(
+            last_on_disk,
+            "the state on the disk is not the last one taken ({last})"
+        );
+        assert_eq!(agents_alive, 0, "the agents stopped with the app");
+        assert_eq!(*failures.lock(), Vec::<String>::new(), "saves that failed");
+        assert!(h.core.quitting.load(Ordering::Acquire));
+    }
+
     #[tokio::test]
     async fn closing_the_app_installs_the_update_without_starting_it_again() {
         let h = harness("upd-quit");

@@ -155,6 +155,8 @@ mod paths;
 mod recovery_tests;
 #[cfg(test)]
 mod remote_tests;
+#[cfg(test)]
+mod save_tests;
 // What an agent is getting through, and the plan files it follows: the crate `escouade-plan`.
 use escouade_plan::{plan, planfiles};
 // The data and what it names, the processes and WSL: the crate `escouade-model` (`model` and `paths` re-export theirs).
