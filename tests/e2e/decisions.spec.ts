@@ -238,7 +238,8 @@ test('the register of the decisions: numbered and dated, filtered, accepted in o
   await expect.poll(() => fs.readFileSync(file14, 'utf8')).toContain('state: "accepted"');
   expect(fs.readFileSync(file14, 'utf8')).toMatch(/accepted_by: "[^"]+"/);
   await expect(detail).toContainText(/ADR-014 · acceptée aujourd’hui/);
-  await expect(page.locator('[data-docs-share]')).toContainText('1 changement à partager');
+  await expect(page.getByTestId('docs-badge')).toHaveText('1');
+  await expect(page.locator('[data-docs-sync] [data-pending]')).toHaveText('1 à partager');
 
   // « Proposer une décision », by hand.
   await page.getByRole('button', { name: 'Proposer une décision' }).click();

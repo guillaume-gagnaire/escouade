@@ -88,7 +88,7 @@
   }}
 />
 
-<SpaceHead title={t('docs.spaces.decisions')}>
+<SpaceHead title={t('docs.spaces.decisions')} projectId={project.id}>
   {#snippet line()}
     {#if counts.all}
       <span data-counts

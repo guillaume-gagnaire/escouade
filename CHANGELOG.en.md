@@ -4,6 +4,10 @@ Escouade's visible changes, version by version, in English. The notes of each Gi
 
 To write an entry: one or two short sentences, for a human reader. What they can now see or do, and why it helps; the details (edge cases, settings, file names, tools, ticket numbers) go in the documentation, not here. Each entry of CHANGELOG.md has its English one here, under the same version and the same heading (`## [Unreleased]` for `## [Non publié]`).
 
+## [Unreleased]
+
+- Docs: what is left to share shows as a badge on the “Docs” tab, no longer in the status bar, and a conflict stands out there. “Sync”, in the Docs space, shares your changes or, when there are none, brings in the others’.
+
 ## [2.2.4] — 2026-11-18
 
 - Windows: an update installs even when Escouade takes a while to close, instead of vanishing with nothing installed; should it still fail, Escouade comes back and offers to try again.

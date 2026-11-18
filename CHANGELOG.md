@@ -4,6 +4,10 @@ Les changements visibles d'Escouade, version par version. Les notes de la mise �
 
 Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. Ce qu'il voit ou peut faire de nouveau, et pourquoi c'est utile ; le détail (cas limites, réglages, noms de fichiers, outils, numéros de ticket) va dans la documentation, pas ici. Chaque entrée a sa traduction anglaise dans CHANGELOG.en.md, sous la même version et le même titre (`## [Unreleased]` pour `## [Non publié]`) : un test de la CI refuse une version sans elle.
 
+## [Non publié]
+
+- Docs : ce qui reste à partager se lit sur un badge de l’onglet « Docs », plus dans la barre d’état, et un conflit s’y voit à part. « Synchroniser », dans l’espace Docs, partage tes changements ou, s’il n’y en a pas, récupère ceux des autres.
+
 ## [2.2.4] — 2026-11-18
 
 - Windows : une mise à jour s’installe même quand Escouade met du temps à se fermer, au lieu de disparaître sans rien installer ; si elle échoue malgré tout, Escouade revient et te propose de réessayer.

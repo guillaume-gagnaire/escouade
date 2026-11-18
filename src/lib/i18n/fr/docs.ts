@@ -243,23 +243,31 @@ export default {
   share: {
     on: 'Docs sur la branche {branch}',
     pending: { one: '{count} changement à partager', other: '{count} changements à partager' },
-    none: 'rien à partager',
-    go: 'Partager',
+    pendingShort: { one: '{count} à partager', other: '{count} à partager' },
+    upToDate: 'à jour',
+    sync: 'Synchroniser',
+    syncing: 'Synchronisation…',
+    syncTip:
+      'Récupère ce que les autres ont partagé sur la branche des docs, puis enregistre et envoie les changements des docs (spec, décisions, documents), et eux seuls.',
     withCodeTitle: 'Partager aussi le code ?',
     goAll: 'Tout partager',
-    going: 'Partage…',
-    tip: 'Les changements des docs (spec, décisions, documents) pas encore partagés avec l’équipe. « Partager » récupère d’abord ce que les autres ont partagé, puis enregistre et envoie les docs, et elles seules.',
     done: { one: '{count} changement des docs partagé.', other: '{count} changements des docs partagés.' },
-    nothing: 'Rien à partager.',
+    received: { one: '{count} changement récupéré.', other: '{count} changements récupérés.' },
+    nothing: 'Docs à jour.',
     withCode: {
-      one: 'Cette branche a aussi {count} commit de code pas encore partagé : « Partager » le publierait avec les docs. Tout partager ?',
+      one: 'Cette branche a aussi {count} commit de code pas encore partagé : la synchronisation le publierait avec les docs. Tout partager ?',
       other:
-        'Cette branche a aussi {count} commits de code pas encore partagés : « Partager » les publierait avec les docs. Tout partager ?',
+        'Cette branche a aussi {count} commits de code pas encore partagés : la synchronisation les publierait avec les docs. Tout partager ?',
     },
+    conflictTitle: 'Conflit dans les docs',
     conflict: 'Deux personnes ont modifié les mêmes pages : {files}.',
     resolve: 'L’agent résout',
     cancel: 'Annuler',
     resolving: 'L’agent rédacteur résout le conflit',
+    badge: { one: '{count} changement des docs à partager', other: '{count} changements des docs à partager' },
+    badgeConflict: 'Conflit dans les docs',
+    tabPending: { one: 'Docs, {count} changement des docs à partager', other: 'Docs, {count} changements des docs à partager' },
+    tabConflict: 'Docs, conflit dans les docs',
   },
 
   decisions: {

@@ -596,6 +596,7 @@ export const api = {
   docsDocumentsSearch: (id: string, query: string) => invoke<DocsDocHit[]>('docs_documents_search', { id, query }),
   docsPending: (id: string) => invoke<DocsPending>('docs_pending', { id }),
   docsShare: (id: string, message: string | null = null, withCode = false) => invoke<DocsShared>('docs_share', { id, message, withCode }),
+  docsPull: (id: string) => invoke<DocsShared>('docs_pull', { id }),
   docsShareResolve: (id: string) => invoke<DocsConflict>('docs_share_resolve', { id }),
   docsShareCancel: (id: string) => invoke<void>('docs_share_cancel', { id }),
   /** « Commencer » of « Nouvelle discussion » (ESC-261): its agent, in the folder of the docs branch, sent its subject. */

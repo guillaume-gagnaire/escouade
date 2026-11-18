@@ -156,8 +156,8 @@ test('a brainstorm proposes pages and a decision, poured into the spec on the do
   const decision = fs.readFileSync(path.join(app.repo, '.escouade', 'decisions', decisions[0]), 'utf8');
   expect(decision).toContain('state: "proposed"');
   expect(decision).toContain('origin: "brainstorm"');
-  // Not shared: the status bar says so, nothing committed.
-  await expect(page.locator('[data-docs-share]')).toContainText('à partager');
+  // Not shared: the badge of the Docs tab says so (ESC-534), nothing committed.
+  await expect(page.getByTestId('docs-badge')).toHaveAttribute('data-state', 'pending');
   expect(git('rev-parse', 'HEAD').trim()).toBe(head);
   await shoot(page, 'poured');
 

@@ -766,6 +766,7 @@ pub fn run() {
                 commands::docs_documents_search,
                 commands::docs_pending,
                 commands::docs_share,
+                commands::docs_pull,
                 commands::docs_share_resolve,
                 commands::docs_share_cancel,
                 commands::docs_import_plan,

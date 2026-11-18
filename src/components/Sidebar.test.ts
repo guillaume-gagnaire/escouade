@@ -3733,3 +3733,57 @@ describe('Sidebar agent folders', () => {
     expect(app.modal).toBeNull();
   });
 });
+
+describe('the Docs tab’s badge (ESC-534)', () => {
+  const docsTab = () => screen.getByRole('button', { name: /^Docs/ });
+
+  it('counts the changes of the docs to share, read when the project shows, and nothing when up to date', async () => {
+    resetApp({ projects: [project()], agents: [agent()] });
+    const b = fakeBackend({ docs_pending: () => ({ files: ['a', 'b', 'c'], count: 3, codeCommits: 0, conflict: null }) });
+    render(Sidebar, { project: project() });
+    await waitFor(() => expect(docsTab()).toHaveAccessibleName('Docs, 3 changements des docs à partager'));
+    expect(b.called('docs_pending')[0].args).toEqual({ id: 'p1' });
+    const badge = within(docsTab()).getByTestId('docs-badge');
+    // Read as the other tabs' badges: the same class, the count, its tooltip.
+    expect(badge).toHaveClass('badge');
+    expect(badge).toHaveTextContent('3');
+    expect(badge).toHaveAttribute('data-state', 'pending');
+    expect(getByTip(document.body, '3 changements des docs à partager')).toBe(badge);
+    // Not on the Docs tab: still true, told by the core's events.
+    expect(app.docsOn).toBe(false);
+    app.docsShare.p1 = { pending: 1, conflict: null };
+    await waitFor(() => expect(docsTab()).toHaveAccessibleName('Docs, 1 changement des docs à partager'));
+    app.docsShare.p1 = { pending: 0, conflict: null };
+    await waitFor(() => expect(docsTab()).toHaveAccessibleName('Docs'));
+    expect(within(docsTab()).queryByTestId('docs-badge')).toBeNull();
+  });
+
+  it('marks a conflict apart, the writer agent resolving it too', async () => {
+    resetApp({ projects: [project()], agents: [agent()] });
+    fakeBackend();
+    app.docsShare.p1 = { pending: 2, conflict: { files: ['.escouade/spec/a/b.md'], target: 'origin/main', agentId: null } };
+    render(Sidebar, { project: project() });
+    const badge = within(docsTab()).getByTestId('docs-badge');
+    expect(badge).toHaveAttribute('data-state', 'conflict');
+    expect(badge).toHaveClass('badge', 'conflict');
+    expect(badge).toHaveTextContent('!');
+    expect(docsTab()).toHaveAccessibleName('Docs, conflit dans les docs');
+    expect(getByTip(document.body, 'Conflit dans les docs')).toBe(badge);
+    app.docsShare.p1 = { pending: 2, conflict: { files: ['.escouade/spec/a/b.md'], target: 'origin/main', agentId: 'w1' } };
+    await tick();
+    expect(within(docsTab()).getByTestId('docs-badge')).toHaveAttribute('data-state', 'conflict');
+  });
+
+  it('is written in English', async () => {
+    setLang('en');
+    onTestFinished(() => setLang('fr'));
+    resetApp({ projects: [project()], agents: [agent()] });
+    fakeBackend();
+    app.docsShare.p1 = { pending: 2, conflict: null };
+    render(Sidebar, { project: project() });
+    expect(docsTab()).toHaveAccessibleName('Docs, 2 changes of the docs to share');
+    expect(getByTip(document.body, '2 changes of the docs to share')).toBeInTheDocument();
+    app.docsShare.p1 = { pending: 2, conflict: { files: ['x'], target: 'origin/main', agentId: null } };
+    await waitFor(() => expect(docsTab()).toHaveAccessibleName('Docs, conflict in the docs'));
+  });
+});

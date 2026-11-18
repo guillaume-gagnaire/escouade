@@ -51,7 +51,7 @@ Ce sont des agents d’Escouade comme les autres : la même conversation, et leu
 
 Les discussions sont en cartes sous « Nouvelle discussion », chacune marquée « Brainstorm » ou « Discussion », avec son état : « Question », « Répond », « Brouillon » (des changements proposés pas encore versés), « Versé ».
 
-Une discussion ouverte montre la conversation à gauche, et à droite **« Ce qui ira dans la spec »** : les changements proposés page par page (une section nouvelle, les phrases retirées barrées et les nouvelles en vert) et les décisions proposées. Une croix retire une proposition. **« Verser dans la spec »** écrit les pages sur la branche des docs, et les décisions dans le registre, proposées : elles s’acceptent d’un clic dans les Décisions. Rien n’est partagé : la barre d’état dit combien de changements attendent « Partager ».
+Une discussion ouverte montre la conversation à gauche, et à droite **« Ce qui ira dans la spec »** : les changements proposés page par page (une section nouvelle, les phrases retirées barrées et les nouvelles en vert) et les décisions proposées. Une croix retire une proposition. **« Verser dans la spec »** écrit les pages sur la branche des docs, et les décisions dans le registre, proposées : elles s’acceptent d’un clic dans les Décisions. Rien n’est partagé : le badge de l’onglet « Docs » dit combien de changements attendent « Synchroniser ».
 
 « Demander à la spec », en tête de la spécification, ouvre une discussion avec l’agent rédacteur. Un projet sans spec propose « Écrire une première spec depuis le code » : l’agent rédacteur lit le code et propose une première version, rangée par sujet (cela coûte des tokens, d’où le geste).
 
@@ -125,15 +125,18 @@ Escouade dit où il l’a rangé et pourquoi ; « Déplacer vers » le change 
 
 ## Partager les docs
 
-Tant que l’onglet Docs est ouvert, ou que les docs ont des changements, la barre d’état dit « Docs sur la branche main · 2 changements à partager ». Les changements sont les fichiers de `.escouade/spec`, `decisions` et `documents` modifiés et pas encore envoyés.
+**Le badge de l’onglet « Docs »** dit combien de changements des docs attendent d’être partagés (« 3 changements des docs à partager » dans son infobulle), quel que soit l’onglet ouvert. Un conflit s’y voit à part, en rouge avec un « ! ». Pas de badge : tout est partagé. Les changements sont les fichiers de `.escouade/spec`, `decisions` et `documents` modifiés et pas encore envoyés.
 
-« Partager » récupère d’abord ce que les autres ont partagé, puis enregistre (commit) les fichiers des docs, et eux seuls, et les envoie (push). Le code que tu modifies en même temps n’est pas touché.
+**« Synchroniser »**, dans l’en-tête de chaque espace des docs, est toujours là. À côté, la branche des docs et ce qui reste à partager (« 2 à partager », ou « à jour »).
 
-- Si la branche a aussi des commits de code pas encore envoyés, Escouade te le dit avant : « Tout partager » les envoie avec les docs, « Annuler » ne fait rien.
-- Si deux personnes ont modifié les mêmes pages, la barre d’état les nomme : « L’agent résout » confie le conflit à un agent rédacteur, qui garde ce que chacun voulait dire ; « Annuler » remet les docs comme avant. Tu partages à nouveau une fois qu’il a fini.
+- **Avec des changements à partager**, il récupère d’abord ce que les autres ont partagé, puis enregistre (commit) les fichiers des docs, et eux seuls, et les envoie (push). Le code que tu modifies en même temps n’est pas touché.
+- **Sans rien à partager**, il récupère ce que les autres ont envoyé sur la branche des docs, sans rien envoyer, et le dit : « Docs à jour. » ou « 2 changements récupérés. ».
+- Pendant qu’il tourne, il dit « Synchronisation… » et ne se relance pas.
+- Si la branche a aussi des commits de code pas encore envoyés, Escouade te le dit avant d’envoyer les docs : « Tout partager » les envoie avec, « Annuler » ne fait rien.
+- Si deux personnes ont modifié les mêmes pages, « Conflit dans les docs » prend la place du bouton (son infobulle nomme les pages) : « L’agent résout » confie le conflit à un agent rédacteur, qui garde ce que chacun voulait dire ; « Annuler » remet les docs comme avant. Tu synchronises à nouveau une fois qu’il a fini.
 
 > [!NOTE]
-> Escouade ne partage jamais seul : rien n’est commité ni poussé sans un clic sur « Partager ».
+> Escouade ne partage jamais seul : rien n’est commité ni poussé sans un clic sur « Synchroniser ».
 
 ## La branche des docs
 

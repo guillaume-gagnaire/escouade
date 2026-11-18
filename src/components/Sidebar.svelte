@@ -12,6 +12,7 @@
   import { SIDE_MIN, sideWidth } from '../lib/side-width.svelte';
   import Splitter from './Splitter.svelte';
   import DocsSidebar from './docs/DocsSidebar.svelte';
+  import { readDocsPending } from '../lib/docs-share';
   import { t } from '../lib/i18n';
   import { branchSummary, deltaDetail, repoLabel } from '../lib/repos';
   import { api } from '../lib/ipc';
@@ -180,6 +181,21 @@
   const prsTab = $derived(hasTab(app.codeHosts[project.id], 'pullRequests'));
   /** The project's pull requests come since its PR tab was last opened (ESC-403). */
   const prsNew = $derived(app.prsNew(project.id));
+  /**
+   * What the badge of the Docs tab tells (ESC-534, in place of the status bar): the changes of the docs left to share, or
+   * the conflict a synchronisation stopped on (the writer agent resolving it too). Read when the project shows, kept true by
+   * the core's events wherever the window is.
+   */
+  const docsShared = $derived(app.docsShare[project.id]);
+  const docsConflict = $derived(docsShared?.conflict ?? null);
+  const docsPending = $derived(docsShared?.pending ?? 0);
+  const docsBadge = $derived(
+    docsConflict ? t('docs.share.badgeConflict') : docsPending ? t('docs.share.badge', { count: docsPending }) : '',
+  );
+  $effect(() => {
+    const id = project.id;
+    untrack(() => void readDocsPending(id));
+  });
   // Its code host read when the project shows, and again when the window comes back (its remote may have changed).
   $effect(() => {
     const id = project.id;
@@ -1000,7 +1016,26 @@
           >{/if}</button
       >
     {/if}
-    <button class:on={app.docsOn} aria-pressed={app.docsOn} onclick={() => app.openDocs(project.id)}>{t('docs.tab')}</button>
+    <!-- Its badge (ESC-534): the changes of the docs to share, a conflict marked apart; none when the docs are up to date. -->
+    <button
+      class:on={app.docsOn}
+      aria-pressed={app.docsOn}
+      aria-label={docsConflict ? t('docs.share.tabConflict') : docsPending ? t('docs.share.tabPending', { count: docsPending }) : undefined}
+      onclick={() => app.openDocs(project.id)}
+      >{t('docs.tab')}{#if docsConflict}<span
+          class="badge conflict"
+          data-testid="docs-badge"
+          data-state="conflict"
+          aria-hidden="true"
+          use:tip={{ text: docsBadge, aria: false }}>!</span
+        >{:else if docsPending}<span
+          class="badge"
+          data-testid="docs-badge"
+          data-state="pending"
+          aria-hidden="true"
+          use:tip={{ text: docsBadge, aria: false }}>{docsPending}</span
+        >{/if}</button
+    >
   </div>
 
   {#if app.docsOn}
@@ -1822,6 +1857,12 @@
     min-width: 16px;
     height: 16px;
     font-size: 10px;
+  }
+  /* A conflict of the docs (ESC-534): the same badge, red, louder than what is only waiting. */
+  .seg .badge.conflict {
+    background: var(--del);
+    color: var(--on-wait);
+    font-weight: 750;
   }
   .badge {
     min-width: 17px;

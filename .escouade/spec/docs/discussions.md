@@ -2,7 +2,7 @@
 title: "Discussions"
 subject: "Docs"
 sources: ["website/content/docs/fr/docs-space.md","docs/FACTORY.md","src-tauri/src/discussion.rs","src-tauri/src/mcp/docs.rs","src-tauri/src/engine/mod.rs","src/lib/i18n/fr/docs.ts","src/lib/shortcuts.ts","src/components/docs/SpecSpace.svelte"]
-tickets: ["ESC-261","ESC-289","ESC-310"]
+tickets: ["ESC-261","ESC-289","ESC-310","ESC-534"]
 decisions: []
 compared: "2026-10-31T16:04:50+01:00"
 gaps: [{"text":"La spec dit que les discussions tournent sur Claude Code, Codex, OpenCode, Copilot CLI, Antigravity CLI et Gemini CLI, tous empêchés d'écrire. Le refus côté serveur, quand le harness ne convient pas, ne conseille que « Claude Code, Codex, OpenCode ou Copilot CLI » et oublie Antigravity CLI et Gemini CLI, qui sont pourtant acceptés par `holds`.","code":["src-tauri/src/discussion.rs"]}]
@@ -39,7 +39,7 @@ Parler de la spec avec un agent, dans l'onglet Docs : l'interroger, la mettre à
 
 - Une discussion ouverte montre la conversation à gauche et, à droite, « Ce qui ira dans la spec » : les pages proposées, page par page (« nouvelle section », phrases retirées barrées, nouvelles en vert, « N lignes »), et les « Décisions proposées » (« remplace la n° N » pour un remplacement). Une croix retire une page ou une décision.
 - Ce que l'agent écrit par les outils de docs n'entre pas dans les docs : c'est une proposition, qu'il relit telle qu'il l'a proposée. Plusieurs écritures d'une page font une seule proposition, la dernière ; une décision du même titre est révisée. Une décision proposée a pour origine « discussion » ou « brainstorm », avec le sujet.
-- **« Verser dans la spec »** écrit chaque page proposée, entière, sur la branche des docs, et chaque décision au registre, proposée (voir *Décisions*), puis les retire de la discussion. Rien n'est commité : « Versé dans la spec : N pages. Pas encore partagé. », et la barre d'état compte les changements à partager (voir *Docs du projet*).
+- **« Verser dans la spec »** écrit chaque page proposée, entière, sur la branche des docs, et chaque décision au registre, proposée (voir *Décisions*), puis les retire de la discussion. Rien n'est commité : « Versé dans la spec : N pages. Pas encore partagé. », et le badge de l'onglet « Docs » compte les changements à partager (voir *Docs du projet*).
 
 ### La liste des discussions
 

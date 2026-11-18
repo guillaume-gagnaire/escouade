@@ -34,7 +34,6 @@
   import { branchSummary, isMulti, repoLabel } from '../lib/repos';
   import { menu } from '../lib/menu.svelte';
   import Icon from './Icon.svelte';
-  import DocsShareItem from './docs/DocsShareItem.svelte';
   import QuotaMeter from './QuotaMeter.svelte';
   import { tip } from '../lib/tip';
 
@@ -305,16 +304,6 @@
       t('shell.status.sync.lastFetch', { when: fetched }),
     ].join('\n');
   });
-  /**
-   * The project whose docs the bar tells of (ESC-258): the one on screen, on its Docs tab, or elsewhere while its docs have
-   * changes to share or a conflict.
-   */
-  const docsShown = $derived.by(() => {
-    const p = app.ui.view === 'project' ? app.project : null;
-    if (!p) return null;
-    const d = app.docsShare[p.id];
-    return app.docsOn || d?.pending || d?.conflict ? p.id : null;
-  });
   /** A shortcut as the bar writes it: « Ctrl J ». */
   const kbd = (s: string) => keyLabel(s).split('+').join(' ');
 </script>
@@ -405,10 +394,6 @@
             >{t('heat.label')} <b>≈&nbsp;{fUsd(cacheSaved)}</b></span
           ></span
         >
-      {/if}
-      {#if docsShown}
-        <span class="vsep"></span>
-        <span class="it"><DocsShareItem projectId={docsShown} /></span>
       {/if}
       {#if repo}
         <span class="vsep"></span>

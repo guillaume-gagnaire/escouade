@@ -15,6 +15,8 @@ class DocsStore {
   pending = $state<Record<string, DocsPending>>({});
   /** Why a project's docs could not be read (its docs branch refused, a link in `.escouade`…). */
   error = $state<Record<string, string>>({});
+  /** The projects whose synchronisation of the docs runs (ESC-534), from this window: its button waits. */
+  syncing = $state<Record<string, boolean>>({});
   /** The projects whose « Planifier » runs (ESC-262), from this window. */
   planning = $state<Record<string, boolean>>({});
   /** The plannings whose card the user closed (ESC-291), kept from one start to the next. */

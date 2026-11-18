@@ -222,7 +222,7 @@
   const title = $derived(here?.name ?? t('docs.spaces.documents'));
 </script>
 
-<SpaceHead {title}>
+<SpaceHead {title} projectId={project.id}>
   {#snippet line()}
     {#if folder}<nav class="crumb" aria-label={t('docs.documents.crumbLabel')}>
         <button class="link" onclick={() => choose('')}>{t('docs.spaces.documents')}</button>

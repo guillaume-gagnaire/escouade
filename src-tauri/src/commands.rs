@@ -4260,6 +4260,14 @@ pub async fn docs_share(
         .map_err(err)
 }
 
+/// The synchronisation with none of the docs left to share (ESC-534): fetches and brings in what
+/// the others pushed on the docs branch, without committing nor pushing. Stops on a conflict as
+/// `docs_share` does.
+#[tauri::command]
+pub async fn docs_pull(core: CoreState<'_>, id: String) -> Res<crate::docsshare::Shared> {
+    core.docs_pull(&id).await.map_err(err)
+}
+
 /// « L'agent résout » a conflict of the docs.
 #[tauri::command]
 pub async fn docs_share_resolve(
