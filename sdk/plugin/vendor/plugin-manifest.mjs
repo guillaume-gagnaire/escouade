@@ -24,6 +24,11 @@ export const ICON_BYTES = 1024 * 1024;
 const SETTING_TYPES = ['string', 'number', 'boolean', 'select'];
 const POINTS_WITH_ID = ['accounts', 'ticketSources', 'forges', 'harnesses', 'workflowReaders', 'launchEnvironments'];
 const OPEN_POINTS = ['themes', 'webhooks', 'commands', 'menus', 'statusBar', 'badges', 'projectTemplates'];
+/**
+ * The points the manifest reserves: read for their shape, served by nothing, so said as « reserved, no effect in this
+ * version »: a warning, never a refusal, for a published manifest to hold (ESC-524).
+ */
+export const RESERVED_POINTS = ['menus', 'statusBar', 'badges', 'projectTemplates', 'escouadeYml'];
 
 /**
  * The fields this library knows, object by object (`''` the manifest itself): any other is ignored, and said so. They
@@ -109,7 +114,7 @@ const beyond = (v, max) => compare(numbers(v).slice(0, max.split('.').length), n
  * and nothing else of the app's; the store grants it to its repository alone, the app to a version signed by the store
  * and to a folder in development. `options.file`: the bytes of a file of the
  * plugin's folder by its path (null when it is none), to read the icon's; without it, its file is not looked at.
- * @returns {{ ok: boolean, errors: { path: string, code: string, expected?: string }[], ignored: string[] }}
+ * @returns {{ ok: boolean, errors: { path: string, code: string, expected?: string }[], ignored: string[], reserved: string[] }}
  */
 /**
  * The host of an address written whole (`https://hooks.slack.com/x` gives `hooks.slack.com`, in lower case): its user and
@@ -240,6 +245,7 @@ export function validate(manifest, options = {}) {
   const firstParty = builtin || !!options.firstParty;
   const errors = [];
   const ignored = [];
+  const reserved = [];
   const problem = (path, code, expected) => errors.push(expected ? { path, code, expected } : { path, code });
   const ignoreOthers = (o, path, known) => {
     for (const k of Object.keys(o)) if (!known.includes(k)) ignored.push(join(path, k));
@@ -305,7 +311,7 @@ export function validate(manifest, options = {}) {
   const required = (o, key, path, then) => (key in o ? then(o[key], path) : problem(path, 'required'));
 
   const o = object(manifest, '');
-  if (!o) return { ok: false, errors, ignored };
+  if (!o) return { ok: false, errors, ignored, reserved };
   ignoreOthers(o, '', FIELDS['']);
   if ('$schema' in o) string(o.$schema, '$schema');
   required(o, 'id', 'id', (v, p) => {
@@ -569,6 +575,7 @@ export function validate(manifest, options = {}) {
         }
       }
       if ('escouadeYml' in c) object(c.escouadeYml, 'contributes.escouadeYml');
+      for (const point of RESERVED_POINTS) if (point in c) reserved.push(`contributes.${point}`);
     }
   }
   if ('icon' in o) {
@@ -594,7 +601,7 @@ export function validate(manifest, options = {}) {
       if ('docs' in s) innerPath(s.docs, 'store.docs');
     }
   }
-  return { ok: errors.length === 0, errors, ignored };
+  return { ok: errors.length === 0, errors, ignored, reserved };
 }
 
 /** Reads the text of a manifest: `validate`, or the whole file wrong when it is no JSON. */
@@ -603,7 +610,7 @@ export function validateText(text, options = {}) {
   try {
     value = JSON.parse(text);
   } catch {
-    return { ok: false, errors: [{ path: '', code: 'type', expected: 'object' }], ignored: [] };
+    return { ok: false, errors: [{ path: '', code: 'type', expected: 'object' }], ignored: [], reserved: [] };
   }
   return validate(value, options);
 }
@@ -699,4 +706,11 @@ export function message(error, lang = 'en') {
   const l = lang === 'fr' ? 'fr' : 'en';
   const field = error.path ? `\`${error.path}\`` : l === 'fr' ? 'Le manifeste' : 'The manifest';
   return `${field} ${WHAT[l][error.code](error)}`;
+}
+
+/** What is said of a reserved point at `path` (`contributes.statusBar`): a warning, in the app's words (ESC-524). */
+export function reservedMessage(path, lang = 'en') {
+  return lang === 'fr'
+    ? `\`${path}\` est réservé, sans effet dans cette version : Escouade n'en montre ni n'en appelle rien.`
+    : `\`${path}\` is reserved, with no effect in this version: Escouade shows and calls nothing of it.`;
 }

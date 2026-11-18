@@ -6,6 +6,7 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Plugins : la fenêtre n’annonce plus les menus, éléments de barre d’état, badges et modèles de projet qu’un manifeste déclare sans qu’Escouade s’en serve encore, et `escouade-plugin validate` les dit réservés, sans refuser le plugin. La description, la valeur par défaut, les choix et l’ordre des réglages d’un plugin sont documentés.
 - Sécurité : un agent qui tourne en mode Bypass s’arrête quand ce mode n’est plus autorisé, à la fin de son tour s’il travaille, et sa conversation dit pourquoi.
 - Tes agents peuvent te laisser ce qu’ils attendent de toi sans s’arrêter (un choix entre leurs rendus, un feu vert, une réponse, un essai à faire), avec leurs images et leurs PDF, par le serveur MCP : ta réponse leur revient en message, et un ticket peut l’attendre. L’écran de la boîte « À toi » suit.
 - La boîte « À toi » s’ouvre depuis la barre des projets (`Ctrl+Maj+J`) quand le serveur MCP est allumé : ce qui t’attend, tous projets confondus, une demande à la fois, ses rendus comparés en grand et ses PDF lus sur place, à quoi tu réponds au clavier, que tu reportes ou sur quoi tu reviens.

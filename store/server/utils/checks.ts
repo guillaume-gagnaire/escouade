@@ -1,4 +1,4 @@
-import { iconPath, message, RESERVED_PREFIX, validateText } from '../../../schemas/plugin-manifest.mjs';
+import { iconPath, message, RESERVED_PREFIX, reservedMessage, validateText } from '../../../schemas/plugin-manifest.mjs';
 import { ICON_DECODE_MAX, imageInfo, SCREENSHOT_BYTES, SCREENSHOT_WIDTH, SCREENSHOTS_MAX } from './images';
 import { judgeLicense } from './licenses';
 import { docPages } from './readme';
@@ -234,14 +234,26 @@ function checkManifest(read: ArchiveRead, iconUndecodable = false, path = '', fi
         fix: t('Exporte-la de nouveau en PNG, puis pousse une nouvelle étiquette.', 'Export it again as a PNG, then push a new tag.'),
       },
     ]);
+  // A reserved point (`menus`, `statusBar`…, ESC-524): a warning, the check passes all the same.
+  const reserved: Problem[] = v.reserved.map((p) => ({
+    path: p,
+    why: t(reservedMessage(p, 'fr'), reservedMessage(p, 'en')),
+    fix: t(
+      'Retire ce point du manifeste à ta prochaine version : il ne fait rien. Rien ne presse, la version passe.',
+      'Remove this point from the manifest in your next version: it does nothing. No hurry, the version passes.',
+    ),
+  }));
   if (v.ok)
-    return pass(
-      'manifest',
-      t(
-        `${MANIFEST_FILE} au schéma plugin-1, le validateur d’Escouade passe`,
-        `${MANIFEST_FILE} on the plugin-1 schema, Escouade’s validator passes`,
+    return {
+      ...pass(
+        'manifest',
+        t(
+          `${MANIFEST_FILE} au schéma plugin-1, le validateur d’Escouade passe`,
+          `${MANIFEST_FILE} on the plugin-1 schema, Escouade’s validator passes`,
+        ),
       ),
-    );
+      problems: reserved,
+    };
   return fail(
     'manifest',
     t(`${plural(v.errors.length, 'champ', 'field').fr} à corriger`, `${plural(v.errors.length, 'champ', 'field').en} to fix`),

@@ -106,8 +106,7 @@ Un point est **servi** quand le cœur s'en sert ; le schéma en réserve davanta
 | Environnements de lancement | `launchEnvironments` | servi | isola |
 | Lecteurs de workflow | `workflowReaders` | contrat seul, rien ne l'appelle (`plugins/reader.rs`, joué par ses tests) | — |
 | Réglages et secrets | `settings`, `secrets` | servi | tous |
-| Menus, barre d'état, badges | `menus`, `statusBar`, `badges` | réservé | — |
-| Modèles de projet, clés de `.escouade.yml` | `projectTemplates`, `escouadeYml` | réservé (`plugins.<id>` est lu) | — |
+| Menus, barre d'état, badges, modèles de projet | `menus`, `statusBar`, `badges`, `projectTemplates` | réservé, sans effet : ni montré, ni compté dans ce qu'apporte le plugin, ni rangé ; `validate` et le store avertissent, sans refuser (ESC-524) | — |
 | Outils MCP, textes rédigés, langues, statistiques, Ctrl+K, canaux de notification, vues libres | — | pas servi | — |
 
 **Pas de HTML libre dans la fenêtre** : ce qu'un plugin montre est déclaré et rendu par Escouade, dans les deux langues, aux règles de `DESIGN.md`. L'iframe isolée reste à essayer sous WKWebView et WebKitGTK avant d'offrir une vue libre.
@@ -182,6 +181,7 @@ Le bus est `src-tauri/src/facts.rs` : un `Body` typé par fait, **trente-neuf fa
 - **Environnement de lancement** (`contributes.launchEnvironments`, `launchenv.rs`) : le cœur lit `detect`, décide qu'un worktree est celui de l'environnement et lance `up` ; le plugin répond `launch/ls`, `launch/down`, `launch/destroy` (par `proc/spawn` sur `permissions.commands`, le seul usage de `proc/*` de la première main : isola). Seule la première main sert ce point, `up` étant une commande du terminal du cœur.
 - **Lecteur de workflow** (`contributes.workflowReaders`, `reader.rs`) : `workflow/read` sur les fichiers que le manifeste déclare ; contrat et tests seulement, rien dans l'app ne l'appelle.
 - **Réglages, secrets, thèmes** : rendus par les composants d'Escouade (`contributes.settings`, `secrets`, `themes`) ; un thème donne des jetons de `THEME_TOKENS`, filtrés.
+- **Un réglage** (`contributes.settings[]`) : `key`, `type` (`string`, `number`, `boolean`, `select`) et `title` ; en option, `description` (un texte ou un texte par langue, montré sous le titre), `default` (sa valeur tant que l'utilisateur n'en a pas choisi, de son type ; sans lui, vide, ou `false` pour un `boolean`) et, pour un `select`, `options` (dans l'ordre, chacune une valeur ou `{ value, title }`). La page du plugin montre les réglages puis les secrets, chacun **dans l'ordre du manifeste**.
 
 ## 3. L'hôte WASM
 

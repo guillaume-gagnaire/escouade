@@ -331,6 +331,45 @@ describe('the names too close', () => {
   });
 });
 
+describe('the points a manifest reserves (ESC-524)', () => {
+  it('passes the manifest with a warning for each, never a refusal', () => {
+    const results = runChecks(
+      snapshot(
+        plugin({
+          manifest: {
+            contributes: {
+              webhooks: [{ event: 'agent.waiting', url: 'https://ntfy.sh/{topic}' }],
+              menus: [{}],
+              statusBar: [{ id: 's' }],
+              badges: [],
+              projectTemplates: [],
+              escouadeYml: {},
+            },
+          },
+        }),
+      ),
+    );
+    const manifest = by(results, 'manifest');
+    expect(manifest.status).toBe('pass');
+    expect(manifest.problems.map((p) => p.path).sort()).toEqual([
+      'contributes.badges',
+      'contributes.escouadeYml',
+      'contributes.menus',
+      'contributes.projectTemplates',
+      'contributes.statusBar',
+    ]);
+    expect(manifest.problems[0]!.why.fr).toContain('réservé, sans effet dans cette version');
+    expect(manifest.problems[0]!.why.en).toContain('reserved, with no effect in this version');
+    // Nothing fails that does not fail without them: the check of the manifest passes.
+    expect(failed(results)).toEqual(failed(runChecks(snapshot(plugin()))));
+    expect(failed(results)).not.toContain('manifest');
+  });
+
+  it('says nothing of a manifest without them', () => {
+    expect(by(runChecks(snapshot(plugin())), 'manifest').problems).toEqual([]);
+  });
+});
+
 describe('store.docs that names no page (ESC-366)', () => {
   const withDocs = (docs: unknown, files: Record<string, string | null> = {}) =>
     runChecks(snapshot(plugin({ manifest: { store: { docs } }, files })));

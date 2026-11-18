@@ -72,7 +72,7 @@
           "type": "array"
         },
         "badges": {
-          "description": "Badges of the cards.",
+          "description": "Reserved, with no effect in this version: Escouade shows and calls nothing of it.",
           "items": {
             "type": "object"
           },
@@ -86,7 +86,7 @@
           "type": "array"
         },
         "escouadeYml": {
-          "description": "Its keys of .escouade.yml.",
+          "description": "Reserved, with no effect in this version: read and ignored.",
           "type": "object"
         },
         "forges": {
@@ -209,14 +209,14 @@
           "type": "array"
         },
         "menus": {
-          "description": "Menus.",
+          "description": "Reserved, with no effect in this version: Escouade shows and calls nothing of it.",
           "items": {
             "type": "object"
           },
           "type": "array"
         },
         "projectTemplates": {
-          "description": "Templates of the project wizard.",
+          "description": "Reserved, with no effect in this version: Escouade shows and calls nothing of it.",
           "items": {
             "type": "object"
           },
@@ -259,11 +259,21 @@
           "type": "array"
         },
         "settings": {
+          "description": "Its settings, shown on its page in the order of this list, under « Settings ».",
           "items": {
             "properties": {
+              "default": {
+                "description": "Its value until the user sets one, of its type (for a `select`, one of its options); without it, empty, or false for a `boolean`."
+              },
+              "description": {
+                "description": "Shown under its title: one text, or a text by language (`en` first, then `fr`)."
+              },
               "key": {
                 "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$",
                 "type": "string"
+              },
+              "options": {
+                "description": "The choices of a `select`, in this order: each a value, or `{ \"value\": …, \"title\": … }` to show a title in its stead (one text, or a text by language)."
               },
               "title": {
                 "description": "One text, or a text by language (`en` first, then `fr`).",
@@ -298,7 +308,7 @@
           "type": "array"
         },
         "statusBar": {
-          "description": "Items of the status bar.",
+          "description": "Reserved, with no effect in this version: Escouade shows and calls nothing of it.",
           "items": {
             "type": "object"
           },

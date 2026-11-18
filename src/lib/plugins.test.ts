@@ -1,5 +1,8 @@
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { askOf, sourceUrl } from './plugins';
+import { askOf, categoriesOf, contributionsOf, sourceUrl } from './plugins';
+import { addsOf } from './plugins-settings';
 
 // Where a store plugin comes from (ESC-313): its repository, or its folder at its tag when it is in one.
 describe('the source of a store plugin', () => {
@@ -74,5 +77,41 @@ describe('the modes of a harness, at its installation (ESC-489)', () => {
     const none = askOf('harnessNoMode:Outil', null, 'fr');
     expect(none.text).toBe('Ne déclare aucun mode : Escouade tient ses agents pour Bypass');
     expect(none.note).toContain('Autoriser le mode Bypass');
+  });
+});
+
+// The points the manifest reserves (ESC-524, study T7): read, never served, so never said nor ranked.
+describe('the points a manifest reserves', () => {
+  const RESERVED = { menus: [{ id: 'm' }], statusBar: [{ id: 's' }], badges: [{ id: 'b' }], projectTemplates: [{ name: 'Modèle' }] };
+  const manifest = (contributes: Record<string, unknown>) =>
+    ({ id: 'dev.exemple.x', name: 'X', contributes, permissions: {}, activation: [] }) as never;
+  const view = (contributes: Record<string, unknown>) =>
+    ({ id: 'dev.exemple.x', description: 'Sa description', manifest: manifest(contributes) }) as never;
+
+  it('says nothing of them in what a plugin adds: one that declares only them adds nothing', () => {
+    expect(contributionsOf(manifest(RESERVED), 'fr')).toEqual([]);
+    expect(contributionsOf(manifest({ ...RESERVED, commands: [{ name: 'lint' }] }), 'fr')).toEqual(['Une commande : lint']);
+  });
+
+  it('never ranks a plugin in « Outils » for them', () => {
+    expect(categoriesOf(view(RESERVED))).toEqual([]);
+    for (const [k, v] of Object.entries(RESERVED)) expect(categoriesOf(view({ [k]: v }))).toEqual([]);
+    expect(categoriesOf(view({ ...RESERVED, commands: [{ name: 'lint' }] }))).toEqual(['tools']);
+  });
+
+  it('leaves them out of the line of Réglages › Plugins, which says its description instead', () => {
+    expect(addsOf(view(RESERVED), 'fr')).toBe('Sa description');
+  });
+
+  it('is declared by no plugin of Escouade’s own: their ranks and what they add stay as they were', () => {
+    const dir = resolve(process.cwd(), 'plugins');
+    const manifests = readdirSync(dir)
+      .map((d) => join(dir, d, 'escouade-plugin.json'))
+      .filter((f) => existsSync(f));
+    expect(manifests.length).toBeGreaterThanOrEqual(30);
+    for (const f of manifests) {
+      const m = JSON.parse(readFileSync(f, 'utf8')) as { contributes?: Record<string, unknown> };
+      for (const k of [...Object.keys(RESERVED), 'escouadeYml']) expect(m.contributes ?? {}, f).not.toHaveProperty(k);
+    }
   });
 });

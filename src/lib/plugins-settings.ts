@@ -4,20 +4,11 @@ import { t } from './i18n';
 import { activeIn, categoriesOf, contributionsOf, type PluginView } from './plugins';
 import type { Project } from './types';
 
-/** What the line names, in this order: what the user meets in the app. Settings and secrets have their « Réglages ». */
-const SHOWN = [
-  'harnesses',
-  'ticketSources',
-  'forges',
-  'themes',
-  'launchEnvironments',
-  'webhooks',
-  'commands',
-  'projectTemplates',
-  'menus',
-  'statusBar',
-  'badges',
-] as const;
+/**
+ * What the line names, in this order: what the user meets in the app. Settings and secrets have their « Réglages »; the
+ * points the manifest reserves do nothing yet, and are never named (ESC-524).
+ */
+const SHOWN = ['harnesses', 'ticketSources', 'forges', 'themes', 'launchEnvironments', 'webhooks', 'commands'] as const;
 
 /** What a plugin adds, with where it is set: its two first points, its description when it fills none. */
 export function addsOf(p: PluginView, lang: string): string {

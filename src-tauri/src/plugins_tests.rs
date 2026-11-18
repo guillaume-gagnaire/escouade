@@ -95,7 +95,35 @@ fn the_reader_says_of_each_shared_case_what_the_store_says() {
             .map(|e| e.as_str().unwrap().to_string())
             .collect();
         assert_eq!(sorted(read.ignored), sorted(ignored), "{name}");
+        // The reserved points (ESC-524): a warning beside the manifest, never one of its errors.
+        let reserved: Vec<String> = case["reserved"]
+            .as_array()
+            .map(|r| r.iter().map(|e| e.as_str().unwrap().to_string()).collect())
+            .unwrap_or_default();
+        assert_eq!(sorted(read.reserved), sorted(reserved), "{name}");
     }
+}
+
+/// A reserved point (ESC-524): the manifest holds, the point is said beside it, in the store's words.
+#[test]
+fn a_reserved_point_is_a_warning_in_the_stores_words_never_a_refusal() {
+    let mut v = valid();
+    v["contributes"]["statusBar"] = json!([{ "id": "s" }]);
+    v["contributes"]["escouadeYml"] = json!({});
+    let read = manifest::check(&v, manifest::Hand::Third);
+    assert!(read.manifest.is_ok());
+    assert_eq!(
+        sorted(read.reserved),
+        ["contributes.escouadeYml", "contributes.statusBar"]
+    );
+    assert_eq!(
+        manifest::reserved_point("contributes.statusBar", Lang::Fr),
+        "`contributes.statusBar` est réservé, sans effet dans cette version : Escouade n'en montre ni n'en appelle rien."
+    );
+    assert_eq!(
+        manifest::reserved_point("contributes.statusBar", Lang::En),
+        "`contributes.statusBar` is reserved, with no effect in this version: Escouade shows and calls nothing of it."
+    );
 }
 
 fn valid() -> Value {

@@ -17,11 +17,11 @@ export interface Manifest {
       /** One text, or a text by language (`en` first, then `fr`). */
       name?: string | Record<string, string>;
     }>;
-    /** Badges of the cards. */
+    /** Reserved, with no effect in this version: Escouade shows and calls nothing of it. */
     badges?: Array<Record<string, unknown>>;
     /** Commands run on an event. */
     commands?: Array<Record<string, unknown>>;
-    /** Its keys of .escouade.yml. */
+    /** Reserved, with no effect in this version: read and ignored. */
     escouadeYml?: Record<string, unknown>;
     /** Code hosts: pull requests, CI, deployments. */
     forges?: Array<{
@@ -45,22 +45,29 @@ export interface Manifest {
       /** One text, or a text by language (`en` first, then `fr`). */
       name?: string | Record<string, string>;
     }>;
-    /** Menus. */
+    /** Reserved, with no effect in this version: Escouade shows and calls nothing of it. */
     menus?: Array<Record<string, unknown>>;
-    /** Templates of the project wizard. */
+    /** Reserved, with no effect in this version: Escouade shows and calls nothing of it. */
     projectTemplates?: Array<Record<string, unknown>>;
     secrets?: Array<{
       key: string;
       /** One text, or a text by language (`en` first, then `fr`). */
       title: string | Record<string, string>;
     }>;
+    /** Its settings, shown on its page in the order of this list, under « Settings ». */
     settings?: Array<{
+      /** Its value until the user sets one, of its type (for a `select`, one of its options); without it, empty, or false for a `boolean`. */
+      default?: unknown;
+      /** Shown under its title: one text, or a text by language (`en` first, then `fr`). */
+      description?: unknown;
       key: string;
+      /** The choices of a `select`, in this order: each a value, or `{ "value": …, "title": … }` to show a title in its stead (one text, or a text by language). */
+      options?: unknown;
       /** One text, or a text by language (`en` first, then `fr`). */
       title: string | Record<string, string>;
       type: 'string' | 'number' | 'boolean' | 'select';
     }>;
-    /** Items of the status bar. */
+    /** Reserved, with no effect in this version: Escouade shows and calls nothing of it. */
     statusBar?: Array<Record<string, unknown>>;
     /** Themes. */
     themes?: Array<Record<string, unknown>>;

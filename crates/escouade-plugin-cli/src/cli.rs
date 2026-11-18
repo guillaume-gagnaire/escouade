@@ -256,6 +256,9 @@ pub fn read_manifest(folder: &Path, lang: Lang, hand: manifest::Hand) -> Option<
             tr_in!(lang, "champ ignoré : {f}", "ignored field: {f}")
         );
     }
+    for p in &read.reserved {
+        eprintln!("⚠ {}", manifest::reserved_point(p, lang));
+    }
     match read.manifest {
         Ok(m) => Some(m),
         Err(problems) => {
