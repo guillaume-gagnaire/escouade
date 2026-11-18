@@ -1,9 +1,9 @@
 ---
-number: null
+number: 204
 id: "la-2-2-3-reversee-dans-la-2-3-le-fichier"
 title: "La 2.2.3 reversée dans la 2.3 : le fichier des secrets imposable, la création d'un agent par un agent jugée, la boîte servie à distance"
 date: "2026-11-17"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-520"
 pages: ["fenetre/reglages-imposes","harness/boite-a-toi","plugins/vue-d-ensemble"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"fenetre/reglages-imposes","added":9,"removed":0},{"page":"harness/boite-a-toi","added":7,"removed":0},{"page":"plugins/vue-d-ensemble","added":2,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-18T12:11:54+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

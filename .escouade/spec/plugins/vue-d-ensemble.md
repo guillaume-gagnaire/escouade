@@ -3,7 +3,7 @@ title: "Les plugins : vue d'ensemble"
 subject: "plugins"
 sources: ["docs/PLUGINS.md","docs/PLUGINS-DESIGN.md §8.8, §8.33","docs/STORE.md","schemas/plugin-1.json","website/content/docs/fr/plugins/introduction.md","src-tauri/src/harness_scope.rs","issue GitHub #37","crates/escouade-forge/src/integrations/kept.rs","src-tauri/src/plugin_secrets.rs"]
 tickets: ["ESC-184","ESC-339","ESC-404","ESC-355","ESC-499","ESC-520"]
-decisions: [142,"la-2-2-3-reversee-dans-la-2-3-le-fichier"]
+decisions: [142,204]
 compared: null
 ---
 

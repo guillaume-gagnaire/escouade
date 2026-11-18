@@ -3,7 +3,7 @@ title: "Réglages imposés"
 subject: "fenetre"
 sources: ["docs/TEAM-SERVER.md §6.1, §6.2, §6.3, §6.4, §6.5, §16 (TS-11, TS-12, TS-13)","crates/escouade-policy/README.md (TS-0b ESC-454, TS-12 ESC-465)","crates/escouade-policy/src/list.rs (la liste unique)","src-tauri/src/team_settings.rs (TS-13)","crates/escouade-forge/src/integrations/kept.rs (ESC-499, ESC-520)"]
 tickets: ["ESC-455","ESC-465","ESC-471","ESC-478","ESC-497","ESC-520","ESC-481"]
-decisions: [169,175,183,189,198,197,"la-2-2-3-reversee-dans-la-2-3-le-fichier",201]
+decisions: [169,175,183,189,198,197,204,201]
 compared: null
 ---
 
