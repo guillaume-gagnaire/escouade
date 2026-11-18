@@ -94,7 +94,7 @@ pub struct Settings {
     /// (`mcp::install`). A `mcpHarnesses` of before (« <harness> peut piloter Escouade », ESC-50)
     /// is dropped at the load: the one switch says for all (ESC-119).
     pub mcp_enabled: bool,
-    /// « Les agents peuvent répondre aux questions et aux permissions des autres agents » (ESC-423):
+    /// « Les agents peuvent répondre aux demandes des autres agents » (ESC-423):
     /// who among the agents may use `answer_permission` and `answer_question` on another agent.
     /// Nobody by default, for a new installation as for settings saved before it: Claude outside
     /// Escouade (`Caller::External`) always answers.
@@ -1143,7 +1143,7 @@ pub enum PagesOpen {
     System,
 }
 
-/// « Les agents peuvent répondre aux questions et aux permissions des autres agents » (ESC-423).
+/// « Les agents peuvent répondre aux demandes des autres agents » (ESC-423).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum AgentsAnswer {
@@ -2284,6 +2284,18 @@ pub struct AgentMeta {
     pub effort: String,
     /// Changed by `set_mode`, which keeps `plan_from`.
     pub mode: String,
+    /// The agent that made it through `create_agent`: the one agent that may ask the user to
+    /// delete it (`delete_agent`). None: made by the user, a ticket, or before it was kept.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_by: Option<String>,
+    /// Its maker asks the user to delete it (`delete_agent`, ESC-511): shown on its card until the
+    /// user confirms or refuses, kept across restarts, gone with it or with its maker.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delete_ask: Option<DeleteAsk>,
+    /// The agents whose deletion it asked for and the user refused (their names): it is told with
+    /// the next message it gets, then these go.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub delete_refused: Vec<String>,
     /// The mode its work resumes in once a plan is approved (ESC-277): the one it was in when it
     /// went into Plan, or its mode of departure when it started in it. None: the app's, `auto`.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -2795,6 +2807,11 @@ pub struct PersistedState {
     pub scheduled: Vec<ScheduledTask>,
     /// The first launch's journey (ESC-504): where it stands on this installation, never in a project's file.
     pub onboarding: Onboarding,
+    /// The agents' asynchronous requests (« À toi », ESC-509): open, answered, and the closed ones
+    /// still kept (`asks::KEPT_DAYS`).
+    pub asks: Vec<crate::asks::Ask>,
+    /// The number of the last request left (`a-<n>`): never given twice.
+    pub ask_seq: u64,
 }
 
 /// A station of the first launch's journey (ESC-504, `docs/ONBOARDING.md` § 4), in its order.
@@ -2924,6 +2941,17 @@ pub struct GitInfo {
     /// Of a project of several repositories (ESC-169), each one's: the fields above are then
     /// their sums, and `branch` theirs when they share it (empty otherwise).
     pub repos: Vec<RepoGit>,
+}
+
+/// A deletion an agent asks of the user (`AgentMeta::delete_ask`, `delete_agent`): who asks, since
+/// when, and whether its worktree is to go too (None: as the window has it).
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteAsk {
+    /// The agent that asks (its id): the one that made it.
+    pub by: String,
+    pub at: i64,
+    pub worktree: Option<bool>,
 }
 
 /// An agent's worktree switched from one branch to another (`AgentMeta::branch_moved`).

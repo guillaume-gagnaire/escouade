@@ -27,7 +27,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { availableParallelism, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AWAITING_PUBLICATION, listPlugins, parseArgs, problemsOf, touchedBy } from './ci-lib.mjs';
+import { AWAITING_PUBLICATION, judgedFor, listPlugins, parseArgs, problemsOf, touchedBy } from './ci-lib.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = dirname(HERE);
@@ -131,7 +131,7 @@ async function checkTypeScript({ name }, folder, log) {
 
 /** Each step of a plugin, until one fails: whether all passed. */
 async function check(plugin, log) {
-  const { name, id, version } = plugin;
+  const { name, id, version, min } = plugin;
   const folder = join(HERE, name);
   const problems = problemsOf(folder, plugin);
   if (problems.length > 0) {
@@ -147,7 +147,7 @@ async function check(plugin, log) {
   const hand = String(id).startsWith('dev.escouade.') ? ['--first-party'] : [];
   // Offline, as the store's review plays it (ESC-536): a public service out of reach that day (codeberg.org, 2026-11-18)
   // must not fail the CI; how a plugin types a service's errors is checked by its own tests.
-  const judged = ['--escouade', since, '--offline'];
+  const judged = ['--escouade', judgedFor(since, min), '--offline'];
   const waits = AWAITING_PUBLICATION[name];
   if (waits) {
     const built = join(ROOT, 'src-tauri', 'target', 'plugins-wasm', name, 'plugin.wasm');

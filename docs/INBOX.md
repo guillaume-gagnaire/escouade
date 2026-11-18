@@ -464,6 +464,19 @@ Estimé au rythme d'agents de Claude Code (Opus, effort élevé), en heures d'ag
 - **Hors 2.3** : l'écran du téléphone (I15), dans les tickets de l'app mobile ; la boîte partagée d'une équipe (I12).
 - **Ce qui attend l'utilisateur** : les choix I1 à I17 (avant IN-1, au moins I1, I5, I8 et I10 qui changent le cœur), puis un essai réel : un chef d'escouade qui dépose une dizaine de demandes dans une vraie journée, pour juger le résumé des notifications et les bornes.
 
+### Ce que la 2.2 ne livre pas
+
+IN-1 (ESC-509) est sur `main`, pour une 2.2.x, et reversé dans `release/2.3` (ESC-520). Ce que la 2.3 y a ajouté au reversement :
+
+- **L'API distante** : les commandes de la boîte sont dans la liste unique (`remoteapi/list.rs`, `docs/REMOTE.md`), servies à un client distant ; `inbox_file_bytes` donne un fichier d'une demande en octets bruts (trames binaires d'ESC-495, en parties au-delà de 16 Mo) et les fichiers d'une réponse arrivent par `attach_*`, en corps bruts. `inbox_open_file` ouvre sur la machine du cœur : refusée à distance (`not-served-yet`) jusqu'au mode serveur, qui la changera en téléchargement sur le poste.
+
+Ce qui reste, pour les tickets qui suivent (IN-2 et IN-3 arrivent encore sur `main`, et se reverseront de même) :
+
+- **Le serveur d'équipe** : une demande d'un projet d'équipe reste sur le poste de l'agent qui l'a déposée ; ni partagée, ni vue des autres membres (la boîte d'une équipe, I12).
+- **L'Overseer** : ses nouvelles et sa délégation (`leave_to_user`) ne passent pas encore par la boîte ; il n'y répond pas pour l'utilisateur.
+- **Les relectures de PR** de la 2.3 (l'agent relecteur, PR-5) : la vue « Relecture » du § 5 est à brancher sur elles avec IN-3.
+- **Le téléphone** : son écran (I15) et le push, avec l'app mobile.
+
 ## 17. Ce qui se mesure
 
 Statistiques d'usage anonymes, si l'utilisateur les laisse (à lister dans la page de confidentialité du site, dont les tests les comptent) ; rien d'identifiant, jamais un texte :

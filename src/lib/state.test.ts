@@ -471,6 +471,51 @@ describe('AppState', () => {
     focus.mockRestore();
   });
 
+  it('tells a deletion an agent asks for once, by a toast whose « Voir » opens its dialog, never a dialog by itself', async () => {
+    const { emit } = await start();
+    const asked = { deleteAsk: { by: 'a1', at: 5, worktree: null } };
+    emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, ...asked }) });
+    expect(app.modal).toBeNull();
+    expect(app.toasts.map((t) => t.text)).toEqual(["L'agent « refacto-auth » demande de supprimer l'agent « tests-e2e »."]);
+    // The same ask again (the agent updated): no other toast.
+    emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, status: 'running', ...asked }) });
+    expect(app.toasts).toHaveLength(1);
+    // It waits for the user, as a question does: counted, and reached by Ctrl+J.
+    app.nextWaiting();
+    expect(app.cardFocus.id).toBe('a2');
+    // « Voir » opens the dialog, unless another one is open (what is typed there is not lost).
+    app.modal = { kind: 'convSearch' };
+    app.toasts[0].action!.onClick();
+    expect(app.modal).toEqual({ kind: 'convSearch' });
+    app.modal = null;
+    app.toasts[0].action!.onClick();
+    expect(app.modal).toEqual({ kind: 'deleteAgent', agentId: 'a2' });
+  });
+
+  it('shows a deletion asked before a reload on its card, without a toast', async () => {
+    app.toasts = [];
+    app.modal = null;
+    await start({
+      agents: [agent(), agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, deleteAsk: { by: 'a1', at: 5, worktree: false } })],
+    });
+    expect(app.toasts).toEqual([]);
+    expect(app.modal).toBeNull();
+    expect(app.deleteAskOf(app.agents.a2)).toEqual({ by: 'a1', at: 5, worktree: false, name: 'refacto-auth' });
+  });
+
+  it('takes an agent opened under the editor as seen, the editor staying open over it', async () => {
+    const { emit } = await start();
+    app.ui.selectedAgent.p1 = 'a1';
+    emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, status: 'running' }) });
+    emit({ type: 'agent', agent: agent({ id: 'a2', name: 'tests-e2e', createdAt: 2, status: 'waiting' }) });
+    expect(app.attention).toEqual({ a2: true });
+    await app.openEditor({ source: 'project' });
+    app.selectAgent('a2');
+    expect(app.editorOn).toBe(true);
+    app.markSeen();
+    expect(app.attention).toEqual({});
+  });
+
   it('goes to an agent that finished out of sight with Ctrl+J', async () => {
     const { emit } = await start();
     emit({ type: 'agent', agent: agent({ id: 'b1', projectId: 'p2', name: 'landing', status: 'running' }) });

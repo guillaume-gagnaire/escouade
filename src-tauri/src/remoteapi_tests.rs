@@ -1514,6 +1514,111 @@ async fn a_raw_body_sent_in_parts_writes_a_file_and_a_large_answer_comes_in_part
     h.stop();
 }
 
+// ---------- the box « À toi » at a distance (ESC-509, ESC-520) ----------
+
+/// A remote client — the phone, whose first screen the box is — is told the box changed, lists its requests, reads one
+/// whole and its file in raw bytes (binary frames, never base64), and answers with a file sent in raw chunks; opening a
+/// file is the core's machine's, refused for now (`not-served-yet`).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_remote_client_gets_the_requests_of_the_box_their_files_in_bytes_and_answers_them() {
+    use crate::asks::{AskAuthor, AskDraft, AskKind, Incoming, Source};
+    let (dir, h, api, token) = served("remote-inbox").await;
+    h.core.settings.write().mcp_enabled = true;
+    let mut c = Client::connect(&api, &token).await;
+    c.ok("subscribe", json!({"channel": "__CHANNEL__:1"})).await;
+    let p = project(&mut c, &dir).await;
+    let pid = p["id"].as_str().unwrap().to_string();
+    // A PDF of 5 MB: more than one part of `inbox_file`, one message of the API.
+    let mut pdf = b"%PDF-1.7\n%\xE2\xE3\xCF\xD3\n".to_vec();
+    pdf.extend((0..(5u32 << 20)).map(|i| (i % 251) as u8));
+    let ask = h
+        .core
+        .ask_deposit(
+            AskAuthor {
+                agent: None,
+                name: "Claude · client MCP".into(),
+                chef: false,
+            },
+            &pid,
+            None,
+            AskDraft {
+                kind: AskKind::Confirm,
+                title: "Je publie la note de version ?".into(),
+                wake: true,
+                ..Default::default()
+            },
+            vec![Incoming {
+                name: "note.pdf".into(),
+                declared: None,
+                option: None,
+                source: Source::Bytes(pdf.clone()),
+            }],
+        )
+        .unwrap();
+    c.until("the box changed", |m| {
+        channel_data(m, 1).is_some_and(|d| d["type"] == "inbox" && d["projectId"] == pid.as_str())
+    })
+    .await;
+    let view = c.ok("inbox_list", json!({})).await;
+    assert_eq!(view["enabled"], true);
+    assert_eq!(view["open"], 1);
+    assert_eq!(view["asks"][0]["id"], ask.id.as_str());
+    let whole = c.ok("inbox_get", json!({"id": ask.id})).await;
+    assert_eq!(whole["title"], "Je publie la note de version ?");
+    let file = whole["files"][0]["file"].as_str().unwrap().to_string();
+    let (bytes, frames) = c
+        .call_bytes("inbox_file_bytes", json!({"id": ask.id, "file": file}))
+        .await;
+    assert_eq!(frames, 1);
+    assert!(bytes == pdf, "the bytes read back differ");
+    // Its answer, with a file of the user's sent in raw chunks.
+    let handle = c
+        .ok(
+            "attach_open",
+            json!({"owner": "draft", "name": "relu.txt", "size": 5}),
+        )
+        .await;
+    let handle = handle.as_str().unwrap().to_string();
+    let reply = c
+        .call_body(
+            "attach_chunk",
+            json!({}),
+            &[("x-handle", &handle)],
+            b"relu.",
+        )
+        .await;
+    assert!(
+        matches!(reply, ToClient::Reply { error: None, .. }),
+        "{reply:?}"
+    );
+    let joined = c.ok("attach_finish", json!({"handle": handle})).await;
+    let answered = c
+        .ok(
+            "inbox_answer",
+            json!({"id": ask.id, "answer": {"yes": true}, "files": [joined]}),
+        )
+        .await;
+    assert_eq!(answered["state"], "answered");
+    assert_eq!(c.ok("inbox_list", json!({})).await["open"], 0);
+    // Opened on the core's machine: not at a distance yet.
+    let id = c.next;
+    c.next += 1;
+    c.send(&ToServer::Call {
+        id,
+        cmd: "inbox_open_file".into(),
+        args: json!({"id": ask.id, "file": file, "reveal": false})
+            .as_object()
+            .unwrap()
+            .clone(),
+        body: None,
+        headers: Default::default(),
+    })
+    .await;
+    let reply = c.reply_to(id, "inbox_open_file").await;
+    assert_eq!(code_of(&reply), Some(codes::NOT_SERVED_YET), "{reply:?}");
+    h.stop();
+}
+
 // ---------- the bounded queue and the sessions, alone ----------
 
 #[test]

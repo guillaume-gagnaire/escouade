@@ -25,6 +25,7 @@ import {
 } from '../test/ipc';
 import ContextMenu from './ContextMenu.svelte';
 import Sidebar from './Sidebar.svelte';
+import DeleteAgentModal from './modals/DeleteAgentModal.svelte';
 import { getByTip } from '../test/tip';
 import type { CodeHost } from '../lib/types';
 
@@ -494,23 +495,54 @@ describe('Sidebar', () => {
     });
   });
 
-  describe('deleting the agent of an existing branch', () => {
-    it('says the branch is kept, where an ordinary agent’s goes with its worktree', async () => {
-      const own = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\a1', branch: 'escouade/a1', baseBranch: 'main' };
-      const taken = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\login', branch: 'feat/login', baseBranch: 'main', existing: true };
-      resetApp({ agents: [agent({ worktree: own }), agent({ id: 'a2', name: 'login', worktree: taken, createdAt: 2 })] });
-      fakeBackend();
+  describe('a deletion an agent asks for (ESC-511)', () => {
+    const asked = { deleteAsk: { by: 'a1', at: 1, worktree: null } };
+
+    it('is said on the card of the agent, with « Voir » and « Refuser », and opens no dialog by itself', async () => {
+      const backend = fakeBackend();
+      app.agents.a2 = { ...app.agents.a2, ...asked };
       render(Sidebar, { project: project() });
-      const option = async (name: RegExp) => {
-        await fireEvent.contextMenu(screen.getByRole('button', { name }));
-        // The last entry, whatever the language: it deletes.
-        menu.open!.items.find((i) => i.danger)!.onClick!();
-        return (app.modal as any).option.label as string;
+      await tick();
+      expect(app.modal).toBeNull();
+      const line = document.querySelector('[data-delete-ask="a2"]') as HTMLElement;
+      expect(line).toHaveTextContent('« refacto-auth » demande de le supprimer');
+      // Only on the card of the agent asked about.
+      expect(document.querySelector('[data-delete-ask="a1"]')).toBeNull();
+
+      await userEvent.click(within(line).getByRole('button', { name: "Voir la demande de suppression de l'agent « tests-e2e »" }));
+      expect(app.modal).toEqual({ kind: 'deleteAgent', agentId: 'a2' });
+      // Its click is its own: the card is not opened under it.
+      expect(app.ui.selectedAgent.p1).not.toBe('a2');
+      app.modal = null;
+
+      await userEvent.click(within(line).getByRole('button', { name: "Refuser de supprimer l'agent « tests-e2e »" }));
+      await waitFor(() => expect(backend.called('refuse_delete')).toHaveLength(1));
+      expect(backend.called('refuse_delete')[0].args).toEqual({ id: 'a2' });
+      expect(app.modal).toBeNull();
+    });
+
+    it('is not said once the agent that asked is gone', async () => {
+      fakeBackend();
+      app.agents.a2 = { ...app.agents.a2, deleteAsk: { by: 'gone', at: 1, worktree: null } };
+      render(Sidebar, { project: project() });
+      await tick();
+      expect(document.querySelector('[data-delete-ask]')).toBeNull();
+    });
+
+    it('counts in its folder as waiting for the user, several without piling up', async () => {
+      fakeBackend();
+      app.agents.a2 = { ...app.agents.a2, ...asked };
+      app.agents.a3 = { ...app.agents.a2, id: 'a3', name: 'trois', createdAt: 3 };
+      app.projects[0] = {
+        ...app.projects[0],
+        agentFolders: [{ id: 'f1', name: 'Aides', named: true, principal: null, agents: ['a2', 'a3'] }],
+        agentOrder: ['a1', 'f1'],
       };
-      expect(await option(/refacto-auth/)).toBe('Supprimer aussi le worktree et la branche escouade/a1');
-      expect(await option(/login/)).toBe('Supprimer aussi le worktree (la branche feat/login est conservée)');
-      setLang('en');
-      expect(await option(/login/)).toBe('Also delete the worktree (the branch feat/login is kept)');
+      render(Sidebar, { project: app.projects[0] });
+      await tick();
+      expect(screen.getByText('Aides').closest('section')!.querySelector('.pill.wait')).toHaveTextContent('2');
+      expect(document.querySelectorAll('[data-delete-ask]')).toHaveLength(2);
+      expect(app.modal).toBeNull();
     });
   });
 
@@ -774,7 +806,10 @@ describe('Sidebar remote control', () => {
       render(Sidebar, { project: project() });
       await fireEvent.contextMenu(screen.getByRole('button', { name: /refacto-auth/ }));
       click('Supprimer…');
-      await (app.modal as any).onConfirm(true);
+      expect(app.modal).toEqual({ kind: 'deleteAgent', agentId: 'a1' });
+      render(DeleteAgentModal, { agentId: 'a1' });
+      await fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }));
+      await waitFor(() => expect(backend.called('delete_agent')).toHaveLength(1));
       expect(order(backend, 'delete_agent')).toEqual(['term_kill', 'delete_agent']);
     });
   });
@@ -1455,32 +1490,6 @@ describe('Sidebar editor entries', () => {
     expect(screen.getByRole('button', { name: /^Parcourir / }).nextElementSibling).toHaveTextContent('Pas de dépôt git');
   });
 
-  it('warns that the unsaved files of an agent’s worktree are lost when it is deleted', async () => {
-    const wt = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\a2', branch: 'escouade/a2', baseBranch: 'main' };
-    resetApp({ agents: [agent(), agent({ id: 'a2', name: 'wt-agent', worktree: wt })] });
-    fakeBackend({
-      fs_read: () => ({ kind: 'text', text: 'a\n', size: 2, hash: 'h1', eol: 'lf', bom: false }),
-      fs_base: () => null,
-      set_unsaved: () => null,
-    });
-    for (const [source, path] of [
-      ['a2', 'x.ts'],
-      ['a2', 'y.ts'],
-      ['project', 'x.ts'],
-    ]) {
-      buffers.edit((await buffers.open('p1', source, path)).key, 'mine\n');
-    }
-    render(Sidebar, { project: project() });
-    const deleteBody = async (name: RegExp) => {
-      await fireEvent.contextMenu(screen.getByRole('button', { name }));
-      menu.open!.items.find((i) => i.label === 'Supprimer…')!.onClick!();
-      return (app.modal as any).body as string;
-    };
-    expect(await deleteBody(/wt-agent/)).toMatch(/\. 2 fichiers non enregistrés dans l’éditeur seront perdus\.$/);
-    // An agent without a worktree edits the project's checkout: its files stay open with the project.
-    expect(await deleteBody(/refacto-auth/)).not.toContain('éditeur');
-  });
-
   it('opens an agent with a worktree on that worktree, and offers nothing for an archived one', async () => {
     const wt = { path: 'C:\\code\\demo-api\\.claude\\worktrees\\a2', branch: 'escouade/a2', baseBranch: 'main' };
     resetApp({ agents: [agent({ id: 'a2', name: 'wt-agent', worktree: wt }), agent({ id: 'a3', name: 'vieux', archived: true })] });
@@ -2029,15 +2038,9 @@ describe('Sidebar in English', () => {
       confirm: 'Archive',
     });
     app.modal = null;
+    // Its dialog says what would be lost (DeleteAgentModal.test.ts, in English too).
     menu.open!.items.find((i) => i.label === 'Delete…')!.onClick!();
-    expect(app.modal).toMatchObject({
-      title: 'Delete the agent “tests-e2e”?',
-      confirm: 'Delete',
-      option: { label: 'Also delete the worktree and the branch escouade/a2' },
-    });
-    expect((app.modal as any).body).toBe(
-      'The Claude process is stopped and the conversation is removed from the app (the Claude Code session stays on disk).',
-    );
+    expect(app.modal).toEqual({ kind: 'deleteAgent', agentId: 'a2' });
   });
 
   it('tells in English why a copy waits, and when there is no shell', async () => {

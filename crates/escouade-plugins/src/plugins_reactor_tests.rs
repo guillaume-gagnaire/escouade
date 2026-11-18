@@ -450,9 +450,18 @@ fn loaded(name: &str, limits: Limits) -> W {
 
 /// `loaded`, from a copy of the fixture as the test made it.
 fn loaded_from(folder: PathBuf, limits: Limits) -> W {
+    loaded_with(folder, limits, |p, f| p.load_dev(f, Lang::En))
+}
+
+/// `loaded_from`, the folder loaded by `load`.
+fn loaded_with(
+    folder: PathBuf,
+    limits: Limits,
+    load: impl Fn(&Plugins, &Path) -> Result<crate::PluginView, crate::Refusal>,
+) -> W {
     let data = DataDir::new(folder.parent().unwrap().join("data"));
     let plugins = Plugins::load(data.clone(), "2.2.0");
-    plugins.load_dev(&folder, Lang::En).unwrap();
+    load(&plugins, &folder).unwrap();
     let store = Arc::new(MemoryStore::default());
     let rt = Runtime::new(plugins.clone(), store.clone(), &data, "2.2.0", limits);
     W {
@@ -570,7 +579,18 @@ async fn a_plugin_without_its_module_or_with_no_reactor_is_refused_and_says_why(
     // changed since it was loaded, so nothing stops.
     let folder = copied("missing");
     std::fs::remove_file(folder.join(wasm::MODULE_FILE)).unwrap();
-    let w = loaded_from(folder, Limits::default());
+    // « Charger un dossier » refuses it (issue #43): loaded as a folder whose module went once it was loaded.
+    let why = Plugins::load(
+        DataDir::new(folder.parent().unwrap().join("other")),
+        "2.2.0",
+    )
+    .inspect_dev(&folder, Lang::En)
+    .unwrap_err()
+    .message;
+    assert!(why.contains("escouade-plugin build"), "{why}");
+    let w = loaded_with(folder, Limits::default(), |p, f| {
+        p.load_dev_unbuilt(f, Lang::En)
+    });
     // Its workers: one by core.
     let workers = std::thread::available_parallelism().map_or(8, |n| n.get());
     for _ in 0..workers {
@@ -585,7 +605,7 @@ async fn a_plugin_without_its_module_or_with_no_reactor_is_refused_and_says_why(
     let e = call.await.unwrap().unwrap_err();
     assert!(matches!(e, CallError::Stopped(_)), "{e:?}");
     assert!(
-        journal_has(&w.rt, Kind::Stop, "plugin.wasm"),
+        journal_has(&w.rt, Kind::Stop, "`escouade-plugin build "),
         "{:?}",
         w.rt.journal(ID)
     );

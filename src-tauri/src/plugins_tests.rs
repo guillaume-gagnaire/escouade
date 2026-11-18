@@ -983,3 +983,117 @@ fn a_project_s_settings_go_over_the_user_s_only_as_the_plugin_declares_them() {
     );
     assert_eq!(Value::Object(got), mine);
 }
+
+/// The manifests of the repository a test reads by both readers: every plugin of `plugins/`, the models of
+/// `create-escouade-plugin` (their placeholders filled), the examples of the documentation and the plugins of the tests.
+fn the_repository_s_manifests() -> Vec<(String, Value, PathBuf)> {
+    let root = root();
+    let mut found = Vec::new();
+    for parent in [
+        "plugins",
+        "sdk/create-escouade-plugin/templates",
+        "sdk/doc-examples",
+        "tests/fixtures/plugins",
+    ] {
+        let mut dirs: Vec<PathBuf> = std::fs::read_dir(root.join(parent))
+            .unwrap()
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.join("escouade-plugin.json").is_file())
+            .collect();
+        dirs.sort();
+        for dir in dirs {
+            let text = std::fs::read_to_string(dir.join("escouade-plugin.json"))
+                .unwrap()
+                .replace("{{id}}", "dev.exemple.parity")
+                .replace("{{name}}", "Parity");
+            let name = format!("{parent}/{}", dir.file_name().unwrap().to_string_lossy());
+            found.push((name, serde_json::from_str(&text).unwrap(), dir));
+        }
+    }
+    found
+}
+
+/// Issue #43: the SDK's `validate` (its copy of schemas/plugin-manifest.mjs, sdk/plugin/vendor/) said of a manifest
+/// of the app what an older app said. Every manifest of the repository, read by the app's reader and by the SDK's,
+/// gets the same verdict: the same fields wrong for the same reasons, the same fields ignored. The fields each knows
+/// are compared to plugin-1.json by schemas/plugin-manifest.test.ts, and the copy to its source by
+/// `sdk/plugin/scripts/generate.mjs --check`.
+#[test]
+fn the_sdk_and_the_app_say_the_same_of_every_manifest_of_the_repository() {
+    let manifests = the_repository_s_manifests();
+    assert!(manifests.len() >= 30, "{}", manifests.len());
+    let library = root().join("sdk/plugin/vendor/plugin-manifest.mjs");
+    let script = "import fs from 'node:fs'; import path from 'node:path';
+         import { pathToFileURL } from 'node:url';
+         const { validate } = await import(pathToFileURL(process.argv[1]).href);
+         const cases = JSON.parse(fs.readFileSync(0, 'utf8'));
+         const said = cases.map(([m, dir, firstParty]) => {
+           const file = (p) => { try { return new Uint8Array(fs.readFileSync(path.join(dir, p))); } catch { return null; } };
+           const r = validate(m, { firstParty, file });
+           return { errors: r.errors.map((e) => `${e.path} ${e.code}`).sort(), ignored: [...r.ignored].sort() };
+         });
+         process.stdout.write(JSON.stringify(said));";
+    let first = |m: &Value| {
+        m["id"]
+            .as_str()
+            .is_some_and(|id| id.starts_with("dev.escouade."))
+    };
+    let input: Vec<Value> = manifests
+        .iter()
+        .map(|(_, m, dir)| json!([m, dir, first(m)]))
+        .collect();
+    let mut child = Command::new("node")
+        .args(["--input-type=module", "-e", script])
+        .arg(&library)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("node, for the SDK's reader");
+    use std::io::Write;
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(serde_json::to_string(&input).unwrap().as_bytes())
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+    let sdk: Vec<Value> = serde_json::from_slice(&out.stdout).unwrap();
+    for ((name, m, dir), sdk) in manifests.iter().zip(sdk) {
+        let hand = if first(m) {
+            manifest::Hand::First
+        } else {
+            manifest::Hand::Third
+        };
+        let file = |p: &str| std::fs::read(dir.join(p)).ok();
+        let read = manifest::check_with(m, hand, Some(&file));
+        let errors: Vec<String> = match &read.manifest {
+            Ok(_) => Vec::new(),
+            Err(p) => p
+                .iter()
+                .map(|p| {
+                    let code = serde_json::to_value(p.code).unwrap();
+                    format!("{} {}", p.path, code.as_str().unwrap())
+                })
+                .collect(),
+        };
+        let strings = |v: &Value| -> Vec<String> {
+            v.as_array()
+                .unwrap()
+                .iter()
+                .map(|s| s.as_str().unwrap().to_string())
+                .collect()
+        };
+        assert_eq!(sorted(errors), strings(&sdk["errors"]), "{name}: errors");
+        assert_eq!(
+            sorted(read.ignored),
+            strings(&sdk["ignored"]),
+            "{name}: ignored"
+        );
+    }
+}

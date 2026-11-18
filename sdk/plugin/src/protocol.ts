@@ -300,7 +300,7 @@ export interface LogParams {
 
 /** What fs/* name: a path relative to root, or a path of the host (C:\wt\a.txt) under a root of the agent. root plugin and temp need no agent. */
 export interface FsPath {
-  /** The key of the agent, as agent/attach gave it. */
+  /** The key of the agent, as agent/attach gave it (a harness), or as a launch environment's call lends a worktree. The agent of a fact (its agent.id) gives no access: without a key, a plugin has the roots plugin and temp. */
   agent?: string;
   /** A root of permissions.files. */
   root?: 'plugin' | 'agent' | 'agentRepo' | 'agentHome' | 'temp';
@@ -405,13 +405,18 @@ export interface ProcWriteParams {
 }
 
 export interface ProcOutParams {
+  /** The proc that proc/spawn answered. */
   proc: number;
+  /** Which of its outputs: stdout or stderr, each in the order it was written; the two are not ordered between them. */
   stream: 'stdout' | 'stderr';
+  /** Text, never base64: the bytes as UTF-8, cut between two characters (a byte that is no UTF-8 becomes U+FFFD); 16 KiB at most a notification, and not cut by lines: a line may come in two. */
   data: string;
 }
 
 export interface ProcExitParams {
+  /** The proc that proc/spawn answered. */
   proc: number;
+  /** Its exit code; null when it was killed (proc/kill, the end of the instance) or ended by a signal. It comes once, after every proc/out of the program (unless what it left running held its outputs open more than 1 s). */
   code: number | null;
 }
 
@@ -516,7 +521,7 @@ export interface ToPlugin {
   'events/fact': { params: Fact; result: void };
   /** A permission an agent asks for, before the user is asked (permissions.decide). Past the delay, the user is asked. */
   'permissions/decide': { params: DecideParams; result: Decision };
-  /** What a program wrote, as text cut between two characters. Escouade stops reading it past 256 KiB not yet written on the input of the module. A notification: no answer. */
+  /** What a program wrote, as UTF-8 text cut between two characters (never base64), 16 KiB at most a notification. Escouade stops reading it past 256 KiB not yet written on the input of the module. A notification: no answer. */
   'proc/out': { params: ProcOutParams; result: void };
   /** A program ended, after all it wrote; code is null when it was killed. A notification: no answer. */
   'proc/exit': { params: ProcExitParams; result: void };

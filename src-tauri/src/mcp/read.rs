@@ -66,6 +66,8 @@ struct ProjectRow {
     /// Whether it is attached to a team (TS-7), and its Kanban the team's. Read only: attaching and pouring are the
     /// user's gestures in the window, no tool does them.
     team: TeamOf,
+    /// The accounts of its harness a new agent may go to (`create_agent`'s `account`): id, name.
+    accounts: Vec<Value>,
 }
 
 /// What the tools say of a project's team (TS-7).
@@ -270,7 +272,14 @@ pub(super) async fn projects(core: &Core, caller: &Caller) -> Result<String, Too
             None => Some(git::head_branch(&p.path).await),
         };
         let (engine, models, efforts) = super::act::harness_choices(core, &p);
+        let accounts = accounts::for_project_of(&core.settings.read(), p.engine(), &p)
+            .accounts
+            .iter()
+            .filter(|a| a.active)
+            .map(|a| serde_json::json!({ "id": a.id, "name": accounts::name_in(crate::i18n::ui(), a) }))
+            .collect();
         rows.push(ProjectRow {
+            accounts,
             engine: serde_json::to_value(engine).unwrap_or_default(),
             models,
             efforts,

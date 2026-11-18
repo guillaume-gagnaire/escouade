@@ -25,6 +25,39 @@ const SETTING_TYPES = ['string', 'number', 'boolean', 'select'];
 const POINTS_WITH_ID = ['accounts', 'ticketSources', 'forges', 'harnesses', 'workflowReaders', 'launchEnvironments'];
 const OPEN_POINTS = ['themes', 'webhooks', 'commands', 'menus', 'statusBar', 'badges', 'projectTemplates'];
 
+/**
+ * The fields this library knows, object by object (`''` the manifest itself): any other is ignored, and said so. They
+ * are the properties of plugin-1.json, the schema the app's reader publishes (crates/escouade-plugin-cli/src/manifest.rs):
+ * schemas/plugin-manifest.test.ts fails when the two differ (issue #43).
+ */
+export const FIELDS = {
+  '': [
+    '$schema',
+    'id',
+    'name',
+    'version',
+    'description',
+    'author',
+    'license',
+    'repository',
+    'escouade',
+    'run',
+    'activation',
+    'permissions',
+    'limits',
+    'contributes',
+    'store',
+    'icon',
+  ],
+  author: ['name', 'url', 'email'],
+  escouade: ['api', 'min', 'max'],
+  run: ['command', 'js', 'wasm', 'args', 'windows', 'macos', 'linux'],
+  permissions: ['events', 'network', 'secrets', 'commands', 'env', 'files', 'decide'],
+  limits: ['fetchSeconds', 'fetchBytes', 'fileBytes', 'memoryBytes', 'turnSeconds'],
+  contributes: ['settings', 'secrets', 'escouadeYml', ...POINTS_WITH_ID, ...OPEN_POINTS],
+  store: ['categories', 'keywords', 'screenshots', 'docs'],
+};
+
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const join = (path, key) => (path ? `${path}.${key}` : key);
 const lowerWord = (w) => /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(w);
@@ -273,24 +306,7 @@ export function validate(manifest, options = {}) {
 
   const o = object(manifest, '');
   if (!o) return { ok: false, errors, ignored };
-  ignoreOthers(o, '', [
-    '$schema',
-    'id',
-    'name',
-    'version',
-    'description',
-    'author',
-    'license',
-    'repository',
-    'escouade',
-    'run',
-    'activation',
-    'permissions',
-    'limits',
-    'contributes',
-    'store',
-    'icon',
-  ]);
+  ignoreOthers(o, '', FIELDS['']);
   if ('$schema' in o) string(o.$schema, '$schema');
   required(o, 'id', 'id', (v, p) => {
     const s = string(v, p);
@@ -307,7 +323,7 @@ export function validate(manifest, options = {}) {
   if ('author' in o) {
     const a = object(o.author, 'author');
     if (a) {
-      ignoreOthers(a, 'author', ['name', 'url', 'email']);
+      ignoreOthers(a, 'author', FIELDS.author);
       if ('url' in a) url(a.url, 'author.url');
       if ('email' in a) filled(a.email, 'author.email');
       required(a, 'name', 'author.name', filled);
@@ -318,7 +334,7 @@ export function validate(manifest, options = {}) {
   required(o, 'escouade', 'escouade', (v) => {
     const e = object(v, 'escouade');
     if (!e) return;
-    ignoreOthers(e, 'escouade', ['api', 'min', 'max']);
+    ignoreOthers(e, 'escouade', FIELDS.escouade);
     required(e, 'api', 'escouade.api', (a, p) => {
       const s = string(a, p);
       if (s !== null && !/^[1-9][0-9]*$/.test(s)) problem(p, 'api');
@@ -338,7 +354,7 @@ export function validate(manifest, options = {}) {
   if ('run' in o) {
     const r = object(o.run, 'run');
     if (r) {
-      ignoreOthers(r, 'run', ['command', 'js', 'wasm', 'args', 'windows', 'macos', 'linux']);
+      ignoreOthers(r, 'run', FIELDS.run);
       // A JS/TS bundle of the folder (ESC-320) or the Rust of a module (ESC-331), run by Escouade in WASM: one of the three.
       const inWasm = (key, cargo) => {
         const at = `run.${key}`;
@@ -362,7 +378,7 @@ export function validate(manifest, options = {}) {
   if ('permissions' in o) {
     const p = object(o.permissions, 'permissions');
     if (p) {
-      ignoreOthers(p, 'permissions', ['events', 'network', 'secrets', 'commands', 'env', 'files', 'decide']);
+      ignoreOthers(p, 'permissions', FIELDS.permissions);
       for (const key of ['events', 'network', 'secrets', 'commands', 'env']) if (key in p) words(p[key], `permissions.${key}`);
       if (Array.isArray(p.env))
         p.env.forEach((v, i) => {
@@ -380,17 +396,15 @@ export function validate(manifest, options = {}) {
   if ('limits' in o) {
     const l = object(o.limits, 'limits');
     if (l) {
-      const known = ['fetchSeconds', 'fetchBytes', 'fileBytes', 'memoryBytes', 'turnSeconds'];
-      ignoreOthers(l, 'limits', known);
-      for (const key of known)
+      ignoreOthers(l, 'limits', FIELDS.limits);
+      for (const key of FIELDS.limits)
         if (key in l && !(Number.isSafeInteger(l[key]) && l[key] > 0)) problem(`limits.${key}`, 'type', 'positive integer');
     }
   }
   if ('contributes' in o) {
     const c = object(o.contributes, 'contributes');
     if (c) {
-      const known = ['settings', 'secrets', 'escouadeYml', ...POINTS_WITH_ID, ...OPEN_POINTS];
-      ignoreOthers(c, 'contributes', known);
+      ignoreOthers(c, 'contributes', FIELDS.contributes);
       const items = (v, path) => {
         if (!Array.isArray(v)) return (problem(path, 'type', 'array'), []);
         return v.map((item, i) => [`${path}[${i}]`, object(item, `${path}[${i}]`)]).filter(([, it]) => it);
@@ -471,6 +485,56 @@ export function validate(manifest, options = {}) {
           const a = string(it.account, p);
           if (a !== null && !accounts.includes(a)) problem(p, 'account');
         }
+        // What a harness described by ACP says of its sessions, its turns, its effort and its context (ESC-491): the
+        // arguments of a resume name the session (`{session}`), and what is read of its messages are JSON pointers.
+        if (point === 'harnesses')
+          for (const [at, it] of list) {
+            if (!isObject(it.acp)) continue;
+            const a = join(at, 'acp');
+            const pointer = (v, p) => {
+              if (typeof v !== 'string') problem(p, 'type', 'string');
+              else if (!v.startsWith('/')) problem(p, 'pointer');
+            };
+            if ('resume' in it.acp) {
+              const p = join(a, 'resume');
+              const r = it.acp.resume;
+              if (!isObject(r)) problem(p, 'type', 'object');
+              else {
+                const pa = join(p, 'args');
+                if (!('args' in r)) problem(pa, 'required');
+                else if (!Array.isArray(r.args)) problem(pa, 'type', 'array');
+                else {
+                  r.args.forEach((x, i) => {
+                    if (typeof x !== 'string') problem(`${pa}[${i}]`, 'type', 'string');
+                  });
+                  if (!r.args.some((x) => typeof x === 'string' && x.includes('{session}'))) problem(pa, 'session');
+                }
+                if ('session' in r) pointer(r.session, join(p, 'session'));
+              }
+            }
+            if ('turnEnd' in it.acp) {
+              const p = join(a, 'turnEnd');
+              if (!Array.isArray(it.acp.turnEnd)) problem(p, 'type', 'array');
+              else
+                it.acp.turnEnd.forEach((e, i) => {
+                  const pe = `${p}[${i}]`;
+                  if (!isObject(e)) problem(pe, 'type', 'object');
+                  else if (!Object.keys(e).length) problem(pe, 'empty');
+                  else for (const k of Object.keys(e)) if (!k.startsWith('/')) problem(join(pe, k), 'pointer');
+                });
+            }
+            if ('efforts' in it.acp) {
+              const p = join(a, 'efforts');
+              if (!isObject(it.acp.efforts)) problem(p, 'type', 'object');
+              else for (const [k, v] of Object.entries(it.acp.efforts)) if (typeof v !== 'string') problem(join(p, k), 'type', 'string');
+            }
+            if ('effortOption' in it.acp && typeof it.acp.effortOption !== 'string') problem(join(a, 'effortOption'), 'type', 'string');
+            if ('usage' in it.acp) {
+              const p = join(a, 'usage');
+              if (!isObject(it.acp.usage)) problem(p, 'type', 'object');
+              else for (const k of ['context', 'window']) if (k in it.acp.usage) pointer(it.acp.usage[k], join(p, k));
+            }
+          }
         // A harness of anyone's (ESC-424): no shell nor interpreter as its program, no variable Escouade refuses, set or
         // taken off (SEC-30).
         if (point === 'harnesses' && !firstParty) {
@@ -521,7 +585,7 @@ export function validate(manifest, options = {}) {
   if ('store' in o) {
     const s = object(o.store, 'store');
     if (s) {
-      ignoreOthers(s, 'store', ['categories', 'keywords', 'screenshots', 'docs']);
+      ignoreOthers(s, 'store', FIELDS.store);
       for (const key of ['categories', 'keywords']) if (key in s) words(s[key], `store.${key}`);
       if ('screenshots' in s) {
         if (Array.isArray(s.screenshots)) s.screenshots.forEach((p, i) => innerPath(p, `store.screenshots[${i}]`));
@@ -590,6 +654,8 @@ const WHAT = {
       "n'est pas une variable qu'un plugin peut poser : un nom (lettres, chiffres, `_`), hors des variables d'Escouade et des familles qui changeraient ce que lance le programme (`LD_*`, `GIT_*`, `PYTHON*`, `*_PROXY`, `HOME`, `PATH`…).",
     interpreter: () =>
       "nomme un shell ou un interpréteur (`bash`, `powershell`, `python`, `node`…) : le harness d'un tiers lance un programme à lui.",
+    pointer: () => "n'est pas un pointeur JSON (`/_meta/<agent>/…`) : ce qu'Escouade lit d'un message du harness.",
+    session: () => 'ne nomme pas la session à reprendre : un argument doit contenir `{session}`.',
     square: () => "n'est pas carrée (un PNG carré de 256 px au moins, 512 conseillé).",
     small: () => 'fait moins de 256 px de côté (512 conseillé).',
   },
@@ -621,6 +687,8 @@ const WHAT = {
       "is no variable a plugin may set: a name (letters, digits, `_`), out of Escouade's own and of the families that would change what the program runs (`LD_*`, `GIT_*`, `PYTHON*`, `*_PROXY`, `HOME`, `PATH`…).",
     interpreter: () =>
       "names a shell or an interpreter (`bash`, `powershell`, `python`, `node`…): the harness of anyone's runs a program of its own.",
+    pointer: () => 'is no JSON pointer (`/_meta/<agent>/…`): what Escouade reads of a message of the harness.',
+    session: () => 'does not name the session to resume: an argument must hold `{session}`.',
     square: () => 'is not square (a square PNG of 256 px at least, 512 advised).',
     small: () => 'is under 256 px a side (512 advised).',
   },

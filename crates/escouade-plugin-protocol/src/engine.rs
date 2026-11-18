@@ -178,6 +178,10 @@ pub struct LaunchParams {
     /// The file the core wrote to keep Escouade's server out of it (`Engine::refusal`), when it is refused.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub refusal_file: Option<String>,
+    /// What the agent did so far, as Escouade keeps it (its handover file, ESC-88), for a session to resume (ESC-491):
+    /// a harness that cannot take it back starts a new one with it, after its instructions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recap: Option<String>,
 }
 
 /// A variable of a launch.
@@ -1682,6 +1686,58 @@ pub struct AcpDecl {
     /// by their own name: `_meta.<agent>.toolCall.toolName`, else their title before « · ».
     #[serde(default)]
     pub tools: std::collections::BTreeMap<String, String>,
+    /// How it takes back a session it does not load as it runs (ESC-491): the arguments its process is launched with
+    /// to resume one, and where `session/new` tells the id it keeps the session under. Left out, a session it does not
+    /// load is a new one, said, its instructions given again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resume: Option<AcpResume>,
+    /// What ends a turn it begins by itself (no `session/prompt` asked it, ESC-491): each entry a set of JSON pointers
+    /// into the `update` of a `session/update` and the value each must have, an update that matches all of one entry
+    /// ending the turn. Left out, such a turn ends when the next message is sent, or when it is stopped.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub turn_end: Vec<std::collections::BTreeMap<String, Json>>,
+    /// The value of its option of reasoning (`session/set_config_option`) for each effort of Escouade, as `modes` for
+    /// its modes (ESC-491). An effort left out sets none; the option is set only when its session offers it (a model
+    /// that reasons) with that value.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub efforts: std::collections::BTreeMap<String, String>,
+    /// The id of that option; left out, the one of the category `thought_level`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effort_option: Option<String>,
+    /// Where its `session/update`s tell what its context holds, by JSON pointers into their `update` (ESC-491).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage: Option<AcpUsage>,
+}
+
+/// A value of JSON in a declaration (`AcpDecl::turn_end`): equal as JSON is, which has no NaN.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(transparent)]
+pub struct Json(pub Value);
+
+impl Eq for Json {}
+
+/// `AcpDecl::resume`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpResume {
+    /// Added to `args` to resume a session, `{session}` standing for its id (`["--resume", "{session}"]`).
+    pub args: Vec<String>,
+    /// A JSON pointer into the answer to `session/new` to the id the harness keeps the session under, when it is not
+    /// the session's (`/_meta/<agent>/saved/sessionId`): the one Escouade keeps and resumes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<String>,
+}
+
+/// `AcpDecl::usage`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpUsage {
+    /// The tokens its context holds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<String>,
+    /// The window of its model, in tokens.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window: Option<String>,
 }
 
 fn yes() -> bool {

@@ -769,44 +769,56 @@ pub fn plugin_set_setting(
     plugin_view(&core, &id)
 }
 
-/// Which of a plugin's secrets are kept (their values never leave the keychain).
+/// Which of a plugin's secrets are kept, and where (their values never leave the keychain or the file).
 #[tauri::command(async)]
-pub fn plugin_secrets(core: CoreState, id: String) -> Result<Vec<(String, bool)>, String> {
+pub fn plugin_secrets(
+    core: CoreState,
+    id: String,
+) -> Result<Vec<crate::plugin_secrets::SecretState>, String> {
     let view = plugin_view(&core, &id)?;
-    Ok(view
-        .secret_keys
-        .into_iter()
-        .map(|k| {
-            let set = core
-                .secrets
-                .get(&crate::plugins::runtime::secret_name(&id, &k))
-                .ok()
-                .flatten()
-                .is_some();
-            (k, set)
-        })
-        .collect())
+    Ok(core.plugin_secret_states(&id, view.secret_keys))
 }
 
-/// Keeps a plugin's secret in the keychain, under its own name; empty forgets it.
+/// Keeps a plugin's secret in the keychain, under its own name, read back to check; empty forgets it. `inFile`: the
+/// user chose « Garder dans un fichier lisible de toi seul » (ESC-499). Not kept, it says why
+/// (`plugin_secrets::SecretRefused`).
 #[tauri::command(async)]
 pub fn plugin_set_secret(
     core: CoreState,
     id: String,
     key: String,
     value: String,
-) -> Result<(), String> {
-    let view = plugin_view(&core, &id)?;
+    in_file: Option<bool>,
+) -> Result<(), crate::plugin_secrets::SecretRefused> {
+    let view = plugin_view(&core, &id).map_err(|message| crate::plugin_secrets::SecretRefused {
+        message,
+        keychain_refused: false,
+    })?;
     if !view.secret_keys.contains(&key) {
-        return Err(format!("{key}: not a secret of {id}"));
+        return Err(crate::plugin_secrets::SecretRefused {
+            message: format!("{key}: not a secret of {id}"),
+            keychain_refused: false,
+        });
     }
-    let name = crate::plugins::runtime::secret_name(&id, &key);
-    let done = if value.is_empty() {
-        core.secrets.delete(&name)
-    } else {
-        core.secrets.set(&name, &value)
-    };
-    done.map_err(|e| e.to_string())
+    core.plugin_secret_set(&id, &key, &value, in_file.unwrap_or(false))
+}
+
+/// « Déplacer vers le trousseau »: a plugin's secret kept in the file goes to the keychain, now that there is one.
+#[tauri::command(async)]
+pub fn plugin_secret_move(core: CoreState, id: String, key: String) -> Result<(), String> {
+    core.plugin_secret_move(&id, &key)
+}
+
+/// Réglages › Plugins: the file of the plugins' secrets on this machine, if the user chose it.
+#[tauri::command(async)]
+pub fn secrets_file(core: CoreState) -> crate::plugin_secrets::SecretsFile {
+    core.secrets_file()
+}
+
+/// The file of the plugins' secrets taken back: it goes, with what it holds.
+#[tauri::command(async)]
+pub fn secrets_file_remove(core: CoreState) -> Result<(), String> {
+    core.secrets_file_remove()
 }
 
 /// Where a plugin's process stands, and its journal (the oldest entry first).
@@ -1833,6 +1845,20 @@ pub async fn delete_agent(
     remove_worktree: bool,
 ) -> Res<Option<String>> {
     core.delete_agent(&id, remove_worktree).await.map_err(err)
+}
+
+/// « Refuser » the deletion its maker asked for (`delete_agent`, ESC-511): the agent stays.
+#[tauri::command]
+pub fn refuse_delete(core: CoreState<'_>, id: String) -> Res<()> {
+    core.refuse_delete(&id).map_err(err)
+}
+
+/// What deleting the agent's worktree would lose, as git says it in time (« Supprimer l'agent »).
+#[tauri::command]
+pub async fn delete_loss(core: CoreState<'_>, id: String) -> Res<crate::deleteask::Loss> {
+    core.delete_loss(&id, crate::deleteask::LOSS_TIMEOUT)
+        .await
+        .map_err(err)
 }
 
 #[tauri::command]
@@ -5819,4 +5845,135 @@ pub async fn overseer_undo(core: CoreState<'_>, id: String) -> Res<()> {
 #[tauri::command]
 pub fn overseer_revoke(core: CoreState, id: String) -> Res<()> {
     core.overseer_revoke(&id).map(|_| ()).map_err(err)
+}
+
+// ---------- the box « À toi » (ESC-509): the commands its screen (IN-2) reads and acts by ----------
+
+/// The box: the requests of a project, or of all (`project_id` left out); nothing while the MCP
+/// server is off.
+#[tauri::command(async)]
+pub fn inbox_list(core: CoreState, project_id: Option<String>) -> crate::asks::InboxView {
+    core.inbox_list(project_id.as_deref())
+}
+
+/// A request whole.
+#[tauri::command(async)]
+pub fn inbox_get(core: CoreState, id: String) -> Res<crate::asks::WindowAsk> {
+    core.inbox_get(&id).map_err(err)
+}
+
+/// A part of a request's file (4 MB at most), in base64: its images, its PDF.
+#[tauri::command(async)]
+pub fn inbox_file(
+    core: CoreState,
+    id: String,
+    file: String,
+    offset: Option<u64>,
+    length: Option<u64>,
+) -> Res<crate::asks::InboxChunk> {
+    core.inbox_file(&id, &file, offset.unwrap_or(0), length)
+        .map_err(err)
+}
+
+/// A request's file whole, in raw bytes: binary frames on the remote API (ESC-495), parted beyond
+/// 16 MB, never base64.
+#[tauri::command]
+pub async fn inbox_file_bytes(
+    core: CoreState<'_>,
+    id: String,
+    file: String,
+) -> Res<tauri::ipc::Response> {
+    let core = core.inner().clone();
+    let bytes = tokio::task::spawn_blocking(move || core.inbox_file_bytes(&id, &file))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(err)?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+/// « Ouvrir » or « Afficher dans le dossier » of a request's file.
+#[tauri::command(async)]
+pub fn inbox_open_file(core: CoreState, id: String, file: String, reveal: bool) -> Res<()> {
+    core.inbox_open_file(&id, &file, reveal).map_err(err)
+}
+
+/// The user's answer: it goes to its author 10 seconds later (`inbox_reopen` takes it back).
+#[tauri::command(async)]
+pub fn inbox_answer(
+    core: CoreState,
+    id: String,
+    answer: crate::asks::AnswerIn,
+    files: Option<Vec<AttachedFile>>,
+) -> Res<crate::asks::WindowAsk> {
+    core.inbox_answer(&id, answer, files.unwrap_or_default())
+        .map_err(err)
+}
+
+/// The box closed with the server: what its commands say.
+fn inbox_open(core: &Core) -> Res<()> {
+    if core.inbox_enabled() {
+        Ok(())
+    } else {
+        Err(tr!(
+            "La boîte « À toi » est fermée avec le serveur MCP : allume-le dans Réglages › Agents › Piloter Escouade.",
+            "The “Your turn” box is closed with the MCP server: turn it on in Settings › Agents › Drive Escouade."
+        ))
+    }
+}
+
+/// « Plus tard » until `until` (ms since 1970); left out, it comes back now.
+#[tauri::command(async)]
+pub fn inbox_snooze(
+    core: CoreState,
+    id: String,
+    until: Option<i64>,
+) -> Res<crate::asks::WindowAsk> {
+    inbox_open(&core)?;
+    let a = core.ask_snooze(&id, until).map_err(err)?;
+    core.inbox_get(&a.id).map_err(err)
+}
+
+/// « Laisser <agent> trancher » (`agent`), or taken back (left out).
+#[tauri::command(async)]
+pub fn inbox_delegate(
+    core: CoreState,
+    id: String,
+    agent: Option<String>,
+) -> Res<crate::asks::WindowAsk> {
+    inbox_open(&core)?;
+    let a = core.ask_delegate(&id, agent.as_deref()).map_err(err)?;
+    core.inbox_get(&a.id).map_err(err)
+}
+
+/// « Revenir sur ma réponse »: before its author read it.
+#[tauri::command(async)]
+pub fn inbox_reopen(core: CoreState, id: String) -> Res<crate::asks::WindowAsk> {
+    inbox_open(&core)?;
+    let a = core.ask_reopen(&id).map_err(err)?;
+    core.inbox_get(&a.id).map_err(err)
+}
+
+/// The user saw the request.
+#[tauri::command(async)]
+pub fn inbox_seen(core: CoreState, id: String) -> Res<()> {
+    inbox_open(&core)?;
+    core.ask_seen(&id).map_err(err)
+}
+
+/// What the question before turning the MCP server off lists: the requests that wait.
+#[tauri::command(async)]
+pub fn inbox_closing(core: CoreState) -> crate::asks::InboxClosing {
+    core.inbox_closing()
+}
+
+/// What the box's files weigh, in bytes (shown with the space the app takes, IN-2).
+#[tauri::command(async)]
+pub fn inbox_weight(core: CoreState) -> u64 {
+    core.asks_weight()
+}
+
+/// « Vider les fichiers des demandes closes »: what it freed, in bytes.
+#[tauri::command(async)]
+pub fn inbox_erase_closed_files(core: CoreState) -> u64 {
+    core.asks_erase_closed_files()
 }

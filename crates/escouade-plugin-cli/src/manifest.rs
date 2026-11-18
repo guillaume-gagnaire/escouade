@@ -173,6 +173,10 @@ pub enum Code {
     Variable,
     /// A harness of anyone's that names a shell or an interpreter as its program (`interpreter`, ESC-424).
     Interpreter,
+    /// What a harness described by ACP reads of its messages that is no JSON pointer (`/…`, ESC-491).
+    Pointer,
+    /// The arguments of `acp.resume` that do not name the session to resume (`{session}`, ESC-491).
+    Session,
 }
 
 /// A field that is wrong, by its path (`contributes.settings[0].key`; empty for the whole file).
@@ -285,6 +289,16 @@ impl Problem {
                 lang,
                 "nomme un shell ou un interpréteur (`bash`, `powershell`, `python`, `node`…) : le harness d'un tiers lance un programme à lui.",
                 "names a shell or an interpreter (`bash`, `powershell`, `python`, `node`…): the harness of anyone's runs a program of its own."
+            ),
+            Code::Pointer => tr_in!(
+                lang,
+                "n'est pas un pointeur JSON (`/_meta/<agent>/…`) : ce qu'Escouade lit d'un message du harness.",
+                "is no JSON pointer (`/_meta/<agent>/…`): what Escouade reads of a message of the harness."
+            ),
+            Code::Session => tr_in!(
+                lang,
+                "ne nomme pas la session à reprendre : un argument doit contenir `{{session}}`.",
+                "does not name the session to resume: an argument must hold `{{session}}`."
             ),
             Code::ReadOnly => tr_in!(
                 lang,
@@ -1460,6 +1474,93 @@ impl Checker {
     }
 
     /// The objects of the list of an extension point.
+    /// What a harness described by ACP says of its sessions, its turns, its effort and its context (ESC-491): the
+    /// arguments of a resume name the session (`{session}`), and what is read of its messages are JSON pointers.
+    fn acp_described(&mut self, at: &str, item: &Map<String, Value>) {
+        let Some(acp) = item.get("acp").and_then(Value::as_object) else {
+            return;
+        };
+        let at = join(at, "acp");
+        let pointer = |me: &mut Self, v: &Value, p: &str| match v.as_str() {
+            Some(s) if s.starts_with('/') => {}
+            Some(_) => me.problem(p, Code::Pointer),
+            None => me.wrong_type(p, "string"),
+        };
+        if let Some(r) = acp.get("resume") {
+            let p = join(&at, "resume");
+            if let Some(r) = self.object(r, &p) {
+                let pa = join(&p, "args");
+                match r.get("args").map(|a| a.as_array()) {
+                    None => self.problem(&pa, Code::Required),
+                    Some(None) => self.wrong_type(&pa, "array"),
+                    Some(Some(args)) => {
+                        for (i, a) in args.iter().enumerate() {
+                            if !a.is_string() {
+                                self.wrong_type(&format!("{pa}[{i}]"), "string");
+                            }
+                        }
+                        let named = args
+                            .iter()
+                            .any(|a| a.as_str().is_some_and(|a| a.contains("{session}")));
+                        if !named {
+                            self.problem(&pa, Code::Session);
+                        }
+                    }
+                }
+                if let Some(s) = r.get("session") {
+                    pointer(self, s, &join(&p, "session"));
+                }
+            }
+        }
+        if let Some(ends) = acp.get("turnEnd") {
+            let p = join(&at, "turnEnd");
+            match ends.as_array() {
+                None => self.wrong_type(&p, "array"),
+                Some(ends) => {
+                    for (i, e) in ends.iter().enumerate() {
+                        let pe = format!("{p}[{i}]");
+                        match e.as_object() {
+                            Some(marks) if !marks.is_empty() => {
+                                for k in marks.keys() {
+                                    if !k.starts_with('/') {
+                                        self.problem(&join(&pe, k), Code::Pointer);
+                                    }
+                                }
+                            }
+                            Some(_) => self.problem(&pe, Code::Empty),
+                            None => self.wrong_type(&pe, "object"),
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(efforts) = acp.get("efforts") {
+            let p = join(&at, "efforts");
+            if let Some(efforts) = self.object(efforts, &p) {
+                for (k, v) in efforts {
+                    if !v.is_string() {
+                        self.wrong_type(&join(&p, k), "string");
+                    }
+                }
+            }
+        }
+        if let Some(o) = acp.get("effortOption") {
+            if !o.is_string() {
+                self.wrong_type(&join(&at, "effortOption"), "string");
+            }
+        }
+        if let Some(u) = acp.get("usage") {
+            let p = join(&at, "usage");
+            if let Some(u) = self.object(u, &p) {
+                for k in ["context", "window"] {
+                    if let Some(v) = u.get(k) {
+                        pointer(self, v, &join(&p, k));
+                    }
+                }
+            }
+        }
+    }
+
     /// A harness of anyone's (ESC-424): its program (`locate.names`, else its id) no shell nor interpreter, and the
     /// variables it sets (`acp.env`, `accountVar`, `keyVar`) and those it takes off (`acp.removeEnv`, SEC-30) none that
     /// Escouade refuses a plugin: taking off the proxy or the authorities the core gives is as much as setting others.
@@ -1648,6 +1749,11 @@ impl Checker {
                             self.problem(&p, Code::Account);
                         }
                     }
+                }
+            }
+            if point == "harnesses" {
+                for (at, item) in &items {
+                    self.acp_described(at, item);
                 }
             }
             if point == "harnesses" && self.hand == Hand::Third {

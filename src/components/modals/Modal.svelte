@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte';
+  import { onMount, type Snippet } from 'svelte';
   import { trapFocus } from '../../lib/focus';
   import { t } from '../../lib/i18n';
   import Icon from '../Icon.svelte';
@@ -15,6 +15,7 @@
     badge,
     height,
     flush = false,
+    frameFocus = false,
   }: {
     title: string;
     width?: number;
@@ -30,12 +31,20 @@
     height?: string;
     /** Its content fills the body, edge to edge (the assistant's rail and page). */
     flush?: boolean;
+    /** The dialog itself takes the focus, not its first button: Entrée confirms nothing, what was typed elsewhere is not
+     * taken for an answer (« Supprimer l’agent », ESC-511). */
+    frameFocus?: boolean;
   } = $props();
 
   // Only a click on the overlay closes it: not the end of a selection dragged out of a field (what was typed there
   // would be lost).
   let downOnOverlay = false;
   let overlay = $state<HTMLDivElement>();
+  let frame = $state<HTMLDivElement>();
+  // After `trapFocus`, which gave it to the first button.
+  onMount(() => {
+    if (frameFocus) frame?.focus();
+  });
   /** Échap closes the modal on top alone: one opened over another (« Ajouter un compte… » from the assistant) first. */
   function onkeydown(e: KeyboardEvent) {
     if (e.key !== 'Escape') return;
@@ -55,6 +64,7 @@
   onclick={(e) => downOnOverlay && e.target === e.currentTarget && onclose()}
 >
   <div
+    bind:this={frame}
     class="modal"
     class:tall
     use:trapFocus

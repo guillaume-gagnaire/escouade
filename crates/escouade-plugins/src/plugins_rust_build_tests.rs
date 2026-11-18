@@ -743,3 +743,120 @@ fn a_dependency_with_a_script_off_the_list_is_refused_before_it_runs() {
     );
     assert!(!dir.join("packs").exists());
 }
+
+/// Issue #43, in Rust: the model of `create-escouade-plugin`, not built, then built by `escouade-plugin build` (on the
+/// crates of crates.io, as an author has them), loaded in development without any file moved, called, changed, built
+/// again, and read again by itself from the new `packs/<id>-<version>.wasm`.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_author_creates_builds_loads_and_reloads_a_plugin_in_rust() {
+    use crate::paths::DataDir;
+    use crate::plugins_wasm_tests::{created, force_push_decided, until_decided};
+    use crate::runtime::{Limits, Runtime};
+    use std::sync::Arc;
+
+    let tools = toolchain();
+    let base = test_dir("rust-author");
+    let dir = base.join("my-plugin");
+    let id = "dev.test.author-rust";
+    created("rust", &dir, id);
+    let data = DataDir::new(base.join("data"));
+    let plugins = crate::Plugins::load(data.clone(), "2.2.0");
+
+    // Not built yet: loading the folder says what to run, not a path that is not there.
+    let built = "packs/dev.test.author-rust-0.1.0.wasm";
+    for (lang, said) in [
+        (Lang::En, "build it first"),
+        (Lang::Fr, "construis-le d'abord"),
+    ] {
+        let why = plugins.inspect_dev(&dir, lang).unwrap_err().message;
+        assert!(
+            why.contains(said) && why.contains("escouade-plugin build") && why.contains(built),
+            "{why}"
+        );
+    }
+
+    let build_data = base.join("build-data");
+    let build = || {
+        let o = play(&tools, &build_data, &["build", dir.to_str().unwrap()]);
+        assert!(o.status.success(), "{}", said(&o));
+    };
+    build();
+    assert!(dir.join(built).is_file());
+    assert!(!dir.join("plugin.wasm").exists());
+    // What the issue saw: the module read as an installed plugin's, `plugin.wasm` alone, is not there.
+    let modules = crate::wasm::Modules::new(&data, "2.2.0");
+    let before = modules.prepare_reactor(&dir, None).unwrap_err();
+    assert!(before.contains("plugin.wasm"), "{before}");
+    plugins.load_dev(&dir, Lang::En).unwrap();
+    let store = Arc::new(crate::secrets::MemoryStore::default());
+    let rt = Runtime::new(plugins.clone(), store, &data, "2.2.0", Limits::default());
+    let decided = force_push_decided(&rt, id).await.unwrap();
+    assert_eq!(decided["decision"], "deny", "{decided}");
+    assert_eq!(
+        decided["message"],
+        "No force push in this team: push a new commit instead."
+    );
+
+    let source = dir.join("src/lib.rs");
+    let text = std::fs::read_to_string(&source).unwrap();
+    std::fs::write(
+        &source,
+        text.replace("push a new commit instead", "built again"),
+    )
+    .unwrap();
+    build();
+    until_decided(&rt, id, "No force push in this team: built again.").await;
+    rt.shutdown();
+}
+
+/// Issue #43: the example of the documentation that runs a program and reads what it wrote (sdk/doc-examples/rust,
+/// `procs::version`), built as its author builds it and played in the app's host: `git --version`, a line of its
+/// `permissions.commands`, its `proc/out` as text and its `proc/exit` with its code.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_example_of_the_documentation_runs_a_program_and_reads_its_output() {
+    use crate::paths::DataDir;
+    use crate::runtime::{Limits, Runtime};
+    use std::sync::Arc;
+
+    let tools = toolchain();
+    let base = test_dir("rust-doc-example");
+    let dir = base.join("doc-examples");
+    // Its sources, as they are in the repository (a `target/` of a `cargo check` left out).
+    copy(&root().join("sdk/doc-examples/rust"), &dir);
+    let _ = std::fs::remove_dir_all(dir.join("target"));
+    let o = play(
+        &tools,
+        &base.join("build-data"),
+        &["build", dir.to_str().unwrap()],
+    );
+    assert!(o.status.success(), "{}", said(&o));
+    let data = DataDir::new(base.join("data"));
+    let plugins = crate::Plugins::load(data.clone(), "2.2.0");
+    plugins.load_dev(&dir, Lang::En).unwrap();
+    let store = Arc::new(crate::secrets::MemoryStore::default());
+    let rt = Runtime::new(plugins.clone(), store, &data, "2.2.0", Limits::default());
+    let id = "dev.example.doc-examples";
+    let answer = rt
+        .call_within(
+            id,
+            "example/version",
+            json!(null),
+            std::time::Duration::from_secs(60),
+        )
+        .await
+        .unwrap();
+    assert!(
+        answer["stdout"]
+            .as_str()
+            .unwrap()
+            .starts_with("git version "),
+        "{answer}"
+    );
+    assert_eq!(answer["code"], 0, "{answer}");
+    let journal = rt.journal(id);
+    assert!(
+        journal.iter().any(|e| e.text.contains("ran git --version")),
+        "{journal:?}"
+    );
+    rt.shutdown();
+}

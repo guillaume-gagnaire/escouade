@@ -1688,11 +1688,11 @@ fn capped(text: &str, cut: &mut bool) -> String {
 const ESCOUADE_TOOLS: &str = "mcp__escouade__";
 
 /// What a tool of Escouade is about, first found first (`toolArg` in `src/lib/tools.ts` reads
-/// them in the same order): the ticket it makes, the ticket or the agent it acts on, what an agent
-/// it starts is told, the line an agent reports, the folder it acts on, the project it reads. A
+/// them in the same order): the ticket it makes, the request of the box « À toi » it reads or changes
+/// (`ask`), the ticket or the agent it acts on, what an agent it starts is told, the line an agent reports, the folder it acts on, the project it reads. A
 /// folder made (`create_folder`) is its name.
 const ESCOUADE_MAIN_ARGS: &[&str] = &[
-    "title", "ticket", "agent", "message", "line", "folder", "project",
+    "title", "ask", "ticket", "agent", "message", "line", "folder", "project",
 ];
 
 /// What a tool is asked to act on, as the conversation's card sums it up (`toolArg` in

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://escouade.dev/schemas/plugin-1.json",
+  "id": "dev.escouade.unharnessed",
+  "name": "Unharnessed",
+  "version": "1.0.0",
+  "description": {
+    "fr": "Unharnessed, l'agent de code à un seul outil (un REPL Python), comme harness : décrit par ACP, sans code. Il ne demande jamais rien : ses agents ne tournent qu'en Bypass.",
+    "en": "Unharnessed, the coding agent with one tool (a Python REPL), as a harness: described over ACP, no code. It never asks: its agents run in Bypass only."
+  },
+  "author": { "name": "Escouade", "url": "https://escouade.dev" },
+  "license": "MIT",
+  "repository": "https://github.com/guillaume-gagnaire/escouade/tree/main/plugins/unharnessed",
+  "escouade": { "api": "1", "min": "2.2.2" },
+  "contributes": {
+    "harnesses": [
+      {
+        "id": "unharnessed",
+        "name": "Unharnessed",
+        "speaker": "Unharnessed",
+        "writer": "Unharnessed",
+        "locate": { "names": ["unharnessed"] },
+        "tested": { "oldest": "0.9.8", "newest": "0.9.8" },
+        "caps": {
+          "modes": [
+            {
+              "id": "bypassPermissions",
+              "meaning": {
+                "fr": "Unharnessed ne demande jamais : son code Python et ses commandes tournent avec tes droits, sur tout le disque et le réseau, sans bac à sable. Escouade ne voit rien passer avant.",
+                "en": "Unharnessed never asks: its Python code and its commands run with your rights, on the whole disk and the network, with no sandbox. Escouade sees nothing go by before."
+              }
+            }
+          ]
+        },
+        "accountVar": "UNHARNESSED_CODING_AGENT_DIR",
+        "acp": {
+          "args": ["--mode", "acp"],
+          "fs": false,
+          "modelOption": "model",
+          "questionsInText": true,
+          "tools": { "Python cell": "Python" },
+          "resume": { "args": ["--resume", "{session}"], "session": "/_meta/unharnessed/saved/sessionId" },
+          "turnEnd": [
+            { "/_meta/unharnessed/phase": "terminalQuiescence" },
+            { "/_meta/unharnessed/phase": "responseBoundary", "/_meta/unharnessed/terminalQuiescenceExpected": false }
+          ],
+          "usage": { "context": "/_meta/unharnessed/usage/tokens", "window": "/_meta/unharnessed/usage/window" }
+        }
+      }
+    ]
+  },
+  "store": { "categories": ["harness"], "docs": "docs" }
+}

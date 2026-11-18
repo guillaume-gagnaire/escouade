@@ -2,7 +2,7 @@
 import { createPlugin } from '@escouade-dev/plugin';
 import { keep, notes, words } from './files.ts';
 import { follow, issue } from './net.ts';
-import { input, status, stop } from './procs.ts';
+import { input, status, stop, version } from './procs.ts';
 import { channel, journal, token } from './settings.ts';
 import { live } from './socket.ts';
 import { later, patient } from './timers.ts';
@@ -19,6 +19,7 @@ plugin.handle('example/keep', (text, p) => keep(p, text as string));
 plugin.handle('example/notes', (_, p) => notes(p));
 plugin.handle('example/words', (_, p) => words(p));
 plugin.handle('example/status', async (project, p) => (await status(p, project as string)).exited);
+plugin.handle('example/version', (_, p) => version(p));
 plugin.handle('example/input', (_, p) => input(p));
 plugin.handle('example/kill', (_, p) => stop(p));
 plugin.handle('example/settings', (project, p) => channel(p, project as string));

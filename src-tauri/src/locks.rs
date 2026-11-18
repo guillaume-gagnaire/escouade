@@ -37,8 +37,8 @@ pub use escouade_policy::list::{
     CONTENTLESS, DEFAULT_MODE, DENIED_FILES, DENY_INSECURE_TLS, DICTATION, EXTENSIONS_ALLOWED,
     FORCE_PRIVATE, HARNESSES, MAX_EFFORT, MCP_EXTERNAL, MODELS, MODES_KEY, ONLY_THIS_SERVER,
     PERSONAL_SPACE, PLUGINS_ALLOWED, PLUGINS_DENIED, PLUGIN_ORIGINS_KEY, POLICIES as KEYS,
-    PROXY_EXCLUSIONS, PROXY_URL, REMOTE, REMOTE_API, SERVERS, TEAM_FINGERPRINT, TEAM_SERVER,
-    TELEMETRY, VERIFIED_ONLY, VOICE_ONLINE,
+    PROXY_EXCLUSIONS, PROXY_URL, REMOTE, REMOTE_API, SECRETS_FILE, SERVERS, TEAM_FINGERPRINT,
+    TEAM_SERVER, TELEMETRY, VERIFIED_ONLY, VOICE_ONLINE,
 };
 
 /// The modes a bound of modes may name, from the one that allows the least to the one that allows the most
@@ -757,6 +757,19 @@ impl Locks {
         Ok(())
     }
 
+    /// Whether a plugin's secret may be kept in the file readable by its user alone, where the system has no keychain
+    /// (ESC-499): `secrets.fileFallback` off denies it, the file chosen is then no longer read (ESC-520, `Kept::deny`).
+    pub fn check_secrets_file(&self) -> Result<()> {
+        if self.off(SECRETS_FILE) {
+            bail!(tr!(
+                "Garder les secrets des plugins dans un fichier est interdit {by} ({SECRETS_FILE}) : seul le trousseau système les garde.",
+                "Keeping the plugins’ secrets in a file is denied {by} ({SECRETS_FILE}): only the system keychain keeps them.",
+                by = self.by_line(SECRETS_FILE)
+            ));
+        }
+        Ok(())
+    }
+
     /// Whether the remote API may serve (ESC-478): at its start and at each connection.
     pub fn check_remote_api(&self) -> Result<()> {
         if self.off(REMOTE_API) {
@@ -1331,6 +1344,9 @@ impl crate::core::Core {
             .iter()
             .map(|(id, t)| (id.clone(), Locks::compute(KEYS, Some(t), &managed)))
             .collect();
+        // The file of the plugins' secrets, of the app (never a project's): denied or allowed again at once (ESC-520).
+        self.kept
+            .deny(locks.check_secrets_file().err().map(|e| e.to_string()));
         *self.locks.write() = locks;
         *self.team_locks.write() = by_team;
         let changed = {

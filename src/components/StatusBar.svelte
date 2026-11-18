@@ -26,7 +26,7 @@
   import { openPr, prIcon, prTip, prTone, prWord, stateWord } from '../lib/prs';
   import { api } from '../lib/ipc';
   import { estimatedBy, estimateHint, fSpentUsd } from '../lib/spend';
-  import { app } from '../lib/state.svelte';
+  import { app, asksUser } from '../lib/state.svelte';
   import { postponeRestart, restartIn as restartSeconds, shownVersion } from '../lib/updater';
   import type { EngineId } from '../lib/types';
   import AccountsPanel from './AccountsPanel.svelte';
@@ -51,7 +51,7 @@
     return { cost: app.usage.todayCost + app.liveCost, estimated: byHarness || app.liveCost > 0, byHarness };
   });
   const running = $derived(agents.filter((a) => a.status === 'running').length);
-  const waiting = $derived(agents.filter((a) => a.status === 'waiting').length);
+  const waiting = $derived(agents.filter(asksUser).length);
   const done = $derived(agents.filter((a) => a.status === 'done').length);
   // The agents' processes running, each with the tools and MCP servers it started.
   const procs = $derived(app.resources);

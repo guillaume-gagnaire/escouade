@@ -311,6 +311,15 @@ export default {
     keep: 'Garder',
     forget: 'Oublier',
     secretNote: 'Gardé dans le trousseau du système sous son nom à lui ; il ne l’obtient que quand il le demande.',
+    secretNoteNoKeychain:
+      'Ce poste n’a pas de trousseau système : un secret ne s’y garde que dans un fichier lisible de toi seul, si tu le choisis. Il ne l’obtient que quand il le demande.',
+    secretInFile: 'gardé dans un fichier lisible de toi seul',
+    keepInFile: 'Garder dans un fichier lisible de toi seul',
+    keepInFileDenied: '{by} : le fichier des secrets est interdit sur ce poste, seul le trousseau système garde un secret.',
+    keepInFileNote:
+      'Le secret sera écrit en clair sur le disque, dans {path}, avec les droits de ton seul compte. Ce choix vaut pour ce poste : Réglages › Plugins le montre et le retire.',
+    moveToKeychain: 'Déplacer vers le trousseau',
+    moveNote: 'Un trousseau est là maintenant : rien n’est déplacé sans toi.',
     yes: 'Oui',
     no: 'Non',
   },
@@ -482,6 +491,17 @@ export default {
     install: 'Installer',
     installOf: 'Installer {name}',
     security: 'Sécurité',
+    fileTitle: 'Secrets gardés dans un fichier',
+    fileNote:
+      'Ce poste n’a pas de trousseau système : tu as choisi de garder les secrets des plugins dans {path}, en clair, lisible de ton seul compte. Jamais copié dans les sauvegardes de l’état.',
+    fileNoteKeychain:
+      'Tu as choisi de garder des secrets des plugins dans {path}, en clair, lisible de ton seul compte. Un trousseau est là maintenant : déplace-les depuis la page de chaque plugin.',
+    fileEmpty: 'Aucun secret dedans pour l’instant.',
+    fileSecret: '{key}, de {plugin}',
+    fileRemove: 'Retirer le fichier',
+    fileRemoveConfirm: 'Retirer le fichier ? Ses secrets sont effacés : il faudra les saisir à nouveau.',
+    fileDenied: '{by} : ce fichier n’est plus lu. Déplace ses secrets vers le trousseau depuis la page de chaque plugin, ou retire-le.',
+    fileRemoveYes: 'Retirer et effacer',
   },
 
   proposed: {

@@ -26,24 +26,29 @@ use tauri::test::mock_app;
 /// (`ACTING`, M4) and those only an agent of Escouade may call (`AGENTS_ONLY`, M4). A tool is added
 /// here knowingly. None may run a command; the flow tools do what the window's buttons of the
 /// board do, and so two are named for it (`NAMED_FOR_IT`: approving runs the tests and merges,
-/// deleting deletes). The only two that answer for the user (`ANSWERING`) never give a lasting
+/// deleting deletes; `delete_agent` only asks the user, who confirms in the window). The only two that answer for the user (`ANSWERING`) never give a lasting
 /// permission.
 pub(super) const EXPOSED: &[&str] = &[
     "add_directive",
     "add_document",
+    "answer_ask",
     "answer_permission",
     "answer_question",
     "approve_ticket",
+    "ask_user",
     "create_agent",
     "create_folder",
     "create_scheduled_task",
     "create_ticket",
+    "delete_agent",
     "delete_folder",
     "delete_scheduled_task",
     "delete_ticket",
     "dismiss_block",
     "forget_memory",
     "get_agent_summary",
+    "get_ask",
+    "get_ask_file",
     "get_background_output",
     "get_board",
     "get_docs_to_share",
@@ -56,6 +61,7 @@ pub(super) const EXPOSED: &[&str] = &[
     "get_workflow",
     "leave_to_user",
     "list_agents",
+    "list_asks",
     "list_background_work",
     "list_backups",
     "list_decisions",
@@ -93,10 +99,13 @@ pub(super) const EXPOSED: &[&str] = &[
     "stop_agent",
     "stop_background_work",
     "undo_action",
+    "update_ask",
     "update_folder",
     "update_scheduled_task",
     "update_ticket",
+    "wait_ask",
     "wait_ticket",
+    "withdraw_ask",
     "write_memory",
     "write_spec_page",
 ];
@@ -104,6 +113,8 @@ pub(super) const EXPOSED: &[&str] = &[
 /// Those of `EXPOSED` that only read.
 pub(super) const READING: &[&str] = &[
     "get_agent_summary",
+    "get_ask",
+    "get_ask_file",
     "get_background_output",
     "get_board",
     "get_docs_to_share",
@@ -115,6 +126,7 @@ pub(super) const READING: &[&str] = &[
     "get_usage",
     "get_workflow",
     "list_agents",
+    "list_asks",
     "list_background_work",
     "list_backups",
     "list_decisions",
@@ -132,15 +144,18 @@ pub(super) const READING: &[&str] = &[
     "search_documents",
     "search_memory",
     "search_spec",
+    "wait_ask",
     "wait_ticket",
 ];
 
 /// Those that act, under the guardrails of the window and the autopilot.
 pub(super) const ACTING: &[&str] = &[
     "add_document",
+    "answer_ask",
     "answer_permission",
     "answer_question",
     "approve_ticket",
+    "ask_user",
     "create_agent",
     "create_folder",
     "create_scheduled_task",
@@ -165,9 +180,11 @@ pub(super) const ACTING: &[&str] = &[
     "start_ticket",
     "stop_agent",
     "stop_background_work",
+    "update_ask",
     "update_folder",
     "update_scheduled_task",
     "update_ticket",
+    "withdraw_ask",
     "write_memory",
     "write_spec_page",
 ];
@@ -178,14 +195,17 @@ pub(super) const ANSWERING: &[&str] = &["answer_permission", "answer_question"];
 /// The flow tools named for what they do, as the window's buttons are: (tool, the word of
 /// `FORBIDDEN` it holds).
 const NAMED_FOR_IT: &[(&str, &str)] = &[
+    // The box « À toi »: a request the user left to the caller, and no other (ESC-509).
+    ("answer_ask", "answer"),
     ("approve_ticket", "approve"),
+    ("delete_agent", "delete"),
     ("delete_folder", "delete"),
     ("delete_scheduled_task", "delete"),
     ("delete_ticket", "delete"),
 ];
 
 /// Those an external Claude is refused.
-pub(super) const AGENTS_ONLY: &[&str] = &["report_progress", "split_ticket"];
+pub(super) const AGENTS_ONLY: &[&str] = &["delete_agent", "report_progress", "split_ticket"];
 
 /// The Overseer's alone (ESC-462): refused to every other caller.
 pub(super) const OVERSEER_ONLY: &[&str] = &[

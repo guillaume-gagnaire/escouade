@@ -324,6 +324,7 @@ fn no_tool_of_the_mcp_server_writes_on_a_pull_request() {
         ("mcp/act.rs", include_str!("mcp/act.rs")),
         ("mcp/mod.rs", include_str!("mcp/mod.rs")),
         ("mcp/activity.rs", include_str!("mcp/activity.rs")),
+        ("mcp/asks.rs", include_str!("mcp/asks.rs")),
         ("mcp/background.rs", include_str!("mcp/background.rs")),
         ("mcp/docs.rs", include_str!("mcp/docs.rs")),
         ("mcp/files.rs", include_str!("mcp/files.rs")),

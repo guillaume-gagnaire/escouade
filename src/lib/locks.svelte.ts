@@ -32,6 +32,16 @@ export function lockedBy(row: string, l: Locks = locks.current): LockedBy | null
   return null;
 }
 
+/** The key of the file of the plugins' secrets (ESC-520): off, « Garder dans un fichier » is no longer offered. */
+export const SECRETS_FILE_KEY = 'secrets.fileFallback';
+
+/** Who imposes the key `key` of the core's table, for one that locks no row of the register (`secrets.fileFallback`);
+ *  null when nothing does. */
+export function keyLockedBy(key: string, l: Locks = locks.current): LockedBy | null {
+  const lock = l.locks[key];
+  return lock?.by && lock.value !== null && lock.value !== undefined ? lock.by : null;
+}
+
 /** « Imposé par la stratégie de ce poste », « Imposé par l'équipe Acme ». */
 export function lockLine(by: LockedBy): string {
   return by.kind === 'team' ? t('settings.locks.byTeam', { team: by.team }) : t('settings.locks.byDevice');

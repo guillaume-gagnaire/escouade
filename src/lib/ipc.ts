@@ -151,6 +151,7 @@ import type {
   DocsDraft,
   DocsImported,
   DocsMoved,
+  DeleteLoss,
 } from './types';
 
 /**
@@ -489,6 +490,10 @@ export const api = {
   /** An image pasted in the agent's Claude Code view (base64), written to a file: the path to type there, as its `claude` reads it. */
   pasteImage: (id: string, mediaType: string, data: string) => invoke<string>('paste_image', { id, mediaType, data }),
   deleteAgent: (id: string, removeWorktree: boolean) => invoke<string | null>('delete_agent', { id, removeWorktree }),
+  /** « Refuser » the deletion its maker asked for (`delete_agent`, ESC-511): the agent stays, its maker is told. */
+  refuseDelete: (id: string) => invoke<void>('refuse_delete', { id }),
+  /** What deleting the agent's worktree would lose, as git says it in time (« Supprimer l'agent »). */
+  deleteLoss: (id: string) => invoke<DeleteLoss>('delete_loss', { id }),
   /** Merges into the agent's base branch; `switchToBase`: the project's folder is switched to it first. */
   mergeAgent: (id: string, squash: boolean, switchToBase = false) => invoke<string>('merge_agent', { id, squash, switchToBase }),
   /** What merging the agent would do in each of its repositories (ESC-169). */

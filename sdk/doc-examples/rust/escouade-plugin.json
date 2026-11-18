@@ -17,7 +17,7 @@
       { "root": "agent", "access": "write" },
       { "root": "agentHome", "access": "read" }
     ],
-    "commands": ["git status --short", "git log *"]
+    "commands": ["git status --short", "git log *", "git --version"]
   },
   "limits": { "fetchSeconds": 60, "fetchBytes": 8388608, "fileBytes": 1048576 },
   "contributes": {

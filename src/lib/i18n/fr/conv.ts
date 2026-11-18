@@ -144,6 +144,9 @@ export default {
     queuedHint: '{engine} en tient compte dès sa prochaine étape',
     remote: 'depuis claude.ai',
     remoteHint: 'Envoyé depuis claude.ai ou l’app Claude (remote control)',
+    /** The answer to a request of the box « À toi » (ESC-509), given back to its agent. */
+    ask: 'Réponse de l’utilisateur',
+    askHint: 'Ta réponse à une demande de la boîte « À toi », rendue à l’agent',
     saidAloud: 'Dit à voix haute',
   },
 
@@ -225,6 +228,8 @@ export default {
     /** The link of the page an `Artifact` call published (ESC-400), opened in the browser. */
     openArtifact: 'Ouvrir l’artefact',
     openArtifactTip: 'Ouvrir {url} dans le navigateur',
+    /** The whole of a long input of a call (a cell of code), folded in its detail (ESC-491). */
+    whole: { one: '{key} en entier ({count} ligne)', other: '{key} en entier ({count} lignes)' },
     running: 'en cours',
     subTools: { one: '{count} outil', other: '{count} outils' },
     more: { one: 'Afficher la suite ({count} caractère)', other: 'Afficher la suite ({count} caractères)' },

@@ -381,7 +381,11 @@ fn not_run(lang: crate::i18n::Lang, name: &str) -> anyhow::Error {
 }
 
 /// `path` opened with its application, or shown in its folder (`reveal`), on the host's machine.
-fn open_or_reveal(host: &dyn crate::host::Host, path: PathBuf, reveal: bool) -> anyhow::Result<()> {
+pub(crate) fn open_or_reveal(
+    host: &dyn crate::host::Host,
+    path: PathBuf,
+    reveal: bool,
+) -> anyhow::Result<()> {
     host.open(if reveal {
         crate::host::Opened::Reveal(path)
     } else {

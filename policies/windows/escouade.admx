@@ -167,6 +167,13 @@
         <decimal value="1" />
       </enabledValue>
     </policy>
+    <policy name="secrets_fileFallback" class="Both" displayName="$(string.secrets_fileFallback)" explainText="$(string.secrets_fileFallback_Explain)" key="Software\Policies\Escouade" valueName="secrets.fileFallback">
+      <parentCategory ref="plugins" />
+      <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />
+      <enabledValue>
+        <decimal value="0" />
+      </enabledValue>
+    </policy>
     <policy name="extensions_allowed" class="Both" displayName="$(string.extensions_allowed)" explainText="$(string.extensions_allowed_Explain)" presentation="$(presentation.extensions_allowed)" key="Software\Policies\Escouade">
       <parentCategory ref="editor" />
       <supportedOn ref="SUPPORTED_ESCOUADE_2_3" />

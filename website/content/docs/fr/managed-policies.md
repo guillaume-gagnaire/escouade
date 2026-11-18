@@ -44,6 +44,7 @@ Chaque stratégie a une clé, le même nom partout : la valeur du registre, la c
 | Plugins permis | `plugins.allowed` · liste · restreindre | La liste des ids de plugins qui peuvent s’installer. Absente, tous le peuvent. | L’installation d’un plugin hors de la liste est refusée et dite. |
 | Plugins interdits | `plugins.denied` · liste · restreindre | La liste des ids de plugins qui ne s’installent jamais, même permis par ailleurs. | L’installation d’un plugin de la liste est refusée et dite. |
 | N’installer que des versions vérifiées | `plugins.verifiedOnly` · booléen `true` (`1`) · restreindre | Une version du store sans le sceau « Vérifié par Escouade » est refusée, à l’installation comme à la mise à jour. Seule la valeur true (1) s’impose. | Plugins › « N’installer que des versions vérifiées », allumé et grisé. |
+| Interdire le fichier des secrets des plugins | `secrets.fileFallback` · booléen `false` (`0`) · restreindre | Sur un poste sans trousseau système, le secret d’un plugin ne peut plus être gardé dans un fichier lisible de son seul utilisateur : il n’est gardé que par le trousseau. Un fichier déjà choisi n’est plus lu ; ses secrets se déplacent vers le trousseau ou s’effacent avec lui. Seule la valeur false (0) s’impose. | « Garder dans un fichier lisible de toi seul » n’est plus proposé au champ d’un secret, et Plugins › « Secrets gardés dans un fichier » porte le cadenas. |
 
 ### Éditeur
 

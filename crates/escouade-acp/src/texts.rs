@@ -34,6 +34,32 @@ pub(crate) fn not_resumed(lang: &str, name: &str) -> String {
     )
 }
 
+/// The agent's harness loads no session (`loadSession` false): a new one, said (ESC-491).
+pub(crate) fn no_load(lang: &str, name: &str) -> String {
+    tr(
+        lang,
+        format!("{name} ne reprend pas sa session : l’agent repart d’une session neuve."),
+        format!("{name} doesn’t resume its session: the agent starts again on a new session."),
+    )
+}
+
+/// What the new session is given in place of the one lost: the agent's instructions, and what Escouade knows of what it
+/// did (`recap`).
+pub(crate) fn given_again(lang: &str, recap: bool) -> String {
+    match recap {
+        true => tr(
+            lang,
+            "Ses consignes lui sont redonnées avec son prochain message, et un résumé de ce qu’il a fait.".into(),
+            "Its instructions are given again with its next message, and a summary of what it did.".into(),
+        ),
+        false => tr(
+            lang,
+            "Ses consignes lui sont redonnées avec son prochain message.".into(),
+            "Its instructions are given again with its next message.".into(),
+        ),
+    }
+}
+
 pub(crate) fn fence_missing(lang: &str, name: &str) -> String {
     tr(
         lang,

@@ -10,9 +10,10 @@ export const MANIFEST = 'escouade-plugin.json';
  * cannot have their Cargo.lock, so neither `escouade-plugin validate` nor `build` takes them: `ci.mjs` skips both and plays
  * the module of `scripts/plugins-wasm.sh`, compiled against `crates/`. Out of this list once the crate is published, their
  * Cargo.lock written again (`sh scripts/plugin-lock.sh <name>`). GitHub 2.3.0 (ESC-452: a pull request read whole) waits for
- * escouade-plugin-kit 0.1.3 and escouade-plugin-protocol 0.1.3.
+ * escouade-plugin-kit 0.1.3 and escouade-plugin-protocol 0.1.4 (0.1.3, published from main with the 2.2.3, lacks the types of the
+ * pull requests).
  */
-export const AWAITING_PUBLICATION = { github: 'escouade-plugin-kit 0.1.3' };
+export const AWAITING_PUBLICATION = { github: 'escouade-plugin-kit 0.1.3 and escouade-plugin-protocol 0.1.4' };
 
 /**
  * What judges or builds every plugin: a change there runs them all. `crates/` is the kit and the bench's library, the
@@ -50,11 +51,25 @@ export function readPlugin(folder, name) {
     name,
     id: manifest.id,
     version: manifest.version,
+    // The oldest Escouade it installs on (`escouade.min`).
+    min: manifest.escouade?.min ?? null,
     wasm: typeof manifest.run?.wasm === 'string',
     node: has('package.json'),
     nodeTests: has('test'),
     cargo,
   };
+}
+
+/**
+ * The version of Escouade a plugin is judged for: `since` (the one that serves its sort), or its own `escouade.min` when
+ * it asks for a newer one (Prime Agent's 2.2.2, ESC-485): judged for an older app, it would be refused as too new.
+ */
+export function judgedFor(since, min) {
+  const parts = (v) => String(v).replace(/-.*/, '').split('.').map(Number);
+  if (!min) return since;
+  const [a, b] = [parts(since), parts(min)];
+  for (let i = 0; i < 3; i++) if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) > (b[i] ?? 0) ? since : min;
+  return since;
 }
 
 /** The plugins of `folder`, by the name of their subfolder. */

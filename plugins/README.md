@@ -16,6 +16,7 @@ Published on the store, submitted from their folder like anyone's plugin (docs/S
 | `slack/`         | `dev.escouade.slack`         | MIT     | The same in Slack, in each project's channel, the bot's token in the keychain             | TypeScript program, in WASM |
 | `team-rules/`    | `dev.escouade.team-rules`    | MIT     | The agents' commands allowed or denied by `rules.json` (`permissions/decide`)             | TypeScript program, in WASM |
 | `goose/`         | `dev.escouade.goose`         | MIT     | Goose as a harness, described over ACP (`contributes.harnesses[].acp`)                    | Declarative                 |
+| `unharnessed/`   | `dev.escouade.unharnessed`   | MIT     | Unharnessed as a harness, described over ACP; its one mode is Bypass                      | Declarative                 |
 
 A version is a tag `plugins/<folder>/v1.2.3` (never `v1.2.3`, the app's releases), then its submission on the store
 from its folder, its review and its signature: `npm run plugins:publish -- --changed` goes through them, run by the

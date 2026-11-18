@@ -153,4 +153,4 @@ Le sceau d’un plugin installé est revérifié sur ta machine, avec le `versio
 
 ## Le mode développeur
 
-En développement, « Charger un dossier… » lit le dossier d’un plugin où il est, sans copie ni empreinte, et le relit dès qu’un fichier change. Son journal se lit en direct dans l’onglet Journal. Voir [le manifeste](plugins/manifest) et [le protocole](plugins/api) pour l’écrire.
+En développement, « Charger un dossier… » lit le dossier d’un plugin où il est, sans copie ni empreinte, et le relit dès qu’un fichier change. Un plugin en Rust y tourne sur le dernier module que `escouade-plugin build` a écrit pour la version de son manifeste (`packs/<id>-<version>.wasm`), un plugin en JS/TS sur son bundle (`npm run build`) ; un dossier pas encore construit est refusé, et le refus dit quoi lancer. Son journal se lit en direct dans l’onglet Journal. Voir [le manifeste](plugins/manifest) et [le protocole](plugins/api) pour l’écrire.

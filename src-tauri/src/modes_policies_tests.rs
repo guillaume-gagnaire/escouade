@@ -382,6 +382,40 @@ async fn an_agent_at_work_when_bypass_is_turned_off_ends_its_turn_then_stops() {
     }
 }
 
+/// A turn its harness began by itself (the ACP pilot's, ESC-491: Unharnessed once a command of its last cell ended)
+/// is at work like any other: Bypass turned off during it, its process is not cut; its end, told as any other's
+/// (`turn_ended`), stops it, said (ESC-520).
+#[tokio::test]
+async fn a_turn_its_harness_began_by_itself_ends_then_its_process_stops_when_bypass_was_turned_off()
+{
+    for off in Off::ALL {
+        let (h, p) = setup(&format!("esc520-own-turn-{off:?}")).await;
+        let one = with_account(&h, &ONE_BYPASS);
+        let a = make(&h, &p, one, Some("default"), false).await.unwrap();
+        h.wait("its process started ahead", |h| h.alive(&a.id))
+            .await;
+        // The harness begins a turn, no message of Escouade's under way.
+        h.core.agent(&a.id).unwrap().lock().meta.status = AgentStatus::Running;
+        off.apply(&h, &p);
+        assert!(h.alive(&a.id), "{off:?}: not cut during its own turn");
+        h.core.agent(&a.id).unwrap().lock().meta.status = AgentStatus::Done;
+        h.core
+            .turn_ended(
+                &a.id,
+                crate::board::TurnEnd::Finished("Réveillé par la fin de sa commande.".into()),
+            )
+            .await;
+        assert!(!h.alive(&a.id), "{off:?}");
+        assert!(
+            notices(&h, &a.id)
+                .iter()
+                .any(|n| off.said_in(n) && n.contains("L’agent s’arrête à la fin de son tour")),
+            "{off:?}: {:?}",
+            notices(&h, &a.id)
+        );
+    }
+}
+
 /// An agent made while its mode was allowed, then a policy that does not allow the mode its harness runs it in: a
 /// harness without « Demander » in « Plan », that a bound of the modes does not allow, goes to the one of its own modes
 /// allowed that allows the least (« Demander », which `nearest_mode` would give, is not one), then starts there.

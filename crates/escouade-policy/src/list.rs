@@ -255,6 +255,7 @@ pub const PLUGIN_ORIGINS_KEY: &str = "plugins.allowedOrigins";
 pub const PLUGINS_ALLOWED: &str = "plugins.allowed";
 pub const PLUGINS_DENIED: &str = "plugins.denied";
 pub const VERIFIED_ONLY: &str = "plugins.verifiedOnly";
+pub const SECRETS_FILE: &str = "secrets.fileFallback";
 pub const EXTENSIONS_ALLOWED: &str = "extensions.allowed";
 pub const FORCE_PRIVATE: &str = "projects.forcePrivate";
 pub const DENIED_FILES: &str = "projects.deniedFiles";
@@ -500,6 +501,26 @@ pub const POLICIES: &[Def] = &[
             title: "Install verified versions only",
             help: "A version of the store without the “Verified by Escouade” seal is refused, at an install as at an update. Only the value true (1) is imposed.",
             locks: "Plugins › “Install verified versions only”, on and grayed.",
+        },
+    },
+    Def {
+        key: SECRETS_FILE,
+        sort: Sort::Restrict,
+        form: off(),
+        rows: &[],
+        within: None,
+        category: Category::Plugins,
+        later: false,
+        example: "false",
+        fr: Text {
+            title: "Interdire le fichier des secrets des plugins",
+            help: "Sur un poste sans trousseau système, le secret d’un plugin ne peut plus être gardé dans un fichier lisible de son seul utilisateur : il n’est gardé que par le trousseau. Un fichier déjà choisi n’est plus lu ; ses secrets se déplacent vers le trousseau ou s’effacent avec lui. Seule la valeur false (0) s’impose.",
+            locks: "« Garder dans un fichier lisible de toi seul » n’est plus proposé au champ d’un secret, et Plugins › « Secrets gardés dans un fichier » porte le cadenas.",
+        },
+        en: Text {
+            title: "Deny the file of the plugins’ secrets",
+            help: "On a device without a system keychain, a plugin’s secret can no longer be kept in a file readable by its user alone: only the keychain keeps it. A file already chosen is no longer read; its secrets move to the keychain or are erased with it. Only the value false (0) is imposed.",
+            locks: "“Keep in a file only you can read” is no longer offered at a secret’s field, and Plugins › “Secrets kept in a file” bears the padlock.",
         },
     },
     // ---------- the editor ----------

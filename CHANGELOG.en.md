@@ -6,6 +6,8 @@ To write an entry: one or two short sentences, for a human reader. What they can
 
 ## [Unreleased]
 
+- Security: a managed device or a team can deny the file that keeps the plugins’ secrets where there is no system keychain, and their policies also judge the model and the effort an agent gives the agent it creates. The file denied is no longer offered nor read, and Settings › Plugins shows it under a padlock.
+- Your agents can leave you what they wait for from you without stopping (a choice between their renders, a go-ahead, an answer, a test to run), with their images and PDFs, through the MCP server: your answer comes back to them as a message, and a ticket can wait for it. The screen of the “Your turn” box follows.
 - Team server: a team project’s shared memory goes to the server with its docs, each memory signed by whoever wrote it. A memory an agent writes waits for a human to keep it before the team reads it, the agents read what is not validated as data, an administrator can take everything back after an incident, and a secret is refused.
 - Server mode, a first step: `escouade-server` runs Escouade without a window on a Linux server (x64 or arm64) with no desktop, its API on 127.0.0.1 for a client that comes through a tunnel. A device pairs with a one-time code (`escouade-server pair`), and the server keeps its secrets in a file only you can read.
 - The VS Code editor takes extensions from Open VSX: search them, install a theme, a grammar or snippets, update them, turn them off or remove them from its “Extensions” panel. Escouade checks each one’s signature and runs no extension code; a list of allowed extensions is set on the device, in `.escouade.yml` and by the policies.
@@ -38,6 +40,15 @@ To write an entry: one or two short sentences, for a human reader. What they can
 - Device policies now cover everything an IT department can impose (proxy and certificates, plugins, private projects, voice, updates, models and effort, servers, outside MCP clients), and apply without a restart when it changes them. Escouade comes with its ADMX, an example MDM profile and a documentation page on how to deploy them.
 - An agent that reads a GitHub pull request now gets all of it: its description, its commits, its files and its discussion threads with their answers and their state. It is the first stone of the pull request view in Escouade.
 - Security: seven low findings of the 2.2.0 audit fixed. A harness’s plugin no longer writes through a link out of the agent’s folder nor a script beside its settings, a harness can no longer stop the app with an absurd message length, a plugin’s output is capped at its memory per turn, the tests’ variables are no longer read by the published app, the local servers cut a silent connection sooner, and the window and the website have stricter security policies.
+
+## [2.2.3] — 2026-11-17
+
+- Plugins in development: “Load a folder” takes a Rust plugin’s module where `escouade-plugin build` writes it, with no file to copy, and loads it again at each new build. A folder not built yet says the command to run instead of a path that cannot be found.
+- On a machine without a system keychain (WSL, Linux), “Keep” on a plugin’s secret says why it was not kept, beside the field, and offers to keep it in a file only you can read. Settings › Plugins shows that choice and takes it back.
+- After a restart, an agent whose harness doesn’t resume its session says so, and its new session gets its instructions again (its ticket’s) with a summary of what it did. Unharnessed now resumes its own.
+- A turn a harness begins by itself shows as a turn: the agent goes to work then back to rest, and that text no longer mixes with the next answer. The effort sets Prime Agent’s reasoning too, and the whole code of a long tool call can be read, folded, in its detail.
+- An agent chooses the account and the effort of the agents it creates, and can ask for their deletion: the agent’s card says so, and you confirm, seeing what would be lost. Thanks to @Metalzoid (#44).
+- A folder’s “running” counter no longer looks like an alert. Thanks to @Metalzoid (#44).
 
 ## [2.2.2] — 2026-11-16
 

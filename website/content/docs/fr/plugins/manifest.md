@@ -106,7 +106,7 @@ Un programme est l’un des trois, jamais deux :
   "run": { "js": "dist/plugin.mjs" },
 ```
 
-- `wasm` : le `Cargo.toml` d’un plugin en Rust, jamais un binaire. Le store le compile en module, à côté du manifeste sous le nom `plugin.wasm` ; la fenêtre dit la même chose que pour `js`, et les mêmes [capacités](plugins/capabilities) s’appliquent (voir [le kit Rust](plugins/rust)) :
+- `wasm` : le `Cargo.toml` d’un plugin en Rust, jamais un binaire. Le store le compile en module, à côté du manifeste sous le nom `plugin.wasm` (en développement, `escouade-plugin build` l’écrit dans `packs/`, où Escouade le prend) ; la fenêtre dit la même chose que pour `js`, et les mêmes [capacités](plugins/capabilities) s’appliquent (voir [le kit Rust](plugins/rust)) :
 
 `sdk/create-escouade-plugin/templates/rust/escouade-plugin.json` (extrait)
 
@@ -127,10 +127,10 @@ Un chemin absolu ou qui remonte avec `..` est refusé : un plugin ne lance que c
 - `accounts` : un genre de compte, partagé par ses autres points ;
 - `ticketSources`, `forges` et `harnesses` : une source du Kanban, un hébergeur de code, un harness ; chacun avec un `id`, et le compte qu’il utilise (`account`) parmi ceux de `accounts` ;
 - `launchEnvironments` : un environnement de lancement, qui prend en charge `up`, `ls`, `down` et `destroy` d’un worktree et ses services ; pour l’instant réservé aux plugins d’Escouade (isola) ;
-- `workflowReaders` : un lecteur de workflows, pour apprendre à Escouade un workflow qu’elle ne lit pas seule. Chacun a un `id` et `files`, les globs (depuis le dossier du projet, sans `..`) des fichiers qu’il reçoit ; voir [Le lecteur de workflow](plugins/events#le-lecteur-de-workflow) ;
+- `workflowReaders` : un lecteur de workflows, pour apprendre à Escouade un workflow qu’elle ne lit pas seule (le contrat est fixé, mais **Escouade ne l’appelle pas encore**). Chacun a un `id` et `files`, les globs (depuis le dossier du projet, sans `..`) des fichiers qu’il reçoit ; voir [Le lecteur de workflow](plugins/events#le-lecteur-de-workflow) ;
 - `themes` : des thèmes, décrits dans [Les thèmes](plugins/themes) ;
 - `webhooks` et `commands` : un webhook ou une commande sur un fait, décrits dans [Les événements](plugins/events) ;
-- `menus`, `statusBar`, `badges`, `projectTemplates` et `escouadeYml` : décrits avec les versions qui les mettent en service.
+- `menus`, `statusBar`, `badges`, `projectTemplates` et `escouadeYml` : **réservés, pas servis**. Le manifeste les accepte et `escouade-plugin validate` en juge la forme, mais Escouade n’en montre rien et n’en appelle rien aujourd’hui : n’écris pas un plugin qui compte dessus. Seuls les réglages d’un plugin dans `.escouade.yml` (`plugins.<id>`) sont lus.
 
 Un même plugin peut tenir plusieurs points : un plugin GitHub donne ses issues au Kanban et suit ses PR sur un seul compte.
 

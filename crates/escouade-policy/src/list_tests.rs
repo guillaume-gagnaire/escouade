@@ -31,6 +31,8 @@ fn the_list_covers_what_the_managed_device_imposes_in_6_4() {
         "plugins.allowed",
         "plugins.denied",
         "plugins.verifiedOnly",
+        // The file of the plugins' secrets without a keychain (ESC-499, ESC-520).
+        "secrets.fileFallback",
         "projects.forcePrivate",
         "projects.deniedFiles",
         "proxy.url",
@@ -57,7 +59,7 @@ fn the_list_covers_what_the_managed_device_imposes_in_6_4() {
     ] {
         assert!(def(key).is_some(), "{key} missing from the list");
     }
-    assert_eq!(POLICIES.len(), 32);
+    assert_eq!(POLICIES.len(), 33);
 }
 
 #[test]

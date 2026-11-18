@@ -93,7 +93,7 @@ The protocol’s types come from one schema, [`plugin-protocol-1.json`](/schemas
 | `TIMEOUTS_MS`, `DEFAULT_TIMEOUT_MS`, `ERRORS` | The delays of Escouade’s calls, and the error codes. |
 | `Manifest` | `escouade-plugin.json`. |
 
-`@escouade-dev/plugin/manifest-check` gives the checks of the manifest that the store and Escouade make: `validate(manifest)` and `message(error, 'en')`.
+`@escouade-dev/plugin/manifest-check` gives the checks of the manifest that the store and Escouade make: `validate(manifest)` and `message(error, 'en')`. Since 0.4 they know the app’s whole manifest (`run.wasm`, `permissions.files`, `permissions.env`, `limits`…): their fields are those of the schema Escouade’s reader writes (`plugin-1.json`), and Escouade’s tests have each of its manifests judged by both. 0.3 ignored `run.wasm`, `permissions.files` and `limits`, and wanted a `run.command`: update the SDK (`npm install @escouade-dev/plugin@latest`).
 
 ## The tests
 
@@ -170,7 +170,7 @@ Escouade runs it **inside the app, in WASM**, with no Node on the user’s machi
 - **The same code on both transports**: `start()` speaks to Escouade’s WASM host when the app runs the plugin, on standard input and output under Node (its tests, a plugin started by a command). A plugin written for the SDK runs unchanged on both sides.
 - **Its files**: `readFileSync(new URL('../rules.json', import.meta.url), 'utf8')` still reads a JSON file at the root of its folder; `p.file()` reads the others. The standard `fetch` serves the network, through Escouade in WASM.
 - **What the bundle may import**: `node:fs` and `node:readline`, which Escouade serves, and nothing else; it is one file, without `export`. Any other `import` fails its compilation, and `escouade-plugin validate` says so in your language (“the bundle imports node:child_process, which a plugin in WASM does not have (only node:fs, node:readline)”). `setTimeout` and `clearTimeout` exist there.
-- **SDK 0.3 or later**: a bundle made with SDK 0.2 does not run in WASM; rebuild it (`npm run build`).
+- **SDK 0.3 or later** (0.4 for `p.fs` and `p.runProgram`): a bundle made with SDK 0.2 does not run in WASM; rebuild it (`npm run build`).
 - **The tools, without Node**: `escouade-plugin build` makes the module as the store does, to check that it compiles; `test` and `dev` play the bundle in WASM, in the app’s host. The Javy that compiles it (9.1.0) is downloaded the first time it is needed into `~/.escouade/tools` and checked by its hash; the app and `escouade-plugin` share it. Node only serves the author, for `npm run build` and the plugin’s tests; whoever installs it never needs it. No more need to make it an executable (`deno compile`, `bun build --compile`) for people without Node.
 - **What the plugin can ask for on top**: `p.fs` for the folders of `permissions.files`, `p.runProgram` for the programs of `permissions.commands`, `openStream` and `openSocket` for the network (see [the calls](plugins/calls)). The store no longer publishes a `run.command`.
 

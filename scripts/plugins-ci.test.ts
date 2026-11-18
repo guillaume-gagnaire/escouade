@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { listPlugins, parseArgs, problemsOf, readCargo, readPlugin, touchedBy } from '../plugins/ci-lib.mjs';
+import { judgedFor, listPlugins, parseArgs, problemsOf, readCargo, readPlugin, touchedBy } from '../plugins/ci-lib.mjs';
 
 const made: string[] = [];
 const folder = (files: Record<string, string>) => {
@@ -88,6 +88,16 @@ describe('readPlugin', () => {
     expect(readPlugin(dir, 'x')).toMatchObject({ wasm: true, node: false, cargo: { name: 'escouade-plugin-x' } });
     const js = folder({ 'escouade-plugin.json': manifest({ run: { js: 'dist/plugin.mjs' } }) });
     expect(readPlugin(js, 'x')).toMatchObject({ wasm: false, cargo: null });
+  });
+});
+
+describe('judgedFor', () => {
+  it('judges a plugin for the version of its sort, or for its own minimum when it asks for a newer one', () => {
+    expect(judgedFor('2.2.0', null)).toBe('2.2.0');
+    expect(judgedFor('2.2.0', '2.1.0')).toBe('2.2.0');
+    expect(judgedFor('2.2.0', '2.2.2')).toBe('2.2.2');
+    expect(judgedFor('2.2.0', '2.10.0')).toBe('2.10.0');
+    expect(judgedFor('2.3.0-beta.1', '2.2.2')).toBe('2.3.0-beta.1');
   });
 });
 

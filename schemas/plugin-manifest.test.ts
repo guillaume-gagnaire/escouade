@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { hostCovered, message, validate, validateText, writtenHost } from './plugin-manifest.mjs';
+import { FIELDS, FILE_ACCESS, FILE_ROOTS, hostCovered, message, validate, validateText, writtenHost } from './plugin-manifest.mjs';
 
 // The store's library on the cases it shares with the app's reader (src-tauri/src/plugins_tests.rs): the same fields
 // wrong, for the same reasons, and the same fields ignored.
@@ -127,5 +127,37 @@ describe('the hosts of permissions.network', () => {
     expect(writtenHost('{{secrets.webhook}}')).toBeNull();
     expect(writtenHost('https://{{data.host}}/x')).toBeNull();
     expect(writtenHost('ftp://hooks.slack.com')).toBeNull();
+  });
+});
+
+// The two readers of a manifest, this library (the store, the SDK's `validate`, vendor/ in sdk/plugin) and the app's
+// (crates/escouade-plugin-cli/src/manifest.rs, which writes plugin-1.json): the same fields, object by object (issue
+// #43: a SDK that ignored `run.wasm`, `permissions.files` and `limits`). Their verdicts on the manifests of the
+// repository are compared by src-tauri/src/plugins_tests.rs.
+describe('the fields known', () => {
+  const schema = JSON.parse(fs.readFileSync(path.join(__dirname, 'plugin-1.json'), 'utf8'));
+  const at = (level: string) => (level === '' ? schema : schema.properties[level]);
+
+  for (const level of Object.keys(FIELDS)) {
+    it(`are those of plugin-1.json in ${level || 'the manifest'}`, () => {
+      expect([...FIELDS[level]!].sort()).toEqual(Object.keys(at(level).properties).sort());
+    });
+  }
+
+  it('cover every object of plugin-1.json', () => {
+    const objects = Object.entries(schema.properties as Record<string, { properties?: object }>)
+      .filter(([, v]) => v.properties)
+      .map(([k]) => k);
+    expect(
+      Object.keys(FIELDS)
+        .filter((k) => k !== '')
+        .sort(),
+    ).toEqual(objects.sort());
+  });
+
+  it('give the roots and the accesses of permissions.files of plugin-1.json', () => {
+    const item = schema.properties.permissions.properties.files.items.properties;
+    expect([...FILE_ROOTS].sort()).toEqual([...item.root.enum].sort());
+    expect([...FILE_ACCESS].sort()).toEqual([...item.access.enum].sort());
   });
 });

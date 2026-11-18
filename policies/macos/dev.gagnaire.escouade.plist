@@ -266,6 +266,20 @@
     </dict>
     <dict>
       <key>pfm_description</key>
+      <string>On a device without a system keychain, a plugin’s secret can no longer be kept in a file readable by its user alone: only the keychain keeps it. A file already chosen is no longer read; its secrets move to the keychain or are erased with it. Only the value false (0) is imposed. On the device: “Keep in a file only you can read” is no longer offered at a secret’s field, and Plugins › “Secrets kept in a file” bears the padlock.</string>
+      <key>pfm_name</key>
+      <string>secrets.fileFallback</string>
+      <key>pfm_range_list</key>
+      <array>
+        <false/>
+      </array>
+      <key>pfm_title</key>
+      <string>Deny the file of the plugins’ secrets</string>
+      <key>pfm_type</key>
+      <string>boolean</string>
+    </dict>
+    <dict>
+      <key>pfm_description</key>
       <string>A JSON object like VS Code’s extensions.allowed: its keys are * (all), a publisher of Open VSX or an extension (publisher.name), its values true, false, stable (no pre-release) or the list of the versions allowed. The most precise key says it. An object that names anything allows only what it names. It adds to the lists of the settings and of the .escouade.yml files: an extension must be allowed by each. On the device: General › “Editor’s allowed extensions”, grayed; an extension outside the list is refused before any download, and an installed extension it leaves out is no longer loaded.</string>
       <key>pfm_name</key>
       <string>extensions.allowed</string>

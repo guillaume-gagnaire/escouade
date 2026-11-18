@@ -108,6 +108,10 @@ escouade_command::commands! {
         commands::plugin_set_setting,
         commands::plugin_secrets,
         commands::plugin_set_secret,
+        // The plugins' secrets kept in a file, without a keychain (ESC-499): the file of the core's machine.
+        commands::plugin_secret_move,
+        commands::secrets_file,
+        commands::secrets_file_remove,
         commands::plugin_run,
         commands::plugin_start,
         commands::plugins_check_updates,
@@ -222,6 +226,9 @@ escouade_command::commands! {
         commands::duplicate_agent,
         commands::archive_agent,
         commands::delete_agent,
+        // A deletion an agent asked for (PR 44, ESC-511): on its card, the user's to confirm or refuse.
+        commands::delete_loss,
+        commands::refuse_delete,
         commands::merge_agent,
         commands::get_commands,
         commands::file_suggestions,
@@ -312,6 +319,19 @@ escouade_command::commands! {
         commands::overseer_send,
         commands::overseer_undo,
         commands::overseer_revoke,
+        // The box « À toi » (ESC-509): the phone's first screen, its files' bytes in raw frames.
+        commands::inbox_list,
+        commands::inbox_get,
+        commands::inbox_file,
+        commands::inbox_file_bytes,
+        commands::inbox_answer,
+        commands::inbox_snooze,
+        commands::inbox_delegate,
+        commands::inbox_reopen,
+        commands::inbox_seen,
+        commands::inbox_closing,
+        commands::inbox_weight,
+        commands::inbox_erase_closed_files,
         commands::ticket_update,
         commands::ticket_delete,
         commands::clean_worktrees,
@@ -486,6 +506,7 @@ escouade_command::commands! {
         commands::lsp_trust,
         commands::fs_reveal,
         commands::sent_file_open,
+        commands::inbox_open_file,
         commands::agent_local_open,
     }
 }

@@ -298,6 +298,8 @@ fn the_table_names_its_keys_once_with_their_sort_and_rows() {
                     PLUGIN_ORIGINS_KEY,
                     PLUGINS_ALLOWED,
                     PLUGINS_DENIED,
+                    // Refused at a secret's field, and the file no longer read (ESC-520).
+                    SECRETS_FILE,
                     DENIED_FILES,
                     VOICE_ONLINE,
                     SERVERS,

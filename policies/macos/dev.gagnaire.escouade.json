@@ -177,6 +177,14 @@
       "title": "Deny the Remote Control",
       "type": "boolean"
     },
+    "secrets.fileFallback": {
+      "description": "On a device without a system keychain, a plugin’s secret can no longer be kept in a file readable by its user alone: only the keychain keeps it. A file already chosen is no longer read; its secrets move to the keychain or are erased with it. Only the value false (0) is imposed. “Keep in a file only you can read” is no longer offered at a secret’s field, and Plugins › “Secrets kept in a file” bears the padlock.",
+      "enum": [
+        false
+      ],
+      "title": "Deny the file of the plugins’ secrets",
+      "type": "boolean"
+    },
     "servers.aggregateView": {
       "description": "The spaces are not shown together in one view. Only the value false (0) is imposed. Read and kept; applied with the spaces of the server mode (to come).",
       "enum": [

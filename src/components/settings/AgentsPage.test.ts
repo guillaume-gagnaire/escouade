@@ -589,7 +589,7 @@ describe('the page « Agents »', () => {
   });
 
   it('offers who answers the other agents’ requests, nobody by default, and warns before every agent (ESC-423)', async () => {
-    const ANSWER = 'Les agents peuvent répondre aux questions et aux permissions des autres agents';
+    const ANSWER = 'Les agents peuvent répondre aux demandes des autres agents';
     const be = backend({ save_settings: () => [] });
     // Settings saved before it have no such key: nobody.
     const { agentsAnswer: _, ...before } = app.settings;

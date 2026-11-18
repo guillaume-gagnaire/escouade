@@ -28,7 +28,8 @@ pub fn usage(lang: Lang) -> String {
       seraient compilées, et que son plugin.wasm, s'il est là, a la forme d'un réacteur.
   escouade-plugin build <dossier> [--out <dossier>] [--json]
       Compile un plugin `run.js` ou `run.wasm` en WASM, comme le store : packs/<id>-<version>.wasm
-      et son SHA-256, le même sur tous les systèmes.
+      et son SHA-256, le même sur tous les systèmes. « Charger un dossier » de l'app y prend le
+      module d'un plugin `run.wasm`, sans rien copier.
   escouade-plugin fetch <dossier>
       Télécharge les dépendances d'un plugin `run.wasm` depuis crates.io, sans rien lancer du
       plugin : `build` les trouve ensuite hors ligne, comme au store.
@@ -66,7 +67,8 @@ Options : --lang fr|en ; --escouade <version> joue le plugin comme cette version
       be compiled, and that its plugin.wasm, when it is there, has the form of a reactor.
   escouade-plugin build <folder> [--out <folder>] [--json]
       Compiles a `run.js` or `run.wasm` plugin to WASM, as the store does: packs/<id>-<version>.wasm
-      and its SHA-256, the same on every system.
+      and its SHA-256, the same on every system. The app's “Load a folder” takes the module of a
+      `run.wasm` plugin there, copying nothing.
   escouade-plugin fetch <folder>
       Downloads the dependencies of a `run.wasm` plugin from crates.io, running nothing of the
       plugin: `build` then finds them offline, as at the store.

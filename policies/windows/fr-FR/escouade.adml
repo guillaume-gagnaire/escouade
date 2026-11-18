@@ -88,6 +88,12 @@ Clé : plugins.denied (liste). Sorte : restreindre.</string>
 Sur le poste : Plugins › « N’installer que des versions vérifiées », allumé et grisé.
 
 Clé : plugins.verifiedOnly (booléen, true (1)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
+      <string id="secrets_fileFallback">Interdire le fichier des secrets des plugins</string>
+      <string id="secrets_fileFallback_Explain">Sur un poste sans trousseau système, le secret d’un plugin ne peut plus être gardé dans un fichier lisible de son seul utilisateur : il n’est gardé que par le trousseau. Un fichier déjà choisi n’est plus lu ; ses secrets se déplacent vers le trousseau ou s’effacent avec lui. Seule la valeur false (0) s’impose.
+
+Sur le poste : « Garder dans un fichier lisible de toi seul » n’est plus proposé au champ d’un secret, et Plugins › « Secrets gardés dans un fichier » porte le cadenas.
+
+Clé : secrets.fileFallback (booléen, false (0)). Sorte : restreindre. « Désactivé » retire la stratégie : le réglage redevient libre.</string>
       <string id="extensions_allowed">Extensions permises de l’éditeur</string>
       <string id="extensions_allowed_Explain">Un objet JSON comme extensions.allowed de VS Code : ses clés sont * (toutes), un éditeur d’Open VSX ou une extension (éditeur.nom), ses valeurs true, false, stable (pas de préversion) ou la liste des versions permises. La clé la plus précise dit. Un objet qui nomme quelque chose ne permet que ce qu’il nomme. Il s’ajoute aux listes des réglages et des fichiers .escouade.yml : une extension doit être permise par chacune.
 

@@ -6,6 +6,8 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 
 ## [Non publié]
 
+- Sécurité : un poste géré ou une équipe peut interdire le fichier où se gardent les secrets des plugins sans trousseau système, et ses stratégies jugent aussi le modèle et l’effort qu’un agent donne à l’agent qu’il crée. Le fichier interdit n’est plus proposé ni lu, et Réglages › Plugins le montre sous cadenas.
+- Tes agents peuvent te laisser ce qu’ils attendent de toi sans s’arrêter (un choix entre leurs rendus, un feu vert, une réponse, un essai à faire), avec leurs images et leurs PDF, par le serveur MCP : ta réponse leur revient en message, et un ticket peut l’attendre. L’écran de la boîte « À toi » suit.
 - Serveur d’équipe : la mémoire partagée d’un projet d’équipe part sur le serveur avec ses docs, chaque souvenir signé de qui l’a écrit. Un souvenir écrit par un agent attend qu’un humain le garde avant d’être lu de l’équipe, les agents lisent comme une donnée ce qui n’est pas validé, un administrateur peut tout retirer après un incident, et un secret est refusé.
 - Mode serveur, premier pas : `escouade-server` fait tourner Escouade sans fenêtre sur un serveur Linux (x64 ou arm64) sans bureau, son API sur 127.0.0.1 pour un client qui passe par un tunnel. Un appareil s’y appaire par un code à usage unique (`escouade-server pair`), et ses secrets sont gardés dans un fichier lisible de toi seul.
 - L’éditeur VS Code prend des extensions sur Open VSX : cherche-les, installe un thème, une grammaire ou des extraits, mets-les à jour, coupe-les ou retire-les depuis son panneau « Extensions ». Escouade vérifie la signature de chacune et ne fait tourner aucun code d’extension ; une liste d’extensions permises se règle sur le poste, dans le `.escouade.yml` et par les stratégies.
@@ -38,6 +40,15 @@ Pour écrire une entrée : une ou deux phrases courtes, pour un lecteur humain. 
 - Les stratégies du poste couvrent maintenant tout ce qu’un service informatique peut imposer (proxy et certificats, plugins, projets privés, voix, mises à jour, modèles et effort, serveurs, clients MCP extérieurs), et s’appliquent sans redémarrer quand il les change. Escouade est livré avec son ADMX, un profil MDM d’exemple et une page de la doc qui dit comment les déployer.
 - Un agent qui lit une PR de GitHub en a maintenant tout : sa description, ses commits, ses fichiers et ses fils de discussion avec leurs réponses et leur état. C’est la première pierre de la vue des PR dans Escouade.
 - Sécurité : sept constats faibles de l’audit de la 2.2.0 corrigés. Un plugin de harness n’écrit plus à travers un lien hors du dossier de l’agent ni un script à côté de ses réglages, un harness ne peut plus arrêter l’app par une longueur de message absurde, la sortie d’un plugin est plafonnée à sa mémoire par tour, les variables des tests ne sont plus lues par l’app publiée, les serveurs locaux coupent plus tôt une connexion muette, la fenêtre et le site ont des politiques de sécurité plus strictes.
+
+## [2.2.3] — 2026-11-17
+
+- Plugins en développement : « Charger un dossier » prend le module d’un plugin Rust là où `escouade-plugin build` l’écrit, sans fichier à copier, et le recharge à chaque nouvelle construction. Un dossier pas encore construit dit la commande à lancer au lieu d’un chemin introuvable.
+- Sur un poste sans trousseau système (WSL, Linux), « Garder » le secret d’un plugin dit pourquoi il n’a pas été gardé, à côté du champ, et propose de le garder dans un fichier lisible de toi seul. Ce choix se voit et se retire dans Réglages › Plugins.
+- Après un redémarrage, un agent dont le harness ne reprend pas sa session le dit, et sa session neuve reçoit de nouveau ses consignes (celles de son ticket) avec un résumé de ce qu’il a fait. Unharnessed reprend désormais la sienne.
+- Un tour qu’un harness lance seul s’affiche comme un tour : l’agent passe au travail puis revient au repos, et ce texte ne se mêle plus à la réponse suivante. L’effort règle aussi la réflexion de Prime Agent, et le code entier d’un long appel d’outil se lit, replié, dans son détail.
+- Un agent choisit le compte et l’effort des agents qu’il crée, et peut demander la suppression de ceux-ci : la carte de l’agent le dit, et c’est toi qui confirmes, en voyant ce qui serait perdu. Merci à @Metalzoid (#44).
+- Le compteur « en cours » d’un dossier d’agents n’a plus l’air d’une alerte. Merci à @Metalzoid (#44).
 
 ## [2.2.2] — 2026-11-16
 

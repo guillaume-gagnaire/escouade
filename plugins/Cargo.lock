@@ -149,7 +149,7 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "escouade-acp"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "base64 0.22.1",
  "dunce",
@@ -160,7 +160,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-acp"
-version = "2.2.4"
+version = "2.2.5"
 dependencies = [
  "escouade-acp",
  "escouade-plugin-protocol",
@@ -388,7 +388,7 @@ dependencies = [
 
 [[package]]
 name = "escouade-plugin-protocol"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "serde",
  "serde_json",

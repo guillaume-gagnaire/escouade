@@ -246,6 +246,24 @@ fn dev_of_the_first_hand() -> bool {
     false
 }
 
+/// A folder in development whose `run.js` bundle is not there (issue #43): the refusal says what to run too.
+fn unbuilt_bundle(mut r: Refusal, dir: &Path, lang: Lang) -> Refusal {
+    let unbuilt = r
+        .problems
+        .iter()
+        .any(|p| p.problem.path == "run.js" && p.problem.code == manifest::Code::File);
+    if unbuilt {
+        r.message.push('\n');
+        r.message.push_str(&tr_in!(
+            lang,
+            "Son bundle n'est pas encore construit : lance d'abord `npm run build` dans {}, puis charge le dossier.",
+            "Its bundle is not built yet: run `npm run build` in {} first, then load the folder.",
+            dir.display()
+        ));
+    }
+    r
+}
+
 /// A plugin of the list (`plugins.json`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1346,7 +1364,14 @@ impl Plugins {
         } else {
             manifest::Hand::Third
         };
-        let m = Self::checked(dir, hand, lang)?;
+        let m = Self::checked(dir, hand, lang).map_err(|r| unbuilt_bundle(r, dir, lang))?;
+        // Issue #43: a Rust module is built by its author, never when the folder is loaded.
+        if m.run.as_ref().is_some_and(|r| r.wasm.is_some()) {
+            let built = wasm::Built::of(&m.id, &m.version);
+            if built.module(dir).is_none() {
+                return Err(Refusal::other(wasm::no_module(lang, dir, &built.name)));
+            }
+        }
         let path = std::path::absolute(dir)
             .map(|p| p.display().to_string())
             .unwrap_or_else(|_| dir.display().to_string());
@@ -1364,6 +1389,29 @@ impl Plugins {
             None,
             lang,
         ))
+    }
+
+    /// Loads the folder in development `dir` whatever it has to run, as a folder loaded once its module was taken away
+    /// would: what the runtime's tests of a missing module do.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn load_dev_unbuilt(&self, dir: &Path, lang: Lang) -> Result<PluginView, Refusal> {
+        let m = Self::checked(dir, manifest::Hand::Third, lang)?;
+        let path = std::path::absolute(dir).unwrap().display().to_string();
+        let p = self.stage(
+            Installed {
+                id: m.id.clone(),
+                origin: Origin::Dev { path },
+                fingerprint: String::new(),
+                digest: String::new(),
+                installed_at: String::new(),
+                choices: Choices::default(),
+            },
+            None,
+            m,
+            None,
+            lang,
+        );
+        self.install(&p.token, lang)
     }
 
     /// Keeps what an inspection read until `install` or `discard`, and says it.

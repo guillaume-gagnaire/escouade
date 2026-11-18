@@ -151,9 +151,33 @@ export default {
     archiveBody: 'Son ticket {key} repartira « À faire ».',
     archiveConfirm: 'Archiver',
     deleteTitle: "Supprimer l'agent « {name} » ?",
+
     deleteBody:
       'Le processus de {engine} est arrêté et la conversation est retirée de l’application (la session {harness} reste sur le disque).',
     deleteWorktree: 'Supprimer aussi le worktree et la branche {branch}',
+    // A deletion asked by the agent that made it (`delete_agent`, ESC-511): on its card, a toast once, then this dialog.
+    deleteAsk: {
+      card: '« {by} » demande de le supprimer',
+      by: "Demandé par l'agent « {by} », qui l'a créé.",
+      toast: "L'agent « {by} » demande de supprimer l'agent « {name} ».",
+      see: 'Voir',
+      refuse: 'Refuser',
+      seeLabel: "Voir la demande de suppression de l'agent « {name} »",
+      refuseLabel: "Refuser de supprimer l'agent « {name} »",
+    },
+    deleteLoss: {
+      heading: 'Ce qui serait perdu',
+      reading: 'Lecture du worktree…',
+      unknown: 'État du worktree inconnu : git n’a pas répondu à temps.',
+      dirty: { one: '{count} fichier modifié non commité : {names}', other: '{count} fichiers modifiés non commités : {names}' },
+      more: ', et {count} autres',
+      unmerged: { one: '{count} commit pas encore fusionné dans {base}', other: '{count} commits pas encore fusionnés dans {base}' },
+      turn: 'Un tour en cours, interrompu',
+      request: 'Une demande en attente de ta réponse',
+      ticketLinked: 'Lié au ticket {key}',
+      nothing: 'Rien de non commité ni de non fusionné.',
+      kept: 'La case du worktree est décochée : son travail en cours resterait.',
+    },
   },
 
   // The title bar: the projects' tabs and the window's buttons.

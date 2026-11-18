@@ -1,9 +1,9 @@
 ---
 title: "Réglages imposés"
 subject: "fenetre"
-sources: ["docs/TEAM-SERVER.md §6.1, §6.2, §6.3, §6.4, §6.5, §16 (TS-11, TS-12, TS-13)","crates/escouade-policy/README.md (TS-0b ESC-454, TS-12 ESC-465)","crates/escouade-policy/src/list.rs (la liste unique)","src-tauri/src/team_settings.rs (TS-13)"]
-tickets: ["ESC-455","ESC-465","ESC-471","ESC-478","ESC-481","ESC-497"]
-decisions: [169,175,183,189,201,198,197]
+sources: ["docs/TEAM-SERVER.md §6.1, §6.2, §6.3, §6.4, §6.5, §16 (TS-11, TS-12, TS-13)","crates/escouade-policy/README.md (TS-0b ESC-454, TS-12 ESC-465)","crates/escouade-policy/src/list.rs (la liste unique)","src-tauri/src/team_settings.rs (TS-13)","crates/escouade-forge/src/integrations/kept.rs (ESC-499, ESC-520)"]
+tickets: ["ESC-455","ESC-465","ESC-471","ESC-478","ESC-497","ESC-520","ESC-481"]
+decisions: [169,175,183,189,198,197,"la-2-2-3-reversee-dans-la-2-3-le-fichier",201]
 compared: null
 ---
 
@@ -139,3 +139,16 @@ Ceci précise « C'est le cœur qui refuse » et « Ce qui est déjà en cours �
 - **Un agent dont le mode devient interdit** passe, à la fin de son tour, au mode permis le plus proche **parmi ceux de son harness** (jamais un mode que son harness n'a pas) ; s'ils permettent tous plus, au moins permissif d'entre eux, jamais Bypass. Un harness dont aucun mode n'est permis s'arrête entre deux tours et le dit : « Le mode « bypassPermissions » n’est pas permis par la stratégie de ce poste. Sans Filet n’a aucun autre mode permis. L’agent s’arrête à la fin de son tour. ».
 - **Ce qui tourne encore ne reste pas en vie.** Le process d'un agent, ou son interface (la vue terminal, celle gardée pour Remote Control), qui tourne dans un harness ou un mode que la stratégie ne permet plus, ou en Bypass quand « Autoriser le mode Bypass » vient d'être éteint dans l'app : au repos, il s'arrête aussitôt ; en plein tour, il finit son tour puis s'arrête, sans couper le travail en cours. La conversation dit pourquoi, avec la raison du refus suivie de « L’agent s’arrête à la fin de son tour. » quand la règle change, ou de « L’agent s’arrête. » quand un démarrage est refusé. « Autoriser le mode Bypass » éteint ne change pas le mode de l'agent ; une stratégie le déplace comme ci-dessus quand son harness a un mode permis.
 - **Rien ne le relance** : son message, « Relancer », sa vue terminal, la reprise programmée, le démarrage d'avance d'un nouvel agent (préchauffage) et l'interface gardée en fond pour Remote Control passent par le même jugement ; refusé, ce qui tournait encore s'arrête, et la conversation le dit avec la même raison.
+
+## Ce que la 2.2.3 apporte, jugé aussi (ESC-520)
+
+Reversée dans la 2.3, la 2.2.3 ajoute deux choses que les stratégies du poste et de l'équipe jugent comme le reste.
+
+| Clé | Sorte | Ce qu'elle verrouille ou refuse |
+| --- | --- | --- |
+| `secrets.fileFallback` | restreindre (éteint seulement) | le fichier lisible de son seul utilisateur où se gardent les secrets des plugins sans trousseau système : « Garder dans un fichier lisible de toi seul » n'est plus proposé ni accepté, et Plugins › « Secrets gardés dans un fichier » porte le cadenas |
+
+- **Le fichier des secrets interdit** : c'est une clé de l'app, pas d'un projet. Une équipe l'impose donc tant que le poste en est. Le cœur ne fait aucun fichier et n'y écrit plus aucun secret. Le refus dit qui impose : « Garder les secrets des plugins dans un fichier est interdit par la stratégie de ce poste (secrets.fileFallback) : seul le trousseau système les garde. » Un fichier déjà choisi **n'est plus lu** : aucun plugin n'y trouve plus son secret. Ce qu'il contient reste pour qu'on puisse le déplacer vers le trousseau depuis la page du plugin, ou l'effacer avec « Retirer le fichier ». Un secret gardé de nouveau va au trousseau et sort du fichier. La stratégie retirée, le fichier est relu.
+- **Dans la fenêtre** : au champ d'un secret que le trousseau a refusé, le cadenas et « Imposé par … : le fichier des secrets est interdit sur ce poste, seul le trousseau système garde un secret. » remplacent l'offre du fichier. Dans Réglages › Plugins, le groupe du fichier dit « Imposé par … : ce fichier n'est plus lu. Déplace ses secrets vers le trousseau depuis la page de chaque plugin, ou retire-le. »
+- **Le compte, le modèle et l'effort qu'un agent donne à celui qu'il crée** (`create_agent`, PR 44) : avant que rien ne soit fait, le harness du compte choisi passe par `harnesses.allowed`, le modèle demandé par `harnesses.allowedModels` et l'effort demandé par `harnesses.maxEffort`. Un effort demandé au-dessus du plafond est refusé, en disant qui l'impose, et rien n'est créé. Un effort laissé à son compte descend au plafond, comme pour toute création. Le mode est jugé comme pour les autres créations (ESC-497).
+- **Le pilote ACP** (ESC-491) passe par le même jugement du mode. La session neuve d'après un redémarrage démarre par `judge_start`. Un tour que le harness lance seul compte comme un travail : un mode devenu interdit pendant ce tour arrête le process à la fin du tour, avec sa raison.

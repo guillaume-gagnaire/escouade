@@ -43,6 +43,7 @@ impl Plugin for Examples {
                 "example/notes" => return files::notes(cx).await,
                 "example/words" => return files::words(cx).await,
                 "example/status" => return procs::status(cx, &text(&params)).await,
+                "example/version" => return procs::version(cx).await,
                 "example/input" => return procs::feed(cx, &params).await,
                 "example/kill" => return procs::stop(cx, &params).await,
                 "example/settings" => return settings::channel(cx, &params).await,

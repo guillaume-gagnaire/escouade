@@ -5,6 +5,7 @@ import {
   artifactLink,
   editsByTurn,
   escouadeArgs,
+  fullInput,
   hasDiff,
   isEscouadeTool,
   isQuietTool,
@@ -141,6 +142,10 @@ describe('the tools of Escouade’s own server', () => {
     expect(toolLabel('mcp__escouade__get_ticket_image')).toBe('Escouade · Lire une image d’un ticket');
     expect(toolLabel('mcp__escouade__get_ticket_file')).toBe('Escouade · Lire un fichier d’un ticket');
     expect(toolLabel('mcp__escouade__set_board')).toBe('Escouade · Régler le Kanban');
+    // The box « À toi » (ESC-509).
+    expect(toolLabel('mcp__escouade__ask_user')).toBe('Escouade · Déposer une demande dans « À toi »');
+    expect(toolLabel('mcp__escouade__list_asks')).toBe('Escouade · Lister les demandes de « À toi »');
+    expect(toolLabel('mcp__escouade__answer_ask')).toBe('Escouade · Répondre à une demande laissée');
     // The subagents and background tasks of an agent: list, read, stop, write.
     expect(toolLabel('mcp__escouade__list_background_work')).toBe('Escouade · Lister les sous-agents et tâches de fond d’un agent');
     expect(toolLabel('mcp__escouade__list_backups')).toBe('Escouade · Lister les copies des données');
@@ -195,6 +200,9 @@ describe('the tools of Escouade’s own server', () => {
     // An agent reading an image of its own ticket names no ticket: nothing to sum up.
     expect(arg('get_ticket_image', { file: 'a1b2c3.png' })).toBe('');
     expect(arg('get_ticket_file', { ticket: 'DEM-4', index: 0, offset: 0 })).toBe('DEM-4');
+    // A request of the box is summed up by its title when it is left, by its id after.
+    expect(arg('ask_user', { kind: 'choice', title: 'Choisis la direction' })).toBe('Choisis la direction');
+    expect(arg('get_ask_file', { ask: 'a-12', index: 0 })).toBe('a-12');
     // The subagents and background tasks of an agent are summed up by that agent.
     expect(arg('list_background_work', { agent: 'fix-login' })).toBe('fix-login');
     expect(arg('stop_background_work', { agent: 'fix-login', id: 'bg1' })).toBe('fix-login');
@@ -248,6 +256,7 @@ describe('the tools of Escouade’s own server', () => {
     expect(toolLabel('mcp__escouade__create_agent')).toBe('Escouade · Start an agent');
     expect(toolLabel('mcp__escouade__get_ticket_image')).toBe('Escouade · Read a ticket image');
     expect(toolLabel('mcp__escouade__get_ticket_file')).toBe('Escouade · Read a ticket file');
+    expect(toolLabel('mcp__escouade__wait_ask')).toBe('Escouade · Wait for an answer');
     expect(toolLabel('mcp__escouade__list_background_work')).toBe('Escouade · List an agent’s subagents and background tasks');
     expect(toolLabel('mcp__escouade__get_background_output')).toBe('Escouade · Read a background task’s output or a subagent’s report');
     expect(toolLabel('mcp__escouade__stop_background_work')).toBe('Escouade · Stop a background task or a subagent');
@@ -410,5 +419,21 @@ describe('the artifacts of Claude Code (ESC-400)', () => {
       artifactLink(tool('Artifact', {}, { result: { text: 'Published at https://evil.example/claude.ai/artifact/x', isError: false } })),
     ).toBeNull();
     expect(artifactLink(tool('Bash', {}, { result: { text: URL, isError: false } }))).toBeNull();
+  });
+});
+
+describe('fullInput', () => {
+  const code = Array.from({ length: 200 }, (_, i) => `print(${i})`).join('\n');
+
+  it('gives the whole of a long cell of code, for its detail (ESC-491)', () => {
+    expect(fullInput(tool('Python', { code }))).toEqual({ key: 'code', text: code, lines: 200 });
+    expect(fullInput(tool('lookup', { q: 'x'.repeat(161) }))?.lines).toBe(1);
+  });
+
+  it('gives nothing for a text its row holds, nor for a tool its detail shows its own way', () => {
+    expect(fullInput(tool('Python', { code: 'print(1)' }))).toBeNull();
+    expect(fullInput(tool('Python', { n: 3 }))).toBeNull();
+    for (const name of ['Bash', 'Edit', 'Task', 'TodoWrite', 'mcp__escouade__create_ticket'])
+      expect(fullInput(tool(name, { command: code, description: code, title: code }))).toBeNull();
   });
 });

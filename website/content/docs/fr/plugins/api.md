@@ -83,6 +83,8 @@ Une autre méthode répond l’erreur `-32601` et le note au journal. Les erreur
 
 Les secrets d’un plugin sont dans le trousseau du système, sous un nom à lui : `plugin:<id>:<clé>`. Il les demande par `secrets/get`, au moment où il en a besoin.
 
+Sur un poste sans trousseau (Linux, WSL), l’utilisateur peut choisir de les garder dans un fichier lisible de lui seul : `secrets/get` les rend de la même façon. Un secret absent, jamais saisi ou que le trousseau a refusé, répond `null` dans les deux cas : la fenêtre a dit à l’utilisateur pourquoi il n’a pas été gardé, le plugin n’a qu’à dire qu’il lui manque.
+
 - **Seulement les siens.** La clé doit être l’une de ses `permissions.secrets` ; un motif finissant par `*` en prend plusieurs (`account:*`). Tout autre clé est refusée par `-32001` et notée au journal, même celle d’un autre plugin écrite en entier : `plugin:dev.autre:token` n’est pas une clé de ses permissions.
 - Un plugin n’obtient jamais le secret d’un compte, d’un harness ou d’une intégration d’Escouade.
 - Un secret donné au plugin est masqué (`••••`) partout dans son journal, sa sortie d’erreur comprise.
@@ -116,7 +118,7 @@ Ses méthodes, leurs paramètres, leurs réponses et leurs délais sont décrits
 
 Le manifeste d’un plugin qui a un programme dit le manifeste dit `"run": { "js": "dist/plugin.mjs" }` ou `"run": { "wasm": "Cargo.toml" }` est un programme que fait tourner Escouade **dans l’app, en WASM**, sans Node ni Rust sur la machine. Une instance par plugin, sur un fil à elle, qui garde son état d’un appel à l’autre. Les messages passent par l’entrée et la sortie standard du module ; la poignée de main, les délais, le journal et les relances sont ceux de toute la page ; [le SDK](plugins/sdk) et [le kit Rust](plugins/rust) parlent le protocole pour toi.
 
-Le module est compilé une fois : par le store pour un plugin du store (l’app le télécharge et vérifie son empreinte contre `version.json`), par l’app pour un `run.js` installé depuis un dossier ou un dépôt git. Un `run.wasm` hors du store vient avec son `plugin.wasm`, à côté du manifeste. L’app le précompile à l’installation, le garde dans son cache et le précompile à nouveau après une mise à jour d’Escouade. Il lui faut Escouade 2.2.0 ou plus récent.
+Le module est compilé une fois : par le store pour un plugin du store (l’app le télécharge et vérifie son empreinte contre `version.json`), par l’app pour un `run.js` installé depuis un dossier ou un dépôt git. Un `run.wasm` hors du store vient avec son `plugin.wasm`, à côté du manifeste ; un dossier en développement prend le module que `escouade-plugin build` y a écrit pour la version de son manifeste (`packs/<id>-<version>.wasm`), sinon son `plugin.wasm`. L’app le précompile à l’installation, le garde dans son cache et le précompile à nouveau après une mise à jour d’Escouade. Il lui faut Escouade 2.2.0 ou plus récent.
 
 ### Le réseau, par Escouade
 

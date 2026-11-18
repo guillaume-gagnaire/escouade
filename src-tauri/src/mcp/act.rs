@@ -49,8 +49,8 @@ use super::read::{
 use super::resolve::{self, Sight};
 use super::tools::{
     AnswerPermissionArgs, AnswerQuestionArgs, ApproveTicketArgs, CreateAgentArgs, CreateFolderArgs,
-    CreateTicketArgs, DecisionArg, DeleteFolderArgs, DeleteTicketArgs, DismissBlockArgs,
-    MoveAgentArgs, MoveTicketArgs, PositionArg, QuestionAnswer, RejectTicketArgs,
+    CreateTicketArgs, DecisionArg, DeleteAgentArgs, DeleteFolderArgs, DeleteTicketArgs,
+    DismissBlockArgs, MoveAgentArgs, MoveTicketArgs, PositionArg, QuestionAnswer, RejectTicketArgs,
     ReportProgressArgs, ResolveConflictArgs, ResumeTicketArgs, SendMessageArgs, SetBoardArgs,
     SplitTicketArgs, StartTicketArgs, StopAgentArgs, SubTicket, ToolError, UpdateFolderArgs,
     UpdateTicketArgs, SPLIT_MAX,
@@ -1709,9 +1709,48 @@ pub(super) async fn create_agent(
         )));
     }
     super::overseer::gate_text(core, caller, "", &project.id, message)?;
-    let on = carrier(core, &project, None, None);
-    let model = model(core, &on, a.model.as_deref())?;
-    not_held(core, &project.id, project.engine())?;
+    // An account of the project's harness it may use (ESC-153's checks), else the automatic choice.
+    let account = account_setting(core, a.account.as_deref()).filter(|id| !id.is_empty());
+    if let Some(id) = &account {
+        let refusal =
+            accounts::ticket_refusal(&core.settings.read(), &project, project.engine(), id);
+        if let Some(e) = refusal {
+            return Err(ToolError::Refused(format!("{e:#}")));
+        }
+    }
+    let on = carrier(core, &project, None, account.as_deref());
+    let model = model(core, &on, auto_off(a.model.as_deref()))?;
+    check_effort(core, &on, model.as_deref(), auto_off(a.effort.as_deref()))?;
+    // Auto (empty) is no effort asked: its account's.
+    let effort =
+        effort_setting(i18n::ui(), auto_off(a.effort.as_deref()))?.filter(|e| !e.is_empty());
+    // The harness of the account it chose, the model and the effort it asked for: judged by the policies of the
+    // device and of the project's team (TS-11, TS-12, ESC-520) before anything is made, refused with who imposes it.
+    // An effort left to its account comes down under their ceiling (`create_agent_with`), as for any other creation.
+    {
+        let locks = core.locks_for(&project.id);
+        let engine = project.engine();
+        let judged = locks
+            .check_engine(engine.as_str())
+            .and_then(|()| {
+                model
+                    .as_deref()
+                    .map_or(Ok(()), |m| locks.check_model(engine.as_str(), m))
+            })
+            .and_then(|()| effort.as_deref().map_or(Ok(()), |e| locks.check_effort(e)));
+        if let Err(e) = judged {
+            return Err(ToolError::Refused(format!("{e:#}")));
+        }
+    }
+    match &account {
+        // Asked for by name, it waits for that one alone.
+        Some(id) => {
+            if let Some(held) = core.account_limit(id) {
+                return Err(ToolError::Refused(why(core, &held)));
+            }
+        }
+        None => not_held(core, &project.id, project.engine())?,
+    }
     // One at a time from the count to the first message: two calls at once do not both find a
     // place free.
     let _one = core.mcp.acting.lock().await;
@@ -1741,10 +1780,17 @@ pub(super) async fn create_agent(
             &project.id,
             AgentOptions {
                 model,
+                effort,
                 isolated: a.worktree,
                 folder,
-                // Its Claude account is the project's, else the first usable one: one of those
+                // The one asked for, else the project's, else the first usable one: one of those
                 // `not_held` found free.
+                account,
+                // The one agent that may ask for it to be deleted (`delete_agent`).
+                created_by: match caller {
+                    Caller::Agent(id) => Some(id.clone()),
+                    Caller::External => None,
+                },
                 // Refused before anything is made when its mode is (ESC-489).
                 judge: true,
                 ..Default::default()
@@ -1762,6 +1808,16 @@ pub(super) async fn create_agent(
         }
     };
     let (id, name) = (view.meta.id, view.meta.name);
+    // What it took, the defaults of its account included: what the caller asked or left out.
+    let account = accounts::name_in(
+        i18n::ui(),
+        &accounts::get(&core.settings.read(), &view.meta.account),
+    );
+    // A model that takes no effort (Haiku) runs without one, as a ticket's agent: none is said.
+    let effort = core
+        .takes_effort(view.meta.engine, &view.meta.account, &view.meta.model)
+        .then_some(view.meta.effort);
+    let model = view.meta.model;
     // Under its author's name, as every message from the server: not taken for the user's words.
     let origin = activity::caller_name(core, Some(caller));
     if let Err(e) = core
@@ -1773,7 +1829,14 @@ pub(super) async fn create_agent(
             "The agent {name} (id {id}) is created, but its message could not be sent: {e:#}"
         )));
     }
-    json(&json!({ "id": id, "name": name, "folder": folder_ref(core, &project.id, &id) }))
+    json(&json!({
+        "id": id,
+        "name": name,
+        "folder": folder_ref(core, &project.id, &id),
+        "account": account,
+        "model": model,
+        "effort": effort,
+    }))
 }
 
 /// The folder holding `agent`, as the tools that file agents say it; null when loose.
@@ -1876,6 +1939,50 @@ pub(super) async fn stop_agent(
     json(&json!({ "id": found.id, "name": found.name, "interrupted": interrupted }))
 }
 
+/// `delete_agent`: the user is asked, in the window, to delete an agent the caller made
+/// (`AgentMeta::created_by`). Nothing is deleted here: the window's own modal does it, the user
+/// confirming, one asked for after another.
+pub(super) async fn delete_agent(
+    core: &Arc<Core>,
+    caller: &Caller,
+    a: DeleteAgentArgs,
+) -> Result<String, ToolError> {
+    let me = agent_only(caller)?;
+    let found = other_agent(
+        core,
+        caller,
+        &a.agent,
+        a.project.as_deref(),
+        tr!(
+            "Un agent ne peut pas demander sa propre suppression.",
+            "An agent cannot ask for its own deletion."
+        ),
+    )?;
+    let made_by = core
+        .agent(&found.id)
+        .ok()
+        .and_then(|h| h.lock().meta.created_by.clone());
+    if made_by.as_deref() != Some(me) {
+        let name = &found.name;
+        return Err(ToolError::Refused(tr!(
+            "Tu ne peux demander la suppression que des agents que tu as créés (create_agent) : {name} n’en est pas un.",
+            "You may only ask for the deletion of agents you made (create_agent): {name} is not one."
+        )));
+    }
+    // Kept on its card until the user answers, across restarts (ESC-511): no modal opens by itself.
+    core.ask_delete(me, &found.id, a.worktree)
+        .map_err(|e| ToolError::Refused(format!("{e:#}")))?;
+    json(&json!({
+        "id": found.id,
+        "name": found.name,
+        "asked": true,
+        "note": tr!(
+            "La suppression est demandée à l’utilisateur, sur la carte de l’agent : il l’accepte ou la refuse quand il veut. Acceptée, l’agent n’est plus dans list_agents ; refusée, tu le lis avec ton prochain message.",
+            "The deletion is asked of the user, on the agent’s card: they accept or refuse it when they wish. Accepted, the agent is no longer in list_agents; refused, you read it with your next message."
+        ),
+    }))
+}
+
 // ---------- the requests of the agents ----------
 
 /// The request `asked` of the agent `found`, still waiting for an answer. Refused when it no longer
@@ -1966,8 +2073,8 @@ pub(super) fn may_answer(
             "Only the squad lead the user chose for this project answers the other agents’ permissions and questions, and it is not you: the request waits for the user’s answer. The lead is chosen in Settings › Projects › Team (“Squad lead”)."
         ))),
         AgentsAnswer::Nobody => Err(ToolError::Refused(tr!(
-            "Un agent ne répond pas aux permissions ni aux questions d’un autre agent : la demande attend la réponse de l’utilisateur. Seul l’utilisateur peut le permettre, dans Réglages › Agents › Piloter Escouade (« Les agents peuvent répondre aux questions et aux permissions des autres agents »).",
-            "An agent does not answer another agent’s permissions or questions: the request waits for the user’s answer. Only the user can allow it, in Settings › Agents › Drive Escouade (“Agents can answer the other agents’ questions and permissions”)."
+            "Un agent ne répond pas aux permissions ni aux questions d’un autre agent : la demande attend la réponse de l’utilisateur. Seul l’utilisateur peut le permettre, dans Réglages › Agents › Piloter Escouade (« Les agents peuvent répondre aux demandes des autres agents »).",
+            "An agent does not answer another agent’s permissions or questions: the request waits for the user’s answer. Only the user can allow it, in Settings › Agents › Drive Escouade (“Agents can answer the other agents’ requests”)."
         ))),
     }
 }

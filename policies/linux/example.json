@@ -48,6 +48,7 @@
   ],
   "proxy.url": "http://proxy.example.com:3128",
   "remoteControl.enabled": false,
+  "secrets.fileFallback": false,
   "servers.aggregateView": false,
   "servers.allowed": [
     "https://escouade.corp.example.com"

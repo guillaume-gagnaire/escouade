@@ -44,6 +44,7 @@ Each policy has a key, the same name everywhere: the registry value, the profile
 | Allowed plugins | `plugins.allowed` · list · restrict | The list of the plugin ids that may be installed. Absent, all may. | Installing a plugin outside the list is refused and said. |
 | Denied plugins | `plugins.denied` · list · restrict | The list of the plugin ids that are never installed, even when allowed elsewhere. | Installing a plugin of the list is refused and said. |
 | Install verified versions only | `plugins.verifiedOnly` · Boolean `true` (`1`) · restrict | A version of the store without the “Verified by Escouade” seal is refused, at an install as at an update. Only the value true (1) is imposed. | Plugins › “Install verified versions only”, on and grayed. |
+| Deny the file of the plugins’ secrets | `secrets.fileFallback` · Boolean `false` (`0`) · restrict | On a device without a system keychain, a plugin’s secret can no longer be kept in a file readable by its user alone: only the keychain keeps it. A file already chosen is no longer read; its secrets move to the keychain or are erased with it. Only the value false (0) is imposed. | “Keep in a file only you can read” is no longer offered at a secret’s field, and Plugins › “Secrets kept in a file” bears the padlock. |
 
 ### Editor
 

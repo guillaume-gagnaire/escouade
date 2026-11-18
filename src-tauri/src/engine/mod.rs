@@ -201,6 +201,9 @@ pub struct Spawn {
     pub agents_mcp: crate::model::AgentsMcp,
     /// « Autoriser le mode Bypass » (`crate::bypass`): off, what opens the mode of no question leaves its launch.
     pub bypass: bool,
+    /// What the agent did so far (its handover file, worded as a resume), for a session to resume that its harness may
+    /// not take back (`Engine::takes_recap`, ESC-491).
+    pub recap: Option<String>,
 }
 
 impl Spawn {
@@ -228,6 +231,7 @@ impl Spawn {
             read_only: meta.discussion.is_some() || meta.project_id == crate::overseer::PROJECT,
             agents_mcp: crate::model::AgentsMcp::All,
             bypass: false,
+            recap: None,
         }
     }
 }
@@ -459,6 +463,11 @@ pub trait Engine: Send + Sync {
     /// (`EngineProcess::attach`), which goes on: both views work at once (OpenCode). False: its
     /// interface takes the process's place (`terminal`).
     fn attaches(&self) -> bool {
+        false
+    }
+    /// Whether a session it resumes is given what the agent did so far (`Spawn::recap`), for a new one in its place
+    /// (ESC-491): the harnesses an ACP manifest describes, whose client knows only once it runs whether it loads it.
+    fn takes_recap(&self) -> bool {
         false
     }
     /// Its own interface in a terminal (« Vue <harness> ») that takes the process's place; None

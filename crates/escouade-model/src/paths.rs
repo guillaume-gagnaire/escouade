@@ -354,6 +354,12 @@ impl DataDir {
         self.0.join("mcp-token.json")
     }
 
+    /// The plugins' secrets the user chose to keep in a file readable by them alone, where the system has no keychain
+    /// (ESC-499, `integrations::kept`). Never in the copies of the state (`backups::FILES`).
+    pub fn plugin_secrets_file(&self) -> PathBuf {
+        self.0.join("plugin-secrets.json")
+    }
+
     /// The configuration folder of the agent's own harness (`Engine::agent_home_var`): Cursor's
     /// rules, model and sessions for that agent alone, kept while it lives.
     pub fn agent_home(&self, agent_id: &str) -> PathBuf {
@@ -535,6 +541,23 @@ impl DataDir {
     /// (`--add-dir`).
     pub fn ticket_files(&self, ticket_id: &str) -> PathBuf {
         self.ticket_dir(ticket_id).join(TICKET_FILES)
+    }
+
+    /// The files of the agents' asynchronous requests (« À toi », docs/INBOX.md § 4), a folder each.
+    pub fn asks(&self) -> PathBuf {
+        self.0.join("asks")
+    }
+
+    /// The folder of a request's files (`files/<uniq>/<name>` in it): it outlives its agent's
+    /// worktree. An id is `a-<n>`: one of a hand-edited state that is not never names the folder
+    /// of all the requests, nor one above it.
+    pub fn ask_dir(&self, ask_id: &str) -> PathBuf {
+        let plain = !ask_id.is_empty()
+            && !ask_id.starts_with('.')
+            && ask_id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+        self.asks().join(if plain { ask_id } else { "_" })
     }
 
     /// The files joined to messages, a folder each for what owns them: an agent, or the drafts of

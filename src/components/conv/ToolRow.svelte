@@ -2,7 +2,7 @@
   import { t } from '../../lib/i18n';
   import { firstChangedLine, patchLines } from '../../lib/diff';
   import { callTitle, isSubagentCall } from '../../lib/subagents';
-  import { artifactLink, hasDiff, isQuietTool, toolArg, toolIcon, toolLabel, toolResultSummary } from '../../lib/tools';
+  import { artifactLink, fullInput, hasDiff, isQuietTool, toolArg, toolIcon, toolLabel, toolResultSummary } from '../../lib/tools';
   import { openOutside } from '../../lib/links';
   import type { ConvItem, ToolItem } from '../../lib/types';
   import Icon from '../Icon.svelte';
@@ -36,6 +36,8 @@
 
   const children = $derived(childrenOf(item.id));
   const arg = $derived(toolArg(item, cwd));
+  // The whole of what its row shows the start of (a long cell of code), folded in its detail (ESC-491).
+  const whole = $derived(fullInput(item));
   const diff = $derived(hasDiff(item));
   const res = $derived(toolResultSummary(item));
   // The page an `Artifact` call published (ESC-400): its link, opened in the browser at the user's click.
@@ -149,10 +151,15 @@
       {:else}
         {#if item.name === 'Bash' || item.name === 'PowerShell'}
           <LongText class="out cmd" text={'$ ' + item.input.command} />
+        {:else if whole}
+          <details class="whole" data-whole={whole.key}>
+            <summary>{t('conv.tool.whole', { key: whole.key, count: whole.lines })}</summary>
+            <LongText class="out" text={whole.text} />
+          </details>
         {/if}
         {#if item.result?.text}
           <LongText class="out" text={item.result.text} />
-        {:else if item.name !== 'Bash'}
+        {:else if item.name !== 'Bash' && !whole}
           <LongText class="out" text={JSON.stringify(item.input, null, 2)} />
         {/if}
       {/if}
@@ -373,6 +380,23 @@
     color: var(--text);
     border-bottom: 1px solid var(--line);
     max-height: 120px;
+  }
+  /* The whole of a long input (a cell of code), folded above its output. */
+  .whole {
+    border-bottom: 1px solid var(--line);
+  }
+  .whole summary {
+    padding: 6px 12px;
+    color: var(--soft);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .whole summary:hover {
+    color: var(--text);
+  }
+  .whole summary:focus-visible {
+    outline: 2px solid var(--p-ink);
+    outline-offset: -2px;
   }
   .todos {
     list-style: none;

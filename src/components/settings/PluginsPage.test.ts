@@ -2,10 +2,12 @@ import { render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setLang } from '../../lib/i18n';
+import { setLocks } from '../../lib/locks.svelte';
 import type { Manifest, PluginView, SeedOffer } from '../../lib/plugins';
 import { plugins } from '../../lib/plugins-view.svelte';
 import { app } from '../../lib/state.svelte';
 import type { StoreView } from '../../lib/store';
+import type { Locks } from '../../lib/types';
 import { fakeBackend, project, resetApp } from '../../test/ipc';
 import SettingsModal from '../modals/SettingsModal.svelte';
 
@@ -215,5 +217,72 @@ describe('Réglages › Plugins', () => {
     await expect.poll(() => b.called('save_settings').length).toBe(1);
     expect(b.called('save_settings')[0].args.settings).toMatchObject({ pluginsVerifiedOnly: true });
     expect(app.settings.pluginsVerifiedOnly).toBe(true);
+  });
+
+  it('shows the file of the plugins’ secrets the user chose on this machine, and takes it back, with what it holds', async () => {
+    let chosen = true;
+    const b = fakeBackend({
+      plugins_list: () => [DEEPGRAM],
+      plugin_seed_offers: () => [],
+      secrets_file: () => ({
+        chosen,
+        path: '/home/ada/.escouade/plugin-secrets.json',
+        keychain: false,
+        secrets: chosen ? [{ plugin: 'dev.escouade.deepgram', pluginName: 'Deepgram', key: 'key' }] : [],
+      }),
+      secrets_file_remove: () => {
+        chosen = false;
+        return null;
+      },
+    });
+    render(SettingsModal, { page: 'plugins' });
+    const kept = await screen.findByRole('region', { name: 'Secrets gardés dans un fichier' });
+    expect(kept).toHaveTextContent('Ce poste n’a pas de trousseau système');
+    expect(kept).toHaveTextContent('/home/ada/.escouade/plugin-secrets.json');
+    expect(kept).toHaveTextContent('key, de Deepgram');
+    // Taken back after a confirmation that says its secrets go.
+    await userEvent.click(within(kept).getByRole('button', { name: 'Retirer le fichier' }));
+    const confirm = within(kept).getByRole('group', { name: 'Retirer le fichier' });
+    expect(confirm).toHaveTextContent('Ses secrets sont effacés');
+    expect(b.called('secrets_file_remove')).toHaveLength(0);
+    await userEvent.click(within(confirm).getByRole('button', { name: 'Retirer et effacer' }));
+    expect(b.called('secrets_file_remove')).toHaveLength(1);
+    await expect.poll(() => screen.queryByRole('region', { name: 'Secrets gardés dans un fichier' })).toBeNull();
+  });
+
+  it('shows the file a policy denies with its padlock, still to take back', async () => {
+    setLocks({
+      locks: {
+        'secrets.fileFallback': { key: 'secrets.fileFallback', value: false, by: { kind: 'team', team: 'Acme' }, bounds: [] },
+      },
+      rows: {},
+      warnings: [],
+    } as unknown as Locks);
+    fakeBackend({
+      plugins_list: () => [DEEPGRAM],
+      plugin_seed_offers: () => [],
+      secrets_file: () => ({
+        chosen: true,
+        path: '/home/ada/.escouade/plugin-secrets.json',
+        keychain: true,
+        secrets: [{ plugin: 'dev.escouade.deepgram', pluginName: 'Deepgram', key: 'key' }],
+      }),
+    });
+    render(SettingsModal, { page: 'plugins' });
+    const kept = await screen.findByRole('region', { name: 'Secrets gardés dans un fichier' });
+    expect(within(kept).getByTestId('secrets-file-lock')).toHaveTextContent('Imposé par l’équipe Acme : ce fichier n’est plus lu.');
+    expect(within(kept).getByRole('button', { name: 'Retirer le fichier' })).toBeInTheDocument();
+    setLocks(undefined);
+  });
+
+  it('says nothing of a file the user did not choose', async () => {
+    fakeBackend({
+      plugins_list: () => [DEEPGRAM],
+      plugin_seed_offers: () => [],
+      secrets_file: () => ({ chosen: false, path: '/x', keychain: true, secrets: [] }),
+    });
+    render(SettingsModal, { page: 'plugins' });
+    await screen.findByRole('region', { name: 'Installés' });
+    expect(screen.queryByRole('region', { name: 'Secrets gardés dans un fichier' })).toBeNull();
   });
 });

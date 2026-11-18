@@ -53,6 +53,8 @@ const ANSWERS: Record<string, unknown> = {
   claude_memory_offer: [],
   target_cis: {},
   overview_prs: [],
+  // An agent's worktree with nothing to lose (« Supprimer l'agent », ESC-511).
+  delete_loss: { known: true, dirty: 0, names: [], unmerged: 0, base: 'main' },
 };
 
 /** What the backend answers by default from the arguments of a call. */

@@ -32,8 +32,8 @@ use std::sync::Arc;
 
 /// The bytes of a file `get_ticket_file` gives unless asked for more, and the most it gives: those
 /// of `get_background_output` (Claude Code refuses an answer of more than about 25,000 tokens).
-const READ_DEFAULT: usize = 8192;
-const READ_MAX: usize = 65_536;
+pub(super) const READ_DEFAULT: usize = 8192;
+pub(super) const READ_MAX: usize = 65_536;
 
 /// What is read of a file at a time while it is copied into the drafts.
 const CHUNK: usize = 1 << 20;
@@ -178,19 +178,19 @@ pub(super) fn listed(dir: &Path, files: &[TicketFile]) -> Vec<FileView> {
 
 /// A part of a file, as `get_ticket_file` gives it.
 #[derive(Debug, PartialEq)]
-struct Piece {
+pub(super) struct Piece {
     /// Where it starts in the file, in bytes.
-    offset: u64,
+    pub(super) offset: u64,
     /// "text" (UTF-8, cut at characters) or "base64".
-    encoding: &'static str,
-    content: String,
+    pub(super) encoding: &'static str,
+    pub(super) content: String,
     /// How many bytes of the file it holds.
-    length: usize,
+    pub(super) length: usize,
 }
 
 /// What `bytes`, read at `offset` of a file of `size` bytes, is given as: its text when it is text
 /// (UTF-8 without a NUL), the characters a cut split at either end left out; else its base64.
-fn piece(bytes: Vec<u8>, offset: u64, size: u64) -> Piece {
+pub(super) fn piece(bytes: Vec<u8>, offset: u64, size: u64) -> Piece {
     let end = offset + bytes.len() as u64;
     // A cut at the start may fall in a character: its last bytes are skipped (3 at most).
     let skip = if offset > 0 {
@@ -229,7 +229,11 @@ fn piece(bytes: Vec<u8>, offset: u64, size: u64) -> Piece {
 
 /// `max` bytes of the file at `path` from `offset`, or its last `max` bytes without one; with its
 /// size.
-fn read_part(path: &Path, offset: Option<u64>, max: usize) -> std::io::Result<(Vec<u8>, u64, u64)> {
+pub(super) fn read_part(
+    path: &Path,
+    offset: Option<u64>,
+    max: usize,
+) -> std::io::Result<(Vec<u8>, u64, u64)> {
     let mut file = File::open(path)?;
     let size = file.metadata()?.len();
     let start = match offset {

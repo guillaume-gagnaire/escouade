@@ -21,6 +21,9 @@ mod agentprs_tests;
 mod agy_tests;
 #[cfg(test)]
 mod agy_tui_tests;
+mod asks;
+#[cfg(test)]
+mod asks_tests;
 mod attach;
 mod attachfiles;
 #[cfg(test)]
@@ -59,6 +62,9 @@ mod cursor_tui_tests;
 mod deeplink;
 #[cfg(test)]
 mod deeplink_tests;
+mod deleteask;
+#[cfg(test)]
+mod deleteask_tests;
 mod deploys;
 #[cfg(feature = "desktop")]
 mod desktop;
@@ -178,6 +184,9 @@ mod remoteapi_tests;
 use escouade_plan::{plan, planfiles};
 // The data and what it names, the processes and WSL: the crate `escouade-model` (`model` and `paths` re-export theirs).
 use escouade_model::{agentgroups, heat, job, pricing, proc, wsl};
+mod plugin_secrets;
+#[cfg(test)]
+mod plugin_secrets_tests;
 mod plugins;
 #[cfg(test)]
 mod plugins_accounts_tests;

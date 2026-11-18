@@ -153,4 +153,4 @@ The seal of an installed plugin is checked again on your machine, with the `vers
 
 ## The developer mode
 
-In development, “Load a folder…” reads a plugin’s folder where it is, without a copy or a fingerprint, and reads it again as soon as a file changes. Its journal is read live in the Journal tab. See [the manifest](plugins/manifest) and [the protocol](plugins/api) to write one.
+In development, “Load a folder…” reads a plugin’s folder where it is, without a copy or a fingerprint, and reads it again as soon as a file changes. A plugin in Rust runs there on the last module `escouade-plugin build` wrote for the version of its manifest (`packs/<id>-<version>.wasm`), a plugin in JS/TS on its bundle (`npm run build`); a folder not built yet is refused, and the refusal says what to run. Its journal is read live in the Journal tab. See [the manifest](plugins/manifest) and [the protocol](plugins/api) to write one.

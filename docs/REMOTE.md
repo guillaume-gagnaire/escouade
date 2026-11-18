@@ -272,6 +272,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `create_agent_on_pr`
 - `data_dir`
 - `delete_agent`
+- `delete_loss` : ce que perdrait la suppression qu’un agent demande (PR 44, ESC-511), lu par git sur la machine du cœur
 - `discover_act`
 - `discover_view`
 - `discussion_drop`
@@ -352,6 +353,18 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `harness_plugin_of`
 - `harness_scope`
 - `http_ready`
+- `inbox_answer` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur ; les fichiers de la réponse arrivent par `attach_*`, en octets bruts
+- `inbox_closing` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
+- `inbox_delegate` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
+- `inbox_erase_closed_files` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur : les fichiers effacés sont ceux du cœur
+- `inbox_file` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur : une part d’un fichier en base64, pour la fenêtre
+- `inbox_file_bytes` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur : un fichier entier en octets bruts (trames binaires, en parties au-delà de 16 Mo, ESC-495)
+- `inbox_get` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
+- `inbox_list` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
+- `inbox_reopen` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
+- `inbox_seen` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
+- `inbox_snooze` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
+- `inbox_weight` : la boîte « À toi » (ESC-509) : l’écran du téléphone, servi sur le cœur
 - `integrate_base`
 - `integration_connect`
 - `integration_containers`
@@ -394,6 +407,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `plugin_need_engine`
 - `plugin_remove`
 - `plugin_run`
+- `plugin_secret_move` : les secrets des plugins gardés dans un fichier (ESC-499) : le fichier et le trousseau de la machine du cœur
 - `plugin_secrets`
 - `plugin_seed_offers`
 - `plugin_set_enabled`
@@ -433,6 +447,7 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `refresh_repos`
 - `refresh_usage`
 - `refresh_workflows`
+- `refuse_delete` : la suppression qu’un agent demande, refusée sur sa carte (ESC-511)
 - `remote_image`
 - `remove_project`
 - `remove_workflow_file`
@@ -449,6 +464,8 @@ Elles agissent sur le cœur, quelle que soit la machine du client :
 - `scheduled_preview`
 - `scheduled_update`
 - `search_conversations`
+- `secrets_file` : les secrets des plugins gardés dans un fichier (ESC-499) : le fichier et le trousseau de la machine du cœur
+- `secrets_file_remove` : les secrets des plugins gardés dans un fichier (ESC-499) : le fichier et le trousseau de la machine du cœur
 - `send_message`
 - `sent_files`
 - `set_agent_account`
@@ -658,6 +675,7 @@ Elles ne marchent pas encore telles quelles : refusées avec l'erreur `not-serve
 - `clipboard_image` : lu sur la machine du cœur : lu par le client et envoyé en mode serveur
 - `file_origin` : l’origine d’un fichier déposé sur le poste (Windows) : lue par le client et envoyée en mode serveur
 - `fs_reveal` : ouvert sur la machine du cœur : téléchargé sur le poste en mode serveur
+- `inbox_open_file` : ouvert sur la machine du cœur : téléchargé sur le poste en mode serveur (`inbox_file_bytes` le sert déjà)
 - `lsp_log` : les serveurs de langage de l’éditeur : leurs messages à la fenêtre deviendront des événements
 - `lsp_release` : les serveurs de langage de l’éditeur : leurs messages à la fenêtre deviendront des événements
 - `lsp_release_view` : les serveurs de langage de l’éditeur : leurs messages à la fenêtre deviendront des événements

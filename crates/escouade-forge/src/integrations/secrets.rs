@@ -95,35 +95,47 @@ impl SecretStore for Keychain {
     }
 }
 
-/// No keychain the app knows of (Linux): the secrets stay in the file.
-#[cfg(all(
-    not(any(test, feature = "testing")),
-    not(any(windows, target_os = "macos"))
-))]
-struct NoKeychain;
+/// No keychain the app knows of (Linux, WSL): nothing is kept there (`NoKeychain`, which the window says), the
+/// accounts' secrets stay in their file, a plugin's go to `kept`'s file once the user chose it (ESC-499).
+#[cfg(not(any(test, feature = "testing")))]
+struct Absent;
 
-#[cfg(all(
-    not(any(test, feature = "testing")),
-    not(any(windows, target_os = "macos"))
-))]
-impl SecretStore for NoKeychain {
+#[cfg(not(any(test, feature = "testing")))]
+impl SecretStore for Absent {
     fn get(&self, _name: &str) -> Result<Option<String>> {
         Ok(None)
     }
 
     fn set(&self, _name: &str, _secret: &str) -> Result<()> {
-        bail!("no system keychain here")
+        Err(escouade_plugins::secrets::NoKeychain.into())
     }
 
     fn delete(&self, _name: &str) -> Result<()> {
         Ok(())
     }
+
+    fn present(&self) -> bool {
+        false
+    }
+}
+
+/// A sandboxed run (end-to-end tests, demos) told `ESCOUADE_TEST_KEYCHAIN=absent` plays a system without a keychain, on
+/// every system: never the user's own run, whose keychain is the system's, nor a published app (SEC-13: a build of
+/// development alone reads it).
+#[cfg(not(any(test, feature = "testing")))]
+fn sandbox_without_keychain() -> bool {
+    cfg!(debug_assertions)
+        && paths::sandbox_dir().is_some()
+        && std::env::var("ESCOUADE_TEST_KEYCHAIN").is_ok_and(|v| v == "absent")
 }
 
 /// The store of the accounts of `data`: the system's keychain (the same for every folder, a
 /// sandboxed run's service apart).
 #[cfg(all(not(any(test, feature = "testing")), any(windows, target_os = "macos")))]
 pub fn store_for(_data: &DataDir) -> Arc<dyn SecretStore> {
+    if sandbox_without_keychain() {
+        return Arc::new(Absent);
+    }
     Arc::new(Keychain {
         service: keychain_service(paths::sandbox_dir().is_some()),
     })
@@ -134,7 +146,8 @@ pub fn store_for(_data: &DataDir) -> Arc<dyn SecretStore> {
     not(any(windows, target_os = "macos"))
 ))]
 pub fn store_for(_data: &DataDir) -> Arc<dyn SecretStore> {
-    Arc::new(NoKeychain)
+    let _ = sandbox_without_keychain();
+    Arc::new(Absent)
 }
 
 /// The secrets in memory (tests), in `escouade-plugins` (feature `testing`).

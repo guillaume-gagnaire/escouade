@@ -34,7 +34,10 @@ Le plugin ACP, ou le plugin qui décrit le harness, est coupé, désinstallé ou
 L’agent a touché un fichier lui-même alors qu’une clôture tient. Le message vient une fois par agent. Ce n’est pas une erreur du plugin : c’est la limite de ce harness.
 
 **« La session {harness} n’a pas pu être reprise : nouvelle session (contexte vidé) »**
-L’agent n’a pas retrouvé sa session. Il continue, sans le contexte d’avant.
+L’agent n’a pas retrouvé sa session. Il continue, sans le contexte d’avant ; la ligne ajoute « Ses consignes lui sont redonnées avec son prochain message » quand il en a (le protocole d’un ticket), et « un résumé de ce qu’il a fait » quand Escouade le sait.
+
+**« {harness} ne reprend pas sa session : l’agent repart d’une session neuve. »**
+Le harness ne recharge pas de session (`loadSession: false`), et son manifeste ne dit pas comment la reprendre (`acp.resume`). Après un redémarrage, l’agent continue sur une session neuve, ses consignes et un résumé redonnés avec son prochain message.
 
 **« {harness} : {erreur} »**
 L’agent a fini le tour en erreur, ou refusé un réglage (`session/set_mode: …`, le modèle), avec ses propres mots.

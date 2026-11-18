@@ -311,6 +311,8 @@ async fn the_projects_are_listed_with_their_branch_agents_and_tickets_by_column(
             "efforts": ["low", "medium", "high", "xhigh", "max"],
             // Of no team (TS-7).
             "team": { "attached": false, "board": false },
+            // The accounts a new agent may go to (`create_agent`'s `account`).
+            "accounts": [{ "id": "principal", "name": "Principal" }],
         })
     );
     assert_eq!(projects.as_array().unwrap().len(), 2);

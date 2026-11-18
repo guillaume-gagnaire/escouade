@@ -279,6 +279,7 @@ fn naming_calls() -> Vec<(&'static str, Names, Value)> {
             json!({ "agent": "{}", "text": "Bonjour" }),
         ),
         ("stop_agent", Names::Agent, json!({ "agent": "{}" })),
+        ("delete_agent", Names::Agent, json!({ "agent": "{}" })),
         (
             "move_agent",
             Names::Agent,
@@ -386,7 +387,17 @@ async fn every_tool_that_names_something_is_in_the_tests_of_the_private_projects
     // A tool added to the server is named here, or said to name nothing.
     // The Overseer's own tools (ESC-462) are refused to every other caller: `overseer_tests` checks that they see no
     // private project.
+    // The tools of the box name a request (their own private tests: `asks_tests`); `ask_user` and
+    // `list_asks` a project too.
     let names_nothing = [
+        "answer_ask",
+        "ask_user",
+        "get_ask",
+        "get_ask_file",
+        "list_asks",
+        "update_ask",
+        "wait_ask",
+        "withdraw_ask",
         "list_projects",
         "get_usage",
         // Counts only; the closed projects summed up, never by name nor id (`list_backups_gives_the_copies_and_their_counts_never_a_name_nor_a_path`).

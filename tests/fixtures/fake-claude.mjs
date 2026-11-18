@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Test double of the `claude` CLI in `--input-format/--output-format stream-json` mode.
 // It replays the frame shapes documented in docs/PROTOCOL.md. The user message text picks the
-// scenario: "[artefact]" (an artifact published, or its skill unknown without CLAUDE_CODE_ARTIFACT; ESC-400), "question", "permission", "edit", "slow", "crash", "grandchild", "raisonnement" (a thinking block
+// scenario: "[demande]" (a request left in the box « À toi » through ask_user, ESC-509), "[artefact]" (an artifact published, or its skill unknown without CLAUDE_CODE_ARTIFACT; ESC-400), "question", "permission", "edit", "slow", "crash", "grandchild", "raisonnement" (a thinking block
 // before the reply), "[refus]" (a safeguard refuses the turn, and every turn after it while the conversation holds that
 // message, the resumed session's read up to `--resume-session-at`; ESC-416); anything else is a
 // plain reply ("grandchild" starts a program that lasts a minute in its folder, and says its pid; with
@@ -2729,10 +2729,56 @@ function startSession() {
     next();
   }
 
+  // [demande] (ESC-509): the renders and the PDF written in its folder, then a choice of three options left by ask_user.
+  function askTurn() {
+    const png = Buffer.from('89504e470d0a1a0a0000000d4948445200000001', 'hex');
+    const dir = path.join(process.cwd(), 'design');
+    fs.mkdirSync(dir, { recursive: true });
+    for (const n of ['a', 'b', 'c']) {
+      fs.writeFileSync(path.join(dir, `${n}.png`), png);
+      fs.writeFileSync(path.join(dir, `${n}-clair.png`), png);
+    }
+    fs.writeFileSync(path.join(dir, 'etude.pdf'), Buffer.from('%PDF-1.7\n%\xE2\xE3\xCF\xD3\n', 'latin1'));
+    const renders = (n) => [{ path: `design/${n}.png` }, { path: `design/${n}-clair.png` }];
+    escouadeTool('ask_user', {
+      kind: 'choice',
+      title: 'Choisis la direction du tableau de bord',
+      body: 'J’ai rendu trois directions, en sombre et en clair.',
+      options: [
+        { label: 'Colonnes de chiffres', files: renders('a') },
+        { label: 'Cartes empilées', files: renders('b') },
+        { label: 'Tableau dense', files: renders('c') },
+      ],
+      recommend: { option: 'b', why: 'Les adhérents arrivent du mobile.' },
+      unblocks: 'Le reste du tableau démarre sur la direction choisie',
+      files: [{ path: 'design/etude.pdf' }],
+    })
+      .then((r) => {
+        const left = JSON.parse(r.content[0].text);
+        streamText(`Demande ${left.id} déposée (${left.files} fichiers), je continue mon travail.`);
+        result();
+      })
+      .catch((e) => {
+        streamText(`ask_user a échoué : ${e.message}`);
+        result();
+      });
+  }
+
   function onUser(text) {
     out({ type: 'system', subtype: 'init', session_id: sessionId, model, cwd: process.cwd(), permissionMode: 'default' });
     const demo = demoTurn(text);
     if (demo) return playDemo(demo);
+    // The box « À toi » (ESC-509): [demande] leaves a choice of three options, each with its renders (dark and light) by
+    // their path in its folder, and a PDF of its own, through Escouade's tools (its --mcp-config server), then ends its turn
+    // as an agent that goes on working; the answer that comes back to it is said.
+    if (text.includes('[demande]')) return askTurn();
+    if (text.startsWith('[Escouade · ta demande') || text.startsWith('[Escouade · your request')) {
+      const id = text.match(/(a-\d+)/)?.[1];
+      const chosen = text.match(/(?:a choisi|chose) ([A-F]) ·/)?.[1] ?? '?';
+      streamText(`Réponse reçue pour ${id} : ${chosen}`);
+      result();
+      return;
+    }
     const attached = [...text.matchAll(/^(?:Fichier joint : |Attached file: )(.+), (.+)$/gm)].map((m) => ({
       name: m[1],
       file: m[2].trim(),

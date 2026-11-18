@@ -88,6 +88,8 @@
       <string>http://proxy.example.com:3128</string>
       <key>remoteControl.enabled</key>
       <false/>
+      <key>secrets.fileFallback</key>
+      <false/>
       <key>servers.aggregateView</key>
       <false/>
       <key>servers.allowed</key>

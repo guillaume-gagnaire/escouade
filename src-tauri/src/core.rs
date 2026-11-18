@@ -836,6 +836,8 @@ pub struct AgentOptions {
     pub copy_of: Option<CopyOf>,
     /// The Claude account it runs on (an `Account`'s id); None: Principal.
     pub account: Option<String>,
+    /// The agent that asks for it through `create_agent` (`AgentMeta::created_by`).
+    pub created_by: Option<String>,
     /// A worktree of its own (true) or the project's folder (false), whatever the project does by
     /// default; None: as the project does. `worktree` and `copy_of` name theirs and win.
     pub isolated: Option<bool>,
@@ -1000,6 +1002,8 @@ pub struct Core {
     pub(crate) schedule_clock: crate::scheduled::Clock,
     /// The Overseer (ESC-462): its instructions, its journal, the events that wake it.
     pub(crate) overseer: crate::overseer_core::Hub,
+    /// The agents' asynchronous requests (« À toi », ESC-509): `asks`.
+    pub(crate) asks: Mutex<crate::asks::AskBox>,
     /// Serializes agent creation so that concurrent creations get distinct names.
     create_lock: tokio::sync::Mutex<()>,
     conv_buffer: Mutex<HashMap<String, Vec<ConvOp>>>,
@@ -1086,8 +1090,11 @@ pub struct Core {
     pub(crate) claude_accounts_lock: Mutex<()>,
     /// The accounts of the external ticket systems (`integrations.json`), with their secrets.
     pub accounts: RwLock<integrations::Accounts>,
-    /// Where the accounts' secrets are kept: the system's keychain (memory in tests).
+    /// Where the secrets are kept: the system's keychain (memory in tests), and the file the user chose for the
+    /// plugins' secrets where there is none (`kept`, ESC-499), read first.
     pub(crate) secrets: Arc<dyn integrations::secrets::SecretStore>,
+    /// The same store, with what the file holds and the gestures on it (Réglages › Plugins, a plugin's settings).
+    pub(crate) kept: Arc<integrations::kept::Kept>,
     /// Where the Trello and GitHub APIs are.
     pub bases: RwLock<integrations::Bases>,
     /// The GitHub CLI's token, once asked for.
@@ -1974,6 +1981,10 @@ impl Core {
         let pr_reviews = std::mem::take(&mut state.pr_reviews);
         let scheduled = std::mem::take(&mut state.scheduled);
         let onboarding = std::mem::take(&mut state.onboarding);
+        let asks = crate::asks::AskBox {
+            list: std::mem::take(&mut state.asks),
+            seq: state.ask_seq,
+        };
         closed::retry_leftovers(&data, &mut leftover);
         // The folder of the closed projects is read here, once: the index (`closed_index`) keeps
         // what the app needs of it from now on.
@@ -2023,6 +2034,8 @@ impl Core {
             m.resume_at = None;
             m.port_base = None;
         }
+        // A deletion asked by an agent that is no more (its project closed since) goes (ESC-511).
+        crate::deleteask::prune(&mut state.agents);
         let mut tickets = state.tickets;
         for t in &mut tickets {
             // A validation the app's stop cut: to run again by hand.
@@ -2044,10 +2057,16 @@ impl Core {
                 )
             })
             .collect();
-        // The host's store when it has one (`escouade-server`: a file, ESC-514), else the system's keychain.
-        let secrets = host
-            .secrets()
-            .unwrap_or_else(|| integrations::secrets::store_for(&data));
+        // The host's store when it has one (`escouade-server`: a file, ESC-514), else the system's keychain; and the file
+        // the user may choose for the plugins' secrets (ESC-499).
+        let kept = Arc::new(integrations::kept::Kept::new(
+            host.secrets()
+                .unwrap_or_else(|| integrations::secrets::store_for(&data)),
+            &data,
+        ));
+        // Denied by this device's policy from the start (ESC-520): no plugin reads the file (`apply_locks` after).
+        kept.deny(locks.check_secrets_file().err().map(|e| e.to_string()));
+        let secrets: Arc<dyn integrations::secrets::SecretStore> = kept.clone();
         let accounts = integrations::secrets::load_accounts(
             &data,
             &*secrets,
@@ -2200,6 +2219,7 @@ impl Core {
             scheduled_lock: tokio::sync::Mutex::new(()),
             schedule_clock: crate::scheduled::Clock::from_env(),
             overseer,
+            asks: Mutex::new(asks),
             create_lock: tokio::sync::Mutex::new(()),
             conv_buffer: Mutex::default(),
             conv_flush: tokio::sync::Notify::new(),
@@ -2241,6 +2261,7 @@ impl Core {
             claude_accounts_lock: Mutex::default(),
             accounts: RwLock::new(accounts),
             secrets,
+            kept,
             bases: RwLock::new(integrations::Bases::from_env()),
             gh_token: Mutex::default(),
             forges: RwLock::new(crate::forge::Registry::standard()),
@@ -2545,6 +2566,8 @@ impl Core {
         if !cfg!(test) {
             self.watch_policies();
         }
+        // The box « À toi » as the stop left it: what came due meanwhile (ESC-509).
+        self.asks_sweep();
         // The plugins that decide run before the first permission asked (PLG-8).
         crate::plugins::decide::warm(&self.plugins, &self.plugin_runtime);
         self.telemetry.track(self.started_event());
@@ -2652,6 +2675,10 @@ impl Core {
                 c.pause_tick();
                 // A failed sync of an imported ticket, once its wait is over.
                 c.retry_due_syncs();
+                // The box « À toi »: requests back from « Plus tard », past their date or taken out, and
+                // answers whose 10 seconds were cut by a stop (ESC-509).
+                c.asks_sweep();
+                c.deliver_answers().await;
             }
         });
         // The scheduled tasks' due times (ESC-448): looked at once the app is up, then often
@@ -2739,6 +2766,10 @@ impl Core {
         });
         let scheduled = self.scheduled.read().clone();
         let onboarding = self.onboarding.read().clone();
+        let (asks, ask_seq) = {
+            let b = self.asks.lock();
+            (b.list.clone(), b.seq)
+        };
         PersistedState {
             projects,
             agents,
@@ -2752,6 +2783,8 @@ impl Core {
             pr_reviews,
             scheduled,
             onboarding,
+            asks,
+            ask_seq,
         }
     }
 
@@ -3958,6 +3991,11 @@ impl Core {
             .then(|| self.takes_effort(rt.meta.engine, &account.id, &rt.meta.model));
             (spawn, rt.gen, engine::of(&rt.meta))
         };
+        // A session to resume that its harness may not take back (ESC-491): what the agent did so far goes with it, for
+        // a new one in its place.
+        if engine.takes_recap() && matches!(spawn.start, crate::engine::Start::Resume { .. }) {
+            spawn.recap = self.recap_of(h).await;
+        }
         // A relay its interface left in its folder (the app stopped in « Vue Cursor »).
         self.clear_stale_relay(h);
         // A configuration folder of the agent's own (Cursor: what its « Toujours » keeps).
@@ -5705,6 +5743,23 @@ impl Core {
             .await
     }
 
+    /// The answer to a request of the box « À toi » (ESC-509), to its author: the conversation shows it as
+    /// such (`origin`: "ask"); it wakes the agent at rest, and reaches it during its turn as a message
+    /// typed then does. Never naming the agent.
+    pub(crate) async fn send_ask_answer(self: &Arc<Self>, id: &str, text: String) -> Result<()> {
+        self.send(
+            id,
+            None,
+            text,
+            Vec::new(),
+            Vec::new(),
+            false,
+            false,
+            Some("ask"),
+        )
+        .await
+    }
+
     /// The handover file (`handover`), the first message of the agent on the harness it goes on
     /// on: its conversation shows it as such (`origin`: "handover"), folded. A ticket's agent
     /// that cannot get it blocks its ticket.
@@ -5775,9 +5830,16 @@ impl Core {
         // Its worktree went to another branch since it was last told (`agentbranch`): the agent
         // reads it first, the conversation shows the message alone.
         let note = self.branch_note(id);
-        let with_note = |text: &str| match &note {
-            Some((_, n)) => format!("{n}\n\n{text}"),
-            None => text.to_string(),
+        // The deletions it asked for that the user refused since (`deleteask`, ESC-511): read
+        // first too, once.
+        let refused = self.refusal_note(id);
+        let with_note = |text: &str| {
+            let notes = [note.as_ref().map(|n| &n.1), refused.as_ref().map(|r| &r.1)];
+            notes
+                .into_iter()
+                .flatten()
+                .rev()
+                .fold(text.to_string(), |text, n| format!("{n}\n\n{text}"))
         };
         if h.lock().meta.terminal {
             if !attachments.is_empty() || !files.is_empty() {
@@ -5847,6 +5909,9 @@ impl Core {
             if self.deliver(id, &proc, &delivered, naming, &content, &attachments, kind)? {
                 if let Some((mv, _)) = &note {
                     self.branch_told(id, mv);
+                }
+                if let Some((names, _)) = &refused {
+                    self.refusals_told(id, names);
                 }
                 // Named before it ran: its session takes the name.
                 if lazy && h.lock().meta.named {
@@ -6926,6 +6991,7 @@ impl Core {
             ),
             port_base: o.port_base,
             discussion: o.discussion.clone(),
+            created_by: o.created_by.clone(),
             ..Default::default()
         };
         // The one asked for if the settings know it as an account of the agent's harness
@@ -8698,6 +8764,8 @@ impl Core {
             project_id: pid.clone(),
         });
         self.layout_hook(&pid, |p| crate::folders::remove_agent(p, id));
+        // The deletions it asked for go with it (ESC-511).
+        self.drop_asks_by(id);
         self.request_save();
         self.update_tray();
         self.stop_test_runs(id);
@@ -9754,6 +9822,8 @@ impl Core {
                     env.down_later(wt.path);
                 }
             }
+            // The deletions it asked for in other projects go with it (ESC-511).
+            self.drop_asks_by(&aid);
             self.hub.emit(UiEvent::AgentRemoved {
                 id: aid,
                 project_id: id.to_string(),

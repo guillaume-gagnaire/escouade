@@ -467,7 +467,7 @@ async fn a_module_of_the_seed_is_precompiled_at_its_activation_not_at_the_start(
     rt.prepare_all();
     let folder = PathBuf::from(plugins.get(TRELLO, Lang::Fr).unwrap().folder);
     let (_, made) = Modules::new(&data, "2.2.0")
-        .prepare_reactor(&folder)
+        .prepare_reactor(&folder, None)
         .expect("precompiled");
     assert_eq!(made, Made::Precompiled, "the start did not do it");
 }

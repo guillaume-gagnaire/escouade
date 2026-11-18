@@ -52,8 +52,10 @@ describe('the folders of this repository', () => {
       'discord',
       'goose',
       'high-contrast',
+      'prime-agent',
       'slack',
       'team-rules',
+      'unharnessed',
     ]);
     expect(all.filter((p) => p.version === '0.0.0')).toEqual([]);
   });

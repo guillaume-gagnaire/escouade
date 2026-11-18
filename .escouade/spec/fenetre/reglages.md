@@ -2,7 +2,7 @@
 title: "Réglages"
 subject: "Fenêtre"
 sources: ["docs/SPEC.md","design/settings-2-2/PROPOSITION.md","design/settings-2-2/CONSTRUCTION.md","design/settings-2-2/index.html","design/settings-2-2/captures/a-plugins.png","design/settings-2-2/captures/a-projet.png","design/settings-2-2/captures/a-comptes.png"]
-tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-462","ESC-468","ESC-504"]
+tickets: ["ESC-378","ESC-379","ESC-380","ESC-381","ESC-382","ESC-383","ESC-384","ESC-385","ESC-386","ESC-407","ESC-417","ESC-462","ESC-468","ESC-504","ESC-499"]
 decisions: [118,119,120,121,123,124,126,145,147,181]
 compared: null
 ---
@@ -187,3 +187,11 @@ Le tableau des plugins, côté réglages, et le seul endroit des réglages où l
 
 - Dans Général › « Toi », sous « Statistiques d'usage » : « Premier lancement », « Revoir le harness, le compte, le mode des nouveaux agents et les statistiques. Rien n'est remis à zéro. », et « Refaire le premier lancement », qui ferme la fenêtre des réglages et rouvre le parcours depuis sa première station (voir *Premier lancement*).
 - Ce que le parcours écrit est ce qu'écrivent ces pages, par les mêmes appels : « Ordre des harness » et les comptes (Comptes et harness), « Mode par défaut des agents » (Agents), « Statistiques d'usage » (Général).
+
+### Plugins › Secrets gardés dans un fichier (ESC-499)
+
+Sur la page Plugins, entre « Proposés par Escouade » et « Sécurité », seulement quand l'utilisateur a choisi « Garder dans un fichier lisible de toi seul » sur ce poste (voir *Les plugins : vue d'ensemble*, « Les secrets d'un plugin ») :
+
+- **La note** dit où est le fichier et ce qu'il est. Sans trousseau : « Ce poste n’a pas de trousseau système : tu as choisi de garder les secrets des plugins dans <chemin>, en clair, lisible de ton seul compte. Jamais copié dans les sauvegardes de l’état. ». Avec un trousseau arrivé depuis, elle renvoie à « Déplacer vers le trousseau » sur la page de chaque plugin.
+- **La liste** donne un secret par ligne, sa clé et le nom de son plugin (« token, de Faux plugin »), jamais sa valeur. Si le fichier est vide : « Aucun secret dedans pour l’instant. ».
+- **« Retirer le fichier »**, à droite du titre, demande une confirmation sur place : « Retirer le fichier ? Ses secrets sont effacés : il faudra les saisir à nouveau. », avec « Annuler » et « Retirer et effacer ». Retiré, le fichier disparaît avec ses secrets, le groupe aussi, et le choix est à refaire au champ.

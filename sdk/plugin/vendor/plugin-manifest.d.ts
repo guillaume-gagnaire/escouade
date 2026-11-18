@@ -29,7 +29,9 @@ export interface ManifestError {
     | 'command'
     | 'readOnly'
     | 'variable'
-    | 'interpreter';
+    | 'interpreter'
+    | 'pointer'
+    | 'session';
   /** The type, or the values, the field takes, for `type` and `enum`. */
   expected?: string;
 }
@@ -69,6 +71,8 @@ export const RESERVED_PREFIX: string;
 export const ESCOUADE_DIR: string;
 export const ICON_MIN: number;
 export const ICON_BYTES: number;
+/** The fields known, object by object (`''` the manifest itself): the properties of plugin-1.json. */
+export const FIELDS: Readonly<Record<string, readonly string[]>>;
 /** An icon's path as the folder's files are named: `/` between its parts, without `./` in front. */
 export function iconPath(path: string): string;
 /** What is wrong with an icon's bytes, from its header alone. */

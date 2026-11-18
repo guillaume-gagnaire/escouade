@@ -106,7 +106,7 @@ A program is one of the three, never two:
   "run": { "js": "dist/plugin.mjs" },
 ```
 
-- `wasm`: the `Cargo.toml` of a plugin in Rust, never a binary. The store compiles it into a module, beside the manifest as `plugin.wasm`; the window says the same as for `js`, and the same [capabilities](plugins/capabilities) apply (see [the Rust kit](plugins/rust)):
+- `wasm`: the `Cargo.toml` of a plugin in Rust, never a binary. The store compiles it into a module, beside the manifest as `plugin.wasm` (in development, `escouade-plugin build` writes it into `packs/`, where Escouade takes it); the window says the same as for `js`, and the same [capabilities](plugins/capabilities) apply (see [the Rust kit](plugins/rust)):
 
 `sdk/create-escouade-plugin/templates/rust/escouade-plugin.json` (excerpt)
 
@@ -127,10 +127,10 @@ An absolute path, or one that climbs up with `..`, is refused: a plugin only sta
 - `accounts`: a kind of account, shared by its other points;
 - `ticketSources`, `forges` and `harnesses`: a source of the Kanban, a code host, a harness; each with an `id`, and the account it uses (`account`) among those of `accounts`;
 - `launchEnvironments`: a launch environment, which handles `up`, `ls`, `down` and `destroy` of a worktree and its services; for now reserved to Escouade’s plugins (isola);
-- `workflowReaders`: a reader of workflows, to teach Escouade a workflow it does not read by itself. Each has an `id` and `files`, the globs (from the project’s folder, without `..`) of the files it is given; see [The workflow reader](plugins/events#the-workflow-reader);
+- `workflowReaders`: a reader of workflows, to teach Escouade a workflow it does not read by itself (the contract is set, but **Escouade does not call it yet**). Each has an `id` and `files`, the globs (from the project’s folder, without `..`) of the files it is given; see [The workflow reader](plugins/events#the-workflow-reader);
 - `themes`: themes, described in [Themes](plugins/themes);
 - `webhooks` and `commands`: a webhook or a command on a fact, described in [Events](plugins/events);
-- `menus`, `statusBar`, `badges`, `projectTemplates` and `escouadeYml`: described with the versions that bring them in.
+- `menus`, `statusBar`, `badges`, `projectTemplates` and `escouadeYml`: **reserved, not served**. The manifest accepts them and `escouade-plugin validate` judges their shape, but Escouade shows nothing of them and calls nothing of them today: do not write a plugin that counts on them. Only a plugin’s settings in `.escouade.yml` (`plugins.<id>`) are read.
 
 One plugin can hold several points: a GitHub plugin gives its issues to the Kanban and follows its PRs on a single account.
 

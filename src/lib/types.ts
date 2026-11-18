@@ -86,7 +86,7 @@ export interface Settings {
   engineOrder?: EngineId[];
   /** « Les agents peuvent piloter Escouade »: the MCP server runs, given to the agents and declared in each active account of every harness installed. Changed by `mcp_set_enabled`, not by the settings modal's draft. */
   mcpEnabled: boolean;
-  /** « Les agents peuvent répondre aux questions et aux permissions des autres agents » (ESC-423): nobody by default. */
+  /** « Les agents peuvent répondre aux demandes des autres agents » (ESC-423): nobody by default. */
   agentsAnswer?: AgentsAnswer;
   /** The port of the MCP server on 127.0.0.1 (0 until its first start): the backend's own. */
   mcpPort: number;
@@ -1879,6 +1879,11 @@ export interface Agent {
   ticketId: string | null;
   /** What the agent last reported of its work through Escouade's MCP server (120 characters at most), until its next report. */
   progressLine: string | null;
+  /**
+   * The agent that made it asks the user to delete it (`delete_agent`, ESC-511): `by` is that agent's id, `at` since when,
+   * `worktree` the box it asks for (null: as the window has it). Shown on its card until the user confirms or refuses.
+   */
+  deleteAsk?: DeleteAsk;
   /** Its pull requests (ESC-64), as its code host last told them, the ones to merge first: none when its host has no client yet. */
   prs: PullRequest[];
   /** The code host's word for them: « MR » on GitLab, « PR » elsewhere; null until read. */
@@ -2576,8 +2581,8 @@ export interface UserItem extends Base {
   files?: string[];
   ts: number;
   queued: boolean;
-  /** "remote": sent from claude.ai / the Claude app (Remote Control). */
-  origin?: 'remote' | 'handover';
+  /** "remote": sent from claude.ai / the Claude app (Remote Control); "ask": the answer to a request of the box « À toi » (ESC-509). */
+  origin?: 'remote' | 'handover' | 'ask';
 }
 export interface TextItem extends Base {
   kind: 'text';
@@ -2922,6 +2927,8 @@ export type UiEvent =
   | { type: 'agentRemoved'; id: string; projectId: string }
   | { type: 'conv'; agentId: string; ops: ConvOp[] }
   | { type: 'memory'; projectId: string }
+  /** The box « À toi » changed (ESC-509): `inbox_list` reads it again. */
+  | { type: 'inbox'; projectId: string }
   | { type: 'vectorsDownload'; done: number; total: number }
   | { type: 'git'; projectId: string; git: GitInfo }
   /** Files and folders of a project changed on disk, by their absolute path as the watcher saw them; null: too many to tell (ESC-447). */
@@ -4121,6 +4128,22 @@ export type OnboardingAct =
   | { kind: 'finish' }
   | { kind: 'redo' }
   | { kind: 'telemetryAskedAgain' };
+
+/** A deletion an agent asks of the user (`Agent.deleteAsk`): who asks (an agent's id), since when, and for its worktree. */
+export interface DeleteAsk {
+  by: string;
+  at: number;
+  worktree: boolean | null;
+}
+
+/** What deleting an agent's worktree would lose, as git said it in time (`delete_loss`); `known` false: unknown. */
+export interface DeleteLoss {
+  known: boolean;
+  dirty: number;
+  names: string[];
+  unmerged: number;
+  base: string;
+}
 
 /** A feature to discover by doing it (ESC-506, `docs/ONBOARDING.md` § 7), in the order of its map. */
 export type Discovery =

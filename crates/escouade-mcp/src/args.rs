@@ -876,6 +876,14 @@ pub struct CreateAgentArgs {
     )]
     pub model: Option<String>,
     #[schemars(
+        description = "The account of the project's harness the agent runs on, when several are set up: its name (in any case) or its id (list_projects gives the project's accounts), or auto (the default): the project's, else the first usable one. An account its project may not use, or at its usage limit, is refused, with why."
+    )]
+    pub account: Option<String>,
+    #[schemars(
+        description = "The agent's effort (low, medium, high, xhigh or max: those of the harness and of the model, see list_projects), or auto (the default): its account's (a model that takes none, Haiku, goes without)."
+    )]
+    pub effort: Option<String>,
+    #[schemars(
         description = "The folder the new agent goes in (its sidebar folder): its id or its name in any case, made under that name if there is none. Leave it out: your own folder, made for you (named after you) if you have none. An empty string: no folder. Left out, from another project or from outside Escouade: no automatic folder."
     )]
     pub folder: Option<String>,
@@ -903,6 +911,22 @@ pub struct StopAgentArgs {
         description = "The project to look for its name in (two projects may each have an agent of that name): its id, or its name in any case."
     )]
     pub project: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct DeleteAgentArgs {
+    #[schemars(
+        description = "The agent to delete, one you made with create_agent: its id, or its name in any case."
+    )]
+    pub agent: String,
+    #[schemars(
+        description = "The project to look for its name in (two projects may each have an agent of that name): its id, or its name in any case."
+    )]
+    pub project: Option<String>,
+    #[schemars(
+        description = "true: its worktree and its branch go too (a branch that was there before it stays); false: they stay. The user may change it in the window. Leave it out: as the window offers it (they go)."
+    )]
+    pub worktree: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -1129,4 +1153,286 @@ pub struct LeaveToUserArgs {
     pub request: String,
     #[schemars(description = "Why you leave it to the user, in one sentence.")]
     pub why: String,
+}
+
+// ---------- the box « À toi » (ESC-509, docs/INBOX.md § 9) ----------
+
+/// The sort of a request.
+#[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum AskKindArg {
+    Choice,
+    Confirm,
+    Answer,
+    Task,
+}
+
+/// How urgent a request is.
+#[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum UrgencyArg {
+    Normal,
+    Today,
+}
+
+/// Which requests `list_asks` lists.
+#[derive(Debug, Clone, Copy, Deserialize, schemars::JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+#[schemars(inline)]
+pub enum AskStateArg {
+    Open,
+    Answered,
+    All,
+}
+
+/// A file joined to a request or to one of its options.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[schemars(inline)]
+pub struct AskFileArg {
+    #[schemars(
+        description = "Its name (only what follows the last slash is kept, made safe). Required with data; with path it is the file's name by default."
+    )]
+    pub name: Option<String>,
+    #[schemars(
+        description = "What it is, as an indication only: its type is the one its content has (a file said to be an image, by this or by its name, must be a PNG, JPEG, GIF, WebP or AVIF image)."
+    )]
+    pub media_type: Option<String>,
+    #[schemars(
+        description = "Its content in base64, for a small file (a request weighs 32 MiB at most: give a bigger file by its path). Give this or path, not both."
+    )]
+    pub data: Option<String>,
+    #[schemars(
+        description = "The path of a file on this computer, which is copied (it outlives your worktree). An agent of Escouade gives a file of its working folder only, by a path relative to it or a full one; Claude outside Escouade, a full path. Give this or data, not both."
+    )]
+    pub path: Option<String>,
+}
+
+/// An option of a choice.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(inline)]
+pub struct AskOptionArg {
+    #[schemars(description = "Its letter, a to f (by default its rank: a, b, c…).")]
+    pub id: Option<String>,
+    #[schemars(description = "Its label, on one line (60 characters at most).")]
+    pub label: String,
+    #[schemars(description = "What it is, in a few sentences (600 characters at most).")]
+    pub description: Option<String>,
+    #[schemars(
+        description = "Its files: the renders of a design direction (dark and light), to compare side by side. They count in the request's 12 files."
+    )]
+    pub files: Option<Vec<AskFileArg>>,
+}
+
+/// The recommendation of a request.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(inline)]
+pub struct AskRecommendArg {
+    #[schemars(description = "The option recommended (a choice): its id.")]
+    pub option: Option<String>,
+    #[schemars(description = "The text offered (an answer), for the user to change.")]
+    pub text: Option<String>,
+    #[schemars(description = "Why (500 characters at most). Shown, never chosen for the user.")]
+    pub why: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AskUserArgs {
+    #[schemars(
+        description = "choice (an option among 2 to 6, after comparing their renders), confirm (yes or no: a go-ahead), answer (a sentence the user writes) or task (something only the user can do, its steps ticked)."
+    )]
+    pub kind: AskKindArg,
+    #[schemars(
+        description = "The question, in one sentence, on one line (140 characters at most)."
+    )]
+    pub title: String,
+    #[schemars(description = "The context, in Markdown (8,000 characters at most).")]
+    pub body: Option<String>,
+    #[schemars(description = "A choice's options, 2 to 6.")]
+    pub options: Option<Vec<AskOptionArg>>,
+    #[schemars(description = "A choice where several options may be chosen.")]
+    pub multi: Option<bool>,
+    #[schemars(description = "A task's steps, to tick (10 at most, 300 characters each).")]
+    pub steps: Option<Vec<String>>,
+    #[schemars(description = "Your recommendation, and why.")]
+    pub recommend: Option<AskRecommendArg>,
+    #[schemars(
+        description = "What the answer unblocks, in one sentence (200 characters at most), like « DEM-13 and DEM-14 start on the direction chosen »."
+    )]
+    pub unblocks: Option<String>,
+    #[schemars(
+        description = "The tickets of the project that wait for the answer (10 at most): their keys or ids. The autopilot leaves them until it is answered; withdrawn or expired, they are blocked."
+    )]
+    pub tickets: Option<Vec<String>>,
+    #[schemars(
+        description = "normal (the default) or today. What cannot wait is a blocking question, not a request."
+    )]
+    pub urgency: Option<UrgencyArg>,
+    #[schemars(description = "How long it lives: 14 days by default, 1 to 30.")]
+    pub expires_in_days: Option<u32>,
+    #[schemars(
+        description = "true: the answer settles a decision of the product; once answered, you are told to propose it (propose_decision)."
+    )]
+    pub decision: Option<bool>,
+    #[schemars(
+        description = "true (the default): the answer comes to you as a message, which wakes you at rest; false: you read it by get_ask."
+    )]
+    pub wake: Option<bool>,
+    #[schemars(
+        description = "A confirm's yes label, like « Yes, publish » (24 characters at most)."
+    )]
+    pub yes_label: Option<String>,
+    #[schemars(description = "A confirm's no label, like « Not yet » (24 characters at most).")]
+    pub no_label: Option<String>,
+    #[schemars(
+        description = "A confirm that is a go-ahead (publish, sign, delete, spend): the user's alone, never left to an agent."
+    )]
+    pub gate: Option<bool>,
+    #[schemars(
+        description = "The request's own files: images (PNG, JPEG, GIF, WebP, AVIF), PDF, Markdown, Word, CSV or any other file. 12 files at most with the options', 25 MB each, 64 MB together."
+    )]
+    pub files: Option<Vec<AskFileArg>>,
+    #[schemars(
+        description = "The project: its id or its name. An agent of Escouade leaves it out for its own; Claude outside Escouade gives it."
+    )]
+    pub project: Option<String>,
+    #[schemars(
+        description = "The ticket it is about: its key or id. An agent of a ticket leaves it out for its own."
+    )]
+    pub ticket: Option<String>,
+}
+
+/// A file of a request, as the tools that name one take it.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[schemars(inline)]
+pub struct AskFileRef {
+    #[schemars(
+        description = "The file's file, as get_ask gives it (files). Give this or index, not both."
+    )]
+    pub file: Option<String>,
+    #[schemars(
+        description = "The file's rank in the list get_ask gives (files), from 0. Give this or file, not both."
+    )]
+    pub index: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateAskArgs {
+    #[schemars(description = "The request: its id, like a-12.")]
+    pub ask: String,
+    #[schemars(description = "Its new title (a field left out keeps its value).")]
+    pub title: Option<String>,
+    #[schemars(description = "Its new context, in Markdown.")]
+    pub body: Option<String>,
+    #[schemars(
+        description = "Its options, all of them: an option that goes takes its files with it, a new option's files come with it."
+    )]
+    pub options: Option<Vec<AskOptionArg>>,
+    #[schemars(description = "A choice where several options may be chosen.")]
+    pub multi: Option<bool>,
+    #[schemars(description = "A task's steps, all of them.")]
+    pub steps: Option<Vec<String>>,
+    #[schemars(description = "Your recommendation, and why.")]
+    pub recommend: Option<AskRecommendArg>,
+    #[schemars(description = "What the answer unblocks, in one sentence.")]
+    pub unblocks: Option<String>,
+    #[schemars(description = "normal or today.")]
+    pub urgency: Option<UrgencyArg>,
+    #[schemars(description = "How long it lives from now: 1 to 30 days.")]
+    pub expires_in_days: Option<u32>,
+    #[schemars(description = "A confirm's yes label.")]
+    pub yes_label: Option<String>,
+    #[schemars(description = "A confirm's no label.")]
+    pub no_label: Option<String>,
+    #[schemars(description = "Files to add to the request itself.")]
+    pub add_files: Option<Vec<AskFileArg>>,
+    #[schemars(description = "Files to take away.")]
+    pub remove_files: Option<Vec<AskFileRef>>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct WithdrawAskArgs {
+    #[schemars(description = "The request: its id, like a-12.")]
+    pub ask: String,
+    #[schemars(
+        description = "Why it no longer applies, in one sentence (300 characters at most): the user reads it once."
+    )]
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ListAsksArgs {
+    #[schemars(description = "Only the requests of this project: its id or its name.")]
+    pub project: Option<String>,
+    #[schemars(
+        description = "true (the default): your own requests; false: every request you see. Claude outside Escouade has the requests it left as its own."
+    )]
+    pub mine: Option<bool>,
+    #[schemars(
+        description = "open (the default: open or put off), answered (answered or read) or all."
+    )]
+    pub state: Option<AskStateArg>,
+    #[schemars(
+        description = "true: only the requests the user left to you to answer (answer_ask)."
+    )]
+    pub delegated: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct GetAskArgs {
+    #[schemars(description = "The request: its id, like a-12.")]
+    pub ask: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WaitAskArgs {
+    #[schemars(description = "The request: its id, like a-12.")]
+    pub ask: String,
+    #[schemars(
+        description = "The most seconds to wait: 120 by default, 240 at most (a longer wait is cut to it), 1 at least."
+    )]
+    pub timeout_seconds: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct GetAskFileArgs {
+    #[schemars(description = "The request: its id, like a-12.")]
+    pub ask: String,
+    #[schemars(
+        description = "The file's file, as get_ask gives it (files). Give this or index, not both."
+    )]
+    pub file: Option<String>,
+    #[schemars(
+        description = "The file's rank in the list get_ask gives (files), from 0. Give this or file, not both."
+    )]
+    pub index: Option<u32>,
+    #[schemars(
+        description = "A file that is no image: where to start reading, in bytes (0, its start, by default)."
+    )]
+    pub offset: Option<u64>,
+    #[schemars(
+        description = "The most bytes to read of a file that is no image: 8192 by default, 1 at least and 65536 at most."
+    )]
+    pub bytes: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct AnswerAskArgs {
+    #[schemars(description = "The request the user left to you: its id, like a-12.")]
+    pub ask: String,
+    #[schemars(
+        description = "A choice: the options chosen, by id (one unless the choice is multi)."
+    )]
+    pub options: Option<Vec<String>>,
+    #[schemars(description = "A confirm: yes (true) or no (false).")]
+    pub yes: Option<bool>,
+    #[schemars(description = "An answer: its text.")]
+    pub text: Option<String>,
+    #[schemars(description = "A word for the author (2,000 characters at most).")]
+    pub note: Option<String>,
 }

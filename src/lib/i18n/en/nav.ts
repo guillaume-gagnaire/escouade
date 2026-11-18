@@ -125,8 +125,32 @@ export default defineZone('nav', {
     archiveBody: 'Its ticket {key} goes back to “To do”.',
     archiveConfirm: 'Archive',
     deleteTitle: 'Delete the agent “{name}”?',
+
     deleteBody: 'The {engine} process is stopped and the conversation is removed from the app (the {harness} session stays on disk).',
     deleteWorktree: 'Also delete the worktree and the branch {branch}',
+    // A deletion asked by the agent that made it (`delete_agent`, ESC-511): on its card, a toast once, then this dialog.
+    deleteAsk: {
+      card: '“{by}” asks to delete it',
+      by: 'Asked by the agent “{by}”, which made it.',
+      toast: 'The agent “{by}” asks to delete the agent “{name}”.',
+      see: 'See',
+      refuse: 'Refuse',
+      seeLabel: 'See the request to delete the agent “{name}”',
+      refuseLabel: 'Refuse to delete the agent “{name}”',
+    },
+    deleteLoss: {
+      heading: 'What would be lost',
+      reading: 'Reading the worktree…',
+      unknown: 'Worktree state unknown: git did not answer in time.',
+      dirty: { one: '{count} changed file not committed: {names}', other: '{count} changed files not committed: {names}' },
+      more: ', and {count} more',
+      unmerged: { one: '{count} commit not merged into {base} yet', other: '{count} commits not merged into {base} yet' },
+      turn: 'A turn under way, interrupted',
+      request: 'A request waiting for your answer',
+      ticketLinked: 'Linked to the ticket {key}',
+      nothing: 'Nothing uncommitted or unmerged.',
+      kept: 'The worktree box is unticked: its work in progress would stay.',
+    },
   },
 
   titleBar: {

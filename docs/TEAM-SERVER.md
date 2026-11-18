@@ -491,6 +491,7 @@ C'est ce que font Chrome, Edge, Firefox et VS Code pour les flottes gérées. Ç
 | Mode de permission | les modes permis, celui par défaut ; jamais `bypassPermissions` (« Autoriser le mode Bypass » verrouillé éteint) | oui | oui | restreindre |
 | Harness et modèles | les harness permis, les modèles permis par harness, l'effort au plus | oui | oui | restreindre |
 | Plugins | les origines permises (store public vérifié seulement, store privé, dépôt git), les ids permis ou interdits, « versions vérifiées seulement » | oui | oui | restreindre |
+| Secrets des plugins | le fichier lisible de son seul utilisateur interdit, là où le poste n'a pas de trousseau (`secrets.fileFallback`, ESC-520) : seul le trousseau garde un secret | oui | oui | restreindre |
 | Clôture | projets privés d'office (`private: true`), motifs de fichiers interdits ajoutés | oui | oui | restreindre |
 | Proxy et certificat | adresse du proxy, exclusions ; « Ignorer la vérification TLS » interdite ; le fichier d'autorités | exclusions et interdiction : oui ; adresse et autorités : à accepter | oui | sensible |
 | Télémétrie | statistiques anonymes éteintes | oui | oui | restreindre |

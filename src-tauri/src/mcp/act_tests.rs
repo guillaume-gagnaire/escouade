@@ -123,6 +123,7 @@ async fn the_acting_tools_say_what_they_take_and_that_they_change_things() {
         let destructive = match *name {
             "approve_ticket"
             | "delete_ticket"
+            | "delete_agent"
             | "stop_background_work"
             | "delete_scheduled_task" => Some(true),
             "create_scheduled_task" | "update_scheduled_task" | "pause_scheduled_task" => {
@@ -980,8 +981,17 @@ async fn an_agent_is_created_in_a_project_with_its_first_message_and_the_user_s_
     .await;
     let id = v["id"].as_str().unwrap().to_string();
     assert_eq!(v["name"], "agent-1");
-    assert_eq!(v.as_object().unwrap().len(), 3);
+    assert_eq!(v.as_object().unwrap().len(), 6);
     assert_eq!(v["folder"], serde_json::Value::Null);
+    // What it took, its account's defaults when nothing was asked.
+    let took = h.agent(&id);
+    assert_eq!(v["account"], "Principal");
+    // Made from outside Escouade: no agent may ask for its deletion.
+    assert_eq!(took.created_by, None);
+    assert_eq!(
+        (v["model"].as_str(), v["effort"].as_str()),
+        (Some(took.model.as_str()), Some(took.effort.as_str()))
+    );
     // Made as the window makes one, but the sidebar's selection is the user's. Its first message
     // names it, in the background: its name is waited for, then read as it is.
     h.wait("its name", |h| h.agent(&id).named).await;
@@ -1416,6 +1426,64 @@ async fn a_running_turn_is_interrupted_by_another_and_never_by_the_agent_itself(
     let unknown = refused(&from_b, "stop_agent", json!({ "agent": "zzz" })).await;
     assert!(unknown.contains("Aucun agent « zzz »"), "{unknown}");
     from_b.cancel().await.unwrap();
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn an_agent_asks_the_user_to_delete_an_agent_it_made_and_no_other() {
+    let h = harness("mcp-act-delete-agent");
+    let p = project(&h).await;
+    let chef = put_agent(&h, &p, "chef", 1);
+    let aide = put_agent(&h, &p, "aide", 2);
+    let autre = put_agent(&h, &p, "autre", 3);
+    h.core.agent(&aide.id).unwrap().lock().meta.created_by = Some(chef.id.clone());
+    // What the user is asked: the asks kept on the agents' cards (ESC-511), no modal.
+    let asked = |h: &Harness| {
+        let mut asks: Vec<_> = h
+            .core
+            .agents
+            .read()
+            .values()
+            .filter_map(|a| {
+                let m = &a.lock().meta;
+                m.delete_ask
+                    .as_ref()
+                    .map(|k| (m.id.clone(), k.by.clone(), k.worktree))
+            })
+            .collect();
+        asks.sort();
+        asks
+    };
+    let c = as_agent(&h, &chef.id).await;
+
+    // One it made: the user is asked, under its name; nothing is deleted here.
+    let v = read(
+        &c,
+        "delete_agent",
+        json!({ "agent": "aide", "worktree": false }),
+    )
+    .await;
+    assert_eq!(
+        (v["id"].as_str(), v["asked"].as_bool()),
+        (Some(aide.id.as_str()), Some(true))
+    );
+    assert_eq!(asked(&h), [(aide.id.clone(), chef.id.clone(), Some(false))]);
+    assert!(h.core.agent(&aide.id).is_ok());
+    assert_eq!(entry(&h).outcome, "ok");
+
+    // Not one it did not make, not itself: refused, and the user is not asked.
+    let other = refused(&c, "delete_agent", json!({ "agent": autre.id })).await;
+    assert!(other.contains("que tu as créés"), "{other}");
+    let itself = refused(&c, "delete_agent", json!({ "agent": "chef" })).await;
+    assert!(itself.contains("propre suppression"), "{itself}");
+    assert_eq!(asked(&h).len(), 1);
+
+    // Claude outside Escouade made none.
+    let out = external(&h).await;
+    refused(&out, "delete_agent", json!({ "agent": aide.id })).await;
+    assert_eq!(asked(&h).len(), 1);
+    out.cancel().await.unwrap();
     c.cancel().await.unwrap();
     h.core.mcp.stop();
 }
@@ -2275,6 +2343,209 @@ async fn a_ticket_is_started_while_an_account_is_free_for_its_project_and_refuse
     );
     c.cancel().await.unwrap();
     h.core.mcp.stop();
+}
+
+/// `create_agent` judges as a ticket does (ESC-511): a shared account of a private project that
+/// keeps to its own, and an effort asked of a model that takes none (Haiku), which runs without.
+#[tokio::test]
+async fn an_agent_is_created_under_the_judges_of_a_ticket_on_a_private_project_and_a_model_without_effort(
+) {
+    let h = harness("mcp-act-create-agent-judges");
+    let p = project(&h).await;
+    with_pro(&h);
+    let c = external(&h).await;
+
+    // Haiku takes no effort: not refused, the agent goes without, and the answer says none.
+    let v = read(
+        &c,
+        "create_agent",
+        json!({ "project": "demo", "message": "Vite", "model": "haiku", "effort": "high" }),
+    )
+    .await;
+    assert_eq!(v["model"], "haiku");
+    assert_eq!(v["effort"], Value::Null);
+    turn_over(&h, v["id"].as_str().unwrap()).await;
+    c.cancel().await.unwrap();
+
+    // Private, with an account of its own: a shared one is refused, with why; its own is taken.
+    make_private(&h, &p);
+    crate::harness_scope_tests::turn_on_every_harness(&h, &p.id);
+    h.core.settings.write().accounts[1].projects = vec![p.id.clone()];
+    let chef = put_agent(&h, &p, "chef", 1);
+    let c = as_agent(&h, &chef.id).await;
+    let count = h.core.agents.read().len();
+    let shared = refused(
+        &c,
+        "create_agent",
+        json!({ "project": "demo", "message": "Non", "account": "Principal" }),
+    )
+    .await;
+    assert!(
+        shared.contains("n’utilise que ses propres comptes"),
+        "{shared}"
+    );
+    assert_eq!(h.core.agents.read().len(), count);
+    let own = read(
+        &c,
+        "create_agent",
+        json!({ "project": "demo", "message": "Oui", "account": "pro" }),
+    )
+    .await;
+    assert_eq!(own["account"], "Pro");
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+#[tokio::test]
+async fn an_agent_is_created_on_the_account_and_with_the_effort_asked_for_and_refused_those_it_may_not_take(
+) {
+    let h = harness("mcp-act-create-agent-account-effort");
+    h.project(false).await;
+    with_pro(&h);
+    let c = external(&h).await;
+
+    // Its project's accounts are listed, for the caller to choose.
+    let rows = read(&c, "list_projects", json!({})).await;
+    let names: Vec<&str> = rows[0]["accounts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["Principal", "Pro"]);
+
+    // Named in any case, with an effort: taken, and said.
+    let v = read(
+        &c,
+        "create_agent",
+        json!({ "project": "demo", "message": "Sur Pro", "account": "PRO", "effort": "High" }),
+    )
+    .await;
+    let id = v["id"].as_str().unwrap().to_string();
+    let meta = h.agent(&id);
+    assert_eq!(
+        (meta.account.as_str(), meta.effort.as_str()),
+        ("pro", "high")
+    );
+    assert_eq!(
+        (&v["account"], &v["effort"]),
+        (&json!("Pro"), &json!("high"))
+    );
+    turn_over(&h, &id).await;
+
+    // Auto is the automatic choice and its account's effort, not an empty one.
+    let v = read(
+        &c,
+        "create_agent",
+        json!({ "project": "demo", "message": "Auto", "account": "auto", "effort": "auto" }),
+    )
+    .await;
+    let auto = h.agent(v["id"].as_str().unwrap());
+    assert_eq!(auto.account, PRINCIPAL);
+    assert!(!auto.effort.is_empty());
+    turn_over(&h, &auto.id).await;
+
+    let count = h.core.agents.read().len();
+    let ask = |account: &str| json!({ "project": "demo", "message": "Non", "account": account });
+    // Unknown, reserved to another project, switched off, past its quota: refused, with why.
+    let unknown = refused(&c, "create_agent", ask("Nulle")).await;
+    assert!(unknown.contains("Nulle"), "{unknown}");
+    h.core.settings.write().accounts[1].projects = vec!["ailleurs".into()];
+    let reserved = refused(&c, "create_agent", ask("pro")).await;
+    assert!(reserved.contains("réservé"), "{reserved}");
+    h.core.settings.write().accounts[1].projects.clear();
+    h.core.settings.write().accounts[1].active = false;
+    refused(&c, "create_agent", ask("pro")).await;
+    h.core.settings.write().accounts[1].active = true;
+    let end = h.core.pause_now() + 3_600_000;
+    used_up(&h, "pro", end);
+    let held = refused(&c, "create_agent", ask("pro")).await;
+    assert!(held.contains(&clock(end + RESUME_MARGIN_MS)), "{held}");
+    // An effort no harness takes.
+    let effort = refused(
+        &c,
+        "create_agent",
+        json!({ "project": "demo", "message": "Non", "effort": "extreme" }),
+    )
+    .await;
+    assert!(effort.contains("extreme"), "{effort}");
+    assert_eq!(h.core.agents.read().len(), count);
+    c.cancel().await.unwrap();
+    h.core.mcp.stop();
+}
+
+/// The model and the effort an agent chooses for the one it makes (PR 44) are judged by the policies of the device,
+/// then by those of the project's team, like any other creation (ESC-520): above the ceiling or a model not allowed,
+/// refused with who imposes it, and nothing made; left to its account, the effort comes down under the ceiling.
+#[tokio::test]
+async fn an_agent_may_not_give_the_one_it_makes_a_model_or_an_effort_the_policies_do_not_allow() {
+    use crate::locks::{Managed, TeamPolicies, MAX_EFFORT, MODELS};
+    for team in [false, true] {
+        let h = harness(&format!("mcp-act-create-agent-policies-{team}"));
+        let (p, _) = h.project(false).await;
+        let pairs = [
+            (MAX_EFFORT.to_owned(), json!("medium")),
+            (MODELS.to_owned(), json!({ "claude": ["sonnet", "haiku"] })),
+        ];
+        let says = if team {
+            h.core
+                .projects
+                .write()
+                .iter_mut()
+                .find(|x| x.id == p.id)
+                .unwrap()
+                .team = Some("acme".into());
+            h.core.set_team_policies(Some(TeamPolicies {
+                id: "acme".into(),
+                team: "Acme".into(),
+                signed: None,
+                recommended: Default::default(),
+                enforced: pairs.into(),
+            }));
+            "par l’équipe Acme"
+        } else {
+            h.core.set_managed(Managed {
+                values: pairs
+                    .map(|(k, v)| (k, (v, "the machine's policy".to_owned())))
+                    .into(),
+                warnings: Vec::new(),
+            });
+            "par la stratégie de ce poste"
+        };
+        let parent = put_agent(&h, &p, "parent", 1);
+        let c = as_agent(&h, &parent.id).await;
+        let count = h.core.agents.read().len();
+        let ask = |extra: Value| {
+            let mut a = json!({ "project": "demo", "message": "Vas-y" });
+            a.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            a
+        };
+        let effort = refused(&c, "create_agent", ask(json!({ "effort": "high" }))).await;
+        assert!(effort.contains("« high » dépasse « medium »"), "{effort}");
+        assert!(effort.contains(says), "{effort}");
+        let model = refused(&c, "create_agent", ask(json!({ "model": "opus" }))).await;
+        assert!(model.contains("« opus »"), "{model}");
+        assert!(model.contains(says), "{model}");
+        assert_eq!(h.core.agents.read().len(), count, "nothing made");
+        // Within them: made, as asked.
+        let v = read(
+            &c,
+            "create_agent",
+            ask(json!({ "model": "haiku", "effort": "low" })),
+        )
+        .await;
+        let made = h.agent(v["id"].as_str().unwrap());
+        assert_eq!(
+            (made.model.as_str(), made.effort.as_str()),
+            ("haiku", "low")
+        );
+        assert_eq!(made.created_by.as_deref(), Some(parent.id.as_str()));
+        turn_over(&h, &made.id).await;
+        c.cancel().await.unwrap();
+        h.core.mcp.stop();
+    }
 }
 
 #[tokio::test]
@@ -5755,6 +6026,9 @@ async fn a_named_folder_is_made_or_reused() {
     let f = folder_holding(&h, &p.id, &boss.id).unwrap();
     assert_eq!((f.name.as_str(), f.named), ("Front", true));
     assert_eq!(f.principal.as_deref(), Some(boss.id.as_str()));
+    // Its maker is kept: the one agent that may ask for its deletion (`delete_agent`).
+    let made = h.agent(v["id"].as_str().unwrap());
+    assert_eq!(made.created_by.as_deref(), Some(boss.id.as_str()));
     assert_eq!(v["folder"], json!({ "id": f.id, "name": "Front" }));
     // Reused by its name in any case, then by its id.
     let v = read(

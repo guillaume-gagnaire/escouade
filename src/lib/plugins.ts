@@ -216,8 +216,15 @@ export const pluginsApi = {
   setSetting: (id: string, key: string, value: unknown) => invoke<PluginView>('plugin_set_setting', { id, key, value }),
   /** Agrees to the commands it runs on facts as they are now, or takes the agreement back (PLG-5). */
   approveCommands: (id: string, on: boolean) => invoke<PluginView>('plugin_approve_commands', { id, on }),
-  secrets: (id: string) => invoke<[string, boolean][]>('plugin_secrets', { id }),
-  setSecret: (id: string, key: string, value: string) => invoke<void>('plugin_set_secret', { id, key, value }),
+  secrets: (id: string) => invoke<SecretState[]>('plugin_secrets', { id }),
+  /** « Garder » (empty: « Oublier »); `inFile`: the user chose the file, where the keychain refused (ESC-499). Rejects with a
+   * `SecretRefused`. */
+  setSecret: (id: string, key: string, value: string, inFile = false) => invoke<void>('plugin_set_secret', { id, key, value, inFile }),
+  /** « Déplacer vers le trousseau »: a secret kept in the file goes to the keychain that is there now. */
+  moveSecret: (id: string, key: string) => invoke<void>('plugin_secret_move', { id, key }),
+  /** The file of the plugins' secrets on this machine (Réglages › Plugins). */
+  secretsFile: () => invoke<SecretsFile>('secrets_file'),
+  removeSecretsFile: () => invoke<void>('secrets_file_remove'),
   run: (id: string) => invoke<PluginRun>('plugin_run', { id }),
   start: (id: string) => invoke<PluginRun>('plugin_start', { id }),
   /** « Rechercher des mises à jour »: the store read again first (ESC-405), the plugins then, and the store as it was read. */
@@ -225,6 +232,36 @@ export const pluginsApi = {
   /** The icon of an installed plugin (PLG-13), a `data:image/png` address; null: its letters. */
   icon: (id: string) => invoke<string | null>('plugin_icon', { id }),
 };
+
+/** A plugin's secret, as its settings show it: kept or not, and in the file the user chose rather than the keychain. */
+export interface SecretState {
+  key: string;
+  kept: boolean;
+  inFile: boolean;
+}
+
+/** Why « Garder » kept nothing: its cause, said simply; `keychainRefused`: the keychain was the cause, the file is offered. */
+export interface SecretRefused {
+  message: string;
+  keychainRefused: boolean;
+}
+
+/** The file of the plugins' secrets on this machine (ESC-499): chosen or not, where, whether a keychain is there, what it holds. */
+export interface SecretsFile {
+  chosen: boolean;
+  path: string;
+  keychain: boolean;
+  secrets: { plugin: string; pluginName: string; key: string }[];
+}
+
+/** What a rejected `setSecret` says: a `SecretRefused`, or a plain text. */
+export function refusedOf(e: unknown): SecretRefused {
+  if (e && typeof e === 'object' && 'message' in e) {
+    const r = e as Partial<SecretRefused>;
+    return { message: String(r.message), keychainRefused: !!r.keychainRefused };
+  }
+  return { message: String(e), keychainRefused: false };
+}
 
 /** A text of a manifest in the interface's language: English by default (§3.1). */
 export function textOf(text: ManifestText | undefined, lang: string): string {

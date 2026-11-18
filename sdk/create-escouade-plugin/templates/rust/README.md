@@ -17,6 +17,6 @@ escouade-plugin build .             # the module as the store makes it, and its 
 
 `escouade-plugin` ships with Escouade (https://escouade.dev/en/docs/plugins/testing). It downloads its own compiler the first time: `validate`, `test`, `dev` and `build` need no Rust on your machine.
 
-To try it in Escouade, copy the module next to the manifest as `plugin.wasm`, then load this folder in Plugins › In development. Do not commit `plugin.wasm`: the store writes its own.
+To try it in Escouade, run `escouade-plugin build .`, then load this folder in Plugins › In development: Escouade takes the module of `packs/` built for the version of the manifest, and loads the folder again by itself once you build it again. Do not commit `packs/`: the store compiles the sources.
 
 A plugin compiles alone in its folder: no `build.rs`, no macro of its own, only crates from crates.io. What the store refuses, and why: https://escouade.dev/en/docs/plugins/rust.

@@ -357,15 +357,24 @@ pub async fn words(cx: &Cx) -> Result<Value, Refusal> {
 
 ## Les programmes : `proc/*`
 
-`proc/spawn { command, args?, dir?, agent?, project?, env? }` → `{ proc }`, `proc/write { proc, data, close? }`, `proc/kill { proc }`, puis les notifications `proc/out { proc, stream, data }` et `proc/exit { proc, code }`. `proc/out` peut arriver avant la réponse à `proc/spawn`.
+`proc/spawn { command, args?, dir?, agent?, project?, env? }` → `{ proc }`, `proc/write { proc, data, close? }`, `proc/kill { proc }`, puis les notifications `proc/out { proc, stream, data }` et `proc/exit { proc, code }`.
 
-`command` et `args` doivent être une ligne de `permissions.commands` :
+`command` et `args` doivent être une ligne de `permissions.commands` :
 
 `sdk/doc-examples/rust/escouade-plugin.json` (extrait)
 
 ```json
-    "commands": ["git status --short", "git log *"]
+    "commands": ["git status --short", "git log *", "git --version"]
 ```
+
+**Ce qui revient.**
+
+- `proc/out { proc, stream, data }` : `proc` est celui que `proc/spawn` a rendu ; `stream` vaut `stdout` ou `stderr` ; `data` est du **texte**, jamais du base64 : les octets lus en UTF-8, coupés entre deux caractères (un octet qui n’est pas de l’UTF-8 devient U+FFFD). Un `proc/out` porte 16 Kio au plus et n’est pas une ligne : une ligne peut arriver en deux. Chaque sortie arrive dans l’ordre où elle a été écrite ; `stdout` et `stderr` ne sont pas ordonnées entre elles.
+- `proc/out` peut arriver **avant** la réponse à `proc/spawn` : garde la sortie par son `proc`.
+- `proc/exit { proc, code }` arrive une fois, **après** tous ses `proc/out` (sauf si ce qu’il a laissé tourner garde ses sorties ouvertes plus d’une seconde). `code` est son code de sortie, `null` s’il a été tué (`proc/kill`, la fin de l’instance) ou arrêté par un signal.
+- La sortie n’est plus lue au-delà de 256 Kio qui n’ont pas atteint le module : un programme qui écrit sans fin ralentit, la mémoire de l’app ne grossit pas. Quatre programmes à la fois.
+
+Lancer une ligne dans un projet (`dir: "project"`, l’id du projet d’un fait) :
 
 `sdk/doc-examples/ts/src/procs.ts` (extrait)
 
@@ -396,18 +405,52 @@ pub async fn status(cx: &Cx, project: &str) -> Result<Value, Refusal> {
         .await?;
     Ok(spawned["proc"].clone())
 }
+```
 
-pub fn out(cx: &Cx, out: &Value) {
-    let data = out["data"].as_str().unwrap_or_default();
-    cx.log("info", &format!("{}: {data}", out["stream"]));
-}
+**Un exemple complet** : lancer `git --version` et répondre ce qu’il a écrit. En TypeScript, `runProgram` garde la sortie et `exited` attend la fin :
 
-pub fn exit(cx: &Cx, exit: &Value) {
-    cx.log("info", &format!("it ended: {}", exit["code"]));
+`sdk/doc-examples/ts/src/procs.ts` (extrait)
+
+```ts
+// Runs `git --version` and answers what it wrote and how it ended: `data` is text, a piece of the output, not a line.
+export async function version(p: Plugin) {
+  let stdout = '';
+  let stderr = '';
+  const program = await p.runProgram({ command: 'git', args: ['--version'] }, (data, stream) => {
+    if (stream === 'stderr') stderr += data;
+    else stdout += data;
+  });
+  const code = await program.exited;
+  return { stdout: stdout.trimEnd(), stderr, code };
 }
 ```
 
-`proc/write` écrit sur son entrée, et `proc/kill` l’arrête avec ce qu’il a lancé :
+En Rust, le plugin garde la sortie de chaque programme par son `proc`, et la réponse attend son `proc/exit`. Les notifications arrivent comme tout appel :
+
+`sdk/doc-examples/rust/src/lib.rs` (extrait)
+
+```rust
+                "proc/out" => procs::out(cx, &params),
+                "proc/exit" => procs::exit(cx, &params),
+```
+
+`sdk/doc-examples/rust/src/procs.rs` (extrait)
+
+```rust
+/// What a program wrote, by its `proc`, until its end.
+#[derive(Default)]
+pub struct Said {
+    pub stdout: String,
+    pub stderr: String,
+    /// Its exit code once it ended; `null` when it was killed.
+    pub code: Option<Value>,
+    waiting: Option<Waker>,
+}
+```
+
+Les tests d’Escouade construisent cet exemple comme un auteur (`escouade-plugin build`), le chargent et appellent `example/version` : la réponse est `{ "stdout": "git version …", "stderr": "", "code": 0 }`.
+
+`proc/write` écrit sur son entrée, et `proc/kill` l’arrête avec ce qu’il a lancé :
 
 `sdk/doc-examples/ts/src/procs.ts` (extrait)
 
