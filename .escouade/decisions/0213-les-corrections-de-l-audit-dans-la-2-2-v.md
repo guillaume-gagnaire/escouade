@@ -1,9 +1,9 @@
 ---
-number: null
+number: 213
 id: "les-corrections-de-l-audit-dans-la-2-2-v"
 title: "Les corrections de l'audit dans la 2.2 : variables et mode Bypass appliqués aux chemins propres à la 2.2"
 date: "2026-11-12"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-428"
 pages: ["harness/comptes","plugins/tous-les-plugins-en-wasm","plugins/harness-acp-decrits"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"harness/comptes","added":4,"removed":1},{"page":"plugins/tous-les-plugins-en-wasm","added":2,"removed":2},{"page":"plugins/harness-acp-decrits","added":2,"removed":2}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-18T20:39:58+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

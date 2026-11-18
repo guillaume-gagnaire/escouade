@@ -1,9 +1,9 @@
 ---
-number: null
+number: 214
 id: "la-premiere-main-vient-de-l-origine-et-l"
 title: "La première main vient de l'origine, et les exclusions du proxy n'ont qu'une lecture"
 date: "2026-11-13"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-435"
 pages: ["plugins/livres-avec-escouade","fenetre/reseau"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/livres-avec-escouade","added":8,"removed":2},{"page":"fenetre/reseau","added":5,"removed":2}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-18T20:39:58+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
