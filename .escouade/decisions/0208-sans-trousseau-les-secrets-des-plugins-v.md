@@ -1,9 +1,9 @@
 ---
-number: null
+number: 208
 id: "sans-trousseau-les-secrets-des-plugins-v"
 title: "Sans trousseau, les secrets des plugins vont dans un fichier lisible du seul propriétaire, sur choix de l'utilisateur"
 date: "2026-11-16"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-499"
 pages: ["plugins/vue-d-ensemble","fenetre/reglages","introduction/donnees-et-coupures"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/vue-d-ensemble","added":10,"removed":0},{"page":"fenetre/reglages","added":5,"removed":0},{"page":"introduction/donnees-et-coupures","added":1,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-18T12:16:02+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

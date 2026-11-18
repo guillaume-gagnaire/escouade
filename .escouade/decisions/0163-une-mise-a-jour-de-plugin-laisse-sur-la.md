@@ -1,9 +1,9 @@
 ---
-number: null
+number: 163
 id: "une-mise-a-jour-de-plugin-laisse-sur-la"
 title: "Une mise à jour de plugin laisse sur la page ; « Tout mettre à jour » groupe celles qui ne demandent rien de plus"
 date: "2026-11-13"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-436"
 pages: ["store/store-dans-l-app"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"store/store-dans-l-app","added":8,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-14T16:58:38+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

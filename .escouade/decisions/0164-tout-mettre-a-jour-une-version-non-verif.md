@@ -1,9 +1,9 @@
 ---
-number: null
+number: 164
 id: "tout-mettre-a-jour-une-version-non-verif"
 title: "« Tout mettre à jour » : une version non vérifiée a sa propre fenêtre"
 date: "2026-11-13"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-438"
 pages: ["store/store-dans-l-app"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"store/store-dans-l-app","added":5,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-14T16:58:40+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

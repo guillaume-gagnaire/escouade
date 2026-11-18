@@ -1,9 +1,9 @@
 ---
-number: null
+number: 209
 id: "le-module-d-un-dossier-en-developpement"
 title: "Le module d'un dossier en développement est le dernier construit dans packs/, et un dossier sans module dit quoi lancer"
 date: "2026-11-17"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-500"
 pages: ["plugins/tous-les-plugins-en-wasm"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"plugins/tous-les-plugins-en-wasm","added":9,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-18T12:16:52+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

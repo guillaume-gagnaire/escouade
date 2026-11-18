@@ -1,9 +1,9 @@
 ---
-number: null
+number: 180
 id: "l-etat-tient-a-une-coupure-ecriture-forc"
 title: "L'état tient à une coupure : écriture forcée, copies tournantes par âge, reprise de la dernière bonne copie au démarrage, dite dans une annonce"
 date: "2026-11-15"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-469"
 pages: ["introduction/donnees-et-coupures"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"introduction/donnees-et-coupures","added":32,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-15T18:52:12+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

@@ -3,7 +3,7 @@ title: "Réseau : proxy et certificats"
 subject: "fenetre"
 sources: ["docs/security/audit-2026-11/rapport.md (branche ticket/esc-418), fiches SEC-07 et SEC-28","website/content/docs/fr/settings-network.md","crates/escouade-plugins/src/tls.rs","src-tauri/src/tls_tests.rs"]
 tickets: ["ESC-425","ESC-435"]
-decisions: [154,"la-premiere-main-vient-de-l-origine-et-l"]
+decisions: [154,214]
 compared: null
 ---
 

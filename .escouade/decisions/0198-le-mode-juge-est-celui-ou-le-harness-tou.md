@@ -1,9 +1,9 @@
 ---
-number: null
+number: 198
 id: "le-mode-juge-est-celui-ou-le-harness-tou"
 title: "Le mode jugé est celui où le harness tourne vraiment"
 date: "2026-11-16"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-489"
 pages: ["harness/comptes","plugins/harness-acp-decrits"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"harness/comptes","added":12,"removed":0},{"page":"plugins/harness-acp-decrits","added":7,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-17T15:16:53+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte

@@ -1,9 +1,9 @@
 ---
-number: null
+number: 211
 id: "un-agent-peut-demander-la-suppression-de"
 title: "Un agent peut demander la suppression des agents qu'il a créés ; la demande attend sur la carte, et l'utilisateur confirme en voyant ce qu'il perd"
 date: "2026-11-16"
-state: "proposed"
+state: "accepted"
 origin: "ticket"
 origin_ref: "ESC-511"
 pages: ["harness/serveur-mcp","fenetre/barre-laterale","harness/comptes"]
@@ -12,8 +12,8 @@ documents: []
 supersedes: []
 superseded_by: null
 changes: [{"page":"harness/serveur-mcp","added":8,"removed":7},{"page":"fenetre/barre-laterale","added":20,"removed":6},{"page":"harness/comptes","added":1,"removed":0}]
-accepted_at: ""
-accepted_by: ""
+accepted_at: "2026-11-18T12:18:26+01:00"
+accepted_by: "Guillaume Gagnaire"
 ---
 
 ## Contexte
